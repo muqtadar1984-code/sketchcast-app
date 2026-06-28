@@ -240,6 +240,8 @@ create policy artifacts_write on artifacts for all
   with check (generation_id in (select id from generations where owner_id = auth.uid()));
 create policy jobs_read on jobs for select
   using (generation_id in (select id from generations));
+create policy jobs_insert on jobs for insert
+  with check (generation_id in (select id from generations where owner_id = auth.uid()));
 
 -- generation_shares: teacher (owner) manages; students read shares for their classes
 create policy shares_owner_all on generation_shares for all
