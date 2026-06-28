@@ -3,11 +3,14 @@ import { createClient } from "@/utils/supabase/server";
 import UploadBook from "./upload-book";
 import GenerateButton from "./generate-button";
 import AutoRefresh from "./auto-refresh";
+import DeleteBook from "./delete-book";
+import DeleteLesson from "./delete-lesson";
 
 type Book = {
   id: string;
   title: string;
   author: string | null;
+  storage_path: string | null;
   created_at: string;
 };
 
@@ -34,7 +37,7 @@ export default async function DashboardPage() {
 
   const { data: books } = await supabase
     .from("books")
-    .select("id, title, author, created_at")
+    .select("id, title, author, storage_path, created_at")
     .order("created_at", { ascending: false });
   const bookList = (books ?? []) as Book[];
 
@@ -62,6 +65,7 @@ export default async function DashboardPage() {
         status: g.status as string,
         progress: (g.jobs?.[0]?.progress as number) ?? 0,
         arts,
+        artifactPaths: (g.artifacts ?? []).map((a: any) => a.storage_path as string),
       };
     }),
   );
@@ -111,9 +115,12 @@ export default async function DashboardPage() {
                   <span className="text-xs font-medium text-[#2E6B4E] bg-[#EAF1EC] px-2 py-0.5 rounded-full">
                     PDF
                   </span>
-                  <span className="text-xs text-[#6F6A5F]">
-                    {new Date(b.created_at).toLocaleDateString()}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-[#6F6A5F]">
+                      {new Date(b.created_at).toLocaleDateString()}
+                    </span>
+                    <DeleteBook bookId={b.id} storagePath={b.storage_path} />
+                  </div>
                 </div>
                 <h3 className="mt-3 font-medium" style={{ fontFamily: "Georgia, serif" }}>
                   {b.title}
@@ -140,10 +147,13 @@ export default async function DashboardPage() {
                       <span className="font-medium" style={{ fontFamily: "Georgia, serif" }}>
                         {l.title}
                       </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
-                        {l.status}
-                        {l.status === "processing" ? ` · ${l.progress}%` : ""}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
+                          {l.status}
+                          {l.status === "processing" ? ` · ${l.progress}%` : ""}
+                        </span>
+                        <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
+                      </div>
                     </div>
                     {l.status === "processing" && (
                       <div className="h-1.5 bg-[#F1ECE0] rounded-full mt-3 overflow-hidden">
