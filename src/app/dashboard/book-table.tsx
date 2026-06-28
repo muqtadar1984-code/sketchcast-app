@@ -7,6 +7,7 @@ import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
 import ContentCell, { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
+import { BookCover, TypeIcon } from "./icons";
 
 export type Lesson = CellLesson & { title: string; kind: string };
 export type ChapterRow = {
@@ -15,7 +16,9 @@ export type ChapterRow = {
   presentation: CellLesson | null;
   lessonPlan: CellLesson | null;
   activity: CellLesson | null;
+  worksheet: CellLesson | null;
   exam: CellLesson | null;
+  caseStudy: CellLesson | null;
 };
 export type BookRow = {
   id: string;
@@ -24,6 +27,7 @@ export type BookRow = {
   status: string | null;
   grade: string | null;
   subject: string | null;
+  coverUrl: string | null;
   storagePath: string | null;
   createdAt: string;
   doneChapters: number;
@@ -69,8 +73,9 @@ export default function BookTable({
               <button
                 onClick={() => ready && toggle(b.id)}
                 disabled={!ready}
-                className="flex items-center gap-2 min-w-0 text-left disabled:cursor-default"
+                className="flex items-center gap-3 min-w-0 text-left disabled:cursor-default"
               >
+                <BookCover src={b.coverUrl} title={b.title} />
                 <span className={`text-[#9A958A] text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>
                   {ready ? "▶" : "•"}
                 </span>
@@ -137,7 +142,8 @@ export default function BookTable({
                         <span className="text-sm text-[#2C2A26] flex-1 min-w-0 truncate">
                           <span className="text-[#9A958A]">{ch.num + 1}.</span> {ch.title}
                         </span>
-                        <div className="shrink-0 flex items-center gap-2">
+                        <div className="shrink-0 flex items-center gap-1.5">
+                          <TypeIcon kind="presentation" />
                           <span className={TYPE_LABEL}>Lesson</span>
                           <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="presentation" lesson={ch.presentation} />
                           {ch.presentation?.status === "done" && (
@@ -150,17 +156,30 @@ export default function BookTable({
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-1.5 pl-5">
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5">
+                          <TypeIcon kind="lesson_plan" />
                           <span className={TYPE_LABEL}>Plan</span>
                           <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="lesson_plan" lesson={ch.lessonPlan} />
                         </span>
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5">
+                          <TypeIcon kind="activity" />
                           <span className={TYPE_LABEL}>Activities</span>
                           <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="activity" lesson={ch.activity} />
                         </span>
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5">
+                          <TypeIcon kind="worksheet" />
+                          <span className={TYPE_LABEL}>Worksheet</span>
+                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="worksheet" lesson={ch.worksheet} />
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <TypeIcon kind="exam_paper" />
                           <span className={TYPE_LABEL}>Exam</span>
                           <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="exam_paper" lesson={ch.exam} />
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <TypeIcon kind="case_study" />
+                          <span className={TYPE_LABEL}>Case study</span>
+                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="case_study" lesson={ch.caseStudy} />
                         </span>
                       </div>
                     </li>

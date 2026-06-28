@@ -2,7 +2,7 @@
 
 import GenerateButton from "./generate-button";
 import RegenerateButton from "./regenerate-button";
-import ExamModal from "./exam-modal";
+import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
 
 export type CellLesson = {
@@ -37,18 +37,23 @@ export default function ContentCell({
   kind: string;
   lesson: CellLesson | null;
 }) {
-  const isExam = kind === "exam_paper";
-
+  // Presentation generates directly; document kinds open a customization modal.
   const genControl = (label: string) =>
-    isExam ? (
-      <ExamModal bookId={bookId} schoolId={schoolId} chapterRef={chapterNum} label={label} />
-    ) : (
+    kind === "presentation" ? (
       <GenerateButton
         bookId={bookId}
         schoolId={schoolId}
         chapterRef={chapterNum}
         kind={kind}
         variant="ghost"
+        label={label}
+      />
+    ) : (
+      <OptionsModal
+        bookId={bookId}
+        schoolId={schoolId}
+        chapterRef={chapterNum}
+        kind={kind}
         label={label}
       />
     );

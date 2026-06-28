@@ -4,6 +4,8 @@ import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
+import BrandingCard from "./branding-card";
+import { EmptyBooks } from "./icons";
 
 type Chapter = { num: number; title: string };
 
@@ -16,6 +18,7 @@ type Book = {
   chapters: Chapter[] | null;
   grade: string | null;
   subject: string | null;
+  cover_path: string | null;
   created_at: string;
 };
 
@@ -46,11 +49,30 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false });
   const classes = (classesRaw ?? []) as { id: string; name: string; grade: string | null }[];
 
+  const { data: brandingRow } = await supabase
+    .from("branding")
+    .select("docx_path, pptx_path")
+    .eq("owner_id", user.id)
+    .maybeSingle();
+
   const { data: books } = await supabase
     .from("books")
-    .select("id, title, author, storage_path, status, chapters, grade, subject, created_at")
+    .select("id, title, author, storage_path, status, chapters, grade, subject, cover_path, created_at")
     .order("created_at", { ascending: false });
   const bookList = (books ?? []) as Book[];
+
+  // Signed URLs for cover thumbnails.
+  const coverUrls: Record<string, string | null> = {};
+  await Promise.all(
+    bookList.map(async (b) => {
+      if (b.cover_path) {
+        const { data } = await supabase.storage.from("artifacts").createSignedUrl(b.cover_path, 3600);
+        coverUrls[b.id] = data?.signedUrl ?? null;
+      } else {
+        coverUrls[b.id] = null;
+      }
+    }),
+  );
 
   const { data: gensRaw } = await supabase
     .from("generations")
@@ -119,6 +141,7 @@ export default async function DashboardPage() {
       status: b.status,
       grade: b.grade,
       subject: b.subject,
+      coverUrl: coverUrls[b.id] ?? null,
       storagePath: b.storage_path,
       createdAt: b.created_at,
       doneChapters: chs.filter((c) => lessonForChapter(b.id, c.num)?.status === "done").length,
@@ -133,7 +156,9 @@ export default async function DashboardPage() {
         presentation: lessonFor(b.id, c.num, "presentation") ?? null,
         lessonPlan: lessonFor(b.id, c.num, "lesson_plan") ?? null,
         activity: lessonFor(b.id, c.num, "activity") ?? null,
+        worksheet: lessonFor(b.id, c.num, "worksheet") ?? null,
         exam: lessonFor(b.id, c.num, "exam_paper") ?? null,
+        caseStudy: lessonFor(b.id, c.num, "case_study") ?? null,
       })),
       pendingChapters: chs.filter((c) => !lessonForChapter(b.id, c.num)),
       otherLessons: otherLessonsForBook(b),
@@ -186,8 +211,11 @@ export default async function DashboardPage() {
 
         <UploadBook schoolId={schoolId} />
 
+        <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
+
         {bookList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[#D9CFB8] bg-white p-10 text-center text-[#6F6A5F]">
+            <EmptyBooks />
             No books yet. Upload your first textbook above.
           </div>
         ) : (

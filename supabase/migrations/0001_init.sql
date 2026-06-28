@@ -17,7 +17,7 @@
 create extension if not exists "pgcrypto";
 
 -- Idempotent reset — drop prior objects so this migration can be re-run cleanly.
-drop table if exists generation_shares, jobs, artifacts, generations, books, enrollments, classes, profiles, schools cascade;
+drop table if exists branding, generation_shares, jobs, artifacts, generations, books, enrollments, classes, profiles, schools cascade;
 drop type if exists user_role, book_kind, generation_kind, job_status, artifact_kind cascade;
 drop function if exists current_school_id() cascade;
 drop function if exists current_role_val() cascade;
@@ -84,6 +84,7 @@ create table books (
   chapters     jsonb,                  -- [{"num": int, "title": str}] from index_book
   grade        text,                   -- auto-detected by index_book (not teacher input)
   subject      text,                   -- auto-detected by index_book
+  cover_path   text,                   -- page-1 thumbnail in the `artifacts` bucket
   status       text not null default 'ready',
   created_at   timestamptz not null default now()
 );
@@ -133,6 +134,16 @@ create table generation_shares (
   due_at        timestamptz,
   created_at    timestamptz not null default now(),
   unique (generation_id, class_id)
+);
+
+-- School branding: teacher-uploaded .docx + .pptx templates (in the `uploads`
+-- bucket) used to brand all generated docs, the deck, and the video slides.
+create table branding (
+  owner_id   uuid primary key references profiles(id) on delete cascade,
+  school_id  uuid references schools(id) on delete set null,
+  docx_path  text,
+  pptx_path  text,
+  updated_at timestamptz not null default now()
 );
 
 create index on classes (teacher_id);
@@ -194,6 +205,7 @@ alter table generations        enable row level security;
 alter table artifacts          enable row level security;
 alter table jobs               enable row level security;
 alter table generation_shares  enable row level security;
+alter table branding           enable row level security;
 
 -- ── Policies ────────────────────────────────────────────────────────────────
 -- schools: members read their own school
@@ -282,6 +294,10 @@ create policy shares_owner_all on generation_shares for all
 create policy shares_student_read on generation_shares for select
   using (exists (select 1 from enrollments e
                  where e.class_id = generation_shares.class_id and e.student_id = auth.uid()));
+
+-- branding: each teacher manages their own template set
+create policy branding_owner_all on branding for all
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 -- ── Storage buckets ─────────────────────────────────────────────────────────
 -- 200 MB per file (209715200 bytes), matching the previous app's limit.
