@@ -1,0 +1,75 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+
+// Replace a chapter's existing lesson: queue a fresh generation, then remove the
+// old deck/video (storage + row). lessonForChapter shows the newest generation,
+// so the new (queued) one takes over immediately.
+export default function RegenerateButton({
+  bookId,
+  schoolId,
+  chapterRef,
+  oldGenId,
+  oldArtifactPaths,
+}: {
+  bookId: string;
+  schoolId: string | null;
+  chapterRef: number | string;
+  oldGenId: string;
+  oldArtifactPaths: string[];
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onRegen() {
+    if (!confirm("Regenerate this chapter? The current deck and video will be replaced."))
+      return;
+    setBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setError("Not signed in.");
+      setBusy(false);
+      return;
+    }
+    // 1. Queue a fresh lesson for this chapter (trigger creates its job).
+    const { error: gErr } = await supabase.from("generations").insert({
+      kind: "presentation",
+      book_id: bookId,
+      owner_id: user.id,
+      school_id: schoolId,
+      chapter_ref: String(chapterRef),
+      status: "queued",
+    });
+    if (gErr) {
+      setError(gErr.message);
+      setBusy(false);
+      return;
+    }
+    // 2. Remove the old lesson (storage files + generation row).
+    if (oldArtifactPaths.length) {
+      await supabase.storage.from("artifacts").remove(oldArtifactPaths);
+    }
+    await supabase.from("generations").delete().eq("id", oldGenId);
+    setBusy(false);
+    router.refresh();
+  }
+
+  return (
+    <button
+      onClick={onRegen}
+      disabled={busy}
+      title="Regenerate deck + video"
+      className="text-xs font-medium text-[#854F0B] hover:underline disabled:opacity-50 whitespace-nowrap"
+    >
+      {busy ? "…" : "↻ Regenerate"}
+      {error && <span className="text-red-600 ml-1">{error}</span>}
+    </button>
+  );
+}
