@@ -243,6 +243,18 @@ create policy jobs_read on jobs for select
 create policy jobs_insert on jobs for insert
   with check (generation_id in (select id from generations where owner_id = auth.uid()));
 
+-- Auto-create a job when a generation is inserted (client never touches jobs).
+create or replace function create_job_for_generation() returns trigger
+  language plpgsql security definer set search_path = public as
+$$ begin
+  insert into jobs (generation_id, type, status) values (new.id, new.kind::text, 'queued');
+  return new;
+end $$;
+drop trigger if exists on_generation_created on generations;
+create trigger on_generation_created
+  after insert on generations
+  for each row execute function create_job_for_generation();
+
 -- generation_shares: teacher (owner) manages; students read shares for their classes
 create policy shares_owner_all on generation_shares for all
   using (generation_id in (select id from generations where owner_id = auth.uid()))

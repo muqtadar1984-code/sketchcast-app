@@ -28,29 +28,17 @@ export default function GenerateButton({
       return;
     }
 
-    const { data: gen, error: gErr } = await supabase
-      .from("generations")
-      .insert({
-        kind: "presentation",
-        book_id: bookId,
-        owner_id: user.id,
-        school_id: schoolId,
-        status: "queued",
-      })
-      .select("id")
-      .single();
-    if (gErr || !gen) {
-      setError(gErr?.message ?? "Could not start generation.");
-      setBusy(false);
-      return;
-    }
-
-    const { error: jErr } = await supabase
-      .from("jobs")
-      .insert({ generation_id: gen.id, type: "presentation", status: "queued" });
+    // Insert only the generation — a DB trigger creates its job automatically.
+    const { error: gErr } = await supabase.from("generations").insert({
+      kind: "presentation",
+      book_id: bookId,
+      owner_id: user.id,
+      school_id: schoolId,
+      status: "queued",
+    });
     setBusy(false);
-    if (jErr) {
-      setError(jErr.message);
+    if (gErr) {
+      setError(gErr.message);
       return;
     }
     router.refresh();
