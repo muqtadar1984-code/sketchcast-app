@@ -24,6 +24,8 @@ drop function if exists current_role_val() cascade;
 drop function if exists shared_to_me(uuid) cascade;
 drop function if exists handle_new_user() cascade;
 drop function if exists touch_updated_at() cascade;
+drop function if exists create_job_for_generation() cascade;
+drop function if exists create_index_job_for_book() cascade;
 drop trigger if exists on_auth_user_created on auth.users;
 drop policy if exists uploads_rw on storage.objects;
 drop policy if exists artifacts_owner_rw on storage.objects;
@@ -79,6 +81,7 @@ create table books (
   school_id    uuid references schools(id) on delete set null,
   storage_path text,                  -- path in the `uploads` storage bucket
   pages        int,
+  chapters     jsonb,                  -- [{"num": int, "title": str}] from index_book
   status       text not null default 'ready',
   created_at   timestamptz not null default now()
 );
@@ -109,6 +112,7 @@ create table artifacts (
 create table jobs (
   id            uuid primary key default gen_random_uuid(),
   generation_id uuid references generations(id) on delete cascade,
+  book_id       uuid references books(id) on delete cascade,  -- set for index_book jobs
   type          text not null,
   status        job_status not null default 'queued',
   progress      int not null default 0,
@@ -136,6 +140,7 @@ create index on generations (owner_id);
 create index on generations (book_id);
 create index on artifacts (generation_id);
 create index on jobs (status);
+create index on jobs (book_id);
 create index on generation_shares (class_id);
 
 -- ── Helper functions (SECURITY DEFINER → bypass RLS inside the check) ────────
@@ -254,6 +259,18 @@ drop trigger if exists on_generation_created on generations;
 create trigger on_generation_created
   after insert on generations
   for each row execute function create_job_for_generation();
+
+-- Auto-create an index job when a book is uploaded (extracts its chapter list).
+create or replace function create_index_job_for_book() returns trigger
+  language plpgsql security definer set search_path = public as
+$$ begin
+  insert into jobs (book_id, type, status) values (new.id, 'index_book', 'queued');
+  return new;
+end $$;
+drop trigger if exists on_book_created on books;
+create trigger on_book_created
+  after insert on books
+  for each row execute function create_index_job_for_book();
 
 -- generation_shares: teacher (owner) manages; students read shares for their classes
 create policy shares_owner_all on generation_shares for all

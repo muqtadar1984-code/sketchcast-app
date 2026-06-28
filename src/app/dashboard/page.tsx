@@ -2,15 +2,20 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import UploadBook from "./upload-book";
 import GenerateButton from "./generate-button";
+import GenerateAllButton from "./generate-all-button";
 import AutoRefresh from "./auto-refresh";
 import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
+
+type Chapter = { num: number; title: string };
 
 type Book = {
   id: string;
   title: string;
   author: string | null;
   storage_path: string | null;
+  status: string | null;
+  chapters: Chapter[] | null;
   created_at: string;
 };
 
@@ -37,14 +42,14 @@ export default async function DashboardPage() {
 
   const { data: books } = await supabase
     .from("books")
-    .select("id, title, author, storage_path, created_at")
+    .select("id, title, author, storage_path, status, chapters, created_at")
     .order("created_at", { ascending: false });
   const bookList = (books ?? []) as Book[];
 
   const { data: gensRaw } = await supabase
     .from("generations")
     .select(
-      "id, title, status, created_at, artifacts(kind, storage_path), jobs(progress, status)",
+      "id, title, status, created_at, chapter_ref, book_id, artifacts(kind, storage_path), jobs(progress, status)",
     )
     .order("created_at", { ascending: false });
 
@@ -64,12 +69,31 @@ export default async function DashboardPage() {
         title: (g.title as string) || "Untitled lesson",
         status: g.status as string,
         progress: (g.jobs?.[0]?.progress as number) ?? 0,
-        arts,
+        bookId: (g.book_id as string | null) ?? null,
+        chapterRef: (g.chapter_ref as string | null) ?? null,
+        deck: arts.find((a) => a.kind === "deck_pptx")?.url ?? null,
+        video: arts.find((a) => a.kind === "video_mp4")?.url ?? null,
         artifactPaths: (g.artifacts ?? []).map((a: any) => a.storage_path as string),
       };
     }),
   );
-  const hasPending = lessons.some((l) => l.status === "queued" || l.status === "processing");
+  type Lesson = (typeof lessons)[number];
+
+  // Latest lesson for a given book + chapter number (gensRaw is newest-first).
+  const lessonForChapter = (bookId: string, num: number): Lesson | undefined =>
+    lessons.find((l) => l.bookId === bookId && l.chapterRef === String(num));
+  // Lessons for a book that aren't tied to one of its current chapters
+  // (legacy whole-book lessons with chapter_ref = null, or stale refs).
+  const otherLessonsForBook = (book: Book): Lesson[] => {
+    const nums = new Set((book.chapters ?? []).map((c) => String(c.num)));
+    return lessons.filter(
+      (l) => l.bookId === book.id && (l.chapterRef === null || !nums.has(l.chapterRef)),
+    );
+  };
+
+  const hasPending =
+    lessons.some((l) => l.status === "queued" || l.status === "processing") ||
+    bookList.some((b) => b.status === "indexing");
 
   return (
     <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
@@ -108,75 +132,172 @@ export default async function DashboardPage() {
             No books yet. Upload your first textbook above.
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {bookList.map((b) => (
-              <div key={b.id} className="bg-white rounded-xl border border-[#EBE3D3] p-5">
-                <div className="flex items-start justify-between">
-                  <span className="text-xs font-medium text-[#2E6B4E] bg-[#EAF1EC] px-2 py-0.5 rounded-full">
-                    PDF
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-[#6F6A5F]">
-                      {new Date(b.created_at).toLocaleDateString()}
-                    </span>
-                    <DeleteBook bookId={b.id} storagePath={b.storage_path} />
+          <div className="space-y-5">
+            {bookList.map((b) => {
+              const chapters = b.chapters ?? [];
+              const pendingChapters = chapters.filter((c) => !lessonForChapter(b.id, c.num));
+              const others = otherLessonsForBook(b);
+              return (
+                <div key={b.id} className="bg-white rounded-xl border border-[#EBE3D3] p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-[#2E6B4E] bg-[#EAF1EC] px-2 py-0.5 rounded-full shrink-0">
+                          PDF
+                        </span>
+                        <h3 className="font-medium truncate" style={{ fontFamily: "Georgia, serif" }}>
+                          {b.title}
+                        </h3>
+                      </div>
+                      <p className="text-sm text-[#6F6A5F] mt-0.5">{b.author || "Unknown author"}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {b.status === "ready" && chapters.length > 0 && (
+                        <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={pendingChapters} />
+                      )}
+                      <span className="text-xs text-[#6F6A5F]">
+                        {new Date(b.created_at).toLocaleDateString()}
+                      </span>
+                      <DeleteBook bookId={b.id} storagePath={b.storage_path} />
+                    </div>
                   </div>
+
+                  {b.status === "indexing" ? (
+                    <p className="mt-4 inline-block text-sm text-[#854F0B] bg-[#FAEEDA] rounded-lg px-3 py-1.5">
+                      Finding chapters…
+                    </p>
+                  ) : b.status === "error" ? (
+                    <div className="mt-4 flex items-center gap-3">
+                      <span className="text-sm text-[#A32D2D]">Couldn&apos;t detect chapters.</span>
+                      <GenerateButton bookId={b.id} schoolId={schoolId} label="Generate full book" />
+                    </div>
+                  ) : chapters.length > 0 ? (
+                    <ul className="mt-3 border-t border-[#F1ECE0] divide-y divide-[#F1ECE0]">
+                      {chapters.map((c) => {
+                        const l = lessonForChapter(b.id, c.num);
+                        return (
+                          <li key={c.num} className="flex items-center justify-between gap-4 py-2.5">
+                            <span className="text-sm text-[#2C2A26] flex-1 min-w-0 truncate">
+                              <span className="text-[#9A958A]">{c.num + 1}.</span> {c.title}
+                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!l && (
+                                <GenerateButton bookId={b.id} schoolId={schoolId} chapterRef={c.num} label="Generate" />
+                              )}
+                              {l && l.status === "done" && (
+                                <>
+                                  {l.video && (
+                                    <a href={l.video} target="_blank" className="text-xs font-medium text-[#2E6B4E] hover:underline">
+                                      ▶ Watch
+                                    </a>
+                                  )}
+                                  {l.deck && (
+                                    <a href={l.deck} className="text-xs font-medium text-[#2E6B4E] hover:underline">
+                                      ⬇ Deck
+                                    </a>
+                                  )}
+                                  <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
+                                </>
+                              )}
+                              {l && (l.status === "queued" || l.status === "processing") && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
+                                  {l.status}
+                                  {l.status === "processing" ? ` · ${l.progress}%` : ""}
+                                </span>
+                              )}
+                              {l && l.status === "error" && (
+                                <>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE.error}`}>error</span>
+                                  <GenerateButton bookId={b.id} schoolId={schoolId} chapterRef={c.num} label="Retry" />
+                                </>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <div className="mt-4">
+                      <GenerateButton bookId={b.id} schoolId={schoolId} label="Generate lesson" />
+                    </div>
+                  )}
+
+                  {others.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-[#F1ECE0]">
+                      <p className="text-xs text-[#6F6A5F] mb-2">Other lessons</p>
+                      <ul className="space-y-2">
+                        {others.map((l) => (
+                          <li key={l.id} className="flex items-center justify-between gap-4">
+                            <span className="text-sm text-[#2C2A26] flex-1 min-w-0 truncate">{l.title}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {l.status === "done" ? (
+                                <>
+                                  {l.video && (
+                                    <a href={l.video} target="_blank" className="text-xs font-medium text-[#2E6B4E] hover:underline">
+                                      ▶ Watch
+                                    </a>
+                                  )}
+                                  {l.deck && (
+                                    <a href={l.deck} className="text-xs font-medium text-[#2E6B4E] hover:underline">
+                                      ⬇ Deck
+                                    </a>
+                                  )}
+                                </>
+                              ) : (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
+                                  {l.status}
+                                  {l.status === "processing" ? ` · ${l.progress}%` : ""}
+                                </span>
+                              )}
+                              <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                <h3 className="mt-3 font-medium" style={{ fontFamily: "Georgia, serif" }}>
-                  {b.title}
-                </h3>
-                <p className="text-sm text-[#6F6A5F]">{b.author || "Unknown author"}</p>
-                <GenerateButton bookId={b.id} schoolId={schoolId} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {lessons.length > 0 && (
+        {lessons.filter((l) => l.bookId === null).length > 0 && (
           <>
             <h2 className="text-2xl font-medium mt-12 mb-4" style={{ fontFamily: "Georgia, serif" }}>
-              Lessons
+              Other lessons
             </h2>
             <div className="space-y-3">
-              {lessons.map((l) => {
-                const deck = l.arts.find((a) => a.kind === "deck_pptx")?.url;
-                const video = l.arts.find((a) => a.kind === "video_mp4")?.url;
-                return (
+              {lessons
+                .filter((l) => l.bookId === null)
+                .map((l) => (
                   <div key={l.id} className="bg-white rounded-xl border border-[#EBE3D3] p-5">
                     <div className="flex items-center justify-between gap-4">
-                      <span className="font-medium" style={{ fontFamily: "Georgia, serif" }}>
+                      <span className="font-medium truncate" style={{ fontFamily: "Georgia, serif" }}>
                         {l.title}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
-                          {l.status}
-                          {l.status === "processing" ? ` · ${l.progress}%` : ""}
-                        </span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {l.status === "done" && l.video && (
+                          <a href={l.video} target="_blank" className="text-sm font-medium text-[#2E6B4E] hover:underline">
+                            ▶ Watch
+                          </a>
+                        )}
+                        {l.status === "done" && l.deck && (
+                          <a href={l.deck} className="text-sm font-medium text-[#2E6B4E] hover:underline">
+                            ⬇ Deck
+                          </a>
+                        )}
+                        {l.status !== "done" && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
+                            {l.status}
+                            {l.status === "processing" ? ` · ${l.progress}%` : ""}
+                          </span>
+                        )}
                         <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
                       </div>
                     </div>
-                    {l.status === "processing" && (
-                      <div className="h-1.5 bg-[#F1ECE0] rounded-full mt-3 overflow-hidden">
-                        <div className="h-full bg-[#2E6B4E]" style={{ width: `${l.progress}%` }} />
-                      </div>
-                    )}
-                    {l.status === "done" && (
-                      <div className="flex flex-wrap gap-3 mt-3">
-                        {video && (
-                          <a href={video} target="_blank" className="text-sm font-medium text-[#2E6B4E] hover:underline">
-                            ▶ Watch video
-                          </a>
-                        )}
-                        {deck && (
-                          <a href={deck} className="text-sm font-medium text-[#2E6B4E] hover:underline">
-                            ⬇ Download deck (.pptx)
-                          </a>
-                        )}
-                      </div>
-                    )}
                   </div>
-                );
-              })}
+                ))}
             </div>
           </>
         )}

@@ -4,22 +4,33 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-export default function GenerateButton({
+type Chapter = { num: number; title: string };
+
+// Generates a lesson for every chapter passed in (the parent passes only the
+// chapters that don't already have a lesson). Each insert fires the
+// on_generation_created trigger → one job each.
+export default function GenerateAllButton({
   bookId,
   schoolId,
-  chapterRef = null,
-  label = "Generate lesson",
+  chapters,
 }: {
   bookId: string;
   schoolId: string | null;
-  chapterRef?: number | string | null;
-  label?: string;
+  chapters: Chapter[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onGenerate() {
+  if (chapters.length === 0) return null;
+
+  async function onGenerateAll() {
+    if (
+      !confirm(
+        `Generate a lesson for ${chapters.length} chapter(s)? Each runs separately and uses Claude credits.`,
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -32,15 +43,15 @@ export default function GenerateButton({
       return;
     }
 
-    // Insert only the generation — a DB trigger creates its job automatically.
-    const { error: gErr } = await supabase.from("generations").insert({
+    const rows = chapters.map((c) => ({
       kind: "presentation",
       book_id: bookId,
       owner_id: user.id,
       school_id: schoolId,
-      chapter_ref: chapterRef === null ? null : String(chapterRef),
+      chapter_ref: String(c.num),
       status: "queued",
-    });
+    }));
+    const { error: gErr } = await supabase.from("generations").insert(rows);
     setBusy(false);
     if (gErr) {
       setError(gErr.message);
@@ -52,11 +63,11 @@ export default function GenerateButton({
   return (
     <>
       <button
-        onClick={onGenerate}
+        onClick={onGenerateAll}
         disabled={busy}
-        className="h-8 px-3 rounded-lg bg-[#2E6B4E] text-white text-xs font-medium hover:bg-[#255A41] disabled:opacity-50 whitespace-nowrap"
+        className="h-8 px-3 rounded-lg border border-[#2E6B4E] text-[#2E6B4E] text-xs font-medium hover:bg-[#EAF1EC] disabled:opacity-50 whitespace-nowrap"
       >
-        {busy ? "Starting…" : label}
+        {busy ? "Queuing…" : `Generate all (${chapters.length})`}
       </button>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </>

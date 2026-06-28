@@ -46,7 +46,7 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
       owner_id: user.id,
       school_id: schoolId,
       storage_path: path,
-      status: "ready",
+      status: "indexing", // worker extracts the chapter list, then flips to "ready"
     });
     setBusy(false);
     if (ins.error) {
