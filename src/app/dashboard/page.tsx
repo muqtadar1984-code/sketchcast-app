@@ -14,6 +14,8 @@ type Book = {
   storage_path: string | null;
   status: string | null;
   chapters: Chapter[] | null;
+  grade: string | null;
+  subject: string | null;
   created_at: string;
 };
 
@@ -38,16 +40,22 @@ export default async function DashboardPage() {
     .single();
   const schoolId = (profile?.school_id as string | null) ?? null;
 
+  const { data: classesRaw } = await supabase
+    .from("classes")
+    .select("id, name, grade")
+    .order("created_at", { ascending: false });
+  const classes = (classesRaw ?? []) as { id: string; name: string; grade: string | null }[];
+
   const { data: books } = await supabase
     .from("books")
-    .select("id, title, author, storage_path, status, chapters, created_at")
+    .select("id, title, author, storage_path, status, chapters, grade, subject, created_at")
     .order("created_at", { ascending: false });
   const bookList = (books ?? []) as Book[];
 
   const { data: gensRaw } = await supabase
     .from("generations")
     .select(
-      "id, title, status, created_at, chapter_ref, book_id, artifacts(kind, storage_path), jobs(progress, status)",
+      "id, title, status, created_at, kind, chapter_ref, book_id, artifacts(kind, storage_path), jobs(progress, status)",
     )
     .order("created_at", { ascending: false });
 
@@ -67,19 +75,27 @@ export default async function DashboardPage() {
         title: (g.title as string) || "Untitled lesson",
         status: g.status as string,
         progress: (g.jobs?.[0]?.progress as number) ?? 0,
+        kind: (g.kind as string) || "presentation",
+        params: (g.params as Record<string, unknown> | null) ?? null,
         bookId: (g.book_id as string | null) ?? null,
         chapterRef: (g.chapter_ref as string | null) ?? null,
         deck: arts.find((a) => a.kind === "deck_pptx")?.url ?? null,
         video: arts.find((a) => a.kind === "video_mp4")?.url ?? null,
+        doc: arts.find((a) => a.kind === "docx")?.url ?? null,
         artifactPaths: (g.artifacts ?? []).map((a: any) => a.storage_path as string),
       };
     }),
   );
   type Lesson = (typeof lessons)[number];
 
-  // Latest lesson for a given book + chapter number (gensRaw is newest-first).
+  // Latest generation for a book + chapter + kind (gensRaw is newest-first).
+  const lessonFor = (bookId: string, num: number, kind: string): Lesson | undefined =>
+    lessons.find(
+      (l) => l.bookId === bookId && l.chapterRef === String(num) && l.kind === kind,
+    );
+  // The chapter's "lesson" = its presentation (deck+video) — used for progress.
   const lessonForChapter = (bookId: string, num: number): Lesson | undefined =>
-    lessons.find((l) => l.bookId === bookId && l.chapterRef === String(num));
+    lessonFor(bookId, num, "presentation");
   // Lessons for a book that aren't tied to one of its current chapters
   // (legacy whole-book lessons with chapter_ref = null, or stale refs).
   const otherLessonsForBook = (book: Book): Lesson[] => {
@@ -94,21 +110,49 @@ export default async function DashboardPage() {
     bookList.some((b) => b.status === "indexing");
 
   // Shape the data for the (client) collapsible book/chapter table.
-  const bookRows: BookRow[] = bookList.map((b) => ({
-    id: b.id,
-    title: b.title,
-    author: b.author,
-    status: b.status,
-    storagePath: b.storage_path,
-    createdAt: b.created_at,
-    chapters: (b.chapters ?? []).map((c) => ({
-      num: c.num,
-      title: c.title,
-      lesson: lessonForChapter(b.id, c.num) ?? null,
-    })),
-    pendingChapters: (b.chapters ?? []).filter((c) => !lessonForChapter(b.id, c.num)),
-    otherLessons: otherLessonsForBook(b),
-  }));
+  const bookRows: BookRow[] = bookList.map((b) => {
+    const chs = b.chapters ?? [];
+    return {
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      status: b.status,
+      grade: b.grade,
+      subject: b.subject,
+      storagePath: b.storage_path,
+      createdAt: b.created_at,
+      doneChapters: chs.filter((c) => lessonForChapter(b.id, c.num)?.status === "done").length,
+      totalChapters: chs.length,
+      presentationIds: chs
+        .map((c) => lessonFor(b.id, c.num, "presentation"))
+        .filter((l): l is Lesson => !!l && l.status === "done")
+        .map((l) => l.id),
+      chapters: chs.map((c) => ({
+        num: c.num,
+        title: c.title,
+        presentation: lessonFor(b.id, c.num, "presentation") ?? null,
+        lessonPlan: lessonFor(b.id, c.num, "lesson_plan") ?? null,
+        activity: lessonFor(b.id, c.num, "activity") ?? null,
+        exam: lessonFor(b.id, c.num, "exam_paper") ?? null,
+      })),
+      pendingChapters: chs.filter((c) => !lessonForChapter(b.id, c.num)),
+      otherLessons: otherLessonsForBook(b),
+    };
+  });
+
+  // Group the library Grade → Subject (auto-detected; "Other / General" when unknown).
+  const groupMap = new Map<string, BookRow[]>();
+  for (const br of bookRows) {
+    const key = `${br.grade || "Other"}|||${br.subject || "General"}`;
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key)!.push(br);
+  }
+  const groups = [...groupMap.entries()]
+    .map(([key, rows]) => {
+      const [grade, subject] = key.split("|||");
+      return { grade, subject, books: rows };
+    })
+    .sort((a, b) => `${a.grade} ${a.subject}`.localeCompare(`${b.grade} ${b.subject}`));
 
   return (
     <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
@@ -147,7 +191,20 @@ export default async function DashboardPage() {
             No books yet. Upload your first textbook above.
           </div>
         ) : (
-          <BookTable books={bookRows} schoolId={schoolId} />
+          <div className="space-y-8">
+            {groups.map((g) => (
+              <section key={`${g.grade}-${g.subject}`}>
+                <div className="flex items-baseline gap-2 mb-2 px-1">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-[#2E6B4E]">
+                    {g.grade}
+                  </h2>
+                  <span className="text-[#9A958A]">·</span>
+                  <span className="text-sm text-[#6F6A5F]">{g.subject}</span>
+                </div>
+                <BookTable books={g.books} schoolId={schoolId} classes={classes} />
+              </section>
+            ))}
+          </div>
         )}
 
         {lessons.filter((l) => l.bookId === null).length > 0 && (

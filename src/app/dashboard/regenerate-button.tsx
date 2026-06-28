@@ -13,12 +13,16 @@ export default function RegenerateButton({
   chapterRef,
   oldGenId,
   oldArtifactPaths,
+  kind = "presentation",
+  params = null,
 }: {
   bookId: string;
   schoolId: string | null;
   chapterRef: number | string;
   oldGenId: string;
   oldArtifactPaths: string[];
+  kind?: string;
+  params?: Record<string, unknown> | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -38,13 +42,14 @@ export default function RegenerateButton({
       setBusy(false);
       return;
     }
-    // 1. Queue a fresh lesson for this chapter (trigger creates its job).
+    // 1. Queue a fresh generation of the same kind (trigger creates its job).
     const { error: gErr } = await supabase.from("generations").insert({
-      kind: "presentation",
+      kind,
       book_id: bookId,
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(chapterRef),
+      params,
       status: "queued",
     });
     if (gErr) {

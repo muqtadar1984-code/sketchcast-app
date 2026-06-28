@@ -82,6 +82,8 @@ create table books (
   storage_path text,                  -- path in the `uploads` storage bucket
   pages        int,
   chapters     jsonb,                  -- [{"num": int, "title": str}] from index_book
+  grade        text,                   -- auto-detected by index_book (not teacher input)
+  subject      text,                   -- auto-detected by index_book
   status       text not null default 'ready',
   created_at   timestamptz not null default now()
 );
@@ -96,6 +98,7 @@ create table generations (
   owner_id     uuid not null references profiles(id) on delete cascade,
   school_id    uuid references schools(id) on delete set null,
   status       job_status not null default 'queued',
+  params       jsonb,                  -- per-generation options (e.g. exam question mix)
   created_at   timestamptz not null default now()
 );
 
