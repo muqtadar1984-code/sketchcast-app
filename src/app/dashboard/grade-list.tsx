@@ -8,6 +8,8 @@ export type PendingSub = {
   studentName: string;
   label: string;
   mode: string;
+  auto: number | null;
+  max: number | null;
 };
 
 // Teacher grading of submitted worksheets/exams that still need a mark. Opens
@@ -70,10 +72,12 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
             <span className="font-medium">{r.studentName}</span>
             <span className="text-[#6F6A5F]"> · {r.label}</span>
           </span>
-          {r.mode === "file" && (
+          {r.mode === "file" ? (
             <button onClick={() => openFile(r.id)} className="text-xs font-medium text-[#2E6B4E] hover:underline">
               Open file
             </button>
+          ) : (
+            <span className="text-xs text-[#6F6A5F]">Auto-scored {r.auto ?? 0}/{r.max ?? 0}</span>
           )}
           <span className="flex items-center gap-2 ml-auto">
             <input

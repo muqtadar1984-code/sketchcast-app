@@ -54,10 +54,10 @@ export default async function AnalyticsPage() {
     .select("generation_id, student_id, status");
   const prog = (progRaw ?? []) as ProgRow[];
 
-  type SubRow = { id: string; generation_id: string; student_id: string; mode: string; grade_status: string };
+  type SubRow = { id: string; generation_id: string; student_id: string; mode: string; grade_status: string; auto_score: number | null; max_score: number | null };
   const { data: subsRaw } = await supabase
     .from("submissions")
-    .select("id, generation_id, student_id, mode, grade_status");
+    .select("id, generation_id, student_id, mode, grade_status, auto_score, max_score");
   const subs = (subsRaw ?? []) as SubRow[];
 
   // ── Index the raw rows ──────────────────────────────────────────────────
@@ -114,7 +114,7 @@ export default async function AnalyticsPage() {
 
   const pending: PendingSub[] = subs
     .filter((s) => s.grade_status === "pending")
-    .map((s) => ({ id: s.id, studentName: studentName.get(s.student_id) || "Student", label: genLabel(s.generation_id), mode: s.mode }));
+    .map((s) => ({ id: s.id, studentName: studentName.get(s.student_id) || "Student", label: genLabel(s.generation_id), mode: s.mode, auto: s.auto_score, max: s.max_score }));
 
   const completionPct = total ? Math.round((completed / total) * 100) : 0;
   const metrics: { label: string; value: string | number }[] = [

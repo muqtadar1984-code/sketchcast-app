@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import QuizPlayer, { type QuizData } from "./quiz-player";
 
 export type ProgressStatus = "assigned" | "in_progress" | "completed" | "revised";
 
@@ -15,6 +16,7 @@ export type StudentItemData = {
   video: string | null;
   deck: string | null;
   doc: string | null;
+  quiz: string | null; // signed URL of questions.json, if the worker emitted one
   status: ProgressStatus | null;
   revisionCount: number;
   submitted: boolean;
@@ -42,6 +44,7 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quiz, setQuiz] = useState<QuizData | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const base = { generation_id: item.genId, student_id: studentId, class_id: item.classId };
@@ -102,6 +105,39 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
     setBusy(false);
   }
 
+  async function takeQuiz() {
+    if (!item.quiz) return;
+    setError(null);
+    try {
+      const res = await fetch(item.quiz);
+      const data = (await res.json()) as QuizData;
+      if (!data?.questions?.length) {
+        setError("Quiz unavailable — use Submit answer instead.");
+        return;
+      }
+      setQuiz(data);
+      void markOpen();
+    } catch {
+      setError("Could not load the quiz.");
+    }
+  }
+
+  async function onQuizSubmit(answers: Record<string, unknown>, auto: number, max: number, needsReview: boolean) {
+    const { error: sErr } = await supabase
+      .from("submissions")
+      .upsert(
+        { ...base, mode: "interactive", answers, auto_score: auto, max_score: max, grade_status: needsReview ? "pending" : "auto", submitted_at: new Date().toISOString() },
+        { onConflict: "generation_id,student_id" },
+      );
+    if (sErr) {
+      setError(sErr.message);
+      return;
+    }
+    await markComplete();
+    setSubmitted(true);
+    setQuiz(null);
+  }
+
   const isLesson = item.kind === "presentation";
   const done = status === "completed" || status === "revised" || submitted;
   const overdue = item.dueOverdue && !done;
@@ -132,8 +168,11 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
             {item.doc && (
               <a href={item.doc} className="font-medium text-[#2E6B4E] hover:underline">⬇ Open</a>
             )}
+            {item.quiz && (
+              <button onClick={takeQuiz} className="font-medium text-[#2E6B4E] hover:underline">Take quiz</button>
+            )}
             <button onClick={() => fileRef.current?.click()} disabled={busy} className="font-medium text-[#2E6B4E] hover:underline disabled:opacity-50">
-              {busy ? "Uploading…" : submitted ? "Resubmit" : "Submit answer"}
+              {busy ? "Uploading…" : submitted ? "Resubmit" : "Submit file"}
             </button>
             <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
           </>
@@ -153,6 +192,8 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
           </div>
         </div>
       )}
+
+      {quiz && <QuizPlayer data={quiz} onClose={() => setQuiz(null)} onSubmit={onQuizSubmit} />}
     </li>
   );
 }

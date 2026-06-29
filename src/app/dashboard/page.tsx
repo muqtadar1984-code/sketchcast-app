@@ -133,6 +133,7 @@ export default async function DashboardPage() {
         video: await sign(path("video_mp4")),
         deck: await sign(path("deck_pptx")),
         doc: await sign(path("docx")),
+        quiz: await sign(path("questions_json")),
         status: (prog?.status as StudentItemData["status"]) ?? null,
         revisionCount: prog?.revisionCount ?? 0,
         submitted: submittedSet.has(g.id),
