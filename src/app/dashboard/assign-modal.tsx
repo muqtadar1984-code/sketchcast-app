@@ -32,8 +32,13 @@ export default function AssignModal({
   const [newGrade, setNewGrade] = useState("");
 
   async function createClass() {
-    if (!newName.trim()) {
+    const name = newName.trim();
+    if (!name) {
       setError("Class name required.");
+      return;
+    }
+    if (classList.some((c) => c.name.trim().toLowerCase() === name.toLowerCase())) {
+      setError(`You already have a class named "${name}".`);
       return;
     }
     setBusy(true);

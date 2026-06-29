@@ -28,28 +28,35 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
   const [newGrade, setNewGrade] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [classError, setClassError] = useState<string | null>(null);
   const [rows, setRows] = useState<NewRow[]>([emptyRow()]);
   const [creds, setCreds] = useState<Cred[]>([]);
 
   async function createClass() {
-    if (!newName.trim()) return;
+    const name = newName.trim();
+    if (!name) return;
+    // No two classes with the same name (case-insensitive) for this teacher.
+    if (classes.some((c) => c.name.trim().toLowerCase() === name.toLowerCase())) {
+      setClassError(`You already have a class named "${name}".`);
+      return;
+    }
     setBusy(true);
-    setError(null);
+    setClassError(null);
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setClassError("Not signed in.");
       setBusy(false);
       return;
     }
     const { error: cErr } = await supabase
       .from("classes")
-      .insert({ name: newName.trim(), grade: newGrade.trim() || null, teacher_id: user.id });
+      .insert({ name, grade: newGrade.trim() || null, teacher_id: user.id });
     setBusy(false);
     if (cErr) {
-      setError(cErr.message);
+      setClassError(cErr.message);
       return;
     }
     setNewName("");
@@ -108,7 +115,7 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <label className="block">
           <span className="text-xs text-[#6F6A5F]">New class</span>
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Class name (e.g. 5A)"
+          <input value={newName} onChange={(e) => { setNewName(e.target.value); setClassError(null); }} placeholder="Class name (e.g. 5A)"
             className="field block h-9 px-3 mt-1 text-sm w-44" />
         </label>
         <input value={newGrade} onChange={(e) => setNewGrade(e.target.value)} placeholder="Grade (optional)"
@@ -117,6 +124,7 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
           {busy ? "…" : "Create class"}
         </button>
       </div>
+      {classError && <p className="text-xs text-red-600 mt-1.5">{classError}</p>}
 
       {classes.length > 0 && (
         <div className="mt-4 space-y-2">
