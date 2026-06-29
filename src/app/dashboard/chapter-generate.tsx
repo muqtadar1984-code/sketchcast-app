@@ -46,6 +46,14 @@ export default function ChapterGenerate({
   const chosen = pendingKinds.filter((k) => sel[k.kind]);
   const toggle = (kind: string) => setSel((s) => ({ ...s, [kind]: !s[kind] }));
 
+  // "Assign chapter" sends every student-facing item that's ready (the teacher
+  // lesson plan is never assigned to students).
+  const studentKinds = ["presentation", "activity", "worksheet", "exam_paper", "case_study"];
+  const assignableIds = studentKinds
+    .map((k) => lessons[k])
+    .filter((l): l is CellLesson => !!l && l.status === "done")
+    .map((l) => l.id);
+
   async function generate() {
     if (chosen.length === 0) return;
     setBusy(true);
@@ -115,23 +123,25 @@ export default function ChapterGenerate({
                 kind={k.kind}
                 lesson={lesson}
               />
-              {k.kind === "presentation" && lesson.status === "done" && (
-                <AssignModal label="Assign" generationIds={[lesson.id]} classes={classes} />
-              )}
             </span>
           );
         })}
 
-        {pendingKinds.length > 0 && (
-          <button
-            onClick={generate}
-            disabled={busy || chosen.length === 0}
-            className="btn-primary h-8 px-3 text-xs whitespace-nowrap ml-auto"
-            title="Generate every checked document type for this chapter"
-          >
-            {busy ? "Queuing…" : `Generate (${chosen.length})`}
-          </button>
-        )}
+        <span className="ml-auto flex items-center gap-3">
+          {assignableIds.length > 0 && (
+            <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
+          )}
+          {pendingKinds.length > 0 && (
+            <button
+              onClick={generate}
+              disabled={busy || chosen.length === 0}
+              className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
+              title="Generate every checked document type for this chapter"
+            >
+              {busy ? "Queuing…" : `Generate (${chosen.length})`}
+            </button>
+          )}
+        </span>
       </div>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>

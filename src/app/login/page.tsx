@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { LogoMark } from "../dashboard/icons";
+import { studentEmail } from "@/utils/student";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,7 +19,10 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Teachers sign in with their email; invited students use their ID (no "@"),
+    // which maps to the synthetic student login address.
+    const loginEmail = email.includes("@") ? email.trim() : studentEmail(email);
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
     setLoading(false);
     if (error) {
       setError(error.message);
@@ -41,7 +45,7 @@ export default function LoginPage() {
 
         <form onSubmit={onSubmit} className="space-y-4">
           <input
-            type="email" required placeholder="Email" value={email}
+            required placeholder="Email or student ID" value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="field w-full h-11 px-3 text-[#2C2A26]"
           />

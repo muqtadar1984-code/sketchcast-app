@@ -1,11 +1,27 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
 import BrandingCard from "./branding-card";
-import { EmptyBooks, LogoMark } from "./icons";
+import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
+import AppHeader from "./app-header";
+import StudentDashboard, {
+  type StudentItem,
+  type StudentClassGroup,
+} from "./student-dashboard";
+import { EmptyBooks } from "./icons";
+
+const KIND_LABEL: Record<string, string> = {
+  presentation: "Lesson",
+  worksheet: "Worksheet",
+  exam_paper: "Exam",
+  activity: "Activities",
+  case_study: "Case study",
+  lesson_plan: "Lesson plan",
+};
 
 type Chapter = { num: number; title: string };
 
@@ -42,12 +58,128 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
   const schoolId = (profile?.school_id as string | null) ?? null;
+  const role = (profile?.role as string | null) ?? null;
+  const displayName = profile?.full_name || user.email || "";
 
+  // ── Student view ──────────────────────────────────────────────────────────
+  // Students see only the content assigned to them (RLS → shared_to_me). We sign
+  // those artifacts with the service role since the storage policy only lets the
+  // owning teacher sign directly.
+  if (role === "student") {
+    const { data: gensRaw } = await supabase
+      .from("generations")
+      .select("id, kind, chapter_ref, artifacts(kind, storage_path)")
+      .order("created_at", { ascending: false });
+    const { data: sharesRaw } = await supabase
+      .from("generation_shares")
+      .select("generation_id, due_at, classes(name)");
+
+    type ShareRow = { generation_id: string; due_at: string | null; classes: { name: string } | null };
+    type ShareInfo = { due: string | null; className: string };
+    const shareByGen = new Map<string, ShareInfo>();
+    // (to-one embeds come back as objects at runtime; supabase-js types them as arrays)
+    for (const s of (sharesRaw ?? []) as unknown as ShareRow[]) {
+      const gid = s.generation_id;
+      const className = s.classes?.name || "My class";
+      const due = s.due_at ?? null;
+      const prev = shareByGen.get(gid);
+      if (!prev) shareByGen.set(gid, { due, className });
+      else if (due && (!prev.due || new Date(due) < new Date(prev.due)))
+        shareByGen.set(gid, { due, className: prev.className });
+    }
+
+    let downloadsReady = true;
+    let admin: ReturnType<typeof createAdminClient> | null = null;
+    try {
+      admin = createAdminClient();
+    } catch {
+      downloadsReady = false;
+    }
+    const sign = async (path: string | null): Promise<string | null> => {
+      if (!path || !admin) return null;
+      const { data } = await admin.storage.from("artifacts").createSignedUrl(path, 3600);
+      return data?.signedUrl ?? null;
+    };
+
+    type GenRow = { id: string; kind: string; chapter_ref: string | null; artifacts: { kind: string; storage_path: string }[] };
+    type Item = StudentItem & { className: string; chapterRef: string | null };
+    const items: Item[] = [];
+    for (const g of (gensRaw ?? []) as GenRow[]) {
+      const info = shareByGen.get(g.id);
+      if (!info || g.kind === "lesson_plan") continue; // only assigned, never the teacher plan
+      const arts = g.artifacts ?? [];
+      const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
+      items.push({
+        genId: g.id,
+        kind: g.kind,
+        label: KIND_LABEL[g.kind] ?? g.kind,
+        dueAt: info.due,
+        className: info.className,
+        chapterRef: g.chapter_ref ?? null,
+        video: await sign(path("video_mp4")),
+        deck: await sign(path("deck_pptx")),
+        doc: await sign(path("docx")),
+      });
+    }
+
+    // Group by class → chapter.
+    const byClass = new Map<string, Map<string, Item[]>>();
+    for (const it of items) {
+      const chKey = it.chapterRef ?? "—";
+      if (!byClass.has(it.className)) byClass.set(it.className, new Map());
+      const chMap = byClass.get(it.className)!;
+      if (!chMap.has(chKey)) chMap.set(chKey, []);
+      chMap.get(chKey)!.push(it);
+    }
+    const groups: StudentClassGroup[] = [...byClass.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([className, chMap]) => ({
+        className,
+        chapters: [...chMap.entries()]
+          .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0))
+          .map(([chKey, its]) => ({
+            key: chKey,
+            heading: chKey === "—" ? "Lessons" : `Chapter ${Number(chKey) + 1}`,
+            items: its,
+          })),
+      }));
+
+    return (
+      <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
+        <AppHeader name={displayName} role={role} />
+        <StudentDashboard groups={groups} downloadsReady={downloadsReady} />
+      </div>
+    );
+  }
+
+  // Simple list for the assignment dropdown — always works (no 0005 columns).
   const { data: classesRaw } = await supabase
     .from("classes")
     .select("id, name, grade")
     .order("created_at", { ascending: false });
   const classes = (classesRaw ?? []) as { id: string; name: string; grade: string | null }[];
+
+  // Roster for the Classes card. Reads migration 0005's profile columns + policy;
+  // if that migration isn't applied yet the query errors and we degrade to [] so
+  // the rest of the dashboard keeps working.
+  const { data: rostersRaw } = await supabase
+    .from("classes")
+    .select("id, name, grade, join_code, enrollments(profiles(full_name, username, parent_email))")
+    .order("created_at", { ascending: false });
+  type RosterRaw = {
+    id: string;
+    name: string;
+    grade: string | null;
+    join_code: string;
+    enrollments: { profiles: RosterStudent | null }[];
+  };
+  const classRosters: ClassRoster[] = ((rostersRaw ?? []) as unknown as RosterRaw[]).map((c) => ({
+    id: c.id,
+    name: c.name,
+    grade: c.grade,
+    join_code: c.join_code,
+    students: (c.enrollments ?? []).map((e) => e.profiles).filter((p): p is RosterStudent => !!p),
+  }));
 
   const { data: brandingRow } = await supabase
     .from("branding")
@@ -182,23 +314,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
       <AutoRefresh active={hasPending} />
-      <header className="border-b border-[#EBE3D3] bg-gradient-to-b from-[#FCFAF4] to-white">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="flex items-center gap-2.5 text-xl font-serif">
-            <LogoMark size={30} />
-            SketchCast <span className="text-[#2E6B4E]">AI</span>
-          </span>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-[#6F6A5F]">
-              {profile?.full_name || user.email}
-              {profile?.role ? ` · ${profile.role}` : ""}
-            </span>
-            <form action="/auth/signout" method="post">
-              <button className="btn-ghost h-9 px-3 text-sm">Sign out</button>
-            </form>
-          </div>
-        </div>
-      </header>
+      <AppHeader name={displayName} role={role} />
 
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Your library</h1>
@@ -208,6 +324,8 @@ export default async function DashboardPage() {
         </p>
 
         <UploadBook schoolId={schoolId} />
+
+        <ClassesCard classes={classRosters} />
 
         <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
 
