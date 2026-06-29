@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import ClassProgress from "./class-progress";
 
 export type RosterStudent = { full_name: string | null; username: string | null; parent_email: string | null };
 export type ClassRoster = {
@@ -149,7 +150,9 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
                     </ul>
                   )}
 
-                  <p className="text-xs font-medium text-[#6F6A5F] mt-3 mb-1.5">Add students</p>
+                  <ClassProgress classId={c.id} />
+
+                  <p className="text-xs font-medium text-[#6F6A5F] mt-4 mb-1.5">Add students</p>
                   <div className="space-y-1.5">
                     {rows.map((r, i) => (
                       <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr] gap-1.5">

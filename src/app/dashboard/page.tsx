@@ -9,7 +9,7 @@ import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
 import AppHeader from "./app-header";
 import StudentDashboard, {
-  type StudentItem,
+  type StudentItemData,
   type StudentClassGroup,
 } from "./student-dashboard";
 import { EmptyBooks } from "./icons";
@@ -72,10 +72,10 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false });
     const { data: sharesRaw } = await supabase
       .from("generation_shares")
-      .select("generation_id, due_at, classes(name)");
+      .select("generation_id, due_at, class_id, classes(name)");
 
-    type ShareRow = { generation_id: string; due_at: string | null; classes: { name: string } | null };
-    type ShareInfo = { due: string | null; className: string };
+    type ShareRow = { generation_id: string; due_at: string | null; class_id: string; classes: { name: string } | null };
+    type ShareInfo = { due: string | null; className: string; classId: string };
     const shareByGen = new Map<string, ShareInfo>();
     // (to-one embeds come back as objects at runtime; supabase-js types them as arrays)
     for (const s of (sharesRaw ?? []) as unknown as ShareRow[]) {
@@ -83,10 +83,21 @@ export default async function DashboardPage() {
       const className = s.classes?.name || "My class";
       const due = s.due_at ?? null;
       const prev = shareByGen.get(gid);
-      if (!prev) shareByGen.set(gid, { due, className });
+      if (!prev) shareByGen.set(gid, { due, className, classId: s.class_id });
       else if (due && (!prev.due || new Date(due) < new Date(prev.due)))
-        shareByGen.set(gid, { due, className: prev.className });
+        shareByGen.set(gid, { due, className: prev.className, classId: prev.classId });
     }
+
+    // Current progress + submissions for this student (tables from migration 0006;
+    // if not applied yet these error → empty maps → everything shows "not started").
+    const { data: progRaw } = await supabase
+      .from("student_progress")
+      .select("generation_id, status, revision_count");
+    const progByGen = new Map<string, { status: string; revisionCount: number }>();
+    for (const p of (progRaw ?? []) as { generation_id: string; status: string; revision_count: number }[])
+      progByGen.set(p.generation_id, { status: p.status, revisionCount: p.revision_count ?? 0 });
+    const { data: subsRaw } = await supabase.from("submissions").select("generation_id");
+    const submittedSet = new Set((subsRaw ?? []).map((s: { generation_id: string }) => s.generation_id));
 
     let downloadsReady = true;
     let admin: ReturnType<typeof createAdminClient> | null = null;
@@ -102,23 +113,29 @@ export default async function DashboardPage() {
     };
 
     type GenRow = { id: string; kind: string; chapter_ref: string | null; artifacts: { kind: string; storage_path: string }[] };
-    type Item = StudentItem & { className: string; chapterRef: string | null };
+    type Item = StudentItemData & { className: string; chapterRef: string | null };
     const items: Item[] = [];
     for (const g of (gensRaw ?? []) as GenRow[]) {
       const info = shareByGen.get(g.id);
       if (!info || g.kind === "lesson_plan") continue; // only assigned, never the teacher plan
       const arts = g.artifacts ?? [];
       const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
+      const prog = progByGen.get(g.id);
       items.push({
         genId: g.id,
         kind: g.kind,
         label: KIND_LABEL[g.kind] ?? g.kind,
         dueAt: info.due,
+        dueOverdue: !!info.due && new Date(info.due).getTime() < Date.now(),
+        classId: info.classId,
         className: info.className,
         chapterRef: g.chapter_ref ?? null,
         video: await sign(path("video_mp4")),
         deck: await sign(path("deck_pptx")),
         doc: await sign(path("docx")),
+        status: (prog?.status as StudentItemData["status"]) ?? null,
+        revisionCount: prog?.revisionCount ?? 0,
+        submitted: submittedSet.has(g.id),
       });
     }
 
@@ -147,7 +164,7 @@ export default async function DashboardPage() {
     return (
       <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
         <AppHeader name={displayName} role={role} />
-        <StudentDashboard groups={groups} downloadsReady={downloadsReady} />
+        <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
       </div>
     );
   }

@@ -1,32 +1,20 @@
-import { EmptyBooks, TypeIcon } from "./icons";
+import { EmptyBooks } from "./icons";
+import StudentItem, { type StudentItemData } from "./student-item";
 
-export type StudentItem = {
-  genId: string;
-  kind: string;
-  label: string;
-  dueAt: string | null;
-  video: string | null;
-  deck: string | null;
-  doc: string | null;
-};
-export type StudentChapter = { key: string; heading: string; items: StudentItem[] };
+export type { StudentItemData };
+export type StudentChapter = { key: string; heading: string; items: StudentItemData[] };
 export type StudentClassGroup = { className: string; chapters: StudentChapter[] };
 
-function dueLabel(due: string | null): { text: string; overdue: boolean } | null {
-  if (!due) return null;
-  const d = new Date(due);
-  const overdue = d.getTime() < Date.now();
-  return { text: `Due ${d.toLocaleDateString()}`, overdue };
-}
-
-// Read-only student view (Phase A): the chapters assigned to the student,
-// grouped by class, with links to open each piece. Completion/progress arrives
-// in Phase B.
+// Student view (Phase B): chapters assigned to the student, grouped by class.
+// Each item is interactive — the lesson plays in-app (complete at 100%), and
+// worksheets/exams accept an answer upload. Status updates live.
 export default function StudentDashboard({
   groups,
+  studentId,
   downloadsReady,
 }: {
   groups: StudentClassGroup[];
+  studentId: string;
   downloadsReady: boolean;
 }) {
   return (
@@ -56,31 +44,9 @@ export default function StudentDashboard({
                   <div key={ch.key} className="px-5 py-3">
                     <div className="font-serif font-medium mb-2">{ch.heading}</div>
                     <ul className="space-y-1.5">
-                      {ch.items.map((it) => {
-                        const due = dueLabel(it.dueAt);
-                        return (
-                          <li key={it.genId} className="flex items-center justify-between gap-4">
-                            <span className="flex items-center gap-1.5 text-sm min-w-0">
-                              <TypeIcon kind={it.kind} />
-                              <span className="text-[10px] uppercase tracking-wide text-[#9A958A]">{it.label}</span>
-                            </span>
-                            <span className="flex items-center gap-3 shrink-0 text-xs">
-                              {due && (
-                                <span className={due.overdue ? "text-[#A32D2D]" : "text-[#6F6A5F]"}>{due.text}</span>
-                              )}
-                              {it.video && (
-                                <a href={it.video} target="_blank" className="font-medium text-[#2E6B4E] hover:underline">▶ Watch</a>
-                              )}
-                              {it.deck && (
-                                <a href={it.deck} className="font-medium text-[#2E6B4E] hover:underline">⬇ Deck</a>
-                              )}
-                              {it.doc && (
-                                <a href={it.doc} className="font-medium text-[#2E6B4E] hover:underline">⬇ Open</a>
-                              )}
-                            </span>
-                          </li>
-                        );
-                      })}
+                      {ch.items.map((it) => (
+                        <StudentItem key={it.genId} item={it} studentId={studentId} />
+                      ))}
                     </ul>
                   </div>
                 ))}
