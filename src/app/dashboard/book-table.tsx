@@ -5,9 +5,10 @@ import GenerateButton from "./generate-button";
 import GenerateAllButton from "./generate-all-button";
 import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
-import ContentCell, { type CellLesson } from "./content-cell";
+import { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
-import { BookCover, TypeIcon } from "./icons";
+import ChapterGenerate from "./chapter-generate";
+import { BookCover } from "./icons";
 
 export type Lesson = CellLesson & { title: string; kind: string };
 export type ChapterRow = {
@@ -45,8 +46,6 @@ const STATUS_STYLE: Record<string, string> = {
   error: "bg-[#FCEBEB] text-[#A32D2D]",
 };
 
-const TYPE_LABEL = "text-[10px] uppercase tracking-wide text-[#9A958A]";
-
 export default function BookTable({
   books,
   schoolId,
@@ -63,13 +62,13 @@ export default function BookTable({
   const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
   return (
-    <div className="bg-white rounded-xl border border-[#EBE3D3] overflow-hidden">
+    <div className="card overflow-hidden">
       {books.map((b) => {
         const isOpen = !!open[b.id];
         const ready = b.status === "ready";
         return (
           <div key={b.id} className="border-b border-[#F1ECE0] last:border-b-0">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center">
+            <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#FCFAF4]" : ""}`}>
               <button
                 onClick={() => ready && toggle(b.id)}
                 disabled={!ready}
@@ -80,9 +79,7 @@ export default function BookTable({
                   {ready ? "▶" : "•"}
                 </span>
                 <span className="min-w-0">
-                  <span className="font-medium truncate block" style={{ fontFamily: "Georgia, serif" }}>
-                    {b.title}
-                  </span>
+                  <span className="font-serif font-medium truncate block">{b.title}</span>
                   <span className="text-xs text-[#6F6A5F]">{b.author || "Unknown author"}</span>
                 </span>
               </button>
@@ -138,50 +135,23 @@ export default function BookTable({
                 <ul className="border-t border-[#F1ECE0] divide-y divide-[#F1ECE0]">
                   {b.chapters.map((ch) => (
                     <li key={ch.num} className="py-2.5">
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-[#2C2A26] flex-1 min-w-0 truncate">
-                          <span className="text-[#9A958A]">{ch.num + 1}.</span> {ch.title}
-                        </span>
-                        <div className="shrink-0 flex items-center gap-1.5">
-                          <TypeIcon kind="presentation" />
-                          <span className={TYPE_LABEL}>Lesson</span>
-                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="presentation" lesson={ch.presentation} />
-                          {ch.presentation?.status === "done" && (
-                            <AssignModal
-                              label="Assign"
-                              generationIds={[ch.presentation.id]}
-                              classes={classes}
-                            />
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-1.5 pl-5">
-                        <span className="flex items-center gap-1.5">
-                          <TypeIcon kind="lesson_plan" />
-                          <span className={TYPE_LABEL}>Plan</span>
-                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="lesson_plan" lesson={ch.lessonPlan} />
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <TypeIcon kind="activity" />
-                          <span className={TYPE_LABEL}>Activities</span>
-                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="activity" lesson={ch.activity} />
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <TypeIcon kind="worksheet" />
-                          <span className={TYPE_LABEL}>Worksheet</span>
-                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="worksheet" lesson={ch.worksheet} />
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <TypeIcon kind="exam_paper" />
-                          <span className={TYPE_LABEL}>Exam</span>
-                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="exam_paper" lesson={ch.exam} />
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <TypeIcon kind="case_study" />
-                          <span className={TYPE_LABEL}>Case study</span>
-                          <ContentCell bookId={b.id} schoolId={schoolId} chapterNum={ch.num} kind="case_study" lesson={ch.caseStudy} />
-                        </span>
-                      </div>
+                      <span className="text-sm text-[#2C2A26] block truncate">
+                        <span className="text-[#9A958A]">{ch.num + 1}.</span> {ch.title}
+                      </span>
+                      <ChapterGenerate
+                        bookId={b.id}
+                        schoolId={schoolId}
+                        chapterNum={ch.num}
+                        classes={classes}
+                        lessons={{
+                          presentation: ch.presentation,
+                          lesson_plan: ch.lessonPlan,
+                          activity: ch.activity,
+                          worksheet: ch.worksheet,
+                          exam_paper: ch.exam,
+                          case_study: ch.caseStudy,
+                        }}
+                      />
                     </li>
                   ))}
                 </ul>

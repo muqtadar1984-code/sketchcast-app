@@ -5,7 +5,7 @@ import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
 import BrandingCard from "./branding-card";
-import { EmptyBooks } from "./icons";
+import { EmptyBooks, LogoMark } from "./icons";
 
 type Chapter = { num: number; title: string };
 
@@ -182,9 +182,10 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
       <AutoRefresh active={hasPending} />
-      <header className="border-b border-[#EBE3D3] bg-white">
+      <header className="border-b border-[#EBE3D3] bg-gradient-to-b from-[#FCFAF4] to-white">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="text-xl font-medium" style={{ fontFamily: "Georgia, serif" }}>
+          <span className="flex items-center gap-2.5 text-xl font-serif">
+            <LogoMark size={30} />
             SketchCast <span className="text-[#2E6B4E]">AI</span>
           </span>
           <div className="flex items-center gap-4 text-sm">
@@ -193,19 +194,16 @@ export default async function DashboardPage() {
               {profile?.role ? ` · ${profile.role}` : ""}
             </span>
             <form action="/auth/signout" method="post">
-              <button className="h-9 px-3 rounded-lg border border-[#EBE3D3] text-[#2C2A26] hover:bg-[#FBF8F1]">
-                Sign out
-              </button>
+              <button className="btn-ghost h-9 px-3 text-sm">Sign out</button>
             </form>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
-        <h1 className="text-3xl font-medium mb-1" style={{ fontFamily: "Georgia, serif" }}>
-          Your library
-        </h1>
-        <p className="text-[#6F6A5F] mb-6">
+        <h1 className="text-4xl mb-2">Your library</h1>
+        <div className="h-1 w-14 rounded-full bg-[#C77F2A] mb-3" />
+        <p className="text-[#6F6A5F] mb-7">
           Upload a textbook, then generate a narrated lesson from it.
         </p>
 
@@ -222,12 +220,9 @@ export default async function DashboardPage() {
           <div className="space-y-8">
             {groups.map((g) => (
               <section key={`${g.grade}-${g.subject}`}>
-                <div className="flex items-baseline gap-2 mb-2 px-1">
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-[#2E6B4E]">
-                    {g.grade}
-                  </h2>
-                  <span className="text-[#9A958A]">·</span>
-                  <span className="text-sm text-[#6F6A5F]">{g.subject}</span>
+                <div className="flex items-center gap-2 mb-2.5 px-1">
+                  <h2 className="chip font-sans bg-[#EAF1EC] text-[#2E6B4E]">{g.grade}</h2>
+                  <span className="text-sm font-medium text-[#6F6A5F]">{g.subject}</span>
                 </div>
                 <BookTable books={g.books} schoolId={schoolId} classes={classes} />
               </section>
@@ -237,18 +232,14 @@ export default async function DashboardPage() {
 
         {lessons.filter((l) => l.bookId === null).length > 0 && (
           <>
-            <h2 className="text-2xl font-medium mt-12 mb-4" style={{ fontFamily: "Georgia, serif" }}>
-              Other lessons
-            </h2>
+            <h2 className="text-2xl mt-12 mb-4">Other lessons</h2>
             <div className="space-y-3">
               {lessons
                 .filter((l) => l.bookId === null)
                 .map((l) => (
-                  <div key={l.id} className="bg-white rounded-xl border border-[#EBE3D3] p-5">
+                  <div key={l.id} className="card card-hover p-5">
                     <div className="flex items-center justify-between gap-4">
-                      <span className="font-medium truncate" style={{ fontFamily: "Georgia, serif" }}>
-                        {l.title}
-                      </span>
+                      <span className="font-serif font-medium truncate">{l.title}</span>
                       <div className="flex items-center gap-3 shrink-0">
                         {l.status === "done" && l.video && (
                           <a href={l.video} target="_blank" className="text-sm font-medium text-[#2E6B4E] hover:underline">

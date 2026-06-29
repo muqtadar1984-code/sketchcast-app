@@ -62,6 +62,16 @@ const SPECS: Record<string, Spec> = {
   },
 };
 
+// The params OptionsModal would submit with nothing changed — lets a batch
+// "Generate" queue document kinds without opening each modal. Presentation and
+// unknown kinds carry no params (null).
+export function defaultParams(kind: string): Record<string, unknown> | null {
+  const spec = SPECS[kind];
+  if (!spec) return null;
+  const vals = Object.fromEntries(spec.fields.map((f) => [f.key, f.def]));
+  return spec.build(vals);
+}
+
 export default function OptionsModal({
   bookId,
   schoolId,

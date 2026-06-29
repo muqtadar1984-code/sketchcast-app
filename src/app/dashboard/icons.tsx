@@ -2,6 +2,24 @@ import type { ReactNode } from "react";
 
 const G = "#2E6B4E";
 
+// Brand mark: an open book on a green tile — pairs with the "SketchCast AI"
+// wordmark in the header and on the auth screens.
+export function LogoMark({ size = 32 }: { size?: number }) {
+  const inner = Math.round(size * 0.56);
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-lg bg-[#2E6B4E] shrink-0"
+      style={{ width: size, height: size, boxShadow: "0 2px 6px -1px rgba(37,90,65,.5)" }}
+      aria-hidden
+    >
+      <svg width={inner} height={inner} viewBox="0 0 24 24" fill="none" stroke="#FBF6EC" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" />
+        <path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" />
+      </svg>
+    </span>
+  );
+}
+
 // Book cover thumbnail (rendered from the PDF's first page) with an SVG fallback.
 export function BookCover({ src, title }: { src: string | null; title: string }) {
   if (src) {

@@ -1,26 +1,125 @@
 @import "tailwindcss";
 
+/* ── SketchCast "Warm Scholarly" theme ──────────────────────────────────────
+   Cream paper, forest-green brand, a warm amber second accent, a friendly
+   serif (Fraunces) for headings + Inter for body. Tokens live here so the look
+   is centralised; components reference them (bg-cream, text-brand, shadow-card,
+   font-serif, the .card / .btn-primary helpers, …). */
+@theme {
+  --color-cream: #fbf6ec; /* page background */
+  --color-paper: #ffffff; /* cards */
+  --color-sand: #fcfaf4; /* faint off-white fill */
+  --color-ink: #2c2a26;
+  --color-brand: #2e6b4e; /* forest green */
+  --color-brand-dark: #255a41;
+  --color-brand-tint: #eaf1ec;
+  --color-amber: #c77f2a; /* warm second accent */
+  --color-amber-tint: #faeeda;
+  --color-muted: #6f6a5f;
+  --color-faint: #9a958a;
+  --color-line: #ebe3d3; /* hairline border */
+  --color-line-soft: #f1ece0;
+
+  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Warm-toned soft shadows give cards depth without going cold/grey. */
+  --shadow-card: 0 1px 2px rgba(54, 44, 26, 0.05), 0 8px 24px -12px rgba(54, 44, 26, 0.18);
+  --shadow-card-hover: 0 2px 6px rgba(54, 44, 26, 0.07), 0 16px 34px -14px rgba(54, 44, 26, 0.24);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+
+/* Reusable component classes. Authored as Tailwind v4 @utility so they are
+   reliably emitted and can still be combined with utilities + variants. */
+
+/* A warm paper card with soft depth — the base surface across the app. */
+@utility card {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: 0.875rem;
+  box-shadow: var(--shadow-card);
+}
+/* Add to clickable cards for a gentle lift on hover. */
+@utility card-hover {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  &:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+}
+
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-brand);
+  color: #fff;
+  font-weight: 500;
+  border-radius: 0.625rem;
+  box-shadow: 0 1px 2px rgba(37, 90, 65, 0.25);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  &:hover:not(:disabled) {
+    background: var(--color-brand-dark);
+    box-shadow: 0 6px 16px -4px rgba(37, 90, 65, 0.45);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    opacity: 0.5;
+    box-shadow: none;
+  }
+}
+
+/* Cream outline button (e.g. Sign out). */
+@utility btn-ghost {
+  border: 1px solid var(--color-line);
+  border-radius: 0.625rem;
+  color: var(--color-ink);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  &:hover {
+    background: var(--color-sand);
+    border-color: var(--color-faint);
+  }
+}
+
+/* Text input with a soft brand focus ring. */
+@utility field {
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  &:focus {
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px rgba(46, 107, 78, 0.14);
+  }
+}
+
+/* Small uppercase chip (e.g. the grade label). */
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }

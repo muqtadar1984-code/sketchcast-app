@@ -92,11 +92,9 @@ export default function BrandingCard({
   }
 
   return (
-    <details className="bg-white rounded-xl border border-[#EBE3D3] p-5 mb-8">
+    <details className="card p-5 mb-8">
       <summary className="cursor-pointer flex items-center gap-2 list-none">
-        <span className="font-medium" style={{ fontFamily: "Georgia, serif" }}>
-          School branding
-        </span>
+        <span className="font-serif font-medium">School branding</span>
         <span className="text-xs text-[#6F6A5F]">
           optional · {docx || pptx ? "templates set" : "use your school's format & theme"}
         </span>

@@ -61,10 +61,7 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
   }
 
   return (
-    <form
-      onSubmit={onUpload}
-      className="bg-white rounded-xl border border-[#EBE3D3] p-5 mb-8"
-    >
+    <form onSubmit={onUpload} className="card p-5 mb-8">
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
         <label className="block">
           <span className="text-xs text-[#6F6A5F]">Title (optional)</span>
@@ -72,7 +69,7 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Exploring Society"
-            className="w-full h-10 px-3 mt-1 rounded-lg border border-[#EBE3D3] outline-none focus:border-[#2E6B4E]"
+            className="field w-full h-10 px-3 mt-1"
           />
         </label>
         <label className="block">
@@ -81,14 +78,10 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
             placeholder="e.g. NCERT"
-            className="w-full h-10 px-3 mt-1 rounded-lg border border-[#EBE3D3] outline-none focus:border-[#2E6B4E]"
+            className="field w-full h-10 px-3 mt-1"
           />
         </label>
-        <button
-          type="submit"
-          disabled={!file || busy}
-          className="h-10 px-5 rounded-lg bg-[#2E6B4E] text-white font-medium hover:bg-[#255A41] disabled:opacity-50"
-        >
+        <button type="submit" disabled={!file || busy} className="btn-primary h-10 px-5">
           {busy ? "Uploading…" : "Upload"}
         </button>
       </div>
