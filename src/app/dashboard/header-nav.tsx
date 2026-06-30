@@ -4,19 +4,26 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { InkUnderline } from "@/components/ink-mark";
 
-const TABS = [
-  { href: "/dashboard", label: "Library" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-];
+export type NavTab = { href: string; label: string };
 
-// Teacher nav. The active tab gets the ink-underline motif (drawn on) — the one
-// place the signature appears in the app chrome.
-export default function HeaderNav() {
+// A tab is active on its own route, but NOT when a more specific sibling tab also
+// matches (so "School" doesn't underline while you're on "/dashboard/school/admin").
+function isActive(href: string, path: string, tabs: NavTab[]): boolean {
+  if (href === "/dashboard") return path === "/dashboard";
+  if (path !== href && !path.startsWith(href + "/")) return false;
+  return !tabs.some(
+    (o) => o.href !== href && o.href.startsWith(href + "/") && (path === o.href || path.startsWith(o.href + "/")),
+  );
+}
+
+// Dashboard nav. The active tab gets the ink-underline motif (drawn on) — the one
+// place the signature appears in the app chrome. Tabs are role-derived upstream.
+export default function HeaderNav({ tabs }: { tabs: NavTab[] }) {
   const path = usePathname();
   return (
     <nav className="hidden sm:flex items-center gap-6 text-sm">
-      {TABS.map((t) => {
-        const active = t.href === "/dashboard" ? path === "/dashboard" : path.startsWith(t.href);
+      {tabs.map((t) => {
+        const active = isActive(t.href, path, tabs);
         return (
           <Link
             key={t.href}
