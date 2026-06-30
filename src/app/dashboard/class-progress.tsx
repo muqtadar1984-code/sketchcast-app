@@ -100,10 +100,10 @@ export default function ClassProgress({ classId }: { classId: string }) {
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-[#EEF0EC]">
               <td className="py-1.5 truncate">{r.name}</td>
-              <td className="py-1.5 text-right font-medium text-[#0C8175]">{r.completed}/{r.total}</td>
-              <td className="py-1.5 text-right text-[#9A6400]">{r.revised || "—"}</td>
-              <td className="py-1.5 text-right text-[#5B6470]">{r.incomplete}</td>
-              <td className={`py-1.5 text-right ${r.overdue ? "text-[#B42318]" : "text-[#98A0A9]"}`}>{r.overdue || "—"}</td>
+              <td className="py-1.5 text-right font-medium text-[#0C8175] tabular">{r.completed}/{r.total}</td>
+              <td className="py-1.5 text-right text-[#9A6400] tabular">{r.revised || "—"}</td>
+              <td className="py-1.5 text-right text-[#5B6470] tabular">{r.incomplete}</td>
+              <td className={`py-1.5 text-right tabular ${r.overdue ? "text-[#B42318]" : "text-[#98A0A9]"}`}>{r.overdue || "—"}</td>
             </tr>
           ))}
         </tbody>
