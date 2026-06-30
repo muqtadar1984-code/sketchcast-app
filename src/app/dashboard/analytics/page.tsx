@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import GradeList, { type PendingSub } from "../grade-list";
 import { InkUnderline } from "@/components/ink-mark";
+import { schoolAnalyticsEnabled } from "@/utils/flags";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -127,6 +128,38 @@ export default async function AnalyticsPage() {
     { label: "To grade", value: pending.length },
   ];
 
+  // What the school sees about this teacher (transparency — only when the school
+  // analytics feature is on). The same activity metrics leadership sees, computed
+  // from the teacher's OWN data, so there are no surprises.
+  let schoolView: { label: string; value: string | number }[] | null = null;
+  if (schoolAnalyticsEnabled()) {
+    const { count: lessons } = await supabase
+      .from("generations")
+      .select("*", { count: "exact", head: true })
+      .eq("owner_id", user.id);
+    const { data: gradedRaw } = await supabase
+      .from("submissions")
+      .select("submitted_at, graded_at")
+      .not("graded_at", "is", null);
+    const graded = (gradedRaw ?? []) as { submitted_at: string; graded_at: string | null }[];
+    let tSum = 0;
+    let tN = 0;
+    for (const g of graded) {
+      if (!g.graded_at) continue;
+      const d = (new Date(g.graded_at).getTime() - new Date(g.submitted_at).getTime()) / 86400000;
+      if (d >= 0) {
+        tSum += d;
+        tN++;
+      }
+    }
+    schoolView = [
+      { label: "Lessons made", value: lessons ?? 0 },
+      { label: "Assignments", value: shares.length },
+      { label: "Grading turnaround", value: tN ? `${Math.round((tSum / tN) * 10) / 10}d` : "—" },
+      { label: "To grade", value: pending.length },
+    ];
+  }
+
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader name={displayName} role={role} />
@@ -143,6 +176,26 @@ export default async function AnalyticsPage() {
             </div>
           ))}
         </div>
+
+        {schoolView && (
+          <div className="rounded-xl bg-[#F5F6F3] border border-[#E6E8E4] px-5 py-4 mb-10">
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-sm font-medium">What your school sees about your teaching</h2>
+              <span className="chip bg-[#E2F4F1] text-[#0C8175]">transparency</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {schoolView.map((m) => (
+                <div key={m.label}>
+                  <div className="text-xs text-[#5B6470]">{m.label}</div>
+                  <div className="text-xl tabular mt-0.5">{m.value}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-[#5B6470] mt-2">
+              Leadership sees these to spot where to help — never as a ranking.
+            </p>
+          </div>
+        )}
 
         <h2 className="text-xl mb-2">By class</h2>
         <div className="card divide-y divide-[#EEF0EC] mb-10">
