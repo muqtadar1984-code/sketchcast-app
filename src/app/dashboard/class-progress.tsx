@@ -74,21 +74,21 @@ export default function ClassProgress({ classId }: { classId: string }) {
 
   if (!loaded) {
     return (
-      <button onClick={load} disabled={busy} className="mt-3 text-xs font-medium text-[#2E6B4E] hover:underline disabled:opacity-50">
+      <button onClick={load} disabled={busy} className="mt-3 text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-50">
         {busy ? "Loading progress…" : "Show progress"}
       </button>
     );
   }
 
   if (rows.length === 0) {
-    return <p className="mt-3 text-xs text-[#6F6A5F]">No students enrolled, or nothing assigned yet.</p>;
+    return <p className="mt-3 text-xs text-[#5B6470]">No students enrolled, or nothing assigned yet.</p>;
   }
 
   return (
     <div className="mt-3 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-[10px] uppercase tracking-wide text-[#9A958A] text-left">
+          <tr className="text-[10px] uppercase tracking-wide text-[#98A0A9] text-left">
             <th className="font-medium py-1">Student</th>
             <th className="font-medium py-1 text-right">Completed</th>
             <th className="font-medium py-1 text-right">Revised</th>
@@ -98,12 +98,12 @@ export default function ClassProgress({ classId }: { classId: string }) {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className="border-t border-[#F1ECE0]">
+            <tr key={i} className="border-t border-[#EEF0EC]">
               <td className="py-1.5 truncate">{r.name}</td>
-              <td className="py-1.5 text-right font-medium text-[#2E6B4E]">{r.completed}/{r.total}</td>
-              <td className="py-1.5 text-right text-[#854F0B]">{r.revised || "—"}</td>
-              <td className="py-1.5 text-right text-[#6F6A5F]">{r.incomplete}</td>
-              <td className={`py-1.5 text-right ${r.overdue ? "text-[#A32D2D]" : "text-[#9A958A]"}`}>{r.overdue || "—"}</td>
+              <td className="py-1.5 text-right font-medium text-[#0C8175]">{r.completed}/{r.total}</td>
+              <td className="py-1.5 text-right text-[#9A6400]">{r.revised || "—"}</td>
+              <td className="py-1.5 text-right text-[#5B6470]">{r.incomplete}</td>
+              <td className={`py-1.5 text-right ${r.overdue ? "text-[#B42318]" : "text-[#98A0A9]"}`}>{r.overdue || "—"}</td>
             </tr>
           ))}
         </tbody>

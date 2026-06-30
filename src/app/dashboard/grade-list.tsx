@@ -61,23 +61,23 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-[#6F6A5F]">Nothing to grade right now.</p>;
+    return <p className="text-sm text-[#5B6470]">Nothing to grade right now.</p>;
   }
 
   return (
     <div className="space-y-2">
       {rows.map((r) => (
-        <div key={r.id} className="flex flex-wrap items-center gap-3 border border-[#F1ECE0] rounded-lg px-3 py-2">
+        <div key={r.id} className="flex flex-wrap items-center gap-3 border border-[#EEF0EC] rounded-lg px-3 py-2">
           <span className="text-sm min-w-0">
             <span className="font-medium">{r.studentName}</span>
-            <span className="text-[#6F6A5F]"> · {r.label}</span>
+            <span className="text-[#5B6470]"> · {r.label}</span>
           </span>
           {r.mode === "file" ? (
-            <button onClick={() => openFile(r.id)} className="text-xs font-medium text-[#2E6B4E] hover:underline">
+            <button onClick={() => openFile(r.id)} className="text-xs font-medium text-[#0C8175] hover:underline">
               Open file
             </button>
           ) : (
-            <span className="text-xs text-[#6F6A5F]">Auto-scored {r.auto ?? 0}/{r.max ?? 0}</span>
+            <span className="text-xs text-[#5B6470]">Auto-scored {r.auto ?? 0}/{r.max ?? 0}</span>
           )}
           <span className="flex items-center gap-2 ml-auto">
             <input

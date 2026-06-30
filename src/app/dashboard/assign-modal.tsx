@@ -111,7 +111,7 @@ export default function AssignModal({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-xs font-medium text-[#854F0B] hover:underline whitespace-nowrap"
+        className="text-xs font-medium text-[#9A6400] hover:underline whitespace-nowrap"
       >
         {label}
       </button>
@@ -121,40 +121,40 @@ export default function AssignModal({
           onClick={() => !busy && setOpen(false)}
         >
           <div
-            className="bg-white rounded-xl border border-[#EBE3D3] p-5 w-full max-w-sm"
+            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-medium mb-1" style={{ fontFamily: "Georgia, serif" }}>
+            <h3 className="font-medium mb-1" style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}>
               Assign to a class
             </h3>
-            <p className="text-xs text-[#6F6A5F] mb-3">
+            <p className="text-xs text-[#5B6470] mb-3">
               {generationIds.length} item{generationIds.length === 1 ? "" : "s"} → the class&apos;s
               students will see this in their assignments.
             </p>
 
             {done ? (
-              <p className="text-sm text-[#2E6B4E] py-4">✓ Assigned.</p>
+              <p className="text-sm text-[#0C8175] py-4">✓ Assigned.</p>
             ) : creating ? (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-[#6F6A5F]">New class</p>
+                <p className="text-xs font-medium text-[#5B6470]">New class</p>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="Class name (e.g. 5A)"
-                  className="w-full h-9 px-3 rounded-lg border border-[#EBE3D3] text-sm outline-none focus:border-[#2E6B4E]"
+                  className="w-full h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
                 />
                 <input
                   value={newGrade}
                   onChange={(e) => setNewGrade(e.target.value)}
                   placeholder="Grade (optional)"
-                  className="w-full h-9 px-3 rounded-lg border border-[#EBE3D3] text-sm outline-none focus:border-[#2E6B4E]"
+                  className="w-full h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
                 />
                 {error && <p className="text-xs text-red-600">{error}</p>}
                 <div className="flex justify-end gap-2 pt-1">
                   {classList.length > 0 && (
                     <button
                       onClick={() => setCreating(false)}
-                      className="h-9 px-3 rounded-lg border border-[#EBE3D3] text-sm hover:bg-[#FBF8F1]"
+                      className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
                     >
                       Back
                     </button>
@@ -162,7 +162,7 @@ export default function AssignModal({
                   <button
                     onClick={createClass}
                     disabled={busy}
-                    className="h-9 px-4 rounded-lg bg-[#2E6B4E] text-white text-sm font-medium hover:bg-[#255A41] disabled:opacity-50"
+                    className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
                   >
                     {busy ? "Creating…" : "Create class"}
                   </button>
@@ -171,11 +171,11 @@ export default function AssignModal({
             ) : (
               <div className="space-y-3">
                 <label className="block">
-                  <span className="text-xs text-[#6F6A5F]">Class</span>
+                  <span className="text-xs text-[#5B6470]">Class</span>
                   <select
                     value={classId}
                     onChange={(e) => setClassId(e.target.value)}
-                    className="w-full h-9 px-2 mt-1 rounded-lg border border-[#EBE3D3] text-sm bg-white outline-none focus:border-[#2E6B4E]"
+                    className="w-full h-9 px-2 mt-1 rounded-lg border border-[#E6E8E4] text-sm bg-white outline-none focus:border-[#1FB8A6]"
                   >
                     {classList.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -187,17 +187,17 @@ export default function AssignModal({
                 </label>
                 <button
                   onClick={() => setCreating(true)}
-                  className="text-xs font-medium text-[#2E6B4E] hover:underline"
+                  className="text-xs font-medium text-[#0C8175] hover:underline"
                 >
                   + New class
                 </button>
                 <label className="block">
-                  <span className="text-xs text-[#6F6A5F]">Due date (optional)</span>
+                  <span className="text-xs text-[#5B6470]">Due date (optional)</span>
                   <input
                     type="date"
                     value={due}
                     onChange={(e) => setDue(e.target.value)}
-                    className="w-full h-9 px-3 mt-1 rounded-lg border border-[#EBE3D3] text-sm outline-none focus:border-[#2E6B4E]"
+                    className="w-full h-9 px-3 mt-1 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
                   />
                 </label>
                 {error && <p className="text-xs text-red-600">{error}</p>}
@@ -205,14 +205,14 @@ export default function AssignModal({
                   <button
                     onClick={() => setOpen(false)}
                     disabled={busy}
-                    className="h-9 px-3 rounded-lg border border-[#EBE3D3] text-sm hover:bg-[#FBF8F1]"
+                    className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={assign}
                     disabled={busy}
-                    className="h-9 px-4 rounded-lg bg-[#2E6B4E] text-white text-sm font-medium hover:bg-[#255A41] disabled:opacity-50"
+                    className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
                   >
                     {busy ? "Assigning…" : "Assign"}
                   </button>

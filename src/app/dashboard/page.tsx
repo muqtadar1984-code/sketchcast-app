@@ -13,6 +13,7 @@ import StudentDashboard, {
   type StudentClassGroup,
 } from "./student-dashboard";
 import { EmptyBooks } from "./icons";
+import { InkUnderline } from "@/components/ink-mark";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -39,10 +40,10 @@ type Book = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  queued: "bg-[#F1ECE0] text-[#6F6A5F]",
-  processing: "bg-[#FAEEDA] text-[#854F0B]",
-  done: "bg-[#EAF1EC] text-[#2E6B4E]",
-  error: "bg-[#FCEBEB] text-[#A32D2D]",
+  queued: "bg-[#EEF0EC] text-[#5B6470]",
+  processing: "bg-[#FFF1D6] text-[#9A6400]",
+  done: "bg-[#E2F4F1] text-[#0C8175]",
+  error: "bg-[#FCEBEA] text-[#B42318]",
 };
 
 export default async function DashboardPage() {
@@ -163,7 +164,7 @@ export default async function DashboardPage() {
       }));
 
     return (
-      <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
+      <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader name={displayName} role={role} />
         <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
       </div>
@@ -330,14 +331,14 @@ export default async function DashboardPage() {
     .sort((a, b) => `${a.grade} ${a.subject}`.localeCompare(`${b.grade} ${b.subject}`));
 
   return (
-    <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
+    <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AutoRefresh active={hasPending} />
       <AppHeader name={displayName} role={role} />
 
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Your library</h1>
-        <div className="h-1 w-14 rounded-full bg-[#C77F2A] mb-3" />
-        <p className="text-[#6F6A5F] mb-7">
+        <InkUnderline className="block h-3 w-28 mb-3" />
+        <p className="text-[#5B6470] mb-7">
           Upload a textbook, then generate a narrated lesson from it.
         </p>
 
@@ -348,7 +349,7 @@ export default async function DashboardPage() {
         <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
 
         {bookList.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#D9CFB8] bg-white p-10 text-center text-[#6F6A5F]">
+          <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
             <EmptyBooks />
             No books yet. Upload your first textbook above.
           </div>
@@ -357,8 +358,8 @@ export default async function DashboardPage() {
             {groups.map((g) => (
               <section key={`${g.grade}-${g.subject}`}>
                 <div className="flex items-center gap-2 mb-2.5 px-1">
-                  <h2 className="chip font-sans bg-[#EAF1EC] text-[#2E6B4E]">{g.grade}</h2>
-                  <span className="text-sm font-medium text-[#6F6A5F]">{g.subject}</span>
+                  <h2 className="chip font-sans bg-[#E2F4F1] text-[#0C8175]">{g.grade}</h2>
+                  <span className="text-sm font-medium text-[#5B6470]">{g.subject}</span>
                 </div>
                 <BookTable books={g.books} schoolId={schoolId} classes={classes} />
               </section>
@@ -375,15 +376,15 @@ export default async function DashboardPage() {
                 .map((l) => (
                   <div key={l.id} className="card card-hover p-5">
                     <div className="flex items-center justify-between gap-4">
-                      <span className="font-serif font-medium truncate">{l.title}</span>
+                      <span className="font-display font-medium truncate">{l.title}</span>
                       <div className="flex items-center gap-3 shrink-0">
                         {l.status === "done" && l.video && (
-                          <a href={l.video} target="_blank" className="text-sm font-medium text-[#2E6B4E] hover:underline">
+                          <a href={l.video} target="_blank" className="text-sm font-medium text-[#0C8175] hover:underline">
                             ▶ Watch
                           </a>
                         )}
                         {l.status === "done" && l.deck && (
-                          <a href={l.deck} className="text-sm font-medium text-[#2E6B4E] hover:underline">
+                          <a href={l.deck} className="text-sm font-medium text-[#0C8175] hover:underline">
                             ⬇ Deck
                           </a>
                         )}

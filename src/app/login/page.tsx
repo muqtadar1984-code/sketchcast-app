@@ -33,26 +33,26 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#FBF6EC] px-4">
+    <main className="min-h-screen flex items-center justify-center bg-[#FCFCFA] px-4">
       <div className="w-full max-w-sm card rounded-2xl p-8">
         <div className="flex items-center gap-2.5 mb-1">
           <LogoMark size={34} />
           <h1 className="text-2xl">
-            SketchCast <span className="text-[#2E6B4E]">AI</span>
+            SketchCast <span className="text-[#0C8175]">AI</span>
           </h1>
         </div>
-        <p className="text-sm text-[#6F6A5F] mt-1 mb-6">Sign in to your account</p>
+        <p className="text-sm text-[#5B6470] mt-1 mb-6">Sign in to your account</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <input
             required placeholder="Email or student ID" value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="field w-full h-11 px-3 text-[#2C2A26]"
+            className="field w-full h-11 px-3 text-[#14181F]"
           />
           <input
             type="password" required placeholder="Password" value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="field w-full h-11 px-3 text-[#2C2A26]"
+            className="field w-full h-11 px-3 text-[#14181F]"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full h-11">
@@ -60,9 +60,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-sm text-[#6F6A5F] mt-6 text-center">
+        <p className="text-sm text-[#5B6470] mt-6 text-center">
           New here?{" "}
-          <Link href="/signup" className="text-[#2E6B4E] font-medium hover:underline">
+          <Link href="/signup" className="text-[#0C8175] font-medium hover:underline">
             Create an account
           </Link>
         </p>

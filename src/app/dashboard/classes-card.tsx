@@ -106,15 +106,15 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
   return (
     <details className="card p-5 mb-8">
       <summary className="cursor-pointer flex items-center gap-2 list-none">
-        <span className="font-serif font-medium">Classes &amp; students</span>
-        <span className="text-xs text-[#6F6A5F]">
+        <span className="font-display font-medium">Classes &amp; students</span>
+        <span className="text-xs text-[#5B6470]">
           {classes.length} class{classes.length === 1 ? "" : "es"}
         </span>
       </summary>
 
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <label className="block">
-          <span className="text-xs text-[#6F6A5F]">New class</span>
+          <span className="text-xs text-[#5B6470]">New class</span>
           <input value={newName} onChange={(e) => { setNewName(e.target.value); setClassError(null); }} placeholder="Class name (e.g. 5A)"
             className="field block h-9 px-3 mt-1 text-sm w-44" />
         </label>
@@ -129,28 +129,28 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
       {classes.length > 0 && (
         <div className="mt-4 space-y-2">
           {classes.map((c) => (
-            <div key={c.id} className="border border-[#F1ECE0] rounded-lg">
+            <div key={c.id} className="border border-[#EEF0EC] rounded-lg">
               <button onClick={() => expand(c.id)} className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left">
                 <span className="flex items-center gap-2 min-w-0">
-                  <span className={`text-[#9A958A] text-xs transition-transform ${openId === c.id ? "rotate-90" : ""}`}>▶</span>
+                  <span className={`text-[#98A0A9] text-xs transition-transform ${openId === c.id ? "rotate-90" : ""}`}>▶</span>
                   <span className="font-medium truncate">{c.name}</span>
-                  {c.grade && <span className="text-xs text-[#6F6A5F]">· {c.grade}</span>}
+                  {c.grade && <span className="text-xs text-[#5B6470]">· {c.grade}</span>}
                 </span>
-                <span className="flex items-center gap-3 shrink-0 text-xs text-[#6F6A5F]">
+                <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
                   <span>{c.students.length} student{c.students.length === 1 ? "" : "s"}</span>
-                  <span className="chip bg-[#F1ECE0] text-[#6F6A5F] normal-case tracking-normal">join: {c.join_code}</span>
+                  <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal">join: {c.join_code}</span>
                 </span>
               </button>
 
               {openId === c.id && (
-                <div className="px-4 pb-4 border-t border-[#F1ECE0] bg-[#FCFAF4]">
+                <div className="px-4 pb-4 border-t border-[#EEF0EC] bg-[#F5F6F3]">
                   {c.students.length > 0 && (
-                    <ul className="mt-3 mb-4 divide-y divide-[#F1ECE0]">
+                    <ul className="mt-3 mb-4 divide-y divide-[#EEF0EC]">
                       {c.students.map((s, i) => (
                         <li key={i} className="py-1.5 flex items-center justify-between gap-3 text-sm">
                           <span className="truncate">{s.full_name || s.username}</span>
-                          <span className="text-xs text-[#6F6A5F] shrink-0">
-                            ID: <span className="text-[#2C2A26]">{s.username}</span>
+                          <span className="text-xs text-[#5B6470] shrink-0">
+                            ID: <span className="text-[#14181F]">{s.username}</span>
                             {s.parent_email ? ` · ${s.parent_email}` : ""}
                           </span>
                         </li>
@@ -160,7 +160,7 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
 
                   <ClassProgress classId={c.id} />
 
-                  <p className="text-xs font-medium text-[#6F6A5F] mt-4 mb-1.5">Add students</p>
+                  <p className="text-xs font-medium text-[#5B6470] mt-4 mb-1.5">Add students</p>
                   <div className="space-y-1.5">
                     {rows.map((r, i) => (
                       <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr] gap-1.5">
@@ -177,7 +177,7 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
                     ))}
                   </div>
                   <div className="flex items-center gap-3 mt-2">
-                    <button onClick={() => setRows((rs) => [...rs, emptyRow()])} className="text-xs font-medium text-[#2E6B4E] hover:underline">+ Add row</button>
+                    <button onClick={() => setRows((rs) => [...rs, emptyRow()])} className="text-xs font-medium text-[#0C8175] hover:underline">+ Add row</button>
                     <button onClick={() => addStudents(c.id)} disabled={busy} className="btn-primary h-8 px-3 text-xs ml-auto">
                       {busy ? "Creating…" : "Create logins"}
                     </button>
@@ -186,18 +186,18 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
                   {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
 
                   {creds.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-[#EBE3D3] bg-white p-3">
+                    <div className="mt-3 rounded-lg border border-[#E6E8E4] bg-white p-3">
                       <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-xs font-medium text-[#2E6B4E]">✓ Logins created — give these to parents</p>
-                        <button onClick={copyCreds} className="text-xs font-medium text-[#2E6B4E] hover:underline">Copy all</button>
+                        <p className="text-xs font-medium text-[#0C8175]">✓ Logins created — give these to parents</p>
+                        <button onClick={copyCreds} className="text-xs font-medium text-[#0C8175] hover:underline">Copy all</button>
                       </div>
                       <ul className="text-xs space-y-1">
                         {creds.map((cr, i) => (
-                          <li key={i} className="flex flex-wrap gap-x-3 text-[#2C2A26]">
+                          <li key={i} className="flex flex-wrap gap-x-3 text-[#14181F]">
                             <span className="font-medium">{cr.firstName} {cr.lastName}</span>
                             <span>ID: <span className="font-mono">{cr.username}</span></span>
                             <span>Password: <span className="font-mono">{cr.password}</span></span>
-                            <span className="text-[#6F6A5F]">Parent: {cr.parentEmail ?? "—"}</span>
+                            <span className="text-[#5B6470]">Parent: {cr.parentEmail ?? "—"}</span>
                           </li>
                         ))}
                       </ul>

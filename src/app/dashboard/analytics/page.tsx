@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import GradeList, { type PendingSub } from "../grade-list";
+import { InkUnderline } from "@/components/ink-mark";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -127,26 +128,26 @@ export default async function AnalyticsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FBF6EC] text-[#2C2A26]">
+    <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader name={displayName} role={role} />
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Analytics</h1>
-        <div className="h-1 w-14 rounded-full bg-[#C77F2A] mb-3" />
-        <p className="text-[#6F6A5F] mb-7">How your classes are progressing through what you&apos;ve assigned.</p>
+        <InkUnderline className="block h-3 w-28 mb-3" />
+        <p className="text-[#5B6470] mb-7">How your classes are progressing through what you&apos;ve assigned.</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
           {metrics.map((m) => (
-            <div key={m.label} className="rounded-xl bg-white border border-[#EBE3D3] px-4 py-3">
-              <div className="text-xs text-[#6F6A5F]">{m.label}</div>
-              <div className="text-2xl font-serif mt-0.5">{m.value}</div>
+            <div key={m.label} className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
+              <div className="text-xs text-[#5B6470]">{m.label}</div>
+              <div className="text-2xl tabular mt-0.5">{m.value}</div>
             </div>
           ))}
         </div>
 
         <h2 className="text-xl mb-2">By class</h2>
-        <div className="card divide-y divide-[#F1ECE0] mb-10">
+        <div className="card divide-y divide-[#EEF0EC] mb-10">
           {perClass.size === 0 ? (
-            <div className="px-5 py-3 text-sm text-[#6F6A5F]">No assignments yet.</div>
+            <div className="px-5 py-3 text-sm text-[#5B6470]">No assignments yet.</div>
           ) : (
             [...perClass.entries()].map(([id, c]) => {
               const pct = c.total ? Math.round((c.completed / c.total) * 100) : 0;
@@ -154,12 +155,12 @@ export default async function AnalyticsPage() {
                 <div key={id} className="px-5 py-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="font-medium">{c.name}</span>
-                    <span className="text-sm text-[#6F6A5F]">
-                      {c.completed}/{c.total} done · <span className="text-[#2E6B4E] font-medium">{pct}%</span>
+                    <span className="text-sm text-[#5B6470]">
+                      <span className="tabular">{c.completed}/{c.total}</span> done · <span className="tabular text-[#0C8175] font-medium">{pct}%</span>
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[#F1ECE0] overflow-hidden">
-                    <div className="h-full bg-[#2E6B4E]" style={{ width: `${pct}%` }} />
+                  <div className="h-1.5 rounded-full bg-[#EEF0EC] overflow-hidden">
+                    <div className="h-full bg-[#1FB8A6]" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -170,13 +171,13 @@ export default async function AnalyticsPage() {
         {hotspots.length > 0 && (
           <>
             <h2 className="text-xl mb-2">Most revised</h2>
-            <p className="text-sm text-[#6F6A5F] mb-2">Topics students re-open most — often the trickiest ones.</p>
+            <p className="text-sm text-[#5B6470] mb-2">Topics students re-open most — often the trickiest ones.</p>
             <div className="card px-5 py-3 mb-10">
               <ul className="text-sm space-y-1">
                 {hotspots.map((h, i) => (
                   <li key={i} className="flex items-center justify-between">
                     <span>{h.label}</span>
-                    <span className="text-[#854F0B]">↻ {h.n}</span>
+                    <span className="text-[#9A6400]">↻ {h.n}</span>
                   </li>
                 ))}
               </ul>
@@ -185,7 +186,7 @@ export default async function AnalyticsPage() {
         )}
 
         <h2 className="text-xl mb-2">To grade</h2>
-        <p className="text-sm text-[#6F6A5F] mb-3">Submitted worksheets &amp; exams awaiting a mark.</p>
+        <p className="text-sm text-[#5B6470] mb-3">Submitted worksheets &amp; exams awaiting a mark.</p>
         <GradeList pending={pending} />
       </main>
     </div>

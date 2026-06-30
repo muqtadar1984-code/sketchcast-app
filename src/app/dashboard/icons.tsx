@@ -1,18 +1,18 @@
 import type { ReactNode } from "react";
 
-const G = "#2E6B4E";
+const G = "#0C8175";
 
-// Brand mark: an open book on a green tile — pairs with the "SketchCast AI"
-// wordmark in the header and on the auth screens.
+// Brand mark: an open book on an ink tile, drawn in teal — pairs with the
+// "SketchCast AI" wordmark in the header and on the auth screens.
 export function LogoMark({ size = 32 }: { size?: number }) {
   const inner = Math.round(size * 0.56);
   return (
     <span
-      className="inline-flex items-center justify-center rounded-lg bg-[#2E6B4E] shrink-0"
-      style={{ width: size, height: size, boxShadow: "0 2px 6px -1px rgba(37,90,65,.5)" }}
+      className="inline-flex items-center justify-center rounded-lg bg-[#14181F] shrink-0"
+      style={{ width: size, height: size, boxShadow: "0 2px 6px -1px rgba(20,24,31,.45)" }}
       aria-hidden
     >
-      <svg width={inner} height={inner} viewBox="0 0 24 24" fill="none" stroke="#FBF6EC" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width={inner} height={inner} viewBox="0 0 24 24" fill="none" stroke="#1FB8A6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" />
         <path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" />
       </svg>
@@ -28,12 +28,12 @@ export function BookCover({ src, title }: { src: string | null; title: string })
       <img
         src={src}
         alt={title}
-        className="w-10 h-14 object-cover rounded border border-[#EBE3D3] shrink-0 bg-[#F1ECE0]"
+        className="w-10 h-14 object-cover rounded border border-[#E6E8E4] shrink-0 bg-[#EEF0EC]"
       />
     );
   }
   return (
-    <div className="w-10 h-14 rounded border border-[#EBE3D3] bg-[#EAF1EC] flex items-center justify-center shrink-0">
+    <div className="w-10 h-14 rounded border border-[#E6E8E4] bg-[#E2F4F1] flex items-center justify-center shrink-0">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="1.6">
         <path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z" />
         <path d="M4 17a3 3 0 0 1 3-3h11" />
@@ -100,9 +100,9 @@ export function TypeIcon({ kind }: { kind: string }) {
 export function EmptyBooks() {
   return (
     <svg width="132" height="96" viewBox="0 0 132 96" fill="none" className="mx-auto mb-4">
-      <rect x="24" y="18" width="84" height="58" rx="5" fill="#EAF1EC" stroke="#D9CFB8" />
+      <rect x="24" y="18" width="84" height="58" rx="5" fill="#E2F4F1" stroke="#D2D6D1" />
       <path d="M34 30h44M34 41h54M34 52h38" stroke="#B7C9BD" strokeWidth="3" strokeLinecap="round" />
-      <circle cx="100" cy="66" r="15" fill="#FBF6EC" stroke={G} strokeWidth="2" />
+      <circle cx="100" cy="66" r="15" fill="#FCFCFA" stroke={G} strokeWidth="2" />
       <path d="M100 59v14M93 66h14" stroke={G} strokeWidth="2" strokeLinecap="round" />
     </svg>
   );

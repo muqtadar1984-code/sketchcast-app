@@ -131,7 +131,7 @@ export default function OptionsModal({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-xs font-medium text-[#2E6B4E] hover:underline whitespace-nowrap"
+        className="text-xs font-medium text-[#0C8175] hover:underline whitespace-nowrap"
       >
         {label}
       </button>
@@ -141,16 +141,16 @@ export default function OptionsModal({
           onClick={() => !busy && setOpen(false)}
         >
           <div
-            className="bg-white rounded-xl border border-[#EBE3D3] p-5 w-full max-w-sm"
+            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-medium mb-3" style={{ fontFamily: "Georgia, serif" }}>
+            <h3 className="font-medium mb-3" style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}>
               {spec.title}
             </h3>
             <div className="space-y-1.5">
               {spec.fields.map((f) => (
                 <div key={f.key} className="flex items-center justify-between gap-3 py-0.5">
-                  <span className="text-sm text-[#2C2A26]">{f.label}</span>
+                  <span className="text-sm text-[#14181F]">{f.label}</span>
                   {f.type === "number" && (
                     <input
                       type="number"
@@ -160,14 +160,14 @@ export default function OptionsModal({
                       onChange={(e) =>
                         set(f.key, Math.max(f.min, Math.min(f.max, parseInt(e.target.value || "0", 10))))
                       }
-                      className="w-16 h-8 px-2 rounded-lg border border-[#EBE3D3] text-sm text-right outline-none focus:border-[#2E6B4E]"
+                      className="w-16 h-8 px-2 rounded-lg border border-[#E6E8E4] text-sm text-right outline-none focus:border-[#1FB8A6]"
                     />
                   )}
                   {f.type === "select" && (
                     <select
                       value={String(vals[f.key])}
                       onChange={(e) => set(f.key, e.target.value)}
-                      className="h-8 px-2 rounded-lg border border-[#EBE3D3] text-sm bg-white outline-none focus:border-[#2E6B4E]"
+                      className="h-8 px-2 rounded-lg border border-[#E6E8E4] text-sm bg-white outline-none focus:border-[#1FB8A6]"
                     >
                       {f.options.map((o) => (
                         <option key={o} value={o}>
@@ -191,14 +191,14 @@ export default function OptionsModal({
               <button
                 onClick={() => setOpen(false)}
                 disabled={busy}
-                className="h-9 px-3 rounded-lg border border-[#EBE3D3] text-sm hover:bg-[#FBF8F1]"
+                className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
               >
                 Cancel
               </button>
               <button
                 onClick={submit}
                 disabled={busy}
-                className="h-9 px-4 rounded-lg bg-[#2E6B4E] text-white text-sm font-medium hover:bg-[#255A41] disabled:opacity-50"
+                className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
               >
                 {busy ? "Starting…" : "Generate"}
               </button>

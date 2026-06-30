@@ -40,10 +40,10 @@ export type BookRow = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  queued: "bg-[#F1ECE0] text-[#6F6A5F]",
-  processing: "bg-[#FAEEDA] text-[#854F0B]",
-  done: "bg-[#EAF1EC] text-[#2E6B4E]",
-  error: "bg-[#FCEBEB] text-[#A32D2D]",
+  queued: "bg-[#EEF0EC] text-[#5B6470]",
+  processing: "bg-[#FFF1D6] text-[#9A6400]",
+  done: "bg-[#E2F4F1] text-[#0C8175]",
+  error: "bg-[#FCEBEA] text-[#B42318]",
 };
 
 export default function BookTable({
@@ -67,23 +67,23 @@ export default function BookTable({
         const isOpen = !!open[b.id];
         const ready = b.status === "ready";
         return (
-          <div key={b.id} className="border-b border-[#F1ECE0] last:border-b-0">
-            <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#FCFAF4]" : ""}`}>
+          <div key={b.id} className="border-b border-[#EEF0EC] last:border-b-0">
+            <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#F5F6F3]" : ""}`}>
               <button
                 onClick={() => ready && toggle(b.id)}
                 disabled={!ready}
                 className="flex items-center gap-3 min-w-0 text-left disabled:cursor-default"
               >
                 <BookCover src={b.coverUrl} title={b.title} />
-                <span className={`text-[#9A958A] text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>
+                <span className={`text-[#98A0A9] text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>
                   {ready ? "▶" : "•"}
                 </span>
                 <span className="min-w-0">
-                  <span className="font-serif font-medium truncate block">{b.title}</span>
-                  <span className="text-xs text-[#6F6A5F]">{b.author || "Unknown author"}</span>
+                  <span className="font-display font-medium truncate block">{b.title}</span>
+                  <span className="text-xs text-[#5B6470]">{b.author || "Unknown author"}</span>
                 </span>
               </button>
-              <span className="text-sm text-[#6F6A5F] text-right whitespace-nowrap self-center">
+              <span className="text-sm text-[#5B6470] text-right whitespace-nowrap self-center">
                 {b.status === "indexing" ? (
                   "Finding chapters…"
                 ) : b.status === "error" ? (
@@ -93,8 +93,8 @@ export default function BookTable({
                     <span
                       className={
                         b.doneChapters === b.totalChapters && b.totalChapters > 0
-                          ? "text-[#2E6B4E] font-medium"
-                          : "text-[#2C2A26] font-medium"
+                          ? "text-[#0C8175] font-medium"
+                          : "text-[#14181F] font-medium"
                       }
                     >
                       {b.doneChapters}/{b.totalChapters}
@@ -111,7 +111,7 @@ export default function BookTable({
                     classes={classes}
                   />
                 )}
-                <span className="text-xs text-[#6F6A5F]">
+                <span className="text-xs text-[#5B6470]">
                   {new Date(b.createdAt).toLocaleDateString()}
                 </span>
                 <DeleteBook bookId={b.id} storagePath={b.storagePath} />
@@ -120,23 +120,23 @@ export default function BookTable({
 
             {b.status === "error" && (
               <div className="px-5 pb-3 flex items-center gap-3">
-                <span className="text-xs text-[#A32D2D]">Couldn&apos;t detect chapters.</span>
+                <span className="text-xs text-[#B42318]">Couldn&apos;t detect chapters.</span>
                 <GenerateButton bookId={b.id} schoolId={schoolId} label="Generate full book" />
               </div>
             )}
 
             {isOpen && ready && (
-              <div className="px-5 pb-4 bg-[#FCFAF4]">
+              <div className="px-5 pb-4 bg-[#F5F6F3]">
                 {b.pendingChapters.length > 0 && (
                   <div className="flex justify-end py-2">
                     <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} />
                   </div>
                 )}
-                <ul className="border-t border-[#F1ECE0] divide-y divide-[#F1ECE0]">
+                <ul className="border-t border-[#EEF0EC] divide-y divide-[#EEF0EC]">
                   {b.chapters.map((ch) => (
                     <li key={ch.num} className="py-2.5">
-                      <span className="text-sm text-[#2C2A26] block truncate">
-                        <span className="text-[#9A958A]">{ch.num + 1}.</span> {ch.title}
+                      <span className="text-sm text-[#14181F] block truncate">
+                        <span className="text-[#98A0A9]">{ch.num + 1}.</span> {ch.title}
                       </span>
                       <ChapterGenerate
                         bookId={b.id}
@@ -157,26 +157,26 @@ export default function BookTable({
                 </ul>
 
                 {b.otherLessons.length > 0 && (
-                  <div className="mt-3 pt-2 border-t border-[#F1ECE0]">
-                    <p className="text-xs text-[#6F6A5F] mb-1">Other lessons</p>
+                  <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
+                    <p className="text-xs text-[#5B6470] mb-1">Other lessons</p>
                     {b.otherLessons.map((l) => (
                       <div key={l.id} className="flex items-center justify-between gap-4 py-1">
-                        <span className="text-sm text-[#2C2A26] flex-1 min-w-0 truncate">{l.title}</span>
+                        <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">{l.title}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           {l.status === "done" ? (
                             <>
                               {l.video && (
-                                <a href={l.video} target="_blank" className="text-xs font-medium text-[#2E6B4E] hover:underline">
+                                <a href={l.video} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
                                   ▶ Watch
                                 </a>
                               )}
                               {l.deck && (
-                                <a href={l.deck} className="text-xs font-medium text-[#2E6B4E] hover:underline">
+                                <a href={l.deck} className="text-xs font-medium text-[#0C8175] hover:underline">
                                   ⬇ Deck
                                 </a>
                               )}
                               {l.doc && (
-                                <a href={l.doc} className="text-xs font-medium text-[#2E6B4E] hover:underline">
+                                <a href={l.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
                                   ⬇ Download
                                 </a>
                               )}

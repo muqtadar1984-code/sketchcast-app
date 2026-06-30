@@ -68,15 +68,15 @@ export default function QuizPlayer({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="card w-full max-w-2xl max-h-[88vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-xl font-serif mb-1">{data.title}</h3>
-        {data.instructions && <p className="text-sm text-[#6F6A5F] mb-4">{data.instructions}</p>}
+        <h3 className="text-xl font-display mb-1">{data.title}</h3>
+        {data.instructions && <p className="text-sm text-[#5B6470] mb-4">{data.instructions}</p>}
 
         <ol className="space-y-4">
           {data.questions.map((q, qi) => (
             <li key={q.id}>
               <p className="text-sm font-medium mb-1.5">
-                <span className="text-[#9A958A]">{qi + 1}.</span> {q.prompt}
-                {q.marks ? <span className="text-[#9A958A] font-normal"> [{q.marks}]</span> : null}
+                <span className="text-[#98A0A9]">{qi + 1}.</span> {q.prompt}
+                {q.marks ? <span className="text-[#98A0A9] font-normal"> [{q.marks}]</span> : null}
               </p>
 
               {(q.type === "fill_blank" || q.type === "short") && (
@@ -96,8 +96,8 @@ export default function QuizPlayer({
                       onClick={() => set(q.id, v)}
                       className={`h-8 px-4 rounded-lg border text-sm ${
                         answers[q.id] === v
-                          ? "border-[#2E6B4E] bg-[#EAF1EC] text-[#2E6B4E]"
-                          : "border-[#EBE3D3] text-[#6F6A5F]"
+                          ? "border-[#1FB8A6] bg-[#E2F4F1] text-[#0C8175]"
+                          : "border-[#E6E8E4] text-[#5B6470]"
                       }`}
                     >
                       {v ? "True" : "False"}

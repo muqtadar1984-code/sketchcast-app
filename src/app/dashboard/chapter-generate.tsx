@@ -18,7 +18,7 @@ const KINDS: { kind: string; label: string }[] = [
   { kind: "case_study", label: "Case study" },
 ];
 
-const LABEL = "text-[10px] uppercase tracking-wide text-[#9A958A]";
+const LABEL = "text-[10px] uppercase tracking-wide text-[#98A0A9]";
 
 // One row of controls for a chapter: every content type the chapter doesn't have
 // yet gets a checkbox, and a single "Generate (N)" button queues all the checked
@@ -104,7 +104,7 @@ export default function ChapterGenerate({
                   type="checkbox"
                   checked={!!sel[k.kind]}
                   onChange={() => toggle(k.kind)}
-                  className="h-3.5 w-3.5 accent-[#2E6B4E]"
+                  className="h-3.5 w-3.5 accent-[#0C8175]"
                 />
                 <TypeIcon kind={k.kind} />
                 <span className={LABEL}>{k.label}</span>
