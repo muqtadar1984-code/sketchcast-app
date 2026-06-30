@@ -16,6 +16,7 @@ function tabsFor(role: string | null): NavTab[] {
     const tabs: NavTab[] = [
       { href: "/dashboard/school", label: "School" },
       { href: "/dashboard/school/teachers", label: "Teachers" },
+      { href: "/dashboard/school/access", label: "Access" },
     ];
     if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
     return tabs;
