@@ -1,5 +1,6 @@
 import { EmptyBooks } from "./icons";
 import StudentItem, { type StudentItemData } from "./student-item";
+import { InkUnderline } from "@/components/ink-mark";
 
 export type { StudentItemData };
 export type StudentChapter = { key: string; heading: string; items: StudentItemData[] };
@@ -20,17 +21,17 @@ export default function StudentDashboard({
   return (
     <main className="max-w-5xl mx-auto px-6 py-10">
       <h1 className="text-4xl mb-2">My lessons</h1>
-      <div className="h-1 w-14 rounded-full bg-[#C77F2A] mb-3" />
-      <p className="text-[#6F6A5F] mb-7">Everything your teacher has assigned to you.</p>
+      <InkUnderline className="block h-3 w-28 mb-3" />
+      <p className="text-[#5B6470] mb-7">Everything your teacher has assigned to you.</p>
 
       {!downloadsReady && (
-        <p className="mb-6 text-sm text-[#854F0B] bg-[#FAEEDA] rounded-lg px-3 py-2">
+        <p className="mb-6 text-sm text-[#9A6400] bg-[#FFF1D6] rounded-lg px-3 py-2">
           Downloads aren&apos;t available yet — ask your teacher to finish setup.
         </p>
       )}
 
       {groups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[#D9CFB8] bg-white/60 p-10 text-center text-[#6F6A5F]">
+        <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white/60 p-10 text-center text-[#5B6470]">
           <EmptyBooks />
           Nothing assigned yet. Check back after your teacher shares a lesson.
         </div>
@@ -38,11 +39,11 @@ export default function StudentDashboard({
         <div className="space-y-8">
           {groups.map((g) => (
             <section key={g.className}>
-              <h2 className="chip font-sans bg-[#EAF1EC] text-[#2E6B4E] mb-2.5">{g.className}</h2>
-              <div className="card divide-y divide-[#F1ECE0]">
+              <h2 className="chip font-sans bg-[#E2F4F1] text-[#0C8175] mb-2.5">{g.className}</h2>
+              <div className="card divide-y divide-[#EEF0EC]">
                 {g.chapters.map((ch) => (
                   <div key={ch.key} className="px-5 py-3">
-                    <div className="font-serif font-medium mb-2">{ch.heading}</div>
+                    <div className="font-display font-medium mb-2">{ch.heading}</div>
                     <ul className="space-y-1.5">
                       {ch.items.map((it) => (
                         <StudentItem key={it.genId} item={it} studentId={studentId} />

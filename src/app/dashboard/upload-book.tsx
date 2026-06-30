@@ -64,7 +64,7 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
     <form onSubmit={onUpload} className="card p-5 mb-8">
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
         <label className="block">
-          <span className="text-xs text-[#6F6A5F]">Title (optional)</span>
+          <span className="text-xs text-[#5B6470]">Title (optional)</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -73,7 +73,7 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
           />
         </label>
         <label className="block">
-          <span className="text-xs text-[#6F6A5F]">Author (optional)</span>
+          <span className="text-xs text-[#5B6470]">Author (optional)</span>
           <input
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
@@ -91,9 +91,9 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
           type="file"
           accept="application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-sm text-[#2C2A26] file:mr-3 file:rounded-lg file:border-0 file:bg-[#EAF1EC] file:px-3 file:py-2 file:text-[#2E6B4E] file:font-medium"
+          className="text-sm text-[#14181F] file:mr-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 file:text-[#0C8175] file:font-medium"
         />
-        {file && <span className="text-xs text-[#6F6A5F]">{(file.size / 1e6).toFixed(1)} MB</span>}
+        {file && <span className="text-xs text-[#5B6470]">{(file.size / 1e6).toFixed(1)} MB</span>}
       </div>
 
       {error && <p className="text-sm text-red-600 mt-3">{error}</p>}

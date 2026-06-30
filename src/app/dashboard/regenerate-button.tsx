@@ -71,7 +71,7 @@ export default function RegenerateButton({
       onClick={onRegen}
       disabled={busy}
       title="Regenerate deck + video"
-      className="text-xs font-medium text-[#854F0B] hover:underline disabled:opacity-50 whitespace-nowrap"
+      className="text-xs font-medium text-[#9A6400] hover:underline disabled:opacity-50 whitespace-nowrap"
     >
       {busy ? "…" : "↻ Regenerate"}
       {error && <span className="text-red-600 ml-1">{error}</span>}

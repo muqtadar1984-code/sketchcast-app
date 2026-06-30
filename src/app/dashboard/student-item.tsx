@@ -24,12 +24,12 @@ export type StudentItemData = {
 
 function Badge({ status, submitted }: { status: ProgressStatus | null; submitted: boolean }) {
   if (status === "completed" || (submitted && status !== "revised"))
-    return <span className="chip normal-case tracking-normal bg-[#EAF1EC] text-[#2E6B4E]">✓ Completed</span>;
+    return <span className="chip normal-case tracking-normal bg-[#E2F4F1] text-[#0C8175]">✓ Completed</span>;
   if (status === "revised")
-    return <span className="chip normal-case tracking-normal bg-[#FAEEDA] text-[#854F0B]">↻ Revised</span>;
+    return <span className="chip normal-case tracking-normal bg-[#FFF1D6] text-[#9A6400]">↻ Revised</span>;
   if (status === "in_progress")
-    return <span className="chip normal-case tracking-normal bg-[#F1ECE0] text-[#6F6A5F]">In progress</span>;
-  return <span className="chip normal-case tracking-normal bg-[#F1ECE0] text-[#9A958A]">Not started</span>;
+    return <span className="chip normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470]">In progress</span>;
+  return <span className="chip normal-case tracking-normal bg-[#EEF0EC] text-[#98A0A9]">Not started</span>;
 }
 
 // One assigned item on the student dashboard. The lesson plays in-app and is
@@ -145,33 +145,33 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
   return (
     <li className="flex items-center justify-between gap-4 py-0.5">
       <span className="flex items-center gap-2 text-sm min-w-0">
-        <span className="text-[10px] uppercase tracking-wide text-[#9A958A]">{item.label}</span>
+        <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{item.label}</span>
         <Badge status={status} submitted={submitted} />
       </span>
       <span className="flex items-center gap-3 shrink-0 text-xs">
         {item.dueAt && (
-          <span className={overdue ? "text-[#A32D2D]" : "text-[#6F6A5F]"}>
+          <span className={overdue ? "text-[#B42318]" : "text-[#5B6470]"}>
             Due {new Date(item.dueAt).toLocaleDateString()}
           </span>
         )}
         {isLesson ? (
           <>
             {item.video && (
-              <button onClick={watch} className="font-medium text-[#2E6B4E] hover:underline">▶ Watch</button>
+              <button onClick={watch} className="font-medium text-[#0C8175] hover:underline">▶ Watch</button>
             )}
             {item.deck && (
-              <a href={item.deck} className="font-medium text-[#2E6B4E] hover:underline">⬇ Deck</a>
+              <a href={item.deck} className="font-medium text-[#0C8175] hover:underline">⬇ Deck</a>
             )}
           </>
         ) : (
           <>
             {item.doc && (
-              <a href={item.doc} className="font-medium text-[#2E6B4E] hover:underline">⬇ Open</a>
+              <a href={item.doc} className="font-medium text-[#0C8175] hover:underline">⬇ Open</a>
             )}
             {item.quiz && (
-              <button onClick={takeQuiz} className="font-medium text-[#2E6B4E] hover:underline">Take quiz</button>
+              <button onClick={takeQuiz} className="font-medium text-[#0C8175] hover:underline">Take quiz</button>
             )}
-            <button onClick={() => fileRef.current?.click()} disabled={busy} className="font-medium text-[#2E6B4E] hover:underline disabled:opacity-50">
+            <button onClick={() => fileRef.current?.click()} disabled={busy} className="font-medium text-[#0C8175] hover:underline disabled:opacity-50">
               {busy ? "Uploading…" : submitted ? "Resubmit" : "Submit file"}
             </button>
             <input ref={fileRef} type="file" className="hidden" onChange={onFile} />

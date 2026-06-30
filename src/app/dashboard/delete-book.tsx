@@ -32,7 +32,7 @@ export default function DeleteBook({
       disabled={busy}
       aria-label="Delete book"
       title="Delete book"
-      className="w-6 h-6 flex items-center justify-center rounded-md text-[#6F6A5F] hover:bg-[#FCEBEB] hover:text-[#A32D2D] disabled:opacity-50"
+      className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
     >
       ✕
     </button>

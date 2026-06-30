@@ -17,9 +17,9 @@ export type CellLesson = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  queued: "bg-[#F1ECE0] text-[#6F6A5F]",
-  processing: "bg-[#FAEEDA] text-[#854F0B]",
-  error: "bg-[#FCEBEB] text-[#A32D2D]",
+  queued: "bg-[#EEF0EC] text-[#5B6470]",
+  processing: "bg-[#FFF1D6] text-[#9A6400]",
+  error: "bg-[#FCEBEA] text-[#B42318]",
 };
 
 // One content type for a chapter: presentation (deck+video) or a .docx kind
@@ -71,7 +71,7 @@ export default function ContentCell({
   if (lesson.status === "error") {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs">
-        <span className="text-[#A32D2D]">failed</span>
+        <span className="text-[#B42318]">failed</span>
         {genControl("retry")}
       </span>
     );
@@ -83,19 +83,19 @@ export default function ContentCell({
       {kind === "presentation" ? (
         <>
           {lesson.video && (
-            <a href={lesson.video} target="_blank" className="font-medium text-[#2E6B4E] hover:underline">
+            <a href={lesson.video} target="_blank" className="font-medium text-[#0C8175] hover:underline">
               ▶ Watch
             </a>
           )}
           {lesson.deck && (
-            <a href={lesson.deck} className="font-medium text-[#2E6B4E] hover:underline">
+            <a href={lesson.deck} className="font-medium text-[#0C8175] hover:underline">
               ⬇ Deck
             </a>
           )}
         </>
       ) : (
         lesson.doc && (
-          <a href={lesson.doc} className="font-medium text-[#2E6B4E] hover:underline">
+          <a href={lesson.doc} className="font-medium text-[#0C8175] hover:underline">
             ⬇ Download
           </a>
         )

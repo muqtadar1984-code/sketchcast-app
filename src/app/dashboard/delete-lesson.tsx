@@ -32,7 +32,7 @@ export default function DeleteLesson({
       disabled={busy}
       aria-label="Remove lesson"
       title="Remove lesson"
-      className="w-6 h-6 flex items-center justify-center rounded-md text-[#6F6A5F] hover:bg-[#FCEBEB] hover:text-[#A32D2D] disabled:opacity-50"
+      className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
     >
       ✕
     </button>

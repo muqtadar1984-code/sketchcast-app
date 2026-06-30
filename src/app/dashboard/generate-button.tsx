@@ -59,7 +59,7 @@ export default function GenerateButton({
   const cls =
     variant === "primary"
       ? "btn-primary h-8 px-3 text-xs whitespace-nowrap"
-      : "text-xs font-medium text-[#2E6B4E] hover:underline transition-colors disabled:opacity-50 whitespace-nowrap";
+      : "text-xs font-medium text-[#0C8175] hover:underline transition-colors disabled:opacity-50 whitespace-nowrap";
 
   return (
     <>

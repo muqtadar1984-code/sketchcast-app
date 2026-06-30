@@ -45,29 +45,29 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#FBF6EC] px-4">
+    <main className="min-h-screen flex items-center justify-center bg-[#FCFCFA] px-4">
       <div className="w-full max-w-sm card rounded-2xl p-8">
         <div className="flex items-center gap-2.5 mb-1">
           <LogoMark size={34} />
           <h1 className="text-2xl">Create your account</h1>
         </div>
-        <p className="text-sm text-[#6F6A5F] mt-1 mb-6">Free for teachers &amp; students</p>
+        <p className="text-sm text-[#5B6470] mt-1 mb-6">Free for teachers &amp; students</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <input
             required placeholder="Full name" value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="field w-full h-11 px-3 text-[#2C2A26]"
+            className="field w-full h-11 px-3 text-[#14181F]"
           />
           <input
             type="email" required placeholder="Email" value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="field w-full h-11 px-3 text-[#2C2A26]"
+            className="field w-full h-11 px-3 text-[#14181F]"
           />
           <input
             type="password" required minLength={6} placeholder="Password (min 6 chars)" value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="field w-full h-11 px-3 text-[#2C2A26]"
+            className="field w-full h-11 px-3 text-[#14181F]"
           />
           <div className="flex gap-2">
             {(["teacher", "student"] as const).map((r) => (
@@ -75,8 +75,8 @@ export default function SignupPage() {
                 key={r} type="button" onClick={() => setRole(r)}
                 className={`flex-1 h-11 rounded-lg border text-sm font-medium capitalize ${
                   role === r
-                    ? "border-[#2E6B4E] bg-[#EAF1EC] text-[#2E6B4E]"
-                    : "border-[#EBE3D3] bg-white text-[#6F6A5F]"
+                    ? "border-[#1FB8A6] bg-[#E2F4F1] text-[#0C8175]"
+                    : "border-[#E6E8E4] bg-white text-[#5B6470]"
                 }`}
               >
                 {r}
@@ -84,15 +84,15 @@ export default function SignupPage() {
             ))}
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          {notice && <p className="text-sm text-[#2E6B4E]">{notice}</p>}
+          {notice && <p className="text-sm text-[#0C8175]">{notice}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full h-11">
             {loading ? "Creating…" : "Create account"}
           </button>
         </form>
 
-        <p className="text-sm text-[#6F6A5F] mt-6 text-center">
+        <p className="text-sm text-[#5B6470] mt-6 text-center">
           Already have an account?{" "}
-          <Link href="/login" className="text-[#2E6B4E] font-medium hover:underline">
+          <Link href="/login" className="text-[#0C8175] font-medium hover:underline">
             Sign in
           </Link>
         </p>

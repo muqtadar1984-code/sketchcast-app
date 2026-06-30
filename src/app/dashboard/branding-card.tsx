@@ -23,8 +23,8 @@ function TemplateInput({
   onPick: (f: File) => void;
 }) {
   return (
-    <label className="block border border-dashed border-[#D9CFB8] rounded-lg p-3 cursor-pointer hover:bg-[#FBF8F1]">
-      <span className="text-xs font-medium text-[#2C2A26]">{label}</span>
+    <label className="block border border-dashed border-[#D2D6D1] rounded-lg p-3 cursor-pointer hover:bg-[#F5F6F3]">
+      <span className="text-xs font-medium text-[#14181F]">{label}</span>
       <input
         type="file"
         accept={accept}
@@ -34,7 +34,7 @@ function TemplateInput({
           if (f) onPick(f);
         }}
       />
-      <p className="text-xs text-[#6F6A5F] mt-1 truncate">
+      <p className="text-xs text-[#5B6470] mt-1 truncate">
         {busy ? "Uploading…" : state ? `✓ ${state}` : "Click to upload"}
       </p>
     </label>
@@ -94,12 +94,12 @@ export default function BrandingCard({
   return (
     <details className="card p-5 mb-8">
       <summary className="cursor-pointer flex items-center gap-2 list-none">
-        <span className="font-serif font-medium">School branding</span>
-        <span className="text-xs text-[#6F6A5F]">
+        <span className="font-display font-medium">School branding</span>
+        <span className="text-xs text-[#5B6470]">
           optional · {docx || pptx ? "templates set" : "use your school's format & theme"}
         </span>
       </summary>
-      <p className="text-sm text-[#6F6A5F] mt-3 mb-3">
+      <p className="text-sm text-[#5B6470] mt-3 mb-3">
         Upload your school&apos;s Word and PowerPoint templates. New documents open from the .docx
         template; decks and the video slides adopt the .pptx theme, colours and logo.
       </p>
