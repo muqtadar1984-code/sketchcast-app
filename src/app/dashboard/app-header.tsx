@@ -13,7 +13,10 @@ function tabsFor(role: string | null): NavTab[] {
     ];
   }
   if (schoolAnalyticsEnabled() && (role === "school_admin" || role === "coordinator")) {
-    const tabs: NavTab[] = [{ href: "/dashboard/school", label: "School" }];
+    const tabs: NavTab[] = [
+      { href: "/dashboard/school", label: "School" },
+      { href: "/dashboard/school/teachers", label: "Teachers" },
+    ];
     if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
     return tabs;
   }
