@@ -4,18 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { InkUnderline } from "@/components/ink-mark";
 
-const TABS = [
-  { href: "/dashboard", label: "Library" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-];
+export type NavTab = { href: string; label: string };
 
-// Teacher nav. The active tab gets the ink-underline motif (drawn on) — the one
-// place the signature appears in the app chrome.
-export default function HeaderNav() {
+// Dashboard nav. The active tab gets the ink-underline motif (drawn on) — the one
+// place the signature appears in the app chrome. Tabs are role-derived upstream.
+export default function HeaderNav({ tabs }: { tabs: NavTab[] }) {
   const path = usePathname();
   return (
     <nav className="hidden sm:flex items-center gap-6 text-sm">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const active = t.href === "/dashboard" ? path === "/dashboard" : path.startsWith(t.href);
         return (
           <Link
