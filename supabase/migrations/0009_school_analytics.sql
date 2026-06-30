@@ -25,14 +25,18 @@
 -- narrows content/teacher views (via books.subject). A pure cross-grade subject
 -- coordinator is a follow-up (would need subject on classes).
 --
--- NOTE: the policies/helpers below intentionally key off coordinator_scope
--- MEMBERSHIP, never the 'coordinator' enum literal, so this whole script runs in
--- one shot (Postgres forbids USING a freshly-added enum value in the same
--- transaction). The enum value still exists for app routing / role assignment.
--- Safe to run on the existing database (idempotent).
+-- ⚠️  APPLY ORDER (Supabase SQL editor wraps each run in one transaction):
+--   STEP 1 — run the single `alter type … add value` statement below ON ITS OWN
+--            first, so the new enum value COMMITS independently. If you run the
+--            whole file at once and any later statement errors, the rollback
+--            also discards the enum value (→ "invalid input value for enum
+--            user_role: coordinator" later).
+--   STEP 2 — run the rest of the file. It's idempotent, and the policies/helpers
+--            key off coordinator_scope MEMBERSHIP (never the 'coordinator'
+--            literal), so re-running the whole file is also safe.
 -- ============================================================================
 
--- 1. New role -----------------------------------------------------------------
+-- 1. New role — RUN THIS LINE BY ITSELF FIRST (see APPLY ORDER above) ----------
 alter type user_role add value if not exists 'coordinator';
 
 -- 2. Coordinator scope mapping ------------------------------------------------
