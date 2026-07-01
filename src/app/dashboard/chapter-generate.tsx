@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import ContentCell, { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
+import { NARRATION_STYLES, DEFAULT_STYLE, DEFAULT_VOICE, availableVoices } from "@/utils/narration";
 import { TypeIcon } from "./icons";
 
 // All content types a chapter can produce, in display order.
@@ -42,6 +43,9 @@ export default function ChapterGenerate({
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [narrationStyle, setNarrationStyle] = useState(DEFAULT_STYLE);
+  const [ttsVoice, setTtsVoice] = useState(DEFAULT_VOICE);
+  const voices = availableVoices();
 
   const chosen = pendingKinds.filter((k) => sel[k.kind]);
   const toggle = (kind: string) => setSel((s) => ({ ...s, [kind]: !s[kind] }));
@@ -75,7 +79,10 @@ export default function ChapterGenerate({
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(chapterNum),
-      params: defaultParams(k.kind),
+      params:
+        k.kind === "presentation"
+          ? { narration_style: narrationStyle, tts_voice: ttsVoice }
+          : defaultParams(k.kind),
       status: "queued",
     }));
     const { error: gErr } = await supabase.from("generations").insert(rows);
@@ -143,6 +150,42 @@ export default function ChapterGenerate({
           )}
         </span>
       </div>
+
+      {sel["presentation"] && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">Lesson options</span>
+          <label className="flex items-center gap-1.5 text-xs">
+            <span className="text-[#5B6470]">Narration</span>
+            <select
+              value={narrationStyle}
+              onChange={(e) => setNarrationStyle(e.target.value)}
+              className="field h-8 px-2 text-xs"
+            >
+              {NARRATION_STYLES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-xs">
+            <span className="text-[#5B6470]">Voice</span>
+            <select
+              value={ttsVoice}
+              onChange={(e) => setTtsVoice(e.target.value)}
+              className="field h-8 px-2 text-xs"
+            >
+              {voices.map((v) => (
+                <option key={v.value} value={v.value}>
+                  {v.label}
+                  {v.tier === "premium" ? " ★ premium" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-[10px] text-[#98A0A9]">
+            {NARRATION_STYLES.find((s) => s.value === narrationStyle)?.desc}
+          </span>
+        </div>
+      )}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
