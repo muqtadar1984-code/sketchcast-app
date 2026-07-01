@@ -113,6 +113,12 @@ export default function SignupPage() {
             Sign in
           </Link>
         </p>
+        <p className="text-xs text-[#98A0A9] mt-2 text-center">
+          Setting up a whole school?{" "}
+          <Link href="/schoolsignup" className="text-[#0C8175] hover:underline">
+            Set up your school
+          </Link>
+        </p>
       </div>
     </main>
   );
