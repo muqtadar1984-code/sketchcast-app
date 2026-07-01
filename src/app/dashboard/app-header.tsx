@@ -12,13 +12,19 @@ function tabsFor(role: string | null): NavTab[] {
       { href: "/dashboard/analytics", label: "Analytics" },
     ];
   }
-  if (schoolAnalyticsEnabled() && (role === "school_admin" || role === "coordinator")) {
-    const tabs: NavTab[] = [
-      { href: "/dashboard/school", label: "School" },
-      { href: "/dashboard/school/teachers", label: "Teachers" },
-      { href: "/dashboard/school/access", label: "Access" },
-    ];
-    if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
+  if (role === "school_admin" || role === "coordinator") {
+    const tabs: NavTab[] = [];
+    if (schoolAnalyticsEnabled()) {
+      tabs.push(
+        { href: "/dashboard/school", label: "School" },
+        { href: "/dashboard/school/teachers", label: "Teachers" },
+        { href: "/dashboard/school/access", label: "Access" },
+      );
+      if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
+    }
+    // Invites are the school-admin's onboarding tool — available even when the
+    // analytics suite is flag-off.
+    if (role === "school_admin") tabs.push({ href: "/dashboard/invites", label: "Invites" });
     return tabs;
   }
   return [];

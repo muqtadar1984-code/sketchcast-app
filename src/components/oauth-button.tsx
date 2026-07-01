@@ -16,9 +16,11 @@ const PROVIDERS: Record<Provider, { label: string; Logo: () => React.ReactElemen
 export default function OAuthButton({
   provider = "google",
   mode = "in",
+  next,
 }: {
   provider?: Provider;
   mode?: "in" | "up";
+  next?: string; // path to return to after the callback establishes the session
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,9 +33,10 @@ export default function OAuthButton({
     const supabase = createClient();
     // Supabase brokers the provider; on return it hits our cookie-aware callback,
     // which establishes the session and routes by role.
+    const redirectTo = `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ""}`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo },
     });
     if (error) {
       setError(error.message);
