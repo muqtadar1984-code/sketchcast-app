@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { LogoMark } from "../dashboard/icons";
+import OAuthButton from "@/components/oauth-button";
+import AuthError from "@/components/auth-error";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -53,6 +55,10 @@ export default function SignupPage() {
         </div>
         <p className="text-sm text-[#5B6470] mt-1 mb-6">Free for teachers &amp; students</p>
 
+        <Suspense fallback={null}>
+          <AuthError />
+        </Suspense>
+
         <form onSubmit={onSubmit} className="space-y-4">
           <input
             required placeholder="Full name" value={fullName}
@@ -89,6 +95,17 @@ export default function SignupPage() {
             {loading ? "Creating…" : "Create account"}
           </button>
         </form>
+
+        {role === "teacher" && (
+          <>
+            <div className="flex items-center gap-3 my-5">
+              <span className="h-px flex-1 bg-[#E6E8E4]" />
+              <span className="text-xs text-[#98A0A9]">or</span>
+              <span className="h-px flex-1 bg-[#E6E8E4]" />
+            </div>
+            <OAuthButton provider="google" mode="up" />
+          </>
+        )}
 
         <p className="text-sm text-[#5B6470] mt-6 text-center">
           Already have an account?{" "}
