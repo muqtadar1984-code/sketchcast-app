@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-export default function UploadBook({ schoolId }: { schoolId: string | null }) {
+export default function UploadBook({
+  schoolId,
+  betaBlocked = false,
+}: {
+  schoolId: string | null;
+  betaBlocked?: boolean; // beta teachers get exactly 1 book (server-enforced too)
+}) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -58,6 +64,16 @@ export default function UploadBook({ schoolId }: { schoolId: string | null }) {
     setTitle("");
     setAuthor("");
     router.refresh(); // re-fetch the library (server component) → new book shows
+  }
+
+  if (betaBlocked) {
+    return (
+      <div className="card p-5 mb-8 text-sm text-[#5B6470]">
+        <span className="chip bg-[#FFF1D6] text-[#9A6400] mr-2">Beta</span>
+        The beta is limited to <span className="font-medium text-[#14181F]">1 book</span> — you can
+        explore all its chapters and generate everything for one of them.
+      </div>
+    );
   }
 
   return (
