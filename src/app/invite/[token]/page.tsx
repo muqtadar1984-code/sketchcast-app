@@ -59,6 +59,8 @@ export default async function InvitePage({
     .eq("token", token)
     .maybeSingle();
 
+  // (server component, rendered once per request — Date.now is fine here)
+  // eslint-disable-next-line react-hooks/purity
   const dead = !invite || invite.accepted_at || new Date(invite.expires_at).getTime() < Date.now();
   if (dead) {
     const msg = invite?.accepted_at

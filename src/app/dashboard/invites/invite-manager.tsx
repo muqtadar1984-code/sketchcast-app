@@ -125,6 +125,8 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
         <div className="card divide-y divide-[#EEF0EC]">
           {invites.map((iv) => {
             const accepted = !!iv.accepted_at;
+            // (expiry check against wall-clock — recomputed on refresh is fine)
+            // eslint-disable-next-line react-hooks/purity
             const expired = !accepted && new Date(iv.expires_at).getTime() < Date.now();
             const status = accepted ? "accepted" : expired ? "expired" : "pending";
             const tone = accepted ? "text-[#0C8175]" : expired ? "text-[#9A6400]" : "text-[#5B6470]";

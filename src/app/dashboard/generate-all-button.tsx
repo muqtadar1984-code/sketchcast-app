@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { defaultPresentationParams } from "@/utils/narration";
 
 type Chapter = { num: number; title: string };
 
@@ -49,6 +50,7 @@ export default function GenerateAllButton({
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(c.num),
+      params: defaultPresentationParams(),
       status: "queued",
     }));
     const { error: gErr } = await supabase.from("generations").insert(rows);

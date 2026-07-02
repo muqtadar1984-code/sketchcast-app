@@ -23,8 +23,9 @@ export function LogoMark({ size = 32 }: { size?: number }) {
 // Book cover thumbnail (rendered from the PDF's first page) with an SVG fallback.
 export function BookCover({ src, title }: { src: string | null; title: string }) {
   if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // Signed, short-lived Supabase URL — next/image optimization doesn't apply.
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={title}

@@ -1,6 +1,16 @@
 # Student ↔ Teacher system + Teacher analytics — design
 
-Status: scoped & decided 2026-06-29. Phase A in progress.
+Status: **Phases A–C shipped** (identity/provisioning, progress + submissions,
+analytics + grading + interactive quizzes). Since then the app also shipped:
+school analytics (admin/principal/coordinator, behind a flag), Google sign-in,
+admin invites, and self-serve school setup (`/schoolsignup`).
+
+## Feature flags (server env, default OFF)
+- `FEATURE_SCHOOL_ANALYTICS` — the leadership suite (School / Teachers / Access /
+  Admin tabs, at-risk worklist, coordinator scoping). Requires migrations
+  0009+0010 applied. Set to `true` in Vercel env + redeploy to enable.
+- `NEXT_PUBLIC_ELEVENLABS_ENABLED` — shows premium voices in the lesson
+  generate form (the worker enforces the real gate server-side).
 
 ## Goal
 A teacher assigns the content generated for a chapter to the students who need it;
