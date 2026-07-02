@@ -63,8 +63,8 @@ const SPECS: Record<string, Spec> = {
 };
 
 // The params OptionsModal would submit with nothing changed — lets a batch
-// "Generate" queue document kinds without opening each modal. Presentation and
-// unknown kinds carry no params (null).
+// "Generate" queue document kinds without opening each modal. Unknown kinds
+// carry no params (null); presentation defaults live in utils/narration.ts.
 export function defaultParams(kind: string): Record<string, unknown> | null {
   const spec = SPECS[kind];
   if (!spec) return null;

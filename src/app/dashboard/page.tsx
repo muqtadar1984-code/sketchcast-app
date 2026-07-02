@@ -116,6 +116,9 @@ export default async function DashboardPage() {
     type GenRow = { id: string; kind: string; chapter_ref: string | null; artifacts: { kind: string; storage_path: string }[] };
     type Item = StudentItemData & { className: string; chapterRef: string | null };
     const items: Item[] = [];
+    // (server component, rendered once per request — Date.now is fine here)
+    // eslint-disable-next-line react-hooks/purity
+    const now = Date.now();
     for (const g of (gensRaw ?? []) as GenRow[]) {
       const info = shareByGen.get(g.id);
       if (!info || g.kind === "lesson_plan") continue; // only assigned, never the teacher plan
@@ -127,7 +130,7 @@ export default async function DashboardPage() {
         kind: g.kind,
         label: KIND_LABEL[g.kind] ?? g.kind,
         dueAt: info.due,
-        dueOverdue: !!info.due && new Date(info.due).getTime() < Date.now(),
+        dueOverdue: !!info.due && new Date(info.due).getTime() < now,
         classId: info.classId,
         className: info.className,
         chapterRef: g.chapter_ref ?? null,
@@ -228,15 +231,27 @@ export default async function DashboardPage() {
   const { data: gensRaw } = await supabase
     .from("generations")
     .select(
-      "id, title, status, created_at, kind, chapter_ref, book_id, artifacts(kind, storage_path), jobs(progress, status)",
+      "id, title, status, created_at, kind, chapter_ref, book_id, params, artifacts(kind, storage_path), jobs(progress, status)",
     )
     .order("created_at", { ascending: false });
 
+  type LessonRow = {
+    id: string;
+    title: string | null;
+    status: string;
+    kind: string | null;
+    chapter_ref: string | null;
+    book_id: string | null;
+    params: Record<string, unknown> | null;
+    artifacts: { kind: string; storage_path: string }[] | null;
+    jobs: { progress: number | null; status: string }[] | null;
+  };
+
   // Build signed download URLs for finished artifacts.
   const lessons = await Promise.all(
-    (gensRaw ?? []).map(async (g: any) => {
+    ((gensRaw ?? []) as unknown as LessonRow[]).map(async (g) => {
       const arts = await Promise.all(
-        (g.artifacts ?? []).map(async (a: any) => {
+        (g.artifacts ?? []).map(async (a) => {
           const { data } = await supabase.storage
             .from("artifacts")
             .createSignedUrl(a.storage_path, 3600);
@@ -244,18 +259,18 @@ export default async function DashboardPage() {
         }),
       );
       return {
-        id: g.id as string,
-        title: (g.title as string) || "Untitled lesson",
-        status: g.status as string,
-        progress: (g.jobs?.[0]?.progress as number) ?? 0,
-        kind: (g.kind as string) || "presentation",
-        params: (g.params as Record<string, unknown> | null) ?? null,
-        bookId: (g.book_id as string | null) ?? null,
-        chapterRef: (g.chapter_ref as string | null) ?? null,
+        id: g.id,
+        title: g.title || "Untitled lesson",
+        status: g.status,
+        progress: g.jobs?.[0]?.progress ?? 0,
+        kind: g.kind || "presentation",
+        params: g.params ?? null,
+        bookId: g.book_id ?? null,
+        chapterRef: g.chapter_ref ?? null,
         deck: arts.find((a) => a.kind === "deck_pptx")?.url ?? null,
         video: arts.find((a) => a.kind === "video_mp4")?.url ?? null,
         doc: arts.find((a) => a.kind === "docx")?.url ?? null,
-        artifactPaths: (g.artifacts ?? []).map((a: any) => a.storage_path as string),
+        artifactPaths: (g.artifacts ?? []).map((a) => a.storage_path),
       };
     }),
   );

@@ -36,3 +36,10 @@ export function elevenLabsEnabled(): boolean {
 export function availableVoices(): VoiceOpt[] {
   return elevenLabsEnabled() ? VOICES : VOICES.filter((v) => v.tier === "free");
 }
+
+// The params every presentation generation should carry when the user hasn't
+// picked options (batch/full-book buttons). One source of truth — matches what
+// the chapter row's pickers default to.
+export function defaultPresentationParams(): Record<string, unknown> {
+  return { narration_style: DEFAULT_STYLE, tts_voice: DEFAULT_VOICE };
+}
