@@ -65,16 +65,24 @@ export default async function DashboardPage() {
   const role = (profile?.role as string | null) ?? null;
   const displayName = profile?.full_name || user.email || "";
 
-  // Teacher beta: separate best-effort query so a not-yet-applied migration
-  // (missing beta_tester column) can never break the dashboard.
+  // Teacher beta + signup notification: one best-effort query so a
+  // not-yet-applied migration (missing columns) can never break the dashboard.
+  // Every signup path (email, Google, invite, school setup) funnels through
+  // this page, so the founder's new-registration email fires here, exactly
+  // once per account (signup_notified_at is the dedup marker).
   let isBeta = false;
-  if (teacherBetaEnabled() && role === "teacher") {
+  if (role && role !== "student") {
     const { data: b } = await supabase
       .from("profiles")
-      .select("beta_tester")
+      .select("beta_tester, signup_notified_at")
       .eq("id", user.id)
       .maybeSingle();
-    isBeta = !!(b as { beta_tester?: boolean } | null)?.beta_tester;
+    const flags = b as { beta_tester?: boolean; signup_notified_at?: string | null } | null;
+    isBeta = teacherBetaEnabled() && role === "teacher" && !!flags?.beta_tester;
+    if (flags && !flags.signup_notified_at) {
+      const { notifySignupOnce } = await import("@/utils/notify");
+      await notifySignupOnce(user.id, user.email ?? null, (profile?.full_name as string) ?? null, role);
+    }
   }
 
   // ── Student view ──────────────────────────────────────────────────────────
