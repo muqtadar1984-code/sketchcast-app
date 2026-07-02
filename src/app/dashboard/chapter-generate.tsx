@@ -31,15 +31,22 @@ export default function ChapterGenerate({
   chapterNum,
   classes,
   lessons,
+  beta = null,
 }: {
   bookId: string;
   schoolId: string | null;
   chapterNum: number;
   classes: ClassRow[];
   lessons: Record<string, CellLesson | null>;
+  beta?: { pinned: { bookId: string; chapterRef: string | null } | null } | null;
 }) {
   const router = useRouter();
-  const pendingKinds = KINDS.filter((k) => !lessons[k.kind]);
+  // Beta: once a chapter is pinned (first generation), every OTHER chapter is
+  // locked for new generations (the DB trigger enforces this server-side too).
+  const betaLocked =
+    !!beta?.pinned &&
+    (beta.pinned.bookId !== bookId || beta.pinned.chapterRef !== String(chapterNum));
+  const pendingKinds = betaLocked ? [] : KINDS.filter((k) => !lessons[k.kind]);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +108,7 @@ export default function ChapterGenerate({
         {KINDS.map((k) => {
           const lesson = lessons[k.kind];
           if (!lesson) {
+            if (betaLocked) return null; // locked chapters offer no new generations
             // Pending: a checkbox to include this type in the batch generate.
             return (
               <label
@@ -129,10 +137,17 @@ export default function ChapterGenerate({
                 chapterNum={chapterNum}
                 kind={k.kind}
                 lesson={lesson}
+                trackViews={!!beta}
               />
             </span>
           );
         })}
+
+        {betaLocked && (
+          <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]" title="The beta covers full generation for one chapter of your choice">
+            Beta: 1 chapter — locked
+          </span>
+        )}
 
         <span className="ml-auto flex items-center gap-3">
           {assignableIds.length > 0 && (

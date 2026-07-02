@@ -14,6 +14,8 @@ import StudentDashboard, {
 } from "./student-dashboard";
 import { EmptyBooks } from "./icons";
 import { InkUnderline } from "@/components/ink-mark";
+import FeedbackWidget from "./feedback-widget";
+import { teacherBetaEnabled } from "@/utils/flags";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -30,6 +32,7 @@ type Book = {
   id: string;
   title: string;
   author: string | null;
+  owner_id: string;
   storage_path: string | null;
   status: string | null;
   chapters: Chapter[] | null;
@@ -61,6 +64,18 @@ export default async function DashboardPage() {
   const schoolId = (profile?.school_id as string | null) ?? null;
   const role = (profile?.role as string | null) ?? null;
   const displayName = profile?.full_name || user.email || "";
+
+  // Teacher beta: separate best-effort query so a not-yet-applied migration
+  // (missing beta_tester column) can never break the dashboard.
+  let isBeta = false;
+  if (teacherBetaEnabled() && role === "teacher") {
+    const { data: b } = await supabase
+      .from("profiles")
+      .select("beta_tester")
+      .eq("id", user.id)
+      .maybeSingle();
+    isBeta = !!(b as { beta_tester?: boolean } | null)?.beta_tester;
+  }
 
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
@@ -211,7 +226,7 @@ export default async function DashboardPage() {
 
   const { data: books } = await supabase
     .from("books")
-    .select("id, title, author, storage_path, status, chapters, grade, subject, cover_path, created_at")
+    .select("id, title, author, owner_id, storage_path, status, chapters, grade, subject, cover_path, created_at")
     .order("created_at", { ascending: false });
   const bookList = (books ?? []) as Book[];
 
@@ -331,6 +346,50 @@ export default async function DashboardPage() {
     };
   });
 
+  // Beta state: the pinned (book, chapter), remaining student slots, and the
+  // "opened everything → prompt for feedback" condition.
+  let betaPinned: { bookId: string; chapterRef: string | null } | null = null;
+  let betaSlotsLeft: number | null = null;
+  let feedback: { submitted: boolean; allViewed: boolean } | null = null;
+  if (isBeta) {
+    // Any generation pins the chapter — including a whole-book one
+    // (chapter_ref null), which consumes the beta slot entirely.
+    const pin = lessons.find((l) => l.bookId !== null);
+    betaPinned = pin ? { bookId: pin.bookId!, chapterRef: pin.chapterRef } : null;
+    const distinctStudents = new Set(
+      classRosters.flatMap((c) => c.students.map((s) => s.username || s.full_name || "")),
+    ).size;
+    betaSlotsLeft = Math.max(0, 2 - distinctStudents);
+
+    // Required views = artifacts of finished generations the dashboard actually
+    // renders with tracked links (a live book + one of its current chapters) —
+    // anything else could never be marked viewed and would make the auto-prompt
+    // unreachable.
+    const trackable = (l: (typeof lessons)[number]) => {
+      const book = bookList.find((b) => b.id === l.bookId);
+      return !!book && (book.chapters ?? []).some((c) => String(c.num) === l.chapterRef);
+    };
+    const required: string[] = [];
+    for (const l of lessons) {
+      if (l.status !== "done" || !trackable(l)) continue;
+      if (l.kind === "presentation") {
+        if (l.video) required.push(`${l.id}|video_mp4`);
+        if (l.deck) required.push(`${l.id}|deck_pptx`);
+      } else if (l.doc) {
+        required.push(`${l.id}|docx`);
+      }
+    }
+    const { data: viewsRaw } = await supabase.from("artifact_views").select("generation_id, kind");
+    const viewSet = new Set(
+      ((viewsRaw ?? []) as { generation_id: string; kind: string }[]).map(
+        (v) => `${v.generation_id}|${v.kind}`,
+      ),
+    );
+    const allViewed = required.length > 0 && required.every((r) => viewSet.has(r));
+    const { data: fb } = await supabase.from("beta_feedback").select("id").maybeSingle();
+    feedback = { submitted: !!fb, allViewed };
+  }
+
   // Group the library Grade → Subject (auto-detected; "Other / General" when unknown).
   const groupMap = new Map<string, BookRow[]>();
   for (const br of bookRows) {
@@ -357,9 +416,14 @@ export default async function DashboardPage() {
           Upload a textbook, then generate a narrated lesson from it.
         </p>
 
-        <UploadBook schoolId={schoolId} />
+        {/* Cap counts the teacher's OWN books — the library select also returns
+            school-shared ones, which must not consume their upload. */}
+        <UploadBook
+          schoolId={schoolId}
+          betaBlocked={isBeta && bookList.some((b) => b.owner_id === user.id)}
+        />
 
-        <ClassesCard classes={classRosters} />
+        <ClassesCard classes={classRosters} betaSlotsLeft={betaSlotsLeft} />
 
         <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
 
@@ -376,7 +440,12 @@ export default async function DashboardPage() {
                   <h2 className="chip font-sans bg-[#E2F4F1] text-[#0C8175]">{g.grade}</h2>
                   <span className="text-sm font-medium text-[#5B6470]">{g.subject}</span>
                 </div>
-                <BookTable books={g.books} schoolId={schoolId} classes={classes} />
+                <BookTable
+                  books={g.books}
+                  schoolId={schoolId}
+                  classes={classes}
+                  beta={isBeta ? { pinned: betaPinned } : null}
+                />
               </section>
             ))}
           </div>
@@ -418,6 +487,8 @@ export default async function DashboardPage() {
           </>
         )}
       </main>
+
+      {feedback && <FeedbackWidget submitted={feedback.submitted} allViewed={feedback.allViewed} />}
     </div>
   );
 }

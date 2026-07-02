@@ -60,6 +60,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 
+  // Beta cap pre-check: friendly message + avoids creating auth users that the
+  // enrollments trigger (migration 0011, the real enforcement) would then block.
+  // Best-effort — if the column doesn't exist yet, the query errors → no cap.
+  const { data: me } = await admin
+    .from("profiles")
+    .select("beta_tester")
+    .eq("id", user.id)
+    .maybeSingle();
+  if ((me as { beta_tester?: boolean } | null)?.beta_tester) {
+    const { data: enr } = await admin
+      .from("enrollments")
+      .select("student_id, classes!inner(teacher_id)")
+      .eq("classes.teacher_id", user.id);
+    const current = new Set(((enr ?? []) as { student_id: string }[]).map((e) => e.student_id)).size;
+    if (current + students.length > 2) {
+      return NextResponse.json(
+        {
+          error:
+            current >= 2
+              ? "Beta is limited to 2 students — you've already added both."
+              : `Beta is limited to 2 students — you can add ${2 - current} more.`,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   const created: { firstName: string; lastName: string; username: string; password: string; parentEmail: string | null }[] = [];
   const errors: string[] = [];
 
@@ -112,7 +139,14 @@ export async function POST(request: Request) {
     const { error: eErr } = await admin
       .from("enrollments")
       .insert({ class_id: classId, student_id: sid });
-    if (eErr) errors.push(`${fullName || username}: enroll — ${eErr.message}`);
+    if (eErr) {
+      // Enrollment refused (e.g. the beta student cap) — remove the just-created
+      // auth user so the teacher isn't handed credentials for a student who
+      // isn't enrolled anywhere.
+      errors.push(`${fullName || username}: ${eErr.message}`);
+      await admin.auth.admin.deleteUser(sid).catch(() => undefined);
+      continue;
+    }
 
     created.push({ firstName, lastName, username, password, parentEmail });
   }

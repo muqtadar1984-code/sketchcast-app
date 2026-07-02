@@ -46,14 +46,18 @@ const STATUS_STYLE: Record<string, string> = {
   error: "bg-[#FCEBEA] text-[#B42318]",
 };
 
+export type BetaState = { pinned: { bookId: string; chapterRef: string | null } | null };
+
 export default function BookTable({
   books,
   schoolId,
   classes,
+  beta = null,
 }: {
   books: BookRow[];
   schoolId: string | null;
   classes: ClassRow[];
+  beta?: BetaState | null; // non-null for a beta teacher (1-chapter cap active)
 }) {
   // Expand the only book by default; otherwise everything starts collapsed.
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
@@ -121,13 +125,14 @@ export default function BookTable({
             {b.status === "error" && (
               <div className="px-5 pb-3 flex items-center gap-3">
                 <span className="text-xs text-[#B42318]">Couldn&apos;t detect chapters.</span>
-                <GenerateButton bookId={b.id} schoolId={schoolId} label="Generate full book" />
+                {/* Whole-book generation would blow past the 1-chapter beta cap. */}
+                {!beta && <GenerateButton bookId={b.id} schoolId={schoolId} label="Generate full book" />}
               </div>
             )}
 
             {isOpen && ready && (
               <div className="px-5 pb-4 bg-[#F5F6F3]">
-                {b.pendingChapters.length > 0 && (
+                {b.pendingChapters.length > 0 && !beta && (
                   <div className="flex justify-end py-2">
                     <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} />
                   </div>
@@ -143,6 +148,7 @@ export default function BookTable({
                         schoolId={schoolId}
                         chapterNum={ch.num}
                         classes={classes}
+                        beta={beta}
                         lessons={{
                           presentation: ch.presentation,
                           lesson_plan: ch.lessonPlan,

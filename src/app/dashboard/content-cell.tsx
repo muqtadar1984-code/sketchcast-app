@@ -4,6 +4,7 @@ import GenerateButton from "./generate-button";
 import RegenerateButton from "./regenerate-button";
 import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
+import { recordArtifactView } from "@/utils/views";
 
 export type CellLesson = {
   id: string;
@@ -30,12 +31,14 @@ export default function ContentCell({
   chapterNum,
   kind,
   lesson,
+  trackViews = false,
 }: {
   bookId: string;
   schoolId: string | null;
   chapterNum: number;
   kind: string;
   lesson: CellLesson | null;
+  trackViews?: boolean; // beta: record artifact-opened events (feedback trigger)
 }) {
   // Presentation generates directly; document kinds open a customization modal.
   const genControl = (label: string) =>
@@ -83,19 +86,32 @@ export default function ContentCell({
       {kind === "presentation" ? (
         <>
           {lesson.video && (
-            <a href={lesson.video} target="_blank" className="font-medium text-[#0C8175] hover:underline">
+            <a
+              href={lesson.video}
+              target="_blank"
+              onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")}
+              className="font-medium text-[#0C8175] hover:underline"
+            >
               ▶ Watch
             </a>
           )}
           {lesson.deck && (
-            <a href={lesson.deck} className="font-medium text-[#0C8175] hover:underline">
+            <a
+              href={lesson.deck}
+              onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")}
+              className="font-medium text-[#0C8175] hover:underline"
+            >
               ⬇ Deck
             </a>
           )}
         </>
       ) : (
         lesson.doc && (
-          <a href={lesson.doc} className="font-medium text-[#0C8175] hover:underline">
+          <a
+            href={lesson.doc}
+            onClick={() => trackViews && recordArtifactView(lesson.id, "docx")}
+            className="font-medium text-[#0C8175] hover:underline"
+          >
             ⬇ Download
           </a>
         )

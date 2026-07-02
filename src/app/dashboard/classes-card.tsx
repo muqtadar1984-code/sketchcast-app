@@ -21,7 +21,13 @@ const emptyRow = (): NewRow => ({ firstName: "", lastName: "", parentEmail: "" }
 // Teacher view: create classes, provision invited students (→ login IDs +
 // temporary passwords to hand to parents), and see each class's roster + join
 // code. Data comes from the server (page.tsx); mutations call router.refresh().
-export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
+export default function ClassesCard({
+  classes,
+  betaSlotsLeft = null,
+}: {
+  classes: ClassRoster[];
+  betaSlotsLeft?: number | null; // beta: remaining student slots (null = uncapped)
+}) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
@@ -160,7 +166,19 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
 
                   <ClassProgress classId={c.id} />
 
-                  <p className="text-xs font-medium text-[#5B6470] mt-4 mb-1.5">Add students</p>
+                  {betaSlotsLeft !== null && betaSlotsLeft <= 0 ? (
+                    <p className="text-xs text-[#9A6400] bg-[#FFF1D6] rounded-lg px-3 py-2 mt-4">
+                      Beta is limited to 2 students — you&apos;ve added both. You can assign work
+                      to them and review their responses freely.
+                    </p>
+                  ) : (
+                  <>
+                  <p className="text-xs font-medium text-[#5B6470] mt-4 mb-1.5">
+                    Add students
+                    {betaSlotsLeft !== null && (
+                      <span className="ml-2 text-[#9A6400]">Beta: {betaSlotsLeft} of 2 slots left</span>
+                    )}
+                  </p>
                   <div className="space-y-1.5">
                     {rows.map((r, i) => (
                       <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr] gap-1.5">
@@ -182,6 +200,8 @@ export default function ClassesCard({ classes }: { classes: ClassRoster[] }) {
                       {busy ? "Creating…" : "Create logins"}
                     </button>
                   </div>
+                  </>
+                  )}
 
                   {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
 
