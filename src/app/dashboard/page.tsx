@@ -354,11 +354,12 @@ export default async function DashboardPage() {
     };
   });
 
-  // Beta state: the pinned (book, chapter), remaining student slots, and the
-  // "opened everything → prompt for feedback" condition.
+  // Beta state: the pinned (book, chapter), remaining student slots, and
+  // whether feedback was already submitted (the widget is entirely voluntary —
+  // it opens only from its button; no "viewed everything" auto-prompt).
   let betaPinned: { bookId: string; chapterRef: string | null } | null = null;
   let betaSlotsLeft: number | null = null;
-  let feedback: { submitted: boolean; allViewed: boolean } | null = null;
+  let feedback: { submitted: boolean } | null = null;
   if (isBeta) {
     // Any generation pins the chapter — including a whole-book one
     // (chapter_ref null), which consumes the beta slot entirely.
@@ -368,34 +369,8 @@ export default async function DashboardPage() {
       classRosters.flatMap((c) => c.students.map((s) => s.username || s.full_name || "")),
     ).size;
     betaSlotsLeft = Math.max(0, 2 - distinctStudents);
-
-    // Required views = artifacts of finished generations the dashboard actually
-    // renders with tracked links (a live book + one of its current chapters) —
-    // anything else could never be marked viewed and would make the auto-prompt
-    // unreachable.
-    const trackable = (l: (typeof lessons)[number]) => {
-      const book = bookList.find((b) => b.id === l.bookId);
-      return !!book && (book.chapters ?? []).some((c) => String(c.num) === l.chapterRef);
-    };
-    const required: string[] = [];
-    for (const l of lessons) {
-      if (l.status !== "done" || !trackable(l)) continue;
-      if (l.kind === "presentation") {
-        if (l.video) required.push(`${l.id}|video_mp4`);
-        if (l.deck) required.push(`${l.id}|deck_pptx`);
-      } else if (l.doc) {
-        required.push(`${l.id}|docx`);
-      }
-    }
-    const { data: viewsRaw } = await supabase.from("artifact_views").select("generation_id, kind");
-    const viewSet = new Set(
-      ((viewsRaw ?? []) as { generation_id: string; kind: string }[]).map(
-        (v) => `${v.generation_id}|${v.kind}`,
-      ),
-    );
-    const allViewed = required.length > 0 && required.every((r) => viewSet.has(r));
     const { data: fb } = await supabase.from("beta_feedback").select("id").maybeSingle();
-    feedback = { submitted: !!fb, allViewed };
+    feedback = { submitted: !!fb };
   }
 
   // Group the library Grade → Subject (auto-detected; "Other / General" when unknown).
@@ -496,7 +471,7 @@ export default async function DashboardPage() {
         )}
       </main>
 
-      {feedback && <FeedbackWidget submitted={feedback.submitted} allViewed={feedback.allViewed} />}
+      {feedback && <FeedbackWidget submitted={feedback.submitted} />}
     </div>
   );
 }
