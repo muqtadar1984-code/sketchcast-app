@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 // Beta feedback: a persistent "Give feedback" button + a short structured form.
-// Auto-opens ONCE when the teacher has opened every generated artifact
-// (allViewed) and hasn't submitted; dismissing stops the auto-nag (localStorage)
-// but the button stays. After submitting — via either entry point — both show
-// the "received" state (single submission is enforced by the DB).
+// Entirely voluntary — the form opens only when the teacher clicks the button.
+// After submitting, the button becomes a "received" state (single submission
+// is enforced by the DB).
 
 type Ratings = { overall: number; lesson_quality: number; deck_quality: number; ease_of_use: number };
 const RATING_FIELDS: { key: keyof Ratings; label: string }[] = [
@@ -15,39 +14,21 @@ const RATING_FIELDS: { key: keyof Ratings; label: string }[] = [
   { key: "deck_quality", label: "Deck & documents quality" },
   { key: "ease_of_use", label: "Ease of use" },
 ];
-const DISMISS_KEY = "sc-beta-feedback-dismissed";
 
 export default function FeedbackWidget({
   submitted: submittedInitial,
-  allViewed,
 }: {
   submitted: boolean;
-  allViewed: boolean;
 }) {
   const [submitted, setSubmitted] = useState(submittedInitial);
   const [open, setOpen] = useState(false);
-  const [auto, setAuto] = useState(false);
   const [ratings, setRatings] = useState<Ratings>({ overall: 0, lesson_quality: 0, deck_quality: 0, ease_of_use: 0 });
   const [workedWell, setWorkedWell] = useState("");
   const [improve, setImprove] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-trigger: fires once the teacher has accessed all generated material.
-  // Slightly delayed so it lands unobtrusively (and never mid-hydration).
-  useEffect(() => {
-    if (allViewed && !submitted && !localStorage.getItem(DISMISS_KEY)) {
-      const t = setTimeout(() => {
-        setAuto(true);
-        setOpen(true);
-      }, 1200);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   function close() {
-    localStorage.setItem(DISMISS_KEY, "1"); // don't auto-nag again
     setOpen(false);
   }
 
@@ -66,7 +47,7 @@ export default function FeedbackWidget({
         ...ratings,
         worked_well: workedWell.trim() || null,
         improve: improve.trim() || null,
-        trigger_type: auto ? "auto" : "manual",
+        trigger_type: "manual",
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -110,13 +91,7 @@ export default function FeedbackWidget({
             ✓ Feedback received — thank you!
           </span>
         ) : (
-          <button
-            onClick={() => {
-              setAuto(false);
-              setOpen(true);
-            }}
-            className="btn-primary h-10 px-4 text-sm rounded-full shadow-lg"
-          >
+          <button onClick={() => setOpen(true)} className="btn-primary h-10 px-4 text-sm rounded-full shadow-lg">
             Give feedback
           </button>
         )}
@@ -132,9 +107,7 @@ export default function FeedbackWidget({
           >
             <h3 className="font-display font-medium text-lg mb-1">How was your beta experience?</h3>
             <p className="text-sm text-[#5B6470] mb-4">
-              {auto
-                ? "You've now seen everything SketchCast generated — two minutes of your thoughts would help us enormously."
-                : "Two minutes of your thoughts would help us enormously."}
+              Two minutes of your thoughts would help us enormously.
             </p>
 
             <form onSubmit={submit} className="space-y-3">
