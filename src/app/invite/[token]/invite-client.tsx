@@ -56,7 +56,12 @@ export default function InviteClient({
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: name }, emailRedirectTo: `${location.origin}/auth/confirm` },
+      options: {
+        data: { full_name: name },
+        // After confirming their email, land straight back on the accept route —
+        // without this, invitees had to manually reopen the invite link.
+        emailRedirectTo: `${location.origin}/auth/confirm?next=${encodeURIComponent(acceptPath)}`,
+      },
     });
     setBusy(false);
     if (error) {
@@ -67,7 +72,7 @@ export default function InviteClient({
       router.push(acceptPath);
       return;
     }
-    setNotice("Check your email to confirm your account, then open this invite link again to finish.");
+    setNotice("Check your email to confirm your account — the confirmation link will finish accepting the invite automatically.");
   }
 
   return (

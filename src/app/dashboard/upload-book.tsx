@@ -158,11 +158,13 @@ export default function UploadBook({
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="text-sm text-[#14181F] file:mr-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 file:text-[#0C8175] file:font-medium"
         />
-        {file && (
+        {file ? (
           <span className="text-xs text-[#5B6470]">
             {(file.size / 1e6).toFixed(1)} MB
             {file.size > 20e6 && " — big book; keep this tab open while it uploads"}
           </span>
+        ) : (
+          <span className="text-xs text-[#98A0A9]">Choose a PDF to enable upload</span>
         )}
       </div>
 

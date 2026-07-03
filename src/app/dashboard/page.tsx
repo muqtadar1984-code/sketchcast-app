@@ -15,6 +15,7 @@ import StudentDashboard, {
 import { EmptyBooks } from "./icons";
 import { InkUnderline } from "@/components/ink-mark";
 import FeedbackWidget from "./feedback-widget";
+import BetaBanner from "./beta-banner";
 import { teacherBetaEnabled } from "@/utils/flags";
 
 const KIND_LABEL: Record<string, string> = {
@@ -92,7 +93,7 @@ export default async function DashboardPage() {
   if (role === "student") {
     const { data: gensRaw } = await supabase
       .from("generations")
-      .select("id, kind, chapter_ref, artifacts(kind, storage_path)")
+      .select("id, kind, chapter_ref, book_id, artifacts(kind, storage_path)")
       .order("created_at", { ascending: false });
     const { data: sharesRaw } = await supabase
       .from("generation_shares")
@@ -136,8 +137,17 @@ export default async function DashboardPage() {
       return data?.signedUrl ?? null;
     };
 
-    type GenRow = { id: string; kind: string; chapter_ref: string | null; artifacts: { kind: string; storage_path: string }[] };
-    type Item = StudentItemData & { className: string; chapterRef: string | null };
+    type GenRow = { id: string; kind: string; chapter_ref: string | null; book_id: string | null; artifacts: { kind: string; storage_path: string }[] };
+    type Item = StudentItemData & { className: string; chapterRef: string | null; bookId: string | null };
+    // Real chapter titles for headings ("Unit 1: Be a designer" beats "Chapter 1").
+    // RLS: students in a school can read its books; failure → graceful fallback.
+    const { data: sBooks } = await supabase.from("books").select("id, chapters");
+    const chapterTitle = new Map<string, string>();
+    for (const b of (sBooks ?? []) as { id: string; chapters: { num: number; title: string }[] | null }[]) {
+      for (const c of b.chapters ?? []) {
+        if (c.title && !/^\d+$/.test(c.title.trim())) chapterTitle.set(`${b.id}|${c.num}`, c.title);
+      }
+    }
     const items: Item[] = [];
     // (server component, rendered once per request — Date.now is fine here)
     // eslint-disable-next-line react-hooks/purity
@@ -157,6 +167,7 @@ export default async function DashboardPage() {
         classId: info.classId,
         className: info.className,
         chapterRef: g.chapter_ref ?? null,
+        bookId: g.book_id ?? null,
         video: await sign(path("video_mp4")),
         deck: await sign(path("deck_pptx")),
         doc: await sign(path("docx")),
@@ -184,7 +195,12 @@ export default async function DashboardPage() {
           .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0))
           .map(([chKey, its]) => ({
             key: chKey,
-            heading: chKey === "—" ? "Lessons" : `Chapter ${Number(chKey) + 1}`,
+            // Prefer the chapter's real title ("Unit 1: Be a designer").
+            heading:
+              chKey === "—"
+                ? "Lessons"
+                : chapterTitle.get(`${its[0]?.bookId}|${Number(chKey)}`) ||
+                  `Chapter ${Number(chKey) + 1}`,
             items: its,
           })),
       }));
@@ -399,6 +415,8 @@ export default async function DashboardPage() {
           Upload a textbook, then generate a narrated lesson from it.
         </p>
 
+        {isBeta && <BetaBanner />}
+
         {/* Cap counts the teacher's OWN books — the library select also returns
             school-shared ones, which must not consume their upload. */}
         <UploadBook
@@ -413,7 +431,26 @@ export default async function DashboardPage() {
         {bookList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
             <EmptyBooks />
-            No books yet. Upload your first textbook above.
+            <p className="font-medium text-[#14181F] mb-4">Your library is empty — here&apos;s the whole journey:</p>
+            <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+              <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
+                <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">1</span>
+                Upload a textbook PDF above
+              </span>
+              <span className="text-[#98A0A9]">→</span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
+                <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">2</span>
+                Generate a narrated lesson for a chapter
+              </span>
+              <span className="text-[#98A0A9]">→</span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
+                <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">3</span>
+                Assign it to your class &amp; watch progress
+              </span>
+            </div>
+            <p className="text-xs text-[#98A0A9] mt-4">
+              Chapters are detected automatically — scanned books included.
+            </p>
           </div>
         ) : (
           <div className="space-y-8">

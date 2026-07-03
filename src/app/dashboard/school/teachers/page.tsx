@@ -181,8 +181,14 @@ export default async function SchoolTeachersPage() {
         <h1 className="text-4xl mb-2">Teachers</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">
-          Activity and how each teacher&apos;s students are doing — to spot who could use support, against the cohort
-          baseline (<span className="tabular text-[#0C8175]">{baselinePct}%</span> completion). Not a ranking.
+          Activity and how each teacher&apos;s students are doing — to spot who could use support
+          {baseTotal > 0 && (
+            <>
+              , against the cohort baseline (
+              <span className="tabular text-[#0C8175]">{baselinePct}%</span> completion)
+            </>
+          )}
+          . Not a ranking.
         </p>
 
         {rows.length === 0 ? (

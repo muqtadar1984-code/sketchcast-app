@@ -123,7 +123,8 @@ export default async function AnalyticsPage() {
     { label: "Classes", value: classes.length },
     { label: "Students", value: allStudents.size },
     { label: "Assignments", value: shares.length },
-    { label: "Completion", value: `${completionPct}%` },
+    // "—" until something is assigned: a measured 0% and no-data-yet are different stories.
+    { label: "Completion", value: total ? `${completionPct}%` : "—" },
     { label: "Overdue", value: overdue },
     { label: "To grade", value: pending.length },
   ];

@@ -28,6 +28,11 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
+  // Optimistic additions so a just-created invite appears in "Sent invites"
+  // immediately (router.refresh() catches up moments later).
+  const [pending, setPending] = useState<InviteRow[]>([]);
+  const serverIds = new Set(invites.map((i) => i.id));
+  const list = [...pending.filter((p) => !serverIds.has(p.id)), ...invites];
 
   const linkFor = (token: string) =>
     `${typeof window !== "undefined" ? window.location.origin : ""}/invite/${token}`;
@@ -49,7 +54,7 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
     const { data, error } = await supabase
       .from("invites")
       .insert({ email: e, role, school_id: schoolId, invited_by: user?.id })
-      .select("token")
+      .select("id, email, role, token, accepted_at, expires_at, created_at")
       .single();
     setBusy(false);
     if (error) {
@@ -58,6 +63,7 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
     }
     setEmail("");
     setLink(linkFor(data.token));
+    setPending((p) => [data as InviteRow, ...p]);
     router.refresh();
   }
 
@@ -119,11 +125,11 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
       </div>
 
       <h2 className="text-xl mb-2">Sent invites</h2>
-      {invites.length === 0 ? (
+      {list.length === 0 ? (
         <div className="card px-5 py-6 text-sm text-[#5B6470]">No invites yet.</div>
       ) : (
         <div className="card divide-y divide-[#EEF0EC]">
-          {invites.map((iv) => {
+          {list.map((iv) => {
             const accepted = !!iv.accepted_at;
             // (expiry check against wall-clock — recomputed on refresh is fine)
             // eslint-disable-next-line react-hooks/purity
