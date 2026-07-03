@@ -128,7 +128,7 @@ export default function AssignModal({
               Assign to a class
             </h3>
             <p className="text-xs text-[#5B6470] mb-3">
-              {generationIds.length} item{generationIds.length === 1 ? "" : "s"} → the class&apos;s
+              {generationIds.length} {generationIds.length === 1 ? "item" : "items"} — the class&apos;s
               students will see this in their assignments.
             </p>
 

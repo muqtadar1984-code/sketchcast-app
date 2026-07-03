@@ -4,12 +4,18 @@ import { createClient } from "@/utils/supabase/server";
 
 // Handles the email-confirmation / magic-link callback. Supports both the
 // token_hash flow (verifyOtp) and the PKCE code flow (exchangeCodeForSession).
+// Only same-origin relative redirects (no open-redirect via `next`).
+function safeNext(next: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/dashboard";
+  return next;
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = safeNext(searchParams.get("next"));
 
   const supabase = await createClient();
 

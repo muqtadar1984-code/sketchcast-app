@@ -235,10 +235,11 @@ export default async function SchoolAnalyticsPage() {
     // Logging must never break the page; a missing audit row is recoverable.
   }
 
+  // "—" for rates that have no denominator yet — no-data-yet ≠ measured zero.
   const metrics: { label: string; value: string | number; tone?: "warn" }[] = [
     { label: "Students", value: allStudents.size },
-    { label: "Active (14d)", value: `${activePct}%` },
-    { label: "Completion", value: `${completionPct}%` },
+    { label: "Active (14d)", value: allStudents.size ? `${activePct}%` : "—" },
+    { label: "Completion", value: assignedTotal ? `${completionPct}%` : "—" },
     { label: "At-risk", value: flagged.length, tone: "warn" },
     { label: "Overdue", value: overdueTotal },
   ];
