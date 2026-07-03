@@ -213,10 +213,14 @@ export default async function DashboardPage() {
     );
   }
 
+  // Teacher surfaces show what the person OWNS. Admins/coordinators can read
+  // school-wide rows under RLS, so filter by ownership explicitly — their
+  // Library is their teacher hat, not the school view (that's /dashboard/school).
   // Simple list for the assignment dropdown — always works (no 0005 columns).
   const { data: classesRaw } = await supabase
     .from("classes")
     .select("id, name, grade")
+    .eq("teacher_id", user.id)
     .order("created_at", { ascending: false });
   const classes = (classesRaw ?? []) as { id: string; name: string; grade: string | null }[];
 
@@ -226,6 +230,7 @@ export default async function DashboardPage() {
   const { data: rostersRaw } = await supabase
     .from("classes")
     .select("id, name, grade, join_code, enrollments(profiles(full_name, username, parent_email))")
+    .eq("teacher_id", user.id)
     .order("created_at", { ascending: false });
   type RosterRaw = {
     id: string;
@@ -251,6 +256,7 @@ export default async function DashboardPage() {
   const { data: books } = await supabase
     .from("books")
     .select("id, title, author, owner_id, storage_path, status, chapters, grade, subject, cover_path, created_at")
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
   const bookList = (books ?? []) as Book[];
 
@@ -272,6 +278,7 @@ export default async function DashboardPage() {
     .select(
       "id, title, status, created_at, kind, chapter_ref, book_id, params, artifacts(kind, storage_path), jobs(progress, status)",
     )
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
   type LessonRow = {

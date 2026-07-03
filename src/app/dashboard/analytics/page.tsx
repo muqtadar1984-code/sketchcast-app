@@ -31,35 +31,41 @@ export default async function AnalyticsPage() {
   const role = (profile?.role as string | null) ?? null;
   if (role === "student") redirect("/dashboard");
 
+  // "My Analytics" is the person's OWN teaching. Admins/coordinators can read
+  // school-wide rows under RLS, so pin every dataset to their classes/lessons
+  // (a no-op for plain teachers, whose RLS already equals ownership).
   const { data: classesRaw } = await supabase
     .from("classes")
     .select("id, name")
+    .eq("teacher_id", user.id)
     .order("created_at", { ascending: false });
   const classes = (classesRaw ?? []) as { id: string; name: string }[];
+  const myClassIds = new Set(classes.map((c) => c.id));
 
   type EnrRow = { class_id: string; student_id: string; profiles: { full_name: string | null; username: string | null } | null };
   const { data: enrRaw } = await supabase
     .from("enrollments")
     .select("class_id, student_id, profiles(full_name, username)");
-  const enr = (enrRaw ?? []) as unknown as EnrRow[];
+  const enr = ((enrRaw ?? []) as unknown as EnrRow[]).filter((e) => myClassIds.has(e.class_id));
 
   type ShareRow = { generation_id: string; class_id: string; due_at: string | null; generations: { kind: string; chapter_ref: string | null; title: string | null } | null };
   const { data: sharesRaw } = await supabase
     .from("generation_shares")
     .select("generation_id, class_id, due_at, generations(kind, chapter_ref, title)");
-  const shares = (sharesRaw ?? []) as unknown as ShareRow[];
+  const shares = ((sharesRaw ?? []) as unknown as ShareRow[]).filter((s) => myClassIds.has(s.class_id));
+  const myGenIds = new Set(shares.map((s) => s.generation_id));
 
   type ProgRow = { generation_id: string; student_id: string; status: string };
   const { data: progRaw } = await supabase
     .from("student_progress")
     .select("generation_id, student_id, status");
-  const prog = (progRaw ?? []) as ProgRow[];
+  const prog = ((progRaw ?? []) as ProgRow[]).filter((p) => myGenIds.has(p.generation_id));
 
   type SubRow = { id: string; generation_id: string; student_id: string; mode: string; grade_status: string; auto_score: number | null; max_score: number | null };
   const { data: subsRaw } = await supabase
     .from("submissions")
     .select("id, generation_id, student_id, mode, grade_status, auto_score, max_score");
-  const subs = (subsRaw ?? []) as SubRow[];
+  const subs = ((subsRaw ?? []) as SubRow[]).filter((s) => myGenIds.has(s.generation_id));
 
   // ── Index the raw rows ──────────────────────────────────────────────────
   const studentName = new Map<string, string>();
@@ -139,7 +145,8 @@ export default async function AnalyticsPage() {
       .eq("owner_id", user.id);
     const { data: gradedRaw } = await supabase
       .from("submissions")
-      .select("submitted_at, graded_at")
+      .select("submitted_at, graded_at, generations!inner(owner_id)")
+      .eq("generations.owner_id", user.id)
       .not("graded_at", "is", null);
     const graded = (gradedRaw ?? []) as { submitted_at: string; graded_at: string | null }[];
     let tSum = 0;
