@@ -5,16 +5,16 @@ import { schoolAnalyticsEnabled } from "@/utils/flags";
 
 export const runtime = "nodejs";
 
-// Manage the coordinator role + scope mapping — the ONLY new writes this feature
-// introduces. Admin-only and flag-gated. Promoting a user to `coordinator` and
-// setting profiles.role can't be done under the caller's RLS (profiles update is
-// self-only), so it goes through the service role AFTER we verify the caller is
-// a school_admin and the target is in the SAME school (multi-tenant safety).
+// Manage coordinator GRANTS. Coordinator is a capability, not an identity: a
+// teacher granted coordinator_scope rows keeps their teacher role and dashboard
+// and gains oversight of the granted slice (the RLS policies key off the scope
+// rows, not the role enum). Admin-only and flag-gated. Writes go through the
+// service role AFTER we verify the caller is a school_admin and the target is
+// in the SAME school (multi-tenant safety).
 
 type Body = {
-  action?: "set_role" | "add_scope" | "remove_scope";
+  action?: "add_scope" | "remove_scope" | "revoke_coordinator";
   userId?: string;
-  role?: "coordinator" | "teacher";
   grade?: string;
   subject?: string;
   scopeId?: string;
@@ -67,24 +67,20 @@ export async function POST(request: Request) {
     return { role: data.role as string };
   }
 
-  if (body.action === "set_role") {
+  if (body.action === "revoke_coordinator") {
     const userId = (body.userId ?? "").trim();
-    const role = body.role;
-    if (!userId || (role !== "coordinator" && role !== "teacher")) {
-      return NextResponse.json({ error: "userId and a valid role are required." }, { status: 400 });
-    }
+    if (!userId) return NextResponse.json({ error: "userId is required." }, { status: 400 });
     const target = await targetInSchool(userId);
     if (!target) return NextResponse.json({ error: "User not in your school." }, { status: 403 });
-    // Only promote/demote between teacher and coordinator — never touch admins/students.
     if (target.role !== "teacher" && target.role !== "coordinator") {
       return NextResponse.json({ error: "Only teachers/coordinators can be changed." }, { status: 400 });
     }
-
-    const { error: uErr } = await admin.from("profiles").update({ role }).eq("id", userId);
-    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
-    // Demoting clears their scope rows so no stale access lingers.
-    if (role === "teacher") {
-      await admin.from("coordinator_scope").delete().eq("coordinator_id", userId);
+    // Remove ALL their grants; normalize legacy enum-coordinators back to teacher
+    // (the enum is no longer what powers coordinator access).
+    const { error: dErr } = await admin.from("coordinator_scope").delete().eq("coordinator_id", userId);
+    if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
+    if (target.role === "coordinator") {
+      await admin.from("profiles").update({ role: "teacher" }).eq("id", userId);
     }
     return NextResponse.json({ ok: true });
   }
@@ -98,8 +94,9 @@ export async function POST(request: Request) {
     }
     const target = await targetInSchool(userId);
     if (!target) return NextResponse.json({ error: "User not in your school." }, { status: 403 });
-    if (target.role !== "coordinator") {
-      return NextResponse.json({ error: "Make the user a coordinator first." }, { status: 400 });
+    // Grants go to teachers (incl. legacy enum-coordinators) — never admins/students.
+    if (target.role !== "teacher" && target.role !== "coordinator") {
+      return NextResponse.json({ error: "Coordinator access can only be granted to teachers." }, { status: 400 });
     }
     const { error: iErr } = await admin
       .from("coordinator_scope")

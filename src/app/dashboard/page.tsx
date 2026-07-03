@@ -64,7 +64,6 @@ export default async function DashboardPage() {
     .single();
   const schoolId = (profile?.school_id as string | null) ?? null;
   const role = (profile?.role as string | null) ?? null;
-  const displayName = profile?.full_name || user.email || "";
 
   // Teacher beta + signup notification: one best-effort query so a
   // not-yet-applied migration (missing columns) can never break the dashboard.
@@ -79,7 +78,8 @@ export default async function DashboardPage() {
       .eq("id", user.id)
       .maybeSingle();
     const flags = b as { beta_tester?: boolean; signup_notified_at?: string | null } | null;
-    isBeta = teacherBetaEnabled() && role === "teacher" && !!flags?.beta_tester;
+    // Any beta adult — admins and coordinators teach too, same trial caps.
+    isBeta = teacherBetaEnabled() && !!flags?.beta_tester;
     if (flags && !flags.signup_notified_at) {
       const { notifySignupOnce } = await import("@/utils/notify");
       await notifySignupOnce(user.id, user.email ?? null, (profile?.full_name as string) ?? null, role);
@@ -207,7 +207,7 @@ export default async function DashboardPage() {
 
     return (
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-        <AppHeader name={displayName} role={role} />
+        <AppHeader />
         <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
       </div>
     );
@@ -406,7 +406,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AutoRefresh active={hasPending} />
-      <AppHeader name={displayName} role={role} />
+      <AppHeader />
 
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Your library</h1>

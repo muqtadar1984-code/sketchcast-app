@@ -53,16 +53,16 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  // Beta teachers only — students (minors) and non-beta accounts must not be
-  // able to file "beta feedback" (it would also consume a unique slot + email
-  // the founder).
+  // Beta adults only — every adult can teach (admins/coordinators included),
+  // but students (minors) and non-beta accounts must not be able to file "beta
+  // feedback" (it would also consume a unique slot + email the founder).
   const { data: me } = await supabase
     .from("profiles")
     .select("role, beta_tester")
     .eq("id", user.id)
     .maybeSingle();
   const gate = me as { role?: string; beta_tester?: boolean } | null;
-  if (gate?.role !== "teacher" || !gate?.beta_tester) {
+  if (!gate?.role || gate.role === "student" || !gate.beta_tester) {
     return NextResponse.json({ error: "Feedback is for beta teachers." }, { status: 403 });
   }
 

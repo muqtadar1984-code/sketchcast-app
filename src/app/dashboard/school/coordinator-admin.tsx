@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 export type Member = { id: string; name: string; role: "teacher" | "coordinator" };
 export type Scope = { id: string; coordinator_id: string; grade: string; subject: string | null };
 
-// Admin control for the coordinator role + (grade, subject) scope mapping. Each
-// mutation hits /api/coordinators (admin-only, service role) then refreshes.
+// Admin control for coordinator GRANTS: coordinator access = holding
+// coordinator_scope (grade, subject) rows. The person stays a teacher — same
+// dashboard, plus oversight of the granted slice. Each mutation hits
+// /api/coordinators (admin-only, service role) then refreshes.
 export default function CoordinatorAdmin({
   members,
   scopes,
@@ -24,6 +26,8 @@ export default function CoordinatorAdmin({
   const [error, setError] = useState<string | null>(null);
   // Per-coordinator add-scope form state.
   const [form, setForm] = useState<Record<string, { grade: string; subject: string }>>({});
+  // "Grant a teacher access" form state.
+  const [grant, setGrant] = useState({ userId: "", grade: "", subject: "" });
 
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -44,8 +48,11 @@ export default function CoordinatorAdmin({
   }
 
   const scopesOf = (id: string) => scopes.filter((s) => s.coordinator_id === id);
-  const coordinators = members.filter((m) => m.role === "coordinator");
-  const teachers = members.filter((m) => m.role === "teacher");
+  // A coordinator is anyone holding a grant (legacy enum-coordinators included,
+  // so their rows stay visible and manageable until revoked).
+  const coordinators = members.filter((m) => m.role === "coordinator" || scopesOf(m.id).length > 0);
+  const coordinatorIds = new Set(coordinators.map((m) => m.id));
+  const grantable = members.filter((m) => !coordinatorIds.has(m.id));
 
   return (
     <div className="card p-5">
@@ -54,7 +61,8 @@ export default function CoordinatorAdmin({
         <span className="text-xs text-[#5B6470]">{coordinators.length} coordinator{coordinators.length === 1 ? "" : "s"}</span>
       </div>
       <p className="text-sm text-[#5B6470] mb-4">
-        A coordinator sees only the grades (and optional subjects) you assign — nothing outside their slice.
+        Coordinator access is an add-on for a teacher: they keep their own classes and dashboard, and
+        additionally see only the grades (and optional subjects) you assign — nothing outside that slice.
       </p>
       {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
 
@@ -64,7 +72,7 @@ export default function CoordinatorAdmin({
         </p>
       )}
 
-      {/* Existing coordinators with their scopes */}
+      {/* Current coordinators with their scopes */}
       {coordinators.length > 0 && (
         <div className="space-y-2 mb-5">
           {coordinators.map((m) => {
@@ -73,14 +81,14 @@ export default function CoordinatorAdmin({
               <div key={m.id} className="border border-[#EEF0EC] rounded-lg p-3">
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <span className="font-medium">
-                    {m.name} <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ml-1">coordinator</span>
+                    {m.name} <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ml-1">teacher &amp; coordinator</span>
                   </span>
                   <button
-                    onClick={() => call({ action: "set_role", userId: m.id, role: "teacher" })}
+                    onClick={() => call({ action: "revoke_coordinator", userId: m.id })}
                     disabled={busy}
                     className="text-xs font-medium text-[#5B6470] hover:text-red-600"
                   >
-                    Remove coordinator
+                    Remove coordinator access
                   </button>
                 </div>
 
@@ -141,22 +149,52 @@ export default function CoordinatorAdmin({
         </div>
       )}
 
-      {/* Promote a teacher */}
-      <p className="text-xs font-medium text-[#5B6470] mb-1.5">Make a teacher a coordinator</p>
-      {teachers.length === 0 ? (
-        <p className="text-xs text-[#5B6470]">No teachers available to promote.</p>
+      {/* Grant a teacher coordinator access */}
+      <p className="text-xs font-medium text-[#5B6470] mb-1.5">Give a teacher coordinator access</p>
+      {grantable.length === 0 ? (
+        <p className="text-xs text-[#5B6470]">Every teacher already has coordinator access.</p>
+      ) : grades.length === 0 ? (
+        <p className="text-xs text-[#5B6470]">Add a grade to a class first.</p>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {teachers.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => call({ action: "set_role", userId: m.id, role: "coordinator" })}
-              disabled={busy}
-              className="btn-ghost h-8 px-3 text-xs"
-            >
-              + {m.name}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-end gap-1.5">
+          <select
+            value={grant.userId}
+            onChange={(e) => setGrant((s) => ({ ...s, userId: e.target.value }))}
+            className="field h-8 px-2 text-sm"
+          >
+            <option value="">Choose a teacher…</option>
+            {grantable.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          <select
+            value={grant.grade}
+            onChange={(e) => setGrant((s) => ({ ...s, grade: e.target.value }))}
+            className="field h-8 px-2 text-sm"
+          >
+            {grades.map((g) => (
+              <option key={g} value={g}>Grade {g}</option>
+            ))}
+          </select>
+          <select
+            value={grant.subject}
+            onChange={(e) => setGrant((s) => ({ ...s, subject: e.target.value }))}
+            className="field h-8 px-2 text-sm"
+          >
+            <option value="">All subjects</option>
+            {subjects.map((sub) => (
+              <option key={sub} value={sub}>{sub}</option>
+            ))}
+          </select>
+          <button
+            onClick={() =>
+              call({ action: "add_scope", userId: grant.userId, grade: grant.grade || grades[0], subject: grant.subject })
+            }
+            disabled={busy || !grant.userId || !(grant.grade || grades[0])}
+            className="btn-ghost h-8 px-3 text-xs"
+          >
+            Grant access
+          </button>
         </div>
       )}
     </div>
