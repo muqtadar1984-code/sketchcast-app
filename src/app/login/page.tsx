@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { LogoMark } from "../dashboard/icons";
@@ -9,9 +9,13 @@ import { studentEmail } from "@/utils/student";
 import OAuthButton from "@/components/oauth-button";
 import AuthError from "@/components/auth-error";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  // ?email= prefills the field — makes per-role login links bookmarkable
+  // (e.g. teacher.sketchcast.app/login?email=demo.teacher1@sketchcast.app for
+  // side-by-side multi-account testing across subdomains).
+  const prefill = useSearchParams().get("email") ?? "";
+  const [email, setEmail] = useState(prefill);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,6 +39,27 @@ export default function LoginPage() {
   }
 
   return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <input
+        required placeholder="Email or student ID" value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="field w-full h-11 px-3 text-[#14181F]"
+      />
+      <input
+        type="password" required placeholder="Password" value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className="field w-full h-11 px-3 text-[#14181F]"
+      />
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button type="submit" disabled={loading} className="btn-primary w-full h-11">
+        {loading ? "Signing in…" : "Sign in"}
+      </button>
+    </form>
+  );
+}
+
+export default function LoginPage() {
+  return (
     <main className="min-h-screen flex items-center justify-center bg-[#FCFCFA] px-4">
       <div className="w-full max-w-sm card rounded-2xl p-8">
         <div className="flex items-center gap-2.5 mb-1">
@@ -47,24 +72,8 @@ export default function LoginPage() {
 
         <Suspense fallback={null}>
           <AuthError />
+          <LoginForm />
         </Suspense>
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <input
-            required placeholder="Email or student ID" value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="field w-full h-11 px-3 text-[#14181F]"
-          />
-          <input
-            type="password" required placeholder="Password" value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="field w-full h-11 px-3 text-[#14181F]"
-          />
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button type="submit" disabled={loading} className="btn-primary w-full h-11">
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
 
         <div className="flex items-center gap-3 my-5">
           <span className="h-px flex-1 bg-[#E6E8E4]" />
