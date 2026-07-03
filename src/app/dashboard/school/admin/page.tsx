@@ -25,7 +25,6 @@ export default async function SchoolAdminPage() {
   const role = (profile?.role as string | null) ?? null;
   if (role === "coordinator") redirect("/dashboard/school");
   if (role !== "school_admin") redirect("/dashboard");
-  const displayName = profile?.full_name || user.email || "";
 
   // School roster (teachers + coordinators), scope rows, and the option lists.
   const { data: peopleRaw } = await supabase
@@ -60,7 +59,7 @@ export default async function SchoolAdminPage() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-      <AppHeader name={displayName} role={role} />
+      <AppHeader />
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">School admin</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />

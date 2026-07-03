@@ -48,12 +48,6 @@ export default async function BetaFeedbackPage() {
   if (!user) redirect("/login");
   if (!founderEmails().includes((user.email ?? "").toLowerCase())) redirect("/dashboard");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
-    .single();
-
   // Service role: read every teacher's feedback (RLS restricts teachers to their own).
   let admin: ReturnType<typeof createAdminClient>;
   try {
@@ -61,7 +55,7 @@ export default async function BetaFeedbackPage() {
   } catch {
     return (
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-        <AppHeader name={profile?.full_name || user.email || ""} role={(profile?.role as string) ?? null} />
+        <AppHeader />
         <main className="max-w-4xl mx-auto px-6 py-10">
           <p className="text-sm text-red-600">
             SUPABASE_SERVICE_ROLE_KEY isn&apos;t configured on this deployment, so feedback can&apos;t be listed.
@@ -95,7 +89,7 @@ export default async function BetaFeedbackPage() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-      <AppHeader name={profile?.full_name || user.email || ""} role={(profile?.role as string) ?? null} />
+      <AppHeader />
       <main className="max-w-4xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Beta feedback</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />

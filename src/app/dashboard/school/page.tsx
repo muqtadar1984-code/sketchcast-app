@@ -44,14 +44,18 @@ export default async function SchoolAnalyticsPage() {
     .eq("id", user.id)
     .single();
   const role = (profile?.role as string | null) ?? null;
-  if (role !== "school_admin" && role !== "coordinator") redirect("/dashboard");
-  const isCoordinator = role === "coordinator";
-  const displayName = profile?.full_name || user.email || "";
+  if (!role || role === "student") redirect("/dashboard");
+  const isAdmin = role === "school_admin";
 
-  // Scope label (coordinator slice vs whole school).
+  // Coordinator access is a GRANT (coordinator_scope rows), not an identity —
+  // a teacher holding scope rows gets the coordinator view of their slice and
+  // keeps their teacher dashboard. No grant and not an admin → no page.
   let scopeLabel = "Whole school";
-  if (isCoordinator) {
+  let isCoordinator = false;
+  if (!isAdmin) {
     const { data: scopes } = await supabase.from("coordinator_scope").select("grade, subject");
+    isCoordinator = (scopes?.length ?? 0) > 0;
+    if (!isCoordinator) redirect("/dashboard");
     const grades = [...new Set((scopes ?? []).map((s) => s.grade as string))];
     const subjects = [...new Set((scopes ?? []).map((s) => s.subject).filter(Boolean))] as string[];
     scopeLabel =
@@ -246,7 +250,7 @@ export default async function SchoolAnalyticsPage() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-      <AppHeader name={displayName} role={role} />
+      <AppHeader />
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">School analytics</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />

@@ -15,11 +15,11 @@ const MODEL: { role: string; sees: string }[] = [
   { role: "Teacher", sees: "Only their own classes, students, content, grading, and submissions." },
   {
     role: "Coordinator",
-    sees: "Only the grade(s) — and subject(s), if set — assigned to them: the students, teachers, and content in that slice. Nothing outside it.",
+    sees: "A teacher granted oversight of specific grade(s) — and subject(s), if set: the students, teachers, and content in that slice. Nothing outside it. They keep their own teacher dashboard.",
   },
   {
     role: "Principal / Admin",
-    sees: "Whole-school totals and trends. Named at-risk students are surfaced to the grade/subject coordinator, not profiled school-wide. Admin also manages roles, scopes, and reads the access-audit log.",
+    sees: "Whole-school totals and trends. Named at-risk students are surfaced to the grade/subject coordinator, not profiled school-wide. Admin also manages scopes, reads the access-audit log, and can teach classes of their own.",
   },
 ];
 
@@ -38,13 +38,14 @@ export default async function AccessModelPage() {
     .eq("id", user.id)
     .single();
   const role = (profile?.role as string | null) ?? null;
-  if (role !== "school_admin" && role !== "coordinator") redirect("/dashboard");
+  if (!role || role === "student") redirect("/dashboard");
   const isAdmin = role === "school_admin";
-  const displayName = profile?.full_name || user.email || "";
 
-  // RLS-scoped: admin → school-wide; coordinator → their slice.
+  // RLS-scoped: admin → school-wide; scope-holder → their slice. Coordinator
+  // access is the grant itself (scope rows), so non-admins without rows bounce.
   const { data: scopesRaw } = await supabase.from("coordinator_scope").select("id, coordinator_id, grade, subject");
   const scopes = (scopesRaw ?? []) as { id: string; coordinator_id: string; grade: string; subject: string | null }[];
+  if (!isAdmin && scopes.length === 0) redirect("/dashboard");
   const { data: classesRaw } = await supabase.from("classes").select("id, grade, teacher_id");
   const classes = (classesRaw ?? []) as { id: string; grade: string | null; teacher_id: string }[];
   const { data: enrRaw } = await supabase.from("enrollments").select("class_id, student_id");
@@ -85,7 +86,7 @@ export default async function AccessModelPage() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-      <AppHeader name={displayName} role={role} />
+      <AppHeader />
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Who can see what</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />

@@ -42,8 +42,12 @@ export default async function SchoolTeachersPage() {
     .eq("id", user.id)
     .single();
   const role = (profile?.role as string | null) ?? null;
-  if (role !== "school_admin" && role !== "coordinator") redirect("/dashboard");
-  const displayName = profile?.full_name || user.email || "";
+  if (!role || role === "student") redirect("/dashboard");
+  if (role !== "school_admin") {
+    // Coordinator access = holding scope-grant rows (RLS limits the page to that slice).
+    const { data: sc } = await supabase.from("coordinator_scope").select("id").limit(1);
+    if (!sc?.length) redirect("/dashboard");
+  }
 
   // ── RLS-scoped reads ────────────────────────────────────────────────────────
   const { data: classesRaw } = await supabase.from("classes").select("id, name, grade, teacher_id");
@@ -176,7 +180,7 @@ export default async function SchoolTeachersPage() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-      <AppHeader name={displayName} role={role} />
+      <AppHeader />
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Teachers</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />

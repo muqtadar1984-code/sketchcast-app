@@ -64,7 +64,6 @@ export default async function DashboardPage() {
     .single();
   const schoolId = (profile?.school_id as string | null) ?? null;
   const role = (profile?.role as string | null) ?? null;
-  const displayName = profile?.full_name || user.email || "";
 
   // Teacher beta + signup notification: one best-effort query so a
   // not-yet-applied migration (missing columns) can never break the dashboard.
@@ -79,7 +78,8 @@ export default async function DashboardPage() {
       .eq("id", user.id)
       .maybeSingle();
     const flags = b as { beta_tester?: boolean; signup_notified_at?: string | null } | null;
-    isBeta = teacherBetaEnabled() && role === "teacher" && !!flags?.beta_tester;
+    // Any beta adult — admins and coordinators teach too, same trial caps.
+    isBeta = teacherBetaEnabled() && !!flags?.beta_tester;
     if (flags && !flags.signup_notified_at) {
       const { notifySignupOnce } = await import("@/utils/notify");
       await notifySignupOnce(user.id, user.email ?? null, (profile?.full_name as string) ?? null, role);
@@ -207,16 +207,20 @@ export default async function DashboardPage() {
 
     return (
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-        <AppHeader name={displayName} role={role} />
+        <AppHeader />
         <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
       </div>
     );
   }
 
+  // Teacher surfaces show what the person OWNS. Admins/coordinators can read
+  // school-wide rows under RLS, so filter by ownership explicitly — their
+  // Library is their teacher hat, not the school view (that's /dashboard/school).
   // Simple list for the assignment dropdown — always works (no 0005 columns).
   const { data: classesRaw } = await supabase
     .from("classes")
     .select("id, name, grade")
+    .eq("teacher_id", user.id)
     .order("created_at", { ascending: false });
   const classes = (classesRaw ?? []) as { id: string; name: string; grade: string | null }[];
 
@@ -226,6 +230,7 @@ export default async function DashboardPage() {
   const { data: rostersRaw } = await supabase
     .from("classes")
     .select("id, name, grade, join_code, enrollments(profiles(full_name, username, parent_email))")
+    .eq("teacher_id", user.id)
     .order("created_at", { ascending: false });
   type RosterRaw = {
     id: string;
@@ -251,6 +256,7 @@ export default async function DashboardPage() {
   const { data: books } = await supabase
     .from("books")
     .select("id, title, author, owner_id, storage_path, status, chapters, grade, subject, cover_path, created_at")
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
   const bookList = (books ?? []) as Book[];
 
@@ -272,6 +278,7 @@ export default async function DashboardPage() {
     .select(
       "id, title, status, created_at, kind, chapter_ref, book_id, params, artifacts(kind, storage_path), jobs(progress, status)",
     )
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
   type LessonRow = {
@@ -406,7 +413,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AutoRefresh active={hasPending} />
-      <AppHeader name={displayName} role={role} />
+      <AppHeader />
 
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Your library</h1>
