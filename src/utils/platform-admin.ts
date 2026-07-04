@@ -9,7 +9,7 @@ import { platformConsoleEnabled } from "@/utils/flags";
 // used for coordinators and parents-to-be.
 
 export function founderEmails(): string[] {
-  return (process.env.FOUNDER_EMAILS || "muqtadar.quraishi@sketchcast.app,muqtadar1984@gmail.com")
+  return (process.env.FOUNDER_EMAILS || "muqtadar.quraishi@sketchcast.app")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
