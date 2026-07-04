@@ -36,6 +36,61 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   if (new Date(invite.expires_at).getTime() < Date.now()) return back("expired");
   if ((invite.email || "").toLowerCase() !== (user.email || "").toLowerCase()) return back("email");
 
+  if (invite.role === "parent") {
+    // Parenthood is a GRANT: linking never downgrades an existing adult role
+    // (a teacher who accepts a parent invite stays a teacher and gains links).
+    const { data: me } = await admin
+      .from("profiles")
+      .select("role, school_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!me) return back("apply");
+    if (me.role === "student") return back("role"); // a minor cannot become a parent
+    if (me.role === "teacher" && !me.school_id) {
+      // A fresh default account (signup default is teacher) with no teaching
+      // footprint → this person came to BE a parent.
+      const [{ count: nBooks }, { count: nClasses }] = await Promise.all([
+        admin.from("books").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
+        admin.from("classes").select("id", { count: "exact", head: true }).eq("teacher_id", user.id),
+      ]);
+      if ((nBooks ?? 0) === 0 && (nClasses ?? 0) === 0) {
+        await admin.from("profiles").update({ role: "parent" }).eq("id", user.id);
+      }
+    }
+    // Parents never get school_id — their school relationship flows through
+    // the children (a parent with school_id would inherit the school library).
+
+    const { data: mapped } = await admin
+      .from("invite_children")
+      .select("student_id")
+      .eq("invite_id", invite.id);
+    for (const m of mapped ?? []) {
+      const { data: child } = await admin
+        .from("profiles")
+        .select("role, school_id, parent_email")
+        .eq("id", m.student_id)
+        .maybeSingle();
+      // Re-validate at accept time: still a student of the inviting school.
+      if (!child || child.role !== "student" || child.school_id !== invite.school_id) continue;
+      const verified =
+        (child.parent_email || "").toLowerCase() === (invite.email || "").toLowerCase();
+      await admin
+        .from("parent_links")
+        .upsert(
+          {
+            parent_id: user.id,
+            child_id: m.student_id,
+            source: "school",
+            created_by: invite.invited_by ?? null,
+            verified_at: verified ? new Date().toISOString() : null,
+          },
+          { onConflict: "parent_id,child_id" },
+        );
+    }
+    await admin.from("invites").update({ accepted_at: new Date().toISOString() }).eq("id", invite.id);
+    return NextResponse.redirect(`${origin}/dashboard/children`);
+  }
+
   const { error: uErr } = await admin
     .from("profiles")
     .update({ role: invite.role, school_id: invite.school_id })

@@ -30,6 +30,7 @@ export default async function AnalyticsPage() {
     .single();
   const role = (profile?.role as string | null) ?? null;
   if (role === "student") redirect("/dashboard");
+  if (role === "parent") redirect("/dashboard/children");
 
   // "My Analytics" is the person's OWN teaching. Admins/coordinators can read
   // school-wide rows under RLS, so pin every dataset to their classes/lessons

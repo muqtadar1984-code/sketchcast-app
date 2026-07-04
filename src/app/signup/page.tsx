@@ -13,7 +13,10 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"teacher" | "student">("teacher");
+  const [role, setRole] = useState<"teacher" | "student" | "parent">("teacher");
+  // Parent signups are self-serve (strictly LESS power than the teacher
+  // default) — the option shows only while the portal flag is on.
+  const parentOn = process.env.NEXT_PUBLIC_FEATURE_PARENT_PORTAL === "true";
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -76,7 +79,7 @@ export default function SignupPage() {
             className="field w-full h-11 px-3 text-[#14181F]"
           />
           <div className="flex gap-2">
-            {(["teacher", "student"] as const).map((r) => (
+            {([...(["teacher", "student"] as const), ...(parentOn ? (["parent"] as const) : [])]).map((r) => (
               <button
                 key={r} type="button" onClick={() => setRole(r)}
                 className={`flex-1 h-11 rounded-lg border text-sm font-medium capitalize ${

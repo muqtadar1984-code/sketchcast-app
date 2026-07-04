@@ -20,6 +20,7 @@ type Body = {
   maxBooks?: number | null;
   maxChapters?: number | null;
   maxStudents?: number | null;
+  maxChildren?: number | null;
   note?: string;
 };
 
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
   if (body.action === "suspend" || body.action === "unsuspend" || body.action === "set_caps") {
     const { data: target } = await admin
       .from("profiles")
-      .select("id, role, suspended_at, max_books, max_chapters, max_students")
+      .select("*")
       .eq("id", targetId)
       .maybeSingle();
     if (!target) return NextResponse.json({ error: "User not found." }, { status: 404 });
@@ -112,9 +113,11 @@ export async function POST(request: Request) {
     const mb = capVal(body.maxBooks);
     const mc = capVal(body.maxChapters);
     const ms = capVal(body.maxStudents);
+    const mk = capVal(body.maxChildren);
     if (mb !== undefined) patch.max_books = mb;
     if (mc !== undefined) patch.max_chapters = mc;
     if (ms !== undefined) patch.max_students = ms;
+    if (mk !== undefined) patch.max_children = mk;
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "No valid caps given (0–100000 or null)." }, { status: 400 });
     }
@@ -126,7 +129,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: msg }, { status: 500 });
     }
     await audit("cap_override", "profile", {
-      before: { max_books: target.max_books, max_chapters: target.max_chapters, max_students: target.max_students },
+      before: {
+        max_books: target.max_books ?? null,
+        max_chapters: target.max_chapters ?? null,
+        max_students: target.max_students ?? null,
+        max_children: target.max_children ?? null,
+      },
       after: patch,
     });
     return NextResponse.json({ ok: true });

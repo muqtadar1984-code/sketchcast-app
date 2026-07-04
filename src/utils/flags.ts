@@ -27,3 +27,13 @@ export function teacherBetaEnabled(): boolean {
 export function platformConsoleEnabled(): boolean {
   return process.env.FEATURE_PLATFORM_CONSOLE === "true";
 }
+
+/**
+ * Parent portal: parent role, children links, test-paper generation, parent
+ * invites. Client surfaces (signup role picker) additionally read
+ * NEXT_PUBLIC_FEATURE_PARENT_PORTAL — set both in Vercel; server checks are
+ * authoritative. DB guards (kind trigger, child cap) hold regardless.
+ */
+export function parentPortalEnabled(): boolean {
+  return process.env.FEATURE_PARENT_PORTAL === "true";
+}

@@ -2,17 +2,27 @@ import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
-import { schoolAnalyticsEnabled } from "@/utils/flags";
+import { parentPortalEnabled, schoolAnalyticsEnabled } from "@/utils/flags";
 
 // One person can wear several hats: every adult (teacher, coordinator,
 // school_admin) implicitly has the TEACHER capability (the DB already permits
 // it — teacher access is ownership-based, not role-based), coordinator access
 // is granted via coordinator_scope rows rather than the role enum, and admin
-// stays a rank. Students stay exclusive — a minor's account never gains adult
-// capabilities. Tabs and the label show the UNION of what a person holds.
+// stays a rank. PARENT is the exception among adults: a parent-role account
+// gets ONLY the parent surfaces (never Library/analytics — the DB enforces
+// test-papers-only too), while a teacher who is also a parent keeps their
+// teacher world and gains My Children. Students stay exclusive — a minor's
+// account never gains adult capabilities. Tabs and the label show the UNION
+// of what a person holds.
 
-function tabsFor(role: string | null, hasScope: boolean): NavTab[] {
+function tabsFor(role: string | null, hasScope: boolean, hasChildren: boolean): NavTab[] {
   if (!role || role === "student") return [];
+  if (role === "parent") {
+    return [
+      { href: "/dashboard/children", label: "My Children" },
+      { href: "/dashboard/test-papers", label: "Test Papers" },
+    ];
+  }
   const tabs: NavTab[] = [
     { href: "/dashboard", label: "Library" },
     { href: "/dashboard/analytics", label: "My Analytics" },
@@ -28,15 +38,19 @@ function tabsFor(role: string | null, hasScope: boolean): NavTab[] {
   // Invites are the school-admin's onboarding tool — available even when the
   // analytics suite is flag-off.
   if (role === "school_admin") tabs.push({ href: "/dashboard/invites", label: "Invites" });
+  if (hasChildren) tabs.push({ href: "/dashboard/children", label: "My Children" });
   return tabs;
 }
 
-function labelFor(role: string | null, hasScope: boolean): string {
+function labelFor(role: string | null, hasScope: boolean, hasChildren: boolean): string {
   if (role === "student") return "student";
-  if (role === "school_admin") return "admin & teacher";
-  if (hasScope) return "teacher & coordinator";
-  if (role === "teacher" || role === "coordinator") return "teacher";
-  return "";
+  if (role === "parent") return "parent";
+  let label = "";
+  if (role === "school_admin") label = "admin & teacher";
+  else if (hasScope) label = "teacher & coordinator";
+  else if (role === "teacher" || role === "coordinator") label = "teacher";
+  if (label && hasChildren) label += " & parent";
+  return label;
 }
 
 // Shared app bar for the teacher, student, and leadership dashboards.
@@ -50,6 +64,7 @@ export default async function AppHeader() {
   let role: string | null = null;
   let name = "";
   let hasScope = false;
+  let hasChildren = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -63,10 +78,16 @@ export default async function AppHeader() {
       const { data: sc } = await supabase.from("coordinator_scope").select("id").limit(1);
       hasScope = (sc?.length ?? 0) > 0;
     }
+    if (parentPortalEnabled() && role && role !== "student" && role !== "parent") {
+      // Teacher-parents: pl_parent_read returns only the viewer's own links.
+      // Best-effort — table missing (0018 not applied) just means no tab.
+      const { data: pl } = await supabase.from("parent_links").select("id").limit(1);
+      hasChildren = (pl?.length ?? 0) > 0;
+    }
   }
 
-  const tabs = tabsFor(role, hasScope);
-  const label = labelFor(role, hasScope);
+  const tabs = tabsFor(role, hasScope, hasChildren);
+  const label = labelFor(role, hasScope, hasChildren);
   return (
     <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
       <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">

@@ -16,7 +16,7 @@ export default function OpsControls({
 }: {
   userId: string;
   suspended: boolean;
-  caps: { books: number | null; chapters: number | null; students: number | null };
+  caps: { books: number | null; chapters: number | null; students: number | null; children: number | null };
   isStaffTarget: boolean;
   canGrantStaff: boolean;
   opsReady: boolean;
@@ -29,6 +29,7 @@ export default function OpsControls({
     books: caps.books?.toString() ?? "",
     chapters: caps.chapters?.toString() ?? "",
     students: caps.students?.toString() ?? "",
+    children: caps.children?.toString() ?? "",
   });
 
   async function call(payload: Record<string, unknown>, label: string) {
@@ -103,6 +104,7 @@ export default function OpsControls({
               ["books", "Books"],
               ["chapters", "Chapters"],
               ["students", "Students"],
+              ["children", "Children"],
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="block">
@@ -125,6 +127,7 @@ export default function OpsControls({
                   maxBooks: toCap(capForm.books),
                   maxChapters: toCap(capForm.chapters),
                   maxStudents: toCap(capForm.students),
+                  maxChildren: toCap(capForm.children),
                 },
                 "caps",
               )
