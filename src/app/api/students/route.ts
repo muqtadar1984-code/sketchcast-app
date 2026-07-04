@@ -60,27 +60,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 
-  // Beta cap pre-check: friendly message + avoids creating auth users that the
-  // enrollments trigger (migration 0011, the real enforcement) would then block.
-  // Best-effort — if the column doesn't exist yet, the query errors → no cap.
-  const { data: me } = await admin
-    .from("profiles")
-    .select("beta_tester")
-    .eq("id", user.id)
-    .maybeSingle();
-  if ((me as { beta_tester?: boolean } | null)?.beta_tester) {
+  // Cap pre-check: friendly message + avoids creating auth users that the
+  // enrollments trigger (migrations 0011/0016, the real enforcement) would then
+  // block. Honors per-teacher overrides (profiles.max_students); best-effort —
+  // if columns don't exist yet, the query degrades to the beta default.
+  type CapRow = { beta_tester?: boolean; max_students?: number | null };
+  let me: CapRow | null = null;
+  {
+    const withCaps = await admin
+      .from("profiles")
+      .select("beta_tester, max_students")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (withCaps.error) {
+      const betaOnly = await admin.from("profiles").select("beta_tester").eq("id", user.id).maybeSingle();
+      me = betaOnly.data as CapRow | null;
+    } else {
+      me = withCaps.data as CapRow | null;
+    }
+  }
+  const cap = me?.max_students ?? (me?.beta_tester ? 2 : null);
+  if (cap != null) {
     const { data: enr } = await admin
       .from("enrollments")
       .select("student_id, classes!inner(teacher_id)")
       .eq("classes.teacher_id", user.id);
     const current = new Set(((enr ?? []) as { student_id: string }[]).map((e) => e.student_id)).size;
-    if (current + students.length > 2) {
+    if (current + students.length > cap) {
       return NextResponse.json(
         {
           error:
-            current >= 2
-              ? "Beta is limited to 2 students — you've already added both."
-              : `Beta is limited to 2 students — you can add ${2 - current} more.`,
+            current >= cap
+              ? `Your account is limited to ${cap} student${cap === 1 ? "" : "s"} — you've already added ${current}.`
+              : `Your account is limited to ${cap} student${cap === 1 ? "" : "s"} — you can add ${cap - current} more.`,
         },
         { status: 400 },
       );
