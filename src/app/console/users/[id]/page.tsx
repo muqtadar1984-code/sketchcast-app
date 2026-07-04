@@ -68,8 +68,11 @@ export default async function ConsoleUserDetailPage({
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-10">
-      <p className="mb-4 text-sm">
+      <p className="mb-4 text-sm flex items-center justify-between">
         <Link href="/console/users" className="text-[#0C8175] hover:underline">← Users</Link>
+        <Link href={`/console/users/${id}/view`} className="btn-ghost h-8 px-3 text-xs">
+          View as (read-only)
+        </Link>
       </p>
       <h1 className="text-3xl mb-2">
         {(p.full_name as string) || (p.username as string) || "User"}
