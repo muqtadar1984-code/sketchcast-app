@@ -17,7 +17,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
-import { platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
+import { parentPortalEnabled, platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -88,8 +88,10 @@ export default async function DashboardPage() {
   }
 
   // Parents have their own world — never the teacher library. (After the
-  // notify block so parent signups still email the founder.)
-  if (role === "parent") redirect("/dashboard/children");
+  // notify block so parent signups still email the founder.) Flag-gated to
+  // match the children page's own guard — without this, a parent account
+  // with the flag off would redirect-loop between the two pages.
+  if (role === "parent" && parentPortalEnabled()) redirect("/dashboard/children");
 
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
