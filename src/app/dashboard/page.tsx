@@ -87,6 +87,10 @@ export default async function DashboardPage() {
     }
   }
 
+  // Parents have their own world — never the teacher library. (After the
+  // notify block so parent signups still email the founder.)
+  if (role === "parent") redirect("/dashboard/children");
+
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
   // those artifacts with the service role since the storage policy only lets the
@@ -100,13 +104,15 @@ export default async function DashboardPage() {
       .from("generation_shares")
       .select("generation_id, due_at, class_id, classes(name)");
 
-    type ShareRow = { generation_id: string; due_at: string | null; class_id: string; classes: { name: string } | null };
-    type ShareInfo = { due: string | null; className: string; classId: string };
+    type ShareRow = { generation_id: string; due_at: string | null; class_id: string | null; classes: { name: string } | null };
+    type ShareInfo = { due: string | null; className: string; classId: string | null };
     const shareByGen = new Map<string, ShareInfo>();
     // (to-one embeds come back as objects at runtime; supabase-js types them as arrays)
     for (const s of (sharesRaw ?? []) as unknown as ShareRow[]) {
       const gid = s.generation_id;
-      const className = s.classes?.name || "My class";
+      // class_id null = a direct share (parent portal) — group it under a
+      // family heading instead of a class name.
+      const className = s.classes?.name || (s.class_id ? "My class" : "From your parent");
       const due = s.due_at ?? null;
       const prev = shareByGen.get(gid);
       if (!prev) shareByGen.set(gid, { due, className, classId: s.class_id });

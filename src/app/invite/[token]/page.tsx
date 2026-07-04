@@ -4,13 +4,14 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { LogoMark } from "../../dashboard/icons";
 import InviteClient from "./invite-client";
 
-const ROLE_LABEL: Record<string, string> = { school_admin: "School admin", teacher: "Teacher" };
+const ROLE_LABEL: Record<string, string> = { school_admin: "School admin", teacher: "Teacher", parent: "Parent" };
 const REASON: Record<string, string> = {
   invalid: "This invitation link is invalid.",
   expired: "This invitation has expired.",
   email: "That invitation is for a different email address — sign out and use that email.",
   apply: "Something went wrong accepting the invitation. Please try again.",
   server: "Invites aren't configured on the server.",
+  role: "A student account can't accept a parent invitation — sign out and use the parent's own account.",
 };
 
 function Shell({ children }: { children: React.ReactNode }) {

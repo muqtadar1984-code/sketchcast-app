@@ -139,6 +139,7 @@ export default async function ConsoleUserDetailPage({
             books: (p.max_books as number | null) ?? null,
             chapters: (p.max_chapters as number | null) ?? null,
             students: (p.max_students as number | null) ?? null,
+            children: (p.max_children as number | null) ?? null,
           }}
           isStaffTarget={isStaffTarget}
           canGrantStaff={founderEmails().includes(staff.email) && role !== "student"}

@@ -14,17 +14,37 @@ export type InviteRow = {
   created_at: string;
 };
 
-const ROLE_OPTS = [
-  { value: "teacher", label: "Teacher" },
-  { value: "school_admin", label: "School admin" },
-];
+export type SchoolStudent = {
+  id: string;
+  name: string;
+  username: string | null;
+  parentEmail: string | null;
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  school_admin: "School admin",
+  teacher: "Teacher",
+  parent: "Parent",
+};
 
 // Create invites (RLS lets a school_admin insert for their own school) and copy
-// the resulting link. The token comes back from the insert.
-export default function InviteManager({ invites, schoolId }: { invites: InviteRow[]; schoolId: string | null }) {
+// the resulting link. Parent invites additionally map the child(ren): students
+// whose parent_email matches the typed address float up as suggestions.
+export default function InviteManager({
+  invites,
+  schoolId,
+  students = [],
+  parentEnabled = false,
+}: {
+  invites: InviteRow[];
+  schoolId: string | null;
+  students?: SchoolStudent[];
+  parentEnabled?: boolean;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("teacher");
+  const [childIds, setChildIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
@@ -34,14 +54,34 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
   const serverIds = new Set(invites.map((i) => i.id));
   const list = [...pending.filter((p) => !serverIds.has(p.id)), ...invites];
 
+  const roleOpts = [
+    { value: "teacher", label: "Teacher" },
+    { value: "school_admin", label: "School admin" },
+    ...(parentEnabled ? [{ value: "parent", label: "Parent" }] : []),
+  ];
+
   const linkFor = (token: string) =>
     `${typeof window !== "undefined" ? window.location.origin : ""}/invite/${token}`;
+
+  // Suggested matches first (parent_email on file == the typed address).
+  const emailLc = email.trim().toLowerCase();
+  const sortedStudents = [...students].sort((a, b) => {
+    const am = emailLc && (a.parentEmail ?? "").toLowerCase() === emailLc ? 0 : 1;
+    const bm = emailLc && (b.parentEmail ?? "").toLowerCase() === emailLc ? 0 : 1;
+    return am - bm || a.name.localeCompare(b.name);
+  });
+  const toggleChild = (id: string) =>
+    setChildIds((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
 
   async function create() {
     const e = email.trim();
     if (!e) return;
     if (!schoolId) {
       setError("Your account isn't linked to a school yet — ask your setup contact to link it.");
+      return;
+    }
+    if (role === "parent" && childIds.length === 0) {
+      setError("Pick at least one child for a parent invite.");
       return;
     }
     setBusy(true);
@@ -56,12 +96,26 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
       .insert({ email: e, role, school_id: schoolId, invited_by: user?.id })
       .select("id, email, role, token, accepted_at, expires_at, created_at")
       .single();
-    setBusy(false);
     if (error) {
+      setBusy(false);
       setError(error.message);
       return;
     }
+    if (role === "parent") {
+      const { error: cErr } = await supabase
+        .from("invite_children")
+        .insert(childIds.map((sid) => ({ invite_id: data.id, student_id: sid })));
+      if (cErr) {
+        // Keep it atomic-ish: no child mapping → no parent invite.
+        await supabase.from("invites").delete().eq("id", data.id);
+        setBusy(false);
+        setError(cErr.message);
+        return;
+      }
+    }
+    setBusy(false);
     setEmail("");
+    setChildIds([]);
     setLink(linkFor(data.token));
     setPending((p) => [data as InviteRow, ...p]);
     router.refresh();
@@ -80,7 +134,7 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
                 setEmail(e.target.value);
                 setError(null);
               }}
-              placeholder="colleague@school.edu"
+              placeholder={role === "parent" ? "parent@example.com" : "colleague@school.edu"}
               className="field block h-9 px-3 mt-1 text-sm w-64"
             />
           </label>
@@ -91,7 +145,7 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
               onChange={(e) => setRole(e.target.value)}
               className="field block h-9 px-2 mt-1 text-sm"
             >
-              {ROLE_OPTS.map((o) => (
+              {roleOpts.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -102,6 +156,42 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
             {busy ? "…" : "Create invite"}
           </button>
         </div>
+
+        {role === "parent" && (
+          <div className="mt-3">
+            <p className="text-xs text-[#5B6470] mb-1.5">
+              Their child(ren) — students with this email on file appear first:
+            </p>
+            {students.length === 0 ? (
+              <p className="text-xs text-[#9A6400]">No students in your school yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                {sortedStudents.map((s) => {
+                  const suggested = emailLc && (s.parentEmail ?? "").toLowerCase() === emailLc;
+                  const on = childIds.includes(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => toggleChild(s.id)}
+                      className={`chip font-sans normal-case tracking-normal ${
+                        on
+                          ? "bg-[#14181F] text-white"
+                          : suggested
+                            ? "bg-[#E2F4F1] text-[#0C8175]"
+                            : "bg-[#EEF0EC] text-[#5B6470]"
+                      }`}
+                      title={s.username ?? undefined}
+                    >
+                      {on ? "✓ " : ""}{s.name}
+                      {suggested && !on ? " · suggested" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
         {link && (
           <div className="mt-3 rounded-lg border border-[#E6E8E4] bg-white p-3">
@@ -141,7 +231,7 @@ export default function InviteManager({ invites, schoolId }: { invites: InviteRo
                 <span className="min-w-0 truncate">
                   <span className="font-medium">{iv.email}</span>
                   <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal ml-2">
-                    {iv.role === "school_admin" ? "School admin" : "Teacher"}
+                    {ROLE_LABEL[iv.role] ?? iv.role}
                   </span>
                 </span>
                 <span className="flex items-center gap-3 shrink-0 text-xs">
