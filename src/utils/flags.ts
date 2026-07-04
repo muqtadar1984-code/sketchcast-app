@@ -18,3 +18,12 @@ export function schoolAnalyticsEnabled(): boolean {
 export function teacherBetaEnabled(): boolean {
   return process.env.FEATURE_TEACHER_BETA === "true";
 }
+
+/**
+ * Platform console (/console — SketchCast staff only) + in-portal issue
+ * reporting. Access itself is gated per-request by requirePlatformAdmin();
+ * this flag lets the whole surface stay dark until migration 0014 is applied.
+ */
+export function platformConsoleEnabled(): boolean {
+  return process.env.FEATURE_PLATFORM_CONSOLE === "true";
+}

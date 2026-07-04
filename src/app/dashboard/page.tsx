@@ -15,8 +15,9 @@ import StudentDashboard, {
 import { EmptyBooks } from "./icons";
 import { InkUnderline } from "@/components/ink-mark";
 import FeedbackWidget from "./feedback-widget";
+import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
-import { teacherBetaEnabled } from "@/utils/flags";
+import { platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -209,6 +210,7 @@ export default async function DashboardPage() {
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
         <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
+        {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
       </div>
     );
   }
@@ -516,6 +518,7 @@ export default async function DashboardPage() {
       </main>
 
       {feedback && <FeedbackWidget submitted={feedback.submitted} />}
+      {platformConsoleEnabled() && <ReportIssueWidget />}
     </div>
   );
 }
