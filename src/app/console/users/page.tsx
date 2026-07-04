@@ -1,9 +1,9 @@
+import Link from "next/link";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 
-// Read-only user roster (ops controls arrive with the next console phase).
-// Search across name/username/email; students shown but marked — staff mostly
-// works with adult accounts here.
+// User roster — search across name/username/email; rows open the account's
+// detail page (activity, issues, ops controls).
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,7 @@ export default async function ConsoleUsersPage({
     <main className="max-w-6xl mx-auto px-6 py-10">
       <h1 className="text-4xl mb-2">Users</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
-      <p className="text-[#5B6470] mb-5">{profiles.length} account{profiles.length === 1 ? "" : "s"}{needle ? ` matching “${q}”` : ""}. Read-only for now — ops controls land in the next phase.</p>
+      <p className="text-[#5B6470] mb-5">{profiles.length} account{profiles.length === 1 ? "" : "s"}{needle ? ` matching “${q}”` : ""}. Click a row for detail + ops.</p>
 
       <form method="get" className="mb-5">
         <input
@@ -63,7 +63,7 @@ export default async function ConsoleUsersPage({
           <span>Name</span><span>Email / username</span><span>Role</span><span>School</span><span className="text-right">Joined</span>
         </div>
         {profiles.map((p) => (
-          <div key={p.id} className="grid sm:grid-cols-[2fr_2fr_1fr_1.5fr_1fr] gap-x-3 gap-y-1 px-5 py-2.5 text-sm items-center">
+          <Link key={p.id} href={`/console/users/${p.id}`} className="grid sm:grid-cols-[2fr_2fr_1fr_1.5fr_1fr] gap-x-3 gap-y-1 px-5 py-2.5 text-sm items-center hover:bg-[#FAFBF9]">
             <span className="font-medium truncate">
               {p.full_name || p.username || "—"}
               {p.beta_tester && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ml-2">beta</span>}
@@ -72,7 +72,7 @@ export default async function ConsoleUsersPage({
             <span className={p.role === "student" ? "text-[#98A0A9]" : ""}>{p.role}</span>
             <span className="truncate text-[#5B6470]">{p.school_id ? schoolName.get(p.school_id) ?? "—" : "—"}</span>
             <span className="tabular sm:text-right text-xs text-[#5B6470]">{new Date(p.created_at).toLocaleDateString()}</span>
-          </div>
+          </Link>
         ))}
         {profiles.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No matches.</div>}
       </div>
