@@ -18,10 +18,21 @@ type Issue = {
   status: string;
   title: string;
   description: string | null;
-  context: { url?: string; user_agent?: string; recent_job_errors?: string[] } | null;
+  context: { url?: string; user_agent?: string; recent_job_errors?: string[]; error?: string } | null;
   created_at: string;
   resolved_at: string | null;
   resolution_note: string | null;
+  // Support-agent columns (migration 0020; absent pre-migration).
+  trigger_source?: string | null;
+  generation_id?: string | null;
+  book_id?: string | null;
+  diagnosis?: {
+    category?: string;
+    confidence?: number;
+    user_message?: string;
+    recommended_action?: string;
+  } | null;
+  agent_action?: string | null;
 };
 
 export default async function ConsoleIssueDetailPage({
@@ -101,6 +112,34 @@ export default async function ConsoleIssueDetailPage({
             </div>
           )}
         </div>
+        {issue.diagnosis && (
+          <div className="card p-5 text-sm space-y-1.5 border-l-4 border-l-[#1FB8A6]">
+            <h2 className="font-display font-medium text-lg mb-2">
+              AI diagnosis
+              {issue.trigger_source === "auto" && (
+                <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ml-2 align-middle">auto-triggered</span>
+              )}
+            </h2>
+            <p>
+              <span className="text-[#5B6470]">Root cause:</span>{" "}
+              <span className="font-medium">{issue.diagnosis.category ?? "—"}</span>
+              {typeof issue.diagnosis.confidence === "number" && (
+                <span className="text-[#5B6470]"> · confidence {(issue.diagnosis.confidence * 100).toFixed(0)}%</span>
+              )}
+            </p>
+            <p><span className="text-[#5B6470]">Action taken:</span> {issue.agent_action ?? "—"}</p>
+            {issue.diagnosis.user_message && (
+              <p><span className="text-[#5B6470]">Told the user:</span> {issue.diagnosis.user_message}</p>
+            )}
+            {issue.generation_id && (
+              <p className="text-xs text-[#98A0A9]">generation {issue.generation_id}{issue.book_id ? ` · book ${issue.book_id}` : ""}</p>
+            )}
+            <p className="text-xs text-[#98A0A9]">
+              Staff-only reasoning and gate signals are in the Audit tab (action prefix &quot;support_agent:&quot;).
+            </p>
+          </div>
+        )}
+
         {issue.resolution_note && (
           <div className="card p-5 text-sm">
             <h2 className="font-display font-medium text-lg mb-2">Resolution</h2>
