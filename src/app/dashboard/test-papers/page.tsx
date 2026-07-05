@@ -7,6 +7,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled } from "@/utils/flags";
 import { GeneratePaperButton, AssignChildButton } from "./paper-actions";
 import ReportContentIssue from "../report-content-issue";
+import BookHealthBadge, { type BookHealth } from "../book-health-badge";
 
 // The parent's "library": upload their own book (same pipeline as teachers —
 // chapter detection included), generate a TEST PAPER per chapter (the only
@@ -42,13 +43,17 @@ export default async function TestPapersPage() {
   }));
 
   // Own books + own exam papers.
-  const { data: booksRaw } = await supabase
+  // `health` (migration 0021) is optional — degrade gracefully if not applied.
+  const withHealth = await supabase
     .from("books")
-    .select("id, title, status, chapters")
+    .select("id, title, status, chapters, health")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
-  type Book = { id: string; title: string | null; status: string; chapters: { num: number; title: string }[] | null };
-  const books = (booksRaw ?? []) as Book[];
+  const booksRes = withHealth.error
+    ? await supabase.from("books").select("id, title, status, chapters").eq("owner_id", user.id).order("created_at", { ascending: false })
+    : withHealth;
+  type Book = { id: string; title: string | null; status: string; chapters: { num: number; title: string }[] | null; health?: BookHealth | null };
+  const books = (booksRes.data ?? []) as unknown as Book[];
 
   const { data: gensRaw } = await supabase
     .from("generations")
@@ -83,6 +88,7 @@ export default async function TestPapersPage() {
     bookId: string;
     bookTitle: string;
     bookStatus: string;
+    health: BookHealth | null;
     chapters: { num: number; title: string; gen: Gen | undefined; doc: string | null }[];
   }[] = [];
   for (const b of books) {
@@ -92,7 +98,7 @@ export default async function TestPapersPage() {
       const docPath = gen?.artifacts?.find((a) => a.kind === "docx")?.storage_path ?? null;
       chapters.push({ num: c.num, title: c.title, gen, doc: await sign(docPath) });
     }
-    rows.push({ bookId: b.id, bookTitle: b.title || "Untitled", bookStatus: b.status, chapters });
+    rows.push({ bookId: b.id, bookTitle: b.title || "Untitled", bookStatus: b.status, health: b.health ?? null, chapters });
   }
 
   return (
@@ -119,9 +125,12 @@ export default async function TestPapersPage() {
               <div key={b.bookId} className="card divide-y divide-[#EEF0EC]">
                 <div className="px-5 py-3 flex items-center justify-between">
                   <span className="font-medium font-display text-lg">{b.bookTitle}</span>
-                  {b.bookStatus !== "ready" && (
-                    <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]">{b.bookStatus}…</span>
-                  )}
+                  <span className="flex items-center gap-2">
+                    {b.bookStatus === "ready" && <BookHealthBadge health={b.health} />}
+                    {b.bookStatus !== "ready" && (
+                      <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]">{b.bookStatus}…</span>
+                    )}
+                  </span>
                 </div>
                 {b.chapters.map((c) => (
                   <div key={c.num} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">

@@ -5,6 +5,7 @@ import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
+import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
 import AppHeader from "./app-header";
@@ -42,6 +43,7 @@ type Book = {
   subject: string | null;
   cover_path: string | null;
   created_at: string;
+  health: BookHealth | null;
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -263,12 +265,18 @@ export default async function DashboardPage() {
     .eq("owner_id", user.id)
     .maybeSingle();
 
-  const { data: books } = await supabase
+  // `health` (migration 0021) is optional — degrade to the health-less select
+  // so the library never breaks on a not-yet-applied migration.
+  const bookCols = "id, title, author, owner_id, storage_path, status, chapters, grade, subject, cover_path, created_at";
+  const withHealth = await supabase
     .from("books")
-    .select("id, title, author, owner_id, storage_path, status, chapters, grade, subject, cover_path, created_at")
+    .select(`${bookCols}, health`)
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
-  const bookList = (books ?? []) as Book[];
+  const booksRes = withHealth.error
+    ? await supabase.from("books").select(bookCols).eq("owner_id", user.id).order("created_at", { ascending: false })
+    : withHealth;
+  const bookList = (booksRes.data ?? []) as unknown as Book[];
 
   // Signed URLs for cover thumbnails.
   const coverUrls: Record<string, string | null> = {};
@@ -366,6 +374,7 @@ export default async function DashboardPage() {
       coverUrl: coverUrls[b.id] ?? null,
       storagePath: b.storage_path,
       createdAt: b.created_at,
+      health: (b.health as BookHealth | null) ?? null,
       doneChapters: chs.filter((c) => lessonForChapter(b.id, c.num)?.status === "done").length,
       totalChapters: chs.length,
       presentationIds: chs

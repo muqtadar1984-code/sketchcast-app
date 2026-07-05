@@ -8,6 +8,7 @@ import DeleteLesson from "./delete-lesson";
 import { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
+import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { BookCover } from "./icons";
 
 export type Lesson = CellLesson & { title: string; kind: string };
@@ -31,6 +32,7 @@ export type BookRow = {
   coverUrl: string | null;
   storagePath: string | null;
   createdAt: string;
+  health: BookHealth | null;
   doneChapters: number;
   totalChapters: number;
   presentationIds: string[];
@@ -108,6 +110,7 @@ export default function BookTable({
                 )}
               </span>
               <div className="flex items-center gap-2 whitespace-nowrap self-center">
+                {ready && <BookHealthBadge health={b.health} />}
                 {ready && b.totalChapters > 0 && b.doneChapters === b.totalChapters && (
                   <AssignModal
                     label="Assign book"
