@@ -37,3 +37,13 @@ export function platformConsoleEnabled(): boolean {
 export function parentPortalEnabled(): boolean {
   return process.env.FEATURE_PARENT_PORTAL === "true";
 }
+
+/**
+ * AI support agent: "Report an issue" on lessons/papers + automatic diagnosis
+ * of failed jobs. The button additionally reads NEXT_PUBLIC_FEATURE_SUPPORT_AGENT
+ * (client component); the worker side is gated by SUPPORT_AGENT_ENABLED on
+ * Railway. Server checks are authoritative.
+ */
+export function supportAgentEnabled(): boolean {
+  return process.env.FEATURE_SUPPORT_AGENT === "true";
+}

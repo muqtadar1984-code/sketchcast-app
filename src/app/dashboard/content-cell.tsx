@@ -4,6 +4,7 @@ import GenerateButton from "./generate-button";
 import RegenerateButton from "./regenerate-button";
 import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
+import ReportContentIssue from "./report-content-issue";
 import { recordArtifactView } from "@/utils/views";
 
 export type CellLesson = {
@@ -126,6 +127,7 @@ export default function ContentCell({
         oldArtifactPaths={lesson.artifactPaths}
       />
       <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} />
+      <ReportContentIssue generationId={lesson.id} />
     </span>
   );
 }

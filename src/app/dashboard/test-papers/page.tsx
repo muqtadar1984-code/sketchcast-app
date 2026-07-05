@@ -6,6 +6,7 @@ import AutoRefresh from "../auto-refresh";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled } from "@/utils/flags";
 import { GeneratePaperButton, AssignChildButton } from "./paper-actions";
+import ReportContentIssue from "../report-content-issue";
 
 // The parent's "library": upload their own book (same pipeline as teachers —
 // chapter detection included), generate a TEST PAPER per chapter (the only
@@ -145,6 +146,7 @@ export default async function TestPapersPage() {
                             </a>
                           )}
                           <AssignChildButton generationId={c.gen.id} childrenList={childrenList} />
+                          <ReportContentIssue generationId={c.gen.id} />
                         </>
                       )}
                     </span>
