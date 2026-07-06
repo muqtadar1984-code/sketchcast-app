@@ -1,10 +1,30 @@
-# SketchCast Billing (Stripe) — Setup & Operations
+# SketchCast Billing — Setup & Operations
 
-**Merchant: Aethel Twin Sdn. Bhd. (Malaysia).** One Stripe account, settling
-**MYR** to a Malaysian bank. SketchCast is the product line. Hosted Checkout +
-Billing Customer Portal only — **card data never touches our servers, logs, or
-database** (we store Stripe IDs and statuses only), keeping us out of PCI-DSS
-scope.
+**Two providers, one entitlements table.** The app gates paid access on the
+provider-agnostic `entitlements` table, so which processor took the money is
+invisible downstream.
+
+| Audience | Provider | Model | Currency |
+|---|---|---|---|
+| **Schools** | **Stripe** | Aethel Twin is the **direct merchant** | MYR |
+| **Parents / Teachers** | **Lemon Squeezy** | LS is the **Merchant of Record** | USD |
+
+**Why the split.** Schools are few, large, and mostly invoiced (bank transfer)
+— Aethel Twin bills them directly (Stripe card only for those who prefer it),
+and the school handles its own tax. Parents/teachers are many small
+international B2C transactions where being the merchant means a global
+sales-tax/VAT/GST nightmare — so **Lemon Squeezy is the seller of record**: LS
+charges the customer, handles all consumer tax worldwide, appears on their
+statement, and pays Aethel Twin a payout (net of LS fees). **Card data never
+touches our servers on either provider** (both use hosted checkout), keeping us
+out of PCI-DSS scope.
+
+---
+
+## Part A — Stripe (schools · MYR · direct merchant)
+
+**Merchant: Aethel Twin Sdn. Bhd. (Malaysia).** Settles **MYR** to a Malaysian
+bank. Hosted Checkout + Billing Customer Portal only.
 
 ## Non-negotiables (enforced in code)
 1. **MYR only** — every Price is denominated in MYR; checkout re-fetches the
@@ -105,11 +125,65 @@ adult manages billing → POST /api/billing/portal ─► Stripe Customer Portal
 - `past_due` keeps access (grace); revocation happens when Stripe transitions
   the subscription to `canceled`/`unpaid`.
 
-## Tax seam (deliberately out of scope)
-No tax calculation/registration logic is included (OIDAR/GST/VAT/MoR is a
-future decision). When that day comes, the seam is checkout-session creation
-(`src/app/api/billing/checkout/route.ts`) — add `automatic_tax` or a tax-rate
-lookup there; nothing else needs to change.
+## Stripe tax note
+Tax on the **Stripe/school** path stays out of scope — B2B buyers self-account
+(reverse charge). The consumer-tax problem is solved on the Lemon Squeezy side
+below (LS is MoR). If schools ever need Stripe-side tax, the seam is
+`stripeCheckout()` in `src/app/api/billing/checkout/route.ts`.
+
+---
+
+## Part B — Lemon Squeezy (parents/teachers · USD · Merchant of Record)
+
+**Lemon Squeezy is the merchant of record** for parent/teacher sales. It is the
+seller on the customer's statement, it collects and remits all consumer tax
+(VAT/GST/US sales tax) globally, and it pays Aethel Twin a payout net of LS
+fees. Aethel Twin carries **no B2C consumer-tax liability** — that's the whole
+reason for using LS here. Card data never touches us (LS hosted checkout).
+
+### Lemon Squeezy Dashboard setup (by hand)
+- Create/verify the LS **store** for Aethel Twin (LS onboards you as the
+  software company; LS is MoR on top).
+- Create two **subscription products/variants** priced in **USD**: one for
+  `parent_monthly`, one for `teacher_monthly`. Copy each **Variant ID**.
+- **Settings → API** → create an API key → `LEMONSQUEEZY_API_KEY`. Copy the
+  **Store ID** → `LEMONSQUEEZY_STORE_ID`.
+- **Settings → Webhooks** → add `https://app.sketchcast.app/api/webhooks/lemonsqueezy`,
+  select the `subscription_*` events (created, updated, cancelled, resumed,
+  paused, expired, payment_success, payment_failed). Copy the **signing
+  secret** → `LEMONSQUEEZY_WEBHOOK_SECRET`.
+- Enable the **Customer Portal** in the store so parents/teachers can manage
+  and cancel their own subscription.
+
+### How it flows
+```
+parent/teacher upgrade → POST /api/billing/checkout ─► LS hosted checkout
+   (route dispatches on plan.provider = lemonsqueezy)     │ (card at LS)
+LS ──signed webhook (X-Signature, HMAC-SHA256)──► /api/webhooks/lemonsqueezy
+                                                     └─► subscriptions
+                                                     └─► entitlements ◄── the app
+                                                                          gates on
+manage → POST /api/billing/portal → fresh LS Customer Portal URL (24h-signed)
+```
+- Webhook is Node-runtime, raw-body HMAC-verified, idempotent via a
+  constructed event key (LS has no persistent event id).
+- Identity: `custom_data.{user_id, plan_key}` we set at checkout is echoed on
+  events and the signature proves it; the first event stores the
+  `ls_customer_id ↔ user_id` mapping, later events resolve/cross-check against
+  it.
+- Entitlement statuses: `on_trial`/`active`/`past_due`/`cancelled` keep access
+  (`cancelled` until `ends_at`); `paused`/`unpaid`/`expired` revoke.
+
+### Local dev (Lemon Squeezy)
+```bash
+# LS has no CLI forwarder — use a tunnel (e.g. `ngrok http 3000`) and point a
+# TEST-mode LS webhook at https://<tunnel>/api/webhooks/lemonsqueezy, or replay
+# a captured payload with a correctly-computed X-Signature.
+```
+
+## Tax seam (deliberately out of scope for direct code)
+No tax calc/registration logic lives in our code — on the LS path it's handled
+by LS as MoR; on the Stripe path B2B buyers self-account. Nothing to build.
 
 ## Going live (later — NOT part of this build)
 1. Aethel Twin's live Stripe account verified; swap `sk_live_...` keys.

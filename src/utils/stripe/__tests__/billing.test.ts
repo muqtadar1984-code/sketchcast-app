@@ -119,10 +119,18 @@ describe("MYR currency gate", () => {
     expect(() => assertMyrPrice({ id: "price_x", currency: "myr" })).not.toThrow();
     expect(() => assertMyrPrice({ id: "price_x", currency: "MYR" as string })).not.toThrow();
   });
-  it("plan catalogue rejects unknown keys and never hardcodes price ids", () => {
+  it("plan catalogue rejects unknown keys, routes providers, never hardcodes ids", () => {
     expect(getPlan("free_lunch")).toBeNull();
     expect(getPlan(undefined)).toBeNull();
-    for (const p of Object.values(PLANS)) expect(p.priceEnv).toMatch(/^STRIPE_PRICE_/);
+    // Schools → Stripe (MYR); parents/teachers → Lemon Squeezy (MoR).
+    expect(PLANS.school_annual.provider).toBe("stripe");
+    expect(PLANS.school_onetime.provider).toBe("stripe");
+    expect(PLANS.parent_monthly.provider).toBe("lemonsqueezy");
+    expect(PLANS.teacher_monthly.provider).toBe("lemonsqueezy");
+    for (const p of Object.values(PLANS)) {
+      const prefix = p.provider === "stripe" ? /^STRIPE_PRICE_/ : /^LEMONSQUEEZY_VARIANT_/;
+      expect(p.productEnv).toMatch(prefix);
+    }
   });
 });
 
