@@ -47,3 +47,12 @@ export function parentPortalEnabled(): boolean {
 export function supportAgentEnabled(): boolean {
   return process.env.FEATURE_SUPPORT_AGENT === "true";
 }
+
+/**
+ * Stripe billing (adult-only hosted Checkout + Billing Portal, MYR). OFF by
+ * default and stays off until Aethel Twin's Stripe account is ready — the
+ * guards in src/utils/stripe/guards.ts enforce this server-side.
+ */
+export function billingEnabled(): boolean {
+  return process.env.BILLING_ENABLED === "true";
+}
