@@ -168,6 +168,17 @@ describe("LS subscription → entitlement", () => {
     expect(db.writes.length).toBe(0);
   });
 
+  it("ignores invoice-shaped subscription_payment_* events (never revokes on 'paid')", async () => {
+    // custom_data IS present and maps to a real user — the ONLY thing stopping a
+    // wrongful revoke is the data.type guard. status 'paid' must not flip active.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await handleLsEvent(db, {
+      meta: { event_name: "subscription_payment_success", custom_data: { user_id: "user-A", plan_key: "parent_monthly" } },
+      data: { type: "subscription-invoices", id: "inv_1", attributes: { status: "paid", customer_id: 555, renews_at: null, ends_at: null, updated_at: "2026-07-06T12:00:00Z" } },
+    } as LsEvent);
+    expect(db.writes.length).toBe(0);
+  });
+
   it("persists no card data", async () => {
     const db = new FakeDb({ billing_customers: null });
     await handleLsEvent(db, subEvent({}));

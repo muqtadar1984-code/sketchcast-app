@@ -107,6 +107,17 @@ export async function handleLsEvent(db: Db, event: LsEvent): Promise<void> {
     return;
   }
   const sub = event.data;
+  // The `subscription_*` family includes invoice-shaped events
+  // (subscription_payment_success/failed/refunded), whose `data.type` is
+  // "subscription-invoices" and whose `status` is "paid"/"refunded" — NOT a
+  // subscription lifecycle status. Drive entitlements ONLY from the actual
+  // subscription object, or an invoice's "paid" would be read as "not active"
+  // and wrongly revoke access. Payment health already flows through
+  // subscription_updated (past_due/unpaid).
+  if (sub?.type && sub.type !== "subscriptions") {
+    log("ignored_non_subscription_object", { event: name, type: sub.type });
+    return;
+  }
   const attrs = sub?.attributes;
   const subId = sub?.id;
   if (!attrs || !subId) return;

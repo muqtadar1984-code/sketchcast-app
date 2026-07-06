@@ -148,10 +148,16 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
   `parent_monthly`, one for `teacher_monthly`. Copy each **Variant ID**.
 - **Settings → API** → create an API key → `LEMONSQUEEZY_API_KEY`. Copy the
   **Store ID** → `LEMONSQUEEZY_STORE_ID`.
-- **Settings → Webhooks** → add `https://app.sketchcast.app/api/webhooks/lemonsqueezy`,
-  select the `subscription_*` events (created, updated, cancelled, resumed,
-  paused, expired, payment_success, payment_failed). Copy the **signing
-  secret** → `LEMONSQUEEZY_WEBHOOK_SECRET`.
+- **Settings → Webhooks** → add `https://app.sketchcast.app/api/webhooks/lemonsqueezy`.
+  In LS **you type your own signing secret** (it is NOT auto-generated) — use a
+  long random string and put the SAME value in `LEMONSQUEEZY_WEBHOOK_SECRET`.
+  Select the subscription **lifecycle** events: `subscription_created`,
+  `subscription_updated`, `subscription_cancelled`, `subscription_resumed`,
+  `subscription_paused`, `subscription_expired`. Payment health already flows
+  through `subscription_updated` (→ `past_due`/`unpaid`), so the
+  `subscription_payment_*` events are optional; the handler ignores
+  invoice-shaped events (`data.type = "subscription-invoices"`) either way, so
+  subscribing to them is harmless but unnecessary.
 - Enable the **Customer Portal** in the store so parents/teachers can manage
   and cancel their own subscription.
 
