@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { aiTutorEnabled } from "@/utils/flags";
-import { normalizeQuestion, pickTier, shouldServeCached } from "@/utils/tutor/models";
+import { normalizeQuestion, pickTier, shouldServeCached, buildGreeting, buildStudentContext } from "@/utils/tutor/models";
 import {
   resolveTutorContext,
   loadGrounding,
@@ -11,6 +11,7 @@ import {
   saveCache,
   logMessage,
   streamAnswer,
+  buildStudentModel,
 } from "@/utils/tutor/service";
 
 export const runtime = "nodejs";
@@ -83,9 +84,11 @@ export async function POST(request: Request) {
           return;
         }
 
-        // Miss → grounded, tiered generation.
+        // Miss → grounded, tiered generation, gently personalised toward the
+        // child's weak spots (built only on a miss, so cache hits stay cheap).
+        const sm = await buildStudentModel(admin, user.id, ctx.bookId, ctx.chapterNum, grounding.chapterTitle);
         let full = "";
-        for await (const chunk of streamAnswer(question, grounding, pickTier(question))) {
+        for await (const chunk of streamAnswer(question, grounding, pickTier(question), buildStudentContext(sm))) {
           full += chunk;
           send("text", chunk);
         }
@@ -112,4 +115,30 @@ export async function POST(request: Request) {
       connection: "keep-alive",
     },
   });
+}
+
+// Panel-open: is the tutor ready for this lesson, and the personalised greeting
+// (names the child's real weak spot when there's quiz evidence; a warm
+// diagnostic opener when there isn't).
+export async function GET(request: Request) {
+  if (!aiTutorEnabled()) return NextResponse.json({ error: "Not available." }, { status: 404 });
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+
+  const generationId = new URL(request.url).searchParams.get("generationId") ?? "";
+  if (!generationId) return NextResponse.json({ error: "Missing generationId." }, { status: 400 });
+
+  const admin = createAdminClient();
+  const ctx = await resolveTutorContext(admin, user.id, generationId);
+  if (!ctx) return NextResponse.json({ error: "This lesson isn't assigned to you." }, { status: 403 });
+
+  const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
+  if (!grounding) return NextResponse.json({ ready: false, greeting: "" });
+
+  const sm = await buildStudentModel(admin, user.id, ctx.bookId, ctx.chapterNum, grounding.chapterTitle);
+  return NextResponse.json({ ready: true, greeting: buildGreeting(sm) });
 }

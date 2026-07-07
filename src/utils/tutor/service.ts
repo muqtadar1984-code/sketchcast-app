@@ -9,9 +9,12 @@ import {
   CACHE_FUZZY,
   CACHE_VERIFY_AT,
   buildSystemPrompt,
+  gradeAnswers,
   type Grounding,
   type TutorTier,
   type CacheRow,
+  type Question,
+  type StudentModel,
 } from "./models";
 
 export function anthropic(): Anthropic {
@@ -71,6 +74,73 @@ export async function loadGrounding(
   };
 }
 
+/** Load a quiz generation's questions.json (with the answer key) from the
+ * artifacts bucket. Null when the generation has no interactive quiz. */
+export async function loadQuestions(admin: SupabaseClient, generationId: string): Promise<Question[] | null> {
+  const { data: art } = await admin
+    .from("artifacts")
+    .select("storage_path")
+    .eq("generation_id", generationId)
+    .eq("kind", "questions_json")
+    .maybeSingle();
+  if (!art?.storage_path) return null;
+  const dl = await admin.storage.from("artifacts").download(art.storage_path as string);
+  if (dl.error || !dl.data) return null;
+  try {
+    const parsed = JSON.parse(await dl.data.text());
+    return Array.isArray(parsed?.questions) ? (parsed.questions as Question[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Build the student model for a chapter from REAL evidence: their submissions to
+ * this chapter's quizzes (worksheet/exam), re-graded against the answer key to
+ * surface the specific questions they got wrong. Pure reads — no new grading. */
+export async function buildStudentModel(
+  admin: SupabaseClient,
+  studentId: string,
+  bookId: string,
+  chapterNum: number,
+  chapterTitle: string,
+): Promise<StudentModel> {
+  const none: StudentModel = { chapterTitle, attempted: false, scorePct: null, weakQuestions: [] };
+
+  // Quiz generations for this exact chapter.
+  const { data: gens } = await admin
+    .from("generations")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("chapter_ref", String(chapterNum))
+    .in("kind", ["worksheet", "exam_paper"]);
+  const genIds = (gens ?? []).map((g) => g.id as string);
+  if (genIds.length === 0) return none;
+
+  // The student's own submissions to those quizzes, newest first.
+  const { data: subs } = await admin
+    .from("submissions")
+    .select("generation_id, answers, auto_score, max_score")
+    .eq("student_id", studentId)
+    .in("generation_id", genIds)
+    .order("submitted_at", { ascending: false });
+  if (!subs?.length) return none;
+
+  let scorePct: number | null = null;
+  const weak: string[] = [];
+  for (const sub of subs) {
+    if (scorePct === null && sub.max_score) {
+      scorePct = Math.round(((sub.auto_score as number) ?? 0) / (sub.max_score as number) * 100);
+    }
+    const questions = await loadQuestions(admin, sub.generation_id as string);
+    if (questions && sub.answers) {
+      weak.push(...gradeAnswers(questions, sub.answers as Record<string, unknown>).wrong);
+    }
+    if (weak.length >= 5) break;
+  }
+  const weakQuestions = Array.from(new Set(weak)).slice(0, 5);
+  return { chapterTitle, attempted: true, scorePct, weakQuestions };
+}
+
 /** Cache lookup: near-exact first (safe to replay), then a verified fuzzy match. */
 export async function findCached(
   admin: SupabaseClient,
@@ -127,15 +197,24 @@ export async function logMessage(
 /** Stream a grounded, safe answer from Claude. The chapter CONTEXT is a cached
  * prompt prefix (identical across a chapter's questions → paid once). Yields
  * text chunks as they arrive. */
-export async function* streamAnswer(question: string, grounding: Grounding, tier: TutorTier): AsyncGenerator<string> {
+export async function* streamAnswer(
+  question: string,
+  grounding: Grounding,
+  tier: TutorTier,
+  studentContext = "",
+): AsyncGenerator<string> {
   const { instructions, context } = buildSystemPrompt(grounding);
+  // The chapter grounding is a CACHED prefix (identical across a chapter's
+  // questions). The per-student context is NOT cached (it varies per child).
+  const system = [
+    { type: "text" as const, text: instructions },
+    { type: "text" as const, text: context, cache_control: { type: "ephemeral" as const } },
+    ...(studentContext ? [{ type: "text" as const, text: studentContext }] : []),
+  ];
   const stream = anthropic().messages.stream({
     model: TUTOR_MODELS[tier],
     max_tokens: 300,
-    system: [
-      { type: "text", text: instructions },
-      { type: "text", text: context, cache_control: { type: "ephemeral" } },
-    ],
+    system,
     messages: [{ role: "user", content: question }],
   });
   for await (const event of stream) {

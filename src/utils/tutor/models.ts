@@ -73,6 +73,86 @@ function buildContext(g: Grounding): string {
   return parts.join("\n\n");
 }
 
+// ── personalisation (M2): weak spots from the student's real quiz answers ─────
+// questions.json carries no concept tags, so we re-grade the stored answers
+// against the answer key (same rule as the quiz player) to find the actual
+// questions the student got wrong — genuinely specific, from real evidence.
+
+export type Question = {
+  id: string;
+  type: "fill_blank" | "true_false" | "match" | "short" | "subjective";
+  prompt: string;
+  answer?: unknown;
+  pairs?: { left: string; right: string }[];
+  marks?: number;
+};
+
+const norm = (s: unknown) => String(s ?? "").trim().toLowerCase();
+
+/** Re-grade a submission against its answer key. Returns the PROMPTS of the
+ * objective questions the student got wrong (short/subjective are teacher-graded,
+ * so they're skipped). Mirrors quiz-player.tsx exactly. Pure. */
+export function gradeAnswers(
+  questions: Question[],
+  answers: Record<string, unknown>,
+): { wrong: string[]; correct: number; gradable: number } {
+  const wrong: string[] = [];
+  let correct = 0;
+  let gradable = 0;
+  for (const q of questions || []) {
+    if (q.type === "fill_blank" || q.type === "true_false" || q.type === "match") {
+      gradable++;
+      let ok = false;
+      if (q.type === "fill_blank") ok = !!norm(answers[q.id]) && norm(answers[q.id]) === norm(q.answer);
+      else if (q.type === "true_false") ok = typeof answers[q.id] === "boolean" && answers[q.id] === q.answer;
+      else {
+        const picked = (answers[q.id] as Record<number, string>) || {};
+        const pairs = q.pairs || [];
+        ok = pairs.length > 0 && pairs.every((p, i) => norm(picked[i]) === norm(p.right));
+      }
+      if (ok) correct++;
+      else wrong.push(q.prompt);
+    }
+  }
+  return { wrong, correct, gradable };
+}
+
+export type StudentModel = {
+  chapterTitle: string;
+  attempted: boolean; // has the student submitted a quiz for this chapter?
+  scorePct: number | null; // most-recent objective score, if any
+  weakQuestions: string[]; // prompts of questions they got wrong (deduped, capped)
+};
+
+function shorten(s: string, n = 90): string {
+  const t = (s || "").replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t;
+}
+
+/** The opening line the Coach greets the child with. Names a real weak spot when
+ * there's evidence; a warm diagnostic opener when there isn't (cold start). */
+export function buildGreeting(sm: StudentModel): string {
+  if (!sm.attempted) {
+    return `Hi, I'm Coach! Ask me anything about "${sm.chapterTitle}". Not sure where to start? Say "quiz me" and we'll find out together.`;
+  }
+  if (sm.weakQuestions.length) {
+    return `Welcome back! Last time on "${sm.chapterTitle}", this one tripped you up: "${shorten(sm.weakQuestions[0])}". Want to nail it today? Ask me anything.`;
+  }
+  return `Nice work on "${sm.chapterTitle}" — you got the quiz right! Want to go a little deeper? Ask me anything.`;
+}
+
+/** A gentle per-student hint fed into the answer prompt so replies lean toward
+ * the child's weak spots. Empty when there's nothing to personalise. */
+export function buildStudentContext(sm: StudentModel): string {
+  if (!sm.attempted || !sm.weakQuestions.length) return "";
+  return (
+    "STUDENT CONTEXT (use gently to personalise your help; never read it out verbatim): " +
+    "this student recently struggled with — " +
+    sm.weakQuestions.slice(0, 5).map((q) => `"${shorten(q)}"`).join("; ") +
+    "."
+  );
+}
+
 export type CacheRow = { id: string; answer_text: string; is_verified: boolean };
 
 /** CONSERVATIVE serve rule: only replay a cached answer when it's a near-exact

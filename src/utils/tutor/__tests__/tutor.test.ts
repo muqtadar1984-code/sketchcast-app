@@ -15,7 +15,11 @@ import {
   pickTier,
   buildSystemPrompt,
   shouldServeCached,
+  gradeAnswers,
+  buildGreeting,
   type Grounding,
+  type Question,
+  type StudentModel,
 } from "../models";
 
 const G: Grounding = {
@@ -74,5 +78,43 @@ describe("conservative cache-serve rule", () => {
   });
   it("regenerates when there is no match", () => {
     expect(shouldServeCached(null, false)).toBe(false);
+  });
+});
+
+describe("weak-spot re-grading (from real answers)", () => {
+  const questions: Question[] = [
+    { id: "q1", type: "fill_blank", prompt: "Gas to liquid is ___", answer: "condensation", marks: 1 },
+    { id: "q2", type: "true_false", prompt: "Plants need sunlight.", answer: true, marks: 1 },
+    { id: "q3", type: "match", prompt: "Match", pairs: [{ left: "a", right: "1" }, { left: "b", right: "2" }], marks: 2 },
+    { id: "q4", type: "subjective", prompt: "Explain the water cycle.", marks: 5 },
+  ];
+  it("flags the objective questions the student got wrong; ignores subjective", () => {
+    const r = gradeAnswers(questions, {
+      q1: "evaporation", // wrong
+      q2: true, // right
+      q3: { 0: "1", 1: "wrong" }, // wrong (not all pairs)
+      q4: "anything", // subjective → teacher-graded, ignored
+    });
+    expect(r.wrong).toEqual(["Gas to liquid is ___", "Match"]);
+    expect(r.correct).toBe(1);
+    expect(r.gradable).toBe(3);
+  });
+  it("case/space-insensitive fill-blank matching", () => {
+    expect(gradeAnswers(questions, { q1: "  Condensation " }).wrong).not.toContain("Gas to liquid is ___");
+  });
+});
+
+describe("greeting (names a real weak spot; warm cold-start)", () => {
+  const sm = (over: Partial<StudentModel>): StudentModel => ({ chapterTitle: "Water Cycle", attempted: false, scorePct: null, weakQuestions: [], ...over });
+  it("cold start when no quiz history", () => {
+    expect(buildGreeting(sm({}))).toMatch(/find out together|quiz me/i);
+  });
+  it("names the weak spot when there is one", () => {
+    const g = buildGreeting(sm({ attempted: true, weakQuestions: ["Gas to liquid is ___"] }));
+    expect(g).toMatch(/tripped you up/i);
+    expect(g).toMatch(/Gas to liquid/);
+  });
+  it("congratulates when they aced it", () => {
+    expect(buildGreeting(sm({ attempted: true, weakQuestions: [] }))).toMatch(/Nice work|got the quiz right/i);
   });
 });
