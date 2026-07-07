@@ -56,3 +56,14 @@ export function supportAgentEnabled(): boolean {
 export function billingEnabled(): boolean {
   return process.env.BILLING_ENABLED === "true";
 }
+
+/**
+ * AI Tutor ("Ask Coach") — the Pro+ differentiator. A real-time, chapter-locked
+ * Socratic tutor. OFF by default; ON during the free trial as the teaser, then
+ * gated to the teacher_pro_plus entitlement tier (see the tutor route). The
+ * client "Ask Coach" surface additionally reads NEXT_PUBLIC_FEATURE_AI_TUTOR;
+ * the server check here is authoritative.
+ */
+export function aiTutorEnabled(): boolean {
+  return process.env.FEATURE_AI_TUTOR === "true";
+}
