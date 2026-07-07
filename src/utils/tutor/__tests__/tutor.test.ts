@@ -19,6 +19,11 @@ import {
   buildGreeting,
   classifyMove,
   scoreMastery,
+  resolveVoice,
+  ttsCacheKey,
+  ttsWithinCap,
+  estimateTtsCostUsd,
+  TUTOR_TTS_MONTHLY_CHAR_CAP,
   type Grounding,
   type Question,
   type StudentModel,
@@ -156,5 +161,38 @@ describe("honest mastery estimate", () => {
     const low = scoreMastery({ scorePct: 20, weakCount: 0, practiceCount: 50 });
     expect(low.score).toBeLessThan(80);
     expect(low.band).not.toBe("strong");
+  });
+});
+
+describe("voice gating (paid tier can't be bypassed by naming a premium voice)", () => {
+  it("returns the requested premium voice only when premium is allowed", () => {
+    expect(resolveVoice("el-rachel", { premiumAllowed: true })).toMatchObject({ voiceId: "el-rachel", provider: "elevenlabs" });
+  });
+  it("silently downgrades a premium request to the free default when not allowed", () => {
+    const v = resolveVoice("el-rachel", { premiumAllowed: false });
+    expect(v.tier).toBe("free");
+    expect(v.provider).toBe("browser");
+  });
+  it("falls back to the free default for an unknown voice id", () => {
+    expect(resolveVoice("nope", { premiumAllowed: true }).voiceId).toBe("browser-warm");
+    expect(resolveVoice(null, { premiumAllowed: true }).voiceId).toBe("browser-warm");
+  });
+});
+
+describe("voice cache key + paid cost guard", () => {
+  it("is stable for the same (provider, voice, text) and varies with the text", () => {
+    const a = ttsCacheKey("elevenlabs", "voiceX", "Condensation is gas cooling.");
+    expect(ttsCacheKey("elevenlabs", "voiceX", "Condensation is gas cooling.")).toBe(a);
+    expect(ttsCacheKey("elevenlabs", "voiceX", "Something else.")).not.toBe(a);
+    expect(ttsCacheKey("elevenlabs", "voiceY", "Condensation is gas cooling.")).not.toBe(a);
+    expect(a.startsWith("elevenlabs/")).toBe(true);
+  });
+  it("only meters the paid provider; the browser voice is free", () => {
+    expect(estimateTtsCostUsd(1000, "elevenlabs")).toBeCloseTo(0.3, 5);
+    expect(estimateTtsCostUsd(5000, "browser")).toBe(0);
+  });
+  it("enforces the monthly character cap", () => {
+    expect(ttsWithinCap(TUTOR_TTS_MONTHLY_CHAR_CAP - 100, 100, TUTOR_TTS_MONTHLY_CHAR_CAP)).toBe(true);
+    expect(ttsWithinCap(TUTOR_TTS_MONTHLY_CHAR_CAP - 100, 101, TUTOR_TTS_MONTHLY_CHAR_CAP)).toBe(false);
   });
 });

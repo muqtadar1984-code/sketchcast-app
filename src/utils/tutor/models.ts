@@ -238,3 +238,67 @@ export function shouldServeCached(row: CacheRow | null | undefined, nearExact: b
   if (!row) return false;
   return nearExact || row.is_verified === true;
 }
+
+// ── voice (M4): free default speaks in the browser; premium is ElevenLabs ─────
+// Cost-optimal by construction. The FREE coach voice is the browser's own
+// speech-synthesis (client-side, $0, no infra, works offline) — the route just
+// tells the client which voice character to use. PREMIUM is ElevenLabs: gated,
+// character-capped, and every utterance cached in storage so a repeated coach
+// answer is synthesised once and replayed for free forever (it pairs with the
+// answer cache — the same answers recur across students). Any premium failure or
+// cap-hit degrades to the free browser voice, so voice never hard-fails.
+
+export type TutorVoiceProvider = "browser" | "elevenlabs";
+export type TutorVoice = {
+  voiceId: string; // our STABLE id (never the raw provider id)
+  label: string;
+  provider: TutorVoiceProvider;
+  ref: string; // browser: a character hint; elevenlabs: the provider voice id
+  tier: "free" | "premium";
+};
+
+export const TUTOR_VOICES: TutorVoice[] = [
+  { voiceId: "browser-warm", label: "Coach — warm (free)", provider: "browser", ref: "warm", tier: "free" },
+  { voiceId: "browser-clear", label: "Coach — clear (free)", provider: "browser", ref: "neutral", tier: "free" },
+  { voiceId: "el-rachel", label: "Rachel — natural (premium)", provider: "elevenlabs", ref: "21m00Tcm4TlvDq8ikWAM", tier: "premium" },
+  { voiceId: "el-adam", label: "Adam — deep (premium)", provider: "elevenlabs", ref: "pNInz6obpgDQGcFmaJgB", tier: "premium" },
+];
+export const TUTOR_VOICE_DEFAULT = "browser-warm";
+const VOICE_BY_ID: Record<string, TutorVoice> = Object.fromEntries(TUTOR_VOICES.map((v) => [v.voiceId, v]));
+
+/** Resolve a requested voice to one the caller is allowed to use. Unknown ids
+ * fall back to the free default; a premium voice is NEVER returned unless
+ * `premiumAllowed` — the paid gate can't be bypassed by naming a premium id. */
+export function resolveVoice(requestedId: string | null | undefined, opts: { premiumAllowed: boolean }): TutorVoice {
+  const entry = VOICE_BY_ID[requestedId ?? ""];
+  if (!entry) return VOICE_BY_ID[TUTOR_VOICE_DEFAULT];
+  if (entry.tier === "premium" && !opts.premiumAllowed) return VOICE_BY_ID[TUTOR_VOICE_DEFAULT];
+  return entry;
+}
+
+/** Premium (ElevenLabs) cost guard — mirrors the worker's shared/tts/cost.py. */
+export const ELEVENLABS_USD_PER_1K = 0.3;
+export const TUTOR_TTS_MONTHLY_CHAR_CAP = 200_000; // per-account safety cap on paid synthesis
+
+export function estimateTtsCostUsd(chars: number, provider: TutorVoiceProvider): number {
+  if (provider !== "elevenlabs") return 0;
+  return Math.round((Math.max(0, chars) / 1000) * ELEVENLABS_USD_PER_1K * 10000) / 10000;
+}
+
+/** True when synthesising `add` more paid characters stays within the cap. */
+export function ttsWithinCap(used: number, add: number, cap: number): boolean {
+  return used + Math.max(0, add) <= cap;
+}
+
+/** Stable storage key for a synthesised utterance — identical (provider, voice,
+ * text) always maps to the same cached audio, so it's synthesised once. Pure
+ * (FNV-1a, no crypto import) so it can be unit-tested and matches across runs. */
+export function ttsCacheKey(provider: string, ref: string, text: string): string {
+  const s = `${provider}|${ref}|${text}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return `${provider}/${h.toString(16).padStart(8, "0")}${s.length.toString(36)}`;
+}
