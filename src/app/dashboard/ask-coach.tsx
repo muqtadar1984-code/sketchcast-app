@@ -27,8 +27,10 @@ export default function AskCoach({
   const [busy, setBusy] = useState(false);
   const [readAloud, setReadAloud] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sketch, setSketch] = useState<{ status: "idle" | "pending" | "done" | "error"; url?: string }>({ status: "idle" });
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load the panel-open greeting + readiness.
   useEffect(() => {
@@ -58,7 +60,66 @@ export default function AskCoach({
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
   }, [messages]);
-  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+  useEffect(
+    () => () => {
+      window.speechSynthesis?.cancel();
+      if (pollRef.current) clearInterval(pollRef.current);
+    },
+    [],
+  );
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  // Sketch rendering lives in the batch worker, so we enqueue then poll for the
+  // finished clip. Identical sketches replay instantly from the shared cache.
+  function pollSketch(sketchId: string) {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/tutor/sketch?sketchId=${encodeURIComponent(sketchId)}`);
+        const d = await res.json();
+        if (d.status === "done" && d.url) {
+          setSketch({ status: "done", url: d.url });
+          stopPolling();
+        } else if (d.status === "error") {
+          setSketch({ status: "error" });
+          stopPolling();
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+    }, 3000);
+  }
+
+  async function requestSketch() {
+    if (sketch.status === "pending" || busy || ready === false) return;
+    setError(null);
+    setSketch({ status: "pending" });
+    try {
+      const res = await fetch("/api/tutor/sketch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ generationId, concept: input.trim() || undefined }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSketch({ status: "idle" });
+        setError(d?.error || "Couldn't start the sketch.");
+        return;
+      }
+      if (d.status === "done" && d.url) setSketch({ status: "done", url: d.url });
+      else if (d.status === "pending" && d.sketchId) pollSketch(d.sketchId);
+      else setSketch({ status: "idle" });
+    } catch {
+      setSketch({ status: "idle" });
+      setError("Couldn't reach the coach to draw that.");
+    }
+  }
 
   // messageId → the server decides voice (premium clip vs "speak in the browser");
   // `text` is what the browser path speaks locally (the reply the client already has).
@@ -167,6 +228,14 @@ export default function AskCoach({
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <button
+              onClick={() => void requestSketch()}
+              disabled={sketch.status === "pending" || busy || ready === false}
+              className="text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-40"
+              title="Ask the coach to draw a quick explainer"
+            >
+              {sketch.status === "pending" ? "✏️ Sketching…" : "✏️ Draw this"}
+            </button>
+            <button
               onClick={() => setReadAloud((v) => !v)}
               className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}
               aria-pressed={readAloud}
@@ -194,6 +263,24 @@ export default function AskCoach({
               </div>
             </div>
           ))}
+          {sketch.status === "pending" && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm bg-[#F4F6F3] text-[#5B6470]">
+                🖍️ Coach is sketching this out…
+              </div>
+            </div>
+          )}
+          {sketch.status === "done" && sketch.url && (
+            <div className="flex justify-start">
+              <div className="max-w-[92%] rounded-2xl rounded-bl-sm p-1.5 bg-[#F4F6F3]">
+                <video src={sketch.url} controls playsInline className="rounded-xl w-full" />
+                <p className="text-[11px] text-[#98A0A9] px-2 py-1">Here&apos;s a quick sketch.</p>
+              </div>
+            </div>
+          )}
+          {sketch.status === "error" && (
+            <p className="text-xs text-[#B42318]">Couldn&apos;t draw that one — try asking a question instead.</p>
+          )}
           {error && <p className="text-xs text-[#B42318]">{error}</p>}
         </div>
 
