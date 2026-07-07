@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { aiTutorEnabled } from "@/utils/flags";
-import { resolveTutorContext, loadGrounding, buildMastery } from "@/utils/tutor/service";
+import { aiTutorEnabled, aiTutorRequireProPlus } from "@/utils/flags";
+import { resolveTutorContext, loadGrounding, buildMastery, tutorEntitled } from "@/utils/tutor/service";
 
 export const runtime = "nodejs";
 
@@ -49,6 +49,10 @@ export async function GET(request: Request) {
   // The lesson must actually be assigned to this student (student_progress row).
   const ctx = await resolveTutorContext(admin, studentId, generationId);
   if (!ctx) return NextResponse.json({ error: "This lesson isn't assigned to that student." }, { status: 404 });
+  // Same Pro+ gate as the tutor itself (enforced post-trial).
+  if (aiTutorRequireProPlus() && !(await tutorEntitled(admin, generationId))) {
+    return NextResponse.json({ error: "The AI Coach is a Pro+ feature.", upgrade: true }, { status: 403 });
+  }
 
   const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
   const chapterTitle = grounding?.chapterTitle ?? "this chapter";

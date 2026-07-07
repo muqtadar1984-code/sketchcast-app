@@ -40,6 +40,7 @@ export default function AskCoach({
         if (cancelled) return;
         setReady(!!data.ready);
         if (data.greeting) setMessages([{ role: "coach", content: data.greeting }]);
+        else if (data.upgrade) setError("The AI Coach is a Pro+ feature — ask your teacher or parent to upgrade.");
         else if (!data.ready) setError("The coach isn't ready for this lesson yet.");
       } catch {
         if (!cancelled) {
@@ -59,12 +60,14 @@ export default function AskCoach({
   }, [messages]);
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
-  async function speak(text: string) {
+  // messageId → the server decides voice (premium clip vs "speak in the browser");
+  // `text` is what the browser path speaks locally (the reply the client already has).
+  async function speak(messageId: string, text: string) {
     try {
       const res = await fetch("/api/tutor/voice", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, generationId }),
+        body: JSON.stringify({ messageId, generationId }),
       });
       const v = await res.json();
       if (v?.provider === "elevenlabs" && v.audioUrl) {
@@ -106,6 +109,7 @@ export default function AskCoach({
       const decoder = new TextDecoder();
       let buf = "";
       let full = "";
+      let coachId = "";
       const setCoach = (text: string) =>
         setMessages((m) => {
           const c = [...m];
@@ -133,13 +137,15 @@ export default function AskCoach({
           if (ev === "text") {
             full += data;
             setCoach(full);
+          } else if (ev === "mid") {
+            coachId = data;
           } else if (ev === "error") {
             setError(data || "The coach had trouble answering.");
           }
         }
       }
 
-      if (full && readAloud) void speak(full);
+      if (coachId && readAloud) void speak(coachId, full);
     } catch (e) {
       setError((e as Error).message);
       setMessages((m) => (m[m.length - 1]?.content === "" ? m.slice(0, -1) : m));

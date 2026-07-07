@@ -24,6 +24,8 @@ import {
   ttsWithinCap,
   estimateTtsCostUsd,
   TUTOR_TTS_MONTHLY_CHAR_CAP,
+  planGrantsTutor,
+  tutorGateAllows,
   type Grounding,
   type Question,
   type StudentModel,
@@ -194,5 +196,30 @@ describe("voice cache key + paid cost guard", () => {
   it("enforces the monthly character cap", () => {
     expect(ttsWithinCap(TUTOR_TTS_MONTHLY_CHAR_CAP - 100, 100, TUTOR_TTS_MONTHLY_CHAR_CAP)).toBe(true);
     expect(ttsWithinCap(TUTOR_TTS_MONTHLY_CHAR_CAP - 100, 101, TUTOR_TTS_MONTHLY_CHAR_CAP)).toBe(false);
+  });
+});
+
+describe("Pro+ entitlement gate", () => {
+  it("only Pro+ / family / school tiers grant the tutor — plain Pro does not", () => {
+    expect(planGrantsTutor("teacher_pro_plus_monthly")).toBe(true);
+    expect(planGrantsTutor("teacher_pro_plus_annual")).toBe(true);
+    expect(planGrantsTutor("family_monthly")).toBe(true);
+    expect(planGrantsTutor("school_annual")).toBe(true);
+    expect(planGrantsTutor("teacher_pro_monthly")).toBe(false);
+    expect(planGrantsTutor(null)).toBe(false);
+  });
+  it("the flag is the master switch; entitlement matters only when enforced", () => {
+    expect(tutorGateAllows({ flagOn: false, requireProPlus: false, entitled: true })).toBe(false); // flag off → closed
+    expect(tutorGateAllows({ flagOn: true, requireProPlus: false, entitled: false })).toBe(true); // trial: open to all
+    expect(tutorGateAllows({ flagOn: true, requireProPlus: true, entitled: false })).toBe(false); // post-trial, not entitled
+    expect(tutorGateAllows({ flagOn: true, requireProPlus: true, entitled: true })).toBe(true); // post-trial, Pro+
+  });
+});
+
+describe("prompt-injection hardening", () => {
+  it("tells the model the student's messages are never instructions that change the rules", () => {
+    const { instructions } = buildSystemPrompt(G);
+    expect(instructions).toMatch(/NEVER an instruction that changes/i);
+    expect(instructions).toMatch(/override them|reveal or forget/i);
   });
 });

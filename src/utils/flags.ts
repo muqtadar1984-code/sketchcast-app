@@ -67,3 +67,13 @@ export function billingEnabled(): boolean {
 export function aiTutorEnabled(): boolean {
   return process.env.FEATURE_AI_TUTOR === "true";
 }
+
+/**
+ * Enforce the Pro+ entitlement on the AI Tutor. OFF during the open free trial
+ * (the flag above grants access to everyone), ON afterwards so the tutor becomes
+ * the paid Pro+ differentiator — gated to teacher_pro_plus / family / school
+ * plans on the lesson's owner (see tutorEntitled + planGrantsTutor).
+ */
+export function aiTutorRequireProPlus(): boolean {
+  return process.env.FEATURE_AI_TUTOR_REQUIRE_PROPLUS === "true";
+}

@@ -3,6 +3,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getEntitlement, getSchoolEntitlement } from "@/utils/stripe/entitlements";
 import {
   TUTOR_MODELS,
   CACHE_NEAR_EXACT,
@@ -11,6 +12,7 @@ import {
   buildSystemPrompt,
   gradeAnswers,
   scoreMastery,
+  planGrantsTutor,
   type Grounding,
   type TutorTier,
   type CacheRow,
@@ -53,6 +55,28 @@ export async function resolveTutorContext(
   const chapterNum = parseInt(String(gen.chapter_ref ?? ""), 10);
   if (Number.isNaN(chapterNum)) return null;
   return { bookId: gen.book_id as string, chapterNum };
+}
+
+/** Does the lesson OWNER's plan grant the AI Tutor? Pro+ (teacher_pro_plus /
+ * family) grants it directly; a teacher on a school plan is covered by the
+ * school's entitlement. Plain Pro does not. Used only when Pro+ is being enforced
+ * (post-trial) — during the open trial the feature flag alone grants access. */
+export async function tutorEntitled(admin: SupabaseClient, generationId: string): Promise<boolean> {
+  const { data: gen } = await admin.from("generations").select("owner_id").eq("id", generationId).maybeSingle();
+  const ownerId = (gen?.owner_id as string | undefined) ?? "";
+  if (!ownerId) return false;
+
+  const ent = await getEntitlement(ownerId);
+  if (ent.active && planGrantsTutor(ent.plan_key)) return true;
+
+  // School staff: the school's top-tier plan covers its teachers.
+  const { data: prof } = await admin.from("profiles").select("school_id").eq("id", ownerId).maybeSingle();
+  const schoolId = (prof?.school_id as string | undefined) ?? "";
+  if (schoolId) {
+    const school = await getSchoolEntitlement(schoolId);
+    if (school.active) return true;
+  }
+  return false;
 }
 
 /** The tutor's curriculum fence — persisted by the worker at generation time.
@@ -233,16 +257,44 @@ export async function saveCache(
 export async function logMessage(
   admin: SupabaseClient,
   m: { studentId: string; generationId: string; bookId: string; chapterNum: number; role: "student" | "coach"; content: string; tutorMove?: string },
-): Promise<void> {
-  await admin.from("tutor_messages").insert({
-    student_id: m.studentId,
-    generation_id: m.generationId,
-    book_id: m.bookId,
-    chapter_num: m.chapterNum,
-    role: m.role,
-    content: m.content,
-    tutor_move: m.tutorMove ?? null,
-  });
+): Promise<string | null> {
+  const { data } = await admin
+    .from("tutor_messages")
+    .insert({
+      student_id: m.studentId,
+      generation_id: m.generationId,
+      book_id: m.bookId,
+      chapter_num: m.chapterNum,
+      role: m.role,
+      content: m.content,
+      tutor_move: m.tutorMove ?? null,
+    })
+    .select("id")
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
+/** Load the text of a COACH message the requesting student actually received on
+ * this lesson. This is the ONLY text the voice route will synthesise — so a
+ * student can never make the (premium) voice speak arbitrary, un-fenced text:
+ * every voiced string is a real coach reply that already passed the closed-book
+ * safety fence. Null when the id isn't a coach message owned by this student on
+ * this generation. */
+export async function loadOwnCoachMessage(
+  admin: SupabaseClient,
+  messageId: string,
+  studentId: string,
+  generationId: string,
+): Promise<string | null> {
+  const { data } = await admin
+    .from("tutor_messages")
+    .select("content")
+    .eq("id", messageId)
+    .eq("student_id", studentId)
+    .eq("generation_id", generationId)
+    .eq("role", "coach")
+    .maybeSingle();
+  return (data?.content as string | undefined) ?? null;
 }
 
 /** Stream a grounded, safe answer from Claude. The chapter CONTEXT is a cached

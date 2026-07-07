@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { aiTutorEnabled } from "@/utils/flags";
+import { aiTutorEnabled, aiTutorRequireProPlus } from "@/utils/flags";
 import { normalizeQuestion, pickTier, shouldServeCached, buildGreeting, buildStudentContext, classifyMove } from "@/utils/tutor/models";
 import {
   resolveTutorContext,
@@ -13,6 +13,7 @@ import {
   streamAnswer,
   buildStudentModel,
   recordMastery,
+  tutorEntitled,
 } from "@/utils/tutor/service";
 
 export const runtime = "nodejs";
@@ -58,6 +59,10 @@ export async function POST(request: Request) {
   // Access + chapter (assigned-to-this-student only) and the grounding fence.
   const ctx = await resolveTutorContext(admin, user.id, generationId);
   if (!ctx) return NextResponse.json({ error: "This lesson isn't assigned to you." }, { status: 403 });
+  // Pro+ gate (enforced post-trial; open during the free trial).
+  if (aiTutorRequireProPlus() && !(await tutorEntitled(admin, generationId))) {
+    return NextResponse.json({ error: "The AI Coach is a Pro+ feature.", upgrade: true }, { status: 403 });
+  }
   const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
   if (!grounding) return NextResponse.json({ error: "The tutor isn't ready for this lesson yet." }, { status: 409 });
 
@@ -78,10 +83,13 @@ export async function POST(request: Request) {
         const cached = await findCached(admin, ctx.bookId, ctx.chapterNum, qNorm);
         if (cached && shouldServeCached(cached.row, cached.nearExact)) {
           send("text", cached.row.answer_text);
+          // Log the coach turn BEFORE closing so we can hand the client its id —
+          // the voice route will only speak a real, logged coach message.
+          const cid = await logMessage(admin, { ...base, role: "coach", content: cached.row.answer_text, tutorMove: classifyMove(cached.row.answer_text) });
+          if (cid) send("mid", cid);
           send("done", "cache");
           controller.close();
           await bumpCache(admin, cached.row.id);
-          await logMessage(admin, { ...base, role: "coach", content: cached.row.answer_text, tutorMove: classifyMove(cached.row.answer_text) });
           await recordMastery(admin, { ...base, source: "tutor", signal: "engaged", weight: 0, detail: question });
           return;
         }
@@ -94,15 +102,19 @@ export async function POST(request: Request) {
           full += chunk;
           send("text", chunk);
         }
+
+        // Persist + hand the client the coach message id (for voice) before done.
+        const answer = full.trim();
+        let cid: string | null = null;
+        if (answer) {
+          await saveCache(admin, ctx.bookId, ctx.chapterNum, question, qNorm, answer);
+          cid = await logMessage(admin, { ...base, role: "coach", content: answer, tutorMove: classifyMove(answer) });
+        }
+        if (cid) send("mid", cid);
         send("done", "generated");
         controller.close();
 
-        const answer = full.trim();
-        if (answer) {
-          await saveCache(admin, ctx.bookId, ctx.chapterNum, question, qNorm, answer);
-          await logMessage(admin, { ...base, role: "coach", content: answer, tutorMove: classifyMove(answer) });
-          await recordMastery(admin, { ...base, source: "tutor", signal: "engaged", weight: 0, detail: question });
-        }
+        if (answer) await recordMastery(admin, { ...base, source: "tutor", signal: "engaged", weight: 0, detail: question });
       } catch (e) {
         send("error", "Coach had trouble answering — please try again.");
         controller.close();
@@ -138,6 +150,9 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const ctx = await resolveTutorContext(admin, user.id, generationId);
   if (!ctx) return NextResponse.json({ error: "This lesson isn't assigned to you." }, { status: 403 });
+  if (aiTutorRequireProPlus() && !(await tutorEntitled(admin, generationId))) {
+    return NextResponse.json({ ready: false, greeting: "", upgrade: true });
+  }
 
   const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
   if (!grounding) return NextResponse.json({ ready: false, greeting: "" });
