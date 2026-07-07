@@ -85,7 +85,7 @@ export default function AskCoach({
     stopPolling();
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/tutor/sketch?sketchId=${encodeURIComponent(sketchId)}`);
+        const res = await fetch(`/api/tutor/sketch?sketchId=${encodeURIComponent(sketchId)}&generationId=${encodeURIComponent(generationId)}`);
         const d = await res.json();
         if (d.status === "done" && d.url) {
           setSketch({ status: "done", url: d.url });

@@ -141,17 +141,30 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const sketchId = new URL(request.url).searchParams.get("sketchId") ?? "";
-  if (!sketchId) return NextResponse.json({ error: "Missing sketch." }, { status: 400 });
+  const url = new URL(request.url);
+  const sketchId = url.searchParams.get("sketchId") ?? "";
+  const generationId = url.searchParams.get("generationId") ?? "";
+  if (!sketchId || !generationId) return NextResponse.json({ error: "Missing sketch." }, { status: 400 });
 
   const admin = createAdminClient();
+  // Authorize by LESSON, not by who first requested it: the sketch cache is shared
+  // across students, so a student who coalesced onto another's in-flight render
+  // must still be able to poll it. Any student ASSIGNED this lesson may poll a
+  // sketch whose book+chapter matches — same fence as the rest of the tutor.
+  const ctx = await resolveTutorContext(admin, user.id, generationId);
+  if (!ctx) return NextResponse.json({ error: "This lesson isn't assigned to you." }, { status: 403 });
+  if (aiTutorRequireProPlus() && !(await tutorEntitled(admin, generationId))) {
+    return NextResponse.json({ error: "The AI Coach is a Pro+ feature.", upgrade: true }, { status: 403 });
+  }
+
   const { data: row } = await admin
     .from("tutor_sketch")
-    .select("status, storage_path, requested_by")
+    .select("status, storage_path, book_id, chapter_num")
     .eq("id", sketchId)
     .maybeSingle();
-  // Only the student who asked for THIS sketch may poll it.
-  if (!row || row.requested_by !== user.id) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!row || row.book_id !== ctx.bookId || row.chapter_num !== ctx.chapterNum) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
 
   if (row.status === "done" && row.storage_path) {
     const signed = await admin.storage.from("tutor-sketch").createSignedUrl(row.storage_path as string, 3600);
