@@ -73,18 +73,26 @@ export async function POST(request: Request) {
   // 2) Cache-first (shared across every student).
   const { data: existing } = await admin
     .from("tutor_sketch")
-    .select("id, status, storage_path")
+    .select("id, status, storage_path, updated_at")
     .match(key)
     .maybeSingle();
   if (existing?.status === "done" && existing.storage_path) {
     const signed = await admin.storage.from("tutor-sketch").createSignedUrl(existing.storage_path as string, 3600);
     if (signed.data?.signedUrl) return NextResponse.json({ status: "done", url: signed.data.signedUrl });
+    return NextResponse.json({ error: "Couldn't load that sketch — please try again." }, { status: 502 });
   }
-  if (existing && (existing.status === "queued" || existing.status === "processing")) {
+  // An in-flight render coalesces onto the existing row — UNLESS it's been stuck
+  // 'processing' too long (a dead/killed worker), in which case we re-enqueue it
+  // so a crashed render can never leave students polling forever.
+  const staleProcessing =
+    existing?.status === "processing" &&
+    !!existing.updated_at &&
+    Date.now() - new Date(existing.updated_at as string).getTime() > 3 * 60 * 1000;
+  if (existing && (existing.status === "queued" || (existing.status === "processing" && !staleProcessing))) {
     return NextResponse.json({ status: "pending", sketchId: existing.id });
   }
 
-  // 3) Miss (or a prior error) → reserve the monthly cap, then (re)enqueue.
+  // 3) Miss / prior error / dead render → reserve the monthly cap, then (re)enqueue.
   const period = new Date().toISOString().slice(0, 7);
   const { data: allowed } = await admin.rpc("tutor_sketch_reserve", { p_user: user.id, p_period: period, p_cap: SKETCH_MONTHLY_CAP });
   if (allowed !== true) return NextResponse.json({ error: "You've reached this month's sketch limit." }, { status: 429 });
@@ -104,7 +112,7 @@ export async function POST(request: Request) {
   };
 
   let sketchId = existing?.id as string | undefined;
-  if (existing?.status === "error") {
+  if (existing && (existing.status === "error" || staleProcessing)) {
     await admin.from("tutor_sketch").update(row).eq("id", existing.id);
   } else {
     const ins = await admin.from("tutor_sketch").insert(row).select("id").maybeSingle();
@@ -168,7 +176,8 @@ export async function GET(request: Request) {
 
   if (row.status === "done" && row.storage_path) {
     const signed = await admin.storage.from("tutor-sketch").createSignedUrl(row.storage_path as string, 3600);
-    return NextResponse.json({ status: "done", url: signed.data?.signedUrl ?? null });
+    if (signed.data?.signedUrl) return NextResponse.json({ status: "done", url: signed.data.signedUrl });
+    return NextResponse.json({ status: "error" }); // rendered but can't be signed → let the client stop
   }
   if (row.status === "error") return NextResponse.json({ status: "error" });
   return NextResponse.json({ status: "pending" });

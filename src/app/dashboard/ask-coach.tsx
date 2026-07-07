@@ -83,7 +83,14 @@ export default function AskCoach({
   // finished clip. Identical sketches replay instantly from the shared cache.
   function pollSketch(sketchId: string) {
     stopPolling();
+    let ticks = 0;
     pollRef.current = setInterval(async () => {
+      // Give up after ~2 min so a stuck render never spins forever.
+      if (++ticks > 40) {
+        setSketch({ status: "error" });
+        stopPolling();
+        return;
+      }
       try {
         const res = await fetch(`/api/tutor/sketch?sketchId=${encodeURIComponent(sketchId)}&generationId=${encodeURIComponent(generationId)}`);
         const d = await res.json();
