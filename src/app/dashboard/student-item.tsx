@@ -3,6 +3,11 @@
 import { useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import QuizPlayer, { type QuizData } from "./quiz-player";
+import AskCoach from "./ask-coach";
+
+// Pro+ AI tutor entry point on lessons. Client flag mirrors the server gate
+// (FEATURE_AI_TUTOR); the /api/tutor route is authoritative regardless.
+const AI_TUTOR = process.env.NEXT_PUBLIC_FEATURE_AI_TUTOR === "true";
 
 export type ProgressStatus = "assigned" | "in_progress" | "completed" | "revised";
 
@@ -45,6 +50,7 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
+  const [coaching, setCoaching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const base = { generation_id: item.genId, student_id: studentId, class_id: item.classId };
@@ -162,6 +168,9 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
             {item.deck && (
               <a href={item.deck} className="font-medium text-[#0C8175] hover:underline">⬇ Deck</a>
             )}
+            {AI_TUTOR && (
+              <button onClick={() => setCoaching(true)} className="font-medium text-[#0C8175] hover:underline">🎓 Ask Coach</button>
+            )}
           </>
         ) : (
           <>
@@ -194,6 +203,10 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
       )}
 
       {quiz && <QuizPlayer data={quiz} onClose={() => setQuiz(null)} onSubmit={onQuizSubmit} />}
+
+      {coaching && (
+        <AskCoach generationId={item.genId} studentId={studentId} chapterLabel={item.label} onClose={() => setCoaching(false)} />
+      )}
     </li>
   );
 }

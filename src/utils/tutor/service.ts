@@ -176,19 +176,20 @@ export async function recordMastery(
 
 /** The honest chapter-mastery estimate for the recap: authoritative quiz evidence
  * (re-graded from real submissions) combined with tutor practice count. Reuses
- * buildStudentModel so the two views can never disagree. */
+ * buildStudentModel so the recap and the greeting can never disagree, and returns
+ * the underlying model so the recap can also show the weak spots. */
 export async function buildMastery(
   admin: SupabaseClient,
   studentId: string,
   bookId: string,
   chapterNum: number,
   chapterTitle: string,
-): Promise<Mastery & { practiceCount: number }> {
-  const sm = await buildStudentModel(admin, studentId, bookId, chapterNum, chapterTitle);
+): Promise<{ mastery: Mastery; practiceCount: number; model: StudentModel }> {
+  const model = await buildStudentModel(admin, studentId, bookId, chapterNum, chapterTitle);
   const { data } = await admin.rpc("tutor_mastery_summary", { p_student: studentId, p_book: bookId, p_chapter: chapterNum });
   const practiceCount = Number((data as { engaged?: number }[] | null)?.[0]?.engaged ?? 0);
-  const mastery = scoreMastery({ scorePct: sm.scorePct, weakCount: sm.weakQuestions.length, practiceCount });
-  return { ...mastery, practiceCount };
+  const mastery = scoreMastery({ scorePct: model.scorePct, weakCount: model.weakQuestions.length, practiceCount });
+  return { mastery, practiceCount, model };
 }
 
 /** Cache lookup: near-exact first (safe to replay), then a verified fuzzy match. */

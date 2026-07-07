@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { parentPortalEnabled } from "@/utils/flags";
+import { parentPortalEnabled, aiTutorEnabled } from "@/utils/flags";
 import AddChild from "./add-child";
+import CoachRecap from "../coach-recap";
 
 // The parent home: one section per linked child — their school assignments
 // (read-only: completion, due dates, scores) and the test papers this parent
@@ -21,6 +22,8 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 type ChildItem = {
+  genId: string;
+  kind: string;
   label: string;
   from: string;
   due: string | null;
@@ -102,6 +105,8 @@ export default async function ChildrenPage() {
       const score =
         sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}` : null;
       const item: ChildItem = {
+        genId: s.generation_id,
+        kind: g.kind ?? "",
         label: g.title || KIND_LABEL[g.kind ?? ""] || "Item",
         from: direct ? "you" : className.get(s.class_id!) ?? "class",
         due: s.due_at,
@@ -119,6 +124,7 @@ export default async function ChildrenPage() {
     submitted: "bg-[#E2F4F1] text-[#0C8175]",
     in_progress: "bg-[#FFF1D6] text-[#9A6400]",
   };
+  const coachOn = aiTutorEnabled();
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
@@ -142,21 +148,28 @@ export default async function ChildrenPage() {
             const name = l.profiles?.full_name || l.profiles?.username || "Child";
             const renderRows = (rows: ChildItem[]) =>
               rows.map((it, i) => (
-                <div key={i} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate">
-                    {it.label} <span className="text-xs text-[#5B6470]">· from {it.from}</span>
-                    {it.due && (
-                      <span className={`text-xs ml-2 ${it.overdue ? "text-[#B3401F]" : "text-[#5B6470]"}`}>
-                        due {new Date(it.due).toLocaleDateString()}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    {it.score && <span className="tabular text-xs">{it.score}</span>}
-                    <span className={`chip font-sans normal-case tracking-normal ${STATUS_TONE[it.status] ?? "bg-[#EEF0EC] text-[#5B6470]"}`}>
-                      {it.status.replace("_", " ")}
+                <div key={i} className="px-5 py-2.5 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate">
+                      {it.label} <span className="text-xs text-[#5B6470]">· from {it.from}</span>
+                      {it.due && (
+                        <span className={`text-xs ml-2 ${it.overdue ? "text-[#B3401F]" : "text-[#5B6470]"}`}>
+                          due {new Date(it.due).toLocaleDateString()}
+                        </span>
+                      )}
                     </span>
-                  </span>
+                    <span className="flex items-center gap-2 shrink-0">
+                      {it.score && <span className="tabular text-xs">{it.score}</span>}
+                      <span className={`chip font-sans normal-case tracking-normal ${STATUS_TONE[it.status] ?? "bg-[#EEF0EC] text-[#5B6470]"}`}>
+                        {it.status.replace("_", " ")}
+                      </span>
+                    </span>
+                  </div>
+                  {coachOn && it.kind === "presentation" && (
+                    <div className="mt-1.5">
+                      <CoachRecap studentId={l.child_id} generationId={it.genId} />
+                    </div>
+                  )}
                 </div>
               ));
             return (
