@@ -10,11 +10,13 @@ import {
   CACHE_VERIFY_AT,
   buildSystemPrompt,
   gradeAnswers,
+  scoreMastery,
   type Grounding,
   type TutorTier,
   type CacheRow,
   type Question,
   type StudentModel,
+  type Mastery,
 } from "./models";
 
 export function anthropic(): Anthropic {
@@ -139,6 +141,54 @@ export async function buildStudentModel(
   }
   const weakQuestions = Array.from(new Set(weak)).slice(0, 5);
   return { chapterTitle, attempted: true, scorePct, weakQuestions };
+}
+
+// ── mastery (M3) ─────────────────────────────────────────────────────────────
+
+/** Append a mastery signal. Fire-and-forget: a logging failure must never break
+ * a tutor turn, so errors are swallowed. */
+export async function recordMastery(
+  admin: SupabaseClient,
+  m: {
+    studentId: string;
+    bookId: string;
+    chapterNum: number;
+    source: "tutor" | "quiz";
+    signal: "engaged" | "correct" | "incorrect";
+    weight?: number;
+    detail?: string;
+  },
+): Promise<void> {
+  try {
+    await admin.from("mastery_events").insert({
+      student_id: m.studentId,
+      book_id: m.bookId,
+      chapter_num: m.chapterNum,
+      source: m.source,
+      signal: m.signal,
+      weight: m.weight ?? 1,
+      detail: m.detail ?? null,
+    });
+  } catch {
+    /* mastery logging is best-effort */
+  }
+}
+
+/** The honest chapter-mastery estimate for the recap: authoritative quiz evidence
+ * (re-graded from real submissions) combined with tutor practice count. Reuses
+ * buildStudentModel so the two views can never disagree. */
+export async function buildMastery(
+  admin: SupabaseClient,
+  studentId: string,
+  bookId: string,
+  chapterNum: number,
+  chapterTitle: string,
+): Promise<Mastery & { practiceCount: number }> {
+  const sm = await buildStudentModel(admin, studentId, bookId, chapterNum, chapterTitle);
+  const { data } = await admin.rpc("tutor_mastery_summary", { p_student: studentId, p_book: bookId, p_chapter: chapterNum });
+  const practiceCount = Number((data as { engaged?: number }[] | null)?.[0]?.engaged ?? 0);
+  const mastery = scoreMastery({ scorePct: sm.scorePct, weakCount: sm.weakQuestions.length, practiceCount });
+  return { ...mastery, practiceCount };
 }
 
 /** Cache lookup: near-exact first (safe to replay), then a verified fuzzy match. */

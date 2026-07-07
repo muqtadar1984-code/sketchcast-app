@@ -54,8 +54,10 @@ export function buildSystemPrompt(g: Grounding): { instructions: string; context
     `not in this chapter and gently steer the student back — never guess or use outside knowledge.\n` +
     `2. Never produce unsafe, adult, violent, hateful, or off-topic content. If asked, kindly ` +
     `redirect to the chapter.\n` +
-    `3. Be warm and Socratic: 2–4 short sentences, no markdown, speak directly to the student, and ` +
-    `where it helps, end with a small question that nudges them to think.\n` +
+    `3. Teach, don't just tell. Give a brief, clear explanation grounded in the chapter (2–4 short ` +
+    `sentences, no markdown, speak directly to the student), then end with ONE small question that ` +
+    `checks or extends their understanding. If the student is clearly just fishing for the answer to ` +
+    `graded work, HINT instead: point at the idea and ask what they think — don't hand over the result.\n` +
     `4. Never do the student's graded work for them or hand over exam answers — guide them instead.`;
   return { instructions, context: buildContext(g) };
 }
@@ -151,6 +153,80 @@ export function buildStudentContext(sm: StudentModel): string {
     sm.weakQuestions.slice(0, 5).map((q) => `"${shorten(q)}"`).join("; ") +
     "."
   );
+}
+
+// ── Socratic moves + mastery (M3) ────────────────────────────────────────────
+// Every coach turn is one teaching MOVE. We classify it deterministically from
+// the reply's shape — no extra model call, so it's cheap and unit-testable — and
+// log it on the transcript. The teaching prompt (rule 3 below) is written so the
+// model's replies fall cleanly into these moves. Vocabulary matches the set
+// documented on tutor_messages.tutor_move in migration 0025.
+
+export const TUTOR_MOVES = ["answer", "hint", "ask", "confirm", "redirect", "sketch"] as const;
+export type TutorMove = (typeof TUTOR_MOVES)[number];
+
+const REDIRECT_RE =
+  /\b(not in this chapter|stick to the chapter|back to (?:the |our )?(?:chapter|lesson)|can'?t help with that|i can'?t help|let'?s keep to)\b/i;
+
+/** Classify a coach reply into a teaching move from its shape. Emits the four
+ * moves that are reliably detectable from text: `redirect` (refuse/steer off an
+ * off-topic or unsafe ask), `ask` (the reply is essentially a question turned
+ * back to the student), `confirm` (an explanation that ends by checking
+ * understanding — the default teaching turn), or `answer` (a plain explanation
+ * with no trailing question). `hint`/`sketch` stay in the vocabulary for later
+ * moves but aren't inferred here. Pure. */
+export function classifyMove(reply: string): TutorMove {
+  const t = (reply || "").trim();
+  if (!t) return "answer";
+  if (REDIRECT_RE.test(t)) return "redirect";
+
+  if (!/\?\s*$/.test(t)) return "answer";
+
+  // Ends on a question. Split into sentences; if any DECLARATIVE (non-question)
+  // sentence precedes it, the coach explained then checked understanding
+  // (confirm); if the reply is essentially just a question, the coach handed the
+  // thinking back to the student (ask).
+  const sentences = t.match(/[^.!?]+[.!?]+/g) ?? [t];
+  const hasDeclarative = sentences.some(
+    (s) => !/\?\s*$/.test(s.trim()) && s.replace(/[.!?]/g, "").trim().length > 2,
+  );
+  return hasDeclarative ? "confirm" : "ask";
+}
+
+// Mastery: an HONEST estimate. Quiz evidence (re-graded from real submissions) is
+// authoritative; tutor practice nudges it slightly. Never claims mastery from
+// engagement alone. Surfaced in the parent/teacher recap (M5), not to the child.
+
+export type MasteryBand = "not_started" | "needs_work" | "progressing" | "strong";
+export type MasteryInput = {
+  scorePct: number | null; // most-recent objective quiz score, or null if never attempted
+  weakCount: number; // distinct questions still gotten wrong
+  practiceCount: number; // coach exchanges on this chapter ('engaged' events)
+};
+export type Mastery = { score: number | null; band: MasteryBand; label: string };
+
+const BAND_LABEL: Record<MasteryBand, string> = {
+  not_started: "Not started",
+  needs_work: "Needs work",
+  progressing: "Progressing",
+  strong: "Strong",
+};
+
+/** Combine quiz evidence with tutor practice into a 0–100 mastery estimate and a
+ * band. No quiz yet → score is unknown (null): "Not started", or "Progressing"
+ * once they've practised with the coach. With a quiz score, unresolved weak spots
+ * pull it down and a little practice nudges it up (capped, so practice can never
+ * manufacture mastery). Pure. */
+export function scoreMastery(m: MasteryInput): Mastery {
+  const practice = Math.max(0, Math.trunc(m.practiceCount || 0));
+  if (m.scorePct == null) {
+    const band: MasteryBand = practice > 0 ? "progressing" : "not_started";
+    return { score: null, band, label: BAND_LABEL[band] };
+  }
+  const raw = m.scorePct - Math.max(0, m.weakCount) * 5 + Math.min(practice, 4) * 2;
+  const score = Math.max(0, Math.min(100, Math.round(raw)));
+  const band: MasteryBand = score >= 80 ? "strong" : score >= 50 ? "progressing" : "needs_work";
+  return { score, band, label: BAND_LABEL[band] };
 }
 
 export type CacheRow = { id: string; answer_text: string; is_verified: boolean };

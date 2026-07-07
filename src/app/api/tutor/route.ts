@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { aiTutorEnabled } from "@/utils/flags";
-import { normalizeQuestion, pickTier, shouldServeCached, buildGreeting, buildStudentContext } from "@/utils/tutor/models";
+import { normalizeQuestion, pickTier, shouldServeCached, buildGreeting, buildStudentContext, classifyMove } from "@/utils/tutor/models";
 import {
   resolveTutorContext,
   loadGrounding,
@@ -12,6 +12,7 @@ import {
   logMessage,
   streamAnswer,
   buildStudentModel,
+  recordMastery,
 } from "@/utils/tutor/service";
 
 export const runtime = "nodejs";
@@ -80,7 +81,8 @@ export async function POST(request: Request) {
           send("done", "cache");
           controller.close();
           await bumpCache(admin, cached.row.id);
-          await logMessage(admin, { ...base, role: "coach", content: cached.row.answer_text, tutorMove: "answer" });
+          await logMessage(admin, { ...base, role: "coach", content: cached.row.answer_text, tutorMove: classifyMove(cached.row.answer_text) });
+          await recordMastery(admin, { ...base, source: "tutor", signal: "engaged", weight: 0, detail: question });
           return;
         }
 
@@ -98,7 +100,8 @@ export async function POST(request: Request) {
         const answer = full.trim();
         if (answer) {
           await saveCache(admin, ctx.bookId, ctx.chapterNum, question, qNorm, answer);
-          await logMessage(admin, { ...base, role: "coach", content: answer, tutorMove: "answer" });
+          await logMessage(admin, { ...base, role: "coach", content: answer, tutorMove: classifyMove(answer) });
+          await recordMastery(admin, { ...base, source: "tutor", signal: "engaged", weight: 0, detail: question });
         }
       } catch (e) {
         send("error", "Coach had trouble answering — please try again.");

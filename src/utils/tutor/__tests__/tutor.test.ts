@@ -17,6 +17,8 @@ import {
   shouldServeCached,
   gradeAnswers,
   buildGreeting,
+  classifyMove,
+  scoreMastery,
   type Grounding,
   type Question,
   type StudentModel,
@@ -116,5 +118,43 @@ describe("greeting (names a real weak spot; warm cold-start)", () => {
   });
   it("congratulates when they aced it", () => {
     expect(buildGreeting(sm({ attempted: true, weakQuestions: [] }))).toMatch(/Nice work|got the quiz right/i);
+  });
+});
+
+describe("Socratic move classification (from the reply's shape)", () => {
+  it("plain explanation with no trailing question → answer", () => {
+    expect(classifyMove("Condensation is when a gas cools into a liquid. You see it on a cold glass.")).toBe("answer");
+  });
+  it("explanation that ends by checking understanding → confirm", () => {
+    expect(classifyMove("Condensation is gas cooling into liquid. Where might you see that at home?")).toBe("confirm");
+  });
+  it("a bare question turned back to the student → ask", () => {
+    expect(classifyMove("What do you think happens to the water vapour when it cools?")).toBe("ask");
+  });
+  it("a refusal/steer → redirect", () => {
+    expect(classifyMove("That's not in this chapter — let's stick to the chapter. What part are you stuck on?")).toBe("redirect");
+  });
+  it("empty reply defaults to answer", () => {
+    expect(classifyMove("")).toBe("answer");
+  });
+});
+
+describe("honest mastery estimate", () => {
+  it("is unknown before any quiz attempt", () => {
+    expect(scoreMastery({ scorePct: null, weakCount: 0, practiceCount: 0 })).toMatchObject({ score: null, band: "not_started" });
+  });
+  it("shows progressing once they've practised, still without a quiz", () => {
+    expect(scoreMastery({ scorePct: null, weakCount: 0, practiceCount: 3 })).toMatchObject({ score: null, band: "progressing" });
+  });
+  it("a high quiz score with no weak spots is strong", () => {
+    expect(scoreMastery({ scorePct: 90, weakCount: 0, practiceCount: 0 }).band).toBe("strong");
+  });
+  it("unresolved weak spots pull the score down into needs-work", () => {
+    expect(scoreMastery({ scorePct: 60, weakCount: 4, practiceCount: 0 }).band).toBe("needs_work");
+  });
+  it("practice nudges up but is capped so it can't manufacture mastery", () => {
+    const low = scoreMastery({ scorePct: 20, weakCount: 0, practiceCount: 50 });
+    expect(low.score).toBeLessThan(80);
+    expect(low.band).not.toBe("strong");
   });
 });
