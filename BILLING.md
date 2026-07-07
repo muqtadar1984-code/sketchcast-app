@@ -54,12 +54,18 @@ bank. Hosted Checkout + Billing Customer Portal only.
   `STRIPE_WEBHOOK_SECRET`.
 
 ## Plans
-| plan_key | mode | interval | who |
-|---|---|---|---|
-| `parent_monthly` | subscription | monthly | parents |
-| `teacher_monthly` | subscription | monthly | teachers |
-| `school_annual` | subscription | yearly | school admins (card) |
-| `school_onetime` | one-off payment | 365-day licence | school admins (card) |
+| plan_key | provider | tier | interval | who |
+|---|---|---|---|---|
+| `teacher_pro_monthly` / `teacher_pro_annual` | Lemon Squeezy | teacher_pro | monthly / yearly | teachers |
+| `teacher_pro_plus_monthly` / `teacher_pro_plus_annual` | Lemon Squeezy | teacher_pro_plus | monthly / yearly | teachers |
+| `family_monthly` / `family_annual` | Lemon Squeezy | family | monthly / yearly | parents (any adult) |
+| `school_annual` | Stripe | school | yearly | school admins (card) |
+| `school_onetime` | Stripe | school | 365-day licence | school admins (card) |
+
+Each LS **product** (Teacher Pro, Teacher Pro+, Family) serves both cycles on one
+hosted-checkout page; the six `plan_key`s map 1:1 to LS **variant ids** (via env).
+The public pricing page carries no `plan_key`, so the webhook derives it from the
+subscription's `variant_id` — see `planKeyForVariant()` in `plans.ts`.
 
 **Most schools pay by bank transfer against a direct Aethel Twin invoice —
 outside Stripe entirely.** The `school_*` plans exist only for schools that
@@ -95,15 +101,27 @@ stripe trigger checkout.session.completed
 
 ### Environment
 ```
+# Stripe — SCHOOL plans only (MYR, direct merchant)
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_PARENT_MONTHLY=price_...
-STRIPE_PRICE_TEACHER_MONTHLY=price_...
 STRIPE_PRICE_SCHOOL_ANNUAL=price_...
 STRIPE_PRICE_SCHOOL_ONETIME=price_...
+
+# Lemon Squeezy — PARENT/TEACHER plans (USD, Merchant of Record). One variant id
+# per product×cycle; the webhook maps variant_id → plan_key.
+LEMONSQUEEZY_API_KEY=...
+LEMONSQUEEZY_STORE_ID=...
+LEMONSQUEEZY_WEBHOOK_SECRET=...
+LEMONSQUEEZY_VARIANT_TEACHER_PRO_MONTHLY=...
+LEMONSQUEEZY_VARIANT_TEACHER_PRO_ANNUAL=...
+LEMONSQUEEZY_VARIANT_TEACHER_PRO_PLUS_MONTHLY=...
+LEMONSQUEEZY_VARIANT_TEACHER_PRO_PLUS_ANNUAL=...
+LEMONSQUEEZY_VARIANT_FAMILY_MONTHLY=...
+LEMONSQUEEZY_VARIANT_FAMILY_ANNUAL=...
+
 BILLING_ENABLED=false
 APP_URL=https://app.sketchcast.app
-# plus the existing Supabase vars (service key is used for webhook writes)
+# plus the existing Supabase vars (service key is used for webhook writes + claim)
 ```
 
 ## Architecture
@@ -143,9 +161,17 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
 
 ### Lemon Squeezy Dashboard setup (by hand)
 - Create/verify the LS **store** for Aethel Twin (LS onboards you as the
-  software company; LS is MoR on top).
-- Create two **subscription products/variants** priced in **USD**: one for
-  `parent_monthly`, one for `teacher_monthly`. Copy each **Variant ID**.
+  software company; LS is MoR on top). Set the store currency to **USD**.
+- Create three **subscription products** priced in **USD**, each with a Monthly
+  and an Annual variant: **Teacher Pro** ($24 / $240), **Teacher Pro+** ($49 /
+  $490), **Family** ($9.99 / $99). Copy the six **Variant IDs** into the six
+  `LEMONSQUEEZY_VARIANT_*` env vars (below). The webhook maps a subscription's
+  `variant_id` back to a `plan_key`, so these must match the live store.
+- Create the founding discount code **`FOUNDINGTEACHER`** on the Teacher Pro
+  product (→ $10/mo, price-locked 24 months). It is a *discount*, not a separate
+  product — the public pricing page shows the code and tells teachers to paste
+  it at checkout. The webhook flags such subs `is_founding` (same access as
+  Teacher Pro, tracked for grandfathering).
 - **Settings → API** → create an API key → `LEMONSQUEEZY_API_KEY`. Copy the
   **Store ID** → `LEMONSQUEEZY_STORE_ID`.
 - **Settings → Webhooks** → add `https://app.sketchcast.app/api/webhooks/lemonsqueezy`.
@@ -161,24 +187,45 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
 - Enable the **Customer Portal** in the store so parents/teachers can manage
   and cancel their own subscription.
 
-### How it flows
+### How it flows — TWO purchase origins
 ```
-parent/teacher upgrade → POST /api/billing/checkout ─► LS hosted checkout
-   (route dispatches on plan.provider = lemonsqueezy)     │ (card at LS)
+PUBLIC pricing page (sketchcast.app/pricing) ─► LS hosted checkout (direct link)
+   buyer may be LOGGED OUT · no custom_data · card at LS
+                              │
+IN-APP upgrade (rare) → POST /api/billing/checkout ─► LS hosted checkout
+   authenticated · custom_data.{user_id, plan_key}
+                              │
 LS ──signed webhook (X-Signature, HMAC-SHA256)──► /api/webhooks/lemonsqueezy
-                                                     └─► subscriptions
-                                                     └─► entitlements ◄── the app
-                                                                          gates on
+      plan_key ← variant_id (trusted) · identity ← custom_data.user_id OR email
+                              ├─► known user  → subscriptions + entitlements (access now)
+                              └─► logged-out  → subscription PARKED by email (no access yet)
+sign in with that verified email → claimLsPurchases() → entitlement created
 manage → POST /api/billing/portal → fresh LS Customer Portal URL (24h-signed)
 ```
-- Webhook is Node-runtime, raw-body HMAC-verified, idempotent via a
-  constructed event key (LS has no persistent event id).
-- Identity: `custom_data.{user_id, plan_key}` we set at checkout is echoed on
-  events and the signature proves it; the first event stores the
-  `ls_customer_id ↔ user_id` mapping, later events resolve/cross-check against
-  it.
+- **plan_key is derived from the trusted `variant_id`** on the subscription; the
+  public checkout carries no `plan_key`. `custom_data.plan_key` is only a
+  cross-checked fast-path (the variant wins on any mismatch).
+- **Identity.** An authenticated in-app checkout sets `custom_data.user_id` — we
+  trust and bind it. A public-link purchase carries no user and the buyer may be
+  logged out, so the only signal is the LS **email**. We **never auto-bind a
+  paid sub onto a pre-existing account from the webhook** (a buyer can type any
+  email). Instead the subscription is **parked unclaimed** (`user_id` NULL,
+  `claim_email` = the LS email) with **no entitlement** — money recorded, access
+  withheld. When the account holder signs in with that Supabase-**verified**
+  email, `claimLsPurchases()` binds the sub and creates the entitlement.
+  Parked-but-unclaimed subs log `billing.ls.subscription_parked_unclaimed`
+  (ops-visible); an unmapped variant logs `billing.ls.unmapped_variant`.
+- Webhook is Node-runtime, raw-body HMAC-verified, idempotent via a constructed
+  event key (LS has no persistent event id), monotonic (out-of-order-safe).
 - Entitlement statuses: `on_trial`/`active`/`past_due`/`cancelled` keep access
   (`cancelled` until `ends_at`); `paused`/`unpaid`/`expired` revoke.
+
+> **Deferred (product decision):** tier *capabilities* are not yet wired — the
+> webhook stores the correct `plan_key`/`tier`, but the app does not yet grant
+> Teacher Pro+ anything extra over Teacher Pro, nor cap Family by tier. Decide
+> what each tier unlocks (seat/student caps, premium voices, book limits, Family
+> child cap) and gate on `entitlement.plan_key`. Until then the three tiers
+> unlock the same feature set.
 
 ### Local dev (Lemon Squeezy)
 ```bash

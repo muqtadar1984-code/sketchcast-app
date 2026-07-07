@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { verifyLsSignature, lsEventKey } from "@/utils/lemonsqueezy/webhook";
 import { handleLsEvent, type Db, type LsEvent } from "@/utils/lemonsqueezy/handlers";
+import { detectFoundingFromOrder } from "@/utils/lemonsqueezy/orders";
 
 // Lemon Squeezy webhook receiver. Public but hardened:
 //   * Node runtime (raw body + Node crypto).
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await handleLsEvent(admin as unknown as Db, event);
+    await handleLsEvent(admin as unknown as Db, event, { detectFounding: detectFoundingFromOrder });
     await admin.from("webhook_events").update({ processed_at: new Date().toISOString() }).eq("id", key);
   } catch (e) {
     console.error("billing.ls.webhook.handler_failed", { key, err: (e as Error).message });

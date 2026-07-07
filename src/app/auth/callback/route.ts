@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { claimLsPurchases } from "@/utils/lemonsqueezy/claim";
 
 export const runtime = "nodejs";
 
@@ -62,6 +63,11 @@ export async function GET(request: Request) {
         origin,
         "This sign-in is for teachers. Students log in with the ID from their teacher.",
       );
+    }
+    // Bind any Lemon Squeezy purchase parked under this (provider-verified)
+    // email from a public pricing-page checkout. Best-effort; never blocks login.
+    if (user.email && user.email_confirmed_at) {
+      await claimLsPurchases(user.id, user.email);
     }
   }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getEntitlement } from "@/utils/stripe/entitlements";
 import { assertAdultRole, assertBillingEnabled, BillingGuardError } from "@/utils/stripe/guards";
 import { resolveBillingCaller } from "@/utils/stripe/caller";
+import { claimLsPurchases } from "@/utils/lemonsqueezy/claim";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,14 @@ export async function GET() {
     const caller = await resolveBillingCaller();
     assertAdultRole(caller.role);
     assertBillingEnabled(caller.school);
+
+    // Reconcile any LS purchase bought from the public pricing page and parked
+    // under this (verified) email before reading — so a marketing-page buyer
+    // gets access the first time the app checks their status. Cheap no-op when
+    // there is nothing parked; never throws.
+    if (caller.emailVerified) {
+      await claimLsPurchases(caller.userId, caller.email);
+    }
 
     const entitlement = await getEntitlement(caller.userId);
     return NextResponse.json(entitlement);

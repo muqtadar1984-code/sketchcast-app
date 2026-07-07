@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { assertAdultRole, assertBillingEnabled, assertTenantMatch, BillingGuardError } from "../guards";
-import { assertMyrPrice, getPlan, PLANS } from "../plans";
+import { assertMyrPrice, getPlan, PLANS, planKeyForVariant } from "../plans";
 import { deriveActive } from "../entitlements";
 import { handleStripeEvent } from "../webhook-handlers";
 import type Stripe from "stripe";
@@ -125,12 +125,27 @@ describe("MYR currency gate", () => {
     // Schools → Stripe (MYR); parents/teachers → Lemon Squeezy (MoR).
     expect(PLANS.school_annual.provider).toBe("stripe");
     expect(PLANS.school_onetime.provider).toBe("stripe");
-    expect(PLANS.parent_monthly.provider).toBe("lemonsqueezy");
-    expect(PLANS.teacher_monthly.provider).toBe("lemonsqueezy");
+    // The three real LS products × two cycles.
+    for (const key of ["teacher_pro_monthly", "teacher_pro_annual", "teacher_pro_plus_monthly", "teacher_pro_plus_annual", "family_monthly", "family_annual"] as const) {
+      expect(PLANS[key].provider).toBe("lemonsqueezy");
+    }
+    expect(PLANS.teacher_pro_monthly.tier).toBe("teacher_pro");
+    expect(PLANS.teacher_pro_plus_annual.tier).toBe("teacher_pro_plus");
+    expect(PLANS.family_monthly.tier).toBe("family");
     for (const p of Object.values(PLANS)) {
       const prefix = p.provider === "stripe" ? /^STRIPE_PRICE_/ : /^LEMONSQUEEZY_VARIANT_/;
       expect(p.productEnv).toMatch(prefix);
     }
+  });
+
+  it("planKeyForVariant maps a live variant id back to its plan_key (webhook path)", () => {
+    // The webhook has only the variant id (public checkout carries no plan_key).
+    process.env.LEMONSQUEEZY_VARIANT_TEACHER_PRO_MONTHLY = "1875871";
+    process.env.LEMONSQUEEZY_VARIANT_FAMILY_ANNUAL = "1875897";
+    expect(planKeyForVariant("1875871")).toBe("teacher_pro_monthly");
+    expect(planKeyForVariant(1875897)).toBe("family_annual");
+    expect(planKeyForVariant("999999")).toBeNull(); // unmapped → webhook alerts, never guesses
+    expect(planKeyForVariant(null)).toBeNull();
   });
 });
 
