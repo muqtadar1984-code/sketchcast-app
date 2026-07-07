@@ -5,6 +5,10 @@ import CoachRecap from "./coach-recap";
 
 type Msg = { role: "student" | "coach"; content: string };
 
+// Phase 2 "Draw this" — separate client flag so it stays dark until migration
+// 0028 + the sketch worker are live (the /api/tutor/sketch route is authoritative).
+const SKETCH_ON = process.env.NEXT_PUBLIC_FEATURE_AI_TUTOR_SKETCH === "true";
+
 // "Ask Coach" — the Pro+ AI tutor surface. Opens on an assigned lesson, greets
 // the student (personalised to their weak spots), then streams grounded answers
 // from /api/tutor. Optional read-aloud uses the free browser voice by default and
@@ -227,14 +231,16 @@ export default function AskCoach({
             <div className="text-xs text-[#98A0A9] truncate">{chapterLabel}</div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => void requestSketch()}
-              disabled={sketch.status === "pending" || busy || ready === false}
-              className="text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-40"
-              title="Ask the coach to draw a quick explainer"
-            >
-              {sketch.status === "pending" ? "✏️ Sketching…" : "✏️ Draw this"}
-            </button>
+            {SKETCH_ON && (
+              <button
+                onClick={() => void requestSketch()}
+                disabled={sketch.status === "pending" || busy || ready === false}
+                className="text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-40"
+                title="Ask the coach to draw a quick explainer"
+              >
+                {sketch.status === "pending" ? "✏️ Sketching…" : "✏️ Draw this"}
+              </button>
+            )}
             <button
               onClick={() => setReadAloud((v) => !v)}
               className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}

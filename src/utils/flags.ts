@@ -77,3 +77,15 @@ export function aiTutorEnabled(): boolean {
 export function aiTutorRequireProPlus(): boolean {
   return process.env.FEATURE_AI_TUTOR_REQUIRE_PROPLUS === "true";
 }
+
+/**
+ * AI Tutor Phase 2 — the "Draw this" whiteboard sketch. Kept on its OWN flag
+ * (separate from FEATURE_AI_TUTOR, which is already live) so the "Draw this"
+ * button stays dark until migration 0028 is applied AND the sketch-rendering
+ * worker is deployed — otherwise the button would 500. The client "Draw this"
+ * surface additionally reads NEXT_PUBLIC_FEATURE_AI_TUTOR_SKETCH; this server
+ * check gates the /api/tutor/sketch route and is authoritative.
+ */
+export function aiTutorSketchEnabled(): boolean {
+  return process.env.FEATURE_AI_TUTOR_SKETCH === "true";
+}

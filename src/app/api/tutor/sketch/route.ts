@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { aiTutorEnabled, aiTutorRequireProPlus } from "@/utils/flags";
+import { aiTutorEnabled, aiTutorRequireProPlus, aiTutorSketchEnabled } from "@/utils/flags";
 import { TUTOR_MODELS } from "@/utils/tutor/models";
 import { resolveTutorContext, loadGrounding, tutorEntitled, logMessage, anthropic } from "@/utils/tutor/service";
 import { buildSketchPrompt, parseSketchSpec, canonicalSpecHash, SKETCH_MONTHLY_CAP } from "@/utils/tutor/sketch";
@@ -18,7 +18,7 @@ const SKETCH_VOICE = "edge-aria";
 // Rendering is async (it lives in the batch worker), so the panel enqueues then
 // polls. Identical specs replay from the shared cache for $0.
 export async function POST(request: Request) {
-  if (!aiTutorEnabled()) return NextResponse.json({ error: "Not available." }, { status: 404 });
+  if (!aiTutorEnabled() || !aiTutorSketchEnabled()) return NextResponse.json({ error: "Not available." }, { status: 404 });
 
   const supabase = await createClient();
   const {
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  if (!aiTutorEnabled()) return NextResponse.json({ error: "Not available." }, { status: 404 });
+  if (!aiTutorEnabled() || !aiTutorSketchEnabled()) return NextResponse.json({ error: "Not available." }, { status: 404 });
 
   const supabase = await createClient();
   const {
