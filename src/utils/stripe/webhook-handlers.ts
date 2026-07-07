@@ -87,6 +87,7 @@ async function upsertEntitlement(
     {
       user_id: args.userId,
       school_id: args.schoolId,
+      provider: "stripe",
       active: args.active,
       plan_key: args.planKey,
       status: args.status,
@@ -127,6 +128,7 @@ async function syncSubscription(db: Db, sub: Stripe.Subscription): Promise<void>
     {
       user_id: who.userId,
       school_id: who.schoolId,
+      provider: "stripe",
       stripe_subscription_id: sub.id,
       plan_key: planKey,
       status: sub.status,

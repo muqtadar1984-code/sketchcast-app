@@ -7,6 +7,9 @@ import { BillingGuardError } from "./guards";
 export type BillingCaller = {
   userId: string;
   email: string | null;
+  /** true only when Supabase has confirmed this email — required before we may
+   * claim an LS purchase parked under it (a buyer can type any email at LS). */
+  emailVerified: boolean;
   role: string;
   schoolId: string | null;
   school: { billing_enabled: boolean | null } | null;
@@ -39,6 +42,7 @@ export async function resolveBillingCaller(): Promise<BillingCaller> {
   return {
     userId: user.id,
     email: user.email ?? null,
+    emailVerified: Boolean(user.email_confirmed_at),
     role: profile.role as string,
     schoolId: (profile.school_id as string | null) ?? null,
     school,
