@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { aiTutorEnabled, aiTutorRequireProPlus, aiTutorSketchEnabled } from "@/utils/flags";
-import { TUTOR_MODELS } from "@/utils/tutor/models";
+import { TUTOR_MODELS, toClaudeHistory } from "@/utils/tutor/models";
 import { resolveTutorContext, loadGrounding, tutorEntitled, logMessage, anthropic } from "@/utils/tutor/service";
 import { buildSketchPrompt, parseSketchSpec, canonicalSpecHash, SKETCH_MONTHLY_CAP } from "@/utils/tutor/sketch";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  let body: { generationId?: string; concept?: string };
+  let body: { generationId?: string; concept?: string; history?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
   }
   const generationId = String(body.generationId ?? "");
   const concept = String(body.concept ?? "").trim().slice(0, 200);
+  const history = toClaudeHistory(body.history);
   if (!generationId) return NextResponse.json({ error: "Missing lesson." }, { status: 400 });
 
   const admin = createAdminClient();
@@ -56,7 +57,9 @@ export async function POST(request: Request) {
         { type: "text", text: instructions },
         { type: "text", text: context, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: concept || "Draw the key idea of this lesson." }],
+      // Prior turns give the drawing memory of the thread — a follow-up like
+      // "can you show me how" then resolves against what was just discussed.
+      messages: [...history, { role: "user", content: concept || "Draw the key idea of this lesson." }],
     });
     const raw = resp.content.find((b) => b.type === "text");
     parsed = parseSketchSpec(raw && "text" in raw ? raw.text : "");

@@ -3,12 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import CoachRecap from "./coach-recap";
 
-type Msg = { role: "student" | "coach"; content: string };
+type Msg = { role: "student" | "coach"; content: string; videoUrl?: string };
 
-// Phase 2 "Draw this" — separate client flag so it stays dark until migration
-// 0028 + the sketch worker are live (the /api/tutor/sketch route is authoritative).
-// NB: NEXT_PUBLIC_* is inlined at BUILD time — after setting it in Vercel you must
-// trigger a fresh build (not a cache-reusing redeploy) for the button to appear.
+// Phase 2 "Draw" mode — behind its own client flag (baked at BUILD time, so a
+// fresh Vercel build is needed after enabling it).
 const SKETCH_ON = process.env.NEXT_PUBLIC_FEATURE_AI_TUTOR_SKETCH === "true";
 
 // Browser speech-to-text for the mic button (free, client-side). Not in the
@@ -29,10 +27,9 @@ function speechRecognitionCtor(): (new () => SpeechRec) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-// "Ask Coach" — the Pro+ AI tutor surface. Opens on an assigned lesson, greets
-// the student (personalised to their weak spots), then streams grounded answers
-// from /api/tutor. Optional read-aloud uses the free browser voice by default and
-// a premium clip when the server returns one. All access is fenced server-side;
+// "Ask Coach" — the AI tutor surface. Streams grounded, thread-aware answers, can
+// speak them aloud, and (in Draw mode) answers by drawing an animated whiteboard
+// clip. Access is fenced server-side (owner / assigned student / verified parent);
 // this panel only renders and streams.
 export default function AskCoach({
   generationId,
@@ -50,17 +47,16 @@ export default function AskCoach({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [readAloud, setReadAloud] = useState(true); // read answers aloud by default
+  const [drawMode, setDrawMode] = useState(SKETCH_ON); // Draw by default when enabled
   const [listening, setListening] = useState(false);
   const [micSupported, setMicSupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sketch, setSketch] = useState<{ status: "idle" | "pending" | "done" | "error"; url?: string }>({ status: "idle" });
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<SpeechRec | null>(null);
 
-  // Feature-detect the mic after mount (deferred set → no SSR/hydration mismatch
-  // and no synchronous setState in the effect body).
+  // Feature-detect the mic after mount (deferred set → no SSR/hydration mismatch).
   useEffect(() => {
     const id = setTimeout(() => setMicSupported(!!speechRecognitionCtor()), 0);
     return () => clearTimeout(id);
@@ -90,7 +86,7 @@ export default function AskCoach({
     };
   }, [generationId]);
 
-  // Autoscroll to the newest message; stop any speech when the panel closes.
+  // Autoscroll to the newest message; stop speech/polling/mic when the panel closes.
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
   }, [messages]);
@@ -103,8 +99,13 @@ export default function AskCoach({
     [],
   );
 
-  // Speak text with the free browser voice (used for the message-bound voice
-  // fallback and anything without a server clip).
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
   function speakBrowser(text: string) {
     const synth = window.speechSynthesis;
     if (!synth) return;
@@ -115,8 +116,7 @@ export default function AskCoach({
     synth.speak(u);
   }
 
-  // Mic → speech-to-text into the input box. Free, client-side; interim results
-  // stream in live, and the transcript is left in the box to edit or send.
+  // Mic → speech-to-text into the input box (free, client-side).
   function toggleMic() {
     if (listening) {
       recognitionRef.current?.stop();
@@ -148,68 +148,8 @@ export default function AskCoach({
     }
   }
 
-  function stopPolling() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }
-
-  // Sketch rendering lives in the batch worker, so we enqueue then poll for the
-  // finished clip. Identical sketches replay instantly from the shared cache.
-  function pollSketch(sketchId: string) {
-    stopPolling();
-    let ticks = 0;
-    pollRef.current = setInterval(async () => {
-      // Give up after ~2 min so a stuck render never spins forever.
-      if (++ticks > 40) {
-        setSketch({ status: "error" });
-        stopPolling();
-        return;
-      }
-      try {
-        const res = await fetch(`/api/tutor/sketch?sketchId=${encodeURIComponent(sketchId)}&generationId=${encodeURIComponent(generationId)}`);
-        const d = await res.json();
-        if (d.status === "done" && d.url) {
-          setSketch({ status: "done", url: d.url });
-          stopPolling();
-        } else if (d.status === "error") {
-          setSketch({ status: "error" });
-          stopPolling();
-        }
-      } catch {
-        /* transient — keep polling */
-      }
-    }, 3000);
-  }
-
-  async function requestSketch() {
-    if (sketch.status === "pending" || busy || ready === false) return;
-    setError(null);
-    setSketch({ status: "pending" });
-    try {
-      const res = await fetch("/api/tutor/sketch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ generationId, concept: input.trim() || undefined }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSketch({ status: "idle" });
-        setError(d?.error || "Couldn't start the sketch.");
-        return;
-      }
-      if (d.status === "done" && d.url) setSketch({ status: "done", url: d.url });
-      else if (d.status === "pending" && d.sketchId) pollSketch(d.sketchId);
-      else setSketch({ status: "idle" });
-    } catch {
-      setSketch({ status: "idle" });
-      setError("Couldn't reach the coach to draw that.");
-    }
-  }
-
-  // messageId → the server decides voice (premium clip vs "speak in the browser");
-  // `text` is what the browser path speaks locally (the reply the client already has).
+  // Read a logged coach message aloud (browser voice, or a premium clip when the
+  // server returns one). `text` is the local fallback the browser speaks.
   async function speak(messageId: string, text: string) {
     try {
       const res = await fetch("/api/tutor/voice", {
@@ -228,36 +168,45 @@ export default function AskCoach({
     }
   }
 
-  async function ask() {
-    const q = input.trim();
-    if (!q || busy) return;
-    setInput("");
-    setError(null);
-    setBusy(true);
-    setMessages((m) => [...m, { role: "student", content: q }, { role: "coach", content: "" }]);
+  // The recent thread, so the coach has memory of the conversation. A drawn turn is
+  // represented so the model knows a diagram was given for that step. The opening
+  // GREETING (a coach message before any student turn) is excluded — it isn't part
+  // of the Q&A, and including it would make every first question look "contextual"
+  // and needlessly bypass the answer cache.
+  function threadHistory(): Msg[] {
+    const firstStudent = messages.findIndex((m) => m.role === "student");
+    const thread = firstStudent === -1 ? [] : messages.slice(firstStudent);
+    return thread
+      .filter((m) => m.content || m.videoUrl)
+      .slice(-8)
+      .map((m) => ({ role: m.role, content: m.videoUrl ? "(I drew a diagram to explain that.)" : m.content }));
+  }
+
+  // Update the trailing coach placeholder in place.
+  const patchLastCoach = (patch: Partial<Msg>) =>
+    setMessages((m) => {
+      const c = [...m];
+      const i = c.length - 1;
+      if (i >= 0 && c[i].role === "coach") c[i] = { ...c[i], ...patch };
+      return c;
+    });
+
+  async function doAsk(q: string, history: Msg[]) {
     try {
       const res = await fetch("/api/tutor", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: q, generationId }),
+        body: JSON.stringify({ question: q, generationId, history }),
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error || "The coach is unavailable right now.");
       }
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
       let full = "";
       let coachId = "";
-      const setCoach = (text: string) =>
-        setMessages((m) => {
-          const c = [...m];
-          c[c.length - 1] = { role: "coach", content: text };
-          return c;
-        });
-
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -270,14 +219,13 @@ export default function AskCoach({
           for (const line of evt.split("\n")) {
             if (line.startsWith("event:")) ev = line.slice(6).trim();
             else if (line.startsWith("data:")) {
-              // Keep the chunk's own spacing: strip only the single SSE space.
               const raw = line.slice(5);
-              data += raw.startsWith(" ") ? raw.slice(1) : raw;
+              data += raw.startsWith(" ") ? raw.slice(1) : raw; // keep the chunk's own spacing
             }
           }
           if (ev === "text") {
             full += data;
-            setCoach(full);
+            patchLastCoach({ content: full });
           } else if (ev === "mid") {
             coachId = data;
           } else if (ev === "error") {
@@ -285,11 +233,81 @@ export default function AskCoach({
           }
         }
       }
-
-      if (coachId && readAloud) void speak(coachId, full);
+      if (!full) setMessages((m) => (m[m.length - 1]?.content === "" ? m.slice(0, -1) : m));
+      if (coachId && readAloud && full) void speak(coachId, full);
     } catch (e) {
       setError((e as Error).message);
       setMessages((m) => (m[m.length - 1]?.content === "" ? m.slice(0, -1) : m));
+    }
+  }
+
+  function pollSketchIntoMessage(sketchId: string): Promise<void> {
+    return new Promise((resolve) => {
+      stopPolling();
+      let ticks = 0;
+      pollRef.current = setInterval(async () => {
+        if (++ticks > 40) {
+          // ~2 min guard
+          patchLastCoach({ content: "That sketch is taking a while — try again, or turn Draw off for a quick answer." });
+          stopPolling();
+          resolve();
+          return;
+        }
+        try {
+          const res = await fetch(`/api/tutor/sketch?sketchId=${encodeURIComponent(sketchId)}&generationId=${encodeURIComponent(generationId)}`);
+          const d = await res.json();
+          if (d.status === "done" && d.url) {
+            patchLastCoach({ content: "", videoUrl: d.url });
+            stopPolling();
+            resolve();
+          } else if (d.status === "error") {
+            patchLastCoach({ content: "Couldn't draw that one — try asking in words." });
+            stopPolling();
+            resolve();
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+      }, 3000);
+    });
+  }
+
+  async function doSketch(q: string, history: Msg[]) {
+    try {
+      const res = await fetch("/api/tutor/sketch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ generationId, concept: q, history }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        patchLastCoach({ content: d?.error || "Couldn't start that sketch." });
+        return;
+      }
+      if (d.status === "done" && d.url) patchLastCoach({ content: "", videoUrl: d.url });
+      else if (d.status === "pending" && d.sketchId) await pollSketchIntoMessage(d.sketchId);
+      else patchLastCoach({ content: "Couldn't draw that — try again." });
+    } catch {
+      patchLastCoach({ content: "Couldn't reach the coach to draw that." });
+    }
+  }
+
+  async function submit() {
+    const q = input.trim();
+    if (!q || busy || ready === false) return;
+    setInput("");
+    setError(null);
+    setBusy(true);
+    const history = threadHistory();
+    const drawing = drawMode && SKETCH_ON;
+    setMessages((m) => [
+      ...m,
+      { role: "student", content: q },
+      { role: "coach", content: drawing ? "🖍️ Coach is drawing this out…" : "" },
+    ]);
+    try {
+      if (drawing) await doSketch(q, history);
+      else await doAsk(q, history);
     } finally {
       setBusy(false);
       inputRef.current?.focus();
@@ -309,12 +327,12 @@ export default function AskCoach({
           <div className="flex items-center gap-3 shrink-0">
             {SKETCH_ON && (
               <button
-                onClick={() => void requestSketch()}
-                disabled={sketch.status === "pending" || busy || ready === false}
-                className="text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-40"
-                title="Ask the coach to draw a quick explainer"
+                onClick={() => setDrawMode((v) => !v)}
+                aria-pressed={drawMode}
+                className={`text-xs font-medium ${drawMode ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}
+                title="When on, Coach answers by drawing a whiteboard clip"
               >
-                {sketch.status === "pending" ? "✏️ Sketching…" : "✏️ Draw this"}
+                {drawMode ? "✏️ Draw: on" : "✏️ Draw: off"}
               </button>
             )}
             <button
@@ -334,35 +352,24 @@ export default function AskCoach({
           {ready === null && <p className="text-sm text-[#98A0A9]">Waking the coach…</p>}
           {messages.map((m, i) => (
             <div key={i} className={m.role === "student" ? "flex justify-end" : "flex justify-start"}>
-              <div
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
-                  m.role === "student"
-                    ? "bg-[#E2F4F1] text-[#0C4E47] rounded-br-sm"
-                    : "bg-[#F4F6F3] text-[#14181F] rounded-bl-sm"
-                }`}
-              >
-                {m.content || <span className="text-[#98A0A9]">…</span>}
-              </div>
+              {m.videoUrl ? (
+                <div className="max-w-[92%] rounded-2xl rounded-bl-sm p-1.5 bg-[#F4F6F3]">
+                  <video src={m.videoUrl} controls playsInline className="rounded-xl w-full" />
+                  <p className="text-[11px] text-[#98A0A9] px-2 py-1">Here&apos;s a quick sketch.</p>
+                </div>
+              ) : (
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
+                    m.role === "student"
+                      ? "bg-[#E2F4F1] text-[#0C4E47] rounded-br-sm"
+                      : "bg-[#F4F6F3] text-[#14181F] rounded-bl-sm"
+                  }`}
+                >
+                  {m.content || <span className="text-[#98A0A9]">…</span>}
+                </div>
+              )}
             </div>
           ))}
-          {sketch.status === "pending" && (
-            <div className="flex justify-start">
-              <div className="max-w-[85%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm bg-[#F4F6F3] text-[#5B6470]">
-                🖍️ Coach is sketching this out…
-              </div>
-            </div>
-          )}
-          {sketch.status === "done" && sketch.url && (
-            <div className="flex justify-start">
-              <div className="max-w-[92%] rounded-2xl rounded-bl-sm p-1.5 bg-[#F4F6F3]">
-                <video src={sketch.url} controls playsInline className="rounded-xl w-full" />
-                <p className="text-[11px] text-[#98A0A9] px-2 py-1">Here&apos;s a quick sketch.</p>
-              </div>
-            </div>
-          )}
-          {sketch.status === "error" && (
-            <p className="text-xs text-[#B42318]">Couldn&apos;t draw that one — try asking a question instead.</p>
-          )}
           {error && <p className="text-xs text-[#B42318]">{error}</p>}
         </div>
 
@@ -372,7 +379,7 @@ export default function AskCoach({
             className="flex items-center gap-2 mt-2"
             onSubmit={(e) => {
               e.preventDefault();
-              void ask();
+              void submit();
             }}
           >
             {micSupported && (
@@ -395,14 +402,18 @@ export default function AskCoach({
               onChange={(e) => setInput(e.target.value)}
               maxLength={500}
               disabled={ready === false}
-              placeholder={listening ? "Listening…" : ready === false ? "Coach unavailable" : "Ask about this lesson…"}
+              placeholder={listening ? "Listening…" : ready === false ? "Coach unavailable" : drawMode ? "Ask Coach to draw…" : "Ask about this lesson…"}
               className="field h-9 px-3 text-sm flex-1"
             />
             <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-              {busy ? "…" : "Ask"}
+              {busy ? "…" : drawMode && SKETCH_ON ? "Draw" : "Ask"}
             </button>
           </form>
-          <p className="text-[10px] text-[#98A0A9] mt-1.5">Coach answers only from this lesson — it won&apos;t do graded work for you.</p>
+          <p className="text-[10px] text-[#98A0A9] mt-1.5">
+            {drawMode && SKETCH_ON
+              ? "Draw mode: Coach answers with a quick whiteboard clip. Turn it off for instant text."
+              : "Coach answers only from this lesson — it won't do graded work for you."}
+          </p>
         </div>
       </div>
     </div>

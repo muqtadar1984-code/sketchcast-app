@@ -9,7 +9,8 @@ import { buildSystemPrompt, type Grounding } from "./models";
 // Bump when the renderer's slide contract changes so every cached clip invalidates.
 export const SKETCH_CONTRACT_VERSION = "v1";
 // Per-account monthly cap on NEW sketch renders (cache replays don't count).
-export const SKETCH_MONTHLY_CAP = 30;
+// Higher now that "Draw mode" can make sketches the primary way the coach answers.
+export const SKETCH_MONTHLY_CAP = 200;
 
 // Mirrors the worker's SlideVisual (agent3_scripts/models.py) that the native
 // renderer consumes — so whatever the Coach returns renders with zero glue.

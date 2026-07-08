@@ -330,6 +330,7 @@ export async function* streamAnswer(
   grounding: Grounding,
   tier: TutorTier,
   studentContext = "",
+  history: { role: "user" | "assistant"; content: string }[] = [],
 ): AsyncGenerator<string> {
   const { instructions, context } = buildSystemPrompt(grounding);
   // The chapter grounding is a CACHED prefix (identical across a chapter's
@@ -343,7 +344,8 @@ export async function* streamAnswer(
     model: TUTOR_MODELS[tier],
     max_tokens: 300,
     system,
-    messages: [{ role: "user", content: question }],
+    // Prior turns give the coach memory of the thread; the new question is last.
+    messages: [...history, { role: "user", content: question }],
   });
   for await (const event of stream) {
     if (event.type === "content_block_delta" && event.delta.type === "text_delta") {

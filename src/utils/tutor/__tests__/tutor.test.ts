@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeQuestion,
   pickTier,
+  toClaudeHistory,
   buildSystemPrompt,
   shouldServeCached,
   gradeAnswers,
@@ -41,6 +42,28 @@ describe("question normalisation", () => {
   it("lower-cases, collapses whitespace, drops trailing punctuation", () => {
     expect(normalizeQuestion("  Why  do   PLANTS need Sunlight??? ")).toBe("why do plants need sunlight");
     expect(normalizeQuestion("Photosynthesis.")).toBe("photosynthesis");
+  });
+});
+
+describe("conversation history sanitising", () => {
+  it("maps student→user, coach→assistant, drops empties, caps count", () => {
+    const raw = [
+      { role: "student", content: "how does a polar bear hunt?" },
+      { role: "coach", content: "It stalks seals at breathing holes." },
+      { role: "coach", content: "" }, // dropped
+      { role: "student", content: "  show me how  " },
+    ];
+    expect(toClaudeHistory(raw)).toEqual([
+      { role: "user", content: "how does a polar bear hunt?" },
+      { role: "assistant", content: "It stalks seals at breathing holes." },
+      { role: "user", content: "show me how" },
+    ]);
+    expect(toClaudeHistory(raw, 1)).toHaveLength(1); // keeps the most recent
+  });
+  it("returns [] for non-arrays / junk", () => {
+    expect(toClaudeHistory(undefined)).toEqual([]);
+    expect(toClaudeHistory("nope")).toEqual([]);
+    expect(toClaudeHistory([{ role: "system", content: "x" }, { content: "y" }])).toEqual([]);
   });
 });
 

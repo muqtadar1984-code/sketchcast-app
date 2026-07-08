@@ -43,6 +43,27 @@ export function pickTier(question: string): TutorTier {
   return hard || long ? "strong" : "cheap";
 }
 
+// ── conversation memory ───────────────────────────────────────────────────────
+// The coach was stateless — each request carried only the current question, so a
+// follow-up ("can you show me how") arrived with no memory of the thread. The
+// client now sends recent turns; this sanitises them into Claude's message format.
+export type ChatTurn = { role: "student" | "coach"; content: string };
+
+/** Turn the client's recent chat turns into Claude user/assistant messages
+ * (bounded in count + length). Pure. */
+export function toClaudeHistory(raw: unknown, maxTurns = 10, maxChars = 600): { role: "user" | "assistant"; content: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { role: "user" | "assistant"; content: string }[] = [];
+  for (const t of raw) {
+    const role = (t as ChatTurn)?.role;
+    const content = String((t as ChatTurn)?.content ?? "").trim().slice(0, maxChars);
+    if (!content) continue;
+    if (role === "student") out.push({ role: "user", content });
+    else if (role === "coach") out.push({ role: "assistant", content });
+  }
+  return out.slice(-maxTurns);
+}
+
 /** Build the closed-book grounding + child-safety system prompt. The chapter
  * CONTEXT is returned separately so the caller can mark it a cached prompt prefix
  * (it's identical across every question in a chapter → paid for once). */

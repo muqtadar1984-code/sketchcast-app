@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { aiTutorEnabled, aiTutorRequireProPlus } from "@/utils/flags";
-import { normalizeQuestion, pickTier, shouldServeCached, buildGreeting, buildStudentContext, classifyMove } from "@/utils/tutor/models";
+import { normalizeQuestion, pickTier, shouldServeCached, buildGreeting, buildStudentContext, classifyMove, toClaudeHistory } from "@/utils/tutor/models";
 import {
   resolveTutorContext,
   loadGrounding,
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  let body: { question?: string; generationId?: string };
+  let body: { question?: string; generationId?: string; history?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -47,6 +47,8 @@ export async function POST(request: Request) {
   }
   const question = String(body.question ?? "").trim();
   const generationId = String(body.generationId ?? "");
+  const history = toClaudeHistory(body.history);
+  const contextual = history.length > 0; // a follow-up that depends on the thread
   if (!question || !generationId) {
     return NextResponse.json({ error: "Ask a question about your lesson." }, { status: 400 });
   }
@@ -79,26 +81,31 @@ export async function POST(request: Request) {
       try {
         await logMessage(admin, { ...base, role: "student", content: question });
 
-        // Cache-first — a near-exact or verified match replays at $0.
-        const cached = await findCached(admin, ctx.bookId, ctx.chapterNum, qNorm);
-        if (cached && shouldServeCached(cached.row, cached.nearExact)) {
-          send("text", cached.row.answer_text);
-          // Log the coach turn BEFORE closing so we can hand the client its id —
-          // the voice route will only speak a real, logged coach message.
-          const cid = await logMessage(admin, { ...base, role: "coach", content: cached.row.answer_text, tutorMove: classifyMove(cached.row.answer_text) });
-          if (cid) send("mid", cid);
-          send("done", "cache");
-          controller.close();
-          await bumpCache(admin, cached.row.id);
-          await recordMastery(admin, { ...base, source: "tutor", signal: "engaged", weight: 0, detail: question });
-          return;
+        // Cache-first — but ONLY for a standalone question. A contextual follow-up
+        // ("can you show me how") depends on the thread, so the shared cache (keyed
+        // on the bare question) would serve the wrong answer — always generate fresh.
+        if (!contextual) {
+          const cached = await findCached(admin, ctx.bookId, ctx.chapterNum, qNorm);
+          if (cached && shouldServeCached(cached.row, cached.nearExact)) {
+            send("text", cached.row.answer_text);
+            // Log the coach turn BEFORE closing so we can hand the client its id —
+            // the voice route will only speak a real, logged coach message.
+            const cid = await logMessage(admin, { ...base, role: "coach", content: cached.row.answer_text, tutorMove: classifyMove(cached.row.answer_text) });
+            if (cid) send("mid", cid);
+            send("done", "cache");
+            controller.close();
+            await bumpCache(admin, cached.row.id);
+            await recordMastery(admin, { ...base, source: "tutor", signal: "engaged", weight: 0, detail: question });
+            return;
+          }
         }
 
-        // Miss → grounded, tiered generation, gently personalised toward the
-        // child's weak spots (built only on a miss, so cache hits stay cheap).
+        // Miss (or a contextual turn) → grounded, tiered generation with the thread
+        // in context. Follow-ups lean on the strong model for the extra reasoning.
         const sm = await buildStudentModel(admin, user.id, ctx.bookId, ctx.chapterNum, grounding.chapterTitle);
+        const tier = contextual ? "strong" : pickTier(question);
         let full = "";
-        for await (const chunk of streamAnswer(question, grounding, pickTier(question), buildStudentContext(sm))) {
+        for await (const chunk of streamAnswer(question, grounding, tier, buildStudentContext(sm), history)) {
           full += chunk;
           send("text", chunk);
         }
@@ -107,7 +114,9 @@ export async function POST(request: Request) {
         const answer = full.trim();
         let cid: string | null = null;
         if (answer) {
-          await saveCache(admin, ctx.bookId, ctx.chapterNum, question, qNorm, answer);
+          // Only bank a STANDALONE answer in the shared cache — a contextual reply
+          // is thread-specific and would mislead other students.
+          if (!contextual) await saveCache(admin, ctx.bookId, ctx.chapterNum, question, qNorm, answer);
           cid = await logMessage(admin, { ...base, role: "coach", content: answer, tutorMove: classifyMove(answer) });
         }
         if (cid) send("mid", cid);
