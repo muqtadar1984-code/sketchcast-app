@@ -5,6 +5,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled, aiTutorEnabled } from "@/utils/flags";
 import AddChild from "./add-child";
 import CoachRecap from "../coach-recap";
+import AskCoachButton from "../ask-coach-button";
 
 // The parent home: one section per linked child — their school assignments
 // (read-only: completion, due dates, scores) and the test papers this parent
@@ -166,8 +167,9 @@ export default async function ChildrenPage() {
                     </span>
                   </div>
                   {coachOn && it.kind === "presentation" && (
-                    <div className="mt-1.5">
+                    <div className="mt-1.5 flex items-center gap-3 text-xs">
                       <CoachRecap studentId={l.child_id} generationId={it.genId} />
+                      <AskCoachButton generationId={it.genId} chapterLabel={it.label} className="font-medium text-[#0C8175] hover:underline" />
                     </div>
                   )}
                 </div>

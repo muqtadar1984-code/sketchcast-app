@@ -29,32 +29,57 @@ export function anthropic(): Anthropic {
 
 export type TutorContext = { bookId: string; chapterNum: number };
 
-/** Access + chapter resolution. A student may be tutored on a generation only if
- * it was ASSIGNED to them (a student_progress row exists) — the same signal the
- * app uses to give students their lessons. Returns null (→ 403) otherwise. */
+/** Access + chapter resolution. The coach on a lesson is available to anyone who
+ * legitimately has that lesson in front of them: (a) the teacher/creator who OWNS
+ * the generation (previewing their own lesson), (b) a STUDENT the lesson is
+ * assigned to, or (c) a VERIFIED PARENT of such a student. Returns null (→ 403)
+ * otherwise. Personalisation (weak spots, mastery, recap) only applies for the
+ * assigned student; owners/parents get a generic chapter coach. */
 export async function resolveTutorContext(
   admin: SupabaseClient,
-  studentId: string,
+  userId: string,
   generationId: string,
 ): Promise<TutorContext | null> {
-  const { data: prog } = await admin
-    .from("student_progress")
-    .select("id")
-    .eq("generation_id", generationId)
-    .eq("student_id", studentId)
-    .maybeSingle();
-  if (!prog) return null;
-
   const { data: gen } = await admin
     .from("generations")
-    .select("book_id, chapter_ref")
+    .select("book_id, chapter_ref, owner_id")
     .eq("id", generationId)
     .maybeSingle();
   if (!gen?.book_id) return null;
 
   const chapterNum = parseInt(String(gen.chapter_ref ?? ""), 10);
   if (Number.isNaN(chapterNum)) return null;
-  return { bookId: gen.book_id as string, chapterNum };
+  const ctx: TutorContext = { bookId: gen.book_id as string, chapterNum };
+
+  // (a) the owner — teacher/creator previewing their own lesson.
+  if (gen.owner_id === userId) return ctx;
+
+  // (b) a student the lesson is ASSIGNED to.
+  const { data: prog } = await admin
+    .from("student_progress")
+    .select("id")
+    .eq("generation_id", generationId)
+    .eq("student_id", userId)
+    .maybeSingle();
+  if (prog) return ctx;
+
+  // (c) a VERIFIED parent of a student the lesson is assigned to.
+  const { data: links } = await admin
+    .from("parent_links")
+    .select("child_id")
+    .eq("parent_id", userId)
+    .not("verified_at", "is", null);
+  const childIds = (links ?? []).map((l) => l.child_id as string);
+  if (childIds.length) {
+    const { data: childProg } = await admin
+      .from("student_progress")
+      .select("id")
+      .eq("generation_id", generationId)
+      .in("student_id", childIds)
+      .maybeSingle();
+    if (childProg) return ctx;
+  }
+  return null;
 }
 
 /** Does the lesson OWNER's plan grant the AI Tutor? Pro+ (teacher_pro_plus /

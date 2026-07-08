@@ -11,6 +11,24 @@ type Msg = { role: "student" | "coach"; content: string };
 // trigger a fresh build (not a cache-reusing redeploy) for the button to appear.
 const SKETCH_ON = process.env.NEXT_PUBLIC_FEATURE_AI_TUTOR_SKETCH === "true";
 
+// Browser speech-to-text for the mic button (free, client-side). Not in the
+// standard DOM lib types, so keep a minimal shape and feature-detect it.
+type SpeechRec = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+function speechRecognitionCtor(): (new () => SpeechRec) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 // "Ask Coach" — the Pro+ AI tutor surface. Opens on an assigned lesson, greets
 // the student (personalised to their weak spots), then streams grounded answers
 // from /api/tutor. Optional read-aloud uses the free browser voice by default and
@@ -23,7 +41,7 @@ export default function AskCoach({
   onClose,
 }: {
   generationId: string;
-  studentId: string;
+  studentId?: string; // present only for the assigned student → shows their recap
   chapterLabel: string;
   onClose: () => void;
 }) {
@@ -31,12 +49,22 @@ export default function AskCoach({
   const [ready, setReady] = useState<boolean | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [readAloud, setReadAloud] = useState(false);
+  const [readAloud, setReadAloud] = useState(true); // read answers aloud by default
+  const [listening, setListening] = useState(false);
+  const [micSupported, setMicSupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sketch, setSketch] = useState<{ status: "idle" | "pending" | "done" | "error"; url?: string }>({ status: "idle" });
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recognitionRef = useRef<SpeechRec | null>(null);
+
+  // Feature-detect the mic after mount (deferred set → no SSR/hydration mismatch
+  // and no synchronous setState in the effect body).
+  useEffect(() => {
+    const id = setTimeout(() => setMicSupported(!!speechRecognitionCtor()), 0);
+    return () => clearTimeout(id);
+  }, []);
 
   // Load the panel-open greeting + readiness.
   useEffect(() => {
@@ -70,9 +98,55 @@ export default function AskCoach({
     () => () => {
       window.speechSynthesis?.cancel();
       if (pollRef.current) clearInterval(pollRef.current);
+      recognitionRef.current?.stop();
     },
     [],
   );
+
+  // Speak text with the free browser voice (used for the message-bound voice
+  // fallback and anything without a server clip).
+  function speakBrowser(text: string) {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1;
+    u.pitch = 1.05; // a touch warmer
+    synth.cancel();
+    synth.speak(u);
+  }
+
+  // Mic → speech-to-text into the input box. Free, client-side; interim results
+  // stream in live, and the transcript is left in the box to edit or send.
+  function toggleMic() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const Ctor = speechRecognitionCtor();
+    if (!Ctor) return;
+    try {
+      const rec = new Ctor();
+      rec.lang = "en-US";
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onresult = (e) => {
+        let t = "";
+        for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+        setInput(t);
+      };
+      rec.onerror = () => setListening(false);
+      rec.onend = () => {
+        setListening(false);
+        recognitionRef.current = null;
+        inputRef.current?.focus();
+      };
+      recognitionRef.current = rec;
+      setListening(true);
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  }
 
   function stopPolling() {
     if (pollRef.current) {
@@ -148,14 +222,7 @@ export default function AskCoach({
         void new Audio(v.audioUrl).play().catch(() => {});
         return;
       }
-      const synth = window.speechSynthesis;
-      if (synth) {
-        const u = new SpeechSynthesisUtterance(text);
-        u.rate = 1;
-        u.pitch = 1.05; // a touch warmer
-        synth.cancel();
-        synth.speak(u);
-      }
+      speakBrowser(text);
     } catch {
       /* voice is best-effort */
     }
@@ -300,7 +367,7 @@ export default function AskCoach({
         </div>
 
         <div className="px-4 py-3 border-t border-[#EEF0EC]">
-          <CoachRecap studentId={studentId} generationId={generationId} />
+          {studentId && <CoachRecap studentId={studentId} generationId={generationId} />}
           <form
             className="flex items-center gap-2 mt-2"
             onSubmit={(e) => {
@@ -308,14 +375,27 @@ export default function AskCoach({
               void ask();
             }}
           >
+            {micSupported && (
+              <button
+                type="button"
+                onClick={toggleMic}
+                disabled={ready === false}
+                aria-pressed={listening}
+                title={listening ? "Stop listening" : "Speak your question"}
+                className={`h-9 w-9 rounded-lg border text-base shrink-0 disabled:opacity-40 ${
+                  listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
+                }`}
+              >
+                🎤
+              </button>
+            )}
             <input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               maxLength={500}
               disabled={ready === false}
-              placeholder={ready === false ? "Coach unavailable" : "Ask about this lesson…"
-              }
+              placeholder={listening ? "Listening…" : ready === false ? "Coach unavailable" : "Ask about this lesson…"}
               className="field h-9 px-3 text-sm flex-1"
             />
             <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">

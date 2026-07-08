@@ -5,6 +5,7 @@ import RegenerateButton from "./regenerate-button";
 import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
 import ReportContentIssue from "./report-content-issue";
+import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
 
 export type CellLesson = {
@@ -119,6 +120,13 @@ export default function ContentCell({
             ⬇ Download
           </a>
         )
+      )}
+      {kind === "presentation" && (
+        <AskCoachButton
+          generationId={lesson.id}
+          chapterLabel={`Chapter ${chapterNum + 1}`}
+          className="font-medium text-[#0C8175] hover:underline"
+        />
       )}
       <RegenerateButton
         bookId={bookId}
