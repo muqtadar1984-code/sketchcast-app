@@ -7,6 +7,8 @@ type Msg = { role: "student" | "coach"; content: string };
 
 // Phase 2 "Draw this" — separate client flag so it stays dark until migration
 // 0028 + the sketch worker are live (the /api/tutor/sketch route is authoritative).
+// NB: NEXT_PUBLIC_* is inlined at BUILD time — after setting it in Vercel you must
+// trigger a fresh build (not a cache-reusing redeploy) for the button to appear.
 const SKETCH_ON = process.env.NEXT_PUBLIC_FEATURE_AI_TUTOR_SKETCH === "true";
 
 // "Ask Coach" — the Pro+ AI tutor surface. Opens on an assigned lesson, greets
