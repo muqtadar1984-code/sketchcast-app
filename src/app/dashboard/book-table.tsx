@@ -135,6 +135,20 @@ export default function BookTable({
 
             {isOpen && ready && (
               <div className="px-5 pb-4 bg-[#F5F6F3]">
+                {/* Scanned PDFs have no text layer, so chapter detection falls back
+                    to image recognition — best-effort and often wrong. Warn up front,
+                    before the teacher generates against a bad chapter list. */}
+                {b.health?.facts?.has_text_layer === false && (
+                  <div className="mt-2 flex items-start gap-2 rounded-lg bg-[#FFF1D6] text-[#9A6400] px-3 py-2 text-xs">
+                    <span aria-hidden>⚠️</span>
+                    <span>
+                      This looks like a <strong>scanned PDF</strong> (no text layer). Chapters are detected by image
+                      recognition, so the list below — and any generated content — may be unreliable. For best
+                      results, upload a text-based (digitally exported) PDF, and use <strong>Report an issue</strong> on
+                      anything that comes out wrong.
+                    </span>
+                  </div>
+                )}
                 {b.pendingChapters.length > 0 && !beta && (
                   <div className="flex justify-end py-2">
                     <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} />

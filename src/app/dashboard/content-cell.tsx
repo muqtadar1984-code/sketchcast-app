@@ -74,9 +74,12 @@ export default function ContentCell({
 
   if (lesson.status === "error") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs">
+      <span className="inline-flex items-center gap-2 text-xs">
         <span className="text-[#B42318]">failed</span>
         {genControl("retry")}
+        {/* A failed/wrong generation is exactly what you'd want to flag — the
+            report button was previously only on completed lessons. */}
+        <ReportContentIssue generationId={lesson.id} />
       </span>
     );
   }
