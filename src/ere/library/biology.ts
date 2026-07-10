@@ -4,7 +4,15 @@
 
 import type { KnowledgeObject } from "../ko/types";
 
-/** bio.heart — chambers + valves as addressable parts; flow as stepped states. */
+/** bio.heart — a detailed four-chamber heart: muscle body, blue (right,
+ * deoxygenated) and red (left, oxygenated) chambers, valve leaflets, and the
+ * great vessels (vena cava, pulmonary artery, aorta, pulmonary veins). The
+ * flow.* states + advance_flow step are preserved (part ids unchanged). */
+const HEART_PARTS = [
+  "outline", "vena_cava", "pulmonary_artery", "aorta", "pulmonary_veins",
+  "right_atrium", "left_atrium", "right_ventricle", "left_ventricle",
+  "septum", "tricuspid", "mitral",
+];
 export const HEART: KnowledgeObject = {
   id: "bio.heart",
   name: "Heart",
@@ -13,38 +21,44 @@ export const HEART: KnowledgeObject = {
   difficulty: 3,
   tier: 1,
   parts: [
-    // Renderer-agnostic heart silhouette as logical points (no SVG-path syntax).
-    { id: "outline", name: "Heart outline", geometry: { kind: "curve", points: [[50, 30], [40, 20], [26, 16], [14, 26], [14, 40], [26, 58], [50, 86], [74, 58], [86, 40], [86, 26], [74, 16], [60, 20], [50, 30]] }, style: { stroke: "#B3401F", strokeWidth: 0.8 } },
-    { id: "septum", name: "Septum", geometry: { kind: "line", from: [50, 24], to: [50, 84] }, style: { dashed: true, strokeWidth: 0.5 } },
-    { id: "right_atrium", name: "Right atrium", geometry: { kind: "ellipse", c: [34, 40], rx: 12, ry: 9 }, anchors: [{ id: "c", at: [34, 40] }] },
-    { id: "right_ventricle", name: "Right ventricle", geometry: { kind: "ellipse", c: [36, 64], rx: 13, ry: 12 }, anchors: [{ id: "c", at: [36, 64] }] },
-    { id: "left_atrium", name: "Left atrium", geometry: { kind: "ellipse", c: [66, 40], rx: 12, ry: 9 }, anchors: [{ id: "c", at: [66, 40] }] },
-    { id: "left_ventricle", name: "Left ventricle", geometry: { kind: "ellipse", c: [64, 64], rx: 13, ry: 12 }, anchors: [{ id: "c", at: [64, 64] }] },
-    { id: "tricuspid", name: "Tricuspid valve", geometry: { kind: "line", from: [28, 52], to: [44, 52] }, hiddenByDefault: true },
-    { id: "mitral", name: "Mitral valve", geometry: { kind: "line", from: [56, 52], to: [72, 52] }, hiddenByDefault: true },
+    // Muscle body (organic silhouette, filled).
+    { id: "outline", name: "Heart muscle", geometry: { kind: "curve", points: [[50, 12], [63, 13], [73, 20], [79, 32], [80, 47], [75, 64], [64, 81], [51, 90], [39, 85], [30, 73], [25, 58], [25, 42], [30, 27], [40, 16], [50, 12]] }, style: { fill: "#EC9A88", stroke: "#B3401F", strokeWidth: 1.1 }, anchors: [{ id: "c", at: [52, 50] }] },
+    // Great vessels (drawn over the muscle top edge).
+    { id: "vena_cava", name: "Vena cava", geometry: { kind: "rect", at: [32, 4], w: 5, h: 24, rounded: 2 }, style: { fill: "#AECBEF", stroke: "#2B6CB0" }, anchors: [{ id: "c", at: [34.5, 8] }] },
+    { id: "pulmonary_artery", name: "Pulmonary artery", geometry: { kind: "rect", at: [45, 3], w: 5, h: 20, rounded: 2 }, style: { fill: "#AECBEF", stroke: "#2B6CB0" }, anchors: [{ id: "c", at: [47.5, 7] }] },
+    { id: "aorta", name: "Aorta", geometry: { kind: "path", d: "M60 24 Q60 6 49 6 Q42 6 42 13" }, style: { stroke: "#C53030", strokeWidth: 2.6, fill: "none" }, anchors: [{ id: "c", at: [56, 10] }] },
+    { id: "pulmonary_veins", name: "Pulmonary veins", geometry: { kind: "rect", at: [64, 5], w: 5, h: 22, rounded: 2 }, style: { fill: "#F6B8B8", stroke: "#C53030" }, anchors: [{ id: "c", at: [66.5, 9] }] },
+    // Chambers: right = blue (deoxygenated), left = red (oxygenated).
+    { id: "right_atrium", name: "Right atrium", geometry: { kind: "ellipse", c: [38, 37], rx: 10, ry: 8 }, style: { fill: "#C9DEF7", stroke: "#2B6CB0" }, anchors: [{ id: "c", at: [38, 37] }] },
+    { id: "left_atrium", name: "Left atrium", geometry: { kind: "ellipse", c: [63, 37], rx: 10, ry: 8 }, style: { fill: "#F8CBCB", stroke: "#C53030" }, anchors: [{ id: "c", at: [63, 37] }] },
+    { id: "right_ventricle", name: "Right ventricle", geometry: { kind: "ellipse", c: [39, 63], rx: 12, ry: 15 }, style: { fill: "#C9DEF7", stroke: "#2B6CB0" }, anchors: [{ id: "c", at: [39, 63] }] },
+    { id: "left_ventricle", name: "Left ventricle", geometry: { kind: "ellipse", c: [62, 63], rx: 12, ry: 15 }, style: { fill: "#F8CBCB", stroke: "#C53030", strokeWidth: 1.3 }, anchors: [{ id: "c", at: [62, 63] }] },
+    { id: "septum", name: "Septum", geometry: { kind: "line", from: [50, 26], to: [50, 84] }, style: { stroke: "#B3401F", strokeWidth: 1.1 } },
+    // Valve leaflets (zig-zag between atrium and ventricle each side).
+    { id: "tricuspid", name: "Tricuspid valve", geometry: { kind: "polyline", points: [[30, 47], [34, 50], [38, 47], [42, 50], [46, 47]] }, style: { stroke: "#7A2E1F", strokeWidth: 0.7 } },
+    { id: "mitral", name: "Mitral valve", geometry: { kind: "polyline", points: [[54, 47], [58, 50], [62, 47], [66, 50], [70, 47]] }, style: { stroke: "#7A2E1F", strokeWidth: 0.7 } },
   ],
   states: [
     {
       id: "flow.deox_enters_ra",
       description: "Deoxygenated blood enters the right atrium",
-      partStyles: { right_atrium: { fill: "#CFE3FF", stroke: "#2B6CB0" } },
+      partStyles: { right_atrium: { fill: "#8FBBEE", stroke: "#2B6CB0" } },
       labels: { right_atrium: "O₂-poor blood in" },
     },
     {
       id: "flow.ra_to_rv",
       description: "Blood moves right atrium → right ventricle",
-      partStyles: { right_ventricle: { fill: "#CFE3FF", stroke: "#2B6CB0" } },
-      visibleParts: ["outline", "septum", "right_atrium", "right_ventricle", "left_atrium", "left_ventricle", "tricuspid"],
+      partStyles: { right_ventricle: { fill: "#8FBBEE", stroke: "#2B6CB0" } },
       labels: { right_ventricle: "to lungs →" },
     },
     {
       id: "flow.oxygenated_return",
       description: "Oxygenated blood returns to the left side",
-      partStyles: { left_atrium: { fill: "#FFD6D6", stroke: "#C53030" }, left_ventricle: { fill: "#FFD6D6", stroke: "#C53030" } },
+      partStyles: { left_atrium: { fill: "#F19E9E", stroke: "#C53030" }, left_ventricle: { fill: "#F19E9E", stroke: "#C53030" } },
       labels: { left_ventricle: "O₂-rich → body" },
     },
     { id: "diastole", description: "Chambers relax and fill" },
-    { id: "systole", description: "Chambers contract and pump", partStyles: { left_ventricle: { fill: "#FFE0E0" }, right_ventricle: { fill: "#E0ECFF" } } },
+    { id: "systole", description: "Chambers contract and pump", partStyles: { left_ventricle: { fill: "#F19E9E" }, right_ventricle: { fill: "#8FBBEE" } } },
   ],
   transitions: [
     { from: "*", to: "flow.deox_enters_ra", effect: "flow" },
@@ -66,9 +80,10 @@ export const HEART: KnowledgeObject = {
       },
     },
   ],
-  animation: { drawOrder: ["outline", "septum", "right_atrium", "left_atrium", "right_ventricle", "left_ventricle", "tricuspid", "mitral"], strokeSecPerPart: 0.4 },
+  animation: { drawOrder: [...HEART_PARTS], strokeSecPerPart: 0.22 },
   renderHints: { props: ["flowStage"] },
   provenance: { source: "curated" },
+  vqs: { approved: true, approvedBy: "arieb", golden: "bio.heart.svg" },
 };
 
 /** bio.animal_cell — a detailed, textbook-style cell: an organic membrane, a

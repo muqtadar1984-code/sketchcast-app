@@ -42,11 +42,19 @@ export const CIRCUIT: KnowledgeObject = {
   difficulty: 3,
   tier: 1,
   parts: [
-    { id: "wire", name: "Wire loop", geometry: { kind: "rect", at: [18, 24], w: 64, h: 52, rounded: 2 }, style: { fill: "none", strokeWidth: 0.7 } },
-    { id: "battery", name: "Battery", geometry: { kind: "line", from: [18, 44], to: [18, 56] }, style: { strokeWidth: 1.4 }, anchors: [{ id: "c", at: [18, 50] }] },
-    { id: "battery_short", name: "Battery terminal", geometry: { kind: "line", from: [15, 46], to: [15, 54] } },
-    { id: "bulb", name: "Bulb", geometry: { kind: "circle", c: [50, 24], r: 6 }, style: { fill: "#FFFBEA" }, anchors: [{ id: "c", at: [50, 24] }] },
-    { id: "switch", name: "Switch", geometry: { kind: "line", from: [76, 40], to: [82, 32] }, anchors: [{ id: "c", at: [80, 40] }] },
+    { id: "wire", name: "Wire loop", geometry: { kind: "rect", at: [18, 24], w: 64, h: 52, rounded: 2 }, style: { fill: "none", stroke: "#2A3340", strokeWidth: 0.8 } },
+    // Two-cell battery on the left wire: alternating long-thin (+) / short-thick (−) plates.
+    { id: "battery", name: "Battery", geometry: { kind: "line", from: [11, 44], to: [25, 44] }, style: { stroke: "#2A3340", strokeWidth: 0.6 }, anchors: [{ id: "c", at: [18, 50] }] },
+    { id: "battery_short", name: "Battery terminal", geometry: { kind: "line", from: [15, 47.5], to: [21, 47.5] }, style: { stroke: "#2A3340", strokeWidth: 1.8 } },
+    { id: "battery2", name: "Battery cell", geometry: { kind: "line", from: [11, 52], to: [25, 52] }, style: { stroke: "#2A3340", strokeWidth: 0.6 } },
+    { id: "battery2_short", name: "Battery terminal", geometry: { kind: "line", from: [15, 55.5], to: [21, 55.5] }, style: { stroke: "#2A3340", strokeWidth: 1.8 } },
+    // Filament lamp: glass circle + an × filament.
+    { id: "bulb", name: "Bulb", geometry: { kind: "circle", c: [50, 24], r: 6.5 }, style: { fill: "#FFF6D6", stroke: "#C77F2A", strokeWidth: 0.9 }, anchors: [{ id: "c", at: [50, 24] }] },
+    { id: "filament", name: "Filament", geometry: { kind: "path", d: "M45.6 19.6 L54.4 28.4 M54.4 19.6 L45.6 28.4" }, style: { stroke: "#C77F2A", strokeWidth: 0.8, fill: "none" } },
+    // Switch: pivot + lever raised to a gap above the far contact (open by default).
+    { id: "switch_contact", name: "Contact", geometry: { kind: "point", at: [82, 44] }, style: { fill: "#2A3340" } },
+    { id: "switch_pivot", name: "Pivot", geometry: { kind: "point", at: [82, 58] }, style: { fill: "#2A3340" } },
+    { id: "switch", name: "Switch", geometry: { kind: "line", from: [82, 58], to: [76, 46] }, style: { stroke: "#2A3340", strokeWidth: 1 }, anchors: [{ id: "c", at: [80, 50] }] },
   ],
   states: [
     { id: "open", description: "Switch open — no current, bulb off", partStyles: { switch: { stroke: "#B3401F" }, bulb: { fill: "#FFFFFF" } } },
@@ -63,9 +71,10 @@ export const CIRCUIT: KnowledgeObject = {
       },
     },
   ],
-  animation: { drawOrder: ["wire", "battery", "battery_short", "bulb", "switch"] },
+  animation: { drawOrder: ["wire", "battery", "battery_short", "battery2", "battery2_short", "bulb", "filament", "switch_contact", "switch_pivot", "switch"] },
   renderHints: { props: ["closed"] },
   provenance: { source: "curated" },
+  vqs: { approved: true, approvedBy: "arieb", golden: "phys.circuit.svg" },
 };
 
 export const PHYSICS: KnowledgeObject[] = [BLOCK, CIRCUIT];
