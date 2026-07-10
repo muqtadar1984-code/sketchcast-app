@@ -50,6 +50,11 @@ function LoginForm() {
         onChange={(e) => setPassword(e.target.value)}
         className="field w-full h-11 px-3 text-[#14181F]"
       />
+      <div className="flex justify-end">
+        <Link href="/login/forgot" className="text-xs text-[#0C8175] font-medium hover:underline">
+          Forgot password?
+        </Link>
+      </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={loading} className="btn-primary w-full h-11">
         {loading ? "Signing in…" : "Sign in"}

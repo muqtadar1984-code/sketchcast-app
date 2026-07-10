@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import ClassProgress from "./class-progress";
+import ResetPasswordButton from "./reset-password-button";
 
-export type RosterStudent = { full_name: string | null; username: string | null; parent_email: string | null };
+export type RosterStudent = { id: string; full_name: string | null; username: string | null; parent_email: string | null };
 export type ClassRoster = {
   id: string;
   name: string;
@@ -152,12 +153,15 @@ export default function ClassesCard({
                 <div className="px-4 pb-4 border-t border-[#EEF0EC] bg-[#F5F6F3]">
                   {c.students.length > 0 && (
                     <ul className="mt-3 mb-4 divide-y divide-[#EEF0EC]">
-                      {c.students.map((s, i) => (
-                        <li key={i} className="py-1.5 flex items-center justify-between gap-3 text-sm">
+                      {c.students.map((s) => (
+                        <li key={s.id} className="py-1.5 flex items-center justify-between gap-3 text-sm">
                           <span className="truncate">{s.full_name || s.username}</span>
-                          <span className="text-xs text-[#5B6470] shrink-0">
-                            ID: <span className="text-[#14181F]">{s.username}</span>
-                            {s.parent_email ? ` · ${s.parent_email}` : ""}
+                          <span className="flex items-center gap-3 text-xs text-[#5B6470] shrink-0">
+                            <span>
+                              ID: <span className="text-[#14181F]">{s.username}</span>
+                              {s.parent_email ? ` · ${s.parent_email}` : ""}
+                            </span>
+                            <ResetPasswordButton targetId={s.id} name={s.full_name || s.username || "this student"} />
                           </span>
                         </li>
                       ))}

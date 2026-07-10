@@ -68,6 +68,19 @@ export default async function DashboardPage() {
   const schoolId = (profile?.school_id as string | null) ?? null;
   const role = (profile?.role as string | null) ?? null;
 
+  // Forced password change (set by /api/reset-password hand-outs and on
+  // invited-student provisioning): everyone funnels through this page after
+  // sign-in, so this is the single enforcement point. Separate best-effort
+  // query so a not-yet-applied 0005 migration can't break the dashboard.
+  const { data: mrp } = await supabase
+    .from("profiles")
+    .select("must_reset_password")
+    .eq("id", user.id)
+    .maybeSingle();
+  if ((mrp as { must_reset_password?: boolean } | null)?.must_reset_password) {
+    redirect("/auth/update-password");
+  }
+
   // Teacher beta + signup notification: one best-effort query so a
   // not-yet-applied migration (missing columns) can never break the dashboard.
   // Every signup path (email, Google, invite, school setup) funnels through
@@ -241,7 +254,7 @@ export default async function DashboardPage() {
   // the rest of the dashboard keeps working.
   const { data: rostersRaw } = await supabase
     .from("classes")
-    .select("id, name, grade, join_code, enrollments(profiles(full_name, username, parent_email))")
+    .select("id, name, grade, join_code, enrollments(profiles(id, full_name, username, parent_email))")
     .eq("teacher_id", user.id)
     .order("created_at", { ascending: false });
   type RosterRaw = {

@@ -6,6 +6,7 @@ import { parentPortalEnabled, aiTutorEnabled } from "@/utils/flags";
 import AddChild from "./add-child";
 import CoachRecap from "../coach-recap";
 import AskCoachButton from "../ask-coach-button";
+import ResetPasswordButton from "../reset-password-button";
 
 // The parent home: one section per linked child — their school assignments
 // (read-only: completion, due dates, scores) and the test papers this parent
@@ -176,10 +177,11 @@ export default async function ChildrenPage() {
               ));
             return (
               <div key={l.child_id} className="card divide-y divide-[#EEF0EC]">
-                <div className="px-5 py-3 flex items-center justify-between">
-                  <span className="font-medium text-lg font-display">{name}</span>
-                  <span className="text-xs text-[#5B6470]">
-                    {l.verified_at ? "" : "unverified link · confirm with the school"}
+                <div className="px-5 py-3 flex items-center justify-between gap-3">
+                  <span className="font-medium text-lg font-display truncate">{name}</span>
+                  <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
+                    {!l.verified_at && <span>unverified link · confirm with the school</span>}
+                    <ResetPasswordButton targetId={l.child_id} name={name} />
                   </span>
                 </div>
                 <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">School work ({school.length})</p>

@@ -4,6 +4,7 @@ import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabled } from "@/utils/flags";
 import CoordinatorAdmin, { type Member, type Scope } from "../coordinator-admin";
+import ResetPasswordButton from "../../reset-password-button";
 
 // Admin settings (school_admin only): roster role management + the
 // coordinator → (grade, subject) scope mapping that drives the whole permission
@@ -68,6 +69,27 @@ export default async function SchoolAdminPage() {
         </p>
 
         <CoordinatorAdmin members={members} scopes={scopes} grades={grades} subjects={subjects} />
+
+        <h2 className="text-xl mt-10 mb-1">Members</h2>
+        <p className="text-sm text-[#5B6470] mb-3">
+          Teachers &amp; coordinators in your school. Resetting hands you a temporary password to
+          pass on — it&apos;s shown once, and they must choose a new one at their next sign-in.
+        </p>
+        {members.length === 0 ? (
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">No teachers yet.</div>
+        ) : (
+          <div className="card divide-y divide-[#EEF0EC]">
+            {members.map((m) => (
+              <div key={m.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate">
+                  <span className="font-medium">{m.name}</span>
+                  <span className="text-[#5B6470]"> · {m.role}</span>
+                </span>
+                <ResetPasswordButton targetId={m.id} name={m.name} />
+              </div>
+            ))}
+          </div>
+        )}
 
         <h2 className="text-xl mt-10 mb-1">Access audit</h2>
         <p className="text-sm text-[#5B6470] mb-3">
