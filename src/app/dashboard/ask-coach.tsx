@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import CoachRecap from "./coach-recap";
+import TutorBoard, { type TutorBoardHandle } from "./tutor-board";
 
 type Msg = { role: "student" | "coach"; content: string; videoUrl?: string };
 
 // Phase 2 "Draw" mode — behind its own client flag (baked at BUILD time, so a
 // fresh Vercel build is needed after enabling it).
 const SKETCH_ON = process.env.NEXT_PUBLIC_FEATURE_AI_TUTOR_SKETCH === "true";
+// Phase 1 persistent TAL board (ERE). When on, Coach teaches on ONE board that
+// mutates turn-to-turn instead of the per-reply clip; text is the graceful
+// fallback. Its own build-time flag, so it lights up independently of Draw mode.
+const BOARD_ON = process.env.NEXT_PUBLIC_FEATURE_AI_TUTOR_TAL === "true";
 
 // Browser speech-to-text for the mic button (free, client-side). Not in the
 // standard DOM lib types, so keep a minimal shape and feature-detect it.
@@ -55,6 +60,7 @@ export default function AskCoach({
   const inputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<SpeechRec | null>(null);
+  const boardRef = useRef<TutorBoardHandle>(null);
 
   // Feature-detect the mic after mount (deferred set → no SSR/hydration mismatch).
   useEffect(() => {
@@ -292,6 +298,19 @@ export default function AskCoach({
     }
   }
 
+  // The persistent board (ERE) is the coach's main teaching surface when enabled:
+  // it draws on ONE board that mutates each turn and narrates. Returns false when
+  // the board declines this turn (no grounding / engine failure) so we fall back
+  // to the existing text stream — the board is an enhancement, never a hard dep.
+  async function doBoard(q: string): Promise<boolean> {
+    const r = await boardRef.current?.ask(q);
+    if (!r || r.mode !== "board") return false;
+    // Show the spoken narration as the coach's transcript line (the diagram is on
+    // the board above); keep a gentle default if the turn was purely visual.
+    patchLastCoach({ content: r.narration?.trim() || "✏️ (shown on the board above)" });
+    return true;
+  }
+
   async function submit() {
     const q = input.trim();
     if (!q || busy || ready === false) return;
@@ -303,9 +322,12 @@ export default function AskCoach({
     setMessages((m) => [
       ...m,
       { role: "student", content: q },
-      { role: "coach", content: drawing ? "🖍️ Coach is drawing this out…" : "" },
+      { role: "coach", content: BOARD_ON ? "🖍️ Coach is teaching on the board…" : drawing ? "🖍️ Coach is drawing this out…" : "" },
     ]);
     try {
+      // Board first when enabled; on decline, degrade to the existing draw/text path.
+      if (BOARD_ON && (await doBoard(q))) return;
+      if (BOARD_ON && !drawing) patchLastCoach({ content: "" }); // clear the board placeholder before the text stream
       if (drawing) await doSketch(q, history);
       else await doAsk(q, history);
     } finally {
@@ -325,7 +347,7 @@ export default function AskCoach({
             <div className="text-xs text-[#98A0A9] truncate">{chapterLabel}</div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {SKETCH_ON && (
+            {SKETCH_ON && !BOARD_ON && (
               <button
                 onClick={() => setDrawMode((v) => !v)}
                 aria-pressed={drawMode}
@@ -349,6 +371,7 @@ export default function AskCoach({
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {BOARD_ON && <TutorBoard ref={boardRef} generationId={generationId} readAloud={readAloud} />}
           {ready === null && <p className="text-sm text-[#98A0A9]">Waking the coach…</p>}
           {messages.map((m, i) => (
             <div key={i} className={m.role === "student" ? "flex justify-end" : "flex justify-start"}>
@@ -402,17 +425,29 @@ export default function AskCoach({
               onChange={(e) => setInput(e.target.value)}
               maxLength={500}
               disabled={ready === false}
-              placeholder={listening ? "Listening…" : ready === false ? "Coach unavailable" : drawMode ? "Ask Coach to draw…" : "Ask about this lesson…"}
+              placeholder={
+                listening
+                  ? "Listening…"
+                  : ready === false
+                    ? "Coach unavailable"
+                    : BOARD_ON
+                      ? "Ask Coach to teach this on the board…"
+                      : drawMode
+                        ? "Ask Coach to draw…"
+                        : "Ask about this lesson…"
+              }
               className="field h-9 px-3 text-sm flex-1"
             />
             <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-              {busy ? "…" : drawMode && SKETCH_ON ? "Draw" : "Ask"}
+              {busy ? "…" : !BOARD_ON && drawMode && SKETCH_ON ? "Draw" : "Ask"}
             </button>
           </form>
           <p className="text-[10px] text-[#98A0A9] mt-1.5">
-            {drawMode && SKETCH_ON
-              ? "Draw mode: Coach answers with a quick whiteboard clip. Turn it off for instant text."
-              : "Coach answers only from this lesson — it won't do graded work for you."}
+            {BOARD_ON
+              ? "Coach teaches on the board above — each follow-up builds on what's already drawn."
+              : drawMode && SKETCH_ON
+                ? "Draw mode: Coach answers with a quick whiteboard clip. Turn it off for instant text."
+                : "Coach answers only from this lesson — it won't do graded work for you."}
           </p>
         </div>
       </div>

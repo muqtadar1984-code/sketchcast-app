@@ -89,3 +89,15 @@ export function aiTutorRequireProPlus(): boolean {
 export function aiTutorSketchEnabled(): boolean {
   return process.env.FEATURE_AI_TUTOR_SKETCH === "true";
 }
+
+/**
+ * AI Tutor Phase 1 — the persistent TAL teaching board (ERE engine). When ON,
+ * Ask Coach answers by drawing on ONE board per session that mutates turn to
+ * turn, instead of the stateless clip/text reply. Its own flag so the board
+ * rolls out independently and always degrades to the existing text/clip tutor.
+ * The client "board" surface additionally reads NEXT_PUBLIC_FEATURE_AI_TUTOR_TAL;
+ * the /api/tutor/turn route check here is authoritative.
+ */
+export function aiTutorTalEnabled(): boolean {
+  return process.env.FEATURE_AI_TUTOR_TAL === "true";
+}

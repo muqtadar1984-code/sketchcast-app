@@ -122,3 +122,111 @@ are shared, chapter-level, and carry no student PII. The recap never exposes cha
    child's lesson row → **Coach recap** → band/score/practice/weak spots, no chat.
 6. When ready to charge: set `FEATURE_AI_TUTOR_REQUIRE_PROPLUS=true` and confirm a
    non‑Pro+ owner's students see the upgrade message while a Pro+ owner's don't.
+
+---
+
+## Phase 1 — the persistent teaching board (ERE / TAL)
+
+Instead of a stateless text/clip reply, the coach can teach on **one persistent
+board per (student, lesson)** that *mutates* turn to turn: the first question
+draws a diagram, and each follow-up **builds on what's already there** (highlight
+a part, advance a process, add a label) rather than starting over. Student input
+stays as plain words; only the coach's teaching becomes structured.
+
+This is **strictly additive and off by default**. When its flag is off, or on any
+failure, Ask Coach behaves exactly as above (text, or the Phase‑2 clip). The board
+is an enhancement, never a hard dependency.
+
+### The determinism boundary (why this is safe + cheap)
+
+```
+Student → Coach (LLM) → AI Gateway → TAL → validate → apply to scene graph → SVG + narrate
+         └──────── probabilistic ────────┘ │ └──────────── pure / deterministic ───────────┘
+                                    validation IS the safety model
+```
+
+Left of TAL the model only ever emits **TAL** (a small JSON teaching language) —
+never pixels, never prose that gets rendered. The gateway (`src/ere` +
+`generateTal`) forces valid TAL, validates it against the chapter's **catalog** of
+knowledge objects, and does **one** repair pass. An invalid or off-catalog program
+is never applied — the route returns `{ mode: "text" }` and the existing streamed
+answer takes over. The engine downstream is a pure function of (scene graph,
+events) → SVG, so the same board + question replays byte-identically (and dedupes
+through `tutor_tal_cache` for ~$0).
+
+### How it works (data flow)
+
+1. `POST /api/tutor/turn` — same auth + Pro+ fence as `/api/tutor`. No grounding →
+   `{ mode: "text" }` (nothing to teach from yet).
+2. Load-or-create the student's **board** row (`tutor_board`), rebuild the ERE
+   session from its stored scene graph, then **cache-first**: identical
+   (chapter, question, board-state) replays the stored TAL.
+3. Miss → the **gateway** makes the model emit valid TAL grounded in the chapter,
+   constrained to the catalog, and **aware of the current board** (a read-back is
+   injected so follow-ups mutate rather than redraw). Validate + repair once.
+4. Apply the program to the scene graph, **persist** the new snapshot + append this
+   turn's events (`tutor_board_event`), and return the **authoritative new snapshot
+   + this turn's events** to the client.
+5. The client (`tutor-board.tsx`) is a **pure renderer**: it deserialises the
+   snapshot and `renderSvg`s it, animating **only this turn's new draws** (prior
+   objects render static), and narrates the `speak` text. Reload rehydrates the
+   board from `GET /api/tutor/turn?generationId=` — the DB row is the source of
+   truth, so client and server can't drift. `prefers-reduced-motion` → final state,
+   no animation, no speech.
+
+Board + events are **private to the student** (RLS: `student_id = auth.uid()`);
+teachers/parents still see only the aggregate recap, never the raw board or chat.
+
+### Gating
+
+| Env | Where | Effect |
+|-----|-------|--------|
+| `FEATURE_AI_TUTOR=true` | Vercel (server) | Master switch (shared with the text tutor). Off → `/turn` 404s. |
+| `FEATURE_AI_TUTOR_TAL=true` | Vercel (server) | **Board switch.** Off → `/turn` 404s and Ask Coach uses text/clip. Authoritative. |
+| `NEXT_PUBLIC_FEATURE_AI_TUTOR_TAL=true` | Vercel (client, **build-time**) | Renders the board surface in Ask Coach. Must match the server flag; needs a fresh Vercel build to take effect. |
+
+`FEATURE_AI_TUTOR_REQUIRE_PROPLUS` applies to the board too (same `tutorEntitled`
+check), so the board is a Pro+ capability once the trial closes.
+
+### Migration
+
+`0029_tutor_board.sql` — `tutor_board` (current scene graph, student-RW),
+`tutor_board_event` (append-only log; student-read, service-write only), and
+`tutor_tal_cache` (service-role-only dedupe). Additive + idempotent; run as one
+execution **before** setting the flags.
+
+### Fallback & rollback
+
+- **Fallback (automatic):** no grounding, an invalid/off-catalog program after
+  repair, a model/DB error, or the client failing to reach `/turn` all resolve to
+  `{ mode: "text" }` → the existing streamed text answer. The student always gets
+  an answer.
+- **Rollback (instant, no deploy):** set `FEATURE_AI_TUTOR_TAL=false` (and
+  `NEXT_PUBLIC_FEATURE_AI_TUTOR_TAL=false` on the next build). The `/turn` route
+  goes dark and Ask Coach reverts to text/clip. Existing board rows are inert data;
+  no migration needs reverting.
+
+### 3-subject demo (proves it teaches, not just draws)
+
+Assign a lesson for a **biology**, a **physics**, and an **algorithms/CS** chapter
+(the book's `subject` selects the catalog via `subjectFor`). For each:
+
+1. Ask the opening question ("show me how the heart pumps" / "how does this circuit
+   work" / "sort these numbers") → the board draws the object and narrates.
+2. Ask a **follow-up** ("now show blood leaving the right ventricle" / "close the
+   switch" / "do the next swap") → the **same** object updates in place; only the
+   new stroke animates. Reload the page → the board comes back exactly.
+3. Ask something off-chapter → the coach steers back (or the turn falls to text).
+
+Automated coverage of these guarantees: `src/utils/tutor/__tests__/ere-board.test.ts`
+(3-subject 2-turn persistence across a reload + the gateway validation fence),
+plus the engine's own suite in `sketchcast-ere/`.
+
+### Required env (add to the Phase-1 rollout)
+
+App (Vercel): `FEATURE_AI_TUTOR_TAL=true`, `NEXT_PUBLIC_FEATURE_AI_TUTOR_TAL=true`
+(fresh build), on top of the existing `FEATURE_AI_TUTOR` + `ANTHROPIC_API_KEY`.
+Migration: `0029_tutor_board.sql`.
+
+> Engine source note: `src/ere/` is a **vendored copy** of the `@sketchcast/ere`
+> package (`src/ere/VENDORED.md` has the sync steps). Keep them in lockstep.
