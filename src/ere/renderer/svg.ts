@@ -258,9 +258,59 @@ function strokeAttrs(style: Style | undefined, baseWidth = 0.6): string {
 }
 
 function textEl(at: [number, number], text: string, style: Style | undefined, key: string): string {
-  const size = style?.fontSize ?? 4;
+  let size = style?.fontSize ?? 4;
   const fill = style?.fill ?? INK;
-  return `<text data-part="${esc(key)}" x="${f(at[0])}" y="${f(at[1])}" font-size="${size}" fill="${fill}" text-anchor="middle">${esc(text)}</text>`;
+
+  // POSITION-AWARE wrapping: the usable width is how far the anchor is from the
+  // nearer canvas edge (text-anchor="middle" grows both ways), so a label at
+  // x=20 wraps sooner than one at x=50 — long text can never clip off-canvas
+  // or run across the board into a neighbour (the "smudged text" defect).
+  const avail = Math.max(24, 2 * Math.min(at[0], 100 - at[0]) - 4);
+  let lines = wrapText(text, maxChars(avail, size));
+  if (lines.length > 4) {
+    // Too tall — one font step down, re-wrap (still capped below).
+    size = Math.max(2.6, size * 0.72);
+    lines = wrapText(text, maxChars(avail, size));
+  }
+  if (lines.length > 6) lines = [...lines.slice(0, 5), lines[5]!.replace(/\s*\S*$/, "") + "…"];
+
+  if (lines.length === 1) {
+    return `<text data-part="${esc(key)}" x="${f(at[0])}" y="${f(at[1])}" font-size="${f(size)}" fill="${fill}" text-anchor="middle">${esc(lines[0]!)}</text>`;
+  }
+  // Multi-line: centre the BLOCK on the anchor so labels near the bottom edge
+  // don't grow past y=100.
+  const lh = size * 1.15;
+  const y0 = at[1] - ((lines.length - 1) / 2) * lh;
+  const spans = lines
+    .map((ln, i) => `<tspan x="${f(at[0])}" y="${f(y0 + i * lh)}">${esc(ln)}</tspan>`)
+    .join("");
+  return `<text data-part="${esc(key)}" font-size="${f(size)}" fill="${fill}" text-anchor="middle">${spans}</text>`;
+}
+
+/** Approximate character budget for one line: avg glyph width ≈ 0.55 × font size. */
+function maxChars(avail: number, size: number): number {
+  return Math.max(6, Math.floor(avail / (0.55 * size)));
+}
+
+/** Word-wrap honouring explicit \n (SVG collapses raw newlines to spaces, so
+ * they must become real line breaks here); hard-breaks over-long words. */
+function wrapText(text: string, max: number): string[] {
+  const out: string[] = [];
+  for (const seg of text.split("\n")) {
+    let line = "";
+    for (const word of seg.split(/\s+/).filter(Boolean)) {
+      const w = word.length > max ? word.slice(0, max - 1) + "…" : word;
+      if (!line) line = w;
+      else if (line.length + 1 + w.length <= max) line += ` ${w}`;
+      else {
+        out.push(line);
+        line = w;
+      }
+    }
+    out.push(line); // keep empty segments: "a\n\nb" preserves the gap
+  }
+  while (out.length > 1 && out[out.length - 1] === "") out.pop();
+  return out.length ? out : [""];
 }
 
 function smoothPath(pts: [number, number][]): string {

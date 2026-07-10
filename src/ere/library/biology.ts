@@ -119,4 +119,32 @@ export const ANIMAL_CELL: KnowledgeObject = {
   provenance: { source: "curated" },
 };
 
-export const BIOLOGY: KnowledgeObject[] = [HEART, ANIMAL_CELL];
+/** bio.plant_cell — the ANIMAL_CELL's comparison partner: rigid wall, large
+ * central vacuole, chloroplasts. Mirrors the animal cell's part naming so
+ * side-by-side "plant vs animal" lessons label cleanly. */
+export const PLANT_CELL: KnowledgeObject = {
+  id: "bio.plant_cell",
+  name: "Plant cell",
+  subjects: ["biology"],
+  tags: ["cell", "organelle", "photosynthesis"],
+  difficulty: 2,
+  tier: 1,
+  parts: [
+    { id: "cell_wall", name: "Cell wall", geometry: { kind: "rect", at: [6, 10], w: 88, h: 80, rounded: 4 }, style: { stroke: "#3F7A3F", strokeWidth: 1.2 } },
+    { id: "membrane", name: "Cell membrane", geometry: { kind: "rect", at: [9, 13], w: 82, h: 74, rounded: 3 }, style: { stroke: "#6FA96F" } },
+    { id: "cytoplasm", name: "Cytoplasm", geometry: { kind: "rect", at: [10, 14], w: 80, h: 72, rounded: 3 }, style: { fill: "#F1FAF0", stroke: "none" } },
+    { id: "vacuole", name: "Large vacuole", geometry: { kind: "rect", at: [26, 30], w: 48, h: 40, rounded: 6 }, style: { fill: "#DCEEFB", stroke: "#5B9BD5" }, anchors: [{ id: "c", at: [50, 50] }] },
+    { id: "nucleus", name: "Nucleus", geometry: { kind: "circle", c: [24, 30], r: 10 }, style: { fill: "#E7DAF5", stroke: "#7C4DB8" }, anchors: [{ id: "c", at: [24, 30] }] },
+    { id: "nucleolus", name: "Nucleolus", geometry: { kind: "circle", c: [24, 30], r: 3 }, style: { fill: "#7C4DB8", stroke: "none" } },
+    { id: "chloroplasts", name: "Chloroplasts", geometry: { kind: "ellipse", c: [72, 66], rx: 7, ry: 4 }, style: { fill: "#CDEBC5", stroke: "#3F7A3F" } },
+    { id: "mitochondria", name: "Mitochondrion", geometry: { kind: "ellipse", c: [70, 26], rx: 8, ry: 4.5 }, style: { fill: "#FFE7CC", stroke: "#C77F2A" } },
+  ],
+  states: [
+    { id: "labelled", description: "All organelles visible", visibleParts: ["cell_wall", "membrane", "cytoplasm", "vacuole", "nucleus", "nucleolus", "chloroplasts", "mitochondria"] },
+  ],
+  transitions: [],
+  animation: { drawOrder: ["cell_wall", "membrane", "cytoplasm", "vacuole", "nucleus", "nucleolus", "chloroplasts", "mitochondria"], strokeSecPerPart: 0.32 },
+  provenance: { source: "curated" },
+};
+
+export const BIOLOGY: KnowledgeObject[] = [HEART, ANIMAL_CELL, PLANT_CELL];

@@ -113,7 +113,18 @@ export function buildTalPrompt(opts: {
     `highlight/step/remove) — do NOT re-place them. New instances need a place before a draw.\n` +
     `4. Narration drives pacing: emit "speak" units and bind visuals to them with "sync":{"with":"<speakId>","at":"end"}.\n` +
     `5. Positions are logical: {"region":"center"}, {"relativeTo":{"id":"h","anchor":"right_atrium"}}, ` +
-    `{"coord":[x,y]} on a 0–100 grid, or {"flow":"below:prev"}. Never pixels.\n\n` +
+    `{"coord":[x,y]} on a 0–100 grid, or {"flow":"below:prev"}. Never pixels.\n` +
+    `6. BOARD QUALITY — the board is a small 100×100 whiteboard; treat space as scarce:\n` +
+    `   - PREFER a CATALOG object whenever one matches the concept (place bio.animal_cell — don't sketch a box). ` +
+    `Compose prim.* shapes only when nothing in the catalog fits, and then draw the THING's actual shape and parts — ` +
+    `never an empty rectangle standing in for it.\n` +
+    `   - Labels: ≤4 words, ONE fact per label. Never pack a list into one label and never use \\n inside text ` +
+    `(it renders as a single space). Each fact = its own "label" op at its own position.\n` +
+    `   - Spread labels out: each gets its own target or its own coord, ≥8 units apart, and ≥12 units from the canvas edges.\n` +
+    `   - "label"{text,...} places text directly; do NOT also place a prim.label for the same text ` +
+    `(prim.label is only a building block inside composed objects).\n` +
+    `   - Comparisons: place the two objects side by side (coords near [28,45] and [72,45]), label parts on each ` +
+    `object, and put each shared/different fact as its own short label under its side.\n\n` +
     `OPERATIONS: ${TAL_OPS.filter((o) => OP_HELP[o]).map((o) => OP_HELP[o]).join("; ")}.\n\n` +
     `OUTPUT: a single JSON object {"tal":"${TAL_VERSION}","scene":"${scene}","turn":${turn},"actions":[...]} and NOTHING else.`;
 

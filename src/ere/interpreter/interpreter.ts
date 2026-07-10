@@ -62,13 +62,16 @@ export class BoardSession {
       return { ok: false, errors: [{ path: "$.scene", message: `program targets scene "${program.scene}", session is "${this.scene}"` }] };
     }
 
-    // Rewrite flow:"below:prev" to the concrete previous instance id.
+    // Rewrite flow:"below:prev" to the concrete previous instance id — for
+    // labels/annotations too, else every "below:prev" label anchors to the same
+    // node and they stack on one point.
     let prevPlaced: string | null = lastPlacedId(this.graph);
     for (const a of program.actions) {
       if (a.op === "place") {
         rewriteFlowPrev(a.at, prevPlaced);
         prevPlaced = a.as;
       } else if (a.op === "move") rewriteFlowPrev(a.to, prevPlaced);
+      else if ((a.op === "label" || a.op === "annotate") && a.at) rewriteFlowPrev(a.at, prevPlaced);
     }
 
     // Narration-first timeline (design §2.5).
@@ -87,6 +90,10 @@ export class BoardSession {
       emitted.push(event);
       return event;
     };
+    // Labels that resolve to the same anchor (same target, or the same explicit
+    // position) are auto-staggered vertically so they never render on top of
+    // each other — the model routinely emits several facts about one object.
+    const labelAnchorCount = new Map<string, number>();
 
     for (const s of timeline) {
       const a = s.action;
@@ -126,7 +133,23 @@ export class BoardSession {
         case "label":
         case "annotate": {
           const id = (a as { as?: string }).as ?? `lbl_${this.relSeq++}`;
-          const at: LogicalPos = a.at ?? (a.target ? { relativeTo: { id: a.target, offset: [0, -6] } } : { region: "top" });
+          // k-th label on the same anchor is pushed a step further out.
+          const anchorKey = a.target ?? JSON.stringify(a.at ?? { region: "top" });
+          const k = labelAnchorCount.get(anchorKey) ?? 0;
+          labelAnchorCount.set(anchorKey, k + 1);
+          let at: LogicalPos = a.at ?? (a.target ? { relativeTo: { id: a.target, offset: [0, -6] } } : { region: "top" });
+          if (k > 0) {
+            if ("relativeTo" in at) {
+              const [ox, oy] = at.relativeTo.offset ?? [0, -6];
+              at = { relativeTo: { ...at.relativeTo, offset: [ox, oy - k * 4.5] } };
+            } else if ("coord" in at) {
+              at = { coord: [at.coord[0], Math.min(97, at.coord[1] + k * 4.5)] };
+            } else {
+              // region/flow duplicates: nudge via a relative coord fallback
+              at = { relativeTo: { id: anchorKey, offset: [0, -6 - k * 4.5] } };
+              if (!this.graph.nodes.has(anchorKey)) at = { coord: [50, Math.min(97, 8 + k * 4.5)] };
+            }
+          }
           const node: SceneNode = {
             id,
             kind: "label",

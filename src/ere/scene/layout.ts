@@ -55,6 +55,13 @@ export function resolveWorldPos(graph: SceneGraph, pos: LogicalPos, seen: Set<st
   }
   if ("flow" in pos) {
     const [dir, ref] = pos.flow.split(":") as [string, string];
+    if (!graph.nodes.has(ref)) {
+      // Unknown flow ref (e.g. an un-rewritten "prev"): resolve to the
+      // DIRECTION's region instead of silently flowing off [50,50] — which
+      // used to pile every such label onto the same point.
+      const region: Region = dir === "below" ? "bottom" : dir === "above" ? "top" : dir === "left" ? "left" : "right";
+      return REGIONS[region];
+    }
     const base = nodeWorldCenter(graph, ref, seen);
     const gap = DEFAULT_FOOTPRINT * 0.85;
     if (dir === "below") return [base[0], base[1] + gap];
