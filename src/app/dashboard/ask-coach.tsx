@@ -319,7 +319,10 @@ export default function AskCoach({
     setError(null);
     setBusy(true);
     const history = threadHistory();
-    const drawing = drawMode && SKETCH_ON;
+    // When the persistent board is on it IS the drawing surface — the old sketch
+    // VIDEO clip must never fire (a declined board turn falls back to TEXT, not a
+    // video). So Draw mode only applies when the board is off.
+    const drawing = drawMode && SKETCH_ON && !BOARD_ON;
     setMessages((m) => [
       ...m,
       { role: "student", content: q },
