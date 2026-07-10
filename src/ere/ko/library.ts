@@ -132,11 +132,15 @@ export class Library implements LibraryReader, Instantiator {
 
   /** The semantic index fed to the tutor prompt (design §4.3) — the tutor may
    * only emit refs that exist here or compose from primitives. */
-  catalog(opts: { subjects?: string[]; includePrimitives?: boolean } = {}): CatalogEntry[] {
-    const { subjects, includePrimitives = true } = opts;
+  catalog(opts: { subjects?: string[]; includePrimitives?: boolean; vqsOnly?: boolean } = {}): CatalogEntry[] {
+    const { subjects, includePrimitives = true, vqsOnly = false } = opts;
     return [...this.objects.values()]
       .filter((o) => includePrimitives || !o.id.startsWith("prim."))
       .filter((o) => o.tier !== 3) // quarantined objects never reach the prompt
+      // VQS gate (Phase 2): when on, a curated object must be VQS-approved to be
+      // offered — primitives (the composition kit) are always available. Default
+      // off so the gate can be flipped on only once every object is signed off.
+      .filter((o) => !vqsOnly || o.id.startsWith("prim.") || o.vqs?.approved === true)
       .filter((o) => !subjects || o.subjects.includes("*") || o.subjects.some((s) => subjects.includes(s)))
       .map((o) => ({
         id: o.id,

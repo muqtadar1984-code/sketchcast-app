@@ -88,6 +88,12 @@ export type KnowledgeObject = {
   anchors?: Anchor[]; // object-level anchors (center, top, …) beyond per-part ones
   renderHints?: Record<string, unknown>;
   provenance: { source: "curated" | "composed" | "generated"; reviewedBy?: string };
+  /** Visual Quality Standard sign-off (Phase 2). An object only reaches the live
+   * board when `vqs.approved` is true — the gate mirrors the Tier-3 quarantine.
+   * `golden` names the approved golden-snapshot file; `approvedBy` records the
+   * human sign-off. Absent ⇒ treated as NOT approved (must be explicitly passed).
+   * See VISUAL_QUALITY_STANDARD.md. */
+  vqs?: { approved: boolean; approvedBy?: string; golden?: string };
 };
 
 /** The compact semantic-index entry fed into the tutor prompt (design §4.3). */

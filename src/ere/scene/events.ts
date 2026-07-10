@@ -19,10 +19,16 @@ export type BoardEventType =
   | "focus"
   | "annotation.added"
   | "narration.spoken" // system event carrying timing
-  | "student.select" // Phase 2+
-  | "student.drag"
-  | "student.annotate"
-  | "student.answer";
+  // Student deixis + annotation channel (Phase 2). The student REFERS TO and marks
+  // up objects; they never mutate tutor objects (that stays with TAL). These feed
+  // the tutor's perception via readBack; student.annotate additionally persists a
+  // student-owned note in a separate layer.
+  | "student.select" // tap/click an object or part → "tell me about this"
+  | "student.point" // deictic hover-hold focus for the next question
+  | "student.circle" // lasso a region → "explain what I've circled"
+  | "student.annotate" // student's own sticky note / mark anchored to a target
+  | "student.answer" // student's reply to a tutor `ask`
+  | "student.drag"; // reserved for Phase 3 manipulation (declared, not used)
 
 export type BoardEvent = {
   id: string;

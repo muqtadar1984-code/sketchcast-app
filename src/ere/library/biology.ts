@@ -144,6 +144,7 @@ export const ANIMAL_CELL: KnowledgeObject = {
   animation: { drawOrder: [...ANIMAL_ORGANELLES], strokeSecPerPart: 0.18 },
   renderHints: { props: ["phase"] },
   provenance: { source: "curated" },
+  vqs: { approved: true, approvedBy: "arieb", golden: "bio.animal_cell.svg" },
 };
 
 /** bio.plant_cell — the ANIMAL_CELL's comparison partner: rigid wall, large
@@ -193,6 +194,7 @@ export const PLANT_CELL: KnowledgeObject = {
     strokeSecPerPart: 0.16,
   },
   provenance: { source: "curated" },
+  vqs: { approved: true, approvedBy: "arieb", golden: "bio.plant_cell.svg" },
 };
 
 export const BIOLOGY: KnowledgeObject[] = [HEART, ANIMAL_CELL, PLANT_CELL];

@@ -86,7 +86,32 @@ function renderNode(ctx: Ctx, node: SceneNode): string {
     const at = resolveWorldPos(ctx.graph, node.transform.at);
     const g = node.geometry;
     const text = g?.kind === "text" ? g.text : (node.meta.label ?? "");
-    return textEl(at, text, node.style, node.id);
+    // Leader line: when a label sits AWAY from the part it names, draw a thin
+    // connector to that part's anchor (with a small end dot) — the textbook
+    // labelling style. Skipped for labels already near their target.
+    const target = typeof node.props?.target === "string" ? (node.props.target as string) : undefined;
+    let leader = "";
+    if (target) {
+      const tp = targetWorldPoint(ctx, target);
+      if (tp) {
+        const dx = tp[0] - at[0];
+        const dy = tp[1] - at[1];
+        const len = Math.hypot(dx, dy);
+        if (len > 7) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const x1 = at[0] + ux * 3.2;
+          const y1 = at[1] + uy * 2.2; // start just off the text
+          const x2 = tp[0] - ux * 2;
+          const y2 = tp[1] - uy * 2; // stop short of the part
+          leader =
+            `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="${INK}" stroke-width="0.3" opacity="0.55"/>` +
+            `<circle cx="${f(x2)}" cy="${f(y2)}" r="0.6" fill="${INK}" opacity="0.55"/>`;
+        }
+      }
+    }
+    const label = textEl(at, text, node.style, node.id);
+    return leader ? `<g data-id="${esc(node.id)}">${leader}${label}</g>` : label;
   }
 
   // Objects/primitives: render parts in the KO's draw order, applying the
