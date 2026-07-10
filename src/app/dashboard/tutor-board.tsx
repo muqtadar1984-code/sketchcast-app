@@ -14,10 +14,8 @@ export type TutorBoardHandle = { ask: (question: string) => Promise<{ mode: "boa
 const reducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-const TutorBoard = forwardRef<TutorBoardHandle, { generationId: string; readAloud: boolean }>(function TutorBoard(
-  { generationId, readAloud },
-  ref,
-) {
+const TutorBoard = forwardRef<TutorBoardHandle, { generationId: string; readAloud: boolean; fit?: boolean }>(
+  function TutorBoard({ generationId, readAloud, fit = false }, ref) {
   const [svg, setSvg] = useState("");
   const [active, setActive] = useState(false);
   const [thinking, setThinking] = useState(false);
@@ -109,15 +107,33 @@ const TutorBoard = forwardRef<TutorBoardHandle, { generationId: string; readAlou
   );
 
   if (!active && !thinking) return null;
+
+  // `fit` (maximized two-pane layout): fill the pane and centre a square board
+  // that scales to the smaller of the pane's width/height. Otherwise: an inline
+  // full-width square that flows with the chat (minimized layout). The child
+  // <svg> is forced to fill its box in both cases ([&>svg] utilities).
+  const svgFill = "[&>svg]:block [&>svg]:w-full [&>svg]:h-full";
+  const board = svg ? (
+    <div
+      className={`${svgFill} ${fit ? "mx-auto max-w-full max-h-full" : "w-full"}`}
+      style={fit ? { height: "100%", aspectRatio: "1 / 1" } : { aspectRatio: "1 / 1" }}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  ) : (
+    <div className="w-full grid place-items-center text-xs text-[#98A0A9]" style={{ aspectRatio: "1 / 1" }}>
+      Coach is setting up the board…
+    </div>
+  );
+
   return (
-    <div className="rounded-xl border border-[#EEF0EC] bg-white overflow-hidden mb-2 relative">
-      {svg ? (
-        <div className="w-full" style={{ aspectRatio: "1 / 1" }} dangerouslySetInnerHTML={{ __html: svg }} />
-      ) : (
-        <div className="w-full grid place-items-center text-xs text-[#98A0A9]" style={{ aspectRatio: "1 / 1" }}>
-          Coach is setting up the board…
-        </div>
-      )}
+    <div
+      className={
+        fit
+          ? "h-full w-full flex items-center justify-center overflow-hidden relative"
+          : "rounded-xl border border-[#EEF0EC] bg-white overflow-hidden mb-2 relative"
+      }
+    >
+      {board}
       {thinking && active && (
         <div className="absolute top-1.5 right-2 text-[10px] text-[#0C8175] bg-white/80 rounded px-1.5 py-0.5">✎ working…</div>
       )}

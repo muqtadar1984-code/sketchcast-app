@@ -53,6 +53,7 @@ export default function AskCoach({
   const [busy, setBusy] = useState(false);
   const [readAloud, setReadAloud] = useState(true); // read answers aloud by default
   const [drawMode, setDrawMode] = useState(SKETCH_ON); // Draw by default when enabled
+  const [maximized, setMaximized] = useState(false); // board takes ~70%, chat ~30% (BOARD_ON)
   const [listening, setListening] = useState(false);
   const [micSupported, setMicSupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -336,9 +337,100 @@ export default function AskCoach({
     }
   }
 
+  // Board pane can be maximized to a two-pane split (board ~70% / chat ~30%);
+  // only meaningful when the persistent board is on.
+  const twoPane = BOARD_ON && maximized;
+
+  const messageList = (
+    <>
+      {ready === null && <p className="text-sm text-[#98A0A9]">Waking the coach…</p>}
+      {messages.map((m, i) => (
+        <div key={i} className={m.role === "student" ? "flex justify-end" : "flex justify-start"}>
+          {m.videoUrl ? (
+            <div className="max-w-[92%] rounded-2xl rounded-bl-sm p-1.5 bg-[#F4F6F3]">
+              <video src={m.videoUrl} controls playsInline className="rounded-xl w-full" />
+              <p className="text-[11px] text-[#98A0A9] px-2 py-1">Here&apos;s a quick sketch.</p>
+            </div>
+          ) : (
+            <div
+              className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
+                m.role === "student"
+                  ? "bg-[#E2F4F1] text-[#0C4E47] rounded-br-sm"
+                  : "bg-[#F4F6F3] text-[#14181F] rounded-bl-sm"
+              }`}
+            >
+              {m.content || <span className="text-[#98A0A9]">…</span>}
+            </div>
+          )}
+        </div>
+      ))}
+      {error && <p className="text-xs text-[#B42318]">{error}</p>}
+    </>
+  );
+
+  const inputBar = (
+    <div className="px-4 py-3 border-t border-[#EEF0EC]">
+      {studentId && <CoachRecap studentId={studentId} generationId={generationId} />}
+      <form
+        className="flex items-center gap-2 mt-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        {micSupported && (
+          <button
+            type="button"
+            onClick={toggleMic}
+            disabled={ready === false}
+            aria-pressed={listening}
+            title={listening ? "Stop listening" : "Speak your question"}
+            className={`h-9 w-9 rounded-lg border text-base shrink-0 disabled:opacity-40 ${
+              listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
+            }`}
+          >
+            🎤
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          maxLength={500}
+          disabled={ready === false}
+          placeholder={
+            listening
+              ? "Listening…"
+              : ready === false
+                ? "Coach unavailable"
+                : BOARD_ON
+                  ? "Ask Coach to teach this on the board…"
+                  : drawMode
+                    ? "Ask Coach to draw…"
+                    : "Ask about this lesson…"
+          }
+          className="field h-9 px-3 text-sm flex-1"
+        />
+        <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
+          {busy ? "…" : !BOARD_ON && drawMode && SKETCH_ON ? "Draw" : "Ask"}
+        </button>
+      </form>
+      <p className="text-[10px] text-[#98A0A9] mt-1.5">
+        {BOARD_ON
+          ? "Coach teaches on the board — each follow-up builds on what's already drawn."
+          : drawMode && SKETCH_ON
+            ? "Draw mode: Coach answers with a quick whiteboard clip. Turn it off for instant text."
+            : "Coach answers only from this lesson — it won't do graded work for you."}
+      </p>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="card w-full max-w-lg flex flex-col max-h-[88vh]" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`card w-full flex flex-col ${twoPane ? "max-w-[1400px] h-[92vh]" : "max-w-lg max-h-[88vh]"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
           <div className="min-w-0">
             <div className="font-display font-medium flex items-center gap-1.5">
@@ -364,92 +456,45 @@ export default function AskCoach({
             >
               {readAloud ? "🔊 Read aloud" : "🔈 Read aloud"}
             </button>
+            {BOARD_ON && (
+              <button
+                onClick={() => setMaximized((v) => !v)}
+                aria-pressed={maximized}
+                title={maximized ? "Shrink the board" : "Expand the board"}
+                className="text-[#98A0A9] hover:text-[#5B6470] text-base leading-none"
+              >
+                {maximized ? "🗗" : "🗖"}
+              </button>
+            )}
             <button onClick={onClose} className="text-[#98A0A9] hover:text-[#5B6470] text-lg leading-none" aria-label="Close">
               ×
             </button>
           </div>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-          {BOARD_ON && <TutorBoard ref={boardRef} generationId={generationId} readAloud={readAloud} />}
-          {ready === null && <p className="text-sm text-[#98A0A9]">Waking the coach…</p>}
-          {messages.map((m, i) => (
-            <div key={i} className={m.role === "student" ? "flex justify-end" : "flex justify-start"}>
-              {m.videoUrl ? (
-                <div className="max-w-[92%] rounded-2xl rounded-bl-sm p-1.5 bg-[#F4F6F3]">
-                  <video src={m.videoUrl} controls playsInline className="rounded-xl w-full" />
-                  <p className="text-[11px] text-[#98A0A9] px-2 py-1">Here&apos;s a quick sketch.</p>
-                </div>
-              ) : (
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
-                    m.role === "student"
-                      ? "bg-[#E2F4F1] text-[#0C4E47] rounded-br-sm"
-                      : "bg-[#F4F6F3] text-[#14181F] rounded-bl-sm"
-                  }`}
-                >
-                  {m.content || <span className="text-[#98A0A9]">…</span>}
-                </div>
-              )}
+        {twoPane ? (
+          // Maximized: whiteboard ~70% on the left, chat ~30% on the right.
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[70%] border-r border-[#EEF0EC] bg-[#FBFBF9] p-3 min-h-0">
+              <TutorBoard ref={boardRef} generationId={generationId} readAloud={readAloud} fit />
             </div>
-          ))}
-          {error && <p className="text-xs text-[#B42318]">{error}</p>}
-        </div>
-
-        <div className="px-4 py-3 border-t border-[#EEF0EC]">
-          {studentId && <CoachRecap studentId={studentId} generationId={generationId} />}
-          <form
-            className="flex items-center gap-2 mt-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submit();
-            }}
-          >
-            {micSupported && (
-              <button
-                type="button"
-                onClick={toggleMic}
-                disabled={ready === false}
-                aria-pressed={listening}
-                title={listening ? "Stop listening" : "Speak your question"}
-                className={`h-9 w-9 rounded-lg border text-base shrink-0 disabled:opacity-40 ${
-                  listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
-                }`}
-              >
-                🎤
-              </button>
-            )}
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              maxLength={500}
-              disabled={ready === false}
-              placeholder={
-                listening
-                  ? "Listening…"
-                  : ready === false
-                    ? "Coach unavailable"
-                    : BOARD_ON
-                      ? "Ask Coach to teach this on the board…"
-                      : drawMode
-                        ? "Ask Coach to draw…"
-                        : "Ask about this lesson…"
-              }
-              className="field h-9 px-3 text-sm flex-1"
-            />
-            <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-              {busy ? "…" : !BOARD_ON && drawMode && SKETCH_ON ? "Draw" : "Ask"}
-            </button>
-          </form>
-          <p className="text-[10px] text-[#98A0A9] mt-1.5">
-            {BOARD_ON
-              ? "Coach teaches on the board above — each follow-up builds on what's already drawn."
-              : drawMode && SKETCH_ON
-                ? "Draw mode: Coach answers with a quick whiteboard clip. Turn it off for instant text."
-                : "Coach answers only from this lesson — it won't do graded work for you."}
-          </p>
-        </div>
+            <div className="w-[30%] flex flex-col min-h-0">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                {messageList}
+              </div>
+              {inputBar}
+            </div>
+          </div>
+        ) : (
+          // Minimized: board (if any) flows above the chat in one column.
+          <>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {BOARD_ON && <TutorBoard ref={boardRef} generationId={generationId} readAloud={readAloud} />}
+              {messageList}
+            </div>
+            {inputBar}
+          </>
+        )}
       </div>
     </div>
   );
