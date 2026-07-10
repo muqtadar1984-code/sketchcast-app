@@ -29,10 +29,17 @@ const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const f = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 
-type Ctx = { graph: SceneGraph; lib: Library; opts: RenderOpts };
+// `grads` maps a solid fill colour → a generated radial-gradient id, so filled
+// shapes get soft depth (a lighter top-left, the colour at the rim) instead of a
+// flat fill. Populated while rendering the body, emitted into <defs> after — the
+// order is deterministic, so the same graph still yields byte-identical output.
+type Ctx = { graph: SceneGraph; lib: Library; opts: RenderOpts; grads: Map<string, string>; idp: string };
 
 export function renderSvg(graph: SceneGraph, lib: Library, opts: RenderOpts = {}): string {
-  const ctx: Ctx = { graph, lib, opts };
+  // Prefix generated <defs> ids with the scene's state hash so two DIFFERENT
+  // boards on one page can't collide on gradient ids (SVG ids are document-
+  // global); the same board re-renders identically, so determinism holds.
+  const ctx: Ctx = { graph, lib, opts, grads: new Map(), idp: graph.stateHash().slice(0, 6) };
   const body: string[] = [];
 
   for (const id of graph.order) {
@@ -44,13 +51,24 @@ export function renderSvg(graph: SceneGraph, lib: Library, opts: RenderOpts = {}
 
   const anim = opts.animate ? animationCss(ctx) : "";
   const bg = opts.background ?? "#FCFCFA";
+  const gradDefs = [...ctx.grads.entries()]
+    .map(
+      ([color, id]) =>
+        `<radialGradient id="${id}" cx="38%" cy="30%" r="82%">` +
+        `<stop offset="0%" stop-color="${lighten(color, 0.26)}"/>` +
+        `<stop offset="65%" stop-color="${color}"/>` +
+        `<stop offset="100%" stop-color="${darken(color, 0.1)}"/></radialGradient>`,
+    )
+    .join("");
+  // A soft, close shadow gives organelles/objects a gentle lift off the board.
+  const shadow = `<filter id="sk-soft" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="0.5" stdDeviation="0.7" flood-color="#1b2a3322"/></filter>`;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"` +
     (opts.width ? ` width="${opts.width}"` : "") +
     (opts.height ? ` height="${opts.height}"` : "") +
     ` font-family="ui-sans-serif, system-ui, sans-serif">` +
     `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">` +
-    `<path d="M 0 1 L 9 5 L 0 9 z" fill="${INK}"/></marker>${anim}</defs>` +
+    `<path d="M 0 1 L 9 5 L 0 9 z" fill="${INK}"/></marker>${shadow}${gradDefs}${anim}</defs>` +
     `<rect x="0" y="0" width="100" height="100" fill="${bg}"/>` +
     body.join("") +
     `</svg>`
@@ -93,7 +111,9 @@ function renderNode(ctx: Ctx, node: SceneNode): string {
   if (node.meta.label && node.kind === "object") {
     pieces.push(textEl([center[0], center[1] + (DEFAULT_FOOTPRINT * (node.transform.scale ?? 1)) / 2 + 4], node.meta.label, { fontSize: 3.4 }, `${node.id}.name`));
   }
-  return `<g data-id="${esc(node.id)}">${pieces.join("")}</g>`;
+  // A gentle drop shadow lifts a drawn object off the board (skip empty groups).
+  const lift = pieces.length ? ` filter="url(#sk-soft)"` : "";
+  return `<g data-id="${esc(node.id)}"${lift}>${pieces.join("")}</g>`;
 }
 
 function renderRelation(ctx: Ctx, node: SceneNode): string {
@@ -148,7 +168,7 @@ function geometryEl(
 ): string {
   const W = (p: [number, number]) => worldFromLocal(node, center, p);
   const k = ((node.transform.scale ?? 1) * DEFAULT_FOOTPRINT) / 100; // local→world scale factor
-  const s = strokeAttrs(style);
+  const s = strokeAttrs(ctx, style);
   const id = ` data-part="${esc(key)}" class="sk-stroke"`;
 
   switch (g.kind) {
@@ -165,14 +185,16 @@ function geometryEl(
     case "polygon":
     case "curve": {
       const pts = g.points.map(W);
-      if (g.kind === "curve") return `<path${id} d="${smoothPath(pts)}"${s} fill="none" pathLength="1"/>`;
+      // A curve honours its style fill (closed organic blobs); repeat the first
+      // point to close it cleanly. `s` already carries the fill (default none).
+      if (g.kind === "curve") return `<path${id} d="${smoothPath(pts)}"${s} pathLength="1"/>`;
       const attr = pts.map(([x, y]) => `${f(x)},${f(y)}`).join(" ");
       return `<${g.kind === "polygon" ? "polygon" : "polyline"}${id} points="${attr}"${s} pathLength="1"/>`;
     }
     case "path": {
       // Path data is local: translate+scale via a transform (keeps `d` untouched).
       const [ox, oy] = W([0, 0]);
-      return `<path${id} d="${esc(g.d)}" transform="translate(${f(ox)} ${f(oy)}) scale(${f(k)})"${strokeAttrs(style, 0.6 / k)} pathLength="1"/>`;
+      return `<path${id} d="${esc(g.d)}" transform="translate(${f(ox)} ${f(oy)}) scale(${f(k)})"${strokeAttrs(ctx, style, 0.6 / k)} pathLength="1"/>`;
     }
     case "circle": {
       const [cx, cy] = W(g.c);
@@ -248,13 +270,42 @@ function geometryEl(
   }
 }
 
-function strokeAttrs(style: Style | undefined, baseWidth = 0.6): string {
+function strokeAttrs(ctx: Ctx, style: Style | undefined, baseWidth = 0.6): string {
   const stroke = style?.stroke ?? INK;
   const width = style?.strokeWidth ?? baseWidth;
-  const fill = style?.fill ?? "none";
+  const fill = fillPaint(ctx, style?.fill ?? "none");
   const dash = style?.dashed ? ` stroke-dasharray="1.6 1.2"` : "";
   const op = style?.opacity !== undefined ? ` opacity="${style.opacity}"` : "";
   return ` stroke="${stroke}" stroke-width="${width}" fill="${fill}" stroke-linecap="round" stroke-linejoin="round"${dash}${op}`;
+}
+
+/** A solid hex fill becomes a registered radial gradient (soft depth); "none",
+ * transparent, non-hex, and already-url() paints pass through untouched. */
+function fillPaint(ctx: Ctx, color: string): string {
+  if (!/^#[0-9a-fA-F]{3,8}$/.test(color)) return color;
+  let id = ctx.grads.get(color);
+  if (!id) {
+    id = `g${ctx.idp}_${ctx.grads.size}`;
+    ctx.grads.set(color, id);
+  }
+  return `url(#${id})`;
+}
+
+function rgb(hex: string): [number, number, number] {
+  const c = hex.replace("#", "");
+  const full = c.length === 3 ? c.split("").map((x) => x + x).join("") : c.slice(0, 6);
+  const n = parseInt(full, 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+const toHex = (r: number, g: number, b: number): string =>
+  "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+function lighten(hex: string, amt: number): string {
+  const [r, g, b] = rgb(hex);
+  return toHex(r + (255 - r) * amt, g + (255 - g) * amt, b + (255 - b) * amt);
+}
+function darken(hex: string, amt: number): string {
+  const [r, g, b] = rgb(hex);
+  return toHex(r * (1 - amt), g * (1 - amt), b * (1 - amt));
 }
 
 function textEl(at: [number, number], text: string, style: Style | undefined, key: string): string {

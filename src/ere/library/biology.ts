@@ -71,7 +71,16 @@ export const HEART: KnowledgeObject = {
   provenance: { source: "curated" },
 };
 
-/** bio.animal_cell — organelles as parts; mitosis phases as states. */
+/** bio.animal_cell — a detailed, textbook-style cell: an organic membrane, a
+ * nucleus with nucleolus, two mitochondria with cristae, rough ER, Golgi,
+ * ribosomes, a lysosome, a vacuole and centrioles. Mitosis phases as states keep
+ * working (the core membrane/cytoplasm/nucleus/chromosomes/spindle parts are
+ * preserved). Local 0–100 space; the whole cell fills ~4–96. */
+const ANIMAL_ORGANELLES = [
+  "cytoplasm", "membrane", "er", "golgi", "nucleus", "nucleolus", "dna",
+  "mito1", "mito1_cristae", "mito2", "mito2_cristae", "lysosome", "vacuole",
+  "centriole1", "centriole2", "ribo1", "ribo2", "ribo3", "ribo4", "ribo5",
+];
 export const ANIMAL_CELL: KnowledgeObject = {
   id: "bio.animal_cell",
   name: "Animal cell",
@@ -80,20 +89,38 @@ export const ANIMAL_CELL: KnowledgeObject = {
   difficulty: 2,
   tier: 1,
   parts: [
-    { id: "membrane", name: "Cell membrane", geometry: { kind: "ellipse", c: [50, 50], rx: 46, ry: 38 } },
-    { id: "cytoplasm", name: "Cytoplasm", geometry: { kind: "ellipse", c: [50, 50], rx: 44, ry: 36 }, style: { fill: "#F3FAF7", stroke: "none" } },
-    { id: "nucleus", name: "Nucleus", geometry: { kind: "circle", c: [50, 50], r: 13 }, style: { fill: "#E7DAF5", stroke: "#7C4DB8" }, anchors: [{ id: "c", at: [50, 50] }] },
-    { id: "nucleolus", name: "Nucleolus", geometry: { kind: "circle", c: [50, 50], r: 4 }, style: { fill: "#7C4DB8", stroke: "none" } },
-    { id: "mitochondria", name: "Mitochondrion", geometry: { kind: "ellipse", c: [74, 34], rx: 9, ry: 5 }, style: { fill: "#FFE7CC", stroke: "#C77F2A" } },
-    { id: "chromosomes", name: "Chromosomes", geometry: { kind: "polyline", points: [[44, 50], [48, 46], [48, 54], [52, 46], [52, 54], [56, 50]] }, hiddenByDefault: true, style: { stroke: "#C53030", strokeWidth: 0.9 } },
-    { id: "spindle", name: "Spindle fibres", geometry: { kind: "line", from: [22, 50], to: [78, 50] }, hiddenByDefault: true, style: { dashed: true } },
+    // Organic blob: cytoplasm fill + membrane rim share the same outline.
+    { id: "cytoplasm", name: "Cytoplasm", geometry: { kind: "curve", points: [[50, 5], [70, 8], [85, 19], [93, 36], [94, 55], [86, 74], [70, 89], [50, 95], [30, 90], [14, 77], [6, 57], [7, 35], [17, 17], [34, 7], [50, 5]] }, style: { fill: "#63D6BC", stroke: "none" } },
+    { id: "membrane", name: "Cell membrane", geometry: { kind: "curve", points: [[50, 5], [70, 8], [85, 19], [93, 36], [94, 55], [86, 74], [70, 89], [50, 95], [30, 90], [14, 77], [6, 57], [7, 35], [17, 17], [34, 7], [50, 5]] }, style: { fill: "none", stroke: "#2E9E86", strokeWidth: 1.1 } },
+    // Rough ER — folded membrane C-loops left of the nucleus.
+    { id: "er", name: "Endoplasmic reticulum", geometry: { kind: "path", d: "M22 40 Q13 50 22 60 M25 39 Q15 50 25 61 M28 40 Q19 50 28 60" }, style: { stroke: "#6E86C7", strokeWidth: 0.7, fill: "none" } },
+    // Golgi — stacked flattened sacs, lower right.
+    { id: "golgi", name: "Golgi apparatus", geometry: { kind: "path", d: "M58 74 Q66 69 74 74 M59 77 Q66 72 73 77 M60 80 Q66 76 72 80 M61 83 Q66 80 71 83" }, style: { stroke: "#E0706B", strokeWidth: 0.7, fill: "none" } },
+    { id: "nucleus", name: "Nucleus", geometry: { kind: "circle", c: [46, 47], r: 14 }, style: { fill: "#F3B6C4", stroke: "#D2718B", strokeWidth: 0.9 }, anchors: [{ id: "c", at: [46, 47] }] },
+    { id: "nucleolus", name: "Nucleolus", geometry: { kind: "circle", c: [48, 49], r: 4.5 }, style: { fill: "#C43D5F", stroke: "none" } },
+    { id: "dna", name: "Chromatin", geometry: { kind: "polyline", points: [[44, 49], [46, 46], [48, 50], [50, 46], [52, 50], [54, 47]] }, style: { stroke: "#7A1F3A", strokeWidth: 0.6 } },
+    { id: "mito1", name: "Mitochondrion", geometry: { kind: "ellipse", c: [72, 30], rx: 9, ry: 5 }, style: { fill: "#C9DCEC", stroke: "#6E8FB0" }, anchors: [{ id: "c", at: [72, 30] }] },
+    { id: "mito1_cristae", name: "Cristae", geometry: { kind: "polyline", points: [[65, 30], [67, 27], [69, 31], [71, 27], [73, 31], [75, 27], [77, 30]] }, style: { stroke: "#E0894C", strokeWidth: 0.6 } },
+    { id: "mito2", name: "Mitochondrion", geometry: { kind: "ellipse", c: [30, 73], rx: 9, ry: 5 }, style: { fill: "#C9DCEC", stroke: "#6E8FB0" } },
+    { id: "mito2_cristae", name: "Cristae", geometry: { kind: "polyline", points: [[23, 73], [25, 70], [27, 74], [29, 70], [31, 74], [33, 70], [35, 73]] }, style: { stroke: "#E0894C", strokeWidth: 0.6 } },
+    { id: "lysosome", name: "Lysosome", geometry: { kind: "circle", c: [26, 32], r: 4 }, style: { fill: "#F4C542", stroke: "#C99A1E" }, anchors: [{ id: "c", at: [26, 32] }] },
+    { id: "vacuole", name: "Vacuole", geometry: { kind: "ellipse", c: [78, 58], rx: 6, ry: 5 }, style: { fill: "#F3B4C6", stroke: "#D98CA6" }, anchors: [{ id: "c", at: [78, 58] }] },
+    { id: "centriole1", name: "Centriole", geometry: { kind: "rect", at: [20, 56], w: 3, h: 8, rounded: 1 }, style: { fill: "#DA4A3F", stroke: "#A82D25" } },
+    { id: "centriole2", name: "Centriole", geometry: { kind: "rect", at: [24, 58], w: 8, h: 3, rounded: 1 }, style: { fill: "#DA4A3F", stroke: "#A82D25" } },
+    { id: "ribo1", name: "Ribosome", geometry: { kind: "point", at: [38, 30] }, style: { fill: "#3B4B66" } },
+    { id: "ribo2", name: "Ribosome", geometry: { kind: "point", at: [58, 34] }, style: { fill: "#3B4B66" } },
+    { id: "ribo3", name: "Ribosome", geometry: { kind: "point", at: [66, 52] }, style: { fill: "#3B4B66" } },
+    { id: "ribo4", name: "Ribosome", geometry: { kind: "point", at: [44, 68] }, style: { fill: "#3B4B66" } },
+    { id: "ribo5", name: "Ribosome", geometry: { kind: "point", at: [55, 62] }, style: { fill: "#3B4B66" } },
+    { id: "chromosomes", name: "Chromosomes", geometry: { kind: "polyline", points: [[42, 47], [46, 43], [46, 51], [50, 43], [50, 51], [54, 47]] }, hiddenByDefault: true, style: { stroke: "#C53030", strokeWidth: 0.9 } },
+    { id: "spindle", name: "Spindle fibres", geometry: { kind: "line", from: [20, 47], to: [72, 47] }, hiddenByDefault: true, style: { dashed: true } },
   ],
   states: [
-    { id: "interphase", description: "Normal cell; genetic material as chromatin", visibleParts: ["membrane", "cytoplasm", "nucleus", "nucleolus", "mitochondria"] },
-    { id: "mitosis.prophase", description: "Chromosomes condense", visibleParts: ["membrane", "cytoplasm", "nucleus", "chromosomes", "mitochondria"], labels: { chromosomes: "chromosomes condense" } },
-    { id: "mitosis.metaphase", description: "Chromosomes align on the spindle", visibleParts: ["membrane", "cytoplasm", "chromosomes", "spindle", "mitochondria"], labels: { spindle: "spindle forms" } },
-    { id: "mitosis.anaphase", description: "Sister chromatids pulled apart", visibleParts: ["membrane", "cytoplasm", "chromosomes", "spindle", "mitochondria"] },
-    { id: "mitosis.telophase", description: "Two nuclei reform", visibleParts: ["membrane", "cytoplasm", "nucleus", "mitochondria"] },
+    { id: "interphase", description: "Normal cell; genetic material as chromatin", visibleParts: [...ANIMAL_ORGANELLES] },
+    { id: "mitosis.prophase", description: "Chromosomes condense", visibleParts: ["cytoplasm", "membrane", "nucleus", "chromosomes", "mito1", "mito1_cristae", "mito2", "mito2_cristae"], labels: { chromosomes: "chromosomes condense" } },
+    { id: "mitosis.metaphase", description: "Chromosomes align on the spindle", visibleParts: ["cytoplasm", "membrane", "chromosomes", "spindle", "mito1", "mito2"], labels: { spindle: "spindle forms" } },
+    { id: "mitosis.anaphase", description: "Sister chromatids pulled apart", visibleParts: ["cytoplasm", "membrane", "chromosomes", "spindle", "mito1", "mito2"] },
+    { id: "mitosis.telophase", description: "Two nuclei reform", visibleParts: ["cytoplasm", "membrane", "nucleus", "mito1", "mito2"] },
   ],
   transitions: [
     { from: "interphase", to: "mitosis.prophase", effect: "interpolate" },
@@ -114,7 +141,7 @@ export const ANIMAL_CELL: KnowledgeObject = {
       },
     },
   ],
-  animation: { drawOrder: ["membrane", "cytoplasm", "nucleus", "nucleolus", "mitochondria", "chromosomes", "spindle"], strokeSecPerPart: 0.35 },
+  animation: { drawOrder: [...ANIMAL_ORGANELLES], strokeSecPerPart: 0.18 },
   renderHints: { props: ["phase"] },
   provenance: { source: "curated" },
 };
@@ -130,20 +157,41 @@ export const PLANT_CELL: KnowledgeObject = {
   difficulty: 2,
   tier: 1,
   parts: [
-    { id: "cell_wall", name: "Cell wall", geometry: { kind: "rect", at: [6, 10], w: 88, h: 80, rounded: 4 }, style: { stroke: "#3F7A3F", strokeWidth: 1.2 } },
-    { id: "membrane", name: "Cell membrane", geometry: { kind: "rect", at: [9, 13], w: 82, h: 74, rounded: 3 }, style: { stroke: "#6FA96F" } },
-    { id: "cytoplasm", name: "Cytoplasm", geometry: { kind: "rect", at: [10, 14], w: 80, h: 72, rounded: 3 }, style: { fill: "#F1FAF0", stroke: "none" } },
-    { id: "vacuole", name: "Large vacuole", geometry: { kind: "rect", at: [26, 30], w: 48, h: 40, rounded: 6 }, style: { fill: "#DCEEFB", stroke: "#5B9BD5" }, anchors: [{ id: "c", at: [50, 50] }] },
-    { id: "nucleus", name: "Nucleus", geometry: { kind: "circle", c: [24, 30], r: 10 }, style: { fill: "#E7DAF5", stroke: "#7C4DB8" }, anchors: [{ id: "c", at: [24, 30] }] },
-    { id: "nucleolus", name: "Nucleolus", geometry: { kind: "circle", c: [24, 30], r: 3 }, style: { fill: "#7C4DB8", stroke: "none" } },
-    { id: "chloroplasts", name: "Chloroplasts", geometry: { kind: "ellipse", c: [72, 66], rx: 7, ry: 4 }, style: { fill: "#CDEBC5", stroke: "#3F7A3F" } },
-    { id: "mitochondria", name: "Mitochondrion", geometry: { kind: "ellipse", c: [70, 26], rx: 8, ry: 4.5 }, style: { fill: "#FFE7CC", stroke: "#C77F2A" } },
+    // Rigid wall band + membrane + cytoplasm.
+    { id: "cell_wall", name: "Cell wall", geometry: { kind: "rect", at: [6, 8], w: 88, h: 84, rounded: 5 }, style: { fill: "#B7D99F", stroke: "#3F7A3F", strokeWidth: 1.3 } },
+    { id: "cytoplasm", name: "Cytoplasm", geometry: { kind: "rect", at: [9, 11], w: 82, h: 78, rounded: 4 }, style: { fill: "#EAF7E1", stroke: "none" } },
+    { id: "membrane", name: "Cell membrane", geometry: { kind: "rect", at: [9, 11], w: 82, h: 78, rounded: 4 }, style: { fill: "none", stroke: "#6FA96F", strokeWidth: 0.6 } },
+    // Large central vacuole pushes everything to the rim.
+    { id: "vacuole", name: "Large vacuole", geometry: { kind: "rect", at: [27, 27], w: 46, h: 47, rounded: 10 }, style: { fill: "#CFE7F7", stroke: "#7FB4D8", strokeWidth: 0.7 }, anchors: [{ id: "c", at: [50, 50] }] },
+    { id: "nucleus", name: "Nucleus", geometry: { kind: "circle", c: [20, 25], r: 9 }, style: { fill: "#F3B6C4", stroke: "#D2718B", strokeWidth: 0.9 }, anchors: [{ id: "c", at: [20, 25] }] },
+    { id: "nucleolus", name: "Nucleolus", geometry: { kind: "circle", c: [20, 25], r: 3 }, style: { fill: "#C43D5F", stroke: "none" } },
+    { id: "chloro1", name: "Chloroplast", geometry: { kind: "ellipse", c: [80, 30], rx: 7, ry: 4.5 }, style: { fill: "#77C265", stroke: "#3F7A3F" }, anchors: [{ id: "c", at: [80, 30] }] },
+    { id: "grana1", name: "Grana", geometry: { kind: "path", d: "M77 30 h6 M77 28.4 h6 M77 31.6 h6" }, style: { stroke: "#2E6B2E", strokeWidth: 0.5, fill: "none" } },
+    { id: "chloro2", name: "Chloroplast", geometry: { kind: "ellipse", c: [81, 55], rx: 7, ry: 4.5 }, style: { fill: "#77C265", stroke: "#3F7A3F" } },
+    { id: "grana2", name: "Grana", geometry: { kind: "path", d: "M78 55 h6 M78 53.4 h6 M78 56.6 h6" }, style: { stroke: "#2E6B2E", strokeWidth: 0.5, fill: "none" } },
+    { id: "chloro3", name: "Chloroplast", geometry: { kind: "ellipse", c: [48, 82], rx: 7, ry: 4.5 }, style: { fill: "#77C265", stroke: "#3F7A3F" } },
+    { id: "chloro4", name: "Chloroplast", geometry: { kind: "ellipse", c: [22, 62], rx: 7, ry: 4.5 }, style: { fill: "#77C265", stroke: "#3F7A3F" } },
+    { id: "mito", name: "Mitochondrion", geometry: { kind: "ellipse", c: [72, 82], rx: 6.5, ry: 4 }, style: { fill: "#C9DCEC", stroke: "#6E8FB0" }, anchors: [{ id: "c", at: [72, 82] }] },
+    { id: "mito_cristae", name: "Cristae", geometry: { kind: "polyline", points: [[67, 82], [69, 80], [71, 83], [73, 80], [75, 83], [77, 82]] }, style: { stroke: "#E0894C", strokeWidth: 0.5 } },
+    { id: "golgi", name: "Golgi apparatus", geometry: { kind: "path", d: "M60 18 Q66 14 72 18 M61 21 Q66 17 71 21 M62 24 Q66 21 70 24" }, style: { stroke: "#E0706B", strokeWidth: 0.7, fill: "none" } },
+    { id: "er", name: "Endoplasmic reticulum", geometry: { kind: "path", d: "M30 16 Q24 24 30 32 M33 16 Q26 24 33 32" }, style: { stroke: "#6E86C7", strokeWidth: 0.7, fill: "none" } },
+    { id: "ribo1", name: "Ribosome", geometry: { kind: "point", at: [16, 46] }, style: { fill: "#3B4B66" } },
+    { id: "ribo2", name: "Ribosome", geometry: { kind: "point", at: [44, 18] }, style: { fill: "#3B4B66" } },
+    { id: "ribo3", name: "Ribosome", geometry: { kind: "point", at: [86, 44] }, style: { fill: "#3B4B66" } },
+    { id: "ribo4", name: "Ribosome", geometry: { kind: "point", at: [34, 84] }, style: { fill: "#3B4B66" } },
   ],
   states: [
-    { id: "labelled", description: "All organelles visible", visibleParts: ["cell_wall", "membrane", "cytoplasm", "vacuole", "nucleus", "nucleolus", "chloroplasts", "mitochondria"] },
+    {
+      id: "labelled",
+      description: "All organelles visible",
+      visibleParts: ["cell_wall", "cytoplasm", "membrane", "vacuole", "nucleus", "nucleolus", "chloro1", "grana1", "chloro2", "grana2", "chloro3", "chloro4", "mito", "mito_cristae", "golgi", "er", "ribo1", "ribo2", "ribo3", "ribo4"],
+    },
   ],
   transitions: [],
-  animation: { drawOrder: ["cell_wall", "membrane", "cytoplasm", "vacuole", "nucleus", "nucleolus", "chloroplasts", "mitochondria"], strokeSecPerPart: 0.32 },
+  animation: {
+    drawOrder: ["cell_wall", "cytoplasm", "membrane", "vacuole", "nucleus", "nucleolus", "chloro1", "grana1", "chloro2", "grana2", "chloro3", "chloro4", "mito", "mito_cristae", "golgi", "er", "ribo1", "ribo2", "ribo3", "ribo4"],
+    strokeSecPerPart: 0.16,
+  },
   provenance: { source: "curated" },
 };
 
