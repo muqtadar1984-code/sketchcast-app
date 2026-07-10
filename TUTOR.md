@@ -230,3 +230,35 @@ Migration: `0029_tutor_board.sql`.
 
 > Engine source note: `src/ere/` is a **vendored copy** of the `@sketchcast/ere`
 > package (`src/ere/VENDORED.md` has the sync steps). Keep them in lockstep.
+
+---
+
+## Phase 2 (in progress) — the shared board (standalone canvas app)
+
+Phase 2 moves the interactive board into a **separate app** (`board.sketchcast.app`,
+own repo/deploy) embedded via a sandboxed iframe, and makes the board **shared**:
+the student can select/point/circle/annotate objects and the tutor perceives those
+events. The determinism boundary is unchanged — **student events in, TAL out.**
+
+**Server layer shipped (P2-B), all behind `FEATURE_AI_TUTOR_CANVAS` (default off):**
+- **Cross-origin auth** — the board is cookieless, so the portal mints a scoped
+  HMAC token via `POST /api/tutor/board-token` (cookie-auth + the same assignment +
+  Pro+ checks) and hands it to the iframe. `/api/tutor/turn` now does **dual-auth**
+  (cookie same-origin OR `Authorization: Bearer <token>` cross-origin, the token
+  bound to the lesson), with CORS + an OPTIONS preflight that echoes **only** the
+  allowlisted board origin. The turn route STILL re-runs `resolveTutorContext` +
+  Pro+, so a token can never exceed its `(user, lesson)` scope.
+  Helpers: `src/utils/tutor/board-token.ts` (sign/verify), `board.ts` (`boardCors`).
+- **Student events** — `/api/tutor/turn` accepts `studentEvents[]` (validated +
+  sanitized: only `student.select/point/circle/annotate/answer`; `drag`/manipulation
+  is blocked — that's Phase 3). They feed the tutor's read-back (so it answers the
+  referenced object), are persisted append-only (`actor='student'`), and fold into
+  the TAL cache key via a `ref_hash` so "explain what I circled" on the Golgi vs the
+  nucleus don't collide. **Migration `0033`** adds the `ref_hash` column.
+
+**Env (all default off/empty):** `FEATURE_AI_TUTOR_CANVAS` +
+`NEXT_PUBLIC_FEATURE_AI_TUTOR_CANVAS`, `NEXT_PUBLIC_BOARD_URL` (+ optional
+`BOARD_APP_ORIGIN` for CORS), and `BOARD_TOKEN_SECRET` (≥16-char random).
+**Run migration `0033` before enabling** (the turn route reads the `ref_hash`
+column; until then a board turn degrades to text). Still to build: the standalone
+`sketchcast-board` app (P2-C) and the portal `CanvasFrame` iframe + fallback (P2-D).

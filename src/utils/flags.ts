@@ -101,3 +101,17 @@ export function aiTutorSketchEnabled(): boolean {
 export function aiTutorTalEnabled(): boolean {
   return process.env.FEATURE_AI_TUTOR_TAL === "true";
 }
+
+/**
+ * AI Tutor Phase 2 — the shared board runs in the STANDALONE canvas app
+ * (board.sketchcast.app), embedded via a sandboxed iframe, so a student can
+ * select/point/circle/annotate objects and the tutor perceives those events.
+ * This flag gates the scoped board-token mint route + the cross-origin (Bearer)
+ * auth path on /api/tutor/turn. OFF by default; requires FEATURE_AI_TUTOR_TAL too
+ * (the board itself). The portal iframe surface additionally reads
+ * NEXT_PUBLIC_FEATURE_AI_TUTOR_CANVAS + NEXT_PUBLIC_BOARD_URL; when off, the portal
+ * falls back to the Phase-1 in-app board, then text.
+ */
+export function aiTutorCanvasEnabled(): boolean {
+  return process.env.FEATURE_AI_TUTOR_CANVAS === "true";
+}
