@@ -169,7 +169,7 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
               <a href={item.deck} className="font-medium text-[#0C8175] hover:underline">⬇ Deck</a>
             )}
             {AI_TUTOR && (
-              <button onClick={() => setCoaching(true)} className="font-medium text-[#0C8175] hover:underline">🎓 Ask Coach</button>
+              <button onClick={() => setCoaching(true)} className="font-medium text-[#0C8175] hover:underline">🎓 Assistant</button>
             )}
           </>
         ) : (

@@ -30,7 +30,7 @@ export default function AskCoachButton({
         className={className ?? "font-medium text-[#0C8175] hover:underline"}
         title="Try the AI coach on this lesson"
       >
-        🎓 Ask Coach
+        🎓 Assistant
       </button>
       {open && (
         <AskCoach generationId={generationId} chapterLabel={chapterLabel} studentId={studentId} onClose={() => setOpen(false)} />

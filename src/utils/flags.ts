@@ -115,3 +115,15 @@ export function aiTutorTalEnabled(): boolean {
 export function aiTutorCanvasEnabled(): boolean {
   return process.env.FEATURE_AI_TUTOR_CANVAS === "true";
 }
+
+/**
+ * AI Teaching Assistant — the chat tutor that REPLACES "Ask Coach" as the active
+ * student path (the TAL board stays preserved behind FEATURE_AI_TUTOR_TAL, off).
+ * Book-first Option-B grounding, swappable LLM provider (Gemini free tier first),
+ * constrained SymPy math tool, browser voice. The client launcher additionally
+ * reads NEXT_PUBLIC_FEATURE_AI_ASSISTANT; the /api/assistant check here is
+ * authoritative. OFF by default.
+ */
+export function aiAssistantEnabled(): boolean {
+  return process.env.FEATURE_AI_ASSISTANT === "true";
+}

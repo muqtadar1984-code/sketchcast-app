@@ -17,6 +17,7 @@ import { EmptyBooks } from "./icons";
 import { InkUnderline } from "@/components/ink-mark";
 import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
+import AssistantLauncher from "./assistant-launcher";
 import BetaBanner from "./beta-banner";
 import { parentPortalEnabled, platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
 
@@ -234,6 +235,7 @@ export default async function DashboardPage() {
         <AppHeader />
         <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
         {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
+        <AssistantLauncher />
       </div>
     );
   }
@@ -549,6 +551,7 @@ export default async function DashboardPage() {
 
       {feedback && <FeedbackWidget submitted={feedback.submitted} />}
       {platformConsoleEnabled() && <ReportIssueWidget />}
+      <AssistantLauncher />
     </div>
   );
 }
