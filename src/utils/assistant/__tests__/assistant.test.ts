@@ -17,6 +17,7 @@ import { buildAssistantPrompt, declineMessage, NO_BOOK_MESSAGE } from "@/utils/a
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
 import { StubProvider } from "@/utils/assistant/providers/stub";
 import { toGeminiContents, toGeminiBody } from "@/utils/assistant/providers/gemini";
+import { buildHistorySummary } from "@/utils/assistant/store";
 
 const TOPICS: Topic[] = [
   { bookId: "b1", bookTitle: "Science 7", chapterNum: 1, title: "Cells and their structure" },
@@ -137,6 +138,24 @@ describe("orchestrator (provider-agnostic)", () => {
     const events = [];
     for await (const ev of runAssistantTurn({ provider, system: "s", history: [], question: "q" })) events.push(ev);
     expect(events).toEqual([{ type: "error", message: "rate limited", retryable: true }]);
+  });
+});
+
+describe("history summarisation (summarise, don't replay)", () => {
+  it("condenses older sessions into topics + recent questions, deduped", () => {
+    const s = buildHistorySummary([
+      { content: "what is photosynthesis", source_label: "Chapter 2 — Photosynthesis" },
+      { content: "explain chlorophyll", source_label: "Chapter 2 — Photosynthesis" },
+      { content: "what is a cell", source_label: "Chapter 1 — Cells" },
+    ]);
+    expect(s).toContain("Chapter 2 — Photosynthesis");
+    expect(s).toContain("Chapter 1 — Cells");
+    // deduped topics: "Photosynthesis" appears once
+    expect(s!.match(/Photosynthesis/g)!.length).toBe(1);
+    expect(s).toContain('"what is photosynthesis"');
+  });
+  it("is null with no history", () => {
+    expect(buildHistorySummary([])).toBeNull();
   });
 });
 

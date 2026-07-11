@@ -71,9 +71,19 @@ export async function openSession(admin: SupabaseClient, studentId: string): Pro
   };
 }
 
-/** Compact, deterministic summary of OLDER sessions in the retention window —
- * the topics/questions touched, never raw transcript. (A model-written summary
- * is a later upgrade; this is free and instant.) */
+/** Pure: compact summary of older sessions from their student rows — the
+ * topics/questions touched, never raw transcript. Deterministic; unit-tested.
+ * (A model-written summary is a later upgrade; this is free and instant.) */
+export function buildHistorySummary(rows: { content: unknown; source_label?: unknown }[]): string | null {
+  if (!rows.length) return null;
+  const topics = [...new Set(rows.map((m) => String(m.source_label || "")).filter(Boolean))].slice(0, 5);
+  const questions = rows.slice(0, 5).map((m) => `"${String(m.content).slice(0, 80)}"`);
+  const parts: string[] = [];
+  if (topics.length) parts.push(`Topics covered recently: ${topics.join("; ")}.`);
+  if (questions.length) parts.push(`Recent questions: ${questions.join(", ")}.`);
+  return parts.join(" ") || null;
+}
+
 async function olderHistorySummary(admin: SupabaseClient, studentId: string, activeSessionId: string): Promise<string | null> {
   const { data } = await admin
     .from("assistant_messages")
@@ -83,13 +93,7 @@ async function olderHistorySummary(admin: SupabaseClient, studentId: string, act
     .neq("session_id", activeSessionId)
     .order("created_at", { ascending: false })
     .limit(12);
-  if (!data?.length) return null;
-  const topics = [...new Set(data.map((m) => String(m.source_label || "")).filter(Boolean))].slice(0, 5);
-  const questions = data.slice(0, 5).map((m) => `"${String(m.content).slice(0, 80)}"`);
-  const parts: string[] = [];
-  if (topics.length) parts.push(`Topics covered recently: ${topics.join("; ")}.`);
-  if (questions.length) parts.push(`Recent questions: ${questions.join(", ")}.`);
-  return parts.join(" ") || null;
+  return buildHistorySummary(data ?? []);
 }
 
 export type TurnLog = {
