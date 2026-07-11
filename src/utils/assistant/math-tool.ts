@@ -27,6 +27,22 @@ export function mathToolsAvailable(): boolean {
 
 const CANNOT = JSON.stringify({ ok: false, error: "could not compute this one" });
 
+/** Build the POST body for the math service from a structured tool call. Pure +
+ * exported so the app↔service contract is unit-tested (schema drift here silently
+ * gives a child a wrong answer). The one shape that needs remapping: the model
+ * emits definite-integral bounds as FLAT `from`/`to` (simpler for it to fill),
+ * but `op_integrate` reads ONLY a nested `definite: {from, to}` object — send it
+ * flat and the service ignores the bounds and returns the INDEFINITE
+ * antiderivative as {ok:true}, i.e. the wrong answer for "area under a curve". */
+export function toMathRequestBody(call: ToolCall): Record<string, unknown> {
+  const args = (call.args ?? {}) as Record<string, unknown>;
+  if (call.name === "integrate" && (args.from !== undefined || args.to !== undefined)) {
+    const { from, to, ...rest } = args;
+    return { op: call.name, ...rest, definite: { from, to } };
+  }
+  return { op: call.name, ...args };
+}
+
 /** Forward a structured tool call to the math service. Always resolves to a JSON
  * string result for the model; never throws (a math hiccup must not kill the
  * teaching turn — the model explains conceptually instead). */
@@ -38,7 +54,7 @@ export async function runMathTool(call: ToolCall): Promise<string> {
     const res = await fetch(`${url.replace(/\/$/, "")}/math`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-math-token": token },
-      body: JSON.stringify({ op: call.name, ...call.args }),
+      body: JSON.stringify(toMathRequestBody(call)),
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return CANNOT;

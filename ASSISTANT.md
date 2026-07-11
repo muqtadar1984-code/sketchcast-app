@@ -109,13 +109,45 @@ already in use, while Gemini is evaluated.)
 **Migration:** `0034_assistant.sql` (assistant_sessions / assistant_messages, RLS,
 30-day retention on open). Run before enabling.
 
-## Math service (SymPy) — deploy as a 2nd Railway service
+## Math service (SymPy) — DEPLOYED (2nd Railway service)
 
-Repo: `sketchcast-ai` (worker), directory `mathsvc/`. In Railway → **New service →
-GitHub repo** (same repo, root dir unchanged), Custom Start Command:
-`pip install -r mathsvc/requirements.txt && uvicorn mathsvc.app:app --host 0.0.0.0 --port $PORT`.
-Set `MATH_SVC_TOKEN` (long random). Then set `MATH_SVC_URL` + the same
-`MATH_SVC_TOKEN` on Vercel. Health check: `/health`.
+Live at `https://successful-imagination-production-42cd.up.railway.app` (Railway
+project `charming-embrace`, service `successful-imagination`, same repo
+`sketchcast-ai`, **Dockerfile path `mathsvc/Dockerfile`**, target Port 8080 — the
+Dockerfile keeps this build light and isolated from the worker's nixpacks build).
+`MATH_SVC_TOKEN` is set on the service; `MATH_SVC_URL` + the same `MATH_SVC_TOKEN`
+are set on Vercel. Health check `/health`. Redeploys on any change under
+`mathsvc/**` (watch path). To rebuild a new service from scratch, see
+`sketchcast/mathsvc/README.md`.
+
+## Acceptance hardening (post-deploy audit, 2026-07-11)
+
+A multi-agent acceptance audit of the deployed service + the app-side contract
+found and fixed two confirmed issues (both pre-enablement — the feature is
+flag-off and `/math` is token-gated, so neither was live-exploitable):
+
+- **Definite integrals (wrong-answer-to-a-child, FIXED).** The model emits
+  definite bounds as flat `from`/`to`, but `op_integrate` reads only a nested
+  `definite:{from,to}` — so the bounds were silently dropped and the service
+  returned the *indefinite antiderivative* as `{ok:true}`. Fixed in
+  `math-tool.ts` (`toMathRequestBody` remaps `integrate` → nested `definite`),
+  covered by a contract test so the shape can't drift again.
+- **Power-tower / degree DoS (FIXED).** `9^9^9` (or `(x+1)^9999999`) bypassed
+  the whitelist and would materialize an astronomically large value at parse
+  time; the op timeout can't reclaim it (CPython can't kill the thread) → OOM on
+  the single worker. Fixed in `safety.py` with a pre-parse (`evaluate=False`)
+  size guard (`_estimate_numeric_bits` + `_reject_absurd_degree`, caps
+  `MAX_RESULT_BITS` / `MAX_SYMBOLIC_DEGREE`) — rejects in ≤0.1s, legit powers
+  and symbolic exponents (`2**x`) still compute.
+
+**Recommended deeper follow-ups (not yet done):**
+- **Process isolation** for each op (separate process + memory `rlimit` +
+  `SIGKILL` on timeout) so any future runaway is truly reclaimed, plus a small
+  concurrency cap. The size guard closes the cheap trigger; this bounds the rest.
+- **Honest-mastery is prompt-only** — the math tool always returns the full
+  graded answer to the model; only the system prompt (`prompt.ts` rule 3) stops
+  it being read out on a graded item. Consider an eval asserting a direct
+  "what's the answer to Q5" doesn't leak the raw `result` verbatim.
 
 ## Privacy / RLS
 

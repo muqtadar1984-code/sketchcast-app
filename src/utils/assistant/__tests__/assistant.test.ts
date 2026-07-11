@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import { decideScope, scoreTopics, type Topic } from "@/utils/assistant/scope";
 import { buildAssistantPrompt, declineMessage, NO_BOOK_MESSAGE } from "@/utils/assistant/prompt";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
+import { toMathRequestBody } from "@/utils/assistant/math-tool";
 import { StubProvider } from "@/utils/assistant/providers/stub";
 import { toGeminiContents, toGeminiBody } from "@/utils/assistant/providers/gemini";
 import { buildHistorySummary } from "@/utils/assistant/store";
@@ -138,6 +139,27 @@ describe("orchestrator (provider-agnostic)", () => {
     const events = [];
     for await (const ev of runAssistantTurn({ provider, system: "s", history: [], question: "q" })) events.push(ev);
     expect(events).toEqual([{ type: "error", message: "rate limited", retryable: true }]);
+  });
+});
+
+describe("math tool request contract (app ↔ service shape)", () => {
+  it("remaps definite-integral bounds to the nested `definite` object the service reads", () => {
+    // Regression: the model emits flat from/to but op_integrate reads only
+    // `definite`. Sending flat → bounds dropped → indefinite antiderivative
+    // returned as {ok:true} → a wrong 'area under the curve' answer to a child.
+    const body = toMathRequestBody({ id: "t", name: "integrate", args: { expr: "x**2", from: "0", to: "1" } });
+    expect(body).toEqual({ op: "integrate", expr: "x**2", definite: { from: "0", to: "1" } });
+    expect(body).not.toHaveProperty("from");
+    expect(body).not.toHaveProperty("to");
+  });
+  it("leaves an indefinite integral flat (no empty definite object)", () => {
+    const body = toMathRequestBody({ id: "t", name: "integrate", args: { expr: "2*x", var: "x" } });
+    expect(body).toEqual({ op: "integrate", expr: "2*x", var: "x" });
+  });
+  it("passes every other op through unchanged", () => {
+    expect(toMathRequestBody({ id: "t", name: "solve", args: { expr: "x-1=0" } })).toEqual({ op: "solve", expr: "x-1=0" });
+    expect(toMathRequestBody({ id: "t", name: "physics_eval", args: { expr: "F=m*a", values: { m: "2 kg" }, target_unit: "N" } }))
+      .toEqual({ op: "physics_eval", expr: "F=m*a", values: { m: "2 kg" }, target_unit: "N" });
   });
 });
 
