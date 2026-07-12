@@ -1,5 +1,6 @@
 import { requirePlatformAdmin } from "@/utils/platform-admin";
 import ConsoleHeader from "./console-header";
+import AssistantLauncher from "../dashboard/assistant-launcher";
 
 // Staff-only shell. requirePlatformAdmin() bounces everyone else to /dashboard
 // (and the whole surface is dark while FEATURE_PLATFORM_CONSOLE is off).
@@ -11,6 +12,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <ConsoleHeader email={admin.email} />
       {children}
+      <AssistantLauncher />
     </div>
   );
 }

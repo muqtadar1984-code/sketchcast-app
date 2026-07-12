@@ -11,25 +11,55 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type ScopedBook = { id: string; title: string; subject: string | null; grade: string | null };
 export type Topic = { bookId: string; bookTitle: string; chapterNum: number; title: string };
 
-/** Books in scope for THIS user: a student's assigned lessons' books first;
- * an adult (teacher/parent previewing) falls back to books they own. Capped —
- * scope is "what we're studying", not the whole library. */
+/** Books in scope for THIS user, resolved by a fallback chain: a student's
+ * assigned lessons' books first; then an adult's OWN books (teacher/parent who
+ * has uploaded); then — for a PARENT with no own books — the books their LINKED
+ * children are studying. Capped — scope is "what we're studying", not the whole
+ * library. */
 export async function inScopeBooks(admin: SupabaseClient, userId: string): Promise<ScopedBook[]> {
   const ids = new Set<string>();
+  const addBookIds = (rows: unknown[] | null | undefined) => {
+    for (const r of rows ?? []) {
+      const g = (r as { generations?: { book_id?: string } | { book_id?: string }[] }).generations;
+      const v = Array.isArray(g) ? g[0]?.book_id : g?.book_id;
+      if (v) ids.add(v);
+    }
+  };
+
   const { data: assigned } = await admin
     .from("student_progress")
     .select("generations(book_id)")
     .eq("student_id", userId)
     .limit(200);
-  for (const r of assigned ?? []) {
-    const bookId = (r as { generations?: { book_id?: string } | { book_id?: string }[] }).generations;
-    const v = Array.isArray(bookId) ? bookId[0]?.book_id : bookId?.book_id;
-    if (v) ids.add(v);
-  }
+  addBookIds(assigned);
+
   if (ids.size === 0) {
     const { data: owned } = await admin.from("books").select("id").eq("owner_id", userId).limit(12);
     for (const r of owned ?? []) ids.add((r as { id: string }).id);
   }
+
+  if (ids.size === 0) {
+    // Parent fallback: the books their LINKED children are studying. Explicitly
+    // scoped to this parent's own links — the admin client bypasses RLS, so the
+    // parent_id filter is the guard that keeps it to their OWN children.
+    const { data: kids } = await admin
+      .from("parent_links")
+      .select("child_id")
+      .eq("parent_id", userId)
+      .limit(20);
+    const childIds = (kids ?? [])
+      .map((k) => (k as { child_id?: string }).child_id)
+      .filter((v): v is string => !!v);
+    if (childIds.length) {
+      const { data: kidAssigned } = await admin
+        .from("student_progress")
+        .select("generations(book_id)")
+        .in("student_id", childIds)
+        .limit(400);
+      addBookIds(kidAssigned);
+    }
+  }
+
   if (ids.size === 0) return [];
   const { data: books } = await admin
     .from("books")

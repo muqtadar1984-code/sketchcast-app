@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { decideScope, scoreTopics, type Topic } from "@/utils/assistant/scope";
+import { decideScope, scoreTopics, inScopeBooks, type Topic } from "@/utils/assistant/scope";
 import { buildAssistantPrompt, declineMessage, NO_BOOK_MESSAGE } from "@/utils/assistant/prompt";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
 import { toMathRequestBody } from "@/utils/assistant/math-tool";
@@ -178,6 +178,57 @@ describe("history summarisation (summarise, don't replay)", () => {
   });
   it("is null with no history", () => {
     expect(buildHistorySummary([])).toBeNull();
+  });
+});
+
+// A tiny scripted Supabase double: each awaited query resolves to the next
+// canned { data } in order. inScopeBooks issues its queries in a fixed sequence,
+// so ordering the responses mirrors the fallback chain it walks.
+function scriptedAdmin(responses: unknown[][]) {
+  let i = 0;
+  const builder = () => {
+    const b: Record<string, unknown> = {};
+    const chain = () => b;
+    b.select = chain;
+    b.eq = chain;
+    b.in = chain;
+    b.limit = chain;
+    b.then = (resolve: (v: { data: unknown[] }) => unknown) =>
+      Promise.resolve({ data: responses[i++] ?? [] }).then(resolve);
+    return b;
+  };
+  return { from: () => builder() } as unknown as Parameters<typeof inScopeBooks>[0];
+}
+
+describe("inScopeBooks fallback chain (student → own → children's books)", () => {
+  it("a pure parent (no assigned, no own) grounds on their children's assigned books", async () => {
+    const books = await inScopeBooks(
+      scriptedAdmin([
+        [], // 1. self student_progress
+        [], // 2. own books
+        [{ child_id: "c1" }], // 3. parent_links
+        [{ generations: { book_id: "b1" } }], // 4. children's student_progress
+        [{ id: "b1", title: "Science 7", subject: "Science", grade: "7" }], // 5. final books
+      ]),
+      "parent-1"
+    );
+    expect(books).toEqual([{ id: "b1", title: "Science 7", subject: "Science", grade: "7" }]);
+  });
+
+  it("a teacher-parent with own books grounds on THOSE, not the children's", async () => {
+    const books = await inScopeBooks(
+      scriptedAdmin([
+        [], // self student_progress
+        [{ id: "b2" }], // own books → stops the chain before the parent branch
+        [{ id: "b2", title: "Math 8", subject: "Math", grade: "8" }], // final books
+      ]),
+      "teacher-parent-1"
+    );
+    expect(books).toEqual([{ id: "b2", title: "Math 8", subject: "Math", grade: "8" }]);
+  });
+
+  it("an adult with nothing (no books, no children) returns empty", async () => {
+    expect(await inScopeBooks(scriptedAdmin([[], [], []]), "lonely-1")).toEqual([]);
   });
 });
 

@@ -17,9 +17,8 @@ import { EmptyBooks } from "./icons";
 import { InkUnderline } from "@/components/ink-mark";
 import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
-import AssistantLauncher from "./assistant-launcher";
 import BetaBanner from "./beta-banner";
-import { parentPortalEnabled, platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
+import { platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -103,11 +102,9 @@ export default async function DashboardPage() {
     }
   }
 
-  // Parents have their own world — never the teacher library. (After the
-  // notify block so parent signups still email the founder.) Flag-gated to
-  // match the children page's own guard — without this, a parent account
-  // with the flag off would redirect-loop between the two pages.
-  if (role === "parent" && parentPortalEnabled()) redirect("/dashboard/children");
+  // Parents are now full authors (migration 0035 dropped the test-papers-only
+  // trigger): they fall through to the Library like any other adult, with
+  // My Children + Test Papers as extra tabs (see app-header tabsFor). No redirect.
 
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
@@ -235,7 +232,6 @@ export default async function DashboardPage() {
         <AppHeader />
         <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
         {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
-        <AssistantLauncher />
       </div>
     );
   }
@@ -551,7 +547,6 @@ export default async function DashboardPage() {
 
       {feedback && <FeedbackWidget submitted={feedback.submitted} />}
       {platformConsoleEnabled() && <ReportIssueWidget />}
-      <AssistantLauncher />
     </div>
   );
 }
