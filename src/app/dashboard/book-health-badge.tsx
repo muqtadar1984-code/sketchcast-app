@@ -42,7 +42,7 @@ export default function BookHealthBadge({ health }: { health: BookHealth | null 
   const style = BAND_STYLE[health.band] ?? BAND_STYLE.fair;
 
   return (
-    <span className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+    <span data-tour="book-health" className="relative inline-block" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setOpen((o) => !o)}
         className={`chip font-sans normal-case tracking-normal ${style.chip}`}

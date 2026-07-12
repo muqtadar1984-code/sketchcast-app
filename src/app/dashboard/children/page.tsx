@@ -176,7 +176,7 @@ export default async function ChildrenPage() {
                 </div>
               ));
             return (
-              <div key={l.child_id} className="card divide-y divide-[#EEF0EC]">
+              <div key={l.child_id} data-tour="child-assignments" className="card divide-y divide-[#EEF0EC]">
                 <div className="px-5 py-3 flex items-center justify-between gap-3">
                   <span className="font-medium text-lg font-display truncate">{name}</span>
                   <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
@@ -184,7 +184,7 @@ export default async function ChildrenPage() {
                     <ResetPasswordButton targetId={l.child_id} name={name} />
                   </span>
                 </div>
-                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">School work ({school.length})</p>
+                <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">School work ({school.length})</p>
                 {school.length ? renderRows(school) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">Nothing assigned by school yet.</p>}
                 <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">From you ({mine.length})</p>
                 {mine.length ? renderRows(mine) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">No test papers assigned yet — create one under Test Papers.</p>}

@@ -230,7 +230,9 @@ export default async function DashboardPage() {
     return (
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
-        <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
+        <div data-tour="assignments">
+          <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
+        </div>
         {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
       </div>
     );
@@ -461,9 +463,13 @@ export default async function DashboardPage() {
           betaBlocked={isBeta && bookList.some((b) => b.owner_id === user.id)}
         />
 
-        <ClassesCard classes={classRosters} betaSlotsLeft={betaSlotsLeft} />
+        <div data-tour="classes">
+          <ClassesCard classes={classRosters} betaSlotsLeft={betaSlotsLeft} />
+        </div>
 
-        <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
+        <div data-tour="branding">
+          <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
+        </div>
 
         {bookList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
@@ -490,7 +496,7 @@ export default async function DashboardPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-8" data-tour="book-card">
             {groups.map((g) => (
               <section key={`${g.grade}-${g.subject}`}>
                 <div className="flex items-center gap-2 mb-2.5 px-1">

@@ -1,0 +1,161 @@
+"use client";
+
+// The tour runtime: given the user's role + server-provided seen-state, it
+// auto-starts the right tour on the right screen (deferred until they're there),
+// skips missing targets, emits analytics, and records completion. Everything
+// library-specific lives in engine.ts; content lives in definitions.ts. Behind
+// NEXT_PUBLIC_FEATURE_TOUR so it can be dark-launched.
+
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import type { Role, TourSeen } from "./types";
+import { tourForRole } from "./definitions";
+import { resolveSteps, shouldAutoStart } from "./logic";
+import { createDriverEngine, type TourEngine } from "./engine";
+import { emitTourEvent } from "./analytics";
+
+const TOUR_ON = process.env.NEXT_PUBLIC_FEATURE_TOUR === "true";
+
+type TourContextValue = {
+  /** A tour exists for this role AND the feature flag is on. */
+  available: boolean;
+  isRunning: boolean;
+  start: (opts?: { force?: boolean }) => void;
+  /** Re-run the role's tour on demand (navigates to its home screen first). */
+  replay: () => void;
+};
+
+const TourContext = createContext<TourContextValue>({
+  available: false,
+  isRunning: false,
+  start: () => {},
+  replay: () => {},
+});
+
+export function useTour(): TourContextValue {
+  return useContext(TourContext);
+}
+
+function postSeen(tourKey: string, version: number, status: "completed" | "skipped") {
+  try {
+    const body = JSON.stringify({ tourKey, version, status });
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      navigator.sendBeacon("/api/tour/seen", new Blob([body], { type: "application/json" }));
+      return;
+    }
+    void fetch("/api/tour/seen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
+export default function TourProvider({
+  role,
+  seen,
+  children,
+}: {
+  role: string | null;
+  seen: TourSeen | null;
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const def = tourForRole(role);
+  const available = TOUR_ON && !!def;
+
+  const engineRef = useRef<TourEngine | null>(null);
+  const seenRef = useRef<TourSeen | null>(seen); // local mirror; updated on finish so it won't re-nag this session
+  const autoStartedRef = useRef(false);
+  const pendingReplayRef = useRef(false);
+  const [isRunning, setIsRunning] = useState(false);
+
+  const start = useCallback(
+    (opts?: { force?: boolean }) => {
+      if (!available || !def || engineRef.current) return;
+      const tag = { tourKey: def.key, role: def.role as Role, version: def.version };
+
+      const { valid, missing } = resolveSteps(def.steps, (t) => !!document.querySelector(t));
+      for (const m of missing) {
+        emitTourEvent({ ...tag, event: "tour_step_target_missing", meta: { step_id: m.id } });
+      }
+      if (!valid.length) return; // nothing on screen to show → never spotlight empty space
+
+      const reduce =
+        typeof window !== "undefined" &&
+        !!window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      const engine = createDriverEngine();
+      engineRef.current = engine;
+      setIsRunning(true);
+      emitTourEvent({ ...tag, event: "tour_started", meta: { steps: valid.length, forced: !!opts?.force } });
+
+      const finish = () => {
+        engineRef.current = null;
+        setIsRunning(false);
+      };
+      engine.run(
+        valid,
+        {
+          onStepView: (index) => emitTourEvent({ ...tag, event: "tour_step_viewed", meta: { index } }),
+          onSkip: (index) => {
+            emitTourEvent({ ...tag, event: "tour_skipped", meta: { at_step: index } });
+            seenRef.current = { version: def.version, status: "skipped" };
+            postSeen(def.key, def.version, "skipped");
+            finish();
+          },
+          onComplete: () => {
+            emitTourEvent({ ...tag, event: "tour_completed" });
+            seenRef.current = { version: def.version, status: "completed" };
+            postSeen(def.key, def.version, "completed");
+            finish();
+          },
+        },
+        { animate: !reduce },
+      );
+    },
+    [available, def],
+  );
+
+  const replay = useCallback(() => {
+    if (!available || !def) return;
+    if (pathname === def.homePath) {
+      start({ force: true });
+    } else {
+      pendingReplayRef.current = true;
+      router.push(def.homePath);
+    }
+  }, [available, def, pathname, router, start]);
+
+  // Auto-start (or complete a pending replay) once the user is on the tour's home
+  // screen — deferred if they landed elsewhere (Section 7).
+  useEffect(() => {
+    if (!available || !def || pathname !== def.homePath) return;
+    if (pendingReplayRef.current) {
+      pendingReplayRef.current = false;
+      const t = setTimeout(() => start({ force: true }), 400);
+      return () => clearTimeout(t);
+    }
+    if (autoStartedRef.current || !shouldAutoStart(seenRef.current, def.version)) return;
+    autoStartedRef.current = true;
+    const t = setTimeout(() => start(), 600); // let targets mount / hydration settle
+    return () => clearTimeout(t);
+  }, [available, def, pathname, start]);
+
+  useEffect(
+    () => () => {
+      engineRef.current?.stop();
+      engineRef.current = null;
+    },
+    [],
+  );
+
+  return (
+    <TourContext.Provider value={{ available, isRunning, start, replay }}>{children}</TourContext.Provider>
+  );
+}

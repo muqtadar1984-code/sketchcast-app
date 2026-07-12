@@ -19,6 +19,7 @@ export default function AssistantLauncher() {
     <>
       <div className="fixed bottom-4 right-4 z-40">
         <button
+          data-tour="assistant"
           onClick={() => setOpen(true)}
           className="btn-primary h-11 px-4 text-sm rounded-full shadow-lg flex items-center gap-2"
           aria-label="Open the AI Teaching Assistant"

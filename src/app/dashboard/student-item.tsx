@@ -150,7 +150,7 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
 
   return (
     <li className="flex items-center justify-between gap-4 py-0.5">
-      <span className="flex items-center gap-2 text-sm min-w-0">
+      <span data-tour="progress" className="flex items-center gap-2 text-sm min-w-0">
         <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{item.label}</span>
         <Badge status={status} submitted={submitted} />
       </span>
@@ -163,7 +163,7 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
         {isLesson ? (
           <>
             {item.video && (
-              <button onClick={watch} className="font-medium text-[#0C8175] hover:underline">▶ Watch</button>
+              <button data-tour="open-lesson" onClick={watch} className="font-medium text-[#0C8175] hover:underline">▶ Watch</button>
             )}
             {item.deck && (
               <a href={item.deck} className="font-medium text-[#0C8175] hover:underline">⬇ Deck</a>

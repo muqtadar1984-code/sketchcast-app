@@ -128,7 +128,11 @@ export default function ChapterGenerate({
           }
           // Already generated (or in progress): keep the normal controls.
           return (
-            <span key={k.kind} className="flex items-center gap-1.5">
+            <span
+              key={k.kind}
+              data-tour={k.kind === "presentation" ? "lesson-output" : undefined}
+              className="flex items-center gap-1.5"
+            >
               <TypeIcon kind={k.kind} />
               <span className={LABEL}>{k.label}</span>
               <ContentCell
@@ -151,10 +155,13 @@ export default function ChapterGenerate({
 
         <span className="ml-auto flex items-center gap-3">
           {assignableIds.length > 0 && (
-            <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
+            <span data-tour="assign-chapter">
+              <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
+            </span>
           )}
           {pendingKinds.length > 0 && (
             <button
+              data-tour="generate-lesson"
               onClick={generate}
               disabled={busy || chosen.length === 0}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap"

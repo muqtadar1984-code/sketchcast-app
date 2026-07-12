@@ -6,6 +6,13 @@ import { InkUnderline } from "@/components/ink-mark";
 
 export type NavTab = { href: string; label: string };
 
+// data-tour markers on specific nav destinations (for role tours that point at
+// where to go rather than an on-screen element).
+const TOUR_MARK: Record<string, string | undefined> = {
+  "/dashboard/school": "school-nav",
+  "/dashboard/test-papers": "test-papers-nav",
+};
+
 // A tab is active on its own route, but NOT when a more specific sibling tab also
 // matches (so "School" doesn't underline while you're on "/dashboard/school/admin").
 function isActive(href: string, path: string, tabs: NavTab[]): boolean {
@@ -28,6 +35,7 @@ export default function HeaderNav({ tabs }: { tabs: NavTab[] }) {
           <Link
             key={t.href}
             href={t.href}
+            data-tour={TOUR_MARK[t.href]}
             aria-current={active ? "page" : undefined}
             className={`relative ${active ? "text-[#14181F] font-medium" : "text-[#5B6470] hover:text-[#14181F]"}`}
           >

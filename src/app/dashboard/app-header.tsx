@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
+import TourReplayButton from "./tour-replay-button";
 import { parentPortalEnabled, schoolAnalyticsEnabled } from "@/utils/flags";
 
 // One person can wear several hats: every adult (teacher, coordinator,
@@ -100,6 +101,7 @@ export default async function AppHeader() {
             {name}
             {label ? ` · ${label}` : ""}
           </span>
+          <TourReplayButton />
           <form action="/auth/signout" method="post">
             <button className="btn-ghost h-9 px-3 text-sm">Sign out</button>
           </form>
