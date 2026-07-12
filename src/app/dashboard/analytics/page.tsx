@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import AppHeader from "../app-header";
 import GradeList, { type PendingSub } from "../grade-list";
 import { InkUnderline } from "@/components/ink-mark";
@@ -61,10 +62,10 @@ export default async function AnalyticsPage() {
     .select("generation_id, student_id, status");
   const prog = ((progRaw ?? []) as ProgRow[]).filter((p) => myGenIds.has(p.generation_id));
 
-  type SubRow = { id: string; generation_id: string; student_id: string; mode: string; grade_status: string; auto_score: number | null; max_score: number | null };
+  type SubRow = { id: string; generation_id: string; student_id: string; mode: string; grade_status: string; auto_score: number | null; max_score: number | null; answers: Record<string, unknown> | null };
   const { data: subsRaw } = await supabase
     .from("submissions")
-    .select("id, generation_id, student_id, mode, grade_status, auto_score, max_score");
+    .select("id, generation_id, student_id, mode, grade_status, auto_score, max_score, answers");
   const subs = ((subsRaw ?? []) as SubRow[]).filter((s) => myGenIds.has(s.generation_id));
 
   // ── Index the raw rows ──────────────────────────────────────────────────
@@ -119,9 +120,41 @@ export default async function AnalyticsPage() {
   for (const p of prog) if (p.status === "revised") revByGen.set(p.generation_id, (revByGen.get(p.generation_id) ?? 0) + 1);
   const hotspots = [...revByGen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([gid, n]) => ({ label: genLabel(gid), n }));
 
+  // For interactive submissions still needing a mark, sign the quiz questions so the
+  // teacher can READ each written answer (short/subjective) instead of scoring blind.
+  const pendingInteractiveGenIds = [
+    ...new Set(subs.filter((s) => s.grade_status === "pending" && s.mode !== "file").map((s) => s.generation_id)),
+  ];
+  const quizUrlByGen = new Map<string, string>();
+  if (pendingInteractiveGenIds.length) {
+    try {
+      const admin = createAdminClient();
+      const { data: qArts } = await admin
+        .from("artifacts")
+        .select("generation_id, storage_path")
+        .eq("kind", "questions_json")
+        .in("generation_id", pendingInteractiveGenIds);
+      for (const a of (qArts ?? []) as { generation_id: string; storage_path: string }[]) {
+        const { data } = await admin.storage.from("artifacts").createSignedUrl(a.storage_path, 3600);
+        if (data?.signedUrl) quizUrlByGen.set(a.generation_id, data.signedUrl);
+      }
+    } catch {
+      // no service key / storage hiccup → the teacher still gets the score box, just no review panel.
+    }
+  }
+
   const pending: PendingSub[] = subs
     .filter((s) => s.grade_status === "pending")
-    .map((s) => ({ id: s.id, studentName: studentName.get(s.student_id) || "Student", label: genLabel(s.generation_id), mode: s.mode, auto: s.auto_score, max: s.max_score }));
+    .map((s) => ({
+      id: s.id,
+      studentName: studentName.get(s.student_id) || "Student",
+      label: genLabel(s.generation_id),
+      mode: s.mode,
+      auto: s.auto_score,
+      max: s.max_score,
+      answers: s.answers ?? null,
+      quizUrl: s.mode !== "file" ? quizUrlByGen.get(s.generation_id) ?? null : null,
+    }));
 
   const completionPct = total ? Math.round((completed / total) * 100) : 0;
   const metrics: { label: string; value: string | number }[] = [
