@@ -41,10 +41,11 @@ create table if not exists public.tour_events (
   created_at timestamptz not null default now()
 );
 create index if not exists tour_events_lookup on public.tour_events (tour_key, version, event);
+-- Analytics sink: written by /api/tour/event via the SERVICE ROLE (so the route's
+-- event-whitelist + size caps are load-bearing, not bypassable from the browser)
+-- and read only by staff (console). Never client-writable or client-readable —
+-- matches mastery_events / assistant events. RLS on with no policies → service-role
+-- only; belt-and-suspenders revoke below.
 alter table public.tour_events enable row level security;
 drop policy if exists tour_events_self_insert on public.tour_events;
-create policy tour_events_self_insert on public.tour_events
-  for insert with check (user_id = auth.uid());
--- No SELECT policy for authenticated: drop-off analytics are read with the
--- service role (console), never cross-user.
-revoke select on public.tour_events from anon, authenticated;
+revoke all on public.tour_events from anon, authenticated;

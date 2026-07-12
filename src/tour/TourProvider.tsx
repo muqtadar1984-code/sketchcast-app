@@ -6,7 +6,7 @@
 // library-specific lives in engine.ts; content lives in definitions.ts. Behind
 // NEXT_PUBLIC_FEATURE_TOUR so it can be dark-launched.
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { Role, TourSeen } from "./types";
 import { tourForRole } from "./definitions";
@@ -65,7 +65,10 @@ export default function TourProvider({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const def = tourForRole(role);
+  // Memoized so `def`/`start`/the auto-start effect keep a stable identity across
+  // renders (tourForRole returns a fresh object each call) — otherwise the effect
+  // re-runs every commit and can cancel the scheduled start.
+  const def = useMemo(() => tourForRole(role), [role]);
   const available = TOUR_ON && !!def;
 
   const engineRef = useRef<TourEngine | null>(null);
@@ -99,25 +102,31 @@ export default function TourProvider({
         engineRef.current = null;
         setIsRunning(false);
       };
-      engine.run(
-        valid,
-        {
-          onStepView: (index) => emitTourEvent({ ...tag, event: "tour_step_viewed", meta: { index } }),
-          onSkip: (index) => {
-            emitTourEvent({ ...tag, event: "tour_skipped", meta: { at_step: index } });
-            seenRef.current = { version: def.version, status: "skipped" };
-            postSeen(def.key, def.version, "skipped");
-            finish();
+      try {
+        engine.run(
+          valid,
+          {
+            onStepView: (index) => emitTourEvent({ ...tag, event: "tour_step_viewed", meta: { index } }),
+            onSkip: (index) => {
+              emitTourEvent({ ...tag, event: "tour_skipped", meta: { at_step: index } });
+              seenRef.current = { version: def.version, status: "skipped" };
+              postSeen(def.key, def.version, "skipped");
+              finish();
+            },
+            onComplete: () => {
+              emitTourEvent({ ...tag, event: "tour_completed" });
+              seenRef.current = { version: def.version, status: "completed" };
+              postSeen(def.key, def.version, "completed");
+              finish();
+            },
           },
-          onComplete: () => {
-            emitTourEvent({ ...tag, event: "tour_completed" });
-            seenRef.current = { version: def.version, status: "completed" };
-            postSeen(def.key, def.version, "completed");
-            finish();
-          },
-        },
-        { animate: !reduce },
-      );
+          { animate: !reduce },
+        );
+      } catch {
+        // A driver.js init / DOM failure must degrade to no-tour, never surface —
+        // and must not leave engineRef stuck (which would no-op every later start).
+        finish();
+      }
     },
     [available, def],
   );
@@ -136,14 +145,17 @@ export default function TourProvider({
   // screen — deferred if they landed elsewhere (Section 7).
   useEffect(() => {
     if (!available || !def || pathname !== def.homePath) return;
-    if (pendingReplayRef.current) {
-      pendingReplayRef.current = false;
-      const t = setTimeout(() => start({ force: true }), 400);
-      return () => clearTimeout(t);
-    }
-    if (autoStartedRef.current || !shouldAutoStart(seenRef.current, def.version)) return;
-    autoStartedRef.current = true;
-    const t = setTimeout(() => start(), 600); // let targets mount / hydration settle
+    const replaying = pendingReplayRef.current;
+    if (!replaying && (autoStartedRef.current || !shouldAutoStart(seenRef.current, def.version))) return;
+    // Flip the guard INSIDE the timer, not here: if this effect re-runs before the
+    // timer fires (React Strict Mode's mount double-invoke, or any re-render), the
+    // cleanup clears the timer and we must RESCHEDULE — flipping the guard early
+    // would make the re-run bail and permanently cancel the start.
+    const t = setTimeout(() => {
+      if (replaying) pendingReplayRef.current = false;
+      else autoStartedRef.current = true;
+      start({ force: replaying });
+    }, replaying ? 400 : 600); // let targets mount / hydration settle
     return () => clearTimeout(t);
   }, [available, def, pathname, start]);
 
