@@ -10,7 +10,7 @@
   `subagent_type: "qa-frontend"`. Tell it the **TARGET** (`prod` or `local`) and a scope
   (`smoke`, `area:<name>`, or specific ids). Default = the P0 smoke set + cross-cutting.
 - **Targets:** `prod` → `https://app.sketchcast.app` (landing/pricing `https://sketchcast.app`);
-  `local` → `http://localhost:3000` (`preview_start({name:"portal"})`).
+  `local` → `http://localhost:3000` (`preview_start({name:"web"})`).
 - **Release rule:** nothing ships to prod until it passes on **local** first. A prod run is a
   smoke confirmation, not a substitute for the local pass. The agent refuses to bless a
   release with any open P0/P1 FAIL.

@@ -26,8 +26,11 @@ The invoker gives you a **TARGET**:
 - `prod` → base URL `https://app.sketchcast.app` (landing/pricing: `https://sketchcast.app`).
   Open it with `preview_start({ url: "https://app.sketchcast.app" })`.
 - `local` → base URL `http://localhost:3000`. Start the dev server with
-  `preview_start({ name: "portal" })` (defined in `.claude/launch.json`) — never with Bash.
-  If it's already running, `preview_start` reuses it.
+  `preview_start({ name: "web" })` (the preview registry's dev-server name) — never with Bash.
+  If it's already running, `preview_start` reuses it. The isolated local stack (local Supabase
+  + demo seed) is brought up per `docs/qa/LOCAL-DEV.md`; the human runs that bring-up, you test
+  against it. Authenticated scenarios mint password-free sessions via the LOCAL service role,
+  same magic-link → `/auth/confirm` technique as prod.
 
 The **living test catalog is `docs/qa/QA-PLAN.md`** — read it first. It lists every
 scenario with an id, role, steps, expected result, and three flags: `requires_login`,

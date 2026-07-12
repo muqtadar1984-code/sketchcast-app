@@ -1,0 +1,4 @@
+# Supabase CLI runtime artifacts (created by `supabase start`) — do not commit.
+.branches
+.temp
+.env
