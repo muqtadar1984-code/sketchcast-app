@@ -84,8 +84,9 @@ export default function FeedbackWidget({
 
   return (
     <>
-      {/* Persistent entry point (bottom-right) */}
-      <div className="fixed bottom-5 right-5 z-40">
+      {/* Persistent entry point (bottom-right) — stacked ABOVE the AI Assistant
+          launcher (which sits at bottom-4 right-4) so the two don't collide. */}
+      <div className="fixed bottom-20 right-4 z-40">
         {submitted ? (
           <span className="inline-flex items-center gap-2 rounded-full bg-white border border-[#E6E8E4] px-4 h-10 text-sm text-[#0C8175] shadow-sm">
             ✓ Feedback received — thank you!
