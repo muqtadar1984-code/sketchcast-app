@@ -10,6 +10,7 @@ import AssignModal, { type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { BookCover } from "./icons";
+import { cleanBookTitle } from "@/utils/book";
 
 export type Lesson = CellLesson & { title: string; kind: string };
 export type ChapterRow = {
@@ -85,7 +86,7 @@ export default function BookTable({
                   {ready ? "▶" : "•"}
                 </span>
                 <span className="min-w-0">
-                  <span className="font-display font-medium truncate block">{b.title}</span>
+                  <span className="font-display font-medium truncate block">{cleanBookTitle(b.title)}</span>
                   <span className="text-xs text-[#5B6470]">{b.author || "Unknown author"}</span>
                 </span>
               </button>

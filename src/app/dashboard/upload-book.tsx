@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { cleanBookTitle } from "@/utils/book";
 
 export default function UploadBook({
   schoolId,
@@ -89,7 +90,7 @@ export default function UploadBook({
     }
 
     const ins = await supabase.from("books").insert({
-      title: title.trim() || file.name.replace(/\.pdf$/i, ""),
+      title: title.trim() || cleanBookTitle(file.name),
       author: author.trim() || null,
       owner_id: user.id,
       school_id: schoolId,
