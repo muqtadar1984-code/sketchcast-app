@@ -1,0 +1,129 @@
+name: autofix
+
+# Triggered by POST /api/autofix/dispatch (repository_dispatch). Claude Code writes a
+# minimal fix on a branch, we run the quality gates, open a PR (never merge), and call
+# back the app so it emails the founder the signed Approve/Reject links.
+#
+# ── One-time setup (see docs/AUTOFIX.md) ──
+# Repo secrets: ANTHROPIC_API_KEY, AUTOFIX_CALLBACK_SECRET, AUTOFIX_APP_URL
+# Enable Actions on the repo. The default GITHUB_TOKEN below opens the PR; the app's
+# own GITHUB_AUTOFIX_TOKEN (in Vercel) is what later merges it on your approval.
+
+on:
+  repository_dispatch:
+    types: [autofix]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: autofix-${{ github.event.client_payload.run_key }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    env:
+      RUN_KEY: ${{ github.event.client_payload.run_key }}
+      BRANCH: ${{ github.event.client_payload.branch }}
+      APP_URL: ${{ secrets.AUTOFIX_APP_URL }}
+      CALLBACK_SECRET: ${{ secrets.AUTOFIX_CALLBACK_SECRET }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Create fix branch
+        run: git switch -c "$BRANCH"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Claude Code writes the fix. NOTE: pin/confirm the action version against its
+      # current README when you enable this (the inputs below match the base action).
+      - name: Claude Code — write the fix
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--allowedTools Edit,Write,Read,Bash,Grep,Glob"
+          prompt: |
+            You are fixing a real customer-reported bug in this Next.js 16 / React 19 app.
+            Read AGENTS.md first. Reproduce the problem, then make the SMALLEST correct fix.
+            Add or adjust a Vitest test that would have caught it. Keep the change tightly
+            scoped to the reported issue. Do NOT touch auth, billing, database migrations,
+            middleware, or secrets unless it is truly essential — and if you must, say so
+            clearly. When done, ensure `npx tsc --noEmit`, `npx eslint`, and `npx vitest run`
+            all pass. Here is the report:
+
+            ${{ github.event.client_payload.brief }}
+
+      - name: Quality gates
+        id: gates
+        run: |
+          set +e
+          npx tsc --noEmit;   TSC=$?
+          npx eslint .;       LINT=$?
+          npx vitest run;     TEST=$?
+          echo "tsc=$TSC eslint=$LINT vitest=$TEST"
+          if [ $TSC -eq 0 ] && [ $LINT -eq 0 ] && [ $TEST -eq 0 ]; then
+            echo "ci_passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ci_passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect changes + sensitive paths
+        id: diff
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            FILES=$(git diff --cached --name-only | head -50)
+            echo "files<<EOF" >> "$GITHUB_OUTPUT"; echo "$FILES" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+            if echo "$FILES" | grep -Eq '(auth|billing|middleware|supabase/migrations|stripe|lemonsqueezy|rls)'; then
+              echo "sensitive=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "sensitive=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Commit + push + open PR
+        id: pr
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "sketchcast-autofix[bot]"
+          git config user.email "noreply@sketchcast.app"
+          git commit -m "Auto-fix: address reported issue (run $RUN_KEY)"
+          git push origin "$BRANCH"
+          CI="${{ steps.gates.outputs.ci_passed }}"
+          BODY="Automated fix for a reported issue (run \`$RUN_KEY\`).\n\nCI: $CI\n\n**DO NOT MERGE manually** — approve via the email link so the app records it."
+          URL=$(gh pr create --base main --head "$BRANCH" --title "Auto-fix: run $RUN_KEY (CI: $CI)" --body "$(printf "%b" "$BODY")")
+          echo "pr_url=$URL" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$(gh pr view "$URL" --json number -q .number)" >> "$GITHUB_OUTPUT"
+
+      - name: Call back the app
+        if: always()
+        run: |
+          CHANGED="${{ steps.diff.outputs.changed }}"
+          CI="${{ steps.gates.outputs.ci_passed }}"
+          if [ "$CHANGED" != "true" ]; then CI="false"; SUMMARY="The agent produced no code changes for this report."; else SUMMARY="See the pull request for the diff."; fi
+          jq -n \
+            --arg run_key "$RUN_KEY" \
+            --arg pr_url "${{ steps.pr.outputs.pr_url }}" \
+            --argjson pr_number "${{ steps.pr.outputs.pr_number || 'null' }}" \
+            --argjson ci_passed "${CI:-false}" \
+            --argjson sensitive "${{ steps.diff.outputs.sensitive || 'false' }}" \
+            --arg summary "$SUMMARY" \
+            '{run_key:$run_key, pr_url:$pr_url, pr_number:$pr_number, ci_passed:$ci_passed, sensitive:$sensitive, summary:$summary}' \
+          | curl -sS -X POST "$APP_URL/api/autofix/pr-opened" \
+              -H "content-type: application/json" \
+              -H "x-autofix-secret: $CALLBACK_SECRET" \
+              --data @-

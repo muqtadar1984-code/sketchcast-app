@@ -138,3 +138,16 @@ export function aiAssistantEnabled(): boolean {
 export function onboardingEnabled(): boolean {
   return process.env.FEATURE_ONBOARDING === "true";
 }
+
+/**
+ * Autofix — the automated bug-fix pipeline. Staff tap "Attempt auto-fix" on a
+ * reported issue → a GitHub Action (Claude Code) writes the fix on a branch + opens
+ * a PR → the founder gets an email with signed Approve/Reject links → Approve
+ * squash-merges to main (→ prod). OFF by default; needs migration 0039 + the GitHub
+ * token/secrets (see docs/AUTOFIX.md). The client console button also reads
+ * NEXT_PUBLIC_FEATURE_AUTOFIX; the /api/autofix/* routes check this and are
+ * authoritative (they 404 when off — a kill switch for the whole pipeline).
+ */
+export function autofixEnabled(): boolean {
+  return process.env.FEATURE_AUTOFIX === "true";
+}

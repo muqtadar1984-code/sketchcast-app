@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 import TriageForm from "./triage-form";
+import AutofixPanel, { type AutofixRun } from "./autofix-panel";
 
 // One issue: full context, reporter profile, and lifecycle controls.
 
@@ -70,6 +71,22 @@ export default async function ConsoleIssueDetailPage({
   }
 
   const ctx = issue.context ?? {};
+
+  // Latest auto-fix run for this issue (drives the Auto-fix panel). Best-effort:
+  // pre-0039 the table doesn't exist yet, so a failure just hides the panel.
+  let autofixRun: AutofixRun = null;
+  try {
+    const { data: r } = await admin
+      .from("autofix_runs")
+      .select("status, pr_url, pr_number, ci_passed, sensitive, decided_via, created_at")
+      .eq("issue_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    autofixRun = (r as AutofixRun) ?? null;
+  } catch {
+    // 0039 not applied yet
+  }
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-10">
@@ -150,6 +167,8 @@ export default async function ConsoleIssueDetailPage({
           </div>
         )}
       </div>
+
+      <AutofixPanel issueId={issue.id} run={autofixRun} />
 
       <TriageForm
         id={issue.id}
