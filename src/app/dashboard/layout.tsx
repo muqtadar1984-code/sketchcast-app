@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { onboardingEnabled } from "@/utils/flags";
 import AssistantLauncher from "./assistant-launcher";
 import TourProvider from "@/tour/TourProvider";
 import { tourForRole } from "@/tour/definitions";
@@ -18,7 +20,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let role: string | null = null;
   let seen: TourSeen | null = null;
   if (user) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, onboarded_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    // Blocking new-joiner gate: an adult self-signup that was never onboarded is
+    // sent to /onboarding to confirm Teacher/Parent + fill the required fields,
+    // so nobody uses the app as a silently-defaulted teacher. Exemptions:
+    //  • students — provisioned/self-signup as "student"; they have their own
+    //    (must_reset_password) first-run flow on the page and no picker option, so
+    //    forcing them here would trap them.
+    //  • deliberately-provisioned adults (invited teacher/coordinator/admin,
+    //    school_admin) — those flows stamp onboarded_at at creation, so they never
+    //    reach here.
+    // `profile == null` (0038 not applied, or row missing) falls through untouched.
+    if (
+      onboardingEnabled() &&
+      profile &&
+      profile.onboarded_at == null &&
+      profile.role !== "student"
+    ) {
+      redirect("/onboarding");
+    }
     role = (profile?.role as string | null) ?? null;
     const def = tourForRole(role);
     if (def) {

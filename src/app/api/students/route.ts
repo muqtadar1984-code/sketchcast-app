@@ -144,6 +144,9 @@ export async function POST(request: Request) {
         must_reset_password: true,
         school_id: cls.school_id,
         role: "student",
+        // Provisioned with a known identity → skip the new-joiner onboarding gate
+        // (0038). Students are also exempted by role in the gate, belt-and-braces.
+        onboarded_at: new Date().toISOString(),
       })
       .eq("id", sid);
     if (pErr) errors.push(`${fullName || username}: profile — ${pErr.message}`);

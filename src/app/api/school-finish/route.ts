@@ -50,9 +50,11 @@ export async function POST(request: Request) {
   }
 
   // role/school_id are service-role-only (migration 0010), so this must go through admin.
+  // Stamp onboarded_at: setting up a school unambiguously identifies this user as a
+  // school admin, so they skip the new-joiner onboarding gate (see 0038).
   const { error: pErr } = await admin
     .from("profiles")
-    .update({ role: "school_admin", school_id: school.id })
+    .update({ role: "school_admin", school_id: school.id, onboarded_at: new Date().toISOString() })
     .eq("id", user.id);
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
 

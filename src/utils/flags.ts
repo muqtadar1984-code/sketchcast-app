@@ -127,3 +127,14 @@ export function aiTutorCanvasEnabled(): boolean {
 export function aiAssistantEnabled(): boolean {
   return process.env.FEATURE_AI_ASSISTANT === "true";
 }
+
+/**
+ * New-joiner profile onboarding — a blocking, one-time setup (confirm Teacher /
+ * Parent + fill a short profile) that a new user completes BEFORE using the app,
+ * so no one lands as a silently-defaulted teacher. OFF by default; needs migration
+ * 0038. The gate lives in the dashboard layout; /api/onboarding writes the
+ * confirmed role with the service role.
+ */
+export function onboardingEnabled(): boolean {
+  return process.env.FEATURE_ONBOARDING === "true";
+}

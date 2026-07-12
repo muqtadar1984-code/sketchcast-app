@@ -87,13 +87,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
           { onConflict: "parent_id,child_id" },
         );
     }
+    // Accepting an invite identifies this user (as a parent here) → they skip the
+    // new-joiner onboarding gate (0038). Harmless if they were already onboarded.
+    await admin.from("profiles").update({ onboarded_at: new Date().toISOString() }).eq("id", user.id);
     await admin.from("invites").update({ accepted_at: new Date().toISOString() }).eq("id", invite.id);
     return NextResponse.redirect(`${origin}/dashboard/children`);
   }
 
   const { error: uErr } = await admin
     .from("profiles")
-    .update({ role: invite.role, school_id: invite.school_id })
+    // onboarded_at: the invite's role identifies this user → skip the onboarding gate (0038).
+    .update({ role: invite.role, school_id: invite.school_id, onboarded_at: new Date().toISOString() })
     .eq("id", user.id);
   if (uErr) return back("apply");
   await admin.from("invites").update({ accepted_at: new Date().toISOString() }).eq("id", invite.id);
