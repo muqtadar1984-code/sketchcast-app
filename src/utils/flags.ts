@@ -1,6 +1,20 @@
 // Server-side feature flags. Default OFF so nothing lights up in production by
 // accident — set the env var to exactly "true" to enable.
 
+import { consoleModeOn } from "./console-routing";
+
+/**
+ * Console subdomain — when NEXT_PUBLIC_CONSOLE_HOST is set (e.g.
+ * "console.sketchcast.app"), the staff console moves to its OWN subdomain with its
+ * own sign-in (/staff-login), is removed from the main app host, and console access
+ * is hard-restricted to @sketchcast.app accounts. Unset ⇒ legacy behavior (console
+ * at /console on the main host). The whole feature is one env var — the kill switch.
+ * See src/utils/console-routing.ts + docs/CONSOLE.md.
+ */
+export function consoleSubdomainEnabled(): boolean {
+  return consoleModeOn();
+}
+
 /**
  * School analytics (Admin / Principal / Coordinator oversight). Gated because it
  * exposes minors' data upward; keep OFF in prod until the RLS migration (0009)

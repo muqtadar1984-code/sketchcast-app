@@ -50,9 +50,17 @@ export default function ConsoleHeader({ email }: { email: string }) {
         </span>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-[#98A0A9] hidden md:inline">{email} · staff</span>
-          <Link href="/dashboard" className="text-[#98A0A9] hover:text-white">
-            ← App
-          </Link>
+          {/* On the dedicated console subdomain the teacher app is a different
+              host (and @sketchcast.app has no teacher side), so drop the cross-link
+              there and rely on a real sign-out. In legacy mode "← App" still helps. */}
+          {!process.env.NEXT_PUBLIC_CONSOLE_HOST && (
+            <Link href="/dashboard" className="text-[#98A0A9] hover:text-white">
+              ← App
+            </Link>
+          )}
+          <form action="/auth/signout" method="post">
+            <button className="text-[#98A0A9] hover:text-white">Sign out</button>
+          </form>
         </div>
       </div>
     </header>
