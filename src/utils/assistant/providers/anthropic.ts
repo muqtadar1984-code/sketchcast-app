@@ -28,7 +28,9 @@ export function toAnthropicMessages(messages: Turn[]): MsgParam[] {
 
 export class AnthropicProvider implements LLMProvider {
   readonly id = "anthropic";
-  readonly model = process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+  // Sonnet 5 is the quality tier for the student-facing assistant (same model the
+  // tutor uses). Override per deploy with ASSISTANT_ANTHROPIC_MODEL.
+  readonly model = process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-sonnet-5";
 
   async *stream(opts: GenerateOpts): AsyncGenerator<StreamEvent, void, void> {
     let stream: AsyncIterable<Anthropic.RawMessageStreamEvent>;

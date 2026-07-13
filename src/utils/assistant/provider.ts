@@ -43,10 +43,12 @@ export interface LLMProvider {
   stream(opts: GenerateOpts): AsyncGenerator<StreamEvent, void, void>;
 }
 
-/** The active provider, chosen by env (default gemini). Import stays lazy so a
- * misconfigured alternate provider can't break the configured one. */
+/** The active provider, chosen by env (default anthropic → Sonnet 5, the quality
+ * tier for the student-facing assistant). Set ASSISTANT_PROVIDER=gemini to switch
+ * to the Gemini free tier (e.g. once Google sponsorship lands). Import stays lazy
+ * so a misconfigured alternate provider can't break the configured one. */
 export async function assistantProvider(): Promise<LLMProvider> {
-  const which = (process.env.ASSISTANT_PROVIDER || "gemini").toLowerCase();
+  const which = (process.env.ASSISTANT_PROVIDER || "anthropic").toLowerCase();
   if (which === "anthropic") {
     const { AnthropicProvider } = await import("./providers/anthropic");
     return new AnthropicProvider();
