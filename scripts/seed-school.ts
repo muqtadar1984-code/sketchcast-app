@@ -513,7 +513,10 @@ async function main() {
     schoolId,
   });
   await must(
-    db.from("coordinator_scope").insert({ coordinator_id: principalId, school_id: schoolId, grade: "5", subject: null }),
+    db
+      .from("coordinator_scope")
+      .insert({ coordinator_id: principalId, school_id: schoolId, grade: "5", subject: null })
+      .select("id"),
     "principal coordinator_scope",
   );
   console.log(`+ principal ${principalEmail} (admin view + Grade 5 coordinator grant)`);
@@ -534,7 +537,10 @@ async function main() {
   // teacher1 also coordinates Grade 5 → HER login shows the NAMED at-risk
   // worklist (admins see the aggregate view; the named list is the grant-holder's).
   await must(
-    db.from("coordinator_scope").insert({ coordinator_id: teacherIds[0], school_id: schoolId, grade: "5", subject: null }),
+    db
+      .from("coordinator_scope")
+      .insert({ coordinator_id: teacherIds[0], school_id: schoolId, grade: "5", subject: null })
+      .select("id"),
     "teacher1 coordinator_scope",
   );
   console.log(`+ 5 teachers (teacher1 also holds the Grade 5 coordinator grant)`);
@@ -591,13 +597,16 @@ async function main() {
     schoolId: null, // parents never carry school_id
   });
   await must(
-    db.from("parent_links").insert({
-      parent_id: parentId,
-      child_id: studentIds[0][0],
-      source: "school",
-      created_by: principalId,
-      verified_at: new Date().toISOString(),
-    }),
+    db
+      .from("parent_links")
+      .insert({
+        parent_id: parentId,
+        child_id: studentIds[0][0],
+        source: "school",
+        created_by: principalId,
+        verified_at: new Date().toISOString(),
+      })
+      .select("id"),
     "parent link",
   );
   await db.from("profiles").update({ parent_email: parentEmail }).eq("id", studentIds[0][0]);
@@ -628,12 +637,15 @@ async function main() {
         : [iso(4 * DAY), new Date(now + 6 * DAY).toISOString(), new Date(now + 12 * DAY).toISOString()];
     for (let s = 0; s < share.length; s++) {
       await must(
-        db.from("generation_shares").insert({
-          generation_id: share[s].id,
-          class_id: classIds[c],
-          shared_by: teacherIds[c],
-          due_at: dues[s],
-        }),
+        db
+          .from("generation_shares")
+          .insert({
+            generation_id: share[s].id,
+            class_id: classIds[c],
+            shared_by: teacherIds[c],
+            due_at: dues[s],
+          })
+          .select("id"),
         `share ${share[s].title} → ${CLASSES[c].name}`,
       );
       shareCount++;
@@ -864,19 +876,27 @@ async function main() {
   const tenantGenIds = (await must(db.from("generations").select("id").eq("school_id", schoolId), "gen ids")).map(
     (g: { id: string }) => g.id,
   );
+  const tenantBookIds = (await must(db.from("books").select("id").eq("school_id", schoolId), "book ids")).map(
+    (b: { id: string }) => b.id,
+  );
+  // Jobs the INSERT triggers enqueued: generation jobs carry generation_id,
+  // index_book jobs carry book_id — the seeder must have closed BOTH kinds.
+  const openJobs =
+    (tenantGenIds.length ? await count("jobs", (q) => q.eq("status", "queued").in("generation_id", tenantGenIds)) : 0) +
+    (tenantBookIds.length ? await count("jobs", (q) => q.eq("status", "queued").in("book_id", tenantBookIds)) : 0);
   const rows: [string, number][] = [
     ["profiles (school members)", await count("profiles", (q) => q.eq("school_id", schoolId))],
     ["classes", await count("classes", (q) => q.eq("school_id", schoolId))],
     ["enrollments", await count("enrollments", (q) => q.in("class_id", classIds))],
     ["coordinator_scope", await count("coordinator_scope", (q) => q.eq("school_id", schoolId))],
-    ["books", await count("books", (q) => q.eq("school_id", schoolId))],
+    ["books", tenantBookIds.length],
     ["generations", tenantGenIds.length],
     ["artifacts", tenantGenIds.length ? await count("artifacts", (q) => q.in("generation_id", tenantGenIds)) : 0],
     ["generation_shares", tenantGenIds.length ? await count("generation_shares", (q) => q.in("generation_id", tenantGenIds)) : 0],
     ["student_progress", tenantGenIds.length ? await count("student_progress", (q) => q.in("generation_id", tenantGenIds)) : 0],
     ["submissions", tenantGenIds.length ? await count("submissions", (q) => q.in("generation_id", tenantGenIds)) : 0],
     ["parent_links (demo parent)", await count("parent_links", (q) => q.eq("parent_id", parentId))],
-    ["open jobs (must be 0)", await count("jobs", (q) => q.eq("status", "queued").in("generation_id", tenantGenIds.length ? tenantGenIds : ["00000000-0000-0000-0000-000000000000"]))],
+    ["open jobs (must be 0)", openJobs],
   ];
   for (const [label, n] of rows) console.log(`  ${label.padEnd(28)} ${n}`);
 
