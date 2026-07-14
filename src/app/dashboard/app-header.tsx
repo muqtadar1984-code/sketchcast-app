@@ -4,7 +4,7 @@ import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
-import { parentPortalEnabled, roleHatsEnabled, schoolAnalyticsEnabledFor } from "@/utils/flags";
+import { calendarEnabledFor, parentPortalEnabled, roleHatsEnabled, schoolAnalyticsEnabledFor } from "@/utils/flags";
 import { HAT_LABEL, hatsFor, resolveHat, type Hat } from "@/utils/hats";
 import { activeHatCookie } from "@/utils/hats-server";
 
@@ -21,16 +21,19 @@ import { activeHatCookie } from "@/utils/hats-server";
 // One-hat-at-a-time tabs (FEATURE_ROLE_HATS): only the ACTIVE hat's world
 // renders — a principal in Teacher mode sees a plain teacher header, nothing
 // leadership. Presentation only; every page keeps its own server-side gates.
-function tabsForHat(hat: Hat, analyticsOn: boolean): NavTab[] {
+function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean): NavTab[] {
+  const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: "Calendar" }] : [];
   if (hat === "teacher")
     return [
       { href: "/dashboard", label: "Library" },
       { href: "/dashboard/analytics", label: "My Analytics" },
+      ...calendar,
     ];
   if (hat === "parent")
     return [
       { href: "/dashboard/children", label: "My Children" },
       { href: "/dashboard/test-papers", label: "Test Papers" },
+      ...calendar,
     ];
   const tabs: NavTab[] = [];
   if (analyticsOn) {
@@ -41,17 +44,25 @@ function tabsForHat(hat: Hat, analyticsOn: boolean): NavTab[] {
     );
     if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
   }
+  tabs.push(...calendar);
   // Invites are the principal's onboarding tool — principal hat only.
   if (hat === "principal") tabs.push({ href: "/dashboard/invites", label: "Invites" });
   return tabs;
 }
 
-function tabsFor(role: string | null, hasScope: boolean, hasChildren: boolean, analyticsOn: boolean): NavTab[] {
+function tabsFor(
+  role: string | null,
+  hasScope: boolean,
+  hasChildren: boolean,
+  analyticsOn: boolean,
+  calendarOn: boolean,
+): NavTab[] {
   if (!role || role === "student") return [];
   const tabs: NavTab[] = [
     { href: "/dashboard", label: "Library" },
     { href: "/dashboard/analytics", label: "My Analytics" },
   ];
+  if (calendarOn) tabs.push({ href: "/dashboard/calendar", label: "Calendar" });
   if (analyticsOn && (role === "school_admin" || hasScope)) {
     tabs.push(
       { href: "/dashboard/school", label: "School" },
@@ -94,6 +105,7 @@ export default async function AppHeader() {
   let hasScope = false;
   let hasChildren = false;
   let analyticsOn = false;
+  let calendarOn = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -111,6 +123,24 @@ export default async function AppHeader() {
       const { data: sc } = await supabase.from("coordinator_scope").select("id").limit(1);
       hasScope = (sc?.length ?? 0) > 0;
     }
+    if (role && role !== "student") {
+      calendarOn = await calendarEnabledFor(supabase, profile?.school_id as string | null);
+      // Parents carry no school_id — check their children's school(s) instead
+      // (readable via schools_parent_read, 0043).
+      if (!calendarOn && !profile?.school_id) {
+        const { data: pl } = await supabase
+          .from("parent_links")
+          .select("profiles:child_id(school_id)")
+          .order("created_at")
+          .limit(10);
+        for (const l of (pl ?? []) as unknown as { profiles: { school_id: string | null } | null }[]) {
+          if (l.profiles?.school_id && (await calendarEnabledFor(supabase, l.profiles.school_id))) {
+            calendarOn = true;
+            break;
+          }
+        }
+      }
+    }
     if (parentPortalEnabled() && role && role !== "student") {
       // Any adult with links (a parent, or a teacher who is also a parent):
       // pl_parent_read returns only the viewer's own links. Best-effort — table
@@ -127,7 +157,9 @@ export default async function AppHeader() {
     hats = hatsFor({ role, hasScope, hasChildren, analyticsOn });
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
-  const tabs = activeHat ? tabsForHat(activeHat, analyticsOn) : tabsFor(role, hasScope, hasChildren, analyticsOn);
+  const tabs = activeHat
+    ? tabsForHat(activeHat, analyticsOn, calendarOn)
+    : tabsFor(role, hasScope, hasChildren, analyticsOn, calendarOn);
   const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
   return (
     <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">

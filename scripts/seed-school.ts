@@ -518,10 +518,9 @@ async function main() {
         slug: SLUG,
         display_name: NAME,
         status: "active",
-        // Per-tenant leadership suite + briefing assistant — lights
-        // dashboard/school/** and "Ask about your school" for THIS school only
-        // (schoolAnalyticsEnabledFor / schoolAssistantEnabledFor), no global env flip.
-        config: { school_analytics: true, school_assistant: true },
+        // Per-tenant features — leadership suite, briefing assistant, calendar —
+        // for THIS school only (the *EnabledFor helpers), no global env flips.
+        config: { school_analytics: true, school_assistant: true, calendar: true },
       })
       .select("id")
       .single(),
@@ -857,6 +856,36 @@ async function main() {
     }
   }
   console.log(`+ ${shareCount} assignments, ${progressCount} progress rows, ${submissionCount} submissions`);
+
+  // ── Calendar events (needs migration 0043 — skipped with a warning if absent) ─
+  const ahead = (days: number, hourUTC = 7) => new Date(now + days * DAY + hourUTC * 3600000).toISOString();
+  // All-day events are civil dates stored as UTC midnight (the app convention).
+  const dayAhead = (days: number) => `${new Date(now + days * DAY).toISOString().slice(0, 10)}T00:00:00.000Z`;
+  const demoEvents = [
+    { title: "Staff briefing", kind: "meeting", audience: "staff", starts_at: ahead(2, 0), ends_at: ahead(2, 1), location: "Staff room" },
+    { title: "Curriculum review — leadership", kind: "meeting", audience: "leadership", starts_at: ahead(6, 2), ends_at: ahead(6, 3), location: "Principal's office" },
+    { title: "Professional development day", kind: "pd", audience: "staff", starts_at: dayAhead(9), all_day: true },
+    { title: "Mid-term assessments week begins", kind: "exam", audience: "school", starts_at: dayAhead(13), all_day: true },
+    { title: "Sports Day", kind: "activity", audience: "school", starts_at: ahead(20, 0), ends_at: ahead(20, 4), location: "School field" },
+    { title: "Public holiday — school closed", kind: "holiday", audience: "school", starts_at: dayAhead(27), all_day: true },
+    { title: "Parents' progress evening", kind: "meeting", audience: "school", starts_at: ahead(16, 9), ends_at: ahead(16, 11), location: "Main hall" },
+    { title: "Science fair prep", kind: "activity", audience: "class", class_id: classIds[0], starts_at: ahead(4, 5), ends_at: ahead(4, 6), location: "Lab 2" },
+  ];
+  let eventCount = 0;
+  for (const ev of demoEvents) {
+    const { error } = await db.from("school_events").insert({
+      school_id: schoolId,
+      created_by: principalId,
+      all_day: false,
+      ...ev,
+    });
+    if (error) {
+      console.warn(`  ! calendar events skipped (${error.message}) — run migration 0043 and re-seed to populate the calendar.`);
+      break;
+    }
+    eventCount++;
+  }
+  if (eventCount) console.log(`+ ${eventCount} calendar events`);
 
   // ── Credentials file ────────────────────────────────────────────────────────
   const portal = `https://school.sketchcast.app/${SLUG}`;

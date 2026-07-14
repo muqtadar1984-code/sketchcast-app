@@ -74,6 +74,27 @@ export async function schoolAssistantEnabledFor(
 }
 
 /**
+ * School calendar (events + ICS subscribe/export). Needs migration 0043.
+ * Global env FEATURE_CALENDAR, or per-school schools.config
+ * {"calendar": true} — the demo-tenant rollout path, same as the briefing.
+ */
+export async function calendarEnabledFor(
+  supabase: SupabaseClient,
+  schoolId: string | null | undefined,
+): Promise<boolean> {
+  if (process.env.FEATURE_CALENDAR === "true") return true;
+  if (!schoolId) return false;
+  const { data, error } = await supabase
+    .from("schools")
+    .select("config")
+    .eq("id", schoolId)
+    .maybeSingle();
+  if (error) return false;
+  const cfg = (data?.config ?? null) as { calendar?: unknown } | null;
+  return cfg?.calendar === true;
+}
+
+/**
  * Role hats ("one hat at a time") — multi-role adults wear exactly one active
  * hat (principal / coordinator / teacher / parent): only that hat's tabs and
  * surfaces render, switched via the header dropdown or a portal role door.
