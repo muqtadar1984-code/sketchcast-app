@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isPortalRole } from "@/utils/school-routing";
+import { roleHatsEnabled } from "@/utils/flags";
+import { HAT_COOKIE, isHat } from "@/utils/hats";
 
 export const runtime = "nodejs";
 
@@ -18,6 +20,19 @@ export const runtime = "nodejs";
 //   student   → role student, same school
 //   parent    → any non-student with a parent_links row to a child IN this
 //               school (parents deliberately carry no school_id — multi-school)
+// Success response, stamping the portal door as the INITIAL active hat (the
+// role-hats model, when on): logging in through /demo/teacher puts a principal
+// straight into Teacher mode — the door and the header dropdown are one system.
+// The student door clears any hat cookie (students hold no hats).
+function okThrough(door: string, redirect: string): NextResponse {
+  const res = NextResponse.json({ ok: true, redirect });
+  if (roleHatsEnabled()) {
+    if (isHat(door)) res.cookies.set(HAT_COOKIE, door, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+    else res.cookies.set(HAT_COOKIE, "", { path: "/", maxAge: 0 });
+  }
+  return res;
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -76,7 +91,7 @@ export async function POST(request: Request) {
         .in("id", childIds)
         .eq("school_id", schoolId)
         .limit(1);
-      if (kids?.length) return NextResponse.json({ ok: true, redirect: "/dashboard/children" });
+      if (kids?.length) return okThrough("parent", "/dashboard/children");
     }
     return NextResponse.json({ error: "No child of this account is enrolled at this school." }, { status: 403 });
   }
@@ -93,5 +108,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This door is for students — staff sign in as Teacher." }, { status: 403 });
   }
 
-  return NextResponse.json({ ok: true, redirect: "/dashboard" });
+  // principal door → Principal hat; teacher door → Teacher hat (even for a
+  // school_admin — they chose that door); student door → no hat.
+  return okThrough(role, "/dashboard");
 }

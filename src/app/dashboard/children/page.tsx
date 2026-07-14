@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled, aiTutorEnabled } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 import AddChild from "./add-child";
 import CoachRecap from "../coach-recap";
 import AskCoachButton from "../ask-coach-button";
@@ -44,11 +45,14 @@ export default async function ChildrenPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, school_id")
     .eq("id", user.id)
     .maybeSingle();
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
+  // One-hat mode: My Children belongs to the Parent hat.
+  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "parent");
+  if (hatAway) redirect(hatAway);
 
   // Linked children (RLS: own links only).
   type LinkRow = {

@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 
 // Layer B — the teacher layer, for leadership. Two things kept distinct:
 //   * teacher activity (their OWN output): lessons generated, assignments made,
@@ -44,6 +45,9 @@ export default async function SchoolTeachersPage() {
     redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
+  // One-hat mode: the School pages belong to the leadership hats.
+  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "leadership");
+  if (hatAway) redirect(hatAway);
   if (role !== "school_admin") {
     // Coordinator access = holding scope-grant rows (RLS limits the page to that slice).
     const { data: sc } = await supabase.from("coordinator_scope").select("id").limit(1);

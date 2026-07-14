@@ -74,6 +74,17 @@ export async function schoolAssistantEnabledFor(
 }
 
 /**
+ * Role hats ("one hat at a time") — multi-role adults wear exactly one active
+ * hat (principal / coordinator / teacher / parent): only that hat's tabs and
+ * surfaces render, switched via the header dropdown or a portal role door.
+ * Presentation-only (an active_hat cookie) — RLS and server checks unchanged,
+ * so the flag can flip freely. Single-hat users see no difference.
+ */
+export function roleHatsEnabled(): boolean {
+  return process.env.FEATURE_ROLE_HATS === "true";
+}
+
+/**
  * Teacher beta (capped trial + feedback loop). The flag gates the beta UI
  * surfaces; the caps themselves are DB triggers keyed off profiles.beta_tester
  * (migration 0011), so they hold server-side regardless of this flag.

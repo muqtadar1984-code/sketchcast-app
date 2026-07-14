@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 import { SchoolAssistantCard } from "./school-assistant";
 
 // School analytics — leadership oversight, scoped by RLS (school_admin/principal
@@ -47,6 +48,9 @@ export default async function SchoolAnalyticsPage() {
     redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
+  // One-hat mode: the School pages belong to the leadership hats.
+  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "leadership");
+  if (hatAway) redirect(hatAway);
   // The briefing assistant rides its own per-tenant gate on top of the suite.
   const assistantOn = await schoolAssistantEnabledFor(supabase, profile?.school_id as string | null);
   const isAdmin = role === "school_admin";

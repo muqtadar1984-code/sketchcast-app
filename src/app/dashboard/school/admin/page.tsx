@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 import CoordinatorAdmin, { type Member, type Scope } from "../coordinator-admin";
 import ResetPasswordButton from "../../reset-password-button";
 
@@ -27,6 +28,9 @@ export default async function SchoolAdminPage() {
   const role = (profile?.role as string | null) ?? null;
   if (role === "coordinator") redirect("/dashboard/school");
   if (role !== "school_admin") redirect("/dashboard");
+  // One-hat mode: Admin settings belong to the Principal hat only.
+  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "principal");
+  if (hatAway) redirect(hatAway);
 
   // School roster (teachers + coordinators), scope rows, and the option lists.
   const { data: peopleRaw } = await supabase

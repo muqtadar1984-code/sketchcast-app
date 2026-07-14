@@ -19,6 +19,7 @@ import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import { platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -80,6 +81,12 @@ export default async function DashboardPage() {
   if ((mrp as { must_reset_password?: boolean } | null)?.must_reset_password) {
     redirect("/auth/update-password");
   }
+
+  // One-hat mode: the Library is the TEACHER hat's home — an adult wearing a
+  // different hat is sent to that hat's world instead (presentation only;
+  // students are unaffected and every page keeps its own auth gates).
+  const hatAway = await enforceHat(supabase, role, schoolId, "teacher");
+  if (hatAway) redirect(hatAway);
 
   // Teacher beta + signup notification: one best-effort query so a
   // not-yet-applied migration (missing columns) can never break the dashboard.

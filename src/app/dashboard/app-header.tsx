@@ -3,7 +3,10 @@ import { createClient } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
 import TourReplayButton from "./tour-replay-button";
-import { parentPortalEnabled, schoolAnalyticsEnabledFor } from "@/utils/flags";
+import HatSwitcher from "./hat-switcher";
+import { parentPortalEnabled, roleHatsEnabled, schoolAnalyticsEnabledFor } from "@/utils/flags";
+import { HAT_LABEL, hatsFor, resolveHat, type Hat } from "@/utils/hats";
+import { activeHatCookie } from "@/utils/hats-server";
 
 // One person can wear several hats: every adult (teacher, coordinator,
 // school_admin, PARENT) implicitly has the TEACHER capability (the DB already
@@ -14,6 +17,34 @@ import { parentPortalEnabled, schoolAnalyticsEnabledFor } from "@/utils/flags";
 // My Children + Test Papers tabs, and land on the Library like any adult.
 // Students stay exclusive — a minor's account never gains adult capabilities.
 // Tabs and the label show the UNION of what a person holds.
+
+// One-hat-at-a-time tabs (FEATURE_ROLE_HATS): only the ACTIVE hat's world
+// renders — a principal in Teacher mode sees a plain teacher header, nothing
+// leadership. Presentation only; every page keeps its own server-side gates.
+function tabsForHat(hat: Hat, analyticsOn: boolean): NavTab[] {
+  if (hat === "teacher")
+    return [
+      { href: "/dashboard", label: "Library" },
+      { href: "/dashboard/analytics", label: "My Analytics" },
+    ];
+  if (hat === "parent")
+    return [
+      { href: "/dashboard/children", label: "My Children" },
+      { href: "/dashboard/test-papers", label: "Test Papers" },
+    ];
+  const tabs: NavTab[] = [];
+  if (analyticsOn) {
+    tabs.push(
+      { href: "/dashboard/school", label: "School" },
+      { href: "/dashboard/school/teachers", label: "Teachers" },
+      { href: "/dashboard/school/access", label: "Access" },
+    );
+    if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
+  }
+  // Invites are the principal's onboarding tool — principal hat only.
+  if (hat === "principal") tabs.push({ href: "/dashboard/invites", label: "Invites" });
+  return tabs;
+}
 
 function tabsFor(role: string | null, hasScope: boolean, hasChildren: boolean, analyticsOn: boolean): NavTab[] {
   if (!role || role === "student") return [];
@@ -89,8 +120,15 @@ export default async function AppHeader() {
     }
   }
 
-  const tabs = tabsFor(role, hasScope, hasChildren, analyticsOn);
-  const label = labelFor(role, hasScope, hasChildren);
+  // One-hat mode: filter everything to the active hat; legacy union view when off.
+  let hats: Hat[] = [];
+  let activeHat: Hat | null = null;
+  if (roleHatsEnabled() && user) {
+    hats = hatsFor({ role, hasScope, hasChildren, analyticsOn });
+    activeHat = resolveHat(await activeHatCookie(), hats);
+  }
+  const tabs = activeHat ? tabsForHat(activeHat, analyticsOn) : tabsFor(role, hasScope, hasChildren, analyticsOn);
+  const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
   return (
     <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
       <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -102,6 +140,7 @@ export default async function AppHeader() {
           {tabs.length > 0 && <HeaderNav tabs={tabs} />}
         </span>
         <div className="flex items-center gap-4 text-sm">
+          {hats.length > 1 && activeHat && <HatSwitcher hats={hats} active={activeHat} />}
           <span className="text-[#5B6470]">
             {name}
             {label ? ` · ${label}` : ""}

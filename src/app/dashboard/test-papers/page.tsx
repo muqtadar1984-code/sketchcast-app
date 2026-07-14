@@ -5,6 +5,7 @@ import UploadBook from "../upload-book";
 import AutoRefresh from "../auto-refresh";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 import { GeneratePaperButton, AssignChildButton } from "./paper-actions";
 import ReportContentIssue from "../report-content-issue";
 import BookHealthBadge, { type BookHealth } from "../book-health-badge";
@@ -31,6 +32,9 @@ export default async function TestPapersPage() {
     .maybeSingle();
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
+  // One-hat mode: Test Papers belongs to the Parent hat.
+  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "parent");
+  if (hatAway) redirect(hatAway);
 
   // Children for the assign dropdown (own links only).
   type LinkRow = { child_id: string; profiles: { full_name: string | null; username: string | null } | null };

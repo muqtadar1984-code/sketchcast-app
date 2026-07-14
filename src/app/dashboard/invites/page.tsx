@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 import InviteManager, { type InviteRow, type SchoolStudent } from "./invite-manager";
 
 // School-admin only: issue email invites for school_admin / teacher / parent
@@ -22,6 +23,9 @@ export default async function InvitesPage() {
     .single();
   const role = (profile?.role as string | null) ?? null;
   if (role !== "school_admin") redirect("/dashboard");
+  // One-hat mode: Invites are the Principal hat's onboarding tool.
+  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "principal");
+  if (hatAway) redirect(hatAway);
 
   const { data: invitesRaw } = await supabase
     .from("invites")

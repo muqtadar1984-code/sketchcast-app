@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor } from "@/utils/flags";
+import { enforceHat } from "@/utils/hats-server";
 
 // "Who can see what" — a plain-language, read-only view of the access model so
 // leadership can see exactly how the scoping works (and trust it with minors'
@@ -40,6 +41,9 @@ export default async function AccessModelPage() {
     redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
+  // One-hat mode: the School pages belong to the leadership hats.
+  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "leadership");
+  if (hatAway) redirect(hatAway);
   const isAdmin = role === "school_admin";
 
   // RLS-scoped: admin → school-wide; scope-holder → their slice. Coordinator
