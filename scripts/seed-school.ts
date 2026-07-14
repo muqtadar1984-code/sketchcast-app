@@ -229,12 +229,15 @@ const TEACHERS = [
   { fullName: "Ahmad Faizal", subject: "History" },
   { fullName: "Mei Ling Tan", subject: "Geography" },
 ];
+// Class name = "{subject} {grade} {suffix}", where subject comes from the book
+// actually cloned to that teacher (so nobody "teaches Maths in Science 5A");
+// falls back to the teacher's nominal subject when the library is empty.
 const CLASSES = [
-  { name: "Science 5 Amanah", grade: "5" },
-  { name: "Mathematics 5 Bestari", grade: "5" },
-  { name: "English 4 Cerdik", grade: "4" },
-  { name: "History 6 Dinamik", grade: "6" },
-  { name: "Geography 5 Ehsan", grade: "5" },
+  { suffix: "Amanah", grade: "5" },
+  { suffix: "Bestari", grade: "5" },
+  { suffix: "Cerdik", grade: "4" },
+  { suffix: "Dinamik", grade: "6" },
+  { suffix: "Ehsan", grade: "5" },
 ];
 const STUDENTS: [string, string][][] = [
   [["Aisha", "Rahman"], ["Wei Jian", "Tan"], ["Harvind", "Raj"], ["Nur Iman", "Zulkifli"], ["Sofea", "Aziz"]],
@@ -331,12 +334,28 @@ async function wipeTenant(): Promise<void> {
 // ── Clone library content ─────────────────────────────────────────────────────
 
 type ClonedGen = { id: string; title: string; kind: string; teacherIdx: number };
+type ClonedLibrary = { gensByTeacher: ClonedGen[][]; subjectByTeacher: (string | null)[] };
 
-async function cloneLibrary(schoolId: string, teacherIds: string[]): Promise<ClonedGen[][]> {
+// Demo titles are prospect-facing: turn slug-like upload names
+// ("pdfcoffee.com_cambridge-primary-science-year-7-lb-2nd-edition-pdf-free")
+// into readable ones. No-op for titles that already contain spaces.
+function cleanTitle(raw: string): string {
+  let t = raw.replace(/^[a-z0-9.-]+\.(com|org|net|io)[_-]/i, "");
+  if (/\s/.test(t)) return t; // already human-authored
+  t = t.replace(/[-_]+/g, " ").replace(/\b(pdf|free|download)\b/gi, "").replace(/\s{2,}/g, " ").trim();
+  const EXPAND: Record<string, string> = { lb: "Learner's Book", wb: "Workbook", tb: "Teacher's Book" };
+  return t
+    .split(" ")
+    .map((w) => EXPAND[w.toLowerCase()] ?? (/^[0-9]/.test(w) ? w : w[0]?.toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
+async function cloneLibrary(schoolId: string, teacherIds: string[]): Promise<ClonedLibrary> {
   const perTeacher: ClonedGen[][] = teacherIds.map(() => []);
+  const subjectByTeacher: (string | null)[] = teacherIds.map(() => null);
   if (!CLONE_FROM) {
     console.warn("! --clone-from not given: the library will be EMPTY (Watch/Deck/Worksheet/Quiz demo dead). Strongly consider --clone-from.");
-    return perTeacher;
+    return { gensByTeacher: perTeacher, subjectByTeacher };
   }
   const src = (await listAllUsers()).find((u) => u.email === CLONE_FROM.toLowerCase());
   if (!src) fail(`--clone-from ${CLONE_FROM}: no such auth user.`);
@@ -352,12 +371,16 @@ async function cloneLibrary(schoolId: string, teacherIds: string[]): Promise<Clo
     "listing source books",
   );
   if (!books?.length) fail(`--clone-from ${CLONE_FROM}: no ready books to clone.`);
-  console.log(`Cloning ${Math.min(books.length, 5)} book(s) from ${CLONE_FROM} (has ${books.length} ready).`);
+  console.log(
+    `Cloning from ${CLONE_FROM} (${books.length} ready book(s), cycled across ${teacherIds.length} teachers so every class has openable lessons).`,
+  );
 
-  for (let i = 0; i < Math.min(books.length, 5); i++) {
-    const book = books[i];
-    const tIdx = i % teacherIds.length;
+  // EVERY teacher gets a book copy (cycle when the source has fewer books than
+  // teachers) — an empty class is a dead demo screen.
+  for (let tIdx = 0; tIdx < teacherIds.length; tIdx++) {
+    const book = books[tIdx % books.length];
     const teacherId = teacherIds[tIdx];
+    subjectByTeacher[tIdx] = (book.subject as string | null) ?? null;
 
     // Book file (uploads bucket) — path must start with the new owner's uid.
     let newStoragePath: string | null = null;
@@ -377,7 +400,7 @@ async function cloneLibrary(schoolId: string, teacherIds: string[]): Promise<Clo
       db
         .from("books")
         .insert({
-          title: book.title,
+          title: cleanTitle(book.title as string),
           author: book.author,
           kind: book.kind,
           owner_id: teacherId,
@@ -452,9 +475,11 @@ async function cloneLibrary(schoolId: string, teacherIds: string[]): Promise<Clo
       }
       perTeacher[tIdx].push({ id: newGen.id, title: gen.title ?? "Lesson", kind: gen.kind, teacherIdx: tIdx });
     }
-    console.log(`  + book "${book.title}" → ${TEACHERS[tIdx].fullName} (${(gens ?? []).length} lessons, grounding ×${(grounding ?? []).length})`);
+    console.log(
+      `  + book "${cleanTitle(book.title as string)}" → ${TEACHERS[tIdx].fullName} (${(gens ?? []).length} lessons, grounding ×${(grounding ?? []).length})`,
+    );
   }
-  return perTeacher;
+  return { gensByTeacher: perTeacher, subjectByTeacher };
 }
 
 // ── Build ─────────────────────────────────────────────────────────────────────
@@ -545,17 +570,23 @@ async function main() {
   );
   console.log(`+ 5 teachers (teacher1 also holds the Grade 5 coordinator grant)`);
 
+  // ── Library first (cloned real content) — class names derive from it ───────
+  const { gensByTeacher, subjectByTeacher } = await cloneLibrary(schoolId, teacherIds);
+
   // ── Classes ─────────────────────────────────────────────────────────────────
+  const classNames = CLASSES.map(
+    (c, i) => `${subjectByTeacher[i] ?? TEACHERS[i].subject} ${c.grade} ${c.suffix}`,
+  );
   const classIds: string[] = [];
   const joinCodes: string[] = [];
   for (let i = 0; i < CLASSES.length; i++) {
     const cls = await must(
       db
         .from("classes")
-        .insert({ name: CLASSES[i].name, grade: CLASSES[i].grade, teacher_id: teacherIds[i], school_id: schoolId })
+        .insert({ name: classNames[i], grade: CLASSES[i].grade, teacher_id: teacherIds[i], school_id: schoolId })
         .select("id, join_code")
         .single(),
-      `creating class ${CLASSES[i].name}`,
+      `creating class ${classNames[i]}`,
     );
     classIds.push(cls.id);
     joinCodes.push(cls.join_code);
@@ -583,7 +614,7 @@ async function main() {
       const { error } = await db.from("enrollments").insert({ class_id: classIds[c], student_id: id });
       if (error) fail(`enrolling ${username}: ${error.message}`);
       ids.push(id);
-      studentCreds.push({ class: CLASSES[c].name, name: `${first} ${last}`, username });
+      studentCreds.push({ class: classNames[c], name: `${first} ${last}`, username });
     }
     studentIds.push(ids);
   }
@@ -612,12 +643,10 @@ async function main() {
   await db.from("profiles").update({ parent_email: parentEmail }).eq("id", studentIds[0][0]);
   console.log(`+ parent ${parentEmail} → linked to ${STUDENTS[0][0].join(" ")}`);
 
-  // ── Library (cloned real content) ───────────────────────────────────────────
-  const gensByTeacher = await cloneLibrary(schoolId, teacherIds);
-
   // ── Assignments + progress + submissions ────────────────────────────────────
-  // Due-date mix: classes 0-1 get TWO past-due shares (so shaped students trip
-  // the "≥2 overdue" rule); classes 2-4 get one past + upcoming.
+  // Due-date mix: the first classes holding ≥2 lessons get TWO past-due shares
+  // (so shaped students trip the "≥2 overdue" rule); the rest get one past +
+  // upcoming dues.
   let shareCount = 0;
   let progressCount = 0;
   let submissionCount = 0;
@@ -625,16 +654,16 @@ async function main() {
   for (let c = 0; c < classIds.length; c++) {
     const gens = gensByTeacher[c] ?? [];
     if (gens.length === 0) {
-      console.warn(`  ! class "${CLASSES[c].name}": teacher has no cloned lessons — screens for this class will be thin.`);
+      console.warn(`  ! class "${classNames[c]}": teacher has no cloned lessons — screens for this class will be thin.`);
       continue;
     }
     if (gens.length < 2)
-      console.warn(`  ! class "${CLASSES[c].name}": only 1 lesson — completion/overdue rules need ≥2 assigned to fully light up.`);
+      console.warn(`  ! class "${classNames[c]}": only 1 lesson — completion/overdue rules need ≥2 assigned to fully light up.`);
     const share = gens.slice(0, 3);
-    const dues =
-      c <= 1
-        ? [iso(6 * DAY), iso(2 * DAY), new Date(now + 7 * DAY).toISOString()]
-        : [iso(4 * DAY), new Date(now + 6 * DAY).toISOString(), new Date(now + 12 * DAY).toISOString()];
+    const heavyOverdue = c <= 2 && share.length >= 2; // the shaped ≥2-overdue classes
+    const dues = heavyOverdue
+      ? [iso(6 * DAY), iso(2 * DAY), new Date(now + 7 * DAY).toISOString()]
+      : [iso(4 * DAY), new Date(now + 6 * DAY).toISOString(), new Date(now + 12 * DAY).toISOString()];
     for (let s = 0; s < share.length; s++) {
       await must(
         db
@@ -646,7 +675,7 @@ async function main() {
             due_at: dues[s],
           })
           .select("id"),
-        `share ${share[s].title} → ${CLASSES[c].name}`,
+        `share ${share[s].title} → ${classNames[c]}`,
       );
       shareCount++;
     }
@@ -763,7 +792,7 @@ async function main() {
       );
     }
     // s3 — AT-RISK: barely started weeks ago, inactive >14d, low scores, and in
-    // classes 0-1 both past-due shares are incomplete (≥2 overdue).
+    // the heavy-overdue classes both past-due shares are incomplete (≥2 overdue).
     progress.push({
       generation_id: share[0].id,
       student_id: s3,
@@ -773,7 +802,7 @@ async function main() {
       opened_at: iso(25 * DAY),
       updated_at: iso(20 * DAY), // BEFORE UPDATE touch trigger → survives on INSERT
     });
-    if (c === 1 && share[1]) {
+    if (c === 2 && share[1]) {
       subs.push(
         {
           generation_id: share[0].id,
@@ -839,7 +868,7 @@ async function main() {
     teachers: TEACHERS.map((t, i) => ({
       name: t.fullName,
       email: `teacher${i + 1}@${SLUG}.sketchcast.app`,
-      class: CLASSES[i].name,
+      class: classNames[i],
       joinCode: joinCodes[i],
       notes: i === 0 ? "Also Grade 5 coordinator → sees the NAMED at-risk worklist" : undefined,
     })),
@@ -856,7 +885,7 @@ async function main() {
   md.push(`## Teachers — ${portal}/teacher`, "", "| # | Name | Email | Class | Join code |", "|---|---|---|---|---|");
   TEACHERS.forEach((t, i) =>
     md.push(
-      `| ${i + 1} | ${t.fullName}${i === 0 ? " (coordinator)" : ""} | \`teacher${i + 1}@${SLUG}.sketchcast.app\` | ${CLASSES[i].name} | \`${joinCodes[i]}\` |`,
+      `| ${i + 1} | ${t.fullName}${i === 0 ? " (coordinator)" : ""} | \`teacher${i + 1}@${SLUG}.sketchcast.app\` | ${classNames[i]} | \`${joinCodes[i]}\` |`,
     ),
   );
   md.push("", `Teacher 1 also holds the Grade 5 coordinator grant — her School tab shows the **named at-risk worklist**.`, "");
