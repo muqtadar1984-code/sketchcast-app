@@ -19,7 +19,7 @@ const MODEL: { role: string; sees: string }[] = [
   },
   {
     role: "Principal / Admin",
-    sees: "Whole-school totals and trends. Named at-risk students are surfaced to the grade/subject coordinator, not profiled school-wide. Admin also manages scopes, reads the access-audit log, and can teach classes of their own.",
+    sees: "Whole-school totals and trends, plus named at-risk students on request via the school briefing (each briefing is recorded in the access audit). The day-to-day named worklist stays with the grade/subject coordinator. Admin also manages scopes, reads the access-audit log, and can teach classes of their own.",
   },
 ];
 

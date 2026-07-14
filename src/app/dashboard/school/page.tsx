@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabledFor } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor } from "@/utils/flags";
+import { SchoolAssistantCard } from "./school-assistant";
 
 // School analytics — leadership oversight, scoped by RLS (school_admin/principal
 // → whole school; coordinator → their grade/subject slice). Build order #1: the
@@ -46,6 +47,8 @@ export default async function SchoolAnalyticsPage() {
     redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
+  // The briefing assistant rides its own per-tenant gate on top of the suite.
+  const assistantOn = await schoolAssistantEnabledFor(supabase, profile?.school_id as string | null);
   const isAdmin = role === "school_admin";
 
   // Coordinator access is a GRANT (coordinator_scope rows), not an identity —
@@ -271,6 +274,8 @@ export default async function SchoolAnalyticsPage() {
           ))}
         </div>
 
+        {assistantOn && <SchoolAssistantCard />}
+
         <h2 className="text-xl mb-1">Students needing support</h2>
         <p className="text-sm text-[#5B6470] mb-3">
           Flagged by low/declining completion, falling scores, or inactivity — the worklist to act on first.
@@ -321,8 +326,9 @@ export default async function SchoolAnalyticsPage() {
                 </div>
               ))}
             <div className="px-5 py-3 text-xs text-[#5B6470]">
-              Names are shown to the grade/subject coordinator for their slice, so support stays close to the
-              student and minor data isn&apos;t profiled school-wide.
+              Names live in the grade/subject coordinator&apos;s worklist, so support stays close to the student.
+              As principal you can also ask the school briefing above for names and reasons — every briefing is
+              recorded in the access audit.
             </div>
           </div>
         )}

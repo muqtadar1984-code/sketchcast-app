@@ -518,9 +518,10 @@ async function main() {
         slug: SLUG,
         display_name: NAME,
         status: "active",
-        // Per-tenant leadership suite — lights dashboard/school/** for THIS school
-        // only (schoolAnalyticsEnabledFor), no global env flip needed.
-        config: { school_analytics: true },
+        // Per-tenant leadership suite + briefing assistant — lights
+        // dashboard/school/** and "Ask about your school" for THIS school only
+        // (schoolAnalyticsEnabledFor / schoolAssistantEnabledFor), no global env flip.
+        config: { school_analytics: true, school_assistant: true },
       })
       .select("id")
       .single(),
