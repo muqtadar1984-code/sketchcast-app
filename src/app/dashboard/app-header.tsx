@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
 import TourReplayButton from "./tour-replay-button";
-import { parentPortalEnabled, schoolAnalyticsEnabled } from "@/utils/flags";
+import { parentPortalEnabled, schoolAnalyticsEnabledFor } from "@/utils/flags";
 
 // One person can wear several hats: every adult (teacher, coordinator,
 // school_admin, PARENT) implicitly has the TEACHER capability (the DB already
@@ -15,13 +15,13 @@ import { parentPortalEnabled, schoolAnalyticsEnabled } from "@/utils/flags";
 // Students stay exclusive — a minor's account never gains adult capabilities.
 // Tabs and the label show the UNION of what a person holds.
 
-function tabsFor(role: string | null, hasScope: boolean, hasChildren: boolean): NavTab[] {
+function tabsFor(role: string | null, hasScope: boolean, hasChildren: boolean, analyticsOn: boolean): NavTab[] {
   if (!role || role === "student") return [];
   const tabs: NavTab[] = [
     { href: "/dashboard", label: "Library" },
     { href: "/dashboard/analytics", label: "My Analytics" },
   ];
-  if (schoolAnalyticsEnabled() && (role === "school_admin" || hasScope)) {
+  if (analyticsOn && (role === "school_admin" || hasScope)) {
     tabs.push(
       { href: "/dashboard/school", label: "School" },
       { href: "/dashboard/school/teachers", label: "Teachers" },
@@ -62,14 +62,19 @@ export default async function AppHeader() {
   let name = "";
   let hasScope = false;
   let hasChildren = false;
+  let analyticsOn = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, role")
+      .select("full_name, role, school_id")
       .eq("id", user.id)
       .maybeSingle();
     role = (profile?.role as string | null) ?? null;
     name = profile?.full_name || user.email || "";
+    if (role && role !== "student") {
+      // Global env flag OR this school's config override (the sales-demo tenant).
+      analyticsOn = await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null);
+    }
     if (role === "teacher" || role === "coordinator") {
       // RLS: cs_self_read returns only the viewer's own grant rows.
       const { data: sc } = await supabase.from("coordinator_scope").select("id").limit(1);
@@ -84,7 +89,7 @@ export default async function AppHeader() {
     }
   }
 
-  const tabs = tabsFor(role, hasScope, hasChildren);
+  const tabs = tabsFor(role, hasScope, hasChildren, analyticsOn);
   const label = labelFor(role, hasScope, hasChildren);
   return (
     <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">

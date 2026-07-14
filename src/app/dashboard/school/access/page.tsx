@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabled } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 
 // "Who can see what" — a plain-language, read-only view of the access model so
 // leadership can see exactly how the scoping works (and trust it with minors'
@@ -24,8 +24,6 @@ const MODEL: { role: string; sees: string }[] = [
 ];
 
 export default async function AccessModelPage() {
-  if (!schoolAnalyticsEnabled()) redirect("/dashboard");
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -37,6 +35,9 @@ export default async function AccessModelPage() {
     .select("full_name, role, school_id")
     .eq("id", user.id)
     .single();
+  // Global env flag OR this school's config override (the sales-demo tenant).
+  if (!(await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null)))
+    redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
   const isAdmin = role === "school_admin";

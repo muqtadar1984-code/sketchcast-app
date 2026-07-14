@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabled } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 
 // Layer B — the teacher layer, for leadership. Two things kept distinct:
 //   * teacher activity (their OWN output): lessons generated, assignments made,
@@ -28,8 +28,6 @@ type TeacherRow = {
 };
 
 export default async function SchoolTeachersPage() {
-  if (!schoolAnalyticsEnabled()) redirect("/dashboard");
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,6 +39,9 @@ export default async function SchoolTeachersPage() {
     .select("full_name, role, school_id")
     .eq("id", user.id)
     .single();
+  // Global env flag OR this school's config override (the sales-demo tenant).
+  if (!(await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null)))
+    redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
   if (role !== "school_admin") {

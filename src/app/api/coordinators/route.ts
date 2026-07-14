@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { schoolAnalyticsEnabled } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 
 export const runtime = "nodejs";
 
@@ -21,10 +21,6 @@ type Body = {
 };
 
 export async function POST(request: Request) {
-  if (!schoolAnalyticsEnabled()) {
-    return NextResponse.json({ error: "Not enabled." }, { status: 404 });
-  }
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,6 +37,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "School admin only." }, { status: 403 });
   }
   const schoolId = me.school_id as string;
+
+  // Global env flag OR this school's config override (the sales-demo tenant).
+  if (!(await schoolAnalyticsEnabledFor(supabase, schoolId))) {
+    return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+  }
 
   let body: Body;
   try {

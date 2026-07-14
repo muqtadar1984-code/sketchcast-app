@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabled } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 import CoordinatorAdmin, { type Member, type Scope } from "../coordinator-admin";
 import ResetPasswordButton from "../../reset-password-button";
 
@@ -10,8 +10,6 @@ import ResetPasswordButton from "../../reset-password-button";
 // coordinator → (grade, subject) scope mapping that drives the whole permission
 // model, plus the DPDP access-audit trail. Behind FEATURE_SCHOOL_ANALYTICS.
 export default async function SchoolAdminPage() {
-  if (!schoolAnalyticsEnabled()) redirect("/dashboard");
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -23,6 +21,9 @@ export default async function SchoolAdminPage() {
     .select("full_name, role, school_id")
     .eq("id", user.id)
     .single();
+  // Global env flag OR this school's config override (the sales-demo tenant).
+  if (!(await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null)))
+    redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (role === "coordinator") redirect("/dashboard/school");
   if (role !== "school_admin") redirect("/dashboard");

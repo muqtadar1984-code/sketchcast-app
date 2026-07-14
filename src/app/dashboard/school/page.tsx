@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabled } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 
 // School analytics — leadership oversight, scoped by RLS (school_admin/principal
 // → whole school; coordinator → their grade/subject slice). Build order #1: the
@@ -30,8 +30,6 @@ type Flagged = {
 };
 
 export default async function SchoolAnalyticsPage() {
-  if (!schoolAnalyticsEnabled()) redirect("/dashboard");
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -43,6 +41,9 @@ export default async function SchoolAnalyticsPage() {
     .select("full_name, role, school_id")
     .eq("id", user.id)
     .single();
+  // Global env flag OR this school's config override (the sales-demo tenant).
+  if (!(await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null)))
+    redirect("/dashboard");
   const role = (profile?.role as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
   const isAdmin = role === "school_admin";

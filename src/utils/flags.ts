@@ -1,6 +1,7 @@
 // Server-side feature flags. Default OFF so nothing lights up in production by
 // accident — set the env var to exactly "true" to enable.
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { consoleModeOn } from "./console-routing";
 
 /**
@@ -22,6 +23,30 @@ export function consoleSubdomainEnabled(): boolean {
  */
 export function schoolAnalyticsEnabled(): boolean {
   return process.env.FEATURE_SCHOOL_ANALYTICS === "true";
+}
+
+/**
+ * Tenant-aware variant: the global env flag, OR the per-school override in
+ * schools.config (0042) — {"school_analytics": true}. Lets ONE tenant (e.g. the
+ * sales demo school) show the leadership suite without lighting it up for every
+ * teacher in prod. Reads through the caller's own session client: schools_read
+ * RLS only ever returns the user's OWN school row, so this leaks nothing.
+ * Best-effort — pre-0042 DBs (no config column) simply resolve to "off".
+ */
+export async function schoolAnalyticsEnabledFor(
+  supabase: SupabaseClient,
+  schoolId: string | null | undefined,
+): Promise<boolean> {
+  if (schoolAnalyticsEnabled()) return true;
+  if (!schoolId) return false;
+  const { data, error } = await supabase
+    .from("schools")
+    .select("config")
+    .eq("id", schoolId)
+    .maybeSingle();
+  if (error) return false;
+  const cfg = (data?.config ?? null) as { school_analytics?: unknown } | null;
+  return cfg?.school_analytics === true;
 }
 
 /**

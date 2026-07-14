@@ -4,7 +4,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import AppHeader from "../app-header";
 import GradeList, { type PendingSub } from "../grade-list";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabled } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -26,7 +26,7 @@ export default async function AnalyticsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role")
+    .select("full_name, role, school_id")
     .eq("id", user.id)
     .single();
   const role = (profile?.role as string | null) ?? null;
@@ -171,7 +171,7 @@ export default async function AnalyticsPage() {
   // analytics feature is on). The same activity metrics leadership sees, computed
   // from the teacher's OWN data, so there are no surprises.
   let schoolView: { label: string; value: string | number }[] | null = null;
-  if (schoolAnalyticsEnabled()) {
+  if (await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null)) {
     const { count: lessons } = await supabase
       .from("generations")
       .select("*", { count: "exact", head: true })
