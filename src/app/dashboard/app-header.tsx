@@ -4,7 +4,13 @@ import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
-import { calendarEnabledFor, parentPortalEnabled, roleHatsEnabled, schoolAnalyticsEnabledFor } from "@/utils/flags";
+import {
+  calendarEnabledFor,
+  parentPortalEnabled,
+  roleHatsEnabled,
+  schoolAnalyticsEnabledFor,
+  timetableEnabledFor,
+} from "@/utils/flags";
 import { HAT_LABEL, hatsFor, resolveHat, type Hat } from "@/utils/hats";
 import { activeHatCookie } from "@/utils/hats-server";
 
@@ -21,7 +27,7 @@ import { activeHatCookie } from "@/utils/hats-server";
 // One-hat-at-a-time tabs (FEATURE_ROLE_HATS): only the ACTIVE hat's world
 // renders — a principal in Teacher mode sees a plain teacher header, nothing
 // leadership. Presentation only; every page keeps its own server-side gates.
-function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean): NavTab[] {
+function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetableOn: boolean): NavTab[] {
   const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: "Calendar" }] : [];
   if (hat === "teacher")
     return [
@@ -44,6 +50,7 @@ function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean): NavTab
     );
     if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
   }
+  if (timetableOn) tabs.push({ href: "/dashboard/school/timetable", label: "Timetable" });
   tabs.push(...calendar);
   // Invites are the principal's onboarding tool — principal hat only.
   if (hat === "principal") tabs.push({ href: "/dashboard/invites", label: "Invites" });
@@ -56,6 +63,7 @@ function tabsFor(
   hasChildren: boolean,
   analyticsOn: boolean,
   calendarOn: boolean,
+  timetableOn: boolean,
 ): NavTab[] {
   if (!role || role === "student") return [];
   const tabs: NavTab[] = [
@@ -71,6 +79,8 @@ function tabsFor(
     );
     if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
   }
+  if (timetableOn && (role === "school_admin" || hasScope))
+    tabs.push({ href: "/dashboard/school/timetable", label: "Timetable" });
   // Invites are the school-admin's onboarding tool — available even when the
   // analytics suite is flag-off.
   if (role === "school_admin") tabs.push({ href: "/dashboard/invites", label: "Invites" });
@@ -106,6 +116,7 @@ export default async function AppHeader() {
   let hasChildren = false;
   let analyticsOn = false;
   let calendarOn = false;
+  let timetableOn = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -117,6 +128,7 @@ export default async function AppHeader() {
     if (role && role !== "student") {
       // Global env flag OR this school's config override (the sales-demo tenant).
       analyticsOn = await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null);
+      timetableOn = await timetableEnabledFor(supabase, profile?.school_id as string | null);
     }
     if (role === "teacher" || role === "coordinator") {
       // RLS: cs_self_read returns only the viewer's own grant rows.
@@ -158,8 +170,8 @@ export default async function AppHeader() {
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const tabs = activeHat
-    ? tabsForHat(activeHat, analyticsOn, calendarOn)
-    : tabsFor(role, hasScope, hasChildren, analyticsOn, calendarOn);
+    ? tabsForHat(activeHat, analyticsOn, calendarOn, timetableOn)
+    : tabsFor(role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn);
   const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
   return (
     <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">

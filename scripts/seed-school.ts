@@ -518,9 +518,10 @@ async function main() {
         slug: SLUG,
         display_name: NAME,
         status: "active",
-        // Per-tenant features — leadership suite, briefing assistant, calendar —
-        // for THIS school only (the *EnabledFor helpers), no global env flips.
-        config: { school_analytics: true, school_assistant: true, calendar: true },
+        // Per-tenant features — leadership suite, briefing assistant, calendar,
+        // timetable — for THIS school only (the *EnabledFor helpers), no global
+        // env flips.
+        config: { school_analytics: true, school_assistant: true, calendar: true, timetable_enabled: true },
       })
       .select("id")
       .single(),
@@ -886,6 +887,35 @@ async function main() {
     eventCount++;
   }
   if (eventCount) console.log(`+ ${eventCount} calendar events`);
+
+  // ── Timetable (needs migration 0045 — skipped with a warning if absent) ──────
+  // A Latin-square rotation: in every period, the 5 classes are taught by 5
+  // DIFFERENT teachers (teacher index = (class + period) mod 5) — a full,
+  // realistic, conflict-free grid that shows cross-teaching. 5 classes × 5 days
+  // × 6 periods.
+  {
+    const slotRows: Record<string, unknown>[] = [];
+    for (let c = 0; c < classIds.length; c++) {
+      for (let day = 1; day <= 5; day++) {
+        for (let period = 1; period <= 6; period++) {
+          const tIdx = (c + period + day) % teacherIds.length;
+          slotRows.push({
+            school_id: schoolId,
+            class_id: classIds[c],
+            day,
+            period,
+            subject: TEACHERS[tIdx].subject,
+            teacher_id: teacherIds[tIdx],
+            room: `Room ${101 + c}`,
+            created_by: principalId,
+          });
+        }
+      }
+    }
+    const { error } = await db.from("timetable_slots").insert(slotRows);
+    if (error) console.warn(`  ! timetable skipped (${error.message}) — run migration 0045 and re-seed to populate it.`);
+    else console.log(`+ ${slotRows.length} timetable slots (conflict-free rotation)`);
+  }
 
   // ── Credentials file ────────────────────────────────────────────────────────
   const portal = `https://school.sketchcast.app/${SLUG}`;
