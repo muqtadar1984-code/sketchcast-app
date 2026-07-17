@@ -68,6 +68,7 @@ export async function POST(request: Request) {
       start: shape.start,
       end: shape.end,
       breaks: shape.breaks,
+      periodMinutes: shape.periodMinutes,
       maxPerTeacherPerDay: shape.maxPerTeacherPerDay,
     },
   };

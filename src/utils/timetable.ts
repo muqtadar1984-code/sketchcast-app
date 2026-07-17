@@ -31,6 +31,9 @@ export type TimetableShape = {
   start?: string; // school start, "07:45"
   end?: string; // school end, "14:45"
   breaks?: BreakDef[];
+  /** Length of one period in minutes — the settings panel derives every
+   *  period/break/end time from start + this + the breaks. */
+  periodMinutes?: number;
   /** Max LESSON periods a teacher may be given per day (soft in the editor,
    *  hard in the generator and the substitution picker). */
   maxPerTeacherPerDay?: number;
@@ -56,6 +59,7 @@ export const DEFAULT_SHAPE: TimetableShape = {
     { label: "Snack break", time: "10:45", minutes: 15, afterPeriod: 4 },
     { label: "Lunch break", time: "12:30", minutes: 45, afterPeriod: 6 },
   ],
+  periodMinutes: 45,
   maxPerTeacherPerDay: 6,
 };
 
@@ -86,6 +90,7 @@ export function shapeFromConfig(cfg: unknown): TimetableShape {
         start?: unknown;
         end?: unknown;
         breaks?: unknown;
+        periodMinutes?: unknown;
         maxPerTeacherPerDay?: unknown;
       };
     } | null
@@ -126,14 +131,53 @@ export function shapeFromConfig(cfg: unknown): TimetableShape {
     typeof t.maxPerTeacherPerDay === "number" && t.maxPerTeacherPerDay >= 1 && t.maxPerTeacherPerDay <= 12
       ? Math.floor(t.maxPerTeacherPerDay)
       : DEFAULT_SHAPE.maxPerTeacherPerDay;
+  const periodMinutes =
+    typeof t.periodMinutes === "number" && t.periodMinutes >= 5 && t.periodMinutes <= 240
+      ? Math.floor(t.periodMinutes)
+      : DEFAULT_SHAPE.periodMinutes;
   return {
     days,
     periods: periods.length ? periods : DEFAULT_SHAPE.periods,
     start,
     end,
     breaks,
+    periodMinutes,
     maxPerTeacherPerDay,
   };
+}
+
+/**
+ * The derived day timeline: P1 starts at school start, every period is
+ * `periodMinutes` long, and each break pushes everything after it later.
+ * Breaks attach after their period (afterPeriod 0 = before P1, which also
+ * delays P1 — an opening assembly). Returns each period's start, each
+ * break's start (aligned by index with `breaks`), and the school end
+ * (= the last period's finish).
+ */
+export function layoutTimes(
+  startMinutes: number,
+  periodMinutes: number,
+  periodCount: number,
+  breaks: BreakDef[],
+): { periodTimes: string[]; breakTimes: string[]; end: string } {
+  const breakTimes: string[] = new Array(breaks.length).fill("");
+  const periodTimes: string[] = [];
+  let t = startMinutes;
+  const takeBreaks = (after: number) => {
+    breaks.forEach((b, i) => {
+      if (Math.min(b.afterPeriod, periodCount) === after) {
+        breakTimes[i] = minutesToTime(t);
+        t += b.minutes ?? 0;
+      }
+    });
+  };
+  takeBreaks(0);
+  for (let p = 1; p <= periodCount; p++) {
+    periodTimes.push(minutesToTime(t));
+    t += periodMinutes;
+    takeBreaks(p);
+  }
+  return { periodTimes, breakTimes, end: minutesToTime(t) };
 }
 
 export const cellKey = (classId: string, day: number, period: number) => `${classId}|${day}|${period}`;

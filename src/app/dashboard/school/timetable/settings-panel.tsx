@@ -1,80 +1,66 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DAY_NAMES, minutesToTime, timeToMinutes, type BreakDef, type TimetableShape } from "@/utils/timetable";
+import {
+  DAY_NAMES,
+  layoutTimes,
+  minutesToTime,
+  timeToMinutes,
+  type BreakDef,
+  type TimetableShape,
+} from "@/utils/timetable";
 
-// Principal-only structure settings: school hours, the period list, breaks
-// (snack, lunch — label/time/length/position), days per week and the per-day
-// teacher limit. Everything is stored in schools.config.timetable via the
-// settings API (sanitized server-side by the same parser every page reads
-// through), so a typo can't brick the grid — bad fields just fall back.
+// Principal-only structure settings. The day's TIMELINE IS DERIVED, never
+// hand-typed: P1 starts at school start, every period runs `period length`
+// minutes, each break pushes what follows it later, and school end is the
+// last period's finish. Change the start or the length and the whole
+// schedule re-flows — no way to produce a P2 that starts before P1. What's
+// stored (via the settings API, sanitized by shapeFromConfig) is the
+// computed times, so the grid and every other page just read them as before.
 export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [days, setDays] = useState(shape.days);
-  const [start, setStart] = useState(shape.start ?? "");
-  const [end, setEnd] = useState(shape.end ?? "");
+  const [start, setStart] = useState(shape.start ?? "07:45");
+  const [periodLen, setPeriodLen] = useState(shape.periodMinutes ?? 45);
   const [maxPerDay, setMaxPerDay] = useState(shape.maxPerTeacherPerDay ?? 6);
-  const [periods, setPeriods] = useState(shape.periods.map((p) => ({ label: p.label, time: p.time ?? "" })));
-  const [breaks, setBreaks] = useState<BreakDef[]>((shape.breaks ?? []).map((b) => ({ ...b })));
+  const [periods, setPeriods] = useState(shape.periods.map((p) => ({ label: p.label })));
+  const [breaks, setBreaks] = useState<{ label: string; minutes: number; afterPeriod: number }[]>(
+    (shape.breaks ?? []).map((b) => ({ label: b.label, minutes: b.minutes ?? 15, afterPeriod: b.afterPeriod })),
+  );
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  // The last COMMITTED start time, in minutes — the base every shift is
-  // measured from.
-  const startBase = useRef(timeToMinutes(shape.start ?? ""));
+  // The last COMMITTED start (minutes) — the anchor while the field is mid-edit.
+  const startBase = useRef(timeToMinutes(shape.start ?? "07:45") ?? 465);
 
-  // The start time is the schedule's anchor: moving it drags every period,
-  // break and the end time along by the same delta, so "school now starts at
-  // 08:45" is one edit, not ten. The shift happens on COMMIT (blur / Enter),
-  // never per keystroke — typing "13:45" passes through "1:45", and shifting
-  // on intermediates would yank the whole schedule around mid-edit. An
-  // invalid value on commit reverts to the last good one.
+  // The whole timeline, derived. While the start field is mid-typing
+  // (invalid), the last committed value anchors the preview.
+  const computed = useMemo(() => {
+    const anchor = timeToMinutes(start) ?? startBase.current;
+    return layoutTimes(anchor, periodLen, periods.length, breaks as BreakDef[]);
+  }, [start, periodLen, periods.length, breaks]);
+
   function commitStart() {
     const next = timeToMinutes(start);
-    const base = startBase.current;
     if (next === null) {
-      // Half-typed or garbage: restore the last committed value.
-      if (base !== null) setStart(minutesToTime(base));
+      setStart(minutesToTime(startBase.current)); // revert half-typed input
       return;
     }
     startBase.current = next;
-    setStart(minutesToTime(next)); // normalize "8:45" → "08:45"
-    if (base === null || next === base) return;
-    const delta = next - base;
-    const shift = (t?: string) => {
-      const m = timeToMinutes(t);
-      return m === null ? t : minutesToTime(m + delta);
-    };
-    setPeriods((prev) => prev.map((p) => ({ ...p, time: p.time ? shift(p.time)! : p.time })));
-    setBreaks((prev) => prev.map((b) => ({ ...b, time: b.time ? shift(b.time) : b.time })));
-    setEnd((prev) => shift(prev) ?? prev);
-    setMsg(
-      `Shifted every period, break and the end time by ${delta > 0 ? "+" : ""}${delta} min — click Save settings to apply it to the timetable.`,
-    );
+    setStart(minutesToTime(next)); // normalize "8:50" → "08:50"
   }
 
   // Unsaved-changes tracking: nothing here touches the timetable until Save.
-  const snapshot = () => JSON.stringify({ days, start, end, maxPerDay, periods, breaks });
+  const snapshot = () => JSON.stringify({ days, start, periodLen, maxPerDay, periods, breaks });
   const baseline = useRef<string>("");
   if (!baseline.current) baseline.current = snapshot();
   const dirty = snapshot() !== baseline.current;
 
-  /** All time fields must be real clock times (or empty) before saving —
-   *  otherwise the server's sanitizer would quietly swap them for defaults. */
-  function invalidTimeField(): string | null {
-    if (timeToMinutes(start) === null) return "School start time";
-    if (timeToMinutes(end) === null) return "School end time";
-    for (const p of periods) if (p.time && timeToMinutes(p.time) === null) return `Period "${p.label}" time`;
-    for (const b of breaks) if (b.time && timeToMinutes(b.time) === null) return `Break "${b.label || "?"}" time`;
-    return null;
-  }
-
   async function save() {
-    const bad = invalidTimeField();
-    if (bad) {
-      setErr(`${bad} isn't a valid hh:mm time — fix it (or clear it) before saving.`);
+    if (timeToMinutes(start) === null) {
+      setErr("School start time isn't a valid hh:mm time.");
       return;
     }
     setBusy(true);
@@ -88,10 +74,11 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
           timetable: {
             days,
             start,
-            end,
+            end: computed.end,
+            periodMinutes: periodLen,
             maxPerTeacherPerDay: maxPerDay,
-            periods: periods.map((p) => ({ label: p.label, time: p.time || undefined })),
-            breaks,
+            periods: periods.map((p, i) => ({ label: p.label, time: computed.periodTimes[i] })),
+            breaks: breaks.map((b, i) => ({ ...b, time: computed.breakTimes[i] || undefined })),
           },
         }),
       });
@@ -125,7 +112,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
         <div className="mt-3">
           <div className="flex flex-wrap gap-3">
             <label className="text-xs text-[#5B6470]">
-              School starts
+              School starts (= Period 1)
               <input
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
@@ -136,13 +123,21 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
                 placeholder="07:45"
                 className={`${fieldCls} block w-24 mt-1`}
               />
-              <span className="block text-[10px] text-[#98A0A9] mt-0.5 w-28">
-                Moving this shifts every period &amp; break with it
-              </span>
+            </label>
+            <label className="text-xs text-[#5B6470]">
+              Period length (min)
+              <input
+                type="number"
+                min={5}
+                max={240}
+                value={periodLen}
+                onChange={(e) => setPeriodLen(Math.floor(Math.max(5, Math.min(240, Number(e.target.value) || 45))))}
+                className={`${fieldCls} block w-24 mt-1`}
+              />
             </label>
             <label className="text-xs text-[#5B6470]">
               School ends
-              <input value={end} onChange={(e) => setEnd(e.target.value)} placeholder="14:45" className={`${fieldCls} block w-24 mt-1`} />
+              <input value={computed.end} readOnly disabled className={`${fieldCls} block w-24 mt-1 bg-[#F5F6F3] text-[#5B6470]`} />
             </label>
             <label className="text-xs text-[#5B6470]">
               Days / week
@@ -167,6 +162,10 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
               />
             </label>
           </div>
+          <p className="text-[11px] text-[#98A0A9] mt-2">
+            All times are computed: Period 1 starts when school starts, each period runs {periodLen} minutes,
+            and every break pushes the rest of the day later. School ends when the last period does.
+          </p>
 
           <div className="mt-4">
             <div className="text-xs font-medium text-[#5B6470] mb-1">Periods</div>
@@ -174,16 +173,11 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
               <div key={i} className="flex items-center gap-2 mb-1">
                 <input
                   value={p.label}
-                  onChange={(e) => setPeriods((prev) => prev.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                  onChange={(e) => setPeriods((prev) => prev.map((x, j) => (j === i ? { label: e.target.value } : x)))}
                   className={`${fieldCls} w-24`}
                   maxLength={12}
                 />
-                <input
-                  value={p.time}
-                  onChange={(e) => setPeriods((prev) => prev.map((x, j) => (j === i ? { ...x, time: e.target.value } : x)))}
-                  placeholder="hh:mm"
-                  className={`${fieldCls} w-24`}
-                />
+                <span className="w-16 text-sm text-[#5B6470] tabular-nums">{computed.periodTimes[i]}</span>
                 <button
                   onClick={() => setPeriods((prev) => prev.filter((_, j) => j !== i))}
                   disabled={periods.length <= 1}
@@ -195,7 +189,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
             ))}
             {periods.length < 12 && (
               <button
-                onClick={() => setPeriods((prev) => [...prev, { label: `P${prev.length + 1}`, time: "" }])}
+                onClick={() => setPeriods((prev) => [...prev, { label: `P${prev.length + 1}` }])}
                 className="text-xs text-[#0C8175] hover:underline"
               >
                 + Add period
@@ -214,27 +208,24 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
                   className={`${fieldCls} w-32`}
                   maxLength={40}
                 />
-                <input
-                  value={b.time ?? ""}
-                  onChange={(e) => setBreaks((prev) => prev.map((x, j) => (j === i ? { ...x, time: e.target.value || undefined } : x)))}
-                  placeholder="10:45"
-                  className={`${fieldCls} w-20`}
-                />
+                <span className="w-14 text-sm text-[#5B6470] tabular-nums">{computed.breakTimes[i]}</span>
                 <input
                   type="number"
                   min={1}
                   max={240}
-                  value={b.minutes ?? ""}
+                  value={b.minutes}
                   onChange={(e) =>
-                    setBreaks((prev) => prev.map((x, j) => (j === i ? { ...x, minutes: Number(e.target.value) || undefined } : x)))
+                    setBreaks((prev) =>
+                      prev.map((x, j) => (j === i ? { ...x, minutes: Math.max(1, Math.min(240, Number(e.target.value) || 15)) } : x)),
+                    )
                   }
-                  placeholder="min"
+                  title="Break length (minutes)"
                   className={`${fieldCls} w-20`}
                 />
                 <label className="text-xs text-[#5B6470] flex items-center gap-1">
                   after
                   <select
-                    value={b.afterPeriod}
+                    value={Math.min(b.afterPeriod, periods.length)}
                     onChange={(e) => setBreaks((prev) => prev.map((x, j) => (j === i ? { ...x, afterPeriod: Number(e.target.value) } : x)))}
                     className={`${fieldCls}`}
                   >
@@ -253,7 +244,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
             ))}
             {breaks.length < 6 && (
               <button
-                onClick={() => setBreaks((prev) => [...prev, { label: "", time: undefined, minutes: undefined, afterPeriod: 0 }])}
+                onClick={() => setBreaks((prev) => [...prev, { label: "", minutes: 15, afterPeriod: 0 }])}
                 className="text-xs text-[#0C8175] hover:underline"
               >
                 + Add break

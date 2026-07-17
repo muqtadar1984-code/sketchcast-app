@@ -7,6 +7,7 @@ import {
   teacherDayLoads,
   timeToMinutes,
   minutesToTime,
+  layoutTimes,
   DEFAULT_SHAPE,
   type Slot,
 } from "../timetable";
@@ -113,6 +114,28 @@ describe("shapeFromConfig", () => {
       { label: "P2", time: "10:00" },
     ]);
     expect(s.breaks?.[0].time).toBeUndefined();
+  });
+});
+
+describe("layoutTimes (derived day timeline)", () => {
+  it("reproduces the default shape exactly: 07:45 start, 45-min periods, snack + lunch", () => {
+    const { periodTimes, breakTimes, end } = layoutTimes(465, 45, 8, DEFAULT_SHAPE.breaks!);
+    expect(periodTimes).toEqual(DEFAULT_SHAPE.periods.map((p) => p.time));
+    expect(breakTimes).toEqual(["10:45", "12:30"]);
+    expect(end).toBe("14:45");
+  });
+  it("re-flows when the period length changes to 30 minutes", () => {
+    const { periodTimes, end } = layoutTimes(465, 30, 4, []);
+    expect(periodTimes).toEqual(["07:45", "08:15", "08:45", "09:15"]);
+    expect(end).toBe("09:45");
+  });
+  it("a break before P1 delays the whole day; one after a removed period clamps to the last", () => {
+    const opening = layoutTimes(480, 40, 2, [{ label: "Assembly", minutes: 20, afterPeriod: 0 }]);
+    expect(opening.breakTimes).toEqual(["08:00"]);
+    expect(opening.periodTimes).toEqual(["08:20", "09:00"]);
+    const clamped = layoutTimes(480, 40, 2, [{ label: "Late break", minutes: 10, afterPeriod: 9 }]);
+    expect(clamped.breakTimes).toEqual(["09:20"]); // after P2, the last period
+    expect(clamped.end).toBe("09:30");
   });
 });
 
