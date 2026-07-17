@@ -16,11 +16,14 @@ export default function GenerateButton({
   teachers,
   subjects,
   initialMapping,
+  coreNames,
 }: {
   teachers: Teacher[];
   subjects: string[];
   /** subject -> teacher ids, inferred server-side (onboarding subjects + current grid). */
   initialMapping: Record<string, string[]>;
+  /** The subjects that run once every day (config override or the default four). */
+  coreNames: string[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -73,8 +76,9 @@ export default function GenerateButton({
           >
             <h2 className="text-lg">Auto-generate the timetable</h2>
             <p className="text-sm text-[#5B6470] mt-1 mb-4">
-              Confirm who teaches what — every class gets its grade&apos;s weekly quota, class teachers open their own
-              class&apos;s week, and no teacher is ever in two rooms at once.
+              Confirm who teaches what — the class teacher takes Period 1 every day, core subjects (
+              {coreNames.join(", ")}) run once every day, the other subjects fill the rest of the week, and no teacher
+              is ever in two rooms at once.
             </p>
 
             <div className="space-y-2 mb-4">

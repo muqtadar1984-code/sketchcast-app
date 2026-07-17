@@ -6,7 +6,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { timetableEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import { shapeFromConfig, type Slot } from "@/utils/timetable";
-import { curriculumForGrade } from "@/utils/timetable-solver";
+import { canonicalSubject, curriculumForGrade, DEFAULT_CORE_SUBJECTS } from "@/utils/timetable-solver";
 import TimetableEditor from "./timetable-editor";
 import GenerateButton from "./generate-button";
 import AbsencePanel, { type AbsenceRow, type SubRow } from "./absence-panel";
@@ -144,10 +144,24 @@ export default async function TimetablePage() {
   // Subjects = the union of every present grade's curriculum; the prefill maps
   // teachers onto them from (a) their onboarding "subjects I teach" and (b)
   // whatever they already teach on the current grid.
-  const cfgCurriculum = (school?.config as { timetable?: { curriculum?: Record<string, Record<string, number>> } } | null)
-    ?.timetable?.curriculum;
+  const cfgTimetable = (school?.config as {
+    timetable?: { curriculum?: Record<string, Record<string, number>>; coreSubjects?: unknown };
+  } | null)?.timetable;
+  const cfgCurriculum = cfgTimetable?.curriculum;
   const subjectSet = new Set<string>();
   for (const c of classes) for (const s of Object.keys(curriculumForGrade(c.grade, cfgCurriculum))) subjectSet.add(s);
+  // Core subjects (config override or the default set) always get a dialog
+  // row — a custom core the school can't staff from the dialog would report
+  // gaps forever with no way to fix them.
+  const coreNames = [
+    ...new Set(
+      (Array.isArray(cfgTimetable?.coreSubjects)
+        ? cfgTimetable!.coreSubjects.filter((s): s is string => typeof s === "string" && !!s)
+        : DEFAULT_CORE_SUBJECTS
+      ).map((s) => canonicalSubject(s.trim(), [...subjectSet])),
+    ),
+  ];
+  for (const s of coreNames) subjectSet.add(s);
   const subjects = [...subjectSet].sort();
   const initialMapping: Record<string, string[]> = {};
   const mapTeacher = (subject: string, tid: string) => {
@@ -178,7 +192,9 @@ export default async function TimetablePage() {
               <span className="chip bg-[#E2F4F1] text-[#0C8175] ml-2">Grade {coordGrades.join(", ")}</span>
             )}
           </p>
-          {isAdmin && <GenerateButton teachers={teachers} subjects={subjects} initialMapping={initialMapping} />}
+          {isAdmin && (
+            <GenerateButton teachers={teachers} subjects={subjects} initialMapping={initialMapping} coreNames={coreNames} />
+          )}
         </div>
         <AbsencePanel
           teachers={teachers}

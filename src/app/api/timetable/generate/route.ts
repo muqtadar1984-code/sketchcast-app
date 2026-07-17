@@ -72,8 +72,14 @@ export async function POST(request: Request) {
   }
 
   const { data: school } = await admin.from("schools").select("config").eq("id", schoolId).maybeSingle();
-  const cfg = (school?.config ?? null) as { timetable?: { curriculum?: Record<string, Record<string, number>> } } | null;
+  const cfg = (school?.config ?? null) as {
+    timetable?: { curriculum?: Record<string, Record<string, number>>; coreSubjects?: unknown };
+  } | null;
   const shape = shapeFromConfig(school?.config ?? null);
+  // Per-school core set (subjects that must run daily); default lives in the solver.
+  const coreSubjects = Array.isArray(cfg?.timetable?.coreSubjects)
+    ? cfg!.timetable!.coreSubjects.filter((s): s is string => typeof s === "string" && !!s && s.length <= 60).slice(0, 10)
+    : undefined;
 
   const { data: classesRaw } = await admin
     .from("classes")
@@ -98,6 +104,7 @@ export async function POST(request: Request) {
     curriculum: cfg?.timetable?.curriculum,
     pinned: mode === "fill" ? existing : lockedPins,
     maxPerTeacherPerDay: shape.maxPerTeacherPerDay ?? 6,
+    coreSubjects,
   });
 
   // Writes are NOT one transaction over PostgREST, so contain the blast radius:
@@ -167,12 +174,20 @@ export async function POST(request: Request) {
     );
   }
 
-  // Name the gaps for the dialog (class names read better than ids).
+  // Name the gaps for the dialog (class names read better than ids). Anchor
+  // misses join the list as a pseudo-subject: "5B: Class teacher (P1) ×2".
   const className = new Map(classes.map((c) => [c.id, c.name] as const));
   return NextResponse.json({
     ok: true,
     placed: rows.length,
     kept: mode === "fill" ? existing.length : lockedPins.length,
-    unplaced: result.unplaced.map((u) => ({ class: className.get(u.classId) ?? "Class", subject: u.subject, count: u.count })),
+    unplaced: [
+      ...result.unplaced.map((u) => ({ class: className.get(u.classId) ?? "Class", subject: u.subject, count: u.count })),
+      ...result.anchorMisses.map((m) => ({
+        class: className.get(m.classId) ?? "Class",
+        subject: "Class teacher (P1)",
+        count: m.count,
+      })),
+    ],
   });
 }
