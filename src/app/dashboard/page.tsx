@@ -18,6 +18,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
+import FairUseMeter from "./fair-use-meter";
 import { platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 
@@ -511,6 +512,10 @@ export default async function DashboardPage() {
         </p>
 
         {isBeta && <BetaBanner />}
+
+        {/* Fair-use transparency: what this month's plan includes, what's used,
+            what carried over (0047). The DB triggers are the guard. */}
+        <FairUseMeter />
 
         {/* Cap counts the teacher's OWN books — the library select also returns
             school-shared ones, which must not consume their upload. */}

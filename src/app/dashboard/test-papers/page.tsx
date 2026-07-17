@@ -6,6 +6,7 @@ import AutoRefresh from "../auto-refresh";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
+import FairUseMeter from "../fair-use-meter";
 import { GeneratePaperButton, AssignChildButton } from "./paper-actions";
 import ReportContentIssue from "../report-content-issue";
 import BookHealthBadge, { type BookHealth } from "../book-health-badge";
@@ -116,6 +117,9 @@ export default async function TestPapersPage() {
           Upload your child&apos;s textbook, generate a test paper for any chapter, then assign it —
           your child takes it as an interactive quiz or on paper.
         </p>
+
+        {/* Fair-use transparency for parents too (0047). */}
+        <FairUseMeter />
 
         <UploadBook schoolId={(profile?.school_id as string | null) ?? null} betaBlocked={betaBlocked} />
 
