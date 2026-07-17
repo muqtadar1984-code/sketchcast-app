@@ -118,6 +118,7 @@ export default async function AppHeader() {
 
   let role: string | null = null;
   let name = "";
+  let schoolName = "";
   let hasScope = false;
   let hasChildren = false;
   let analyticsOn = false;
@@ -138,6 +139,14 @@ export default async function AppHeader() {
     // Timetable reaches every school member — students see their class grid.
     if (role && profile?.school_id) {
       timetableOn = await timetableEnabledFor(supabase, profile.school_id as string);
+      // The school's identity badge (far right; logo joins it later).
+      // schools_read (0001): every member reads their own school row.
+      const { data: sch } = await supabase
+        .from("schools")
+        .select("name, display_name")
+        .eq("id", profile.school_id as string)
+        .maybeSingle();
+      schoolName = (sch?.display_name as string | null) || (sch?.name as string | null) || "";
     }
     if ((role === "teacher" || role === "coordinator") && profile?.school_id) {
       // RLS cs_self_read + school filter: only grants in the CURRENT school
@@ -189,19 +198,18 @@ export default async function AppHeader() {
   const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
   return (
     <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
-      {/* Full-width bar: the logo hugs the left edge, controls hug the right,
-          and the name truncates instead of wrapping the whole bar. */}
-      <div className="px-5 h-16 flex items-center justify-between gap-4">
-        <span className="flex items-center gap-5 min-w-0">
-          <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
-            <LogoMark size={30} />
-            SketchCast <span className="text-[#0C8175]">AI</span>
-          </Link>
-          {tabs.length > 0 && <HeaderNav tabs={tabs} />}
-        </span>
+      {/* Full-width bar: the logo alone anchors the left, the tabs float in
+          the center (no dead gap), controls sit right, and the SCHOOL identity
+          holds the extreme right (its logo joins the name later). */}
+      <div className="px-5 h-16 flex items-center gap-5">
+        <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
+          <LogoMark size={30} />
+          SketchCast <span className="text-[#0C8175]">AI</span>
+        </Link>
+        <div className="flex-1 min-w-0 flex justify-center">{tabs.length > 0 && <HeaderNav tabs={tabs} />}</div>
         <div className="flex items-center gap-3 text-sm shrink-0">
           {hats.length > 1 && activeHat && <HatSwitcher hats={hats} active={activeHat} />}
-          <span className="text-[#5B6470] hidden lg:inline max-w-[16rem] truncate whitespace-nowrap" title={`${name}${label ? ` · ${label}` : ""}`}>
+          <span className="text-[#5B6470] hidden xl:inline max-w-[14rem] truncate whitespace-nowrap" title={`${name}${label ? ` · ${label}` : ""}`}>
             {name}
             {label ? ` · ${label}` : ""}
           </span>
@@ -209,6 +217,11 @@ export default async function AppHeader() {
           <form action="/auth/signout" method="post">
             <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">Sign out</button>
           </form>
+          {schoolName && (
+            <span className="hidden md:inline-flex items-center pl-4 ml-1 border-l border-[#E6E8E4] font-display text-[#14181F] whitespace-nowrap max-w-[14rem] truncate">
+              {schoolName}
+            </span>
+          )}
         </div>
       </div>
     </header>
