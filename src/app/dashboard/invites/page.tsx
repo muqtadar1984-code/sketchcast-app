@@ -59,8 +59,9 @@ export default async function InvitesPage() {
         <h1 className="text-4xl mb-2">Invites</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">
-          Invite school admins, teachers{parentPortalEnabled() ? ", and parents" : ""} to your school
-          by email. Elevated roles are granted here — never self-selected at signup.
+          Invite parents to your school by email — each invite carries the child mapping. Teacher and
+          admin accounts are set up, edited and removed by SketchCast for you: contact support to add
+          or change staff.
         </p>
         <InviteManager
           invites={invites}

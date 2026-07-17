@@ -72,7 +72,24 @@ export default async function TimetablePage() {
       editable: isAdmin || coordGrades.includes(c.grade ?? ""),
     }),
   );
-  if (!classes.length) redirect("/dashboard/school");
+  // ZERO classes must render, not redirect: when analytics is off this page IS
+  // the leadership hat's home, and bouncing to a teacher-domain page re-enters
+  // enforceHat → hatHome → here (ERR_TOO_MANY_REDIRECTS). Loop-safety invariant.
+  if (!classes.length) {
+    return (
+      <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
+        <AppHeader />
+        <main className="max-w-5xl mx-auto px-6 py-10">
+          <h1 className="text-4xl mb-2">Timetable</h1>
+          <InkUnderline className="block h-3 w-28 mb-3" />
+          <p className="text-[#5B6470]">
+            No classes yet — the timetable appears once your school&apos;s classes are set up. SketchCast
+            provisions staff and classes with you during onboarding; contact support to get started.
+          </p>
+        </main>
+      </div>
+    );
+  }
 
   const { data: slotsRaw } = await supabase
     .from("timetable_slots")

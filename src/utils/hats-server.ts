@@ -36,10 +36,12 @@ export async function verifyHat(
   if (hat === "coordinator") {
     // Meaningful only where a leadership surface exists — analytics OR the
     // timetable (otherwise its home doesn't accept it — see the invariant).
+    if (!schoolId) return false;
     const analyticsOn = await schoolAnalyticsEnabledFor(supabase, schoolId);
     if (!analyticsOn && !(await timetableEnabledFor(supabase, schoolId))) return false;
-    // RLS cs_self_read: only the caller's own grant rows come back.
-    const { data } = await supabase.from("coordinator_scope").select("id").limit(1);
+    // RLS cs_self_read + school filter: only grants in the CURRENT school count
+    // (a stale grant from a school this user has left must not verify the hat).
+    const { data } = await supabase.from("coordinator_scope").select("id").eq("school_id", schoolId).limit(1);
     return (data?.length ?? 0) > 0;
   }
   // parent
@@ -56,7 +58,12 @@ export async function hatHome(supabase: SupabaseClient, schoolId: string | null,
     // Valid only when analytics OR timetable is on; land on whichever exists.
     return (await schoolAnalyticsEnabledFor(supabase, schoolId)) ? "/dashboard/school" : "/dashboard/school/timetable";
   }
-  return (await schoolAnalyticsEnabledFor(supabase, schoolId)) ? "/dashboard/school" : "/dashboard/invites";
+  // Principal: analytics home first, the timetable when only that surface is
+  // on, and the (parent-)invites page as the legacy last resort — it still
+  // accepts the principal hat, keeping the loop-safety invariant.
+  if (await schoolAnalyticsEnabledFor(supabase, schoolId)) return "/dashboard/school";
+  if (await timetableEnabledFor(supabase, schoolId)) return "/dashboard/school/timetable";
+  return "/dashboard/invites";
 }
 
 export type HatDomain = "teacher" | "leadership" | "principal" | "parent";

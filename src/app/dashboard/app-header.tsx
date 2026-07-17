@@ -33,6 +33,8 @@ function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetab
     return [
       { href: "/dashboard", label: "Library" },
       { href: "/dashboard/analytics", label: "My Analytics" },
+      // School-linked teachers get THEIR schedule (read-only, plus cover duties).
+      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: "Timetable" }] : []),
       ...calendar,
     ];
   if (hat === "parent")
@@ -52,8 +54,8 @@ function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetab
   }
   if (timetableOn) tabs.push({ href: "/dashboard/school/timetable", label: "Timetable" });
   tabs.push(...calendar);
-  // Invites are the principal's onboarding tool — principal hat only.
-  if (hat === "principal") tabs.push({ href: "/dashboard/invites", label: "Invites" });
+  // Invites (parents only since 0052 — teacher accounts are staff-managed)
+  // live under the Admin surface, not a top-level tab.
   return tabs;
 }
 
@@ -65,7 +67,10 @@ function tabsFor(
   calendarOn: boolean,
   timetableOn: boolean,
 ): NavTab[] {
-  if (!role || role === "student") return [];
+  if (!role || role === "student") {
+    // School-linked students get their class timetable — nothing else.
+    return timetableOn ? [{ href: "/dashboard/my-timetable", label: "Timetable" }] : [];
+  }
   const tabs: NavTab[] = [
     { href: "/dashboard", label: "Library" },
     { href: "/dashboard/analytics", label: "My Analytics" },
@@ -79,11 +84,12 @@ function tabsFor(
     );
     if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
   }
-  if (timetableOn && (role === "school_admin" || hasScope))
-    tabs.push({ href: "/dashboard/school/timetable", label: "Timetable" });
-  // Invites are the school-admin's onboarding tool — available even when the
-  // analytics suite is flag-off.
-  if (role === "school_admin") tabs.push({ href: "/dashboard/invites", label: "Invites" });
+  if (timetableOn)
+    tabs.push(
+      role === "school_admin" || hasScope
+        ? { href: "/dashboard/school/timetable", label: "Timetable" }
+        : { href: "/dashboard/my-timetable", label: "Timetable" },
+    );
   if (hasChildren) {
     tabs.push({ href: "/dashboard/children", label: "My Children" });
     tabs.push({ href: "/dashboard/test-papers", label: "Test Papers" });
@@ -128,11 +134,19 @@ export default async function AppHeader() {
     if (role && role !== "student") {
       // Global env flag OR this school's config override (the sales-demo tenant).
       analyticsOn = await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null);
-      timetableOn = await timetableEnabledFor(supabase, profile?.school_id as string | null);
     }
-    if (role === "teacher" || role === "coordinator") {
-      // RLS: cs_self_read returns only the viewer's own grant rows.
-      const { data: sc } = await supabase.from("coordinator_scope").select("id").limit(1);
+    // Timetable reaches every school member — students see their class grid.
+    if (role && profile?.school_id) {
+      timetableOn = await timetableEnabledFor(supabase, profile.school_id as string);
+    }
+    if ((role === "teacher" || role === "coordinator") && profile?.school_id) {
+      // RLS cs_self_read + school filter: only grants in the CURRENT school
+      // count (stale grants from a former school must not surface the tabs).
+      const { data: sc } = await supabase
+        .from("coordinator_scope")
+        .select("id")
+        .eq("school_id", profile.school_id as string)
+        .limit(1);
       hasScope = (sc?.length ?? 0) > 0;
     }
     if (role && role !== "student") {
@@ -175,23 +189,25 @@ export default async function AppHeader() {
   const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
   return (
     <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
-      <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-        <span className="flex items-center gap-5">
-          <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display">
+      {/* Full-width bar: the logo hugs the left edge, controls hug the right,
+          and the name truncates instead of wrapping the whole bar. */}
+      <div className="px-5 h-16 flex items-center justify-between gap-4">
+        <span className="flex items-center gap-5 min-w-0">
+          <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
             <LogoMark size={30} />
             SketchCast <span className="text-[#0C8175]">AI</span>
           </Link>
           {tabs.length > 0 && <HeaderNav tabs={tabs} />}
         </span>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-3 text-sm shrink-0">
           {hats.length > 1 && activeHat && <HatSwitcher hats={hats} active={activeHat} />}
-          <span className="text-[#5B6470]">
+          <span className="text-[#5B6470] hidden lg:inline max-w-[16rem] truncate whitespace-nowrap" title={`${name}${label ? ` · ${label}` : ""}`}>
             {name}
             {label ? ` · ${label}` : ""}
           </span>
           <TourReplayButton />
           <form action="/auth/signout" method="post">
-            <button className="btn-ghost h-9 px-3 text-sm">Sign out</button>
+            <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">Sign out</button>
           </form>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -19,7 +20,7 @@ import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import FairUseMeter from "./fair-use-meter";
-import { platformConsoleEnabled, teacherBetaEnabled } from "@/utils/flags";
+import { platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 
 const KIND_LABEL: Record<string, string> = {
@@ -88,6 +89,16 @@ export default async function DashboardPage() {
     .select("must_reset_password")
     .eq("id", user.id)
     .maybeSingle();
+
+  // Lesson tools (0052): PE/Music/Art-style teachers don't teach from books —
+  // SketchCast staff flag them and the upload/generation surfaces disappear
+  // (the DB triggers are the real guard). Best-effort: a not-yet-applied 0052
+  // must not break the dashboard, so a failed read means tools stay on.
+  let lessonTools = true;
+  {
+    const { data: lt } = await supabase.from("profiles").select("lesson_tools").eq("id", user.id).maybeSingle();
+    if (lt && (lt as { lesson_tools?: boolean | null }).lesson_tools === false) lessonTools = false;
+  }
   if ((mrp as { must_reset_password?: boolean } | null)?.must_reset_password) {
     redirect("/auth/update-password");
   }
@@ -266,9 +277,19 @@ export default async function DashboardPage() {
           })),
       }));
 
+    // School-linked students get their class timetable; the header tab is
+    // hidden on phones, so surface an in-page link too.
+    const studentTimetableOn = schoolId ? await timetableEnabledFor(supabase, schoolId) : false;
     return (
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
+        {studentTimetableOn && (
+          <div className="max-w-5xl mx-auto px-6 pt-4 sm:hidden">
+            <Link href="/dashboard/my-timetable" className="chip bg-[#E2F4F1] text-[#0C8175]">
+              📅 My timetable
+            </Link>
+          </div>
+        )}
         <div data-tour="assignments">
           <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
         </div>
@@ -515,14 +536,22 @@ export default async function DashboardPage() {
 
         {/* Fair-use transparency: what this month's plan includes, what's used,
             what carried over (0047). The DB triggers are the guard. */}
-        <FairUseMeter />
+        {lessonTools && <FairUseMeter />}
 
         {/* Cap counts the teacher's OWN books — the library select also returns
             school-shared ones, which must not consume their upload. */}
-        <UploadBook
-          schoolId={schoolId}
-          betaBlocked={isBeta && bookList.some((b) => b.owner_id === user.id)}
-        />
+        {lessonTools ? (
+          <UploadBook
+            schoolId={schoolId}
+            betaBlocked={isBeta && bookList.some((b) => b.owner_id === user.id)}
+          />
+        ) : (
+          <p className="text-sm text-[#5B6470] mb-6">
+            Your account is set up for teaching without book tools (PE, music, arts and similar
+            subjects) — your timetable and classes are below. If that's wrong, ask your school to
+            contact SketchCast support.
+          </p>
+        )}
 
         <div data-tour="classes">
           <ClassesCard classes={classRosters} betaSlotsLeft={betaSlotsLeft} />

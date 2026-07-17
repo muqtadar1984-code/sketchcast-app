@@ -43,7 +43,7 @@ export default function InviteManager({
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("teacher");
+  const [role, setRole] = useState("parent");
   const [childIds, setChildIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,11 +54,9 @@ export default function InviteManager({
   const serverIds = new Set(invites.map((i) => i.id));
   const list = [...pending.filter((p) => !serverIds.has(p.id)), ...invites];
 
-  const roleOpts = [
-    { value: "teacher", label: "Teacher" },
-    { value: "school_admin", label: "School admin" },
-    ...(parentEnabled ? [{ value: "parent", label: "Parent" }] : []),
-  ];
+  // Parents only since 0052 — teacher and admin accounts are provisioned by
+  // SketchCast staff (the invites RLS policy enforces this server-side too).
+  const roleOpts = parentEnabled ? [{ value: "parent", label: "Parent" }] : [];
 
   const linkFor = (token: string) =>
     `${typeof window !== "undefined" ? window.location.origin : ""}/invite/${token}`;
@@ -119,6 +117,20 @@ export default function InviteManager({
     setLink(linkFor(data.token));
     setPending((p) => [data as InviteRow, ...p]);
     router.refresh();
+  }
+
+  // No invitable roles (parent portal off): render an explanation, never a
+  // dead form with an empty Role select.
+  if (roleOpts.length === 0) {
+    return (
+      <div className="card p-5 mb-6">
+        <p className="text-sm text-[#5B6470]">
+          Invites aren&apos;t available right now — teacher and admin accounts are managed by
+          SketchCast, and parent invites are switched off for this deployment. Contact support to
+          add people to your school.
+        </p>
+      </div>
+    );
   }
 
   return (
