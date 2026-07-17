@@ -6,6 +6,7 @@ import { normalizeQuestion, pickTier, shouldServeCached, buildGreeting, buildStu
 import {
   resolveTutorContext,
   loadGrounding,
+  hasLessonGrounding,
   findCached,
   bumpCache,
   saveCache,
@@ -66,7 +67,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "The AI Coach is a Pro+ feature.", upgrade: true }, { status: 403 });
   }
   const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
-  if (!grounding) return NextResponse.json({ error: "The tutor isn't ready for this lesson yet." }, { status: 409 });
+  // Index-time rows carry only source_text — the tutor needs LESSON grounding.
+  if (!hasLessonGrounding(grounding))
+    return NextResponse.json({ error: "The tutor isn't ready for this lesson yet." }, { status: 409 });
 
   const qNorm = normalizeQuestion(question);
   const encoder = new TextEncoder();
@@ -164,7 +167,7 @@ export async function GET(request: Request) {
   }
 
   const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
-  if (!grounding) return NextResponse.json({ ready: false, greeting: "" });
+  if (!hasLessonGrounding(grounding)) return NextResponse.json({ ready: false, greeting: "" });
 
   const sm = await buildStudentModel(admin, user.id, ctx.bookId, ctx.chapterNum, grounding.chapterTitle);
   return NextResponse.json({ ready: true, greeting: buildGreeting(sm) });

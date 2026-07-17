@@ -201,11 +201,15 @@ export default async function DashboardPage() {
       const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
       const prog = progByGen.get(g.id);
       // Multi-part lessons: every video/deck part, in PART order (Part 1 first).
+      // NULL SLOTS ARE KEPT for videos: parts.length must always equal the true
+      // part count — silently dropping a transiently-unsignable URL would shift
+      // part numbering and corrupt the per-part progress math (a student could
+      // even "complete" a lesson with a middle part missing).
       const videoPaths = arts
         .filter((a) => a.kind === "video_mp4")
         .map((a) => a.storage_path)
         .sort((a, b) => partNum(a) - partNum(b));
-      const videos = (await Promise.all(videoPaths.map(sign))).filter((u): u is string => !!u);
+      const videos = await Promise.all(videoPaths.map(sign));
       const deckPaths = arts
         .filter((a) => a.kind === "deck_pptx")
         .map((a) => a.storage_path)

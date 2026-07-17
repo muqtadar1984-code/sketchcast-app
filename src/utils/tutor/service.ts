@@ -129,6 +129,14 @@ export async function loadGrounding(
   };
 }
 
+/** True when a chapter has LESSON grounding (concepts/narration from a
+ * generated lesson). Index-time rows carry only source_text — enough for the
+ * assistant's book-level answers, but the TUTOR's "ready" gates must still
+ * treat them as not-ready (the tutor teaches from the lesson, not the book). */
+export function hasLessonGrounding(g: Grounding | null): g is Grounding {
+  return !!g && (g.concepts != null || !!g.scriptText);
+}
+
 /** Load a quiz generation's questions.json (with the answer key) from the
  * artifacts bucket. Null when the generation has no interactive quiz. */
 export async function loadQuestions(admin: SupabaseClient, generationId: string): Promise<Question[] | null> {

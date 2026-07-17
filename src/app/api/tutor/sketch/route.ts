@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { aiTutorEnabled, aiTutorRequireProPlus, aiTutorSketchEnabled } from "@/utils/flags";
 import { TUTOR_MODELS, toClaudeHistory } from "@/utils/tutor/models";
-import { resolveTutorContext, loadGrounding, tutorEntitled, logMessage, anthropic } from "@/utils/tutor/service";
+import { resolveTutorContext, loadGrounding, hasLessonGrounding, tutorEntitled, logMessage, anthropic } from "@/utils/tutor/service";
 import { buildSketchPrompt, parseSketchSpec, canonicalSpecHash, SKETCH_MONTHLY_CAP } from "@/utils/tutor/sketch";
 
 export const runtime = "nodejs";
@@ -44,7 +44,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "The AI Coach is a Pro+ feature.", upgrade: true }, { status: 403 });
   }
   const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
-  if (!grounding) return NextResponse.json({ error: "The tutor isn't ready for this lesson yet." }, { status: 409 });
+  // Index-time rows carry only source_text — sketches need LESSON grounding.
+  if (!hasLessonGrounding(grounding))
+    return NextResponse.json({ error: "The tutor isn't ready for this lesson yet." }, { status: 409 });
 
   // 1) Author the slide spec + narration (one cheap, grounded, cached call).
   let parsed;

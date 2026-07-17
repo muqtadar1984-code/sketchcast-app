@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { aiTutorEnabled, aiTutorRequireProPlus, aiTutorTalEnabled, aiTutorCanvasEnabled } from "@/utils/flags";
 import { normalizeQuestion } from "@/utils/tutor/models";
-import { resolveTutorContext, loadGrounding, tutorEntitled } from "@/utils/tutor/service";
+import { resolveTutorContext, loadGrounding, hasLessonGrounding, tutorEntitled } from "@/utils/tutor/service";
 import { verifyBoardToken } from "@/utils/tutor/board-token";
 import {
   BoardSession,
@@ -95,7 +95,8 @@ export async function POST(request: Request) {
 
   // No grounding → the board can't be taught from this lesson yet: text fallback.
   const grounding = await loadGrounding(admin, ctx.bookId, ctx.chapterNum);
-  if (!grounding) return jsonCors(request, { mode: "text" });
+  // Index-time rows carry only source_text — the board needs LESSON grounding.
+  if (!hasLessonGrounding(grounding)) return jsonCors(request, { mode: "text" });
 
   // Student deixis/annotation for this turn (untrusted iframe input → validated).
   const studentEvents: StudentEventInput[] = parseStudentEvents(body.studentEvents);
