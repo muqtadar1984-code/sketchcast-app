@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DAY_NAMES, type BreakDef, type TimetableShape } from "@/utils/timetable";
+import { DAY_NAMES, minutesToTime, timeToMinutes, type BreakDef, type TimetableShape } from "@/utils/timetable";
 
 // Principal-only structure settings: school hours, the period list, breaks
 // (snack, lunch — label/time/length/position), days per week and the per-day
@@ -21,8 +21,53 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // The last COMMITTED start time, in minutes — the base every shift is
+  // measured from.
+  const startBase = useRef(timeToMinutes(shape.start ?? ""));
+
+  // The start time is the schedule's anchor: moving it drags every period,
+  // break and the end time along by the same delta, so "school now starts at
+  // 08:45" is one edit, not ten. The shift happens on COMMIT (blur / Enter),
+  // never per keystroke — typing "13:45" passes through "1:45", and shifting
+  // on intermediates would yank the whole schedule around mid-edit. An
+  // invalid value on commit reverts to the last good one.
+  function commitStart() {
+    const next = timeToMinutes(start);
+    const base = startBase.current;
+    if (next === null) {
+      // Half-typed or garbage: restore the last committed value.
+      if (base !== null) setStart(minutesToTime(base));
+      return;
+    }
+    startBase.current = next;
+    setStart(minutesToTime(next)); // normalize "8:45" → "08:45"
+    if (base === null || next === base) return;
+    const delta = next - base;
+    const shift = (t?: string) => {
+      const m = timeToMinutes(t);
+      return m === null ? t : minutesToTime(m + delta);
+    };
+    setPeriods((prev) => prev.map((p) => ({ ...p, time: p.time ? shift(p.time)! : p.time })));
+    setBreaks((prev) => prev.map((b) => ({ ...b, time: b.time ? shift(b.time) : b.time })));
+    setEnd((prev) => shift(prev) ?? prev);
+  }
+
+  /** All time fields must be real clock times (or empty) before saving —
+   *  otherwise the server's sanitizer would quietly swap them for defaults. */
+  function invalidTimeField(): string | null {
+    if (timeToMinutes(start) === null) return "School start time";
+    if (timeToMinutes(end) === null) return "School end time";
+    for (const p of periods) if (p.time && timeToMinutes(p.time) === null) return `Period "${p.label}" time`;
+    for (const b of breaks) if (b.time && timeToMinutes(b.time) === null) return `Break "${b.label || "?"}" time`;
+    return null;
+  }
 
   async function save() {
+    const bad = invalidTimeField();
+    if (bad) {
+      setErr(`${bad} isn't a valid hh:mm time — fix it (or clear it) before saving.`);
+      return;
+    }
     setBusy(true);
     setErr(null);
     setMsg(null);
@@ -71,7 +116,19 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
           <div className="flex flex-wrap gap-3">
             <label className="text-xs text-[#5B6470]">
               School starts
-              <input value={start} onChange={(e) => setStart(e.target.value)} placeholder="07:45" className={`${fieldCls} block w-24 mt-1`} />
+              <input
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+                onBlur={commitStart}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitStart();
+                }}
+                placeholder="07:45"
+                className={`${fieldCls} block w-24 mt-1`}
+              />
+              <span className="block text-[10px] text-[#98A0A9] mt-0.5 w-28">
+                Moving this shifts every period &amp; break with it
+              </span>
             </label>
             <label className="text-xs text-[#5B6470]">
               School ends

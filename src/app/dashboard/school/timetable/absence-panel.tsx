@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { isoWeekday } from "@/utils/substitution";
+import { isLesson, type Slot } from "@/utils/timetable";
 
 // Absences & cover for one date. Everyone is assumed PRESENT until the
 // principal or a coordinator marks them absent here; marking calls the
@@ -32,6 +34,8 @@ export default function AbsencePanel({
   initialAbsences,
   initialSubs,
   canMark,
+  slots,
+  maxPerDay,
 }: {
   teachers: { id: string; name: string }[];
   classNames: Record<string, string>;
@@ -39,6 +43,8 @@ export default function AbsencePanel({
   initialAbsences: AbsenceRow[];
   initialSubs: SubRow[];
   canMark: boolean;
+  slots: Slot[];
+  maxPerDay: number;
 }) {
   const [date, setDate] = useState(todayLocal());
   const [absences, setAbsences] = useState<AbsenceRow[]>(initialAbsences);
@@ -51,6 +57,32 @@ export default function AbsencePanel({
   const teacherName = useMemo(() => new Map(teachers.map((t) => [t.id, t.name] as const)), [teachers]);
   const dayAbsences = absences.filter((a) => a.on_date === date);
   const absentIds = new Set(dayAbsences.map((a) => a.teacher_id));
+
+  // Availability on the selected date's weekday: who is in class when, and how
+  // many lessons each teacher already carries that day. Only someone less than
+  // 100% busy — free that period AND under the daily cap — can take cover.
+  const weekday = isoWeekday(date);
+  const availability = useMemo(() => {
+    const busy = new Set<string>(); // "teacher|period"
+    const dayLessons = new Map<string, number>();
+    if (weekday !== null) {
+      for (const s of slots) {
+        if (!s.teacher_id || s.day !== weekday) continue;
+        busy.add(`${s.teacher_id}|${s.period}`);
+        if (isLesson(s)) dayLessons.set(s.teacher_id, (dayLessons.get(s.teacher_id) ?? 0) + 1);
+      }
+    }
+    return { busy, dayLessons };
+  }, [slots, weekday]);
+
+  /** Why a teacher can('t) cover this row — "ok" or the blocking reason. */
+  function coverState(t: string, row: SubRow): "ok" | "in class" | "covering" | "fully booked" {
+    if (availability.busy.has(`${t}|${row.period}`)) return "in class";
+    const covers = subs.filter((x) => x.on_date === date && x.substitute_teacher_id === t && x.id !== row.id);
+    if (covers.some((x) => x.period === row.period)) return "covering";
+    if ((availability.dayLessons.get(t) ?? 0) + covers.length >= maxPerDay) return "fully booked";
+    return "ok";
+  }
 
   async function mark() {
     if (!markTeacher || busy) return;
@@ -207,11 +239,16 @@ export default function AbsencePanel({
                               <option value="">⚠ No cover found</option>
                               {teachers
                                 .filter((t) => t.id !== s.original_teacher_id && !absentIds.has(t.id))
-                                .map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
+                                .map((t) => {
+                                  const state = coverState(t.id, s);
+                                  const isCurrent = t.id === s.substitute_teacher_id;
+                                  return (
+                                    <option key={t.id} value={t.id} disabled={state !== "ok" && !isCurrent}>
+                                      {t.name}
+                                      {state !== "ok" ? ` · ${state}` : ""}
+                                    </option>
+                                  );
+                                })}
                             </select>
                           ) : s.substitute_teacher_id ? (
                             teacherName.get(s.substitute_teacher_id) ?? "Teacher"

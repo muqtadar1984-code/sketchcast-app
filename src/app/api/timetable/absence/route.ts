@@ -293,7 +293,7 @@ export async function PATCH(request: Request) {
 
   const { data: row } = await admin
     .from("timetable_substitutions")
-    .select("id, school_id, on_date, original_teacher_id")
+    .select("id, school_id, on_date, period, original_teacher_id")
     .eq("id", body.id)
     .maybeSingle();
   if (!row || row.school_id !== schoolId) {
@@ -320,6 +320,42 @@ export async function PATCH(request: Request) {
       .maybeSingle();
     if (subAbsent) {
       return NextResponse.json({ error: "That teacher is also absent on that date." }, { status: 400 });
+    }
+
+    // Only someone less than 100% busy can take cover: free that period (own
+    // grid AND other covers) and under the per-day lesson cap. Same rule the
+    // auto-picker applies — a manual override doesn't get to double-book.
+    const subDay = isoWeekday(row.on_date as string);
+    if (subDay !== null) {
+      const [{ data: school }, { data: slotsRaw }, { data: dateSubsRaw }] = await Promise.all([
+        admin.from("schools").select("config").eq("id", schoolId).maybeSingle(),
+        admin.from("timetable_slots").select("day, period, teacher_id, kind").eq("school_id", schoolId),
+        admin
+          .from("timetable_substitutions")
+          .select("id, period, substitute_teacher_id")
+          .eq("school_id", schoolId)
+          .eq("on_date", row.on_date),
+      ]);
+      const cap = shapeFromConfig(school?.config ?? null).maxPerTeacherPerDay ?? 6;
+      const daySlots = ((slotsRaw ?? []) as { day: number; period: number; teacher_id: string | null; kind?: string }[]).filter(
+        (s) => s.teacher_id === subTeacher && s.day === subDay,
+      );
+      if (daySlots.some((s) => s.period === row.period)) {
+        return NextResponse.json({ error: "That teacher is teaching their own class that period." }, { status: 400 });
+      }
+      const otherCovers = ((dateSubsRaw ?? []) as { id: string; period: number; substitute_teacher_id: string | null }[]).filter(
+        (s) => s.substitute_teacher_id === subTeacher && s.id !== row.id,
+      );
+      if (otherCovers.some((s) => s.period === row.period)) {
+        return NextResponse.json({ error: "That teacher is already covering another class that period." }, { status: 400 });
+      }
+      const load = daySlots.filter((s) => (s.kind ?? "lesson") === "lesson").length + otherCovers.length;
+      if (load >= cap) {
+        return NextResponse.json(
+          { error: `That teacher is fully booked — already at the daily limit of ${cap} lessons.` },
+          { status: 400 },
+        );
+      }
     }
   }
 

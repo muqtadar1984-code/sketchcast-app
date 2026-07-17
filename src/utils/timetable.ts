@@ -59,7 +59,22 @@ export const DEFAULT_SHAPE: TimetableShape = {
   maxPerTeacherPerDay: 6,
 };
 
-const TIME_RE = /^\d{1,2}:\d{2}$/;
+/** "07:45" → minutes since midnight; null for anything that isn't hh:mm. */
+export function timeToMinutes(t: string | undefined | null): number | null {
+  if (!t) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+/** Minutes since midnight → "hh:mm", wrapping around the day. */
+export function minutesToTime(n: number): string {
+  const x = ((Math.round(n) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`;
+}
 
 /** Parse schools.config.timetable, falling back field-by-field to the default. */
 export function shapeFromConfig(cfg: unknown): TimetableShape {
@@ -84,11 +99,13 @@ export function shapeFromConfig(cfg: unknown): TimetableShape {
         .slice(0, 12)
         .map((p, i) => ({
           label: typeof p.label === "string" && p.label ? p.label : `P${i + 1}`,
-          time: typeof p.time === "string" ? p.time : undefined,
+          // Only real clock times survive — a half-typed "09:1" would render
+          // AND silently stop tracking start-time shifts forever.
+          time: typeof p.time === "string" && timeToMinutes(p.time) !== null ? p.time : undefined,
         }))
     : DEFAULT_SHAPE.periods;
-  const start = typeof t.start === "string" && TIME_RE.test(t.start) ? t.start : DEFAULT_SHAPE.start;
-  const end = typeof t.end === "string" && TIME_RE.test(t.end) ? t.end : DEFAULT_SHAPE.end;
+  const start = typeof t.start === "string" && timeToMinutes(t.start) !== null ? t.start : DEFAULT_SHAPE.start;
+  const end = typeof t.end === "string" && timeToMinutes(t.end) !== null ? t.end : DEFAULT_SHAPE.end;
   // An explicit empty array means "no breaks" — only a MISSING field falls back.
   const breaks = Array.isArray(t.breaks)
     ? t.breaks
@@ -96,7 +113,7 @@ export function shapeFromConfig(cfg: unknown): TimetableShape {
         .slice(0, 6)
         .map((b, i) => ({
           label: typeof b.label === "string" && b.label ? b.label.slice(0, 40) : `Break ${i + 1}`,
-          time: typeof b.time === "string" && TIME_RE.test(b.time) ? b.time : undefined,
+          time: typeof b.time === "string" && timeToMinutes(b.time) !== null ? b.time : undefined,
           minutes:
             typeof b.minutes === "number" && b.minutes >= 1 && b.minutes <= 240 ? Math.floor(b.minutes) : undefined,
           afterPeriod:

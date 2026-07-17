@@ -5,6 +5,8 @@ import {
   cellKey,
   dayOverloads,
   teacherDayLoads,
+  timeToMinutes,
+  minutesToTime,
   DEFAULT_SHAPE,
   type Slot,
 } from "../timetable";
@@ -94,6 +96,39 @@ describe("shapeFromConfig", () => {
     expect(s.end).toBe("14:45");
     expect(s.breaks).toEqual(DEFAULT_SHAPE.breaks);
     expect(s.maxPerTeacherPerDay).toBe(6);
+  });
+  it("rejects out-of-range clock values everywhere (start/end/periods/breaks)", () => {
+    const s = shapeFromConfig({
+      timetable: {
+        start: "24:00",
+        end: "12:99",
+        periods: [{ label: "P1", time: "09:1" }, { label: "P2", time: "10:00" }],
+        breaks: [{ label: "Recess", time: "25:30", minutes: 15, afterPeriod: 1 }],
+      },
+    });
+    expect(s.start).toBe("07:45"); // 24:00 is not a clock time
+    expect(s.end).toBe("14:45");
+    expect(s.periods).toEqual([
+      { label: "P1", time: undefined }, // half-typed time dropped, label kept
+      { label: "P2", time: "10:00" },
+    ]);
+    expect(s.breaks?.[0].time).toBeUndefined();
+  });
+});
+
+describe("clock helpers", () => {
+  it("round-trips hh:mm through minutes", () => {
+    expect(timeToMinutes("07:45")).toBe(465);
+    expect(minutesToTime(465)).toBe("07:45");
+    expect(minutesToTime(timeToMinutes("23:59")! + 2)).toBe("00:01"); // wraps
+    expect(minutesToTime(timeToMinutes("00:30")! - 60)).toBe("23:30"); // negative shift wraps back
+  });
+  it("rejects non-times", () => {
+    expect(timeToMinutes("late")).toBeNull();
+    expect(timeToMinutes("25:00")).toBeNull();
+    expect(timeToMinutes("07:75")).toBeNull();
+    expect(timeToMinutes("")).toBeNull();
+    expect(timeToMinutes(undefined)).toBeNull();
   });
 });
 

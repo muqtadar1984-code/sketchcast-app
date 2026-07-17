@@ -187,6 +187,8 @@ export default async function TimetablePage() {
           initialAbsences={absences}
           initialSubs={substitutions}
           canMark={isAdmin || coordGrades.length > 0}
+          slots={slots}
+          maxPerDay={shape.maxPerTeacherPerDay ?? 6}
         />
         <TimetableEditor
           key={slotsVersion}

@@ -746,7 +746,14 @@ export default function TimetableEditor({
         </div>
       )}
 
-      <TeacherRoster staff={staffDetails} classes={classes} slots={slots} maxPerDay={maxPerDay} shapeDays={shape.days} />
+      <TeacherRoster
+        staff={staffDetails}
+        classes={classes}
+        slots={slots}
+        maxPerDay={maxPerDay}
+        shapeDays={shape.days}
+        periodsPerDay={shape.periods.length}
+      />
 
       {isAdmin && <SettingsPanel shape={shape} />}
     </div>

@@ -15,12 +15,14 @@ export default function TeacherRoster({
   slots,
   maxPerDay,
   shapeDays,
+  periodsPerDay,
 }: {
   staff: StaffDetail[];
   classes: { id: string; name: string; teacher_id: string }[];
   slots: Slot[];
   maxPerDay: number;
   shapeDays: number;
+  periodsPerDay: number;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -57,18 +59,32 @@ export default function TeacherRoster({
             worstDay = d;
           }
         }
+        const week = weekly.get(t.id) ?? 0;
+        // "Blocked" = share of the coverable week already taken: the
+        // denominator is what a teacher may at most carry (the per-day cap,
+        // or the day length if shorter) × days. "Fully" is judged PER DAY —
+        // a teacher over-loaded Mon–Thu but free Friday can still cover on
+        // Friday, so the weekly ratio alone must not say "never".
+        const perDayCapacity = Math.min(maxPerDay, periodsPerDay);
+        const denom = shapeDays * perDayCapacity;
+        let daysWithSpare = 0;
+        for (let d = 1; d <= shapeDays; d++) {
+          if ((dayLoads.get(`${t.id}|${d}`) ?? 0) < perDayCapacity) daysWithSpare++;
+        }
         return {
           id: t.id,
           name: t.name,
           classTeacherOf: classesByTeacher.get(t.id) ?? [],
           subjects: [...subjects].sort(),
-          weekly: weekly.get(t.id) ?? 0,
+          weekly: week,
+          blockedPct: denom > 0 ? Math.min(100, Math.round((week / denom) * 100)) : 0,
+          fullyBlocked: daysWithSpare === 0,
           worstDay,
           worstCount,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staff, classes, slots, shapeDays]);
+  }, [staff, classes, slots, shapeDays, maxPerDay, periodsPerDay]);
 
   return (
     <div className="card mt-6 p-4 print:hidden">
@@ -85,6 +101,7 @@ export default function TeacherRoster({
                 <th className="px-2 py-2 text-left font-normal">Class teacher</th>
                 <th className="px-2 py-2 text-left font-normal">Teaches</th>
                 <th className="px-2 py-2 text-left font-normal whitespace-nowrap">Lessons / week</th>
+                <th className="px-2 py-2 text-left font-normal whitespace-nowrap">Blocked</th>
                 <th className="px-2 py-2 text-left font-normal whitespace-nowrap">Heaviest day (limit {maxPerDay})</th>
               </tr>
             </thead>
@@ -111,6 +128,18 @@ export default function TeacherRoster({
                     )}
                   </td>
                   <td className="px-2 py-1.5 text-[#5B6470]">{r.weekly}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span
+                      className={r.fullyBlocked ? "text-[#B42318] font-medium" : "text-[#5B6470]"}
+                      title={
+                        r.fullyBlocked
+                          ? "Fully booked every day — cannot be assigned as a substitute"
+                          : "Has spare capacity on at least one day — can take cover then"
+                      }
+                    >
+                      {r.blockedPct}% blocked
+                    </span>
+                  </td>
                   <td className="px-2 py-1.5">
                     {r.worstCount ? (
                       <span className={r.worstCount > maxPerDay ? "text-[#9A6400] font-medium" : "text-[#5B6470]"}>
