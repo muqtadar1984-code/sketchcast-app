@@ -84,16 +84,20 @@ export async function POST(request: Request) {
 
   const { data: existingRaw } = await admin
     .from("timetable_slots")
-    .select("class_id, day, period, subject, teacher_id")
+    .select("class_id, day, period, subject, teacher_id, locked, kind")
     .eq("school_id", schoolId);
   const existing = (existingRaw ?? []) as Slot[];
+  // Locked cells are pins in BOTH modes: fill keeps everything, replace keeps
+  // only what a human pinned and rebuilds around it.
+  const lockedPins = existing.filter((s) => s.locked);
 
   const result = generateTimetable({
     shape,
     classes,
     subjectTeachers,
     curriculum: cfg?.timetable?.curriculum,
-    pinned: mode === "fill" ? existing : [],
+    pinned: mode === "fill" ? existing : lockedPins,
+    maxPerTeacherPerDay: shape.maxPerTeacherPerDay ?? 6,
   });
 
   // Writes are NOT one transaction over PostgREST, so contain the blast radius:
@@ -109,6 +113,8 @@ export async function POST(request: Request) {
     subject: s.subject,
     teacher_id: s.teacher_id,
     room: null as string | null,
+    locked: false,
+    kind: "lesson",
     created_by: user.id,
   }));
 
@@ -135,11 +141,13 @@ export async function POST(request: Request) {
     // "start over" — walk every class, not just the generated ones.
     for (const c of classes) {
       const mine = byClass.get(c.id) ?? [];
+      // Replace never deletes a locked cell — those were the pins.
       const { error: delErr } = await admin
         .from("timetable_slots")
         .delete()
         .eq("school_id", schoolId)
-        .eq("class_id", c.id);
+        .eq("class_id", c.id)
+        .eq("locked", false);
       if (delErr) {
         failures.push(`${className.get(c.id)}: ${delErr.message}`);
         continue;
@@ -164,7 +172,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     placed: rows.length,
-    kept: mode === "fill" ? existing.length : 0,
+    kept: mode === "fill" ? existing.length : lockedPins.length,
     unplaced: result.unplaced.map((u) => ({ class: className.get(u.classId) ?? "Class", subject: u.subject, count: u.count })),
   });
 }

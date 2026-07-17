@@ -24,7 +24,7 @@
 // teachers per period. Existing slots can be passed as PINS: their cells and
 // teacher-times are respected and never overwritten ("fill gaps" mode).
 
-import { cellKey, type Slot, type TimetableShape } from "./timetable";
+import { cellKey, isLesson, type Slot, type TimetableShape } from "./timetable";
 
 export type GenClass = { id: string; grade: string | null; teacher_id: string | null; name: string };
 
@@ -37,6 +37,8 @@ export type GenInput = {
   curriculum?: Record<string, Record<string, number>>;
   /** Existing slots to keep untouched (fill mode). Empty = clean slate. */
   pinned?: Slot[];
+  /** Hard ceiling on LESSON periods per teacher per day (unset = unlimited). */
+  maxPerTeacherPerDay?: number;
 };
 
 export type GenResult = {
@@ -161,16 +163,24 @@ export function generateTimetable(input: GenInput): GenResult {
     return ga - gb || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
   });
 
-  // Occupancy from pins.
+  // Occupancy from pins. A nonteaching pin (assembly, duty) still makes its
+  // teacher BUSY that period, but carries no teaching load and never counts
+  // toward the per-day lesson cap.
+  const cap = input.maxPerTeacherPerDay ?? Infinity;
   const teacherBusy = new Set<string>(); // "teacher|day|period"
   const cellTaken = new Set<string>(); // cellKey(class, day, period)
   const teacherLoad: Record<string, number> = {};
+  const teacherDayLoad: Record<string, number> = {}; // "teacher|day" -> lessons
   const subjectsOnDay = new Set<string>(); // "class|day|subject" (soft spread rule)
   const occupy = (s: Slot) => {
     cellTaken.add(cellKey(s.class_id, s.day, s.period));
     if (s.teacher_id) {
       teacherBusy.add(`${s.teacher_id}|${s.day}|${s.period}`);
-      teacherLoad[s.teacher_id] = (teacherLoad[s.teacher_id] ?? 0) + 1;
+      if (isLesson(s)) {
+        teacherLoad[s.teacher_id] = (teacherLoad[s.teacher_id] ?? 0) + 1;
+        const dk = `${s.teacher_id}|${s.day}`;
+        teacherDayLoad[dk] = (teacherDayLoad[dk] ?? 0) + 1;
+      }
     }
     subjectsOnDay.add(`${s.class_id}|${s.day}|${s.subject}`);
   };
@@ -194,7 +204,8 @@ export function generateTimetable(input: GenInput): GenResult {
   }
 
   const out: Slot[] = [];
-  const teacherFree = (t: string, d: number, p: number) => !teacherBusy.has(`${t}|${d}|${p}`);
+  const teacherFree = (t: string, d: number, p: number) =>
+    !teacherBusy.has(`${t}|${d}|${p}`) && (teacherDayLoad[`${t}|${d}`] ?? 0) < cap;
 
   const place = (c: GenClass, subject: string, teacher: string, d: number, p: number) => {
     const slot: Slot = { class_id: c.id, day: d, period: p, subject, teacher_id: teacher };

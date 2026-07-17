@@ -147,6 +147,53 @@ describe("generateTimetable", () => {
     expect(teacherConflicts([...pinned, ...result.slots]).size).toBe(0);
   });
 
+  it("honours maxPerTeacherPerDay: no teacher-day exceeds the cap", () => {
+    // One teacher per subject makes the cap bind hard.
+    const classes: GenClass[] = Array.from({ length: 4 }, (_, i) => ({
+      id: `c${i}`,
+      grade: "5",
+      name: `5 S${i}`,
+      teacher_id: null,
+    }));
+    const result = generateTimetable({ shape: DEFAULT_SHAPE, classes, subjectTeachers: staff(1), maxPerTeacherPerDay: 4 });
+    const perDay = new Map<string, number>();
+    for (const s of result.slots) {
+      const k = `${s.teacher_id}|${s.day}`;
+      perDay.set(k, (perDay.get(k) ?? 0) + 1);
+    }
+    for (const count of perDay.values()) expect(count).toBeLessThanOrEqual(4);
+    expect(teacherConflicts(result.slots).size).toBe(0);
+  });
+
+  it("pinned lessons count toward the day cap; nonteaching pins don't", () => {
+    // 4 pinned Monday lessons + cap 4 → the solver may give this teacher
+    // nothing more on Monday.
+    const pinned: Slot[] = Array.from({ length: 4 }, (_, i) => ({
+      class_id: "c-other",
+      day: 1,
+      period: i + 1,
+      subject: "Mathematics",
+      teacher_id: "t-Mathematics-0",
+    }));
+    pinned.push({
+      class_id: "c-other",
+      day: 1,
+      period: 5,
+      subject: "Assembly",
+      teacher_id: "t-Mathematics-0",
+      kind: "nonteaching",
+    });
+    const result = generateTimetable({
+      shape: DEFAULT_SHAPE,
+      classes: [{ id: "c1", grade: "5", name: "5 A", teacher_id: null }],
+      subjectTeachers: staff(1),
+      pinned,
+      maxPerTeacherPerDay: 4,
+    });
+    const mondayMaths = result.slots.filter((s) => s.teacher_id === "t-Mathematics-0" && s.day === 1);
+    expect(mondayMaths).toHaveLength(0);
+  });
+
   it("is deterministic: same input, identical output", () => {
     const classes: GenClass[] = Array.from({ length: 6 }, (_, i) => ({
       id: `c${i}`,

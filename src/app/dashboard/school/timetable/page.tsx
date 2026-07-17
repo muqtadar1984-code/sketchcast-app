@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { timetableEnabledFor } from "@/utils/flags";
@@ -8,6 +9,7 @@ import { shapeFromConfig, type Slot } from "@/utils/timetable";
 import { curriculumForGrade } from "@/utils/timetable-solver";
 import TimetableEditor from "./timetable-editor";
 import GenerateButton from "./generate-button";
+import AbsencePanel, { type AbsenceRow, type SubRow } from "./absence-panel";
 
 // Onboarding subject labels → curriculum subject names (loose aliases so a
 // teacher who picked "Computing / ICT" prefills onto the ICT row).
@@ -45,7 +47,9 @@ export default async function TimetablePage() {
   const isAdmin = role === "school_admin";
   let coordGrades: string[] = [];
   if (!isAdmin) {
-    const { data: scopes } = await supabase.from("coordinator_scope").select("grade");
+    // School-scoped on purpose: a stale coordinator grant from a school this
+    // user has since left must not open THIS school's timetable.
+    const { data: scopes } = await supabase.from("coordinator_scope").select("grade").eq("school_id", schoolId);
     coordGrades = [...new Set(((scopes ?? []) as { grade: string }[]).map((s) => s.grade))];
     if (!coordGrades.length) redirect("/dashboard");
   }
@@ -72,7 +76,7 @@ export default async function TimetablePage() {
 
   const { data: slotsRaw } = await supabase
     .from("timetable_slots")
-    .select("id, class_id, day, period, subject, teacher_id, room, updated_at");
+    .select("id, class_id, day, period, subject, teacher_id, room, locked, kind, updated_at");
   const slotRows = (slotsRaw ?? []) as (Slot & { updated_at: string })[];
   const slots: Slot[] = slotRows.map(({ updated_at: _u, ...s }) => s);
   // The editor holds the grid in useState, and router.refresh() deliberately
@@ -81,21 +85,60 @@ export default async function TimetablePage() {
   const slotsVersion = `${slotRows.length}:${slotRows.reduce((m, s) => (s.updated_at > m ? s.updated_at : m), "")}`;
 
   // Teachers of the school for the assign dropdown (adults only), plus their
-  // onboarding profile (subjects) for the generator's prefill.
-  const { data: staffRaw } = await supabase
-    .from("profiles")
-    .select("id, full_name, username, role, profile")
-    .eq("school_id", schoolId)
-    .neq("role", "student");
-  const staff = (staffRaw ?? []) as {
+  // onboarding profile (subjects) for the generator's prefill. Fetched via the
+  // service role AFTER the leadership check above: a coordinator's RLS view of
+  // profiles is deliberately narrow (self + their grade's class teachers), but
+  // the pickers, roster and cover names need the full adult roster. Falls back
+  // to the session-visible slice if the admin key is missing.
+  type StaffRow = {
     id: string;
     full_name: string | null;
     username: string | null;
     profile: { subjects?: string[] } | null;
-  }[];
+  };
+  let staff: StaffRow[] = [];
+  try {
+    const adminClient = createAdminClient();
+    const { data: staffRaw } = await adminClient
+      .from("profiles")
+      .select("id, full_name, username, role, profile")
+      .eq("school_id", schoolId)
+      .neq("role", "student");
+    staff = (staffRaw ?? []) as StaffRow[];
+  } catch {
+    const { data: staffRaw } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, role, profile")
+      .eq("school_id", schoolId)
+      .neq("role", "student");
+    staff = (staffRaw ?? []) as StaffRow[];
+  }
   const teachers = staff
     .map((t) => ({ id: t.id, name: t.full_name || t.username || "Teacher" }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const staffDetails = staff
+    .map((t) => ({
+      id: t.id,
+      name: t.full_name || t.username || "Teacher",
+      subjects: (t.profile?.subjects ?? []).filter((s): s is string => typeof s === "string"),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Absences & cover: recent past for context, everything upcoming (RLS-read).
+  const since = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+  const [{ data: absRaw }, { data: subsRaw }] = await Promise.all([
+    supabase
+      .from("teacher_absences")
+      .select("id, teacher_id, on_date, reason")
+      .gte("on_date", since)
+      .order("on_date"),
+    supabase
+      .from("timetable_substitutions")
+      .select("id, absence_id, class_id, on_date, period, subject, original_teacher_id, substitute_teacher_id")
+      .gte("on_date", since),
+  ]);
+  const absences = (absRaw ?? []) as AbsenceRow[];
+  const substitutions = (subsRaw ?? []) as SubRow[];
 
   // ── Generator inputs (admin only) ────────────────────────────────────────────
   // Subjects = the union of every present grade's curriculum; the prefill maps
@@ -122,11 +165,13 @@ export default async function TimetablePage() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-      <AppHeader />
-      <main className="max-w-5xl mx-auto px-6 py-10">
+      <div className="print:hidden">
+        <AppHeader />
+      </div>
+      <main className="max-w-5xl mx-auto px-6 py-10 print:py-2">
         <h1 className="text-4xl mb-2">Timetable</h1>
-        <InkUnderline className="block h-3 w-28 mb-3" />
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-7">
+        <InkUnderline className="block h-3 w-28 mb-3 print:hidden" />
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-7 print:hidden">
           <p className="text-[#5B6470]">
             Build each class&apos;s week — clashes where a teacher is in two rooms at once light up instantly.
             {!isAdmin && (
@@ -135,13 +180,23 @@ export default async function TimetablePage() {
           </p>
           {isAdmin && <GenerateButton teachers={teachers} subjects={subjects} initialMapping={initialMapping} />}
         </div>
+        <AbsencePanel
+          teachers={teachers}
+          classNames={Object.fromEntries(classes.map((c) => [c.id, c.name]))}
+          periodLabels={shape.periods.map((p) => p.label)}
+          initialAbsences={absences}
+          initialSubs={substitutions}
+          canMark={isAdmin || coordGrades.length > 0}
+        />
         <TimetableEditor
           key={slotsVersion}
           schoolId={schoolId}
           shape={shape}
           classes={classes}
           teachers={teachers}
+          staffDetails={staffDetails}
           initialSlots={slots}
+          isAdmin={isAdmin}
         />
       </main>
     </div>
