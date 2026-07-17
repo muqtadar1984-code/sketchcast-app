@@ -753,6 +753,7 @@ export default function TimetableEditor({
         maxPerDay={maxPerDay}
         shapeDays={shape.days}
         periodsPerDay={shape.periods.length}
+        isAdmin={isAdmin}
       />
 
       {isAdmin && <SettingsPanel shape={shape} />}

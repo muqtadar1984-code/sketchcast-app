@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DAY_NAMES, isLesson, teacherDayLoads, type Slot } from "@/utils/timetable";
 import type { StaffDetail } from "./timetable-editor";
 
@@ -8,7 +9,9 @@ import type { StaffDetail } from "./timetable-editor";
 // who isn't, what each person teaches (declared in onboarding ∪ taught on the
 // live grid), their weekly lesson count, and their heaviest day against the
 // per-day limit. Derived live from the editor's slot state, so edits update
-// it immediately.
+// it immediately. The principal can reassign class-teacher positions from
+// here (an ownership transfer — the class follows its class teacher), and a
+// standing check confirms every grade & section has one.
 export default function TeacherRoster({
   staff,
   classes,
@@ -16,19 +19,75 @@ export default function TeacherRoster({
   maxPerDay,
   shapeDays,
   periodsPerDay,
+  isAdmin,
 }: {
   staff: StaffDetail[];
-  classes: { id: string; name: string; teacher_id: string }[];
+  classes: { id: string; name: string; grade: string | null; teacher_id: string }[];
   slots: Slot[];
   maxPerDay: number;
   shapeDays: number;
   periodsPerDay: number;
+  isAdmin: boolean;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(true);
+  // Optimistic class-teacher reassignments (server truth catches up on refresh).
+  const [reassigned, setReassigned] = useState<Record<string, string>>({});
+  const [ctBusy, setCtBusy] = useState(false);
+  const [ctErr, setCtErr] = useState<string | null>(null);
+
+  const mergedClasses = useMemo(
+    () => classes.map((c) => ({ ...c, teacher_id: reassigned[c.id] ?? c.teacher_id })),
+    [classes, reassigned],
+  );
+  const staffIds = useMemo(() => new Set(staff.map((t) => t.id)), [staff]);
+  // The check: a position is uncovered when its holder is no longer on staff
+  // (left the school, role changed) — the DB never lets it be empty.
+  const uncovered = mergedClasses.filter((c) => !staffIds.has(c.teacher_id));
+
+  async function reassign(classId: string, teacherId: string) {
+    if (!teacherId || ctBusy) return;
+    setCtBusy(true);
+    setCtErr(null);
+    // Optimistic: show the new holder immediately, roll back on failure.
+    const prevHolder = reassigned[classId];
+    setReassigned((prev) => ({ ...prev, [classId]: teacherId }));
+    try {
+      const res = await fetch("/api/timetable/class-teacher", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ class_id: classId, teacher_id: teacherId }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setCtErr(json.error ?? "Could not reassign the class teacher.");
+        setReassigned((prev) => {
+          const next = { ...prev };
+          if (prevHolder) next[classId] = prevHolder;
+          else delete next[classId];
+          return next;
+        });
+      } else {
+        // Refresh server props so the EDITOR's cell-teacher default follows
+        // the new class teacher too (the grid's client state survives — the
+        // editor is keyed by the slots version, which this doesn't touch).
+        router.refresh();
+      }
+    } catch {
+      setCtErr("Network error.");
+      setReassigned((prev) => {
+        const next = { ...prev };
+        if (prevHolder) next[classId] = prevHolder;
+        else delete next[classId];
+        return next;
+      });
+    }
+    setCtBusy(false);
+  }
 
   const rows = useMemo(() => {
     const classesByTeacher = new Map<string, string[]>();
-    for (const c of classes) {
+    for (const c of mergedClasses) {
       if (!classesByTeacher.has(c.teacher_id)) classesByTeacher.set(c.teacher_id, []);
       classesByTeacher.get(c.teacher_id)!.push(c.name);
     }
@@ -84,7 +143,7 @@ export default function TeacherRoster({
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staff, classes, slots, shapeDays, maxPerDay, periodsPerDay]);
+  }, [staff, mergedClasses, slots, shapeDays, maxPerDay, periodsPerDay]);
 
   return (
     <div className="card mt-6 p-4 print:hidden">
@@ -154,6 +213,53 @@ export default function TeacherRoster({
               ))}
             </tbody>
           </table>
+
+          <div className="mt-5 border-t border-[#EEF0EC] pt-3">
+            <div className="text-xs font-medium text-[#5B6470] mb-1">Class-teacher positions</div>
+            {uncovered.length === 0 ? (
+              <p className="text-xs text-[#0C8175] mb-2">✓ Every grade &amp; section has a class teacher.</p>
+            ) : (
+              <p className="text-xs text-[#B42318] mb-2">
+                ⚠ Without a serving class teacher:{" "}
+                {uncovered.map((c) => c.name).join(", ")} — assign one below.
+              </p>
+            )}
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {[...mergedClasses]
+                .sort((a, b) => (a.grade ?? "").localeCompare(b.grade ?? "") || a.name.localeCompare(b.name))
+                .map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <span className="w-44 truncate text-[#5B6470]" title={c.name}>
+                      {c.name}
+                    </span>
+                    {isAdmin ? (
+                      <select
+                        value={staffIds.has(c.teacher_id) ? c.teacher_id : ""}
+                        onChange={(e) => void reassign(c.id, e.target.value)}
+                        disabled={ctBusy}
+                        className={`field h-8 px-2 text-sm ${staffIds.has(c.teacher_id) ? "" : "text-[#B42318]"}`}
+                      >
+                        {!staffIds.has(c.teacher_id) && <option value="">⚠ assign a class teacher…</option>}
+                        {staff.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span>{staff.find((t) => t.id === c.teacher_id)?.name ?? "⚠ unassigned"}</span>
+                    )}
+                  </label>
+                ))}
+            </div>
+            {isAdmin && (
+              <p className="text-[10px] text-[#98A0A9] mt-1.5">
+                Reassigning moves the class — its students and join code — to the new class teacher. Timetable
+                lessons keep their own subject teachers.
+              </p>
+            )}
+            {ctErr && <p className="text-sm text-red-600 mt-1">{ctErr}</p>}
+          </div>
         </div>
       )}
     </div>

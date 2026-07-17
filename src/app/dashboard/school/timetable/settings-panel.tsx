@@ -50,7 +50,16 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
     setPeriods((prev) => prev.map((p) => ({ ...p, time: p.time ? shift(p.time)! : p.time })));
     setBreaks((prev) => prev.map((b) => ({ ...b, time: b.time ? shift(b.time) : b.time })));
     setEnd((prev) => shift(prev) ?? prev);
+    setMsg(
+      `Shifted every period, break and the end time by ${delta > 0 ? "+" : ""}${delta} min — click Save settings to apply it to the timetable.`,
+    );
   }
+
+  // Unsaved-changes tracking: nothing here touches the timetable until Save.
+  const snapshot = () => JSON.stringify({ days, start, end, maxPerDay, periods, breaks });
+  const baseline = useRef<string>("");
+  if (!baseline.current) baseline.current = snapshot();
+  const dirty = snapshot() !== baseline.current;
 
   /** All time fields must be real clock times (or empty) before saving —
    *  otherwise the server's sanitizer would quietly swap them for defaults. */
@@ -90,10 +99,11 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
       if (!res.ok) {
         setErr(json.error ?? "Save failed.");
       } else {
+        baseline.current = snapshot();
         setMsg(
           json.orphaned
             ? `Saved. ⚠ ${json.orphaned} existing lesson(s) now sit outside the new shape (a removed day or period) — grow the shape back or clear them.`
-            : "Saved.",
+            : "Saved — the timetable now shows the new times.",
         );
         router.refresh();
       }
@@ -257,10 +267,13 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
           </p>
           {msg && <p className="text-sm text-[#0C8175] mt-2">{msg}</p>}
           {err && <p className="text-sm text-red-600 mt-2">{err}</p>}
-          <div className="mt-3">
+          <div className="mt-3 flex items-center gap-3">
             <button onClick={() => void save()} disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
               {busy ? "Saving…" : "Save settings"}
             </button>
+            {dirty && !busy && (
+              <span className="text-xs text-[#9A6400]">● Unsaved changes — the timetable updates after you save</span>
+            )}
           </div>
         </div>
       )}

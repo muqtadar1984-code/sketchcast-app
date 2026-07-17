@@ -229,6 +229,18 @@ const TEACHERS = [
   { fullName: "Ahmad Faizal", subject: "History" },
   { fullName: "Mei Ling Tan", subject: "Geography" },
 ];
+// One dedicated teacher per enrichment subject (teacher6..teacher11): no
+// classes, no seeded slots — staff with FREE capacity, so the substitution
+// picker and the % blocked column have something to show. Keep in sync with
+// scripts/add-subject-teachers.ts (the additive version for a live tenant).
+const SUBJECT_TEACHERS = [
+  { fullName: "Farah Aziz", subject: "Art" },
+  { fullName: "Zainab Ismail", subject: "Bahasa Melayu" },
+  { fullName: "Kelvin Ong", subject: "ICT" },
+  { fullName: "Anitha Ramasamy", subject: "Moral Education" },
+  { fullName: "Hafiz Osman", subject: "Music" },
+  { fullName: "Ganesh Muthu", subject: "PE" },
+];
 // Class name = "{subject} {grade} {suffix}", where subject comes from the book
 // actually cloned to that teacher (so nobody "teaches Maths in Science 5A");
 // falls back to the teacher's nominal subject when the library is empty.
@@ -570,6 +582,26 @@ async function main() {
     "teacher1 coordinator_scope",
   );
   console.log(`+ 5 teachers (teacher1 also holds the Grade 5 coordinator grant)`);
+
+  // ── Subject teachers (free capacity for substitution demos) ─────────────────
+  for (let i = 0; i < SUBJECT_TEACHERS.length; i++) {
+    const email = `teacher${TEACHERS.length + 1 + i}@${SLUG}.sketchcast.app`;
+    const id = await createAccount({
+      email,
+      fullName: SUBJECT_TEACHERS[i].fullName,
+      role: "teacher",
+      schoolId,
+      maxBooks: 20,
+    });
+    // Declared subject → the Auto-generate mapping pre-selects them and the
+    // substitution picker ranks them as subject teachers.
+    const { error: subjErr } = await db
+      .from("profiles")
+      .update({ profile: { subjects: [SUBJECT_TEACHERS[i].subject] } })
+      .eq("id", id);
+    if (subjErr) fail(`profile subjects ${email}: ${subjErr.message}`);
+  }
+  console.log(`+ ${SUBJECT_TEACHERS.length} subject teachers (no classes — free substitution capacity)`);
 
   // ── Library first (cloned real content) — class names derive from it ───────
   const { gensByTeacher, subjectByTeacher } = await cloneLibrary(schoolId, teacherIds);
@@ -932,6 +964,11 @@ async function main() {
       joinCode: joinCodes[i],
       notes: i === 0 ? "Also Grade 5 coordinator → sees the NAMED at-risk worklist" : undefined,
     })),
+    subjectTeachers: SUBJECT_TEACHERS.map((t, i) => ({
+      name: t.fullName,
+      subject: t.subject,
+      email: `teacher${TEACHERS.length + 1 + i}@${SLUG}.sketchcast.app`,
+    })),
     parent: { name: "Rahman bin Yusof", email: parentEmail, child: STUDENTS[0][0].join(" ") },
     students: studentCreds,
   };
@@ -949,6 +986,11 @@ async function main() {
     ),
   );
   md.push("", `Teacher 1 also holds the Grade 5 coordinator grant — her School tab shows the **named at-risk worklist**.`, "");
+  md.push(`## Subject teachers — ${portal}/teacher (no classes; free substitution capacity)`, "", "| # | Name | Subject | Email |", "|---|---|---|---|");
+  SUBJECT_TEACHERS.forEach((t, i) =>
+    md.push(`| ${TEACHERS.length + 1 + i} | ${t.fullName} | ${t.subject} | \`teacher${TEACHERS.length + 1 + i}@${SLUG}.sketchcast.app\` |`),
+  );
+  md.push("");
   md.push(`## Parent — ${portal}/parent`, "", `| Rahman bin Yusof | \`${parentEmail}\` | child: ${STUDENTS[0][0].join(" ")} |`, "");
   md.push(`## Students — ${portal}/student (log in with the student ID)`, "", "| Class | Name | Student ID |", "|---|---|---|");
   for (const s of studentCreds) md.push(`| ${s.class} | ${s.name} | \`${s.username}\` |`);

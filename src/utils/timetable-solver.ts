@@ -50,6 +50,8 @@ export type GenResult = {
 
 // Default weekly quotas (periods/week). Trimmed automatically if a school's
 // shape has fewer cells; override per grade via schools.config.timetable.curriculum.
+// Enrichment subjects (PE, Art, Music, Moral Education, ICT) run TWICE a week
+// in every grade — product decision 2026-07-17.
 export const PRIMARY_CURRICULUM: Record<string, number> = {
   "Bahasa Melayu": 5,
   English: 5,
@@ -58,10 +60,10 @@ export const PRIMARY_CURRICULUM: Record<string, number> = {
   History: 2,
   Geography: 1,
   PE: 2,
-  Art: 1,
-  Music: 1,
+  Art: 2,
+  Music: 2,
   "Moral Education": 2,
-  ICT: 1,
+  ICT: 2,
 };
 export const SECONDARY_CURRICULUM: Record<string, number> = {
   "Bahasa Melayu": 4,
@@ -71,9 +73,9 @@ export const SECONDARY_CURRICULUM: Record<string, number> = {
   History: 3,
   Geography: 2,
   PE: 2,
-  Art: 1,
-  "Moral Education": 1,
-  ICT: 1,
+  Art: 2,
+  "Moral Education": 2,
+  ICT: 2,
 };
 
 /**
