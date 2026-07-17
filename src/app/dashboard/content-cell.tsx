@@ -4,7 +4,6 @@ import GenerateButton from "./generate-button";
 import RegenerateButton from "./regenerate-button";
 import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
-import ReportContentIssue from "./report-content-issue";
 import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
 
@@ -13,7 +12,11 @@ export type CellLesson = {
   status: string;
   progress: number;
   video: string | null;
+  /** All video parts in order — a long chapter renders as Part 1..N (~15 min each). */
+  videos?: string[];
   deck: string | null;
+  /** One deck per video part, same order. */
+  decks?: string[];
   doc: string | null;
   params: Record<string, unknown> | null;
   artifactPaths: string[];
@@ -78,9 +81,8 @@ export default function ContentCell({
       <span className="inline-flex items-center gap-2 text-xs">
         <span className="text-[#B42318]">failed</span>
         {genControl("retry")}
-        {/* A failed/wrong generation is exactly what you'd want to flag — the
-            report button was previously only on completed lessons. */}
-        <ReportContentIssue generationId={lesson.id} />
+        {/* Reporting moved to the page-bottom "Report a problem" widget — the
+            inline per-artifact button cluttered every cell. */}
       </span>
     );
   }
@@ -90,25 +92,27 @@ export default function ContentCell({
     <span className="inline-flex items-center gap-2 text-xs">
       {kind === "presentation" ? (
         <>
-          {lesson.video && (
+          {(lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : []).map((url, i, all) => (
             <a
-              href={lesson.video}
+              key={i}
+              href={url}
               target="_blank"
               onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")}
               className="font-medium text-[#0C8175] hover:underline"
             >
-              ▶ Watch
+              {all.length > 1 ? (i === 0 ? "▶ Watch Pt 1" : `▶ Pt ${i + 1}`) : "▶ Watch"}
             </a>
-          )}
-          {lesson.deck && (
+          ))}
+          {(lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : []).map((url, i, all) => (
             <a
-              href={lesson.deck}
+              key={`d${i}`}
+              href={url}
               onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")}
               className="font-medium text-[#0C8175] hover:underline"
             >
-              ⬇ Deck
+              {all.length > 1 ? `⬇ Deck Pt ${i + 1}` : "⬇ Deck"}
             </a>
-          )}
+          ))}
         </>
       ) : (
         lesson.doc && (
@@ -138,7 +142,6 @@ export default function ContentCell({
         oldArtifactPaths={lesson.artifactPaths}
       />
       <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} />
-      <ReportContentIssue generationId={lesson.id} />
     </span>
   );
 }

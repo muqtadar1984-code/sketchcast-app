@@ -19,7 +19,11 @@ export type StudentItemData = {
   dueOverdue: boolean;
   classId: string | null;
   video: string | null;
+  /** All video parts in order (long chapters render as Part 1..N). */
+  videos?: string[];
   deck: string | null;
+  /** One deck per part, same order. */
+  decks?: string[];
   doc: string | null;
   quiz: string | null; // signed URL of questions.json, if the worker emitted one
   status: ProgressStatus | null;
@@ -52,6 +56,10 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [coaching, setCoaching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Long chapters arrive as several ~15-min parts; they play back-to-back and
+  // the lesson only counts as complete after the LAST part ends.
+  const parts = item.videos?.length ? item.videos : item.video ? [item.video] : [];
+  const [partIdx, setPartIdx] = useState(0);
 
   const base = { generation_id: item.genId, student_id: studentId, class_id: item.classId };
 
@@ -80,7 +88,8 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
   }
 
   function watch() {
-    if (!item.video) return;
+    if (!parts.length) return;
+    setPartIdx(0);
     setPlaying(true);
     void markOpen();
   }
@@ -162,12 +171,16 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
         )}
         {isLesson ? (
           <>
-            {item.video && (
-              <button data-tour="open-lesson" onClick={watch} className="font-medium text-[#0C8175] hover:underline">▶ Watch</button>
+            {parts.length > 0 && (
+              <button data-tour="open-lesson" onClick={watch} className="font-medium text-[#0C8175] hover:underline">
+                ▶ Watch{parts.length > 1 ? ` (${parts.length} parts)` : ""}
+              </button>
             )}
-            {item.deck && (
-              <a href={item.deck} className="font-medium text-[#0C8175] hover:underline">⬇ Deck</a>
-            )}
+            {(item.decks?.length ? item.decks : item.deck ? [item.deck] : []).map((url, i, all) => (
+              <a key={`d${i}`} href={url} className="font-medium text-[#0C8175] hover:underline">
+                {all.length > 1 ? `⬇ Deck Pt ${i + 1}` : "⬇ Deck"}
+              </a>
+            ))}
             {AI_TUTOR && (
               <button onClick={() => setCoaching(true)} className="font-medium text-[#0C8175] hover:underline">🎓 Assistant</button>
             )}
@@ -190,13 +203,38 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
 
       {error && <span className="sr-only">{error}</span>}
 
-      {playing && item.video && (
+      {playing && parts.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setPlaying(false)}>
           <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <video src={item.video} controls autoPlay onEnded={markComplete} className="w-full rounded-lg bg-black" />
+            <video
+              key={partIdx}
+              src={parts[partIdx]}
+              controls
+              autoPlay
+              onEnded={() => {
+                if (partIdx < parts.length - 1) setPartIdx(partIdx + 1);
+                else void markComplete();
+              }}
+              className="w-full rounded-lg bg-black"
+            />
             <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-white/70">Watch to the end to mark this lesson complete.</p>
-              <button onClick={() => setPlaying(false)} className="text-xs text-white/90 hover:underline">Close</button>
+              <p className="text-xs text-white/70">
+                {parts.length > 1 ? `Part ${partIdx + 1} of ${parts.length} — parts play on automatically. ` : ""}
+                Watch to the end to mark this lesson complete.
+              </p>
+              <span className="flex items-center gap-3">
+                {parts.length > 1 &&
+                  parts.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setPartIdx(i)}
+                      className={`text-xs ${i === partIdx ? "text-white font-medium" : "text-white/60 hover:underline"}`}
+                    >
+                      Pt {i + 1}
+                    </button>
+                  ))}
+                <button onClick={() => setPlaying(false)} className="text-xs text-white/90 hover:underline">Close</button>
+              </span>
             </div>
           </div>
         </div>

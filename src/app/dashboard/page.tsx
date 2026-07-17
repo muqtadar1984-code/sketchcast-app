@@ -54,6 +54,15 @@ const STATUS_STYLE: Record<string, string> = {
   error: "bg-[#FCEBEA] text-[#B42318]",
 };
 
+// Multi-part artifact ordering. NOT a path sort: ICU collation puts "." AFTER
+// "_", so lesson.mp4 (Part 1) would sort BEHIND lesson_partN.mp4 — the student
+// player would open on Part 2 and "complete" on the real Part 1. Extract the
+// part number instead (no suffix = Part 1).
+const partNum = (path: string): number => {
+  const m = /_part(\d+)\.[a-z0-9]+$/i.exec(path);
+  return m ? Number(m[1]) : 1;
+};
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
@@ -187,6 +196,17 @@ export default async function DashboardPage() {
       const arts = g.artifacts ?? [];
       const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
       const prog = progByGen.get(g.id);
+      // Multi-part lessons: every video/deck part, in PART order (Part 1 first).
+      const videoPaths = arts
+        .filter((a) => a.kind === "video_mp4")
+        .map((a) => a.storage_path)
+        .sort((a, b) => partNum(a) - partNum(b));
+      const videos = (await Promise.all(videoPaths.map(sign))).filter((u): u is string => !!u);
+      const deckPaths = arts
+        .filter((a) => a.kind === "deck_pptx")
+        .map((a) => a.storage_path)
+        .sort((a, b) => partNum(a) - partNum(b));
+      const decks = (await Promise.all(deckPaths.map(sign))).filter((u): u is string => !!u);
       items.push({
         genId: g.id,
         kind: g.kind,
@@ -197,8 +217,10 @@ export default async function DashboardPage() {
         className: info.className,
         chapterRef: g.chapter_ref ?? null,
         bookId: g.book_id ?? null,
-        video: await sign(path("video_mp4")),
-        deck: await sign(path("deck_pptx")),
+        video: videos[0] ?? null,
+        videos,
+        deck: decks[0] ?? null,
+        decks,
         doc: await sign(path("docx")),
         quiz: await sign(path("questions_json")),
         status: (prog?.status as StudentItemData["status"]) ?? null,
@@ -339,9 +361,20 @@ export default async function DashboardPage() {
           const { data } = await supabase.storage
             .from("artifacts")
             .createSignedUrl(a.storage_path, 3600);
-          return { kind: a.kind as string, url: data?.signedUrl ?? null };
+          return { kind: a.kind as string, path: a.storage_path, url: data?.signedUrl ?? null };
         }),
       );
+      // Multi-part lessons: a long chapter renders as several ~15-min videos
+      // (lesson.mp4, lesson_part2.mp4, …) with a deck per part — collect ALL of
+      // them in PART order. `video`/`deck` stay the first part for old call sites.
+      const videos = arts
+        .filter((a) => a.kind === "video_mp4" && a.url)
+        .sort((a, b) => partNum(a.path) - partNum(b.path))
+        .map((a) => a.url!);
+      const decks = arts
+        .filter((a) => a.kind === "deck_pptx" && a.url)
+        .sort((a, b) => partNum(a.path) - partNum(b.path))
+        .map((a) => a.url!);
       return {
         id: g.id,
         title: g.title || "Untitled lesson",
@@ -351,8 +384,10 @@ export default async function DashboardPage() {
         params: g.params ?? null,
         bookId: g.book_id ?? null,
         chapterRef: g.chapter_ref ?? null,
-        deck: arts.find((a) => a.kind === "deck_pptx")?.url ?? null,
-        video: arts.find((a) => a.kind === "video_mp4")?.url ?? null,
+        deck: decks[0] ?? null,
+        decks,
+        video: videos[0] ?? null,
+        videos,
         doc: arts.find((a) => a.kind === "docx")?.url ?? null,
         artifactPaths: (g.artifacts ?? []).map((a) => a.storage_path),
       };
@@ -376,6 +411,10 @@ export default async function DashboardPage() {
       (l) => l.bookId === book.id && (l.chapterRef === null || !nums.has(l.chapterRef)),
     );
   };
+  // Lessons queued via the book's "Generate selected" batch — shown together
+  // under their own sub-header at the end of the book (marked params.batch).
+  const batchLessonsForBook = (book: Book): Lesson[] =>
+    lessons.filter((l) => l.bookId === book.id && (l.params as { batch?: unknown } | null)?.batch === true);
 
   const hasPending =
     lessons.some((l) => l.status === "queued" || l.status === "processing") ||
@@ -413,6 +452,7 @@ export default async function DashboardPage() {
       })),
       pendingChapters: chs.filter((c) => !lessonForChapter(b.id, c.num)),
       otherLessons: otherLessonsForBook(b),
+      batchLessons: batchLessonsForBook(b),
     };
   });
 
@@ -532,16 +572,18 @@ export default async function DashboardPage() {
                     <div className="flex items-center justify-between gap-4">
                       <span className="font-display font-medium truncate">{l.title}</span>
                       <div className="flex items-center gap-3 shrink-0">
-                        {l.status === "done" && l.video && (
-                          <a href={l.video} target="_blank" className="text-sm font-medium text-[#0C8175] hover:underline">
-                            ▶ Watch
-                          </a>
-                        )}
-                        {l.status === "done" && l.deck && (
-                          <a href={l.deck} className="text-sm font-medium text-[#0C8175] hover:underline">
-                            ⬇ Deck
-                          </a>
-                        )}
+                        {l.status === "done" &&
+                          l.videos.map((url, i, all) => (
+                            <a key={`v${i}`} href={url} target="_blank" className="text-sm font-medium text-[#0C8175] hover:underline">
+                              {all.length > 1 ? (i === 0 ? "▶ Watch Pt 1" : `▶ Pt ${i + 1}`) : "▶ Watch"}
+                            </a>
+                          ))}
+                        {l.status === "done" &&
+                          l.decks.map((url, i, all) => (
+                            <a key={`d${i}`} href={url} className="text-sm font-medium text-[#0C8175] hover:underline">
+                              {all.length > 1 ? `⬇ Deck Pt ${i + 1}` : "⬇ Deck"}
+                            </a>
+                          ))}
                         {l.status !== "done" && (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                             {l.status}

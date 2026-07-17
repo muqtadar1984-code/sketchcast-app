@@ -8,6 +8,7 @@ import DeleteLesson from "./delete-lesson";
 import { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
+import BatchGenerate from "./batch-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
@@ -40,7 +41,36 @@ export type BookRow = {
   chapters: ChapterRow[];
   pendingChapters: { num: number; title: string }[];
   otherLessons: (CellLesson & { title: string })[];
+  /** Lessons queued via "Generate selected" (params.batch) — own section at the book's end. */
+  batchLessons: (CellLesson & { title: string; kind: string; chapterRef: string | null })[];
 };
+
+const KIND_LABEL: Record<string, string> = {
+  presentation: "Lesson",
+  lesson_plan: "Plan",
+  activity: "Activities",
+  worksheet: "Worksheet",
+  exam_paper: "Exam",
+  case_study: "Case study",
+};
+
+// "num|kind" for every chapter×kind that already has a lesson — the batch grid
+// locks these so a batch can never displace finished (possibly assigned) work.
+function existingCellKeys(chapters: ChapterRow[]): string[] {
+  const keys: string[] = [];
+  for (const ch of chapters) {
+    const cells: [string, CellLesson | null][] = [
+      ["presentation", ch.presentation],
+      ["lesson_plan", ch.lessonPlan],
+      ["activity", ch.activity],
+      ["worksheet", ch.worksheet],
+      ["exam_paper", ch.exam],
+      ["case_study", ch.caseStudy],
+    ];
+    for (const [kind, lesson] of cells) if (lesson) keys.push(`${ch.num}|${kind}`);
+  }
+  return keys;
+}
 
 const STATUS_STYLE: Record<string, string> = {
   queued: "bg-[#EEF0EC] text-[#5B6470]",
@@ -50,6 +80,32 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export type BetaState = { pinned: { bookId: string; chapterRef: string | null } | null };
+
+// Watch/Deck/Download links for one finished lesson — multi-part aware (a long
+// chapter ships Part 1..N videos and a deck per part).
+function ArtifactLinks({ lesson }: { lesson: CellLesson }) {
+  const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
+  const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
+  return (
+    <>
+      {videos.map((url, i, all) => (
+        <a key={`v${i}`} href={url} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
+          {all.length > 1 ? (i === 0 ? "▶ Watch Pt 1" : `▶ Pt ${i + 1}`) : "▶ Watch"}
+        </a>
+      ))}
+      {decks.map((url, i, all) => (
+        <a key={`d${i}`} href={url} className="text-xs font-medium text-[#0C8175] hover:underline">
+          {all.length > 1 ? `⬇ Deck Pt ${i + 1}` : "⬇ Deck"}
+        </a>
+      ))}
+      {lesson.doc && (
+        <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+          ⬇ Download
+        </a>
+      )}
+    </>
+  );
+}
 
 export default function BookTable({
   books,
@@ -150,9 +206,18 @@ export default function BookTable({
                     </span>
                   </div>
                 )}
-                {b.pendingChapters.length > 0 && !beta && (
-                  <div className="flex justify-end py-2">
-                    <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} />
+                {!beta && (
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Whole-book batch: any mix of chapters × content types. */}
+                    <BatchGenerate
+                      bookId={b.id}
+                      schoolId={schoolId}
+                      chapters={b.chapters}
+                      existingKeys={existingCellKeys(b.chapters)}
+                    />
+                    {b.pendingChapters.length > 0 && (
+                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} />
+                    )}
                   </div>
                 )}
                 <ul className="border-t border-[#EEF0EC] divide-y divide-[#EEF0EC]">
@@ -187,25 +252,7 @@ export default function BookTable({
                       <div key={l.id} className="flex items-center justify-between gap-4 py-1">
                         <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">{l.title}</span>
                         <div className="flex items-center gap-2 shrink-0">
-                          {l.status === "done" ? (
-                            <>
-                              {l.video && (
-                                <a href={l.video} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
-                                  ▶ Watch
-                                </a>
-                              )}
-                              {l.deck && (
-                                <a href={l.deck} className="text-xs font-medium text-[#0C8175] hover:underline">
-                                  ⬇ Deck
-                                </a>
-                              )}
-                              {l.doc && (
-                                <a href={l.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
-                                  ⬇ Download
-                                </a>
-                              )}
-                            </>
-                          ) : (
+                          {l.status === "done" ? <ArtifactLinks lesson={l} /> : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                               {l.status}
                               {l.status === "processing" ? ` · ${l.progress}%` : ""}
@@ -215,6 +262,38 @@ export default function BookTable({
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* The batch's own receipt: everything queued via "Generate
+                    selected", grouped at the END of the book (they also fill
+                    their chapter cells above as they finish). */}
+                {b.batchLessons.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
+                    <p className="text-xs text-[#5B6470] mb-1">Generated as selected</p>
+                    {b.batchLessons.map((l) => {
+                      const ch = b.chapters.find((c) => String(c.num) === l.chapterRef);
+                      return (
+                        <div key={l.id} className="flex items-center justify-between gap-4 py-1">
+                          <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">
+                            <span className="text-[#98A0A9]">
+                              {ch ? `${ch.num + 1}. ` : ""}
+                            </span>
+                            {ch?.title ?? l.title}
+                            <span className="text-xs text-[#98A0A9]"> · {KIND_LABEL[l.kind] ?? l.kind}</span>
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {l.status === "done" ? <ArtifactLinks lesson={l} /> : (
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
+                                {l.status}
+                                {l.status === "processing" ? ` · ${l.progress}%` : ""}
+                              </span>
+                            )}
+                            <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
