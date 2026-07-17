@@ -28,6 +28,9 @@ export type StudentItemData = {
   quiz: string | null; // signed URL of questions.json, if the worker emitted one
   status: ProgressStatus | null;
   revisionCount: number;
+  /** Encodes per-part progress for multi-part lessons: part k of N done ⇒
+   * floor(100·k/N). Single-part lessons use it as before. */
+  progressPct: number;
   submitted: boolean;
 };
 
@@ -56,10 +59,20 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [coaching, setCoaching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  // Long chapters arrive as several ~15-min parts; they play back-to-back and
-  // the lesson only counts as complete after the LAST part ends.
+  // Long chapters arrive as several ~15-min parts — designed to be watched ONE
+  // PART PER DAY in class (a 4-part chapter ≈ 4 days). Each finished part is
+  // recorded (progress_pct encodes parts-done), so tomorrow resumes at the next
+  // part; the lesson only counts complete after the LAST part.
   const parts = item.videos?.length ? item.videos : item.video ? [item.video] : [];
   const [partIdx, setPartIdx] = useState(0);
+  const [partEnded, setPartEnded] = useState(false);
+  const initialDone =
+    item.status === "completed" || item.status === "revised"
+      ? parts.length
+      : parts.length > 1
+        ? Math.min(parts.length, Math.round((item.progressPct * parts.length) / 100))
+        : 0;
+  const [doneParts, setDoneParts] = useState(initialDone);
 
   const base = { generation_id: item.genId, student_id: studentId, class_id: item.classId };
 
@@ -87,11 +100,44 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
     setStatus("completed");
   }
 
-  function watch() {
+  /** Record "watched up to part k" without completing the lesson. */
+  async function markPartDone(k: number) {
+    await supabase.from("student_progress").upsert(
+      {
+        ...base,
+        status: "in_progress",
+        progress_pct: Math.floor((100 * k) / parts.length),
+        opened_at: new Date().toISOString(),
+      },
+      { onConflict: "generation_id,student_id" },
+    );
+    if (!status || status === "assigned") setStatus("in_progress");
+  }
+
+  function watch(at?: number) {
     if (!parts.length) return;
-    setPartIdx(0);
+    // Resume where the class left off: the first unwatched part (or replay any
+    // specific part via the part chips).
+    setPartIdx(at ?? Math.min(doneParts, parts.length - 1));
+    setPartEnded(false);
     setPlaying(true);
     void markOpen();
+  }
+
+  function onPartEnded() {
+    const k = partIdx + 1;
+    const already = status === "completed" || status === "revised";
+    // STRICTLY sequential: a part only counts when it's the NEXT one — jumping
+    // straight to the last chip must not complete a 4-day lesson in one sitting
+    // (replays of earlier parts record nothing, same as before).
+    if (!already && k === doneParts + 1) {
+      if (k === parts.length) void markComplete();
+      else void markPartDone(k);
+      setDoneParts(k);
+    }
+    // Multi-part: pause at the "part done" screen — one part per day is the
+    // point, so the next part is a deliberate click, never an autoplay.
+    if (parts.length > 1 && partIdx < parts.length - 1) setPartEnded(true);
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -171,10 +217,42 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
         )}
         {isLesson ? (
           <>
-            {parts.length > 0 && (
-              <button data-tour="open-lesson" onClick={watch} className="font-medium text-[#0C8175] hover:underline">
-                ▶ Watch{parts.length > 1 ? ` (${parts.length} parts)` : ""}
+            {parts.length === 1 && (
+              <button data-tour="open-lesson" onClick={() => watch()} className="font-medium text-[#0C8175] hover:underline">
+                ▶ Watch
               </button>
+            )}
+            {parts.length > 1 && (
+              <span className="inline-flex items-center gap-1.5 flex-wrap">
+                <button
+                  data-tour="open-lesson"
+                  onClick={() => watch()}
+                  className="font-medium text-[#0C8175] hover:underline"
+                >
+                  {doneParts === 0
+                    ? `▶ Start Part 1 of ${parts.length}`
+                    : doneParts >= parts.length
+                      ? "▶ Rewatch"
+                      : `▶ Continue — Part ${doneParts + 1} of ${parts.length}`}
+                </button>
+                <span className="text-[10px] text-[#98A0A9]">~15 min each</span>
+                {parts.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => watch(i)}
+                    title={i < doneParts ? `Rewatch Part ${i + 1}` : `Part ${i + 1}`}
+                    className={`text-[10px] rounded-full px-1.5 py-0.5 ${
+                      i < doneParts
+                        ? "bg-[#E2F4F1] text-[#0C8175]"
+                        : i === doneParts
+                          ? "bg-[#FFF1D6] text-[#9A6400]"
+                          : "bg-[#EEF0EC] text-[#98A0A9]"
+                    }`}
+                  >
+                    {i < doneParts ? `✓${i + 1}` : i + 1}
+                  </button>
+                ))}
+              </span>
             )}
             {(item.decks?.length ? item.decks : item.deck ? [item.deck] : []).map((url, i, all) => (
               <a key={`d${i}`} href={url} className="font-medium text-[#0C8175] hover:underline">
@@ -206,35 +284,48 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
       {playing && parts.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setPlaying(false)}>
           <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <video
-              key={partIdx}
-              src={parts[partIdx]}
-              controls
-              autoPlay
-              onEnded={() => {
-                if (partIdx < parts.length - 1) setPartIdx(partIdx + 1);
-                else void markComplete();
-              }}
-              className="w-full rounded-lg bg-black"
-            />
+            {partEnded ? (
+              <div className="w-full rounded-lg bg-black/90 border border-white/10 px-8 py-14 text-center">
+                <p className="text-lg text-white">✓ Part {partIdx + 1} of {parts.length} done — nice work!</p>
+                <p className="text-sm text-white/60 mt-1">
+                  {doneParts >= parts.length
+                    ? "That was the last part — lesson complete."
+                    : "One part a day keeps it easy. Come back tomorrow, or keep going now."}
+                </p>
+                <div className="flex items-center justify-center gap-3 mt-5">
+                  {partIdx < parts.length - 1 && (
+                    <button
+                      onClick={() => {
+                        setPartIdx(partIdx + 1);
+                        setPartEnded(false);
+                      }}
+                      className="btn-primary h-10 px-4 text-sm"
+                    >
+                      ▶ Play Part {partIdx + 2}
+                    </button>
+                  )}
+                  <button onClick={() => setPlaying(false)} className="h-10 px-4 text-sm text-white/90 hover:underline">
+                    Done for today
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <video
+                key={partIdx}
+                src={parts[partIdx]}
+                controls
+                autoPlay
+                onEnded={onPartEnded}
+                className="w-full rounded-lg bg-black"
+              />
+            )}
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-white/70">
-                {parts.length > 1 ? `Part ${partIdx + 1} of ${parts.length} — parts play on automatically. ` : ""}
-                Watch to the end to mark this lesson complete.
+                {parts.length > 1
+                  ? `Part ${partIdx + 1} of ${parts.length} (~15 min). Finish a part to check it off — the last part completes the lesson.`
+                  : "Watch to the end to mark this lesson complete."}
               </p>
-              <span className="flex items-center gap-3">
-                {parts.length > 1 &&
-                  parts.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPartIdx(i)}
-                      className={`text-xs ${i === partIdx ? "text-white font-medium" : "text-white/60 hover:underline"}`}
-                    >
-                      Pt {i + 1}
-                    </button>
-                  ))}
-                <button onClick={() => setPlaying(false)} className="text-xs text-white/90 hover:underline">Close</button>
-              </span>
+              <button onClick={() => setPlaying(false)} className="text-xs text-white/90 hover:underline">Close</button>
             </div>
           </div>
         </div>

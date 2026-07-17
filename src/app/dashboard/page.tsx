@@ -155,10 +155,14 @@ export default async function DashboardPage() {
     // if not applied yet these error → empty maps → everything shows "not started").
     const { data: progRaw } = await supabase
       .from("student_progress")
-      .select("generation_id, status, revision_count");
-    const progByGen = new Map<string, { status: string; revisionCount: number }>();
-    for (const p of (progRaw ?? []) as { generation_id: string; status: string; revision_count: number }[])
-      progByGen.set(p.generation_id, { status: p.status, revisionCount: p.revision_count ?? 0 });
+      .select("generation_id, status, revision_count, progress_pct");
+    const progByGen = new Map<string, { status: string; revisionCount: number; progressPct: number }>();
+    for (const p of (progRaw ?? []) as { generation_id: string; status: string; revision_count: number; progress_pct: number }[])
+      progByGen.set(p.generation_id, {
+        status: p.status,
+        revisionCount: p.revision_count ?? 0,
+        progressPct: p.progress_pct ?? 0,
+      });
     const { data: subsRaw } = await supabase.from("submissions").select("generation_id");
     const submittedSet = new Set((subsRaw ?? []).map((s: { generation_id: string }) => s.generation_id));
 
@@ -225,6 +229,7 @@ export default async function DashboardPage() {
         quiz: await sign(path("questions_json")),
         status: (prog?.status as StudentItemData["status"]) ?? null,
         revisionCount: prog?.revisionCount ?? 0,
+        progressPct: prog?.progressPct ?? 0,
         submitted: submittedSet.has(g.id),
       });
     }

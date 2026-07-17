@@ -22,6 +22,9 @@ export type Grounding = {
   chapterTitle: string;
   concepts: unknown; // Agent-2 analysis (jsonb) — definitions, prerequisites, difficulty
   scriptText: string | null; // the lesson's own narration text
+  /** The chapter's raw book text (index-time extraction / OCR cache) — the
+   * fallback grounding for chapters whose lesson isn't generated yet. */
+  sourceText?: string | null;
 };
 
 /** Normalise a question for cache matching: lower-case, collapse whitespace,

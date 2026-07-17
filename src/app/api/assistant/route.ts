@@ -160,14 +160,21 @@ export async function POST(request: Request) {
           return;
         }
 
-        // Grounding excerpt (generated-lesson chapters have rich grounding; other
-        // chapters fall back to topic-level guidance — still book-bounded).
+        // Grounding excerpt, best-first: a generated lesson's concepts + its own
+        // narration; else the chapter's RAW BOOK TEXT (persisted at index time) —
+        // so anything covered in the book is answerable even before any artifact
+        // is generated; else topic-level guidance (still book-bounded).
         const grounding = await loadGrounding(admin, best.bookId, best.chapterNum);
-        const excerpt = grounding
+        const generated = grounding
           ? [grounding.concepts ? JSON.stringify(grounding.concepts).slice(0, 5000) : "", grounding.scriptText ?? ""]
               .filter(Boolean)
               .join("\n")
-          : `(No lesson text available for this chapter yet — teach the topic "${best.title}" at the student's level, within the curriculum.)`;
+          : "";
+        const excerpt =
+          generated ||
+          (grounding?.sourceText
+            ? `FROM THE BOOK (no lesson generated for this chapter yet — answer from this chapter text):\n${grounding.sourceText.slice(0, 9000)}`
+            : `(No lesson text available for this chapter yet — teach the topic "${best.title}" at the student's level, within the curriculum.)`);
 
         const student = await buildStudentModel(admin, user.id, best.bookId, best.chapterNum, best.title).catch(() => null);
         const mastery =

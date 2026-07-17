@@ -113,7 +113,7 @@ export async function loadGrounding(
 ): Promise<Grounding | null> {
   const { data } = await admin
     .from("chapter_grounding")
-    .select("chapter_title, concepts, script_text")
+    .select("chapter_title, concepts, script_text, source_text")
     .eq("book_id", bookId)
     .eq("chapter_num", chapterNum)
     .maybeSingle();
@@ -122,6 +122,10 @@ export async function loadGrounding(
     chapterTitle: (data.chapter_title as string) ?? "this chapter",
     concepts: data.concepts ?? null,
     scriptText: (data.script_text as string | null) ?? null,
+    // The chapter's raw book text (persisted at index time, or OCR-cached for
+    // scanned books) — lets the assistant answer on chapters whose lessons
+    // haven't been GENERATED yet: if it's in the book, it's answerable.
+    sourceText: (data.source_text as string | null) ?? null,
   };
 }
 
