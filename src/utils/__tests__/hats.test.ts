@@ -22,8 +22,11 @@ describe("hatsFor — which hats an account holds", () => {
       "parent",
     ]);
   });
-  it("the coordinator hat needs the tenant's analytics suite — no suite, no hat", () => {
+  it("the coordinator hat needs a leadership surface — analytics OR timetable", () => {
     expect(hatsFor({ role: "teacher", hasScope: true, hasChildren: false, analyticsOn: false })).toEqual(["teacher"]);
+    expect(
+      hatsFor({ role: "teacher", hasScope: true, hasChildren: false, analyticsOn: false, timetableOn: true }),
+    ).toEqual(["coordinator", "teacher"]);
   });
 });
 

@@ -166,7 +166,7 @@ export default async function AppHeader() {
   let hats: Hat[] = [];
   let activeHat: Hat | null = null;
   if (roleHatsEnabled() && user) {
-    hats = hatsFor({ role, hasScope, hasChildren, analyticsOn });
+    hats = hatsFor({ role, hasScope, hasChildren, analyticsOn, timetableOn });
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const tabs = activeHat
