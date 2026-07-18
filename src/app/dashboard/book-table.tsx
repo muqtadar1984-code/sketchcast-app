@@ -12,6 +12,7 @@ import BatchGenerate from "./batch-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
+import { jobStageLabel } from "@/utils/job-stage";
 
 export type Lesson = CellLesson & { title: string; kind: string };
 export type ChapterRow = {
@@ -255,7 +256,7 @@ export default function BookTable({
                           {l.status === "done" ? <ArtifactLinks lesson={l} /> : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                               {l.status}
-                              {l.status === "processing" ? ` · ${l.progress}%` : ""}
+                              {l.status === "processing" ? ` · ${jobStageLabel(l.progress, l.stage)}` : ""}
                             </span>
                           )}
                           <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
@@ -286,7 +287,7 @@ export default function BookTable({
                             {l.status === "done" ? <ArtifactLinks lesson={l} /> : (
                               <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                                 {l.status}
-                                {l.status === "processing" ? ` · ${l.progress}%` : ""}
+                                {l.status === "processing" ? ` · ${jobStageLabel(l.progress, l.stage)}` : ""}
                               </span>
                             )}
                             <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />

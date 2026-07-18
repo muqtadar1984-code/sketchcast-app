@@ -21,6 +21,7 @@ import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import FairUseMeter from "./fair-use-meter";
 import { platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
 
 const KIND_LABEL: Record<string, string> = {
@@ -367,7 +368,9 @@ export default async function DashboardPage() {
   const { data: gensRaw } = await supabase
     .from("generations")
     .select(
-      "id, title, status, created_at, kind, chapter_ref, book_id, params, artifacts(kind, storage_path), jobs(progress, status)",
+      // jobs(*) on purpose: the embedded wildcard tolerates the 0053 `stage`
+      // column existing or not, so deploy order can't break the Library.
+      "id, title, status, created_at, kind, chapter_ref, book_id, params, artifacts(kind, storage_path), jobs(*)",
     )
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
@@ -381,7 +384,7 @@ export default async function DashboardPage() {
     book_id: string | null;
     params: Record<string, unknown> | null;
     artifacts: { kind: string; storage_path: string }[] | null;
-    jobs: { progress: number | null; status: string }[] | null;
+    jobs: { progress: number | null; status: string; stage?: JobStage | null }[] | null;
   };
 
   // Build signed download URLs for finished artifacts.
@@ -411,6 +414,7 @@ export default async function DashboardPage() {
         title: g.title || "Untitled lesson",
         status: g.status,
         progress: g.jobs?.[0]?.progress ?? 0,
+        stage: g.jobs?.[0]?.stage ?? null,
         kind: g.kind || "presentation",
         params: g.params ?? null,
         bookId: g.book_id ?? null,

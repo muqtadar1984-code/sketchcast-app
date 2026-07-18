@@ -6,11 +6,14 @@ import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
+import { jobStageLabel, type JobStage } from "@/utils/job-stage";
 
 export type CellLesson = {
   id: string;
   status: string;
   progress: number;
+  /** Part-major generation stage (0053) — "part 2/4 · 35%" narration. */
+  stage?: JobStage;
   video: string | null;
   /** All video parts in order — a long chapter renders as Part 1..N (~15 min each). */
   videos?: string[];
@@ -71,7 +74,7 @@ export default function ContentCell({
   if (lesson.status === "queued" || lesson.status === "processing") {
     return (
       <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[lesson.status] ?? ""}`}>
-        {lesson.status === "processing" ? `${lesson.progress}%` : "queued"}
+        {lesson.status === "processing" ? jobStageLabel(lesson.progress, lesson.stage) : "queued"}
       </span>
     );
   }

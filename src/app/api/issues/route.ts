@@ -131,7 +131,9 @@ export async function POST(request: Request) {
     `Page: ${url || "?"}`,
     description ? `\n${description}\n` : "",
     context.recent_job_errors ? `Recent job errors:\n- ${(context.recent_job_errors as string[]).join("\n- ")}` : "",
-    `\nTriage: https://app.sketchcast.app/console/issues/${row.id}`,
+    // The console lives on its own subdomain — a /console link on the app host
+    // redirects to /dashboard (console-routing), which dead-ends the email.
+    `\nTriage: https://${process.env.NEXT_PUBLIC_CONSOLE_HOST || "app.sketchcast.app"}/console/issues/${row.id}`,
   ].filter(Boolean).join("\n");
   if (!(await sendEmail(subject, text))) await sendEmail(subject, text);
 
