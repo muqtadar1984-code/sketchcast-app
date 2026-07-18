@@ -13,6 +13,7 @@ import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
 import { jobStageLabel } from "@/utils/job-stage";
+import { languageLabel } from "@/utils/narration";
 
 export type Lesson = CellLesson & { title: string; kind: string };
 export type PartRow = {
@@ -44,6 +45,8 @@ export type BookRow = {
   status: string | null;
   grade: string | null;
   subject: string | null;
+  /** Detected book language (0056) — chip + generation defaults. */
+  language: string | null;
   coverUrl: string | null;
   storagePath: string | null;
   createdAt: string;
@@ -212,6 +215,9 @@ export default function BookTable({
               </span>
               <div className="flex items-center gap-2 whitespace-nowrap self-center">
                 {ready && <BookHealthBadge health={b.health} />}
+                {b.language && languageLabel(b.language) && (
+                  <span className="chip bg-[#E2F4F1] text-[#0C8175]">{languageLabel(b.language)}</span>
+                )}
                 {ready && b.totalChapters > 0 && b.doneChapters === b.totalChapters && (
                   <AssignModal
                     label="Assign book"
@@ -258,9 +264,10 @@ export default function BookTable({
                       schoolId={schoolId}
                       chapters={b.chapters}
                       existingKeys={existingCellKeys(b.chapters)}
+                      language={b.language}
                     />
                     {b.pendingChapters.length > 0 && (
-                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} />
+                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} />
                     )}
                   </div>
                 )}
@@ -288,6 +295,7 @@ export default function BookTable({
                           .flatMap((p) => [p.presentation, p.activity, p.worksheet, p.exam, p.caseStudy])
                           .filter((l): l is CellLesson => !!l && l.status === "done")
                           .map((l) => l.id)}
+                        bookLanguage={b.language}
                       />
                       {/* Per-part lesson units (index-time part map): one row
                           per part, each with its OWN kit, generated on demand.
@@ -330,6 +338,7 @@ export default function BookTable({
                                         lesson={lesson}
                                         part={p.n}
                                         trackViews={!!beta}
+                                        bookLanguage={b.language}
                                       />
                                     ) : (
                                       <span className="text-[#C6CBC4]">—</span>

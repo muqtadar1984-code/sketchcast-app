@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { LANGUAGES } from "@/utils/narration";
 
 type Field =
   | { type: "number"; key: string; label: string; min: number; max: number; def: number }
@@ -79,6 +80,7 @@ export default function OptionsModal({
   kind,
   label,
   part = null,
+  bookLanguage = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -87,6 +89,8 @@ export default function OptionsModal({
   label: string;
   /** Generate for ONE part of the chapter (per-part lesson units). */
   part?: number | null;
+  /** Detected book language (0056) — preselects the document language. */
+  bookLanguage?: string | null;
 }) {
   const spec = SPECS[kind];
   const router = useRouter();
@@ -96,6 +100,7 @@ export default function OptionsModal({
   const [vals, setVals] = useState<Record<string, unknown>>(() =>
     Object.fromEntries((spec?.fields ?? []).map((f) => [f.key, f.def])),
   );
+  const [language, setLanguage] = useState(bookLanguage || "en");
 
   if (!spec) return null;
   const set = (k: string, v: unknown) => setVals((s) => ({ ...s, [k]: v }));
@@ -118,7 +123,11 @@ export default function OptionsModal({
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(chapterRef),
-      params: part ? { ...(spec.build(vals) ?? {}), part } : spec.build(vals),
+      params: {
+        ...(spec.build(vals) ?? {}),
+        ...(part ? { part } : {}),
+        language,
+      },
       status: "queued",
     });
     setBusy(false);
@@ -151,6 +160,21 @@ export default function OptionsModal({
               {spec.title}
             </h3>
             <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3 py-0.5">
+                <span className="text-sm text-[#14181F]">Language</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="field h-8 px-2 text-sm"
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.value} value={l.value}>
+                      {l.label}
+                      {bookLanguage === l.value ? " (book)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
               {spec.fields.map((f) => (
                 <div key={f.key} className="flex items-center justify-between gap-3 py-0.5">
                   <span className="text-sm text-[#14181F]">{f.label}</span>

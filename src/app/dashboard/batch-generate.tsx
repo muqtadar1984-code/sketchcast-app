@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { defaultParams } from "./options-modal";
-import { NARRATION_STYLES, DEFAULT_STYLE, DEFAULT_VOICE, availableVoices } from "@/utils/narration";
+import { NARRATION_STYLES, DEFAULT_STYLE, availableVoices, defaultVoiceFor } from "@/utils/narration";
 
 const KINDS: { kind: string; label: string }[] = [
   { kind: "presentation", label: "Lesson" },
@@ -26,6 +26,7 @@ export default function BatchGenerate({
   schoolId,
   chapters,
   existingKeys,
+  language = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -34,6 +35,8 @@ export default function BatchGenerate({
    * batch can never silently displace a finished (possibly assigned) lesson;
    * use the cell's own Regenerate for that. */
   existingKeys: string[];
+  /** Detected book language (0056) — batch lessons inherit it + its voice. */
+  language?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -41,8 +44,8 @@ export default function BatchGenerate({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [narrationStyle, setNarrationStyle] = useState(DEFAULT_STYLE);
-  const [ttsVoice, setTtsVoice] = useState(DEFAULT_VOICE);
-  const voices = availableVoices();
+  const [ttsVoice, setTtsVoice] = useState(defaultVoiceFor(language));
+  const voices = availableVoices(language);
 
   const key = (num: number, kind: string) => `${num}|${kind}`;
   const existing = new Set(existingKeys);
@@ -90,8 +93,8 @@ export default function BatchGenerate({
       const [numStr, kind] = k.split("|");
       const params =
         kind === "presentation"
-          ? { narration_style: narrationStyle, tts_voice: ttsVoice, batch: true }
-          : { ...defaultParams(kind), batch: true };
+          ? { narration_style: narrationStyle, tts_voice: ttsVoice, batch: true, ...(language ? { language } : {}) }
+          : { ...defaultParams(kind), batch: true, ...(language ? { language } : {}) };
       return {
         kind,
         book_id: bookId,

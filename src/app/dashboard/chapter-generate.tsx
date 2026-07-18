@@ -6,7 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import ContentCell, { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
-import { NARRATION_STYLES, DEFAULT_STYLE, DEFAULT_VOICE, availableVoices } from "@/utils/narration";
+import { NARRATION_STYLES, DEFAULT_STYLE, LANGUAGES, availableVoices, defaultVoiceFor } from "@/utils/narration";
 import { TypeIcon } from "./icons";
 
 // All content types a chapter can produce, in display order.
@@ -33,6 +33,7 @@ export default function ChapterGenerate({
   lessons,
   beta = null,
   extraAssignableIds = [],
+  bookLanguage = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -42,6 +43,8 @@ export default function ChapterGenerate({
   beta?: { pinned: { bookId: string; chapterRef: string | null } | null } | null;
   /** Done per-part lesson ids — assigned along with the chapter's own items. */
   extraAssignableIds?: string[];
+  /** Detected book language (0056) — preselects the lesson language + voice. */
+  bookLanguage?: string | null;
 }) {
   const router = useRouter();
   // Beta: once a chapter is pinned (first generation), every OTHER chapter is
@@ -54,8 +57,13 @@ export default function ChapterGenerate({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [narrationStyle, setNarrationStyle] = useState(DEFAULT_STYLE);
-  const [ttsVoice, setTtsVoice] = useState(DEFAULT_VOICE);
-  const voices = availableVoices();
+  const [language, setLanguage] = useState(bookLanguage || "en");
+  const [ttsVoice, setTtsVoice] = useState(defaultVoiceFor(bookLanguage));
+  const voices = availableVoices(language);
+  const pickLanguage = (lang: string) => {
+    setLanguage(lang);
+    setTtsVoice(defaultVoiceFor(lang)); // voice follows the lesson language
+  };
 
   const chosen = pendingKinds.filter((k) => sel[k.kind]);
   const toggle = (kind: string) => setSel((s) => ({ ...s, [kind]: !s[kind] }));
@@ -94,8 +102,8 @@ export default function ChapterGenerate({
       chapter_ref: String(chapterNum),
       params:
         k.kind === "presentation"
-          ? { narration_style: narrationStyle, tts_voice: ttsVoice }
-          : defaultParams(k.kind),
+          ? { narration_style: narrationStyle, tts_voice: ttsVoice, language }
+          : { ...defaultParams(k.kind), language },
       status: "queued",
     }));
     const { error: gErr } = await supabase.from("generations").insert(rows);
@@ -148,6 +156,7 @@ export default function ChapterGenerate({
                 kind={k.kind}
                 lesson={lesson}
                 trackViews={!!beta}
+                bookLanguage={bookLanguage}
               />
             </span>
           );
@@ -182,6 +191,21 @@ export default function ChapterGenerate({
       {sel["presentation"] && (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">Lesson options</span>
+          <label className="flex items-center gap-1.5 text-xs">
+            <span className="text-[#5B6470]">Language</span>
+            <select
+              value={language}
+              onChange={(e) => pickLanguage(e.target.value)}
+              className="field h-8 px-2 text-xs"
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                  {bookLanguage === l.value ? " (book)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-1.5 text-xs">
             <span className="text-[#5B6470]">Narration</span>
             <select

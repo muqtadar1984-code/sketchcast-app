@@ -363,6 +363,19 @@ export default async function DashboardPage() {
     : withHealth;
   const bookList = (booksRes.data ?? []) as unknown as Book[];
 
+  // Detected book languages (0056) — separate best-effort query so a
+  // not-yet-run migration can never break the Library.
+  const bookLangs = new Map<string, string>();
+  if (bookList.length) {
+    const { data: bl } = await supabase
+      .from("books")
+      .select("id, language")
+      .in("id", bookList.map((b) => b.id));
+    for (const b of (bl ?? []) as { id: string; language: string | null }[]) {
+      if (b.language) bookLangs.set(b.id, b.language);
+    }
+  }
+
   // Signed URLs for cover thumbnails.
   const coverUrls: Record<string, string | null> = {};
   await Promise.all(
@@ -494,6 +507,7 @@ export default async function DashboardPage() {
       status: b.status,
       grade: b.grade,
       subject: b.subject,
+      language: bookLangs.get(b.id) ?? null,
       coverUrl: coverUrls[b.id] ?? null,
       storagePath: b.storage_path,
       createdAt: b.created_at,

@@ -41,6 +41,7 @@ export default function ContentCell({
   lesson,
   trackViews = false,
   part = null,
+  bookLanguage = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -50,6 +51,8 @@ export default function ContentCell({
   trackViews?: boolean; // beta: record artifact-opened events (feedback trigger)
   /** Generate/display ONE part of the chapter (per-part lesson units). */
   part?: number | null;
+  /** Detected book language (0056) — preselects the doc-modal language. */
+  bookLanguage?: string | null;
 }) {
   // Presentation generates directly; document kinds open a customization modal.
   const genControl = (label: string) =>
@@ -71,6 +74,7 @@ export default function ContentCell({
         kind={kind}
         label={label}
         part={part}
+        bookLanguage={bookLanguage}
       />
     );
 

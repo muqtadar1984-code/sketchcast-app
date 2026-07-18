@@ -14,10 +14,13 @@ export default function GenerateAllButton({
   bookId,
   schoolId,
   chapters,
+  language = null,
 }: {
   bookId: string;
   schoolId: string | null;
   chapters: Chapter[];
+  /** Detected book language (0056) — lessons inherit it + its voice. */
+  language?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -50,7 +53,7 @@ export default function GenerateAllButton({
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(c.num),
-      params: defaultPresentationParams(),
+      params: defaultPresentationParams(language),
       status: "queued",
     }));
     const { error: gErr } = await supabase.from("generations").insert(rows);
