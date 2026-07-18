@@ -32,6 +32,7 @@ export default function ChapterGenerate({
   classes,
   lessons,
   beta = null,
+  extraAssignableIds = [],
 }: {
   bookId: string;
   schoolId: string | null;
@@ -39,6 +40,8 @@ export default function ChapterGenerate({
   classes: ClassRow[];
   lessons: Record<string, CellLesson | null>;
   beta?: { pinned: { bookId: string; chapterRef: string | null } | null } | null;
+  /** Done per-part lesson ids — assigned along with the chapter's own items. */
+  extraAssignableIds?: string[];
 }) {
   const router = useRouter();
   // Beta: once a chapter is pinned (first generation), every OTHER chapter is
@@ -60,10 +63,13 @@ export default function ChapterGenerate({
   // "Assign chapter" sends every student-facing item that's ready (the teacher
   // lesson plan is never assigned to students).
   const studentKinds = ["presentation", "activity", "worksheet", "exam_paper", "case_study"];
-  const assignableIds = studentKinds
-    .map((k) => lessons[k])
-    .filter((l): l is CellLesson => !!l && l.status === "done")
-    .map((l) => l.id);
+  const assignableIds = [
+    ...studentKinds
+      .map((k) => lessons[k])
+      .filter((l): l is CellLesson => !!l && l.status === "done")
+      .map((l) => l.id),
+    ...extraAssignableIds,
+  ];
 
   async function generate() {
     if (chosen.length === 0) return;

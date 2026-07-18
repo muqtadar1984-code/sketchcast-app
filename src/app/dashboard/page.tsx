@@ -33,7 +33,7 @@ const KIND_LABEL: Record<string, string> = {
   lesson_plan: "Lesson plan",
 };
 
-type Chapter = { num: number; title: string };
+type Chapter = { num: number; title: string; parts?: { titles?: string[]; words?: number }[] | null };
 
 type Book = {
   id: string;
@@ -142,7 +142,7 @@ export default async function DashboardPage() {
   if (role === "student") {
     const { data: gensRaw } = await supabase
       .from("generations")
-      .select("id, kind, chapter_ref, book_id, artifacts(kind, storage_path)")
+      .select("id, kind, chapter_ref, book_id, params, artifacts(kind, storage_path)")
       .order("created_at", { ascending: false });
     const { data: sharesRaw } = await supabase
       .from("generation_shares")
@@ -192,7 +192,14 @@ export default async function DashboardPage() {
       return data?.signedUrl ?? null;
     };
 
-    type GenRow = { id: string; kind: string; chapter_ref: string | null; book_id: string | null; artifacts: { kind: string; storage_path: string }[] };
+    type GenRow = {
+      id: string;
+      kind: string;
+      chapter_ref: string | null;
+      book_id: string | null;
+      params: { part?: unknown } | null;
+      artifacts: { kind: string; storage_path: string }[];
+    };
     type Item = StudentItemData & { className: string; chapterRef: string | null; bookId: string | null };
     // Real chapter titles for headings ("Unit 1: Be a designer" beats "Chapter 1").
     // RLS: students in a school can read its books; failure → graceful fallback.
@@ -228,10 +235,14 @@ export default async function DashboardPage() {
         .map((a) => a.storage_path)
         .sort((a, b) => partNum(a) - partNum(b));
       const decks = (await Promise.all(deckPaths.map(sign))).filter((u): u is string => !!u);
+      // Per-part lesson units: label carries the part so three assigned
+      // "Lesson"s of one chapter read as Part 1/2/3, not three clones.
+      const genPart = g.params?.part;
+      const partLabel = typeof genPart === "number" && genPart >= 1 ? ` · Part ${genPart}` : "";
       items.push({
         genId: g.id,
         kind: g.kind,
-        label: KIND_LABEL[g.kind] ?? g.kind,
+        label: `${KIND_LABEL[g.kind] ?? g.kind}${partLabel}`,
         dueAt: info.due,
         dueOverdue: !!info.due && new Date(info.due).getTime() < now,
         classId: info.classId,
@@ -431,20 +442,38 @@ export default async function DashboardPage() {
   type Lesson = (typeof lessons)[number];
 
   // Latest generation for a book + chapter + kind (gensRaw is newest-first).
-  const lessonFor = (bookId: string, num: number, kind: string): Lesson | undefined =>
+  // `part` scopes to per-part lesson units: null = the whole-chapter artifact
+  // (a lesson generated with params.part never fills the whole-chapter cell,
+  // and vice versa).
+  const partOf = (l: Lesson): number | null => {
+    const p = (l.params as { part?: unknown } | null)?.part;
+    return typeof p === "number" && p >= 1 ? p : null;
+  };
+  const lessonFor = (bookId: string, num: number, kind: string, part: number | null = null): Lesson | undefined =>
     lessons.find(
-      (l) => l.bookId === bookId && l.chapterRef === String(num) && l.kind === kind,
+      (l) => l.bookId === bookId && l.chapterRef === String(num) && l.kind === kind && partOf(l) === part,
     );
   // The chapter's "lesson" = its presentation (deck+video) — used for progress.
   const lessonForChapter = (bookId: string, num: number): Lesson | undefined =>
     lessonFor(bookId, num, "presentation");
   // Lessons for a book that aren't tied to one of its current chapters
-  // (legacy whole-book lessons with chapter_ref = null, or stale refs).
+  // (legacy whole-book lessons with chapter_ref = null, or stale refs) — plus
+  // ORPHANED part lessons: a re-index can shrink or drop a chapter's part
+  // map, and a lesson with params.part beyond it must stay visible (and
+  // deletable) here rather than silently vanishing.
   const otherLessonsForBook = (book: Book): Lesson[] => {
     const nums = new Set((book.chapters ?? []).map((c) => String(c.num)));
-    return lessons.filter(
-      (l) => l.bookId === book.id && (l.chapterRef === null || !nums.has(l.chapterRef)),
-    );
+    const partsLen = new Map((book.chapters ?? []).map((c) => [String(c.num), c.parts?.length ?? 0]));
+    return lessons.filter((l) => {
+      if (l.bookId !== book.id) return false;
+      if (l.chapterRef === null || !nums.has(l.chapterRef)) return true;
+      const part = partOf(l);
+      if (part !== null) {
+        const n = partsLen.get(l.chapterRef) ?? 0;
+        return n <= 1 || part > n;
+      }
+      return false;
+    });
   };
   // Lessons queued via the book's "Generate selected" batch — shown together
   // under their own sub-header at the end of the book (marked params.batch).
@@ -471,8 +500,13 @@ export default async function DashboardPage() {
       health: (b.health as BookHealth | null) ?? null,
       doneChapters: chs.filter((c) => lessonForChapter(b.id, c.num)?.status === "done").length,
       totalChapters: chs.length,
-      presentationIds: chs
-        .map((c) => lessonFor(b.id, c.num, "presentation"))
+      presentationIds: [
+        ...chs.map((c) => lessonFor(b.id, c.num, "presentation")),
+        // Per-part lessons are as assignable as whole-chapter ones.
+        ...chs.flatMap((c) =>
+          (c.parts?.length ?? 0) > 1 ? c.parts!.map((_, i) => lessonFor(b.id, c.num, "presentation", i + 1)) : [],
+        ),
+      ]
         .filter((l): l is Lesson => !!l && l.status === "done")
         .map((l) => l.id),
       chapters: chs.map((c) => ({
@@ -484,6 +518,21 @@ export default async function DashboardPage() {
         worksheet: lessonFor(b.id, c.num, "worksheet") ?? null,
         exam: lessonFor(b.id, c.num, "exam_paper") ?? null,
         caseStudy: lessonFor(b.id, c.num, "case_study") ?? null,
+        // Per-part lesson units (index-time part map, 2026-07-18): each part
+        // carries its OWN full kit, generated on demand.
+        parts:
+          (c.parts?.length ?? 0) > 1
+            ? c.parts!.map((p, i) => ({
+                n: i + 1,
+                titles: (p.titles ?? []).slice(0, 3),
+                presentation: lessonFor(b.id, c.num, "presentation", i + 1) ?? null,
+                lessonPlan: lessonFor(b.id, c.num, "lesson_plan", i + 1) ?? null,
+                activity: lessonFor(b.id, c.num, "activity", i + 1) ?? null,
+                worksheet: lessonFor(b.id, c.num, "worksheet", i + 1) ?? null,
+                exam: lessonFor(b.id, c.num, "exam_paper", i + 1) ?? null,
+                caseStudy: lessonFor(b.id, c.num, "case_study", i + 1) ?? null,
+              }))
+            : [],
       })),
       pendingChapters: chs.filter((c) => !lessonForChapter(b.id, c.num)),
       otherLessons: otherLessonsForBook(b),

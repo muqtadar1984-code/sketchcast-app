@@ -5,7 +5,7 @@ import GenerateButton from "./generate-button";
 import GenerateAllButton from "./generate-all-button";
 import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
-import { type CellLesson } from "./content-cell";
+import ContentCell, { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
 import BatchGenerate from "./batch-generate";
@@ -15,6 +15,16 @@ import { cleanBookTitle } from "@/utils/book";
 import { jobStageLabel } from "@/utils/job-stage";
 
 export type Lesson = CellLesson & { title: string; kind: string };
+export type PartRow = {
+  n: number;
+  titles: string[];
+  presentation: CellLesson | null;
+  lessonPlan: CellLesson | null;
+  activity: CellLesson | null;
+  worksheet: CellLesson | null;
+  exam: CellLesson | null;
+  caseStudy: CellLesson | null;
+};
 export type ChapterRow = {
   num: number;
   title: string;
@@ -24,6 +34,8 @@ export type ChapterRow = {
   worksheet: CellLesson | null;
   exam: CellLesson | null;
   caseStudy: CellLesson | null;
+  /** Per-part lesson units (index-time part map) — empty for single-part chapters. */
+  parts: PartRow[];
 };
 export type BookRow = {
   id: string;
@@ -272,7 +284,63 @@ export default function BookTable({
                           exam_paper: ch.exam,
                           case_study: ch.caseStudy,
                         }}
+                        extraAssignableIds={ch.parts
+                          .flatMap((p) => [p.presentation, p.activity, p.worksheet, p.exam, p.caseStudy])
+                          .filter((l): l is CellLesson => !!l && l.status === "done")
+                          .map((l) => l.id)}
                       />
+                      {/* Per-part lesson units (index-time part map): one row
+                          per part, each with its OWN kit, generated on demand.
+                          Beta mirrors ChapterGenerate's chapter lock: other
+                          chapters show dashes, never live Generate buttons. */}
+                      {ch.parts.length > 1 && (
+                        <div className="mt-1.5 space-y-1.5">
+                          {ch.parts.map((p) => {
+                            const locked =
+                              !!beta?.pinned &&
+                              (beta.pinned.bookId !== b.id || beta.pinned.chapterRef !== String(ch.num));
+                            return (
+                              <div key={p.n} className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-4 text-xs">
+                                <span className="w-36 shrink-0 text-[#5B6470]">
+                                  Part {p.n}
+                                  {p.titles.length > 0 && (
+                                    <span className="block text-[10px] text-[#98A0A9] truncate" title={p.titles.join(", ")}>
+                                      {p.titles.join(", ")}
+                                    </span>
+                                  )}
+                                </span>
+                                {(
+                                  [
+                                    ["presentation", "Lesson", p.presentation],
+                                    ["lesson_plan", "Plan", p.lessonPlan],
+                                    ["activity", "Activities", p.activity],
+                                    ["worksheet", "Worksheet", p.worksheet],
+                                    ["exam_paper", "Exam", p.exam],
+                                    ["case_study", "Case study", p.caseStudy],
+                                  ] as const
+                                ).map(([kind, label, lesson]) => (
+                                  <span key={kind} className="inline-flex items-center gap-1">
+                                    <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{label}</span>
+                                    {lesson || !locked ? (
+                                      <ContentCell
+                                        bookId={b.id}
+                                        schoolId={schoolId}
+                                        chapterNum={ch.num}
+                                        kind={kind}
+                                        lesson={lesson}
+                                        part={p.n}
+                                        trackViews={!!beta}
+                                      />
+                                    ) : (
+                                      <span className="text-[#C6CBC4]">—</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

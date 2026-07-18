@@ -78,12 +78,15 @@ export default function OptionsModal({
   chapterRef,
   kind,
   label,
+  part = null,
 }: {
   bookId: string;
   schoolId: string | null;
   chapterRef: number | string;
   kind: string;
   label: string;
+  /** Generate for ONE part of the chapter (per-part lesson units). */
+  part?: number | null;
 }) {
   const spec = SPECS[kind];
   const router = useRouter();
@@ -115,7 +118,7 @@ export default function OptionsModal({
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(chapterRef),
-      params: spec.build(vals),
+      params: part ? { ...(spec.build(vals) ?? {}), part } : spec.build(vals),
       status: "queued",
     });
     setBusy(false);
