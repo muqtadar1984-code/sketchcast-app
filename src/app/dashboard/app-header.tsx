@@ -4,6 +4,7 @@ import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
+import NotificationsBell, { type IssueNotification } from "./notifications-bell";
 import {
   calendarEnabledFor,
   parentPortalEnabled,
@@ -185,6 +186,31 @@ export default async function AppHeader() {
     }
   }
 
+  // Issue-status notifications: the user's own reports (pi_report_read RLS)
+  // and the seen-watermark for the badge. Both best-effort — a pre-0055
+  // deploy or a missing console table must never break the header.
+  let bellIssues: IssueNotification[] = [];
+  let bellUnread = 0;
+  if (user) {
+    const { data: issRaw } = await supabase
+      .from("platform_issues")
+      .select("id, title, category, status, resolution_note, created_at, updated_at")
+      .eq("reporter_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+    bellIssues = (issRaw ?? []) as IssueNotification[];
+    if (bellIssues.length) {
+      let seen: string | null = null;
+      const { data: seenRow } = await supabase
+        .from("profiles")
+        .select("notifications_seen_at")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (seenRow) seen = (seenRow as { notifications_seen_at?: string | null }).notifications_seen_at ?? null;
+      bellUnread = bellIssues.filter((i) => !seen || i.updated_at > seen).length;
+    }
+  }
+
   // One-hat mode: filter everything to the active hat; legacy union view when off.
   let hats: Hat[] = [];
   let activeHat: Hat | null = null;
@@ -213,6 +239,7 @@ export default async function AppHeader() {
             {name}
             {label ? ` · ${label}` : ""}
           </span>
+          {user && <NotificationsBell userId={user.id} issues={bellIssues} initialUnread={bellUnread} />}
           <TourReplayButton />
           <form action="/auth/signout" method="post">
             <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">Sign out</button>
