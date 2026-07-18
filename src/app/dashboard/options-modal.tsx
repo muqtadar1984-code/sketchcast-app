@@ -100,7 +100,8 @@ export default function OptionsModal({
   const [vals, setVals] = useState<Record<string, unknown>>(() =>
     Object.fromEntries((spec?.fields ?? []).map((f) => [f.key, f.def])),
   );
-  const [language, setLanguage] = useState(bookLanguage || "en");
+  const knownBookLang = LANGUAGES.some((l) => l.value === bookLanguage) ? bookLanguage : null;
+  const [language, setLanguage] = useState(knownBookLang || "en");
 
   if (!spec) return null;
   const set = (k: string, v: unknown) => setVals((s) => ({ ...s, [k]: v }));

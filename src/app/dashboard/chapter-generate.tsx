@@ -57,8 +57,11 @@ export default function ChapterGenerate({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [narrationStyle, setNarrationStyle] = useState(DEFAULT_STYLE);
-  const [language, setLanguage] = useState(bookLanguage || "en");
-  const [ttsVoice, setTtsVoice] = useState(defaultVoiceFor(bookLanguage));
+  // Unknown stored codes normalize to English — a free-text books.language
+  // value must never leave the Language select without a matching option.
+  const knownBookLang = LANGUAGES.some((l) => l.value === bookLanguage) ? bookLanguage : null;
+  const [language, setLanguage] = useState(knownBookLang || "en");
+  const [ttsVoice, setTtsVoice] = useState(defaultVoiceFor(knownBookLang));
   const voices = availableVoices(language);
   const pickLanguage = (lang: string) => {
     setLanguage(lang);
@@ -201,7 +204,7 @@ export default function ChapterGenerate({
               {LANGUAGES.map((l) => (
                 <option key={l.value} value={l.value}>
                   {l.label}
-                  {bookLanguage === l.value ? " (book)" : ""}
+                  {knownBookLang === l.value ? " (book)" : ""}
                 </option>
               ))}
             </select>
