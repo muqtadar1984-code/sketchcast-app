@@ -36,6 +36,8 @@ export const VOICES: VoiceOpt[] = [
   { value: "edge-mohan", label: "Mohan — తెలుగు", tier: "free", lang: "te" },
   { value: "edge-aarohi", label: "Aarohi — मराठी", tier: "free", lang: "mr" },
   { value: "edge-manohar", label: "Manohar — मराठी", tier: "free", lang: "mr" },
+  { value: "edge-swara", label: "Swara — हिन्दी", tier: "free", lang: "hi" },
+  { value: "edge-madhur", label: "Madhur — हिन्दी", tier: "free", lang: "hi" },
   // Premium ElevenLabs voices are multilingual — offered for every language.
   { value: "el-rachel", label: "Rachel — natural", tier: "premium", lang: "*" },
   { value: "el-adam", label: "Adam — deep", tier: "premium", lang: "*" },
@@ -53,6 +55,7 @@ export const LANGUAGES: LanguageOpt[] = [
   { value: "pt", label: "Português" },
   { value: "te", label: "తెలుగు (Telugu)" },
   { value: "mr", label: "मराठी (Marathi)" },
+  { value: "hi", label: "हिन्दी (Hindi)" },
 ];
 export const languageLabel = (code: string | null | undefined): string | null =>
   LANGUAGES.find((l) => l.value === code)?.label ?? null;
