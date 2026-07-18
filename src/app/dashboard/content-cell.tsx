@@ -42,6 +42,7 @@ export default function ContentCell({
   trackViews = false,
   part = null,
   bookLanguage = null,
+  genLocked = false,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -53,6 +54,9 @@ export default function ContentCell({
   part?: number | null;
   /** Detected book language (0056) — preselects the doc-modal language. */
   bookLanguage?: string | null;
+  /** Trial: this cell's unit is outside the pin — hide generate/retry/
+      regenerate (the DB would reject them) but keep artifacts + delete. */
+  genLocked?: boolean;
 }) {
   // Presentation generates directly; document kinds open a customization modal.
   const genControl = (label: string) =>
@@ -78,7 +82,7 @@ export default function ContentCell({
       />
     );
 
-  if (!lesson) return genControl("Generate");
+  if (!lesson) return genLocked ? <span className="text-[#C6CBC4]">—</span> : genControl("Generate");
 
   if (lesson.status === "queued" || lesson.status === "processing") {
     return (
@@ -92,7 +96,7 @@ export default function ContentCell({
     return (
       <span className="inline-flex items-center gap-2 text-xs">
         <span className="text-[#B42318]">failed</span>
-        {genControl("retry")}
+        {!genLocked && genControl("retry")}
         {/* Reporting moved to the page-bottom "Report a problem" widget — the
             inline per-artifact button cluttered every cell. */}
       </span>
@@ -175,15 +179,17 @@ export default function ContentCell({
           className="font-medium text-[#0C8175] hover:underline"
         />
       )}
-      <RegenerateButton
-        bookId={bookId}
-        schoolId={schoolId}
-        chapterRef={chapterNum}
-        kind={kind}
-        params={lesson.params}
-        oldGenId={lesson.id}
-        oldArtifactPaths={lesson.artifactPaths}
-      />
+      {!genLocked && (
+        <RegenerateButton
+          bookId={bookId}
+          schoolId={schoolId}
+          chapterRef={chapterNum}
+          kind={kind}
+          params={lesson.params}
+          oldGenId={lesson.id}
+          oldArtifactPaths={lesson.artifactPaths}
+        />
+      )}
       <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} />
     </span>
   );

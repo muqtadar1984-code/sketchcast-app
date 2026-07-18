@@ -32,6 +32,7 @@ export default function ChapterGenerate({
   classes,
   lessons,
   beta = null,
+  multiPartTrial = false,
   extraAssignableIds = [],
   bookLanguage = null,
 }: {
@@ -40,18 +41,27 @@ export default function ChapterGenerate({
   chapterNum: number;
   classes: ClassRow[];
   lessons: Record<string, CellLesson | null>;
-  beta?: { pinned: { bookId: string; chapterRef: string | null } | null } | null;
+  beta?: { pinned: { bookId: string; chapterRef: string | null; part: number | null } | null } | null;
+  /** Beta + the chapter has >1 part: trial kits are per-part, so this
+      chapter-level row offers no new generations (the part rows do). */
+  multiPartTrial?: boolean;
   /** Done per-part lesson ids — assigned along with the chapter's own items. */
   extraAssignableIds?: string[];
   /** Detected book language (0056) — preselects the lesson language + voice. */
   bookLanguage?: string | null;
 }) {
   const router = useRouter();
-  // Beta: once a chapter is pinned (first generation), every OTHER chapter is
-  // locked for new generations (the DB trigger enforces this server-side too).
-  const betaLocked =
+  // Beta mirrors the DB pin (0057): the first generation fixes one
+  // (book, chapter, part) unit. This chapter-level row (part 0) stays live
+  // when it IS the pinned unit (the DB skips the multi-part guard on an
+  // exact pin match — regens of a grandfathered whole-chapter kit expand
+  // nothing), or when no pin exists and the chapter is single-part.
+  const pinnedElsewhere =
     !!beta?.pinned &&
     (beta.pinned.bookId !== bookId || beta.pinned.chapterRef !== String(chapterNum));
+  const pinIsThisChapterLevel = !!beta?.pinned && !pinnedElsewhere && beta.pinned.part == null;
+  const betaLocked =
+    !!beta && (beta.pinned ? !pinIsThisChapterLevel : !!multiPartTrial);
   const pendingKinds = betaLocked ? [] : KINDS.filter((k) => !lessons[k.kind]);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
@@ -160,16 +170,39 @@ export default function ChapterGenerate({
                 lesson={lesson}
                 trackViews={!!beta}
                 bookLanguage={bookLanguage}
+                genLocked={betaLocked}
               />
             </span>
           );
         })}
 
-        {betaLocked && (
-          <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]" title="The beta covers full generation for one chapter of your choice">
-            Beta: 1 chapter — locked
-          </span>
-        )}
+        {betaLocked &&
+          // Three honest states (review: never say "pick one part below" when
+          // every part row renders dashes): pinned to another unit → locked;
+          // no pin yet → invite the pick; pinned to a part of THIS chapter →
+          // name it. (A chapter-level pin on THIS chapter is never locked.)
+          (pinnedElsewhere ? (
+            <span
+              className="chip font-sans bg-[#FFF1D6] text-[#9A6400]"
+              title="Your free trial covers the full kit (all six content types) for one part of one chapter"
+            >
+              Trial: 1 part — locked
+            </span>
+          ) : !beta?.pinned ? (
+            <span
+              className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
+              title="This chapter is split into parts — your trial covers the full kit (all six content types) for one part of your choice"
+            >
+              Trial: pick one part below
+            </span>
+          ) : (
+            <span
+              className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
+              title="Your trial kit lives on this part — retries and every content type for it stay open"
+            >
+              Trial: Part {beta.pinned.part} is your kit
+            </span>
+          ))}
 
         <span className="ml-auto flex items-center gap-3">
           {assignableIds.length > 0 && (

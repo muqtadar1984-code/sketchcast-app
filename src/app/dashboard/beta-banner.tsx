@@ -20,8 +20,11 @@ export default function BetaBanner() {
     <div className="mb-6 rounded-xl border border-[#BDE8E2] bg-[#E2F4F1] px-4 py-3 flex items-start justify-between gap-3">
       <p className="text-sm text-[#0C8175]">
         <span className="font-medium">Welcome to SketchCast!</span> Your free trial includes{" "}
-        <span className="font-medium text-[#14181F]">1 book — explore all its chapters and generate every content kind for one of them</span>.{" "}
-        Classes, assigning, reviewing, and analytics are all unlimited. Questions?{" "}
+        <span className="font-medium text-[#14181F]">
+          1 book and the full kit — video lesson, plan, activities, worksheet, exam and case study —
+          for one part of one chapter
+        </span>
+        . Classes, assigning, reviewing, and analytics are all unlimited. Questions?{" "}
         <a href="mailto:hello@sketchcast.app" className="underline">hello@sketchcast.app</a>
       </p>
       <button

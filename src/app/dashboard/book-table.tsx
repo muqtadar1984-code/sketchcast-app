@@ -95,7 +95,11 @@ const STATUS_STYLE: Record<string, string> = {
   error: "bg-[#FCEBEA] text-[#B42318]",
 };
 
-export type BetaState = { pinned: { bookId: string; chapterRef: string | null } | null };
+export type BetaState = {
+  // The trial's pinned unit (0057): book + chapter + part. part null = a
+  // chapter-level (single-part or legacy whole-chapter) unit.
+  pinned: { bookId: string; chapterRef: string | null; part: number | null } | null;
+};
 
 // Watch/Deck/Download links for one finished lesson — multi-part aware (a long
 // chapter ships Part 1..N videos and a deck per part). Multi-part lessons
@@ -283,6 +287,7 @@ export default function BookTable({
                         chapterNum={ch.num}
                         classes={classes}
                         beta={beta}
+                        multiPartTrial={!!beta && ch.parts.length > 1}
                         lessons={{
                           presentation: ch.presentation,
                           lesson_plan: ch.lessonPlan,
@@ -299,14 +304,17 @@ export default function BookTable({
                       />
                       {/* Per-part lesson units (index-time part map): one row
                           per part, each with its OWN kit, generated on demand.
-                          Beta mirrors ChapterGenerate's chapter lock: other
-                          chapters show dashes, never live Generate buttons. */}
+                          Beta mirrors the DB pin (0057) exactly: only the
+                          pinned (book, chapter, part) triple stays live —
+                          everything else shows dashes, never Generate. */}
                       {ch.parts.length > 1 && (
                         <div className="mt-1.5 space-y-1.5">
                           {ch.parts.map((p) => {
                             const locked =
                               !!beta?.pinned &&
-                              (beta.pinned.bookId !== b.id || beta.pinned.chapterRef !== String(ch.num));
+                              (beta.pinned.bookId !== b.id ||
+                                beta.pinned.chapterRef !== String(ch.num) ||
+                                beta.pinned.part !== p.n);
                             return (
                               <div key={p.n} className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-4 text-xs">
                                 <span className="w-36 shrink-0 text-[#5B6470]">
@@ -339,6 +347,7 @@ export default function BookTable({
                                         part={p.n}
                                         trackViews={!!beta}
                                         bookLanguage={b.language}
+                                        genLocked={locked}
                                       />
                                     ) : (
                                       <span className="text-[#C6CBC4]">—</span>

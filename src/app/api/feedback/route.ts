@@ -62,7 +62,16 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle();
   const gate = me as { role?: string; beta_tester?: boolean } | null;
-  if (!gate?.role || gate.role === "student" || !gate.beta_tester) {
+  // Accept the beta flag OR the DB's live trial scope (my_trial_pin, 0057):
+  // pre-0012 accounts have beta_tester=false yet see the trial surfaces —
+  // their feedback must not 403 (review finding).
+  let allowed = !!gate?.beta_tester;
+  if (!allowed) {
+    const { data: tp, error: tpErr } = await supabase.rpc("my_trial_pin");
+    const scope = (Array.isArray(tp) ? tp[0] : tp) as { in_scope?: boolean } | null;
+    allowed = !tpErr && !!scope?.in_scope;
+  }
+  if (!gate?.role || gate.role === "student" || !allowed) {
     return NextResponse.json({ error: "Feedback is for beta teachers." }, { status: 403 });
   }
 

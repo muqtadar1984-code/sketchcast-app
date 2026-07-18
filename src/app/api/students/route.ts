@@ -79,7 +79,17 @@ export async function POST(request: Request) {
       me = withCaps.data as CapRow | null;
     }
   }
-  const cap = me?.max_students ?? (me?.beta_tester ? 2 : null);
+  // The 2-student default is a TRIAL shape, not a flag shape: beta_tester is
+  // never cleared on upgrade (0012), so gate on the DB's own trial scope
+  // (my_trial_pin, 0057 — trial tier, no school, not a parent, no override).
+  // Best-effort: before 0057 runs the RPC is absent → fall back to the flag.
+  let trialScope = !!me?.beta_tester;
+  {
+    const { data: tp, error: tpErr } = await supabase.rpc("my_trial_pin");
+    const scope = (Array.isArray(tp) ? tp[0] : tp) as { in_scope?: boolean } | null;
+    if (!tpErr && scope) trialScope = !!scope.in_scope;
+  }
+  const cap = me?.max_students ?? (trialScope ? 2 : null);
   if (cap != null) {
     const { data: enr } = await admin
       .from("enrollments")

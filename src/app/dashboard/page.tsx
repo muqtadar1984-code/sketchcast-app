@@ -110,21 +110,56 @@ export default async function DashboardPage() {
   const hatAway = await enforceHat(supabase, role, schoolId, "teacher");
   if (hatAway) redirect(hatAway);
 
-  // Teacher beta + signup notification: one best-effort query so a
-  // not-yet-applied migration (missing columns) can never break the dashboard.
-  // Every signup path (email, Google, invite, school setup) funnels through
-  // this page, so the founder's new-registration email fires here, exactly
-  // once per account (signup_notified_at is the dedup marker).
+  // Teacher trial locks + signup notification: best-effort queries so a
+  // not-yet-applied migration can never break the dashboard.
+  // The trial state mirrors the DB scope EXACTLY via my_trial_pin (0057):
+  // trial tier, no school, not a parent, no console override. beta_tester
+  // alone no longer decides — the flag is never cleared on upgrade, so a
+  // paying teacher must unlock the moment their entitlement lands (review
+  // finding). Before 0057 runs, the RPC is absent → no locks, matching the
+  // unpinned DB.
   let isBeta = false;
+  let trialPin: { bookId: string; chapterRef: string | null; part: number | null } | null = null;
+  let trialBookUsed = 0;
   if (role && role !== "student") {
+    if (teacherBetaEnabled()) {
+      const { data: tp } = await supabase.rpc("my_trial_pin");
+      const pin = (Array.isArray(tp) ? tp[0] : tp) as
+        | {
+            in_scope: boolean;
+            pinned: boolean;
+            book_id: string | null;
+            chapter_ref: string | null;
+            part: number | null;
+            repinnable: boolean;
+          }
+        | null;
+      isBeta = !!pin?.in_scope;
+      // repinnable = the DB's failed-first-attempt escape is open (the pinned
+      // unit never succeeded and every remaining generation errored) — render
+      // as unpinned so the teacher can restart anywhere, exactly as the DB
+      // would accept. The pin moves on their next accepted generation.
+      if (isBeta && pin?.pinned && pin.book_id && !pin.repinnable) {
+        trialPin = {
+          bookId: pin.book_id,
+          chapterRef: pin.chapter_ref,
+          part: pin.part && pin.part >= 1 ? pin.part : null,
+        };
+      }
+      if (isBeta) {
+        const { data: used } = await supabase.rpc("my_trial_book_used");
+        trialBookUsed = typeof used === "number" ? used : 0;
+      }
+    }
+    // Every signup path (email, Google, invite, school setup) funnels through
+    // this page, so the founder's new-registration email fires here, exactly
+    // once per account (signup_notified_at is the dedup marker).
     const { data: b } = await supabase
       .from("profiles")
-      .select("beta_tester, signup_notified_at")
+      .select("signup_notified_at")
       .eq("id", user.id)
       .maybeSingle();
-    const flags = b as { beta_tester?: boolean; signup_notified_at?: string | null } | null;
-    // Any beta adult — admins and coordinators teach too, same trial caps.
-    isBeta = teacherBetaEnabled() && !!flags?.beta_tester;
+    const flags = b as { signup_notified_at?: string | null } | null;
     if (flags && !flags.signup_notified_at) {
       const { notifySignupOnce } = await import("@/utils/notify");
       await notifySignupOnce(user.id, user.email ?? null, (profile?.full_name as string) ?? null, role);
@@ -554,17 +589,14 @@ export default async function DashboardPage() {
     };
   });
 
-  // Beta state: the pinned (book, chapter), remaining student slots, and
-  // whether feedback was already submitted (the widget is entirely voluntary —
-  // it opens only from its button; no "viewed everything" auto-prompt).
-  let betaPinned: { bookId: string; chapterRef: string | null } | null = null;
+  // Beta state: the pinned unit (the DB's own answer via my_trial_pin —
+  // display-list derivation broke on created_at ties and the 1000-row cap),
+  // remaining student slots, and whether feedback was already submitted (the
+  // widget is entirely voluntary — it opens only from its button).
+  const betaPinned = trialPin;
   let betaSlotsLeft: number | null = null;
   let feedback: { submitted: boolean } | null = null;
   if (isBeta) {
-    // Any generation pins the chapter — including a whole-book one
-    // (chapter_ref null), which consumes the beta slot entirely.
-    const pin = lessons.find((l) => l.bookId !== null);
-    betaPinned = pin ? { bookId: pin.bookId!, chapterRef: pin.chapterRef } : null;
     const distinctStudents = new Set(
       classRosters.flatMap((c) => c.students.map((s) => s.username || s.full_name || "")),
     ).size;
@@ -605,12 +637,13 @@ export default async function DashboardPage() {
             what carried over (0047). The DB triggers are the guard. */}
         {lessonTools && <FairUseMeter />}
 
-        {/* Cap counts the teacher's OWN books — the library select also returns
-            school-shared ones, which must not consume their upload. */}
+        {/* The trial's book slot comes from the 0046 ledger (my_trial_book_used):
+            a deleted generated-from book keeps its slot consumed, so live book
+            rows must not decide whether to offer a doomed multi-minute upload. */}
         {lessonTools ? (
           <UploadBook
             schoolId={schoolId}
-            betaBlocked={isBeta && bookList.some((b) => b.owner_id === user.id)}
+            betaBlocked={isBeta && (trialBookUsed >= 1 || bookList.some((b) => b.owner_id === user.id))}
           />
         ) : (
           <p className="text-sm text-[#5B6470] mb-6">

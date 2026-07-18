@@ -8,9 +8,13 @@ import { cleanBookTitle } from "@/utils/book";
 export default function UploadBook({
   schoolId,
   betaBlocked = false,
+  parent = false,
 }: {
   schoolId: string | null;
   betaBlocked?: boolean; // beta teachers get exactly 1 book (server-enforced too)
+  /** Parent surface (test papers): the blocked-card copy must not promise the
+      teacher part-kit — parents generate exam papers only (0018). */
+  parent?: boolean;
 }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -100,6 +104,14 @@ export default function UploadBook({
     setBusy(false);
     setPct(null);
     if (ins.error) {
+      // The PUT ran before the insert — don't leave a doomed PDF in storage
+      // (the DB book cap can reject the row the UI allowed, e.g. a ledger
+      // slot consumed by a deleted book). Best-effort.
+      try {
+        await supabase.storage.from("uploads").remove([path]);
+      } catch {
+        /* the orphan sweep is cosmetic — the error below is what matters */
+      }
       setError(ins.error.message);
       return;
     }
@@ -113,9 +125,13 @@ export default function UploadBook({
   if (betaBlocked) {
     return (
       <div className="card p-5 mb-8 text-sm text-[#5B6470]">
-        <span className="chip bg-[#FFF1D6] text-[#9A6400] mr-2">Beta</span>
-        The beta is limited to <span className="font-medium text-[#14181F]">1 book</span> — you can
-        explore all its chapters and generate everything for one of them.
+        <span className="chip bg-[#FFF1D6] text-[#9A6400] mr-2">Trial</span>
+        The free trial is limited to <span className="font-medium text-[#14181F]">1 book</span>
+        {parent ? (
+          <> — generate test papers from its chapters.</>
+        ) : (
+          <> — explore all its chapters and generate the full kit for one part of one chapter.</>
+        )}
       </div>
     );
   }

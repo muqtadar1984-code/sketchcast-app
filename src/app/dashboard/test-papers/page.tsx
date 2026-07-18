@@ -121,7 +121,7 @@ export default async function TestPapersPage() {
         {/* Fair-use transparency for parents too (0047). */}
         <FairUseMeter />
 
-        <UploadBook schoolId={(profile?.school_id as string | null) ?? null} betaBlocked={betaBlocked} />
+        <UploadBook schoolId={(profile?.school_id as string | null) ?? null} betaBlocked={betaBlocked} parent />
 
         {books.length === 0 ? (
           <div className="card px-5 py-8 text-sm text-[#5B6470]">
