@@ -83,22 +83,53 @@ const STATUS_STYLE: Record<string, string> = {
 export type BetaState = { pinned: { bookId: string; chapterRef: string | null } | null };
 
 // Watch/Deck/Download links for one finished lesson — multi-part aware (a long
-// chapter ships Part 1..N videos and a deck per part).
+// chapter ships Part 1..N videos and a deck per part). Multi-part lessons
+// render ONE LINE PER PART, stacked — "Part 2 · Watch · Deck" — instead of a
+// single crowded row of Pt links.
 function ArtifactLinks({ lesson }: { lesson: CellLesson }) {
   const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
   const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
+  const nParts = Math.max(videos.length, decks.length);
+
+  if (nParts > 1) {
+    return (
+      <span className="flex flex-col gap-0.5">
+        {Array.from({ length: nParts }, (_, i) => (
+          <span key={i} className="flex items-center gap-2 whitespace-nowrap">
+            <span className="text-xs text-[#5B6470] w-11">Part {i + 1}</span>
+            {videos[i] && (
+              <a href={videos[i]} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
+                ▶ Watch
+              </a>
+            )}
+            {decks[i] && (
+              <a href={decks[i]} className="text-xs font-medium text-[#0C8175] hover:underline">
+                ⬇ Deck
+              </a>
+            )}
+          </span>
+        ))}
+        {lesson.doc && (
+          <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+            ⬇ Download
+          </a>
+        )}
+      </span>
+    );
+  }
+
   return (
     <>
-      {videos.map((url, i, all) => (
-        <a key={`v${i}`} href={url} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
-          {all.length > 1 ? (i === 0 ? "▶ Watch Pt 1" : `▶ Pt ${i + 1}`) : "▶ Watch"}
+      {videos[0] && (
+        <a href={videos[0]} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
+          ▶ Watch
         </a>
-      ))}
-      {decks.map((url, i, all) => (
-        <a key={`d${i}`} href={url} className="text-xs font-medium text-[#0C8175] hover:underline">
-          {all.length > 1 ? `⬇ Deck Pt ${i + 1}` : "⬇ Deck"}
+      )}
+      {decks[0] && (
+        <a href={decks[0]} className="text-xs font-medium text-[#0C8175] hover:underline">
+          ⬇ Deck
         </a>
-      ))}
+      )}
       {lesson.doc && (
         <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
           ⬇ Download
