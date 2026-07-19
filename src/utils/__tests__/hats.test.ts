@@ -28,6 +28,12 @@ describe("hatsFor — which hats an account holds", () => {
       hatsFor({ role: "teacher", hasScope: true, hasChildren: false, analyticsOn: false, timetableOn: true }),
     ).toEqual(["coordinator", "teacher"]);
   });
+  it("a parent-role account holds ONE merged parent hat — never a teacher hat to switch to", () => {
+    // The parent hat's tabs include the Library (founder, 2026-07-19), so a
+    // single hat means no switcher renders and authoring is directly open.
+    expect(hatsFor({ role: "parent", hasScope: false, hasChildren: true, analyticsOn: true })).toEqual(["parent"]);
+    expect(hatsFor({ role: "parent", hasScope: false, hasChildren: false, analyticsOn: false })).toEqual(["parent"]);
+  });
 });
 
 describe("resolveHat — cookie vs held hats", () => {

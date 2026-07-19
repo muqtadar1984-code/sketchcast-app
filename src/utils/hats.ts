@@ -45,6 +45,11 @@ export function hatsFor(opts: {
   timetableOn?: boolean;
 }): Hat[] {
   if (!opts.role || opts.role === "student") return [];
+  // Parents live in ONE merged world (founder, 2026-07-19): the parent hat's
+  // tabs include the Library and analytics, so a parent-role account never
+  // switches hats to author — and no switcher renders (single hat). Adults
+  // with other roles keep the one-hat-at-a-time model.
+  if (opts.role === "parent") return ["parent"];
   const hats: Hat[] = [];
   if (opts.role === "school_admin") hats.push("principal");
   if (opts.hasScope && (opts.analyticsOn || opts.timetableOn)) hats.push("coordinator");

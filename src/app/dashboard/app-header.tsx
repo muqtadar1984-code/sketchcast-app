@@ -40,7 +40,11 @@ function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetab
       ...calendar,
     ];
   if (hat === "parent")
+    // Parents get the full authoring facilities directly (founder,
+    // 2026-07-19) — no switching to a teacher hat to reach the Library.
     return [
+      { href: "/dashboard", label: "Library" },
+      { href: "/dashboard/analytics", label: "My Analytics" },
       { href: "/dashboard/children", label: "My Children" },
       { href: "/dashboard/test-papers", label: "Test Papers" },
       ...calendar,

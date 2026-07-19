@@ -85,7 +85,11 @@ export async function enforceHat(
   if (!hat) return null;
   const fits =
     domain === "teacher"
-      ? hat === "teacher"
+      ? // Parent-role accounts live in ONE merged world: their (only) parent
+        // hat includes the Library and analytics, so teacher surfaces accept
+        // it. Multi-role adults wearing the parent hat still bounce — their
+        // teacher world is a separate hat.
+        hat === "teacher" || (hat === "parent" && role === "parent")
       : domain === "leadership"
         ? hat === "principal" || hat === "coordinator"
         : domain === "principal"

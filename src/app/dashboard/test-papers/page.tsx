@@ -4,17 +4,17 @@ import AppHeader from "../app-header";
 import UploadBook from "../upload-book";
 import AutoRefresh from "../auto-refresh";
 import { InkUnderline } from "@/components/ink-mark";
-import { parentPortalEnabled } from "@/utils/flags";
+import { parentPortalEnabled, teacherBetaEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import FairUseMeter from "../fair-use-meter";
 import { GeneratePaperButton, AssignChildButton } from "./paper-actions";
 import ReportContentIssue from "../report-content-issue";
 import BookHealthBadge, { type BookHealth } from "../book-health-badge";
 
-// The parent's "library": upload their own book (same pipeline as teachers —
-// chapter detection included), generate a TEST PAPER per chapter (the only
-// kind the DB allows parents), download it, and assign it to a child. Also
-// reachable by teacher-parents, whose full Library covers the same ground.
+// The parent's paper-focused view: upload their own book (same pipeline as
+// teachers — chapter detection included), generate a test paper per chapter,
+// download it, and assign it to a child. Parents are full authors since 0035
+// — the Library tab covers every other kind; this view stays paper-first.
 
 export const dynamic = "force-dynamic";
 
@@ -86,8 +86,19 @@ export default async function TestPapersPage() {
   const anyRunning = gens.some((g) => g.status !== "done" && g.status !== "error") ||
     books.some((b) => b.status === "indexing");
 
-  // Beta cap message mirrors the teacher library.
-  const betaBlocked = !!profile?.beta_tester && books.length >= 1;
+  // Trial gate mirrors the DB (my_trial_pin / my_trial_book_used — parents
+  // are pinned exactly like teachers since 0058, and the 0046 ledger keeps a
+  // deleted generated-from book's slot consumed). Best-effort: before the
+  // migrations run, the RPCs are absent → legacy flag check.
+  let betaBlocked = !!profile?.beta_tester && books.length >= 1;
+  if (teacherBetaEnabled()) {
+    const { data: tp } = await supabase.rpc("my_trial_pin");
+    const scope = (Array.isArray(tp) ? tp[0] : tp) as { in_scope?: boolean } | null;
+    if (scope) {
+      const { data: used } = await supabase.rpc("my_trial_book_used");
+      betaBlocked = !!scope.in_scope && ((typeof used === "number" ? used : 0) >= 1 || books.length >= 1);
+    }
+  }
 
   const rows: {
     bookId: string;
