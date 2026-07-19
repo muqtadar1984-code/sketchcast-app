@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { kitRows } from "./kit";
+import { defaultNarrationForGrade } from "@/utils/narration";
 
 // One-click full kit for a chapter part (0059): queues the video lesson plus
 // its five documents together — one lesson credit, documents free. Used on
@@ -16,6 +17,7 @@ export default function GenerateKitButton({
   part = null,
   language = null,
   skipKinds = [],
+  bookGrade = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -25,6 +27,8 @@ export default function GenerateKitButton({
   /** Doc kinds that already exist for this unit (legacy standalone docs) —
       the kit skips them instead of inserting duplicates. */
   skipKinds?: string[];
+  /** Book grade — age-appropriate narration default (grades 1–4 → Storytelling). */
+  bookGrade?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -42,7 +46,15 @@ export default function GenerateKitButton({
       setBusy(false);
       return;
     }
-    const rows = kitRows({ bookId, schoolId, userId: user.id, chapterNum, part, language }).filter(
+    const rows = kitRows({
+      bookId,
+      schoolId,
+      userId: user.id,
+      chapterNum,
+      part,
+      language,
+      narrationStyle: defaultNarrationForGrade(bookGrade),
+    }).filter(
       (r) => r.kind === "presentation" || !skipKinds.includes(r.kind),
     );
     const { error: gErr } = await supabase.from("generations").insert(rows);

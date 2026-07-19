@@ -272,7 +272,7 @@ export default function BookTable({
                       language={b.language}
                     />
                     {b.pendingChapters.length > 0 && (
-                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} />
+                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} />
                     )}
                   </div>
                 )}
@@ -302,6 +302,7 @@ export default function BookTable({
                           .filter((l): l is CellLesson => !!l && l.status === "done")
                           .map((l) => l.id)}
                         bookLanguage={b.language}
+                        bookGrade={b.grade}
                       />
                       {/* Per-part lesson units (index-time part map): one row
                           per part, each with its OWN kit, generated on demand.
@@ -337,6 +338,7 @@ export default function BookTable({
                                     chapterNum={ch.num}
                                     part={p.n}
                                     language={b.language}
+                                    bookGrade={b.grade}
                                     skipKinds={(
                                       [
                                         ["lesson_plan", p.lessonPlan],

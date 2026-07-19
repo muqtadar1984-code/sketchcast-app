@@ -7,7 +7,7 @@ import ContentCell, { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
 import { kitRows, type GenerationRow } from "./kit";
-import { NARRATION_STYLES, DEFAULT_STYLE, LANGUAGES, availableVoices, defaultVoiceFor } from "@/utils/narration";
+import { NARRATION_STYLES, DEFAULT_STYLE, LANGUAGES, availableVoices, defaultVoiceFor, defaultNarrationForGrade } from "@/utils/narration";
 import { TypeIcon } from "./icons";
 
 // All content types a chapter can produce, in display order.
@@ -36,6 +36,7 @@ export default function ChapterGenerate({
   multiPartTrial = false,
   extraAssignableIds = [],
   bookLanguage = null,
+  bookGrade = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -50,6 +51,8 @@ export default function ChapterGenerate({
   extraAssignableIds?: string[];
   /** Detected book language (0056) — preselects the lesson language + voice. */
   bookLanguage?: string | null;
+  /** Book grade — preselects an age-appropriate narration style (grades 1–4 → Storytelling). */
+  bookGrade?: string | null;
 }) {
   const router = useRouter();
   // Beta mirrors the DB pin (0057): the first generation fixes one
@@ -75,7 +78,8 @@ export default function ChapterGenerate({
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [narrationStyle, setNarrationStyle] = useState(DEFAULT_STYLE);
+  // Age-appropriate default from the book's grade (overridable in the picker).
+  const [narrationStyle, setNarrationStyle] = useState(defaultNarrationForGrade(bookGrade));
   // Unknown stored codes normalize to English — a free-text books.language
   // value must never leave the Language select without a matching option.
   const knownBookLang = LANGUAGES.some((l) => l.value === bookLanguage) ? bookLanguage : null;

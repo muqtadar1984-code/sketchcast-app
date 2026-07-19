@@ -15,6 +15,32 @@ export const NARRATION_STYLES: NarrationStyle[] = [
 ];
 export const DEFAULT_STYLE = "socratic";
 
+// Approximate school level (1..12+) from a book's free-text grade label, so the
+// narration style can default to something age-appropriate. Secondary systems
+// (Form / Tingkatan / Secondary) sit ABOVE primary — Form 1 ≈ grade 7 — so they
+// never read as early primary. Returns null when nothing numeric is found; the
+// caller then keeps the global default.
+export function gradeLevel(grade: string | null | undefined): number | null {
+  if (!grade) return null;
+  const g = grade.toLowerCase();
+  if (/\b(kindergarten|kg|pre-?k|pre-?school|nursery|reception|tadika|prasekolah)\b/.test(g)) return 0;
+  const m = g.match(/\d+/);
+  if (!m) return null;
+  const n = parseInt(m[0], 10);
+  if (!Number.isFinite(n)) return null;
+  if (/\b(form|tingkatan|secondary|sec|senior)\b/.test(g)) return n + 6; // secondary
+  return n;
+}
+
+// The narration style a book should default to, from its grade. Young children
+// (≈ grades 1–4) learn through narrative, not Socratic questioning, so those
+// books default to Storytelling; grade 5+ (and unknown) keep Socratic. The
+// teacher can always override in the picker.
+export function defaultNarrationForGrade(grade: string | null | undefined): string {
+  const lvl = gradeLevel(grade);
+  return lvl !== null && lvl <= 4 ? "storytelling" : DEFAULT_STYLE;
+}
+
 export type VoiceOpt = { value: string; label: string; tier: "free" | "premium"; lang: string };
 
 export const VOICES: VoiceOpt[] = [
@@ -87,11 +113,14 @@ export function availableVoices(lang?: string | null): VoiceOpt[] {
 
 // The params every presentation generation should carry when the user hasn't
 // picked options (batch/full-book buttons). One source of truth — matches what
-// the chapter row's pickers default to. Language-aware: a Bahasa Melayu book
-// defaults to a Malay voice and carries its language explicitly.
-export function defaultPresentationParams(language?: string | null): Record<string, unknown> {
+// the chapter row's pickers default to. Language-aware (Malay book → Malay
+// voice) and grade-aware (grades 1–4 → Storytelling, see defaultNarrationForGrade).
+export function defaultPresentationParams(
+  language?: string | null,
+  grade?: string | null,
+): Record<string, unknown> {
   return {
-    narration_style: DEFAULT_STYLE,
+    narration_style: defaultNarrationForGrade(grade),
     tts_voice: defaultVoiceFor(language),
     ...(language ? { language } : {}),
   };

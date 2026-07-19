@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { kitRows } from "./kit";
+import { defaultNarrationForGrade } from "@/utils/narration";
 
 type Chapter = { num: number; title: string };
 
@@ -15,12 +16,15 @@ export default function GenerateAllButton({
   schoolId,
   chapters,
   language = null,
+  bookGrade = null,
 }: {
   bookId: string;
   schoolId: string | null;
   chapters: Chapter[];
   /** Detected book language (0056) — lessons inherit it + its voice. */
   language?: string | null;
+  /** Book grade — age-appropriate narration default (grades 1–4 → Storytelling). */
+  bookGrade?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -52,7 +56,14 @@ export default function GenerateAllButton({
     let queued = 0;
     let stopError: string | null = null;
     for (const c of chapters) {
-      const rows = kitRows({ bookId, schoolId, userId: user.id, chapterNum: c.num, language });
+      const rows = kitRows({
+        bookId,
+        schoolId,
+        userId: user.id,
+        chapterNum: c.num,
+        language,
+        narrationStyle: defaultNarrationForGrade(bookGrade),
+      });
       const { error: gErr } = await supabase.from("generations").insert(rows);
       if (gErr) {
         stopError = queued
