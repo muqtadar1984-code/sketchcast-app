@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { defaultParams } from "./options-modal";
+import { LANGUAGES } from "@/utils/narration";
 
 // Revision papers (0061). A teacher picks a GROUP of chapters at term /
 // mid-term / exam time and generates ONLY worksheets and/or exam papers — no
@@ -39,6 +40,10 @@ export default function BatchGenerate({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // Paper language — defaults to the book's, but a teacher can pick another
+  // (e.g. Jawi for a Malay revision paper).
+  const knownBookLang = LANGUAGES.some((l) => l.value === language) ? language! : "en";
+  const [lang, setLang] = useState(knownBookLang);
 
   const toggleChapter = (num: number) =>
     setChapterSel((s) => {
@@ -89,7 +94,7 @@ export default function BatchGenerate({
           owner_id: user.id,
           school_id: schoolId,
           chapter_ref: null,
-          params: { ...defaultParams(kind), revision: true, chapters: chosenChapters, ...(language ? { language } : {}) },
+          params: { ...defaultParams(kind), revision: true, chapters: chosenChapters, language: lang },
           status: "queued",
         });
       } else {
@@ -100,7 +105,7 @@ export default function BatchGenerate({
             owner_id: user.id,
             school_id: schoolId,
             chapter_ref: String(num),
-            params: { ...defaultParams(kind), revision: true, ...(language ? { language } : {}) },
+            params: { ...defaultParams(kind), revision: true, language: lang },
             status: "queued",
           });
         }
@@ -194,6 +199,19 @@ export default function BatchGenerate({
               </label>
             ))}
           </div>
+
+          {/* Language */}
+          <label className="flex items-center gap-1.5 text-xs mb-2">
+            <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">Language</span>
+            <select value={lang} onChange={(e) => setLang(e.target.value)} className="field h-8 px-2 text-xs">
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                  {knownBookLang === l.value ? " (book)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {/* Mode */}
           <div className="flex flex-col gap-1 text-xs mb-2">

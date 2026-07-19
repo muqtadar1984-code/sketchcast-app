@@ -56,13 +56,19 @@ export const LANGUAGES: LanguageOpt[] = [
   { value: "te", label: "తెలుగు (Telugu)" },
   { value: "mr", label: "मराठी (Marathi)" },
   { value: "hi", label: "हिन्दी (Hindi)" },
+  // Jawi — Malay in the Arabic script (RTL). Documents only for now; a video
+  // lesson generated in Jawi narrates in Malay with Rumi slides (worker
+  // downgrades the presentation kind until the Jawi video phase).
+  { value: "ms-arab", label: "بهاس ملايو — Jawi (Malay)" },
 ];
 export const languageLabel = (code: string | null | undefined): string | null =>
   LANGUAGES.find((l) => l.value === code)?.label ?? null;
 
-/** The free voice that matches a lesson language (English → Aria). */
+/** The free voice that matches a lesson language (English → Aria). Jawi is
+ * spoken Malay, so it borrows the Malay voice. */
 export function defaultVoiceFor(lang: string | null | undefined): string {
-  return VOICES.find((v) => v.tier === "free" && v.lang === (lang || "en"))?.value ?? DEFAULT_VOICE;
+  const l = lang === "ms-arab" ? "ms" : lang || "en";
+  return VOICES.find((v) => v.tier === "free" && v.lang === l)?.value ?? DEFAULT_VOICE;
 }
 
 // Premium (ElevenLabs) voices are offered ONLY when explicitly enabled; the free
@@ -74,8 +80,9 @@ export function elevenLabsEnabled(): boolean {
 export function availableVoices(lang?: string | null): VoiceOpt[] {
   const pool = elevenLabsEnabled() ? VOICES : VOICES.filter((v) => v.tier === "free");
   if (!lang) return pool;
+  const l = lang === "ms-arab" ? "ms" : lang; // Jawi is spoken Malay
   // The chosen language's voices lead; premium multilingual voices follow.
-  return pool.filter((v) => v.lang === lang || v.lang === "*");
+  return pool.filter((v) => v.lang === l || v.lang === "*");
 }
 
 // The params every presentation generation should carry when the user hasn't
