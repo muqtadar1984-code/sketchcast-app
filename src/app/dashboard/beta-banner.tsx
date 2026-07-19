@@ -21,7 +21,7 @@ export default function BetaBanner() {
       <p className="text-sm text-[#0C8175]">
         <span className="font-medium">Welcome to SketchCast!</span> Your free trial includes{" "}
         <span className="font-medium text-[#14181F]">
-          1 book and the full kit — video lesson, plan, activities, worksheet, exam and case study —
+          1 book and the full kit — video lesson, plan, activities, worksheet, test paper and case study —
           for one part of one chapter
         </span>
         . Classes, assigning, reviewing, and analytics are all unlimited. Questions?{" "}

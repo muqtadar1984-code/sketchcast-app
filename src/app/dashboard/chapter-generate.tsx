@@ -16,7 +16,7 @@ const KINDS: { kind: string; label: string }[] = [
   { kind: "lesson_plan", label: "Plan" },
   { kind: "activity", label: "Activities" },
   { kind: "worksheet", label: "Worksheet" },
-  { kind: "exam_paper", label: "Exam" },
+  { kind: "exam_paper", label: "Test paper" },
   { kind: "case_study", label: "Case study" },
 ];
 
@@ -94,9 +94,10 @@ export default function ChapterGenerate({
   const chosen = pendingKinds.filter((k) => sel[k.kind]);
   const toggle = (kind: string) => setSel((s) => ({ ...s, [kind]: !s[kind] }));
 
-  // "Assign chapter" sends every student-facing item that's ready (the teacher
-  // lesson plan is never assigned to students).
-  const studentKinds = ["presentation", "activity", "worksheet", "exam_paper", "case_study"];
+  // "Assign chapter" sends the student-workable items that are ready: the
+  // lesson, the worksheet and the test paper (founder 2026-07-19). The teacher
+  // plan, class activities and case study are teaching aids, never assigned.
+  const studentKinds = ["presentation", "worksheet", "exam_paper"];
   const assignableIds = [
     ...studentKinds
       .map((k) => lessons[k])
@@ -243,7 +244,7 @@ export default function ChapterGenerate({
               onClick={generate}
               disabled={busy}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
-              title="The video lesson plus its plan, activities, worksheet, exam and case study — documents free, one credit per rendered lesson part"
+              title="The video lesson plus its plan, activities, worksheet, test paper and case study — documents free, one credit per rendered lesson part"
             >
               {busy ? "Queuing…" : "Generate full kit"}
             </button>

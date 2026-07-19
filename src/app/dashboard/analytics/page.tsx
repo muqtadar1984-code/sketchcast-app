@@ -10,7 +10,8 @@ import { enforceHat } from "@/utils/hats-server";
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
   worksheet: "Worksheet",
-  exam_paper: "Exam",
+  exam_paper: "Test paper",
+  exam: "Exam",
   activity: "Activities",
   case_study: "Case study",
 };

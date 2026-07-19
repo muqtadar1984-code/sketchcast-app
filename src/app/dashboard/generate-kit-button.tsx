@@ -73,7 +73,7 @@ export default function GenerateKitButton({
         onClick={generate}
         disabled={busy}
         className="font-medium text-[#0C8175] hover:underline disabled:opacity-60 text-xs"
-        title="Generates the video lesson plus its plan, activities, worksheet, exam and case study — one lesson credit, documents free"
+        title="Generates the video lesson plus its plan, activities, worksheet, test paper and case study — one lesson credit, documents free"
       >
         {busy ? "Queuing…" : "Generate kit"}
       </button>

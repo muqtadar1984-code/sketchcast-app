@@ -20,14 +20,15 @@ import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import FairUseMeter from "./fair-use-meter";
-import { platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import { examGenerationEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
   worksheet: "Worksheet",
-  exam_paper: "Exam",
+  exam_paper: "Test paper",
+  exam: "Exam",
   activity: "Activities",
   case_study: "Case study",
   lesson_plan: "Lesson plan",
@@ -87,6 +88,33 @@ function chapterRangeLabel(nums: number[]): string {
     }
   }
   return (ns.length === 1 ? "Chapter " : "Chapters ") + parts.join(", ");
+}
+
+// Readable coverage line for a cumulative exam (0062): which chapters and parts
+// it tests, e.g. "1. Cells; 2. Materials (Parts 1, 3)". Mirrors what the worker
+// prints on the paper so the teacher sees exactly what the last exam covered.
+function examCoverageLabel(
+  scope: { chapter: string; part: number }[],
+  chapters: { num: number; title: string }[],
+): string {
+  const byChapter = new Map<number, number[]>();
+  for (const s of scope) {
+    const n = Number(s.chapter);
+    if (!Number.isFinite(n)) continue;
+    if (!byChapter.has(n)) byChapter.set(n, []);
+    byChapter.get(n)!.push(Number(s.part) || 0);
+  }
+  const bits: string[] = [];
+  for (const [n, parts] of [...byChapter.entries()].sort((a, b) => a[0] - b[0])) {
+    const title = chapters.find((c) => c.num === n)?.title ?? `Chapter ${n + 1}`;
+    const realParts = [...new Set(parts.filter((p) => p > 0))].sort((a, b) => a - b);
+    bits.push(
+      realParts.length && !parts.includes(0)
+        ? `${n + 1}. ${title} (Part${realParts.length > 1 ? "s" : ""} ${realParts.join(", ")})`
+        : `${n + 1}. ${title}`,
+    );
+  }
+  return bits.join("; ");
 }
 
 export default async function DashboardPage() {
@@ -506,6 +534,9 @@ export default async function DashboardPage() {
         video: videos[0] ?? null,
         videos,
         doc: arts.find((a) => a.kind === "docx")?.url ?? null,
+        // Cumulative exams (0062) carry a SECOND doc — the answer key — as its
+        // own artifact kind so it never rides the student's `docx` download.
+        answerKey: arts.find((a) => a.kind === "answer_key_docx")?.url ?? null,
         artifactPaths: (g.artifacts ?? []).map((a) => a.storage_path),
       };
     }),
@@ -524,6 +555,9 @@ export default async function DashboardPage() {
   // over a group of chapters — they live in their OWN book-level section, never
   // in a chapter's kit cells.
   const isRevision = (l: Lesson): boolean => (l.params as { revision?: unknown } | null)?.revision === true;
+  // Cumulative exams (0062, kind 'exam') live in their OWN book-level section
+  // ("Exams") — never in a chapter's cells, Other lessons or Revision papers.
+  const isExam = (l: Lesson): boolean => l.kind === "exam";
   const lessonFor = (bookId: string, num: number, kind: string, part: number | null = null): Lesson | undefined =>
     lessons.find(
       (l) => l.bookId === bookId && l.chapterRef === String(num) && l.kind === kind && partOf(l) === part && !isRevision(l),
@@ -542,6 +576,7 @@ export default async function DashboardPage() {
     return lessons.filter((l) => {
       if (l.bookId !== book.id) return false;
       if (isRevision(l)) return false; // revision papers have their own section
+      if (isExam(l)) return false; // exams have their own section
       if (l.chapterRef === null || !nums.has(l.chapterRef)) return true;
       const part = partOf(l);
       if (part !== null) {
@@ -625,7 +660,7 @@ export default async function DashboardPage() {
       revisionPapers: lessons
         .filter((l) => l.bookId === b.id && isRevision(l))
         .map((l) => {
-          const kindLabel = l.kind === "exam_paper" ? "Exam paper" : "Worksheet";
+          const kindLabel = l.kind === "exam_paper" ? "Test paper" : "Worksheet";
           const chapters = (l.params as { chapters?: unknown } | null)?.chapters;
           const scope = Array.isArray(chapters) && chapters.length
             ? chapterRangeLabel(chapters as number[])
@@ -639,6 +674,51 @@ export default async function DashboardPage() {
             progress: l.progress,
             stage: l.stage,
             doc: l.doc,
+            artifactPaths: l.artifactPaths,
+          };
+        }),
+      // Exam tool (0062): the covered units the teacher can test — a chapter
+      // with a live chapter-level lesson (part 0 = "Whole chapter"), or each
+      // covered part of a multi-part chapter. Only these are offered.
+      examUnits: chs
+        .map((c) => {
+          const parts = c.parts ?? [];
+          const units: { part: number; label: string }[] = [];
+          // A chapter-level lesson (part 0) covers the whole chapter — offer it
+          // whenever one exists, INCLUDING a multi-part chapter taught at chapter
+          // level (e.g. via "Generate all"), which would otherwise be invisible.
+          if (lessonFor(b.id, c.num, "presentation")?.status === "done") {
+            units.push({ part: 0, label: "Whole chapter" });
+          }
+          if (parts.length > 1) {
+            parts.forEach((p, i) => {
+              const pl = lessonFor(b.id, c.num, "presentation", i + 1);
+              if (pl && pl.status === "done") {
+                const titles = (p.titles ?? []).slice(0, 2).join(", ");
+                units.push({ part: i + 1, label: titles ? `Part ${i + 1} — ${titles}` : `Part ${i + 1}` });
+              }
+            });
+          }
+          return { num: c.num, title: c.title, units };
+        })
+        .filter((c) => c.units.length > 0),
+      // Generated exams (0062): the exam paper + its answer key, with a coverage
+      // line so the teacher knows exactly what the last exam tested.
+      exams: lessons
+        .filter((l) => l.bookId === b.id && isExam(l))
+        .map((l) => {
+          const scopeRaw = (l.params as { scope?: unknown } | null)?.scope;
+          const scope = Array.isArray(scopeRaw) ? (scopeRaw as { chapter: string; part: number }[]) : [];
+          const title = (l.params as { title?: unknown } | null)?.title;
+          return {
+            id: l.id,
+            label: typeof title === "string" && title.trim() ? title.trim() : "Exam",
+            coverage: examCoverageLabel(scope, chs),
+            status: l.status,
+            progress: l.progress,
+            stage: l.stage,
+            doc: l.doc,
+            answerKey: l.answerKey,
             artifactPaths: l.artifactPaths,
           };
         }),
@@ -756,6 +836,7 @@ export default async function DashboardPage() {
                   schoolId={schoolId}
                   classes={classes}
                   beta={isBeta ? { pinned: betaPinned } : null}
+                  examEnabled={examGenerationEnabled()}
                 />
               </section>
             ))}

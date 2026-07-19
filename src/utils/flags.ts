@@ -257,6 +257,19 @@ export function onboardingEnabled(): boolean {
 }
 
 /**
+ * Exam generation — the cumulative exam tool (paper + separate answer key over a
+ * chosen set of covered chapters/parts). OFF by default; needs migration 0062
+ * (the new `exam` generation_kind + `answer_key_docx` artifact_kind + the free
+ * enforce_fair_use branch). Gated so the app can deploy before 0062 is applied
+ * without the tool erroring on click — turn it on AFTER running 0062. Purely a UI
+ * gate: the DB trigger is the authoritative guard. Server-read (the tool renders
+ * inside the client BookTable, which receives this as a prop from the dashboard).
+ */
+export function examGenerationEnabled(): boolean {
+  return process.env.FEATURE_EXAM === "true";
+}
+
+/**
  * Autofix — the automated bug-fix pipeline. Staff tap "Attempt auto-fix" on a
  * reported issue → a GitHub Action (Claude Code) writes the fix on a branch + opens
  * a PR → the founder gets an email with signed Approve/Reject links → Approve

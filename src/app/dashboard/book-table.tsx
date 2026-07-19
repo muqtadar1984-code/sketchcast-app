@@ -10,6 +10,7 @@ import GenerateKitButton from "./generate-kit-button";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
 import BatchGenerate from "./batch-generate";
+import ExamGenerate, { type ExamChapterOpt } from "./exam-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
@@ -62,6 +63,10 @@ export type BookRow = {
   batchLessons: (CellLesson & { title: string; kind: string; chapterRef: string | null })[];
   /** Revision papers (0061): standalone worksheets/exams over a group of chapters. */
   revisionPapers: RevisionPaper[];
+  /** Exam tool (0062): the covered chapters/parts an exam can be built from. */
+  examUnits: ExamChapterOpt[];
+  /** Generated exams (0062): the exam paper + its answer key. */
+  exams: ExamPaper[];
 };
 export type RevisionPaper = {
   id: string;
@@ -72,13 +77,25 @@ export type RevisionPaper = {
   doc: string | null;
   artifactPaths: string[];
 };
+export type ExamPaper = {
+  id: string;
+  label: string;
+  /** "1. Cells; 2. Materials (Parts 1, 3)" — what the exam tests. */
+  coverage: string;
+  status: string;
+  progress: number;
+  stage?: import("@/utils/job-stage").JobStage;
+  doc: string | null;
+  answerKey: string | null;
+  artifactPaths: string[];
+};
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
   lesson_plan: "Plan",
   activity: "Activities",
   worksheet: "Worksheet",
-  exam_paper: "Exam",
+  exam_paper: "Test paper",
   case_study: "Case study",
 };
 
@@ -157,11 +174,14 @@ export default function BookTable({
   schoolId,
   classes,
   beta = null,
+  examEnabled = false,
 }: {
   books: BookRow[];
   schoolId: string | null;
   classes: ClassRow[];
   beta?: BetaState | null; // non-null for a beta teacher (1-chapter cap active)
+  /** Exam tool (0062) — gated on FEATURE_EXAM until migration 0062 is applied. */
+  examEnabled?: boolean;
 }) {
   // Expand the only book by default; otherwise everything starts collapsed.
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
@@ -255,13 +275,17 @@ export default function BookTable({
                   </div>
                 )}
                 {!beta && (
-                  <div className="flex items-center justify-between gap-3">
-                    {/* Whole-book batch: any mix of chapters × content types. */}
+                  <div className="space-y-0.5">
+                    {b.pendingChapters.length > 0 && (
+                      <div className="flex justify-end pb-1">
+                        <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} />
+                      </div>
+                    )}
+                    {/* Revision papers: worksheets/test papers over a group of
+                        chapters, built from generated lessons. */}
                     <BatchGenerate
                       bookId={b.id}
                       schoolId={schoolId}
-                      /* Revision papers are built from GENERATED lessons — offer
-                         only chapters that already have a live lesson. */
                       chapters={b.chapters
                         .filter(
                           (ch) =>
@@ -271,8 +295,11 @@ export default function BookTable({
                         .map((ch) => ({ num: ch.num, title: ch.title }))}
                       language={b.language}
                     />
-                    {b.pendingChapters.length > 0 && (
-                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} />
+                    {/* Exam: a cumulative exam paper + separate answer key over
+                        the chosen covered chapters/parts (0062). Gated on
+                        FEATURE_EXAM until migration 0062 is applied. */}
+                    {examEnabled && (
+                      <ExamGenerate bookId={b.id} schoolId={schoolId} chapters={b.examUnits} language={b.language} />
                     )}
                   </div>
                 )}
@@ -298,7 +325,7 @@ export default function BookTable({
                           case_study: ch.caseStudy,
                         }}
                         extraAssignableIds={ch.parts
-                          .flatMap((p) => [p.presentation, p.activity, p.worksheet, p.exam, p.caseStudy])
+                          .flatMap((p) => [p.presentation, p.worksheet, p.exam])
                           .filter((l): l is CellLesson => !!l && l.status === "done")
                           .map((l) => l.id)}
                         bookLanguage={b.language}
@@ -317,6 +344,13 @@ export default function BookTable({
                               (beta.pinned.bookId !== b.id ||
                                 beta.pinned.chapterRef !== String(ch.num) ||
                                 beta.pinned.part !== p.n);
+                            // Per-part assignment (founder 2026-07-19): every
+                            // generated part can be assigned on its own — the
+                            // lesson, worksheet and test paper for that part
+                            // (never the plan, activities or case study).
+                            const partAssignable = [p.presentation, p.worksheet, p.exam]
+                              .filter((l): l is CellLesson => !!l && l.status === "done")
+                              .map((l) => l.id);
                             return (
                               <div key={p.n} className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-4 text-xs">
                                 <span className="w-36 shrink-0 text-[#5B6470]">
@@ -358,7 +392,7 @@ export default function BookTable({
                                     ["lesson_plan", "Plan", p.lessonPlan],
                                     ["activity", "Activities", p.activity],
                                     ["worksheet", "Worksheet", p.worksheet],
-                                    ["exam_paper", "Exam", p.exam],
+                                    ["exam_paper", "Test paper", p.exam],
                                     ["case_study", "Case study", p.caseStudy],
                                   ] as const
                                 ).map(([kind, label, lesson]) => (
@@ -390,6 +424,15 @@ export default function BookTable({
                                     )}
                                   </span>
                                 ))}
+                                {partAssignable.length > 0 && (
+                                  <span className="ml-auto">
+                                    <AssignModal
+                                      label="Assign"
+                                      generationIds={partAssignable}
+                                      classes={classes}
+                                    />
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
@@ -424,6 +467,51 @@ export default function BookTable({
                             </span>
                           )}
                           <DeleteLesson genId={p.id} artifactPaths={p.artifactPaths} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Exams (0062): each exam ships an exam paper + a separate
+                    answer key, with a line naming the chapters/parts it covers.
+                    Assigning an exam gives students the paper only — the answer
+                    key is never surfaced to them. */}
+                {b.exams.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
+                    <p className="text-xs text-[#5B6470] mb-1">Exams</p>
+                    {b.exams.map((e) => (
+                      <div key={e.id} className="flex items-start justify-between gap-4 py-1.5">
+                        <span className="min-w-0 flex-1">
+                          <span className="text-sm text-[#14181F] block truncate">{e.label}</span>
+                          {e.coverage && (
+                            <span className="block text-[10px] text-[#98A0A9] truncate" title={e.coverage}>
+                              Covers: {e.coverage}
+                            </span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {e.status === "done" ? (
+                            <>
+                              {e.doc && (
+                                <a href={e.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                  ⬇ Exam paper
+                                </a>
+                              )}
+                              {e.answerKey && (
+                                <a href={e.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                  ⬇ Answer key
+                                </a>
+                              )}
+                              <AssignModal label="Assign" generationIds={[e.id]} classes={classes} />
+                            </>
+                          ) : (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[e.status] ?? ""}`}>
+                              {e.status}
+                              {e.status === "processing" ? ` · ${jobStageLabel(e.progress, e.stage)}` : ""}
+                            </span>
+                          )}
+                          <DeleteLesson genId={e.id} artifactPaths={e.artifactPaths} />
                         </div>
                       </div>
                     ))}

@@ -17,7 +17,7 @@ import { LANGUAGES } from "@/utils/narration";
 // appear in the book's "Revision papers" section.
 const KINDS = [
   { kind: "worksheet", label: "Worksheet" },
-  { kind: "exam_paper", label: "Exam paper" },
+  { kind: "exam_paper", label: "Test paper" },
 ] as const;
 
 export default function BatchGenerate({
@@ -145,7 +145,7 @@ export default function BatchGenerate({
         onClick={() => setOpen((v) => !v)}
         className="btn-ghost h-8 px-3 text-xs"
         aria-expanded={open}
-        title="Generate worksheets and exam papers for revision across a group of chapters"
+        title="Generate worksheets and test papers for revision across a group of chapters"
       >
         {open ? "▾" : "▸"} Revision papers…
       </button>
@@ -154,7 +154,7 @@ export default function BatchGenerate({
         <div className="mt-2 rounded-lg border border-[#E6E8E4] bg-white p-3">
           <p className="text-[10px] text-[#98A0A9] mb-2">
             For term, mid-term and exam revision: pick a group of chapters and generate worksheets
-            and/or exam papers — <span className="text-[#0C8175]">free</span>, from the lessons
+            and/or test papers — <span className="text-[#0C8175]">free</span>, from the lessons
             you&apos;ve already generated.
           </p>
 

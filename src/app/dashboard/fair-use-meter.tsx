@@ -86,7 +86,7 @@ export default async function FairUseMeter() {
         <>
           <Row label="Lessons" b={fu.credits} />
           <p className="text-[10px] text-[#98A0A9]">
-            Each lesson includes its full document kit — plan, activities, worksheet, exam and case
+            Each lesson includes its full document kit — plan, activities, worksheet, test paper and case
             study — free.
           </p>
         </>

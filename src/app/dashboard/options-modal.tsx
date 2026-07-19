@@ -47,7 +47,7 @@ const SPECS: Record<string, Spec> = {
     build: (v) => v,
   },
   exam_paper: {
-    title: "Exam paper — question mix",
+    title: "Test paper — question mix",
     fields: [
       { type: "number", key: "fill_blank", label: "Fill in the blanks", min: 0, max: 20, def: 5 },
       { type: "number", key: "true_false", label: "True / False", min: 0, max: 20, def: 5 },
