@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
 import HeaderNav, { type NavTab } from "./header-nav";
+import MobileNav from "./mobile-nav";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
 import NotificationsBell, { type IssueNotification } from "./notifications-bell";
@@ -223,11 +224,14 @@ export default async function AppHeader() {
     : tabsFor(role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn);
   const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
   return (
-    <header className="border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
+    <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
       {/* Full-width bar: the logo alone anchors the left, the tabs float in
           the center (no dead gap), controls sit right, and the SCHOOL identity
-          holds the extreme right (its logo joins the name later). */}
-      <div className="px-5 h-16 flex items-center gap-5">
+          holds the extreme right (its logo joins the name later). On phones
+          the tabs are hidden, so a hamburger (far left) opens them as a
+          dropdown — every role's tabs, same source. */}
+      <div className="px-5 h-16 flex items-center gap-3 sm:gap-5">
+        {tabs.length > 0 && <MobileNav tabs={tabs} />}
         <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
           <LogoMark size={30} />
           SketchCast <span className="text-[#0C8175]">AI</span>

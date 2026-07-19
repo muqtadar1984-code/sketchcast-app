@@ -15,7 +15,8 @@ const TOUR_MARK: Record<string, string | undefined> = {
 
 // A tab is active on its own route, but NOT when a more specific sibling tab also
 // matches (so "School" doesn't underline while you're on "/dashboard/school/admin").
-function isActive(href: string, path: string, tabs: NavTab[]): boolean {
+// Exported for the mobile menu (mobile-nav.tsx) — same rule, different chrome.
+export function isActive(href: string, path: string, tabs: NavTab[]): boolean {
   if (href === "/dashboard") return path === "/dashboard";
   if (path !== href && !path.startsWith(href + "/")) return false;
   return !tabs.some(
