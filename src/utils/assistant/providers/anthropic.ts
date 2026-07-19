@@ -38,7 +38,11 @@ export class AnthropicProvider implements LLMProvider {
       stream = await anthropic().messages.create({
         model: this.model,
         max_tokens: opts.maxTokens ?? 1024,
-        temperature: opts.temperature ?? 0.6,
+        // NOTE: no `temperature`. Sonnet 5 (the default model) 400s with
+        // "`temperature` is deprecated for this model" — sending it broke EVERY
+        // assistant turn ("I couldn't answer that one"). Newer Anthropic models
+        // manage sampling themselves; omitting it is safe for every model, so we
+        // never send it and let the model use its own default.
         system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
         messages: toAnthropicMessages(opts.messages),
         ...(opts.tools?.length
