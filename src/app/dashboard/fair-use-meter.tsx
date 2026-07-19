@@ -14,6 +14,9 @@ type FairUse = {
   /** pre-0059 shape (deploy window): two pools. */
   parts?: Bucket;
   docs?: Bucket;
+  /** 0060: the launch free-trial period — every feature, a period-total cap. */
+  promo?: boolean;
+  trial_ends?: string;
   resets_on: string;
 };
 
@@ -45,10 +48,32 @@ export default async function FairUseMeter() {
   const fu = data as FairUse;
   if (fu.unlimited) return null;
 
-  const resetLabel = new Date(`${fu.resets_on}T00:00:00Z`).toLocaleDateString("en-MY", {
-    month: "short",
-    day: "numeric",
-  });
+  const dateLabel = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-MY", { month: "short", day: "numeric" });
+
+  // Launch free-trial period (0060): every feature unlocked, a single
+  // period-total budget of lessons that ends on the trial date (no monthly
+  // reset, no rollover). Framed as a trial, not a monthly meter.
+  if (fu.promo && fu.credits) {
+    return (
+      <section className="card px-5 py-3.5 mb-6 space-y-2 border-[#BDE8E2] bg-[#F1FBF9]" data-tour="fair-use">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-[#0C8175]">Free trial — every feature unlocked</span>
+          {fu.trial_ends && (
+            <span className="text-[10px] text-[#98A0A9]">trial ends {dateLabel(fu.trial_ends)}</span>
+          )}
+        </div>
+        <Row label="Trial lessons" b={fu.credits} />
+        <p className="text-[10px] text-[#98A0A9]">
+          {fu.credits.available > 0
+            ? `${fu.credits.available} of ${fu.credits.cap} lessons left — each brings its full document kit free. After the trial, the free plan covers one lesson at a time.`
+            : `You've used all ${fu.credits.cap} trial lessons. Subscribe to keep generating — the free plan covers one lesson at a time.`}
+        </p>
+      </section>
+    );
+  }
+
+  const resetLabel = dateLabel(fu.resets_on);
   return (
     <section className="card px-5 py-3.5 mb-6 space-y-2" data-tour="fair-use">
       <div className="flex items-center justify-between">
