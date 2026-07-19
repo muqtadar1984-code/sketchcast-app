@@ -35,9 +35,14 @@ describe("defaultNarrationForGrade — age-appropriate narration", () => {
       expect(defaultNarrationForGrade(g)).toBe("storytelling");
     }
   });
-  it("grade 5+ and secondary keep Socratic", () => {
-    for (const g of ["Grade 5", "Year 7", "Form 1", "Tingkatan 3", "10th Grade"]) {
+  it("grades 5–9 (incl. lower secondary) keep Socratic", () => {
+    for (const g of ["Grade 5", "Year 7", "Grade 9", "Form 1", "Tingkatan 3"]) {
       expect(defaultNarrationForGrade(g)).toBe("socratic");
+    }
+  });
+  it("grade 10 onwards (incl. upper secondary) defaults to Conversational", () => {
+    for (const g of ["Grade 10", "10th Grade", "Year 11", "Form 4", "Tingkatan 5", "Grade 12"]) {
+      expect(defaultNarrationForGrade(g)).toBe("conversational");
     }
   });
   it("an unknown/blank grade keeps the global default (Socratic)", () => {

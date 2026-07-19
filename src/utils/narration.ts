@@ -32,13 +32,18 @@ export function gradeLevel(grade: string | null | undefined): number | null {
   return n;
 }
 
-// The narration style a book should default to, from its grade. Young children
-// (≈ grades 1–4) learn through narrative, not Socratic questioning, so those
-// books default to Storytelling; grade 5+ (and unknown) keep Socratic. The
-// teacher can always override in the picker.
+// The narration style a book should default to, from its grade — three tiers:
+//   • grades 1–4 (young children) → Storytelling — they learn through narrative,
+//     not Socratic questioning;
+//   • grades 5–9 → Socratic (the default);
+//   • grade 10 onwards (older students) → Conversational — a mature, casual tone.
+// Unknown grades keep Socratic. The teacher can always override in the picker.
 export function defaultNarrationForGrade(grade: string | null | undefined): string {
   const lvl = gradeLevel(grade);
-  return lvl !== null && lvl <= 4 ? "storytelling" : DEFAULT_STYLE;
+  if (lvl === null) return DEFAULT_STYLE;
+  if (lvl <= 4) return "storytelling";
+  if (lvl >= 10) return "conversational";
+  return DEFAULT_STYLE;
 }
 
 export type VoiceOpt = { value: string; label: string; tier: "free" | "premium"; lang: string };
