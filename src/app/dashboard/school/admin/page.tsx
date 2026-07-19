@@ -6,6 +6,7 @@ import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import CoordinatorAdmin, { type Member, type Scope } from "../coordinator-admin";
 import ResetPasswordButton from "../../reset-password-button";
+import DeleteStudentButton from "../../delete-student-button";
 
 // Admin settings (school_admin only): roster role management + the
 // coordinator → (grade, subject) scope mapping that drives the whole permission
@@ -44,9 +45,28 @@ export default async function SchoolAdminPage() {
     .map((p) => ({ id: p.id, name: p.full_name || p.username || "User", role: p.role as "teacher" | "coordinator" }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // School students, with their class names (best-effort — RLS leadership
+  // reads). The admin is the deletion authority for every school student.
+  const students = people
+    .filter((p) => p.role === "student")
+    .map((p) => ({ id: p.id, name: p.full_name || p.username || "Student", username: p.username }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const classesOf = new Map<string, string[]>();
+  if (students.length) {
+    const { data: enrRaw } = await supabase
+      .from("enrollments")
+      .select("student_id, classes(name)");
+    for (const e of (enrRaw ?? []) as unknown as { student_id: string; classes: { name: string } | null }[]) {
+      if (!e.classes?.name) continue;
+      if (!classesOf.has(e.student_id)) classesOf.set(e.student_id, []);
+      classesOf.get(e.student_id)!.push(e.classes.name);
+    }
+  }
+
   const { data: scopesRaw } = await supabase
     .from("coordinator_scope")
-    .select("id, coordinator_id, grade, subject");
+    .select("id, coordinator_id, grade, subject")
+    .eq("school_id", profile!.school_id);
   const scopes = (scopesRaw ?? []) as Scope[];
 
   const { data: classesRaw } = await supabase.from("classes").select("grade");
@@ -91,6 +111,33 @@ export default async function SchoolAdminPage() {
                   <span className="text-[#5B6470]"> · {m.role}</span>
                 </span>
                 <ResetPasswordButton targetId={m.id} name={m.name} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h2 className="text-xl mt-10 mb-1">Students</h2>
+        <p className="text-sm text-[#5B6470] mb-3">
+          Every student account in your school. Deleting is permanent — the sign-in, class
+          enrollments and submitted work are all removed.
+        </p>
+        {students.length === 0 ? (
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">No students yet.</div>
+        ) : (
+          <div className="card divide-y divide-[#EEF0EC]">
+            {students.map((s) => (
+              <div key={s.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate">
+                  <span className="font-medium">{s.name}</span>
+                  {s.username && <span className="text-[#5B6470]"> · {s.username}</span>}
+                  {(classesOf.get(s.id) ?? []).length > 0 && (
+                    <span className="text-[#5B6470]"> · {classesOf.get(s.id)!.join(", ")}</span>
+                  )}
+                </span>
+                <span className="flex items-center gap-3 shrink-0">
+                  <ResetPasswordButton targetId={s.id} name={s.name} />
+                  <DeleteStudentButton targetId={s.id} name={s.name} />
+                </span>
               </div>
             ))}
           </div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import ClassProgress from "./class-progress";
 import ResetPasswordButton from "./reset-password-button";
+import DeleteStudentButton from "./delete-student-button";
 
 export type RosterStudent = { id: string; full_name: string | null; username: string | null; parent_email: string | null };
 export type ClassRoster = {
@@ -162,6 +163,7 @@ export default function ClassesCard({
                               {s.parent_email ? ` · ${s.parent_email}` : ""}
                             </span>
                             <ResetPasswordButton targetId={s.id} name={s.full_name || s.username || "this student"} />
+                            <DeleteStudentButton targetId={s.id} name={s.full_name || s.username || "this student"} />
                           </span>
                         </li>
                       ))}

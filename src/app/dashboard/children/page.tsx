@@ -8,6 +8,7 @@ import AddChild from "./add-child";
 import CoachRecap from "../coach-recap";
 import AskCoachButton from "../ask-coach-button";
 import ResetPasswordButton from "../reset-password-button";
+import DeleteStudentButton from "../delete-student-button";
 
 // The parent home: one section per linked child — their school assignments
 // (read-only: completion, due dates, scores) and the test papers this parent
@@ -54,15 +55,18 @@ export default async function ChildrenPage() {
   const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "parent");
   if (hatAway) redirect(hatAway);
 
-  // Linked children (RLS: own links only).
+  // Linked children (RLS: own links only). `source` decides who may delete:
+  // self-created children are the parent's to remove; school-issued links are
+  // school-managed.
   type LinkRow = {
     child_id: string;
     verified_at: string | null;
+    source: string | null;
     profiles: { full_name: string | null; username: string | null } | null;
   };
   const { data: linksRaw } = await supabase
     .from("parent_links")
-    .select("child_id, verified_at, profiles:child_id(full_name, username)");
+    .select("child_id, verified_at, source, profiles:child_id(full_name, username)");
   const links = (linksRaw ?? []) as unknown as LinkRow[];
   if (links.length === 0 && role !== "parent") redirect("/dashboard");
 
@@ -186,6 +190,7 @@ export default async function ChildrenPage() {
                   <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
                     {!l.verified_at && <span>unverified link · confirm with the school</span>}
                     <ResetPasswordButton targetId={l.child_id} name={name} />
+                    {l.source === "self" && <DeleteStudentButton targetId={l.child_id} name={name} />}
                   </span>
                 </div>
                 <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">School work ({school.length})</p>
