@@ -11,9 +11,9 @@ import { defaultParams } from "./options-modal";
 //   · Combine → ONE cumulative paper spanning all the selected chapters
 //     (a real revision/term paper; the worker grounds it on all of them).
 //   · Per chapter → one paper per selected chapter (a revision pack).
-// Every revision paper is a standalone assessment (params.revision) and draws
-// one lesson credit — the DB enforces it. Results appear in the book's
-// "Revision papers" section.
+// Revision papers are FREE — they're built from lessons you've already
+// generated (the parent passes only chapters that have a lesson). Results
+// appear in the book's "Revision papers" section.
 const KINDS = [
   { kind: "worksheet", label: "Worksheet" },
   { kind: "exam_paper", label: "Exam paper" },
@@ -149,7 +149,8 @@ export default function BatchGenerate({
         <div className="mt-2 rounded-lg border border-[#E6E8E4] bg-white p-3">
           <p className="text-[10px] text-[#98A0A9] mb-2">
             For term, mid-term and exam revision: pick a group of chapters and generate worksheets
-            and/or exam papers only. Each paper draws one lesson credit.
+            and/or exam papers — <span className="text-[#0C8175]">free</span>, from the lessons
+            you&apos;ve already generated.
           </p>
 
           {/* Chapters */}
@@ -160,7 +161,7 @@ export default function BatchGenerate({
               onChange={(e) => setChapterSel(e.target.checked ? new Set(chapters.map((c) => c.num)) : new Set())}
               className="h-3.5 w-3.5 accent-[#0C8175]"
             />
-            All chapters ({chapters.length})
+            All taught chapters ({chapters.length})
           </label>
           <div className="max-h-44 overflow-y-auto divide-y divide-[#F1F3EF] mb-2">
             {chapters.map((c) => (
@@ -220,7 +221,7 @@ export default function BatchGenerate({
               disabled={busy || !canGo || nPapers === 0}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50 ml-auto"
             >
-              {busy ? "Queuing…" : nPapers > 0 ? `Generate ${nPapers} paper${nPapers === 1 ? "" : "s"} (${nPapers} credit${nPapers === 1 ? "" : "s"})` : "Generate"}
+              {busy ? "Queuing…" : nPapers > 0 ? `Generate ${nPapers} paper${nPapers === 1 ? "" : "s"} (free)` : "Generate"}
             </button>
           </div>
         </div>

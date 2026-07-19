@@ -260,7 +260,15 @@ export default function BookTable({
                     <BatchGenerate
                       bookId={b.id}
                       schoolId={schoolId}
-                      chapters={b.chapters}
+                      /* Revision papers are built from GENERATED lessons — offer
+                         only chapters that already have a live lesson. */
+                      chapters={b.chapters
+                        .filter(
+                          (ch) =>
+                            (ch.presentation && ch.presentation.status !== "error") ||
+                            ch.parts.some((p) => p.presentation && p.presentation.status !== "error"),
+                        )
+                        .map((ch) => ({ num: ch.num, title: ch.title }))}
                       language={b.language}
                     />
                     {b.pendingChapters.length > 0 && (
