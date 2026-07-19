@@ -173,8 +173,17 @@ describe("decideReset — coordinator rule (d)", () => {
 describe("generateTempPassword", () => {
   const samples = Array.from({ length: 200 }, () => generateTempPassword());
 
-  it("is three lowercase words plus two digits", () => {
-    for (const p of samples) expect(p).toMatch(/^[a-z]{3,5}-[a-z]{3,5}-[a-z]{3,5}[2-9]{2}$/);
+  it("is a capitalized word, two lowercase words, then two digits", () => {
+    for (const p of samples) expect(p).toMatch(/^[A-Z][a-z]{2,4}-[a-z]{3,5}-[a-z]{3,5}[2-9]{2}$/);
+  });
+
+  it("satisfies a lower+upper+digit+symbol password policy (Supabase required characters)", () => {
+    for (const p of samples) {
+      expect(p).toMatch(/[a-z]/);
+      expect(p).toMatch(/[A-Z]/);
+      expect(p).toMatch(/[0-9]/);
+      expect(p).toContain("-"); // the symbol class — GoTrue's set includes '-'
+    }
   });
 
   it("is at least 8 characters (shortest possible shape is 13)", () => {

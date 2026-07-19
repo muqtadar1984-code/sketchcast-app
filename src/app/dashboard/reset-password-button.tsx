@@ -52,7 +52,10 @@ export default function ResetPasswordButton({ targetId, name }: { targetId: stri
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2 text-xs">
-      {error && <span className="text-red-600">{error}</span>}
+      {/* [overflow-wrap:anywhere]: a long unbroken server error (e.g. a raw
+          password-policy charset) must wrap, not stretch the page wider than
+          the phone viewport (Khaja's zoomed-out screenshot). */}
+      {error && <span className="text-red-600 min-w-0 [overflow-wrap:anywhere]">{error}</span>}
       {stage === "confirm" ? (
         <>
           <span className="text-[#5B6470]">Reset {name}&apos;s password?</span>

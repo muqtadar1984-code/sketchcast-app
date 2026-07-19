@@ -80,7 +80,7 @@ export default function AddChild() {
           <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-9 px-3 text-sm">
             Close
           </button>
-          {error && <p className="w-full text-sm text-red-600">{error}</p>}
+          {error && <p className="w-full text-sm text-red-600 [overflow-wrap:anywhere]">{error}</p>}
         </form>
       )}
     </div>

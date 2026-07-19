@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { studentEmail, usernameBase } from "@/utils/student";
 import { parentPortalEnabled } from "@/utils/flags";
+import { generateTempPassword } from "@/utils/temp-password";
 
 export const runtime = "nodejs";
 
@@ -14,13 +15,6 @@ export const runtime = "nodejs";
 // this (a teacher can be a parent too); students never.
 
 type NewChild = { firstName?: string; lastName?: string };
-
-function tempPassword(): string {
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  const bytes = new Uint8Array(10);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
-}
 
 export async function POST(request: Request) {
   if (!parentPortalEnabled()) {
@@ -81,6 +75,20 @@ export async function POST(request: Request) {
     );
   }
 
+  // Duplicate guard: adding the same child twice creates a second empty
+  // account (Khaja did exactly this — double-submit a minute apart). Compare
+  // against already-linked children by name; the retry path for a lost
+  // password is Reset password, not re-adding.
+  const { data: linked } = await admin
+    .from("parent_links")
+    .select("profiles:child_id(full_name)")
+    .eq("parent_id", user.id);
+  const existingNames = new Set(
+    ((linked ?? []) as unknown as { profiles: { full_name: string | null } | null }[])
+      .map((r) => (r.profiles?.full_name ?? "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+
   const created: { firstName: string; lastName: string; username: string; password: string }[] = [];
   const errors: string[] = [];
 
@@ -88,6 +96,14 @@ export async function POST(request: Request) {
     const firstName = (c.firstName ?? "").trim();
     const lastName = (c.lastName ?? "").trim();
     const fullName = [firstName, lastName].filter(Boolean).join(" ");
+    const nameKey = fullName.toLowerCase();
+    if (nameKey && existingNames.has(nameKey)) {
+      errors.push(
+        `${fullName} is already linked to you. To fix their sign-in, use "Reset password" on their card instead of adding them again.`,
+      );
+      continue;
+    }
+    if (nameKey) existingNames.add(nameKey); // also dedupe within one submission
 
     // Unused username (first.last, then first.last2, …) — same as /api/students.
     const base = usernameBase(firstName, lastName);
@@ -102,7 +118,7 @@ export async function POST(request: Request) {
       username = `${base}${n}`;
     }
 
-    const password = tempPassword();
+    const password = generateTempPassword();
     const { data: createdUser, error: cErr } = await admin.auth.admin.createUser({
       email: studentEmail(username),
       password,

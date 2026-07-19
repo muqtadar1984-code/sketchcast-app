@@ -1,13 +1,20 @@
-// Readable temporary passwords for hierarchical resets: three short words plus
-// two digits ("fern-mint-star38") — easy to read over a shoulder or a phone
-// call, hard to mistype. The alphabet avoids every ambiguous glyph the student
-// provisioning alphabet avoids (0/O, 1/l/I, and lowercase o): no word contains
+// Readable temporary passwords for hierarchical resets AND student/child
+// provisioning: three short words plus two digits ("Fern-mint-star38") — easy
+// to read over a shoulder or a phone call, hard to mistype. The alphabet
+// avoids every ambiguous glyph (0/O, 1/l/I, lowercase o): no word contains
 // `l` or `o`, and the digits are 2–9.
 //
+// POLICY COMPLIANCE: the Supabase project's password policy can require one
+// character from EACH of lowercase / uppercase / digits / symbols — GoTrue
+// enforces it on admin password updates (Khaja's child reset failed with the
+// raw policy error, 2026-07-19). This format satisfies all four classes by
+// construction: the first word is capitalized (upper + lower), two digits,
+// and `-` is in GoTrue's accepted symbol set. Do NOT swap the hyphen out.
+//
 // Entropy is ~23 bits — intentionally a HANDOFF credential, not a durable one:
-// the reset route sets profiles.must_reset_password, so the account is forced
-// to choose a real password at the next sign-in, and Supabase rate-limits
-// sign-in attempts.
+// provisioning/reset set profiles.must_reset_password, so the account is
+// forced to choose a real password at the next sign-in, and Supabase
+// rate-limits sign-in attempts.
 
 const WORDS = [
   "amber", "aqua", "bear", "bird", "cake", "camp", "cave", "crab",
@@ -32,6 +39,7 @@ function pick(items: readonly string[] | string): string {
 }
 
 export function generateTempPassword(): string {
-  const words = [pick(WORDS), pick(WORDS), pick(WORDS)].join("-");
+  const first = pick(WORDS);
+  const words = [first[0].toUpperCase() + first.slice(1), pick(WORDS), pick(WORDS)].join("-");
   return `${words}${pick(DIGITS)}${pick(DIGITS)}`;
 }

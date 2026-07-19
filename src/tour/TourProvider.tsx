@@ -82,7 +82,15 @@ export default function TourProvider({
       if (!available || !def || engineRef.current) return;
       const tag = { tourKey: def.key, role: def.role as Role, version: def.version };
 
-      const { valid, missing } = resolveSteps(def.steps, (t) => !!document.querySelector(t));
+      // A target must be VISIBLE, not merely present: `hidden sm:flex` nav
+      // tabs exist in the DOM on phones but render nothing, and driver.js
+      // dumps the popover at the top-left corner when highlighting a
+      // zero-rect element (Khaja's mobile screenshot). getClientRects() is
+      // empty for display:none and detached elements.
+      const { valid, missing } = resolveSteps(def.steps, (t) => {
+        const el = document.querySelector(t);
+        return !!el && el.getClientRects().length > 0;
+      });
       for (const m of missing) {
         emitTourEvent({ ...tag, event: "tour_step_target_missing", meta: { step_id: m.id } });
       }

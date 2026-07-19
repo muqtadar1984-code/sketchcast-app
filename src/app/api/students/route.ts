@@ -2,18 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { studentEmail, usernameBase } from "@/utils/student";
+import { generateTempPassword } from "@/utils/temp-password";
 
 export const runtime = "nodejs";
 
 type NewStudent = { firstName?: string; lastName?: string; parentEmail?: string };
-
-function tempPassword(): string {
-  // 10-char password from an unambiguous alphabet (no 0/O/1/l/I).
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  const bytes = new Uint8Array(10);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
-}
 
 // Provision invited students for a class. Teacher-only: the caller must own the
 // target class. Creates an auth user (synthetic email + temp password) per
@@ -131,7 +124,7 @@ export async function POST(request: Request) {
       username = `${base}${n}`;
     }
 
-    const password = tempPassword();
+    const password = generateTempPassword();
     const { data: createdUser, error: cErr } = await admin.auth.admin.createUser({
       email: studentEmail(username),
       password,
