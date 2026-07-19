@@ -3,24 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { defaultParams } from "./options-modal";
+import { kitRows } from "./kit";
 import { NARRATION_STYLES, DEFAULT_STYLE, availableVoices, defaultVoiceFor } from "@/utils/narration";
 
-const KINDS: { kind: string; label: string }[] = [
-  { kind: "presentation", label: "Lesson" },
-  { kind: "lesson_plan", label: "Plan" },
-  { kind: "activity", label: "Activities" },
-  { kind: "worksheet", label: "Worksheet" },
-  { kind: "exam_paper", label: "Exam" },
-  { kind: "case_study", label: "Case study" },
-];
-
-// Book-level batch generation: a chapters × kinds checkbox grid, one
-// "Generate selected" click. Column headers select a kind for every chapter,
-// the row checkbox selects every kind for a chapter. Each queued generation is
-// tagged params.batch = true, which groups the results under the book's
-// "Generated as selected" section (they also fill their chapter cells as
-// usual — the section is the batch's own receipt, not the only home).
+// Book-level batch generation (0059: the KIT is the unit). One checkbox per
+// chapter queues that chapter's full kit — the video lesson plus all five
+// documents (one lesson credit each, documents free). Chapters whose lesson
+// already exists are locked here: their missing documents are free add-backs
+// on the chapter row, and Regenerate lives in the cells.
+// Each queued row is tagged params.batch = true, which groups the results
+// under the book's "Generated as selected" section as the batch's receipt.
 export default function BatchGenerate({
   bookId,
   schoolId,
@@ -31,50 +23,35 @@ export default function BatchGenerate({
   bookId: string;
   schoolId: string | null;
   chapters: { num: number; title: string }[];
-  /** "num|kind" combos that ALREADY have a lesson — locked in the grid, so a
-   * batch can never silently displace a finished (possibly assigned) lesson;
-   * use the cell's own Regenerate for that. */
+  /** "num|kind" combos that ALREADY have a lesson — a chapter with an existing
+   * presentation is locked (its kit has started; use the row's own controls). */
   existingKeys: string[];
   /** Detected book language (0056) — batch lessons inherit it + its voice. */
   language?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [narrationStyle, setNarrationStyle] = useState(DEFAULT_STYLE);
   const [ttsVoice, setTtsVoice] = useState(defaultVoiceFor(language));
   const voices = availableVoices(language);
 
-  const key = (num: number, kind: string) => `${num}|${kind}`;
   const existing = new Set(existingKeys);
-  const locked = (num: number, kind: string) => existing.has(key(num, kind));
-  const has = (num: number, kind: string) => sel.has(key(num, kind));
-  const setMany = (keys: string[], on: boolean) =>
+  const started = new Set(
+    existingKeys.filter((k) => k.endsWith("|presentation")).map((k) => Number(k.split("|")[0])),
+  );
+  const openChapters = chapters.filter((c) => !started.has(c.num));
+  const toggle = (num: number) =>
     setSel((s) => {
       const next = new Set(s);
-      for (const k of keys) {
-        if (on && !existing.has(k)) next.add(k);
-        else if (!on) next.delete(k);
-      }
+      if (next.has(num)) next.delete(num);
+      else next.add(num);
       return next;
     });
-  const toggleCell = (num: number, kind: string) => setMany([key(num, kind)], !has(num, kind));
-  // "All" states consider only the OPEN (not-yet-generated) cells.
-  const openCells = (pred: (num: number, kind: string) => boolean) => {
-    const cells: string[] = [];
-    for (const c of chapters) for (const k of KINDS) if (pred(c.num, k.kind) && !locked(c.num, k.kind)) cells.push(key(c.num, k.kind));
-    return cells;
-  };
-  const kindAll = (kind: string) => {
-    const open = openCells((_n, k) => k === kind);
-    return open.length > 0 && open.every((k) => sel.has(k));
-  };
-  const chapterAll = (num: number) => {
-    const open = openCells((n) => n === num);
-    return open.length > 0 && open.every((k) => sel.has(k));
-  };
+  const allSelected = openChapters.length > 0 && openChapters.every((c) => sel.has(c.num));
+  const setAll = (on: boolean) => setSel(on ? new Set(openChapters.map((c) => c.num)) : new Set());
 
   async function generate() {
     if (sel.size === 0) return;
@@ -89,26 +66,37 @@ export default function BatchGenerate({
       setBusy(false);
       return;
     }
-    const rows = [...sel].map((k) => {
-      const [numStr, kind] = k.split("|");
-      const params =
-        kind === "presentation"
-          ? { narration_style: narrationStyle, tts_voice: ttsVoice, batch: true, ...(language ? { language } : {}) }
-          : { ...defaultParams(kind), batch: true, ...(language ? { language } : {}) };
-      return {
-        kind,
-        book_id: bookId,
-        owner_id: user.id,
-        school_id: schoolId,
-        chapter_ref: numStr,
-        params,
-        status: "queued",
-      };
-    });
-    const { error: gErr } = await supabase.from("generations").insert(rows);
+    // One INSERT per kit (presentation row FIRST — the DB's docs-with-lesson
+    // guard reads earlier rows of the same insert). Chunking per chapter means
+    // hitting the credit cap midway keeps everything already queued instead of
+    // aborting the whole batch. Legacy standalone docs are skipped, not
+    // duplicated.
+    let queued = 0;
+    let stopError: string | null = null;
+    for (const num of [...sel].sort((a, z) => a - z)) {
+      const rows = kitRows({
+        bookId,
+        schoolId,
+        userId: user.id,
+        chapterNum: num,
+        language,
+        narrationStyle,
+        ttsVoice,
+        batch: true,
+      }).filter((r) => r.kind === "presentation" || !existing.has(`${num}|${r.kind}`));
+      const { error: gErr } = await supabase.from("generations").insert(rows);
+      if (gErr) {
+        stopError = queued
+          ? `Queued ${queued} kit${queued === 1 ? "" : "s"}, then stopped at chapter ${num + 1}: ${gErr.message}`
+          : gErr.message;
+        break;
+      }
+      queued++;
+    }
     setBusy(false);
-    if (gErr) {
-      setError(gErr.message);
+    if (stopError) {
+      setError(stopError);
+      router.refresh(); // the queued kits are real — show them
       return;
     }
     setSel(new Set());
@@ -124,70 +112,52 @@ export default function BatchGenerate({
         onClick={() => setOpen((v) => !v)}
         className="btn-ghost h-8 px-3 text-xs"
         aria-expanded={open}
-        title="Pick any mix of chapters and content types, then generate them all at once"
+        title="Pick chapters and generate their full kits (lesson + documents) at once — one credit per lesson part (long chapters render as several parts)"
       >
         {open ? "▾" : "▸"} Batch generate…
       </button>
 
       {open && (
-        <div className="mt-2 rounded-lg border border-[#E6E8E4] bg-white p-3 overflow-x-auto">
-          <table className="text-xs border-collapse">
-            <thead>
-              <tr className="text-[#5B6470]">
-                <th className="text-left font-normal pr-3 pb-1.5">Chapter</th>
-                <th className="pr-2 pb-1.5 font-normal" title="Select every type for the whole book">
-                  All
-                </th>
-                {KINDS.map((k) => (
-                  <th key={k.kind} className="px-2 pb-1.5 font-normal whitespace-nowrap">
-                    <label className="flex items-center gap-1 cursor-pointer justify-center">
-                      <input
-                        type="checkbox"
-                        checked={kindAll(k.kind)}
-                        onChange={(e) => setMany(chapters.map((c) => key(c.num, k.kind)), e.target.checked)}
-                        className="h-3.5 w-3.5 accent-[#0C8175]"
-                      />
-                      {k.label}
-                    </label>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {chapters.map((c) => (
-                <tr key={c.num} className="border-t border-[#F1F3EF]">
-                  <td className="pr-3 py-1.5 max-w-[260px] truncate text-[#14181F]">
+        <div className="mt-2 rounded-lg border border-[#E6E8E4] bg-white p-3">
+          <p className="text-[10px] text-[#98A0A9] mb-1.5">
+            Each kit = the video lesson + plan, activities, worksheet, exam and case study. The
+            documents are free; the lesson costs one credit per rendered part (long chapters render
+            as several ~15-minute parts).
+          </p>
+          <label className="flex items-center gap-1.5 text-xs cursor-pointer py-1 text-[#5B6470]">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={(e) => setAll(e.target.checked)}
+              className="h-3.5 w-3.5 accent-[#0C8175]"
+              disabled={openChapters.length === 0}
+            />
+            All remaining chapters ({openChapters.length})
+          </label>
+          <div className="max-h-56 overflow-y-auto divide-y divide-[#F1F3EF]">
+            {chapters.map((c) =>
+              started.has(c.num) ? (
+                <div key={c.num} className="flex items-center gap-1.5 text-xs py-1.5 text-[#98A0A9]" title="Kit started — finish or regenerate from the chapter row">
+                  <span className="w-3.5 text-center text-[#0C8175]">✓</span>
+                  <span className="truncate">
                     <span className="text-[#98A0A9]">{c.num + 1}.</span> {c.title}
-                  </td>
-                  <td className="pr-2 py-1.5 text-center">
-                    <input
-                      type="checkbox"
-                      checked={chapterAll(c.num)}
-                      onChange={(e) => setMany(KINDS.map((k) => key(c.num, k.kind)), e.target.checked)}
-                      className="h-3.5 w-3.5 accent-[#0C8175]"
-                      title="Every remaining type for this chapter"
-                    />
-                  </td>
-                  {KINDS.map((k) =>
-                    locked(c.num, k.kind) ? (
-                      <td key={k.kind} className="px-2 py-1.5 text-center text-[#0C8175]" title="Already generated — use the chapter row's Regenerate to redo it">
-                        ✓
-                      </td>
-                    ) : (
-                      <td key={k.kind} className="px-2 py-1.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={has(c.num, k.kind)}
-                          onChange={() => toggleCell(c.num, k.kind)}
-                          className="h-3.5 w-3.5 accent-[#0C8175]"
-                        />
-                      </td>
-                    ),
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                </div>
+              ) : (
+                <label key={c.num} className="flex items-center gap-1.5 text-xs py-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sel.has(c.num)}
+                    onChange={() => toggle(c.num)}
+                    className="h-3.5 w-3.5 accent-[#0C8175]"
+                  />
+                  <span className="truncate text-[#14181F]">
+                    <span className="text-[#98A0A9]">{c.num + 1}.</span> {c.title}
+                  </span>
+                </label>
+              ),
+            )}
+          </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <label className="flex items-center gap-1.5 text-xs">
@@ -212,13 +182,13 @@ export default function BatchGenerate({
               </select>
             </label>
             <span className="ml-auto flex items-center gap-3">
-              {error && <span className="text-xs text-red-600">{error}</span>}
+              {error && <span className="text-xs text-red-600 [overflow-wrap:anywhere]">{error}</span>}
               <button
                 onClick={() => void generate()}
                 disabled={busy || sel.size === 0}
                 className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50"
               >
-                {busy ? "Queuing…" : `Generate selected (${sel.size})`}
+                {busy ? "Queuing…" : `Generate ${sel.size} kit${sel.size === 1 ? "" : "s"}`}
               </button>
             </span>
           </div>

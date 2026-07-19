@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { defaultPresentationParams } from "@/utils/narration";
+import { kitRows } from "./kit";
 
 type Chapter = { num: number; title: string };
 
-// Generates a lesson for every chapter passed in (the parent passes only the
-// chapters that don't already have a lesson). Each insert fires the
-// on_generation_created trigger → one job each.
+// Generates the full KIT (lesson + five documents, 0059) for every chapter
+// passed in (the parent passes only the chapters without a lesson). Each row
+// fires the on_generation_created trigger → one job each.
 export default function GenerateAllButton({
   bookId,
   schoolId,
@@ -31,7 +31,7 @@ export default function GenerateAllButton({
   async function onGenerateAll() {
     if (
       !confirm(
-        `Generate a lesson for ${chapters.length} chapter(s)? Each runs separately and uses Claude credits.`,
+        `Generate the full kit (lesson + documents) for ${chapters.length} chapter(s)? Documents are free; each lesson costs one credit per rendered part (long chapters render as several parts).`,
       )
     )
       return;
@@ -47,20 +47,24 @@ export default function GenerateAllButton({
       return;
     }
 
-    const rows = chapters.map((c) => ({
-      kind: "presentation",
-      book_id: bookId,
-      owner_id: user.id,
-      school_id: schoolId,
-      chapter_ref: String(c.num),
-      params: defaultPresentationParams(language),
-      status: "queued",
-    }));
-    const { error: gErr } = await supabase.from("generations").insert(rows);
+    // One INSERT per kit: hitting the credit cap midway keeps the kits
+    // already queued instead of aborting the whole run.
+    let queued = 0;
+    let stopError: string | null = null;
+    for (const c of chapters) {
+      const rows = kitRows({ bookId, schoolId, userId: user.id, chapterNum: c.num, language });
+      const { error: gErr } = await supabase.from("generations").insert(rows);
+      if (gErr) {
+        stopError = queued
+          ? `Queued ${queued} kit${queued === 1 ? "" : "s"}, then stopped at chapter ${c.num + 1}: ${gErr.message}`
+          : gErr.message;
+        break;
+      }
+      queued++;
+    }
     setBusy(false);
-    if (gErr) {
-      setError(gErr.message);
-      return;
+    if (stopError) {
+      setError(stopError);
     }
     router.refresh();
   }

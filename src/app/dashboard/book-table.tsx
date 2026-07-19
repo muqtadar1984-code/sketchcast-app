@@ -6,6 +6,7 @@ import GenerateAllButton from "./generate-all-button";
 import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
 import ContentCell, { type CellLesson } from "./content-cell";
+import GenerateKitButton from "./generate-kit-button";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
 import BatchGenerate from "./batch-generate";
@@ -70,8 +71,12 @@ const KIND_LABEL: Record<string, string> = {
   case_study: "Case study",
 };
 
-// "num|kind" for every chapter×kind that already has a lesson — the batch grid
-// locks these so a batch can never displace finished (possibly assigned) work.
+// "num|kind" for every chapter×kind that already has a LIVE (non-error)
+// lesson — the batch grid locks these so a batch can never displace finished
+// (possibly assigned) work, while errored attempts stay regenerable. A
+// chapter whose PARTS have started kits also locks its chapter-level
+// presentation key: a chapter-level kit there would duplicate the part
+// videos AND charge one credit per rendered part (0059).
 function existingCellKeys(chapters: ChapterRow[]): string[] {
   const keys: string[] = [];
   for (const ch of chapters) {
@@ -83,7 +88,9 @@ function existingCellKeys(chapters: ChapterRow[]): string[] {
       ["exam_paper", ch.exam],
       ["case_study", ch.caseStudy],
     ];
-    for (const [kind, lesson] of cells) if (lesson) keys.push(`${ch.num}|${kind}`);
+    for (const [kind, lesson] of cells) if (lesson && lesson.status !== "error") keys.push(`${ch.num}|${kind}`);
+    if (ch.parts.some((p) => p.presentation && p.presentation.status !== "error"))
+      keys.push(`${ch.num}|presentation`);
   }
   return keys;
 }
@@ -325,6 +332,30 @@ export default function BookTable({
                                     </span>
                                   )}
                                 </span>
+                                {/* 0059: the kit is the unit — one credit queues the
+                                    lesson plus all five documents. Loose documents
+                                    only exist as free add-backs after a LIVE lesson
+                                    (an errored one re-kits instead). */}
+                                {!locked && !(p.presentation && p.presentation.status !== "error") && (
+                                  <GenerateKitButton
+                                    bookId={b.id}
+                                    schoolId={schoolId}
+                                    chapterNum={ch.num}
+                                    part={p.n}
+                                    language={b.language}
+                                    skipKinds={(
+                                      [
+                                        ["lesson_plan", p.lessonPlan],
+                                        ["activity", p.activity],
+                                        ["worksheet", p.worksheet],
+                                        ["exam_paper", p.exam],
+                                        ["case_study", p.caseStudy],
+                                      ] as const
+                                    )
+                                      .filter(([, l]) => l && l.status !== "error")
+                                      .map(([k]) => k)}
+                                  />
+                                )}
                                 {(
                                   [
                                     ["presentation", "Lesson", p.presentation],
@@ -337,7 +368,11 @@ export default function BookTable({
                                 ).map(([kind, label, lesson]) => (
                                   <span key={kind} className="inline-flex items-center gap-1">
                                     <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{label}</span>
-                                    {lesson || !locked ? (
+                                    {lesson ||
+                                    (!locked &&
+                                      kind !== "presentation" &&
+                                      p.presentation &&
+                                      p.presentation.status !== "error") ? (
                                       <ContentCell
                                         bookId={b.id}
                                         schoolId={schoolId}
@@ -350,7 +385,12 @@ export default function BookTable({
                                         genLocked={locked}
                                       />
                                     ) : (
-                                      <span className="text-[#C6CBC4]">—</span>
+                                      <span
+                                        className="text-[#C6CBC4]"
+                                        title={locked ? undefined : "Generated with the kit — free once the lesson exists"}
+                                      >
+                                        —
+                                      </span>
                                     )}
                                   </span>
                                 ))}

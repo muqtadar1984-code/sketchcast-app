@@ -60,21 +60,35 @@ export default async function TestPapersPage() {
   type Book = { id: string; title: string | null; status: string; chapters: { num: number; title: string }[] | null; health?: BookHealth | null };
   const books = (booksRes.data ?? []) as unknown as Book[];
 
+  // Papers AND lessons: since 0059 a paper generates together with its
+  // chapter's lesson (documents ride free with the lesson), so the button
+  // needs to know whether the lesson already exists.
   const { data: gensRaw } = await supabase
     .from("generations")
-    .select("id, book_id, chapter_ref, status, artifacts(kind, storage_path), jobs(progress, status)")
+    .select("id, kind, book_id, chapter_ref, status, params, artifacts(kind, storage_path), jobs(progress, status)")
     .eq("owner_id", user.id)
-    .eq("kind", "exam_paper");
+    .in("kind", ["exam_paper", "presentation"]);
   type Gen = {
     id: string;
+    kind: string;
     book_id: string | null;
     chapter_ref: string | null;
     status: string;
+    params: Record<string, unknown> | null;
     artifacts: { kind: string; storage_path: string }[] | null;
     jobs: { progress: number | null; status: string }[] | null;
   };
   const gens = (gensRaw ?? []) as Gen[];
-  const paperFor = new Map(gens.map((g) => [`${g.book_id}|${g.chapter_ref}`, g] as const));
+  // Chapter-level rows only (params.part absent) — this view is paper-first.
+  const chapterLevel = (g: Gen) => (g.params as { part?: unknown } | null)?.part == null;
+  const paperFor = new Map(
+    gens.filter((g) => g.kind === "exam_paper" && chapterLevel(g)).map((g) => [`${g.book_id}|${g.chapter_ref}`, g] as const),
+  );
+  const lessonExists = new Set(
+    gens
+      .filter((g) => g.kind === "presentation" && g.status !== "error" && chapterLevel(g))
+      .map((g) => `${g.book_id}|${g.chapter_ref}`),
+  );
 
   // Owner can sign their own artifact paths directly (storage RLS).
   const sign = async (path: string | null) => {
@@ -105,14 +119,20 @@ export default async function TestPapersPage() {
     bookTitle: string;
     bookStatus: string;
     health: BookHealth | null;
-    chapters: { num: number; title: string; gen: Gen | undefined; doc: string | null }[];
+    chapters: { num: number; title: string; gen: Gen | undefined; doc: string | null; hasLesson: boolean }[];
   }[] = [];
   for (const b of books) {
     const chapters = [];
     for (const c of b.chapters ?? []) {
       const gen = paperFor.get(`${b.id}|${c.num}`);
       const docPath = gen?.artifacts?.find((a) => a.kind === "docx")?.storage_path ?? null;
-      chapters.push({ num: c.num, title: c.title, gen, doc: await sign(docPath) });
+      chapters.push({
+        num: c.num,
+        title: c.title,
+        gen,
+        doc: await sign(docPath),
+        hasLesson: lessonExists.has(`${b.id}|${c.num}`),
+      });
     }
     rows.push({ bookId: b.id, bookTitle: b.title || "Untitled", bookStatus: b.status, health: b.health ?? null, chapters });
   }
@@ -157,7 +177,7 @@ export default async function TestPapersPage() {
                       {c.num + 1}. {c.title}
                     </span>
                     <span className="flex items-center gap-2 shrink-0">
-                      {!c.gen && <GeneratePaperButton bookId={b.bookId} chapterNum={c.num} />}
+                      {!c.gen && <GeneratePaperButton bookId={b.bookId} chapterNum={c.num} hasLesson={c.hasLesson} />}
                       {c.gen && c.gen.status === "error" && (
                         <span className="chip font-sans bg-[#FFE9E3] text-[#B3401F]">failed</span>
                       )}

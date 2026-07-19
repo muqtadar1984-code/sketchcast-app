@@ -4,17 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { defaultParams } from "../options-modal";
+import { defaultPresentationParams } from "@/utils/narration";
 
 // Generate a test paper for a chapter, and assign a finished one to a child.
-// The DB enforces both boundaries (parents: exam_paper only; direct shares:
-// own children only) — these components just make the happy path easy.
+// Since 0059, papers ride with the chapter's lesson: without one, this queues
+// lesson + paper together (one credit); with one, the paper alone is free.
+// The DB enforces every boundary — these components make the happy path easy.
 
 export function GeneratePaperButton({
   bookId,
   chapterNum,
+  hasLesson = false,
 }: {
   bookId: string;
   chapterNum: number;
+  /** The chapter's lesson already exists — the paper alone is a free add-back. */
+  hasLesson?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -32,15 +37,43 @@ export function GeneratePaperButton({
       setBusy(false);
       return;
     }
-    const { error: gErr } = await supabase.from("generations").insert({
+    // 0059: documents ride with their lesson. If the chapter's lesson exists,
+    // the paper is a free add-back; otherwise queue lesson + paper together
+    // (one lesson credit) — the presentation row must stay FIRST so the DB's
+    // docs-with-lesson guard sees it.
+    type Row = {
+      kind: string;
+      book_id: string;
+      owner_id: string;
+      school_id: string | null;
+      chapter_ref: string;
+      params: Record<string, unknown>;
+      status: string;
+    };
+    const paperRow: Row = {
       kind: "exam_paper",
       book_id: bookId,
       owner_id: user.id,
       school_id: null,
       chapter_ref: String(chapterNum),
-      params: defaultParams("exam_paper"),
+      params: { ...defaultParams("exam_paper") },
       status: "queued",
-    });
+    };
+    const rows: Row[] = hasLesson
+      ? [paperRow]
+      : [
+          {
+            kind: "presentation",
+            book_id: bookId,
+            owner_id: user.id,
+            school_id: null,
+            chapter_ref: String(chapterNum),
+            params: defaultPresentationParams(null),
+            status: "queued",
+          },
+          paperRow,
+        ];
+    const { error: gErr } = await supabase.from("generations").insert(rows);
     setBusy(false);
     if (gErr) {
       setError(gErr.message);
@@ -52,8 +85,17 @@ export function GeneratePaperButton({
   return (
     <span className="inline-flex items-center gap-2">
       {error && <span className="text-xs text-red-600">{error}</span>}
-      <button onClick={generate} disabled={busy} className="btn-primary h-8 px-3 text-xs">
-        {busy ? "Queuing…" : "Generate test paper"}
+      <button
+        onClick={generate}
+        disabled={busy}
+        className="btn-primary h-8 px-3 text-xs"
+        title={
+          hasLesson
+            ? "Free — the paper reuses this chapter's lesson analysis"
+            : "One lesson credit — generates the chapter's video lesson and the test paper together"
+        }
+      >
+        {busy ? "Queuing…" : hasLesson ? "Generate paper (free)" : "Generate lesson + paper"}
       </button>
     </span>
   );

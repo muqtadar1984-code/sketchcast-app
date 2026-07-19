@@ -6,7 +6,16 @@ import { createClient } from "@/utils/supabase/server";
 // over / reset date. Renders nothing for unlimited tiers (schools, console-
 // blessed accounts) or when the migration isn't applied yet.
 type Bucket = { cap: number; carry: number; used: number; available: number };
-type FairUse = { tier: string; unlimited: boolean; parts: Bucket; docs: Bucket; resets_on: string };
+type FairUse = {
+  tier: string;
+  unlimited: boolean;
+  /** 0059 shape: one pool — lessons. Docs ride free with their lesson. */
+  credits?: Bucket;
+  /** pre-0059 shape (deploy window): two pools. */
+  parts?: Bucket;
+  docs?: Bucket;
+  resets_on: string;
+};
 
 function Row({ label, b }: { label: string; b: Bucket }) {
   const total = b.cap + b.carry;
@@ -48,8 +57,21 @@ export default async function FairUseMeter() {
           resets {resetLabel} · unused allowance carries one month forward
         </span>
       </div>
-      <Row label="Lesson parts" b={fu.parts} />
-      <Row label="Documents" b={fu.docs} />
+      {fu.credits ? (
+        <>
+          <Row label="Lessons" b={fu.credits} />
+          <p className="text-[10px] text-[#98A0A9]">
+            Each lesson includes its full document kit — plan, activities, worksheet, exam and case
+            study — free.
+          </p>
+        </>
+      ) : (
+        // Pre-0059 DB (deploy window): the old two-pool shape.
+        <>
+          {fu.parts && <Row label="Lesson parts" b={fu.parts} />}
+          {fu.docs && <Row label="Documents" b={fu.docs} />}
+        </>
+      )}
     </section>
   );
 }

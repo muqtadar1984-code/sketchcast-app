@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import ContentCell, { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
+import { kitRows, type GenerationRow } from "./kit";
 import { NARRATION_STYLES, DEFAULT_STYLE, LANGUAGES, availableVoices, defaultVoiceFor } from "@/utils/narration";
 import { TypeIcon } from "./icons";
 
@@ -62,7 +63,15 @@ export default function ChapterGenerate({
   const pinIsThisChapterLevel = !!beta?.pinned && !pinnedElsewhere && beta.pinned.part == null;
   const betaLocked =
     !!beta && (beta.pinned ? !pinIsThisChapterLevel : !!multiPartTrial);
-  const pendingKinds = betaLocked ? [] : KINDS.filter((k) => !lessons[k.kind]);
+  // 0059: documents generate only WITH their lesson. Before a LIVE lesson
+  // exists the sole action is the full kit (an errored lesson re-kits — the
+  // DB requires a non-error presentation before docs ride free); after,
+  // missing documents are free add-backs.
+  const hasLesson = !!lessons["presentation"] && lessons["presentation"]!.status !== "error";
+  const kitPending = !betaLocked && !hasLesson;
+  const pendingKinds = betaLocked || !hasLesson
+    ? []
+    : KINDS.filter((k) => k.kind !== "presentation" && !lessons[k.kind]);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +102,7 @@ export default function ChapterGenerate({
   ];
 
   async function generate() {
-    if (chosen.length === 0) return;
+    if (chosen.length === 0 && !kitPending) return;
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -105,20 +114,32 @@ export default function ChapterGenerate({
       setBusy(false);
       return;
     }
-    // One generation row per checked type — the on_generation_created trigger
-    // creates a job for each.
-    const rows = chosen.map((k) => ({
-      kind: k.kind,
-      book_id: bookId,
-      owner_id: user.id,
-      school_id: schoolId,
-      chapter_ref: String(chapterNum),
-      params:
-        k.kind === "presentation"
-          ? { narration_style: narrationStyle, tts_voice: ttsVoice, language }
-          : { ...defaultParams(k.kind), language },
-      status: "queued",
-    }));
+    // Kit mode: lesson + all five docs in one batch (presentation FIRST — the
+    // DB's docs-with-lesson guard reads earlier rows of the same insert).
+    // Add-back mode: just the checked documents (free, analysis reused).
+    const rows: GenerationRow[] = kitPending
+      ? kitRows({
+          bookId,
+          schoolId,
+          userId: user.id,
+          chapterNum,
+          language,
+          narrationStyle,
+          ttsVoice,
+          // Legacy standalone docs (pre-0059) keep their slot — don't duplicate.
+        }).filter(
+          (r) =>
+            r.kind === "presentation" || !(lessons[r.kind] && lessons[r.kind]!.status !== "error"),
+        )
+      : chosen.map((k) => ({
+          kind: k.kind,
+          book_id: bookId,
+          owner_id: user.id,
+          school_id: schoolId,
+          chapter_ref: String(chapterNum),
+          params: { ...defaultParams(k.kind), language },
+          status: "queued",
+        }));
     const { error: gErr } = await supabase.from("generations").insert(rows);
     setBusy(false);
     if (gErr) {
@@ -135,8 +156,10 @@ export default function ChapterGenerate({
         {KINDS.map((k) => {
           const lesson = lessons[k.kind];
           if (!lesson) {
-            if (betaLocked) return null; // locked chapters offer no new generations
-            // Pending: a checkbox to include this type in the batch generate.
+            // Locked chapters offer nothing; pre-lesson, single doc types
+            // aren't offered either (the kit button generates everything).
+            if (betaLocked || !hasLesson) return null;
+            // Lesson exists: missing documents are free add-backs.
             return (
               <label
                 key={k.kind}
@@ -210,21 +233,32 @@ export default function ChapterGenerate({
               <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
             </span>
           )}
+          {kitPending && (
+            <button
+              data-tour="generate-lesson"
+              onClick={generate}
+              disabled={busy}
+              className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
+              title="The video lesson plus its plan, activities, worksheet, exam and case study — documents free, one credit per rendered lesson part"
+            >
+              {busy ? "Queuing…" : "Generate full kit"}
+            </button>
+          )}
           {pendingKinds.length > 0 && (
             <button
               data-tour="generate-lesson"
               onClick={generate}
               disabled={busy || chosen.length === 0}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
-              title="Generate every checked document type for this chapter"
+              title="Free — these reuse the lesson's analysis"
             >
-              {busy ? "Queuing…" : `Generate (${chosen.length})`}
+              {busy ? "Queuing…" : `Generate (${chosen.length}) — free`}
             </button>
           )}
         </span>
       </div>
 
-      {sel["presentation"] && (
+      {kitPending && (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">Lesson options</span>
           <label className="flex items-center gap-1.5 text-xs">

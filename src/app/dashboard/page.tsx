@@ -583,7 +583,15 @@ export default async function DashboardPage() {
               }))
             : [],
       })),
-      pendingChapters: chs.filter((c) => !lessonForChapter(b.id, c.num)),
+      // "Pending" = no chapter-level lesson AND no part-level one either — a
+      // chapter whose parts already have kits must not get a chapter-level
+      // kit on top (it would duplicate the part videos and charge one credit
+      // per rendered part, 0059).
+      pendingChapters: chs.filter(
+        (c) =>
+          !lessonForChapter(b.id, c.num) &&
+          !(c.parts ?? []).some((_, i) => lessonFor(b.id, c.num, "presentation", i + 1)),
+      ),
       otherLessons: otherLessonsForBook(b),
       batchLessons: batchLessonsForBook(b),
     };
