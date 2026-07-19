@@ -473,10 +473,11 @@ export default function BookTable({
                   </div>
                 )}
 
-                {/* Exams (0062): each exam ships an exam paper + a separate
-                    answer key, with a line naming the chapters/parts it covers.
-                    Assigning an exam gives students the paper only — the answer
-                    key is never surfaced to them. */}
+                {/* Exams (0062): a physical, teacher-run assessment — the exam
+                    paper + a separate answer key, with a line naming the
+                    chapters/parts it covers. Download-and-print only: exams are
+                    NOT assigned to students (revision papers are the assignable,
+                    student-facing path). The answer key is teacher-only. */}
                 {b.exams.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
                     <p className="text-xs text-[#5B6470] mb-1">Exams</p>
@@ -503,7 +504,6 @@ export default function BookTable({
                                   ⬇ Answer key
                                 </a>
                               )}
-                              <AssignModal label="Assign" generationIds={[e.id]} classes={classes} />
                             </>
                           ) : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[e.status] ?? ""}`}>
