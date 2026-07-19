@@ -66,6 +66,29 @@ const partNum = (path: string): number => {
   return m ? Number(m[1]) : 1;
 };
 
+// Human label for a set of 0-based chapter numbers → 1-based, contiguous runs
+// collapsed: [0,1,2,4] → "Chapters 1–3, 5". Mirrors the worker's _range_label
+// so a cumulative revision paper reads the same in the UI and the .docx.
+function chapterRangeLabel(nums: number[]): string {
+  const ns = [...new Set(nums.map((n) => Number(n)).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b);
+  if (!ns.length) return "selected chapters";
+  const parts: string[] = [];
+  let start = ns[0];
+  let prev = ns[0];
+  for (const n of [...ns.slice(1), null]) {
+    if (n === prev + 1) {
+      prev = n;
+      continue;
+    }
+    parts.push(start === prev ? `${start + 1}` : `${start + 1}–${prev + 1}`);
+    if (n !== null) {
+      start = n;
+      prev = n;
+    }
+  }
+  return (ns.length === 1 ? "Chapter " : "Chapters ") + parts.join(", ");
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
@@ -497,9 +520,13 @@ export default async function DashboardPage() {
     const p = (l.params as { part?: unknown } | null)?.part;
     return typeof p === "number" && p >= 1 ? p : null;
   };
+  // Revision papers (params.revision, 0061) are standalone worksheets/exams
+  // over a group of chapters — they live in their OWN book-level section, never
+  // in a chapter's kit cells.
+  const isRevision = (l: Lesson): boolean => (l.params as { revision?: unknown } | null)?.revision === true;
   const lessonFor = (bookId: string, num: number, kind: string, part: number | null = null): Lesson | undefined =>
     lessons.find(
-      (l) => l.bookId === bookId && l.chapterRef === String(num) && l.kind === kind && partOf(l) === part,
+      (l) => l.bookId === bookId && l.chapterRef === String(num) && l.kind === kind && partOf(l) === part && !isRevision(l),
     );
   // The chapter's "lesson" = its presentation (deck+video) — used for progress.
   const lessonForChapter = (bookId: string, num: number): Lesson | undefined =>
@@ -514,6 +541,7 @@ export default async function DashboardPage() {
     const partsLen = new Map((book.chapters ?? []).map((c) => [String(c.num), c.parts?.length ?? 0]));
     return lessons.filter((l) => {
       if (l.bookId !== book.id) return false;
+      if (isRevision(l)) return false; // revision papers have their own section
       if (l.chapterRef === null || !nums.has(l.chapterRef)) return true;
       const part = partOf(l);
       if (part !== null) {
@@ -592,6 +620,28 @@ export default async function DashboardPage() {
           !lessonForChapter(b.id, c.num) &&
           !(c.parts ?? []).some((_, i) => lessonFor(b.id, c.num, "presentation", i + 1)),
       ),
+      // Revision papers (0061): standalone worksheets/exams over a group of
+      // chapters, in their own section. Cumulative ones carry params.chapters.
+      revisionPapers: lessons
+        .filter((l) => l.bookId === b.id && isRevision(l))
+        .map((l) => {
+          const kindLabel = l.kind === "exam_paper" ? "Exam paper" : "Worksheet";
+          const chapters = (l.params as { chapters?: unknown } | null)?.chapters;
+          const scope = Array.isArray(chapters) && chapters.length
+            ? chapterRangeLabel(chapters as number[])
+            : l.chapterRef !== null
+              ? chs.find((c) => String(c.num) === l.chapterRef)?.title ?? `Chapter ${Number(l.chapterRef) + 1}`
+              : "";
+          return {
+            id: l.id,
+            label: scope ? `${kindLabel} · ${scope}` : kindLabel,
+            status: l.status,
+            progress: l.progress,
+            stage: l.stage,
+            doc: l.doc,
+            artifactPaths: l.artifactPaths,
+          };
+        }),
       otherLessons: otherLessonsForBook(b),
       batchLessons: batchLessonsForBook(b),
     };

@@ -60,6 +60,17 @@ export type BookRow = {
   otherLessons: (CellLesson & { title: string })[];
   /** Lessons queued via "Generate selected" (params.batch) — own section at the book's end. */
   batchLessons: (CellLesson & { title: string; kind: string; chapterRef: string | null })[];
+  /** Revision papers (0061): standalone worksheets/exams over a group of chapters. */
+  revisionPapers: RevisionPaper[];
+};
+export type RevisionPaper = {
+  id: string;
+  label: string;
+  status: string;
+  progress: number;
+  stage?: import("@/utils/job-stage").JobStage;
+  doc: string | null;
+  artifactPaths: string[];
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -70,30 +81,6 @@ const KIND_LABEL: Record<string, string> = {
   exam_paper: "Exam",
   case_study: "Case study",
 };
-
-// "num|kind" for every chapter×kind that already has a LIVE (non-error)
-// lesson — the batch grid locks these so a batch can never displace finished
-// (possibly assigned) work, while errored attempts stay regenerable. A
-// chapter whose PARTS have started kits also locks its chapter-level
-// presentation key: a chapter-level kit there would duplicate the part
-// videos AND charge one credit per rendered part (0059).
-function existingCellKeys(chapters: ChapterRow[]): string[] {
-  const keys: string[] = [];
-  for (const ch of chapters) {
-    const cells: [string, CellLesson | null][] = [
-      ["presentation", ch.presentation],
-      ["lesson_plan", ch.lessonPlan],
-      ["activity", ch.activity],
-      ["worksheet", ch.worksheet],
-      ["exam_paper", ch.exam],
-      ["case_study", ch.caseStudy],
-    ];
-    for (const [kind, lesson] of cells) if (lesson && lesson.status !== "error") keys.push(`${ch.num}|${kind}`);
-    if (ch.parts.some((p) => p.presentation && p.presentation.status !== "error"))
-      keys.push(`${ch.num}|presentation`);
-  }
-  return keys;
-}
 
 const STATUS_STYLE: Record<string, string> = {
   queued: "bg-[#EEF0EC] text-[#5B6470]",
@@ -274,7 +261,6 @@ export default function BookTable({
                       bookId={b.id}
                       schoolId={schoolId}
                       chapters={b.chapters}
-                      existingKeys={existingCellKeys(b.chapters)}
                       language={b.language}
                     />
                     {b.pendingChapters.length > 0 && (
@@ -402,6 +388,37 @@ export default function BookTable({
                     </li>
                   ))}
                 </ul>
+
+                {/* Revision papers (0061): standalone worksheets/exams over a
+                    group of chapters — cumulative or a per-chapter pack. */}
+                {b.revisionPapers.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
+                    <p className="text-xs text-[#5B6470] mb-1">Revision papers</p>
+                    {b.revisionPapers.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between gap-4 py-1">
+                        <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">{p.label}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {p.status === "done" ? (
+                            <>
+                              {p.doc && (
+                                <a href={p.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                  ⬇ Download
+                                </a>
+                              )}
+                              <AssignModal label="Assign" generationIds={[p.id]} classes={classes} />
+                            </>
+                          ) : (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[p.status] ?? ""}`}>
+                              {p.status}
+                              {p.status === "processing" ? ` · ${jobStageLabel(p.progress, p.stage)}` : ""}
+                            </span>
+                          )}
+                          <DeleteLesson genId={p.id} artifactPaths={p.artifactPaths} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {b.otherLessons.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
