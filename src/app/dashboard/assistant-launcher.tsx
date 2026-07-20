@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import AssistantPanel from "./assistant-panel";
 
 // Floating launcher for the AI Teaching Assistant — bottom-RIGHT, on the same
@@ -13,7 +14,12 @@ const ASSISTANT_ON = process.env.NEXT_PUBLIC_FEATURE_AI_ASSISTANT === "true";
 
 export default function AssistantLauncher() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   if (!ASSISTANT_ON) return null;
+  // The leadership School pages surface their own bottom-right launcher (the
+  // School-briefing bot); hide the teaching Assistant there so the two don't
+  // overlap (and a principal isn't offered a book tutor they don't use).
+  if (pathname?.startsWith("/dashboard/school")) return null;
 
   return (
     <>

@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor, platformConsoleEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
-import { SchoolAssistantCard } from "./school-assistant";
+import { SchoolAssistantLauncher } from "./school-assistant";
+import ReportIssueWidget from "../report-issue-widget";
 
 // School analytics — leadership oversight, scoped by RLS (school_admin/principal
 // → whole school; coordinator → their grade/subject slice). Build order #1: the
@@ -58,10 +59,14 @@ export default async function SchoolAnalyticsPage() {
   // Coordinator access is a GRANT (coordinator_scope rows), not an identity —
   // a teacher holding scope rows gets the coordinator view of their slice and
   // keeps their teacher dashboard. No grant and not an admin → no page.
+  const schoolId = (profile?.school_id as string | null) ?? null;
+  if (!schoolId) redirect("/dashboard");
   let scopeLabel = "Whole school";
   let isCoordinator = false;
   if (!isAdmin) {
-    const { data: scopes } = await supabase.from("coordinator_scope").select("grade, subject");
+    // School-scoped: a stale grant from a school this user has left must not
+    // open THIS school's analytics.
+    const { data: scopes } = await supabase.from("coordinator_scope").select("grade, subject").eq("school_id", schoolId);
     isCoordinator = (scopes?.length ?? 0) > 0;
     if (!isCoordinator) redirect("/dashboard");
     const grades = [...new Set((scopes ?? []).map((s) => s.grade as string))];
@@ -278,8 +283,6 @@ export default async function SchoolAnalyticsPage() {
           ))}
         </div>
 
-        {assistantOn && <SchoolAssistantCard />}
-
         <h2 className="text-xl mb-1">Students needing support</h2>
         <p className="text-sm text-[#5B6470] mb-3">
           Flagged by low/declining completion, falling scores, or inactivity — the worklist to act on first.
@@ -331,12 +334,18 @@ export default async function SchoolAnalyticsPage() {
               ))}
             <div className="px-5 py-3 text-xs text-[#5B6470]">
               Names live in the grade/subject coordinator&apos;s worklist, so support stays close to the student.
-              As principal you can also ask the school briefing above for names and reasons — every briefing is
-              recorded in the access audit.
+              As principal you can also open the School briefing (bottom-right) for names and reasons — every
+              briefing is recorded in the access audit.
             </div>
           </div>
         )}
       </main>
+
+      {/* Floating, bottom-RIGHT: the School briefing bot (replaces the teaching
+          Assistant here). Bottom-LEFT: "Report a problem", so leadership can
+          raise issues too. */}
+      {assistantOn && <SchoolAssistantLauncher />}
+      {platformConsoleEnabled() && <ReportIssueWidget />}
     </div>
   );
 }

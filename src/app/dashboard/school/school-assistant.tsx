@@ -10,23 +10,24 @@ type Msg = { role: "you" | "assistant"; content: string; greeting?: boolean };
 // same SSE protocol and voice affordances, different audience — starter chips
 // instead of book scope, and the conversation history rides with each request
 // (the briefing is stateless server-side; nothing is persisted but the audit).
-export function SchoolAssistantCard() {
+// Floating launcher — the leadership "School briefing" bot lives bottom-RIGHT,
+// exactly where the teaching Assistant sits on teacher/student surfaces (that
+// Assistant is hidden on the School pages, so a principal is offered the school
+// briefing rather than a book tutor they don't use).
+export function SchoolAssistantLauncher() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <section className="card px-5 py-4 mb-10 flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-lg flex items-center gap-2">
-            <span aria-hidden>🗒️</span> School briefing
-          </h2>
-          <p className="text-sm text-[#5B6470] mt-0.5">
-            Ask anything about your school&apos;s progress — answers come from the live analytics you see here.
-          </p>
-        </div>
-        <button onClick={() => setOpen(true)} className="btn-primary h-10 px-4 text-sm shrink-0" data-tour="school-assistant">
-          Ask about your school
+      <div className="fixed bottom-4 right-4 z-40">
+        <button
+          onClick={() => setOpen(true)}
+          className="btn-primary h-11 px-4 text-sm rounded-full shadow-lg flex items-center gap-2"
+          aria-label="Ask about your school"
+          data-tour="school-assistant"
+        >
+          <span aria-hidden>🗒️</span> School briefing
         </button>
-      </section>
+      </div>
       {open && <SchoolAssistantPanel onClose={() => setOpen(false)} />}
     </>
   );

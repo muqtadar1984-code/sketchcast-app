@@ -59,7 +59,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <TourProvider role={role} seen={seen}>
       {children}
-      <AssistantLauncher />
+      {/* A principal (school_admin) doesn't teach from books — no teaching
+          Assistant. Everyone else keeps it; the launcher also hides itself on
+          the leadership School pages, where the School-briefing bot takes over
+          the bottom-right slot. */}
+      {role !== "school_admin" && <AssistantLauncher />}
     </TourProvider>
   );
 }
