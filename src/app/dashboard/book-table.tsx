@@ -14,7 +14,7 @@ import ExamGenerate, { type ExamChapterOpt } from "./exam-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
-import { jobStageLabel } from "@/utils/job-stage";
+import { jobStageLabel, etaLabel } from "@/utils/job-stage";
 import { languageLabel } from "@/utils/narration";
 
 export type Lesson = CellLesson & { title: string; kind: string };
@@ -463,7 +463,13 @@ export default function BookTable({
                           ) : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[p.status] ?? ""}`}>
                               {p.status}
-                              {p.status === "processing" ? ` · ${jobStageLabel(p.progress, p.stage)}` : ""}
+                              {p.status === "processing"
+                                ? ` · ${jobStageLabel(p.progress, p.stage)}${
+                                    etaLabel("exam_paper", p.progress, p.stage)
+                                      ? ` · ${etaLabel("exam_paper", p.progress, p.stage)}`
+                                      : ""
+                                  }`
+                                : ""}
                             </span>
                           )}
                           <DeleteLesson genId={p.id} artifactPaths={p.artifactPaths} />
@@ -508,7 +514,13 @@ export default function BookTable({
                           ) : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[e.status] ?? ""}`}>
                               {e.status}
-                              {e.status === "processing" ? ` · ${jobStageLabel(e.progress, e.stage)}` : ""}
+                              {e.status === "processing"
+                                ? ` · ${jobStageLabel(e.progress, e.stage)}${
+                                    etaLabel("exam", e.progress, e.stage)
+                                      ? ` · ${etaLabel("exam", e.progress, e.stage)}`
+                                      : ""
+                                  }`
+                                : ""}
                             </span>
                           )}
                           <DeleteLesson genId={e.id} artifactPaths={e.artifactPaths} />
