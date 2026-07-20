@@ -6,6 +6,7 @@ import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor, platformConsoleEn
 import { enforceHat } from "@/utils/hats-server";
 import { SchoolAssistantLauncher } from "./school-assistant";
 import ReportIssueWidget from "../report-issue-widget";
+import AdminHelpNote from "../admin-help-note";
 
 // School analytics — leadership oversight, scoped by RLS (school_admin/principal
 // → whole school; coordinator → their grade/subject slice). Build order #1: the
@@ -339,6 +340,11 @@ export default async function SchoolAnalyticsPage() {
             </div>
           </div>
         )}
+
+        {/* Contact SketchCast staff for admin help (principal + coordinator). */}
+        <div className="mt-10">
+          <AdminHelpNote />
+        </div>
       </main>
 
       {/* Floating, bottom-RIGHT: the School briefing bot (replaces the teaching

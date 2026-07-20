@@ -20,7 +20,8 @@ import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import FairUseMeter from "./fair-use-meter";
-import { examGenerationEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import { examGenerationEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
 
@@ -207,11 +208,18 @@ export default async function DashboardPage() {
     // once per account (signup_notified_at is the dedup marker).
     const { data: b } = await supabase
       .from("profiles")
-      .select("signup_notified_at")
+      .select("signup_notified_at, onboarded_at")
       .eq("id", user.id)
       .maybeSingle();
-    const flags = b as { signup_notified_at?: string | null } | null;
-    if (flags && !flags.signup_notified_at) {
+    const flags = b as { signup_notified_at?: string | null; onboarded_at?: string | null } | null;
+    // Don't notify while the user is still in onboarding limbo. This page renders
+    // CONCURRENTLY with the layout's onboarding redirect, so firing here for a
+    // brand-new adult would capture the pre-onboarding DEFAULT role ('teacher')
+    // for someone who is about to choose Parent. Wait until they're settled —
+    // onboarded, or the onboarding gate is off — so the email reports the real
+    // role. The notification then fires on their first post-onboarding load.
+    const settled = !onboardingEnabled() || !!flags?.onboarded_at;
+    if (flags && !flags.signup_notified_at && settled) {
       const { notifySignupOnce } = await import("@/utils/notify");
       await notifySignupOnce(user.id, user.email ?? null, (profile?.full_name as string) ?? null, role);
     }
@@ -879,6 +887,14 @@ export default async function DashboardPage() {
                 ))}
             </div>
           </>
+        )}
+        {/* Contact SketchCast staff for admin help beyond self-serve (password
+            resets + adding students). Teachers/coordinators here; parents run
+            their own family world, so it's hidden for them. */}
+        {role !== "parent" && (
+          <div className="mt-10">
+            <AdminHelpNote />
+          </div>
         )}
       </main>
 

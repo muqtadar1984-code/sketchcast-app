@@ -30,7 +30,9 @@ export async function notifySignupOnce(
           "",
           `Name:  ${name || "—"}`,
           `Email: ${email || "—"}`,
-          `Role:  ${role || "teacher"}`,
+          // Never assume "teacher": callers pass the SETTLED role (post-onboarding),
+          // so an empty value here means genuinely unknown, not a default.
+          `Role:  ${role || "unknown"}`,
           `Time:  ${new Date().toISOString()}`,
           "",
           `Feedback dashboard: https://app.sketchcast.app/dashboard/beta-feedback`,
