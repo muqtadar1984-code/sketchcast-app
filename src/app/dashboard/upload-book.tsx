@@ -185,6 +185,13 @@ export default function UploadBook({
         )}
       </div>
 
+      {/* Restrictions, stated up front so a wrong file fails at the picker, not
+          mid-upload. PDF-only is the file input's accept; single-file (no
+          `multiple`); 200 MB is the `uploads` bucket's file_size_limit (0001). */}
+      <p className="mt-2 text-[11px] text-[#98A0A9]">
+        PDF only · one file at a time · up to 200&nbsp;MB.
+      </p>
+
       {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
     </form>
   );

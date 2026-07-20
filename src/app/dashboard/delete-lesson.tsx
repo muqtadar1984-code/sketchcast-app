@@ -7,9 +7,13 @@ import { createClient } from "@/utils/supabase/client";
 export default function DeleteLesson({
   genId,
   artifactPaths,
+  className = "",
 }: {
   genId: string;
   artifactPaths: string[];
+  /** Extra classes — kit rows pass "hidden group-hover:inline-flex" so ✕ only
+      shows on hover, keeping the row uncluttered. */
+  className?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -32,7 +36,7 @@ export default function DeleteLesson({
       disabled={busy}
       aria-label="Remove lesson"
       title="Remove lesson"
-      className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
+      className={`w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 ${className}`}
     >
       ✕
     </button>

@@ -6,7 +6,7 @@ import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
-import { jobStageLabel, etaLabel, type JobStage } from "@/utils/job-stage";
+import { etaLabel, type JobStage } from "@/utils/job-stage";
 
 export type CellLesson = {
   id: string;
@@ -25,20 +25,59 @@ export type CellLesson = {
   artifactPaths: string[];
 };
 
-const STATUS_STYLE: Record<string, string> = {
-  queued: "bg-[#EEF0EC] text-[#5B6470]",
-  processing: "bg-[#FFF1D6] text-[#9A6400]",
-  error: "bg-[#FCEBEA] text-[#B42318]",
-};
+// Icon-forward kit cells (2026-07-20): the icon IS the download/watch (no
+// "Download" word); the label is the link text; ↻ regenerate + ✕ delete (delete
+// on hover) sit beside it; progress shows as a compact ring, not a bar.
+function PlayIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="inline-block align-[-1px] shrink-0" aria-hidden>
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+function DownloadIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="inline-block align-[-1px] shrink-0" aria-hidden>
+      <path d="M12 3v12m0 0l4-4m-4 4l-4-4" />
+      <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+    </svg>
+  );
+}
+function Ring({ pct }: { pct: number }) {
+  const size = 14;
+  const stroke = 2.2;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="inline-block align-[-2px] shrink-0" style={{ transform: "rotate(-90deg)" }} aria-hidden>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E6E8E4" strokeWidth={stroke} />
+      {pct > 0 && (
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="#1FB8A6"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - Math.min(100, Math.max(0, pct)) / 100)}
+        />
+      )}
+    </svg>
+  );
+}
 
-// One content type for a chapter: presentation (deck+video) or a .docx kind
-// (lesson_plan / activity / exam_paper). The parent renders the type label.
+// One content type for a chapter/part: presentation (video + deck) or a .docx
+// kind. The label ("Plan", "Worksheet"…) is now the link text; presentation
+// shows "Watch" + "Deck" instead.
 export default function ContentCell({
   bookId,
   schoolId,
   chapterNum,
   kind,
   lesson,
+  label = "",
   trackViews = false,
   part = null,
   bookLanguage = null,
@@ -49,6 +88,8 @@ export default function ContentCell({
   chapterNum: number;
   kind: string;
   lesson: CellLesson | null;
+  /** Display name — the link text (docs). Presentation ignores it (Watch/Deck). */
+  label?: string;
   trackViews?: boolean; // beta: record artifact-opened events (feedback trigger)
   /** Generate/display ONE part of the chapter (per-part lesson units). */
   part?: number | null;
@@ -58,16 +99,18 @@ export default function ContentCell({
       regenerate (the DB would reject them) but keep artifacts + delete. */
   genLocked?: boolean;
 }) {
+  const isPres = kind === "presentation";
+
   // Presentation generates directly; document kinds open a customization modal.
-  const genControl = (label: string) =>
-    kind === "presentation" ? (
+  const genControl = (lbl: string) =>
+    isPres ? (
       <GenerateButton
         bookId={bookId}
         schoolId={schoolId}
         chapterRef={chapterNum}
         kind={kind}
         variant="ghost"
-        label={label}
+        label={lbl}
         params={part ? { part } : null}
       />
     ) : (
@@ -76,66 +119,70 @@ export default function ContentCell({
         schoolId={schoolId}
         chapterRef={chapterNum}
         kind={kind}
-        label={label}
+        label={lbl}
         part={part}
         bookLanguage={bookLanguage}
       />
     );
 
-  if (!lesson) return genLocked ? <span className="text-[#C6CBC4]">—</span> : genControl("Generate");
+  // Not generated: a free add-back once its lesson exists ("+ Worksheet"), or a
+  // dash when the trial pin locks this unit.
+  if (!lesson) return genLocked ? <span className="text-[#C6CBC4]">—</span> : genControl(`+ ${label}`);
 
   if (lesson.status === "queued" || lesson.status === "processing") {
     const eta = lesson.status === "processing" ? etaLabel(kind, lesson.progress, lesson.stage) : "";
     return (
-      <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[lesson.status] ?? ""}`}>
-        {lesson.status === "processing"
-          ? `${jobStageLabel(lesson.progress, lesson.stage)}${eta ? ` · ${eta}` : ""}`
-          : "queued"}
+      <span
+        className="inline-flex items-center gap-1.5 text-xs text-[#98A0A9] whitespace-nowrap"
+        title={`${label || "Lesson"} — ${lesson.status}${eta ? ` (${eta})` : ""}`}
+      >
+        {isPres ? (
+          <>
+            <PlayIcon /> Watch
+          </>
+        ) : (
+          label
+        )}
+        <Ring pct={lesson.status === "processing" ? lesson.progress : 0} />
+        {isPres && lesson.status === "processing" && (
+          <span className="text-[#9A6400] tabular-nums">
+            {lesson.progress}%{eta ? ` · ${eta}` : ""}
+          </span>
+        )}
       </span>
     );
   }
 
   if (lesson.status === "error") {
     return (
-      <span className="inline-flex items-center gap-2 text-xs">
-        <span className="text-[#B42318]">failed</span>
+      <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+        <span className="text-[#B42318]">{isPres ? "Watch" : label} failed</span>
         {!genLocked && genControl("retry")}
-        {/* Reporting moved to the page-bottom "Report a problem" widget — the
-            inline per-artifact button cluttered every cell. */}
       </span>
     );
   }
 
-  // done — multi-part lessons stack ONE LINE PER PART ("Part 2 · Watch · Deck")
-  // instead of a single crowded row of Pt links.
+  // done — multi-video presentations stack one line per part ("Pt 2 · Watch · Deck").
   const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
   const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
   const nParts = Math.max(videos.length, decks.length);
+  const linkCls = "inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline";
   return (
-    <span className={`inline-flex ${kind === "presentation" && nParts > 1 ? "items-start" : "items-center"} gap-2 text-xs`}>
-      {kind === "presentation" ? (
+    <span className={`group inline-flex ${isPres && nParts > 1 ? "items-start" : "items-center"} gap-1.5 text-xs whitespace-nowrap`}>
+      {isPres ? (
         nParts > 1 ? (
-          <span className="flex flex-col gap-0.5">
+          <span className="inline-flex flex-col gap-0.5">
             {Array.from({ length: nParts }, (_, i) => (
-              <span key={i} className="flex items-center gap-2 whitespace-nowrap">
-                <span className="text-[#5B6470] w-11">Part {i + 1}</span>
+              <span key={i} className="inline-flex items-center gap-1.5">
+                <span className="text-[#98A0A9] w-8">Pt {i + 1}</span>
                 {videos[i] && (
-                  <a
-                    href={videos[i]}
-                    target="_blank"
-                    onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")}
-                    className="font-medium text-[#0C8175] hover:underline"
-                  >
-                    ▶ Watch
+                  <a href={videos[i]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>
+                    <span className="text-[#1FB8A6]"><PlayIcon /></span>Watch
                   </a>
                 )}
                 {decks[i] && (
-                  <a
-                    href={decks[i]}
-                    onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")}
-                    className="font-medium text-[#0C8175] hover:underline"
-                  >
-                    ⬇ Deck
+                  <a href={decks[i]} onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")} className={linkCls}>
+                    <span className="text-[#1FB8A6]"><DownloadIcon /></span>Deck
                   </a>
                 )}
               </span>
@@ -144,46 +191,30 @@ export default function ContentCell({
         ) : (
           <>
             {videos[0] && (
-              <a
-                href={videos[0]}
-                target="_blank"
-                onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")}
-                className="font-medium text-[#0C8175] hover:underline"
-              >
-                ▶ Watch
+              <a href={videos[0]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>
+                <span className="text-[#1FB8A6]"><PlayIcon /></span>Watch
               </a>
             )}
             {decks[0] && (
-              <a
-                href={decks[0]}
-                onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")}
-                className="font-medium text-[#0C8175] hover:underline"
-              >
-                ⬇ Deck
+              <a href={decks[0]} onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")} className={linkCls}>
+                <span className="text-[#1FB8A6]"><DownloadIcon /></span>Deck
               </a>
             )}
           </>
         )
       ) : (
         lesson.doc && (
-          <a
-            href={lesson.doc}
-            onClick={() => trackViews && recordArtifactView(lesson.id, "docx")}
-            className="font-medium text-[#0C8175] hover:underline"
-          >
-            ⬇ Download
+          <a href={lesson.doc} onClick={() => trackViews && recordArtifactView(lesson.id, "docx")} className={linkCls}>
+            <span className="text-[#1FB8A6]"><DownloadIcon /></span>{label}
           </a>
         )
       )}
-      {kind === "presentation" && (
-        <AskCoachButton
-          generationId={lesson.id}
-          chapterLabel={`Chapter ${chapterNum + 1}`}
-          className="font-medium text-[#0C8175] hover:underline"
-        />
+      {isPres && (
+        <AskCoachButton generationId={lesson.id} chapterLabel={`Chapter ${chapterNum + 1}`} className="font-medium text-[#0C8175] hover:underline" />
       )}
       {!genLocked && (
         <RegenerateButton
+          icon
           bookId={bookId}
           schoolId={schoolId}
           chapterRef={chapterNum}
@@ -193,7 +224,7 @@ export default function ContentCell({
           oldArtifactPaths={lesson.artifactPaths}
         />
       )}
-      <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} />
+      <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} className="hidden group-hover:inline-flex" />
     </span>
   );
 }

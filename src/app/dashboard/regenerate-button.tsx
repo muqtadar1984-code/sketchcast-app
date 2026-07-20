@@ -7,6 +7,14 @@ import { createClient } from "@/utils/supabase/client";
 // Replace a chapter's existing lesson: queue a fresh generation, then remove the
 // old deck/video (storage + row). lessonForChapter shows the newest generation,
 // so the new (queued) one takes over immediately.
+function RefreshIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="inline-block align-[-1px] shrink-0" aria-hidden>
+      <path d="M21 12a9 9 0 11-2.64-6.36M21 4v5h-5" />
+    </svg>
+  );
+}
+
 export default function RegenerateButton({
   bookId,
   schoolId,
@@ -15,6 +23,7 @@ export default function RegenerateButton({
   oldArtifactPaths,
   kind = "presentation",
   params = null,
+  icon = false,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -23,6 +32,8 @@ export default function RegenerateButton({
   oldArtifactPaths: string[];
   kind?: string;
   params?: Record<string, unknown> | null;
+  /** Compact icon-only ↻ (kit rows) instead of the "↻ Regenerate" text. */
+  icon?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -64,6 +75,21 @@ export default function RegenerateButton({
     await supabase.from("generations").delete().eq("id", oldGenId);
     setBusy(false);
     router.refresh();
+  }
+
+  if (icon) {
+    return (
+      <button
+        onClick={onRegen}
+        disabled={busy}
+        title="Regenerate"
+        aria-label="Regenerate"
+        className="text-[#C6CBC4] hover:text-[#5B6470] disabled:opacity-50"
+      >
+        {busy ? <span className="text-[10px]">…</span> : <RefreshIcon />}
+        {error && <span className="text-red-600 text-[10px] ml-1">{error}</span>}
+      </button>
+    );
   }
 
   return (

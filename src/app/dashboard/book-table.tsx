@@ -351,9 +351,14 @@ export default function BookTable({
                             const partAssignable = [p.presentation, p.worksheet, p.exam]
                               .filter((l): l is CellLesson => !!l && l.status === "done")
                               .map((l) => l.id);
+                            // A part is "generated" once its kit has been queued
+                            // (the lesson row exists and isn't errored). Before
+                            // that the row shows ONLY "Generate kit" — no greyed
+                            // placeholder cells (founder 2026-07-20: less texty).
+                            const generated = !!p.presentation && p.presentation.status !== "error";
                             return (
-                              <div key={p.n} className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-4 text-xs">
-                                <span className="w-36 shrink-0 text-[#5B6470]">
+                              <div key={p.n} className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-4 text-xs">
+                                <span className="w-28 shrink-0 text-[#5B6470]">
                                   Part {p.n}
                                   {p.titles.length > 0 && (
                                     <span className="block text-[10px] text-[#98A0A9] truncate" title={p.titles.join(", ")}>
@@ -361,11 +366,47 @@ export default function BookTable({
                                     </span>
                                   )}
                                 </span>
-                                {/* 0059: the kit is the unit — one credit queues the
-                                    lesson plus all five documents. Loose documents
-                                    only exist as free add-backs after a LIVE lesson
-                                    (an errored one re-kits instead). */}
-                                {!locked && !(p.presentation && p.presentation.status !== "error") && (
+                                {generated ? (
+                                  <>
+                                    {/* Icon-forward cells: each artifact is its own
+                                        watch/download link; a missing document is a
+                                        free "+ Name" add-back once the lesson exists. */}
+                                    {(
+                                      [
+                                        ["presentation", "Lesson", p.presentation],
+                                        ["lesson_plan", "Plan", p.lessonPlan],
+                                        ["activity", "Activities", p.activity],
+                                        ["worksheet", "Worksheet", p.worksheet],
+                                        ["exam_paper", "Test paper", p.exam],
+                                        ["case_study", "Case study", p.caseStudy],
+                                      ] as const
+                                    ).map(([kind, label, lesson]) => (
+                                      <ContentCell
+                                        key={kind}
+                                        bookId={b.id}
+                                        schoolId={schoolId}
+                                        chapterNum={ch.num}
+                                        kind={kind}
+                                        label={label}
+                                        lesson={lesson}
+                                        part={p.n}
+                                        trackViews={!!beta}
+                                        bookLanguage={b.language}
+                                        genLocked={locked}
+                                      />
+                                    ))}
+                                    {partAssignable.length > 0 && (
+                                      <span className="ml-auto">
+                                        <AssignModal label="Assign" generationIds={partAssignable} classes={classes} />
+                                      </span>
+                                    )}
+                                  </>
+                                ) : locked ? (
+                                  // Trial: this part isn't the pinned unit (0057).
+                                  <span className="text-[#C6CBC4]" title="Your free trial covers the full kit for one part of one chapter">—</span>
+                                ) : (
+                                  // 0059: the kit is the unit — one credit queues the
+                                  // lesson plus all five documents in one click.
                                   <GenerateKitButton
                                     bookId={b.id}
                                     schoolId={schoolId}
@@ -385,53 +426,6 @@ export default function BookTable({
                                       .filter(([, l]) => l && l.status !== "error")
                                       .map(([k]) => k)}
                                   />
-                                )}
-                                {(
-                                  [
-                                    ["presentation", "Lesson", p.presentation],
-                                    ["lesson_plan", "Plan", p.lessonPlan],
-                                    ["activity", "Activities", p.activity],
-                                    ["worksheet", "Worksheet", p.worksheet],
-                                    ["exam_paper", "Test paper", p.exam],
-                                    ["case_study", "Case study", p.caseStudy],
-                                  ] as const
-                                ).map(([kind, label, lesson]) => (
-                                  <span key={kind} className="inline-flex items-center gap-1">
-                                    <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{label}</span>
-                                    {lesson ||
-                                    (!locked &&
-                                      kind !== "presentation" &&
-                                      p.presentation &&
-                                      p.presentation.status !== "error") ? (
-                                      <ContentCell
-                                        bookId={b.id}
-                                        schoolId={schoolId}
-                                        chapterNum={ch.num}
-                                        kind={kind}
-                                        lesson={lesson}
-                                        part={p.n}
-                                        trackViews={!!beta}
-                                        bookLanguage={b.language}
-                                        genLocked={locked}
-                                      />
-                                    ) : (
-                                      <span
-                                        className="text-[#C6CBC4]"
-                                        title={locked ? undefined : "Generated with the kit — free once the lesson exists"}
-                                      >
-                                        —
-                                      </span>
-                                    )}
-                                  </span>
-                                ))}
-                                {partAssignable.length > 0 && (
-                                  <span className="ml-auto">
-                                    <AssignModal
-                                      label="Assign"
-                                      generationIds={partAssignable}
-                                      classes={classes}
-                                    />
-                                  </span>
                                 )}
                               </div>
                             );

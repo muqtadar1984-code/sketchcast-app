@@ -7,7 +7,7 @@ import ContentCell, { type CellLesson } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
 import { kitRows, type GenerationRow } from "./kit";
-import { NARRATION_STYLES, DEFAULT_STYLE, LANGUAGES, availableVoices, defaultVoiceFor, defaultNarrationForGrade } from "@/utils/narration";
+import { NARRATION_STYLES, LANGUAGES, availableVoices, defaultVoiceFor, defaultNarrationForGrade } from "@/utils/narration";
 import { TypeIcon } from "./icons";
 
 // All content types a chapter can produce, in display order.
@@ -157,7 +157,7 @@ export default function ChapterGenerate({
 
   return (
     <div className="mt-1.5 pl-5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {KINDS.map((k) => {
           const lesson = lessons[k.kind];
           if (!lesson) {
@@ -181,20 +181,20 @@ export default function ChapterGenerate({
               </label>
             );
           }
-          // Already generated (or in progress): keep the normal controls.
+          // Already generated (or in progress): icon-forward cell — the label
+          // IS the watch/download link now, so no separate type icon + caption.
           return (
             <span
               key={k.kind}
               data-tour={k.kind === "presentation" ? "lesson-output" : undefined}
-              className="flex items-center gap-1.5"
+              className="flex items-center"
             >
-              <TypeIcon kind={k.kind} />
-              <span className={LABEL}>{k.label}</span>
               <ContentCell
                 bookId={bookId}
                 schoolId={schoolId}
                 chapterNum={chapterNum}
                 kind={k.kind}
+                label={k.label}
                 lesson={lesson}
                 trackViews={!!beta}
                 bookLanguage={bookLanguage}
