@@ -6,7 +6,7 @@ import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
-import { jobStageLabel, type JobStage } from "@/utils/job-stage";
+import { jobStageLabel, etaLabel, type JobStage } from "@/utils/job-stage";
 
 export type CellLesson = {
   id: string;
@@ -85,9 +85,12 @@ export default function ContentCell({
   if (!lesson) return genLocked ? <span className="text-[#C6CBC4]">—</span> : genControl("Generate");
 
   if (lesson.status === "queued" || lesson.status === "processing") {
+    const eta = lesson.status === "processing" ? etaLabel(kind, lesson.progress, lesson.stage) : "";
     return (
       <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[lesson.status] ?? ""}`}>
-        {lesson.status === "processing" ? jobStageLabel(lesson.progress, lesson.stage) : "queued"}
+        {lesson.status === "processing"
+          ? `${jobStageLabel(lesson.progress, lesson.stage)}${eta ? ` · ${eta}` : ""}`
+          : "queued"}
       </span>
     );
   }
