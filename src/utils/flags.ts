@@ -270,6 +270,19 @@ export function examGenerationEnabled(): boolean {
 }
 
 /**
+ * Getting-started stepper — the inline, progress-tracking onboarding checklist
+ * on the Library (Upload → Generate → Assign) for new joiners. OFF by default;
+ * needs migration 0064 (the getting_started_dismissed_at column + backfill). The
+ * whole thing is server-gated here: the dashboard only reads the column and
+ * renders the card when this is on, so pre-migration DBs never see a broken
+ * query. Existing users were backfilled as dismissed — only genuinely-new
+ * signups (column still NULL) get the guide.
+ */
+export function gettingStartedEnabled(): boolean {
+  return process.env.FEATURE_GETTING_STARTED === "true";
+}
+
+/**
  * Autofix — the automated bug-fix pipeline. Staff tap "Attempt auto-fix" on a
  * reported issue → a GitHub Action (Claude Code) writes the fix on a branch + opens
  * a PR → the founder gets an email with signed Approve/Reject links → Approve

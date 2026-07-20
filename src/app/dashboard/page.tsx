@@ -20,7 +20,8 @@ import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import FairUseMeter from "./fair-use-meter";
-import { examGenerationEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import GettingStarted from "./getting-started";
+import { examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
@@ -765,6 +766,30 @@ export default async function DashboardPage() {
     })
     .sort((a, b) => `${a.grade} ${a.subject}`.localeCompare(`${b.grade} ${b.subject}`));
 
+  // Getting-started stepper (inline onboarding, 0064) — new joiners only. Show
+  // ONLY when the flag is on, this account has book tools, and the dismissal
+  // column reads back a genuine NULL (a pre-migration error → column undefined →
+  // hidden, never a broken card; existing users were backfilled as dismissed).
+  let gettingStarted: { upload: boolean; generate: boolean; assign: boolean } | null = null;
+  if (gettingStartedEnabled() && lessonTools && role !== "student") {
+    const { data: gs, error: gsErr } = await supabase
+      .from("profiles")
+      .select("getting_started_dismissed_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    const dismissedAt = (gs as { getting_started_dismissed_at?: string | null } | null)?.getting_started_dismissed_at;
+    if (!gsErr && gs && dismissedAt == null) {
+      // Step 3 = "has assigned anything". One cheap head count of the shares the
+      // user can see (RLS scopes to their own); best-effort → not-done on error.
+      const { count } = await supabase.from("generation_shares").select("id", { count: "exact", head: true });
+      gettingStarted = {
+        upload: bookList.length > 0,
+        generate: lessons.length > 0,
+        assign: (count ?? 0) > 0,
+      };
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AutoRefresh active={hasPending} />
@@ -776,6 +801,14 @@ export default async function DashboardPage() {
         <p className="text-[#5B6470] mb-7">
           Upload a textbook, then generate a narrated lesson from it.
         </p>
+
+        {gettingStarted && (
+          <GettingStarted
+            userId={user.id}
+            variant={role === "parent" ? "parent" : "teacher"}
+            steps={gettingStarted}
+          />
+        )}
 
         {isBeta && <BetaBanner />}
 
@@ -794,7 +827,7 @@ export default async function DashboardPage() {
         ) : (
           <p className="text-sm text-[#5B6470] mb-6">
             Your account is set up for teaching without book tools (PE, music, arts and similar
-            subjects) — your timetable and classes are below. If that's wrong, ask your school to
+            subjects) — your timetable and classes are below. If that&apos;s wrong, ask your school to
             contact SketchCast support.
           </p>
         )}
@@ -808,6 +841,14 @@ export default async function DashboardPage() {
         </div>
 
         {bookList.length === 0 ? (
+          gettingStarted ? (
+            // The stepper above already walks the journey — keep this slim so the
+            // same three steps don't appear twice on one screen.
+            <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-8 text-center text-[#5B6470]">
+              <EmptyBooks />
+              <p className="font-medium text-[#14181F] mt-2">Your library is empty — start with step 1 above.</p>
+            </div>
+          ) : (
           <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
             <EmptyBooks />
             <p className="font-medium text-[#14181F] mb-4">Your library is empty — here&apos;s the whole journey:</p>
@@ -831,6 +872,7 @@ export default async function DashboardPage() {
               Chapters are detected automatically — scanned books included.
             </p>
           </div>
+          )
         ) : (
           <div className="space-y-8" data-tour="book-card">
             {groups.map((g) => (
