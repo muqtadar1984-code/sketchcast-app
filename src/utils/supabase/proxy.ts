@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { consoleHostname, consoleRoute, bareHost, STAFF_LOGIN_PATH } from "@/utils/console-routing";
 import { schoolHostname, schoolRoute } from "@/utils/school-routing";
+import { sessionScoped } from "@/utils/supabase/session-cookies";
 
 // Refreshes the Supabase auth session on every request and guards routes.
 // Called from src/proxy.ts (Next.js 16's renamed "middleware").
@@ -22,7 +23,8 @@ export async function updateSession(request: NextRequest) {
           );
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
+            // Session-scoped so the login clears when the browser closes.
+            response.cookies.set(name, value, sessionScoped(options)),
           );
         },
       },
