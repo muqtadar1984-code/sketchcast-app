@@ -1,77 +1,74 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { detectQuad, warpQuad, loadCv, type Quad, type Corner } from "@/utils/scan-cv";
 
-// Page scanner (2026-07-21): photograph a physical book and hand the existing
-// upload path ONE assembled PDF. Built for parents who have no digital copy of
-// their child's book.
+// Page scanner: photograph a physical book and hand the existing upload path ONE
+// assembled PDF. Built for parents who have no digital copy of their child's book.
 //
-// Deliberately client-side and worker-free: `agent1_ingestion/extractor.py`
-// already runs Docling with do_ocr=True, so a photographed book is an
-// already-supported input — it just needs to arrive as a PDF. Nothing here
-// touches the upload/validation path; we produce a File and the normal flow runs.
+// Deliberately client-side and worker-free: agent1_ingestion/extractor.py already
+// runs Docling with do_ocr=True, so a photographed book is an already-supported
+// input — it just needs to arrive as a PDF. Nothing here touches the upload or
+// validation path; we produce a File and the normal flow runs.
 //
 // The 200 MB ceiling (the `uploads` bucket's file_size_limit) is the hard
 // constraint: raw phone photos are 3–5 MB each, so every page is downscaled and
-// re-encoded on capture, the running total is shown against the budget, quality
-// steps down as the total grows, and assembly is refused before it would produce
-// a PDF the server must reject. There is no page cap — long scans are allowed,
-// but the UI recommends one chapter at a time.
+// re-encoded on capture, the running total is shown against the budget, and
+// assembly is refused before it could produce a PDF the server must reject.
+// No page cap — long scans are allowed, but the copy recommends one chapter.
 //
-// Auto edge-detection + draggable corners are the NEXT slice; today each page
-// gets a downscale + grayscale/contrast clean-up, which is what OCR benefits
-// from most after resolution.
+// Slice 2: each page is auto edge-detected and flattened (perspective + deskew),
+// which is the biggest OCR-quality lever after resolution. Auto-detection DOES
+// go wrong, so every page keeps its original photo and can be re-cropped by hand.
 
 const MAX_TOTAL_BYTES = 200 * 1024 * 1024; // must match the bucket's file_size_limit
 const SOFT_BUDGET = Math.round(MAX_TOTAL_BYTES * 0.9); // leave PDF overhead headroom
-const TARGET_PAGE_BYTES = 300 * 1024; // aim: a page costs ~300 KB
+const TARGET_PAGE_BYTES = 300 * 1024;
 const MAX_EDGE = 1600; // long-edge px — enough for OCR, far cheaper than a raw photo
 const QUALITIES = [0.72, 0.6, 0.5, 0.42, 0.35];
 
-export type ScannedPage = { id: string; url: string; bytes: number; w: number; h: number };
+type ScannedPage = {
+  id: string;
+  url: string; // the cleaned page that goes into the PDF
+  bytes: number;
+  /** The original (downscaled) photo, kept so the crop can be redone by hand. */
+  srcUrl: string;
+  srcW: number;
+  srcH: number;
+  /** Current corners in source pixels; null = no crop applied. */
+  quad: Quad | null;
+  auto: boolean; // corners came from detection rather than the user
+};
 
-function mb(n: number) {
-  return `${(n / 1e6).toFixed(1)} MB`;
+const mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
+
+function canvasFrom(img: CanvasImageSource, w: number, h: number) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d")?.drawImage(img, 0, 0, w, h);
+  return c;
 }
 
-// Downscale + clean up one photo, stepping quality down until it fits the target
-// (or we run out of steps — a dense page legitimately costs more).
-async function processPhoto(file: File, budgetPerPage: number): Promise<ScannedPage | null> {
-  const bitmap = await createImageBitmap(file).catch(() => null);
-  if (!bitmap) return null;
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const w = Math.max(1, Math.round(bitmap.width * scale));
-  const h = Math.max(1, Math.round(bitmap.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
+/** Grayscale + contrast (what OCR likes) and encode, stepping quality down to fit. */
+async function encodePage(source: HTMLCanvasElement, target: number) {
+  const out = document.createElement("canvas");
+  out.width = source.width;
+  out.height = source.height;
+  const ctx = out.getContext("2d");
   if (!ctx) return null;
-  // Lift contrast and drop colour: printed pages OCR better as clean grayscale,
-  // and it roughly halves the bytes. (Feature-detected — Safari < 17 ignores it.)
   try {
     ctx.filter = "grayscale(1) contrast(1.18) brightness(1.06)";
   } catch {
-    /* unsupported → plain draw */
+    /* Safari < 17 ignores canvas filters — plain draw is still fine */
   }
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close?.();
-
-  const target = Math.max(120 * 1024, Math.min(TARGET_PAGE_BYTES, budgetPerPage));
+  ctx.drawImage(source, 0, 0);
   let blob: Blob | null = null;
   for (const q of QUALITIES) {
-    blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", q));
-    if (!blob) return null;
-    if (blob.size <= target) break;
+    blob = await new Promise<Blob | null>((r) => out.toBlob(r, "image/jpeg", q));
+    if (!blob || blob.size <= target) break;
   }
-  if (!blob) return null;
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    url: URL.createObjectURL(blob),
-    bytes: blob.size,
-    w,
-    h,
-  };
+  return blob;
 }
 
 export default function PageScanner({
@@ -85,41 +82,96 @@ export default function PageScanner({
   const [pages, setPages] = useState<ScannedPage[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<number | null>(null);
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
 
   const total = pages.reduce((n, p) => n + p.bytes, 0);
   const overBudget = total >= SOFT_BUDGET;
+  const autoMisses = pages.filter((p) => !p.quad).length;
+
+  // Warm OpenCV as soon as the scanner opens so the first page isn't the one that
+  // waits for the 8 MB download. Fire-and-forget: loadCv resolves null on failure
+  // and every caller degrades to an un-cropped page.
+  useEffect(() => {
+    void loadCv();
+  }, []);
 
   const addPhotos = useCallback(
     async (list: FileList | null) => {
       if (!list?.length) return;
       setError(null);
-      const files = Array.from(list);
-      setBusy(`Adding ${files.length} page${files.length === 1 ? "" : "s"}…`);
+      const files = Array.from(list).filter((f) => f.type.startsWith("image/"));
+      if (!files.length) {
+        setError("Those files weren't photos — pick images of the pages.");
+        return;
+      }
       const added: ScannedPage[] = [];
       let running = total;
-      for (const f of files) {
+      for (let i = 0; i < files.length; i++) {
+        setBusy(`Reading page ${i + 1} of ${files.length}…`);
         if (running >= SOFT_BUDGET) {
           setError(
-            `Stopped at ${mb(running)} — a scan has to stay under 200 MB. ` +
-              "Create this PDF and upload it, then scan the next chapter separately.",
+            `Stopped at ${mb(running)} — a scan has to stay under 200 MB. Create this PDF ` +
+              "and upload it, then scan the next chapter separately.",
           );
           break;
         }
-        const page = await processPhoto(f, TARGET_PAGE_BYTES);
-        if (page) {
-          added.push(page);
-          running += page.bytes;
-        }
+        const bitmap = await createImageBitmap(files[i]).catch(() => null);
+        if (!bitmap) continue;
+        const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+        const sw = Math.max(1, Math.round(bitmap.width * scale));
+        const sh = Math.max(1, Math.round(bitmap.height * scale));
+        const src = canvasFrom(bitmap, sw, sh);
+        bitmap.close?.();
+
+        const quad = await detectQuad(src);
+        const flat = quad ? await warpQuad(src, quad) : null;
+        const blob = await encodePage(flat ?? src, TARGET_PAGE_BYTES);
+        const srcBlob = await new Promise<Blob | null>((r) => src.toBlob(r, "image/jpeg", 0.8));
+        if (!blob || !srcBlob) continue;
+
+        added.push({
+          id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+          url: URL.createObjectURL(blob),
+          bytes: blob.size,
+          srcUrl: URL.createObjectURL(srcBlob),
+          srcW: sw,
+          srcH: sh,
+          quad: flat ? quad : null,
+          auto: !!flat,
+        });
+        running += blob.size;
       }
       if (added.length) setPages((p) => [...p, ...added]);
-      else if (!added.length && !files.every((f) => f.type.startsWith("image/")))
-        setError("Those files weren't photos — pick images of the pages.");
       setBusy(null);
     },
     [total],
   );
+
+  /** Re-crop one page from hand-placed corners. */
+  async function applyQuad(index: number, quad: Quad | null) {
+    const page = pages[index];
+    setBusy("Applying crop…");
+    const img = new Image();
+    img.src = page.srcUrl;
+    await img.decode().catch(() => {});
+    const src = canvasFrom(img, page.srcW, page.srcH);
+    const flat = quad ? await warpQuad(src, quad) : null;
+    const blob = await encodePage(flat ?? src, TARGET_PAGE_BYTES);
+    if (blob) {
+      URL.revokeObjectURL(page.url);
+      setPages((p) =>
+        p.map((q, i) =>
+          i === index
+            ? { ...q, url: URL.createObjectURL(blob), bytes: blob.size, quad: flat ? quad : null, auto: false }
+            : q,
+        ),
+      );
+    }
+    setBusy(null);
+    setEditing(null);
+  }
 
   function move(i: number, dir: -1 | 1) {
     setPages((p) => {
@@ -134,6 +186,7 @@ export default function PageScanner({
   function remove(i: number) {
     setPages((p) => {
       URL.revokeObjectURL(p[i].url);
+      URL.revokeObjectURL(p[i].srcUrl);
       return p.filter((_, k) => k !== i);
     });
   }
@@ -143,13 +196,11 @@ export default function PageScanner({
     setBusy("Building the PDF…");
     setError(null);
     try {
-      // Lazy: pdf-lib only loads once someone actually scans.
-      const { PDFDocument } = await import("pdf-lib");
+      const { PDFDocument } = await import("pdf-lib"); // lazy: only for scanners
       const pdf = await PDFDocument.create();
       for (const p of pages) {
         const bytes = new Uint8Array(await (await fetch(p.url)).arrayBuffer());
         const img = await pdf.embedJpg(bytes);
-        // One page per photo, sized to the image so nothing is cropped or letterboxed.
         const page = pdf.addPage([img.width, img.height]);
         page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
       }
@@ -159,96 +210,219 @@ export default function PageScanner({
       const blob = new Blob([buf], { type: "application/pdf" });
       if (blob.size > MAX_TOTAL_BYTES) {
         setError(
-          `That PDF is ${mb(blob.size)} — over the 200 MB limit. Remove some pages, ` +
-            "or scan this book one chapter at a time.",
+          `That PDF is ${mb(blob.size)} — over the 200 MB limit. Remove some pages, or scan ` +
+            "this book one chapter at a time.",
         );
         setBusy(null);
         return;
       }
-      const stamp = new Date().toISOString().slice(0, 10);
-      onDone(new File([blob], `scan-${stamp}.pdf`, { type: "application/pdf" }));
+      onDone(new File([blob], `scan-${new Date().toISOString().slice(0, 10)}.pdf`, { type: "application/pdf" }));
     } catch (ex) {
       setError(ex instanceof Error ? ex.message : "Couldn't build the PDF.");
     }
     setBusy(null);
   }
 
+  const page = editing === null ? null : pages[editing];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#14181F]/45 p-0 sm:p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#14181F]/45 sm:p-4" role="dialog" aria-modal="true">
       <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="font-display text-base font-medium">Scan pages</h2>
-            <p className="mt-1 text-xs text-[#5B6470]">
-              Photograph the pages and we&apos;ll turn them into one PDF.
-              <span className="block text-[#98A0A9]">
-                Best results: one chapter at a time, page flat, good light, fills the frame.
-              </span>
-            </p>
-          </div>
-          <button onClick={onClose} aria-label="Close" className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {/* `capture` opens the camera on a phone; on desktop it's a file picker,
-              which is also useful (photos already taken, or a flatbed export). */}
-          <input ref={camera} type="file" accept="image/*" capture="environment" multiple className="hidden"
-            onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
-          <input ref={library} type="file" accept="image/*" multiple className="hidden"
-            onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
-          <button onClick={() => camera.current?.click()} disabled={!!busy} className="btn-primary h-10 px-4 text-sm">
-            {pages.length ? "Add pages" : "Take photos"}
-          </button>
-          <button onClick={() => library.current?.click()} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
-            Choose photos
-          </button>
-        </div>
-
-        {busy && <p className="mt-3 text-xs text-[#9A6400]">{busy}</p>}
-        {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
-
-        {pages.length > 0 && (
+        {page ? (
+          <CornerEditor
+            page={page}
+            onCancel={() => setEditing(null)}
+            onApply={(q) => applyQuad(editing!, q)}
+            busy={busy}
+          />
+        ) : (
           <>
-            <div className="mt-4 flex items-center justify-between text-xs">
-              <span className="text-[#5B6470]">
-                {pages.length} page{pages.length === 1 ? "" : "s"} · {mb(total)}
-              </span>
-              <span className={overBudget ? "text-red-600" : "text-[#98A0A9]"}>
-                {overBudget ? "At the 200 MB limit" : `${mb(MAX_TOTAL_BYTES - total)} left of 200 MB`}
-              </span>
-            </div>
-            <div className="mt-1 h-1.5 rounded-full bg-[#EEF0EC] overflow-hidden" aria-hidden>
-              <div
-                className={`h-full transition-[width] ${overBudget ? "bg-red-500" : "bg-[#1FB8A6]"}`}
-                style={{ width: `${Math.min(100, (total / MAX_TOTAL_BYTES) * 100)}%` }}
-              />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-base font-medium">Scan pages</h2>
+                <p className="mt-1 text-xs text-[#5B6470]">
+                  Photograph the pages and we&apos;ll turn them into one PDF.
+                  <span className="block text-[#98A0A9]">
+                    Best results: one chapter at a time, page flat, good light, fills the frame.
+                  </span>
+                </p>
+              </div>
+              <button onClick={onClose} aria-label="Close" className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
             </div>
 
-            <ul className="mt-4 grid grid-cols-3 sm:grid-cols-5 gap-3">
-              {pages.map((p, i) => (
-                <li key={p.id} className="group relative rounded-lg border border-[#DCE6E2] overflow-hidden bg-[#F5F6F3]">
-                  {/* Local object URL of a just-captured photo — next/image adds nothing here. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.url} alt={`Page ${i + 1}`} className="w-full h-24 object-cover" />
-                  <span className="absolute top-1 left-1 rounded bg-[#14181F]/70 px-1.5 text-[10px] text-white">{i + 1}</span>
-                  <div className="absolute inset-x-0 bottom-0 flex justify-between bg-white/85 px-1 py-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                    <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move page ${i + 1} earlier`} className="px-1 text-xs disabled:opacity-30">←</button>
-                    <button onClick={() => remove(i)} aria-label={`Remove page ${i + 1}`} className="px-1 text-xs text-red-600">✕</button>
-                    <button onClick={() => move(i, 1)} disabled={i === pages.length - 1} aria-label={`Move page ${i + 1} later`} className="px-1 text-xs disabled:opacity-30">→</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {/* `capture` opens the camera on a phone; on desktop it's a file
+                  picker, which is also useful (photos already taken). */}
+              <input ref={camera} type="file" accept="image/*" capture="environment" multiple className="hidden"
+                onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
+              <input ref={library} type="file" accept="image/*" multiple className="hidden"
+                onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
+              <button onClick={() => camera.current?.click()} disabled={!!busy} className="btn-primary h-10 px-4 text-sm">
+                {pages.length ? "Add pages" : "Take photos"}
+              </button>
+              <button onClick={() => library.current?.click()} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
+                Choose photos
+              </button>
+            </div>
+
+            {busy && <p className="mt-3 text-xs text-[#9A6400]">{busy}</p>}
+            {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+
+            {pages.length > 0 && (
+              <>
+                <div className="mt-4 flex items-center justify-between text-xs">
+                  <span className="text-[#5B6470]">
+                    {pages.length} page{pages.length === 1 ? "" : "s"} · {mb(total)}
+                  </span>
+                  <span className={overBudget ? "text-red-600" : "text-[#98A0A9]"}>
+                    {overBudget ? "At the 200 MB limit" : `${mb(MAX_TOTAL_BYTES - total)} left of 200 MB`}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 rounded-full bg-[#EEF0EC] overflow-hidden" aria-hidden>
+                  <div className={`h-full transition-[width] ${overBudget ? "bg-red-500" : "bg-[#1FB8A6]"}`}
+                    style={{ width: `${Math.min(100, (total / MAX_TOTAL_BYTES) * 100)}%` }} />
+                </div>
+                {autoMisses > 0 && (
+                  <p className="mt-2 text-[11px] text-[#9A6400]">
+                    {autoMisses} page{autoMisses === 1 ? " wasn't" : "s weren't"} cropped automatically — tap
+                    a page to set its edges by hand.
+                  </p>
+                )}
+
+                <ul className="mt-4 grid grid-cols-3 sm:grid-cols-5 gap-3">
+                  {pages.map((p, i) => (
+                    <li key={p.id} className="group relative rounded-lg border border-[#DCE6E2] overflow-hidden bg-[#F5F6F3]">
+                      {/* Local object URL of a just-captured photo — next/image adds nothing. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.url} alt={`Page ${i + 1}`} className="w-full h-24 object-cover" />
+                      <span className="absolute top-1 left-1 rounded bg-[#14181F]/70 px-1.5 text-[10px] text-white">{i + 1}</span>
+                      {!p.quad && (
+                        <span className="absolute top-1 right-1 rounded bg-[#FFF1D6] px-1 text-[9px] text-[#9A6400]">uncropped</span>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-white/90 px-1 py-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move page ${i + 1} earlier`} className="px-1 text-xs disabled:opacity-30">←</button>
+                        <button onClick={() => setEditing(i)} className="px-1 text-[10px] font-medium text-[#0C8175]">Edges</button>
+                        <button onClick={() => remove(i)} aria-label={`Remove page ${i + 1}`} className="px-1 text-xs text-red-600">✕</button>
+                        <button onClick={() => move(i, 1)} disabled={i === pages.length - 1} aria-label={`Move page ${i + 1} later`} className="px-1 text-xs disabled:opacity-30">→</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button onClick={onClose} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">Cancel</button>
+              <button onClick={build} disabled={!pages.length || !!busy} className="btn-primary h-10 px-4 text-sm">
+                Use these {pages.length || ""} page{pages.length === 1 ? "" : "s"}
+              </button>
+            </div>
           </>
         )}
-
-        <div className="mt-5 flex items-center justify-end gap-2">
-          <button onClick={onClose} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">Cancel</button>
-          <button onClick={build} disabled={!pages.length || !!busy} className="btn-primary h-10 px-4 text-sm">
-            Use these {pages.length || ""} page{pages.length === 1 ? "" : "s"}
-          </button>
-        </div>
       </div>
     </div>
+  );
+}
+
+/** Drag the four corners over the ORIGINAL photo — auto-detection does go wrong,
+    so a hand correction is always available (and is the only option when
+    detection found nothing). */
+function CornerEditor({
+  page,
+  onApply,
+  onCancel,
+  busy,
+}: {
+  page: ScannedPage;
+  onApply: (quad: Quad | null) => void;
+  onCancel: () => void;
+  busy: string | null;
+}) {
+  const inset = 0.08;
+  const [quad, setQuad] = useState<Quad>(
+    page.quad ?? [
+      { x: page.srcW * inset, y: page.srcH * inset },
+      { x: page.srcW * (1 - inset), y: page.srcH * inset },
+      { x: page.srcW * (1 - inset), y: page.srcH * (1 - inset) },
+      { x: page.srcW * inset, y: page.srcH * (1 - inset) },
+    ],
+  );
+  const [drag, setDrag] = useState<number | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+
+  // Pointer position → source-image pixels (the SVG shares the image's viewBox).
+  function toSrc(e: React.PointerEvent): Corner | null {
+    const r = box.current?.getBoundingClientRect();
+    if (!r) return null;
+    return {
+      x: Math.max(0, Math.min(page.srcW, ((e.clientX - r.left) / r.width) * page.srcW)),
+      y: Math.max(0, Math.min(page.srcH, ((e.clientY - r.top) / r.height) * page.srcH)),
+    };
+  }
+
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-base font-medium">Set the page edges</h2>
+          <p className="mt-1 text-xs text-[#5B6470]">
+            Drag the four corners to the corners of the page.
+          </p>
+        </div>
+        <button onClick={onCancel} aria-label="Back" className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
+      </div>
+
+      <div
+        ref={box}
+        className="relative mt-4 touch-none select-none mx-auto"
+        style={{ maxWidth: "min(100%, 520px)" }}
+        onPointerMove={(e) => {
+          if (drag === null) return;
+          const p = toSrc(e);
+          if (p) setQuad((q) => q.map((c, i) => (i === drag ? p : c)) as Quad);
+        }}
+        onPointerUp={() => setDrag(null)}
+        onPointerLeave={() => setDrag(null)}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={page.srcUrl} alt="Page photo" className="w-full block rounded-lg" />
+        <svg viewBox={`0 0 ${page.srcW} ${page.srcH}`} className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+          <polygon
+            points={quad.map((c) => `${c.x},${c.y}`).join(" ")}
+            fill="rgba(31,184,166,0.16)"
+            stroke="#1FB8A6"
+            strokeWidth={Math.max(2, page.srcW * 0.004)}
+          />
+          {quad.map((c, i) => (
+            <circle
+              key={i}
+              cx={c.x}
+              cy={c.y}
+              r={Math.max(10, page.srcW * 0.022)}
+              fill="#fff"
+              stroke="#0C8175"
+              strokeWidth={Math.max(2, page.srcW * 0.004)}
+              style={{ cursor: "grab" }}
+              onPointerDown={(e) => {
+                (e.target as Element).releasePointerCapture?.(e.pointerId);
+                setDrag(i);
+              }}
+            />
+          ))}
+        </svg>
+      </div>
+
+      {busy && <p className="mt-3 text-xs text-[#9A6400]">{busy}</p>}
+
+      <div className="mt-5 flex items-center justify-between gap-2">
+        <button onClick={() => onApply(null)} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
+          Use the full photo
+        </button>
+        <span className="flex gap-2">
+          <button onClick={onCancel} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">Cancel</button>
+          <button onClick={() => onApply(quad)} disabled={!!busy} className="btn-primary h-10 px-4 text-sm">Apply crop</button>
+        </span>
+      </div>
+    </>
   );
 }
