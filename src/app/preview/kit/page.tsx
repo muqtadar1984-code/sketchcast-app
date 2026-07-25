@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { notFound } from "next/navigation";
 import ContentCell, { type CellLesson } from "@/app/dashboard/content-cell";
 import LessonCard, { type CardPart } from "@/app/dashboard/lesson-card";
 import RegenerateButton from "@/app/dashboard/regenerate-button";
 import GettingStarted from "@/app/dashboard/getting-started";
+import PageScanner from "@/app/dashboard/page-scanner";
 
 // DEV-ONLY verification of the REAL redesigned kit cells (ContentCell) in every
 // state — done, generating (ring), queued, error, add-back, trial-locked — laid
@@ -39,7 +40,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export default function KitPreview() {
   if (process.env.NODE_ENV === "production") notFound();
 
-  // ?open=<label> auto-clicks a trigger so a screenshot can capture the dialog.
+  const [showScanner, setShowScanner] = useState(false);
+
+  // ?open=<label> auto-clicks a trigger so a screenshot can capture a dialog
+  // (including the scanner's "Scan pages (demo)" button).
   useEffect(() => {
     const want = new URLSearchParams(window.location.search).get("open");
     if (!want) return;
@@ -68,6 +72,12 @@ export default function KitPreview() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F] py-10">
       <div className="max-w-7xl mx-auto px-6">
+        {/* The REAL page scanner, opened by a button (never from render or an
+            effect — reading location while rendering desyncs hydration). */}
+        <button onClick={() => setShowScanner(true)} className="btn-ghost h-9 px-3 text-sm mb-3">
+          Scan pages (demo)
+        </button>
+        {showScanner && <PageScanner onDone={() => setShowScanner(false)} onClose={() => setShowScanner(false)} />}
         <p className="text-xs text-[#98A0A9] mb-2">Preview · redesigned lesson cards (direction 1) — dev only.</p>
         <div className="card overflow-hidden bg-[#EEF3F1] mb-10">
           <div className="px-5 py-4 space-y-2">

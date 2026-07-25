@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { cleanBookTitle } from "@/utils/book";
+import PageScanner from "./page-scanner";
 
 export default function UploadBook({
   schoolId,
@@ -23,6 +24,10 @@ export default function UploadBook({
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  // A scan arrives as a normal PDF File, so everything below it — validation,
+  // signed upload, retry, the books insert — runs completely unchanged.
+  const [scanned, setScanned] = useState(false);
 
   // PUT via XHR so we get real upload-progress events (fetch can't report
   // progress) — on slow connections a multi-minute silent "Uploading…" reads
@@ -168,22 +173,51 @@ export default function UploadBook({
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <input
           type="file"
           accept="application/pdf"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setScanned(false);
+          }}
           className="text-sm text-[#14181F] file:mr-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 file:text-[#0C8175] file:font-medium"
         />
+        {/* No digital copy? Photograph the pages — they become one PDF and take
+            exactly this same upload path. */}
+        <button
+          type="button"
+          onClick={() => setScanning(true)}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0C8175] hover:underline"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2" />
+            <circle cx="12" cy="12" r="3.2" />
+          </svg>
+          Scan pages
+        </button>
         {file ? (
           <span className="text-xs text-[#5B6470]">
+            {scanned && <span className="text-[#0C8175]">Scanned · </span>}
             {(file.size / 1e6).toFixed(1)} MB
             {file.size > 20e6 && " — big book; keep this tab open while it uploads"}
           </span>
         ) : (
-          <span className="text-xs text-[#98A0A9]">Choose a PDF to enable upload</span>
+          <span className="text-xs text-[#98A0A9]">Choose a PDF, or scan pages, to enable upload</span>
         )}
       </div>
+
+      {scanning && (
+        <PageScanner
+          onClose={() => setScanning(false)}
+          onDone={(pdf) => {
+            setFile(pdf);
+            setScanned(true);
+            setScanning(false);
+            setError(null);
+          }}
+        />
+      )}
 
       {/* Restrictions, stated up front so a wrong file fails at the picker, not
           mid-upload. PDF-only is the file input's accept; single-file (no
