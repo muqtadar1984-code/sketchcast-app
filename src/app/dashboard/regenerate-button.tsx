@@ -151,7 +151,12 @@ export default function RegenerateButton({
 
   // Icon-only on artifact chips (keeps the kit uncluttered — the dialog does the
   // explaining); labelled where there's room.
-  const hint = `New version — writes a different ${noun}, keeps this one`;
+  //
+  // The hint states ONLY what is always true. Whether the current version
+  // survives depends on the usage check, which hasn't run yet at hover time: an
+  // assigned one is kept (its shares, progress and submissions must survive), an
+  // unassigned one is replaced. The dialog says which, once it knows.
+  const hint = `New version — writes a different ${noun}`;
   const trigger = icon ? (
     <button
       onClick={openDialog}
