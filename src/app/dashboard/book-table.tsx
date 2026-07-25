@@ -197,7 +197,7 @@ export default function BookTable({
         const ready = b.status === "ready";
         return (
           <div key={b.id} className="border-b border-[#EEF0EC] last:border-b-0">
-            <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#F5F6F3]" : ""}`}>
+            <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#EEF3F1]" : ""}`}>
               <button
                 onClick={() => ready && toggle(b.id)}
                 disabled={!ready}
@@ -260,7 +260,7 @@ export default function BookTable({
             )}
 
             {isOpen && ready && (
-              <div className="px-5 pb-4 bg-[#F5F6F3]">
+              <div className="px-5 pb-4 bg-[#EEF3F1]">
                 {/* Scanned PDFs have no text layer, so chapter detection falls back
                     to image recognition — best-effort and often wrong. Warn up front,
                     before the teacher generates against a bad chapter list. */}

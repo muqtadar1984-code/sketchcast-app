@@ -74,7 +74,7 @@ function SlideThumb({ n, title, video, processing, pct, trackId }: {
   n: number; title: string; video?: string | null; processing?: boolean; pct?: number; trackId?: string | null;
 }) {
   const slide = (
-    <div className="absolute inset-0 rounded-lg bg-white border border-[#E6E8E4] overflow-hidden">
+    <div className="absolute inset-0 rounded-lg bg-white border border-[#DCE6E2] overflow-hidden">
       <span className="absolute top-2 left-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#1FB8A6] text-[10px] font-medium text-[#04342C]">{n}</span>
       <span className="absolute top-2.5 left-7 right-2 text-[8px] font-medium text-[#14181F] truncate">{title}</span>
       <span className="absolute top-[19px] left-7 h-[3px] w-8 rounded-full bg-[#E2F4F1]" />
@@ -104,7 +104,7 @@ function SlideThumb({ n, title, video, processing, pct, trackId }: {
 // add-back, retry, regenerate, delete); the pill is just its frame.
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-[#E6E8E4] bg-white px-2.5 py-1 leading-none">
+    <span className="inline-flex items-center rounded-full border border-[#DCE6E2] bg-white px-2.5 py-1 leading-none">
       {children}
     </span>
   );
@@ -152,8 +152,8 @@ export default function LessonCard({
   // Trial (0057): this part isn't the pinned unit — a muted, non-actionable card.
   if (locked) {
     return (
-      <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-[#E6E8E4] bg-[#FAFBF9] px-3.5 py-3">
-        <div className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#E6E8E4] bg-white/60 flex items-center justify-center text-[#C6CBC4]">
+      <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-[#DCE6E2] bg-[#E1E8E5] px-3.5 py-3">
+        <div className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#DCE6E2] bg-[#D8E1DD] flex items-center justify-center text-[#C6CBC4]">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></svg>
         </div>
         <div className="min-w-0">
@@ -167,15 +167,17 @@ export default function LessonCard({
   // Not generated: one clear card with a single "Generate kit" action.
   if (!generated) {
     return (
-      <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-[#D6DAD3] bg-white px-3.5 py-3">
-        <div className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#D6DAD3] bg-[#F5F6F3] flex items-center justify-center text-[#B7C1B9]">
+      <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3">
+        <div className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#C3D0CB] bg-[#D8E1DD] flex items-center justify-center text-[#B7C1B9]">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium truncate">{title}</div>
+          {/* Ink is dialled back on the filled card so a made lesson (white,
+              full-contrast) still wins the eye. */}
+          <div className="text-sm font-medium text-[#556059] truncate">{title}</div>
           {/* Don't repeat the heading: when the title already fell back to
               "Part N", the meta line drops it. */}
-          <div className="text-xs text-[#98A0A9] truncate">
+          <div className="text-xs text-[#87938D] truncate">
             {subtitle ? `${subtitle} · ` : ""}Not generated yet · 1 credit
           </div>
         </div>
@@ -215,7 +217,7 @@ export default function LessonCard({
     .map((l) => l.id);
 
   return (
-    <div className="group/card flex gap-3.5 rounded-xl border border-[#EAECE7] bg-white px-3.5 py-3">
+    <div className="group/card flex gap-3.5 rounded-xl border border-[#DCE6E2] bg-white px-3.5 py-3">
       <SlideThumb
         n={part.n}
         title={title}
