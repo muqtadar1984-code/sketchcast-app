@@ -92,8 +92,20 @@ export default function FeedbackWidget({
             ✓ Feedback received — thank you!
           </span>
         ) : (
-          <button onClick={() => setOpen(true)} className="btn-primary h-10 px-4 text-sm rounded-full shadow-lg">
-            Give feedback
+          /* Collapsed to its mark like the other floating controls; the label
+             returns on hover/focus. */
+          <button
+            onClick={() => setOpen(true)}
+            title="Give feedback"
+            aria-label="Give feedback"
+            className="group btn-primary h-10 px-3 hover:px-4 focus-visible:px-4 text-sm rounded-full shadow-lg flex items-center transition-all"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+              <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-3.6-.7L3 21l1.9-4.6A8.1 8.1 0 0 1 3.6 11.5 8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z" />
+            </svg>
+            <span className="max-w-0 group-hover:max-w-[10rem] group-focus-visible:max-w-[10rem] ml-0 group-hover:ml-2 group-focus-visible:ml-2 overflow-hidden whitespace-nowrap transition-all duration-200">
+              Give feedback
+            </span>
           </button>
         )}
       </div>

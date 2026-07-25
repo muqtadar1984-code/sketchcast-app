@@ -19,13 +19,25 @@ export function SchoolAssistantLauncher() {
   return (
     <>
       <div className="fixed bottom-4 right-4 z-40">
+        {/* Collapsed to its mark, expanding on hover/focus — the same treatment
+            as the teaching Assistant and "Report a problem", so no floating
+            control sits over the content column. The drawn mark replaces an
+            emoji, which sized differently per platform and couldn't be tinted. */}
         <button
           onClick={() => setOpen(true)}
-          className="btn-primary h-11 px-4 text-sm rounded-full shadow-lg flex items-center gap-2"
+          className="group btn-primary h-11 px-3 hover:px-4 focus-visible:px-4 text-sm rounded-full shadow-lg flex items-center transition-all"
+          title="Ask about your school"
           aria-label="Ask about your school"
           data-tour="school-assistant"
         >
-          <span aria-hidden>🗒️</span> School briefing
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+            <path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z" />
+            <path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v11A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 17.5 6H16" />
+            <path d="M9 11h6M9 15h4" />
+          </svg>
+          <span className="max-w-0 group-hover:max-w-[10rem] group-focus-visible:max-w-[10rem] ml-0 group-hover:ml-2 group-focus-visible:ml-2 overflow-hidden whitespace-nowrap transition-all duration-200">
+            School briefing
+          </span>
         </button>
       </div>
       {open && <SchoolAssistantPanel onClose={() => setOpen(false)} />}
