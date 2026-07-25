@@ -5,8 +5,9 @@ import GenerateButton from "./generate-button";
 import GenerateAllButton from "./generate-all-button";
 import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
-import ContentCell, { type CellLesson } from "./content-cell";
-import GenerateKitButton from "./generate-kit-button";
+import { type CellLesson } from "./content-cell";
+import LessonCard from "./lesson-card";
+import BookTools from "./book-tools";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
 import BatchGenerate from "./batch-generate";
@@ -275,12 +276,13 @@ export default function BookTable({
                   </div>
                 )}
                 {!beta && (
-                  <div className="space-y-0.5">
+                  // One primary action (generate what's missing); the occasional
+                  // paper tools sit behind "More" so they stop competing with it.
+                  <div className="flex items-center justify-end gap-2 py-1.5">
                     {b.pendingChapters.length > 0 && (
-                      <div className="flex justify-end pb-1">
-                        <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} />
-                      </div>
+                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} />
                     )}
+                    <BookTools>
                     {/* Revision papers: worksheets/test papers over a group of
                         chapters, built from generated lessons. */}
                     <BatchGenerate
@@ -301,6 +303,7 @@ export default function BookTable({
                     {examEnabled && (
                       <ExamGenerate bookId={b.id} schoolId={schoolId} chapters={b.examUnits} language={b.language} />
                     )}
+                    </BookTools>
                   </div>
                 )}
                 <ul className="border-t border-[#EEF0EC] divide-y divide-[#EEF0EC]">
@@ -337,97 +340,26 @@ export default function BookTable({
                           pinned (book, chapter, part) triple stays live —
                           everything else shows dashes, never Generate. */}
                       {ch.parts.length > 1 && (
-                        <div className="mt-1.5 space-y-1.5">
+                        <div className="mt-2 space-y-2">
                           {ch.parts.map((p) => {
                             const locked =
                               !!beta?.pinned &&
                               (beta.pinned.bookId !== b.id ||
                                 beta.pinned.chapterRef !== String(ch.num) ||
                                 beta.pinned.part !== p.n);
-                            // Per-part assignment (founder 2026-07-19): every
-                            // generated part can be assigned on its own — the
-                            // lesson, worksheet and test paper for that part
-                            // (never the plan, activities or case study).
-                            const partAssignable = [p.presentation, p.worksheet, p.exam]
-                              .filter((l): l is CellLesson => !!l && l.status === "done")
-                              .map((l) => l.id);
-                            // A part is "generated" once its kit has been queued
-                            // (the lesson row exists and isn't errored). Before
-                            // that the row shows ONLY "Generate kit" — no greyed
-                            // placeholder cells (founder 2026-07-20: less texty).
-                            const generated = !!p.presentation && p.presentation.status !== "error";
                             return (
-                              <div key={p.n} className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-4 text-xs">
-                                <span className="w-28 shrink-0 text-[#5B6470]">
-                                  Part {p.n}
-                                  {p.titles.length > 0 && (
-                                    <span className="block text-[10px] text-[#98A0A9] truncate" title={p.titles.join(", ")}>
-                                      {p.titles.join(", ")}
-                                    </span>
-                                  )}
-                                </span>
-                                {generated ? (
-                                  <>
-                                    {/* Icon-forward cells: each artifact is its own
-                                        watch/download link; a missing document is a
-                                        free "+ Name" add-back once the lesson exists. */}
-                                    {(
-                                      [
-                                        ["presentation", "Lesson", p.presentation],
-                                        ["lesson_plan", "Plan", p.lessonPlan],
-                                        ["activity", "Activities", p.activity],
-                                        ["worksheet", "Worksheet", p.worksheet],
-                                        ["exam_paper", "Test paper", p.exam],
-                                        ["case_study", "Case study", p.caseStudy],
-                                      ] as const
-                                    ).map(([kind, label, lesson]) => (
-                                      <ContentCell
-                                        key={kind}
-                                        bookId={b.id}
-                                        schoolId={schoolId}
-                                        chapterNum={ch.num}
-                                        kind={kind}
-                                        label={label}
-                                        lesson={lesson}
-                                        part={p.n}
-                                        trackViews={!!beta}
-                                        bookLanguage={b.language}
-                                        genLocked={locked}
-                                      />
-                                    ))}
-                                    {partAssignable.length > 0 && (
-                                      <span className="ml-auto">
-                                        <AssignModal label="Assign" generationIds={partAssignable} classes={classes} />
-                                      </span>
-                                    )}
-                                  </>
-                                ) : locked ? (
-                                  // Trial: this part isn't the pinned unit (0057).
-                                  <span className="text-[#C6CBC4]" title="Your free trial covers the full kit for one part of one chapter">—</span>
-                                ) : (
-                                  // 0059: the kit is the unit — one credit queues the
-                                  // lesson plus all five documents in one click.
-                                  <GenerateKitButton
-                                    bookId={b.id}
-                                    schoolId={schoolId}
-                                    chapterNum={ch.num}
-                                    part={p.n}
-                                    language={b.language}
-                                    bookGrade={b.grade}
-                                    skipKinds={(
-                                      [
-                                        ["lesson_plan", p.lessonPlan],
-                                        ["activity", p.activity],
-                                        ["worksheet", p.worksheet],
-                                        ["exam_paper", p.exam],
-                                        ["case_study", p.caseStudy],
-                                      ] as const
-                                    )
-                                      .filter(([, l]) => l && l.status !== "error")
-                                      .map(([k]) => k)}
-                                  />
-                                )}
-                              </div>
+                              <LessonCard
+                                key={p.n}
+                                bookId={b.id}
+                                schoolId={schoolId}
+                                chapterNum={ch.num}
+                                part={p}
+                                classes={classes}
+                                locked={locked}
+                                trackViews={!!beta}
+                                bookLanguage={b.language}
+                                bookGrade={b.grade}
+                              />
                             );
                           })}
                         </div>
