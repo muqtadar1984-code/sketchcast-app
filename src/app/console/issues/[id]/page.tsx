@@ -89,7 +89,7 @@ export default async function ConsoleIssueDetailPage({
   }
 
   return (
-    <main className="max-w-4xl mx-auto px-6 py-10">
+    <main className="max-w-7xl mx-auto px-6 py-10">
       <p className="mb-4 text-sm">
         <Link href="/console/issues" className="text-[#0C8175] hover:underline">← Issues</Link>
       </p>

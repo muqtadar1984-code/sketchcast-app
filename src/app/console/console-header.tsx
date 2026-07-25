@@ -25,7 +25,7 @@ export default function ConsoleHeader({ email }: { email: string }) {
   const path = usePathname();
   return (
     <header className="border-b border-[#2A3140] bg-[#14181F] text-white">
-      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
         <span className="flex items-center gap-6">
           <Link href="/console" className="flex items-center gap-2.5 text-lg font-display text-white">
             <LogoMark size={26} />

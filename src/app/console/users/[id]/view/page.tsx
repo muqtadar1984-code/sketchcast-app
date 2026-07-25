@@ -130,7 +130,7 @@ export default async function ViewAsPage({
   }
 
   return (
-    <main className="max-w-4xl mx-auto px-6 py-8">
+    <main className="max-w-7xl mx-auto px-6 py-8">
       <div className="rounded-xl bg-[#FFF1D6] text-[#9A6400] px-4 py-3 text-sm mb-6 flex items-center justify-between gap-3">
         <span>
           Read-only view as <span className="font-medium">{name}</span> ({role}) — nothing here is

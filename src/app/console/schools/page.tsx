@@ -54,7 +54,7 @@ export default async function ConsoleSchoolsPage() {
   const independents = profiles.filter((p) => !p.school_id && p.role !== "student").length;
 
   return (
-    <main className="max-w-6xl mx-auto px-6 py-10">
+    <main className="max-w-7xl mx-auto px-6 py-10">
       <h1 className="text-4xl mb-2">Schools</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-[#5B6470] mb-6">

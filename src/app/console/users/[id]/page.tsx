@@ -67,7 +67,7 @@ export default async function ConsoleUserDetailPage({
   ];
 
   return (
-    <main className="max-w-5xl mx-auto px-6 py-10">
+    <main className="max-w-7xl mx-auto px-6 py-10">
       <p className="mb-4 text-sm flex items-center justify-between">
         <Link href="/console/users" className="text-[#0C8175] hover:underline">← Users</Link>
         <Link href={`/console/users/${id}/view`} className="btn-ghost h-8 px-3 text-xs">

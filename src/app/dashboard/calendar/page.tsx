@@ -177,7 +177,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-5xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-6 py-10">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-4xl mb-2">Calendar</h1>
