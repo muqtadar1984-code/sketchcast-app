@@ -391,7 +391,7 @@ export default async function DashboardPage() {
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
         {studentTimetableOn && (
-          <div className="max-w-7xl mx-auto px-6 pt-4 sm:hidden">
+          <div className="max-w-5xl mx-auto px-6 pt-4 sm:hidden">
             <Link href="/dashboard/my-timetable" className="chip bg-[#E2F4F1] text-[#0C8175]">
               📅 My timetable
             </Link>
