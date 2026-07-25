@@ -167,40 +167,49 @@ export default function LessonCard({
   // Not generated: one clear card with a single "Generate kit" action.
   if (!generated) {
     return (
-      <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3">
-        <div className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#C3D0CB] bg-[#D8E1DD] flex items-center justify-center text-[#B7C1B9]">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
-        </div>
-        <div className="min-w-0 flex-1">
-          {/* Ink is dialled back on the filled card so a made lesson (white,
-              full-contrast) still wins the eye. */}
-          <div className="text-sm font-medium text-[#556059] truncate">{title}</div>
-          {/* Don't repeat the heading: when the title already fell back to
-              "Part N", the meta line drops it. */}
-          <div className="text-xs text-[#87938D] truncate">
-            {subtitle ? `${subtitle} · ` : ""}Not generated yet · 1 credit
-          </div>
-        </div>
-        <GenerateKitButton
-          bookId={bookId}
-          schoolId={schoolId}
-          chapterNum={chapterNum}
-          part={part.n}
-          language={bookLanguage}
-          bookGrade={bookGrade}
-          skipKinds={(
-            [
-              ["lesson_plan", part.lessonPlan],
-              ["activity", part.activity],
-              ["worksheet", part.worksheet],
-              ["exam_paper", part.exam],
-              ["case_study", part.caseStudy],
-            ] as const
-          )
-            .filter(([, l]) => l && l.status !== "error")
-            .map(([k]) => k)}
-        />
-      </div>
+      // The WHOLE card is the button — a part that doesn't exist yet has exactly
+      // one thing to do, so the click target is the card, not a link at its edge.
+      <GenerateKitButton
+        bookId={bookId}
+        schoolId={schoolId}
+        chapterNum={chapterNum}
+        part={part.n}
+        language={bookLanguage}
+        bookGrade={bookGrade}
+        className="group/new w-full text-left flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
+        skipKinds={(
+          [
+            ["lesson_plan", part.lessonPlan],
+            ["activity", part.activity],
+            ["worksheet", part.worksheet],
+            ["exam_paper", part.exam],
+            ["case_study", part.caseStudy],
+          ] as const
+        )
+          .filter(([, l]) => l && l.status !== "error")
+          .map(([k]) => k)}
+      >
+        {({ busy }) => (
+          <>
+            <span className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#C3D0CB] bg-[#D8E1DD] flex items-center justify-center text-[#B7C1B9] transition-colors group-hover/new:border-[#1FB8A6] group-hover/new:text-[#0C8175]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              {/* Ink is dialled back on the filled card so a made lesson (white,
+                  full-contrast) still wins the eye. */}
+              <span className="block text-sm font-medium text-[#556059] truncate">{title}</span>
+              {/* Don't repeat the heading: when the title already fell back to
+                  "Part N", the meta line drops it. */}
+              <span className="block text-xs text-[#87938D] truncate">
+                {subtitle ? `${subtitle} · ` : ""}Not generated yet · 1 credit
+              </span>
+            </span>
+            <span className="shrink-0 text-[13px] font-medium text-[#0C8175]">
+              {busy ? "Queuing…" : "Generate kit"}
+            </span>
+          </>
+        )}
+      </GenerateKitButton>
     );
   }
 
