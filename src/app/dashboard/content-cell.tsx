@@ -5,6 +5,7 @@ import RegenerateButton from "./regenerate-button";
 import OptionsModal from "./options-modal";
 import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
+import ReportFailure from "./report-failure";
 import { recordArtifactView } from "@/utils/views";
 import { etaLabel, type JobStage } from "@/utils/job-stage";
 
@@ -82,6 +83,7 @@ export default function ContentCell({
   part = null,
   bookLanguage = null,
   genLocked = false,
+  bookTitle = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -98,6 +100,8 @@ export default function ContentCell({
   /** Trial: this cell's unit is outside the pin — hide generate/retry/
       regenerate (the DB would reject them) but keep artifacts + delete. */
   genLocked?: boolean;
+  /** Named in the failure report emailed to staff; falls back to the book id. */
+  bookTitle?: string | null;
 }) {
   const isPres = kind === "presentation";
 
@@ -154,10 +158,23 @@ export default function ContentCell({
   }
 
   if (lesson.status === "error") {
+    // "retry" re-runs it as-is; "report" emails the SketchCast team the book,
+    // chapter and part so someone can look at it. Offered ONLY where something
+    // has actually failed — the per-artifact reporter was removed from every
+    // artifact for being noisy, and this brings it back just where it earns place.
     return (
       <span className="inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap">
         <span className="text-[#B42318]">{isPres ? "Watch" : label} failed</span>
         {!genLocked && genControl("retry")}
+        <ReportFailure
+          generationId={lesson.id}
+          kind={kind}
+          label={isPres ? "Lesson" : label}
+          bookId={bookId}
+          bookTitle={bookTitle}
+          chapterNum={chapterNum}
+          part={part}
+        />
       </span>
     );
   }

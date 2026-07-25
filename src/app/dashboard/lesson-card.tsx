@@ -117,6 +117,7 @@ export default function LessonCard({
   part,
   classes,
   chapterTitle = "",
+  bookTitle = null,
   locked = false,
   trackViews = false,
   bookLanguage = null,
@@ -129,6 +130,8 @@ export default function LessonCard({
   classes: ClassRow[];
   /** Used to suppress a part title that just repeats the chapter heading. */
   chapterTitle?: string;
+  /** Named in the failure report a teacher emails to staff. */
+  bookTitle?: string | null;
   locked?: boolean;
   trackViews?: boolean;
   bookLanguage?: string | null;
@@ -309,6 +312,7 @@ export default function LessonCard({
                   part={part.n}
                   trackViews={trackViews}
                   bookLanguage={bookLanguage}
+                  bookTitle={bookTitle}
                 />
               </Chip>
             );
