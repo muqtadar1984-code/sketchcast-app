@@ -173,11 +173,11 @@ export default function LessonCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{title}</div>
-          {subtitle ? (
-            <div className="text-xs text-[#98A0A9] truncate">{subtitle}</div>
-          ) : (
-            <div className="text-xs text-[#98A0A9]">{partLabel} · not generated yet · 1 credit</div>
-          )}
+          {/* Don't repeat the heading: when the title already fell back to
+              "Part N", the meta line drops it. */}
+          <div className="text-xs text-[#98A0A9] truncate">
+            {subtitle ? `${subtitle} · ` : ""}Not generated yet · 1 credit
+          </div>
         </div>
         <GenerateKitButton
           bookId={bookId}
@@ -256,7 +256,7 @@ export default function LessonCard({
         </div>
 
         {/* Artifact chips: Deck + Ask Coach + the five documents. */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px]">
           {multi ? (
             // Long lesson: one Watch·Deck chip per rendered part.
             Array.from({ length: Math.max(videos.length, decks.length) }, (_, i) => (

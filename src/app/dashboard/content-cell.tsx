@@ -133,7 +133,7 @@ export default function ContentCell({
     const eta = lesson.status === "processing" ? etaLabel(kind, lesson.progress, lesson.stage) : "";
     return (
       <span
-        className="inline-flex items-center gap-1.5 text-xs text-[#98A0A9] whitespace-nowrap"
+        className="inline-flex items-center gap-1.5 text-[13px] text-[#98A0A9] whitespace-nowrap"
         title={`${label || "Lesson"} — ${lesson.status}${eta ? ` (${eta})` : ""}`}
       >
         {isPres ? (
@@ -155,7 +155,7 @@ export default function ContentCell({
 
   if (lesson.status === "error") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+      <span className="inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap">
         <span className="text-[#B42318]">{isPres ? "Watch" : label} failed</span>
         {!genLocked && genControl("retry")}
       </span>
@@ -168,7 +168,7 @@ export default function ContentCell({
   const nParts = Math.max(videos.length, decks.length);
   const linkCls = "inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline";
   return (
-    <span className={`group inline-flex ${isPres && nParts > 1 ? "items-start" : "items-center"} gap-1.5 text-xs whitespace-nowrap`}>
+    <span className={`group inline-flex ${isPres && nParts > 1 ? "items-start" : "items-center"} gap-1.5 text-[13px] whitespace-nowrap`}>
       {isPres ? (
         nParts > 1 ? (
           <span className="inline-flex flex-col gap-0.5">

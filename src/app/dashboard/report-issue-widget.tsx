@@ -56,6 +56,8 @@ export default function ReportIssueWidget({ variant = "adult" }: { variant?: "ad
     }, 1800);
   }
 
+  const label = variant === "student" ? "Need help?" : "Report a problem";
+
   return (
     <div className="fixed bottom-4 left-4 z-40">
       {open && (
@@ -107,12 +109,23 @@ export default function ReportIssueWidget({ variant = "adult" }: { variant?: "ad
           </div>
         </form>
       )}
+      {/* Collapsed to an icon by default, expanding on hover/focus: as a fixed
+          bottom-left widget its full-width label ran under the left edge of the
+          content column on anything narrower than ~1560px. The icon keeps it
+          discoverable; the label (and tooltip) still name it. */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="btn-ghost h-9 px-3 text-sm bg-white border border-[#E6E8E4] shadow-sm"
-        aria-label="Report a problem"
+        className="group flex items-center h-10 rounded-full bg-white border border-[#E6E8E4] shadow-sm px-2.5 hover:px-3.5 focus-visible:px-3.5 transition-all"
+        title={label}
+        aria-label={label}
       >
-        {variant === "student" ? "Need help?" : "Report a problem"}
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5B6470" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+          <path d="M12 9v4M12 17h.01" />
+          <path d="M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z" />
+        </svg>
+        <span className="max-w-0 group-hover:max-w-[11rem] group-focus-visible:max-w-[11rem] ml-0 group-hover:ml-2 group-focus-visible:ml-2 overflow-hidden whitespace-nowrap text-sm text-[#14181F] transition-all duration-200">
+          {label}
+        </span>
       </button>
     </div>
   );
