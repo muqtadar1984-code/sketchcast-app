@@ -67,10 +67,13 @@ export default function KitPreview() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F] py-10">
-      <div className="max-w-5xl mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-6">
         <p className="text-xs text-[#98A0A9] mb-2">Preview · redesigned lesson cards (direction 1) — dev only.</p>
         <div className="card overflow-hidden bg-[#F5F6F3] mb-10">
           <div className="px-5 py-4 space-y-2">
+            {/* Real prod data: a bare numeral leaked in as a title, and single-
+                section parts just repeat the chapter name — both suppressed. */}
+            <LessonCard {...COMMON} classes={[]} chapterTitle="Cells" part={part(1, { titles: ["1", "Cells"] })} />
             <LessonCard {...COMMON} classes={[]} part={part(1, { titles: ["What a cell is", "Cell structure and using a microscope"] })} />
             <LessonCard {...COMMON} classes={[]} part={part(2, {
               titles: ["Plant and animal cells"],

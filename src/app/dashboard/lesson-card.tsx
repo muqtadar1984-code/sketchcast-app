@@ -116,6 +116,7 @@ export default function LessonCard({
   chapterNum,
   part,
   classes,
+  chapterTitle = "",
   locked = false,
   trackViews = false,
   bookLanguage = null,
@@ -126,6 +127,8 @@ export default function LessonCard({
   chapterNum: number;
   part: CardPart;
   classes: ClassRow[];
+  /** Used to suppress a part title that just repeats the chapter heading. */
+  chapterTitle?: string;
   locked?: boolean;
   trackViews?: boolean;
   bookLanguage?: string | null;
@@ -133,10 +136,18 @@ export default function LessonCard({
 }) {
   const pres = part.presentation;
   const generated = !!pres && pres.status !== "error";
-  const titles = part.titles.filter(Boolean);
-  const title = titles[0] || `Part ${part.n}`;
-  const subtitle = titles.slice(1).join(" · ");
   const partLabel = `Part ${part.n}`;
+  // Section titles come from the book's part map and aren't always usable as a
+  // heading: some are bare numbering ("1", "1.2"), and a single-section part
+  // often just repeats the chapter name, which would echo the heading above it.
+  // Drop both, then fall back to "Part N" rather than showing a stray digit.
+  const chapter = (chapterTitle || "").trim().toLowerCase();
+  const titles = part.titles
+    .map((t) => (t || "").trim())
+    .filter((t) => t && !/^[\d.)\s-]+$/.test(t) && t.toLowerCase() !== chapter);
+  const title = titles[0] || partLabel;
+  const rest = titles.slice(1).join(" · ");
+  const subtitle = rest || (title === partLabel ? "" : partLabel);
 
   // Trial (0057): this part isn't the pinned unit — a muted, non-actionable card.
   if (locked) {
@@ -219,9 +230,12 @@ export default function LessonCard({
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium truncate" title={titles.join(" · ")}>{title}</div>
             <div className="text-xs text-[#98A0A9] truncate">
-              {subtitle || partLabel}
+              {subtitle}
               {processing && (
-                <span className="text-[#9A6400]"> · {p.progress}%{eta ? ` · ${eta}` : ""}</span>
+                <span className="text-[#9A6400]">
+                  {subtitle ? " · " : ""}
+                  {p.progress}%{eta ? ` · ${eta}` : ""}
+                </span>
               )}
             </div>
           </div>

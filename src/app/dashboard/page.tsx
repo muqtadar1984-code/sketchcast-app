@@ -391,7 +391,7 @@ export default async function DashboardPage() {
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
         {studentTimetableOn && (
-          <div className="max-w-5xl mx-auto px-6 pt-4 sm:hidden">
+          <div className="max-w-7xl mx-auto px-6 pt-4 sm:hidden">
             <Link href="/dashboard/my-timetable" className="chip bg-[#E2F4F1] text-[#0C8175]">
               📅 My timetable
             </Link>
@@ -795,7 +795,7 @@ export default async function DashboardPage() {
       <AutoRefresh active={hasPending} />
       <AppHeader />
 
-      <main className="max-w-5xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">Your library</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">

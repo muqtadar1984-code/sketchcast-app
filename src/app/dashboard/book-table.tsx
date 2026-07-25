@@ -355,6 +355,7 @@ export default function BookTable({
                                 chapterNum={ch.num}
                                 part={p}
                                 classes={classes}
+                                chapterTitle={ch.title}
                                 locked={locked}
                                 trackViews={!!beta}
                                 bookLanguage={b.language}
