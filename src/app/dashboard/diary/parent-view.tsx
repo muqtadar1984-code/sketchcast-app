@@ -1,0 +1,289 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/utils/supabase/server";
+import AppHeader from "../app-header";
+import { InkUnderline } from "@/components/ink-mark";
+import DiaryNote, { type DiaryNoteItem, type DiaryReplyItem } from "./diary-note";
+import ParentCompose from "./parent-compose";
+import DateNav, { dayWindowUtc, isDayKey, todayKey } from "./date-nav";
+import { displayNames } from "./names";
+
+// The PARENT page of the diary: one stacked section per linked child (the
+// children-page shape), each showing the chosen day as a timeline —
+//   · auto-entries DERIVED at read (nothing stored): what was assigned that
+//     day (generation_shares ⋈ generations) and what the child completed
+//     (student_progress, with the submission score when there is one)
+//   · the day's notes, including parents_only ones (this is the audience they
+//     exist for), each with Acknowledge ("sign the diary"), reply + translate
+//   · a compose box scoped to that child (per-student only — parents never
+//     write class-wide; the API and RLS both enforce it)
+// Every read is RLS-scoped to the parent's own children (0018/0066).
+
+const KIND_LABEL: Record<string, string> = {
+  presentation: "Video lesson",
+  activity: "Activities",
+  worksheet: "Worksheet",
+  exam_paper: "Test paper",
+  exam: "Exam",
+  case_study: "Case study",
+  lesson_plan: "Lesson plan",
+};
+
+type AutoEntry = { label: string; detail: string; done: boolean; score: string | null };
+
+export default async function ParentDiary({
+  date,
+  teacherHref = null,
+}: {
+  date?: string;
+  /** Union mode only: back to this adult's own class diary (see page.tsx). */
+  teacherHref?: string | null;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const day = isDayKey(date) ? date : todayKey();
+  const { startUtc, endUtc } = dayWindowUtc(day);
+
+  // ── The parent's slice, all RLS-scoped ──────────────────────────────────────
+  type LinkRow = { child_id: string; profiles: { full_name: string | null; username: string | null } | null };
+  const { data: linksRaw } = await supabase
+    .from("parent_links")
+    .select("child_id, profiles:child_id(full_name, username)")
+    .order("created_at");
+  const links = (linksRaw ?? []) as unknown as LinkRow[];
+
+  const [enrQ, classesQ, notesQ] = await Promise.all([
+    supabase.from("enrollments").select("class_id, student_id"),
+    supabase.from("classes").select("id, name"),
+    supabase
+      .from("diary_notes")
+      .select("id, author_id, class_id, student_id, note_type, body, parents_only, created_at")
+      .eq("entry_date", day)
+      .order("created_at"),
+  ]);
+  const enr = (enrQ.data ?? []) as { class_id: string; student_id: string }[];
+  const className = new Map(((classesQ.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
+  type NoteRow = {
+    id: string;
+    author_id: string;
+    class_id: string | null;
+    student_id: string | null;
+    note_type: string;
+    body: string;
+    parents_only: boolean;
+    created_at: string;
+  };
+  const notes = (notesQ.data ?? []) as NoteRow[];
+
+  // Threads + receipts for the day's notes, and the day's derived entries.
+  const noteIds = notes.map((n) => n.id);
+  type ReplyRow = { id: string; note_id: string; author_id: string; body: string; created_at: string };
+  type AckRow = { note_id: string; parent_id: string; student_id: string; acked_at: string };
+  const [repliesQ, acksQ, sharesQ, progQ] = await Promise.all([
+    noteIds.length
+      ? supabase.from("diary_replies").select("id, note_id, author_id, body, created_at").in("note_id", noteIds).order("created_at")
+      : Promise.resolve({ data: [] as ReplyRow[] }),
+    noteIds.length
+      ? supabase.from("diary_acks").select("note_id, parent_id, student_id, acked_at").in("note_id", noteIds)
+      : Promise.resolve({ data: [] as AckRow[] }),
+    supabase
+      .from("generation_shares")
+      .select("generation_id, class_id, student_id, created_at")
+      .gte("created_at", startUtc)
+      .lt("created_at", endUtc),
+    supabase
+      .from("student_progress")
+      .select("generation_id, student_id, completed_at")
+      .gte("completed_at", startUtc)
+      .lt("completed_at", endUtc),
+  ]);
+  const replies = (repliesQ.data ?? []) as ReplyRow[];
+  const acks = (acksQ.data ?? []) as AckRow[];
+  const shares = (sharesQ.data ?? []) as { generation_id: string; class_id: string | null; student_id: string | null; created_at: string }[];
+  const prog = (progQ.data ?? []) as { generation_id: string; student_id: string; completed_at: string }[];
+
+  // Titles for the derived entries + scores for the day's completions.
+  const genIds = [...new Set([...shares.map((s) => s.generation_id), ...prog.map((p) => p.generation_id)])];
+  type GenRow = { id: string; title: string | null; kind: string | null };
+  type SubRow = { generation_id: string; student_id: string; auto_score: number | null; teacher_score: number | null; max_score: number | null };
+  const [gensQ, subsQ] = await Promise.all([
+    genIds.length
+      ? supabase.from("generations").select("id, title, kind").in("id", genIds)
+      : Promise.resolve({ data: [] as GenRow[] }),
+    prog.length
+      ? supabase
+          .from("submissions")
+          .select("generation_id, student_id, auto_score, teacher_score, max_score")
+          .in("generation_id", [...new Set(prog.map((p) => p.generation_id))])
+      : Promise.resolve({ data: [] as SubRow[] }),
+  ]);
+  const genOf = new Map(((gensQ.data ?? []) as GenRow[]).map((g) => [g.id, g]));
+  const subOf = new Map(((subsQ.data ?? []) as SubRow[]).map((s) => [`${s.generation_id}|${s.student_id}`, s]));
+
+  // Bylines: RLS resolves self + own children; a teacher's profile is
+  // (correctly) unreadable to a parent, so names.ts fills the rest with the
+  // service role — a real name, not a generic "Teacher" for everyone (the same
+  // helper the teacher and student views use). "Teacher" stays the last resort
+  // for a byline nothing could resolve (no service key in local dev).
+  const names = await displayNames(
+    supabase,
+    [...notes.map((n) => n.author_id), ...replies.map((r) => r.author_id)].filter((id) => id !== user.id),
+  );
+  const nameOf = (id: string) => (id === user.id ? "You" : names.get(id) || "Teacher");
+
+  const classesOfChild = new Map<string, string[]>();
+  for (const e of enr) {
+    if (!classesOfChild.has(e.student_id)) classesOfChild.set(e.student_id, []);
+    classesOfChild.get(e.student_id)!.push(e.class_id);
+  }
+
+  function entriesFor(childId: string): AutoEntry[] {
+    const childClasses = new Set(classesOfChild.get(childId) ?? []);
+    const out: AutoEntry[] = [];
+    for (const s of shares) {
+      if (s.student_id !== childId && !(s.class_id && childClasses.has(s.class_id))) continue;
+      const g = genOf.get(s.generation_id);
+      out.push({
+        label: g?.title || KIND_LABEL[g?.kind ?? ""] || "Assignment",
+        detail: `assigned · ${s.class_id ? className.get(s.class_id) ?? "class" : "direct"}`,
+        done: false,
+        score: null,
+      });
+    }
+    for (const p of prog) {
+      if (p.student_id !== childId) continue;
+      const g = genOf.get(p.generation_id);
+      const sub = subOf.get(`${p.generation_id}|${childId}`);
+      out.push({
+        label: g?.title || KIND_LABEL[g?.kind ?? ""] || "Assignment",
+        detail: "completed",
+        done: true,
+        score: sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}` : null,
+      });
+    }
+    return out;
+  }
+
+  function notesFor(childId: string): NoteRow[] {
+    const childClasses = new Set(classesOfChild.get(childId) ?? []);
+    return notes.filter((n) => n.student_id === childId || (n.class_id != null && childClasses.has(n.class_id)));
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
+      <AppHeader />
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        <h1 className="text-4xl mb-2">Diary</h1>
+        <InkUnderline className="block h-3 w-28 mb-3" />
+        <p className={`text-[#5B6470] ${teacherHref ? "mb-2" : "mb-6"}`}>
+          The daily communication book — one page per day, per child. Sign notes so the teacher knows
+          you&apos;ve seen them.
+        </p>
+        {teacherHref && (
+          <p className="text-sm text-[#5B6470] mb-6">
+            Viewing as parent ·{" "}
+            <Link href={teacherHref} className="font-medium text-[#0C8175] hover:underline">
+              back to my class diary
+            </Link>
+          </p>
+        )}
+
+        {/* Day links keep the ?as=parent door open in union mode. */}
+        <DateNav
+          day={day}
+          href={(d) => (teacherHref ? `/dashboard/diary?as=parent&d=${d}` : `/dashboard/diary?d=${d}`)}
+        />
+
+        <div className="space-y-5">
+          {links.length === 0 && (
+            <div className="card px-5 py-8 text-sm text-[#5B6470]">
+              No children linked yet — add your child under My Children first.
+            </div>
+          )}
+          {links.map((l) => {
+            const childName = l.profiles?.full_name || l.profiles?.username || "Child";
+            const entries = entriesFor(l.child_id);
+            const childNotes = notesFor(l.child_id);
+            const classLabels = (classesOfChild.get(l.child_id) ?? [])
+              .map((cid) => className.get(cid))
+              .filter(Boolean)
+              .join(", ");
+            return (
+              <div key={l.child_id} className="card divide-y divide-[#EEF0EC]">
+                <div className="px-5 py-3 flex items-center justify-between gap-3">
+                  <span className="font-medium text-lg font-display truncate">{childName}</span>
+                  {classLabels && <span className="text-xs text-[#5B6470] shrink-0">{classLabels}</span>}
+                </div>
+
+                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                  From the classroom ({entries.length})
+                </p>
+                {entries.length ? (
+                  entries.map((e, i) => (
+                    <div key={i} className="px-5 py-2.5 text-sm flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate">
+                        {e.label} <span className="text-xs text-[#5B6470]">· {e.detail}</span>
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        {e.score && <span className="tabular text-xs">{e.score}</span>}
+                        <span
+                          className={`chip font-sans normal-case tracking-normal ${
+                            e.done ? "bg-[#E2F4F1] text-[#0C8175]" : "bg-[#EEF0EC] text-[#5B6470]"
+                          }`}
+                        >
+                          {e.done ? "completed" : "assigned"}
+                        </span>
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">Nothing recorded for this day.</p>
+                )}
+
+                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                  Notes ({childNotes.length})
+                </p>
+                {childNotes.length ? (
+                  childNotes.map((n) => {
+                    const myAck = acks.find(
+                      (a) => a.note_id === n.id && a.parent_id === user.id && a.student_id === l.child_id,
+                    );
+                    const item: DiaryNoteItem = {
+                      id: n.id,
+                      type: n.note_type,
+                      body: n.body,
+                      author: nameOf(n.author_id),
+                      audience: n.class_id ? className.get(n.class_id) ?? "Class" : childName,
+                      parentsOnly: n.parents_only,
+                      createdAt: n.created_at,
+                    };
+                    const thread: DiaryReplyItem[] = replies
+                      .filter((r) => r.note_id === n.id)
+                      .map((r) => ({ id: r.id, author: nameOf(r.author_id), body: r.body, createdAt: r.created_at }));
+                    return (
+                      <DiaryNote
+                        key={n.id}
+                        note={item}
+                        replies={thread}
+                        canReply
+                        ack={{ studentId: l.child_id, ackedAt: myAck?.acked_at ?? null }}
+                      />
+                    );
+                  })
+                ) : (
+                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">No notes for this day.</p>
+                )}
+
+                <ParentCompose studentId={l.child_id} childName={childName} entryDate={day} />
+              </div>
+            );
+          })}
+        </div>
+      </main>
+    </div>
+  );
+}

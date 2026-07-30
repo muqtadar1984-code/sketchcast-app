@@ -1,6 +1,12 @@
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parentPortalEnabled, roleHatsEnabled, schoolAnalyticsEnabledFor, timetableEnabledFor } from "./flags";
+import {
+  diaryEnabled,
+  parentPortalEnabled,
+  roleHatsEnabled,
+  schoolAnalyticsEnabledFor,
+  timetableEnabledFor,
+} from "./flags";
 import { HAT_COOKIE, isHat, type Hat } from "./hats";
 
 // Server-side half of the hat model: read the cookie, verify a hat is actually
@@ -34,11 +40,12 @@ export async function verifyHat(
   if (hat === "teacher") return true; // every adult teaches
   if (hat === "principal") return role === "school_admin";
   if (hat === "coordinator") {
-    // Meaningful only where a leadership surface exists — analytics OR the
-    // timetable (otherwise its home doesn't accept it — see the invariant).
+    // Meaningful only where a leadership surface exists — analytics, the
+    // timetable OR the school diary (otherwise its home doesn't accept it —
+    // see the invariant). Keep this in step with hatsFor() in hats.ts.
     if (!schoolId) return false;
     const analyticsOn = await schoolAnalyticsEnabledFor(supabase, schoolId);
-    if (!analyticsOn && !(await timetableEnabledFor(supabase, schoolId))) return false;
+    if (!analyticsOn && !diaryEnabled() && !(await timetableEnabledFor(supabase, schoolId))) return false;
     // RLS cs_self_read + school filter: only grants in the CURRENT school count
     // (a stale grant from a school this user has left must not verify the hat).
     const { data } = await supabase.from("coordinator_scope").select("id").eq("school_id", schoolId).limit(1);
@@ -55,8 +62,12 @@ export async function hatHome(supabase: SupabaseClient, schoolId: string | null,
   if (hat === "parent") return "/dashboard/children";
   if (hat === "teacher") return "/dashboard";
   if (hat === "coordinator") {
-    // Valid only when analytics OR timetable is on; land on whichever exists.
-    return (await schoolAnalyticsEnabledFor(supabase, schoolId)) ? "/dashboard/school" : "/dashboard/school/timetable";
+    // Valid only when analytics, the timetable OR the diary is on; land on
+    // whichever exists (the school diary accepts the coordinator hat too, so
+    // the invariant holds in the diary-only tenant).
+    if (await schoolAnalyticsEnabledFor(supabase, schoolId)) return "/dashboard/school";
+    if (await timetableEnabledFor(supabase, schoolId)) return "/dashboard/school/timetable";
+    return "/dashboard/school/diary";
   }
   // Principal: analytics home first, the timetable when only that surface is
   // on, and the (parent-)invites page as the legacy last resort — it still

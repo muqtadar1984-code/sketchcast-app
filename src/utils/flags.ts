@@ -294,3 +294,13 @@ export function gettingStartedEnabled(): boolean {
 export function autofixEnabled(): boolean {
   return process.env.FEATURE_AUTOFIX === "true";
 }
+
+/**
+ * Class diary — the daily teacher↔home communication book (notes per class or
+ * student, student replies, parent acks, on-demand translation). OFF by
+ * default; needs migration 0066. Gates the /api/diary/* routes (404 when off —
+ * authoritative), the Diary tabs, and both diary pages.
+ */
+export function diaryEnabled(): boolean {
+  return process.env.FEATURE_DIARY === "true";
+}

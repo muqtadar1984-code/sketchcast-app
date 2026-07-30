@@ -22,10 +22,15 @@ describe("hatsFor — which hats an account holds", () => {
       "parent",
     ]);
   });
-  it("the coordinator hat needs a leadership surface — analytics OR timetable", () => {
+  it("the coordinator hat needs a leadership surface — analytics, timetable OR diary", () => {
     expect(hatsFor({ role: "teacher", hasScope: true, hasChildren: false, analyticsOn: false })).toEqual(["teacher"]);
     expect(
       hatsFor({ role: "teacher", hasScope: true, hasChildren: false, analyticsOn: false, timetableOn: true }),
+    ).toEqual(["coordinator", "teacher"]);
+    // Diary-only tenant: the school diary IS a leadership surface, so the hat
+    // (and the coordinator's own read-only diary) must still be reachable.
+    expect(
+      hatsFor({ role: "teacher", hasScope: true, hasChildren: false, analyticsOn: false, diaryOn: true }),
     ).toEqual(["coordinator", "teacher"]);
   });
   it("a parent-role account holds ONE merged parent hat — never a teacher hat to switch to", () => {

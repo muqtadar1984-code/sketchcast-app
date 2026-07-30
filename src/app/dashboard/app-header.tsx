@@ -8,6 +8,7 @@ import HatSwitcher from "./hat-switcher";
 import NotificationsBell, { type IssueNotification } from "./notifications-bell";
 import {
   calendarEnabledFor,
+  diaryEnabled,
   parentPortalEnabled,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
@@ -29,12 +30,14 @@ import { activeHatCookie } from "@/utils/hats-server";
 // One-hat-at-a-time tabs (FEATURE_ROLE_HATS): only the ACTIVE hat's world
 // renders — a principal in Teacher mode sees a plain teacher header, nothing
 // leadership. Presentation only; every page keeps its own server-side gates.
-function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetableOn: boolean): NavTab[] {
+function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetableOn: boolean, diaryOn: boolean): NavTab[] {
   const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: "Calendar" }] : [];
+  const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: "Diary" }] : [];
   if (hat === "teacher")
     return [
       { href: "/dashboard", label: "Library" },
       { href: "/dashboard/analytics", label: "My Analytics" },
+      ...diary,
       // School-linked teachers get THEIR schedule (read-only, plus cover duties).
       ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: "Timetable" }] : []),
       ...calendar,
@@ -46,6 +49,7 @@ function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetab
       { href: "/dashboard", label: "Library" },
       { href: "/dashboard/analytics", label: "My Analytics" },
       { href: "/dashboard/children", label: "My Children" },
+      ...diary,
       { href: "/dashboard/test-papers", label: "Test Papers" },
       ...calendar,
     ];
@@ -58,6 +62,8 @@ function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetab
     );
     if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
   }
+  // Leadership's diary is the read-only school surface, not the personal one.
+  if (diaryOn) tabs.push({ href: "/dashboard/school/diary", label: "Diary" });
   if (timetableOn) tabs.push({ href: "/dashboard/school/timetable", label: "Timetable" });
   tabs.push(...calendar);
   // Invites (parents only since 0052 — teacher accounts are staff-managed)
@@ -72,15 +78,20 @@ function tabsFor(
   analyticsOn: boolean,
   calendarOn: boolean,
   timetableOn: boolean,
+  diaryOn: boolean,
 ): NavTab[] {
   if (!role || role === "student") {
-    // School-linked students get their class timetable — nothing else.
-    return timetableOn ? [{ href: "/dashboard/my-timetable", label: "Timetable" }] : [];
+    // School-linked students get their class diary + timetable — nothing else.
+    return [
+      ...(diaryOn ? [{ href: "/dashboard/diary", label: "Diary" }] : []),
+      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: "Timetable" }] : []),
+    ];
   }
   const tabs: NavTab[] = [
     { href: "/dashboard", label: "Library" },
     { href: "/dashboard/analytics", label: "My Analytics" },
   ];
+  if (diaryOn) tabs.push({ href: "/dashboard/diary", label: "Diary" });
   if (calendarOn) tabs.push({ href: "/dashboard/calendar", label: "Calendar" });
   if (analyticsOn && (role === "school_admin" || hasScope)) {
     tabs.push(
@@ -96,6 +107,11 @@ function tabsFor(
         ? { href: "/dashboard/school/timetable", label: "Timetable" }
         : { href: "/dashboard/my-timetable", label: "Timetable" },
     );
+  // Union view carries BOTH diary doors: the personal one above, and the
+  // leadership read-only surface (distinct label — two "Diary" tabs would be
+  // indistinguishable here).
+  if (diaryOn && (role === "school_admin" || hasScope))
+    tabs.push({ href: "/dashboard/school/diary", label: "School Diary" });
   if (hasChildren) {
     tabs.push({ href: "/dashboard/children", label: "My Children" });
     tabs.push({ href: "/dashboard/test-papers", label: "Test Papers" });
@@ -217,15 +233,18 @@ export default async function AppHeader() {
   }
 
   // One-hat mode: filter everything to the active hat; legacy union view when off.
+  const diaryOn = diaryEnabled() && !!user && !!role;
   let hats: Hat[] = [];
   let activeHat: Hat | null = null;
   if (roleHatsEnabled() && user) {
-    hats = hatsFor({ role, hasScope, hasChildren, analyticsOn, timetableOn });
+    // The diary counts as a leadership surface: with only FEATURE_DIARY on, a
+    // coordinator still holds their hat (the school diary is behind it).
+    hats = hatsFor({ role, hasScope, hasChildren, analyticsOn, timetableOn, diaryOn });
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const tabs = activeHat
-    ? tabsForHat(activeHat, analyticsOn, calendarOn, timetableOn)
-    : tabsFor(role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn);
+    ? tabsForHat(activeHat, analyticsOn, calendarOn, timetableOn, diaryOn)
+    : tabsFor(role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn, diaryOn);
   const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
   return (
     <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">

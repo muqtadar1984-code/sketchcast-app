@@ -1,0 +1,330 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
+import AppHeader from "../app-header";
+import { InkUnderline } from "@/components/ink-mark";
+import DiaryNote, { type DiaryNoteItem, type DiaryReplyItem } from "./diary-note";
+import DiaryCompose from "../diary-compose";
+import DiaryDay from "../diary-day";
+import { dayWindowUtc, isDayKey, todayKey } from "./date-nav";
+import { displayNames } from "./names";
+
+// The TEACHER page of the diary: pick one of your classes, pick a day, then
+// the day reads like a page of the communication book —
+//   · a compose card (class-wide or per-student, type chips, parents-only)
+//   · auto-entries DERIVED at read (nothing stored): what was assigned to the
+//     class that day (generation_shares ⋈ generations) and which students
+//     completed what (student_progress, with the submission score when graded)
+//   · the day's notes — class-wide + per-student, parent-authored ones
+//     included (RLS's diary_teacher_of delivers them) — each with the
+//     "Signed N/M" parent-receipt count, the reply thread and translate
+// RLS scopes every read; the only service-role touch is the signature
+// DENOMINATOR (which students have a linked parent — teachers have no
+// parent_links read path) and unresolved bylines (names.ts).
+
+const KIND_LABEL: Record<string, string> = {
+  presentation: "Video lesson",
+  activity: "Activities",
+  worksheet: "Worksheet",
+  exam_paper: "Test paper",
+  exam: "Exam",
+  case_study: "Case study",
+  lesson_plan: "Lesson plan",
+};
+const KIND_ICON: Record<string, string> = {
+  presentation: "🎬",
+  activity: "🧩",
+  worksheet: "📝",
+  exam_paper: "🧪",
+  exam: "🧪",
+  case_study: "🔍",
+};
+
+type AutoEntry = { key: string; at: string; icon: string; text: string };
+
+export default async function TeacherDiary({
+  date,
+  classParam,
+  parentHref = null,
+}: {
+  date?: string;
+  classParam?: string;
+  /** Union mode only: this adult also has children — the door to their parent
+   * diary, since no hat switcher renders (see page.tsx). */
+  parentHref?: string | null;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const day = isDayKey(date) ? date : todayKey();
+  const today = todayKey();
+  const { startUtc, endUtc } = dayWindowUtc(day);
+  // Times on derived rows render in the school's timezone (calendar doctrine —
+  // fixed UTC+8; per-school config when a school outside MY signs up).
+  const timeFmt = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit" });
+  const dayLabel = new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC", // the key IS the civil day — don't re-shift it
+  });
+
+  // Their OWN classes — admins/coordinators can read school-wide rows under
+  // RLS, but this page is their teacher hat (the school-wide diary is
+  // /dashboard/school/diary), so filter by ownership explicitly.
+  const { data: classesRaw } = await supabase
+    .from("classes")
+    .select("id, name")
+    .eq("teacher_id", user.id)
+    .order("name");
+  const classes = (classesRaw ?? []) as { id: string; name: string }[];
+  const classId = classes.some((cl) => cl.id === classParam) ? classParam! : classes[0]?.id ?? null;
+  const className = classes.find((cl) => cl.id === classId)?.name ?? "";
+
+  let noteItems: {
+    item: DiaryNoteItem;
+    thread: DiaryReplyItem[];
+    signed: { signed: number; total: number } | null;
+  }[] = [];
+  const auto: AutoEntry[] = [];
+  let roster: { id: string; name: string }[] = [];
+
+  if (classId) {
+    // Roster: the compose target list, completion bylines and the "Signed N/M"
+    // denominator all come from who is enrolled (0005's embed path).
+    type RosterRaw = {
+      enrollments: { profiles: { id: string; full_name: string | null; username: string | null } | null }[];
+    };
+    const { data: rosterRaw } = await supabase
+      .from("classes")
+      .select("id, enrollments(profiles(id, full_name, username))")
+      .eq("id", classId)
+      .maybeSingle();
+    roster = ((rosterRaw as unknown as RosterRaw | null)?.enrollments ?? [])
+      .map((e) => e.profiles)
+      .filter((p): p is { id: string; full_name: string | null; username: string | null } => !!p)
+      .map((p) => ({ id: p.id, name: p.full_name || p.username || "Student" }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const rosterIds = roster.map((s) => s.id);
+    const rosterName = new Map(roster.map((s) => [s.id, s.name]));
+
+    // The day's notes: class-wide + per-student for this class's students (two
+    // queries — an .or() over a long student-id list gets unwieldy).
+    type NoteRow = {
+      id: string;
+      author_id: string;
+      class_id: string | null;
+      student_id: string | null;
+      note_type: string;
+      body: string;
+      parents_only: boolean;
+      created_at: string;
+    };
+    const noteCols = "id, author_id, class_id, student_id, note_type, body, parents_only, created_at";
+    const [classNotesQ, studentNotesQ] = await Promise.all([
+      supabase.from("diary_notes").select(noteCols).eq("class_id", classId).eq("entry_date", day),
+      rosterIds.length
+        ? supabase.from("diary_notes").select(noteCols).in("student_id", rosterIds).eq("entry_date", day)
+        : Promise.resolve({ data: [] as NoteRow[] }),
+    ]);
+    const notes = ([...((classNotesQ.data ?? []) as NoteRow[]), ...((studentNotesQ.data ?? []) as NoteRow[])]).sort(
+      (a, b) => a.created_at.localeCompare(b.created_at),
+    );
+    const noteIds = notes.map((n) => n.id);
+
+    // Threads + receipts + the day's derived entries, in one round.
+    type ReplyRow = { id: string; note_id: string; author_id: string; body: string; created_at: string };
+    type AckRow = { note_id: string; student_id: string };
+    type ShareRow = { generation_id: string; created_at: string };
+    type ProgRow = { generation_id: string; student_id: string; completed_at: string };
+    const [repliesQ, acksQ, sharesQ, progQ] = await Promise.all([
+      noteIds.length
+        ? supabase.from("diary_replies").select("id, note_id, author_id, body, created_at").in("note_id", noteIds).order("created_at")
+        : Promise.resolve({ data: [] as ReplyRow[] }),
+      noteIds.length
+        ? supabase.from("diary_acks").select("note_id, student_id").in("note_id", noteIds)
+        : Promise.resolve({ data: [] as AckRow[] }),
+      supabase
+        .from("generation_shares")
+        .select("generation_id, created_at")
+        .eq("class_id", classId)
+        .gte("created_at", startUtc)
+        .lt("created_at", endUtc),
+      supabase
+        .from("student_progress")
+        .select("generation_id, student_id, completed_at")
+        .eq("class_id", classId)
+        .gte("completed_at", startUtc)
+        .lt("completed_at", endUtc),
+    ]);
+    const replies = (repliesQ.data ?? []) as ReplyRow[];
+    const acks = (acksQ.data ?? []) as AckRow[];
+    const shares = (sharesQ.data ?? []) as ShareRow[];
+    const prog = (progQ.data ?? []) as ProgRow[];
+
+    // Titles for the derived entries + scores for the day's completions.
+    const genIds = [...new Set([...shares.map((s) => s.generation_id), ...prog.map((p) => p.generation_id)])];
+    type GenRow = { id: string; title: string | null; kind: string | null };
+    type SubRow = { generation_id: string; student_id: string; auto_score: number | null; teacher_score: number | null; max_score: number | null };
+    const [gensQ, subsQ] = await Promise.all([
+      genIds.length
+        ? supabase.from("generations").select("id, title, kind").in("id", genIds)
+        : Promise.resolve({ data: [] as GenRow[] }),
+      prog.length
+        ? supabase
+            .from("submissions")
+            .select("generation_id, student_id, auto_score, teacher_score, max_score")
+            .in("generation_id", [...new Set(prog.map((p) => p.generation_id))])
+        : Promise.resolve({ data: [] as SubRow[] }),
+    ]);
+    const genOf = new Map(((gensQ.data ?? []) as GenRow[]).map((g) => [g.id, g]));
+    const subOf = new Map(((subsQ.data ?? []) as SubRow[]).map((s) => [`${s.generation_id}|${s.student_id}`, s]));
+
+    for (const s of shares) {
+      const g = genOf.get(s.generation_id);
+      if (g?.kind === "lesson_plan") continue; // the teacher's doc, never assigned
+      auto.push({
+        key: `s-${s.generation_id}-${s.created_at}`,
+        at: s.created_at,
+        icon: KIND_ICON[g?.kind ?? ""] ?? "📌",
+        text: `Assigned ${g?.title || KIND_LABEL[g?.kind ?? ""] || "an assignment"}`,
+      });
+    }
+    for (const p of prog) {
+      const g = genOf.get(p.generation_id);
+      const sub = subOf.get(`${p.generation_id}|${p.student_id}`);
+      const score = sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}` : null;
+      auto.push({
+        key: `p-${p.generation_id}-${p.student_id}`,
+        at: p.completed_at,
+        icon: "✅",
+        text: `${rosterName.get(p.student_id) ?? "A student"} completed ${g?.title || KIND_LABEL[g?.kind ?? ""] || "an assignment"}${score ? ` · ${score}` : ""}`,
+      });
+    }
+    auto.sort((a, b) => a.at.localeCompare(b.at));
+
+    // Parent signatures: the acks are readable under RLS; the DENOMINATOR
+    // (which students have a linked parent account) needs the service role.
+    // No key → hide the count rather than show a wrong denominator.
+    const signedByNote = new Map<string, Set<string>>();
+    for (const a of acks) {
+      if (!signedByNote.has(a.note_id)) signedByNote.set(a.note_id, new Set());
+      signedByNote.get(a.note_id)!.add(a.student_id);
+    }
+    let linked: Set<string> | null = null;
+    if (rosterIds.length) {
+      try {
+        const admin = createAdminClient();
+        const { data: pl } = await admin.from("parent_links").select("child_id").in("child_id", rosterIds);
+        linked = new Set(((pl ?? []) as { child_id: string }[]).map((r) => r.child_id));
+      } catch {
+        /* no service key — count hidden */
+      }
+    }
+    const signedFor = (n: NoteRow): { signed: number; total: number } | null => {
+      if (!linked) return null;
+      // Per-student note: only that child's parents can sign — 0/1 or 1/1.
+      const total = n.student_id ? (linked.has(n.student_id) ? 1 : 0) : linked.size;
+      // Count only signatures from students still on TODAY'S roster with a
+      // linked parent (`linked` is the roster ∩ parent_links set) — a receipt
+      // from a since-unenrolled child stands in the audit but isn't part of
+      // this class's count, so N can never exceed M.
+      const signers = signedByNote.get(n.id);
+      let signed = 0;
+      if (signers) for (const sid of signers) if (linked.has(sid)) signed++;
+      return { signed, total };
+    };
+
+    const names = await displayNames(
+      supabase,
+      [...notes.map((n) => n.author_id), ...replies.map((r) => r.author_id)].filter((id) => id !== user.id),
+    );
+    const nameOf = (id: string) => (id === user.id ? "You" : names.get(id) || rosterName.get(id) || "A parent");
+
+    noteItems = notes.map((n) => ({
+      item: {
+        id: n.id,
+        type: n.note_type,
+        body: n.body,
+        author: nameOf(n.author_id),
+        audience: n.student_id ? rosterName.get(n.student_id) ?? "a student" : className,
+        parentsOnly: n.parents_only,
+        createdAt: n.created_at,
+      },
+      thread: replies
+        .filter((r) => r.note_id === n.id)
+        .map((r) => ({ id: r.id, author: nameOf(r.author_id), body: r.body, createdAt: r.created_at })),
+      signed: signedFor(n),
+    }));
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
+      <AppHeader />
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        <h1 className="text-4xl mb-2">Diary</h1>
+        <InkUnderline className="block h-3 w-28 mb-3" />
+        <p className={`text-[#5B6470] ${parentHref ? "mb-2" : "mb-6"}`}>
+          The daily communication book — notes home, replies, parent signatures, and what happened in
+          class.
+        </p>
+        {parentHref && (
+          <p className="text-sm text-[#5B6470] mb-6">
+            Viewing as teacher ·{" "}
+            <Link href={parentHref} className="font-medium text-[#0C8175] hover:underline">
+              see my children&apos;s diary
+            </Link>
+          </p>
+        )}
+
+        {!classId ? (
+          <div className="card px-5 py-8 text-sm text-[#5B6470]">
+            Create a class on your Library first — the diary is written per class.
+          </div>
+        ) : (
+          <>
+            <DiaryDay classes={classes} classId={classId} date={day} today={today} />
+
+            <DiaryCompose classId={classId} className={className} students={roster} date={day} />
+
+            <h2 className="font-display text-lg mb-3">{dayLabel}</h2>
+            <div className="card divide-y divide-[#EEF0EC]">
+              <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                From the classroom ({auto.length})
+              </p>
+              {auto.length ? (
+                auto.map((a) => (
+                  <div key={a.key} className="px-5 py-2.5 flex items-center gap-3 text-sm text-[#5B6470]">
+                    <span aria-hidden>{a.icon}</span>
+                    <span className="min-w-0 truncate">{a.text}</span>
+                    <span className="ml-auto shrink-0 text-xs text-[#98A0A9]">{timeFmt.format(new Date(a.at))}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="px-5 py-2.5 text-sm text-[#98A0A9]">Nothing recorded for this day.</p>
+              )}
+
+              <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                Notes ({noteItems.length})
+              </p>
+              {noteItems.length ? (
+                noteItems.map((n) => (
+                  <DiaryNote key={n.item.id} note={n.item} replies={n.thread} canReply signed={n.signed} />
+                ))
+              ) : (
+                <p className="px-5 py-2.5 text-sm text-[#98A0A9]">
+                  No notes for this day yet — write the first one above.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}

@@ -31,8 +31,8 @@ export function isHat(s: string | null | undefined): s is Hat {
  * The hats an account holds, in seniority order (the first is the default).
  * - principal: the school_admin role
  * - coordinator: holds coordinator_scope rows AND at least one leadership
- *   surface is on for the tenant — analytics OR the timetable (a hat with no
- *   rooms behind it would be an empty world)
+ *   surface is on for the tenant — analytics, the timetable OR the diary (a
+ *   hat with no rooms behind it would be an empty world)
  * - teacher: every adult (adults implicitly teach — ownership-based access)
  * - parent: has parent_links (caller passes false when the portal flag is off)
  * Students hold no hats: their view never changes and no switcher renders.
@@ -43,6 +43,7 @@ export function hatsFor(opts: {
   hasChildren: boolean;
   analyticsOn: boolean;
   timetableOn?: boolean;
+  diaryOn?: boolean;
 }): Hat[] {
   if (!opts.role || opts.role === "student") return [];
   // Parents live in ONE merged world (founder, 2026-07-19): the parent hat's
@@ -52,7 +53,7 @@ export function hatsFor(opts: {
   if (opts.role === "parent") return ["parent"];
   const hats: Hat[] = [];
   if (opts.role === "school_admin") hats.push("principal");
-  if (opts.hasScope && (opts.analyticsOn || opts.timetableOn)) hats.push("coordinator");
+  if (opts.hasScope && (opts.analyticsOn || opts.timetableOn || opts.diaryOn)) hats.push("coordinator");
   hats.push("teacher");
   if (opts.hasChildren) hats.push("parent");
   return hats;
