@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { notFound } from "next/navigation";
 import ContentCell, { type CellLesson } from "@/app/dashboard/content-cell";
+import ChapterGenerate from "@/app/dashboard/chapter-generate";
 import LessonCard, { type CardPart } from "@/app/dashboard/lesson-card";
 import RegenerateButton from "@/app/dashboard/regenerate-button";
 import GettingStarted from "@/app/dashboard/getting-started";
@@ -165,6 +166,26 @@ export default function KitPreview() {
         <p className="text-[11px] text-[#98A0A9] mt-4">
           Hover a done artifact to reveal its ✕. Rings = live progress. ↻ regenerates.
         </p>
+
+        {/* Chunked lesson at CHAPTER level — the REAL ChapterGenerate swaps its
+            flat wrap for one bordered card: Pt chips first, docs attached. */}
+        <p className="text-xs text-[#98A0A9] mt-10 mb-2">Chapter row with a chunked lesson (REAL ChapterGenerate) — dev only.</p>
+        <div className="card overflow-hidden bg-[#EEF3F1] mb-10">
+          <div className="px-5 py-3">
+            <ChapterGenerate
+              {...COMMON}
+              classes={[]}
+              lessons={{
+                presentation: pres({ videos: ["#", "#", "#"], decks: ["#", "#", "#"] }),
+                lesson_plan: doc(),
+                activity: doc(),
+                worksheet: doc(),
+                exam_paper: doc(),
+                case_study: doc(),
+              }}
+            />
+          </div>
+        </div>
 
         <p className="text-xs text-[#98A0A9] mt-10 mb-3">Getting-started stepper — fresh / mid / done:</p>
         <div className="grid gap-4 sm:grid-cols-3 items-start">

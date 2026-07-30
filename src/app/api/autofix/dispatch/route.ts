@@ -14,6 +14,19 @@ export const runtime = "nodejs";
 
 const DAILY_CAP = 20; // backstop against runaway dispatch
 
+// The autofix_runs table ships in migration 0039. Before it runs, PostgREST reports
+// the table as missing from its schema cache (PGRST205) — surface that as a friendly
+// "not provisioned" 503 instead of leaking raw PostgREST internals.
+function dbErrorResponse(err: { code?: string; message?: string }) {
+  if (err.code === "PGRST205" || /schema cache/i.test(err.message ?? "")) {
+    return NextResponse.json(
+      { error: "Auto-fix isn't provisioned yet — migration 0039 hasn't been run. See docs/AUTOFIX.md." },
+      { status: 503 },
+    );
+  }
+  return NextResponse.json({ error: "Database error — try again." }, { status: 500 });
+}
+
 // Scrub obvious PII before anything leaves for a public GitHub Action log.
 function sanitize(s: string | null | undefined, max = 1500): string {
   return (s ?? "")
@@ -46,13 +59,17 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (!issue) return NextResponse.json({ error: "Issue not found." }, { status: 404 });
 
-  // One active run per issue.
-  const { data: existing } = await admin
+  // One active run per issue. limit(1): two concurrent dispatches can both
+  // pass this check-then-insert, and a bare maybeSingle() would then error
+  // (PGRST116, multiple rows) on every LATER attempt — bricking the issue.
+  const { data: existing, error: eErr } = await admin
     .from("autofix_runs")
     .select("id, status")
     .eq("issue_id", issueId)
     .in("status", ["dispatched", "pr_open", "approved"])
+    .limit(1)
     .maybeSingle();
+  if (eErr) return dbErrorResponse(eErr);
   if (existing) {
     return NextResponse.json({ error: "An auto-fix is already in progress for this issue." }, { status: 409 });
   }
@@ -83,7 +100,8 @@ export async function POST(request: Request) {
     .insert({ issue_id: issueId, run_key: runKey, branch, status: "dispatched", repo: "sketchcast-app" })
     .select("id")
     .single();
-  if (iErr || !run) return NextResponse.json({ error: iErr?.message ?? "Could not start." }, { status: 500 });
+  if (iErr) return dbErrorResponse(iErr);
+  if (!run) return NextResponse.json({ error: "Database error — try again." }, { status: 500 });
 
   const dispatch = await repositoryDispatch("autofix", {
     run_key: runKey,

@@ -20,6 +20,7 @@ type Body = {
   title?: string;
   description?: string | null;
   url?: string | null;
+  attachments?: string[];
 };
 
 async function sendEmail(subject: string, text: string): Promise<boolean> {
@@ -74,6 +75,22 @@ export async function POST(request: Request) {
   // Data minimization for minors: no free text, no pipeline context.
   const description = isStudent ? null : (body.description ?? "").trim().slice(0, 4000) || null;
 
+  // Screenshots (0065): students get them stripped; everyone else is pinned to
+  // paths inside THEIR OWN storage folder — the console signs whatever is
+  // stored here via the service role, so an arbitrary path would let a
+  // reporter read other users' objects (confused deputy).
+  const attachments = isStudent
+    ? null
+    : (Array.isArray(body.attachments) ? body.attachments : [])
+        .filter(
+          (p) =>
+            typeof p === "string" &&
+            p.length <= 200 && // real paths are ~50 chars; junk breaks the console card
+            p.startsWith(`${user.id}/`) &&
+            !p.includes(".."),
+        )
+        .slice(0, 3);
+
   // Rate limit: at most N open reports per user (their own rows via RLS).
   const { count: openCount } = await supabase
     .from("platform_issues")
@@ -116,6 +133,9 @@ export async function POST(request: Request) {
       category,
       title,
       description,
+      // Key only when present — PostgREST rejects unknown columns even when
+      // null, and this must not break reports on a pre-0065 database.
+      ...(attachments?.length ? { attachment_paths: attachments } : {}),
       context,
     })
     .select("id")
@@ -131,6 +151,8 @@ export async function POST(request: Request) {
     `Page: ${url || "?"}`,
     description ? `\n${description}\n` : "",
     context.recent_job_errors ? `Recent job errors:\n- ${(context.recent_job_errors as string[]).join("\n- ")}` : "",
+    // Count only — signed URLs never belong in email; view them in the console.
+    attachments?.length ? `Screenshots: ${attachments.length} (in the console)` : "",
     // The console lives on its own subdomain — a /console link on the app host
     // redirects to /dashboard (console-routing), which dead-ends the email.
     `\nTriage: https://${process.env.NEXT_PUBLIC_CONSOLE_HOST || "app.sketchcast.app"}/console/issues/${row.id}`,

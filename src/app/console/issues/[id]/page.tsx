@@ -20,6 +20,8 @@ type Issue = {
   title: string;
   description: string | null;
   context: { url?: string; user_agent?: string; recent_job_errors?: string[]; error?: string } | null;
+  // Screenshot paths in the 'issue-attachments' bucket (0065; absent pre-migration).
+  attachment_paths?: string[] | null;
   created_at: string;
   resolved_at: string | null;
   resolution_note: string | null;
@@ -72,21 +74,35 @@ export default async function ConsoleIssueDetailPage({
 
   const ctx = issue.context ?? {};
 
-  // Latest auto-fix run for this issue (drives the Auto-fix panel). Best-effort:
-  // pre-0039 the table doesn't exist yet, so a failure just hides the panel.
-  let autofixRun: AutofixRun = null;
-  try {
-    const { data: r } = await admin
-      .from("autofix_runs")
-      .select("status, pr_url, pr_number, ci_passed, sensitive, decided_via, created_at")
-      .eq("issue_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    autofixRun = (r as AutofixRun) ?? null;
-  } catch {
-    // 0039 not applied yet
-  }
+  // Signed screenshot URLs (private bucket — the service role signs, so no
+  // staff storage policy exists). Null on failure → skipped in the render.
+  const screenshotUrls = await Promise.all(
+    (issue.attachment_paths ?? []).map(async (p) => {
+      try {
+        const { data } = await admin.storage.from("issue-attachments").createSignedUrl(p, 3600);
+        return data?.signedUrl ?? null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  // Latest auto-fix run for this issue (drives the Auto-fix panel). Pre-0039 the
+  // table doesn't exist and the query returns PGRST205 (supabase-js doesn't throw) —
+  // the panel then shows a "not set up" note. Only THAT error means unprovisioned:
+  // a transient DB blip must not tell staff to re-run a migration that already ran.
+  // An empty result is NOT unprovisioned either (data:null, error:null).
+  const { data: autofixRow, error: autofixErr } = await admin
+    .from("autofix_runs")
+    .select("status, pr_url, pr_number, ci_passed, sensitive, decided_via, created_at")
+    .eq("issue_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const autofixProvisioned = !(
+    autofixErr && (autofixErr.code === "PGRST205" || /schema cache/i.test(autofixErr.message ?? ""))
+  );
+  const autofixRun: AutofixRun = (autofixRow as AutofixRun) ?? null;
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
@@ -129,6 +145,20 @@ export default async function ConsoleIssueDetailPage({
             </div>
           )}
         </div>
+        {screenshotUrls.some(Boolean) && (
+          <div className="card p-5">
+            <h2 className="font-display font-medium text-lg mb-2">Screenshots</h2>
+            <div className="flex flex-wrap gap-3">
+              {screenshotUrls.map((url, i) =>
+                url ? (
+                  <a key={i} href={url} target="_blank" rel="noreferrer">
+                    <img src={url} alt="Screenshot" className="max-h-48 rounded border border-[#E6E8E4]" />
+                  </a>
+                ) : null,
+              )}
+            </div>
+          </div>
+        )}
         {issue.diagnosis && (
           <div className="card p-5 text-sm space-y-1.5 border-l-4 border-l-[#1FB8A6]">
             <h2 className="font-display font-medium text-lg mb-2">
@@ -168,7 +198,7 @@ export default async function ConsoleIssueDetailPage({
         )}
       </div>
 
-      <AutofixPanel issueId={issue.id} run={autofixRun} />
+      <AutofixPanel issueId={issue.id} run={autofixRun} provisioned={autofixProvisioned} />
 
       <TriageForm
         id={issue.id}

@@ -42,6 +42,18 @@ type ScannedPage = {
 
 const mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
 
+// In-app webviews (Gmail, WhatsApp, Facebook, Instagram, Line, the Google app)
+// routinely break the camera round-trip. Copy-only: we hint at a real browser
+// but never disable the button — some webviews do work.
+const inAppBrowser =
+  typeof navigator !== "undefined" && /\bwv\b|FBAN|FBAV|Instagram|Line\/|GSA\//.test(navigator.userAgent);
+
+// The no-return camera hint only makes sense where `capture` actually opens a
+// camera. On desktop it's a plain file dialog, and a >3 s cancel would earn
+// camera/gallery copy that matches nothing the user did.
+const mobileUA =
+  typeof navigator !== "undefined" && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+
 function canvasFrom(img: CanvasImageSource, w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
@@ -85,6 +97,13 @@ export default function PageScanner({
   const [editing, setEditing] = useState<number | null>(null);
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
+  // Some webviews open the camera and then never fire `change` — the user comes
+  // back to a page that looks like nothing happened. Track the round-trip so we
+  // can hint at the gallery fallback (a hint, never an error: cancelling the
+  // camera looks identical and is a perfectly normal thing to do).
+  const cameraClickedAt = useRef<number | null>(null);
+  const cameraReturned = useRef(false);
+  const [cameraHint, setCameraHint] = useState(false);
 
   const total = pages.reduce((n, p) => n + p.bytes, 0);
   const overBudget = total >= SOFT_BUDGET;
@@ -95,6 +114,37 @@ export default function PageScanner({
   // and every caller degrades to an un-cropped page.
   useEffect(() => {
     void loadCv();
+  }, []);
+
+  // When focus comes back >3 s after the camera was opened with no `change`
+  // event, the capture either failed or was cancelled — either way the gallery
+  // picker is the way forward. Two subtleties: on a SUCCESSFUL capture the
+  // focus event arrives BEFORE the input's change event, so the hint waits a
+  // beat and only fires if change still hasn't come; and it is one-shot —
+  // the guard disarms after firing so later unrelated focus events (tab
+  // switches) can't re-raise it.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onFocus = () => {
+      if (
+        cameraClickedAt.current !== null &&
+        !cameraReturned.current &&
+        Date.now() - cameraClickedAt.current > 3000
+      ) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (!cameraReturned.current && cameraClickedAt.current !== null) {
+            setCameraHint(true);
+            cameraClickedAt.current = null; // disarm — hint at most once per attempt
+          }
+        }, 1500);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const addPhotos = useCallback(
@@ -108,6 +158,7 @@ export default function PageScanner({
       }
       const added: ScannedPage[] = [];
       let running = total;
+      let skipped = 0; // photos the browser couldn't decode (HEIC on many Androids)
       for (let i = 0; i < files.length; i++) {
         setBusy(`Reading page ${i + 1} of ${files.length}…`);
         if (running >= SOFT_BUDGET) {
@@ -118,18 +169,31 @@ export default function PageScanner({
           break;
         }
         const bitmap = await createImageBitmap(files[i]).catch(() => null);
-        if (!bitmap) continue;
+        if (!bitmap) {
+          skipped++;
+          continue;
+        }
         const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
         const sw = Math.max(1, Math.round(bitmap.width * scale));
         const sh = Math.max(1, Math.round(bitmap.height * scale));
         const src = canvasFrom(bitmap, sw, sh);
         bitmap.close?.();
 
-        const quad = await detectQuad(src);
+        // Cap the wait on detection: the first page can be stuck behind the 8 MB
+        // OpenCV download. Give up on auto-crop after 4 s (loadCv keeps warming in
+        // the background, so later pages still get it) — the page just lands
+        // uncropped, same as any detection miss.
+        const quad = await Promise.race([
+          detectQuad(src),
+          new Promise<Quad | null>((r) => setTimeout(() => r(null), 4000)),
+        ]);
         const flat = quad ? await warpQuad(src, quad) : null;
         const blob = await encodePage(flat ?? src, TARGET_PAGE_BYTES);
         const srcBlob = await new Promise<Blob | null>((r) => src.toBlob(r, "image/jpeg", 0.8));
-        if (!blob || !srcBlob) continue;
+        if (!blob || !srcBlob) {
+          skipped++;
+          continue;
+        }
 
         added.push({
           id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
@@ -144,6 +208,17 @@ export default function PageScanner({
         running += blob.size;
       }
       if (added.length) setPages((p) => [...p, ...added]);
+      if (skipped) {
+        // Don't clobber the budget message above — dropped photos matter less
+        // than a scan that's already at the 200 MB ceiling.
+        setError(
+          (prev) =>
+            prev ??
+            `${skipped} photo${skipped === 1 ? "" : "s"} couldn't be read — if your camera saves ` +
+              "HEIC ('high efficiency') photos, switch the camera to 'Most compatible'/JPEG, or " +
+              "use Choose photos.",
+        );
+      }
       setBusy(null);
     },
     [total],
@@ -254,10 +329,20 @@ export default function PageScanner({
               {/* `capture` opens the camera on a phone; on desktop it's a file
                   picker, which is also useful (photos already taken). */}
               <input ref={camera} type="file" accept="image/*" capture="environment" multiple className="hidden"
-                onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
+                onChange={(e) => { cameraReturned.current = true; cameraClickedAt.current = null; setCameraHint(false); addPhotos(e.target.files); e.target.value = ""; }} />
               <input ref={library} type="file" accept="image/*" multiple className="hidden"
-                onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
-              <button onClick={() => camera.current?.click()} disabled={!!busy} className="btn-primary h-10 px-4 text-sm">
+                onChange={(e) => { setCameraHint(false); addPhotos(e.target.files); e.target.value = ""; }} />
+              <button
+                onClick={() => {
+                  // Arm the no-return hint only on mobile (see mobileUA).
+                  cameraClickedAt.current = mobileUA ? Date.now() : null;
+                  cameraReturned.current = false;
+                  setCameraHint(false);
+                  camera.current?.click();
+                }}
+                disabled={!!busy}
+                className="btn-primary h-10 px-4 text-sm"
+              >
                 {pages.length ? "Add pages" : "Take photos"}
               </button>
               <button onClick={() => library.current?.click()} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
@@ -265,8 +350,20 @@ export default function PageScanner({
               </button>
             </div>
 
+            {inAppBrowser && (
+              <p className="mt-2 text-[11px] text-[#98A0A9]">
+                Cameras often fail inside the Gmail/WhatsApp browser — open sketchcast.app in Chrome
+                or Safari, or use Choose photos.
+              </p>
+            )}
+
             {busy && <p className="mt-3 text-xs text-[#9A6400]">{busy}</p>}
             {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+            {cameraHint && !busy && (
+              <p className="mt-3 text-xs text-[#5B6470]">
+                Nothing came back from the camera? Use Choose photos to pick from your gallery instead.
+              </p>
+            )}
 
             {pages.length > 0 && (
               <>

@@ -71,6 +71,19 @@ export default function ChapterGenerate({
   // DB requires a non-error presentation before docs ride free); after,
   // missing documents are free add-backs.
   const hasLesson = !!lessons["presentation"] && lessons["presentation"]!.status !== "error";
+  // A chunked lesson renders as Part 1..N videos/decks. Its Pt stack breaks
+  // the flat cell row, so the render below swaps to a bordered card (same
+  // array-or-legacy-single fallback as ContentCell's done branch). Gated on
+  // status "done": the worker uploads part artifacts DURING generation, so
+  // without it the row would flip layouts mid-render — and an errored kit
+  // with stale part videos must keep the flat row's failed/retry line.
+  const presL = lessons["presentation"];
+  const multiVideo =
+    presL?.status === "done" &&
+    Math.max(
+      presL?.videos?.length ?? (presL?.video ? 1 : 0),
+      presL?.decks?.length ?? (presL?.deck ? 1 : 0),
+    ) > 1;
   const kitPending = !betaLocked && !hasLesson;
   const pendingKinds = betaLocked || !hasLesson
     ? []
@@ -155,113 +168,149 @@ export default function ChapterGenerate({
     router.refresh();
   }
 
+  // The six cells, split so the two layouts below can share them: (a) the
+  // presentation (its tour anchor must render exactly once, visible in both
+  // layouts) and (b) the five document kinds. Already generated (or in
+  // progress): icon-forward cell — the label IS the watch/download link now,
+  // so no separate type icon + caption.
+  const presCell = presL ? (
+    <span data-tour="lesson-output" className="flex items-center">
+      <ContentCell
+        bookId={bookId}
+        schoolId={schoolId}
+        chapterNum={chapterNum}
+        kind="presentation"
+        label="Lesson"
+        lesson={presL}
+        trackViews={!!beta}
+        bookLanguage={bookLanguage}
+        genLocked={betaLocked}
+      />
+    </span>
+  ) : null;
+
+  const docCells = KINDS.filter((k) => k.kind !== "presentation").map((k) => {
+    const lesson = lessons[k.kind];
+    if (!lesson) {
+      // Locked chapters offer nothing; pre-lesson, single doc types
+      // aren't offered either (the kit button generates everything).
+      if (betaLocked || !hasLesson) return null;
+      // Lesson exists: missing documents are free add-backs.
+      return (
+        <label
+          key={k.kind}
+          className="flex items-center gap-1.5 cursor-pointer select-none hover:opacity-80"
+        >
+          <input
+            type="checkbox"
+            checked={!!sel[k.kind]}
+            onChange={() => toggle(k.kind)}
+            className="h-3.5 w-3.5 accent-[#0C8175]"
+          />
+          <TypeIcon kind={k.kind} />
+          <span className={LABEL}>{k.label}</span>
+        </label>
+      );
+    }
+    return (
+      <span key={k.kind} className="flex items-center">
+        <ContentCell
+          bookId={bookId}
+          schoolId={schoolId}
+          chapterNum={chapterNum}
+          kind={k.kind}
+          label={k.label}
+          lesson={lesson}
+          trackViews={!!beta}
+          bookLanguage={bookLanguage}
+          genLocked={betaLocked}
+        />
+      </span>
+    );
+  });
+
+  const trialChip =
+    betaLocked &&
+    // Three honest states (review: never say "pick one part below" when
+    // every part row renders dashes): pinned to another unit → locked;
+    // no pin yet → invite the pick; pinned to a part of THIS chapter →
+    // name it. (A chapter-level pin on THIS chapter is never locked.)
+    (pinnedElsewhere ? (
+      <span
+        className="chip font-sans bg-[#FFF1D6] text-[#9A6400]"
+        title="Your free trial covers the full kit (all six content types) for one part of one chapter"
+      >
+        Trial: 1 part — locked
+      </span>
+    ) : !beta?.pinned ? (
+      <span
+        className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
+        title="This chapter is split into parts — your trial covers the full kit (all six content types) for one part of your choice"
+      >
+        Trial: pick one part below
+      </span>
+    ) : (
+      <span
+        className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
+        title="Your trial kit lives on this part — retries and every content type for it stay open"
+      >
+        Trial: Part {beta.pinned.part} is your kit
+      </span>
+    ));
+
+  const actions = (
+    <span className="ml-auto flex items-center gap-3">
+      {assignableIds.length > 0 && (
+        <span data-tour="assign-chapter">
+          <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
+        </span>
+      )}
+      {kitPending && (
+        <button
+          data-tour="generate-lesson"
+          onClick={generate}
+          disabled={busy}
+          className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
+          title="The video lesson plus its plan, activities, worksheet, test paper and case study — documents free, one credit per rendered lesson part"
+        >
+          {busy ? "Queuing…" : "Generate full kit"}
+        </button>
+      )}
+      {pendingKinds.length > 0 && (
+        <button
+          data-tour="generate-lesson"
+          onClick={generate}
+          disabled={busy || chosen.length === 0}
+          className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
+          title="Free — these reuse the lesson's analysis"
+        >
+          {busy ? "Queuing…" : `Generate (${chosen.length}) — free`}
+        </button>
+      )}
+    </span>
+  );
+
   return (
     <div className="mt-1.5 pl-5">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        {KINDS.map((k) => {
-          const lesson = lessons[k.kind];
-          if (!lesson) {
-            // Locked chapters offer nothing; pre-lesson, single doc types
-            // aren't offered either (the kit button generates everything).
-            if (betaLocked || !hasLesson) return null;
-            // Lesson exists: missing documents are free add-backs.
-            return (
-              <label
-                key={k.kind}
-                className="flex items-center gap-1.5 cursor-pointer select-none hover:opacity-80"
-              >
-                <input
-                  type="checkbox"
-                  checked={!!sel[k.kind]}
-                  onChange={() => toggle(k.kind)}
-                  className="h-3.5 w-3.5 accent-[#0C8175]"
-                />
-                <TypeIcon kind={k.kind} />
-                <span className={LABEL}>{k.label}</span>
-              </label>
-            );
-          }
-          // Already generated (or in progress): icon-forward cell — the label
-          // IS the watch/download link now, so no separate type icon + caption.
-          return (
-            <span
-              key={k.kind}
-              data-tour={k.kind === "presentation" ? "lesson-output" : undefined}
-              className="flex items-center"
-            >
-              <ContentCell
-                bookId={bookId}
-                schoolId={schoolId}
-                chapterNum={chapterNum}
-                kind={k.kind}
-                label={k.label}
-                lesson={lesson}
-                trackViews={!!beta}
-                bookLanguage={bookLanguage}
-                genLocked={betaLocked}
-              />
-            </span>
-          );
-        })}
-
-        {betaLocked &&
-          // Three honest states (review: never say "pick one part below" when
-          // every part row renders dashes): pinned to another unit → locked;
-          // no pin yet → invite the pick; pinned to a part of THIS chapter →
-          // name it. (A chapter-level pin on THIS chapter is never locked.)
-          (pinnedElsewhere ? (
-            <span
-              className="chip font-sans bg-[#FFF1D6] text-[#9A6400]"
-              title="Your free trial covers the full kit (all six content types) for one part of one chapter"
-            >
-              Trial: 1 part — locked
-            </span>
-          ) : !beta?.pinned ? (
-            <span
-              className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
-              title="This chapter is split into parts — your trial covers the full kit (all six content types) for one part of your choice"
-            >
-              Trial: pick one part below
-            </span>
-          ) : (
-            <span
-              className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
-              title="Your trial kit lives on this part — retries and every content type for it stay open"
-            >
-              Trial: Part {beta.pinned.part} is your kit
-            </span>
-          ))}
-
-        <span className="ml-auto flex items-center gap-3">
-          {assignableIds.length > 0 && (
-            <span data-tour="assign-chapter">
-              <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
-            </span>
-          )}
-          {kitPending && (
-            <button
-              data-tour="generate-lesson"
-              onClick={generate}
-              disabled={busy}
-              className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
-              title="The video lesson plus its plan, activities, worksheet, test paper and case study — documents free, one credit per rendered lesson part"
-            >
-              {busy ? "Queuing…" : "Generate full kit"}
-            </button>
-          )}
-          {pendingKinds.length > 0 && (
-            <button
-              data-tour="generate-lesson"
-              onClick={generate}
-              disabled={busy || chosen.length === 0}
-              className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
-              title="Free — these reuse the lesson's analysis"
-            >
-              {busy ? "Queuing…" : `Generate (${chosen.length}) — free`}
-            </button>
-          )}
-        </span>
-      </div>
+      {multiVideo ? (
+        // Chunked lesson: one bordered card (LessonCard's frame) — the Pt
+        // chip stack first, the documents in an attached row underneath.
+        <div className="rounded-xl border border-[#DCE6E2] bg-white px-3.5 py-2.5">
+          {presCell}
+          <div className="mt-2 pt-2 border-t border-[#EEF0EC] flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {docCells}
+            {trialChip}
+            {actions}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {presCell}
+          {docCells}
+          {trialChip}
+          {actions}
+        </div>
+      )}
 
       {kitPending && (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">

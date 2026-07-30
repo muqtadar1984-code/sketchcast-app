@@ -179,7 +179,7 @@ export default function ContentCell({
     );
   }
 
-  // done — multi-video presentations stack one line per part ("Pt 2 · Watch · Deck").
+  // done — multi-video presentations stack one chip per part ("Pt 2 · Watch · Deck").
   const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
   const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
   const nParts = Math.max(videos.length, decks.length);
@@ -188,9 +188,9 @@ export default function ContentCell({
     <span className={`group inline-flex ${isPres && nParts > 1 ? "items-start" : "items-center"} gap-1.5 text-[13px] whitespace-nowrap`}>
       {isPres ? (
         nParts > 1 ? (
-          <span className="inline-flex flex-col gap-0.5">
+          <span className="inline-flex flex-col gap-1">
             {Array.from({ length: nParts }, (_, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5">
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-full border border-[#DCE6E2] bg-[#FCFCFA] px-2.5 py-1">
                 <span className="text-[#98A0A9] w-8">Pt {i + 1}</span>
                 {videos[i] && (
                   <a href={videos[i]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>

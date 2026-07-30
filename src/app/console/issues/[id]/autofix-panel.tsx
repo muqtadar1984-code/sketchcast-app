@@ -25,8 +25,17 @@ const LABEL: Record<string, { text: string; tone: string }> = {
 
 // Staff control: fire an auto-fix attempt at this issue (a GitHub Action drafts a
 // PR; the founder approves the release by email). Only rendered when
-// NEXT_PUBLIC_FEATURE_AUTOFIX is on. An in-progress run hides the button.
-export default function AutofixPanel({ issueId, run }: { issueId: string; run: AutofixRun }) {
+// NEXT_PUBLIC_FEATURE_AUTOFIX is on. An in-progress run hides the button. When the
+// environment isn't provisioned (migration 0039 not run) a setup note replaces it.
+export default function AutofixPanel({
+  issueId,
+  run,
+  provisioned,
+}: {
+  issueId: string;
+  run: AutofixRun;
+  provisioned: boolean;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -88,7 +97,14 @@ export default function AutofixPanel({ issueId, run }: { issueId: string; run: A
         </div>
       )}
 
-      {canAttempt && (
+      {!provisioned && (
+        <p className="text-sm text-[#5B6470]">
+          Auto-fix isn&apos;t set up on this environment yet — run migration 0039 and configure the
+          GitHub secrets (docs/AUTOFIX.md).
+        </p>
+      )}
+
+      {provisioned && canAttempt && (
         <button onClick={attempt} disabled={busy} className="btn-primary h-9 px-4 text-sm">
           {busy ? "Starting…" : run ? "Attempt auto-fix again" : "🔧 Attempt auto-fix"}
         </button>
