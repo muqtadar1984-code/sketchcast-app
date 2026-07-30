@@ -31,7 +31,10 @@ to `main` → Vercel deploys. **Nothing reaches production without your tap.**
 ## One-time setup (to activate)
 
 1. **Migration:** run `supabase/migrations/0039_autofix.sql`.
-2. **Enable GitHub Actions** on `muqtadar1984-code/sketchcast-app`.
+2. **Enable GitHub Actions** on `muqtadar1984-code/sketchcast-app`, AND under
+   Settings → Actions → General → *Workflow permissions*, tick
+   **"Allow GitHub Actions to create and approve pull requests"** — the workflow's
+   `gh pr create` uses the default `github.token`, which cannot open PRs without it.
 3. **GitHub token:** create a **fine-grained PAT** scoped to `sketchcast-app` with
    `Contents: Read/Write`, `Pull requests: Read/Write`, `Actions: Read/Write`,
    `Metadata: Read`. (Or a GitHub App installation token.)
