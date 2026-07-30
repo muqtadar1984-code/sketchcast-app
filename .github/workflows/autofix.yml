@@ -46,13 +46,17 @@ jobs:
 
       - run: npm ci
 
-      # Claude Code writes the fix. NOTE: pin/confirm the action version against its
-      # current README when you enable this (the inputs below match the base action).
+      # Claude Code writes the fix. `model` is pinned explicitly: the action's own
+      # default was a RETIRED id (claude-sonnet-4-20250514 → 404, first smoke test),
+      # so never rely on it. claude-sonnet-5 is the same model the app's assistant
+      # already runs in prod on this API key. `allowed_tools` is this action's real
+      # input name — `claude_args` is not an input and was silently ignored.
       - name: Claude Code — write the fix
         uses: anthropics/claude-code-base-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--allowedTools Edit,Write,Read,Bash,Grep,Glob"
+          model: claude-sonnet-5
+          allowed_tools: "Edit,Write,Read,Bash,Grep,Glob"
           prompt: |
             You are fixing a real customer-reported bug in this Next.js 16 / React 19 app.
             Read AGENTS.md first. Reproduce the problem, then make the SMALLEST correct fix.
