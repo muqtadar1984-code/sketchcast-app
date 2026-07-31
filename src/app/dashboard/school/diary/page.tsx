@@ -290,7 +290,9 @@ export default async function SchoolDiaryPage({
                       body: r.body,
                       createdAt: r.created_at,
                     }));
-                  // Read-only: no reply box, no ack — RLS blocks both anyway.
+                  // Read-only: no reply box, no ack — RLS blocks both anyway —
+                  // and no delete either (`mine` left unset): this is the
+                  // oversight page; an author retracts from their own diary.
                   return <DiaryNote key={n.id} note={item} replies={thread} />;
                 })
               ) : (

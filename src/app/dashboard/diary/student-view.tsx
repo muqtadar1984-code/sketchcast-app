@@ -152,10 +152,18 @@ export default async function StudentDiary({ date }: { date?: string }) {
       audience: n.student_id ? "you" : (n.class_id && className.get(n.class_id)) || "your class",
       parentsOnly: n.parents_only, // always false here — dn_read strips the rest
       createdAt: n.created_at,
+      mine: n.author_id === user.id, // always false — students never author notes
     },
     thread: replies
       .filter((r) => r.note_id === n.id)
-      .map((r) => ({ id: r.id, author: nameOf(r.author_id), body: r.body, createdAt: r.created_at })),
+      .map((r) => ({
+        id: r.id,
+        author: nameOf(r.author_id),
+        body: r.body,
+        createdAt: r.created_at,
+        // Their own reply is theirs to take back (dr_author_delete).
+        mine: r.author_id === user.id,
+      })),
   }));
 
   return (

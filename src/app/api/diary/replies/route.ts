@@ -4,11 +4,16 @@ import { diaryEnabled } from "@/utils/flags";
 
 export const runtime = "nodejs";
 
-// Class diary — reply on a note's thread (0066). Any PARTICIPANT on the note may
-// reply: the author, the teacher side, the parent side, or the student the note
-// concerns (never on parents_only rows — the helper excludes them by
-// construction). Leadership reads but can't write. The insert runs under the
-// CALLER'S session so RLS (dr_insert → diary_note_participant) is the authority.
+// Class diary — reply on a note's thread (0066), or retract your own reply.
+//
+//   POST   { noteId, body, studentId? }
+//   DELETE { id }   — the author retracts their own reply (dr_author_delete)
+//
+// Any PARTICIPANT on the note may reply: the author, the teacher side, the
+// parent side, or the student the note concerns (never on parents_only rows —
+// the helper excludes them by construction). Leadership reads but can't write.
+// The insert runs under the CALLER'S session so RLS (dr_insert →
+// diary_note_participant) is the authority.
 //
 // WHO A REPLY IS ABOUT (diary_replies.student_id, read by diary_reply_visible):
 // on a CLASS-WIDE note the audience is thirty households, so a family's reply is
@@ -151,4 +156,54 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, id: row.id, studentId: replyStudent });
+}
+
+// A thread is a record — there is no edit path — but the person who wrote a
+// line can take it back, which is what the privacy policy promises and what
+// dr_author_delete (author_id = auth.uid()) allows. Runs under the CALLER'S
+// session, exactly like the note delete; the cached translation of the reply
+// goes with it via 0066's diary_drop_translations trigger.
+export async function DELETE(request: Request) {
+  if (!diaryEnabled()) {
+    return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+
+  let body: { id?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+  const id = typeof body.id === "string" && UUID_RE.test(body.id) ? body.id : null;
+  if (!id) return NextResponse.json({ error: "A reply id is required." }, { status: 400 });
+
+  // .select() so the deleted rows come BACK: someone else's reply doesn't raise
+  // under RLS, it just matches nothing — zero rows IS the denial.
+  const { data: gone, error: dErr } = await supabase
+    .from("diary_replies")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (dErr) {
+    // 42501 = the policy refused outright (a suspended account hits the
+    // RESTRICTIVE 0015 rule here).
+    if (dErr.code === "42501") {
+      return NextResponse.json({ error: "That isn't yours to delete." }, { status: 403 });
+    }
+    // Log the detail; never hand PostgREST internals to the client.
+    console.error("diary.replies delete:", dErr.message);
+    return NextResponse.json({ error: "Could not delete the reply." }, { status: 500 });
+  }
+  // Not-yours and never-existed read the same on purpose — nothing leaks about
+  // threads the caller can't see.
+  if (!gone?.length) {
+    return NextResponse.json({ error: "That isn't yours to delete." }, { status: 403 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

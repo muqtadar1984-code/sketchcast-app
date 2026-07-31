@@ -18,6 +18,12 @@ export { NOTE_TYPES, TYPE_STYLE } from "./note-types";
 //                 state renders as the teal "Signed ✓" receipt chip
 //   · signed    — teacher only: the "Signed N/M" receipt count (N parents
 //                 signed, of M students with a linked parent account)
+//   · mine      — per note AND per reply: the viewer WROTE this one, so the
+//                 delete affordance shows (RLS's dn_author_delete /
+//                 dr_author_delete is the real gate). Resolved server-side from
+//                 author_id, the same comparison that already renders the "You"
+//                 byline; omitted ⇒ no delete, which is how the read-only
+//                 leadership page (dashboard/school/diary) stays read-only.
 // Translate is available to every viewer: /api/diary/translate re-proves the
 // caller can read the target under THEIR session before serving the cache.
 // The last-picked language is remembered (localStorage) so re-translating
@@ -28,6 +34,8 @@ export type DiaryReplyItem = {
   author: string; // display name, resolved server-side ("You" / "Teacher" / a child)
   body: string;
   createdAt: string;
+  /** The viewer wrote this reply — offer to retract it. */
+  mine?: boolean;
 };
 
 export type DiaryNoteItem = {
@@ -38,6 +46,9 @@ export type DiaryNoteItem = {
   audience: string; // where it's addressed: a class name or a student's name
   parentsOnly: boolean;
   createdAt: string;
+  /** The viewer wrote this note — offer to delete it (thread + signatures go
+   * with it; the confirm copy says so). */
+  mine?: boolean;
 };
 
 type Translated = { text: string; dir: string };
@@ -198,6 +209,55 @@ export default function DiaryNote({
     router.refresh();
   }
 
+  // ── Delete (authors only — RLS's dn_author_delete / dr_author_delete) ────────
+  // Never a bare one-tap ✕: deleting a note takes its whole thread AND the
+  // parents' signatures on it with it (0066 cascades), which is not what "✕"
+  // looks like it does — so the confirm SAYS it in words first. Inline two-tap,
+  // the same shape as DeleteStudentButton on the roster; no window.confirm.
+  // Neither handler clears its busy flag on success: the row it belongs to
+  // disappears with the refresh, and a re-armable control on a deleted note is
+  // just a second way to see an error.
+  const [confirmNote, setConfirmNote] = useState(false);
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [confirmReply, setConfirmReply] = useState<string | null>(null);
+  const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
+
+  async function removeNote() {
+    setNoteBusy(true);
+    setError(null);
+    const res = await fetch("/api/diary/notes", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: note.id }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(json.error ?? "Could not delete the note.");
+      setNoteBusy(false);
+      setConfirmNote(false);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function removeReply(id: string) {
+    setReplyBusyId(id);
+    setError(null);
+    const res = await fetch("/api/diary/replies", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(json.error ?? "Could not delete the reply.");
+      setReplyBusyId(null);
+      setConfirmReply(null);
+      return;
+    }
+    router.refresh();
+  }
+
   const time = TIME_FMT.format(new Date(note.createdAt));
 
   return (
@@ -244,6 +304,20 @@ export default function DiaryNote({
               </option>
             ))}
           </select>
+          {note.mine && !confirmNote && (
+            <button
+              onClick={() => {
+                setError(null);
+                setConfirmNote(true);
+              }}
+              disabled={noteBusy}
+              aria-label="Delete this note"
+              title="Delete this note"
+              className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
+            >
+              ✕
+            </button>
+          )}
         </span>
       </div>
 
@@ -251,14 +325,72 @@ export default function DiaryNote({
         {noteXl?.text ?? note.body}
       </p>
 
+      {note.mine && confirmNote && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-[#5B6470]">
+            Delete this note and its replies? The parents&apos; signatures on it go too.
+          </span>
+          <button
+            onClick={removeNote}
+            disabled={noteBusy}
+            className="font-medium text-red-600 hover:underline disabled:opacity-60"
+          >
+            {noteBusy ? "Deleting…" : "Yes, delete"}
+          </button>
+          <button
+            onClick={() => setConfirmNote(false)}
+            disabled={noteBusy}
+            className="font-medium text-[#5B6470] hover:underline disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        </p>
+      )}
+
       {(replies.length > 0 || canReply) && (
         <div className="mt-2 pl-3 border-l-2 border-[#EEF0EC] space-y-1.5">
           {replies.map((r) => {
             const rXl = lang ? xl[`reply:${r.id}`] : undefined;
+            const armed = confirmReply === r.id;
+            const busy = replyBusyId === r.id;
             return (
               <p key={r.id} className="text-sm" dir={rXl?.dir ?? "ltr"}>
                 <span className="text-xs text-[#5B6470]">{r.author}: </span>
                 <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{rXl?.text ?? r.body}</span>
+                {/* Own line only. The confirm stays LTR inside a mirrored
+                    thread — it's chrome, not part of what was said. */}
+                {r.mine &&
+                  (armed ? (
+                    <span className="ms-2 inline-flex flex-wrap items-center gap-2 text-xs" dir="ltr">
+                      <span className="text-[#5B6470]">Delete this reply?</span>
+                      <button
+                        onClick={() => removeReply(r.id)}
+                        disabled={busy}
+                        className="font-medium text-red-600 hover:underline disabled:opacity-60"
+                      >
+                        {busy ? "Deleting…" : "Yes, delete"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmReply(null)}
+                        disabled={busy}
+                        className="font-medium text-[#5B6470] hover:underline disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setConfirmReply(r.id);
+                      }}
+                      aria-label="Delete your reply"
+                      title="Delete your reply"
+                      className="ms-1.5 align-middle text-xs text-[#98A0A9] hover:text-[#B42318]"
+                    >
+                      ✕
+                    </button>
+                  ))}
               </p>
             );
           })}

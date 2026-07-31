@@ -4,12 +4,17 @@ import { diaryEnabled } from "@/utils/flags";
 
 export const runtime = "nodejs";
 
-// Class diary — author a note (0066). A note targets EXACTLY ONE of a class
-// (class-wide) or a student (personal). Teachers write to classes they own or
-// students they teach; parents write per-student notes about their own children
-// only; students never author notes (they reply). The insert runs under the
-// CALLER'S session so RLS (dn_insert) is the authority on standing — this route
-// only shapes and pre-validates so denials come back as friendly 400/403s.
+// Class diary — author a note (0066), or retract your own.
+//
+//   POST   { classId | studentId, type, body, parentsOnly?, entryDate? }
+//   DELETE { id }   — the author deletes their own note (dn_author_delete)
+//
+// A note targets EXACTLY ONE of a class (class-wide) or a student (personal).
+// Teachers write to classes they own or students they teach; parents write
+// per-student notes about their own children only; students never author notes
+// (they reply). Both writes run under the CALLER'S session so RLS (dn_insert /
+// dn_author_delete) is the authority on standing — this route only shapes and
+// pre-validates so denials come back as friendly 400/403s.
 
 const NOTE_TYPES = ["homework", "reminder", "praise", "concern", "health", "general"] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -122,4 +127,58 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, id: row.id, entryDate: row.entry_date });
+}
+
+// The privacy policy promises a family can remove what they wrote, and the
+// diary is where the most personal of it lives — so an author can take a note
+// back. The delete runs under the CALLER'S session: dn_author_delete
+// (author_id = auth.uid()) is the whole rule, and the row simply doesn't match
+// for anyone else. Everything hanging off the note goes with it in the DB —
+// replies and parent signatures by ON DELETE CASCADE, cached translations by
+// 0066's diary_drop_translations trigger — so there is nothing to clean up
+// here, and the UI's confirm copy says so before the tap.
+export async function DELETE(request: Request) {
+  if (!diaryEnabled()) {
+    return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+
+  let body: { id?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+  const id = typeof body.id === "string" && UUID_RE.test(body.id) ? body.id : null;
+  if (!id) return NextResponse.json({ error: "A note id is required." }, { status: 400 });
+
+  // .select() so the deleted rows come BACK: a note that isn't the caller's
+  // doesn't raise under RLS, it just matches nothing — zero rows IS the denial.
+  const { data: gone, error: dErr } = await supabase
+    .from("diary_notes")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (dErr) {
+    // 42501 = the policy refused outright (a suspended account hits the
+    // RESTRICTIVE 0015 rule here).
+    if (dErr.code === "42501") {
+      return NextResponse.json({ error: "That isn't yours to delete." }, { status: 403 });
+    }
+    // Log the detail; never hand PostgREST internals to the client.
+    console.error("diary.notes delete:", dErr.message);
+    return NextResponse.json({ error: "Could not delete the note." }, { status: 500 });
+  }
+  // Someone else's note and a note that never existed are indistinguishable on
+  // purpose — the same reasoning as the reply route's denial, so nothing leaks
+  // about notes the caller can't see.
+  if (!gone?.length) {
+    return NextResponse.json({ error: "That isn't yours to delete." }, { status: 403 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

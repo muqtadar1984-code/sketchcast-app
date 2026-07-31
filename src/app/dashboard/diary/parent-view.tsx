@@ -260,10 +260,19 @@ export default async function ParentDiary({
                       audience: n.class_id ? className.get(n.class_id) ?? "Class" : childName,
                       parentsOnly: n.parents_only,
                       createdAt: n.created_at,
+                      // Their own note home — theirs to take back
+                      // (dn_author_delete); a teacher's note never is.
+                      mine: n.author_id === user.id,
                     };
                     const thread: DiaryReplyItem[] = replies
                       .filter((r) => r.note_id === n.id)
-                      .map((r) => ({ id: r.id, author: nameOf(r.author_id), body: r.body, createdAt: r.created_at }));
+                      .map((r) => ({
+                        id: r.id,
+                        author: nameOf(r.author_id),
+                        body: r.body,
+                        createdAt: r.created_at,
+                        mine: r.author_id === user.id,
+                      }));
                     return (
                       <DiaryNote
                         key={n.id}

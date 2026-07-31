@@ -255,10 +255,19 @@ export default async function TeacherDiary({
         audience: n.student_id ? rosterName.get(n.student_id) ?? "a student" : className,
         parentsOnly: n.parents_only,
         createdAt: n.created_at,
+        // Authors can take their own line back (dn_author_delete) — the same
+        // comparison that renders the "You" byline above.
+        mine: n.author_id === user.id,
       },
       thread: replies
         .filter((r) => r.note_id === n.id)
-        .map((r) => ({ id: r.id, author: nameOf(r.author_id), body: r.body, createdAt: r.created_at })),
+        .map((r) => ({
+          id: r.id,
+          author: nameOf(r.author_id),
+          body: r.body,
+          createdAt: r.created_at,
+          mine: r.author_id === user.id,
+        })),
       signed: signedFor(n),
     }));
   }
