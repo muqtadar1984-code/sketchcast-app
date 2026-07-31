@@ -225,12 +225,17 @@ export default function DiaryNote({
               {LANGUAGES.find((l) => l.value === remembered)?.label ?? remembered}
             </button>
           )}
+          {/* Point-of-transfer notice: choosing a language sends this note's
+              text (and its replies') to our AI translation provider. Students
+              can translate too, so the disclosure has to sit on the control
+              itself, not only in the privacy policy. */}
           <select
             value={lang}
             onChange={(e) => translateTo(e.target.value)}
             disabled={xlBusy}
             className="field h-7 px-1.5 text-xs"
-            aria-label="Translate this note"
+            aria-label="Translate this note — sends the text to our AI translation provider"
+            title="Machine translation — the text of this note is sent to our AI provider to translate it"
           >
             <option value="">{xlBusy ? "Translating…" : "Translate"}</option>
             {LANGUAGES.map((l) => (

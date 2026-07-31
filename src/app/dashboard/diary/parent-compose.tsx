@@ -101,7 +101,8 @@ export default function ParentCompose({
         <span>
           Let {childName} see this note too
           <span className="block text-xs text-[#98A0A9]">
-            Off by default — only {childName}&apos;s teachers and you can read it.
+            Off by default — you, {childName}&apos;s teachers and school leadership can read it,
+            but {childName} cannot.
           </span>
         </span>
       </label>

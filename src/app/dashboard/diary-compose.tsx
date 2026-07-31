@@ -114,7 +114,7 @@ export default function DiaryCompose({
             className="accent-[#0C8175]"
           />
           Parents only
-          <span className="text-xs text-[#98A0A9]">— hidden from students; parents and teachers still see it</span>
+          <span className="text-xs text-[#98A0A9]">— hidden from students; parents, teachers and school leadership still see it</span>
         </label>
 
         <div className="ml-auto flex items-center gap-2">
