@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { noticesEnabledFor } from "@/utils/flags";
 import AppHeader from "../app-header";
+import NoticesSection from "../notices-section";
 import { InkUnderline } from "@/components/ink-mark";
 import DiaryNote, { type DiaryNoteItem, type DiaryNoteMessages, type DiaryReplyItem } from "./diary-note";
 import ParentCompose from "./parent-compose";
@@ -272,6 +273,11 @@ export default async function ParentDiary({
             </Link>
           </p>
         )}
+
+        {/* The school's board — what's been announced and what's coming up.
+            The Diary is where notices live; My Children keeps only the urgent
+            banner. */}
+        <NoticesSection />
 
         {/* Day links keep the ?as=parent door open in union mode. */}
         <DateNav

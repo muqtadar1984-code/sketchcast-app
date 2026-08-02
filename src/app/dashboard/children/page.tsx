@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { parentPortalEnabled, aiTutorEnabled } from "@/utils/flags";
+import { parentPortalEnabled, aiTutorEnabled, diaryEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import { noticesFor } from "@/utils/notices";
 import AddChild from "./add-child";
@@ -88,6 +88,11 @@ export default async function ChildrenPage() {
   // School notices (0068) — a parent carries no school_id, so noticesFor
   // resolves the school through their children (the calendar page's fallback).
   const notices = await noticesFor(supabase, { userId: user.id, role, schoolId });
+  // Can this reader actually GET to the Diary, where the notices list now
+  // lives? Same condition the header uses to decide the tab. FEATURE_DIARY is
+  // independent of FEATURE_NOTICES, so this can genuinely be false while
+  // notices are live — and the list is the only place to sign one.
+  const diaryReachable = diaryEnabled() && !!role;
 
   // Linked children (RLS: own links only). `source` decides who may delete:
   // self-created children are the parent's to remove; school-issued links are
@@ -179,10 +184,13 @@ export default async function ChildrenPage() {
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">{t.subtitle}</p>
 
-        {/* What the school is telling families — the reason most parents open
-            this page — above their children's work. */}
+        {/* Anything urgent still interrupts here, above their children's work.
+            The browsable list of what's coming up lives on the Diary — EXCEPT
+            when this reader has no Diary to go to, because the list carries the
+            only Acknowledge control and a parent is exactly who an important
+            notice asks to sign. */}
         {notices && <NoticeBanner notices={notices.featured} />}
-        {notices && <NoticesCard notices={notices.upcoming} />}
+        {notices && !diaryReachable && <NoticesCard notices={notices.upcoming} />}
 
         {/* The same fair-use card the Library and Test Papers show. This page
             is where a parent actually LANDS — onboarding, the parent hat, the

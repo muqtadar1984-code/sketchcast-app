@@ -114,6 +114,7 @@ export default function NotificationsBell({
   notices = [],
   noticesUnread = 0,
   noticesOn = false,
+  noticesHref = "/dashboard/calendar",
   t,
 }: {
   userId: string;
@@ -121,6 +122,9 @@ export default function NotificationsBell({
   /** Issues whose STATUS changed since notifications_seen_at. */
   initialUnread: number;
   notices?: NoticeNotification[];
+  /** Where a notice actually LIVES for this viewer — their Diary once the
+   * board moved there, falling back to the calendar when they have none. */
+  noticesHref?: string;
   /** Notices POSTED since notices_seen_at. */
   noticesUnread?: number;
   /** The notices feature is live for this viewer — gates the second watermark
@@ -226,11 +230,12 @@ export default function NotificationsBell({
                     </p>
                   </li>
                 ) : (
-                  // The notice itself lives on the calendar — the bell is the
-                  // nudge, not the record.
+                  // The bell is the nudge, not the record: it links to wherever
+                  // the board actually is for this viewer (their Diary, or the
+                  // calendar when they have no Diary tab).
                   <li key={`n-${r.notice.id}`} className="border-t first:border-t-0 border-[#EEF0EC] pt-2 first:pt-0">
                     <Link
-                      href="/dashboard/calendar"
+                      href={noticesHref}
                       onClick={() => setOpen(false)}
                       className="block rounded hover:bg-[#FAFBF9]"
                     >

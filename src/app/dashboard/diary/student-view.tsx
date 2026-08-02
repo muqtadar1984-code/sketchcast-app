@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { noticesEnabledFor } from "@/utils/flags";
 import AppHeader from "../app-header";
+import NoticesSection from "../notices-section";
 import { InkUnderline } from "@/components/ink-mark";
 import DiaryNote, { type DiaryNoteItem, type DiaryNoteMessages, type DiaryReplyItem } from "./diary-note";
 import DateNav, { dayWindowUtc, isDayKey, todayKey } from "./date-nav";
@@ -236,6 +237,11 @@ export default async function StudentDiary({ date }: { date?: string }) {
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">{t.studentIntro}</p>
+
+        {/* The school's board — what's been announced and what's coming up.
+            The Diary is where notices live; the lessons page keeps only the
+            urgent banner. */}
+        <NoticesSection />
 
         <DateNav day={day} href={(d) => `/dashboard/diary?d=${d}`} t={t.nav} lang={lang} />
 

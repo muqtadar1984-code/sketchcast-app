@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { noticesEnabledFor } from "@/utils/flags";
 import AppHeader from "../app-header";
+import NoticesSection from "../notices-section";
 import { InkUnderline } from "@/components/ink-mark";
 import DiaryNote, { type DiaryNoteItem, type DiaryNoteMessages, type DiaryReplyItem } from "./diary-note";
 import DiaryCompose from "../diary-compose";
@@ -356,6 +357,11 @@ export default async function TeacherDiary({
             </Link>
           </p>
         )}
+
+        {/* The school's board — what's been announced and what's coming up.
+            The Diary is where notices live; the Library keeps only the urgent
+            banner. */}
+        <NoticesSection />
 
         {!classId ? (
           <div className="card px-5 py-8 text-sm text-[#5B6470]">{t.noClasses}</div>

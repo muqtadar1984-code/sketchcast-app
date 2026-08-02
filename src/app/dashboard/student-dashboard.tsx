@@ -2,6 +2,7 @@ import { EmptyBooks } from "./icons";
 import StudentItem, { type StudentItemData, type StudentItemMessages } from "./student-item";
 import NoticeBanner from "./notice-banner";
 import NoticesCard from "./notices-card";
+import { diaryEnabled } from "@/utils/flags";
 import type { NoticesData } from "@/utils/notices";
 import { InkUnderline } from "@/components/ink-mark";
 import { getDictionary } from "@/i18n/dictionaries";
@@ -45,10 +46,13 @@ export default async function StudentDashboard({
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
-      {/* The school's own news, above the lessons: a student's page has nothing
-          else competing at the top, so both surfaces sit together. */}
+      {/* Anything urgent still interrupts here, where a student actually works.
+          The browsable list of what's coming up lives on the Diary — unless
+          there is no Diary to reach, in which case it stays put rather than
+          disappearing from the product. (A student is never asked to sign
+          anything, so only the reading matters here.) */}
       {notices && <NoticeBanner notices={notices.featured} />}
-      {notices && <NoticesCard notices={notices.upcoming} />}
+      {notices && !diaryEnabled() && <NoticesCard notices={notices.upcoming} />}
 
       {!downloadsReady && (
         <p className="mb-6 text-sm text-[#9A6400] bg-[#FFF1D6] rounded-lg px-3 py-2">{t.downloadsNotReady}</p>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
+import NoticesSection from "../../notices-section";
 import { InkUnderline } from "@/components/ink-mark";
 import { diaryEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
@@ -245,6 +246,12 @@ export default async function SchoolDiaryPage({
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{t.intro}</p>
+
+        {/* Leadership's diary IS this page — they hold no personal Diary tab —
+            so the school's board belongs here too. The banner comes with it:
+            a principal wearing the principal hat has no Library, and would
+            otherwise be the one person who never sees an urgent notice. */}
+        <NoticesSection />
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-10">
           {metrics.map((m) => (

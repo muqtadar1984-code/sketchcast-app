@@ -396,6 +396,12 @@ export default async function AppHeader() {
               notices={bellNotices}
               noticesUnread={bellNoticesUnread}
               noticesOn={noticesOn}
+              // Where the board lives for THIS viewer. Taken from the tabs we
+              // just built rather than hard-coded, so it is by construction a
+              // route they actually hold: /dashboard/diary for a teacher,
+              // parent or student, /dashboard/school/diary for leadership, and
+              // the calendar when they have no Diary tab at all.
+              noticesHref={tabs.find((tab) => tab.href.endsWith("/diary"))?.href ?? "/dashboard/calendar"}
               t={t.nav.bell}
             />
           )}

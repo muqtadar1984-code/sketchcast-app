@@ -25,7 +25,7 @@ import GettingStarted from "./getting-started";
 import NoticeBanner from "./notice-banner";
 import NoticesCard from "./notices-card";
 import { noticesFor } from "@/utils/notices";
-import { examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import { diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
@@ -247,6 +247,10 @@ export default async function DashboardPage() {
   // this viewer, so nothing renders. Read before the student branch below —
   // students get the same board.
   const notices = await noticesFor(supabase, { userId: user.id, role, schoolId });
+  // Can this reader reach the Diary, where the notices list now lives? Same
+  // condition the header uses for the tab. FEATURE_DIARY is independent of
+  // FEATURE_NOTICES, so this really can be false while notices are live.
+  const diaryReachable = diaryEnabled() && !!role;
 
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
@@ -838,6 +842,11 @@ export default async function DashboardPage() {
         <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
         {notices && <NoticeBanner notices={notices.featured} />}
+        {/* The browsable list lives on the Diary now — unless this reader has
+            no Diary to go to. The list is the only place a notice can be
+            SIGNED, and staff are asked to sign every staff notice, so it must
+            not vanish just because FEATURE_DIARY is off. */}
+        {notices && !diaryReachable && <NoticesCard notices={notices.upcoming} />}
 
         {gettingStarted && (
           <GettingStarted
@@ -873,10 +882,6 @@ export default async function DashboardPage() {
         <div data-tour="branding">
           <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} t={t} />
         </div>
-
-        {/* School-side news sits with the other school cards, above the library
-            itself — the banner already carries anything urgent. */}
-        {notices && <NoticesCard notices={notices.upcoming} />}
 
         {bookList.length === 0 ? (
           gettingStarted ? (
