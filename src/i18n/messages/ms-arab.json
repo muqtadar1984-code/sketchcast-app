@@ -1501,5 +1501,56 @@
         "failed": "انق تيدق داڤت دتمبه."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "ممباچ بهاݢين {n}/{total}",
+      "partProgress": "بهاݢين {n}/{total} · {pct}%",
+      "percent": "{pct}%",
+      "minutesLeft": "~{n} مينيت لاݢي"
+    },
+    "book": {
+      "untitled": "بوکو تنڤا تاجوق"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "سقراتيک",
+        "direct_explainer": "ڤنراڠن تروس",
+        "storytelling": "برچريتا",
+        "exam_focused": "فوکوس ڤڤريقساءن",
+        "conversational": "سنتاي بربوال"
+      },
+      "styleHints": {
+        "socratic": "ممبيمبيڠ ڤلاجر منموءي ايديا دڠن سوءالن.",
+        "direct_explainer": "ڤڠاجرن جلس دان تروس تراڠ، دڠن سديکيت سوءالن.",
+        "storytelling": "ممبالوت کونسيڤ دالم ساتو جالن چريتا.",
+        "exam_focused": "بيڠکاي اولڠ کاجي — ايسي ڤنتيڠ دان کسيلاڤن لازيم.",
+        "conversational": "نادا سنتاي، مسرا دان بهاس موده."
+      },
+      "voices": {
+        "edge-aria": "اريا — نيوترل",
+        "edge-guy": "ݢاي — مسرا",
+        "edge-neerja": "نيرجا — ايڠݢريس اينديا",
+        "edge-sonia": "سونيا — ايڠݢريس بريتيش",
+        "edge-yasmin": "ياسمين — بهاس ملايو",
+        "edge-osman": "عثمان — بهاس ملايو",
+        "edge-zariyah": "زاريه — عرب",
+        "edge-hamed": "حامد — عرب",
+        "edge-denise": "دنيس — ڤرانچيس",
+        "edge-henri": "هنري — ڤرانچيس",
+        "edge-elvira": "ايلۏيرا — سڤاڽول",
+        "edge-alvaro": "الۏارو — سڤاڽول",
+        "edge-francisca": "فرانسيسکا — ڤورتوݢيس",
+        "edge-antonio": "انتونيو — ڤورتوݢيس",
+        "edge-shruti": "شروتي — تلوݢو",
+        "edge-mohan": "موهن — تلوݢو",
+        "edge-aarohi": "آروهي — مراتي",
+        "edge-manohar": "مانوهر — مراتي",
+        "edge-swara": "سوارا — هيندي",
+        "edge-madhur": "مادهور — هيندي",
+        "el-rachel": "راچيل — سمولا جادي",
+        "el-adam": "آدم — دالم"
+      }
+    }
   }
 }

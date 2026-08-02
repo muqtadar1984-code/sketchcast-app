@@ -1501,5 +1501,56 @@
         "failed": "تعذّر إضافة الابن."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "قراءة الجزء {n}/{total}",
+      "partProgress": "الجزء {n}/{total} · {pct}%",
+      "percent": "{pct}%",
+      "minutesLeft": "بقي ~{n} د"
+    },
+    "book": {
+      "untitled": "كتاب بلا عنوان"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "سقراطي",
+        "direct_explainer": "شرح مباشر",
+        "storytelling": "أسلوب القصة",
+        "exam_focused": "مركّز على الامتحان",
+        "conversational": "حواري"
+      },
+      "styleHints": {
+        "socratic": "يقود الطلاب إلى اكتشاف الأفكار بالأسئلة.",
+        "direct_explainer": "تدريس واضح ومباشر بأقل قدر من الأسئلة.",
+        "storytelling": "يضع المفهوم داخل خيط قصصي متصل.",
+        "exam_focused": "إطار مراجعة — النقاط الأساسية والأخطاء الشائعة.",
+        "conversational": "نبرة ودودة بلغة بسيطة وغير رسمية."
+      },
+      "voices": {
+        "edge-aria": "آريا — محايدة",
+        "edge-guy": "غاي — دافئ",
+        "edge-neerja": "نيرجا — الإنجليزية الهندية",
+        "edge-sonia": "سونيا — الإنجليزية البريطانية",
+        "edge-yasmin": "ياسمين — الملايوية",
+        "edge-osman": "عثمان — الملايوية",
+        "edge-zariyah": "زارية — العربية",
+        "edge-hamed": "حامد — العربية",
+        "edge-denise": "دينيز — الفرنسية",
+        "edge-henri": "هنري — الفرنسية",
+        "edge-elvira": "إلفيرا — الإسبانية",
+        "edge-alvaro": "ألفارو — الإسبانية",
+        "edge-francisca": "فرانسيسكا — البرتغالية",
+        "edge-antonio": "أنطونيو — البرتغالية",
+        "edge-shruti": "شروتي — التيلوغوية",
+        "edge-mohan": "موهان — التيلوغوية",
+        "edge-aarohi": "آروهي — المهاراتية",
+        "edge-manohar": "مانوهار — المهاراتية",
+        "edge-swara": "سوارا — الهندية",
+        "edge-madhur": "مادهور — الهندية",
+        "el-rachel": "راشيل — طبيعية",
+        "el-adam": "آدم — عميق"
+      }
+    }
   }
 }

@@ -1501,5 +1501,56 @@
         "failed": "Could not add the child."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "reading part {n}/{total}",
+      "partProgress": "part {n}/{total} · {pct}%",
+      "percent": "{pct}%",
+      "minutesLeft": "~{n} min left"
+    },
+    "book": {
+      "untitled": "Untitled book"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "Socratic",
+        "direct_explainer": "Direct explainer",
+        "storytelling": "Storytelling",
+        "exam_focused": "Exam focused",
+        "conversational": "Conversational"
+      },
+      "styleHints": {
+        "socratic": "Guides students to discover ideas through questions.",
+        "direct_explainer": "Clear, straightforward teaching with minimal questioning.",
+        "storytelling": "Wraps the concept in a narrative through-line.",
+        "exam_focused": "Revision framing — key points and common mistakes.",
+        "conversational": "Casual, friendly, plain-language tone."
+      },
+      "voices": {
+        "edge-aria": "Aria — neutral",
+        "edge-guy": "Guy — warm",
+        "edge-neerja": "Neerja — Indian English",
+        "edge-sonia": "Sonia — British",
+        "edge-yasmin": "Yasmin — Bahasa Melayu",
+        "edge-osman": "Osman — Bahasa Melayu",
+        "edge-zariyah": "Zariyah — العربية",
+        "edge-hamed": "Hamed — العربية",
+        "edge-denise": "Denise — Français",
+        "edge-henri": "Henri — Français",
+        "edge-elvira": "Elvira — Español",
+        "edge-alvaro": "Álvaro — Español",
+        "edge-francisca": "Francisca — Português",
+        "edge-antonio": "Antônio — Português",
+        "edge-shruti": "Shruti — తెలుగు",
+        "edge-mohan": "Mohan — తెలుగు",
+        "edge-aarohi": "Aarohi — मराठी",
+        "edge-manohar": "Manohar — मराठी",
+        "edge-swara": "Swara — हिन्दी",
+        "edge-madhur": "Madhur — हिन्दी",
+        "el-rachel": "Rachel — natural",
+        "el-adam": "Adam — deep"
+      }
+    }
   }
 }

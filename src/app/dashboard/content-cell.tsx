@@ -29,13 +29,18 @@ export type CellLesson = {
 };
 
 /** Every word the Library renders — its own `library` namespace plus the shared
- * `common` slice — composed ONCE server-side by the dashboard page and handed
- * down this whole tree as one object (so it is serialized once, not per cell).
- * Typed from the English dictionary, but the import is type-only: the
- * server-only module is erased here and no translation file reaches the browser
- * bundle. Lives in this file because it is already the library's shared-type
- * module (CellLesson) — every other cell, card and modal imports from here. */
-export type LibraryMessages = Dictionary["library"] & { common: Dictionary["common"] };
+ * `common` slice and the `utils` one (the strings the shared helpers in
+ * src/utils emit: progress chips, ETAs, narration and voice names, the untitled
+ * book) — composed ONCE server-side by the dashboard page and handed down this
+ * whole tree as one object (so it is serialized once, not per cell). Typed from
+ * the English dictionary, but the import is type-only: the server-only module is
+ * erased here and no translation file reaches the browser bundle. Lives in this
+ * file because it is already the library's shared-type module (CellLesson) —
+ * every other cell, card and modal imports from here. */
+export type LibraryMessages = Dictionary["library"] & {
+  common: Dictionary["common"];
+  utils: Dictionary["utils"];
+};
 
 /** A generation's raw DB status word ("queued", "processing", …) in the reader's
  * language; an unknown status shows as itself rather than blank. */
@@ -159,7 +164,8 @@ export default function ContentCell({
   if (!lesson) return genLocked ? <span className="text-[#C6CBC4]">—</span> : genControl(fmt(t.cell.addBack, { label }));
 
   if (lesson.status === "queued" || lesson.status === "processing") {
-    const eta = lesson.status === "processing" ? etaLabel(kind, lesson.progress, lesson.stage) : "";
+    const eta =
+      lesson.status === "processing" ? etaLabel(kind, lesson.progress, lesson.stage, t.utils.job) : "";
     return (
       <span
         className="inline-flex items-center gap-1.5 text-[13px] text-[#98A0A9] whitespace-nowrap"
@@ -178,7 +184,8 @@ export default function ContentCell({
         <Ring pct={lesson.status === "processing" ? lesson.progress : 0} />
         {isPres && lesson.status === "processing" && (
           <span className="text-[#9A6400] tabular-nums">
-            {lesson.progress}%{eta ? ` · ${eta}` : ""}
+            {fmt(t.utils.job.percent, { pct: lesson.progress })}
+            {eta ? ` · ${eta}` : ""}
           </span>
         )}
       </span>

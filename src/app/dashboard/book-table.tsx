@@ -209,7 +209,7 @@ export default function BookTable({
                   {ready ? "▶" : "•"}
                 </span>
                 <span className="min-w-0">
-                  <span className="font-display font-medium truncate block">{cleanBookTitle(b.title)}</span>
+                  <span className="font-display font-medium truncate block">{cleanBookTitle(b.title, t.utils.book)}</span>
                   <span className="text-xs text-[#5B6470]">{b.author || t.book.unknownAuthor}</span>
                 </span>
               </button>
@@ -396,9 +396,9 @@ export default function BookTable({
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[p.status] ?? ""}`}>
                               {statusLabel(t, p.status)}
                               {p.status === "processing"
-                                ? ` · ${jobStageLabel(p.progress, p.stage)}${
-                                    etaLabel("exam_paper", p.progress, p.stage)
-                                      ? ` · ${etaLabel("exam_paper", p.progress, p.stage)}`
+                                ? ` · ${jobStageLabel(p.progress, p.stage, t.utils.job)}${
+                                    etaLabel("exam_paper", p.progress, p.stage, t.utils.job)
+                                      ? ` · ${etaLabel("exam_paper", p.progress, p.stage, t.utils.job)}`
                                       : ""
                                   }`
                                 : ""}
@@ -447,9 +447,9 @@ export default function BookTable({
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[e.status] ?? ""}`}>
                               {statusLabel(t, e.status)}
                               {e.status === "processing"
-                                ? ` · ${jobStageLabel(e.progress, e.stage)}${
-                                    etaLabel("exam", e.progress, e.stage)
-                                      ? ` · ${etaLabel("exam", e.progress, e.stage)}`
+                                ? ` · ${jobStageLabel(e.progress, e.stage, t.utils.job)}${
+                                    etaLabel("exam", e.progress, e.stage, t.utils.job)
+                                      ? ` · ${etaLabel("exam", e.progress, e.stage, t.utils.job)}`
                                       : ""
                                   }`
                                 : ""}
@@ -472,7 +472,9 @@ export default function BookTable({
                           {l.status === "done" ? <ArtifactLinks lesson={l} t={t} /> : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                               {statusLabel(t, l.status)}
-                              {l.status === "processing" ? ` · ${jobStageLabel(l.progress, l.stage)}` : ""}
+                              {l.status === "processing"
+                                ? ` · ${jobStageLabel(l.progress, l.stage, t.utils.job)}`
+                                : ""}
                             </span>
                           )}
                           <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />
@@ -503,7 +505,9 @@ export default function BookTable({
                             {l.status === "done" ? <ArtifactLinks lesson={l} t={t} /> : (
                               <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                                 {statusLabel(t, l.status)}
-                                {l.status === "processing" ? ` · ${jobStageLabel(l.progress, l.stage)}` : ""}
+                                {l.status === "processing"
+                                  ? ` · ${jobStageLabel(l.progress, l.stage, t.utils.job)}`
+                                  : ""}
                               </span>
                             )}
                             <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />

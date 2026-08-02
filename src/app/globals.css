@@ -110,6 +110,184 @@ h1, h2, h3 {
   scale: -1 1;
 }
 
+/* ── Non-Latin scripts (Arabic, Jawi, Devanagari, Telugu) ──────────────────
+   layout.tsx puts EVERY face's variable on <html> and chooses nothing. The
+   choosing happens here, keyed on the same `lang` that layout wrote, because
+   a font-family a locale never resolves is a font the browser never fetches
+   (the note in layout.tsx has the unicode-range mechanics). Latin locales
+   fall straight through all of this untouched.
+
+   Everything below drives Tailwind 4's own theme variables rather than
+   restating rules, so it reaches utilities we never wrote: `.font-sans`
+   compiles to `font-family: var(--font-sans)`, `.text-sm` to
+   `line-height: var(--tw-leading, var(--text-sm--line-height))`, and
+   `.tracking-wide` to `letter-spacing: var(--tracking-wide)`. Re-pointing
+   those variables on <html> redirects every such utility at once. Where a
+   utility hard-codes its value instead (`.leading-none`, `.uppercase`) there
+   is a real rule for it at the end of the section.
+
+   ── The ordering rule: THE SCRIPT FACE LEADS ITS STACK ──
+   Not a preference. next/font gives every family a metric-matched fallback —
+   a real @font-face whose src is local("Arial"), carrying ascent/descent/
+   size-adjust overrides and, the part that bites, NO unicode-range. That
+   makes it a catch-all claiming every codepoint Arial can draw, and Arial
+   draws Arabic. So the stack that reads more naturally,
+
+       font-family: var(--font-inter), var(--font-noto-sans-arabic);
+
+   resolves Arabic to 'Inter Fallback' — Arial, stretched by Inter's 107%
+   size-adjust — and never reaches the Noto face at all. Which is exactly the
+   undesigned substitution these faces were added to end, arriving silently
+   and only in the locales nobody on the team proofreads. Leading with the
+   script face is right by construction rather than by luck. (Arial carries no
+   Devanagari or Telugu, so those two would likely survive the other order;
+   depending on a system font's *absence* of coverage is not worth being
+   accidentally right about, so all three follow the one rule.)
+
+   The trade: Latin runs inside a non-Latin page — a product name, an email
+   address — render in the Noto family's own Latin rather than Space Grotesk.
+   That is the better result anyway. Noto's Latin is drawn to sit beside its
+   Arabic at matching weight and x-height, whereas dropping Space Grotesk into
+   a Noto Kufi headline pairs two faces that were never designed to meet. What
+   carries a brand across a writing system is the ROLE structure — a
+   constructed display voice over a humanist text voice — and that is what is
+   preserved here, not the Latin outlines. */
+
+/* Arabic and Jawi. Kufi takes the display role because Space Grotesk is a
+   constructed, monolinear geometric grotesk and Kufic is the Arabic script
+   built on the same principles: angular, near-uniform stroke, historically
+   the script of inscriptions and titles. It also stays where it belongs —
+   Kufi flattens the curves naskh uses to tell letters apart, so it is a
+   display face and never a body one. Noto Sans Arabic, naskh-derived and
+   humanist, carries running text as Inter's counterpart.
+
+   --font-mono leads with the Arabic face too, because `.chip` resolves it and
+   chips hold translated WORDS, which must reach a real Arabic face rather
+   than JetBrains Mono's Arial fallback. `.tabular` pays for that with Noto's
+   digits instead of JetBrains', but it keeps its column alignment: the
+   "tnum" it already asks for is present in Noto Sans Arabic. */
+html:is([lang="ar"], [lang="ms-Arab" i], :lang(ar), :lang(ms-Arab)) {
+  --font-display: var(--font-noto-kufi-arabic), var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-noto-sans-arabic), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-noto-sans-arabic), var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* Hindi and Marathi. One family across all three roles: Devanagari has no
+   geometric counterpart worth splitting display from text over, so the
+   distinction is carried by the weight axis (100–900) the way the h1–h3 rule
+   above already does it, rather than by a second face. */
+html:is([lang="hi"], [lang="mr"], :lang(hi), :lang(mr)) {
+  --font-display: var(--font-noto-sans-devanagari), var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-noto-sans-devanagari), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-noto-sans-devanagari), var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* Telugu, same single-family reasoning. */
+html:is([lang="te"], :lang(te)) {
+  --font-display: var(--font-noto-sans-telugu), var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-noto-sans-telugu), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-noto-sans-telugu), var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* ── Leading, and the things that must not be done to these scripts ────────
+   All three need more room than Latin at the same size — Arabic for the
+   descenders of ج ح خ ع and the dots hanging under them, Devanagari for
+   matras stacked above and below the shirorekha, Telugu for its subscript
+   conjuncts. Tailwind's Latin ratios (text-base 1.5, text-sm 1.43, text-xs
+   1.33) crowd all three, and the display sizes, which ship at 1.2 and below,
+   clip them outright.
+
+   Letter-spacing is the destructive one, so every tracking step is flattened
+   to zero. Arabic is cursive: its letters join along the baseline, and
+   tracking prises those joins apart into a row of disconnected shapes — not
+   "loose", broken. Devanagari joins too, along the shirorekha headline.
+   Telugu does not join, but its stacked conjuncts read as one unit and
+   tracking splits them. Zeroing the variables catches the thirteen
+   `uppercase tracking-wide` eyebrow labels across src/app/dashboard/ without
+   this file having to know any of them by name.
+
+   `font-synthesis-style: none` is the italic fix, and it is deliberately the
+   longhand. None of these scripts has an italic; asked for one anyway, the
+   browser FAKES it by shearing the upright glyphs, which drags Arabic's joins
+   out of alignment and tilts Devanagari's headline off level. This says: use
+   a real italic if the family has one, otherwise stay upright. Weight
+   synthesis is left alone — the variable faces cover 100–900, so nothing is
+   ever faked there. */
+html:is([lang="ar"], [lang="ms-Arab" i], [lang="hi"], [lang="mr"], [lang="te"],
+        :lang(ar), :lang(ms-Arab), :lang(hi), :lang(mr), :lang(te)) {
+  line-height: 1.7;
+
+  --text-xs--line-height: 1.6;
+  --text-sm--line-height: 1.65;
+  --text-base--line-height: 1.7;
+  --text-lg--line-height: 1.7;
+  --text-xl--line-height: 1.6;
+  --text-2xl--line-height: 1.5;
+  --text-3xl--line-height: 1.4;
+  --text-4xl--line-height: 1.3;
+  --text-5xl--line-height: 1.25;
+
+  --leading-tight: 1.4;
+  --leading-snug: 1.5;
+  --leading-normal: 1.7;
+  --leading-relaxed: 1.8;
+
+  --tracking-tighter: 0em;
+  --tracking-tight: 0em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0em;
+  --tracking-wider: 0em;
+  --tracking-widest: 0em;
+
+  font-synthesis-style: none;
+}
+
+/* Telugu hangs lowest of the three — its subscript consonants drop further
+   than Arabic descenders or Devanagari matras — so it takes one more step. */
+html:is([lang="te"], :lang(te)) {
+  line-height: 1.8;
+  --text-xs--line-height: 1.7;
+  --text-sm--line-height: 1.75;
+  --text-base--line-height: 1.8;
+  --text-lg--line-height: 1.8;
+  --text-xl--line-height: 1.7;
+  --text-2xl--line-height: 1.6;
+  --text-3xl--line-height: 1.45;
+}
+
+/* The rules above reach anything that reads a theme variable. These three set
+   letter-spacing literally — two of them in this very file — so they need
+   naming. Same reason as above: tracking severs the joins. */
+html:is([lang="ar"], [lang="ms-Arab" i], [lang="hi"], [lang="mr"], [lang="te"],
+        :lang(ar), :lang(ms-Arab), :lang(hi), :lang(mr), :lang(te))
+  :is(h1, h2, h3, .tabular, .chip) {
+  letter-spacing: normal;
+}
+
+/* `.leading-none` compiles to a bare `line-height: 1` and the numeric steps to
+   a fixed rem, so no variable override can reach them; at these sizes they
+   clip Arabic descenders and Devanagari matras. 1.35 clears both without
+   materially moving the layouts that asked for tight text. */
+html:is([lang="ar"], [lang="ms-Arab" i], [lang="hi"], [lang="mr"], [lang="te"],
+        :lang(ar), :lang(ms-Arab), :lang(hi), :lang(mr), :lang(te))
+  :is(.leading-none, .leading-3, .leading-4, .leading-5) {
+  line-height: 1.35;
+}
+
+/* All three scripts are unicameral — there is no capital to transform to, so
+   `uppercase` is inert on their glyphs, and once tracking is zeroed above the
+   eyebrow label (10px + uppercase + tracking-wide) has lost both of the
+   signals that made it read as a label. Dropping the transform as well stops
+   a mixed string from uppercasing only its Latin half; the weight gives the
+   label back a way to distinguish itself. Remove the weight line if a design
+   pass gives these labels a better treatment. */
+html:is([lang="ar"], [lang="ms-Arab" i], [lang="hi"], [lang="mr"], [lang="te"],
+        :lang(ar), :lang(ms-Arab), :lang(hi), :lang(mr), :lang(te))
+  .uppercase {
+  text-transform: none;
+  font-weight: 500;
+}
+
 /* ── Component utilities (Tailwind v4 @utility, so they're reliably emitted) ── */
 @utility card {
   background: var(--color-paper);

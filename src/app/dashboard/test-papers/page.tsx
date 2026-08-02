@@ -28,7 +28,7 @@ export default async function TestPapersPage() {
   // expect. The rest of this page's own copy is translated separately.
   const locale = await resolveLocale();
   const dict = await getDictionary(locale);
-  const tLib: LibraryMessages = { ...dict.library, common: dict.common };
+  const tLib: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
   const supabase = await createClient();
   const {
     data: { user },

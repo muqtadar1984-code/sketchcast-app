@@ -1501,5 +1501,56 @@
         "failed": "బిడ్డను చేర్చలేకపోయాం."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "భాగం {n}/{total} చదువుతోంది",
+      "partProgress": "భాగం {n}/{total} · {pct}%",
+      "percent": "{pct}%",
+      "minutesLeft": "~{n} నిమి మిగిలింది"
+    },
+    "book": {
+      "untitled": "పేరు లేని పుస్తకం"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "సోక్రటిక్",
+        "direct_explainer": "నేరుగా వివరణ",
+        "storytelling": "కథా శైలి",
+        "exam_focused": "పరీక్షపై దృష్టి",
+        "conversational": "సంభాషణ శైలి"
+      },
+      "styleHints": {
+        "socratic": "ప్రశ్నల ద్వారా విద్యార్థులే ఆలోచనలు కనుగొనేలా నడిపిస్తుంది.",
+        "direct_explainer": "ప్రశ్నలు తక్కువ — స్పష్టంగా, నేరుగా బోధన.",
+        "storytelling": "భావనను ఒక కథా సూత్రంలో చుట్టి చెబుతుంది.",
+        "exam_focused": "పునశ్చరణ దృష్టి — ముఖ్యాంశాలు, తరచు వచ్చే తప్పులు.",
+        "conversational": "సాదా మాటలతో సహజమైన, స్నేహపూర్వక ధోరణి."
+      },
+      "voices": {
+        "edge-aria": "ఆరియా — తటస్థం",
+        "edge-guy": "గై — ఆత్మీయం",
+        "edge-neerja": "నీర్జా — భారతీయ ఇంగ్లిష్",
+        "edge-sonia": "సోనియా — బ్రిటిష్ ఇంగ్లిష్",
+        "edge-yasmin": "యాస్మిన్ — మలయ్",
+        "edge-osman": "ఉస్మాన్ — మలయ్",
+        "edge-zariyah": "జారియా — అరబిక్",
+        "edge-hamed": "హామెద్ — అరబిక్",
+        "edge-denise": "డెనిస్ — ఫ్రెంచ్",
+        "edge-henri": "హెన్రీ — ఫ్రెంచ్",
+        "edge-elvira": "ఎల్విరా — స్పానిష్",
+        "edge-alvaro": "అల్వారో — స్పానిష్",
+        "edge-francisca": "ఫ్రాన్సిస్కా — పోర్చుగీస్",
+        "edge-antonio": "అంటోనియో — పోర్చుగీస్",
+        "edge-shruti": "శ్రుతి — తెలుగు",
+        "edge-mohan": "మోహన్ — తెలుగు",
+        "edge-aarohi": "ఆరోహి — మరాఠీ",
+        "edge-manohar": "మనోహర్ — మరాఠీ",
+        "edge-swara": "స్వర — హిందీ",
+        "edge-madhur": "మధుర్ — హిందీ",
+        "el-rachel": "రేచల్ — సహజం",
+        "el-adam": "ఆడమ్ — గంభీరం"
+      }
+    }
   }
 }

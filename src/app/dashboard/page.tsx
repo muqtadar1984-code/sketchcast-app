@@ -436,7 +436,7 @@ export default async function DashboardPage() {
   // beyond what the header already paid.
   const locale = await resolveLocale();
   const dict = await getDictionary(locale);
-  const t: LibraryMessages = { ...dict.library, common: dict.common };
+  const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
 
   // Teacher surfaces show what the person OWNS. Admins/coordinators can read
   // school-wide rows under RLS, so filter by ownership explicitly — their

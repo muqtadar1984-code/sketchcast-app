@@ -230,7 +230,8 @@ export default function LessonCard({
   const videos = p.videos?.length ? p.videos : p.video ? [p.video] : [];
   const decks = p.decks?.length ? p.decks : p.deck ? [p.deck] : [];
   const multi = Math.max(videos.length, decks.length) > 1;
-  const eta = p.status === "processing" ? etaLabel("presentation", p.progress, p.stage) : "";
+  const eta =
+    p.status === "processing" ? etaLabel("presentation", p.progress, p.stage, t.utils.job) : "";
 
   const assignable = [part.presentation, part.worksheet, part.exam]
     .filter((l): l is CellLesson => !!l && l.status === "done")
@@ -257,7 +258,8 @@ export default function LessonCard({
               {processing && (
                 <span className="text-[#9A6400]">
                   {subtitle ? " · " : ""}
-                  {p.progress}%{eta ? ` · ${eta}` : ""}
+                  {fmt(t.utils.job.percent, { pct: p.progress })}
+                  {eta ? ` · ${eta}` : ""}
                 </span>
               )}
             </div>

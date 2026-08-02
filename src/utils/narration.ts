@@ -1,19 +1,42 @@
+import type { Dictionary } from "@/i18n/dictionaries";
+
 // Lesson narration options for the generate form. These MUST mirror the worker's
 // authoritative registry (sketchcast-ai `agent3_scripts/prompts.py` STYLE_META and
 // `shared/tts/registry.py`) — the stable ids (style keys + voice_ids) are the
 // contract posted in `generations.params`. The worker resolves voice → provider
 // and enforces the free/premium gate server-side; this list only drives the UI.
 
+// WORDS vs IDS. Which is exactly why the words moved OUT of this file: a style's
+// name and its one-line description, and a voice's name and character, all live
+// in the dictionary under `utils.narration`, so the generation options read in
+// the reader's language like the rest of the modal — while the ids below, the
+// half the worker actually reads, never move. Translating "Socratic" must not
+// change what lands in `params`. The type-only Dictionary import is erased at
+// build time, so the server-only module never reaches the browser bundle.
+export type NarrationMessages = Dictionary["utils"]["narration"];
+
 export type NarrationStyle = { value: string; label: string; desc: string };
 
-export const NARRATION_STYLES: NarrationStyle[] = [
-  { value: "socratic", label: "Socratic", desc: "Guides students to discover ideas through questions." },
-  { value: "direct_explainer", label: "Direct explainer", desc: "Clear, straightforward teaching with minimal questioning." },
-  { value: "storytelling", label: "Storytelling", desc: "Wraps the concept in a narrative through-line." },
-  { value: "exam_focused", label: "Exam focused", desc: "Revision framing — key points and common mistakes." },
-  { value: "conversational", label: "Conversational", desc: "Casual, friendly, plain-language tone." },
-];
-export const DEFAULT_STYLE = "socratic";
+/** The style ids, in the order the picker offers them. */
+export const NARRATION_STYLES = [
+  "socratic",
+  "direct_explainer",
+  "storytelling",
+  "exam_focused",
+  "conversational",
+] as const satisfies readonly (keyof NarrationMessages["styles"])[];
+
+export type NarrationStyleId = (typeof NARRATION_STYLES)[number];
+export const DEFAULT_STYLE: NarrationStyleId = "socratic";
+
+/** The style picker's options, worded for the reader. */
+export const narrationStyles = (t: NarrationMessages): NarrationStyle[] =>
+  NARRATION_STYLES.map((value) => ({ value, label: t.styles[value], desc: t.styleHints[value] }));
+
+/** The line under the picker describing the chosen style; "" for an unknown id
+ * (a style retired from the registry but still stored on an old generation). */
+export const narrationStyleHint = (t: NarrationMessages, value: string): string =>
+  (t.styleHints as Record<string, string>)[value] ?? "";
 
 // Approximate school level (1..12+) from a book's free-text grade label, so the
 // narration style can default to something age-appropriate. Secondary systems
@@ -48,32 +71,44 @@ export function defaultNarrationForGrade(grade: string | null | undefined): stri
 
 export type VoiceOpt = { value: string; label: string; tier: "free" | "premium"; lang: string };
 
-export const VOICES: VoiceOpt[] = [
-  { value: "edge-aria", label: "Aria — neutral", tier: "free", lang: "en" },
-  { value: "edge-guy", label: "Guy — warm", tier: "free", lang: "en" },
-  { value: "edge-neerja", label: "Neerja — Indian English", tier: "free", lang: "en" },
-  { value: "edge-sonia", label: "Sonia — British", tier: "free", lang: "en" },
-  { value: "edge-yasmin", label: "Yasmin — Bahasa Melayu", tier: "free", lang: "ms" },
-  { value: "edge-osman", label: "Osman — Bahasa Melayu", tier: "free", lang: "ms" },
-  { value: "edge-zariyah", label: "Zariyah — العربية", tier: "free", lang: "ar" },
-  { value: "edge-hamed", label: "Hamed — العربية", tier: "free", lang: "ar" },
-  { value: "edge-denise", label: "Denise — Français", tier: "free", lang: "fr" },
-  { value: "edge-henri", label: "Henri — Français", tier: "free", lang: "fr" },
-  { value: "edge-elvira", label: "Elvira — Español", tier: "free", lang: "es" },
-  { value: "edge-alvaro", label: "Álvaro — Español", tier: "free", lang: "es" },
-  { value: "edge-francisca", label: "Francisca — Português", tier: "free", lang: "pt" },
-  { value: "edge-antonio", label: "Antônio — Português", tier: "free", lang: "pt" },
-  { value: "edge-shruti", label: "Shruti — తెలుగు", tier: "free", lang: "te" },
-  { value: "edge-mohan", label: "Mohan — తెలుగు", tier: "free", lang: "te" },
-  { value: "edge-aarohi", label: "Aarohi — मराठी", tier: "free", lang: "mr" },
-  { value: "edge-manohar", label: "Manohar — मराठी", tier: "free", lang: "mr" },
-  { value: "edge-swara", label: "Swara — हिन्दी", tier: "free", lang: "hi" },
-  { value: "edge-madhur", label: "Madhur — हिन्दी", tier: "free", lang: "hi" },
+/** A voice's stable id — `keyof` the dictionary's voice map, so the registry
+ * below and the ten message files are proven not to drift apart at compile
+ * time (a voice added here without its label fails the type check). */
+export type VoiceId = keyof NarrationMessages["voices"];
+
+// The registry: ids, tier and language only. The name a teacher reads
+// ("Aria — neutral") is `utils.narration.voices[id]` in the dictionary.
+export const VOICES: { value: VoiceId; tier: "free" | "premium"; lang: string }[] = [
+  { value: "edge-aria", tier: "free", lang: "en" },
+  { value: "edge-guy", tier: "free", lang: "en" },
+  { value: "edge-neerja", tier: "free", lang: "en" },
+  { value: "edge-sonia", tier: "free", lang: "en" },
+  { value: "edge-yasmin", tier: "free", lang: "ms" },
+  { value: "edge-osman", tier: "free", lang: "ms" },
+  { value: "edge-zariyah", tier: "free", lang: "ar" },
+  { value: "edge-hamed", tier: "free", lang: "ar" },
+  { value: "edge-denise", tier: "free", lang: "fr" },
+  { value: "edge-henri", tier: "free", lang: "fr" },
+  { value: "edge-elvira", tier: "free", lang: "es" },
+  { value: "edge-alvaro", tier: "free", lang: "es" },
+  { value: "edge-francisca", tier: "free", lang: "pt" },
+  { value: "edge-antonio", tier: "free", lang: "pt" },
+  { value: "edge-shruti", tier: "free", lang: "te" },
+  { value: "edge-mohan", tier: "free", lang: "te" },
+  { value: "edge-aarohi", tier: "free", lang: "mr" },
+  { value: "edge-manohar", tier: "free", lang: "mr" },
+  { value: "edge-swara", tier: "free", lang: "hi" },
+  { value: "edge-madhur", tier: "free", lang: "hi" },
   // Premium ElevenLabs voices are multilingual — offered for every language.
-  { value: "el-rachel", label: "Rachel — natural", tier: "premium", lang: "*" },
-  { value: "el-adam", label: "Adam — deep", tier: "premium", lang: "*" },
+  { value: "el-rachel", tier: "premium", lang: "*" },
+  { value: "el-adam", tier: "premium", lang: "*" },
 ];
 export const DEFAULT_VOICE = "edge-aria"; // free — reproduces today's behaviour
+
+/** A voice's display name; an id no longer in the dictionary shows as itself
+ * rather than blank (same rule as statusLabel/kindLabel on the Library). */
+export const voiceLabel = (t: NarrationMessages, value: string): string =>
+  (t.voices as Record<string, string>)[value] ?? value;
 
 // Lesson languages — MUST mirror the worker's shared/languages.py registry.
 export type LanguageOpt = { value: string; label: string };
@@ -108,12 +143,12 @@ export function elevenLabsEnabled(): boolean {
   return process.env.NEXT_PUBLIC_ELEVENLABS_ENABLED === "true";
 }
 
-export function availableVoices(lang?: string | null): VoiceOpt[] {
+export function availableVoices(t: NarrationMessages, lang?: string | null): VoiceOpt[] {
   const pool = elevenLabsEnabled() ? VOICES : VOICES.filter((v) => v.tier === "free");
-  if (!lang) return pool;
   const l = lang === "ms-arab" ? "ms" : lang; // Jawi is spoken Malay
   // The chosen language's voices lead; premium multilingual voices follow.
-  return pool.filter((v) => v.lang === l || v.lang === "*");
+  const chosen = l ? pool.filter((v) => v.lang === l || v.lang === "*") : pool;
+  return chosen.map((v) => ({ ...v, label: voiceLabel(t, v.value) }));
 }
 
 // The params every presentation generation should carry when the user hasn't

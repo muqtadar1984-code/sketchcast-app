@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cleanBookTitle } from "@/utils/book";
+import en from "@/i18n/messages/en.json";
 
 describe("cleanBookTitle", () => {
   it("cleans a download-site filename slug", () => {
@@ -28,5 +29,17 @@ describe("cleanBookTitle", () => {
     expect(cleanBookTitle("")).toBe("Untitled book");
     expect(cleanBookTitle(null)).toBe("Untitled book");
     expect(cleanBookTitle(undefined)).toBe("Untitled book");
+  });
+
+  it("uses the reader's word for the fallback when given one", () => {
+    const ar = { untitled: "كتاب بلا عنوان" };
+    expect(cleanBookTitle("", ar)).toBe("كتاب بلا عنوان");
+    expect(cleanBookTitle("free-pdf-download", ar)).toBe("كتاب بلا عنوان"); // nothing left after the strip
+    expect(cleanBookTitle("The Cat in the Hat", ar)).toBe("The Cat in the Hat"); // a real title is never invented
+  });
+
+  // The English default is a COPY of the dictionary's own English — keep them one word.
+  it("the no-dictionary default says exactly what the English dictionary says", () => {
+    expect(cleanBookTitle("")).toBe(en.utils.book.untitled);
   });
 });

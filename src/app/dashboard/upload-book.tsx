@@ -100,7 +100,7 @@ export default function UploadBook({
     }
 
     const ins = await supabase.from("books").insert({
-      title: title.trim() || cleanBookTitle(file.name),
+      title: title.trim() || cleanBookTitle(file.name, t.utils.book),
       author: author.trim() || null,
       owner_id: user.id,
       school_id: schoolId,

@@ -4,6 +4,17 @@
 // readable WITHOUT touching a title a human (or the indexer) actually wrote — a real title
 // has spaces and no download-site cruft, so we leave it alone.
 
+import type { Dictionary } from "@/i18n/dictionaries";
+
+// The ONE word this file invents (everything else is the teacher's own title,
+// tidied): the placeholder for a book with no usable name. Passed in rather than
+// hardcoded so it reads in the same language as the row around it. The type-only
+// Dictionary import is erased at build time — the server-only module never
+// reaches the browser bundle.
+export type BookMessages = Dictionary["utils"]["book"];
+
+const EN: BookMessages = { untitled: "Untitled book" };
+
 const JUNK_TAIL = /[\s._-]*(pdf[\s._-]*free|free[\s._-]*pdf|ebook|pdf|free|download)\s*$/i;
 const DOMAIN_HEAD = /^[a-z0-9-]+\.(?:com|net|org|pub|io|in|co|info|xyz)[._-]+/i;
 
@@ -17,17 +28,17 @@ function looksLikeFilename(s: string): boolean {
   );
 }
 
-export function cleanBookTitle(raw: string | null | undefined): string {
+export function cleanBookTitle(raw: string | null | undefined, t: BookMessages = EN): string {
   const s = (raw ?? "").trim();
-  if (!s) return "Untitled book";
+  if (!s) return t.untitled;
   if (!looksLikeFilename(s)) return s; // already a human/indexer title — don't touch it
 
-  let t = s.replace(/\.pdf$/i, "").replace(DOMAIN_HEAD, "");
+  let cleaned = s.replace(/\.pdf$/i, "").replace(DOMAIN_HEAD, "");
   // Strip a couple of trailing junk tokens (…-pdf-free, …-free).
-  t = t.replace(JUNK_TAIL, "").replace(JUNK_TAIL, "");
-  t = t.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
-  if (!t) return "Untitled book";
+  cleaned = cleaned.replace(JUNK_TAIL, "").replace(JUNK_TAIL, "");
+  cleaned = cleaned.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return t.untitled;
   // Title-case a slug so it reads like a title (leave digits as-is).
-  t = t.replace(/\b([a-z])/gi, (_m, c: string) => c.toUpperCase());
-  return t;
+  cleaned = cleaned.replace(/\b([a-z])/gi, (_m, c: string) => c.toUpperCase());
+  return cleaned;
 }

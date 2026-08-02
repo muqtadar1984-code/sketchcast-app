@@ -1501,5 +1501,56 @@
         "failed": "Impossible d'ajouter l'enfant."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "lecture de la partie {n}/{total}",
+      "partProgress": "partie {n}/{total} · {pct} %",
+      "percent": "{pct} %",
+      "minutesLeft": "il reste ~{n} min"
+    },
+    "book": {
+      "untitled": "Livre sans titre"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "Socratique",
+        "direct_explainer": "Explication directe",
+        "storytelling": "Récit",
+        "exam_focused": "Axé examen",
+        "conversational": "Conversationnel"
+      },
+      "styleHints": {
+        "socratic": "Amène les élèves à découvrir les idées par des questions.",
+        "direct_explainer": "Un enseignement clair et direct, avec peu de questions.",
+        "storytelling": "Enveloppe la notion dans un fil narratif.",
+        "exam_focused": "Cadrage révisions — points clés et erreurs fréquentes.",
+        "conversational": "Ton détendu, amical, en langage simple."
+      },
+      "voices": {
+        "edge-aria": "Aria — neutre",
+        "edge-guy": "Guy — chaleureux",
+        "edge-neerja": "Neerja — anglais indien",
+        "edge-sonia": "Sonia — anglais britannique",
+        "edge-yasmin": "Yasmin — malais",
+        "edge-osman": "Osman — malais",
+        "edge-zariyah": "Zariyah — arabe",
+        "edge-hamed": "Hamed — arabe",
+        "edge-denise": "Denise — français",
+        "edge-henri": "Henri — français",
+        "edge-elvira": "Elvira — espagnol",
+        "edge-alvaro": "Álvaro — espagnol",
+        "edge-francisca": "Francisca — portugais",
+        "edge-antonio": "Antônio — portugais",
+        "edge-shruti": "Shruti — télougou",
+        "edge-mohan": "Mohan — télougou",
+        "edge-aarohi": "Aarohi — marathi",
+        "edge-manohar": "Manohar — marathi",
+        "edge-swara": "Swara — hindi",
+        "edge-madhur": "Madhur — hindi",
+        "el-rachel": "Rachel — naturelle",
+        "el-adam": "Adam — grave"
+      }
+    }
   }
 }

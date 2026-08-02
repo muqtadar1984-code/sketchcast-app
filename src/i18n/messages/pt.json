@@ -1501,5 +1501,56 @@
         "failed": "Não foi possível adicionar o filho."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "lendo a parte {n}/{total}",
+      "partProgress": "parte {n}/{total} · {pct}%",
+      "percent": "{pct}%",
+      "minutesLeft": "~{n} min restantes"
+    },
+    "book": {
+      "untitled": "Livro sem título"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "Socrático",
+        "direct_explainer": "Explicação direta",
+        "storytelling": "Narrativo",
+        "exam_focused": "Foco na prova",
+        "conversational": "Conversacional"
+      },
+      "styleHints": {
+        "socratic": "Leva os alunos a descobrir as ideias por meio de perguntas.",
+        "direct_explainer": "Ensino claro e direto, com poucas perguntas.",
+        "storytelling": "Envolve o conceito em um fio narrativo.",
+        "exam_focused": "Enquadramento de revisão — pontos-chave e erros comuns.",
+        "conversational": "Tom leve, amigável e em linguagem simples."
+      },
+      "voices": {
+        "edge-aria": "Aria — neutra",
+        "edge-guy": "Guy — calorosa",
+        "edge-neerja": "Neerja — inglês indiano",
+        "edge-sonia": "Sonia — inglês britânico",
+        "edge-yasmin": "Yasmin — malaio",
+        "edge-osman": "Osman — malaio",
+        "edge-zariyah": "Zariyah — árabe",
+        "edge-hamed": "Hamed — árabe",
+        "edge-denise": "Denise — francês",
+        "edge-henri": "Henri — francês",
+        "edge-elvira": "Elvira — espanhol",
+        "edge-alvaro": "Álvaro — espanhol",
+        "edge-francisca": "Francisca — português",
+        "edge-antonio": "Antônio — português",
+        "edge-shruti": "Shruti — télugo",
+        "edge-mohan": "Mohan — télugo",
+        "edge-aarohi": "Aarohi — marati",
+        "edge-manohar": "Manohar — marati",
+        "edge-swara": "Swara — hindi",
+        "edge-madhur": "Madhur — hindi",
+        "el-rachel": "Rachel — natural",
+        "el-adam": "Adam — grave"
+      }
+    }
   }
 }

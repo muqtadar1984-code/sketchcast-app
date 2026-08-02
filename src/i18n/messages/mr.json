@@ -1501,5 +1501,56 @@
         "failed": "मूल जोडता आले नाही."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "भाग {n}/{total} वाचत आहे",
+      "partProgress": "भाग {n}/{total} · {pct}%",
+      "percent": "{pct}%",
+      "minutesLeft": "~{n} मि शिल्लक"
+    },
+    "book": {
+      "untitled": "शीर्षक नसलेले पुस्तक"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "सॉक्रेटिक",
+        "direct_explainer": "थेट स्पष्टीकरण",
+        "storytelling": "गोष्टीरूप",
+        "exam_focused": "परीक्षाकेंद्रित",
+        "conversational": "संवादी"
+      },
+      "styleHints": {
+        "socratic": "प्रश्नांतून विद्यार्थ्यांना कल्पना शोधायला लावते.",
+        "direct_explainer": "कमी प्रश्न, स्पष्ट आणि थेट शिकवण.",
+        "storytelling": "संकल्पना एका कथासूत्रात गुंफते.",
+        "exam_focused": "उजळणीची मांडणी — महत्त्वाचे मुद्दे आणि नेहमीच्या चुका.",
+        "conversational": "सहज, मैत्रीपूर्ण आणि सोप्या भाषेतील सूर."
+      },
+      "voices": {
+        "edge-aria": "आरिया — तटस्थ",
+        "edge-guy": "गाइ — उबदार",
+        "edge-neerja": "नीरजा — भारतीय इंग्रजी",
+        "edge-sonia": "सोनिया — ब्रिटिश इंग्रजी",
+        "edge-yasmin": "यास्मिन — मलय",
+        "edge-osman": "उस्मान — मलय",
+        "edge-zariyah": "ज़ारिया — अरबी",
+        "edge-hamed": "हामेद — अरबी",
+        "edge-denise": "डेनिस — फ्रेंच",
+        "edge-henri": "हेन्री — फ्रेंच",
+        "edge-elvira": "एल्विरा — स्पॅनिश",
+        "edge-alvaro": "आल्वारो — स्पॅनिश",
+        "edge-francisca": "फ्रान्सिस्का — पोर्तुगीज",
+        "edge-antonio": "अंतोनियो — पोर्तुगीज",
+        "edge-shruti": "श्रुती — तेलुगू",
+        "edge-mohan": "मोहन — तेलुगू",
+        "edge-aarohi": "आरोही — मराठी",
+        "edge-manohar": "मनोहर — मराठी",
+        "edge-swara": "स्वरा — हिंदी",
+        "edge-madhur": "मधुर — हिंदी",
+        "el-rachel": "रेचल — नैसर्गिक",
+        "el-adam": "अॅडम — गंभीर"
+      }
+    }
   }
 }

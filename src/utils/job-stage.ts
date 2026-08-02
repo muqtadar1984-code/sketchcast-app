@@ -6,6 +6,9 @@
 // jobs (and pre-0053 rows) have no stage — callers fall back to the overall
 // percentage. jobs.progress stays the source of truth; stage is narration.
 
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
+
 export type JobStage = {
   phase?: string;
   part?: number;
@@ -13,13 +16,33 @@ export type JobStage = {
   part_pct?: number;
 } | null;
 
+// These two lines land in EVERY progress chip on the Library — the busiest
+// screen in the product — so they are words, not decoration, and they have to
+// arrive in the reader's language. Both functions take the messages as their
+// LAST argument: a client component already holds the library dictionary
+// (t.utils.job) and passes it down. The type-only Dictionary import is erased
+// at build time, so the server-only module never reaches the browser bundle.
+export type JobMessages = Dictionary["utils"]["job"];
+
+// The English default keeps a caller with no dictionary (the unit tests, a
+// future non-UI consumer) honest rather than blank. Every REAL call site on the
+// dashboard passes t.utils.job.
+const EN: JobMessages = {
+  readingPart: "reading part {n}/{total}",
+  partProgress: "part {n}/{total} · {pct}%",
+  percent: "{pct}%",
+  minutesLeft: "~{n} min left",
+};
+
 /** "part 2/4 · 35%" · "reading part 1/4" · fallback "45%". */
-export function jobStageLabel(progress: number, stage?: JobStage): string {
+export function jobStageLabel(progress: number, stage?: JobStage, t: JobMessages = EN): string {
   if (stage && typeof stage === "object" && (stage.total ?? 0) > 1 && (stage.part ?? 0) >= 1) {
-    if (stage.phase === "analysis") return `reading part ${stage.part}/${stage.total}`;
-    return `part ${stage.part}/${stage.total} · ${Math.max(0, Math.min(100, stage.part_pct ?? 0))}%`;
+    const n = stage.part!;
+    const total = stage.total!;
+    if (stage.phase === "analysis") return fmt(t.readingPart, { n, total });
+    return fmt(t.partProgress, { n, total, pct: Math.max(0, Math.min(100, stage.part_pct ?? 0)) });
   }
-  return `${progress}%`;
+  return fmt(t.percent, { pct: progress });
 }
 
 // A rough "~5 min left" for a job that's processing. We don't store a per-job
@@ -38,7 +61,12 @@ const KIND_MINUTES: Record<string, number> = {
 };
 const MINUTES_PER_VIDEO_PART = 6;
 
-export function etaLabel(kind: string | null | undefined, progress: number, stage?: JobStage): string {
+export function etaLabel(
+  kind: string | null | undefined,
+  progress: number,
+  stage?: JobStage,
+  t: JobMessages = EN,
+): string {
   const p = Math.max(0, Math.min(100, progress || 0));
   if (p >= 98) return "";
   const k = kind || "presentation";
@@ -50,5 +78,5 @@ export function etaLabel(kind: string | null | undefined, progress: number, stag
     total = KIND_MINUTES[k] ?? 3;
   }
   const remaining = total * (1 - Math.max(p, 1) / 100);
-  return `~${Math.max(1, Math.ceil(remaining))} min left`;
+  return fmt(t.minutesLeft, { n: Math.max(1, Math.ceil(remaining)) });
 }

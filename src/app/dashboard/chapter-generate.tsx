@@ -7,7 +7,14 @@ import ContentCell, { kindLabel, type CellLesson, type LibraryMessages } from ".
 import AssignModal, { type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
 import { kitRows, type GenerationRow } from "./kit";
-import { NARRATION_STYLES, LANGUAGES, availableVoices, defaultVoiceFor, defaultNarrationForGrade } from "@/utils/narration";
+import {
+  LANGUAGES,
+  availableVoices,
+  defaultNarrationForGrade,
+  defaultVoiceFor,
+  narrationStyleHint,
+  narrationStyles,
+} from "@/utils/narration";
 import { TypeIcon } from "./icons";
 import { fmt } from "@/i18n/format";
 
@@ -102,7 +109,8 @@ export default function ChapterGenerate({
   const knownBookLang = LANGUAGES.some((l) => l.value === bookLanguage) ? bookLanguage : null;
   const [language, setLanguage] = useState(knownBookLang || "en");
   const [ttsVoice, setTtsVoice] = useState(defaultVoiceFor(knownBookLang));
-  const voices = availableVoices(language);
+  const voices = availableVoices(t.utils.narration, language);
+  const styles = narrationStyles(t.utils.narration);
   const pickLanguage = (lang: string) => {
     setLanguage(lang);
     setTtsVoice(defaultVoiceFor(lang)); // voice follows the lesson language
@@ -334,7 +342,7 @@ export default function ChapterGenerate({
               onChange={(e) => setNarrationStyle(e.target.value)}
               className="field h-8 px-2 text-xs"
             >
-              {NARRATION_STYLES.map((s) => (
+              {styles.map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
@@ -355,7 +363,7 @@ export default function ChapterGenerate({
             </select>
           </label>
           <span className="text-[10px] text-[#98A0A9]">
-            {NARRATION_STYLES.find((s) => s.value === narrationStyle)?.desc}
+            {narrationStyleHint(t.utils.narration, narrationStyle)}
           </span>
         </div>
       )}

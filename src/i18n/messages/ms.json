@@ -1501,5 +1501,56 @@
         "failed": "Tidak dapat menambah anak."
       }
     }
+  },
+  "utils": {
+    "job": {
+      "readingPart": "membaca bahagian {n}/{total}",
+      "partProgress": "bahagian {n}/{total} · {pct}%",
+      "percent": "{pct}%",
+      "minutesLeft": "~{n} min lagi"
+    },
+    "book": {
+      "untitled": "Buku tanpa tajuk"
+    },
+    "narration": {
+      "styles": {
+        "socratic": "Sokratik",
+        "direct_explainer": "Penerangan terus",
+        "storytelling": "Bercerita",
+        "exam_focused": "Fokus peperiksaan",
+        "conversational": "Santai berbual"
+      },
+      "styleHints": {
+        "socratic": "Membimbing pelajar menemui idea melalui soalan.",
+        "direct_explainer": "Pengajaran jelas dan terus terang, dengan sedikit soalan.",
+        "storytelling": "Membalut konsep dalam satu jalan cerita.",
+        "exam_focused": "Bingkai ulang kaji — isi penting dan kesilapan lazim.",
+        "conversational": "Nada santai, mesra dan bahasa mudah."
+      },
+      "voices": {
+        "edge-aria": "Aria — neutral",
+        "edge-guy": "Guy — mesra",
+        "edge-neerja": "Neerja — Inggeris India",
+        "edge-sonia": "Sonia — Inggeris British",
+        "edge-yasmin": "Yasmin — Bahasa Melayu",
+        "edge-osman": "Osman — Bahasa Melayu",
+        "edge-zariyah": "Zariyah — Arab",
+        "edge-hamed": "Hamed — Arab",
+        "edge-denise": "Denise — Perancis",
+        "edge-henri": "Henri — Perancis",
+        "edge-elvira": "Elvira — Sepanyol",
+        "edge-alvaro": "Álvaro — Sepanyol",
+        "edge-francisca": "Francisca — Portugis",
+        "edge-antonio": "Antônio — Portugis",
+        "edge-shruti": "Shruti — Telugu",
+        "edge-mohan": "Mohan — Telugu",
+        "edge-aarohi": "Aarohi — Marathi",
+        "edge-manohar": "Manohar — Marathi",
+        "edge-swara": "Swara — Hindi",
+        "edge-madhur": "Madhur — Hindi",
+        "el-rachel": "Rachel — semula jadi",
+        "el-adam": "Adam — dalam"
+      }
+    }
   }
 }

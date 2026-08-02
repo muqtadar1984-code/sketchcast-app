@@ -32,7 +32,7 @@ const L = (over: Partial<CellLesson>): CellLesson => ({
   ...over,
 });
 
-const T: LibraryMessages = { ...en.library, common: en.common };
+const T: LibraryMessages = { ...en.library, common: en.common, utils: en.utils };
 const COMMON = { bookId: "demo", schoolId: null, chapterNum: 0, t: T };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
