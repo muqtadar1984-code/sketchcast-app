@@ -100,6 +100,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     .update({ role: invite.role, school_id: invite.school_id, onboarded_at: new Date().toISOString() })
     .eq("id", user.id);
   if (uErr) return back("apply");
+  // Coordinator grants are per-school capabilities — joining a school revokes
+  // any grant that doesn't match it (0052 also enforces this with a trigger).
+  if (invite.school_id) {
+    await admin.from("coordinator_scope").delete().eq("coordinator_id", user.id).neq("school_id", invite.school_id);
+  } else {
+    await admin.from("coordinator_scope").delete().eq("coordinator_id", user.id);
+  }
   await admin.from("invites").update({ accepted_at: new Date().toISOString() }).eq("id", invite.id);
 
   return NextResponse.redirect(`${origin}/dashboard`);

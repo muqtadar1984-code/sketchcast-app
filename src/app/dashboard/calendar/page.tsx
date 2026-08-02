@@ -324,13 +324,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <h2 className="text-xl">{monthLabel}</h2>
           <div className="flex items-center gap-2">
             <Link href={`/dashboard/calendar?m=${prev}`} className="btn-ghost h-9 px-3 text-sm">
-              ← Prev
+              <span className="rtl-flip">←</span> Prev
             </Link>
             <Link href="/dashboard/calendar" className="btn-ghost h-9 px-3 text-sm">
               Today
             </Link>
             <Link href={`/dashboard/calendar?m=${next}`} className="btn-ghost h-9 px-3 text-sm">
-              Next →
+              Next <span className="rtl-flip">→</span>
             </Link>
           </div>
         </div>
@@ -353,7 +353,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               return (
                 <div
                   key={key}
-                  className={`min-h-[92px] border-b border-r border-[#EEF0EC] p-1.5 align-top ${inMonth ? "" : "bg-[#FAFBF9] text-[#98A0A9]"}`}
+                  className={`min-h-[92px] border-b border-e border-[#EEF0EC] p-1.5 align-top ${inMonth ? "" : "bg-[#FAFBF9] text-[#98A0A9]"}`}
                 >
                   <div
                     className={`text-xs mb-1 ${key === todayKey ? "inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#0C8175] text-white" : "text-[#5B6470]"}`}

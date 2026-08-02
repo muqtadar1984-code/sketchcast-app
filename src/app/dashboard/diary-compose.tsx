@@ -117,7 +117,7 @@ export default function DiaryCompose({
           <span className="text-xs text-[#98A0A9]">— hidden from students; parents, teachers and school leadership still see it</span>
         </label>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           {error && <span className="text-xs text-red-600">{error}</span>}
           <button onClick={post} disabled={busy || !body.trim()} className="btn-primary h-9 px-4 text-sm">
             {done ? "Added ✓" : busy ? "Saving…" : "Add to the diary"}

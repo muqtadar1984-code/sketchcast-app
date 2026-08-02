@@ -41,7 +41,7 @@ export default function NoticesCard({ notices }: { notices: Notice[] }) {
                     // screen-reader user nothing about where it goes.
                     aria-label={`${n.linkLabel} — opens in a new tab`}
                     title={n.linkLabel}
-                    className="ml-1.5 font-medium text-[#0C8175] hover:underline"
+                    className="ms-1.5 font-medium text-[#0C8175] hover:underline"
                   >
                     ↗
                   </a>

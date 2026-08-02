@@ -392,15 +392,15 @@ export default function PageScanner({
                       {/* Local object URL of a just-captured photo — next/image adds nothing. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={p.url} alt={`Page ${i + 1}`} className="w-full h-24 object-cover" />
-                      <span className="absolute top-1 left-1 rounded bg-[#14181F]/70 px-1.5 text-[10px] text-white">{i + 1}</span>
+                      <span className="absolute top-1 start-1 rounded bg-[#14181F]/70 px-1.5 text-[10px] text-white">{i + 1}</span>
                       {!p.quad && (
-                        <span className="absolute top-1 right-1 rounded bg-[#FFF1D6] px-1 text-[9px] text-[#9A6400]">uncropped</span>
+                        <span className="absolute top-1 end-1 rounded bg-[#FFF1D6] px-1 text-[9px] text-[#9A6400]">uncropped</span>
                       )}
                       <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-white/90 px-1 py-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move page ${i + 1} earlier`} className="px-1 text-xs disabled:opacity-30">←</button>
+                        <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move page ${i + 1} earlier`} className="rtl-flip px-1 text-xs disabled:opacity-30">←</button>
                         <button onClick={() => setEditing(i)} className="px-1 text-[10px] font-medium text-[#0C8175]">Edges</button>
                         <button onClick={() => remove(i)} aria-label={`Remove page ${i + 1}`} className="px-1 text-xs text-red-600">✕</button>
-                        <button onClick={() => move(i, 1)} disabled={i === pages.length - 1} aria-label={`Move page ${i + 1} later`} className="px-1 text-xs disabled:opacity-30">→</button>
+                        <button onClick={() => move(i, 1)} disabled={i === pages.length - 1} aria-label={`Move page ${i + 1} later`} className="rtl-flip px-1 text-xs disabled:opacity-30">→</button>
                       </div>
                     </li>
                   ))}

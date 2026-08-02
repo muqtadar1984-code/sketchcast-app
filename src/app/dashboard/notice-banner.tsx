@@ -125,9 +125,9 @@ export default function NoticeBanner({ notices }: { notices: Notice[] }) {
           {visible.length > 1 && (
             // The dots are the ONLY way to reach notices 2 and 3, so each one
             // gets a 24px target (WCAG 2.5.8) — the button is the target, the
-            // span inside is the dot you see. -ml-1.5 pulls the row back level
+            // span inside is the dot you see. -ms-1.5 pulls the row back level
             // with the text now that every dot carries its own padding.
-            <div className="mt-1.5 -ml-1.5 flex items-center gap-0.5">
+            <div className="mt-1.5 -ms-1.5 flex items-center gap-0.5">
               {visible.map((n, i) => (
                 <button
                   key={n.id}
@@ -150,7 +150,7 @@ export default function NoticeBanner({ notices }: { notices: Notice[] }) {
               <button
                 onClick={() => setHeld((h) => !h)}
                 title={held ? "Resume rotating notices" : "Stop rotating notices"}
-                className="ml-1 h-6 px-1.5 text-xs text-[#9A6400] hover:text-[#14181F] hover:underline"
+                className="ms-1 h-6 px-1.5 text-xs text-[#9A6400] hover:text-[#14181F] hover:underline"
               >
                 {held ? "Play" : "Pause"}
               </button>

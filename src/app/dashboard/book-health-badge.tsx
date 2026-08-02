@@ -31,7 +31,7 @@ function Bar({ label, value }: { label: string; value: number }) {
       <div className="flex-1 h-1.5 rounded-full bg-[#EEF0EC] overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${value}%`, background: tone }} />
       </div>
-      <span className="tabular w-8 text-right text-[#5B6470]">{value}</span>
+      <span className="tabular w-8 text-end text-[#5B6470]">{value}</span>
     </div>
   );
 }
@@ -52,7 +52,7 @@ export default function BookHealthBadge({ health }: { health: BookHealth | null 
       </button>
 
       {open && (
-        <span className="absolute right-0 z-30 mt-1 w-72 card p-4 shadow-lg text-left block">
+        <span className="absolute end-0 z-30 mt-1 w-72 card p-4 shadow-lg text-start block">
           <span className="flex items-center justify-between mb-2">
             <span className="font-display font-medium text-sm">Book health</span>
             <span className={`chip font-sans normal-case tracking-normal ${style.chip}`}>{health.score}/100</span>
@@ -87,7 +87,7 @@ export default function BookHealthBadge({ health }: { health: BookHealth | null 
           )}
 
           {health.recommendation && (
-            <span className="block text-xs text-[#0C8175] font-medium">→ {health.recommendation}</span>
+            <span className="block text-xs text-[#0C8175] font-medium"><span className="rtl-flip">→</span> {health.recommendation}</span>
           )}
         </span>
       )}

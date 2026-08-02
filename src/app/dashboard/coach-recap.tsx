@@ -51,7 +51,7 @@ export default function CoachRecap({ studentId, generationId }: { studentId: str
       <button onClick={load} disabled={busy} className="font-medium text-[#0C8175] hover:underline disabled:opacity-50">
         {busy ? "Loading recap…" : open ? "Hide coach recap" : "Coach recap"}
       </button>
-      {error && <span className="ml-2 text-[#B42318]">{error}</span>}
+      {error && <span className="ms-2 text-[#B42318]">{error}</span>}
 
       {open && data && (
         <div className="mt-2 rounded-lg bg-[#FAFBF9] border border-[#EEF0EC] px-3 py-2 space-y-1.5">
@@ -66,7 +66,7 @@ export default function CoachRecap({ studentId, generationId }: { studentId: str
           {data.weakQuestions.length > 0 ? (
             <div>
               <div className="text-[#5B6470] font-medium">Still shaky on:</div>
-              <ul className="list-disc pl-4 text-[#5B6470]">
+              <ul className="list-disc ps-4 text-[#5B6470]">
                 {data.weakQuestions.slice(0, 3).map((q, i) => (
                   <li key={i} className="truncate">{q}</li>
                 ))}

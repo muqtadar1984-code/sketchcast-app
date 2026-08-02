@@ -55,7 +55,7 @@ export default function ConsoleHeader({ email }: { email: string }) {
               there and rely on a real sign-out. In legacy mode "← App" still helps. */}
           {!process.env.NEXT_PUBLIC_CONSOLE_HOST && (
             <Link href="/dashboard" className="text-[#98A0A9] hover:text-white">
-              ← App
+              <span className="rtl-flip">←</span> App
             </Link>
           )}
           <form action="/auth/signout" method="post">

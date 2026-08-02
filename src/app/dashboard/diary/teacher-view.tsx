@@ -358,7 +358,7 @@ export default async function TeacherDiary({
                   <div key={a.key} className="px-5 py-2.5 flex items-center gap-3 text-sm text-[#5B6470]">
                     <span aria-hidden>{a.icon}</span>
                     <span className="min-w-0 truncate">{a.text}</span>
-                    <span className="ml-auto shrink-0 text-xs text-[#98A0A9]">{timeFmt.format(new Date(a.at))}</span>
+                    <span className="ms-auto shrink-0 text-xs text-[#98A0A9]">{timeFmt.format(new Date(a.at))}</span>
                   </div>
                 ))
               ) : (

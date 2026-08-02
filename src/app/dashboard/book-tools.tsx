@@ -41,7 +41,7 @@ export default function BookTools({ children }: { children: React.ReactNode }) {
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 z-30 mt-1 w-[22rem] max-w-[calc(100vw-3rem)] rounded-xl border border-[#E6E8E4] bg-white p-3 shadow-lg">
+        <div className="absolute end-0 z-30 mt-1 w-[22rem] max-w-[calc(100vw-3rem)] rounded-xl border border-[#E6E8E4] bg-white p-3 shadow-lg">
           <p className="text-[10px] uppercase tracking-wide text-[#98A0A9] mb-1.5">Extra papers</p>
           <div className="space-y-1">{children}</div>
         </div>

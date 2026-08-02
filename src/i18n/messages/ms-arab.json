@@ -1,0 +1,129 @@
+{
+  "common": {
+    "close": "توتوڤ",
+    "cancel": "باتل",
+    "save": "سيمڤن",
+    "saving": "مڽيمڤن…",
+    "loading": "ممواتکن…",
+    "tryAgain": "چوبا لاݢي",
+    "somethingWentWrong": "اد مسئله — سيلا چوبا لاݢي سبنتر لاݢي.",
+    "language": "بهاس",
+    "chooseLanguage": "ڤيليه بهاس اندا",
+    "languageChangeFailed": "تيدق داڤت منوکر بهاس — چوبا لاݢي."
+  },
+  "nav": {
+    "tabs": {
+      "library": "ڤوستاک",
+      "myAnalytics": "اناليتيک ساي",
+      "diary": "دياري",
+      "schoolDiary": "دياري سکوله",
+      "calendar": "کالندر",
+      "timetable": "جدوال وقتو",
+      "school": "سکوله",
+      "teachers": "ݢورو",
+      "access": "اکسيس",
+      "admin": "ڤنتدبير",
+      "myChildren": "انق ساي",
+      "testPapers": "کرتس اوجين"
+    },
+    "openMenu": "بوک مينو",
+    "closeMenu": "توتوڤ مينو",
+    "signOut": "لوݢ کلوار",
+    "tour": "ڤندوان",
+    "takeATour": "ايکوتي ڤندوان",
+    "viewingAs": "مليهت سباݢاي",
+    "switchRoleView": "توکر ڤاڤرن ڤرانن",
+    "hats": {
+      "principal": "ڤڠتوا",
+      "coordinator": "ڤڽلارس",
+      "teacher": "ݢورو",
+      "parent": "ايبو باڤ"
+    },
+    "roleLabel": {
+      "student": "ڤلاجر",
+      "parent": "ايبو باڤ",
+      "teacher": "ݢورو",
+      "adminAndTeacher": "ڤنتدبير دان ݢورو",
+      "teacherAndCoordinator": "ݢورو دان ڤڽلارس",
+      "alsoParent": "{role} دان ايبو باڤ"
+    },
+    "bell": {
+      "title": "ڤمبريتاهوان",
+      "titleUnread": "ڤمبريتاهوان ({count} بلوم دباچ)",
+      "tooltipWithNotices": "نوتيس سکوله دان ايسو يڠ اندا لاڤورکن",
+      "tooltipIssuesOnly": "ايسو يڠ اندا لاڤورکن",
+      "headingWithNotices": "نوتيس سکوله دان لاڤورن اندا",
+      "headingIssuesOnly": "ايسو يڠ اندا لاڤورکن",
+      "emptyWithNotices": "بلوم اد اڤ-اڤ د سيني — نوتيس سکوله، دان ڤرکمباڠن اڤ سهاج يڠ اندا لاڤورکن، اکن دڤاڤرکن د سيني.",
+      "emptyIssuesOnly": "بلوم اد اڤ-اڤ د سيني — اڤابيلا اندا ملاڤورکن مسئله، ڤرکمباڠنڽ اکن دڤاڤرکن د سيني سهيڠݢ سلساي.",
+      "status": {
+        "open": "دتريما",
+        "triaged": "سدڠ دسمق",
+        "inProgress": "سدڠ دبائيقي",
+        "resolved": "سلساي"
+      },
+      "audience": {
+        "school": "سموا اورڠ",
+        "staff": "کاکيتاڠن سهاج"
+      },
+      "important": "ڤنتيڠ",
+      "deadlineFallback": "سبلوم",
+      "reportedAgo": "دلاڤورکن {ago}",
+      "updatedAgo": "دکمس کيني {ago}",
+      "postedAgo": "دسيارکن {ago}",
+      "minutesAgo": "{n} مينيت لالو",
+      "hoursAgo": "{n} جام لالو",
+      "daysAgo": "{n} هاري لالو",
+      "now": "سکارڠ",
+      "inMinutes": "دالم {n} مينيت",
+      "inHours": "دالم {n} جام",
+      "inDays": "دالم {n} هاري"
+    }
+  },
+  "student": {
+    "title": "ڤلاجرن ساي",
+    "subtitle": "سموا يڠ دبريکن اوليه ݢورو اندا.",
+    "downloadsNotReady": "موات تورون بلوم ترسديا — مينتا ݢورو اندا ملڠکڤکن ڤرسدياءن.",
+    "empty": "بلوم اد توݢسن. سمق سمولا سلڤس ݢورو اندا برکوڠسي ڤلاجرن.",
+    "status": {
+      "completed": "سلساي",
+      "revised": "دأولڠ کاجي",
+      "inProgress": "سدڠ دبوات",
+      "notStarted": "بلوم مولا"
+    },
+    "item": {
+      "due": "تاريخ اخير {date}",
+      "watch": "تونتون",
+      "startFirstPart": "مولا بهاݢين 1 درڤد {total}",
+      "continuePart": "سامبوڠ — بهاݢين {n} درڤد {total}",
+      "rewatch": "تونتون سمولا",
+      "eachAboutFifteenMinutes": "~15 مينيت ستياڤ ساتو",
+      "part": "بهاݢين {n}",
+      "rewatchPart": "تونتون سمولا بهاݢين {n}",
+      "partWontLoad": "بهاݢين {n} تيدق داڤت دمواتکن — موات سمولا هلامن",
+      "deck": "سلايد",
+      "deckPart": "سلايد بهݢ {n}",
+      "assistant": "ڤمبنتو",
+      "open": "بوک",
+      "takeQuiz": "جواب کويز",
+      "uploading": "مموات نايق…",
+      "resubmit": "هنتر سمولا",
+      "submitFile": "هنتر فايل",
+      "quizUnavailable": "کويز تيدق ترسديا — ݢوناکن هنتر جواڤن.",
+      "quizLoadFailed": "کويز تيدق داڤت دمواتکن."
+    },
+    "player": {
+      "partDone": "بهاݢين {n} درڤد {total} سلساي — شاباس!",
+      "partFinished": "بهاݢين {n} درڤد {total} تامت",
+      "lessonComplete": "ايتو بهاݢين تراخير — ڤلاجرن اين سوده لڠکڤ!",
+      "onePartADay": "ساتو بهاݢين سهاري ممودهکن. کمبالي ايسوق، اتاو تروسکن سکارڠ.",
+      "alreadyCompleted": "اندا سوده مڽلسايکن ڤلاجرن اين — باݢوس اونتوق اولڠ کاجي!",
+      "nextUpPart": "بهاݢين دکيرا مڠيکوت اوروتن — ستروسڽ اياله بهاݢين {n}.",
+      "playPart": "مأين بهاݢين {n}",
+      "doneForToday": "چوکوڤ اونتوق هاري اين",
+      "partLoadFailed": "بهاݢين {n} تيدق داڤت دمواتکن سکارڠ — توتوڤ اين دان موات سمولا هلامن اونتوق چوبا لاݢي.",
+      "multiPartHint": "بهاݢين {n} درڤد {total} (~15 مينيت). هابيسکن ساتو بهاݢين اونتوق مناندکنڽ — بهاݢين تراخير ملڠکڤکن ڤلاجرن.",
+      "singlePartHint": "تونتون سهيڠݢ هابيس اونتوق مناندکن ڤلاجرن اين سلساي."
+    }
+  }
+}

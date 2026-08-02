@@ -20,8 +20,16 @@ export interface TourEngine {
   stop(): void;
 }
 
+// driver.js only understands PHYSICAL sides, so mirror left/right for an RTL
+// document: a popover told to sit "left" of a control that RTL has already
+// moved to the left edge gets pushed off screen. The definitions stay written
+// in LTR terms — this is the one place that knows about direction.
 function sideFor(p: TourStep["placement"]): "top" | "bottom" | "left" | "right" | undefined {
-  return p && p !== "auto" ? p : undefined;
+  if (!p || p === "auto") return undefined;
+  if (p !== "left" && p !== "right") return p;
+  const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
+  if (!rtl) return p;
+  return p === "left" ? "right" : "left";
 }
 
 export function createDriverEngine(): TourEngine {

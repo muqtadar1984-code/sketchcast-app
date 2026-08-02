@@ -188,7 +188,7 @@ export default function OptionsModal({
                       onChange={(e) =>
                         set(f.key, Math.max(f.min, Math.min(f.max, parseInt(e.target.value || "0", 10))))
                       }
-                      className="w-16 h-8 px-2 rounded-lg border border-[#E6E8E4] text-sm text-right outline-none focus:border-[#1FB8A6]"
+                      className="w-16 h-8 px-2 rounded-lg border border-[#E6E8E4] text-sm text-end outline-none focus:border-[#1FB8A6]"
                     />
                   )}
                   {f.type === "select" && (

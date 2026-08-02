@@ -45,9 +45,9 @@ export default function DiaryDay({
           ))}
         </div>
       )}
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ms-auto flex items-center gap-2">
         <button onClick={() => go(classId, shiftDay(date, -1))} className="btn-ghost h-9 w-9 text-sm" aria-label="Previous day">
-          ←
+          <span className="rtl-flip">←</span>
         </button>
         <input
           type="date"
@@ -57,10 +57,10 @@ export default function DiaryDay({
           aria-label="Diary day"
         />
         <button onClick={() => go(classId, shiftDay(date, 1))} className="btn-ghost h-9 w-9 text-sm" aria-label="Next day">
-          →
+          <span className="rtl-flip">→</span>
         </button>
         {date !== today && (
-          <button onClick={() => go(classId, today)} className="text-sm font-medium text-[#0C8175] hover:underline ml-1">
+          <button onClick={() => go(classId, today)} className="text-sm font-medium text-[#0C8175] hover:underline ms-1">
             Today
           </button>
         )}

@@ -206,7 +206,7 @@ export default async function TimetablePage() {
           <p className="text-[#5B6470]">
             Build each class&apos;s week — clashes where a teacher is in two rooms at once light up instantly.
             {!isAdmin && (
-              <span className="chip bg-[#E2F4F1] text-[#0C8175] ml-2">Grade {coordGrades.join(", ")}</span>
+              <span className="chip bg-[#E2F4F1] text-[#0C8175] ms-2">Grade {coordGrades.join(", ")}</span>
             )}
           </p>
           {isAdmin && (

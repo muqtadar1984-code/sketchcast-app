@@ -52,7 +52,8 @@ async function gate(supabase: Awaited<ReturnType<typeof createClient>>): Promise
   if (role === "school_admin") {
     viewer = { name: profile?.full_name || "Principal", kind: "principal", scopeLabel: "Whole school" };
   } else {
-    const { data: scopes } = await supabase.from("coordinator_scope").select("grade, subject");
+    // School-scoped: stale grants from a former school must not pass the gate.
+    const { data: scopes } = await supabase.from("coordinator_scope").select("grade, subject").eq("school_id", schoolId);
     if (!scopes?.length) return { ok: false, status: 403, error: "Leadership only." };
     const grades = [...new Set(scopes.map((s) => s.grade as string))];
     const subjects = [...new Set(scopes.map((s) => s.subject).filter(Boolean))] as string[];

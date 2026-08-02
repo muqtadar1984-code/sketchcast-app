@@ -84,9 +84,10 @@ export default function FeedbackWidget({
 
   return (
     <>
-      {/* Persistent entry point (bottom-right) — stacked ABOVE the AI Assistant
-          launcher (which sits at bottom-4 right-4) so the two don't collide. */}
-      <div className="fixed bottom-20 right-4 z-40">
+      {/* Persistent entry point in the bottom trailing corner (right in LTR,
+          left in RTL — bottom-20 end-4) — stacked ABOVE the AI Assistant
+          launcher, which sits at bottom-4 end-4, so the two don't collide. */}
+      <div className="fixed bottom-20 end-4 z-40">
         {submitted ? (
           <span className="inline-flex items-center gap-2 rounded-full bg-white border border-[#E6E8E4] px-4 h-10 text-sm text-[#0C8175] shadow-sm">
             ✓ Feedback received — thank you!
@@ -103,7 +104,7 @@ export default function FeedbackWidget({
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
               <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-3.6-.7L3 21l1.9-4.6A8.1 8.1 0 0 1 3.6 11.5 8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z" />
             </svg>
-            <span className="max-w-0 group-hover:max-w-[10rem] group-focus-visible:max-w-[10rem] ml-0 group-hover:ml-2 group-focus-visible:ml-2 overflow-hidden whitespace-nowrap transition-all duration-200">
+            <span className="max-w-0 group-hover:max-w-[10rem] group-focus-visible:max-w-[10rem] ms-0 group-hover:ms-2 group-focus-visible:ms-2 overflow-hidden whitespace-nowrap transition-all duration-200">
               Give feedback
             </span>
           </button>

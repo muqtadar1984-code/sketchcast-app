@@ -1,0 +1,129 @@
+{
+  "common": {
+    "close": "إغلاق",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ…",
+    "loading": "جارٍ التحميل…",
+    "tryAgain": "أعد المحاولة",
+    "somethingWentWrong": "حدث خطأ ما — أعد المحاولة بعد قليل.",
+    "language": "اللغة",
+    "chooseLanguage": "اختر لغتك",
+    "languageChangeFailed": "تعذّر تغيير اللغة — أعد المحاولة."
+  },
+  "nav": {
+    "tabs": {
+      "library": "المكتبة",
+      "myAnalytics": "إحصاءاتي",
+      "diary": "اليوميات",
+      "schoolDiary": "يوميات المدرسة",
+      "calendar": "التقويم",
+      "timetable": "الجدول الدراسي",
+      "school": "المدرسة",
+      "teachers": "المعلمون",
+      "access": "الصلاحيات",
+      "admin": "الإدارة",
+      "myChildren": "أبنائي",
+      "testPapers": "أوراق الاختبار"
+    },
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "signOut": "تسجيل الخروج",
+    "tour": "جولة",
+    "takeATour": "ابدأ جولة تعريفية",
+    "viewingAs": "العرض بصفة",
+    "switchRoleView": "تبديل عرض الدور",
+    "hats": {
+      "principal": "مدير المدرسة",
+      "coordinator": "المنسّق",
+      "teacher": "معلم",
+      "parent": "ولي أمر"
+    },
+    "roleLabel": {
+      "student": "طالب",
+      "parent": "ولي أمر",
+      "teacher": "معلم",
+      "adminAndTeacher": "مسؤول ومعلم",
+      "teacherAndCoordinator": "معلم ومنسّق",
+      "alsoParent": "{role} وولي أمر"
+    },
+    "bell": {
+      "title": "الإشعارات",
+      "titleUnread": "الإشعارات ({count} غير مقروء)",
+      "tooltipWithNotices": "إعلانات المدرسة والمشكلات التي أبلغت عنها",
+      "tooltipIssuesOnly": "المشكلات التي أبلغت عنها",
+      "headingWithNotices": "إعلانات المدرسة وبلاغاتك",
+      "headingIssuesOnly": "المشكلات التي أبلغت عنها",
+      "emptyWithNotices": "لا شيء هنا بعد — ستظهر إعلانات المدرسة وحالة أي مشكلة تبلّغ عنها في هذا المكان.",
+      "emptyIssuesOnly": "لا شيء هنا بعد — عند الإبلاغ عن مشكلة، ستظهر حالتها هنا حتى يتم حلها.",
+      "status": {
+        "open": "تم الاستلام",
+        "triaged": "قيد المراجعة",
+        "inProgress": "قيد الإصلاح",
+        "resolved": "تم الحل"
+      },
+      "audience": {
+        "school": "الجميع",
+        "staff": "الطاقم فقط"
+      },
+      "important": "مهم",
+      "deadlineFallback": "قبل",
+      "reportedAgo": "أُبلغ عنها {ago}",
+      "updatedAgo": "حُدِّث {ago}",
+      "postedAgo": "نُشر {ago}",
+      "minutesAgo": "قبل {n} د",
+      "hoursAgo": "قبل {n} س",
+      "daysAgo": "قبل {n} ي",
+      "now": "الآن",
+      "inMinutes": "خلال {n} د",
+      "inHours": "خلال {n} س",
+      "inDays": "خلال {n} يوم"
+    }
+  },
+  "student": {
+    "title": "دروسي",
+    "subtitle": "كل ما أسنده إليك معلمك.",
+    "downloadsNotReady": "التنزيلات غير متاحة بعد — اطلب من معلمك إكمال الإعداد.",
+    "empty": "لا توجد مهام بعد. عد لاحقًا بعد أن يشارك معلمك درسًا.",
+    "status": {
+      "completed": "مكتمل",
+      "revised": "تمت المراجعة",
+      "inProgress": "قيد التقدم",
+      "notStarted": "لم يبدأ"
+    },
+    "item": {
+      "due": "موعد التسليم {date}",
+      "watch": "شاهد",
+      "startFirstPart": "ابدأ الجزء 1 من {total}",
+      "continuePart": "تابع — الجزء {n} من {total}",
+      "rewatch": "أعد المشاهدة",
+      "eachAboutFifteenMinutes": "~15 دقيقة لكل جزء",
+      "part": "الجزء {n}",
+      "rewatchPart": "أعد مشاهدة الجزء {n}",
+      "partWontLoad": "تعذّر تحميل الجزء {n} — حدّث الصفحة",
+      "deck": "الشرائح",
+      "deckPart": "شرائح ج{n}",
+      "assistant": "المساعد",
+      "open": "افتح",
+      "takeQuiz": "ابدأ الاختبار",
+      "uploading": "جارٍ الرفع…",
+      "resubmit": "إعادة الإرسال",
+      "submitFile": "أرسل ملفًا",
+      "quizUnavailable": "الاختبار غير متاح — استخدم «أرسل إجابة» بدلًا منه.",
+      "quizLoadFailed": "تعذّر تحميل الاختبار."
+    },
+    "player": {
+      "partDone": "أنهيت الجزء {n} من {total} — أحسنت!",
+      "partFinished": "انتهى الجزء {n} من {total}",
+      "lessonComplete": "كان ذلك الجزء الأخير — اكتمل الدرس كله!",
+      "onePartADay": "جزء واحد كل يوم يجعل الأمر سهلًا. عد غدًا، أو واصل الآن.",
+      "alreadyCompleted": "لقد أكملت هذا الدرس من قبل — مراجعة ممتازة!",
+      "nextUpPart": "الأجزاء تُحتسب بالترتيب — التالي لك هو الجزء {n}.",
+      "playPart": "شغّل الجزء {n}",
+      "doneForToday": "يكفي لليوم",
+      "partLoadFailed": "تعذّر تحميل الجزء {n} الآن — أغلق هذه النافذة وحدّث الصفحة للمحاولة مرة أخرى.",
+      "multiPartHint": "الجزء {n} من {total} (~15 دقيقة). أنهِ الجزء ليُحتسب — الجزء الأخير يُكمل الدرس.",
+      "singlePartHint": "شاهد حتى النهاية ليُحتسب الدرس مكتملًا."
+    }
+  }
+}

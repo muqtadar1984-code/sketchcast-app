@@ -46,9 +46,15 @@ export default async function AccessModelPage() {
   if (hatAway) redirect(hatAway);
   const isAdmin = role === "school_admin";
 
-  // RLS-scoped: admin → school-wide; scope-holder → their slice. Coordinator
-  // access is the grant itself (scope rows), so non-admins without rows bounce.
-  const { data: scopesRaw } = await supabase.from("coordinator_scope").select("id, coordinator_id, grade, subject");
+  const schoolId = (profile?.school_id as string | null) ?? null;
+  if (!schoolId) redirect("/dashboard");
+
+  // RLS-scoped + explicit school filter: admin → school-wide; scope-holder →
+  // their slice in THIS school (a stale grant from a former school won't gate in).
+  const { data: scopesRaw } = await supabase
+    .from("coordinator_scope")
+    .select("id, coordinator_id, grade, subject")
+    .eq("school_id", schoolId);
   const scopes = (scopesRaw ?? []) as { id: string; coordinator_id: string; grade: string; subject: string | null }[];
   if (!isAdmin && scopes.length === 0) redirect("/dashboard");
   const { data: classesRaw } = await supabase.from("classes").select("id, grade, teacher_id");

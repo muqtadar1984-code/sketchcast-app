@@ -273,7 +273,7 @@ export default function NoticeComposer() {
 
           <label className="text-xs text-[#5B6470] block">
             Type
-            <select value={kind} onChange={(e) => setKind(e.target.value)} className="field h-10 px-2 text-sm mt-1 ml-2">
+            <select value={kind} onChange={(e) => setKind(e.target.value)} className="field h-10 px-2 text-sm mt-1 ms-2">
               {KINDS.map((k) => (
                 <option key={k} value={k}>
                   {k === "pd" ? "PD / training" : k[0].toUpperCase() + k.slice(1)}

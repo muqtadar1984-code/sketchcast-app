@@ -1,0 +1,129 @@
+{
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "loading": "Loading…",
+    "tryAgain": "Try again",
+    "somethingWentWrong": "Something went wrong — try again shortly.",
+    "language": "Language",
+    "chooseLanguage": "Choose your language",
+    "languageChangeFailed": "Couldn't change the language — try again."
+  },
+  "nav": {
+    "tabs": {
+      "library": "Library",
+      "myAnalytics": "My Analytics",
+      "diary": "Diary",
+      "schoolDiary": "School Diary",
+      "calendar": "Calendar",
+      "timetable": "Timetable",
+      "school": "School",
+      "teachers": "Teachers",
+      "access": "Access",
+      "admin": "Admin",
+      "myChildren": "My Children",
+      "testPapers": "Test Papers"
+    },
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "signOut": "Sign out",
+    "tour": "Tour",
+    "takeATour": "Take a tour",
+    "viewingAs": "Viewing as",
+    "switchRoleView": "Switch role view",
+    "hats": {
+      "principal": "Principal",
+      "coordinator": "Coordinator",
+      "teacher": "Teacher",
+      "parent": "Parent"
+    },
+    "roleLabel": {
+      "student": "student",
+      "parent": "parent",
+      "teacher": "teacher",
+      "adminAndTeacher": "admin & teacher",
+      "teacherAndCoordinator": "teacher & coordinator",
+      "alsoParent": "{role} & parent"
+    },
+    "bell": {
+      "title": "Notifications",
+      "titleUnread": "Notifications ({count} unread)",
+      "tooltipWithNotices": "School notices and your reported issues",
+      "tooltipIssuesOnly": "Your reported issues",
+      "headingWithNotices": "School notices & your reports",
+      "headingIssuesOnly": "Your reported issues",
+      "emptyWithNotices": "Nothing here yet — school notices, and the progress of anything you report, show up right here.",
+      "emptyIssuesOnly": "Nothing here yet — when you report a problem, its progress shows up right here until it's resolved.",
+      "status": {
+        "open": "Received",
+        "triaged": "Being reviewed",
+        "inProgress": "Being fixed",
+        "resolved": "Resolved"
+      },
+      "audience": {
+        "school": "Everyone",
+        "staff": "Staff only"
+      },
+      "important": "Important",
+      "deadlineFallback": "By",
+      "reportedAgo": "reported {ago}",
+      "updatedAgo": "updated {ago}",
+      "postedAgo": "posted {ago}",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago",
+      "now": "now",
+      "inMinutes": "in {n}m",
+      "inHours": "in {n}h",
+      "inDays": "in {n} days"
+    }
+  },
+  "student": {
+    "title": "My lessons",
+    "subtitle": "Everything your teacher has assigned to you.",
+    "downloadsNotReady": "Downloads aren't available yet — ask your teacher to finish setup.",
+    "empty": "Nothing assigned yet. Check back after your teacher shares a lesson.",
+    "status": {
+      "completed": "Completed",
+      "revised": "Revised",
+      "inProgress": "In progress",
+      "notStarted": "Not started"
+    },
+    "item": {
+      "due": "Due {date}",
+      "watch": "Watch",
+      "startFirstPart": "Start Part 1 of {total}",
+      "continuePart": "Continue — Part {n} of {total}",
+      "rewatch": "Rewatch",
+      "eachAboutFifteenMinutes": "~15 min each",
+      "part": "Part {n}",
+      "rewatchPart": "Rewatch Part {n}",
+      "partWontLoad": "Part {n} couldn't load — refresh the page",
+      "deck": "Deck",
+      "deckPart": "Deck Pt {n}",
+      "assistant": "Assistant",
+      "open": "Open",
+      "takeQuiz": "Take quiz",
+      "uploading": "Uploading…",
+      "resubmit": "Resubmit",
+      "submitFile": "Submit file",
+      "quizUnavailable": "Quiz unavailable — use Submit answer instead.",
+      "quizLoadFailed": "Could not load the quiz."
+    },
+    "player": {
+      "partDone": "Part {n} of {total} done — nice work!",
+      "partFinished": "Part {n} of {total} finished",
+      "lessonComplete": "That was the last part — the whole lesson is complete!",
+      "onePartADay": "One part a day keeps it easy. Come back tomorrow, or keep going now.",
+      "alreadyCompleted": "You've already completed this lesson — great revising!",
+      "nextUpPart": "Parts count in order — next up for you is Part {n}.",
+      "playPart": "Play Part {n}",
+      "doneForToday": "Done for today",
+      "partLoadFailed": "Part {n} couldn't load just now — close this and refresh the page to try again.",
+      "multiPartHint": "Part {n} of {total} (~15 min). Finish a part to check it off — the last part completes the lesson.",
+      "singlePartHint": "Watch to the end to mark this lesson complete."
+    }
+  }
+}

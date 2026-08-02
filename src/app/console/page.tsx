@@ -149,15 +149,15 @@ export default async function ConsoleOverviewPage() {
           <h2 className="text-xl mb-3">Generations by kind</h2>
           <div className="card divide-y divide-[#EEF0EC]">
             <div className="grid grid-cols-[2fr_repeat(3,1fr)] gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium">
-              <span>Kind</span><span className="text-right">Done</span>
-              <span className="text-right">Failed</span><span className="text-right">Running</span>
+              <span>Kind</span><span className="text-end">Done</span>
+              <span className="text-end">Failed</span><span className="text-end">Running</span>
             </div>
             {[...byKind.entries()].sort((a, b) => (b[1].done + b[1].error) - (a[1].done + a[1].error)).map(([k, r]) => (
               <div key={k} className="grid grid-cols-[2fr_repeat(3,1fr)] gap-2 px-5 py-2.5 text-sm">
                 <span className="font-medium">{k}</span>
-                <span className="tabular text-right">{r.done}</span>
-                <span className={`tabular text-right ${r.error ? "text-[#9A6400]" : ""}`}>{r.error}</span>
-                <span className="tabular text-right">{r.other}</span>
+                <span className="tabular text-end">{r.done}</span>
+                <span className={`tabular text-end ${r.error ? "text-[#9A6400]" : ""}`}>{r.error}</span>
+                <span className="tabular text-end">{r.other}</span>
               </div>
             ))}
             {byKind.size === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No generations yet.</div>}
@@ -174,7 +174,7 @@ export default async function ConsoleOverviewPage() {
                     style={{ width: funnel[0].n ? `${Math.max(2, (f.n / funnel[0].n) * 100)}%` : "0%", opacity: 1 - i * 0.12 }}
                   />
                 </div>
-                <span className="tabular text-sm w-8 text-right">{f.n}</span>
+                <span className="tabular text-sm w-8 text-end">{f.n}</span>
               </div>
             ))}
           </div>

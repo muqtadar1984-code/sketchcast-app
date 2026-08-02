@@ -137,13 +137,13 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
                   )}
                 </>
               )}
-              <span className="flex items-center gap-2 ml-auto">
+              <span className="flex items-center gap-2 ms-auto">
                 <input
                   type="number"
                   placeholder="Score"
                   value={score[r.id] ?? ""}
                   onChange={(e) => setScore((s) => ({ ...s, [r.id]: e.target.value }))}
-                  className="field h-8 w-20 px-2 text-sm text-right"
+                  className="field h-8 w-20 px-2 text-sm text-end"
                 />
                 <input
                   placeholder="Feedback (optional)"

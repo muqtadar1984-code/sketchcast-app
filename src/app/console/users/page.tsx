@@ -60,18 +60,18 @@ export default async function ConsoleUsersPage({
 
       <div className="card divide-y divide-[#EEF0EC]">
         <div className="hidden sm:grid grid-cols-[2fr_2fr_1fr_1.5fr_1fr] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium">
-          <span>Name</span><span>Email / username</span><span>Role</span><span>School</span><span className="text-right">Joined</span>
+          <span>Name</span><span>Email / username</span><span>Role</span><span>School</span><span className="text-end">Joined</span>
         </div>
         {profiles.map((p) => (
           <Link key={p.id} href={`/console/users/${p.id}`} className="grid sm:grid-cols-[2fr_2fr_1fr_1.5fr_1fr] gap-x-3 gap-y-1 px-5 py-2.5 text-sm items-center hover:bg-[#FAFBF9]">
             <span className="font-medium truncate">
               {p.full_name || p.username || "—"}
-              {p.beta_tester && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ml-2">beta</span>}
+              {p.beta_tester && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ms-2">beta</span>}
             </span>
             <span className="truncate text-[#5B6470]">{emails.get(p.id) || p.username || "—"}</span>
             <span className={p.role === "student" ? "text-[#98A0A9]" : ""}>{p.role}</span>
             <span className="truncate text-[#5B6470]">{p.school_id ? schoolName.get(p.school_id) ?? "—" : "—"}</span>
-            <span className="tabular sm:text-right text-xs text-[#5B6470]">{new Date(p.created_at).toLocaleDateString()}</span>
+            <span className="tabular sm:text-end text-xs text-[#5B6470]">{new Date(p.created_at).toLocaleDateString()}</span>
           </Link>
         ))}
         {profiles.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No matches.</div>}

@@ -8,10 +8,12 @@ import type { CSSProperties } from "react";
 type MarkProps = { className?: string; color?: string; delay?: number };
 
 // A wobbly underline. Stretches to its container width (preserveAspectRatio none),
-// so place it under a heading with `w-full`.
+// so place it under a heading with `w-full`. The `ink-underline` hook is what
+// globals.css mirrors under dir="rtl", so the stroke draws on in the reading
+// direction instead of against it.
 export function InkUnderline({ className, color = "#1FB8A6", delay = 0.15 }: MarkProps) {
   return (
-    <svg viewBox="0 0 240 12" preserveAspectRatio="none" fill="none" aria-hidden className={className}>
+    <svg viewBox="0 0 240 12" preserveAspectRatio="none" fill="none" aria-hidden className={`ink-underline ${className ?? ""}`}>
       <path
         d="M3 8 C 46 3, 96 11, 150 6 S 214 4, 237 7"
         stroke={color}

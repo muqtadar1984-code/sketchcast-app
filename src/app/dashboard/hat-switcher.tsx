@@ -2,12 +2,29 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { HAT_LABEL, type Hat } from "@/utils/hats";
+import { type Hat } from "@/utils/hats";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 // The top-right hat dropdown: switch which role's world you're in. The server
 // validates the hat is actually held (/api/hat) and answers with that hat's
 // home; a full router.refresh() re-renders the header + tabs for the new hat.
-export default function HatSwitcher({ hats, active }: { hats: Hat[]; active: Hat }) {
+//
+// Its words arrive as props from the (server) header — the hat NAMES included,
+// so "Principal" reads as the school itself says it. The type import is
+// type-only and erased, so the server-only dictionary never reaches the bundle.
+export default function HatSwitcher({
+  hats,
+  active,
+  labels,
+  viewingAs,
+  switchLabel,
+}: {
+  hats: Hat[];
+  active: Hat;
+  labels: Dictionary["nav"]["hats"];
+  viewingAs: string;
+  switchLabel: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -34,17 +51,17 @@ export default function HatSwitcher({ hats, active }: { hats: Hat[]; active: Hat
 
   return (
     <label className="flex items-center gap-1.5 text-sm">
-      <span className="text-[#98A0A9] text-xs hidden sm:inline">Viewing as</span>
+      <span className="text-[#98A0A9] text-xs hidden sm:inline">{viewingAs}</span>
       <select
         value={active}
         disabled={busy}
         onChange={(e) => void change(e.target.value)}
-        aria-label="Switch role view"
+        aria-label={switchLabel}
         className="h-9 rounded-lg border border-[#E6E8E4] bg-white px-2 text-sm text-[#14181F] disabled:opacity-50"
       >
         {hats.map((h) => (
           <option key={h} value={h}>
-            {HAT_LABEL[h]}
+            {labels[h]}
           </option>
         ))}
       </select>

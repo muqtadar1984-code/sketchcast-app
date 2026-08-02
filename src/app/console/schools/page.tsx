@@ -64,19 +64,19 @@ export default async function ConsoleSchoolsPage() {
 
       <div className="card divide-y divide-[#EEF0EC]">
         <div className="hidden sm:grid grid-cols-[2fr_repeat(5,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium">
-          <span>School</span><span className="text-right">Teachers</span><span className="text-right">Students</span>
-          <span className="text-right">Classes</span><span className="text-right">Lessons done</span><span className="text-right">Open issues</span>
+          <span>School</span><span className="text-end">Teachers</span><span className="text-end">Students</span>
+          <span className="text-end">Classes</span><span className="text-end">Lessons done</span><span className="text-end">Open issues</span>
         </div>
         {schools.map((s) => {
           const r = rows.get(s.id) ?? blank();
           return (
             <div key={s.id} className="grid sm:grid-cols-[2fr_repeat(5,1fr)] gap-x-3 gap-y-1 px-5 py-2.5 text-sm items-center">
               <span className="font-medium truncate">{s.name || "School"}</span>
-              <span className="tabular sm:text-right">{r.teachers}</span>
-              <span className="tabular sm:text-right">{r.students}</span>
-              <span className="tabular sm:text-right">{r.classes}</span>
-              <span className="tabular sm:text-right">{r.gensDone}</span>
-              <span className={`tabular sm:text-right ${r.openIssues ? "text-[#9A6400]" : ""}`}>{r.openIssues}</span>
+              <span className="tabular sm:text-end">{r.teachers}</span>
+              <span className="tabular sm:text-end">{r.students}</span>
+              <span className="tabular sm:text-end">{r.classes}</span>
+              <span className="tabular sm:text-end">{r.gensDone}</span>
+              <span className={`tabular sm:text-end ${r.openIssues ? "text-[#9A6400]" : ""}`}>{r.openIssues}</span>
             </div>
           );
         })}

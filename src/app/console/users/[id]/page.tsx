@@ -69,18 +69,18 @@ export default async function ConsoleUserDetailPage({
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
       <p className="mb-4 text-sm flex items-center justify-between">
-        <Link href="/console/users" className="text-[#0C8175] hover:underline">← Users</Link>
+        <Link href="/console/users" className="text-[#0C8175] hover:underline"><span className="rtl-flip">←</span> Users</Link>
         <Link href={`/console/users/${id}/view`} className="btn-ghost h-8 px-3 text-xs">
           View as (read-only)
         </Link>
       </p>
       <h1 className="text-3xl mb-2">
         {(p.full_name as string) || (p.username as string) || "User"}
-        {p.beta_tester === true && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ml-3 align-middle">beta</span>}
+        {p.beta_tester === true && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ms-3 align-middle">beta</span>}
         {opsReady && p.suspended_at != null && (
-          <span className="chip font-sans bg-[#FFE9E3] text-[#B3401F] ml-2 align-middle">suspended</span>
+          <span className="chip font-sans bg-[#FFE9E3] text-[#B3401F] ms-2 align-middle">suspended</span>
         )}
-        {isStaffTarget && <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ml-2 align-middle">staff</span>}
+        {isStaffTarget && <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ms-2 align-middle">staff</span>}
       </h1>
       <InkUnderline className="block h-3 w-28 mb-6" />
 

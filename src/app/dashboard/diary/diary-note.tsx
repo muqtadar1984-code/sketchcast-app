@@ -271,7 +271,7 @@ export default function DiaryNote({
             <span className="chip font-sans normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470]">parents only</span>
           )}
           <span className="truncate">
-            {note.author} → {note.audience} · {time}
+            {note.author} <span className="rtl-flip">→</span> {note.audience} · {time}
           </span>
         </div>
         <span className="flex items-center gap-1.5 shrink-0">
@@ -348,7 +348,7 @@ export default function DiaryNote({
       )}
 
       {(replies.length > 0 || canReply) && (
-        <div className="mt-2 pl-3 border-l-2 border-[#EEF0EC] space-y-1.5">
+        <div className="mt-2 ps-3 border-s-2 border-[#EEF0EC] space-y-1.5">
           {replies.map((r) => {
             const rXl = lang ? xl[`reply:${r.id}`] : undefined;
             const armed = confirmReply === r.id;

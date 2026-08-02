@@ -205,7 +205,7 @@ export default function AbsencePanel({
                 {a.reason && <span className="text-xs text-[#5B6470]">({a.reason})</span>}
                 <span className="chip bg-[#FDECEA] text-[#B42318]">absent</span>
                 {canMark && (
-                  <button onClick={() => void unmark(a.id)} disabled={busy} className="text-xs text-[#B42318] hover:underline ml-auto">
+                  <button onClick={() => void unmark(a.id)} disabled={busy} className="text-xs text-[#B42318] hover:underline ms-auto">
                     Remove (back in school)
                   </button>
                 )}
@@ -216,10 +216,10 @@ export default function AbsencePanel({
                 <table className="w-full text-sm border-collapse mt-2">
                   <thead>
                     <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-                      <th className="px-2 py-1.5 text-left font-normal w-20">Period</th>
-                      <th className="px-2 py-1.5 text-left font-normal">Class</th>
-                      <th className="px-2 py-1.5 text-left font-normal">Subject</th>
-                      <th className="px-2 py-1.5 text-left font-normal">Covered by</th>
+                      <th className="px-2 py-1.5 text-start font-normal w-20">Period</th>
+                      <th className="px-2 py-1.5 text-start font-normal">Class</th>
+                      <th className="px-2 py-1.5 text-start font-normal">Subject</th>
+                      <th className="px-2 py-1.5 text-start font-normal">Covered by</th>
                     </tr>
                   </thead>
                   <tbody>

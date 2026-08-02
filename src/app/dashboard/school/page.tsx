@@ -269,7 +269,7 @@ export default async function SchoolAnalyticsPage() {
         <h1 className="text-4xl mb-2">School analytics</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">
-          <span className="chip bg-[#E2F4F1] text-[#0C8175] mr-2">{scopeLabel}</span>
+          <span className="chip bg-[#E2F4F1] text-[#0C8175] me-2">{scopeLabel}</span>
           Signals that prompt support — not a ranking.
         </p>
 

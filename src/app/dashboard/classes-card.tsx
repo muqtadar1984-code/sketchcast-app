@@ -138,9 +138,11 @@ export default function ClassesCard({
         <div className="mt-4 space-y-2">
           {classes.map((c) => (
             <div key={c.id} className="border border-[#EEF0EC] rounded-lg">
-              <button onClick={() => expand(c.id)} className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left">
+              <button onClick={() => expand(c.id)} className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-start">
                 <span className="flex items-center gap-2 min-w-0">
-                  <span className={`text-[#98A0A9] text-xs transition-transform ${openId === c.id ? "rotate-90" : ""}`}>▶</span>
+                  {/* Disclosure caret — mirrors in RTL, and the open rotation
+                      reverses with it so it still points down. */}
+                  <span className={`rtl-flip text-[#98A0A9] text-xs transition-transform ${openId === c.id ? "rotate-90 rtl:-rotate-90" : ""}`}>▶</span>
                   <span className="font-medium truncate">{c.name}</span>
                   {c.grade && <span className="text-xs text-[#5B6470]">· {c.grade}</span>}
                 </span>
@@ -182,7 +184,7 @@ export default function ClassesCard({
                   <p className="text-xs font-medium text-[#5B6470] mt-4 mb-1.5">
                     Add students
                     {betaSlotsLeft !== null && (
-                      <span className="ml-2 text-[#9A6400]">Beta: {betaSlotsLeft} of 2 slots left</span>
+                      <span className="ms-2 text-[#9A6400]">Beta: {betaSlotsLeft} of 2 slots left</span>
                     )}
                   </p>
                   <div className="space-y-1.5">
@@ -202,7 +204,7 @@ export default function ClassesCard({
                   </div>
                   <div className="flex items-center gap-3 mt-2">
                     <button onClick={() => setRows((rs) => [...rs, emptyRow()])} className="text-xs font-medium text-[#0C8175] hover:underline">+ Add row</button>
-                    <button onClick={() => addStudents(c.id)} disabled={busy} className="btn-primary h-8 px-3 text-xs ml-auto">
+                    <button onClick={() => addStudents(c.id)} disabled={busy} className="btn-primary h-8 px-3 text-xs ms-auto">
                       {busy ? "Creating…" : "Create logins"}
                     </button>
                   </div>

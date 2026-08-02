@@ -124,7 +124,7 @@ export default function GenerateButton({
                 {result.unplaced.length > 0 ? (
                   <div className="mt-2">
                     <p className="text-[#9A6400]">Couldn&apos;t staff {result.unplaced.length} gap{result.unplaced.length === 1 ? "" : "s"}:</p>
-                    <ul className="mt-1 text-xs text-[#5B6470] list-disc pl-4">
+                    <ul className="mt-1 text-xs text-[#5B6470] list-disc ps-4">
                       {result.unplaced.slice(0, 10).map((u, i) => (
                         <li key={i}>
                           {u.class}: {u.subject} ×{u.count}

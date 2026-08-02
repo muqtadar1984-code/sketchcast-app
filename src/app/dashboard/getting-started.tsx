@@ -81,7 +81,7 @@ export default function GettingStarted({
         disabled={busy}
         aria-label="Dismiss getting started"
         title="Dismiss"
-        className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-md text-[#98A0A9] hover:bg-[#F5F6F3] hover:text-[#5B6470] disabled:opacity-50"
+        className="absolute top-3 end-3 w-7 h-7 flex items-center justify-center rounded-md text-[#98A0A9] hover:bg-[#F5F6F3] hover:text-[#5B6470] disabled:opacity-50"
       >
         ✕
       </button>
@@ -93,7 +93,7 @@ export default function GettingStarted({
         <h2 className="font-display font-medium text-[#14181F]">
           {allDone ? "You're all set!" : "Getting started"}
         </h2>
-        <span className="chip bg-[#E2F4F1] text-[#0C8175] ml-1">
+        <span className="chip bg-[#E2F4F1] text-[#0C8175] ms-1">
           {doneCount}/{list.length}
         </span>
       </div>

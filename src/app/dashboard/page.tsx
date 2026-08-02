@@ -878,12 +878,12 @@ export default async function DashboardPage() {
                 <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">1</span>
                 Upload a textbook PDF above
               </span>
-              <span className="text-[#98A0A9]">→</span>
+              <span className="rtl-flip text-[#98A0A9]">→</span>
               <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
                 <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">2</span>
                 Generate a narrated lesson for a chapter
               </span>
-              <span className="text-[#98A0A9]">→</span>
+              <span className="rtl-flip text-[#98A0A9]">→</span>
               <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
                 <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">3</span>
                 Assign it to your class &amp; watch progress

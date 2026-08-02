@@ -1,0 +1,129 @@
+{
+  "common": {
+    "close": "बंद करें",
+    "cancel": "रद्द करें",
+    "save": "सहेजें",
+    "saving": "सहेजा जा रहा है…",
+    "loading": "लोड हो रहा है…",
+    "tryAgain": "फिर कोशिश करें",
+    "somethingWentWrong": "कुछ गड़बड़ हो गई — थोड़ी देर बाद फिर कोशिश करें।",
+    "language": "भाषा",
+    "chooseLanguage": "अपनी भाषा चुनें",
+    "languageChangeFailed": "भाषा नहीं बदली जा सकी — फिर कोशिश करें।"
+  },
+  "nav": {
+    "tabs": {
+      "library": "लाइब्रेरी",
+      "myAnalytics": "मेरे आँकड़े",
+      "diary": "डायरी",
+      "schoolDiary": "स्कूल डायरी",
+      "calendar": "कैलेंडर",
+      "timetable": "समय-सारणी",
+      "school": "स्कूल",
+      "teachers": "शिक्षक",
+      "access": "पहुँच",
+      "admin": "एडमिन",
+      "myChildren": "मेरे बच्चे",
+      "testPapers": "प्रश्नपत्र"
+    },
+    "openMenu": "मेन्यू खोलें",
+    "closeMenu": "मेन्यू बंद करें",
+    "signOut": "साइन आउट",
+    "tour": "टूर",
+    "takeATour": "टूर देखें",
+    "viewingAs": "इस रूप में देख रहे हैं",
+    "switchRoleView": "भूमिका बदलें",
+    "hats": {
+      "principal": "प्रधानाचार्य",
+      "coordinator": "समन्वयक",
+      "teacher": "शिक्षक",
+      "parent": "अभिभावक"
+    },
+    "roleLabel": {
+      "student": "छात्र",
+      "parent": "अभिभावक",
+      "teacher": "शिक्षक",
+      "adminAndTeacher": "एडमिन और शिक्षक",
+      "teacherAndCoordinator": "शिक्षक और समन्वयक",
+      "alsoParent": "{role} और अभिभावक"
+    },
+    "bell": {
+      "title": "सूचनाएँ",
+      "titleUnread": "सूचनाएँ ({count} अपठित)",
+      "tooltipWithNotices": "स्कूल की सूचनाएँ और आपकी बताई समस्याएँ",
+      "tooltipIssuesOnly": "आपकी बताई समस्याएँ",
+      "headingWithNotices": "स्कूल की सूचनाएँ और आपकी रिपोर्ट",
+      "headingIssuesOnly": "आपकी बताई समस्याएँ",
+      "emptyWithNotices": "यहाँ अभी कुछ नहीं है — स्कूल की सूचनाएँ, और आपकी बताई किसी भी बात की प्रगति, यहीं दिखेंगी।",
+      "emptyIssuesOnly": "यहाँ अभी कुछ नहीं है — आप कोई समस्या बताएँगे तो हल होने तक उसकी प्रगति यहीं दिखेगी।",
+      "status": {
+        "open": "मिल गई",
+        "triaged": "जाँची जा रही है",
+        "inProgress": "ठीक की जा रही है",
+        "resolved": "हल हो गई"
+      },
+      "audience": {
+        "school": "सभी",
+        "staff": "केवल स्टाफ"
+      },
+      "important": "ज़रूरी",
+      "deadlineFallback": "अंतिम तिथि",
+      "reportedAgo": "{ago} बताई गई",
+      "updatedAgo": "{ago} अपडेट हुई",
+      "postedAgo": "{ago} पोस्ट हुई",
+      "minutesAgo": "{n} मि पहले",
+      "hoursAgo": "{n} घं पहले",
+      "daysAgo": "{n} दिन पहले",
+      "now": "अभी",
+      "inMinutes": "{n} मि में",
+      "inHours": "{n} घं में",
+      "inDays": "{n} दिन में"
+    }
+  },
+  "student": {
+    "title": "मेरे पाठ",
+    "subtitle": "आपके शिक्षक ने आपको जो कुछ दिया है।",
+    "downloadsNotReady": "डाउनलोड अभी उपलब्ध नहीं हैं — अपने शिक्षक से सेटअप पूरा करने को कहें।",
+    "empty": "अभी कुछ नहीं दिया गया है। शिक्षक के पाठ साझा करने के बाद दोबारा देखें।",
+    "status": {
+      "completed": "पूरा",
+      "revised": "दोहराया",
+      "inProgress": "चल रहा है",
+      "notStarted": "शुरू नहीं किया"
+    },
+    "item": {
+      "due": "{date} तक",
+      "watch": "देखें",
+      "startFirstPart": "{total} में से भाग 1 शुरू करें",
+      "continuePart": "जारी रखें — {total} में से भाग {n}",
+      "rewatch": "फिर देखें",
+      "eachAboutFifteenMinutes": "हर एक ~15 मिनट",
+      "part": "भाग {n}",
+      "rewatchPart": "भाग {n} फिर देखें",
+      "partWontLoad": "भाग {n} लोड नहीं हो सका — पेज रीफ़्रेश करें",
+      "deck": "स्लाइड",
+      "deckPart": "स्लाइड भा {n}",
+      "assistant": "सहायक",
+      "open": "खोलें",
+      "takeQuiz": "क्विज़ दें",
+      "uploading": "अपलोड हो रहा है…",
+      "resubmit": "फिर जमा करें",
+      "submitFile": "फ़ाइल जमा करें",
+      "quizUnavailable": "क्विज़ उपलब्ध नहीं है — इसके बजाय ‘उत्तर जमा करें’ का उपयोग करें।",
+      "quizLoadFailed": "क्विज़ लोड नहीं हो सकी।"
+    },
+    "player": {
+      "partDone": "{total} में से भाग {n} पूरा — शाबाश!",
+      "partFinished": "{total} में से भाग {n} पूरा हुआ",
+      "lessonComplete": "वह आख़िरी भाग था — पूरा पाठ पूरा हो गया!",
+      "onePartADay": "रोज़ एक भाग करने से आसान रहता है। कल फिर आएँ, या अभी आगे बढ़ें।",
+      "alreadyCompleted": "आप यह पाठ पहले ही पूरा कर चुके हैं — बढ़िया दोहराई!",
+      "nextUpPart": "भाग क्रम से गिने जाते हैं — आपका अगला भाग {n} है।",
+      "playPart": "भाग {n} चलाएँ",
+      "doneForToday": "आज के लिए बस",
+      "partLoadFailed": "भाग {n} अभी लोड नहीं हो सका — इसे बंद करें और पेज रीफ़्रेश करके फिर कोशिश करें।",
+      "multiPartHint": "{total} में से भाग {n} (~15 मिनट)। एक भाग पूरा करने पर वह चिह्नित हो जाता है — आख़िरी भाग पाठ पूरा करता है।",
+      "singlePartHint": "इस पाठ को पूरा चिह्नित करने के लिए अंत तक देखें।"
+    }
+  }
+}

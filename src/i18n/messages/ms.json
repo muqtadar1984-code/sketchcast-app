@@ -1,0 +1,129 @@
+{
+  "common": {
+    "close": "Tutup",
+    "cancel": "Batal",
+    "save": "Simpan",
+    "saving": "Menyimpan…",
+    "loading": "Memuatkan…",
+    "tryAgain": "Cuba lagi",
+    "somethingWentWrong": "Ada masalah — sila cuba lagi sebentar lagi.",
+    "language": "Bahasa",
+    "chooseLanguage": "Pilih bahasa anda",
+    "languageChangeFailed": "Tidak dapat menukar bahasa — cuba lagi."
+  },
+  "nav": {
+    "tabs": {
+      "library": "Pustaka",
+      "myAnalytics": "Analitik Saya",
+      "diary": "Diari",
+      "schoolDiary": "Diari Sekolah",
+      "calendar": "Kalendar",
+      "timetable": "Jadual Waktu",
+      "school": "Sekolah",
+      "teachers": "Guru",
+      "access": "Akses",
+      "admin": "Pentadbir",
+      "myChildren": "Anak Saya",
+      "testPapers": "Kertas Ujian"
+    },
+    "openMenu": "Buka menu",
+    "closeMenu": "Tutup menu",
+    "signOut": "Log keluar",
+    "tour": "Panduan",
+    "takeATour": "Ikuti panduan",
+    "viewingAs": "Melihat sebagai",
+    "switchRoleView": "Tukar paparan peranan",
+    "hats": {
+      "principal": "Pengetua",
+      "coordinator": "Penyelaras",
+      "teacher": "Guru",
+      "parent": "Ibu bapa"
+    },
+    "roleLabel": {
+      "student": "pelajar",
+      "parent": "ibu bapa",
+      "teacher": "guru",
+      "adminAndTeacher": "pentadbir & guru",
+      "teacherAndCoordinator": "guru & penyelaras",
+      "alsoParent": "{role} & ibu bapa"
+    },
+    "bell": {
+      "title": "Pemberitahuan",
+      "titleUnread": "Pemberitahuan ({count} belum dibaca)",
+      "tooltipWithNotices": "Notis sekolah dan isu yang anda laporkan",
+      "tooltipIssuesOnly": "Isu yang anda laporkan",
+      "headingWithNotices": "Notis sekolah & laporan anda",
+      "headingIssuesOnly": "Isu yang anda laporkan",
+      "emptyWithNotices": "Belum ada apa-apa di sini — notis sekolah, dan perkembangan apa sahaja yang anda laporkan, akan dipaparkan di sini.",
+      "emptyIssuesOnly": "Belum ada apa-apa di sini — apabila anda melaporkan masalah, perkembangannya akan dipaparkan di sini sehingga selesai.",
+      "status": {
+        "open": "Diterima",
+        "triaged": "Sedang disemak",
+        "inProgress": "Sedang dibaiki",
+        "resolved": "Selesai"
+      },
+      "audience": {
+        "school": "Semua orang",
+        "staff": "Kakitangan sahaja"
+      },
+      "important": "Penting",
+      "deadlineFallback": "Sebelum",
+      "reportedAgo": "dilaporkan {ago}",
+      "updatedAgo": "dikemas kini {ago}",
+      "postedAgo": "disiarkan {ago}",
+      "minutesAgo": "{n} minit lalu",
+      "hoursAgo": "{n} jam lalu",
+      "daysAgo": "{n} hari lalu",
+      "now": "sekarang",
+      "inMinutes": "dalam {n} minit",
+      "inHours": "dalam {n} jam",
+      "inDays": "dalam {n} hari"
+    }
+  },
+  "student": {
+    "title": "Pelajaran saya",
+    "subtitle": "Semua yang diberikan oleh guru anda.",
+    "downloadsNotReady": "Muat turun belum tersedia — minta guru anda melengkapkan persediaan.",
+    "empty": "Belum ada tugasan. Semak semula selepas guru anda berkongsi pelajaran.",
+    "status": {
+      "completed": "Selesai",
+      "revised": "Diulang kaji",
+      "inProgress": "Sedang dibuat",
+      "notStarted": "Belum mula"
+    },
+    "item": {
+      "due": "Tarikh akhir {date}",
+      "watch": "Tonton",
+      "startFirstPart": "Mula Bahagian 1 daripada {total}",
+      "continuePart": "Sambung — Bahagian {n} daripada {total}",
+      "rewatch": "Tonton semula",
+      "eachAboutFifteenMinutes": "~15 min setiap satu",
+      "part": "Bahagian {n}",
+      "rewatchPart": "Tonton semula Bahagian {n}",
+      "partWontLoad": "Bahagian {n} tidak dapat dimuatkan — muat semula halaman",
+      "deck": "Slaid",
+      "deckPart": "Slaid Bhg {n}",
+      "assistant": "Pembantu",
+      "open": "Buka",
+      "takeQuiz": "Jawab kuiz",
+      "uploading": "Memuat naik…",
+      "resubmit": "Hantar semula",
+      "submitFile": "Hantar fail",
+      "quizUnavailable": "Kuiz tidak tersedia — gunakan Hantar jawapan.",
+      "quizLoadFailed": "Kuiz tidak dapat dimuatkan."
+    },
+    "player": {
+      "partDone": "Bahagian {n} daripada {total} selesai — syabas!",
+      "partFinished": "Bahagian {n} daripada {total} tamat",
+      "lessonComplete": "Itu bahagian terakhir — pelajaran ini sudah lengkap!",
+      "onePartADay": "Satu bahagian sehari memudahkan. Kembali esok, atau teruskan sekarang.",
+      "alreadyCompleted": "Anda sudah menyelesaikan pelajaran ini — bagus untuk ulang kaji!",
+      "nextUpPart": "Bahagian dikira mengikut urutan — seterusnya ialah Bahagian {n}.",
+      "playPart": "Main Bahagian {n}",
+      "doneForToday": "Cukup untuk hari ini",
+      "partLoadFailed": "Bahagian {n} tidak dapat dimuatkan sekarang — tutup ini dan muat semula halaman untuk cuba lagi.",
+      "multiPartHint": "Bahagian {n} daripada {total} (~15 min). Habiskan satu bahagian untuk menandakannya — bahagian terakhir melengkapkan pelajaran.",
+      "singlePartHint": "Tonton sehingga habis untuk menandakan pelajaran ini selesai."
+    }
+  }
+}

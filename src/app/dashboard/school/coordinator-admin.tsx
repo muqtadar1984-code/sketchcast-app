@@ -81,7 +81,7 @@ export default function CoordinatorAdmin({
               <div key={m.id} className="border border-[#EEF0EC] rounded-lg p-3">
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <span className="font-medium">
-                    {m.name} <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ml-1">teacher &amp; coordinator</span>
+                    {m.name} <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ms-1">teacher &amp; coordinator</span>
                   </span>
                   <button
                     onClick={() => call({ action: "revoke_coordinator", userId: m.id })}
@@ -104,7 +104,7 @@ export default function CoordinatorAdmin({
                           onClick={() => call({ action: "remove_scope", scopeId: s.id })}
                           disabled={busy}
                           aria-label="Remove scope"
-                          className="ml-0.5 text-[#9A6400] hover:text-red-600"
+                          className="ms-0.5 text-[#9A6400] hover:text-red-600"
                         >
                           ×
                         </button>

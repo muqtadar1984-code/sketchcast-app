@@ -72,6 +72,44 @@ h1, h2, h3 {
   }
 }
 
+/* ── Right-to-left (Arabic, Jawi) ──────────────────────────────────────────
+   The LAYOUT mirrors on its own: every directional utility in src/ is a
+   logical one (ps-/pe-, ms-/me-, text-start/end, border-s/e, rounded-ss…ee,
+   start-/end-), and Tailwind 4 already writes margin-inline-* for space-x-*
+   and border-inline-*-width for divide-x. Setting dir="rtl" on <html> is the
+   whole switch.
+
+   What CSS still has to do is turn the handful of GLYPHS that encode reading
+   direction. "←" and "→" are not Bidi_Mirrored characters: the bidi algorithm
+   moves them along the line but never turns them round, so a back arrow in an
+   Arabic page would still point at the previous page's side of the screen.
+
+   .rtl-flip goes on the element HOLDING such a glyph. Three deliberate choices:
+   · nothing is emitted for LTR, so left-to-right renders exactly as before;
+   · the flip uses `scale` — the individual transform property, the same one
+     Tailwind's -scale-x-100 writes — so it COMPOSES with `rotate` instead of
+     overwriting it. That is what lets a disclosure caret mirror while still
+     pointing down when it is open (it pairs with rtl:-rotate-90 there,
+     because scale is applied before rotate);
+   · the :where(…) condition is a copy of the one Tailwind compiles its own
+     `rtl:` variant to, because that caret wears both and they have to agree on
+     what "RTL" means. It is a FORGIVING list on purpose: a browser without
+     :dir() drops that arm and still matches on the attribute.
+
+   NOT flipped, on purpose: the ▶ play triangle. Play/skip are media TRANSPORT
+   controls — they mean "forward along the tape", not "forward along the
+   sentence" — and point the same way in every locale. */
+.rtl-flip:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
+  display: inline-block;
+  scale: -1 1;
+}
+
+/* The signature underline draws itself on from the start of its path. Mirror
+   the whole mark so the pen travels right-to-left, with the reader. */
+.ink-underline:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
+  scale: -1 1;
+}
+
 /* ── Component utilities (Tailwind v4 @utility, so they're reliably emitted) ── */
 @utility card {
   background: var(--color-paper);

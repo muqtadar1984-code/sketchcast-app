@@ -259,7 +259,7 @@ export default function ChapterGenerate({
     ));
 
   const actions = (
-    <span className="ml-auto flex items-center gap-3">
+    <span className="ms-auto flex items-center gap-3">
       {assignableIds.length > 0 && (
         <span data-tour="assign-chapter">
           <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
@@ -291,7 +291,7 @@ export default function ChapterGenerate({
   );
 
   return (
-    <div className="mt-1.5 pl-5">
+    <div className="mt-1.5 ps-5">
       {multiVideo ? (
         // Chunked lesson: one bordered card (LessonCard's frame) — the Pt
         // chip stack first, the documents in an attached row underneath.

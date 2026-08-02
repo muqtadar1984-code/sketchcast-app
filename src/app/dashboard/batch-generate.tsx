@@ -237,7 +237,7 @@ export default function BatchGenerate({
             <button
               onClick={() => void generate()}
               disabled={busy || !canGo || nPapers === 0}
-              className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50 ml-auto"
+              className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50 ms-auto"
             >
               {busy ? "Queuing…" : nPapers > 0 ? `Generate ${nPapers} paper${nPapers === 1 ? "" : "s"} (free)` : "Generate"}
             </button>

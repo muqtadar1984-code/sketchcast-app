@@ -135,7 +135,7 @@ const TutorBoard = forwardRef<TutorBoardHandle, { generationId: string; readAlou
     >
       {board}
       {thinking && active && (
-        <div className="absolute top-1.5 right-2 text-[10px] text-[#0C8175] bg-white/80 rounded px-1.5 py-0.5">✎ working…</div>
+        <div className="absolute top-1.5 end-2 text-[10px] text-[#0C8175] bg-white/80 rounded px-1.5 py-0.5">✎ working…</div>
       )}
     </div>
   );

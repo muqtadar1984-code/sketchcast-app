@@ -5,18 +5,23 @@ import HeaderNav, { type NavTab } from "./header-nav";
 import MobileNav from "./mobile-nav";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
+import LanguageSwitcher from "./language-switcher";
 import NotificationsBell, { type IssueNotification, type NoticeNotification } from "./notifications-bell";
 import {
   calendarEnabledFor,
   diaryEnabled,
+  i18nEnabled,
   noticesEnabledFor,
   parentPortalEnabled,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
   timetableEnabledFor,
 } from "@/utils/flags";
-import { HAT_LABEL, hatsFor, resolveHat, type Hat } from "@/utils/hats";
+import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
 import { activeHatCookie } from "@/utils/hats-server";
+import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 // One person can wear several hats: every adult (teacher, coordinator,
 // school_admin, PARENT) implicitly has the TEACHER capability (the DB already
@@ -28,44 +33,56 @@ import { activeHatCookie } from "@/utils/hats-server";
 // Students stay exclusive — a minor's account never gains adult capabilities.
 // Tabs and the label show the UNION of what a person holds.
 
+// Every tab label and role word comes from the request's dictionary, so the two
+// tab builders take the `nav` slice rather than repeating the strings: one tab
+// exists in exactly one place, in ten languages.
+type NavMessages = Dictionary["nav"];
+
 // One-hat-at-a-time tabs (FEATURE_ROLE_HATS): only the ACTIVE hat's world
 // renders — a principal in Teacher mode sees a plain teacher header, nothing
 // leadership. Presentation only; every page keeps its own server-side gates.
-function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetableOn: boolean, diaryOn: boolean): NavTab[] {
-  const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: "Calendar" }] : [];
-  const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: "Diary" }] : [];
+function tabsForHat(
+  t: NavMessages["tabs"],
+  hat: Hat,
+  analyticsOn: boolean,
+  calendarOn: boolean,
+  timetableOn: boolean,
+  diaryOn: boolean,
+): NavTab[] {
+  const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: t.calendar }] : [];
+  const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : [];
   if (hat === "teacher")
     return [
-      { href: "/dashboard", label: "Library" },
-      { href: "/dashboard/analytics", label: "My Analytics" },
+      { href: "/dashboard", label: t.library },
+      { href: "/dashboard/analytics", label: t.myAnalytics },
       ...diary,
       // School-linked teachers get THEIR schedule (read-only, plus cover duties).
-      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: "Timetable" }] : []),
+      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: t.timetable }] : []),
       ...calendar,
     ];
   if (hat === "parent")
     // Parents get the full authoring facilities directly (founder,
     // 2026-07-19) — no switching to a teacher hat to reach the Library.
     return [
-      { href: "/dashboard", label: "Library" },
-      { href: "/dashboard/analytics", label: "My Analytics" },
-      { href: "/dashboard/children", label: "My Children" },
+      { href: "/dashboard", label: t.library },
+      { href: "/dashboard/analytics", label: t.myAnalytics },
+      { href: "/dashboard/children", label: t.myChildren },
       ...diary,
-      { href: "/dashboard/test-papers", label: "Test Papers" },
+      { href: "/dashboard/test-papers", label: t.testPapers },
       ...calendar,
     ];
   const tabs: NavTab[] = [];
   if (analyticsOn) {
     tabs.push(
-      { href: "/dashboard/school", label: "School" },
-      { href: "/dashboard/school/teachers", label: "Teachers" },
-      { href: "/dashboard/school/access", label: "Access" },
+      { href: "/dashboard/school", label: t.school },
+      { href: "/dashboard/school/teachers", label: t.teachers },
+      { href: "/dashboard/school/access", label: t.access },
     );
-    if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
+    if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: t.admin });
   }
   // Leadership's diary is the read-only school surface, not the personal one.
-  if (diaryOn) tabs.push({ href: "/dashboard/school/diary", label: "Diary" });
-  if (timetableOn) tabs.push({ href: "/dashboard/school/timetable", label: "Timetable" });
+  if (diaryOn) tabs.push({ href: "/dashboard/school/diary", label: t.diary });
+  if (timetableOn) tabs.push({ href: "/dashboard/school/timetable", label: t.timetable });
   tabs.push(...calendar);
   // Invites (parents only since 0052 — teacher accounts are staff-managed)
   // live under the Admin surface, not a top-level tab.
@@ -73,6 +90,7 @@ function tabsForHat(hat: Hat, analyticsOn: boolean, calendarOn: boolean, timetab
 }
 
 function tabsFor(
+  t: NavMessages["tabs"],
   role: string | null,
   hasScope: boolean,
   hasChildren: boolean,
@@ -84,56 +102,65 @@ function tabsFor(
   if (!role || role === "student") {
     // School-linked students get their class diary + timetable — nothing else.
     return [
-      ...(diaryOn ? [{ href: "/dashboard/diary", label: "Diary" }] : []),
-      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: "Timetable" }] : []),
+      ...(diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : []),
+      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: t.timetable }] : []),
     ];
   }
   const tabs: NavTab[] = [
-    { href: "/dashboard", label: "Library" },
-    { href: "/dashboard/analytics", label: "My Analytics" },
+    { href: "/dashboard", label: t.library },
+    { href: "/dashboard/analytics", label: t.myAnalytics },
   ];
-  if (diaryOn) tabs.push({ href: "/dashboard/diary", label: "Diary" });
-  if (calendarOn) tabs.push({ href: "/dashboard/calendar", label: "Calendar" });
+  if (diaryOn) tabs.push({ href: "/dashboard/diary", label: t.diary });
+  if (calendarOn) tabs.push({ href: "/dashboard/calendar", label: t.calendar });
   if (analyticsOn && (role === "school_admin" || hasScope)) {
     tabs.push(
-      { href: "/dashboard/school", label: "School" },
-      { href: "/dashboard/school/teachers", label: "Teachers" },
-      { href: "/dashboard/school/access", label: "Access" },
+      { href: "/dashboard/school", label: t.school },
+      { href: "/dashboard/school/teachers", label: t.teachers },
+      { href: "/dashboard/school/access", label: t.access },
     );
-    if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: "Admin" });
+    if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: t.admin });
   }
   if (timetableOn)
     tabs.push(
       role === "school_admin" || hasScope
-        ? { href: "/dashboard/school/timetable", label: "Timetable" }
-        : { href: "/dashboard/my-timetable", label: "Timetable" },
+        ? { href: "/dashboard/school/timetable", label: t.timetable }
+        : { href: "/dashboard/my-timetable", label: t.timetable },
     );
   // Union view carries BOTH diary doors: the personal one above, and the
   // leadership read-only surface (distinct label — two "Diary" tabs would be
   // indistinguishable here).
   if (diaryOn && (role === "school_admin" || hasScope))
-    tabs.push({ href: "/dashboard/school/diary", label: "School Diary" });
+    tabs.push({ href: "/dashboard/school/diary", label: t.schoolDiary });
   if (hasChildren) {
-    tabs.push({ href: "/dashboard/children", label: "My Children" });
-    tabs.push({ href: "/dashboard/test-papers", label: "Test Papers" });
+    tabs.push({ href: "/dashboard/children", label: t.myChildren });
+    tabs.push({ href: "/dashboard/test-papers", label: t.testPapers });
   }
   return tabs;
 }
 
-function labelFor(role: string | null, hasScope: boolean, hasChildren: boolean): string {
-  if (role === "student") return "student";
-  if (role === "parent") return "parent";
+// The union-view descriptor beside the name ("teacher & coordinator"). The
+// combinations are whole messages rather than words glued with "&": the
+// conjunction, and the order the two roles read in, are a translator's call.
+function labelFor(t: NavMessages["roleLabel"], role: string | null, hasScope: boolean, hasChildren: boolean): string {
+  if (role === "student") return t.student;
+  if (role === "parent") return t.parent;
   let label = "";
-  if (role === "school_admin") label = "admin & teacher";
-  else if (hasScope) label = "teacher & coordinator";
-  else if (role === "teacher" || role === "coordinator") label = "teacher";
-  if (label && hasChildren) label += " & parent";
+  if (role === "school_admin") label = t.adminAndTeacher;
+  else if (hasScope) label = t.teacherAndCoordinator;
+  else if (role === "teacher" || role === "coordinator") label = t.teacher;
+  if (label && hasChildren) label = fmt(t.alsoParent, { role: label });
   return label;
 }
 
 // Shared app bar for the teacher, student, and leadership dashboards.
-// Self-sufficient: derives everything from the session, no props needed.
+// Self-sufficient: derives everything from the session, no props needed — the
+// interface language included. resolveLocale() is React-cached per request, so
+// asking here costs nothing beyond what the root layout already paid, and the
+// dictionary stays on the server: each client control below is handed the
+// handful of strings it renders, never the whole file.
 export default async function AppHeader() {
+  const locale = await resolveLocale();
+  const t = await getDictionary(locale);
   const supabase = await createClient();
   const {
     data: { user },
@@ -295,9 +322,11 @@ export default async function AppHeader() {
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const tabs = activeHat
-    ? tabsForHat(activeHat, analyticsOn, calendarOn, timetableOn, diaryOn)
-    : tabsFor(role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn, diaryOn);
-  const label = activeHat ? HAT_LABEL[activeHat].toLowerCase() : labelFor(role, hasScope, hasChildren);
+    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn)
+    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn, diaryOn);
+  // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
+  // it is lower-cased — a no-op in the scripts that have no case at all.
+  const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);
   return (
     <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
       {/* Full-width bar: the logo alone anchors the left, the tabs float in
@@ -306,14 +335,27 @@ export default async function AppHeader() {
           the tabs are hidden, so a hamburger (far left) opens them as a
           dropdown — every role's tabs, same source. */}
       <div className="px-5 h-16 flex items-center gap-3 sm:gap-5">
-        {tabs.length > 0 && <MobileNav tabs={tabs} />}
+        {tabs.length > 0 && <MobileNav tabs={tabs} openLabel={t.nav.openMenu} closeLabel={t.nav.closeMenu} />}
+        {/* The product name is a name, in every language — never translated. */}
         <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
           <LogoMark size={30} />
           SketchCast <span className="text-[#0C8175]">AI</span>
         </Link>
         <div className="flex-1 min-w-0 flex justify-center">{tabs.length > 0 && <HeaderNav tabs={tabs} />}</div>
         <div className="flex items-center gap-3 text-sm shrink-0">
-          {hats.length > 1 && activeHat && <HatSwitcher hats={hats} active={activeHat} />}
+          {hats.length > 1 && activeHat && (
+            <HatSwitcher
+              hats={hats}
+              active={activeHat}
+              labels={t.nav.hats}
+              viewingAs={t.nav.viewingAs}
+              switchLabel={t.nav.switchRoleView}
+            />
+          )}
+          {/* Deliberately NOT hidden on phones like the name beside it: a reader
+              who can't read the current language has to be able to reach this
+              from the device they actually use. */}
+          {i18nEnabled() && <LanguageSwitcher locale={locale} t={t.common} />}
           <span className="text-[#5B6470] hidden xl:inline max-w-[14rem] truncate whitespace-nowrap" title={`${name}${label ? ` · ${label}` : ""}`}>
             {name}
             {label ? ` · ${label}` : ""}
@@ -326,14 +368,17 @@ export default async function AppHeader() {
               notices={bellNotices}
               noticesUnread={bellNoticesUnread}
               noticesOn={noticesOn}
+              t={t.nav.bell}
             />
           )}
-          <TourReplayButton />
+          <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
           <form action="/auth/signout" method="post">
-            <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">Sign out</button>
+            <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">{t.nav.signOut}</button>
           </form>
+          {/* Logical inset/border (ps-/ms-/border-s) so the school's divider sits
+              on the correct side once <html dir="rtl"> mirrors the bar. */}
           {schoolName && (
-            <span className="hidden md:inline-flex items-center pl-4 ml-1 border-l border-[#E6E8E4] font-display text-[#14181F] whitespace-nowrap max-w-[14rem] truncate">
+            <span className="hidden md:inline-flex items-center ps-4 ms-1 border-s border-[#E6E8E4] font-display text-[#14181F] whitespace-nowrap max-w-[14rem] truncate">
               {schoolName}
             </span>
           )}

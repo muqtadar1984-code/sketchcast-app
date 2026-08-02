@@ -18,7 +18,7 @@ export function SchoolAssistantLauncher() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="fixed bottom-4 right-4 z-40">
+      <div className="fixed bottom-4 end-4 z-40">
         {/* Collapsed to its mark, expanding on hover/focus — the same treatment
             as the teaching Assistant and "Report a problem", so no floating
             control sits over the content column. The drawn mark replaces an
@@ -35,7 +35,7 @@ export function SchoolAssistantLauncher() {
             <path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v11A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 17.5 6H16" />
             <path d="M9 11h6M9 15h4" />
           </svg>
-          <span className="max-w-0 group-hover:max-w-[10rem] group-focus-visible:max-w-[10rem] ml-0 group-hover:ml-2 group-focus-visible:ml-2 overflow-hidden whitespace-nowrap transition-all duration-200">
+          <span className="max-w-0 group-hover:max-w-[10rem] group-focus-visible:max-w-[10rem] ms-0 group-hover:ms-2 group-focus-visible:ms-2 overflow-hidden whitespace-nowrap transition-all duration-200">
             School briefing
           </span>
         </button>
@@ -262,7 +262,7 @@ function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
             <div key={i} className={m.role === "you" ? "flex justify-end" : "flex flex-col items-start"}>
               <div
                 className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
-                  m.role === "you" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-br-sm" : "bg-[#F4F6F3] text-[#14181F] rounded-bl-sm"
+                  m.role === "you" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-[#14181F] rounded-es-sm"
                 }`}
               >
                 {m.content || <span className="text-[#98A0A9]">…</span>}

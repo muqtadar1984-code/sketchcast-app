@@ -11,7 +11,19 @@ import { isActive, type NavTab } from "./header-nav";
 // same role-derived tabs as a dropdown panel. Rendered for every role —
 // teacher, student, parent, and all school hats — because it receives the
 // exact tabs the desktop nav shows.
-export default function MobileNav({ tabs }: { tabs: NavTab[] }) {
+//
+// The tab labels arrive already translated (the header builds them from the
+// request's dictionary); the two words this component owns — the button's
+// accessible name in each state — come in as props for the same reason.
+export default function MobileNav({
+  tabs,
+  openLabel,
+  closeLabel,
+}: {
+  tabs: NavTab[];
+  openLabel: string;
+  closeLabel: string;
+}) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
 
@@ -20,7 +32,7 @@ export default function MobileNav({ tabs }: { tabs: NavTab[] }) {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-label={open ? "Close menu" : "Open menu"}
+        aria-label={open ? closeLabel : openLabel}
         className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-[#E6E8E4] bg-white text-[#14181F]"
       >
         {open ? (
@@ -38,7 +50,7 @@ export default function MobileNav({ tabs }: { tabs: NavTab[] }) {
         <>
           {/* Backdrop: tap anywhere else to close. */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <nav className="absolute left-0 right-0 top-16 z-30 border-b border-[#E6E8E4] bg-white shadow-lg">
+          <nav className="absolute start-0 end-0 top-16 z-30 border-b border-[#E6E8E4] bg-white shadow-lg">
             {tabs.map((t) => {
               const active = isActive(t.href, path, tabs);
               return (

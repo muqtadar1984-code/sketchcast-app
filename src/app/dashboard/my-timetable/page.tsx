@@ -118,9 +118,9 @@ export default async function MyTimetablePage() {
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-            <th className="px-2 py-2 text-left font-normal w-20">Period</th>
+            <th className="px-2 py-2 text-start font-normal w-20">Period</th>
             {days.map((d) => (
-              <th key={d} className="px-2 py-2 text-left font-normal">
+              <th key={d} className="px-2 py-2 text-start font-normal">
                 {d}
               </th>
             ))}
@@ -196,7 +196,7 @@ export default async function MyTimetablePage() {
             <ul className="text-sm text-[#5B6470] space-y-1">
               {covers.map((c, i) => (
                 <li key={i}>
-                  <span className="chip bg-[#FFF1D6] text-[#9A6400] mr-2">{c.on_date}</span>
+                  <span className="chip bg-[#FFF1D6] text-[#9A6400] me-2">{c.on_date}</span>
                   {shape.periods[c.period - 1]?.label ?? `P${c.period}`} · {c.subject} ·{" "}
                   {classNames.get(c.class_id) ?? "Class"}
                   {c.original_teacher_id ? ` — covering for ${firstName(c.original_teacher_id)}` : ""}

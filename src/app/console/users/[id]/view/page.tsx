@@ -137,7 +137,7 @@ export default async function ViewAsPage({
           clickable, and this access is audited.
         </span>
         <Link href={`/console/users/${id}`} className="font-medium hover:underline shrink-0">
-          ← Back to account
+          <span className="rtl-flip">←</span> Back to account
         </Link>
       </div>
 

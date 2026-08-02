@@ -107,12 +107,12 @@ export default async function ConsoleIssueDetailPage({
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
       <p className="mb-4 text-sm">
-        <Link href="/console/issues" className="text-[#0C8175] hover:underline">← Issues</Link>
+        <Link href="/console/issues" className="text-[#0C8175] hover:underline"><span className="rtl-flip">←</span> Issues</Link>
       </p>
       <h1 className="text-3xl mb-2">{issue.title}</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-sm text-[#5B6470] mb-6">
-        <span className="chip font-sans bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal mr-2">{issue.category}</span>
+        <span className="chip font-sans bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal me-2">{issue.category}</span>
         reported <span className="tabular">{new Date(issue.created_at).toLocaleString()}</span>
         {reporter && (
           <>
@@ -160,11 +160,11 @@ export default async function ConsoleIssueDetailPage({
           </div>
         )}
         {issue.diagnosis && (
-          <div className="card p-5 text-sm space-y-1.5 border-l-4 border-l-[#1FB8A6]">
+          <div className="card p-5 text-sm space-y-1.5 border-s-4 border-s-[#1FB8A6]">
             <h2 className="font-display font-medium text-lg mb-2">
               AI diagnosis
               {issue.trigger_source === "auto" && (
-                <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ml-2 align-middle">auto-triggered</span>
+                <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ms-2 align-middle">auto-triggered</span>
               )}
             </h2>
             <p>

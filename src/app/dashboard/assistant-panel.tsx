@@ -221,13 +221,13 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
             <div key={i} className={m.role === "student" ? "flex justify-end" : "flex flex-col items-start"}>
               <div
                 className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
-                  m.role === "student" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-br-sm" : "bg-[#F4F6F3] text-[#14181F] rounded-bl-sm"
+                  m.role === "student" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-[#14181F] rounded-es-sm"
                 }`}
               >
                 {m.content || <span className="text-[#98A0A9]">…</span>}
               </div>
               {m.source && (
-                <span className="text-[10px] text-[#0C8175] mt-1 ml-1">📖 from your {m.source.label}</span>
+                <span className="text-[10px] text-[#0C8175] mt-1 ms-1">📖 from your {m.source.label}</span>
               )}
             </div>
           ))}

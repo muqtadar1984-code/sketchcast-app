@@ -130,7 +130,7 @@ export default function UploadBook({
   if (betaBlocked) {
     return (
       <div className="card p-5 mb-8 text-sm text-[#5B6470]">
-        <span className="chip bg-[#FFF1D6] text-[#9A6400] mr-2">Trial</span>
+        <span className="chip bg-[#FFF1D6] text-[#9A6400] me-2">Trial</span>
         The free trial is limited to <span className="font-medium text-[#14181F]">1 book</span>
         {parent ? (
           <> — generate test papers from its chapters.</>
@@ -181,7 +181,7 @@ export default function UploadBook({
             setFile(e.target.files?.[0] ?? null);
             setScanned(false);
           }}
-          className="text-sm text-[#14181F] file:mr-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 file:text-[#0C8175] file:font-medium"
+          className="text-sm text-[#14181F] file:me-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 file:text-[#0C8175] file:font-medium"
         />
         {/* No digital copy? Photograph the pages — they become one PDF and take
             exactly this same upload path. */}

@@ -176,7 +176,7 @@ export default async function ChildrenPage() {
                     <span className="min-w-0 truncate">
                       {it.label} <span className="text-xs text-[#5B6470]">· from {it.from}</span>
                       {it.due && (
-                        <span className={`text-xs ml-2 ${it.overdue ? "text-[#B3401F]" : "text-[#5B6470]"}`}>
+                        <span className={`text-xs ms-2 ${it.overdue ? "text-[#B3401F]" : "text-[#5B6470]"}`}>
                           due {new Date(it.due).toLocaleDateString()}
                         </span>
                       )}

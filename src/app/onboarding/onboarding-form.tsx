@@ -78,7 +78,7 @@ export default function OnboardingForm({
       type="button"
       onClick={() => setRole(r)}
       aria-pressed={role === r}
-      className={`flex-1 rounded-xl border p-4 text-left transition ${
+      className={`flex-1 rounded-xl border p-4 text-start transition ${
         role === r
           ? "border-[#1FB8A6] bg-[#E2F4F1]"
           : "border-[#E6E8E4] bg-white hover:border-[#CBD2CC]"

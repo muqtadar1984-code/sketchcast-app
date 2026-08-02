@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 // The bell carries TWO feeds, and "unread" means a DIFFERENT thing in each:
 //   · ISSUES  — every report the user has made, with its live triage status
@@ -46,11 +48,17 @@ type BellRow =
   | { kind: "issue"; at: string; issue: IssueNotification }
   | { kind: "notice"; at: string; notice: NoticeNotification; cd: string | null };
 
-const STATUS_LABEL: Record<string, string> = {
-  open: "Received",
-  triaged: "Being reviewed",
-  in_progress: "Being fixed",
-  resolved: "Resolved",
+/** Every word the bell renders, handed down by the (server) header. */
+export type BellMessages = Dictionary["nav"]["bell"];
+
+// The DB's status codes are snake_case and never translated — this maps them to
+// the dictionary's camelCase keys, so a status we don't recognise falls through
+// to the raw code rather than a blank chip.
+const STATUS_KEY: Record<string, keyof BellMessages["status"]> = {
+  open: "open",
+  triaged: "triaged",
+  in_progress: "inProgress",
+  resolved: "resolved",
 };
 const STATUS_STYLE: Record<string, string> = {
   open: "bg-[#EEF0EC] text-[#5B6470]",
@@ -58,31 +66,30 @@ const STATUS_STYLE: Record<string, string> = {
   in_progress: "bg-[#FFF1D6] text-[#9A6400]",
   resolved: "bg-[#E2F4F1] text-[#0C8175]",
 };
-const AUDIENCE_LABEL: Record<string, string> = {
-  school: "Everyone",
-  staff: "Staff only",
-};
 const AUDIENCE_STYLE: Record<string, string> = {
   school: "bg-[#E8F1FB] text-[#175CD3]",
   staff: "bg-[#EFE9FB] text-[#6941C6]",
 };
 
-function ago(iso: string): string {
+// The relative clocks are whole messages ("{n}m ago", "in {n} days"), never a
+// number glued to a suffix: word order, spacing and the unit itself all move
+// between languages.
+function ago(iso: string, t: BellMessages): string {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return fmt(t.minutesAgo, { n: mins });
   const h = Math.round(mins / 60);
-  if (h < 48) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  if (h < 48) return fmt(t.hoursAgo, { n: h });
+  return fmt(t.daysAgo, { n: Math.round(h / 24) });
 }
 
 /** `ago` pointing the other way — how long until a clock runs out. */
-function until(iso: string): string {
+function until(iso: string, t: BellMessages): string {
   const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
-  if (mins <= 0) return "now";
-  if (mins < 60) return `in ${mins}m`;
+  if (mins <= 0) return t.now;
+  if (mins < 60) return fmt(t.inMinutes, { n: mins });
   const h = Math.round(mins / 60);
-  if (h < 48) return `in ${h}h`;
-  return `in ${Math.round(h / 24)} days`;
+  if (h < 48) return fmt(t.inHours, { n: h });
+  return fmt(t.inDays, { n: Math.round(h / 24) });
 }
 
 // The TWO-CLOCK countdown: while the action deadline is still ahead it IS the
@@ -90,11 +97,13 @@ function until(iso: string): string {
 // its event date ("in 2 days"). Both lapsed — or a pure deadline, which carries
 // no event date at all — leaves nothing to count down, so the line disappears
 // rather than reading "in 0m" at a reader who is already too late.
-function countdown(n: NoticeNotification): string | null {
+function countdown(n: NoticeNotification, t: BellMessages): string | null {
   const now = Date.now();
+  // action_label is the poster's OWN words ("Register by") — school data, never
+  // translated; only the stand-in when they left it blank comes from the file.
   if (n.action_by && new Date(n.action_by).getTime() > now)
-    return `${n.action_label || "By"} · ${until(n.action_by)}`;
-  if (n.starts_at && new Date(n.starts_at).getTime() > now) return until(n.starts_at);
+    return `${n.action_label || t.deadlineFallback} · ${until(n.action_by, t)}`;
+  if (n.starts_at && new Date(n.starts_at).getTime() > now) return until(n.starts_at, t);
   return null;
 }
 
@@ -105,6 +114,7 @@ export default function NotificationsBell({
   notices = [],
   noticesUnread = 0,
   noticesOn = false,
+  t,
 }: {
   userId: string;
   issues: IssueNotification[];
@@ -116,6 +126,8 @@ export default function NotificationsBell({
   /** The notices feature is live for this viewer — gates the second watermark
    * write, so a tenant without it never touches the 0068 column. */
   noticesOn?: boolean;
+  /** The bell's words, resolved server-side by the header. */
+  t: BellMessages;
 }) {
   const [open, setOpen] = useState(false);
   const [issueUnread, setIssueUnread] = useState(initialUnread);
@@ -164,7 +176,7 @@ export default function NotificationsBell({
   // are measured against.
   const rows: BellRow[] = [
     ...issues.map((i) => ({ kind: "issue" as const, at: i.updated_at, issue: i })),
-    ...notices.map((n) => ({ kind: "notice" as const, at: n.created_at, notice: n, cd: countdown(n) })),
+    ...notices.map((n) => ({ kind: "notice" as const, at: n.created_at, notice: n, cd: countdown(n, t) })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
   return (
@@ -172,27 +184,23 @@ export default function NotificationsBell({
       <button
         onClick={() => void toggle()}
         className="relative h-9 w-9 inline-flex items-center justify-center rounded-lg hover:bg-[#EEF0EC] text-base"
-        aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}
-        title={noticesOn ? "School notices and your reported issues" : "Your reported issues"}
+        aria-label={unread ? fmt(t.titleUnread, { count: unread }) : t.title}
+        title={noticesOn ? t.tooltipWithNotices : t.tooltipIssuesOnly}
       >
         🔔
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-[#B42318] text-white text-[10px] leading-[1.1rem] text-center">
+          <span className="absolute -top-0.5 -end-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-[#B42318] text-white text-[10px] leading-[1.1rem] text-center">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 max-h-96 overflow-y-auto card p-3 shadow-lg">
+        <div className="absolute end-0 top-11 z-50 w-80 max-h-96 overflow-y-auto card p-3 shadow-lg">
           <p className="text-xs font-medium text-[#5B6470] mb-2">
-            {noticesOn ? "School notices & your reports" : "Your reported issues"}
+            {noticesOn ? t.headingWithNotices : t.headingIssuesOnly}
           </p>
           {rows.length === 0 ? (
-            <p className="text-sm text-[#5B6470]">
-              {noticesOn
-                ? "Nothing here yet — school notices, and the progress of anything you report, show up right here."
-                : "Nothing here yet — when you report a problem, its progress shows up right here until it's resolved."}
-            </p>
+            <p className="text-sm text-[#5B6470]">{noticesOn ? t.emptyWithNotices : t.emptyIssuesOnly}</p>
           ) : (
             <ul className="space-y-2">
               {rows.map((r) =>
@@ -203,7 +211,7 @@ export default function NotificationsBell({
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${STATUS_STYLE[r.issue.status] ?? "bg-[#EEF0EC] text-[#5B6470]"}`}
                       >
-                        {STATUS_LABEL[r.issue.status] ?? r.issue.status}
+                        {STATUS_KEY[r.issue.status] ? t.status[STATUS_KEY[r.issue.status]] : r.issue.status}
                       </span>
                     </div>
                     {r.issue.status === "resolved" && r.issue.resolution_note && (
@@ -211,8 +219,10 @@ export default function NotificationsBell({
                     )}
                     <p className="text-[10px] text-[#98A0A9] mt-0.5">
                       {r.issue.category ? `${r.issue.category} · ` : ""}
-                      reported {ago(r.issue.created_at)}
-                      {r.issue.updated_at !== r.issue.created_at ? ` · updated ${ago(r.issue.updated_at)}` : ""}
+                      {fmt(t.reportedAgo, { ago: ago(r.issue.created_at, t) })}
+                      {r.issue.updated_at !== r.issue.created_at
+                        ? ` · ${fmt(t.updatedAgo, { ago: ago(r.issue.updated_at, t) })}`
+                        : ""}
                     </p>
                   </li>
                 ) : (
@@ -232,13 +242,13 @@ export default function NotificationsBell({
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${AUDIENCE_STYLE[r.notice.audience] ?? "bg-[#EEF0EC] text-[#5B6470]"}`}
                         >
-                          {AUDIENCE_LABEL[r.notice.audience] ?? "School"}
+                          {r.notice.audience === "staff" ? t.audience.staff : t.audience.school}
                         </span>
                       </div>
                       {r.cd && <p className="text-xs text-[#9A6400] mt-0.5">⏳ {r.cd}</p>}
                       <p className="text-[10px] text-[#98A0A9] mt-0.5">
-                        {r.notice.importance === "important" ? "Important · " : ""}
-                        posted {ago(r.notice.created_at)}
+                        {r.notice.importance === "important" ? `${t.important} · ` : ""}
+                        {fmt(t.postedAgo, { ago: ago(r.notice.created_at, t) })}
                       </p>
                     </Link>
                   </li>

@@ -1,0 +1,129 @@
+{
+  "common": {
+    "close": "Fermer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "loading": "Chargement…",
+    "tryAgain": "Réessayer",
+    "somethingWentWrong": "Une erreur est survenue — réessayez dans un instant.",
+    "language": "Langue",
+    "chooseLanguage": "Choisissez votre langue",
+    "languageChangeFailed": "Impossible de changer la langue — réessayez."
+  },
+  "nav": {
+    "tabs": {
+      "library": "Bibliothèque",
+      "myAnalytics": "Mes statistiques",
+      "diary": "Carnet",
+      "schoolDiary": "Carnet de l'école",
+      "calendar": "Calendrier",
+      "timetable": "Emploi du temps",
+      "school": "École",
+      "teachers": "Enseignants",
+      "access": "Accès",
+      "admin": "Admin",
+      "myChildren": "Mes enfants",
+      "testPapers": "Contrôles"
+    },
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "signOut": "Se déconnecter",
+    "tour": "Visite",
+    "takeATour": "Faire la visite guidée",
+    "viewingAs": "Vue en tant que",
+    "switchRoleView": "Changer de rôle affiché",
+    "hats": {
+      "principal": "Directeur",
+      "coordinator": "Coordinateur",
+      "teacher": "Enseignant",
+      "parent": "Parent"
+    },
+    "roleLabel": {
+      "student": "élève",
+      "parent": "parent",
+      "teacher": "enseignant",
+      "adminAndTeacher": "admin et enseignant",
+      "teacherAndCoordinator": "enseignant et coordinateur",
+      "alsoParent": "{role} et parent"
+    },
+    "bell": {
+      "title": "Notifications",
+      "titleUnread": "Notifications ({count} non lues)",
+      "tooltipWithNotices": "Avis de l'école et problèmes que vous avez signalés",
+      "tooltipIssuesOnly": "Problèmes que vous avez signalés",
+      "headingWithNotices": "Avis de l'école et vos signalements",
+      "headingIssuesOnly": "Problèmes que vous avez signalés",
+      "emptyWithNotices": "Rien pour le moment — les avis de l'école, et le suivi de tout ce que vous signalez, apparaîtront ici.",
+      "emptyIssuesOnly": "Rien pour le moment — lorsque vous signalez un problème, son suivi apparaît ici jusqu'à sa résolution.",
+      "status": {
+        "open": "Reçu",
+        "triaged": "En cours d'examen",
+        "inProgress": "En cours de correction",
+        "resolved": "Résolu"
+      },
+      "audience": {
+        "school": "Tout le monde",
+        "staff": "Personnel uniquement"
+      },
+      "important": "Important",
+      "deadlineFallback": "Avant le",
+      "reportedAgo": "signalé {ago}",
+      "updatedAgo": "mis à jour {ago}",
+      "postedAgo": "publié {ago}",
+      "minutesAgo": "il y a {n} min",
+      "hoursAgo": "il y a {n} h",
+      "daysAgo": "il y a {n} j",
+      "now": "à l'instant",
+      "inMinutes": "dans {n} min",
+      "inHours": "dans {n} h",
+      "inDays": "dans {n} jours"
+    }
+  },
+  "student": {
+    "title": "Mes leçons",
+    "subtitle": "Tout ce que ton enseignant t'a donné à faire.",
+    "downloadsNotReady": "Les téléchargements ne sont pas encore disponibles — demande à ton enseignant de terminer la configuration.",
+    "empty": "Rien à faire pour l'instant. Reviens quand ton enseignant aura partagé une leçon.",
+    "status": {
+      "completed": "Terminé",
+      "revised": "Révisé",
+      "inProgress": "En cours",
+      "notStarted": "Pas commencé"
+    },
+    "item": {
+      "due": "À rendre le {date}",
+      "watch": "Regarder",
+      "startFirstPart": "Commencer la partie 1 sur {total}",
+      "continuePart": "Continuer — partie {n} sur {total}",
+      "rewatch": "Revoir",
+      "eachAboutFifteenMinutes": "~15 min chacune",
+      "part": "Partie {n}",
+      "rewatchPart": "Revoir la partie {n}",
+      "partWontLoad": "La partie {n} n'a pas pu se charger — actualise la page",
+      "deck": "Diapos",
+      "deckPart": "Diapos P{n}",
+      "assistant": "Assistant",
+      "open": "Ouvrir",
+      "takeQuiz": "Faire le quiz",
+      "uploading": "Envoi…",
+      "resubmit": "Renvoyer",
+      "submitFile": "Envoyer un fichier",
+      "quizUnavailable": "Quiz indisponible — utilise « Envoyer une réponse ».",
+      "quizLoadFailed": "Impossible de charger le quiz."
+    },
+    "player": {
+      "partDone": "Partie {n} sur {total} terminée — bravo !",
+      "partFinished": "Partie {n} sur {total} terminée",
+      "lessonComplete": "C'était la dernière partie — la leçon est terminée !",
+      "onePartADay": "Une partie par jour, c'est plus facile. Reviens demain, ou continue maintenant.",
+      "alreadyCompleted": "Tu as déjà terminé cette leçon — bonne révision !",
+      "nextUpPart": "Les parties comptent dans l'ordre — la prochaine pour toi est la partie {n}.",
+      "playPart": "Lire la partie {n}",
+      "doneForToday": "C'est fini pour aujourd'hui",
+      "partLoadFailed": "La partie {n} n'a pas pu se charger — ferme cette fenêtre et actualise la page pour réessayer.",
+      "multiPartHint": "Partie {n} sur {total} (~15 min). Termine une partie pour la valider — la dernière termine la leçon.",
+      "singlePartHint": "Regarde jusqu'au bout pour valider cette leçon."
+    }
+  }
+}

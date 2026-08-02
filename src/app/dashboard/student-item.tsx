@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import QuizPlayer, { type QuizData } from "./quiz-player";
 import AskCoach from "./ask-coach";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 // Pro+ AI tutor entry point on lessons. Client flag mirrors the server gate
 // (FEATURE_AI_TUTOR); the /api/tutor route is authoritative regardless.
@@ -36,21 +38,52 @@ export type StudentItemData = {
   submitted: boolean;
 };
 
-function Badge({ status, submitted }: { status: ProgressStatus | null; submitted: boolean }) {
+/** Every word a row can render, composed server-side by the student dashboard
+ * (its own `student` namespace plus the shared Close). Typed from the English
+ * dictionary, but the import is type-only — the server-only module is erased
+ * here and no translation file reaches the browser bundle. */
+export type StudentItemMessages = Dictionary["student"] & { close: string };
+
+function Badge({
+  status,
+  submitted,
+  t,
+}: {
+  status: ProgressStatus | null;
+  submitted: boolean;
+  t: StudentItemMessages["status"];
+}) {
   if (status === "completed" || (submitted && status !== "revised"))
-    return <span className="chip normal-case tracking-normal bg-[#E2F4F1] text-[#0C8175]">✓ Completed</span>;
+    return <span className="chip normal-case tracking-normal bg-[#E2F4F1] text-[#0C8175]">✓ {t.completed}</span>;
   if (status === "revised")
-    return <span className="chip normal-case tracking-normal bg-[#FFF1D6] text-[#9A6400]">↻ Revised</span>;
+    return <span className="chip normal-case tracking-normal bg-[#FFF1D6] text-[#9A6400]">↻ {t.revised}</span>;
   if (status === "in_progress")
-    return <span className="chip normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470]">In progress</span>;
-  return <span className="chip normal-case tracking-normal bg-[#EEF0EC] text-[#98A0A9]">Not started</span>;
+    return <span className="chip normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470]">{t.inProgress}</span>;
+  return <span className="chip normal-case tracking-normal bg-[#EEF0EC] text-[#98A0A9]">{t.notStarted}</span>;
 }
 
 // One assigned item on the student dashboard. The lesson plays in-app and is
 // marked complete when watched to the end (re-opening a finished one -> revised);
 // worksheets/exams are opened, then an answer file is uploaded to submit. All
 // writes go through the student's own session (RLS).
-export default function StudentItem({ item, studentId }: { item: StudentItemData; studentId: string }) {
+//
+// Its words arrive whole from the server (`t`) — the part counters read
+// "Part {n} of {total}" from the file rather than being glued together here, so
+// a language that counts in a different order still reads as a sentence.
+export default function StudentItem({
+  item,
+  studentId,
+  t,
+  lang,
+}: {
+  item: StudentItemData;
+  studentId: string;
+  t: StudentItemMessages;
+  /** BCP-47 tag for the due date. Passed explicitly rather than left to the
+   * runtime default, which is the SERVER's locale during the prerender and the
+   * BROWSER's after hydration — two different dates for the same row. */
+  lang: string;
+}) {
   const supabase = createClient();
   const [status, setStatus] = useState<ProgressStatus | null>(item.status);
   const [revisions, setRevisions] = useState(item.revisionCount);
@@ -192,13 +225,13 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
       const res = await fetch(item.quiz);
       const data = (await res.json()) as QuizData;
       if (!data?.questions?.length) {
-        setError("Quiz unavailable — use Submit answer instead.");
+        setError(t.item.quizUnavailable);
         return;
       }
       setQuiz(data);
       void markOpen();
     } catch {
-      setError("Could not load the quiz.");
+      setError(t.item.quizLoadFailed);
     }
   }
 
@@ -226,19 +259,19 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
     <li className="flex items-center justify-between gap-4 py-0.5">
       <span data-tour="progress" className="flex items-center gap-2 text-sm min-w-0">
         <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{item.label}</span>
-        <Badge status={status} submitted={submitted} />
+        <Badge status={status} submitted={submitted} t={t.status} />
       </span>
       <span className="flex items-center gap-3 shrink-0 text-xs">
         {item.dueAt && (
           <span className={overdue ? "text-[#B42318]" : "text-[#5B6470]"}>
-            Due {new Date(item.dueAt).toLocaleDateString()}
+            {fmt(t.item.due, { date: new Date(item.dueAt).toLocaleDateString(lang) })}
           </span>
         )}
         {isLesson ? (
           <>
             {parts.length === 1 && !!parts[0] && (
               <button data-tour="open-lesson" onClick={() => watch()} className="font-medium text-[#0C8175] hover:underline">
-                ▶ Watch
+                ▶ {t.item.watch}
               </button>
             )}
             {parts.length > 1 && (
@@ -249,12 +282,12 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
                   className="font-medium text-[#0C8175] hover:underline"
                 >
                   {doneParts === 0
-                    ? `▶ Start Part 1 of ${parts.length}`
+                    ? `▶ ${fmt(t.item.startFirstPart, { total: parts.length })}`
                     : doneParts >= parts.length
-                      ? "▶ Rewatch"
-                      : `▶ Continue — Part ${doneParts + 1} of ${parts.length}`}
+                      ? `▶ ${t.item.rewatch}`
+                      : `▶ ${fmt(t.item.continuePart, { n: doneParts + 1, total: parts.length })}`}
                 </button>
-                <span className="text-[10px] text-[#98A0A9]">~15 min each</span>
+                <span className="text-[10px] text-[#98A0A9]">{t.item.eachAboutFifteenMinutes}</span>
                 {parts.map((url, i) => (
                   <button
                     key={i}
@@ -262,10 +295,10 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
                     disabled={!url}
                     title={
                       !url
-                        ? `Part ${i + 1} couldn't load — refresh the page`
+                        ? fmt(t.item.partWontLoad, { n: i + 1 })
                         : i < doneParts
-                          ? `Rewatch Part ${i + 1}`
-                          : `Part ${i + 1}`
+                          ? fmt(t.item.rewatchPart, { n: i + 1 })
+                          : fmt(t.item.part, { n: i + 1 })
                     }
                     className={`text-[10px] rounded-full px-1.5 py-0.5 disabled:opacity-40 ${
                       i < doneParts
@@ -282,23 +315,23 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
             )}
             {(item.decks?.length ? item.decks : item.deck ? [item.deck] : []).map((url, i, all) => (
               <a key={`d${i}`} href={url} className="font-medium text-[#0C8175] hover:underline">
-                {all.length > 1 ? `⬇ Deck Pt ${i + 1}` : "⬇ Deck"}
+                ⬇ {all.length > 1 ? fmt(t.item.deckPart, { n: i + 1 }) : t.item.deck}
               </a>
             ))}
             {AI_TUTOR && (
-              <button onClick={() => setCoaching(true)} className="font-medium text-[#0C8175] hover:underline">🎓 Assistant</button>
+              <button onClick={() => setCoaching(true)} className="font-medium text-[#0C8175] hover:underline">🎓 {t.item.assistant}</button>
             )}
           </>
         ) : (
           <>
             {item.doc && (
-              <a href={item.doc} className="font-medium text-[#0C8175] hover:underline">⬇ Open</a>
+              <a href={item.doc} className="font-medium text-[#0C8175] hover:underline">⬇ {t.item.open}</a>
             )}
             {item.quiz && (
-              <button onClick={takeQuiz} className="font-medium text-[#0C8175] hover:underline">Take quiz</button>
+              <button onClick={takeQuiz} className="font-medium text-[#0C8175] hover:underline">{t.item.takeQuiz}</button>
             )}
             <button onClick={() => fileRef.current?.click()} disabled={busy} className="font-medium text-[#0C8175] hover:underline disabled:opacity-50">
-              {busy ? "Uploading…" : submitted ? "Resubmit" : "Submit file"}
+              {busy ? t.item.uploading : submitted ? t.item.resubmit : t.item.submitFile}
             </button>
             <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
           </>
@@ -314,17 +347,17 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
               <div className="w-full rounded-lg bg-black/90 border border-white/10 px-8 py-14 text-center">
                 <p className="text-lg text-white">
                   {endInfo.counted
-                    ? `✓ Part ${endInfo.part} of ${parts.length} done — nice work!`
-                    : `Part ${endInfo.part} of ${parts.length} finished`}
+                    ? `✓ ${fmt(t.player.partDone, { n: endInfo.part, total: parts.length })}`
+                    : fmt(t.player.partFinished, { n: endInfo.part, total: parts.length })}
                 </p>
                 <p className="text-sm text-white/60 mt-1">
                   {endInfo.counted && endInfo.completed
-                    ? "That was the last part — the whole lesson is complete! 🎉"
+                    ? `${t.player.lessonComplete} 🎉`
                     : endInfo.counted
-                      ? "One part a day keeps it easy. Come back tomorrow, or keep going now."
+                      ? t.player.onePartADay
                       : endInfo.completed
-                        ? "You've already completed this lesson — great revising!"
-                        : `Parts count in order — next up for you is Part ${doneParts + 1}.`}
+                        ? t.player.alreadyCompleted
+                        : fmt(t.player.nextUpPart, { n: doneParts + 1 })}
                 </p>
                 <div className="flex items-center justify-center gap-3 mt-5">
                   {partIdx < parts.length - 1 && !!parts[partIdx + 1] && (
@@ -335,11 +368,11 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
                       }}
                       className="btn-primary h-10 px-4 text-sm"
                     >
-                      ▶ Play Part {partIdx + 2}
+                      ▶ {fmt(t.player.playPart, { n: partIdx + 2 })}
                     </button>
                   )}
                   <button onClick={() => setPlaying(false)} className="h-10 px-4 text-sm text-white/90 hover:underline">
-                    {endInfo.counted && !endInfo.completed ? "Done for today" : "Close"}
+                    {endInfo.counted && !endInfo.completed ? t.player.doneForToday : t.close}
                   </button>
                 </div>
               </div>
@@ -354,18 +387,16 @@ export default function StudentItem({ item, studentId }: { item: StudentItemData
               />
             ) : (
               <div className="w-full rounded-lg bg-black/90 border border-white/10 px-8 py-14 text-center">
-                <p className="text-sm text-white/80">
-                  Part {partIdx + 1} couldn&apos;t load just now — close this and refresh the page to try again.
-                </p>
+                <p className="text-sm text-white/80">{fmt(t.player.partLoadFailed, { n: partIdx + 1 })}</p>
               </div>
             )}
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-white/70">
                 {parts.length > 1
-                  ? `Part ${partIdx + 1} of ${parts.length} (~15 min). Finish a part to check it off — the last part completes the lesson.`
-                  : "Watch to the end to mark this lesson complete."}
+                  ? fmt(t.player.multiPartHint, { n: partIdx + 1, total: parts.length })
+                  : t.player.singlePartHint}
               </p>
-              <button onClick={() => setPlaying(false)} className="text-xs text-white/90 hover:underline">Close</button>
+              <button onClick={() => setPlaying(false)} className="text-xs text-white/90 hover:underline">{t.close}</button>
             </div>
           </div>
         </div>

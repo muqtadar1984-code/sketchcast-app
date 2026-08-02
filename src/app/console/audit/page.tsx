@@ -46,7 +46,7 @@ export default async function ConsoleAuditPage() {
               <span className="min-w-0 truncate">
                 <span className="font-medium">{l.actor_id ? nameOf.get(l.actor_id) ?? "Staff" : "System"}</span>
                 <span className="text-[#5B6470]"> · {l.action}</span>
-                {l.target_kind && <span className="text-[#98A0A9]"> → {l.target_kind}</span>}
+                {l.target_kind && <span className="text-[#98A0A9]"> <span className="rtl-flip">→</span> {l.target_kind}</span>}
                 {l.detail && Object.keys(l.detail).length > 0 && (
                   <span className="text-xs text-[#98A0A9]"> · {JSON.stringify(l.detail).slice(0, 80)}</span>
                 )}

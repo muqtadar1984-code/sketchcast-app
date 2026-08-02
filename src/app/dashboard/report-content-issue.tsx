@@ -100,7 +100,7 @@ export default function ReportContentIssue({ generationId }: { generationId: str
       )}
 
       {open && !issueId && (
-        <form onSubmit={submit} className="card p-3 mt-1 w-72 shadow-lg text-left">
+        <form onSubmit={submit} className="card p-3 mt-1 w-72 shadow-lg text-start">
           <p className="text-xs font-medium mb-2">What&apos;s wrong with this item?</p>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="field h-8 px-2 text-xs w-full mb-2">
             {OPTIONS.map((o) => (
@@ -130,7 +130,7 @@ export default function ReportContentIssue({ generationId }: { generationId: str
       {issueId && (
         <span className={`text-xs ${statusLine().tone}`}>
           {(!live || (live.status === "in_progress" && !live.action)) && (
-            <span className="inline-block w-2 h-2 rounded-full bg-[#FFB020] animate-pulse mr-1.5 align-middle" />
+            <span className="inline-block w-2 h-2 rounded-full bg-[#FFB020] animate-pulse me-1.5 align-middle" />
           )}
           {statusLine().text}
         </span>

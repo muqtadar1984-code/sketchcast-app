@@ -448,7 +448,7 @@ export default function TimetableEditor({
             ↩ Undo {undoStack[undoStack.length - 1].label}
           </button>
         )}
-        <button onClick={() => window.print()} className="btn-ghost h-9 px-3 text-sm ml-auto">
+        <button onClick={() => window.print()} className="btn-ghost h-9 px-3 text-sm ms-auto">
           🖨 Print
         </button>
       </div>
@@ -476,9 +476,9 @@ export default function TimetableEditor({
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-              <th className="px-2 py-2 text-left font-normal w-20">Period</th>
+              <th className="px-2 py-2 text-start font-normal w-20">Period</th>
               {days.map((d) => (
-                <th key={d} className="px-2 py-2 text-left font-normal">
+                <th key={d} className="px-2 py-2 text-start font-normal">
                   {d}
                 </th>
               ))}
@@ -555,7 +555,7 @@ export default function TimetableEditor({
                               e.preventDefault();
                               void dropOn(day, period);
                             }}
-                            className={`w-full min-h-[44px] rounded px-1.5 py-1 text-left text-[11px] leading-4 transition-colors ${
+                            className={`w-full min-h-[44px] rounded px-1.5 py-1 text-start text-[11px] leading-4 transition-colors ${
                               isPreview
                                 ? dropPreview!.bad
                                   ? "ring-2 ring-[#B42318] bg-[#FDECEA]"

@@ -84,7 +84,7 @@ export default function GenerateKitButton({
       >
         {children({ busy })}
         {error && (
-          <span className="ml-2 text-[10px] text-red-600 [overflow-wrap:anywhere]">{error}</span>
+          <span className="ms-2 text-[10px] text-red-600 [overflow-wrap:anywhere]">{error}</span>
         )}
       </button>
     );

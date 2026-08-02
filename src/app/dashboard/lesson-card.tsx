@@ -75,12 +75,12 @@ function SlideThumb({ n, title, video, processing, pct, trackId }: {
 }) {
   const slide = (
     <div className="absolute inset-0 rounded-lg bg-white border border-[#DCE6E2] overflow-hidden">
-      <span className="absolute top-2 left-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#1FB8A6] text-[10px] font-medium text-[#04342C]">{n}</span>
-      <span className="absolute top-2.5 left-7 right-2 text-[8px] font-medium text-[#14181F] truncate">{title}</span>
-      <span className="absolute top-[19px] left-7 h-[3px] w-8 rounded-full bg-[#E2F4F1]" />
-      <span className="absolute bottom-2.5 right-3 h-7 w-9 rounded-md border-2 border-[#1FB8A6] bg-[#F4FBF9]" />
-      <span className="absolute bottom-3.5 left-3 h-[3px] w-9 rounded-full bg-[#EEF0EC]" />
-      <span className="absolute bottom-2.5 left-3 h-[3px] w-6 rounded-full bg-[#EEF0EC]" />
+      <span className="absolute top-2 start-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#1FB8A6] text-[10px] font-medium text-[#04342C]">{n}</span>
+      <span className="absolute top-2.5 start-7 end-2 text-[8px] font-medium text-[#14181F] truncate">{title}</span>
+      <span className="absolute top-[19px] start-7 h-[3px] w-8 rounded-full bg-[#E2F4F1]" />
+      <span className="absolute bottom-2.5 end-3 h-7 w-9 rounded-md border-2 border-[#1FB8A6] bg-[#F4FBF9]" />
+      <span className="absolute bottom-3.5 start-3 h-[3px] w-9 rounded-full bg-[#EEF0EC]" />
+      <span className="absolute bottom-2.5 start-3 h-[3px] w-6 rounded-full bg-[#EEF0EC]" />
     </div>
   );
   const overlay = processing ? (
@@ -89,6 +89,9 @@ function SlideThumb({ n, title, video, processing, pct, trackId }: {
     </div>
   ) : video ? (
     <div className="absolute inset-0 flex items-center justify-center">
+      {/* pl-, not ps-: the triangle is a media TRANSPORT control, so it points
+          right in every locale, and the optical nudge that centres it has to
+          stay on the same physical side. */}
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#14181F]/60 text-white pl-0.5"><PlayGlyph /></span>
     </div>
   ) : null;
@@ -179,7 +182,7 @@ export default function LessonCard({
         part={part.n}
         language={bookLanguage}
         bookGrade={bookGrade}
-        className="group/new w-full text-left flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
+        className="group/new w-full text-start flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
         skipKinds={(
           [
             ["lesson_plan", part.lessonPlan],
@@ -275,14 +278,14 @@ export default function LessonCard({
             // Long lesson: one Watch·Deck chip per rendered part.
             Array.from({ length: Math.max(videos.length, decks.length) }, (_, i) => (
               <Chip key={i}>
-                <span className="text-[#98A0A9] mr-1.5">Pt {i + 1}</span>
+                <span className="text-[#98A0A9] me-1.5">Pt {i + 1}</span>
                 {videos[i] && (
                   <a href={videos[i]} target="_blank" onClick={() => trackViews && recordArtifactView(p.id, "video_mp4")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline">
                     <span className="text-[#1FB8A6]"><PlayGlyph size={12} /></span>Watch
                   </a>
                 )}
                 {decks[i] && (
-                  <a href={decks[i]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline ml-2">
+                  <a href={decks[i]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline ms-2">
                     <span className="text-[#1FB8A6]"><DownloadGlyph /></span>Deck
                   </a>
                 )}
@@ -323,7 +326,7 @@ export default function LessonCard({
           </span>
 
           {assignable.length > 0 && (
-            <span className="ml-auto">
+            <span className="ms-auto">
               <AssignModal label="Assign" generationIds={assignable} classes={classes} />
             </span>
           )}

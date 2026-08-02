@@ -1,0 +1,129 @@
+{
+  "common": {
+    "close": "बंद करा",
+    "cancel": "रद्द करा",
+    "save": "जतन करा",
+    "saving": "जतन करत आहे…",
+    "loading": "लोड होत आहे…",
+    "tryAgain": "पुन्हा प्रयत्न करा",
+    "somethingWentWrong": "काहीतरी चूक झाली — थोड्या वेळाने पुन्हा प्रयत्न करा.",
+    "language": "भाषा",
+    "chooseLanguage": "तुमची भाषा निवडा",
+    "languageChangeFailed": "भाषा बदलता आली नाही — पुन्हा प्रयत्न करा."
+  },
+  "nav": {
+    "tabs": {
+      "library": "लायब्ररी",
+      "myAnalytics": "माझी आकडेवारी",
+      "diary": "डायरी",
+      "schoolDiary": "शाळेची डायरी",
+      "calendar": "कॅलेंडर",
+      "timetable": "वेळापत्रक",
+      "school": "शाळा",
+      "teachers": "शिक्षक",
+      "access": "परवानगी",
+      "admin": "प्रशासन",
+      "myChildren": "माझी मुले",
+      "testPapers": "प्रश्नपत्रिका"
+    },
+    "openMenu": "मेनू उघडा",
+    "closeMenu": "मेनू बंद करा",
+    "signOut": "साइन आउट",
+    "tour": "टूर",
+    "takeATour": "टूर पाहा",
+    "viewingAs": "म्हणून पाहत आहात",
+    "switchRoleView": "भूमिका बदला",
+    "hats": {
+      "principal": "मुख्याध्यापक",
+      "coordinator": "समन्वयक",
+      "teacher": "शिक्षक",
+      "parent": "पालक"
+    },
+    "roleLabel": {
+      "student": "विद्यार्थी",
+      "parent": "पालक",
+      "teacher": "शिक्षक",
+      "adminAndTeacher": "प्रशासक व शिक्षक",
+      "teacherAndCoordinator": "शिक्षक व समन्वयक",
+      "alsoParent": "{role} व पालक"
+    },
+    "bell": {
+      "title": "सूचना",
+      "titleUnread": "सूचना ({count} न वाचलेल्या)",
+      "tooltipWithNotices": "शाळेच्या सूचना आणि तुम्ही कळवलेल्या अडचणी",
+      "tooltipIssuesOnly": "तुम्ही कळवलेल्या अडचणी",
+      "headingWithNotices": "शाळेच्या सूचना व तुमचे अहवाल",
+      "headingIssuesOnly": "तुम्ही कळवलेल्या अडचणी",
+      "emptyWithNotices": "इथे अजून काही नाही — शाळेच्या सूचना, आणि तुम्ही कळवलेल्या गोष्टींची प्रगती, इथेच दिसेल.",
+      "emptyIssuesOnly": "इथे अजून काही नाही — तुम्ही अडचण कळवली की ती सुटेपर्यंत तिची प्रगती इथेच दिसेल.",
+      "status": {
+        "open": "मिळाली",
+        "triaged": "तपासली जात आहे",
+        "inProgress": "दुरुस्त केली जात आहे",
+        "resolved": "सुटली"
+      },
+      "audience": {
+        "school": "सर्वांसाठी",
+        "staff": "फक्त कर्मचाऱ्यांसाठी"
+      },
+      "important": "महत्त्वाचे",
+      "deadlineFallback": "अंतिम तारीख",
+      "reportedAgo": "{ago} कळवले",
+      "updatedAgo": "{ago} अद्ययावत",
+      "postedAgo": "{ago} प्रसिद्ध",
+      "minutesAgo": "{n} मि पूर्वी",
+      "hoursAgo": "{n} तास पूर्वी",
+      "daysAgo": "{n} दिवसांपूर्वी",
+      "now": "आत्ता",
+      "inMinutes": "{n} मि मध्ये",
+      "inHours": "{n} तासांत",
+      "inDays": "{n} दिवसांत"
+    }
+  },
+  "student": {
+    "title": "माझे धडे",
+    "subtitle": "तुमच्या शिक्षकांनी तुम्हाला दिलेले सर्व काही.",
+    "downloadsNotReady": "डाउनलोड अजून उपलब्ध नाहीत — सेटअप पूर्ण करायला तुमच्या शिक्षकांना सांगा.",
+    "empty": "अजून काही दिलेले नाही. शिक्षकांनी धडा शेअर केल्यावर पुन्हा पाहा.",
+    "status": {
+      "completed": "पूर्ण",
+      "revised": "उजळणी केली",
+      "inProgress": "सुरू आहे",
+      "notStarted": "सुरू केलेले नाही"
+    },
+    "item": {
+      "due": "{date} पर्यंत",
+      "watch": "पाहा",
+      "startFirstPart": "{total} पैकी भाग 1 सुरू करा",
+      "continuePart": "पुढे चालू ठेवा — {total} पैकी भाग {n}",
+      "rewatch": "पुन्हा पाहा",
+      "eachAboutFifteenMinutes": "प्रत्येकी ~15 मि",
+      "part": "भाग {n}",
+      "rewatchPart": "भाग {n} पुन्हा पाहा",
+      "partWontLoad": "भाग {n} लोड झाला नाही — पान रिफ्रेश करा",
+      "deck": "स्लाइड्स",
+      "deckPart": "स्लाइड्स भा {n}",
+      "assistant": "सहायक",
+      "open": "उघडा",
+      "takeQuiz": "क्विझ सोडवा",
+      "uploading": "अपलोड होत आहे…",
+      "resubmit": "पुन्हा सादर करा",
+      "submitFile": "फाइल सादर करा",
+      "quizUnavailable": "क्विझ उपलब्ध नाही — त्याऐवजी ‘उत्तर सादर करा’ वापरा.",
+      "quizLoadFailed": "क्विझ लोड करता आली नाही."
+    },
+    "player": {
+      "partDone": "{total} पैकी भाग {n} पूर्ण — छान!",
+      "partFinished": "{total} पैकी भाग {n} संपला",
+      "lessonComplete": "तो शेवटचा भाग होता — संपूर्ण धडा पूर्ण झाला!",
+      "onePartADay": "दिवसाला एक भाग म्हणजे सोपे. उद्या पुन्हा या, किंवा आत्ताच पुढे चालू ठेवा.",
+      "alreadyCompleted": "हा धडा तुम्ही आधीच पूर्ण केला आहे — छान उजळणी!",
+      "nextUpPart": "भाग क्रमाने मोजले जातात — तुमचा पुढचा भाग {n} आहे.",
+      "playPart": "भाग {n} चालवा",
+      "doneForToday": "आजपुरते झाले",
+      "partLoadFailed": "भाग {n} आत्ता लोड झाला नाही — हे बंद करा आणि पान रिफ्रेश करून पुन्हा प्रयत्न करा.",
+      "multiPartHint": "{total} पैकी भाग {n} (~15 मि). एक भाग पूर्ण केला की तो खूण होतो — शेवटचा भाग धडा पूर्ण करतो.",
+      "singlePartHint": "हा धडा पूर्ण म्हणून खूण होण्यासाठी शेवटपर्यंत पाहा."
+    }
+  }
+}

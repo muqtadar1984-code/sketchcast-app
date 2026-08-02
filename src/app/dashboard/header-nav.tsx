@@ -41,7 +41,7 @@ export default function HeaderNav({ tabs }: { tabs: NavTab[] }) {
             className={`relative ${active ? "text-[#14181F] font-medium" : "text-[#5B6470] hover:text-[#14181F]"}`}
           >
             {t.label}
-            {active && <InkUnderline className="absolute -bottom-2 left-0 h-2 w-full" />}
+            {active && <InkUnderline className="absolute -bottom-2 start-0 h-2 w-full" />}
           </Link>
         );
       })}

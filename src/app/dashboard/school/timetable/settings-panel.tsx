@@ -104,7 +104,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
 
   return (
     <div className="card mt-4 p-4 print:hidden">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-left">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-start">
         <span className="font-medium text-sm">⚙ Timetable settings (hours, breaks, periods)</span>
         <span className="text-xs text-[#5B6470]">{open ? "Hide" : "Show"}</span>
       </button>

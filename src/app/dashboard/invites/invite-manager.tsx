@@ -242,7 +242,7 @@ export default function InviteManager({
               <div key={iv.id} className="px-5 py-3 flex items-center justify-between gap-3">
                 <span className="min-w-0 truncate">
                   <span className="font-medium">{iv.email}</span>
-                  <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal ml-2">
+                  <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal ms-2">
                     {ROLE_LABEL[iv.role] ?? iv.role}
                   </span>
                 </span>

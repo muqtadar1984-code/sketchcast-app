@@ -48,9 +48,12 @@ export default async function SchoolTeachersPage() {
   // One-hat mode: the School pages belong to the leadership hats.
   const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "leadership");
   if (hatAway) redirect(hatAway);
+  const schoolId = (profile?.school_id as string | null) ?? null;
+  if (!schoolId) redirect("/dashboard");
   if (role !== "school_admin") {
-    // Coordinator access = holding scope-grant rows (RLS limits the page to that slice).
-    const { data: sc } = await supabase.from("coordinator_scope").select("id").limit(1);
+    // Coordinator access = scope-grant rows IN THIS SCHOOL (a stale grant from
+    // a former school must not open this page); RLS limits it to that slice.
+    const { data: sc } = await supabase.from("coordinator_scope").select("id").eq("school_id", schoolId).limit(1);
     if (!sc?.length) redirect("/dashboard");
   }
 
@@ -206,25 +209,25 @@ export default async function SchoolTeachersPage() {
           <div className="card divide-y divide-[#EEF0EC]">
             <div className="hidden sm:grid grid-cols-[2fr_repeat(4,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium">
               <span>Teacher</span>
-              <span className="text-right">Lessons</span>
-              <span className="text-right">Assigned</span>
-              <span className="text-right">To grade</span>
-              <span className="text-right">Completion</span>
+              <span className="text-end">Lessons</span>
+              <span className="text-end">Assigned</span>
+              <span className="text-end">To grade</span>
+              <span className="text-end">Completion</span>
             </div>
             {rows.map((r) => (
               <div key={r.id} className="px-5 py-3">
                 <div className="grid sm:grid-cols-[2fr_repeat(4,1fr)] gap-x-3 gap-y-1 items-center">
                   <span className="font-medium truncate">{r.name}</span>
-                  <span className="tabular sm:text-right text-sm">
+                  <span className="tabular sm:text-end text-sm">
                     <span className="sm:hidden text-[#5B6470]">Lessons </span>{r.lessons}
                   </span>
-                  <span className="tabular sm:text-right text-sm">
+                  <span className="tabular sm:text-end text-sm">
                     <span className="sm:hidden text-[#5B6470]">Assigned </span>{r.assignments}
                   </span>
-                  <span className={`tabular sm:text-right text-sm ${r.pending >= GRADING_BACKLOG ? "text-[#9A6400]" : ""}`}>
+                  <span className={`tabular sm:text-end text-sm ${r.pending >= GRADING_BACKLOG ? "text-[#9A6400]" : ""}`}>
                     <span className="sm:hidden text-[#5B6470]">To grade </span>{r.pending}
                   </span>
-                  <span className="tabular sm:text-right text-sm">
+                  <span className="tabular sm:text-end text-sm">
                     <span className="sm:hidden text-[#5B6470]">Completion </span>
                     {r.completionPct == null ? "—" : `${r.completionPct}%`}
                   </span>

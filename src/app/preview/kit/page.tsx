@@ -31,7 +31,7 @@ const COMMON = { bookId: "demo", schoolId: null, chapterNum: 0 };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-4 py-2.5 border-t border-[#EEF0EC] text-xs">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 ps-4 py-2.5 border-t border-[#EEF0EC] text-xs">
       <span className="w-28 shrink-0 text-[#5B6470]">{label}</span>
       {children}
     </div>
@@ -156,7 +156,7 @@ export default function KitPreview() {
             </Row>
 
             {/* Not generated — the whole row is just this. */}
-            <div className="flex items-center gap-x-2 pl-4 py-2.5 border-t border-[#EEF0EC] text-xs">
+            <div className="flex items-center gap-x-2 ps-4 py-2.5 border-t border-[#EEF0EC] text-xs">
               <span className="w-28 shrink-0 text-[#5B6470]">Part 3 (new)</span>
               <span className="text-[13px] text-[#98A0A9]">→ dashboard shows only a “Generate kit” button here</span>
             </div>

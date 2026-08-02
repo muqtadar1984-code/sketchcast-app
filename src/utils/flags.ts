@@ -325,3 +325,16 @@ export function autofixEnabled(): boolean {
 export function diaryEnabled(): boolean {
   return process.env.FEATURE_DIARY === "true";
 }
+
+/**
+ * UI language switching (10 locales, RTL for Arabic and Jawi). OFF by default,
+ * and deliberately so until EVERY surface is translated: a half-translated UI
+ * reads as broken, and Accept-Language detection would otherwise hand an
+ * Arabic-browser visitor a right-to-left layout wrapped around mostly-English
+ * copy the moment this merges. With the flag off, resolveLocale() short-circuits
+ * to English and the switcher does not render, so the machinery ships dark and
+ * this is a one-variable release once the string rollout is complete.
+ */
+export function i18nEnabled(): boolean {
+  return process.env.FEATURE_I18N === "true";
+}

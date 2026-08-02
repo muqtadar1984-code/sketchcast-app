@@ -201,10 +201,13 @@ export default function BookTable({
               <button
                 onClick={() => ready && toggle(b.id)}
                 disabled={!ready}
-                className="flex items-center gap-3 min-w-0 text-left disabled:cursor-default"
+                className="flex items-center gap-3 min-w-0 text-start disabled:cursor-default"
               >
                 <BookCover src={b.coverUrl} title={b.title} />
-                <span className={`text-[#98A0A9] text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>
+                {/* Disclosure caret, not a play button: it points along the
+                    reading direction, so RTL mirrors it (rtl-flip) and reverses
+                    the open rotation so it still ends up pointing down. */}
+                <span className={`rtl-flip text-[#98A0A9] text-xs transition-transform ${isOpen ? "rotate-90 rtl:-rotate-90" : ""}`}>
                   {ready ? "▶" : "•"}
                 </span>
                 <span className="min-w-0">
@@ -212,7 +215,7 @@ export default function BookTable({
                   <span className="text-xs text-[#5B6470]">{b.author || "Unknown author"}</span>
                 </span>
               </button>
-              <span className="text-sm text-[#5B6470] text-right whitespace-nowrap self-center">
+              <span className="text-sm text-[#5B6470] text-end whitespace-nowrap self-center">
                 {b.status === "indexing" ? (
                   "Finding chapters…"
                 ) : b.status === "error" ? (

@@ -88,22 +88,22 @@ export default function ClassProgress({ classId }: { classId: string }) {
     <div className="mt-3 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-[10px] uppercase tracking-wide text-[#98A0A9] text-left">
+          <tr className="text-[10px] uppercase tracking-wide text-[#98A0A9] text-start">
             <th className="font-medium py-1">Student</th>
-            <th className="font-medium py-1 text-right">Completed</th>
-            <th className="font-medium py-1 text-right">Revised</th>
-            <th className="font-medium py-1 text-right">Incomplete</th>
-            <th className="font-medium py-1 text-right">Overdue</th>
+            <th className="font-medium py-1 text-end">Completed</th>
+            <th className="font-medium py-1 text-end">Revised</th>
+            <th className="font-medium py-1 text-end">Incomplete</th>
+            <th className="font-medium py-1 text-end">Overdue</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-[#EEF0EC]">
               <td className="py-1.5 truncate">{r.name}</td>
-              <td className="py-1.5 text-right font-medium text-[#0C8175] tabular">{r.completed}/{r.total}</td>
-              <td className="py-1.5 text-right text-[#9A6400] tabular">{r.revised || "—"}</td>
-              <td className="py-1.5 text-right text-[#5B6470] tabular">{r.incomplete}</td>
-              <td className={`py-1.5 text-right tabular ${r.overdue ? "text-[#B42318]" : "text-[#98A0A9]"}`}>{r.overdue || "—"}</td>
+              <td className="py-1.5 text-end font-medium text-[#0C8175] tabular">{r.completed}/{r.total}</td>
+              <td className="py-1.5 text-end text-[#9A6400] tabular">{r.revised || "—"}</td>
+              <td className="py-1.5 text-end text-[#5B6470] tabular">{r.incomplete}</td>
+              <td className={`py-1.5 text-end tabular ${r.overdue ? "text-[#B42318]" : "text-[#98A0A9]"}`}>{r.overdue || "—"}</td>
             </tr>
           ))}
         </tbody>

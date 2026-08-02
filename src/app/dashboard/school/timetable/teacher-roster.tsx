@@ -147,7 +147,7 @@ export default function TeacherRoster({
 
   return (
     <div className="card mt-6 p-4 print:hidden">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-left">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-start">
         <span className="font-medium text-sm">Teachers ({rows.length})</span>
         <span className="text-xs text-[#5B6470]">{open ? "Hide" : "Show"}</span>
       </button>
@@ -156,12 +156,12 @@ export default function TeacherRoster({
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-                <th className="px-2 py-2 text-left font-normal">Teacher</th>
-                <th className="px-2 py-2 text-left font-normal">Class teacher</th>
-                <th className="px-2 py-2 text-left font-normal">Teaches</th>
-                <th className="px-2 py-2 text-left font-normal whitespace-nowrap">Lessons / week</th>
-                <th className="px-2 py-2 text-left font-normal whitespace-nowrap">Blocked</th>
-                <th className="px-2 py-2 text-left font-normal whitespace-nowrap">Heaviest day (limit {maxPerDay})</th>
+                <th className="px-2 py-2 text-start font-normal">Teacher</th>
+                <th className="px-2 py-2 text-start font-normal">Class teacher</th>
+                <th className="px-2 py-2 text-start font-normal">Teaches</th>
+                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">Lessons / week</th>
+                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">Blocked</th>
+                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">Heaviest day (limit {maxPerDay})</th>
               </tr>
             </thead>
             <tbody>
@@ -171,7 +171,7 @@ export default function TeacherRoster({
                   <td className="px-2 py-1.5">
                     {r.classTeacherOf.length ? (
                       r.classTeacherOf.map((c) => (
-                        <span key={c} className="chip bg-[#E2F4F1] text-[#0C8175] mr-1 mb-0.5 inline-block">
+                        <span key={c} className="chip bg-[#E2F4F1] text-[#0C8175] me-1 mb-0.5 inline-block">
                           {c}
                         </span>
                       ))

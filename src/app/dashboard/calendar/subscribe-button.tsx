@@ -65,8 +65,15 @@ export default function SubscribeButton() {
           <div className="card w-full max-w-md p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg">Subscribe from your calendar app</h2>
             <p className="text-sm text-[#5B6470]">
-              In Google Calendar: <span className="text-[#14181F]">Other calendars → + → From URL</span>. In Outlook:{" "}
-              <span className="text-[#14181F]">Add calendar → Subscribe from web</span>. Paste this personal address —
+              {/* Menu breadcrumbs: the arrows walk you through a menu, so they
+                  follow the reading direction rather than the screen. */}
+              In Google Calendar:{" "}
+              <span className="text-[#14181F]">
+                Other calendars <span className="rtl-flip">→</span> + <span className="rtl-flip">→</span> From URL
+              </span>. In Outlook:{" "}
+              <span className="text-[#14181F]">
+                Add calendar <span className="rtl-flip">→</span> Subscribe from web
+              </span>. Paste this personal address —
               it shows exactly what you can see here, and stays up to date.
             </p>
             {busy && <p className="text-sm text-[#98A0A9]">Preparing your address…</p>}

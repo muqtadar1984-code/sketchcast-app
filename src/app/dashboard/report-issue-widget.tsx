@@ -166,7 +166,7 @@ export default function ReportIssueWidget({ variant = "adult" }: { variant?: "ad
   const label = variant === "student" ? "Need help?" : "Report a problem";
 
   return (
-    <div className="fixed bottom-4 left-4 z-40">
+    <div className="fixed bottom-4 start-4 z-40">
       {open && (
         <form onSubmit={submit} className="card p-4 mb-2 w-80 shadow-lg">
           <p className="font-medium text-sm mb-2">
@@ -220,7 +220,7 @@ export default function ReportIssueWidget({ variant = "adult" }: { variant?: "ad
                   setShots((prev) => [...prev, ...picked].slice(0, MAX_SHOTS));
                   e.target.value = ""; // allow re-picking the same file after a remove
                 }}
-                className="mt-1 w-full text-xs text-[#5B6470] file:mr-2 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-2.5 file:py-1.5 file:text-[#0C8175] file:font-medium"
+                className="mt-1 w-full text-xs text-[#5B6470] file:me-2 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-2.5 file:py-1.5 file:text-[#0C8175] file:font-medium"
               />
               {shots.length > 0 && (
                 <ul className="mt-1.5 space-y-1">
@@ -266,7 +266,7 @@ export default function ReportIssueWidget({ variant = "adult" }: { variant?: "ad
           <path d="M12 9v4M12 17h.01" />
           <path d="M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z" />
         </svg>
-        <span className="max-w-0 group-hover:max-w-[11rem] group-focus-visible:max-w-[11rem] ml-0 group-hover:ml-2 group-focus-visible:ml-2 overflow-hidden whitespace-nowrap text-sm text-[#14181F] transition-all duration-200">
+        <span className="max-w-0 group-hover:max-w-[11rem] group-focus-visible:max-w-[11rem] ms-0 group-hover:ms-2 group-focus-visible:ms-2 overflow-hidden whitespace-nowrap text-sm text-[#14181F] transition-all duration-200">
           {label}
         </span>
       </button>

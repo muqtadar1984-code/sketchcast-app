@@ -73,7 +73,7 @@ export default function AutofixPanel({
   const info = run ? LABEL[run.status] : null;
 
   return (
-    <div className="card p-5 mb-6 border-l-4 border-l-[#1FB8A6]">
+    <div className="card p-5 mb-6 border-s-4 border-s-[#1FB8A6]">
       <h2 className="font-display font-medium text-lg mb-1">🔧 Auto-fix</h2>
       <p className="text-sm text-[#5B6470] mb-3">
         Have an AI draft a code fix for this issue on a branch. You approve the release from the
@@ -84,12 +84,12 @@ export default function AutofixPanel({
         <div className="text-sm mb-3 space-y-1">
           <p className={info.tone}>
             {info.text}
-            {run.sensitive && <span className="ml-2 chip font-sans bg-[#FCEBEA] text-[#B42318]">⚠️ sensitive diff</span>}
+            {run.sensitive && <span className="ms-2 chip font-sans bg-[#FCEBEA] text-[#B42318]">⚠️ sensitive diff</span>}
           </p>
           {run.pr_url && (
             <p>
               <a href={run.pr_url} target="_blank" rel="noopener noreferrer" className="text-[#0C8175] hover:underline">
-                View pull request{run.pr_number ? ` #${run.pr_number}` : ""} →
+                View pull request{run.pr_number ? ` #${run.pr_number}` : ""} <span className="rtl-flip">→</span>
               </a>
             </p>
           )}
