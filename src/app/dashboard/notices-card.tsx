@@ -1,5 +1,8 @@
-import { NoticeAckButton } from "./notice-banner";
+import { NoticeAckButton } from "./notice-banner-client";
 import type { Notice } from "@/utils/notices";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 // "Next 10" — the quiet half of the notices pair. The banner interrupts; this
 // just lists what is coming, soonest first, on every dashboard so a parent, a
@@ -14,18 +17,25 @@ import type { Notice } from "@/utils/notices";
 // Everyone ones, students sign nothing), so this file just honours seeksAck.
 // The countdown chip turns amber inside two days; nothing here ever goes red,
 // because red means something broke.
+//
+// Stays a SERVER component: only the receipt button needs the browser, and it
+// is handed its words from here (resolveLocale is React-cached per request, so
+// asking costs nothing beyond what the layout already paid).
 
-export default function NoticesCard({ notices }: { notices: Notice[] }) {
+export default async function NoticesCard({ notices }: { notices: Notice[] }) {
+  const dict = await getDictionary(await resolveLocale());
+  const t = dict.comms.notices.card;
+
   // Empty is the normal state for most schools most weeks. One muted line says
   // so without spending a whole card on nothing.
   if (!notices.length) {
-    return <p className="text-sm text-[#98A0A9] mb-8">No school notices right now.</p>;
+    return <p className="text-sm text-[#98A0A9] mb-8">{t.empty}</p>;
   }
 
   return (
     <section className="mb-8">
-      <h2 className="text-xl mb-1">School notices</h2>
-      <p className="text-sm text-[#5B6470] mb-3">What&apos;s coming up, soonest first.</p>
+      <h2 className="text-xl mb-1">{t.title}</h2>
+      <p className="text-sm text-[#5B6470] mb-3">{t.subtitle}</p>
       <div className="card divide-y divide-[#EEF0EC]">
         {notices.map((n) => (
           <div key={n.id} className="px-5 py-3 flex items-start justify-between gap-3">
@@ -39,7 +49,7 @@ export default function NoticesCard({ notices }: { notices: Notice[] }) {
                     rel="noopener noreferrer"
                     // The label is the accessible name — "↗" alone tells a
                     // screen-reader user nothing about where it goes.
-                    aria-label={`${n.linkLabel} — opens in a new tab`}
+                    aria-label={fmt(t.opensInNewTab, { label: n.linkLabel })}
                     title={n.linkLabel}
                     className="ms-1.5 font-medium text-[#0C8175] hover:underline"
                   >
@@ -49,7 +59,7 @@ export default function NoticesCard({ notices }: { notices: Notice[] }) {
               </div>
               <div className="text-xs text-[#5B6470]">
                 {n.when} · {n.audienceLabel}
-                {n.important ? " · important" : ""}
+                {n.important ? ` · ${t.important}` : ""}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -59,7 +69,7 @@ export default function NoticesCard({ notices }: { notices: Notice[] }) {
               >
                 {n.countdown.label}
               </span>
-              {n.seeksAck && <NoticeAckButton noticeId={n.id} acked={n.acked} />}
+              {n.seeksAck && <NoticeAckButton noticeId={n.id} acked={n.acked} t={dict.comms.notices.ack} />}
             </div>
           </div>
         ))}

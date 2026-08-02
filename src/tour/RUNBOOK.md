@@ -9,7 +9,8 @@ load-bearing decisions — **content-as-data**, **library-behind-a-wrapper**, an
 | File | What it is |
 |---|---|
 | `src/tour/types.ts` | `TourStep` / `TourDefinition` / event + seen types |
-| `src/tour/definitions.ts` | **the five tours as DATA** — the only file you edit for content |
+| `src/tour/definitions.ts` | **the five tours as DATA** — targets, order, placement, version |
+| `src/i18n/messages/*.json` | **the tour's WORDS** — `app.tour.<tourKey>.<stepId>.{title,body}`, in ten languages |
 | `src/tour/logic.ts` | pure gate + missing-target logic (unit-tested) |
 | `src/tour/engine.ts` | the **only** file that imports the library (driver.js) — swap here |
 | `src/tour/TourProvider.tsx` | runtime: auto-start, replay, skip-on-missing, telemetry |
@@ -28,16 +29,23 @@ The launcher is mounted once in `src/app/dashboard/layout.tsx` (wraps every dash
 ## Add a STEP  *(config edit only)*
 In `definitions.ts`, push to a role's `steps` array:
 ```ts
-{ id: "assign", target: '[data-tour="assign-chapter"]', order: 4,
-  placement: "top", title: "Assign to a class", body: "One short, jargon-free line." }
+{ id: "assign", target: '[data-tour="assign-chapter"]', order: 4, placement: "top" }
+```
+…and its words to `en.json` under the tour's key (English is the schema; the other
+nine files fall back to it until translated):
+```json
+"app": { "tour": { "teacher_onboarding": {
+  "assign": { "title": "Assign to a class", "body": "One short, jargon-free line." }
+} } }
 ```
 Then add the marker to the real element: `data-tour="assign-chapter"`. Missing marker
 → the step is **skipped gracefully** and a `tour_step_target_missing` event is logged
 (never a frozen or empty spotlight). Use `target: ""` for a centered, no-highlight step.
 
 ## Add a ROLE  *(config edit only)*
-1. Add a `TourDefinition` in `definitions.ts` and register it in `TOURS`.
+1. Add a definition in `definitions.ts` and register it in `TOURS`.
 2. Set its `homePath` to the screen the tour runs on, and add `data-tour` markers there.
+3. Add a matching `app.tour.<tourKey>` block to `en.json` with every step's title/body.
 No engine change. (The `Role` union in `types.ts` is the one type to extend for a brand-new role.)
 
 ## Bump a VERSION (re-show an improved tour to everyone)
@@ -61,7 +69,7 @@ Rewrite `engine.ts` (`createDriverEngine` → the `TourEngine` interface) for sh
 or another engine. `definitions.ts`, `TourProvider`, and every call site are untouched.
 
 ## Known TODOs / placeholders
-- **Copy** in `definitions.ts` is a short, benefit-first **placeholder** — refine with Muqtadar/Sara.
+- **Copy** (now in `en.json` under `app.tour`) is a short, benefit-first **placeholder** — refine with Muqtadar/Sara.
 - **Coordinator** tour is a minimal 3-step welcome, flagged `// TODO: refine` (scope still being defined).
 - Marker inventory currently placed: `book-card, generate-lesson, lesson-output, assign-chapter,
   classes, branding, book-health, school-nav, assistant, assignments, open-lesson, progress,

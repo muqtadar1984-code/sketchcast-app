@@ -4,9 +4,13 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { calendarEnabledFor, noticesEnabledFor } from "@/utils/flags";
-import EventEditor, { type EditorClass, type EditableEvent } from "./event-editor";
+import EventEditor, { type EditorClass, type EditableEvent, type EventEditorMessages } from "./event-editor";
 import NoticeComposer from "./notice-composer";
 import SubscribeButton from "./subscribe-button";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { htmlLang } from "@/i18n/locales";
+import { fmt } from "@/i18n/format";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +105,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // The page's words, and the tag every date on it is written in. resolveLocale
+  // is React-cached, so asking here and in the header costs one lookup.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.comms.calendar;
+  const lang = htmlLang(locale);
+  const kindLabel = (kind: string): string => (t.kinds as Record<string, string>)[kind] ?? kind;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -263,9 +275,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           all_day: e.all_day,
         };
 
-  const timeFmt = new Intl.DateTimeFormat("en-MY", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
-  const dayFmt = new Intl.DateTimeFormat("en-MY", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
-  const monthLabel = new Intl.DateTimeFormat("en-MY", { timeZone: TZ, month: "long", year: "numeric" }).format(
+  // Every clock on the page runs in SCHOOL time and is written in the READER's
+  // language — the zone is the school's fact, the words are theirs.
+  const timeFmt = new Intl.DateTimeFormat(lang, { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+  const dayFmt = new Intl.DateTimeFormat(lang, { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
+  const weekdayFmt = new Intl.DateTimeFormat(lang, { timeZone: "UTC", weekday: "short" });
+  const monthLabel = new Intl.DateTimeFormat(lang, { timeZone: TZ, month: "long", year: "numeric" }).format(
     new Date(monthStartCivil - TZ_OFFSET_MS + 12 * 3600000),
   );
   const mkParam = (y: number, mo: number) => `${y}-${String(mo + 1).padStart(2, "0")}`;
@@ -277,20 +292,25 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
    * own words ("Register by Fri, 8 Aug") when that is all the row has. */
   const subLine = (e: EventRow): string => {
     if (!e.starts_at) {
-      return `${e.action_label?.trim() || "By"} ${dayFmt.format(new Date(e.action_by!))}`;
+      return `${e.action_label?.trim() || t.by} ${dayFmt.format(new Date(e.action_by!))}`;
     }
     const d = new Date(e.starts_at);
-    return `${dayFmt.format(d)}${e.all_day ? " · all day" : ` · ${timeFmt.format(d)}`}`;
+    const date = dayFmt.format(d);
+    return e.all_day ? fmt(t.dateAllDay, { date }) : fmt(t.dateAtTime, { date, time: timeFmt.format(d) });
   };
 
   // Upcoming list: the next 30 days from today (already-fetched grid rows),
   // measured on whichever clock the row actually has.
   const upcoming = events
     .filter((e) => {
-      const t = new Date(whenOf(e)!).getTime();
-      return t >= now - DAY && t < now + 30 * DAY;
+      const at = new Date(whenOf(e)!).getTime();
+      return at >= now - DAY && at < now + 30 * DAY;
     })
     .slice(0, 12);
+
+  // Built once, shared by every editor on the page: one message object in the
+  // RSC payload rather than one per event row.
+  const editorT: EventEditorMessages = { ...t.editor, kinds: t.kinds, common: dict.common };
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
@@ -298,15 +318,21 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       <main className="max-w-7xl mx-auto px-6 py-10">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-4xl mb-2">Calendar</h1>
+            <h1 className="text-4xl mb-2">{t.title}</h1>
             <InkUnderline className="block h-3 w-28 mb-3" />
-            <p className="text-[#5B6470]">
-              Meetings, exams, holidays and assignment due dates — everyone sees their own slice.
-            </p>
+            <p className="text-[#5B6470]">{t.intro}</p>
           </div>
           <div className="flex items-center gap-2">
-            <SubscribeButton />
-            {canCreate && <EventEditor schoolId={schoolId!} isAdmin={isAdmin} classes={editorClasses} userId={user.id} />}
+            <SubscribeButton t={t.subscribe} />
+            {canCreate && (
+              <EventEditor
+                schoolId={schoolId!}
+                isAdmin={isAdmin}
+                classes={editorClasses}
+                userId={user.id}
+                t={editorT}
+              />
+            )}
           </div>
         </div>
 
@@ -324,22 +350,26 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <h2 className="text-xl">{monthLabel}</h2>
           <div className="flex items-center gap-2">
             <Link href={`/dashboard/calendar?m=${prev}`} className="btn-ghost h-9 px-3 text-sm">
-              <span className="rtl-flip">←</span> Prev
+              <span className="rtl-flip">←</span> {t.prev}
             </Link>
             <Link href="/dashboard/calendar" className="btn-ghost h-9 px-3 text-sm">
-              Today
+              {t.today}
             </Link>
             <Link href={`/dashboard/calendar?m=${next}`} className="btn-ghost h-9 px-3 text-sm">
-              Next <span className="rtl-flip">→</span>
+              {t.next} <span className="rtl-flip">→</span>
             </Link>
           </div>
         </div>
 
         <div className="card overflow-hidden">
+          {/* The column heads are FORMATTED, not listed: the grid always starts
+              on a Monday, so the first seven cells name themselves in whatever
+              language the page is being read in — no seven more keys to keep in
+              step with the ten message files. */}
           <div className="grid grid-cols-7 border-b border-[#EEF0EC] bg-[#F5F6F3] text-xs text-[#5B6470]">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-              <div key={d} className="px-2 py-1.5 text-center">
-                {d}
+            {Array.from({ length: 7 }, (_, i) => (
+              <div key={i} className="px-2 py-1.5 text-center">
+                {weekdayFmt.format(new Date(gridStartCivil + i * DAY))}
               </div>
             ))}
           </div>
@@ -377,14 +407,16 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     {dayDues.slice(0, 2).map((d, j) => (
                       <div
                         key={`due-${j}`}
-                        title={`Due: ${d.generations?.title ?? "assignment"}`}
+                        title={fmt(t.dueTooltip, { title: d.generations?.title ?? t.assignmentLower })}
                         className="truncate rounded border border-dashed border-[#D5D9D2] px-1.5 py-0.5 text-[11px] leading-4 text-[#5B6470]"
                       >
-                        ⏰ {d.generations?.title ?? "Assignment"} due
+                        ⏰ {fmt(t.dueEntry, { title: d.generations?.title ?? t.assignment })}
                       </div>
                     ))}
                     {dayEvents.length + dayDues.length > 5 && (
-                      <div className="text-[10px] text-[#98A0A9]">+{dayEvents.length + dayDues.length - 5} more</div>
+                      <div className="text-[10px] text-[#98A0A9]">
+                        {fmt(t.moreCount, { n: dayEvents.length + dayDues.length - 5 })}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -406,8 +438,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           if (!manageable.length && !pulled.length) return null;
           return (
             <>
-              <h2 className="text-xl mt-10 mb-1">Manage this month&apos;s events</h2>
-              <p className="text-sm text-[#5B6470] mb-3">Events you created or can edit in {monthLabel}.</p>
+              <h2 className="text-xl mt-10 mb-1">{t.manageTitle}</h2>
+              <p className="text-sm text-[#5B6470] mb-3">{fmt(t.manageSubtitle, { month: monthLabel })}</p>
               {manageable.length > 0 && (
                 <div className="card divide-y divide-[#EEF0EC]">
                   {manageable.map((e) => {
@@ -419,7 +451,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           <div className="text-xs text-[#5B6470]">{subLine(e)}</div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className={`chip font-sans ${KIND_STYLE[e.kind] ?? KIND_STYLE.other}`}>{e.kind}</span>
+                          <span className={`chip font-sans ${KIND_STYLE[e.kind] ?? KIND_STYLE.other}`}>
+                            {kindLabel(e.kind)}
+                          </span>
                           {ed && (
                             <EventEditor
                               schoolId={schoolId!}
@@ -427,6 +461,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                               classes={editorClasses}
                               userId={user.id}
                               existing={ed}
+                              t={editorT}
                             />
                           )}
                         </div>
@@ -438,8 +473,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               {pulled.length > 0 && (
                 <>
                   <p className="text-xs text-[#98A0A9] mt-3 mb-1.5">
-                    Withdrawn in {monthLabel} — kept for your record, and visible to leadership only. Nobody else sees
-                    these, on any surface.
+                    {fmt(t.withdrawnNote, { month: monthLabel })}
                   </p>
                   <div className="card divide-y divide-[#EEF0EC] bg-[#FAFBF9]">
                     {pulled.map((e) => (
@@ -448,7 +482,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           <div className="text-sm text-[#98A0A9] line-through truncate">{e.title}</div>
                           <div className="text-xs text-[#98A0A9]">{subLine(e)}</div>
                         </div>
-                        <span className="chip font-sans bg-[#EEF0EC] text-[#5B6470] shrink-0">Withdrawn</span>
+                        <span className="chip font-sans bg-[#EEF0EC] text-[#5B6470] shrink-0">{t.withdrawn}</span>
                       </div>
                     ))}
                   </div>
@@ -458,10 +492,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           );
         })()}
 
-        <h2 className="text-xl mt-10 mb-1">Upcoming</h2>
-        <p className="text-sm text-[#5B6470] mb-3">The next 30 days in your slice.</p>
+        <h2 className="text-xl mt-10 mb-1">{t.upcoming}</h2>
+        <p className="text-sm text-[#5B6470] mb-3">{t.upcomingSubtitle}</p>
         {upcoming.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">Nothing scheduled yet.</div>
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.nothingScheduled}</div>
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             {upcoming.map((e) => {
@@ -476,7 +510,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`chip font-sans ${KIND_STYLE[e.kind] ?? KIND_STYLE.other}`}>{e.kind}</span>
+                    <span className={`chip font-sans ${KIND_STYLE[e.kind] ?? KIND_STYLE.other}`}>
+                      {kindLabel(e.kind)}
+                    </span>
                     {ed && (
                       <EventEditor
                         schoolId={schoolId!}
@@ -484,6 +520,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                         classes={editorClasses}
                         userId={user.id}
                         existing={ed}
+                        t={editorT}
                       />
                     )}
                   </div>

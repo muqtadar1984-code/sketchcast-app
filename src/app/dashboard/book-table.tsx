@@ -5,7 +5,7 @@ import GenerateButton from "./generate-button";
 import GenerateAllButton from "./generate-all-button";
 import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
-import { type CellLesson } from "./content-cell";
+import { kindLabel, statusLabel, type CellLesson, type LibraryMessages } from "./content-cell";
 import LessonCard from "./lesson-card";
 import BookTools from "./book-tools";
 import AssignModal, { type ClassRow } from "./assign-modal";
@@ -17,6 +17,7 @@ import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
 import { jobStageLabel, etaLabel } from "@/utils/job-stage";
 import { languageLabel } from "@/utils/narration";
+import { fmt } from "@/i18n/format";
 
 export type Lesson = CellLesson & { title: string; kind: string };
 export type PartRow = {
@@ -91,15 +92,6 @@ export type ExamPaper = {
   artifactPaths: string[];
 };
 
-const KIND_LABEL: Record<string, string> = {
-  presentation: "Lesson",
-  lesson_plan: "Plan",
-  activity: "Activities",
-  worksheet: "Worksheet",
-  exam_paper: "Test paper",
-  case_study: "Case study",
-};
-
 const STATUS_STYLE: Record<string, string> = {
   queued: "bg-[#EEF0EC] text-[#5B6470]",
   processing: "bg-[#FFF1D6] text-[#9A6400]",
@@ -117,7 +109,7 @@ export type BetaState = {
 // chapter ships Part 1..N videos and a deck per part). Multi-part lessons
 // render ONE LINE PER PART, stacked — "Part 2 · Watch · Deck" — instead of a
 // single crowded row of Pt links.
-function ArtifactLinks({ lesson }: { lesson: CellLesson }) {
+function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }) {
   const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
   const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
   const nParts = Math.max(videos.length, decks.length);
@@ -127,22 +119,22 @@ function ArtifactLinks({ lesson }: { lesson: CellLesson }) {
       <span className="flex flex-col gap-0.5">
         {Array.from({ length: nParts }, (_, i) => (
           <span key={i} className="flex items-center gap-2 whitespace-nowrap">
-            <span className="text-xs text-[#5B6470] w-11">Part {i + 1}</span>
+            <span className="text-xs text-[#5B6470] w-11">{fmt(t.part, { n: i + 1 })}</span>
             {videos[i] && (
               <a href={videos[i]} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
-                ▶ Watch
+                ▶ {t.watch}
               </a>
             )}
             {decks[i] && (
               <a href={decks[i]} className="text-xs font-medium text-[#0C8175] hover:underline">
-                ⬇ Deck
+                ⬇ {t.deck}
               </a>
             )}
           </span>
         ))}
         {lesson.doc && (
           <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
-            ⬇ Download
+            ⬇ {t.download}
           </a>
         )}
       </span>
@@ -153,17 +145,17 @@ function ArtifactLinks({ lesson }: { lesson: CellLesson }) {
     <>
       {videos[0] && (
         <a href={videos[0]} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
-          ▶ Watch
+          ▶ {t.watch}
         </a>
       )}
       {decks[0] && (
         <a href={decks[0]} className="text-xs font-medium text-[#0C8175] hover:underline">
-          ⬇ Deck
+          ⬇ {t.deck}
         </a>
       )}
       {lesson.doc && (
         <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
-          ⬇ Download
+          ⬇ {t.download}
         </a>
       )}
     </>
@@ -174,12 +166,18 @@ export default function BookTable({
   books,
   schoolId,
   classes,
+  t,
+  lang,
   beta = null,
   examEnabled = false,
 }: {
   books: BookRow[];
   schoolId: string | null;
   classes: ClassRow[];
+  t: LibraryMessages;
+  /** BCP-47 tag for the reader's locale — the one date on this surface (the
+      book's upload day) formats in their own calendar conventions. */
+  lang: string;
   beta?: BetaState | null; // non-null for a beta teacher (1-chapter cap active)
   /** Exam tool (0062) — gated on FEATURE_EXAM until migration 0062 is applied. */
   examEnabled?: boolean;
@@ -212,43 +210,43 @@ export default function BookTable({
                 </span>
                 <span className="min-w-0">
                   <span className="font-display font-medium truncate block">{cleanBookTitle(b.title)}</span>
-                  <span className="text-xs text-[#5B6470]">{b.author || "Unknown author"}</span>
+                  <span className="text-xs text-[#5B6470]">{b.author || t.book.unknownAuthor}</span>
                 </span>
               </button>
               <span className="text-sm text-[#5B6470] text-end whitespace-nowrap self-center">
                 {b.status === "indexing" ? (
-                  "Finding chapters…"
+                  t.book.findingChapters
                 ) : b.status === "error" ? (
                   "—"
                 ) : (
-                  <>
-                    <span
-                      className={
-                        b.doneChapters === b.totalChapters && b.totalChapters > 0
-                          ? "text-[#0C8175] font-medium"
-                          : "text-[#14181F] font-medium"
-                      }
-                    >
-                      {b.doneChapters}/{b.totalChapters}
-                    </span>{" "}
-                    chapters
-                  </>
+                  // One message, one emphasis: the fraction can't be styled apart
+                  // from the word without pinning their order for every language.
+                  <span
+                    className={
+                      b.doneChapters === b.totalChapters && b.totalChapters > 0
+                        ? "text-[#0C8175] font-medium"
+                        : "text-[#14181F] font-medium"
+                    }
+                  >
+                    {fmt(t.book.chaptersDone, { done: b.doneChapters, total: b.totalChapters })}
+                  </span>
                 )}
               </span>
               <div className="flex items-center gap-2 whitespace-nowrap self-center">
-                {ready && <BookHealthBadge health={b.health} />}
+                {ready && <BookHealthBadge health={b.health} t={t} />}
                 {b.language && languageLabel(b.language) && (
                   <span className="chip bg-[#E2F4F1] text-[#0C8175]">{languageLabel(b.language)}</span>
                 )}
                 {ready && b.totalChapters > 0 && b.doneChapters === b.totalChapters && (
                   <AssignModal
-                    label="Assign book"
+                    label={t.book.assignBook}
                     generationIds={b.presentationIds}
                     classes={classes}
+                    t={t}
                   />
                 )}
                 <span className="text-xs text-[#5B6470]">
-                  {new Date(b.createdAt).toLocaleDateString()}
+                  {new Date(b.createdAt).toLocaleDateString(lang)}
                 </span>
                 <DeleteBook bookId={b.id} storagePath={b.storagePath} />
               </div>
@@ -256,9 +254,9 @@ export default function BookTable({
 
             {b.status === "error" && (
               <div className="px-5 pb-3 flex items-center gap-3">
-                <span className="text-xs text-[#B42318]">Couldn&apos;t detect chapters.</span>
+                <span className="text-xs text-[#B42318]">{t.book.noChapters}</span>
                 {/* Whole-book generation would blow past the 1-chapter beta cap. */}
-                {!beta && <GenerateButton bookId={b.id} schoolId={schoolId} label="Generate full book" />}
+                {!beta && <GenerateButton bookId={b.id} schoolId={schoolId} label={t.book.generateFullBook} />}
               </div>
             )}
 
@@ -270,11 +268,11 @@ export default function BookTable({
                 {b.health?.facts?.has_text_layer === false && (
                   <div className="mt-2 flex items-start gap-2 rounded-lg bg-[#FFF1D6] text-[#9A6400] px-3 py-2 text-xs">
                     <span aria-hidden>⚠️</span>
+                    {/* The emphasis is a LEAD-IN rather than a word inside the
+                        sentence: bolding mid-sentence would pin the phrase's
+                        position in every language. */}
                     <span>
-                      This looks like a <strong>scanned PDF</strong> (no text layer). Chapters are detected by image
-                      recognition, so the list below — and any generated content — may be unreliable. For best
-                      results, upload a text-based (digitally exported) PDF, and use <strong>Report an issue</strong> on
-                      anything that comes out wrong.
+                      <strong>{t.book.scannedLead}</strong> {t.book.scannedWarning} {t.book.scannedAdvice}
                     </span>
                   </div>
                 )}
@@ -285,7 +283,7 @@ export default function BookTable({
                     {b.pendingChapters.length > 0 && (
                       <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} />
                     )}
-                    <BookTools>
+                    <BookTools t={t}>
                     {/* Revision papers: worksheets/test papers over a group of
                         chapters, built from generated lessons. */}
                     <BatchGenerate
@@ -299,12 +297,13 @@ export default function BookTable({
                         )
                         .map((ch) => ({ num: ch.num, title: ch.title }))}
                       language={b.language}
+                      t={t}
                     />
                     {/* Exam: a cumulative exam paper + separate answer key over
                         the chosen covered chapters/parts (0062). Gated on
                         FEATURE_EXAM until migration 0062 is applied. */}
                     {examEnabled && (
-                      <ExamGenerate bookId={b.id} schoolId={schoolId} chapters={b.examUnits} language={b.language} />
+                      <ExamGenerate bookId={b.id} schoolId={schoolId} chapters={b.examUnits} language={b.language} t={t} />
                     )}
                     </BookTools>
                   </div>
@@ -336,6 +335,7 @@ export default function BookTable({
                           .map((l) => l.id)}
                         bookLanguage={b.language}
                         bookGrade={b.grade}
+                        t={t}
                       />
                       {/* Per-part lesson units (index-time part map): one row
                           per part, each with its OWN kit, generated on demand.
@@ -364,6 +364,7 @@ export default function BookTable({
                                 trackViews={!!beta}
                                 bookLanguage={b.language}
                                 bookGrade={b.grade}
+                                t={t}
                               />
                             );
                           })}
@@ -377,7 +378,7 @@ export default function BookTable({
                     group of chapters — cumulative or a per-chapter pack. */}
                 {b.revisionPapers.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
-                    <p className="text-xs text-[#5B6470] mb-1">Revision papers</p>
+                    <p className="text-xs text-[#5B6470] mb-1">{t.book.revisionPapers}</p>
                     {b.revisionPapers.map((p) => (
                       <div key={p.id} className="flex items-center justify-between gap-4 py-1">
                         <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">{p.label}</span>
@@ -386,14 +387,14 @@ export default function BookTable({
                             <>
                               {p.doc && (
                                 <a href={p.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
-                                  ⬇ Download
+                                  ⬇ {t.download}
                                 </a>
                               )}
-                              <AssignModal label="Assign" generationIds={[p.id]} classes={classes} />
+                              <AssignModal label={t.assign} generationIds={[p.id]} classes={classes} t={t} />
                             </>
                           ) : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[p.status] ?? ""}`}>
-                              {p.status}
+                              {statusLabel(t, p.status)}
                               {p.status === "processing"
                                 ? ` · ${jobStageLabel(p.progress, p.stage)}${
                                     etaLabel("exam_paper", p.progress, p.stage)
@@ -403,7 +404,7 @@ export default function BookTable({
                                 : ""}
                             </span>
                           )}
-                          <DeleteLesson genId={p.id} artifactPaths={p.artifactPaths} />
+                          <DeleteLesson genId={p.id} artifactPaths={p.artifactPaths} t={t} />
                         </div>
                       </div>
                     ))}
@@ -417,14 +418,14 @@ export default function BookTable({
                     student-facing path). The answer key is teacher-only. */}
                 {b.exams.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
-                    <p className="text-xs text-[#5B6470] mb-1">Exams</p>
+                    <p className="text-xs text-[#5B6470] mb-1">{t.book.exams}</p>
                     {b.exams.map((e) => (
                       <div key={e.id} className="flex items-start justify-between gap-4 py-1.5">
                         <span className="min-w-0 flex-1">
                           <span className="text-sm text-[#14181F] block truncate">{e.label}</span>
                           {e.coverage && (
                             <span className="block text-[10px] text-[#98A0A9] truncate" title={e.coverage}>
-                              Covers: {e.coverage}
+                              {fmt(t.book.covers, { list: e.coverage })}
                             </span>
                           )}
                         </span>
@@ -433,18 +434,18 @@ export default function BookTable({
                             <>
                               {e.doc && (
                                 <a href={e.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
-                                  ⬇ Exam paper
+                                  ⬇ {t.book.examPaper}
                                 </a>
                               )}
                               {e.answerKey && (
                                 <a href={e.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
-                                  ⬇ Answer key
+                                  ⬇ {t.book.answerKey}
                                 </a>
                               )}
                             </>
                           ) : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[e.status] ?? ""}`}>
-                              {e.status}
+                              {statusLabel(t, e.status)}
                               {e.status === "processing"
                                 ? ` · ${jobStageLabel(e.progress, e.stage)}${
                                     etaLabel("exam", e.progress, e.stage)
@@ -454,7 +455,7 @@ export default function BookTable({
                                 : ""}
                             </span>
                           )}
-                          <DeleteLesson genId={e.id} artifactPaths={e.artifactPaths} />
+                          <DeleteLesson genId={e.id} artifactPaths={e.artifactPaths} t={t} />
                         </div>
                       </div>
                     ))}
@@ -463,18 +464,18 @@ export default function BookTable({
 
                 {b.otherLessons.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
-                    <p className="text-xs text-[#5B6470] mb-1">Other lessons</p>
+                    <p className="text-xs text-[#5B6470] mb-1">{t.otherLessons}</p>
                     {b.otherLessons.map((l) => (
                       <div key={l.id} className="flex items-center justify-between gap-4 py-1">
                         <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">{l.title}</span>
                         <div className="flex items-center gap-2 shrink-0">
-                          {l.status === "done" ? <ArtifactLinks lesson={l} /> : (
+                          {l.status === "done" ? <ArtifactLinks lesson={l} t={t} /> : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
-                              {l.status}
+                              {statusLabel(t, l.status)}
                               {l.status === "processing" ? ` · ${jobStageLabel(l.progress, l.stage)}` : ""}
                             </span>
                           )}
-                          <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
+                          <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />
                         </div>
                       </div>
                     ))}
@@ -486,7 +487,7 @@ export default function BookTable({
                     their chapter cells above as they finish). */}
                 {b.batchLessons.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
-                    <p className="text-xs text-[#5B6470] mb-1">Generated as selected</p>
+                    <p className="text-xs text-[#5B6470] mb-1">{t.book.generatedAsSelected}</p>
                     {b.batchLessons.map((l) => {
                       const ch = b.chapters.find((c) => String(c.num) === l.chapterRef);
                       return (
@@ -496,16 +497,16 @@ export default function BookTable({
                               {ch ? `${ch.num + 1}. ` : ""}
                             </span>
                             {ch?.title ?? l.title}
-                            <span className="text-xs text-[#98A0A9]"> · {KIND_LABEL[l.kind] ?? l.kind}</span>
+                            <span className="text-xs text-[#98A0A9]"> · {kindLabel(t, l.kind)}</span>
                           </span>
                           <div className="flex items-center gap-2 shrink-0">
-                            {l.status === "done" ? <ArtifactLinks lesson={l} /> : (
+                            {l.status === "done" ? <ArtifactLinks lesson={l} t={t} /> : (
                               <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
-                                {l.status}
+                                {statusLabel(t, l.status)}
                                 {l.status === "processing" ? ` · ${jobStageLabel(l.progress, l.stage)}` : ""}
                               </span>
                             )}
-                            <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
+                            <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />
                           </div>
                         </div>
                       );

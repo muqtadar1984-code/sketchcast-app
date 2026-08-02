@@ -125,5 +125,1381 @@
       "multiPartHint": "Parte {n} de {total} (~15 min). Termina una parte para marcarla — la última completa la lección.",
       "singlePartHint": "Míralo hasta el final para marcar esta lección como completada."
     }
+  },
+  "app": {
+    "auth": {
+      "or": "o",
+      "signIn": "Iniciar sesión",
+      "signOut": "Cerrar sesión",
+      "fullName": "Nombre completo",
+      "email": "Correo",
+      "password": "Contraseña",
+      "alreadyHaveAccount": "¿Ya tiene una cuenta?",
+      "schoolPrompt": "¿Va a configurar toda una escuela?",
+      "schoolCta": "Configure su escuela"
+    },
+    "oauth": {
+      "signInWith": "Iniciar sesión con {provider}",
+      "signUpWith": "Crear cuenta con {provider}",
+      "redirecting": "Redirigiendo…"
+    },
+    "login": {
+      "subtitle": "Inicie sesión en su cuenta",
+      "emailOrId": "Correo o ID de alumno",
+      "forgot": "¿Olvidó su contraseña?",
+      "signingIn": "Iniciando sesión…",
+      "newHere": "¿Es nuevo aquí?",
+      "createAccount": "Crear una cuenta"
+    },
+    "forgot": {
+      "subtitle": "Restablezca su contraseña",
+      "sent": "Si existe una cuenta con ese correo, le enviaremos un enlace para restablecerla. Revise su bandeja de entrada (y la carpeta de spam).",
+      "emailPlaceholder": "Su correo",
+      "studentHint": "Eso parece un ID de alumno. Las cuentas de alumno no tienen correo — pida a su profesor o a su padre/madre que restablezca la contraseña desde su panel.",
+      "sending": "Enviando…",
+      "send": "Enviar enlace",
+      "remembered": "¿Ya la recordó?",
+      "backToSignIn": "Volver a iniciar sesión"
+    },
+    "updatePassword": {
+      "subtitle": "Elija una contraseña nueva",
+      "checking": "Un momento…",
+      "expired": "Este enlace caducó, o no ha iniciado sesión.",
+      "requestNewLink": "Solicitar un enlace nuevo",
+      "signInLink": "iniciar sesión",
+      "updated": "Contraseña actualizada — abriendo su panel…",
+      "newPassword": "Contraseña nueva (mín. 8 caracteres)",
+      "repeatPassword": "Repita la contraseña nueva",
+      "tooShort": "La contraseña debe tener al menos 8 caracteres.",
+      "mismatch": "Las dos contraseñas no coinciden.",
+      "submit": "Guardar contraseña"
+    },
+    "signup": {
+      "title": "Cree su cuenta",
+      "subtitle": "Gratis para profesores y alumnos",
+      "passwordMin": "Contraseña (mín. 6 caracteres)",
+      "roles": {
+        "teacher": "Profesor",
+        "student": "Alumno",
+        "parent": "Padre/madre"
+      },
+      "confirmEmail": "Revise su correo para confirmar la cuenta y luego inicie sesión.",
+      "creating": "Creando…",
+      "submit": "Crear cuenta"
+    },
+    "schoolSignup": {
+      "title": "Configure su escuela",
+      "subtitle": "Cree su escuela en SketchCast y luego invite a sus profesores.",
+      "yourFullName": "Su nombre completo",
+      "workEmail": "Correo del trabajo",
+      "createPassword": "Cree una contraseña (mín. 6 caracteres)",
+      "creating": "Creando…",
+      "continue": "Continuar",
+      "confirmEmail": "Revise su correo para confirmar la cuenta — después le pondrá nombre a su escuela.",
+      "nextStepHint": "En el siguiente paso le pondrá nombre a su escuela.",
+      "finish": {
+        "title": "Ponga nombre a su escuela",
+        "signedInAs": "Sesión iniciada como {email}. Esto crea su escuela y lo deja como administrador — podrá invitar profesores enseguida.",
+        "schoolName": "Nombre de la escuela",
+        "creating": "Creando…",
+        "submit": "Crear mi escuela"
+      }
+    },
+    "invite": {
+      "notAvailable": "Las invitaciones no están disponibles ahora mismo.",
+      "unavailableTitle": "Invitación no disponible",
+      "used": "Esta invitación ya se usó.",
+      "invalid": "Este enlace de invitación no es válido.",
+      "expired": "Esta invitación caducó.",
+      "goToSignIn": "Ir a iniciar sesión",
+      "title": "Le han invitado",
+      "joinAs": "Únase a {school} como {role}",
+      "forEmail": "para {email}",
+      "fallbackSchool": "su escuela",
+      "roles": {
+        "schoolAdmin": "Administrador escolar",
+        "teacher": "Profesor",
+        "parent": "Padre/madre"
+      },
+      "reason": {
+        "invalid": "Este enlace de invitación no es válido.",
+        "expired": "Esta invitación caducó.",
+        "email": "Esa invitación es para otro correo — cierre sesión y use ese correo.",
+        "apply": "Algo salió mal al aceptar la invitación. Inténtelo de nuevo.",
+        "server": "Las invitaciones no están configuradas en el servidor.",
+        "role": "Una cuenta de alumno no puede aceptar una invitación de padre/madre — cierre sesión y use la cuenta del padre o la madre."
+      },
+      "accept": "Aceptar invitación",
+      "wrongAccount": "Su sesión es de {signedIn}, pero esta invitación es para {invited}. Cierre sesión y use ese correo.",
+      "invitedEmail": "Correo invitado",
+      "createPassword": "Cree una contraseña (mín. 6)",
+      "creating": "Creando…",
+      "submit": "Aceptar y crear cuenta",
+      "confirmEmail": "Revise su correo para confirmar la cuenta — el enlace de confirmación terminará de aceptar la invitación automáticamente.",
+      "googleHint": "Use la cuenta de Google de {email}."
+    },
+    "onboarding": {
+      "title": "Bienvenido — vamos a configurar su cuenta",
+      "subtitle": "Un par de preguntas rápidas para que SketchCast se adapte a su forma de trabajar. Puede cambiarlas después.",
+      "roleQuestion": "Estoy aquí como…",
+      "teacher": "Profesor",
+      "teacherSub": "Crear lecciones y dar clases",
+      "parent": "Padre/madre",
+      "parentSub": "Acompañar el aprendizaje de mi hijo",
+      "fullName": "Su nombre completo",
+      "namePlaceholder": "p. ej. Alex Morgan",
+      "whereTeach": "¿Dónde enseña?",
+      "pickOne": "Elija una opción.",
+      "schoolName": "Nombre de la escuela",
+      "schoolPlaceholder": "p. ej. Riverside Secondary",
+      "gradesTeach": "Grados que enseña",
+      "pickAtLeastOne": "Elija al menos uno.",
+      "subjectsTeach": "Materias que enseña",
+      "childrenCount": "¿A cuántos hijos va a acompañar?",
+      "childrenPlaceholder": "p. ej. 2",
+      "childGrades": "Grados de sus hijos",
+      "heardFrom": "¿Cómo supo de nosotros?",
+      "optional": "Opcional",
+      "completeRequired": "Complete los campos obligatorios marcados con *.",
+      "settingUp": "Configurando…",
+      "continue": "Continuar",
+      "networkError": "Error de red. Inténtelo de nuevo.",
+      "affiliations": {
+        "school": "Enseño en una escuela",
+        "independent": "Profesor particular / tutor",
+        "homeschool": "Educación en casa"
+      },
+      "grades": {
+        "kindergarten": "Preescolar / Kínder",
+        "g1to3": "Grados 1–3",
+        "g4to6": "Grados 4–6",
+        "g7to9": "Grados 7–9",
+        "g10to12": "Grados 10–12"
+      },
+      "subjects": {
+        "maths": "Matemáticas",
+        "science": "Ciencias",
+        "english": "Inglés",
+        "computing": "Informática / TIC",
+        "socialStudies": "Ciencias sociales",
+        "languages": "Idiomas",
+        "arts": "Artes",
+        "other": "Otra"
+      }
+    },
+    "reportIssue": {
+      "label": "Reportar un problema",
+      "labelStudent": "¿Necesitas ayuda?",
+      "titleStudent": "¿Algo no funciona?",
+      "about": "¿Sobre qué es?",
+      "summary": "Resumen",
+      "summaryStudent": "¿Qué pasó? (en pocas palabras)",
+      "summaryPlaceholder": "p. ej. Falla la descarga de las diapositivas de la Unidad 3",
+      "summaryPlaceholderStudent": "El video no se reproduce",
+      "details": "Detalles (opcional)",
+      "detailsPlaceholder": "¿Qué esperaba y qué pasó en su lugar?",
+      "screenshots": "Capturas de pantalla (opcional)",
+      "screenshotsCount": "Capturas (opcional · {n}/{max})",
+      "removeFile": "Quitar {name}",
+      "notSignedIn": "Sesión no iniciada.",
+      "sendFailedNetwork": "No se pudo enviar — revise su conexión e inténtelo de nuevo.",
+      "sendFailed": "No se pudo enviar — inténtelo de nuevo.",
+      "attachedOneFailed": "Enviado, pero no se pudo adjuntar 1 captura.",
+      "attachedSomeFailed": "Enviado, pero no se pudieron adjuntar {n} capturas.",
+      "sent": "Enviado",
+      "sending": "Enviando…",
+      "send": "Enviar",
+      "categories": {
+        "video": "Videolección",
+        "deckDocs": "Diapositivas / documentos",
+        "quiz": "Test",
+        "upload": "Subir un libro",
+        "login": "Iniciar sesión",
+        "speed": "Lentitud",
+        "other": "Otra cosa"
+      }
+    },
+    "betaBanner": {
+      "welcome": "¡Bienvenido a SketchCast!",
+      "body": "Su prueba gratuita incluye {trial}. Las clases, las asignaciones, la revisión y las estadísticas son ilimitadas. ¿Dudas?",
+      "trial": "1 libro y el kit completo — videolección, plan, actividades, hoja de trabajo, prueba y caso práctico — para una parte de un capítulo"
+    },
+    "tour": {
+      "teacher_onboarding": {
+        "library": {
+          "title": "Su biblioteca",
+          "body": "Cada libro de texto que suba queda aquí. Abra uno para convertir sus capítulos en lecciones."
+        },
+        "generate": {
+          "title": "Convierta un capítulo en una lección",
+          "body": "Elija un capítulo y genere a partir de él una videolección narrada completa — automáticamente."
+        },
+        "output": {
+          "title": "Vea y descargue",
+          "body": "Reproduzca la lección terminada, o descargue las diapositivas editables y las hojas de trabajo."
+        },
+        "assign": {
+          "title": "Asigne a una clase",
+          "body": "Comparta con sus alumnos la lección, la hoja de trabajo y el test de un capítulo con un clic."
+        },
+        "assistant": {
+          "title": "Asistente de enseñanza IA",
+          "body": "Un ayudante basado en sus libros — pregúntele lo que sea sobre ellos; también revisa matemáticas."
+        },
+        "classes": {
+          "title": "Sus clases",
+          "body": "Cree clases y agregue alumnos para empezar a seguir su progreso."
+        }
+      },
+      "student_onboarding": {
+        "assignments": {
+          "title": "Tus tareas",
+          "body": "Todo lo que te asigna tu profesor aparece aquí."
+        },
+        "open": {
+          "title": "Ver una lección",
+          "body": "Abre una lección para ver el video o leer las diapositivas."
+        },
+        "assistant": {
+          "title": "Pregúntale al Asistente",
+          "body": "¿Te atascaste? Pregúntale al asistente IA — responde con tus propios libros."
+        },
+        "progress": {
+          "title": "Tu progreso",
+          "body": "Mira lo que ya terminaste y lo que te falta."
+        }
+      },
+      "parent_onboarding": {
+        "assignments": {
+          "title": "Las tareas de su hijo",
+          "body": "Vea qué se le ha asignado a cada hijo y cómo le va."
+        },
+        "recap": {
+          "title": "Progreso y resumen",
+          "body": "Siga de un vistazo lo completado y las notas — sin adivinar."
+        },
+        "practice": {
+          "title": "Cree práctica extra",
+          "body": "Cree pruebas de práctica para su hijo cuando quiera, en Exámenes."
+        }
+      },
+      "school_admin_onboarding": {
+        "school": {
+          "title": "Administre su escuela",
+          "body": "Abra el área de su escuela para agregar profesores, alumnos y clases."
+        },
+        "branding": {
+          "title": "Identidad de la escuela",
+          "body": "Agregue el logo y los colores de su escuela a cada lección y documento."
+        },
+        "health": {
+          "title": "Salud del libro",
+          "body": "Una puntuación rápida de calidad muestra qué libros están listos para enseñar."
+        },
+        "classes": {
+          "title": "Clases y alumnos",
+          "body": "Cree clases e inscriba alumnos para seguir su progreso."
+        }
+      },
+      "coordinator_onboarding": {
+        "welcome": {
+          "title": "Bienvenido a SketchCast",
+          "body": "Aquí tiene un vistazo de 30 segundos a lo que puede hacer como coordinador."
+        },
+        "oversight": {
+          "title": "Lo que supervisa",
+          "body": "Las clases y los profesores a su cargo aparecerán en esta área."
+        },
+        "help": {
+          "title": "¿Necesita ayuda?",
+          "body": "Puede repetir este recorrido cuando quiera con este botón — y siempre puede reportar un problema."
+        }
+      }
+    }
+  },
+  "comms": {
+    "diary": {
+      "title": "Agenda",
+      "teacherIntro": "El cuaderno de comunicación diario — notas a casa, respuestas, firmas de los padres y lo que pasó en clase.",
+      "parentIntro": "El cuaderno de comunicación diario — una página por día y por hijo. Firme las notas para que el profesor sepa que las vio.",
+      "studentIntro": "Notas de tus profesores, día por día — responde para mantenerlos al tanto.",
+      "viewingAsTeacher": "Viendo como profesor",
+      "seeChildrensDiary": "ver la agenda de mis hijos",
+      "viewingAsParent": "Viendo como padre/madre",
+      "backToClassDiary": "volver a la agenda de mi clase",
+      "noClasses": "Cree primero una clase en su Biblioteca — la agenda se escribe por clase.",
+      "noChildrenLinked": "Todavía no hay hijos vinculados — agregue a su hijo en Mis hijos.",
+      "fromClassroom": "Desde el aula ({count})",
+      "nothingRecorded": "No hay nada registrado este día.",
+      "notesHeading": "Notas ({count})",
+      "noNotesWriteFirst": "Todavía no hay notas para este día — escriba la primera arriba.",
+      "noNotes": "No hay notas para este día.",
+      "addToDiary": "Agregar a la agenda",
+      "saveNoteFailed": "No se pudo guardar la nota.",
+      "nav": {
+        "previousDay": "Día anterior",
+        "nextDay": "Día siguiente",
+        "today": "Hoy",
+        "diaryDay": "Día de la agenda"
+      },
+      "noteTypes": {
+        "homework": "Tarea",
+        "reminder": "Recordatorio",
+        "praise": "Felicitación",
+        "concern": "Preocupación",
+        "health": "Salud",
+        "general": "General"
+      },
+      "kinds": {
+        "presentation": "Videolección",
+        "activity": "Actividades",
+        "worksheet": "Hoja de trabajo",
+        "exam_paper": "Prueba",
+        "exam": "Examen",
+        "case_study": "Caso práctico",
+        "lesson_plan": "Plan de clase"
+      },
+      "people": {
+        "you": "Usted",
+        "yourself": "usted",
+        "teacher": "Profesor",
+        "parent": "Padre/madre",
+        "aParent": "Un padre/madre",
+        "student": "Alumno",
+        "aStudent": "Un alumno",
+        "oneStudent": "un alumno",
+        "child": "Hijo",
+        "theClass": "Clase",
+        "yourClass": "su clase"
+      },
+      "entry": {
+        "assigned": "Asignó {title}",
+        "assignedToYou": "Asignado: {title}",
+        "assignedToYouIn": "Asignado: {title} · {class}",
+        "completedBy": "{name} completó {title}",
+        "youCompleted": "Completaste {title}",
+        "withScore": "{text} · {score}",
+        "schoolNotice": "Aviso de la escuela — {title}",
+        "withDeadline": "{text} · {label} {date}",
+        "deadline": "{label} {date}",
+        "by": "Por",
+        "fromTheSchool": "de la escuela",
+        "anAssignment": "una tarea",
+        "anAssignmentStart": "Una tarea",
+        "assignment": "Tarea",
+        "assignedIn": "asignada · {where}",
+        "direct": "directo",
+        "classFallback": "clase",
+        "assignedChip": "asignada",
+        "completedChip": "completada",
+        "schoolNoticeChip": "aviso escolar",
+        "completedByOne": "completada por 1 alumno",
+        "completedByMany": "completada por {n} alumnos"
+      },
+      "note": {
+        "parentsOnly": "solo padres",
+        "translateLikeLastTime": "Traducir como la última vez",
+        "translate": "Traducir",
+        "translating": "Traduciendo…",
+        "translateAria": "Traducir esta nota — envía el texto a nuestro proveedor de traducción con IA",
+        "translateTitle": "Traducción automática — el texto de esta nota se envía a nuestro proveedor de IA para traducirlo",
+        "deleteNote": "Eliminar esta nota",
+        "deleteNoteConfirm": "¿Eliminar esta nota y sus respuestas? También se eliminan las firmas de los padres.",
+        "deleting": "Eliminando…",
+        "yesDelete": "Sí, eliminar",
+        "deleteReply": "Eliminar su respuesta",
+        "deleteReplyConfirm": "¿Eliminar esta respuesta?",
+        "replyPlaceholder": "Escriba una respuesta…",
+        "sending": "Enviando…",
+        "reply": "Responder",
+        "signedTitle": "Padres que han firmado esta nota, del total de alumnos inscritos con una cuenta de padre/madre vinculada",
+        "signedCount": "Firmada {signed}/{total}",
+        "signed": "Firmada",
+        "signing": "Firmando…",
+        "acknowledge": "Firmar",
+        "translationIncomplete": "Traducción incompleta — se muestra el original.",
+        "translationPartial": "Traducción incompleta — {missing} de {total} mensajes siguen en el original.",
+        "retry": "Reintentar",
+        "signFailed": "No se pudo firmar — inténtelo de nuevo.",
+        "replyFailed": "No se pudo enviar la respuesta.",
+        "deleteNoteFailed": "No se pudo eliminar la nota.",
+        "deleteReplyFailed": "No se pudo eliminar la respuesta."
+      },
+      "compose": {
+        "title": "Escribir en la agenda",
+        "placeholder": "Escriba una nota a casa — tareas, recordatorios, cómo fue el día…",
+        "targetAria": "¿Para quién es esta nota?",
+        "wholeClass": "Toda la clase — {class}",
+        "onlyStudent": "Solo {name}",
+        "parentsOnly": "Solo padres",
+        "parentsOnlyHint": "— oculta a los alumnos; los padres, los profesores y la dirección sí la ven",
+        "added": "Agregada"
+      },
+      "parentCompose": {
+        "open": "Escribir una nota sobre {name}",
+        "placeholder": "Una nota privada para los profesores de {name} — p. ej. una ausencia, medicamentos, algo de casa…",
+        "letChildSee": "Permitir que {name} también vea esta nota",
+        "letChildSeeHint": "Desactivado por defecto — usted, los profesores de {name} y la dirección pueden leerla, pero {name} no."
+      }
+    },
+    "schoolDiary": {
+      "title": "Agenda escolar",
+      "intro": "Vista de solo lectura del cuaderno de comunicación profesor↔casa. Escribir queda en manos de los participantes — esta consulta se registra en la auditoría de accesos.",
+      "notesSevenDays": "Notas (7 d)",
+      "concernSigned": "Preocupación firmada",
+      "noClassesInScope": "Todavía no hay clases en su ámbito."
+    },
+    "notices": {
+      "banner": {
+        "sectionLabel": "Avisos de la escuela",
+        "important": "Importante",
+        "showNotice": "Ver el aviso {n} de {total}",
+        "resumeRotating": "Reanudar la rotación de avisos",
+        "stopRotating": "Detener la rotación de avisos",
+        "play": "Reproducir",
+        "pause": "Pausar",
+        "dismiss": "Ocultar {title}",
+        "dismissTitle": "Ocultar hasta su próxima visita"
+      },
+      "ack": {
+        "acknowledge": "Confirmar",
+        "confirming": "Confirmando…",
+        "confirmed": "Confirmado",
+        "failed": "No se pudo confirmar — inténtelo de nuevo."
+      },
+      "card": {
+        "title": "Avisos de la escuela",
+        "subtitle": "Lo que viene, empezando por lo más próximo.",
+        "empty": "No hay avisos de la escuela ahora mismo.",
+        "opensInNewTab": "{label} — se abre en una pestaña nueva",
+        "important": "importante"
+      },
+      "composer": {
+        "title": "Publicar un aviso",
+        "subtitle": "Un anuncio para toda la escuela o solo para el personal — con enlace, con fecha límite, o ambos.",
+        "write": "Escribir un aviso",
+        "audienceEveryone": "Todos (profesores, padres, alumnos)",
+        "audienceStaff": "Solo el personal",
+        "consequenceStaff": "Se pedirá al personal que confirme que lo ha leído.",
+        "consequenceImportant": "Se pedirá a los padres que lo confirmen. También aparece en el día de la agenda de cada hijo.",
+        "consequenceNormal": "Aparece en los paneles y en el día de la agenda de cada hijo. No se pide confirmación a nadie.",
+        "titlePlaceholder": "Título — p. ej. Día del Deporte, 12 de septiembre",
+        "bodyPlaceholder": "Lo que la gente necesita saber. Sea breve — los detalles pueden ir en el enlace.",
+        "linkPlaceholder": "Enlace (opcional) — https://…",
+        "linkLabelPlaceholder": "Texto del botón — Inscribirse",
+        "happensOn": "Se realiza el (hora escolar, opcional)",
+        "actionBy": "Fecha límite para actuar (opcional)",
+        "actionLabelPlaceholder": "Cómo llamar a la fecha límite — Inscribirse antes del, Pagar antes del, Responder antes del",
+        "clocksHint": "La cuenta regresiva muestra primero la fecha límite y luego cambia a la fecha del evento cuando esta pasa. Un aviso puede tener solo una de las dos.",
+        "markImportant": "Marcar como importante",
+        "markImportantStaffHint": "— destaca en la lista del personal",
+        "markImportantParentsHint": "— pide confirmación a los padres",
+        "featureUntil": "Destacar en los paneles hasta",
+        "featureHint": "— deja de destacarse solo; se muestran tres avisos como máximo.",
+        "type": "Tipo",
+        "publish": "Publicar aviso",
+        "publishing": "Publicando…",
+        "published": "Publicado",
+        "publishFailed": "No se pudo publicar el aviso."
+      },
+      "revoke": {
+        "revoke": "Retirar",
+        "confirm": "¿Retirar «{title}»? Desaparecerá de los paneles, de las agendas de clase y de los calendarios suscritos. El registro se conserva para su auditoría.",
+        "yes": "Sí, retirar",
+        "withdrawing": "Retirando…",
+        "failed": "No se pudo retirar el aviso."
+      }
+    },
+    "calendar": {
+      "title": "Calendario",
+      "intro": "Reuniones, exámenes, feriados y fechas de entrega — cada quien ve su parte.",
+      "prev": "Ant.",
+      "next": "Sig.",
+      "today": "Hoy",
+      "kinds": {
+        "meeting": "Reunión",
+        "exam": "Examen",
+        "holiday": "Feriado",
+        "activity": "Actividad",
+        "pd": "Capacitación",
+        "other": "Otro"
+      },
+      "by": "Por",
+      "dateAllDay": "{date} · todo el día",
+      "dateAtTime": "{date} · {time}",
+      "dueTooltip": "Entrega: {title}",
+      "dueEntry": "Entrega de {title}",
+      "assignment": "Tarea",
+      "assignmentLower": "tarea",
+      "moreCount": "+{n} más",
+      "manageTitle": "Gestionar los eventos de este mes",
+      "manageSubtitle": "Eventos que usted creó o puede editar en {month}.",
+      "withdrawnNote": "Retirados en {month} — se conservan en su registro y solo los ve la dirección. Nadie más los ve, en ninguna pantalla.",
+      "withdrawn": "Retirado",
+      "upcoming": "Próximamente",
+      "upcomingSubtitle": "Los próximos 30 días en su parte.",
+      "nothingScheduled": "Todavía no hay nada programado.",
+      "editor": {
+        "add": "Agregar evento",
+        "edit": "Editar",
+        "newTitle": "Evento nuevo",
+        "editTitle": "Editar evento",
+        "titlePlaceholder": "Título",
+        "type": "Tipo",
+        "whoSeesIt": "Quién lo ve",
+        "class": "Clase",
+        "allDay": "Todo el día",
+        "starts": "Empieza",
+        "startsSchoolTime": "Empieza (hora escolar, MYT)",
+        "ends": "Termina (opcional)",
+        "locationPlaceholder": "Lugar (opcional)",
+        "detailsPlaceholder": "Detalles (opcional)",
+        "delete": "Eliminar",
+        "audiences": {
+          "staff": "Solo el personal",
+          "school": "Toda la escuela (incl. alumnos y padres)",
+          "leadership": "Solo la dirección",
+          "class": "Una clase"
+        },
+        "titleAndStartRequired": "Se requiere un título y una hora de inicio.",
+        "pickAClass": "Elija una clase para un evento de clase.",
+        "cannotSave": "No puede guardar este evento (revise el público o la clase).",
+        "cannotDelete": "No puede eliminar este evento."
+      },
+      "subscribe": {
+        "button": "Vincular con Google/Outlook",
+        "title": "Suscríbase desde su app de calendario",
+        "googleLabel": "En Google Calendar:",
+        "googleStep1": "Otros calendarios",
+        "googleStep2": "Desde URL",
+        "outlookLabel": "En Outlook:",
+        "outlookStep1": "Agregar calendario",
+        "outlookStep2": "Suscribirse desde la web",
+        "pasteHint": "Pegue esta dirección personal — muestra exactamente lo que usted ve aquí y se mantiene al día.",
+        "notSignedIn": "Sesión no iniciada.",
+        "preparing": "Preparando su dirección…",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "rotate": "Cambiar dirección",
+        "rotateTitle": "La dirección anterior deja de funcionar de inmediato",
+        "done": "Listo"
+      }
+    }
+  },
+  "library": {
+    "title": "Su biblioteca",
+    "subtitle": "Suba un libro de texto y genere a partir de él una lección narrada.",
+    "noBookTools": "Su cuenta está configurada para enseñar sin herramientas de libros (educación física, música, artes y materias similares) — su horario y sus clases están abajo. Si esto es un error, pida a su escuela que contacte al soporte de SketchCast.",
+    "notSignedIn": "Sesión no iniciada.",
+    "otherLessons": "Otras lecciones",
+    "untitled": "Lección sin título",
+    "queuing": "En cola…",
+    "watch": "Ver",
+    "deck": "Diapositivas",
+    "download": "Descargar",
+    "assign": "Asignar",
+    "chapter": "Capítulo {n}",
+    "chapterOne": "Capítulo {list}",
+    "chapterMany": "Capítulos {list}",
+    "selectedChapters": "capítulos seleccionados",
+    "wholeChapter": "Capítulo completo",
+    "part": "Parte {n}",
+    "partShort": "Pt {n}",
+    "partTitled": "Parte {n} — {titles}",
+    "partOne": "Parte {list}",
+    "partMany": "Partes {list}",
+    "watchPart": "Ver pt {n}",
+    "deckPart": "Diapos {n}",
+    "kinds": {
+      "presentation": "Lección",
+      "lesson_plan": "Plan",
+      "activity": "Actividades",
+      "worksheet": "Hoja de trabajo",
+      "exam_paper": "Prueba",
+      "case_study": "Caso práctico",
+      "exam": "Examen"
+    },
+    "status": {
+      "queued": "En cola",
+      "processing": "Procesando",
+      "done": "Listo",
+      "error": "Falló"
+    },
+    "group": {
+      "other": "Otros",
+      "general": "General"
+    },
+    "empty": {
+      "withStepper": "Su biblioteca está vacía — empiece por el paso 1 de arriba.",
+      "title": "Su biblioteca está vacía — este es todo el recorrido:",
+      "step1": "Suba arriba un libro de texto en PDF",
+      "step2": "Genere una lección narrada de un capítulo",
+      "step3": "Asígnela a su clase y siga el progreso",
+      "note": "Los capítulos se detectan automáticamente — también en libros escaneados."
+    },
+    "book": {
+      "unknownAuthor": "Autor desconocido",
+      "findingChapters": "Buscando capítulos…",
+      "chaptersDone": "{done}/{total} capítulos",
+      "assignBook": "Asignar libro",
+      "noChapters": "No se detectaron capítulos.",
+      "generateFullBook": "Generar libro completo",
+      "scannedLead": "PDF escaneado.",
+      "scannedWarning": "Este archivo no tiene capa de texto, así que los capítulos se detectan por reconocimiento de imagen — la lista de abajo, y todo lo que se genere a partir de ella, puede no ser confiable.",
+      "scannedAdvice": "Para mejores resultados suba un PDF con texto (exportado digitalmente) y use «Reportar un problema» con todo lo que salga mal.",
+      "revisionPapers": "Material de repaso",
+      "revisionLabel": "{kind} · {scope}",
+      "exams": "Exámenes",
+      "covers": "Cubre: {list}",
+      "examPaper": "Examen",
+      "answerKey": "Solucionario",
+      "generatedAsSelected": "Generado según lo seleccionado"
+    },
+    "cell": {
+      "addBack": "+ {label}",
+      "retry": "reintentar",
+      "failed": "{label} falló",
+      "statusTitle": "{label} — {status}"
+    },
+    "card": {
+      "watchLesson": "Ver la lección",
+      "trialOnePart": "{part} · su prueba cubre una parte",
+      "notGenerated": "Aún sin generar · 1 crédito",
+      "generateKit": "Generar kit"
+    },
+    "kit": {
+      "lessonOptions": "Opciones de la lección",
+      "language": "Idioma",
+      "narration": "Narración",
+      "voice": "Voz",
+      "bookSuffix": " (libro)",
+      "premiumSuffix": " ★ premium",
+      "assignChapter": "Asignar capítulo",
+      "generateFullKit": "Generar kit completo",
+      "generateFullKitHint": "La videolección más su plan, actividades, hoja de trabajo, prueba y caso práctico — los documentos son gratis, un crédito por cada parte de lección renderizada",
+      "generateFree": "Generar ({n}) — gratis",
+      "generateFreeHint": "Gratis — reutilizan el análisis de la lección",
+      "trialLocked": "Prueba: 1 parte — bloqueado",
+      "trialLockedHint": "Su prueba gratuita cubre el kit completo (los seis tipos de contenido) para una parte de un capítulo",
+      "trialPick": "Prueba: elija una parte abajo",
+      "trialPickHint": "Este capítulo está dividido en partes — su prueba cubre el kit completo (los seis tipos de contenido) para la parte que elija",
+      "trialPinned": "Prueba: la parte {n} es su kit",
+      "trialPinnedHint": "Su kit de prueba está en esta parte — los reintentos y todos los tipos de contenido siguen disponibles para ella"
+    },
+    "upload": {
+      "trial": "Prueba",
+      "trialTeacher": "La prueba gratuita se limita a 1 libro — explore todos sus capítulos y genere el kit completo para una parte de un capítulo.",
+      "trialParent": "La prueba gratuita se limita a 1 libro — genere pruebas a partir de sus capítulos.",
+      "titleLabel": "Título (opcional)",
+      "titlePlaceholder": "p. ej. Explorando la sociedad",
+      "authorLabel": "Autor (opcional)",
+      "authorPlaceholder": "p. ej. NCERT",
+      "upload": "Subir",
+      "uploading": "Subiendo…",
+      "uploadingPct": "Subiendo {pct}%",
+      "finishing": "Finalizando…",
+      "scanPages": "Escanear páginas",
+      "scannedPrefix": "Escaneado · ",
+      "megabytes": "{n} MB",
+      "bigBook": " — libro grande; mantenga esta pestaña abierta mientras se sube",
+      "choosePdf": "Elija un PDF, o escanee páginas, para poder subir",
+      "limits": "Solo PDF · un archivo a la vez · hasta 200 MB.",
+      "httpFailed": "Falló la subida (HTTP {status}).",
+      "networkError": "Error de red durante la subida.",
+      "timedOut": "Se agotó el tiempo de la subida.",
+      "couldNotStart": "No se pudo iniciar la subida.",
+      "retryAdvice": "{error} Revise su conexión a internet e inténtelo de nuevo — los libros de texto grandes necesitan una conexión estable durante unos minutos."
+    },
+    "scan": {
+      "title": "Escanear páginas",
+      "intro": "Fotografíe las páginas y las convertiremos en un solo PDF.",
+      "tips": "Mejores resultados: un capítulo a la vez, la página plana, buena luz y que llene el encuadre.",
+      "takePhotos": "Tomar fotos",
+      "addPages": "Agregar páginas",
+      "choosePhotos": "Elegir fotos",
+      "inAppBrowser": "La cámara suele fallar dentro del navegador de Gmail o WhatsApp — abra sketchcast.app en Chrome o Safari, o use Elegir fotos.",
+      "cameraHint": "¿No llegó nada de la cámara? Use Elegir fotos para tomarlas de su galería.",
+      "notPhotos": "Esos archivos no eran fotos — elija imágenes de las páginas.",
+      "readingPage": "Leyendo la página {n} de {total}…",
+      "applyingCrop": "Aplicando el recorte…",
+      "buildingPdf": "Creando el PDF…",
+      "buildFailed": "No se pudo crear el PDF.",
+      "budgetStop": "Se detuvo en {size} — un escaneo debe quedar por debajo de 200 MB. Cree este PDF y súbalo, y luego escanee el siguiente capítulo aparte.",
+      "tooBig": "Ese PDF pesa {size} — supera el límite de 200 MB. Quite algunas páginas, o escanee este libro capítulo por capítulo.",
+      "heicOne": "No se pudo leer 1 foto — si su cámara guarda fotos HEIC («alta eficiencia»), cámbiela a «Más compatible»/JPEG, o use Elegir fotos.",
+      "heicMany": "No se pudieron leer {n} fotos — si su cámara guarda fotos HEIC («alta eficiencia»), cámbiela a «Más compatible»/JPEG, o use Elegir fotos.",
+      "pageCountOne": "1 página · {size}",
+      "pageCountMany": "{n} páginas · {size}",
+      "atLimit": "En el límite de 200 MB",
+      "leftOfLimit": "Quedan {size} de 200 MB",
+      "uncroppedOne": "1 página no se recortó automáticamente — toque una página para ajustar sus bordes a mano.",
+      "uncroppedMany": "{n} páginas no se recortaron automáticamente — toque una página para ajustar sus bordes a mano.",
+      "pageAlt": "Página {n}",
+      "uncropped": "sin recortar",
+      "moveEarlier": "Mover la página {n} antes",
+      "moveLater": "Mover la página {n} después",
+      "removePage": "Quitar la página {n}",
+      "edges": "Bordes",
+      "usePages": "Usar estas páginas",
+      "useOne": "Usar esta página",
+      "useMany": "Usar estas {n} páginas",
+      "editTitle": "Ajuste los bordes de la página",
+      "editIntro": "Arrastre las cuatro esquinas hasta las esquinas de la página.",
+      "back": "Atrás",
+      "photoAlt": "Foto de la página",
+      "useFullPhoto": "Usar la foto completa",
+      "applyCrop": "Aplicar recorte"
+    },
+    "options": {
+      "titles": {
+        "lesson_plan": "Opciones del plan de clase",
+        "activity": "Opciones de las actividades",
+        "worksheet": "Opciones de la hoja de trabajo",
+        "case_study": "Opciones del caso práctico",
+        "exam_paper": "Prueba — tipos de preguntas"
+      },
+      "fields": {
+        "duration_minutes": "Duración (minutos)",
+        "include_homework": "Incluir tarea",
+        "include_differentiation": "Incluir diferenciación",
+        "num_activities": "Número de actividades",
+        "num_questions": "Número de preguntas",
+        "discussion_questions": "Preguntas de discusión",
+        "difficulty": "Dificultad",
+        "length": "Extensión",
+        "include_answer_key": "Incluir solucionario",
+        "fill_blank": "Completar los espacios",
+        "true_false": "Verdadero / Falso",
+        "match_column": "Relacionar columnas",
+        "subjective": "Preguntas de desarrollo"
+      },
+      "choices": {
+        "difficulty": {
+          "easy": "Fácil",
+          "medium": "Media",
+          "hard": "Difícil"
+        },
+        "length": {
+          "short": "Corta",
+          "medium": "Media",
+          "long": "Larga"
+        }
+      },
+      "language": "Idioma",
+      "bookSuffix": " (libro)",
+      "starting": "Iniciando…",
+      "generate": "Generar"
+    },
+    "revision": {
+      "open": "Material de repaso…",
+      "openHint": "Genere hojas de trabajo y pruebas de repaso sobre un grupo de capítulos",
+      "intro": "Para el repaso del trimestre, de medio término y de exámenes: elija un grupo de capítulos y genere hojas de trabajo o pruebas.",
+      "introFree": "Gratis, a partir de las lecciones que ya generó.",
+      "allChapters": "Todos los capítulos enseñados ({n})",
+      "papers": "Documentos",
+      "language": "Idioma",
+      "bookSuffix": " (libro)",
+      "combine": "Combinar",
+      "combineAll": "Un solo documento con los capítulos seleccionados",
+      "combineAllNote": "(un repaso acumulativo)",
+      "perChapter": "Un documento por capítulo",
+      "perChapterNote": "(un paquete de repaso)",
+      "needTwo": "Elija al menos dos capítulos para combinar — o cambie a uno por capítulo.",
+      "generate": "Generar",
+      "generateOne": "Generar 1 documento (gratis)",
+      "generateMany": "Generar {n} documentos (gratis)",
+      "queuedOne": "1 documento de repaso en cola — vea «Material de repaso» abajo.",
+      "queuedMany": "{n} documentos de repaso en cola — vea «Material de repaso» abajo.",
+      "stoppedOne": "1 documento en cola y luego se detuvo: {error}",
+      "stoppedMany": "{n} documentos en cola y luego se detuvo: {error}"
+    },
+    "examTool": {
+      "open": "Examen…",
+      "openHint": "Cree un examen acumulativo (examen + solucionario) sobre los capítulos y partes que ha enseñado",
+      "intro": "Un examen acumulativo sobre todo lo que ha enseñado — un examen más un solucionario aparte. Marque los capítulos y las partes a evaluar (desmarque para omitirlos), fije la dificultad y cuántas preguntas de cada tipo.",
+      "introFree": "Gratis.",
+      "whatToTest": "Qué evaluar",
+      "questionsPerType": "Preguntas por tipo",
+      "types": {
+        "mcq": "Opción múltiple",
+        "fill_blank": "Completar los espacios",
+        "true_false": "Verdadero / Falso",
+        "match_column": "Relacionar columnas",
+        "short_answer": "Respuesta corta",
+        "long_answer": "Respuesta larga"
+      },
+      "difficulty": "Dificultad",
+      "difficulties": {
+        "easy": "Fácil",
+        "medium": "Media",
+        "hard": "Difícil",
+        "mixed": "Mixta"
+      },
+      "language": "Idioma",
+      "bookSuffix": " (libro)",
+      "titleLabel": "Título",
+      "titlePlaceholder": "p. ej. Examen de medio término (opcional)",
+      "unitsOne": "1 unidad",
+      "unitsMany": "{n} unidades",
+      "questionsOne": "1 pregunta",
+      "questionsMany": "{n} preguntas",
+      "generate": "Generar examen (gratis)",
+      "queued": "Examen en cola — el examen y su solucionario aparecen en «Exámenes», abajo."
+    },
+    "tools": {
+      "more": "Más",
+      "hint": "Material de repaso y exámenes",
+      "heading": "Documentos extra"
+    },
+    "health": {
+      "badge": "Salud {score} · {band}",
+      "hint": "Salud del libro — haga clic para ver el detalle",
+      "title": "Salud del libro",
+      "score": "{score}/100",
+      "textQuality": "Calidad del texto",
+      "chapters": "Capítulos",
+      "facts": "{pages} páginas · {chapters} capítulos · {type}",
+      "textPdf": "PDF con texto",
+      "scanned": "escaneado",
+      "bands": {
+        "excellent": "Excelente",
+        "good": "Buena",
+        "fair": "Regular",
+        "poor": "Mala"
+      }
+    },
+    "classes": {
+      "heading": "Clases y alumnos",
+      "countOne": "1 clase",
+      "countMany": "{n} clases",
+      "newClass": "Clase nueva",
+      "namePlaceholder": "Nombre de la clase (p. ej. 5A)",
+      "gradePlaceholder": "Grado (opcional)",
+      "create": "Crear clase",
+      "creating": "…",
+      "duplicate": "Ya tiene una clase con el nombre «{name}».",
+      "studentsOne": "1 alumno",
+      "studentsMany": "{n} alumnos",
+      "joinCode": "código: {code}",
+      "idLabel": "ID:",
+      "passwordLabel": "Contraseña:",
+      "parentLabel": "Padre/madre:",
+      "thisStudent": "este alumno",
+      "betaFull": "La beta se limita a 2 alumnos — ya agregó los dos. Puede asignarles trabajo y revisar sus respuestas sin límite.",
+      "addStudents": "Agregar alumnos",
+      "betaSlots": "Beta: quedan {n} de 2 lugares",
+      "firstName": "Nombre",
+      "lastName": "Apellido",
+      "parentEmail": "Correo del padre/madre",
+      "addRow": "+ Agregar fila",
+      "creatingLogins": "Creando…",
+      "createLogins": "Crear accesos",
+      "needName": "Agregue al menos un nombre.",
+      "addFailed": "No se pudieron agregar los alumnos.",
+      "credsCreated": "Accesos creados — entréguelos a los padres",
+      "copyAll": "Copiar todo"
+    },
+    "progress": {
+      "show": "Ver progreso",
+      "loading": "Cargando el progreso…",
+      "empty": "No hay alumnos inscritos, o todavía no se ha asignado nada.",
+      "student": "Alumno",
+      "unnamed": "Alumno",
+      "completed": "Completado",
+      "revised": "Repasado",
+      "incomplete": "Incompleto",
+      "overdue": "Atrasado"
+    },
+    "assignModal": {
+      "heading": "Asignar a una clase",
+      "itemsOne": "1 elemento — los alumnos de la clase lo verán en sus tareas.",
+      "itemsMany": "{n} elementos — los alumnos de la clase los verán en sus tareas.",
+      "assigned": "Asignado.",
+      "newClass": "Clase nueva",
+      "namePlaceholder": "Nombre de la clase (p. ej. 5A)",
+      "gradePlaceholder": "Grado (opcional)",
+      "back": "Atrás",
+      "creating": "Creando…",
+      "createClass": "Crear clase",
+      "classLabel": "Clase",
+      "addClass": "+ Clase nueva",
+      "due": "Fecha de entrega (opcional)",
+      "assigning": "Asignando…",
+      "assign": "Asignar",
+      "nameRequired": "El nombre de la clase es obligatorio.",
+      "duplicate": "Ya tiene una clase con el nombre «{name}».",
+      "createFailed": "No se pudo crear la clase.",
+      "pickClass": "Elija una clase."
+    },
+    "deleteLesson": {
+      "confirm": "¿Quitar esta lección? Si todavía se está generando, se cancelará.",
+      "remove": "Quitar lección"
+    },
+    "branding": {
+      "heading": "Identidad de la escuela",
+      "notSet": "opcional · use el formato y el tema de su escuela",
+      "set": "opcional · plantillas configuradas",
+      "intro": "Suba las plantillas de Word y PowerPoint de su escuela. Los documentos nuevos se abren desde la plantilla .docx; las diapositivas y el video adoptan el tema, los colores y el logo del .pptx.",
+      "docx": "Plantilla de Word (.docx)",
+      "pptx": "Plantilla de PowerPoint (.pptx)",
+      "uploading": "Subiendo…",
+      "clickToUpload": "Haga clic para subir",
+      "uploaded": "Subida"
+    }
+  },
+  "school": {
+    "fallback": {
+      "student": "Alumno",
+      "teacher": "Profesor",
+      "coordinator": "Coordinador",
+      "class": "Clase",
+      "user": "Usuario",
+      "child": "Hijo",
+      "item": "Elemento",
+      "school": "Escuela"
+    },
+    "analytics": {
+      "title": "Estadísticas de la escuela",
+      "subtitle": "Señales que sugieren dar apoyo — no es un ranking.",
+      "scope": {
+        "wholeSchool": "Toda la escuela",
+        "grades": "Grado {grades}",
+        "yourGrades": "Sus grados"
+      },
+      "metric": {
+        "students": "Alumnos",
+        "active": "Activos (14 d)",
+        "completion": "Avance",
+        "atRisk": "En riesgo",
+        "overdue": "Atrasadas"
+      },
+      "worklist": {
+        "title": "Alumnos que necesitan apoyo",
+        "hint": "Marcados por avance bajo o en descenso, notas a la baja o inactividad — la lista por la que empezar.",
+        "empty": "No hay alumnos marcados en este ámbito.",
+        "contactParent": "Contactar al padre/madre",
+        "contactSubject": "Seguimiento sobre {name}"
+      },
+      "reason": {
+        "completion": "{pct}% de avance",
+        "inactive": "inactivo {days} d",
+        "neverStarted": "nunca empezó",
+        "avgScore": "nota media {pct}%",
+        "declining": "notas a la baja",
+        "overdue": "{n} atrasadas"
+      },
+      "byGrade": {
+        "grade": "Grado {grade}",
+        "atRisk": "{n} en riesgo",
+        "note": "Los nombres están en la lista del coordinador de grado o materia, para que el apoyo quede cerca del alumno. Como director también puede abrir el Informe escolar (abajo a la derecha) para ver nombres y motivos — cada informe se registra en la auditoría de accesos."
+      }
+    },
+    "teachers": {
+      "title": "Profesores",
+      "intro": "La actividad y cómo van los alumnos de cada profesor — para ver quién podría necesitar apoyo. No es un ranking.",
+      "introBaseline": "La actividad y cómo van los alumnos de cada profesor — para ver quién podría necesitar apoyo, frente a la referencia del grupo ({pct}% de avance). No es un ranking.",
+      "empty": "Todavía no hay profesores en este ámbito.",
+      "col": {
+        "teacher": "Profesor",
+        "lessons": "Lecciones",
+        "assigned": "Asignadas",
+        "toGrade": "Por calificar",
+        "completion": "Avance"
+      },
+      "mayNeedSupport": "puede necesitar apoyo:",
+      "flag": {
+        "belowCohort": "{pts} pts bajo el grupo",
+        "toGrade": "{n} por calificar",
+        "slowGrading": "{days} d para calificar"
+      },
+      "footnote": "Los profesores ven sus propias métricas visibles para la escuela en su página de Estadísticas — la escuela no ve nada de un profesor que él mismo no pueda ver."
+    },
+    "access": {
+      "title": "Quién ve qué",
+      "subtitle": "Cómo se delimitan los datos según el rol. Se aplica en la base de datos (seguridad a nivel de fila), no solo se oculta en la interfaz.",
+      "grade": "Grado {grade}",
+      "model": {
+        "student": {
+          "role": "Alumno",
+          "sees": "Solo sus propias lecciones, su progreso y sus entregas."
+        },
+        "teacher": {
+          "role": "Profesor",
+          "sees": "Solo sus propias clases, alumnos, contenidos, calificaciones y entregas."
+        },
+        "coordinator": {
+          "role": "Coordinador",
+          "sees": "Un profesor con supervisión de uno o varios grados — y materias, si se definen: los alumnos, profesores y contenidos de ese ámbito. Nada fuera de él. Conserva su propio panel de profesor."
+        },
+        "principal": {
+          "role": "Director / Admin",
+          "sees": "Totales y tendencias de toda la escuela, más los nombres de los alumnos en riesgo cuando los pida a través del informe escolar (cada informe se registra en la auditoría de accesos). La lista diaria con nombres queda con el coordinador de grado o materia. El administrador además gestiona los ámbitos, lee el registro de auditoría de accesos y puede dar clases propias."
+        }
+      },
+      "reach": {
+        "title": "Coordinadores y su alcance",
+        "hint": "A qué equivale ahora mismo el ámbito de cada coordinador. Gestiónelos en la pantalla de Admin.",
+        "empty": "Todavía no hay coordinadores — todos son profesores (solo sus clases) o administradores (toda la escuela).",
+        "footprint": "{classes} clases · {students} alumnos · {teachers} profesores"
+      },
+      "mine": {
+        "title": "Su acceso",
+        "hint": "Exactamente su parte — y nada más allá.",
+        "noScope": "Todavía no tiene un ámbito asignado, así que no puede ver datos de alumnos. Pida a su administrador que le asigne un grado.",
+        "covers": "Eso cubre {classes} clases, {students} alumnos y {teachers} profesores. Todo lo de otros grados es invisible para usted."
+      }
+    },
+    "admin": {
+      "title": "Administración escolar",
+      "subtitle": "Roles y ámbitos de supervisión — quién puede ver qué parte de la escuela, y un registro de quién consultó.",
+      "role": {
+        "teacher": "profesor",
+        "coordinator": "coordinador"
+      },
+      "notices": {
+        "title": "Avisos publicados",
+        "hint": "Todo lo que ha anunciado la escuela y hasta dónde se ha leído. Al retirar un aviso, este desaparece de los paneles, de las agendas de clase y de los calendarios suscritos — el registro se queda aquí.",
+        "empty": "Todavía no se ha publicado nada.",
+        "staffOnly": "Solo el personal",
+        "everyone": "Todos",
+        "byFallback": "Por",
+        "featuredUntil": "destacado hasta {when}",
+        "important": "importante",
+        "link": "enlace",
+        "readByStaff": "Leído por {n} de {total} del personal",
+        "noAckAsked": "No se pidió confirmación",
+        "ackParents": "{pct}% confirmado · {n} de {total} padres",
+        "ackNoParents": "{n} confirmaron — todavía no hay padres vinculados en la lista",
+        "unverifiedOne": "1 padre/madre vinculado no coincide con el correo del registro del alumno — en el registro de {names}. No se bloquea nada; sigue recibiendo todos los avisos. Conviene confirmarlo con la familia la próxima vez que hable con ella.",
+        "unverifiedMany": "{n} padres vinculados no coinciden con el correo del registro del alumno — en los registros de {names}. No se bloquea nada; siguen recibiendo todos los avisos. Conviene confirmarlo con las familias la próxima vez que hable con ellas.",
+        "andMore": "y {n} más"
+      },
+      "members": {
+        "title": "Miembros",
+        "hint": "Profesores y coordinadores de su escuela. Al restablecer se le entrega una contraseña temporal para que la pase — se muestra una sola vez y la persona debe elegir una nueva al iniciar sesión.",
+        "empty": "Todavía no hay profesores."
+      },
+      "students": {
+        "title": "Alumnos",
+        "hint": "Todas las cuentas de alumno de su escuela. Eliminar es permanente: se borran el acceso, las inscripciones en clases y todo el trabajo entregado.",
+        "empty": "Todavía no hay alumnos."
+      },
+      "audit": {
+        "title": "Auditoría de accesos",
+        "hint": "Cada consulta de datos de alumnos por parte de la dirección se registra aquí para el rastro de protección de datos.",
+        "empty": "Todavía no se ha registrado ningún acceso.",
+        "atRisk": "{n} en riesgo"
+      }
+    },
+    "coordinators": {
+      "title": "Coordinadores y ámbitos",
+      "countOne": "1 coordinador",
+      "countMany": "{n} coordinadores",
+      "intro": "El acceso de coordinador es un complemento para un profesor: conserva sus propias clases y su panel, y además ve solo los grados (y las materias opcionales) que usted le asigne — nada fuera de ese ámbito.",
+      "noGrades": "Todavía no existen grados de clase — agregue primero un grado a una clase y luego podrá asignarle un ámbito a un coordinador.",
+      "remove": "Quitar el acceso de coordinador",
+      "noScope": "Todavía sin ámbito — agregue un grado abajo (si no, no verá nada).",
+      "removeScope": "Quitar ámbito",
+      "grade": "Grado {grade}",
+      "allSubjects": "Todas las materias",
+      "addScope": "+ Agregar ámbito",
+      "grantTitle": "Dar acceso de coordinador a un profesor",
+      "allGranted": "Todos los profesores ya tienen acceso de coordinador.",
+      "addGradeFirst": "Agregue primero un grado a una clase.",
+      "chooseTeacher": "Elija un profesor…",
+      "grant": "Dar acceso"
+    },
+    "briefing": {
+      "launcher": "Informe escolar",
+      "launcherHint": "Pregunte sobre su escuela",
+      "subtitle": "Respuestas con los datos actuales de su escuela",
+      "reading": "Leyendo los datos más recientes de la escuela…",
+      "unavailable": "El informe no está disponible ahora mismo.",
+      "unreachable": "No se pudo conectar con el informe. Inténtelo de nuevo en un momento.",
+      "failed": "El informe no está disponible ahora mismo.",
+      "readAloud": "Leer en voz alta",
+      "stopReading": "Dejar de leer en voz alta",
+      "stop": "Detener",
+      "listening": "Escuchando…",
+      "placeholder": "Pregunte por el avance, los alumnos en riesgo, las calificaciones…",
+      "ask": "Preguntar",
+      "micStart": "Diga su pregunta",
+      "micStop": "Dejar de escuchar",
+      "footnote": "Usa solo las estadísticas que usted ya puede ver aquí. Cada informe se registra en la auditoría de accesos."
+    },
+    "assistant": {
+      "launcher": "Asistente",
+      "launcherHint": "Abrir el Asistente de enseñanza IA",
+      "title": "Asistente de enseñanza IA",
+      "subtitle": "Respuestas de sus libros",
+      "loading": "Preparando sus libros…",
+      "unavailable": "El asistente no está disponible ahora mismo.",
+      "unreachable": "No se pudo conectar con el asistente. Inténtelo de nuevo en un momento.",
+      "failed": "El asistente no está disponible ahora mismo.",
+      "readAloud": "Leer en voz alta",
+      "stopReading": "Dejar de leer en voz alta",
+      "stop": "Detener",
+      "listening": "Escuchando…",
+      "noBook": "Aún no hay libro",
+      "placeholder": "Pregunte sobre sus libros…",
+      "ask": "Preguntar",
+      "micStart": "Diga su pregunta",
+      "micStop": "Dejar de escuchar",
+      "source": "de su {label}",
+      "footnote": "Le ayudo a aprender con sus libros — pistas y método, nunca las respuestas de lo que se califica."
+    },
+    "timetable": {
+      "title": "Horario",
+      "intro": "Arme la semana de cada clase — los choques donde un profesor está en dos aulas a la vez se marcan al instante.",
+      "noClasses": "Todavía no hay clases — el horario aparece en cuanto se configuren las clases de su escuela. SketchCast configura el personal y las clases con usted durante la puesta en marcha; contacte al soporte para empezar.",
+      "gradeScope": "Grado {grades}",
+      "hide": "Ocultar",
+      "show": "Mostrar",
+      "period": "Periodo",
+      "schoolHours": "Horario escolar {start} – {end}",
+      "minutes": "{n} min",
+      "days": {
+        "mon": "Lun",
+        "tue": "Mar",
+        "wed": "Mié",
+        "thu": "Jue",
+        "fri": "Vie",
+        "sat": "Sáb",
+        "sun": "Dom"
+      },
+      "absence": {
+        "title": "Ausencias y suplencias",
+        "hint": "Se asume que todos están presentes hasta que se marque una ausencia. La suplencia se calcula al marcar — vuelva a marcar tras cambios grandes en la cuadrícula.",
+        "markPlaceholder": "Marcar a un profesor como ausente…",
+        "reasonPlaceholder": "Motivo (opcional)",
+        "mark": "Marcar ausente y asignar suplencia",
+        "working": "Procesando…",
+        "markFailed": "No se pudo marcar la ausencia.",
+        "removeFailed": "No se pudo quitar la ausencia.",
+        "updateFailed": "No se pudo actualizar la suplencia.",
+        "networkError": "Error de red.",
+        "none": "Sin ausencias el {date} — plantilla completa.",
+        "absent": "ausente",
+        "removeAbsence": "Quitar (ya está en la escuela)",
+        "noLessons": "No hay clases que cubrir ese día.",
+        "col": {
+          "period": "Periodo",
+          "class": "Clase",
+          "subject": "Materia",
+          "coveredBy": "Suplente"
+        },
+        "noCover": "Sin suplente",
+        "state": {
+          "inClass": "en clase",
+          "covering": "supliendo",
+          "fullyBooked": "sin horas libres"
+        }
+      },
+      "generate": {
+        "button": "Generar automáticamente",
+        "title": "Generar el horario automáticamente",
+        "intro": "Confirme quién enseña qué — el profesor titular toma el periodo 1 todos los días, las materias troncales ({core}) se dan una vez al día, las demás materias llenan el resto de la semana y ningún profesor está en dos aulas a la vez.",
+        "noTeacher": "sin profesor — se reportará como hueco",
+        "modeFill": "Llenar huecos (conservar lo ya colocado)",
+        "modeReplace": "Empezar de cero (reemplazar toda la cuadrícula)",
+        "failed": "Falló la generación.",
+        "placed": "Se colocaron {n} clases.",
+        "placedKept": "Se colocaron {n} clases (se conservaron {kept} existentes).",
+        "gapsOne": "No se pudo cubrir 1 hueco:",
+        "gapsMany": "No se pudieron cubrir {n} huecos:",
+        "gapRow": "{class}: {subject} ×{count}",
+        "andMore": "…y {n} más",
+        "gapsHint": "Asigne más profesores a esas materias y ejecute «Llenar huecos».",
+        "noGaps": "Sin huecos — la semana está cubierta.",
+        "staffed": "{n}/{total} materias con profesor",
+        "done": "Listo",
+        "generating": "Generando…",
+        "runAgain": "Ejecutar de nuevo",
+        "generate": "Generar"
+      },
+      "editor": {
+        "byClass": "Por clase",
+        "byTeacher": "Por profesor",
+        "viewOnly": "(solo lectura)",
+        "undo": "Deshacer {label}",
+        "print": "Imprimir",
+        "clashesOne": "1 choque: un profesor está en dos clases a la vez — las celdas en conflicto están resaltadas.",
+        "clashesMany": "{n} choques: un profesor está en dos clases a la vez — las celdas en conflicto están resaltadas.",
+        "overLimit": "Por encima del límite diario ({max}/día): {list}",
+        "overLimitItem": "{teacher} — {day} {count}",
+        "nonTeaching": "sin docencia",
+        "editSettingsHint": "edítelo en Ajustes del horario, abajo",
+        "dragTip": "Consejo: arrastre una clase a otra celda para moverla (a una celda ocupada para intercambiarlas). 🔒 el generador automático, las herramientas de día y los arrastres nunca tocan las celdas bloqueadas.",
+        "dayTools": "Herramientas de día:",
+        "copyDay": "Copiar {day}",
+        "to": "a",
+        "copy": "Copiar",
+        "clearDayPrompt": "Vaciar un día…",
+        "clearDay": "Vaciar {day}",
+        "clearWeek": "Vaciar la semana",
+        "clearWeekLabel": "Vaciar toda la semana",
+        "confirmClear": "¿{label} en {class}? Se eliminarán {n} clase(s) (las celdas bloqueadas se quedan). Puede deshacerlo.",
+        "subject": "Materia",
+        "teacher": "Profesor",
+        "teacherOnDuty": "Profesor (opcional — de guardia)",
+        "unassigned": "— sin asignar —",
+        "room": "Aula (opcional)",
+        "lock": "Bloquear (el generador automático y las herramientas de día nunca la tocan)",
+        "nonTeachingOption": "Sin docencia (asamblea, hora libre — no cuenta para choques ni carga)",
+        "clearCell": "Vaciar celda",
+        "subjectRequired": "La materia es obligatoria.",
+        "cannotEdit": "No puede editar el horario de esta clase.",
+        "resync": "{message} — resincronizando la cuadrícula.",
+        "undoPartial": "Deshacer «{label}» solo se aplicó en parte",
+        "movePartial": "El movimiento solo se aplicó en parte",
+        "copyPartial": "Copiar día solo se aplicó en parte",
+        "clearPartial": "{label} solo se aplicó en parte",
+        "capWarning": "{teacher} ya tiene {count} clases el {day} (límite {max}). Puede guardar igualmente — el límite es una guía para las personas y una regla para el generador.",
+        "thisTeacher": "Este profesor",
+        "undoLabel": {
+          "editCell": "editar celda",
+          "clearCell": "vaciar celda",
+          "swapCells": "intercambiar celdas",
+          "moveCell": "mover celda",
+          "copyDay": "copiar día"
+        }
+      },
+      "roster": {
+        "title": "Profesores ({n})",
+        "col": {
+          "teacher": "Profesor",
+          "classTeacher": "Titular",
+          "teaches": "Enseña",
+          "lessonsPerWeek": "Clases / semana",
+          "blocked": "Ocupado",
+          "heaviestDay": "Día más cargado (límite {max})"
+        },
+        "blockedPct": "{pct}% ocupado",
+        "blockedFull": "Sin horas libres ningún día — no puede asignarse como suplente",
+        "blockedSpare": "Tiene horas libres al menos un día — puede cubrir entonces",
+        "positionsTitle": "Puestos de profesor titular",
+        "allCovered": "Todos los grados y secciones tienen profesor titular.",
+        "uncovered": "Sin profesor titular en activo: {classes} — asigne uno abajo.",
+        "assignPrompt": "asignar un profesor titular…",
+        "unassigned": "sin asignar",
+        "reassignNote": "Reasignar traslada la clase — con sus alumnos y su código de acceso — al nuevo profesor titular. Las clases del horario conservan sus propios profesores de materia.",
+        "reassignFailed": "No se pudo reasignar al profesor titular.",
+        "networkError": "Error de red."
+      },
+      "settings": {
+        "title": "Ajustes del horario (horas, descansos, periodos)",
+        "startLabel": "La escuela empieza (= periodo 1)",
+        "periodLength": "Duración del periodo (min)",
+        "endLabel": "La escuela termina",
+        "daysPerWeek": "Días / semana",
+        "maxPerDay": "Máx. clases / profesor / día",
+        "computedNote": "Todos los horarios se calculan: el periodo 1 empieza cuando empieza la escuela, cada periodo dura {min} minutos y cada descanso retrasa el resto del día. La escuela termina cuando termina el último periodo.",
+        "periods": "Periodos",
+        "remove": "Quitar",
+        "addPeriod": "+ Agregar periodo",
+        "breaks": "Descansos",
+        "breakPlaceholder": "Recreo",
+        "breakLength": "Duración del descanso (minutos)",
+        "after": "después de",
+        "startOfDay": "inicio del día",
+        "addBreak": "+ Agregar descanso",
+        "weekNote": "Semana: {days}. Quitar periodos o días nunca elimina clases — todo lo que quede fuera de la nueva estructura se reporta para que lo ordene.",
+        "invalidStart": "La hora de inicio de la escuela no es una hora hh:mm válida.",
+        "saveFailed": "No se pudo guardar.",
+        "savedOrphaned": "Guardado. ⚠ {n} clase(s) existente(s) quedaron fuera de la nueva estructura (un día o periodo eliminado) — amplíe de nuevo la estructura o elimínelas.",
+        "saved": "Guardado — el horario ya muestra los nuevos horarios.",
+        "networkError": "Error de red — no se guardó nada.",
+        "save": "Guardar ajustes",
+        "unsaved": "Cambios sin guardar — el horario se actualiza cuando guarde"
+      }
+    },
+    "myTimetable": {
+      "title": "Mi horario",
+      "studentIntro": "La semana de tu clase.",
+      "teacherIntro": "Las clases que da esta semana.",
+      "covers": "Suplencias",
+      "coveringFor": "— supliendo a {name}",
+      "myClass": "Mi clase",
+      "empty": "Todavía no hay clases en el horario — aparecerán aquí en cuanto la escuela lo publique."
+    },
+    "myAnalytics": {
+      "title": "Estadísticas",
+      "subtitle": "Cómo avanzan sus clases en lo que ha asignado.",
+      "metric": {
+        "classes": "Clases",
+        "students": "Alumnos",
+        "assignments": "Tareas",
+        "completion": "Avance",
+        "overdue": "Atrasadas",
+        "toGrade": "Por calificar"
+      },
+      "schoolView": {
+        "title": "Lo que su escuela ve de su enseñanza",
+        "chip": "transparencia",
+        "lessonsMade": "Lecciones creadas",
+        "assignments": "Tareas",
+        "turnaround": "Tiempo de calificación",
+        "toGrade": "Por calificar",
+        "note": "La dirección ve esto para saber dónde ayudar — nunca como un ranking."
+      },
+      "byClass": "Por clase",
+      "noAssignments": "Todavía no hay tareas.",
+      "done": "hechas",
+      "mostRevised": "Más repasado",
+      "mostRevisedHint": "Los temas que los alumnos vuelven a abrir más — suelen ser los más difíciles.",
+      "toGradeTitle": "Por calificar",
+      "toGradeHint": "Hojas de trabajo y exámenes entregados a la espera de nota.",
+      "chapterLabel": "{kind} · Cap. {n}",
+      "kind": {
+        "presentation": "Lección",
+        "worksheet": "Hoja de trabajo",
+        "examPaper": "Prueba",
+        "exam": "Examen",
+        "activity": "Actividades",
+        "caseStudy": "Caso práctico"
+      }
+    },
+    "children": {
+      "title": "Mis hijos",
+      "subtitle": "En qué trabaja cada hijo — el trabajo de la escuela es de solo lectura, más las pruebas que usted asigne.",
+      "empty": "Todavía no hay hijos vinculados. Agregue a su hijo abajo — o, si su escuela le envió una invitación, abra el enlace de ese correo.",
+      "from": "de {source}",
+      "fromYou": "usted",
+      "fromClass": "la clase",
+      "due": "para el {date}",
+      "unverified": "vínculo sin verificar · confírmelo con la escuela",
+      "schoolWork": "Trabajo de la escuela ({n})",
+      "noSchoolWork": "La escuela todavía no ha asignado nada.",
+      "yourWork": "De usted ({n})",
+      "noTestPapers": "Todavía no hay pruebas asignadas — cree una en Exámenes.",
+      "kind": {
+        "presentation": "Videolección",
+        "activity": "Actividades",
+        "worksheet": "Hoja de trabajo",
+        "examPaper": "Prueba",
+        "caseStudy": "Caso práctico"
+      },
+      "status": {
+        "notStarted": "sin empezar",
+        "inProgress": "en curso",
+        "completed": "completada",
+        "revised": "repasada",
+        "submitted": "entregada"
+      },
+      "add": {
+        "title": "Agregar un hijo",
+        "hint": "Crea su acceso (ID de hijo + una contraseña temporal que usted le entrega).",
+        "button": "+ Agregar hijo",
+        "saveThese": "Guarde estos datos — se muestran una sola vez:",
+        "childId": "ID del hijo",
+        "tempPassword": "Contraseña temporal",
+        "signInNote": "Inicia sesión en app.sketchcast.app con el ID (sin correo) y elige su propia contraseña.",
+        "firstName": "Nombre",
+        "lastName": "Apellido",
+        "creating": "Creando…",
+        "create": "Crear acceso",
+        "failed": "No se pudo agregar al hijo."
+      }
+    }
   }
 }

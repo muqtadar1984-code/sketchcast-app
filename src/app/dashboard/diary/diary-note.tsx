@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LANGUAGES } from "@/utils/narration";
-import { TYPE_ICON, TYPE_LABEL, TYPE_STYLE } from "./note-types";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { TYPE_ICON, TYPE_STYLE, noteTypeLabel, type NoteTypeLabels } from "./note-types";
 
 // Client-side consumers may keep importing these from here; server pages must
 // use ./note-types directly (values in a "use client" module aren't readable
@@ -24,10 +26,16 @@ export { NOTE_TYPES, TYPE_STYLE } from "./note-types";
 //                 author_id, the same comparison that already renders the "You"
 //                 byline; omitted ⇒ no delete, which is how the read-only
 //                 leadership page (dashboard/school/diary) stays read-only.
+//   · t / lang  — every word this card renders, plus the tag its clocks format
+//                 in. Composed by each server view (the dictionary is
+//                 server-only; the strings cross the boundary, the file never
+//                 does), so one note reads the same in four places.
 // Translate is available to every viewer: /api/diary/translate re-proves the
 // caller can read the target under THEIR session before serving the cache.
 // The last-picked language is remembered (localStorage) so re-translating
-// tomorrow's page is one click.
+// tomorrow's page is one click. That picker is a CONTENT-language list (the
+// narration registry, each name in its own language) — unrelated to the
+// interface language this card is written in.
 
 export type DiaryReplyItem = {
   id: string;
@@ -53,25 +61,17 @@ export type DiaryNoteItem = {
 
 type Translated = { text: string; dir: string };
 
+/** Every word this card renders: its own slice, the note-type vocabulary the
+ * chip names, and the shared Cancel. Typed from the English dictionary, but the
+ * import is type-only — the server-only module is erased here and no
+ * translation file reaches the browser bundle. */
+export type DiaryNoteMessages = Dictionary["comms"]["diary"]["note"] & {
+  noteTypes: NoteTypeLabels;
+  cancel: string;
+};
+
 // Last-picked translation language, shared across every note and visit.
 const LANG_KEY = "diary-translate-lang";
-
-// Times render in the SCHOOL's timezone (calendar doctrine — fixed UTC+8), the
-// same zone date-nav buckets the day into, so a page never shows two clocks:
-// a note filed at 9pm KL stays on its own day for a parent reading abroad.
-// Make this per-school config when a school outside MY signs up.
-const TIME_FMT = new Intl.DateTimeFormat("en-MY", {
-  timeZone: "Asia/Kuala_Lumpur",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-const STAMP_FMT = new Intl.DateTimeFormat("en-MY", {
-  timeZone: "Asia/Kuala_Lumpur",
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 export default function DiaryNote({
   note,
@@ -79,6 +79,8 @@ export default function DiaryNote({
   canReply = false,
   ack = null,
   signed = null,
+  t,
+  lang,
 }: {
   note: DiaryNoteItem;
   replies: DiaryReplyItem[];
@@ -87,11 +89,42 @@ export default function DiaryNote({
   ack?: { studentId: string; ackedAt: string | null } | null;
   /** Teacher-only: parent signatures so far (null hides the count). */
   signed?: { signed: number; total: number } | null;
+  t: DiaryNoteMessages;
+  /** BCP-47 tag for the two clocks below. Passed explicitly rather than left to
+   * the runtime default, which is the SERVER's locale during the prerender and
+   * the BROWSER's after hydration — two different times for the same note. */
+  lang: string;
 }) {
   const router = useRouter();
 
+  // Times render in the SCHOOL's timezone (calendar doctrine — fixed UTC+8),
+  // the same zone date-nav buckets the day into, so a page never shows two
+  // clocks: a note filed at 9pm KL stays on its own day for a parent reading
+  // abroad. The reader's LANGUAGE still decides how it is written. Make the
+  // zone per-school config when a school outside MY signs up.
+  const [timeFmt, stampFmt] = useMemo(
+    () => [
+      new Intl.DateTimeFormat(lang, {
+        timeZone: "Asia/Kuala_Lumpur",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      new Intl.DateTimeFormat(lang, {
+        timeZone: "Asia/Kuala_Lumpur",
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    ],
+    [lang],
+  );
+
   // ── Translate (cache-first server; "" = show originals) ─────────────────────
-  const [lang, setLang] = useState("");
+  // xlLang is the CONTENT language the reader asked this note to be turned into
+  // — nothing to do with `lang` above, which is the interface the card itself is
+  // written in.
+  const [xlLang, setXlLang] = useState("");
   const [remembered, setRemembered] = useState<string | null>(null);
   const [xl, setXl] = useState<Record<string, Translated>>({}); // "note:id" / "reply:id" → text for the CURRENT lang
   const [xlBusy, setXlBusy] = useState(false);
@@ -104,7 +137,7 @@ export default function DiaryNote({
   // initializer would make server and client render different markup). It only
   // surfaces a one-click shortcut — nothing translates until asked.
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       // deferred: avoids setState-in-effect cascades (the beta-banner idiom)
       try {
         const saved = localStorage.getItem(LANG_KEY);
@@ -113,7 +146,7 @@ export default function DiaryNote({
         /* private mode — no shortcut */
       }
     }, 0);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, []);
 
   // A note plus its thread is 1+N calls. They SETTLE INDIVIDUALLY: one failed
@@ -124,7 +157,7 @@ export default function DiaryNote({
   // deliberately never cached in the UI: half a sentence reads like the whole
   // message, which is worse than the untranslated original.
   async function translateTo(next: string) {
-    setLang(next);
+    setXlLang(next);
     setError(null);
     setXlGap(null);
     if (!next) return; // back to originals
@@ -140,16 +173,19 @@ export default function DiaryNote({
       ...replies.map((r) => ({ kind: "reply", id: r.id })),
     ];
     const settled = await Promise.allSettled(
-      targets.map(async (t) => {
+      targets.map(async (target) => {
         const res = await fetch("/api/diary/translate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: t.kind, id: t.id, lang: next }),
+          body: JSON.stringify({ kind: target.kind, id: target.id, lang: next }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.error ?? "translate failed");
         if (json.partial === true) throw new Error("partial");
-        return [`${t.kind}:${t.id}`, { text: json.text as string, dir: json.dir as string }] as const;
+        return [
+          `${target.kind}:${target.id}`,
+          { text: json.text as string, dir: json.dir as string },
+        ] as const;
       }),
     );
     const done = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
@@ -157,10 +193,10 @@ export default function DiaryNote({
     setXl(Object.fromEntries(done));
     setXlBusy(false);
     if (missing) setXlGap({ lang: next, missing, total: settled.length });
-    if (!done.length) setLang(""); // nothing landed — back to the originals
+    if (!done.length) setXlLang(""); // nothing landed — back to the originals
   }
 
-  const noteXl = lang ? xl[`note:${note.id}`] : undefined;
+  const noteXl = xlLang ? xl[`note:${note.id}`] : undefined;
 
   // ── Acknowledge (parents: the "signed the diary" receipt) ───────────────────
   const [ackedAt, setAckedAt] = useState(ack?.ackedAt ?? null);
@@ -178,7 +214,7 @@ export default function DiaryNote({
     const json = await res.json().catch(() => ({}));
     setAckBusy(false);
     if (!res.ok) {
-      setError(json.error ?? "Could not sign — please try again.");
+      setError(json.error ?? t.signFailed);
       return;
     }
     setAckedAt(new Date().toISOString());
@@ -202,7 +238,7 @@ export default function DiaryNote({
     const json = await res.json().catch(() => ({}));
     setReplyBusy(false);
     if (!res.ok) {
-      setError(json.error ?? "Could not send the reply.");
+      setError(json.error ?? t.replyFailed);
       return;
     }
     setReply("");
@@ -232,7 +268,7 @@ export default function DiaryNote({
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(json.error ?? "Could not delete the note.");
+      setError(json.error ?? t.deleteNoteFailed);
       setNoteBusy(false);
       setConfirmNote(false);
       return;
@@ -250,7 +286,7 @@ export default function DiaryNote({
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(json.error ?? "Could not delete the reply.");
+      setError(json.error ?? t.deleteReplyFailed);
       setReplyBusyId(null);
       setConfirmReply(null);
       return;
@@ -258,29 +294,31 @@ export default function DiaryNote({
     router.refresh();
   }
 
-  const time = TIME_FMT.format(new Date(note.createdAt));
+  const time = timeFmt.format(new Date(note.createdAt));
 
   return (
     <div className="px-5 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex flex-wrap items-center gap-1.5 text-xs text-[#5B6470]">
           <span className={`chip font-sans normal-case tracking-normal ${TYPE_STYLE[note.type] ?? TYPE_STYLE.general}`}>
-            {TYPE_ICON[note.type] ?? "📝"} {TYPE_LABEL[note.type] ?? note.type}
+            {TYPE_ICON[note.type] ?? "📝"} {noteTypeLabel(t.noteTypes, note.type)}
           </span>
           {note.parentsOnly && (
-            <span className="chip font-sans normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470]">parents only</span>
+            <span className="chip font-sans normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470]">
+              {t.parentsOnly}
+            </span>
           )}
           <span className="truncate">
             {note.author} <span className="rtl-flip">→</span> {note.audience} · {time}
           </span>
         </div>
         <span className="flex items-center gap-1.5 shrink-0">
-          {!lang && remembered && (
+          {!xlLang && remembered && (
             <button
               onClick={() => translateTo(remembered)}
               disabled={xlBusy}
               className="btn-ghost h-7 px-2 text-xs"
-              title="Translate like last time"
+              title={t.translateLikeLastTime}
             >
               {LANGUAGES.find((l) => l.value === remembered)?.label ?? remembered}
             </button>
@@ -290,14 +328,14 @@ export default function DiaryNote({
               can translate too, so the disclosure has to sit on the control
               itself, not only in the privacy policy. */}
           <select
-            value={lang}
+            value={xlLang}
             onChange={(e) => translateTo(e.target.value)}
             disabled={xlBusy}
             className="field h-7 px-1.5 text-xs"
-            aria-label="Translate this note — sends the text to our AI translation provider"
-            title="Machine translation — the text of this note is sent to our AI provider to translate it"
+            aria-label={t.translateAria}
+            title={t.translateTitle}
           >
-            <option value="">{xlBusy ? "Translating…" : "Translate"}</option>
+            <option value="">{xlBusy ? t.translating : t.translate}</option>
             {LANGUAGES.map((l) => (
               <option key={l.value} value={l.value}>
                 {l.label}
@@ -311,8 +349,8 @@ export default function DiaryNote({
                 setConfirmNote(true);
               }}
               disabled={noteBusy}
-              aria-label="Delete this note"
-              title="Delete this note"
+              aria-label={t.deleteNote}
+              title={t.deleteNote}
               className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
             >
               ✕
@@ -327,22 +365,20 @@ export default function DiaryNote({
 
       {note.mine && confirmNote && (
         <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-[#5B6470]">
-            Delete this note and its replies? The parents&apos; signatures on it go too.
-          </span>
+          <span className="text-[#5B6470]">{t.deleteNoteConfirm}</span>
           <button
             onClick={removeNote}
             disabled={noteBusy}
             className="font-medium text-red-600 hover:underline disabled:opacity-60"
           >
-            {noteBusy ? "Deleting…" : "Yes, delete"}
+            {noteBusy ? t.deleting : t.yesDelete}
           </button>
           <button
             onClick={() => setConfirmNote(false)}
             disabled={noteBusy}
             className="font-medium text-[#5B6470] hover:underline disabled:opacity-60"
           >
-            Cancel
+            {t.cancel}
           </button>
         </p>
       )}
@@ -350,7 +386,7 @@ export default function DiaryNote({
       {(replies.length > 0 || canReply) && (
         <div className="mt-2 ps-3 border-s-2 border-[#EEF0EC] space-y-1.5">
           {replies.map((r) => {
-            const rXl = lang ? xl[`reply:${r.id}`] : undefined;
+            const rXl = xlLang ? xl[`reply:${r.id}`] : undefined;
             const armed = confirmReply === r.id;
             const busy = replyBusyId === r.id;
             return (
@@ -362,20 +398,20 @@ export default function DiaryNote({
                 {r.mine &&
                   (armed ? (
                     <span className="ms-2 inline-flex flex-wrap items-center gap-2 text-xs" dir="ltr">
-                      <span className="text-[#5B6470]">Delete this reply?</span>
+                      <span className="text-[#5B6470]">{t.deleteReplyConfirm}</span>
                       <button
                         onClick={() => removeReply(r.id)}
                         disabled={busy}
                         className="font-medium text-red-600 hover:underline disabled:opacity-60"
                       >
-                        {busy ? "Deleting…" : "Yes, delete"}
+                        {busy ? t.deleting : t.yesDelete}
                       </button>
                       <button
                         onClick={() => setConfirmReply(null)}
                         disabled={busy}
                         className="font-medium text-[#5B6470] hover:underline disabled:opacity-60"
                       >
-                        Cancel
+                        {t.cancel}
                       </button>
                     </span>
                   ) : (
@@ -384,8 +420,8 @@ export default function DiaryNote({
                         setError(null);
                         setConfirmReply(r.id);
                       }}
-                      aria-label="Delete your reply"
-                      title="Delete your reply"
+                      aria-label={t.deleteReply}
+                      title={t.deleteReply}
                       className="ms-1.5 align-middle text-xs text-[#98A0A9] hover:text-[#B42318]"
                     >
                       ✕
@@ -401,11 +437,11 @@ export default function DiaryNote({
                 onChange={(e) => setReply(e.target.value)}
                 maxLength={2000}
                 rows={1}
-                placeholder="Write a reply…"
+                placeholder={t.replyPlaceholder}
                 className="field px-3 py-1.5 text-sm flex-1 min-h-[34px]"
               />
               <button type="submit" disabled={replyBusy || !reply.trim()} className="btn-ghost h-8 px-3 text-sm shrink-0">
-                {replyBusy ? "Sending…" : "Reply"}
+                {replyBusy ? t.sending : t.reply}
               </button>
             </form>
           )}
@@ -413,11 +449,8 @@ export default function DiaryNote({
       )}
 
       {signed && signed.total > 0 && (
-        <p
-          className="mt-2 text-xs text-[#5B6470]"
-          title="Parents who have signed this note, out of the enrolled students with a linked parent account"
-        >
-          ✍️ Signed {signed.signed}/{signed.total}
+        <p className="mt-2 text-xs text-[#5B6470]" title={t.signedTitle}>
+          ✍️ {fmt(t.signedCount, { signed: signed.signed, total: signed.total })}
         </p>
       )}
 
@@ -425,11 +458,11 @@ export default function DiaryNote({
         <div className="mt-2">
           {ackedAt ? (
             <span className="chip font-sans normal-case tracking-normal bg-[#E2F4F1] text-[#0C8175]">
-              Signed ✓ {STAMP_FMT.format(new Date(ackedAt))}
+              {t.signed} ✓ {stampFmt.format(new Date(ackedAt))}
             </span>
           ) : (
             <button onClick={acknowledge} disabled={ackBusy} className="btn-ghost h-8 px-3 text-sm">
-              {ackBusy ? "Signing…" : "Acknowledge"}
+              {ackBusy ? t.signing : t.acknowledge}
             </button>
           )}
         </div>
@@ -438,14 +471,14 @@ export default function DiaryNote({
       {xlGap && (
         <p className="mt-1.5 text-xs text-[#9A6400]">
           {xlGap.missing === xlGap.total
-            ? "Translation incomplete — showing the original."
-            : `Translation incomplete — ${xlGap.missing} of ${xlGap.total} messages still show the original.`}{" "}
+            ? t.translationIncomplete
+            : fmt(t.translationPartial, { missing: xlGap.missing, total: xlGap.total })}{" "}
           <button
             onClick={() => translateTo(xlGap.lang)}
             disabled={xlBusy}
             className="font-medium underline disabled:no-underline"
           >
-            {xlBusy ? "Translating…" : "Retry"}
+            {xlBusy ? t.translating : t.retry}
           </button>
         </p>
       )}

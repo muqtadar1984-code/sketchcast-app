@@ -8,6 +8,11 @@ import LessonCard, { type CardPart } from "@/app/dashboard/lesson-card";
 import RegenerateButton from "@/app/dashboard/regenerate-button";
 import GettingStarted from "@/app/dashboard/getting-started";
 import PageScanner from "@/app/dashboard/page-scanner";
+import type { LibraryMessages } from "@/app/dashboard/content-cell";
+// This gallery has no server parent to hand it a dictionary, so it reads the
+// ENGLISH messages directly. Safe here and nowhere else: the route notFound()s
+// in production, so the whole file (and this import) only exists in dev.
+import en from "@/i18n/messages/en.json";
 
 // DEV-ONLY verification of the REAL redesigned kit cells (ContentCell) in every
 // state — done, generating (ring), queued, error, add-back, trial-locked — laid
@@ -27,7 +32,8 @@ const L = (over: Partial<CellLesson>): CellLesson => ({
   ...over,
 });
 
-const COMMON = { bookId: "demo", schoolId: null, chapterNum: 0 };
+const T: LibraryMessages = { ...en.library, common: en.common };
+const COMMON = { bookId: "demo", schoolId: null, chapterNum: 0, t: T };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -78,7 +84,7 @@ export default function KitPreview() {
         <button onClick={() => setShowScanner(true)} className="btn-ghost h-9 px-3 text-sm mb-3">
           Scan pages (demo)
         </button>
-        {showScanner && <PageScanner onDone={() => setShowScanner(false)} onClose={() => setShowScanner(false)} />}
+        {showScanner && <PageScanner t={T} onDone={() => setShowScanner(false)} onClose={() => setShowScanner(false)} />}
         <p className="text-xs text-[#98A0A9] mb-2">Preview · redesigned lesson cards (direction 1) — dev only.</p>
         <div className="card overflow-hidden bg-[#EEF3F1] mb-10">
           <div className="px-5 py-4 space-y-2">

@@ -1,102 +1,54 @@
-"use client";
-
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/client";
 import { LogoMark } from "../dashboard/icons";
-import { studentEmail } from "@/utils/student";
 import OAuthButton from "@/components/oauth-button";
 import AuthError from "@/components/auth-error";
+import LoginForm from "./login-form";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
 
-function LoginForm() {
-  const router = useRouter();
-  // ?email= prefills the field — makes per-role login links bookmarkable
-  // (e.g. teacher.sketchcast.app/login?email=demo.teacher1@sketchcast.app for
-  // side-by-side multi-account testing across subdomains).
-  const prefill = useSearchParams().get("email") ?? "";
-  const [email, setEmail] = useState(prefill);
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const supabase = createClient();
-    // Teachers sign in with their email; invited students use their ID (no "@"),
-    // which maps to the synthetic student login address.
-    const loginEmail = email.includes("@") ? email.trim() : studentEmail(email);
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    router.push("/dashboard");
-    router.refresh();
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <input
-        required placeholder="Email or student ID" value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="field w-full h-11 px-3 text-[#14181F]"
-      />
-      <input
-        type="password" required placeholder="Password" value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="field w-full h-11 px-3 text-[#14181F]"
-      />
-      <div className="flex justify-end">
-        <Link href="/login/forgot" className="text-xs text-[#0C8175] font-medium hover:underline">
-          Forgot password?
-        </Link>
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={loading} className="btn-primary w-full h-11">
-        {loading ? "Signing in…" : "Sign in"}
-      </button>
-    </form>
-  );
-}
-
-export default function LoginPage() {
+// Sign-in. A SERVER component so the page's own words come from the request's
+// dictionary — resolveLocale() works signed-OUT too (the sc_locale cookie, then
+// Accept-Language), which is the whole reason a parent who reads no English can
+// get past this screen. The two interactive pieces (the form, the OAuth button)
+// are client components handed exactly the strings they render.
+export default async function LoginPage() {
+  const locale = await resolveLocale();
+  const t = await getDictionary(locale);
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#FCFCFA] px-4">
       <div className="w-full max-w-sm card rounded-2xl p-8">
         <div className="flex items-center gap-2.5 mb-1">
           <LogoMark size={34} />
+          {/* The product name is a name, in every language — never translated. */}
           <h1 className="text-2xl">
             SketchCast <span className="text-[#0C8175]">AI</span>
           </h1>
         </div>
-        <p className="text-sm text-[#5B6470] mt-1 mb-6">Sign in to your account</p>
+        <p className="text-sm text-[#5B6470] mt-1 mb-6">{t.app.login.subtitle}</p>
 
         <Suspense fallback={null}>
           <AuthError />
-          <LoginForm />
+          <LoginForm t={t.app.login} auth={t.app.auth} />
         </Suspense>
 
         <div className="flex items-center gap-3 my-5">
           <span className="h-px flex-1 bg-[#E6E8E4]" />
-          <span className="text-xs text-[#98A0A9]">or</span>
+          <span className="text-xs text-[#98A0A9]">{t.app.auth.or}</span>
           <span className="h-px flex-1 bg-[#E6E8E4]" />
         </div>
-        <OAuthButton provider="google" mode="in" />
+        <OAuthButton provider="google" mode="in" t={t.app.oauth} />
 
         <p className="text-sm text-[#5B6470] mt-6 text-center">
-          New here?{" "}
+          {t.app.login.newHere}{" "}
           <Link href="/signup" className="text-[#0C8175] font-medium hover:underline">
-            Create an account
+            {t.app.login.createAccount}
           </Link>
         </p>
         <p className="text-xs text-[#98A0A9] mt-2 text-center">
-          Setting up a whole school?{" "}
+          {t.app.auth.schoolPrompt}{" "}
           <Link href="/schoolsignup" className="text-[#0C8175] hover:underline">
-            Set up your school
+            {t.app.auth.schoolCta}
           </Link>
         </p>
       </div>

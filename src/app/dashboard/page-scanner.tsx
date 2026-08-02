@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { detectQuad, warpQuad, loadCv, type Quad, type Corner } from "@/utils/scan-cv";
+import { fmt } from "@/i18n/format";
+import { type LibraryMessages } from "./content-cell";
 
 // Page scanner: photograph a physical book and hand the existing upload path ONE
 // assembled PDF. Built for parents who have no digital copy of their child's book.
@@ -40,7 +42,9 @@ type ScannedPage = {
   auto: boolean; // corners came from detection rather than the user
 };
 
-const mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
+// Sizes read as "12.3 MB" — the unit belongs to the message, not to this
+// helper, so the template comes in from the caller's dictionary.
+const mb = (n: number, template: string) => fmt(template, { n: (n / 1e6).toFixed(1) });
 
 // In-app webviews (Gmail, WhatsApp, Facebook, Instagram, Line, the Google app)
 // routinely break the camera round-trip. Copy-only: we hint at a real browser
@@ -86,10 +90,12 @@ async function encodePage(source: HTMLCanvasElement, target: number) {
 export default function PageScanner({
   onDone,
   onClose,
+  t,
 }: {
   /** Receives the assembled PDF — the caller feeds it to the normal upload. */
   onDone: (file: File) => void;
   onClose: () => void;
+  t: LibraryMessages;
 }) {
   const [pages, setPages] = useState<ScannedPage[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -153,19 +159,16 @@ export default function PageScanner({
       setError(null);
       const files = Array.from(list).filter((f) => f.type.startsWith("image/"));
       if (!files.length) {
-        setError("Those files weren't photos — pick images of the pages.");
+        setError(t.scan.notPhotos);
         return;
       }
       const added: ScannedPage[] = [];
       let running = total;
       let skipped = 0; // photos the browser couldn't decode (HEIC on many Androids)
       for (let i = 0; i < files.length; i++) {
-        setBusy(`Reading page ${i + 1} of ${files.length}…`);
+        setBusy(fmt(t.scan.readingPage, { n: i + 1, total: files.length }));
         if (running >= SOFT_BUDGET) {
-          setError(
-            `Stopped at ${mb(running)} — a scan has to stay under 200 MB. Create this PDF ` +
-              "and upload it, then scan the next chapter separately.",
-          );
+          setError(fmt(t.scan.budgetStop, { size: mb(running, t.upload.megabytes) }));
           break;
         }
         const bitmap = await createImageBitmap(files[i]).catch(() => null);
@@ -212,22 +215,18 @@ export default function PageScanner({
         // Don't clobber the budget message above — dropped photos matter less
         // than a scan that's already at the 200 MB ceiling.
         setError(
-          (prev) =>
-            prev ??
-            `${skipped} photo${skipped === 1 ? "" : "s"} couldn't be read — if your camera saves ` +
-              "HEIC ('high efficiency') photos, switch the camera to 'Most compatible'/JPEG, or " +
-              "use Choose photos.",
+          (prev) => prev ?? (skipped === 1 ? t.scan.heicOne : fmt(t.scan.heicMany, { n: skipped })),
         );
       }
       setBusy(null);
     },
-    [total],
+    [total, t],
   );
 
   /** Re-crop one page from hand-placed corners. */
   async function applyQuad(index: number, quad: Quad | null) {
     const page = pages[index];
-    setBusy("Applying crop…");
+    setBusy(t.scan.applyingCrop);
     const img = new Image();
     img.src = page.srcUrl;
     await img.decode().catch(() => {});
@@ -268,7 +267,7 @@ export default function PageScanner({
 
   async function build() {
     if (!pages.length) return;
-    setBusy("Building the PDF…");
+    setBusy(t.scan.buildingPdf);
     setError(null);
     try {
       const { PDFDocument } = await import("pdf-lib"); // lazy: only for scanners
@@ -284,16 +283,13 @@ export default function PageScanner({
       new Uint8Array(buf).set(out);
       const blob = new Blob([buf], { type: "application/pdf" });
       if (blob.size > MAX_TOTAL_BYTES) {
-        setError(
-          `That PDF is ${mb(blob.size)} — over the 200 MB limit. Remove some pages, or scan ` +
-            "this book one chapter at a time.",
-        );
+        setError(fmt(t.scan.tooBig, { size: mb(blob.size, t.upload.megabytes) }));
         setBusy(null);
         return;
       }
       onDone(new File([blob], `scan-${new Date().toISOString().slice(0, 10)}.pdf`, { type: "application/pdf" }));
     } catch (ex) {
-      setError(ex instanceof Error ? ex.message : "Couldn't build the PDF.");
+      setError(ex instanceof Error ? ex.message : t.scan.buildFailed);
     }
     setBusy(null);
   }
@@ -309,20 +305,19 @@ export default function PageScanner({
             onCancel={() => setEditing(null)}
             onApply={(q) => applyQuad(editing!, q)}
             busy={busy}
+            t={t}
           />
         ) : (
           <>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="font-display text-base font-medium">Scan pages</h2>
+                <h2 className="font-display text-base font-medium">{t.scan.title}</h2>
                 <p className="mt-1 text-xs text-[#5B6470]">
-                  Photograph the pages and we&apos;ll turn them into one PDF.
-                  <span className="block text-[#98A0A9]">
-                    Best results: one chapter at a time, page flat, good light, fills the frame.
-                  </span>
+                  {t.scan.intro}
+                  <span className="block text-[#98A0A9]">{t.scan.tips}</span>
                 </p>
               </div>
-              <button onClick={onClose} aria-label="Close" className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
+              <button onClick={onClose} aria-label={t.common.close} className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -343,36 +338,31 @@ export default function PageScanner({
                 disabled={!!busy}
                 className="btn-primary h-10 px-4 text-sm"
               >
-                {pages.length ? "Add pages" : "Take photos"}
+                {pages.length ? t.scan.addPages : t.scan.takePhotos}
               </button>
               <button onClick={() => library.current?.click()} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
-                Choose photos
+                {t.scan.choosePhotos}
               </button>
             </div>
 
-            {inAppBrowser && (
-              <p className="mt-2 text-[11px] text-[#98A0A9]">
-                Cameras often fail inside the Gmail/WhatsApp browser — open sketchcast.app in Chrome
-                or Safari, or use Choose photos.
-              </p>
-            )}
+            {inAppBrowser && <p className="mt-2 text-[11px] text-[#98A0A9]">{t.scan.inAppBrowser}</p>}
 
             {busy && <p className="mt-3 text-xs text-[#9A6400]">{busy}</p>}
             {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
-            {cameraHint && !busy && (
-              <p className="mt-3 text-xs text-[#5B6470]">
-                Nothing came back from the camera? Use Choose photos to pick from your gallery instead.
-              </p>
-            )}
+            {cameraHint && !busy && <p className="mt-3 text-xs text-[#5B6470]">{t.scan.cameraHint}</p>}
 
             {pages.length > 0 && (
               <>
                 <div className="mt-4 flex items-center justify-between text-xs">
                   <span className="text-[#5B6470]">
-                    {pages.length} page{pages.length === 1 ? "" : "s"} · {mb(total)}
+                    {pages.length === 1
+                      ? fmt(t.scan.pageCountOne, { size: mb(total, t.upload.megabytes) })
+                      : fmt(t.scan.pageCountMany, { n: pages.length, size: mb(total, t.upload.megabytes) })}
                   </span>
                   <span className={overBudget ? "text-red-600" : "text-[#98A0A9]"}>
-                    {overBudget ? "At the 200 MB limit" : `${mb(MAX_TOTAL_BYTES - total)} left of 200 MB`}
+                    {overBudget
+                      ? t.scan.atLimit
+                      : fmt(t.scan.leftOfLimit, { size: mb(MAX_TOTAL_BYTES - total, t.upload.megabytes) })}
                   </span>
                 </div>
                 <div className="mt-1 h-1.5 rounded-full bg-[#EEF0EC] overflow-hidden" aria-hidden>
@@ -381,8 +371,7 @@ export default function PageScanner({
                 </div>
                 {autoMisses > 0 && (
                   <p className="mt-2 text-[11px] text-[#9A6400]">
-                    {autoMisses} page{autoMisses === 1 ? " wasn't" : "s weren't"} cropped automatically — tap
-                    a page to set its edges by hand.
+                    {autoMisses === 1 ? t.scan.uncroppedOne : fmt(t.scan.uncroppedMany, { n: autoMisses })}
                   </p>
                 )}
 
@@ -391,16 +380,16 @@ export default function PageScanner({
                     <li key={p.id} className="group relative rounded-lg border border-[#DCE6E2] overflow-hidden bg-[#F5F6F3]">
                       {/* Local object URL of a just-captured photo — next/image adds nothing. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.url} alt={`Page ${i + 1}`} className="w-full h-24 object-cover" />
+                      <img src={p.url} alt={fmt(t.scan.pageAlt, { n: i + 1 })} className="w-full h-24 object-cover" />
                       <span className="absolute top-1 start-1 rounded bg-[#14181F]/70 px-1.5 text-[10px] text-white">{i + 1}</span>
                       {!p.quad && (
-                        <span className="absolute top-1 end-1 rounded bg-[#FFF1D6] px-1 text-[9px] text-[#9A6400]">uncropped</span>
+                        <span className="absolute top-1 end-1 rounded bg-[#FFF1D6] px-1 text-[9px] text-[#9A6400]">{t.scan.uncropped}</span>
                       )}
                       <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-white/90 px-1 py-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move page ${i + 1} earlier`} className="rtl-flip px-1 text-xs disabled:opacity-30">←</button>
-                        <button onClick={() => setEditing(i)} className="px-1 text-[10px] font-medium text-[#0C8175]">Edges</button>
-                        <button onClick={() => remove(i)} aria-label={`Remove page ${i + 1}`} className="px-1 text-xs text-red-600">✕</button>
-                        <button onClick={() => move(i, 1)} disabled={i === pages.length - 1} aria-label={`Move page ${i + 1} later`} className="rtl-flip px-1 text-xs disabled:opacity-30">→</button>
+                        <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={fmt(t.scan.moveEarlier, { n: i + 1 })} className="rtl-flip px-1 text-xs disabled:opacity-30">←</button>
+                        <button onClick={() => setEditing(i)} className="px-1 text-[10px] font-medium text-[#0C8175]">{t.scan.edges}</button>
+                        <button onClick={() => remove(i)} aria-label={fmt(t.scan.removePage, { n: i + 1 })} className="px-1 text-xs text-red-600">✕</button>
+                        <button onClick={() => move(i, 1)} disabled={i === pages.length - 1} aria-label={fmt(t.scan.moveLater, { n: i + 1 })} className="rtl-flip px-1 text-xs disabled:opacity-30">→</button>
                       </div>
                     </li>
                   ))}
@@ -409,9 +398,13 @@ export default function PageScanner({
             )}
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button onClick={onClose} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">Cancel</button>
+              <button onClick={onClose} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">{t.common.cancel}</button>
               <button onClick={build} disabled={!pages.length || !!busy} className="btn-primary h-10 px-4 text-sm">
-                Use these {pages.length || ""} page{pages.length === 1 ? "" : "s"}
+                {pages.length === 0
+                  ? t.scan.usePages
+                  : pages.length === 1
+                    ? t.scan.useOne
+                    : fmt(t.scan.useMany, { n: pages.length })}
               </button>
             </div>
           </>
@@ -429,11 +422,13 @@ function CornerEditor({
   onApply,
   onCancel,
   busy,
+  t,
 }: {
   page: ScannedPage;
   onApply: (quad: Quad | null) => void;
   onCancel: () => void;
   busy: string | null;
+  t: LibraryMessages;
 }) {
   const inset = 0.08;
   const [quad, setQuad] = useState<Quad>(
@@ -461,12 +456,10 @@ function CornerEditor({
     <>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-display text-base font-medium">Set the page edges</h2>
-          <p className="mt-1 text-xs text-[#5B6470]">
-            Drag the four corners to the corners of the page.
-          </p>
+          <h2 className="font-display text-base font-medium">{t.scan.editTitle}</h2>
+          <p className="mt-1 text-xs text-[#5B6470]">{t.scan.editIntro}</p>
         </div>
-        <button onClick={onCancel} aria-label="Back" className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
+        <button onClick={onCancel} aria-label={t.scan.back} className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
       </div>
 
       <div
@@ -482,7 +475,7 @@ function CornerEditor({
         onPointerLeave={() => setDrag(null)}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={page.srcUrl} alt="Page photo" className="w-full block rounded-lg" />
+        <img src={page.srcUrl} alt={t.scan.photoAlt} className="w-full block rounded-lg" />
         <svg viewBox={`0 0 ${page.srcW} ${page.srcH}`} className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
           <polygon
             points={quad.map((c) => `${c.x},${c.y}`).join(" ")}
@@ -513,11 +506,11 @@ function CornerEditor({
 
       <div className="mt-5 flex items-center justify-between gap-2">
         <button onClick={() => onApply(null)} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
-          Use the full photo
+          {t.scan.useFullPhoto}
         </button>
         <span className="flex gap-2">
-          <button onClick={onCancel} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">Cancel</button>
-          <button onClick={() => onApply(quad)} disabled={!!busy} className="btn-primary h-10 px-4 text-sm">Apply crop</button>
+          <button onClick={onCancel} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">{t.common.cancel}</button>
+          <button onClick={() => onApply(quad)} disabled={!!busy} className="btn-primary h-10 px-4 text-sm">{t.scan.applyCrop}</button>
         </span>
       </div>
     </>

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { fmt } from "@/i18n/format";
+import { type LibraryMessages } from "./content-cell";
 
 export type ClassRow = { id: string; name: string; grade: string | null };
 
@@ -13,10 +15,14 @@ export default function AssignModal({
   label,
   generationIds,
   classes,
+  t,
 }: {
+  /** The trigger's text — already translated by the caller ("Assign chapter",
+      "Assign book", plain "Assign"). */
   label: string;
   generationIds: string[];
   classes: ClassRow[];
+  t: LibraryMessages;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -34,11 +40,11 @@ export default function AssignModal({
   async function createClass() {
     const name = newName.trim();
     if (!name) {
-      setError("Class name required.");
+      setError(t.assignModal.nameRequired);
       return;
     }
     if (classList.some((c) => c.name.trim().toLowerCase() === name.toLowerCase())) {
-      setError(`You already have a class named "${name}".`);
+      setError(fmt(t.assignModal.duplicate, { name }));
       return;
     }
     setBusy(true);
@@ -48,7 +54,7 @@ export default function AssignModal({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(false);
       return;
     }
@@ -59,7 +65,7 @@ export default function AssignModal({
       .single();
     setBusy(false);
     if (cErr || !data) {
-      setError(cErr?.message ?? "Could not create class.");
+      setError(cErr?.message ?? t.assignModal.createFailed);
       return;
     }
     setClassList((l) => [data as ClassRow, ...l]);
@@ -71,7 +77,7 @@ export default function AssignModal({
 
   async function assign() {
     if (!classId) {
-      setError("Pick a class.");
+      setError(t.assignModal.pickClass);
       return;
     }
     setBusy(true);
@@ -81,7 +87,7 @@ export default function AssignModal({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(false);
       return;
     }
@@ -125,28 +131,29 @@ export default function AssignModal({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-medium mb-1" style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}>
-              Assign to a class
+              {t.assignModal.heading}
             </h3>
             <p className="text-xs text-[#5B6470] mb-3">
-              {generationIds.length} {generationIds.length === 1 ? "item" : "items"} — the class&apos;s
-              students will see this in their assignments.
+              {generationIds.length === 1
+                ? t.assignModal.itemsOne
+                : fmt(t.assignModal.itemsMany, { n: generationIds.length })}
             </p>
 
             {done ? (
-              <p className="text-sm text-[#0C8175] py-4">✓ Assigned.</p>
+              <p className="text-sm text-[#0C8175] py-4">✓ {t.assignModal.assigned}</p>
             ) : creating ? (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-[#5B6470]">New class</p>
+                <p className="text-xs font-medium text-[#5B6470]">{t.assignModal.newClass}</p>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Class name (e.g. 5A)"
+                  placeholder={t.assignModal.namePlaceholder}
                   className="w-full h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
                 />
                 <input
                   value={newGrade}
                   onChange={(e) => setNewGrade(e.target.value)}
-                  placeholder="Grade (optional)"
+                  placeholder={t.assignModal.gradePlaceholder}
                   className="w-full h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
                 />
                 {error && <p className="text-xs text-red-600">{error}</p>}
@@ -156,7 +163,7 @@ export default function AssignModal({
                       onClick={() => setCreating(false)}
                       className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
                     >
-                      Back
+                      {t.assignModal.back}
                     </button>
                   )}
                   <button
@@ -164,14 +171,14 @@ export default function AssignModal({
                     disabled={busy}
                     className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
                   >
-                    {busy ? "Creating…" : "Create class"}
+                    {busy ? t.assignModal.creating : t.assignModal.createClass}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="space-y-3">
                 <label className="block">
-                  <span className="text-xs text-[#5B6470]">Class</span>
+                  <span className="text-xs text-[#5B6470]">{t.assignModal.classLabel}</span>
                   <select
                     value={classId}
                     onChange={(e) => setClassId(e.target.value)}
@@ -189,10 +196,10 @@ export default function AssignModal({
                   onClick={() => setCreating(true)}
                   className="text-xs font-medium text-[#0C8175] hover:underline"
                 >
-                  + New class
+                  {t.assignModal.addClass}
                 </button>
                 <label className="block">
-                  <span className="text-xs text-[#5B6470]">Due date (optional)</span>
+                  <span className="text-xs text-[#5B6470]">{t.assignModal.due}</span>
                   <input
                     type="date"
                     value={due}
@@ -207,14 +214,14 @@ export default function AssignModal({
                     disabled={busy}
                     className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
                   >
-                    Cancel
+                    {t.common.cancel}
                   </button>
                   <button
                     onClick={assign}
                     disabled={busy}
                     className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
                   >
-                    {busy ? "Assigning…" : "Assign"}
+                    {busy ? t.assignModal.assigning : t.assignModal.assign}
                   </button>
                 </div>
               </div>

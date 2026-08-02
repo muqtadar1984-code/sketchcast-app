@@ -9,7 +9,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { Role, TourSeen } from "./types";
-import { tourForRole } from "./definitions";
+import { tourForRole, type TourCopy } from "./definitions";
 import { resolveSteps, shouldAutoStart } from "./logic";
 import { createDriverEngine, type TourEngine } from "./engine";
 import { emitTourEvent } from "./analytics";
@@ -57,18 +57,24 @@ function postSeen(tourKey: string, version: number, status: "completed" | "skipp
 export default function TourProvider({
   role,
   seen,
+  copy,
   children,
 }: {
   role: string | null;
   seen: TourSeen | null;
+  /** The tour's words for THIS request's language, resolved by the (server)
+   * dashboard layout — the steps themselves carry only targets and order. */
+  copy: TourCopy;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   // Memoized so `def`/`start`/the auto-start effect keep a stable identity across
   // renders (tourForRole returns a fresh object each call) — otherwise the effect
-  // re-runs every commit and can cancel the scheduled start.
-  const def = useMemo(() => tourForRole(role), [role]);
+  // re-runs every commit and can cancel the scheduled start. `copy` arrives from
+  // the server, so its identity only changes when the tree is re-rendered there
+  // (a language switch), which is exactly when the tour should be rebuilt.
+  const def = useMemo(() => tourForRole(role, copy), [role, copy]);
   const available = TOUR_ON && !!def;
 
   const engineRef = useRef<TourEngine | null>(null);

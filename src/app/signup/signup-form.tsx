@@ -1,0 +1,117 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import OAuthButton from "@/components/oauth-button";
+import type { Dictionary } from "@/i18n/dictionaries";
+
+// The self-signup form. The Google button lives INSIDE this component (not in
+// the server page) because it only appears for the Teacher pick, and the pick is
+// client state — so the OAuth button's words are handed down one more level.
+//
+// The role VALUES stay the English codes the database stores ("teacher",
+// "student", "parent"); only the button labels come from the dictionary.
+type Role = "teacher" | "student" | "parent";
+
+export default function SignupForm({
+  t,
+  auth,
+  oauth,
+}: {
+  t: Dictionary["app"]["signup"];
+  auth: Dictionary["app"]["auth"];
+  oauth: Dictionary["app"]["oauth"];
+}) {
+  const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<Role>("teacher");
+  // Parent signups are self-serve (strictly LESS power than the teacher
+  // default) — the option shows only while the portal flag is on.
+  const parentOn = process.env.NEXT_PUBLIC_FEATURE_PARENT_PORTAL === "true";
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setNotice(null);
+    setLoading(true);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, role },
+        emailRedirectTo: `${location.origin}/auth/confirm`,
+      },
+    });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    // If email confirmation is OFF, a session is returned and we go straight in.
+    if (data.session) {
+      router.push("/dashboard");
+      router.refresh();
+      return;
+    }
+    setNotice(t.confirmEmail);
+  }
+
+  return (
+    <>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <input
+          required placeholder={auth.fullName} value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          className="field w-full h-11 px-3 text-[#14181F]"
+        />
+        <input
+          type="email" required placeholder={auth.email} value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="field w-full h-11 px-3 text-[#14181F]"
+        />
+        <input
+          type="password" required minLength={6} placeholder={t.passwordMin} value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="field w-full h-11 px-3 text-[#14181F]"
+        />
+        <div className="flex gap-2">
+          {([...(["teacher", "student"] as const), ...(parentOn ? (["parent"] as const) : [])]).map((r) => (
+            <button
+              key={r} type="button" onClick={() => setRole(r)}
+              className={`flex-1 h-11 rounded-lg border text-sm font-medium ${
+                role === r
+                  ? "border-[#1FB8A6] bg-[#E2F4F1] text-[#0C8175]"
+                  : "border-[#E6E8E4] bg-white text-[#5B6470]"
+              }`}
+            >
+              {t.roles[r]}
+            </button>
+          ))}
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {notice && <p className="text-sm text-[#0C8175]">{notice}</p>}
+        <button type="submit" disabled={loading} className="btn-primary w-full h-11">
+          {loading ? t.creating : t.submit}
+        </button>
+      </form>
+
+      {role === "teacher" && (
+        <>
+          <div className="flex items-center gap-3 my-5">
+            <span className="h-px flex-1 bg-[#E6E8E4]" />
+            <span className="text-xs text-[#98A0A9]">{auth.or}</span>
+            <span className="h-px flex-1 bg-[#E6E8E4]" />
+          </div>
+          <OAuthButton provider="google" mode="up" t={oauth} />
+        </>
+      )}
+    </>
+  );
+}

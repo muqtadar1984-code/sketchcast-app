@@ -2,6 +2,8 @@
 // "use client") so both server pages (metrics, labels) and client components
 // (chips, cards) can read the values. Mirrors migration 0066's CHECK list.
 
+import type { Dictionary } from "@/i18n/dictionaries";
+
 export const NOTE_TYPES = ["homework", "reminder", "praise", "concern", "health", "general"] as const;
 
 // House tones: praise gets the teal mist, concern the amber warning, health
@@ -15,15 +17,18 @@ export const TYPE_STYLE: Record<string, string> = {
   general: "bg-[#EEF0EC] text-[#5B6470]",
 };
 
-// Display casing + a glanceable icon for every chip that names a type.
-export const TYPE_LABEL: Record<string, string> = {
-  homework: "Homework",
-  reminder: "Reminder",
-  praise: "Praise",
-  concern: "Concern",
-  health: "Health",
-  general: "General",
-};
+// The reader's WORDS for those values live in the dictionary
+// (comms.diary.noteTypes), never here: "concern" is what the database stores in
+// every language, and this is only how it reads on screen. Components are
+// handed that slice and look a value up through the helper below, which falls
+// back to the raw value for a type this build doesn't know about.
+export type NoteTypeLabels = Dictionary["comms"]["diary"]["noteTypes"];
+
+export function noteTypeLabel(labels: NoteTypeLabels, type: string): string {
+  return (labels as Record<string, string>)[type] ?? type;
+}
+
+// A glanceable icon for every chip that names a type.
 export const TYPE_ICON: Record<string, string> = {
   homework: "📚",
   reminder: "🔔",

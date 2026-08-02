@@ -8,6 +8,9 @@ import CoordinatorAdmin, { type Member, type Scope } from "../coordinator-admin"
 import ResetPasswordButton from "../../reset-password-button";
 import DeleteStudentButton from "../../delete-student-button";
 import { RevokeNoticeButton } from "../../calendar/notice-composer";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 /** The explicit page for the parent-link read. PostgREST caps an unbounded
  * select at its own default and does not say so; a school would have to be
@@ -31,6 +34,9 @@ function livePinIds(rows: { id: string; featured_until: string | null }[]): Set<
 // model, the published-notice review, plus the DPDP access-audit trail. Behind
 // FEATURE_SCHOOL_ANALYTICS.
 export default async function SchoolAdminPage() {
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.admin;
   const supabase = await createClient();
   const {
     data: { user },
@@ -58,17 +64,21 @@ export default async function SchoolAdminPage() {
     .select("id, full_name, username, role")
     .eq("school_id", profile!.school_id);
   const people = (peopleRaw ?? []) as { id: string; full_name: string | null; username: string | null; role: string }[];
-  const nameOf = new Map(people.map((p) => [p.id, p.full_name || p.username || "User"] as const));
+  const nameOf = new Map(people.map((p) => [p.id, p.full_name || p.username || dict.school.fallback.user] as const));
   const members: Member[] = people
     .filter((p) => p.role === "teacher" || p.role === "coordinator")
-    .map((p) => ({ id: p.id, name: p.full_name || p.username || "User", role: p.role as "teacher" | "coordinator" }))
+    .map((p) => ({
+      id: p.id,
+      name: p.full_name || p.username || dict.school.fallback.user,
+      role: p.role as "teacher" | "coordinator",
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // School students, with their class names (best-effort — RLS leadership
   // reads). The admin is the deletion authority for every school student.
   const students = people
     .filter((p) => p.role === "student")
-    .map((p) => ({ id: p.id, name: p.full_name || p.username || "Student", username: p.username }))
+    .map((p) => ({ id: p.id, name: p.full_name || p.username || dict.school.fallback.student, username: p.username }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const classesOf = new Map<string, string[]>();
   if (students.length) {
@@ -191,7 +201,9 @@ export default async function SchoolAdminPage() {
     // to ask about.
     unverifiedLinks = schoolLinks.filter((l) => !l.verified_at).length;
     unverifiedNames = [
-      ...new Set(schoolLinks.filter((l) => !l.verified_at).map((l) => nameOf.get(l.child_id) || "Student")),
+      ...new Set(
+        schoolLinks.filter((l) => !l.verified_at).map((l) => nameOf.get(l.child_id) || dict.school.fallback.student),
+      ),
     ].sort((a, b) => a.localeCompare(b));
   }
 
@@ -225,23 +237,28 @@ export default async function SchoolAdminPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">School admin</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-7">
-          Roles &amp; oversight scopes — who can see which slice of the school, and a log of who looked.
-        </p>
+        <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
-        <CoordinatorAdmin members={members} scopes={scopes} grades={grades} subjects={subjects} />
+        <CoordinatorAdmin
+          members={members}
+          scopes={scopes}
+          grades={grades}
+          subjects={subjects}
+          t={{
+            ...dict.school.coordinators,
+            teacherAndCoordinator: dict.nav.roleLabel.teacherAndCoordinator,
+            somethingWentWrong: dict.common.somethingWentWrong,
+          }}
+        />
 
         {noticesOn && (
           <>
-            <h2 className="text-xl mt-10 mb-1">Published notices</h2>
-            <p className="text-sm text-[#5B6470] mb-3">
-              Everything the school has announced, and how far it has been read. Withdrawing removes a notice from
-              dashboards, class diaries and subscribed calendars — the record stays here.
-            </p>
+            <h2 className="text-xl mt-10 mb-1">{t.notices.title}</h2>
+            <p className="text-sm text-[#5B6470] mb-3">{t.notices.hint}</p>
             {notices.length === 0 ? (
-              <div className="card px-5 py-6 text-sm text-[#5B6470]">Nothing published yet.</div>
+              <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.notices.empty}</div>
             ) : (
               <div className="card divide-y divide-[#EEF0EC]">
                 {notices.map((n) => {
@@ -252,36 +269,38 @@ export default async function SchoolAdminPage() {
                   // then from parents. Anything else asks for nothing, and the
                   // row says so rather than showing a 0%.
                   const progress = staffNotice
-                    ? `Read by ${acked} of ${staffTotal} staff`
+                    ? fmt(t.notices.readByStaff, { n: acked, total: staffTotal })
                     : n.importance !== "important"
-                      ? "No acknowledgment asked"
+                      ? t.notices.noAckAsked
                       : linkedParents > 0
-                        ? `${Math.round((acked / linkedParents) * 100)}% acknowledged · ${acked} of ${linkedParents}${
-                            linksTruncated ? "+" : ""
-                          } parents`
-                        : `${acked} acknowledged — no linked parents on the roster yet`;
+                        ? fmt(t.notices.ackParents, {
+                            pct: Math.round((acked / linkedParents) * 100),
+                            n: acked,
+                            total: `${linkedParents}${linksTruncated ? "+" : ""}`,
+                          })
+                        : fmt(t.notices.ackNoParents, { n: acked });
                   const pinned = pinnedIds.has(n.id);
                   return (
                     <div key={n.id} className="px-5 py-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-sm text-[#14181F] truncate">{n.title}</div>
                         <div className="text-xs text-[#5B6470]">
-                          {staffNotice ? "Staff only" : "Everyone"}
+                          {staffNotice ? t.notices.staffOnly : t.notices.everyone}
                           {" · "}
-                          {nameOf.get(n.created_by ?? "") || "School"}
+                          {nameOf.get(n.created_by ?? "") || dict.school.fallback.school}
                           {n.starts_at ? ` · ${when(n.starts_at)}` : ""}
-                          {n.action_by ? ` · ${n.action_label || "By"} ${when(n.action_by)}` : ""}
-                          {pinned ? ` · featured until ${when(n.featured_until!)}` : ""}
+                          {n.action_by ? ` · ${n.action_label || t.notices.byFallback} ${when(n.action_by)}` : ""}
+                          {pinned ? ` · ${fmt(t.notices.featuredUntil, { when: when(n.featured_until!) })}` : ""}
                         </div>
                         <div className="text-xs text-[#98A0A9] tabular">{progress}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         {n.importance === "important" && (
-                          <span className="chip bg-[#FCEBEA] text-[#B42318]">important</span>
+                          <span className="chip bg-[#FCEBEA] text-[#B42318]">{t.notices.important}</span>
                         )}
                         {n.link_url && (
                           <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal">
-                            {n.link_label || "link"}
+                            {n.link_label || t.notices.link}
                           </span>
                         )}
                         <RevokeNoticeButton eventId={n.id} title={n.title} />
@@ -295,31 +314,35 @@ export default async function SchoolAdminPage() {
                 unmatched email usually means a sibling's address or a typo at
                 invite time — worth a word at the next parents' evening, and
                 worth knowing before you assume a notice landed. */}
-            {unverifiedLinks > 0 && (
-              <p className="text-xs text-[#98A0A9] mt-2">
-                {unverifiedLinks} linked parent{unverifiedLinks === 1 ? " does" : "s do"} not match the email on the
-                student record — on the records for {unverifiedNames.slice(0, 8).join(", ")}
-                {unverifiedNames.length > 8 ? ` and ${unverifiedNames.length - 8} more` : ""}. Nothing is blocked; they
-                still receive every notice. Worth confirming with the family when you next speak.
-              </p>
-            )}
+            {unverifiedLinks > 0 &&
+              (() => {
+                const names =
+                  unverifiedNames.slice(0, 8).join(", ") +
+                  (unverifiedNames.length > 8
+                    ? ` ${fmt(t.notices.andMore, { n: unverifiedNames.length - 8 })}`
+                    : "");
+                return (
+                  <p className="text-xs text-[#98A0A9] mt-2">
+                    {unverifiedLinks === 1
+                      ? fmt(t.notices.unverifiedOne, { names })
+                      : fmt(t.notices.unverifiedMany, { n: unverifiedLinks, names })}
+                  </p>
+                );
+              })()}
           </>
         )}
 
-        <h2 className="text-xl mt-10 mb-1">Members</h2>
-        <p className="text-sm text-[#5B6470] mb-3">
-          Teachers &amp; coordinators in your school. Resetting hands you a temporary password to
-          pass on — it&apos;s shown once, and they must choose a new one at their next sign-in.
-        </p>
+        <h2 className="text-xl mt-10 mb-1">{t.members.title}</h2>
+        <p className="text-sm text-[#5B6470] mb-3">{t.members.hint}</p>
         {members.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">No teachers yet.</div>
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.members.empty}</div>
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             {members.map((m) => (
               <div key={m.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
                 <span className="min-w-0 truncate">
                   <span className="font-medium">{m.name}</span>
-                  <span className="text-[#5B6470]"> · {m.role}</span>
+                  <span className="text-[#5B6470]"> · {t.role[m.role] ?? m.role}</span>
                 </span>
                 <ResetPasswordButton targetId={m.id} name={m.name} />
               </div>
@@ -327,13 +350,10 @@ export default async function SchoolAdminPage() {
           </div>
         )}
 
-        <h2 className="text-xl mt-10 mb-1">Students</h2>
-        <p className="text-sm text-[#5B6470] mb-3">
-          Every student account in your school. Deleting is permanent — the sign-in, class
-          enrollments and submitted work are all removed.
-        </p>
+        <h2 className="text-xl mt-10 mb-1">{t.students.title}</h2>
+        <p className="text-sm text-[#5B6470] mb-3">{t.students.hint}</p>
         {students.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">No students yet.</div>
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.students.empty}</div>
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             {students.map((s) => (
@@ -354,23 +374,23 @@ export default async function SchoolAdminPage() {
           </div>
         )}
 
-        <h2 className="text-xl mt-10 mb-1">Access audit</h2>
-        <p className="text-sm text-[#5B6470] mb-3">
-          Every leadership view of student data is logged here for the data-protection trail.
-        </p>
+        <h2 className="text-xl mt-10 mb-1">{t.audit.title}</h2>
+        <p className="text-sm text-[#5B6470] mb-3">{t.audit.hint}</p>
         {log.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">No access recorded yet.</div>
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.audit.empty}</div>
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             {log.map((l) => (
               <div key={l.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
                 <span className="min-w-0 truncate">
-                  <span className="font-medium">{nameOf.get(l.actor_id) || "User"}</span>
+                  <span className="font-medium">{nameOf.get(l.actor_id) || dict.school.fallback.user}</span>
                   <span className="text-[#5B6470]"> · {l.actor_role}</span>
                 </span>
                 <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
                   <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal">{l.scope}</span>
-                  {l.detail?.at_risk != null && <span className="tabular">{l.detail.at_risk} at-risk</span>}
+                  {l.detail?.at_risk != null && (
+                    <span className="tabular">{fmt(t.audit.atRisk, { n: l.detail.at_risk })}</span>
+                  )}
                   <span className="tabular">{new Date(l.created_at).toLocaleString()}</span>
                 </span>
               </div>

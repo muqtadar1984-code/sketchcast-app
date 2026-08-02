@@ -10,6 +10,9 @@ import { canonicalSubject, curriculumForGrade, DEFAULT_CORE_SUBJECTS } from "@/u
 import TimetableEditor from "./timetable-editor";
 import GenerateButton from "./generate-button";
 import AbsencePanel, { type AbsenceRow, type SubRow } from "./absence-panel";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 // Onboarding subject labels → curriculum subject names (loose aliases so a
 // teacher who picked "Computing / ICT" prefills onto the ICT row).
@@ -27,6 +30,9 @@ export const dynamic = "force-dynamic";
 // derived from the same rows. Coordinators edit only classes in their grade
 // slice (the RLS write policies are the enforcement; the UI mirrors them).
 export default async function TimetablePage() {
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.timetable;
   const supabase = await createClient();
   const {
     data: { user },
@@ -80,12 +86,9 @@ export default async function TimetablePage() {
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
         <main className="max-w-7xl mx-auto px-6 py-10">
-          <h1 className="text-4xl mb-2">Timetable</h1>
+          <h1 className="text-4xl mb-2">{t.title}</h1>
           <InkUnderline className="block h-3 w-28 mb-3" />
-          <p className="text-[#5B6470]">
-            No classes yet — the timetable appears once your school&apos;s classes are set up. SketchCast
-            provisions staff and classes with you during onboarding; contact support to get started.
-          </p>
+          <p className="text-[#5B6470]">{t.noClasses}</p>
         </main>
       </div>
     );
@@ -131,13 +134,13 @@ export default async function TimetablePage() {
     staff = (staffRaw ?? []) as StaffRow[];
   }
   const teachers = staff
-    .map((t) => ({ id: t.id, name: t.full_name || t.username || "Teacher" }))
+    .map((s) => ({ id: s.id, name: s.full_name || s.username || dict.school.fallback.teacher }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const staffDetails = staff
-    .map((t) => ({
-      id: t.id,
-      name: t.full_name || t.username || "Teacher",
-      subjects: (t.profile?.subjects ?? []).filter((s): s is string => typeof s === "string"),
+    .map((s) => ({
+      id: s.id,
+      name: s.full_name || s.username || dict.school.fallback.teacher,
+      subjects: (s.profile?.subjects ?? []).filter((x): x is string => typeof x === "string"),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -186,10 +189,10 @@ export default async function TimetablePage() {
     if (!initialMapping[subject]) initialMapping[subject] = [];
     if (!initialMapping[subject].includes(tid)) initialMapping[subject].push(tid);
   };
-  for (const t of staff) {
-    for (const declared of t.profile?.subjects ?? []) {
-      mapTeacher(declared, t.id);
-      for (const alias of SUBJECT_ALIASES[declared] ?? []) mapTeacher(alias, t.id);
+  for (const member of staff) {
+    for (const declared of member.profile?.subjects ?? []) {
+      mapTeacher(declared, member.id);
+      for (const alias of SUBJECT_ALIASES[declared] ?? []) mapTeacher(alias, member.id);
     }
   }
   for (const s of slots) if (s.teacher_id) mapTeacher(s.subject, s.teacher_id);
@@ -200,17 +203,25 @@ export default async function TimetablePage() {
         <AppHeader />
       </div>
       <main className="max-w-7xl mx-auto px-6 py-10 print:py-2">
-        <h1 className="text-4xl mb-2">Timetable</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3 print:hidden" />
         <div className="flex flex-wrap items-center justify-between gap-3 mb-7 print:hidden">
           <p className="text-[#5B6470]">
-            Build each class&apos;s week — clashes where a teacher is in two rooms at once light up instantly.
+            {t.intro}
             {!isAdmin && (
-              <span className="chip bg-[#E2F4F1] text-[#0C8175] ms-2">Grade {coordGrades.join(", ")}</span>
+              <span className="chip bg-[#E2F4F1] text-[#0C8175] ms-2">
+                {fmt(t.gradeScope, { grades: coordGrades.join(", ") })}
+              </span>
             )}
           </p>
           {isAdmin && (
-            <GenerateButton teachers={teachers} subjects={subjects} initialMapping={initialMapping} coreNames={coreNames} />
+            <GenerateButton
+              teachers={teachers}
+              subjects={subjects}
+              initialMapping={initialMapping}
+              coreNames={coreNames}
+              t={{ ...t.generate, cancel: dict.common.cancel }}
+            />
           )}
         </div>
         <AbsencePanel
@@ -222,6 +233,7 @@ export default async function TimetablePage() {
           canMark={isAdmin || coordGrades.length > 0}
           slots={slots}
           maxPerDay={shape.maxPerTeacherPerDay ?? 6}
+          t={{ ...t.absence, teacherFallback: dict.school.fallback.teacher, classFallback: dict.school.fallback.class }}
         />
         <TimetableEditor
           key={slotsVersion}
@@ -232,6 +244,14 @@ export default async function TimetablePage() {
           staffDetails={staffDetails}
           initialSlots={slots}
           isAdmin={isAdmin}
+          t={{
+            ...t,
+            cancel: dict.common.cancel,
+            save: dict.common.save,
+            saving: dict.common.saving,
+            teacherFallback: dict.school.fallback.teacher,
+            classFallback: dict.school.fallback.class,
+          }}
         />
       </main>
     </div>

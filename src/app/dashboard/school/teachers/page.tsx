@@ -4,6 +4,9 @@ import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 // Layer B — the teacher layer, for leadership. Two things kept distinct:
 //   * teacher activity (their OWN output): lessons generated, assignments made,
@@ -29,6 +32,9 @@ type TeacherRow = {
 };
 
 export default async function SchoolTeachersPage() {
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.teachers;
   const supabase = await createClient();
   const {
     data: { user },
@@ -83,7 +89,7 @@ export default async function SchoolTeachersPage() {
   const teacherIds = [...new Set(classes.map((c) => c.teacher_id))];
   const { data: tProfRaw } = await supabase.from("profiles").select("id, full_name, username").in("id", teacherIds.length ? teacherIds : ["00000000-0000-0000-0000-000000000000"]);
   const tProf = (tProfRaw ?? []) as { id: string; full_name: string | null; username: string | null }[];
-  const nameOf = new Map(tProf.map((p) => [p.id, p.full_name || p.username || "Teacher"] as const));
+  const nameOf = new Map(tProf.map((p) => [p.id, p.full_name || p.username || dict.school.fallback.teacher] as const));
 
   // ── Index ────────────────────────────────────────────────────────────────────
   const genOwner = new Map(gens.map((g) => [g.id, g.owner_id] as const));
@@ -115,10 +121,10 @@ export default async function SchoolTeachersPage() {
     if (s.graded_at) {
       const d = (new Date(s.graded_at).getTime() - new Date(s.submitted_at).getTime()) / DAY;
       if (d >= 0) {
-        const t = turnaround.get(owner) ?? { sum: 0, n: 0 };
-        t.sum += d;
-        t.n++;
-        turnaround.set(owner, t);
+        const acc = turnaround.get(owner) ?? { sum: 0, n: 0 };
+        acc.sum += d;
+        acc.n++;
+        turnaround.set(owner, acc);
       }
     }
   }
@@ -150,7 +156,7 @@ export default async function SchoolTeachersPage() {
     const ta = turnaround.get(tid);
     rows.push({
       id: tid,
-      name: nameOf.get(tid) || "Teacher",
+      name: nameOf.get(tid) || dict.school.fallback.teacher,
       lessons: lessonsByTeacher.get(tid) ?? 0,
       assignments: assignmentsByTeacher.get(tid) ?? 0,
       pending: pendingByTeacher.get(tid) ?? 0,
@@ -164,9 +170,10 @@ export default async function SchoolTeachersPage() {
   for (const r of rows) {
     const flags: string[] = [];
     if (r.completionPct != null && r.completionPct < baselinePct - BELOW_BASELINE)
-      flags.push(`${baselinePct - r.completionPct}pts below cohort`);
-    if (r.pending >= GRADING_BACKLOG) flags.push(`${r.pending} to grade`);
-    if (r.turnaroundDays != null && r.turnaroundDays > SLOW_GRADING_DAYS) flags.push(`${r.turnaroundDays}d to grade`);
+      flags.push(fmt(t.flag.belowCohort, { pts: baselinePct - r.completionPct }));
+    if (r.pending >= GRADING_BACKLOG) flags.push(fmt(t.flag.toGrade, { n: r.pending }));
+    if (r.turnaroundDays != null && r.turnaroundDays > SLOW_GRADING_DAYS)
+      flags.push(fmt(t.flag.slowGrading, { days: r.turnaroundDays }));
     r.flags = flags;
   }
   // Need-first ordering: flagged teachers on top, then lowest completion. Not a leaderboard.
@@ -190,51 +197,44 @@ export default async function SchoolTeachersPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-5xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">Teachers</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">
-          Activity and how each teacher&apos;s students are doing — to spot who could use support
-          {baseTotal > 0 && (
-            <>
-              , against the cohort baseline (
-              <span className="tabular text-[#0C8175]">{baselinePct}%</span> completion)
-            </>
-          )}
-          . Not a ranking.
+          {baseTotal > 0 ? fmt(t.introBaseline, { pct: baselinePct }) : t.intro}
         </p>
 
         {rows.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">No teachers in this scope yet.</div>
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.empty}</div>
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             <div className="hidden sm:grid grid-cols-[2fr_repeat(4,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium">
-              <span>Teacher</span>
-              <span className="text-end">Lessons</span>
-              <span className="text-end">Assigned</span>
-              <span className="text-end">To grade</span>
-              <span className="text-end">Completion</span>
+              <span>{t.col.teacher}</span>
+              <span className="text-end">{t.col.lessons}</span>
+              <span className="text-end">{t.col.assigned}</span>
+              <span className="text-end">{t.col.toGrade}</span>
+              <span className="text-end">{t.col.completion}</span>
             </div>
             {rows.map((r) => (
               <div key={r.id} className="px-5 py-3">
                 <div className="grid sm:grid-cols-[2fr_repeat(4,1fr)] gap-x-3 gap-y-1 items-center">
                   <span className="font-medium truncate">{r.name}</span>
                   <span className="tabular sm:text-end text-sm">
-                    <span className="sm:hidden text-[#5B6470]">Lessons </span>{r.lessons}
+                    <span className="sm:hidden text-[#5B6470]">{t.col.lessons} </span>{r.lessons}
                   </span>
                   <span className="tabular sm:text-end text-sm">
-                    <span className="sm:hidden text-[#5B6470]">Assigned </span>{r.assignments}
+                    <span className="sm:hidden text-[#5B6470]">{t.col.assigned} </span>{r.assignments}
                   </span>
                   <span className={`tabular sm:text-end text-sm ${r.pending >= GRADING_BACKLOG ? "text-[#9A6400]" : ""}`}>
-                    <span className="sm:hidden text-[#5B6470]">To grade </span>{r.pending}
+                    <span className="sm:hidden text-[#5B6470]">{t.col.toGrade} </span>{r.pending}
                   </span>
                   <span className="tabular sm:text-end text-sm">
-                    <span className="sm:hidden text-[#5B6470]">Completion </span>
+                    <span className="sm:hidden text-[#5B6470]">{t.col.completion} </span>
                     {r.completionPct == null ? "—" : `${r.completionPct}%`}
                   </span>
                 </div>
                 {r.flags.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    <span className="text-xs text-[#5B6470]">may need support:</span>
+                    <span className="text-xs text-[#5B6470]">{t.mayNeedSupport}</span>
                     {r.flags.map((f, i) => (
                       <span key={i} className="chip font-sans bg-[#FFF1D6] text-[#9A6400]">{f}</span>
                     ))}
@@ -244,10 +244,7 @@ export default async function SchoolTeachersPage() {
             ))}
           </div>
         )}
-        <p className="text-xs text-[#5B6470] mt-4">
-          Teachers can see their own school-visible metrics on their Analytics page — the school sees no more about a
-          teacher than the teacher can see about themselves.
-        </p>
+        <p className="text-xs text-[#5B6470] mt-4">{t.footnote}</p>
       </main>
     </div>
   );

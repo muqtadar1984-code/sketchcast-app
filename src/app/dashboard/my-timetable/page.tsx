@@ -5,9 +5,17 @@ import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { timetableEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
-import { DAY_NAMES, isLesson, shapeFromConfig, type Slot } from "@/utils/timetable";
+import { isLesson, shapeFromConfig, type Slot } from "@/utils/timetable";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 export const dynamic = "force-dynamic";
+
+/** The week's ORDER (mirroring utils/timetable's DAY_NAMES); the words come
+ * from the dictionary, one key per day so a partly-translated locale falls back
+ * per day rather than blanking the header row. */
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
 // "My timetable" — the read-only schedule every SCHOOL member gets from their
 // own login (the editable builder stays a leadership surface):
@@ -18,6 +26,10 @@ export const dynamic = "force-dynamic";
 // through the service role because a member's RLS view of profiles/classes is
 // deliberately narrower than the school-wide grid they can already see.
 export default async function MyTimetablePage() {
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.myTimetable;
+  const tt = dict.school.timetable;
   const supabase = await createClient();
   const {
     data: { user },
@@ -42,7 +54,7 @@ export default async function MyTimetablePage() {
 
   const { data: school } = await supabase.from("schools").select("config").eq("id", schoolId).maybeSingle();
   const shape = shapeFromConfig(school?.config ?? null);
-  const days = DAY_NAMES.slice(0, shape.days);
+  const days = DAY_KEYS.slice(0, shape.days).map((k) => tt.days[k]);
 
   const { data: slotsRaw } = await supabase
     .from("timetable_slots")
@@ -72,16 +84,17 @@ export default async function MyTimetablePage() {
     ]);
     classNames = new Map(((cls ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
     teacherNames = new Map(
-      ((staff ?? []) as { id: string; full_name: string | null; username: string | null }[]).map((t) => [
-        t.id,
-        t.full_name || t.username || "Teacher",
+      ((staff ?? []) as { id: string; full_name: string | null; username: string | null }[]).map((s) => [
+        s.id,
+        s.full_name || s.username || dict.school.fallback.teacher,
       ]),
     );
   } catch {
     const { data: cls } = await supabase.from("classes").select("id, name");
     classNames = new Map(((cls ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   }
-  const firstName = (id: string | null) => (id ? (teacherNames.get(id) ?? "Teacher").split(" ")[0] : "");
+  const firstName = (id: string | null) =>
+    id ? (teacherNames.get(id) ?? dict.school.fallback.teacher).split(" ")[0] : "";
 
   // Upcoming cover duties for teachers (assigned when a colleague is absent).
   type Cover = { on_date: string; period: number; subject: string; class_id: string; original_teacher_id: string | null };
@@ -110,7 +123,7 @@ export default async function MyTimetablePage() {
   }
 
   const grids: { title: string | null; classId: string | null }[] = isStudent
-    ? classIds.map((id) => ({ title: classNames.get(id) ?? "My class", classId: id }))
+    ? classIds.map((id) => ({ title: classNames.get(id) ?? t.myClass, classId: id }))
     : [{ title: null, classId: null }];
 
   const renderGrid = (classId: string | null) => (
@@ -118,7 +131,7 @@ export default async function MyTimetablePage() {
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-            <th className="px-2 py-2 text-start font-normal w-20">Period</th>
+            <th className="px-2 py-2 text-start font-normal w-20">{tt.period}</th>
             {days.map((d) => (
               <th key={d} className="px-2 py-2 text-start font-normal">
                 {d}
@@ -144,7 +157,7 @@ export default async function MyTimetablePage() {
                         <div className={`rounded px-1.5 py-1 text-[11px] leading-4 ${isLesson(s) ? "bg-[#F4F6F3]" : "bg-[#EFEDF7]"}`}>
                           <span className="text-[#14181F]">{s.subject}</span>
                           <span className="block text-[#5B6470]">
-                            {isStudent ? firstName(s.teacher_id) : (classNames.get(s.class_id) ?? "Class")}
+                            {isStudent ? firstName(s.teacher_id) : (classNames.get(s.class_id) ?? dict.school.fallback.class)}
                             {s.room ? ` · ${s.room}` : ""}
                           </span>
                         </div>
@@ -160,7 +173,7 @@ export default async function MyTimetablePage() {
                   <td colSpan={days.length + 1} className="px-2 py-1 text-[11px] text-[#9A6400]">
                     ☕ {b.label}
                     {b.time ? ` · ${b.time}` : ""}
-                    {b.minutes ? ` · ${b.minutes} min` : ""}
+                    {b.minutes ? ` · ${fmt(tt.minutes, { n: b.minutes })}` : ""}
                   </td>
                 </tr>
               )),
@@ -172,8 +185,10 @@ export default async function MyTimetablePage() {
   );
 
   const hoursLine = [
-    shape.start && shape.end ? `School hours ${shape.start} – ${shape.end}` : null,
-    ...(shape.breaks ?? []).map((b) => `${b.label} ${b.time ?? ""}${b.minutes ? ` · ${b.minutes} min` : ""}`),
+    shape.start && shape.end ? fmt(tt.schoolHours, { start: shape.start, end: shape.end }) : null,
+    ...(shape.breaks ?? []).map(
+      (b) => `${b.label} ${b.time ?? ""}${b.minutes ? ` · ${fmt(tt.minutes, { n: b.minutes })}` : ""}`,
+    ),
   ]
     .filter(Boolean)
     .join("   ·   ");
@@ -184,22 +199,22 @@ export default async function MyTimetablePage() {
         <AppHeader />
       </div>
       <main className="max-w-7xl mx-auto px-6 py-10 print:py-2">
-        <h1 className="text-4xl mb-2">My timetable</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3 print:hidden" />
-        <p className="text-[#5B6470] mb-6 print:hidden">
-          {isStudent ? "Your class's week." : "The lessons you teach this week."}
-        </p>
+        <p className="text-[#5B6470] mb-6 print:hidden">{isStudent ? t.studentIntro : t.teacherIntro}</p>
 
         {!isStudent && covers.length > 0 && (
           <div className="card p-4 mb-5">
-            <p className="text-sm font-medium mb-2">Cover duties</p>
+            <p className="text-sm font-medium mb-2">{t.covers}</p>
             <ul className="text-sm text-[#5B6470] space-y-1">
               {covers.map((c, i) => (
                 <li key={i}>
                   <span className="chip bg-[#FFF1D6] text-[#9A6400] me-2">{c.on_date}</span>
                   {shape.periods[c.period - 1]?.label ?? `P${c.period}`} · {c.subject} ·{" "}
-                  {classNames.get(c.class_id) ?? "Class"}
-                  {c.original_teacher_id ? ` — covering for ${firstName(c.original_teacher_id)}` : ""}
+                  {classNames.get(c.class_id) ?? dict.school.fallback.class}
+                  {c.original_teacher_id
+                    ? ` ${fmt(t.coveringFor, { name: firstName(c.original_teacher_id) })}`
+                    : ""}
                 </li>
               ))}
             </ul>
@@ -212,11 +227,7 @@ export default async function MyTimetablePage() {
             {renderGrid(g.classId)}
           </div>
         ))}
-        {mySlots.length === 0 && (
-          <p className="text-sm text-[#5B6470]">
-            No lessons on the timetable yet — it appears here as soon as the school publishes it.
-          </p>
-        )}
+        {mySlots.length === 0 && <p className="text-sm text-[#5B6470]">{t.empty}</p>}
         {hoursLine && <p className="text-xs text-[#5B6470] mt-2">{hoursLine}</p>}
       </main>
     </div>

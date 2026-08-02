@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 export type EditorClass = { id: string; name: string };
 export type EditableEvent = {
@@ -19,12 +20,18 @@ export type EditableEvent = {
 };
 
 const KINDS = ["meeting", "exam", "holiday", "activity", "pd", "other"] as const;
-const AUDIENCES: { value: string; label: string }[] = [
-  { value: "staff", label: "Staff only" },
-  { value: "school", label: "Whole school (incl. students & parents)" },
-  { value: "leadership", label: "Leadership only" },
-  { value: "class", label: "One class" },
-];
+// The stored audience VALUES, in the order they read best. Their words come
+// from the dictionary (t.audiences), keyed by the value the database holds.
+const AUDIENCES = ["staff", "school", "leadership", "class"] as const;
+
+/** Every word the editor renders, plus the shared event-type vocabulary and the
+ * common Save/Cancel. Typed from the English dictionary, but the import is
+ * type-only — the server-only module is erased here and no translation file
+ * reaches the browser bundle. */
+export type EventEditorMessages = Dictionary["comms"]["calendar"]["editor"] & {
+  kinds: Dictionary["comms"]["calendar"]["kinds"];
+  common: Dictionary["common"];
+};
 
 // Times are entered and shown in SCHOOL time (Malaysia, fixed UTC+8, no DST) —
 // never the browser's zone, or an admin travelling abroad would silently save
@@ -50,12 +57,14 @@ export default function EventEditor({
   classes,
   userId,
   existing,
+  t,
 }: {
   schoolId: string;
   isAdmin: boolean;
   classes: EditorClass[];
   userId: string;
   existing?: EditableEvent;
+  t: EventEditorMessages;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -79,12 +88,12 @@ export default function EventEditor({
     e.preventDefault();
     setError(null);
     if (!title.trim() || !start) {
-      setError("A title and a start time are required.");
+      setError(t.titleAndStartRequired);
       return;
     }
     const aud = isAdmin ? audience : "class";
     if (aud === "class" && !classId) {
-      setError("Pick a class for a class event.");
+      setError(t.pickAClass);
       return;
     }
     setBusy(true);
@@ -110,7 +119,7 @@ export default function EventEditor({
     const { data, error: err } = await q;
     setBusy(false);
     if (err || !data?.length) {
-      setError(err?.message || "You can't save this event (check the audience/class).");
+      setError(err?.message || t.cannotSave);
       return;
     }
     setOpen(false);
@@ -125,7 +134,7 @@ export default function EventEditor({
     const { data, error: err } = await supabase.from("school_events").delete().eq("id", existing.id).select("id");
     setBusy(false);
     if (err || !data?.length) {
-      setError(err?.message || "You can't delete this event.");
+      setError(err?.message || t.cannotDelete);
       return;
     }
     setOpen(false);
@@ -136,11 +145,11 @@ export default function EventEditor({
     <>
       {existing ? (
         <button onClick={() => setOpen(true)} className="btn-ghost h-8 px-2.5 text-xs">
-          Edit
+          {t.edit}
         </button>
       ) : (
         <button onClick={() => setOpen(true)} className="btn-primary h-10 px-4 text-sm">
-          Add event
+          {t.add}
         </button>
       )}
       {open && (
@@ -150,10 +159,10 @@ export default function EventEditor({
             onClick={(e) => e.stopPropagation()}
             className="card w-full max-w-md p-6 space-y-3 max-h-[90vh] overflow-y-auto"
           >
-            <h2 className="text-lg">{existing ? "Edit event" : "New event"}</h2>
+            <h2 className="text-lg">{existing ? t.editTitle : t.newTitle}</h2>
             <input
               required
-              placeholder="Title"
+              placeholder={t.titlePlaceholder}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="field w-full h-10 px-3 text-sm"
@@ -161,33 +170,35 @@ export default function EventEditor({
             />
             <div className="grid grid-cols-2 gap-2">
               <label className="text-xs text-[#5B6470]">
-                Type
+                {t.type}
                 <select value={kind} onChange={(e) => setKind(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
                   {KINDS.map((k) => (
                     <option key={k} value={k}>
-                      {k === "pd" ? "PD / training" : k[0].toUpperCase() + k.slice(1)}
+                      {t.kinds[k]}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="text-xs text-[#5B6470]">
-                Who sees it
+                {t.whoSeesIt}
                 {isAdmin ? (
                   <select value={audience} onChange={(e) => setAudience(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
                     {AUDIENCES.map((a) => (
-                      <option key={a.value} value={a.value}>
-                        {a.label}
+                      <option key={a} value={a}>
+                        {t.audiences[a]}
                       </option>
                     ))}
                   </select>
                 ) : (
-                  <div className="field w-full h-10 px-3 text-sm mt-1 flex items-center bg-[#F5F6F3]">One class</div>
+                  <div className="field w-full h-10 px-3 text-sm mt-1 flex items-center bg-[#F5F6F3]">
+                    {t.audiences.class}
+                  </div>
                 )}
               </label>
             </div>
             {(isAdmin ? audience === "class" : true) && (
               <label className="text-xs text-[#5B6470] block">
-                Class
+                {t.class}
                 <select value={classId} onChange={(e) => setClassId(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -199,11 +210,11 @@ export default function EventEditor({
             )}
             <label className="flex items-center gap-2 text-sm text-[#5B6470]">
               <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-              All-day
+              {t.allDay}
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="text-xs text-[#5B6470]">
-                Starts {allDay ? "" : "(school time, MYT)"}
+                {allDay ? t.starts : t.startsSchoolTime}
                 <input
                   required
                   type={allDay ? "date" : "datetime-local"}
@@ -213,7 +224,7 @@ export default function EventEditor({
                 />
               </label>
               <label className="text-xs text-[#5B6470]">
-                Ends (optional)
+                {t.ends}
                 <input
                   type={allDay ? "date" : "datetime-local"}
                   value={allDay ? end.slice(0, 10) : end}
@@ -223,14 +234,14 @@ export default function EventEditor({
               </label>
             </div>
             <input
-              placeholder="Location (optional)"
+              placeholder={t.locationPlaceholder}
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="field w-full h-10 px-3 text-sm"
               maxLength={120}
             />
             <textarea
-              placeholder="Details (optional)"
+              placeholder={t.detailsPlaceholder}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="field w-full px-3 py-2 text-sm min-h-[70px]"
@@ -240,17 +251,17 @@ export default function EventEditor({
             <div className="flex items-center justify-between pt-1">
               {existing ? (
                 <button type="button" onClick={() => void remove()} disabled={busy} className="text-sm text-[#B42318] hover:underline">
-                  Delete
+                  {t.delete}
                 </button>
               ) : (
                 <span />
               )}
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-10 px-4 text-sm">
-                  Cancel
+                  {t.common.cancel}
                 </button>
                 <button type="submit" disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
-                  {busy ? "Saving…" : "Save"}
+                  {busy ? t.common.saving : t.common.save}
                 </button>
               </div>
             </div>

@@ -125,5 +125,1381 @@
       "multiPartHint": "Bahagian {n} daripada {total} (~15 min). Habiskan satu bahagian untuk menandakannya — bahagian terakhir melengkapkan pelajaran.",
       "singlePartHint": "Tonton sehingga habis untuk menandakan pelajaran ini selesai."
     }
+  },
+  "app": {
+    "auth": {
+      "or": "atau",
+      "signIn": "Log masuk",
+      "signOut": "Log keluar",
+      "fullName": "Nama penuh",
+      "email": "E-mel",
+      "password": "Kata laluan",
+      "alreadyHaveAccount": "Sudah ada akaun?",
+      "schoolPrompt": "Menyediakan satu sekolah penuh?",
+      "schoolCta": "Sediakan sekolah anda"
+    },
+    "oauth": {
+      "signInWith": "Log masuk dengan {provider}",
+      "signUpWith": "Daftar dengan {provider}",
+      "redirecting": "Mengalihkan…"
+    },
+    "login": {
+      "subtitle": "Log masuk ke akaun anda",
+      "emailOrId": "E-mel atau ID pelajar",
+      "forgot": "Lupa kata laluan?",
+      "signingIn": "Sedang log masuk…",
+      "newHere": "Baharu di sini?",
+      "createAccount": "Cipta akaun"
+    },
+    "forgot": {
+      "subtitle": "Tetapkan semula kata laluan anda",
+      "sent": "Jika ada akaun untuk e-mel itu, pautan tetapan semula sedang dihantar. Semak peti masuk anda (dan folder spam).",
+      "emailPlaceholder": "E-mel anda",
+      "studentHint": "Itu nampak seperti ID pelajar. Akaun pelajar tiada e-mel — minta guru atau ibu bapa anda menetapkan semula kata laluan anda dari papan pemuka mereka.",
+      "sending": "Menghantar…",
+      "send": "Hantar pautan tetapan semula",
+      "remembered": "Sudah ingat?",
+      "backToSignIn": "Kembali ke log masuk"
+    },
+    "updatePassword": {
+      "subtitle": "Pilih kata laluan baharu",
+      "checking": "Sekejap…",
+      "expired": "Pautan ini telah luput atau anda belum log masuk.",
+      "requestNewLink": "Minta pautan tetapan semula baharu",
+      "signInLink": "log masuk",
+      "updated": "Kata laluan dikemas kini — membawa anda ke papan pemuka…",
+      "newPassword": "Kata laluan baharu (minimum 8 aksara)",
+      "repeatPassword": "Ulang kata laluan baharu",
+      "tooShort": "Kata laluan mesti sekurang-kurangnya 8 aksara.",
+      "mismatch": "Kedua-dua kata laluan tidak sama.",
+      "submit": "Tetapkan kata laluan baharu"
+    },
+    "signup": {
+      "title": "Cipta akaun anda",
+      "subtitle": "Percuma untuk guru & pelajar",
+      "passwordMin": "Kata laluan (minimum 6 aksara)",
+      "roles": {
+        "teacher": "Guru",
+        "student": "Pelajar",
+        "parent": "Ibu bapa"
+      },
+      "confirmEmail": "Semak e-mel anda untuk mengesahkan akaun, kemudian log masuk.",
+      "creating": "Mencipta…",
+      "submit": "Cipta akaun"
+    },
+    "schoolSignup": {
+      "title": "Sediakan sekolah anda",
+      "subtitle": "Cipta sekolah anda di SketchCast, kemudian jemput guru-guru anda.",
+      "yourFullName": "Nama penuh anda",
+      "workEmail": "E-mel kerja",
+      "createPassword": "Cipta kata laluan (minimum 6 aksara)",
+      "creating": "Mencipta…",
+      "continue": "Teruskan",
+      "confirmEmail": "Semak e-mel anda untuk mengesahkan akaun — kemudian anda akan menamakan sekolah anda.",
+      "nextStepHint": "Anda akan menamakan sekolah anda pada langkah seterusnya.",
+      "finish": {
+        "title": "Namakan sekolah anda",
+        "signedInAs": "Log masuk sebagai {email}. Ini mencipta sekolah anda dan menjadikan anda pentadbirnya — anda boleh menjemput guru sebaik selepas itu.",
+        "schoolName": "Nama sekolah",
+        "creating": "Mencipta…",
+        "submit": "Cipta sekolah saya"
+      }
+    },
+    "invite": {
+      "notAvailable": "Jemputan tidak tersedia buat masa ini.",
+      "unavailableTitle": "Jemputan tidak tersedia",
+      "used": "Jemputan ini telah pun digunakan.",
+      "invalid": "Pautan jemputan ini tidak sah.",
+      "expired": "Jemputan ini telah luput.",
+      "goToSignIn": "Pergi ke log masuk",
+      "title": "Anda dijemput",
+      "joinAs": "Sertai {school} sebagai {role}",
+      "forEmail": "untuk {email}",
+      "fallbackSchool": "sekolah anda",
+      "roles": {
+        "schoolAdmin": "Pentadbir sekolah",
+        "teacher": "Guru",
+        "parent": "Ibu bapa"
+      },
+      "reason": {
+        "invalid": "Pautan jemputan ini tidak sah.",
+        "expired": "Jemputan ini telah luput.",
+        "email": "Jemputan itu untuk alamat e-mel yang lain — log keluar dan gunakan e-mel tersebut.",
+        "apply": "Ada masalah semasa menerima jemputan. Sila cuba lagi.",
+        "server": "Jemputan belum disediakan pada pelayan.",
+        "role": "Akaun pelajar tidak boleh menerima jemputan ibu bapa — log keluar dan gunakan akaun ibu bapa sendiri."
+      },
+      "accept": "Terima jemputan",
+      "wrongAccount": "Anda log masuk sebagai {signedIn}, tetapi jemputan ini untuk {invited}. Log keluar dan gunakan e-mel tersebut.",
+      "invitedEmail": "E-mel yang dijemput",
+      "createPassword": "Cipta kata laluan (minimum 6)",
+      "creating": "Mencipta…",
+      "submit": "Terima & cipta akaun",
+      "confirmEmail": "Semak e-mel anda untuk mengesahkan akaun — pautan pengesahan akan melengkapkan penerimaan jemputan secara automatik.",
+      "googleHint": "Gunakan akaun Google untuk {email}."
+    },
+    "onboarding": {
+      "title": "Selamat datang — mari kita sediakan",
+      "subtitle": "Beberapa soalan ringkas supaya SketchCast sesuai dengan cara anda menggunakannya. Anda boleh ubah kemudian.",
+      "roleQuestion": "Saya di sini sebagai…",
+      "teacher": "Guru",
+      "teacherSub": "Cipta pelajaran & ajar kelas",
+      "parent": "Ibu bapa",
+      "parentSub": "Menyokong pembelajaran anak saya",
+      "fullName": "Nama penuh anda",
+      "namePlaceholder": "cth. Alex Morgan",
+      "whereTeach": "Di mana anda mengajar?",
+      "pickOne": "Sila pilih satu.",
+      "schoolName": "Nama sekolah",
+      "schoolPlaceholder": "cth. Riverside Secondary",
+      "gradesTeach": "Tahun persekolahan yang anda ajar",
+      "pickAtLeastOne": "Pilih sekurang-kurangnya satu.",
+      "subjectsTeach": "Mata pelajaran yang anda ajar",
+      "childrenCount": "Berapa ramai anak yang anda akan bantu?",
+      "childrenPlaceholder": "cth. 2",
+      "childGrades": "Tahun persekolahan anak anda",
+      "heardFrom": "Bagaimana anda mengetahui tentang kami?",
+      "optional": "Pilihan",
+      "completeRequired": "Sila lengkapkan ruangan wajib bertanda *.",
+      "settingUp": "Menyediakan…",
+      "continue": "Teruskan",
+      "networkError": "Ralat rangkaian. Sila cuba lagi.",
+      "affiliations": {
+        "school": "Saya mengajar di sekolah",
+        "independent": "Guru / tutor bebas",
+        "homeschool": "Pendidik homeschool"
+      },
+      "grades": {
+        "kindergarten": "Prasekolah / Tadika",
+        "g1to3": "Tahun 1–3",
+        "g4to6": "Tahun 4–6",
+        "g7to9": "Tahun 7–9",
+        "g10to12": "Tahun 10–12"
+      },
+      "subjects": {
+        "maths": "Matematik",
+        "science": "Sains",
+        "english": "Bahasa Inggeris",
+        "computing": "Komputer / ICT",
+        "socialStudies": "Kajian sosial",
+        "languages": "Bahasa",
+        "arts": "Seni",
+        "other": "Lain-lain"
+      }
+    },
+    "reportIssue": {
+      "label": "Laporkan masalah",
+      "labelStudent": "Perlukan bantuan?",
+      "titleStudent": "Ada yang tak berfungsi?",
+      "about": "Mengenai apa?",
+      "summary": "Ringkasan",
+      "summaryStudent": "Apa yang berlaku? (beberapa perkataan)",
+      "summaryPlaceholder": "cth. Muat turun slaid gagal pada Unit 3",
+      "summaryPlaceholderStudent": "Video tidak mahu dimainkan",
+      "details": "Butiran (pilihan)",
+      "detailsPlaceholder": "Apa yang anda jangkakan, apa yang berlaku sebaliknya?",
+      "screenshots": "Tangkapan skrin (pilihan)",
+      "screenshotsCount": "Tangkapan skrin (pilihan · {n}/{max})",
+      "removeFile": "Buang {name}",
+      "notSignedIn": "Belum log masuk.",
+      "sendFailedNetwork": "Tidak dapat menghantar — semak sambungan anda dan cuba lagi.",
+      "sendFailed": "Tidak dapat menghantar — sila cuba lagi.",
+      "attachedOneFailed": "Dihantar, tetapi 1 tangkapan skrin tidak dapat dilampirkan.",
+      "attachedSomeFailed": "Dihantar, tetapi {n} tangkapan skrin tidak dapat dilampirkan.",
+      "sent": "Dihantar",
+      "sending": "Menghantar…",
+      "send": "Hantar",
+      "categories": {
+        "video": "Pelajaran video",
+        "deckDocs": "Slaid / dokumen",
+        "quiz": "Kuiz",
+        "upload": "Muat naik buku",
+        "login": "Log masuk",
+        "speed": "Perlahan",
+        "other": "Lain-lain"
+      }
+    },
+    "betaBanner": {
+      "welcome": "Selamat datang ke SketchCast!",
+      "body": "Percubaan percuma anda merangkumi {trial}. Kelas, tugasan, semakan dan analitik semuanya tanpa had. Ada soalan?",
+      "trial": "1 buku dan kit penuh — pelajaran video, rancangan, aktiviti, lembaran kerja, kertas ujian dan kajian kes — untuk satu bahagian daripada satu bab"
+    },
+    "tour": {
+      "teacher_onboarding": {
+        "library": {
+          "title": "Pustaka anda",
+          "body": "Setiap buku teks yang anda muat naik tersimpan di sini. Buka satu untuk menjadikan babnya pelajaran."
+        },
+        "generate": {
+          "title": "Jadikan satu bab sebagai pelajaran",
+          "body": "Pilih satu bab dan jana pelajaran video bernarasi penuh daripadanya — secara automatik."
+        },
+        "output": {
+          "title": "Tonton & muat turun",
+          "body": "Mainkan pelajaran yang siap, atau muat turun slaid boleh sunting dan lembaran kerja."
+        },
+        "assign": {
+          "title": "Tugaskan kepada kelas",
+          "body": "Kongsi pelajaran, lembaran kerja dan kuiz sesuatu bab dengan pelajar anda dengan satu klik."
+        },
+        "assistant": {
+          "title": "Pembantu Pengajaran AI",
+          "body": "Pembantu berasaskan buku — tanya apa sahaja daripada buku anda, dan ia boleh menyemak matematik juga."
+        },
+        "classes": {
+          "title": "Kelas anda",
+          "body": "Cipta kelas dan tambah pelajar untuk mula menjejak kemajuan mereka."
+        }
+      },
+      "student_onboarding": {
+        "assignments": {
+          "title": "Kerja anda",
+          "body": "Semua yang guru anda berikan akan muncul di sini."
+        },
+        "open": {
+          "title": "Tonton pelajaran",
+          "body": "Buka pelajaran untuk menonton videonya atau membaca slaidnya."
+        },
+        "assistant": {
+          "title": "Tanya Pembantu",
+          "body": "Buntu? Tanya pembantu AI — ia menjawab daripada buku anda sendiri."
+        },
+        "progress": {
+          "title": "Kemajuan anda",
+          "body": "Lihat apa yang sudah siap dan apa yang belum."
+        }
+      },
+      "parent_onboarding": {
+        "assignments": {
+          "title": "Kerja anak anda",
+          "body": "Lihat tugasan setiap anak dan bagaimana kemajuan mereka."
+        },
+        "recap": {
+          "title": "Kemajuan & ringkasan",
+          "body": "Jejak penyiapan dan markah sepintas lalu — tanpa meneka."
+        },
+        "practice": {
+          "title": "Buat latihan tambahan",
+          "body": "Cipta kertas ujian untuk anak anda bila-bila masa di bawah Kertas Ujian."
+        }
+      },
+      "school_admin_onboarding": {
+        "school": {
+          "title": "Urus sekolah anda",
+          "body": "Buka ruang sekolah anda untuk menambah guru, pelajar dan kelas."
+        },
+        "branding": {
+          "title": "Penjenamaan sekolah",
+          "body": "Tambah logo dan warna sekolah anda pada setiap pelajaran dan dokumen."
+        },
+        "health": {
+          "title": "Kualiti buku",
+          "body": "Skor kualiti ringkas menunjukkan buku teks mana yang sedia untuk diajar."
+        },
+        "classes": {
+          "title": "Kelas & pelajar",
+          "body": "Cipta kelas dan daftarkan pelajar untuk menjejak kemajuan mereka."
+        }
+      },
+      "coordinator_onboarding": {
+        "welcome": {
+          "title": "Selamat datang ke SketchCast",
+          "body": "Ini lihatan ringkas 30 saat tentang apa yang anda boleh buat sebagai penyelaras."
+        },
+        "oversight": {
+          "title": "Apa yang anda selia",
+          "body": "Kelas dan guru dalam bidang anda akan muncul di ruang ini."
+        },
+        "help": {
+          "title": "Perlukan bantuan?",
+          "body": "Ulang panduan ini bila-bila masa dengan butang ini — dan anda sentiasa boleh melaporkan masalah."
+        }
+      }
+    }
+  },
+  "comms": {
+    "diary": {
+      "title": "Diari",
+      "teacherIntro": "Buku komunikasi harian — nota ke rumah, balasan, tandatangan ibu bapa, dan apa yang berlaku di dalam kelas.",
+      "parentIntro": "Buku komunikasi harian — satu halaman sehari, bagi setiap anak. Tandatangani nota supaya guru tahu anda sudah melihatnya.",
+      "studentIntro": "Nota daripada guru anda, sehari satu — balas untuk memberitahu mereka.",
+      "viewingAsTeacher": "Melihat sebagai guru",
+      "seeChildrensDiary": "lihat diari anak saya",
+      "viewingAsParent": "Melihat sebagai ibu bapa",
+      "backToClassDiary": "kembali ke diari kelas saya",
+      "noClasses": "Cipta kelas di Pustaka anda dahulu — diari ditulis mengikut kelas.",
+      "noChildrenLinked": "Belum ada anak dipautkan — tambah anak anda di bawah Anak Saya dahulu.",
+      "fromClassroom": "Dari dalam kelas ({count})",
+      "nothingRecorded": "Tiada catatan untuk hari ini.",
+      "notesHeading": "Nota ({count})",
+      "noNotesWriteFirst": "Belum ada nota untuk hari ini — tulis yang pertama di atas.",
+      "noNotes": "Tiada nota untuk hari ini.",
+      "addToDiary": "Tambah ke diari",
+      "saveNoteFailed": "Tidak dapat menyimpan nota.",
+      "nav": {
+        "previousDay": "Hari sebelumnya",
+        "nextDay": "Hari seterusnya",
+        "today": "Hari ini",
+        "diaryDay": "Hari diari"
+      },
+      "noteTypes": {
+        "homework": "Kerja rumah",
+        "reminder": "Peringatan",
+        "praise": "Pujian",
+        "concern": "Kebimbangan",
+        "health": "Kesihatan",
+        "general": "Umum"
+      },
+      "kinds": {
+        "presentation": "Pelajaran video",
+        "activity": "Aktiviti",
+        "worksheet": "Lembaran kerja",
+        "exam_paper": "Kertas ujian",
+        "exam": "Peperiksaan",
+        "case_study": "Kajian kes",
+        "lesson_plan": "Rancangan pengajaran"
+      },
+      "people": {
+        "you": "Anda",
+        "yourself": "anda",
+        "teacher": "Guru",
+        "parent": "Ibu bapa",
+        "aParent": "Seorang ibu bapa",
+        "student": "Pelajar",
+        "aStudent": "Seorang pelajar",
+        "oneStudent": "seorang pelajar",
+        "child": "Anak",
+        "theClass": "Kelas",
+        "yourClass": "kelas anda"
+      },
+      "entry": {
+        "assigned": "Menugaskan {title}",
+        "assignedToYou": "{title} ditugaskan",
+        "assignedToYouIn": "{title} ditugaskan · {class}",
+        "completedBy": "{name} menyiapkan {title}",
+        "youCompleted": "Anda menyiapkan {title}",
+        "withScore": "{text} · {score}",
+        "schoolNotice": "Notis sekolah — {title}",
+        "withDeadline": "{text} · {label} {date}",
+        "deadline": "{label} {date}",
+        "by": "Oleh",
+        "fromTheSchool": "daripada sekolah",
+        "anAssignment": "satu tugasan",
+        "anAssignmentStart": "Satu tugasan",
+        "assignment": "Tugasan",
+        "assignedIn": "ditugaskan · {where}",
+        "direct": "terus",
+        "classFallback": "kelas",
+        "assignedChip": "ditugaskan",
+        "completedChip": "siap",
+        "schoolNoticeChip": "notis sekolah",
+        "completedByOne": "disiapkan oleh 1 pelajar",
+        "completedByMany": "disiapkan oleh {n} pelajar"
+      },
+      "note": {
+        "parentsOnly": "ibu bapa sahaja",
+        "translateLikeLastTime": "Terjemah seperti kali lalu",
+        "translate": "Terjemah",
+        "translating": "Menterjemah…",
+        "translateAria": "Terjemah nota ini — menghantar teksnya kepada penyedia terjemahan AI kami",
+        "translateTitle": "Terjemahan mesin — teks nota ini dihantar kepada penyedia AI kami untuk diterjemahkan",
+        "deleteNote": "Padam nota ini",
+        "deleteNoteConfirm": "Padam nota ini dan balasannya? Tandatangan ibu bapa padanya turut dipadam.",
+        "deleting": "Memadam…",
+        "yesDelete": "Ya, padam",
+        "deleteReply": "Padam balasan anda",
+        "deleteReplyConfirm": "Padam balasan ini?",
+        "replyPlaceholder": "Tulis balasan…",
+        "sending": "Menghantar…",
+        "reply": "Balas",
+        "signedTitle": "Ibu bapa yang telah menandatangani nota ini, daripada pelajar berdaftar yang mempunyai akaun ibu bapa dipautkan",
+        "signedCount": "Ditandatangani {signed}/{total}",
+        "signed": "Ditandatangani",
+        "signing": "Menandatangani…",
+        "acknowledge": "Tandatangan",
+        "translationIncomplete": "Terjemahan tidak lengkap — memaparkan teks asal.",
+        "translationPartial": "Terjemahan tidak lengkap — {missing} daripada {total} mesej masih memaparkan teks asal.",
+        "retry": "Cuba lagi",
+        "signFailed": "Tidak dapat menandatangani — sila cuba lagi.",
+        "replyFailed": "Tidak dapat menghantar balasan.",
+        "deleteNoteFailed": "Tidak dapat memadam nota.",
+        "deleteReplyFailed": "Tidak dapat memadam balasan."
+      },
+      "compose": {
+        "title": "Tulis dalam diari",
+        "placeholder": "Tulis nota ke rumah — kerja rumah, peringatan, bagaimana hari berjalan…",
+        "targetAria": "Nota ini untuk siapa?",
+        "wholeClass": "Seluruh kelas — {class}",
+        "onlyStudent": "{name} sahaja",
+        "parentsOnly": "Ibu bapa sahaja",
+        "parentsOnlyHint": "— tersembunyi daripada pelajar; ibu bapa, guru dan pimpinan sekolah tetap melihatnya",
+        "added": "Ditambah"
+      },
+      "parentCompose": {
+        "open": "Tulis nota tentang {name}",
+        "placeholder": "Nota peribadi untuk guru {name} — cth. ketidakhadiran, ubat, sesuatu dari rumah…",
+        "letChildSee": "Benarkan {name} melihat nota ini juga",
+        "letChildSeeHint": "Dimatikan secara lalai — anda, guru {name} dan pimpinan sekolah boleh membacanya, tetapi {name} tidak."
+      }
+    },
+    "schoolDiary": {
+      "title": "Diari sekolah",
+      "intro": "Penyeliaan baca sahaja bagi buku komunikasi guru↔rumah. Penulisan kekal dengan pihak yang terlibat — paparan ini direkodkan dalam audit akses.",
+      "notesSevenDays": "Nota (7h)",
+      "concernSigned": "Kebimbangan ditandatangani",
+      "noClassesInScope": "Belum ada kelas dalam skop anda."
+    },
+    "notices": {
+      "banner": {
+        "sectionLabel": "Notis sekolah",
+        "important": "Penting",
+        "showNotice": "Papar notis {n} daripada {total}",
+        "resumeRotating": "Sambung putaran notis",
+        "stopRotating": "Henti putaran notis",
+        "play": "Main",
+        "pause": "Jeda",
+        "dismiss": "Ketepikan {title}",
+        "dismissTitle": "Sembunyi sehingga lawatan anda seterusnya"
+      },
+      "ack": {
+        "acknowledge": "Akui terima",
+        "confirming": "Mengesahkan…",
+        "confirmed": "Disahkan",
+        "failed": "Tidak dapat mengesahkan — sila cuba lagi."
+      },
+      "card": {
+        "title": "Notis sekolah",
+        "subtitle": "Apa yang akan datang, paling hampir dahulu.",
+        "empty": "Tiada notis sekolah buat masa ini.",
+        "opensInNewTab": "{label} — buka dalam tab baharu",
+        "important": "penting"
+      },
+      "composer": {
+        "title": "Terbitkan notis",
+        "subtitle": "Satu pengumuman kepada seluruh sekolah atau kepada bilik guru — dengan pautan, tarikh akhir, atau kedua-duanya.",
+        "write": "Tulis notis",
+        "audienceEveryone": "Semua orang (guru, ibu bapa, pelajar)",
+        "audienceStaff": "Kakitangan sahaja",
+        "consequenceStaff": "Kakitangan akan diminta mengesahkan bahawa mereka telah membacanya.",
+        "consequenceImportant": "Ibu bapa akan diminta mengakui terima. Ia juga muncul dalam hari diari setiap anak.",
+        "consequenceNormal": "Ia muncul pada papan pemuka dan dalam hari diari setiap anak. Tiada sesiapa diminta mengakui terima.",
+        "titlePlaceholder": "Tajuk — cth. Hari Sukan, 12 September",
+        "bodyPlaceholder": "Apa yang perlu diketahui. Ringkaskan — butiran boleh diletakkan di sebalik pautan.",
+        "linkPlaceholder": "Pautan (pilihan) — https://…",
+        "linkLabelPlaceholder": "Teks butang — Daftar",
+        "happensOn": "Berlangsung pada (waktu sekolah, pilihan)",
+        "actionBy": "Tindakan diperlukan sebelum (pilihan)",
+        "actionLabelPlaceholder": "Nama tarikh akhir — Daftar sebelum, Bayar sebelum, Balas sebelum",
+        "clocksHint": "Kiraan detik memaparkan tarikh akhir dahulu, kemudian bertukar kepada tarikh acara setelah tarikh akhir berlalu. Satu notis boleh mempunyai salah satu daripadanya sahaja.",
+        "markImportant": "Tanda penting",
+        "markImportantStaffHint": "— menonjol dalam senarai kakitangan",
+        "markImportantParentsHint": "— meminta ibu bapa mengakui terima",
+        "featureUntil": "Paparkan di papan pemuka sehingga",
+        "featureHint": "— pin terlepas dengan sendirinya; tiga notis sahaja dipaparkan.",
+        "type": "Jenis",
+        "publish": "Terbitkan notis",
+        "publishing": "Menerbitkan…",
+        "published": "Diterbitkan",
+        "publishFailed": "Tidak dapat menerbitkan notis."
+      },
+      "revoke": {
+        "revoke": "Tarik balik",
+        "confirm": "Tarik balik “{title}”? Ia akan hilang daripada papan pemuka, diari kelas dan mana-mana kalendar yang dilanggan. Rekodnya disimpan untuk jejak audit anda.",
+        "yes": "Ya, tarik balik",
+        "withdrawing": "Menarik balik…",
+        "failed": "Tidak dapat menarik balik notis."
+      }
+    },
+    "calendar": {
+      "title": "Kalendar",
+      "intro": "Mesyuarat, peperiksaan, cuti dan tarikh akhir tugasan — setiap orang melihat bahagiannya sendiri.",
+      "prev": "Sebelum",
+      "next": "Seterusnya",
+      "today": "Hari ini",
+      "kinds": {
+        "meeting": "Mesyuarat",
+        "exam": "Peperiksaan",
+        "holiday": "Cuti",
+        "activity": "Aktiviti",
+        "pd": "Latihan",
+        "other": "Lain-lain"
+      },
+      "by": "Oleh",
+      "dateAllDay": "{date} · sepanjang hari",
+      "dateAtTime": "{date} · {time}",
+      "dueTooltip": "Tarikh akhir: {title}",
+      "dueEntry": "{title} — tarikh akhir",
+      "assignment": "Tugasan",
+      "assignmentLower": "tugasan",
+      "moreCount": "+{n} lagi",
+      "manageTitle": "Urus acara bulan ini",
+      "manageSubtitle": "Acara yang anda cipta atau boleh sunting dalam {month}.",
+      "withdrawnNote": "Ditarik balik dalam {month} — disimpan untuk rekod anda, dan hanya kelihatan kepada pimpinan. Tiada orang lain melihatnya, di mana-mana skrin.",
+      "withdrawn": "Ditarik balik",
+      "upcoming": "Akan datang",
+      "upcomingSubtitle": "30 hari akan datang dalam bahagian anda.",
+      "nothingScheduled": "Belum ada apa-apa dijadualkan.",
+      "editor": {
+        "add": "Tambah acara",
+        "edit": "Sunting",
+        "newTitle": "Acara baharu",
+        "editTitle": "Sunting acara",
+        "titlePlaceholder": "Tajuk",
+        "type": "Jenis",
+        "whoSeesIt": "Siapa yang melihatnya",
+        "class": "Kelas",
+        "allDay": "Sepanjang hari",
+        "starts": "Bermula",
+        "startsSchoolTime": "Bermula (waktu sekolah, MYT)",
+        "ends": "Tamat (pilihan)",
+        "locationPlaceholder": "Lokasi (pilihan)",
+        "detailsPlaceholder": "Butiran (pilihan)",
+        "delete": "Padam",
+        "audiences": {
+          "staff": "Kakitangan sahaja",
+          "school": "Seluruh sekolah (termasuk pelajar & ibu bapa)",
+          "leadership": "Pimpinan sahaja",
+          "class": "Satu kelas"
+        },
+        "titleAndStartRequired": "Tajuk dan waktu mula diperlukan.",
+        "pickAClass": "Pilih kelas untuk acara kelas.",
+        "cannotSave": "Anda tidak boleh menyimpan acara ini (semak khalayak/kelas).",
+        "cannotDelete": "Anda tidak boleh memadam acara ini."
+      },
+      "subscribe": {
+        "button": "Pautkan ke Google/Outlook",
+        "title": "Langgan dari aplikasi kalendar anda",
+        "googleLabel": "Dalam Google Calendar:",
+        "googleStep1": "Kalendar lain",
+        "googleStep2": "Dari URL",
+        "outlookLabel": "Dalam Outlook:",
+        "outlookStep1": "Tambah kalendar",
+        "outlookStep2": "Langgan dari web",
+        "pasteHint": "Tampal alamat peribadi ini — ia memaparkan tepat apa yang anda boleh lihat di sini, dan sentiasa dikemas kini.",
+        "notSignedIn": "Belum log masuk.",
+        "preparing": "Menyediakan alamat anda…",
+        "copy": "Salin",
+        "copied": "Disalin",
+        "rotate": "Jana alamat baharu",
+        "rotateTitle": "Alamat lama berhenti berfungsi serta-merta",
+        "done": "Selesai"
+      }
+    }
+  },
+  "library": {
+    "title": "Pustaka anda",
+    "subtitle": "Muat naik buku teks, kemudian jana pelajaran bernarasi daripadanya.",
+    "noBookTools": "Akaun anda disediakan untuk pengajaran tanpa alat buku (PJ, muzik, seni dan subjek seumpamanya) — jadual waktu dan kelas anda ada di bawah. Jika itu tidak tepat, minta sekolah anda menghubungi sokongan SketchCast.",
+    "notSignedIn": "Belum log masuk.",
+    "otherLessons": "Pelajaran lain",
+    "untitled": "Pelajaran tanpa tajuk",
+    "queuing": "Menunggu…",
+    "watch": "Tonton",
+    "deck": "Slaid",
+    "download": "Muat turun",
+    "assign": "Tugaskan",
+    "chapter": "Bab {n}",
+    "chapterOne": "Bab {list}",
+    "chapterMany": "Bab {list}",
+    "selectedChapters": "bab terpilih",
+    "wholeChapter": "Seluruh bab",
+    "part": "Bahagian {n}",
+    "partShort": "Bhg {n}",
+    "partTitled": "Bahagian {n} — {titles}",
+    "partOne": "Bahagian {list}",
+    "partMany": "Bahagian {list}",
+    "watchPart": "Tonton Bhg {n}",
+    "deckPart": "Slaid Bhg {n}",
+    "kinds": {
+      "presentation": "Pelajaran",
+      "lesson_plan": "Rancangan",
+      "activity": "Aktiviti",
+      "worksheet": "Lembaran kerja",
+      "exam_paper": "Kertas ujian",
+      "case_study": "Kajian kes",
+      "exam": "Peperiksaan"
+    },
+    "status": {
+      "queued": "Menunggu",
+      "processing": "Memproses",
+      "done": "Selesai",
+      "error": "Gagal"
+    },
+    "group": {
+      "other": "Lain-lain",
+      "general": "Umum"
+    },
+    "empty": {
+      "withStepper": "Pustaka anda kosong — mulakan dengan langkah 1 di atas.",
+      "title": "Pustaka anda kosong — inilah perjalanan penuhnya:",
+      "step1": "Muat naik PDF buku teks di atas",
+      "step2": "Jana pelajaran bernarasi untuk satu bab",
+      "step3": "Tugaskan kepada kelas anda & pantau kemajuan",
+      "note": "Bab dikesan secara automatik — termasuk buku imbasan."
+    },
+    "book": {
+      "unknownAuthor": "Penulis tidak diketahui",
+      "findingChapters": "Mencari bab…",
+      "chaptersDone": "{done}/{total} bab",
+      "assignBook": "Tugaskan buku",
+      "noChapters": "Bab tidak dapat dikesan.",
+      "generateFullBook": "Jana seluruh buku",
+      "scannedLead": "PDF imbasan.",
+      "scannedWarning": "Fail ini tiada lapisan teks, jadi bab dikesan melalui pengecaman imej — senarai di bawah, dan apa sahaja yang dijana daripadanya, mungkin tidak tepat.",
+      "scannedAdvice": "Untuk hasil terbaik, muat naik PDF berasaskan teks (dieksport secara digital), dan gunakan “Laporkan masalah” pada apa-apa yang tersilap.",
+      "revisionPapers": "Kertas ulang kaji",
+      "revisionLabel": "{kind} · {scope}",
+      "exams": "Peperiksaan",
+      "covers": "Merangkumi: {list}",
+      "examPaper": "Kertas peperiksaan",
+      "answerKey": "Skema jawapan",
+      "generatedAsSelected": "Dijana mengikut pilihan"
+    },
+    "cell": {
+      "addBack": "+ {label}",
+      "retry": "cuba lagi",
+      "failed": "{label} gagal",
+      "statusTitle": "{label} — {status}"
+    },
+    "card": {
+      "watchLesson": "Tonton pelajaran",
+      "trialOnePart": "{part} · percubaan anda merangkumi satu bahagian",
+      "notGenerated": "Belum dijana · 1 kredit",
+      "generateKit": "Jana kit"
+    },
+    "kit": {
+      "lessonOptions": "Pilihan pelajaran",
+      "language": "Bahasa",
+      "narration": "Naratif",
+      "voice": "Suara",
+      "bookSuffix": " (buku)",
+      "premiumSuffix": " ★ premium",
+      "assignChapter": "Tugaskan bab",
+      "generateFullKit": "Jana kit penuh",
+      "generateFullKitHint": "Pelajaran video berserta rancangan, aktiviti, lembaran kerja, kertas ujian dan kajian kesnya — dokumen percuma, satu kredit bagi setiap bahagian pelajaran yang dijana",
+      "generateFree": "Jana ({n}) — percuma",
+      "generateFreeHint": "Percuma — ini menggunakan semula analisis pelajaran",
+      "trialLocked": "Percubaan: 1 bahagian — dikunci",
+      "trialLockedHint": "Percubaan percuma anda merangkumi kit penuh (kesemua enam jenis kandungan) untuk satu bahagian daripada satu bab",
+      "trialPick": "Percubaan: pilih satu bahagian di bawah",
+      "trialPickHint": "Bab ini dipecahkan kepada beberapa bahagian — percubaan anda merangkumi kit penuh (kesemua enam jenis kandungan) untuk satu bahagian pilihan anda",
+      "trialPinned": "Percubaan: Bahagian {n} ialah kit anda",
+      "trialPinnedHint": "Kit percubaan anda terikat pada bahagian ini — percubaan semula dan setiap jenis kandungan untuknya kekal terbuka"
+    },
+    "upload": {
+      "trial": "Percubaan",
+      "trialTeacher": "Percubaan percuma terhad kepada 1 buku — terokai semua babnya dan jana kit penuh untuk satu bahagian daripada satu bab.",
+      "trialParent": "Percubaan percuma terhad kepada 1 buku — jana kertas ujian daripada babnya.",
+      "titleLabel": "Tajuk (pilihan)",
+      "titlePlaceholder": "cth. Meneroka Masyarakat",
+      "authorLabel": "Penulis (pilihan)",
+      "authorPlaceholder": "cth. NCERT",
+      "upload": "Muat naik",
+      "uploading": "Memuat naik…",
+      "uploadingPct": "Memuat naik {pct}%",
+      "finishing": "Melengkapkan…",
+      "scanPages": "Imbas halaman",
+      "scannedPrefix": "Imbasan · ",
+      "megabytes": "{n} MB",
+      "bigBook": " — buku besar; biarkan tab ini terbuka semasa ia dimuat naik",
+      "choosePdf": "Pilih PDF, atau imbas halaman, untuk membolehkan muat naik",
+      "limits": "PDF sahaja · satu fail pada satu masa · sehingga 200 MB.",
+      "httpFailed": "Muat naik gagal (HTTP {status}).",
+      "networkError": "Ralat rangkaian semasa muat naik.",
+      "timedOut": "Muat naik tamat masa.",
+      "couldNotStart": "Tidak dapat memulakan muat naik.",
+      "retryAdvice": "{error} Sila semak sambungan internet anda dan cuba lagi — buku teks besar memerlukan sambungan yang stabil selama beberapa minit."
+    },
+    "scan": {
+      "title": "Imbas halaman",
+      "intro": "Ambil gambar halaman dan kami akan menjadikannya satu PDF.",
+      "tips": "Hasil terbaik: satu bab pada satu masa, halaman rata, cahaya cukup, penuhi bingkai.",
+      "takePhotos": "Ambil gambar",
+      "addPages": "Tambah halaman",
+      "choosePhotos": "Pilih gambar",
+      "inAppBrowser": "Kamera selalunya gagal dalam pelayar Gmail/WhatsApp — buka sketchcast.app dalam Chrome atau Safari, atau gunakan Pilih gambar.",
+      "cameraHint": "Tiada apa-apa daripada kamera? Gunakan Pilih gambar untuk memilih dari galeri anda.",
+      "notPhotos": "Fail itu bukan gambar — pilih imej halaman.",
+      "readingPage": "Membaca halaman {n} daripada {total}…",
+      "applyingCrop": "Memangkas…",
+      "buildingPdf": "Membina PDF…",
+      "buildFailed": "Tidak dapat membina PDF.",
+      "budgetStop": "Berhenti pada {size} — satu imbasan mesti kekal di bawah 200 MB. Cipta PDF ini dan muat naik, kemudian imbas bab seterusnya secara berasingan.",
+      "tooBig": "PDF itu {size} — melebihi had 200 MB. Buang beberapa halaman, atau imbas buku ini satu bab pada satu masa.",
+      "heicOne": "1 gambar tidak dapat dibaca — jika kamera anda menyimpan gambar HEIC (“high efficiency”), tukar kamera kepada “Most compatible”/JPEG, atau gunakan Pilih gambar.",
+      "heicMany": "{n} gambar tidak dapat dibaca — jika kamera anda menyimpan gambar HEIC (“high efficiency”), tukar kamera kepada “Most compatible”/JPEG, atau gunakan Pilih gambar.",
+      "pageCountOne": "1 halaman · {size}",
+      "pageCountMany": "{n} halaman · {size}",
+      "atLimit": "Pada had 200 MB",
+      "leftOfLimit": "{size} lagi daripada 200 MB",
+      "uncroppedOne": "1 halaman tidak dipangkas secara automatik — ketik halaman untuk menetapkan tepinya sendiri.",
+      "uncroppedMany": "{n} halaman tidak dipangkas secara automatik — ketik halaman untuk menetapkan tepinya sendiri.",
+      "pageAlt": "Halaman {n}",
+      "uncropped": "belum dipangkas",
+      "moveEarlier": "Alih halaman {n} ke hadapan",
+      "moveLater": "Alih halaman {n} ke belakang",
+      "removePage": "Buang halaman {n}",
+      "edges": "Tepi",
+      "usePages": "Guna halaman ini",
+      "useOne": "Guna halaman ini",
+      "useMany": "Guna {n} halaman ini",
+      "editTitle": "Tetapkan tepi halaman",
+      "editIntro": "Seret empat bucu ke bucu halaman.",
+      "back": "Kembali",
+      "photoAlt": "Gambar halaman",
+      "useFullPhoto": "Guna seluruh gambar",
+      "applyCrop": "Pangkas"
+    },
+    "options": {
+      "titles": {
+        "lesson_plan": "Pilihan rancangan pengajaran",
+        "activity": "Pilihan aktiviti",
+        "worksheet": "Pilihan lembaran kerja",
+        "case_study": "Pilihan kajian kes",
+        "exam_paper": "Kertas ujian — campuran soalan"
+      },
+      "fields": {
+        "duration_minutes": "Tempoh (minit)",
+        "include_homework": "Sertakan kerja rumah",
+        "include_differentiation": "Sertakan pembezaan",
+        "num_activities": "Bilangan aktiviti",
+        "num_questions": "Bilangan soalan",
+        "discussion_questions": "Soalan perbincangan",
+        "difficulty": "Kesukaran",
+        "length": "Panjang",
+        "include_answer_key": "Sertakan skema jawapan",
+        "fill_blank": "Isi tempat kosong",
+        "true_false": "Betul / Salah",
+        "match_column": "Padankan lajur",
+        "subjective": "Soalan jawapan panjang"
+      },
+      "choices": {
+        "difficulty": {
+          "easy": "Mudah",
+          "medium": "Sederhana",
+          "hard": "Sukar"
+        },
+        "length": {
+          "short": "Pendek",
+          "medium": "Sederhana",
+          "long": "Panjang"
+        }
+      },
+      "language": "Bahasa",
+      "bookSuffix": " (buku)",
+      "starting": "Memulakan…",
+      "generate": "Jana"
+    },
+    "revision": {
+      "open": "Kertas ulang kaji…",
+      "openHint": "Jana lembaran kerja dan kertas ujian untuk ulang kaji merentas sekumpulan bab",
+      "intro": "Untuk ulang kaji penggal, pertengahan penggal dan peperiksaan: pilih sekumpulan bab dan jana lembaran kerja dan/atau kertas ujian.",
+      "introFree": "Percuma, daripada pelajaran yang anda sudah jana.",
+      "allChapters": "Semua bab yang diajar ({n})",
+      "papers": "Kertas",
+      "language": "Bahasa",
+      "bookSuffix": " (buku)",
+      "combine": "Gabung",
+      "combineAll": "Satu kertas merentas bab yang dipilih",
+      "combineAllNote": "(kertas ulang kaji kumulatif)",
+      "perChapter": "Satu kertas bagi setiap bab",
+      "perChapterNote": "(pakej ulang kaji)",
+      "needTwo": "Pilih sekurang-kurangnya dua bab untuk digabungkan — atau tukar kepada satu bagi setiap bab.",
+      "generate": "Jana",
+      "generateOne": "Jana 1 kertas (percuma)",
+      "generateMany": "Jana {n} kertas (percuma)",
+      "queuedOne": "1 kertas ulang kaji sedang menunggu — lihat “Kertas ulang kaji” di bawah.",
+      "queuedMany": "{n} kertas ulang kaji sedang menunggu — lihat “Kertas ulang kaji” di bawah.",
+      "stoppedOne": "1 kertas menunggu, kemudian terhenti: {error}",
+      "stoppedMany": "{n} kertas menunggu, kemudian terhenti: {error}"
+    },
+    "examTool": {
+      "open": "Peperiksaan…",
+      "openHint": "Bina peperiksaan kumulatif (kertas + skema jawapan) merentas bab dan bahagian yang telah anda ajar",
+      "intro": "Peperiksaan kumulatif merangkumi semua yang anda ajar — satu kertas peperiksaan serta skema jawapan berasingan. Tandakan bab dan bahagian yang hendak diuji (nyahtanda untuk melangkau), tetapkan kesukaran dan bilangan soalan bagi setiap jenis.",
+      "introFree": "Percuma.",
+      "whatToTest": "Apa yang hendak diuji",
+      "questionsPerType": "Soalan bagi setiap jenis",
+      "types": {
+        "mcq": "Aneka pilihan",
+        "fill_blank": "Isi tempat kosong",
+        "true_false": "Betul / Salah",
+        "match_column": "Padankan lajur",
+        "short_answer": "Jawapan pendek",
+        "long_answer": "Jawapan panjang"
+      },
+      "difficulty": "Kesukaran",
+      "difficulties": {
+        "easy": "Mudah",
+        "medium": "Sederhana",
+        "hard": "Sukar",
+        "mixed": "Campuran"
+      },
+      "language": "Bahasa",
+      "bookSuffix": " (buku)",
+      "titleLabel": "Tajuk",
+      "titlePlaceholder": "cth. Peperiksaan Pertengahan Tahun (pilihan)",
+      "unitsOne": "1 unit",
+      "unitsMany": "{n} unit",
+      "questionsOne": "1 soalan",
+      "questionsMany": "{n} soalan",
+      "generate": "Jana peperiksaan (percuma)",
+      "queued": "Peperiksaan sedang menunggu — kertas dan skema jawapannya akan muncul di bawah “Peperiksaan”."
+    },
+    "tools": {
+      "more": "Lagi",
+      "hint": "Kertas ulang kaji dan kertas peperiksaan",
+      "heading": "Kertas tambahan"
+    },
+    "health": {
+      "badge": "Kualiti {score} · {band}",
+      "hint": "Kualiti buku — klik untuk butiran",
+      "title": "Kualiti buku",
+      "score": "{score}/100",
+      "textQuality": "Mutu teks",
+      "chapters": "Bab",
+      "facts": "{pages} halaman · {chapters} bab · {type}",
+      "textPdf": "PDF teks",
+      "scanned": "imbasan",
+      "bands": {
+        "excellent": "Cemerlang",
+        "good": "Baik",
+        "fair": "Sederhana",
+        "poor": "Lemah"
+      }
+    },
+    "classes": {
+      "heading": "Kelas & pelajar",
+      "countOne": "1 kelas",
+      "countMany": "{n} kelas",
+      "newClass": "Kelas baharu",
+      "namePlaceholder": "Nama kelas (cth. 5A)",
+      "gradePlaceholder": "Tahun (pilihan)",
+      "create": "Cipta kelas",
+      "creating": "…",
+      "duplicate": "Anda sudah mempunyai kelas bernama “{name}”.",
+      "studentsOne": "1 pelajar",
+      "studentsMany": "{n} pelajar",
+      "joinCode": "sertai: {code}",
+      "idLabel": "ID:",
+      "passwordLabel": "Kata laluan:",
+      "parentLabel": "Ibu bapa:",
+      "thisStudent": "pelajar ini",
+      "betaFull": "Beta terhad kepada 2 pelajar — anda telah menambah kedua-duanya. Anda boleh menugaskan kerja kepada mereka dan menyemak jawapan mereka tanpa had.",
+      "addStudents": "Tambah pelajar",
+      "betaSlots": "Beta: {n} daripada 2 slot berbaki",
+      "firstName": "Nama pertama",
+      "lastName": "Nama akhir",
+      "parentEmail": "E-mel ibu bapa",
+      "addRow": "+ Tambah baris",
+      "creatingLogins": "Mencipta…",
+      "createLogins": "Cipta log masuk",
+      "needName": "Tambah sekurang-kurangnya satu nama.",
+      "addFailed": "Tidak dapat menambah pelajar.",
+      "credsCreated": "Log masuk dicipta — berikan ini kepada ibu bapa",
+      "copyAll": "Salin semua"
+    },
+    "progress": {
+      "show": "Papar kemajuan",
+      "loading": "Memuatkan kemajuan…",
+      "empty": "Tiada pelajar berdaftar, atau belum ada tugasan.",
+      "student": "Pelajar",
+      "unnamed": "Pelajar",
+      "completed": "Selesai",
+      "revised": "Diulang kaji",
+      "incomplete": "Belum siap",
+      "overdue": "Lewat"
+    },
+    "assignModal": {
+      "heading": "Tugaskan kepada kelas",
+      "itemsOne": "1 item — pelajar kelas ini akan melihatnya dalam tugasan mereka.",
+      "itemsMany": "{n} item — pelajar kelas ini akan melihatnya dalam tugasan mereka.",
+      "assigned": "Ditugaskan.",
+      "newClass": "Kelas baharu",
+      "namePlaceholder": "Nama kelas (cth. 5A)",
+      "gradePlaceholder": "Tahun (pilihan)",
+      "back": "Kembali",
+      "creating": "Mencipta…",
+      "createClass": "Cipta kelas",
+      "classLabel": "Kelas",
+      "addClass": "+ Kelas baharu",
+      "due": "Tarikh akhir (pilihan)",
+      "assigning": "Menugaskan…",
+      "assign": "Tugaskan",
+      "nameRequired": "Nama kelas diperlukan.",
+      "duplicate": "Anda sudah mempunyai kelas bernama “{name}”.",
+      "createFailed": "Tidak dapat mencipta kelas.",
+      "pickClass": "Pilih kelas."
+    },
+    "deleteLesson": {
+      "confirm": "Buang pelajaran ini? Ini membatalkannya jika ia masih berjalan.",
+      "remove": "Buang pelajaran"
+    },
+    "branding": {
+      "heading": "Penjenamaan sekolah",
+      "notSet": "pilihan · guna format & tema sekolah anda",
+      "set": "pilihan · templat ditetapkan",
+      "intro": "Muat naik templat Word dan PowerPoint sekolah anda. Dokumen baharu dibuka daripada templat .docx; slaid dan slaid video mengikut tema, warna dan logo .pptx.",
+      "docx": "Templat Word (.docx)",
+      "pptx": "Templat PowerPoint (.pptx)",
+      "uploading": "Memuat naik…",
+      "clickToUpload": "Klik untuk muat naik",
+      "uploaded": "Dimuat naik"
+    }
+  },
+  "school": {
+    "fallback": {
+      "student": "Pelajar",
+      "teacher": "Guru",
+      "coordinator": "Penyelaras",
+      "class": "Kelas",
+      "user": "Pengguna",
+      "child": "Anak",
+      "item": "Item",
+      "school": "Sekolah"
+    },
+    "analytics": {
+      "title": "Analitik sekolah",
+      "subtitle": "Petanda yang menggesa sokongan — bukan penarafan.",
+      "scope": {
+        "wholeSchool": "Seluruh sekolah",
+        "grades": "Tahun {grades}",
+        "yourGrades": "Tahun anda"
+      },
+      "metric": {
+        "students": "Pelajar",
+        "active": "Aktif (14h)",
+        "completion": "Kadar siap",
+        "atRisk": "Berisiko",
+        "overdue": "Lewat"
+      },
+      "worklist": {
+        "title": "Pelajar yang perlukan sokongan",
+        "hint": "Ditanda kerana kadar siap rendah/menurun, markah merosot, atau tidak aktif — senarai kerja yang perlu ditangani dahulu.",
+        "empty": "Tiada pelajar ditanda dalam skop ini.",
+        "contactParent": "Hubungi ibu bapa",
+        "contactSubject": "Semakan tentang {name}"
+      },
+      "reason": {
+        "completion": "{pct}% siap",
+        "inactive": "tidak aktif {days}h",
+        "neverStarted": "tidak pernah mula",
+        "avgScore": "purata markah {pct}%",
+        "declining": "markah menurun",
+        "overdue": "{n} lewat"
+      },
+      "byGrade": {
+        "grade": "Tahun {grade}",
+        "atRisk": "{n} berisiko",
+        "note": "Nama-nama berada dalam senarai kerja penyelaras tahun/subjek, supaya sokongan kekal dekat dengan pelajar. Sebagai pengetua, anda juga boleh membuka Taklimat sekolah (kanan bawah) untuk melihat nama dan sebabnya — setiap taklimat direkodkan dalam audit akses."
+      }
+    },
+    "teachers": {
+      "title": "Guru",
+      "intro": "Aktiviti dan pencapaian pelajar setiap guru — untuk mengenal pasti siapa yang perlukan sokongan. Bukan penarafan.",
+      "introBaseline": "Aktiviti dan pencapaian pelajar setiap guru — untuk mengenal pasti siapa yang perlukan sokongan, berbanding garis dasar kohort ({pct}% siap). Bukan penarafan.",
+      "empty": "Belum ada guru dalam skop ini.",
+      "col": {
+        "teacher": "Guru",
+        "lessons": "Pelajaran",
+        "assigned": "Ditugaskan",
+        "toGrade": "Perlu markah",
+        "completion": "Kadar siap"
+      },
+      "mayNeedSupport": "mungkin perlukan sokongan:",
+      "flag": {
+        "belowCohort": "{pts} mata bawah kohort",
+        "toGrade": "{n} perlu markah",
+        "slowGrading": "{days}h untuk markah"
+      },
+      "footnote": "Guru boleh melihat metrik mereka sendiri yang dilihat sekolah pada halaman Analitik mereka — sekolah tidak melihat apa-apa tentang seorang guru melebihi apa yang guru itu boleh lihat tentang dirinya sendiri."
+    },
+    "access": {
+      "title": "Siapa boleh lihat apa",
+      "subtitle": "Tepatnya bagaimana data diskop mengikut peranan. Dikuatkuasakan dalam pangkalan data (keselamatan peringkat baris), bukan sekadar disembunyikan dalam antara muka.",
+      "grade": "Tahun {grade}",
+      "model": {
+        "student": {
+          "role": "Pelajar",
+          "sees": "Hanya pelajaran, kemajuan dan hantaran mereka sendiri."
+        },
+        "teacher": {
+          "role": "Guru",
+          "sees": "Hanya kelas, pelajar, kandungan, pemarkahan dan hantaran mereka sendiri."
+        },
+        "coordinator": {
+          "role": "Penyelaras",
+          "sees": "Guru yang diberi penyeliaan bagi tahun tertentu — dan subjek, jika ditetapkan: pelajar, guru dan kandungan dalam bahagian itu sahaja. Tiada apa-apa di luarnya. Mereka mengekalkan papan pemuka guru mereka sendiri."
+        },
+        "principal": {
+          "role": "Pengetua / Pentadbir",
+          "sees": "Jumlah dan trend seluruh sekolah, serta nama pelajar berisiko atas permintaan melalui taklimat sekolah (setiap taklimat direkodkan dalam audit akses). Senarai kerja harian bernama kekal dengan penyelaras tahun/subjek. Pentadbir juga mengurus skop, membaca log audit akses, dan boleh mengajar kelas sendiri."
+        }
+      },
+      "reach": {
+        "title": "Penyelaras & jangkauan mereka",
+        "hint": "Apa yang skop setiap penyelaras rangkumi sekarang. Uruskannya di skrin Pentadbir.",
+        "empty": "Belum ada penyelaras — semua orang ialah guru (kelas sendiri sahaja) atau pentadbir (seluruh sekolah).",
+        "footprint": "{classes} kelas · {students} pelajar · {teachers} guru"
+      },
+      "mine": {
+        "title": "Akses anda",
+        "hint": "Tepatnya bahagian anda — dan tiada apa-apa di luarnya.",
+        "noScope": "Anda belum diberikan sebarang skop, jadi anda tidak dapat melihat data pelajar. Minta pentadbir anda menetapkan satu tahun untuk anda.",
+        "covers": "Itu merangkumi {classes} kelas, {students} pelajar dan {teachers} guru. Apa-apa dalam tahun lain tidak kelihatan kepada anda."
+      }
+    },
+    "admin": {
+      "title": "Pentadbiran sekolah",
+      "subtitle": "Peranan & skop penyeliaan — siapa boleh melihat bahagian sekolah yang mana, dan log siapa yang telah melihat.",
+      "role": {
+        "teacher": "guru",
+        "coordinator": "penyelaras"
+      },
+      "notices": {
+        "title": "Notis diterbitkan",
+        "hint": "Semua yang diumumkan sekolah, dan sejauh mana ia telah dibaca. Menarik balik akan mengeluarkan notis daripada papan pemuka, diari kelas dan kalendar yang dilanggan — rekodnya kekal di sini.",
+        "empty": "Belum ada apa-apa diterbitkan.",
+        "staffOnly": "Kakitangan sahaja",
+        "everyone": "Semua orang",
+        "byFallback": "Oleh",
+        "featuredUntil": "dipaparkan sehingga {when}",
+        "important": "penting",
+        "link": "pautan",
+        "readByStaff": "Dibaca oleh {n} daripada {total} kakitangan",
+        "noAckAsked": "Tiada pengakuan diminta",
+        "ackParents": "{pct}% mengakui terima · {n} daripada {total} ibu bapa",
+        "ackNoParents": "{n} mengakui terima — belum ada ibu bapa dipautkan dalam senarai",
+        "unverifiedOne": "1 ibu bapa yang dipautkan tidak sepadan dengan e-mel pada rekod pelajar — pada rekod {names}. Tiada apa-apa disekat; mereka tetap menerima setiap notis. Elok disahkan dengan keluarga apabila anda bercakap nanti.",
+        "unverifiedMany": "{n} ibu bapa yang dipautkan tidak sepadan dengan e-mel pada rekod pelajar — pada rekod {names}. Tiada apa-apa disekat; mereka tetap menerima setiap notis. Elok disahkan dengan keluarga apabila anda bercakap nanti.",
+        "andMore": "dan {n} lagi"
+      },
+      "members": {
+        "title": "Ahli",
+        "hint": "Guru & penyelaras di sekolah anda. Menetapkan semula memberi anda kata laluan sementara untuk disampaikan — ia dipaparkan sekali sahaja, dan mereka mesti memilih yang baharu pada log masuk seterusnya.",
+        "empty": "Belum ada guru."
+      },
+      "students": {
+        "title": "Pelajar",
+        "hint": "Setiap akaun pelajar di sekolah anda. Pemadaman adalah kekal — log masuk, pendaftaran kelas dan kerja yang dihantar semuanya dibuang.",
+        "empty": "Belum ada pelajar."
+      },
+      "audit": {
+        "title": "Audit akses",
+        "hint": "Setiap paparan data pelajar oleh pimpinan direkodkan di sini untuk jejak perlindungan data.",
+        "empty": "Belum ada akses direkodkan.",
+        "atRisk": "{n} berisiko"
+      }
+    },
+    "coordinators": {
+      "title": "Penyelaras & skop",
+      "countOne": "1 penyelaras",
+      "countMany": "{n} penyelaras",
+      "intro": "Akses penyelaras ialah tambahan kepada seorang guru: mereka mengekalkan kelas dan papan pemuka sendiri, dan turut melihat hanya tahun (dan subjek pilihan) yang anda tetapkan — tiada apa-apa di luar bahagian itu.",
+      "noGrades": "Belum ada tahun kelas — tambah tahun pada satu kelas dahulu, kemudian anda boleh menskopkan penyelaras kepadanya.",
+      "remove": "Buang akses penyelaras",
+      "noScope": "Belum ada skop — tambah tahun di bawah (jika tidak, mereka tidak melihat apa-apa).",
+      "removeScope": "Buang skop",
+      "grade": "Tahun {grade}",
+      "allSubjects": "Semua subjek",
+      "addScope": "+ Tambah skop",
+      "grantTitle": "Beri seorang guru akses penyelaras",
+      "allGranted": "Setiap guru sudah mempunyai akses penyelaras.",
+      "addGradeFirst": "Tambah tahun pada satu kelas dahulu.",
+      "chooseTeacher": "Pilih guru…",
+      "grant": "Beri akses"
+    },
+    "briefing": {
+      "launcher": "Taklimat sekolah",
+      "launcherHint": "Tanya tentang sekolah anda",
+      "subtitle": "Jawapan daripada data sekolah anda yang terkini",
+      "reading": "Membaca data sekolah terkini…",
+      "unavailable": "Taklimat tidak tersedia buat masa ini.",
+      "unreachable": "Tidak dapat menghubungi taklimat. Cuba lagi sebentar.",
+      "failed": "Taklimat tidak tersedia buat masa ini.",
+      "readAloud": "Bacakan",
+      "stopReading": "Henti bacaan",
+      "stop": "Henti",
+      "listening": "Mendengar…",
+      "placeholder": "Tanya tentang kadar siap, pelajar berisiko, pemarkahan…",
+      "ask": "Tanya",
+      "micStart": "Sebut soalan anda",
+      "micStop": "Berhenti mendengar",
+      "footnote": "Hanya menggunakan analitik yang anda sudah boleh lihat di sini. Setiap taklimat direkodkan dalam audit akses."
+    },
+    "assistant": {
+      "launcher": "Pembantu",
+      "launcherHint": "Buka Pembantu Pengajaran AI",
+      "title": "Pembantu Pengajaran AI",
+      "subtitle": "Jawapan daripada buku anda",
+      "loading": "Menyediakan buku anda…",
+      "unavailable": "Pembantu tidak tersedia buat masa ini.",
+      "unreachable": "Tidak dapat menghubungi pembantu. Cuba lagi sebentar.",
+      "failed": "Pembantu tidak tersedia buat masa ini.",
+      "readAloud": "Bacakan",
+      "stopReading": "Henti bacaan",
+      "stop": "Henti",
+      "listening": "Mendengar…",
+      "noBook": "Belum ada buku",
+      "placeholder": "Tanya tentang buku anda…",
+      "ask": "Tanya",
+      "micStart": "Sebut soalan anda",
+      "micStop": "Berhenti mendengar",
+      "source": "daripada {label} anda",
+      "footnote": "Saya membantu anda belajar daripada buku anda — petunjuk dan kaedah, bukan jawapan yang dinilai."
+    },
+    "timetable": {
+      "title": "Jadual waktu",
+      "intro": "Bina minggu setiap kelas — pertembungan apabila seorang guru berada di dua bilik serentak akan menyala serta-merta.",
+      "noClasses": "Belum ada kelas — jadual waktu muncul sebaik kelas sekolah anda disediakan. SketchCast menyediakan kakitangan dan kelas bersama anda semasa persediaan; hubungi sokongan untuk bermula.",
+      "gradeScope": "Tahun {grades}",
+      "hide": "Sembunyi",
+      "show": "Papar",
+      "period": "Waktu",
+      "schoolHours": "Waktu sekolah {start} – {end}",
+      "minutes": "{n} min",
+      "days": {
+        "mon": "Isn",
+        "tue": "Sel",
+        "wed": "Rab",
+        "thu": "Kha",
+        "fri": "Jum",
+        "sat": "Sab",
+        "sun": "Ahd"
+      },
+      "absence": {
+        "title": "Ketidakhadiran & guru ganti",
+        "hint": "Semua orang dianggap hadir sehingga ditanda tidak hadir. Guru ganti dikira semasa anda menanda — tanda semula selepas perubahan besar pada grid.",
+        "markPlaceholder": "Tanda guru tidak hadir…",
+        "reasonPlaceholder": "Sebab (pilihan)",
+        "mark": "Tanda tidak hadir & tetapkan guru ganti",
+        "working": "Sedang diproses…",
+        "markFailed": "Tidak dapat menanda ketidakhadiran.",
+        "removeFailed": "Tidak dapat membuang ketidakhadiran.",
+        "updateFailed": "Tidak dapat mengemas kini guru ganti.",
+        "networkError": "Ralat rangkaian.",
+        "none": "Tiada ketidakhadiran pada {date} — semua hadir.",
+        "absent": "tidak hadir",
+        "removeAbsence": "Buang (kembali ke sekolah)",
+        "noLessons": "Tiada pelajaran untuk diganti pada hari itu.",
+        "col": {
+          "period": "Waktu",
+          "class": "Kelas",
+          "subject": "Subjek",
+          "coveredBy": "Diganti oleh"
+        },
+        "noCover": "Tiada guru ganti dijumpai",
+        "state": {
+          "inClass": "dalam kelas",
+          "covering": "mengganti",
+          "fullyBooked": "penuh"
+        }
+      },
+      "generate": {
+        "button": "Auto-jana",
+        "title": "Auto-jana jadual waktu",
+        "intro": "Sahkan siapa mengajar apa — guru kelas mengambil Waktu 1 setiap hari, subjek teras ({core}) berjalan sekali setiap hari, subjek lain mengisi baki minggu, dan tiada guru berada di dua bilik serentak.",
+        "noTeacher": "tiada guru — akan dilaporkan sebagai jurang",
+        "modeFill": "Isi jurang (kekalkan yang sudah ada)",
+        "modeReplace": "Mula semula (ganti seluruh grid)",
+        "failed": "Penjanaan gagal.",
+        "placed": "{n} pelajaran diletakkan.",
+        "placedKept": "{n} pelajaran diletakkan ({kept} sedia ada dikekalkan).",
+        "gapsOne": "Tidak dapat mengisi 1 jurang:",
+        "gapsMany": "Tidak dapat mengisi {n} jurang:",
+        "gapRow": "{class}: {subject} ×{count}",
+        "andMore": "…dan {n} lagi",
+        "gapsHint": "Tetapkan lebih ramai guru untuk subjek tersebut dan jalankan “Isi jurang”.",
+        "noGaps": "Tiada jurang — seminggu penuh sudah ada guru.",
+        "staffed": "{n}/{total} subjek ada guru",
+        "done": "Selesai",
+        "generating": "Menjana…",
+        "runAgain": "Jalankan lagi",
+        "generate": "Jana"
+      },
+      "editor": {
+        "byClass": "Ikut kelas",
+        "byTeacher": "Ikut guru",
+        "viewOnly": "(lihat sahaja)",
+        "undo": "Buat asal {label}",
+        "print": "Cetak",
+        "clashesOne": "1 pertembungan: seorang guru dijadualkan dalam dua kelas serentak — sel yang bertembung digariskan.",
+        "clashesMany": "{n} pertembungan: seorang guru dijadualkan dalam dua kelas serentak — sel yang bertembung digariskan.",
+        "overLimit": "Melebihi had harian ({max}/hari): {list}",
+        "overLimitItem": "{teacher} — {day} {count}",
+        "nonTeaching": "bukan pengajaran",
+        "editSettingsHint": "sunting di bawah Tetapan jadual waktu",
+        "dragTip": "Petua: seret pelajaran ke sel lain untuk memindahkannya (ke sel berisi untuk bertukar tempat). 🔒 sel berkunci tidak pernah disentuh oleh auto-jana, alat harian, atau seretan.",
+        "dayTools": "Alat harian:",
+        "copyDay": "Salin {day}",
+        "to": "ke",
+        "copy": "Salin",
+        "clearDayPrompt": "Kosongkan satu hari…",
+        "clearDay": "Kosongkan {day}",
+        "clearWeek": "Kosongkan minggu",
+        "clearWeekLabel": "Kosongkan seluruh minggu",
+        "confirmClear": "{label} untuk {class}? {n} pelajaran akan dibuang (sel berkunci kekal). Anda boleh membuat asal.",
+        "subject": "Subjek",
+        "teacher": "Guru",
+        "teacherOnDuty": "Guru (pilihan — bertugas)",
+        "unassigned": "— belum ditetapkan —",
+        "room": "Bilik (pilihan)",
+        "lock": "Kunci (auto-jana dan alat harian tidak akan menyentuhnya)",
+        "nonTeachingOption": "Bukan pengajaran (perhimpunan, waktu lapang — tiada kiraan pertembungan atau beban)",
+        "clearCell": "Kosongkan sel",
+        "subjectRequired": "Subjek diperlukan.",
+        "cannotEdit": "Anda tidak boleh menyunting jadual waktu kelas ini.",
+        "resync": "{message} — menyegerakkan semula grid.",
+        "undoPartial": "Buat asal “{label}” hanya sebahagian dilaksanakan",
+        "movePartial": "Pemindahan hanya sebahagian dilaksanakan",
+        "copyPartial": "Salin hari hanya sebahagian dilaksanakan",
+        "clearPartial": "{label} hanya sebahagian dilaksanakan",
+        "capWarning": "{teacher} sudah mempunyai {count} pelajaran pada {day} (had {max}). Anda masih boleh menyimpan — had ini panduan untuk manusia, peraturan untuk penjana.",
+        "thisTeacher": "Guru ini",
+        "undoLabel": {
+          "editCell": "sunting sel",
+          "clearCell": "kosongkan sel",
+          "swapCells": "tukar sel",
+          "moveCell": "alih sel",
+          "copyDay": "salin hari"
+        }
+      },
+      "roster": {
+        "title": "Guru ({n})",
+        "col": {
+          "teacher": "Guru",
+          "classTeacher": "Guru kelas",
+          "teaches": "Mengajar",
+          "lessonsPerWeek": "Pelajaran / minggu",
+          "blocked": "Penuh",
+          "heaviestDay": "Hari terpadat (had {max})"
+        },
+        "blockedPct": "{pct}% penuh",
+        "blockedFull": "Penuh setiap hari — tidak boleh ditetapkan sebagai guru ganti",
+        "blockedSpare": "Ada ruang kosong sekurang-kurangnya satu hari — boleh mengganti ketika itu",
+        "positionsTitle": "Jawatan guru kelas",
+        "allCovered": "Setiap tahun & kelas mempunyai guru kelas.",
+        "uncovered": "Tanpa guru kelas bertugas: {classes} — tetapkan seorang di bawah.",
+        "assignPrompt": "tetapkan guru kelas…",
+        "unassigned": "belum ditetapkan",
+        "reassignNote": "Menetapkan semula memindahkan kelas — pelajar dan kod sertainya — kepada guru kelas baharu. Pelajaran dalam jadual waktu mengekalkan guru subjeknya sendiri.",
+        "reassignFailed": "Tidak dapat menetapkan semula guru kelas.",
+        "networkError": "Ralat rangkaian."
+      },
+      "settings": {
+        "title": "Tetapan jadual waktu (waktu, rehat, masa)",
+        "startLabel": "Sekolah bermula (= Waktu 1)",
+        "periodLength": "Panjang waktu (min)",
+        "endLabel": "Sekolah tamat",
+        "daysPerWeek": "Hari / minggu",
+        "maxPerDay": "Maksimum pelajaran / guru / hari",
+        "computedNote": "Semua masa dikira: Waktu 1 bermula apabila sekolah bermula, setiap waktu berjalan {min} minit, dan setiap rehat melewatkan baki hari itu. Sekolah tamat apabila waktu terakhir tamat.",
+        "periods": "Waktu",
+        "remove": "Buang",
+        "addPeriod": "+ Tambah waktu",
+        "breaks": "Rehat",
+        "breakPlaceholder": "Rehat pagi",
+        "breakLength": "Panjang rehat (minit)",
+        "after": "selepas",
+        "startOfDay": "permulaan hari",
+        "addBreak": "+ Tambah rehat",
+        "weekNote": "Minggu: {days}. Membuang waktu atau hari tidak pernah memadam pelajaran — apa-apa yang tertinggal di luar bentuk baharu akan dilaporkan supaya anda boleh mengemasnya.",
+        "invalidStart": "Waktu mula sekolah bukan masa hh:mm yang sah.",
+        "saveFailed": "Simpanan gagal.",
+        "savedOrphaned": "Disimpan. ⚠ {n} pelajaran sedia ada kini berada di luar bentuk baharu (hari atau waktu yang dibuang) — kembangkan semula bentuknya atau kosongkannya.",
+        "saved": "Disimpan — jadual waktu kini memaparkan masa baharu.",
+        "networkError": "Ralat rangkaian — tiada apa-apa disimpan.",
+        "save": "Simpan tetapan",
+        "unsaved": "Perubahan belum disimpan — jadual waktu dikemas kini selepas anda simpan"
+      }
+    },
+    "myTimetable": {
+      "title": "Jadual waktu saya",
+      "studentIntro": "Minggu kelas anda.",
+      "teacherIntro": "Pelajaran yang anda ajar minggu ini.",
+      "covers": "Tugas ganti",
+      "coveringFor": "— mengganti {name}",
+      "myClass": "Kelas saya",
+      "empty": "Belum ada pelajaran dalam jadual waktu — ia muncul di sini sebaik sekolah menerbitkannya."
+    },
+    "myAnalytics": {
+      "title": "Analitik",
+      "subtitle": "Kemajuan kelas anda menerusi apa yang anda tugaskan.",
+      "metric": {
+        "classes": "Kelas",
+        "students": "Pelajar",
+        "assignments": "Tugasan",
+        "completion": "Kadar siap",
+        "overdue": "Lewat",
+        "toGrade": "Perlu markah"
+      },
+      "schoolView": {
+        "title": "Apa yang sekolah anda lihat tentang pengajaran anda",
+        "chip": "ketelusan",
+        "lessonsMade": "Pelajaran dibuat",
+        "assignments": "Tugasan",
+        "turnaround": "Tempoh pemarkahan",
+        "toGrade": "Perlu markah",
+        "note": "Pimpinan melihat ini untuk mengenal pasti di mana perlu membantu — bukan sebagai penarafan."
+      },
+      "byClass": "Ikut kelas",
+      "noAssignments": "Belum ada tugasan.",
+      "done": "siap",
+      "mostRevised": "Paling diulang kaji",
+      "mostRevisedHint": "Topik yang paling kerap dibuka semula pelajar — selalunya yang paling mencabar.",
+      "toGradeTitle": "Perlu markah",
+      "toGradeHint": "Lembaran kerja & peperiksaan yang dihantar dan menunggu markah.",
+      "chapterLabel": "{kind} · Bab {n}",
+      "kind": {
+        "presentation": "Pelajaran",
+        "worksheet": "Lembaran kerja",
+        "examPaper": "Kertas ujian",
+        "exam": "Peperiksaan",
+        "activity": "Aktiviti",
+        "caseStudy": "Kajian kes"
+      }
+    },
+    "children": {
+      "title": "Anak saya",
+      "subtitle": "Apa yang setiap anak sedang buat — kerja sekolah baca sahaja, serta kertas ujian yang anda tugaskan.",
+      "empty": "Belum ada anak dipautkan. Tambah anak anda di bawah — atau jika sekolah mereka menjemput anda, buka pautan dari e-mel tersebut.",
+      "from": "daripada {source}",
+      "fromYou": "anda",
+      "fromClass": "kelas",
+      "due": "tarikh akhir {date}",
+      "unverified": "pautan belum disahkan · sahkan dengan sekolah",
+      "schoolWork": "Kerja sekolah ({n})",
+      "noSchoolWork": "Belum ada tugasan daripada sekolah.",
+      "yourWork": "Daripada anda ({n})",
+      "noTestPapers": "Belum ada kertas ujian ditugaskan — cipta satu di bawah Kertas Ujian.",
+      "kind": {
+        "presentation": "Pelajaran video",
+        "activity": "Aktiviti",
+        "worksheet": "Lembaran kerja",
+        "examPaper": "Kertas ujian",
+        "caseStudy": "Kajian kes"
+      },
+      "status": {
+        "notStarted": "belum mula",
+        "inProgress": "sedang dibuat",
+        "completed": "selesai",
+        "revised": "diulang kaji",
+        "submitted": "dihantar"
+      },
+      "add": {
+        "title": "Tambah anak",
+        "hint": "Mencipta log masuk mereka (ID anak + kata laluan sementara yang anda berikan kepada mereka).",
+        "button": "+ Tambah anak",
+        "saveThese": "Simpan ini — dipaparkan sekali sahaja:",
+        "childId": "ID anak",
+        "tempPassword": "Kata laluan sementara",
+        "signInNote": "Mereka log masuk di app.sketchcast.app dengan ID itu (tanpa e-mel) dan menetapkan kata laluan sendiri.",
+        "firstName": "Nama pertama",
+        "lastName": "Nama akhir",
+        "creating": "Mencipta…",
+        "create": "Cipta log masuk",
+        "failed": "Tidak dapat menambah anak."
+      }
+    }
   }
 }

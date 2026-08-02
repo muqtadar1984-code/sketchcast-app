@@ -6,6 +6,7 @@ import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
+import { statusLabel, type LibraryMessages } from "./content-cell";
 import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
@@ -28,6 +29,10 @@ import { examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platfo
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { htmlLang } from "@/i18n/locales";
+import { fmt } from "@/i18n/format";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -75,9 +80,9 @@ const partNum = (path: string): number => {
 // Human label for a set of 0-based chapter numbers → 1-based, contiguous runs
 // collapsed: [0,1,2,4] → "Chapters 1–3, 5". Mirrors the worker's _range_label
 // so a cumulative revision paper reads the same in the UI and the .docx.
-function chapterRangeLabel(nums: number[]): string {
+function chapterRangeLabel(t: LibraryMessages, nums: number[]): string {
   const ns = [...new Set(nums.map((n) => Number(n)).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b);
-  if (!ns.length) return "selected chapters";
+  if (!ns.length) return t.selectedChapters;
   const parts: string[] = [];
   let start = ns[0];
   let prev = ns[0];
@@ -92,13 +97,15 @@ function chapterRangeLabel(nums: number[]): string {
       prev = n;
     }
   }
-  return (ns.length === 1 ? "Chapter " : "Chapters ") + parts.join(", ");
+  const list = parts.join(", ");
+  return ns.length === 1 ? fmt(t.chapterOne, { list }) : fmt(t.chapterMany, { list });
 }
 
 // Readable coverage line for a cumulative exam (0062): which chapters and parts
 // it tests, e.g. "1. Cells; 2. Materials (Parts 1, 3)". Mirrors what the worker
 // prints on the paper so the teacher sees exactly what the last exam covered.
 function examCoverageLabel(
+  t: LibraryMessages,
   scope: { chapter: string; part: number }[],
   chapters: { num: number; title: string }[],
 ): string {
@@ -111,11 +118,12 @@ function examCoverageLabel(
   }
   const bits: string[] = [];
   for (const [n, parts] of [...byChapter.entries()].sort((a, b) => a[0] - b[0])) {
-    const title = chapters.find((c) => c.num === n)?.title ?? `Chapter ${n + 1}`;
+    const title = chapters.find((c) => c.num === n)?.title ?? fmt(t.chapter, { n: n + 1 });
     const realParts = [...new Set(parts.filter((p) => p > 0))].sort((a, b) => a - b);
+    const list = realParts.join(", ");
     bits.push(
       realParts.length && !parts.includes(0)
-        ? `${n + 1}. ${title} (Part${realParts.length > 1 ? "s" : ""} ${realParts.join(", ")})`
+        ? `${n + 1}. ${title} (${realParts.length > 1 ? fmt(t.partMany, { list }) : fmt(t.partOne, { list })})`
         : `${n + 1}. ${title}`,
     );
   }
@@ -420,6 +428,16 @@ export default async function DashboardPage() {
     );
   }
 
+  // ── Teacher / parent library ──────────────────────────────────────────────
+  // The Library's words, resolved ONCE here and threaded down the whole client
+  // tree as one object: every cell, card and modal below is a client component,
+  // so they take the strings as a prop rather than importing the (server-only)
+  // dictionary. resolveLocale is React-cached, so asking here costs nothing
+  // beyond what the header already paid.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t: LibraryMessages = { ...dict.library, common: dict.common };
+
   // Teacher surfaces show what the person OWNS. Admins/coordinators can read
   // school-wide rows under RLS, so filter by ownership explicitly — their
   // Library is their teacher hat, not the school view (that's /dashboard/school).
@@ -545,7 +563,7 @@ export default async function DashboardPage() {
         .map((a) => a.url!);
       return {
         id: g.id,
-        title: g.title || "Untitled lesson",
+        title: g.title || t.untitled,
         status: g.status,
         progress: g.jobs?.[0]?.progress ?? 0,
         stage: g.jobs?.[0]?.stage ?? null,
@@ -684,16 +702,17 @@ export default async function DashboardPage() {
       revisionPapers: lessons
         .filter((l) => l.bookId === b.id && isRevision(l))
         .map((l) => {
-          const kindLabel = l.kind === "exam_paper" ? "Test paper" : "Worksheet";
+          const kind = l.kind === "exam_paper" ? t.kinds.exam_paper : t.kinds.worksheet;
           const chapters = (l.params as { chapters?: unknown } | null)?.chapters;
           const scope = Array.isArray(chapters) && chapters.length
-            ? chapterRangeLabel(chapters as number[])
+            ? chapterRangeLabel(t, chapters as number[])
             : l.chapterRef !== null
-              ? chs.find((c) => String(c.num) === l.chapterRef)?.title ?? `Chapter ${Number(l.chapterRef) + 1}`
+              ? chs.find((c) => String(c.num) === l.chapterRef)?.title ??
+                fmt(t.chapter, { n: Number(l.chapterRef) + 1 })
               : "";
           return {
             id: l.id,
-            label: scope ? `${kindLabel} · ${scope}` : kindLabel,
+            label: scope ? fmt(t.book.revisionLabel, { kind, scope }) : kind,
             status: l.status,
             progress: l.progress,
             stage: l.stage,
@@ -712,14 +731,17 @@ export default async function DashboardPage() {
           // whenever one exists, INCLUDING a multi-part chapter taught at chapter
           // level (e.g. via "Generate all"), which would otherwise be invisible.
           if (lessonFor(b.id, c.num, "presentation")?.status === "done") {
-            units.push({ part: 0, label: "Whole chapter" });
+            units.push({ part: 0, label: t.wholeChapter });
           }
           if (parts.length > 1) {
             parts.forEach((p, i) => {
               const pl = lessonFor(b.id, c.num, "presentation", i + 1);
               if (pl && pl.status === "done") {
                 const titles = (p.titles ?? []).slice(0, 2).join(", ");
-                units.push({ part: i + 1, label: titles ? `Part ${i + 1} — ${titles}` : `Part ${i + 1}` });
+                units.push({
+                  part: i + 1,
+                  label: titles ? fmt(t.partTitled, { n: i + 1, titles }) : fmt(t.part, { n: i + 1 }),
+                });
               }
             });
           }
@@ -736,8 +758,8 @@ export default async function DashboardPage() {
           const title = (l.params as { title?: unknown } | null)?.title;
           return {
             id: l.id,
-            label: typeof title === "string" && title.trim() ? title.trim() : "Exam",
-            coverage: examCoverageLabel(scope, chs),
+            label: typeof title === "string" && title.trim() ? title.trim() : t.kinds.exam,
+            coverage: examCoverageLabel(t, scope, chs),
             status: l.status,
             progress: l.progress,
             stage: l.stage,
@@ -770,7 +792,7 @@ export default async function DashboardPage() {
   // Group the library Grade → Subject (auto-detected; "Other / General" when unknown).
   const groupMap = new Map<string, BookRow[]>();
   for (const br of bookRows) {
-    const key = `${br.grade || "Other"}|||${br.subject || "General"}`;
+    const key = `${br.grade || t.group.other}|||${br.subject || t.group.general}`;
     if (!groupMap.has(key)) groupMap.set(key, []);
     groupMap.get(key)!.push(br);
   }
@@ -811,11 +833,9 @@ export default async function DashboardPage() {
       <AppHeader />
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">Your library</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-7">
-          Upload a textbook, then generate a narrated lesson from it.
-        </p>
+        <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
         {notices && <NoticeBanner notices={notices.featured} />}
 
@@ -839,22 +859,19 @@ export default async function DashboardPage() {
         {lessonTools ? (
           <UploadBook
             schoolId={schoolId}
+            t={t}
             betaBlocked={isBeta && (trialBookUsed >= 1 || bookList.some((b) => b.owner_id === user.id))}
           />
         ) : (
-          <p className="text-sm text-[#5B6470] mb-6">
-            Your account is set up for teaching without book tools (PE, music, arts and similar
-            subjects) — your timetable and classes are below. If that&apos;s wrong, ask your school to
-            contact SketchCast support.
-          </p>
+          <p className="text-sm text-[#5B6470] mb-6">{t.noBookTools}</p>
         )}
 
         <div data-tour="classes">
-          <ClassesCard classes={classRosters} betaSlotsLeft={betaSlotsLeft} />
+          <ClassesCard classes={classRosters} t={t} betaSlotsLeft={betaSlotsLeft} />
         </div>
 
         <div data-tour="branding">
-          <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
+          <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} t={t} />
         </div>
 
         {/* School-side news sits with the other school cards, above the library
@@ -867,31 +884,29 @@ export default async function DashboardPage() {
             // same three steps don't appear twice on one screen.
             <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-8 text-center text-[#5B6470]">
               <EmptyBooks />
-              <p className="font-medium text-[#14181F] mt-2">Your library is empty — start with step 1 above.</p>
+              <p className="font-medium text-[#14181F] mt-2">{t.empty.withStepper}</p>
             </div>
           ) : (
           <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
             <EmptyBooks />
-            <p className="font-medium text-[#14181F] mb-4">Your library is empty — here&apos;s the whole journey:</p>
+            <p className="font-medium text-[#14181F] mb-4">{t.empty.title}</p>
             <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
               <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
                 <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">1</span>
-                Upload a textbook PDF above
+                {t.empty.step1}
               </span>
               <span className="rtl-flip text-[#98A0A9]">→</span>
               <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
                 <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">2</span>
-                Generate a narrated lesson for a chapter
+                {t.empty.step2}
               </span>
               <span className="rtl-flip text-[#98A0A9]">→</span>
               <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
                 <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">3</span>
-                Assign it to your class &amp; watch progress
+                {t.empty.step3}
               </span>
             </div>
-            <p className="text-xs text-[#98A0A9] mt-4">
-              Chapters are detected automatically — scanned books included.
-            </p>
+            <p className="text-xs text-[#98A0A9] mt-4">{t.empty.note}</p>
           </div>
           )
         ) : (
@@ -906,6 +921,8 @@ export default async function DashboardPage() {
                   books={g.books}
                   schoolId={schoolId}
                   classes={classes}
+                  t={t}
+                  lang={htmlLang(locale)}
                   beta={isBeta ? { pinned: betaPinned } : null}
                   examEnabled={examGenerationEnabled()}
                 />
@@ -916,7 +933,7 @@ export default async function DashboardPage() {
 
         {lessons.filter((l) => l.bookId === null).length > 0 && (
           <>
-            <h2 className="text-2xl mt-12 mb-4">Other lessons</h2>
+            <h2 className="text-2xl mt-12 mb-4">{t.otherLessons}</h2>
             <div className="space-y-3">
               {lessons
                 .filter((l) => l.bookId === null)
@@ -928,22 +945,22 @@ export default async function DashboardPage() {
                         {l.status === "done" &&
                           l.videos.map((url, i, all) => (
                             <a key={`v${i}`} href={url} target="_blank" className="text-sm font-medium text-[#0C8175] hover:underline">
-                              {all.length > 1 ? (i === 0 ? "▶ Watch Pt 1" : `▶ Pt ${i + 1}`) : "▶ Watch"}
+                              ▶ {all.length > 1 ? fmt(t.watchPart, { n: i + 1 }) : t.watch}
                             </a>
                           ))}
                         {l.status === "done" &&
                           l.decks.map((url, i, all) => (
                             <a key={`d${i}`} href={url} className="text-sm font-medium text-[#0C8175] hover:underline">
-                              {all.length > 1 ? `⬇ Deck Pt ${i + 1}` : "⬇ Deck"}
+                              ⬇ {all.length > 1 ? fmt(t.deckPart, { n: i + 1 }) : t.deck}
                             </a>
                           ))}
                         {l.status !== "done" && (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
-                            {l.status}
+                            {statusLabel(t, l.status)}
                             {l.status === "processing" ? ` · ${l.progress}%` : ""}
                           </span>
                         )}
-                        <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} />
+                        <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />
                       </div>
                     </div>
                   </div>

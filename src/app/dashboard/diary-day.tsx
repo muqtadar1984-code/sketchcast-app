@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import type { Dictionary } from "@/i18n/dictionaries";
 import { shiftDay } from "./diary/date-nav";
 
 // The TEACHER diary's class picker + day navigator (chips, ‹ › steppers and a
@@ -16,11 +17,14 @@ export default function DiaryDay({
   classId,
   date,
   today,
+  t,
 }: {
   classes: { id: string; name: string }[];
   classId: string;
   date: string;
   today: string;
+  /** The same day-navigation words the parent/student views' DateNav uses. */
+  t: Dictionary["comms"]["diary"]["nav"];
 }) {
   const router = useRouter();
 
@@ -46,7 +50,7 @@ export default function DiaryDay({
         </div>
       )}
       <div className="ms-auto flex items-center gap-2">
-        <button onClick={() => go(classId, shiftDay(date, -1))} className="btn-ghost h-9 w-9 text-sm" aria-label="Previous day">
+        <button onClick={() => go(classId, shiftDay(date, -1))} className="btn-ghost h-9 w-9 text-sm" aria-label={t.previousDay}>
           <span className="rtl-flip">←</span>
         </button>
         <input
@@ -54,14 +58,14 @@ export default function DiaryDay({
           value={date}
           onChange={(e) => e.target.value && go(classId, e.target.value)}
           className="field h-9 px-2 text-sm"
-          aria-label="Diary day"
+          aria-label={t.diaryDay}
         />
-        <button onClick={() => go(classId, shiftDay(date, 1))} className="btn-ghost h-9 w-9 text-sm" aria-label="Next day">
+        <button onClick={() => go(classId, shiftDay(date, 1))} className="btn-ghost h-9 w-9 text-sm" aria-label={t.nextDay}>
           <span className="rtl-flip">→</span>
         </button>
         {date !== today && (
           <button onClick={() => go(classId, today)} className="text-sm font-medium text-[#0C8175] hover:underline ms-1">
-            Today
+            {t.today}
           </button>
         )}
       </div>

@@ -3,13 +3,14 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  DAY_NAMES,
   layoutTimes,
   minutesToTime,
   timeToMinutes,
   type BreakDef,
   type TimetableShape,
 } from "@/utils/timetable";
+import { DAY_KEYS, type TimetableMessages } from "./timetable-editor";
+import { fmt } from "@/i18n/format";
 
 // Principal-only structure settings. The day's TIMELINE IS DERIVED, never
 // hand-typed: P1 starts at school start, every period runs `period length`
@@ -18,7 +19,7 @@ import {
 // schedule re-flows — no way to produce a P2 that starts before P1. What's
 // stored (via the settings API, sanitized by shapeFromConfig) is the
 // computed times, so the grid and every other page just read them as before.
-export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
+export default function SettingsPanel({ shape, t }: { shape: TimetableShape; t: TimetableMessages }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [days, setDays] = useState(shape.days);
@@ -60,7 +61,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
 
   async function save() {
     if (timeToMinutes(start) === null) {
-      setErr("School start time isn't a valid hh:mm time.");
+      setErr(t.settings.invalidStart);
       return;
     }
     setBusy(true);
@@ -84,18 +85,16 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
       });
       const json = (await res.json()) as { error?: string; orphaned?: number };
       if (!res.ok) {
-        setErr(json.error ?? "Save failed.");
+        setErr(json.error ?? t.settings.saveFailed);
       } else {
         baseline.current = snapshot();
         setMsg(
-          json.orphaned
-            ? `Saved. ⚠ ${json.orphaned} existing lesson(s) now sit outside the new shape (a removed day or period) — grow the shape back or clear them.`
-            : "Saved — the timetable now shows the new times.",
+          json.orphaned ? fmt(t.settings.savedOrphaned, { n: json.orphaned }) : t.settings.saved,
         );
         router.refresh();
       }
     } catch {
-      setErr("Network error — nothing saved.");
+      setErr(t.settings.networkError);
     }
     setBusy(false);
   }
@@ -105,14 +104,14 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
   return (
     <div className="card mt-4 p-4 print:hidden">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-start">
-        <span className="font-medium text-sm">⚙ Timetable settings (hours, breaks, periods)</span>
-        <span className="text-xs text-[#5B6470]">{open ? "Hide" : "Show"}</span>
+        <span className="font-medium text-sm">⚙ {t.settings.title}</span>
+        <span className="text-xs text-[#5B6470]">{open ? t.hide : t.show}</span>
       </button>
       {open && (
         <div className="mt-3">
           <div className="flex flex-wrap gap-3">
             <label className="text-xs text-[#5B6470]">
-              School starts (= Period 1)
+              {t.settings.startLabel}
               <input
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
@@ -125,7 +124,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
               />
             </label>
             <label className="text-xs text-[#5B6470]">
-              Period length (min)
+              {t.settings.periodLength}
               <input
                 type="number"
                 min={5}
@@ -136,11 +135,11 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
               />
             </label>
             <label className="text-xs text-[#5B6470]">
-              School ends
+              {t.settings.endLabel}
               <input value={computed.end} readOnly disabled className={`${fieldCls} block w-24 mt-1 bg-[#F5F6F3] text-[#5B6470]`} />
             </label>
             <label className="text-xs text-[#5B6470]">
-              Days / week
+              {t.settings.daysPerWeek}
               <input
                 type="number"
                 min={1}
@@ -151,7 +150,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
               />
             </label>
             <label className="text-xs text-[#5B6470]">
-              Max lessons / teacher / day
+              {t.settings.maxPerDay}
               <input
                 type="number"
                 min={1}
@@ -162,13 +161,10 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
               />
             </label>
           </div>
-          <p className="text-[11px] text-[#98A0A9] mt-2">
-            All times are computed: Period 1 starts when school starts, each period runs {periodLen} minutes,
-            and every break pushes the rest of the day later. School ends when the last period does.
-          </p>
+          <p className="text-[11px] text-[#98A0A9] mt-2">{fmt(t.settings.computedNote, { min: periodLen })}</p>
 
           <div className="mt-4">
-            <div className="text-xs font-medium text-[#5B6470] mb-1">Periods</div>
+            <div className="text-xs font-medium text-[#5B6470] mb-1">{t.settings.periods}</div>
             {periods.map((p, i) => (
               <div key={i} className="flex items-center gap-2 mb-1">
                 <input
@@ -183,7 +179,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
                   disabled={periods.length <= 1}
                   className="text-xs text-[#B42318] hover:underline disabled:opacity-30"
                 >
-                  Remove
+                  {t.settings.remove}
                 </button>
               </div>
             ))}
@@ -192,19 +188,19 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
                 onClick={() => setPeriods((prev) => [...prev, { label: `P${prev.length + 1}` }])}
                 className="text-xs text-[#0C8175] hover:underline"
               >
-                + Add period
+                {t.settings.addPeriod}
               </button>
             )}
           </div>
 
           <div className="mt-4">
-            <div className="text-xs font-medium text-[#5B6470] mb-1">Breaks</div>
+            <div className="text-xs font-medium text-[#5B6470] mb-1">{t.settings.breaks}</div>
             {breaks.map((b, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2 mb-1">
                 <input
                   value={b.label}
                   onChange={(e) => setBreaks((prev) => prev.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                  placeholder="Snack break"
+                  placeholder={t.settings.breakPlaceholder}
                   className={`${fieldCls} w-32`}
                   maxLength={40}
                 />
@@ -219,17 +215,17 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
                       prev.map((x, j) => (j === i ? { ...x, minutes: Math.max(1, Math.min(240, Number(e.target.value) || 15)) } : x)),
                     )
                   }
-                  title="Break length (minutes)"
+                  title={t.settings.breakLength}
                   className={`${fieldCls} w-20`}
                 />
                 <label className="text-xs text-[#5B6470] flex items-center gap-1">
-                  after
+                  {t.settings.after}
                   <select
                     value={Math.min(b.afterPeriod, periods.length)}
                     onChange={(e) => setBreaks((prev) => prev.map((x, j) => (j === i ? { ...x, afterPeriod: Number(e.target.value) } : x)))}
                     className={`${fieldCls}`}
                   >
-                    <option value={0}>start of day</option>
+                    <option value={0}>{t.settings.startOfDay}</option>
                     {periods.map((p, pi) => (
                       <option key={pi} value={pi + 1}>
                         {p.label || `P${pi + 1}`}
@@ -238,7 +234,7 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
                   </select>
                 </label>
                 <button onClick={() => setBreaks((prev) => prev.filter((_, j) => j !== i))} className="text-xs text-[#B42318] hover:underline">
-                  Remove
+                  {t.settings.remove}
                 </button>
               </div>
             ))}
@@ -247,24 +243,25 @@ export default function SettingsPanel({ shape }: { shape: TimetableShape }) {
                 onClick={() => setBreaks((prev) => [...prev, { label: "", minutes: 15, afterPeriod: 0 }])}
                 className="text-xs text-[#0C8175] hover:underline"
               >
-                + Add break
+                {t.settings.addBreak}
               </button>
             )}
           </div>
 
           <p className="text-[11px] text-[#98A0A9] mt-3">
-            Week: {DAY_NAMES.slice(0, days).join(", ")}. Removing periods or days never deletes lessons — anything
-            stranded outside the new shape is reported so you can tidy up.
+            {fmt(t.settings.weekNote, {
+              days: DAY_KEYS.slice(0, days)
+                .map((k) => t.days[k])
+                .join(", "),
+            })}
           </p>
           {msg && <p className="text-sm text-[#0C8175] mt-2">{msg}</p>}
           {err && <p className="text-sm text-red-600 mt-2">{err}</p>}
           <div className="mt-3 flex items-center gap-3">
             <button onClick={() => void save()} disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
-              {busy ? "Saving…" : "Save settings"}
+              {busy ? t.saving : t.settings.save}
             </button>
-            {dirty && !busy && (
-              <span className="text-xs text-[#9A6400]">● Unsaved changes — the timetable updates after you save</span>
-            )}
+            {dirty && !busy && <span className="text-xs text-[#9A6400]">● {t.settings.unsaved}</span>}
           </div>
         </div>
       )}

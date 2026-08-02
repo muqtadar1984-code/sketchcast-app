@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { NOTE_TYPES, TYPE_ICON, TYPE_LABEL, TYPE_STYLE } from "./diary/note-types";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { NOTE_TYPES, TYPE_ICON, TYPE_STYLE, noteTypeLabel, type NoteTypeLabels } from "./diary/note-types";
 
 // The TEACHER's compose card: pick a type, write the note, aim it at the whole
 // class or one enrolled student, optionally hide it from students ("parents
@@ -12,17 +14,29 @@ import { NOTE_TYPES, TYPE_ICON, TYPE_LABEL, TYPE_STYLE } from "./diary/note-type
 // the happy path one textarea away. (Parents get their own per-child compose —
 // diary/parent-compose.tsx.)
 
+/** Its own words plus the three the whole diary shares. Typed from the English
+ * dictionary; the import is type-only, so the server-only module is erased and
+ * no translation file reaches the browser bundle. */
+export type DiaryComposeMessages = Dictionary["comms"]["diary"]["compose"] & {
+  noteTypes: NoteTypeLabels;
+  addToDiary: string;
+  saveFailed: string;
+  saving: string;
+};
+
 export default function DiaryCompose({
   classId,
   className,
   students,
   date,
+  t,
 }: {
   classId: string;
   className: string;
   students: { id: string; name: string }[];
   /** The diary day being viewed ("YYYY-MM-DD") — becomes the note's entry_date. */
   date: string;
+  t: DiaryComposeMessages;
 }) {
   const router = useRouter();
   const [type, setType] = useState<string>("general");
@@ -53,7 +67,7 @@ export default function DiaryCompose({
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) {
-      setError(json.error ?? "Could not save the note.");
+      setError(json.error ?? t.saveFailed);
       return;
     }
     setBody("");
@@ -65,19 +79,19 @@ export default function DiaryCompose({
 
   return (
     <div className="card p-5 mb-6">
-      <h2 className="font-display font-medium mb-3">Write in the diary</h2>
+      <h2 className="font-display font-medium mb-3">{t.title}</h2>
 
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {NOTE_TYPES.map((t) => (
+        {NOTE_TYPES.map((nt) => (
           <button
-            key={t}
+            key={nt}
             type="button"
-            onClick={() => setType(t)}
+            onClick={() => setType(nt)}
             className={`chip font-sans normal-case tracking-normal ${
-              type === t ? TYPE_STYLE[t] : "bg-white border border-[#E6E8E4] text-[#5B6470] hover:bg-[#F5F6F3]"
+              type === nt ? TYPE_STYLE[nt] : "bg-white border border-[#E6E8E4] text-[#5B6470] hover:bg-[#F5F6F3]"
             }`}
           >
-            {TYPE_ICON[t]} {TYPE_LABEL[t]}
+            {TYPE_ICON[nt]} {noteTypeLabel(t.noteTypes, nt)}
           </button>
         ))}
       </div>
@@ -87,7 +101,7 @@ export default function DiaryCompose({
         onChange={(e) => setBody(e.target.value)}
         rows={3}
         maxLength={4000}
-        placeholder="Write a note home — homework, reminders, how the day went…"
+        placeholder={t.placeholder}
         className="field px-3 py-2 w-full text-sm"
       />
 
@@ -96,12 +110,12 @@ export default function DiaryCompose({
           value={target}
           onChange={(e) => setTarget(e.target.value)}
           className="field h-9 px-2 text-sm"
-          aria-label="Who is this note for?"
+          aria-label={t.targetAria}
         >
-          <option value="">Whole class — {className}</option>
+          <option value="">{fmt(t.wholeClass, { class: className })}</option>
           {students.map((s) => (
             <option key={s.id} value={s.id}>
-              Only {s.name}
+              {fmt(t.onlyStudent, { name: s.name })}
             </option>
           ))}
         </select>
@@ -113,14 +127,14 @@ export default function DiaryCompose({
             onChange={(e) => setParentsOnly(e.target.checked)}
             className="accent-[#0C8175]"
           />
-          Parents only
-          <span className="text-xs text-[#98A0A9]">— hidden from students; parents, teachers and school leadership still see it</span>
+          {t.parentsOnly}
+          <span className="text-xs text-[#98A0A9]">{t.parentsOnlyHint}</span>
         </label>
 
         <div className="ms-auto flex items-center gap-2">
           {error && <span className="text-xs text-red-600">{error}</span>}
           <button onClick={post} disabled={busy || !body.trim()} className="btn-primary h-9 px-4 text-sm">
-            {done ? "Added ✓" : busy ? "Saving…" : "Add to the diary"}
+            {done ? `${t.added} ✓` : busy ? t.saving : t.addToDiary}
           </button>
         </div>
       </div>

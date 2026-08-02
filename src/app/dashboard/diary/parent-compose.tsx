@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { NOTE_TYPES, TYPE_STYLE } from "./note-types";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { NOTE_TYPES, TYPE_STYLE, noteTypeLabel, type NoteTypeLabels } from "./note-types";
 
 // The parent's compose box, scoped to ONE child: type chips + body → a
 // per-student note (parents never write class-wide — the API and RLS both pin
@@ -16,14 +18,27 @@ import { NOTE_TYPES, TYPE_STYLE } from "./note-types";
 // this note too" (dn_read then strips it from the student's view). The teacher
 // box defaults the other way round on purpose — it writes TO the class.
 
+/** Its own words plus the ones the whole diary shares. Typed from the English
+ * dictionary; the import is type-only, so the server-only module is erased and
+ * no translation file reaches the browser bundle. */
+export type ParentComposeMessages = Dictionary["comms"]["diary"]["parentCompose"] & {
+  noteTypes: NoteTypeLabels;
+  addToDiary: string;
+  saveFailed: string;
+  saving: string;
+  cancel: string;
+};
+
 export default function ParentCompose({
   studentId,
   childName,
   entryDate,
+  t,
 }: {
   studentId: string;
   childName: string;
   entryDate: string;
+  t: ParentComposeMessages;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,7 +62,7 @@ export default function ParentCompose({
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) {
-      setError(json.error ?? "Could not save the note.");
+      setError(json.error ?? t.saveFailed);
       return;
     }
     setBody("");
@@ -61,7 +76,7 @@ export default function ParentCompose({
     return (
       <div className="px-5 py-3">
         <button onClick={() => setOpen(true)} className="btn-ghost h-9 px-3 text-sm">
-          + Write a note about {childName}
+          + {fmt(t.open, { name: childName })}
         </button>
       </div>
     );
@@ -69,16 +84,16 @@ export default function ParentCompose({
   return (
     <form onSubmit={submit} className="px-5 py-3">
       <div className="flex flex-wrap gap-1.5 mb-2">
-        {NOTE_TYPES.map((t) => (
+        {NOTE_TYPES.map((nt) => (
           <button
-            key={t}
+            key={nt}
             type="button"
-            onClick={() => setType(t)}
+            onClick={() => setType(nt)}
             className={`chip font-sans normal-case tracking-normal ${
-              type === t ? TYPE_STYLE[t] : "bg-white border border-[#E6E8E4] text-[#5B6470]"
+              type === nt ? TYPE_STYLE[nt] : "bg-white border border-[#E6E8E4] text-[#5B6470]"
             }`}
           >
-            {t}
+            {noteTypeLabel(t.noteTypes, nt)}
           </button>
         ))}
       </div>
@@ -88,7 +103,7 @@ export default function ParentCompose({
         onChange={(e) => setBody(e.target.value)}
         maxLength={4000}
         rows={3}
-        placeholder={`A private note for ${childName}'s teachers — e.g. absence, medication, something from home…`}
+        placeholder={fmt(t.placeholder, { name: childName })}
         className="field px-3 py-2 w-full text-sm"
       />
       <label className="mt-2 flex items-start gap-1.5 text-sm text-[#5B6470]">
@@ -99,19 +114,16 @@ export default function ParentCompose({
           className="accent-[#0C8175] mt-1"
         />
         <span>
-          Let {childName} see this note too
-          <span className="block text-xs text-[#98A0A9]">
-            Off by default — you, {childName}&apos;s teachers and school leadership can read it,
-            but {childName} cannot.
-          </span>
+          {fmt(t.letChildSee, { name: childName })}
+          <span className="block text-xs text-[#98A0A9]">{fmt(t.letChildSeeHint, { name: childName })}</span>
         </span>
       </label>
       <div className="mt-2 flex items-center gap-2">
         <button type="submit" disabled={busy || !body.trim()} className="btn-primary h-9 px-4 text-sm">
-          {busy ? "Saving…" : "Add to the diary"}
+          {busy ? t.saving : t.addToDiary}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-9 px-3 text-sm">
-          Cancel
+          {t.cancel}
         </button>
       </div>
       {error && <p className="mt-1.5 text-sm text-red-600 [overflow-wrap:anywhere]">{error}</p>}

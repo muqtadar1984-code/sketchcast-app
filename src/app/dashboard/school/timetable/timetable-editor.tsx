@@ -4,7 +4,6 @@ import { Fragment, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import {
-  DAY_NAMES,
   cellKey,
   dayOverloads,
   isLesson,
@@ -15,11 +14,31 @@ import {
 } from "@/utils/timetable";
 import TeacherRoster from "./teacher-roster";
 import SettingsPanel from "./settings-panel";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 type ClassRow = { id: string; name: string; grade: string | null; teacher_id: string; editable: boolean };
 type Teacher = { id: string; name: string };
 export type StaffDetail = { id: string; name: string; subjects: string[] };
 
+/** Every word the workbench renders — the whole timetable slice, plus the few
+ * shared words it borrows — handed down by the (server) Timetable page. The
+ * roster and settings panels below get the same object. */
+export type TimetableMessages = Dictionary["school"]["timetable"] &
+  Pick<Dictionary["common"], "cancel" | "save" | "saving"> & {
+    teacherFallback: string;
+    classFallback: string;
+  };
+
+/** The week's ORDER lives here (mirroring utils/timetable's DAY_NAMES); the
+ * words themselves come from the dictionary, keyed like this so a
+ * partly-translated locale still falls back per day rather than blanking the
+ * header row. */
+export const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
+// Subject suggestions are DATA, not chrome: whatever is picked here is written
+// to timetable_slots.subject and matched by the solver's curriculum names, so
+// they stay in one language on purpose.
 const SUBJECT_SUGGESTIONS = [
   "Mathematics",
   "Science",
@@ -56,6 +75,7 @@ export default function TimetableEditor({
   staffDetails,
   initialSlots,
   isAdmin,
+  t,
 }: {
   schoolId: string;
   shape: TimetableShape;
@@ -64,6 +84,7 @@ export default function TimetableEditor({
   staffDetails: StaffDetail[];
   initialSlots: Slot[];
   isAdmin: boolean;
+  t: TimetableMessages;
 }) {
   const router = useRouter();
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
@@ -84,12 +105,12 @@ export default function TimetableEditor({
   const dragFrom = useRef<{ day: number; period: number } | null>(null);
   const [dropPreview, setDropPreview] = useState<{ day: number; period: number; bad: boolean } | null>(null);
 
-  const days = DAY_NAMES.slice(0, shape.days);
+  const days = DAY_KEYS.slice(0, shape.days).map((k) => t.days[k]);
   const maxPerDay = shape.maxPerTeacherPerDay ?? 6;
   const conflicts = useMemo(() => teacherConflicts(slots), [slots]);
   const overloads = useMemo(() => dayOverloads(slots, maxPerDay), [slots, maxPerDay]);
   const dayLoads = useMemo(() => teacherDayLoads(slots), [slots]);
-  const teacherName = useMemo(() => new Map(teachers.map((t) => [t.id, t.name] as const)), [teachers]);
+  const teacherName = useMemo(() => new Map(teachers.map((x) => [x.id, x.name] as const)), [teachers]);
   const className = useMemo(() => new Map(classes.map((c) => [c.id, c.name] as const)), [classes]);
   const currentClass = classes.find((c) => c.id === classId);
   const slotAt = (cid: string, day: number, period: number) =>
@@ -113,7 +134,7 @@ export default function TimetableEditor({
   // Multi-cell ops that die midway leave the server ahead of the client — the
   // only honest recovery is a full re-sync.
   function failAndResync(message: string) {
-    setError(`${message} — re-syncing the grid.`);
+    setError(fmt(t.editor.resync, { message }));
     router.refresh();
   }
 
@@ -181,7 +202,7 @@ export default function TimetableEditor({
       const ok = await writeCell(entry.classId, cell.day, cell.period, cell.before);
       if (!ok) {
         setBusy(false);
-        failAndResync(`Undo of "${entry.label}" only partly applied`);
+        failAndResync(fmt(t.editor.undoPartial, { label: entry.label }));
         return;
       }
     }
@@ -208,7 +229,7 @@ export default function TimetableEditor({
 
   async function saveCell() {
     if (!editing || !subject.trim()) {
-      setError("A subject is required.");
+      setError(t.editor.subjectRequired);
       return;
     }
     setBusy(true);
@@ -223,12 +244,12 @@ export default function TimetableEditor({
       locked: cellLocked,
       kind: cellNonTeaching ? "nonteaching" : "lesson",
     };
-    pushUndo("edit cell", classId, [{ day: editing.day, period: editing.period }]);
+    pushUndo(t.editor.undoLabel.editCell, classId, [{ day: editing.day, period: editing.period }]);
     const ok = await writeCell(classId, editing.day, editing.period, next);
     setBusy(false);
     if (!ok) {
       setUndoStack((prev) => prev.slice(0, -1));
-      setError("You can't edit this class's timetable.");
+      setError(t.editor.cannotEdit);
       return;
     }
     applyLocal(classId, [{ day: editing.day, period: editing.period, next }]);
@@ -244,12 +265,12 @@ export default function TimetableEditor({
     }
     setBusy(true);
     setError(null);
-    pushUndo("clear cell", classId, [{ day: editing.day, period: editing.period }]);
+    pushUndo(t.editor.undoLabel.clearCell, classId, [{ day: editing.day, period: editing.period }]);
     const ok = await writeCell(classId, editing.day, editing.period, null);
     setBusy(false);
     if (!ok) {
       setUndoStack((prev) => prev.slice(0, -1));
-      setError("You can't edit this class's timetable.");
+      setError(t.editor.cannotEdit);
       return;
     }
     applyLocal(classId, [{ day: editing.day, period: editing.period, next: null }]);
@@ -297,7 +318,7 @@ export default function TimetableEditor({
     const target = slotAt(classId, day, period) ?? null;
     setBusy(true);
     setError(null);
-    pushUndo(target ? "swap cells" : "move cell", classId, [
+    pushUndo(target ? t.editor.undoLabel.swapCells : t.editor.undoLabel.moveCell, classId, [
       { day: from.day, period: from.period },
       { day, period },
     ]);
@@ -307,7 +328,7 @@ export default function TimetableEditor({
     if (!okTarget) {
       setBusy(false);
       setUndoStack((prev) => prev.slice(0, -1));
-      setError("You can't edit this class's timetable.");
+      setError(t.editor.cannotEdit);
       return;
     }
     const okSource = await writeCell(
@@ -319,7 +340,7 @@ export default function TimetableEditor({
     setBusy(false);
     if (!okSource) {
       setUndoStack((prev) => prev.slice(0, -1));
-      failAndResync("The move only partly applied");
+      failAndResync(t.editor.movePartial);
       return;
     }
     applyLocal(classId, [
@@ -338,8 +359,7 @@ export default function TimetableEditor({
         if (s && !s.locked) affected.push({ day: d, period: p });
       }
     if (!affected.length) return;
-    if (!window.confirm(`${label} for ${currentClass.name}? ${affected.length} lesson(s) will be removed (locked cells stay). You can undo this.`))
-      return;
+    if (!window.confirm(fmt(t.editor.confirmClear, { label, class: currentClass.name, n: affected.length }))) return;
     setBusy(true);
     setError(null);
     pushUndo(label.toLowerCase(), classId, affected);
@@ -347,7 +367,7 @@ export default function TimetableEditor({
       const ok = await writeCell(classId, c.day, c.period, null);
       if (!ok) {
         setBusy(false);
-        failAndResync(`${label} only partly applied`);
+        failAndResync(fmt(t.editor.clearPartial, { label }));
         return;
       }
     }
@@ -374,12 +394,12 @@ export default function TimetableEditor({
     if (!changes.length) return;
     setBusy(true);
     setError(null);
-    pushUndo("copy day", classId, changes.map((c) => ({ day: c.day, period: c.period })));
+    pushUndo(t.editor.undoLabel.copyDay, classId, changes.map((c) => ({ day: c.day, period: c.period })));
     for (const ch of changes) {
       const ok = await writeCell(classId, ch.day, ch.period, ch.next);
       if (!ok) {
         setBusy(false);
-        failAndResync("Copy day only partly applied");
+        failAndResync(t.editor.copyPartial);
         return;
       }
     }
@@ -395,15 +415,22 @@ export default function TimetableEditor({
     let count = dayLoads.get(`${cellTeacher}|${editing.day}`) ?? 0;
     if (current && current.teacher_id === cellTeacher && isLesson(current)) count -= 1;
     if (count >= maxPerDay) {
-      return `${teacherName.get(cellTeacher) ?? "This teacher"} already has ${count} lessons on ${days[editing.day - 1]} (limit ${maxPerDay}). You can still save — the limit is a guideline for humans, a rule for the generator.`;
+      return fmt(t.editor.capWarning, {
+        teacher: teacherName.get(cellTeacher) ?? t.editor.thisTeacher,
+        count,
+        day: days[editing.day - 1] ?? "",
+        max: maxPerDay,
+      });
     }
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, cellTeacher, cellNonTeaching, dayLoads, maxPerDay, slots]);
 
   const hoursLine = [
-    shape.start && shape.end ? `School hours ${shape.start} – ${shape.end}` : null,
-    ...(shape.breaks ?? []).map((b) => `${b.label} ${b.time ?? ""}${b.minutes ? ` · ${b.minutes} min` : ""}`),
+    shape.start && shape.end ? fmt(t.schoolHours, { start: shape.start, end: shape.end }) : null,
+    ...(shape.breaks ?? []).map(
+      (b) => `${b.label} ${b.time ?? ""}${b.minutes ? ` · ${fmt(t.minutes, { n: b.minutes })}` : ""}`,
+    ),
   ]
     .filter(Boolean)
     .join("   ·   ");
@@ -416,13 +443,13 @@ export default function TimetableEditor({
             onClick={() => setView("class")}
             className={`h-9 px-3 text-sm ${view === "class" ? "bg-[#14181F] text-white" : "bg-white text-[#5B6470]"}`}
           >
-            By class
+            {t.editor.byClass}
           </button>
           <button
             onClick={() => setView("teacher")}
             className={`h-9 px-3 text-sm ${view === "teacher" ? "bg-[#14181F] text-white" : "bg-white text-[#5B6470]"}`}
           >
-            By teacher
+            {t.editor.byTeacher}
           </button>
         </div>
         {view === "class" ? (
@@ -430,26 +457,31 @@ export default function TimetableEditor({
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
-                {c.editable ? "" : " (view only)"}
+                {c.editable ? "" : ` ${t.editor.viewOnly}`}
               </option>
             ))}
           </select>
         ) : (
           <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)} className="field h-9 px-2 text-sm">
-            {teachers.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            {teachers.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
               </option>
             ))}
           </select>
         )}
         {undoStack.length > 0 && (
-          <button onClick={() => void undo()} disabled={busy} className="btn-ghost h-9 px-3 text-sm" title={`Undo ${undoStack[undoStack.length - 1].label}`}>
-            ↩ Undo {undoStack[undoStack.length - 1].label}
+          <button
+            onClick={() => void undo()}
+            disabled={busy}
+            className="btn-ghost h-9 px-3 text-sm"
+            title={fmt(t.editor.undo, { label: undoStack[undoStack.length - 1].label })}
+          >
+            ↩ {fmt(t.editor.undo, { label: undoStack[undoStack.length - 1].label })}
           </button>
         )}
         <button onClick={() => window.print()} className="btn-ghost h-9 px-3 text-sm ms-auto">
-          🖨 Print
+          🖨 {t.editor.print}
         </button>
       </div>
 
@@ -458,16 +490,24 @@ export default function TimetableEditor({
       )}
       {conflicts.size > 0 && (
         <p className="text-sm text-[#9A6400] mb-2 print:hidden">
-          ⚠ {conflicts.size} clash{conflicts.size === 1 ? "" : "es"}: a teacher is timetabled in two classes at
-          once — clashing cells are outlined.
+          ⚠ {conflicts.size === 1 ? t.editor.clashesOne : fmt(t.editor.clashesMany, { n: conflicts.size })}
         </p>
       )}
       {overloads.length > 0 && (
         <p className="text-sm text-[#9A6400] mb-2 print:hidden">
-          ⚠ Over the daily limit ({maxPerDay}/day):{" "}
-          {overloads
-            .map((o) => `${teacherName.get(o.teacher_id) ?? "Teacher"} — ${DAY_NAMES[o.day - 1]} ${o.count}`)
-            .join(", ")}
+          ⚠{" "}
+          {fmt(t.editor.overLimit, {
+            max: maxPerDay,
+            list: overloads
+              .map((o) =>
+                fmt(t.editor.overLimitItem, {
+                  teacher: teacherName.get(o.teacher_id) ?? t.teacherFallback,
+                  day: t.days[DAY_KEYS[o.day - 1]!],
+                  count: o.count,
+                }),
+              )
+              .join(", "),
+          })}
         </p>
       )}
       {error && <p className="text-sm text-red-600 mb-2 print:hidden">{error}</p>}
@@ -476,7 +516,7 @@ export default function TimetableEditor({
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-              <th className="px-2 py-2 text-start font-normal w-20">Period</th>
+              <th className="px-2 py-2 text-start font-normal w-20">{t.period}</th>
               {days.map((d) => (
                 <th key={d} className="px-2 py-2 text-start font-normal">
                   {d}
@@ -490,7 +530,7 @@ export default function TimetableEditor({
                 <td colSpan={days.length + 1} className="px-2 py-1 text-[11px] text-[#9A6400]">
                   ☕ {b.label}
                   {b.time ? ` · ${b.time}` : ""}
-                  {b.minutes ? ` · ${b.minutes} min` : ""}
+                  {b.minutes ? ` · ${fmt(t.minutes, { n: b.minutes })}` : ""}
                 </td>
               </tr>
             ))}
@@ -516,7 +556,7 @@ export default function TimetableEditor({
                                 className={`rounded px-1.5 py-1 mb-0.5 text-[11px] leading-4 ${clash && isLesson(s) ? "ring-2 ring-[#9A6400] bg-[#FFF1D6]" : "bg-[#F4F6F3]"}`}
                               >
                                 <span className="text-[#14181F]">{s.subject}</span>
-                                <span className="block text-[#5B6470]">{className.get(s.class_id) ?? "Class"}{s.room ? ` · ${s.room}` : ""}</span>
+                                <span className="block text-[#5B6470]">{className.get(s.class_id) ?? t.classFallback}{s.room ? ` · ${s.room}` : ""}</span>
                               </div>
                             ))}
                           </td>
@@ -578,7 +618,7 @@ export default function TimetableEditor({
                                   {s.subject}
                                 </span>
                                 <span className="block text-[#5B6470]">
-                                  {isLesson(s) ? firstName(s.teacher_id) : "non-teaching"}
+                                  {isLesson(s) ? firstName(s.teacher_id) : t.editor.nonTeaching}
                                   {s.room ? ` · ${s.room}` : ""}
                                 </span>
                               </>
@@ -595,7 +635,7 @@ export default function TimetableEditor({
                       <td colSpan={days.length + 1} className="px-2 py-1 text-[11px] text-[#9A6400]">
                         ☕ {b.label}
                         {b.time ? ` · ${b.time}` : ""}
-                        {b.minutes ? ` · ${b.minutes} min` : ""}
+                        {b.minutes ? ` · ${fmt(t.minutes, { n: b.minutes })}` : ""}
                       </td>
                     </tr>
                   ))}
@@ -609,27 +649,24 @@ export default function TimetableEditor({
       {hoursLine && (
         <p className="text-xs text-[#5B6470] mt-2">
           {hoursLine}
-          {isAdmin && <span className="text-[#98A0A9]"> — edit under Timetable settings below</span>}
+          {isAdmin && <span className="text-[#98A0A9]"> — {t.editor.editSettingsHint}</span>}
         </p>
       )}
       {view === "class" && currentClass?.editable && (
-        <p className="text-[11px] text-[#98A0A9] mt-1 print:hidden">
-          Tip: drag a lesson onto another cell to move it (onto a filled cell to swap). 🔒 locked cells are
-          never touched by the auto-generator, day tools, or drags.
-        </p>
+        <p className="text-[11px] text-[#98A0A9] mt-1 print:hidden">{t.editor.dragTip}</p>
       )}
 
       {view === "class" && currentClass?.editable && (
         <div className="flex flex-wrap items-center gap-2 mt-3 text-sm print:hidden">
-          <span className="text-xs text-[#5B6470]">Day tools:</span>
+          <span className="text-xs text-[#5B6470]">{t.editor.dayTools}</span>
           <select value={copySrc} onChange={(e) => setCopySrc(Number(e.target.value))} className="field h-9 px-2 text-sm">
             {days.map((d, i) => (
               <option key={d} value={i + 1}>
-                Copy {d}
+                {fmt(t.editor.copyDay, { day: d })}
               </option>
             ))}
           </select>
-          <span className="text-xs text-[#5B6470]">to</span>
+          <span className="text-xs text-[#5B6470]">{t.editor.to}</span>
           <div className="flex gap-1">
             {days.map((d, i) => {
               const v = i + 1;
@@ -647,7 +684,7 @@ export default function TimetableEditor({
             })}
           </div>
           <button onClick={() => void copyDay()} disabled={busy || !copyDst.length} className="btn-ghost h-9 px-3 text-sm disabled:opacity-50">
-            Copy
+            {t.editor.copy}
           </button>
           <span className="mx-1 text-[#E6E8E4]">|</span>
           <select
@@ -656,25 +693,25 @@ export default function TimetableEditor({
             onChange={(e) => {
               const v = Number(e.target.value);
               e.target.value = "";
-              if (v) void clearDays([v], `Clear ${DAY_NAMES[v - 1]}`);
+              if (v) void clearDays([v], fmt(t.editor.clearDay, { day: days[v - 1] ?? "" }));
             }}
             className="field h-9 px-2 text-sm"
           >
             <option value="" disabled>
-              Clear a day…
+              {t.editor.clearDayPrompt}
             </option>
             {days.map((d, i) => (
               <option key={d} value={i + 1}>
-                Clear {d}
+                {fmt(t.editor.clearDay, { day: d })}
               </option>
             ))}
           </select>
           <button
-            onClick={() => void clearDays(days.map((_, i) => i + 1), "Clear the whole week")}
+            onClick={() => void clearDays(days.map((_, i) => i + 1), t.editor.clearWeekLabel)}
             disabled={busy}
             className="text-sm text-[#B42318] hover:underline disabled:opacity-50"
           >
-            Clear week
+            {t.editor.clearWeek}
           </button>
         </div>
       )}
@@ -687,7 +724,7 @@ export default function TimetableEditor({
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="text-xs text-[#5B6470]">
-              Subject
+              {t.editor.subject}
               <input
                 list="tt-subjects"
                 value={subject}
@@ -703,43 +740,43 @@ export default function TimetableEditor({
               </datalist>
             </label>
             <label className="text-xs text-[#5B6470]">
-              Teacher{cellNonTeaching ? " (optional — on duty)" : ""}
+              {cellNonTeaching ? t.editor.teacherOnDuty : t.editor.teacher}
               <select value={cellTeacher} onChange={(e) => setCellTeacher(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
-                <option value="">— unassigned —</option>
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+                <option value="">{t.editor.unassigned}</option>
+                {teachers.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
                   </option>
                 ))}
               </select>
             </label>
             <label className="text-xs text-[#5B6470]">
-              Room (optional)
+              {t.editor.room}
               <input value={room} onChange={(e) => setRoom(e.target.value)} className="field w-full h-10 px-3 text-sm mt-1" maxLength={40} />
             </label>
           </div>
           <div className="flex flex-wrap gap-4 mt-3">
             <label className="flex items-center gap-1.5 text-xs text-[#5B6470]">
               <input type="checkbox" checked={cellLocked} onChange={(e) => setCellLocked(e.target.checked)} />
-              🔒 Lock (auto-generate and day tools never touch it)
+              🔒 {t.editor.lock}
             </label>
             <label className="flex items-center gap-1.5 text-xs text-[#5B6470]">
               <input type="checkbox" checked={cellNonTeaching} onChange={(e) => setCellNonTeaching(e.target.checked)} />
-              Non-teaching (assembly, free period — no clash or load counting)
+              {t.editor.nonTeachingOption}
             </label>
           </div>
           {capWarning && <p className="text-sm text-[#9A6400] mt-2">⚠ {capWarning}</p>}
           {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
           <div className="flex items-center justify-between mt-3">
             <button onClick={() => void clearCell()} disabled={busy} className="text-sm text-[#B42318] hover:underline">
-              Clear cell
+              {t.editor.clearCell}
             </button>
             <div className="flex items-center gap-2">
               <button onClick={() => setEditing(null)} className="btn-ghost h-10 px-4 text-sm">
-                Cancel
+                {t.cancel}
               </button>
               <button onClick={() => void saveCell()} disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
-                {busy ? "Saving…" : "Save"}
+                {busy ? t.saving : t.save}
               </button>
             </div>
           </div>
@@ -754,9 +791,10 @@ export default function TimetableEditor({
         shapeDays={shape.days}
         periodsPerDay={shape.periods.length}
         isAdmin={isAdmin}
+        t={t}
       />
 
-      {isAdmin && <SettingsPanel shape={shape} />}
+      {isAdmin && <SettingsPanel shape={shape} t={t} />}
     </div>
   );
 }

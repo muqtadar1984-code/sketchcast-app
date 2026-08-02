@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { fmt } from "@/i18n/format";
+import { type LibraryMessages } from "./content-cell";
 
 // Book Health Score badge — a compact colored chip on the library row that
 // expands to the dimensions, problems, and recommendation. Computed by the
@@ -16,11 +18,13 @@ export type BookHealth = {
   note?: string | null;
 };
 
-const BAND_STYLE: Record<string, { chip: string; label: string }> = {
-  excellent: { chip: "bg-[#E2F4F1] text-[#0C8175]", label: "Excellent" },
-  good: { chip: "bg-[#E2F4F1] text-[#0C8175]", label: "Good" },
-  fair: { chip: "bg-[#FFF1D6] text-[#9A6400]", label: "Fair" },
-  poor: { chip: "bg-[#FCEBEA] text-[#B42318]", label: "Poor" },
+// Chip colour per band; the band's WORD comes from the dictionary (t.health.bands),
+// keyed by the same band name the worker writes.
+const BAND_CHIP: Record<string, string> = {
+  excellent: "bg-[#E2F4F1] text-[#0C8175]",
+  good: "bg-[#E2F4F1] text-[#0C8175]",
+  fair: "bg-[#FFF1D6] text-[#9A6400]",
+  poor: "bg-[#FCEBEA] text-[#B42318]",
 };
 
 function Bar({ label, value }: { label: string; value: number }) {
@@ -36,43 +40,49 @@ function Bar({ label, value }: { label: string; value: number }) {
   );
 }
 
-export default function BookHealthBadge({ health }: { health: BookHealth | null }) {
+export default function BookHealthBadge({ health, t }: { health: BookHealth | null; t: LibraryMessages }) {
   const [open, setOpen] = useState(false);
   if (!health || typeof health.score !== "number") return null;
-  const style = BAND_STYLE[health.band] ?? BAND_STYLE.fair;
+  const chip = BAND_CHIP[health.band] ?? BAND_CHIP.fair;
+  const band = (t.health.bands as Record<string, string>)[health.band] ?? t.health.bands.fair;
 
   return (
     <span data-tour="book-health" className="relative inline-block" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`chip font-sans normal-case tracking-normal ${style.chip}`}
-        title="Book health — click for detail"
+        className={`chip font-sans normal-case tracking-normal ${chip}`}
+        title={t.health.hint}
       >
-        Health {health.score} · {style.label}
+        {fmt(t.health.badge, { score: health.score, band })}
       </button>
 
       {open && (
         <span className="absolute end-0 z-30 mt-1 w-72 card p-4 shadow-lg text-start block">
           <span className="flex items-center justify-between mb-2">
-            <span className="font-display font-medium text-sm">Book health</span>
-            <span className={`chip font-sans normal-case tracking-normal ${style.chip}`}>{health.score}/100</span>
+            <span className="font-display font-medium text-sm">{t.health.title}</span>
+            <span className={`chip font-sans normal-case tracking-normal ${chip}`}>
+              {fmt(t.health.score, { score: health.score })}
+            </span>
           </span>
 
           {health.dimensions && (
             <span className="block space-y-1.5 mb-2">
               {typeof health.dimensions.text_layer === "number" && (
-                <Bar label="Text quality" value={health.dimensions.text_layer} />
+                <Bar label={t.health.textQuality} value={health.dimensions.text_layer} />
               )}
               {typeof health.dimensions.structure === "number" && (
-                <Bar label="Chapters" value={health.dimensions.structure} />
+                <Bar label={t.health.chapters} value={health.dimensions.structure} />
               )}
             </span>
           )}
 
           {health.facts && (
             <span className="block text-xs text-[#98A0A9] mb-2">
-              {health.facts.pages ?? "—"} pages · {health.facts.chapters ?? "—"} chapters ·{" "}
-              {health.facts.has_text_layer ? "text PDF" : "scanned"}
+              {fmt(t.health.facts, {
+                pages: health.facts.pages ?? "—",
+                chapters: health.facts.chapters ?? "—",
+                type: health.facts.has_text_layer ? t.health.textPdf : t.health.scanned,
+              })}
             </span>
           )}
 

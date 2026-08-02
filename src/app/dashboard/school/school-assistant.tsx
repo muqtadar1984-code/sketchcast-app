@@ -2,8 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { StreamSpeaker, micSupported, startDictation } from "@/utils/assistant/voice-client";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 type Msg = { role: "you" | "assistant"; content: string; greeting?: boolean };
+
+/** Every word the briefing renders, handed down by the (server) School page. */
+export type BriefingMessages = Dictionary["school"]["briefing"] &
+  Pick<Dictionary["common"], "close" | "loading">;
 
 // The school-briefing assistant — leadership chat over the live analytics
 // snapshot (/api/school-assistant). Adapted from the student assistant panel:
@@ -14,7 +19,7 @@ type Msg = { role: "you" | "assistant"; content: string; greeting?: boolean };
 // exactly where the teaching Assistant sits on teacher/student surfaces (that
 // Assistant is hidden on the School pages, so a principal is offered the school
 // briefing rather than a book tutor they don't use).
-export function SchoolAssistantLauncher() {
+export function SchoolAssistantLauncher({ t }: { t: BriefingMessages }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -26,8 +31,8 @@ export function SchoolAssistantLauncher() {
         <button
           onClick={() => setOpen(true)}
           className="group btn-primary h-11 px-3 hover:px-4 focus-visible:px-4 text-sm rounded-full shadow-lg flex items-center transition-all"
-          title="Ask about your school"
-          aria-label="Ask about your school"
+          title={t.launcherHint}
+          aria-label={t.launcherHint}
           data-tour="school-assistant"
         >
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
@@ -36,16 +41,16 @@ export function SchoolAssistantLauncher() {
             <path d="M9 11h6M9 15h4" />
           </svg>
           <span className="max-w-0 group-hover:max-w-[10rem] group-focus-visible:max-w-[10rem] ms-0 group-hover:ms-2 group-focus-visible:ms-2 overflow-hidden whitespace-nowrap transition-all duration-200">
-            School briefing
+            {t.launcher}
           </span>
         </button>
       </div>
-      {open && <SchoolAssistantPanel onClose={() => setOpen(false)} />}
+      {open && <SchoolAssistantPanel t={t} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
+function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: () => void }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [starters, setStarters] = useState<string[]>([]);
   const [ready, setReady] = useState<boolean | null>(null);
@@ -84,17 +89,18 @@ function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
         if (d.greeting)
           setMessages((m) => (m.length ? m : [{ role: "assistant", content: d.greeting, greeting: true }]));
         if (Array.isArray(d.starters)) setStarters(d.starters);
-        if (!res.ok) setError(d.error || "The briefing isn't available right now.");
+        if (!res.ok) setError(d.error || t.unavailable);
       } catch {
         if (!cancelled) {
           setReady(false);
-          setError("Couldn't reach the briefing. Try again in a moment.");
+          setError(t.unreachable);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -183,7 +189,7 @@ function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error || "The briefing is unavailable right now.");
+        throw new Error(j?.error || t.failed);
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -232,14 +238,14 @@ function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
           <div className="min-w-0">
             <div className="font-display font-medium flex items-center gap-1.5">
-              <span aria-hidden>🗒️</span> School briefing
+              <span aria-hidden>🗒️</span> {t.launcher}
             </div>
-            <div className="text-xs text-[#98A0A9]">Answers from your live school data</div>
+            <div className="text-xs text-[#98A0A9]">{t.subtitle}</div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {speaking ? (
-              <button onClick={stopSpeaking} className="text-xs font-medium text-[#B42318] hover:underline" title="Stop reading aloud">
-                ■ Stop
+              <button onClick={stopSpeaking} className="text-xs font-medium text-[#B42318] hover:underline" title={t.stopReading}>
+                ■ {t.stop}
               </button>
             ) : (
               <button
@@ -247,17 +253,17 @@ function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
                 aria-pressed={readAloud}
                 className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}
               >
-                {readAloud ? "🔊 Read aloud" : "🔈 Read aloud"}
+                {readAloud ? "🔊" : "🔈"} {t.readAloud}
               </button>
             )}
-            <button onClick={onClose} className="text-[#98A0A9] hover:text-[#5B6470] text-lg leading-none" aria-label="Close">
+            <button onClick={onClose} className="text-[#98A0A9] hover:text-[#5B6470] text-lg leading-none" aria-label={t.close}>
               ×
             </button>
           </div>
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-          {ready === null && <p className="text-sm text-[#98A0A9]">Reading the latest school data…</p>}
+          {ready === null && <p className="text-sm text-[#98A0A9]">{t.reading}</p>}
           {messages.map((m, i) => (
             <div key={i} className={m.role === "you" ? "flex justify-end" : "flex flex-col items-start"}>
               <div
@@ -299,7 +305,7 @@ function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
                 onClick={toggleMic}
                 disabled={ready !== true}
                 aria-pressed={listening}
-                title={listening ? "Stop listening" : "Speak your question"}
+                title={listening ? t.micStop : t.micStart}
                 className={`h-9 w-9 rounded-lg border text-base shrink-0 disabled:opacity-40 ${
                   listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
                 }`}
@@ -313,16 +319,14 @@ function SchoolAssistantPanel({ onClose }: { onClose: () => void }) {
               onChange={(e) => setInput(e.target.value)}
               maxLength={600}
               disabled={ready !== true}
-              placeholder={listening ? "Listening…" : ready === null ? "Loading…" : "Ask about completion, at-risk students, grading…"}
+              placeholder={listening ? t.listening : ready === null ? t.loading : t.placeholder}
               className="field h-9 px-3 text-sm flex-1"
             />
             <button type="submit" disabled={busy || !input.trim() || ready !== true} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-              {busy ? "…" : "Ask"}
+              {busy ? "…" : t.ask}
             </button>
           </form>
-          <p className="text-[10px] text-[#98A0A9] mt-1.5">
-            Uses only the analytics you can already see here. Every briefing is recorded in the access audit.
-          </p>
+          <p className="text-[10px] text-[#98A0A9] mt-1.5">{t.footnote}</p>
         </div>
       </div>
     </div>

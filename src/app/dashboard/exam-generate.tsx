@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { LANGUAGES } from "@/utils/narration";
+import { type LibraryMessages } from "./content-cell";
+import { fmt } from "@/i18n/format";
 
 // Exam generation (0062). A teacher builds ONE cumulative exam over everything
 // covered so far — any mix of chapters and parts. It produces TWO documents:
@@ -17,13 +19,15 @@ import { LANGUAGES } from "@/utils/narration";
 export type ExamUnit = { part: number; label: string };
 export type ExamChapterOpt = { num: number; title: string; units: ExamUnit[] };
 
+// Keys double as the dictionary keys (t.examTool.types) — one name for a
+// question type, whatever the reader's language.
 const QTYPES = [
-  { key: "mcq", label: "Multiple choice", def: 10 },
-  { key: "fill_blank", label: "Fill in the blanks", def: 5 },
-  { key: "true_false", label: "True / False", def: 5 },
-  { key: "match_column", label: "Match the columns", def: 5 },
-  { key: "short_answer", label: "Short answer", def: 4 },
-  { key: "long_answer", label: "Long answer", def: 3 },
+  { key: "mcq", def: 10 },
+  { key: "fill_blank", def: 5 },
+  { key: "true_false", def: 5 },
+  { key: "match_column", def: 5 },
+  { key: "short_answer", def: 4 },
+  { key: "long_answer", def: 3 },
 ] as const;
 
 const DIFFICULTIES = ["easy", "medium", "hard", "mixed"] as const;
@@ -34,12 +38,14 @@ export default function ExamGenerate({
   bookId,
   schoolId,
   chapters,
+  t,
   language = null,
 }: {
   bookId: string;
   schoolId: string | null;
   /** Covered units only — chapters/parts that already have a live lesson. */
   chapters: ExamChapterOpt[];
+  t: LibraryMessages;
   /** Detected book language (0056) — the exam inherits it by default. */
   language?: string | null;
 }) {
@@ -93,7 +99,7 @@ export default function ExamGenerate({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(false);
       return;
     }
@@ -117,7 +123,7 @@ export default function ExamGenerate({
       setError(gErr.message);
       return;
     }
-    setNote("Exam queued — the paper and its answer key appear under “Exams” below.");
+    setNote(t.examTool.queued);
     router.refresh();
   }
 
@@ -129,21 +135,19 @@ export default function ExamGenerate({
         onClick={() => setOpen((v) => !v)}
         className="btn-ghost h-8 px-3 text-xs"
         aria-expanded={open}
-        title="Build a cumulative exam (paper + answer key) over the chapters and parts you've taught"
+        title={t.examTool.openHint}
       >
-        {open ? "▾" : "▸"} Exam…
+        {open ? "▾" : "▸"} {t.examTool.open}
       </button>
 
       {open && (
         <div className="mt-2 rounded-lg border border-[#E6E8E4] bg-white p-3">
           <p className="text-[10px] text-[#98A0A9] mb-2">
-            A cumulative exam over everything you&apos;ve taught — one <span className="text-[#0C8175]">exam paper</span> plus a
-            separate <span className="text-[#0C8175]">answer key</span>. Tick the chapters and parts to test (untick to skip),
-            set the difficulty and how many questions of each type. <span className="text-[#0C8175]">Free</span>.
+            {t.examTool.intro} <span className="text-[#0C8175]">{t.examTool.introFree}</span>
           </p>
 
           {/* Coverage tree — chapters and their covered parts */}
-          <p className="text-[10px] uppercase tracking-wide text-[#98A0A9] mb-1">What to test</p>
+          <p className="text-[10px] uppercase tracking-wide text-[#98A0A9] mb-1">{t.examTool.whatToTest}</p>
           <div className="max-h-48 overflow-y-auto divide-y divide-[#F1F3EF] mb-3">
             {chapters.map((c) => {
               const keys = c.units.map((u) => unitKey(c.num, u.part));
@@ -187,11 +191,11 @@ export default function ExamGenerate({
           </div>
 
           {/* Question mix */}
-          <p className="text-[10px] uppercase tracking-wide text-[#98A0A9] mb-1">Questions per type</p>
+          <p className="text-[10px] uppercase tracking-wide text-[#98A0A9] mb-1">{t.examTool.questionsPerType}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 mb-3">
             {QTYPES.map((q) => (
               <label key={q.key} className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-[#5B6470]">{q.label}</span>
+                <span className="text-[#5B6470]">{t.examTool.types[q.key]}</span>
                 <input
                   type="number"
                   min={0}
@@ -207,32 +211,32 @@ export default function ExamGenerate({
           {/* Difficulty · title · language */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
             <label className="flex items-center gap-1.5 text-xs">
-              <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">Difficulty</span>
-              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="field h-8 px-2 text-xs capitalize">
+              <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">{t.examTool.difficulty}</span>
+              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="field h-8 px-2 text-xs">
                 {DIFFICULTIES.map((d) => (
-                  <option key={d} value={d} className="capitalize">
-                    {d}
+                  <option key={d} value={d}>
+                    {t.examTool.difficulties[d]}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex items-center gap-1.5 text-xs">
-              <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">Language</span>
+              <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">{t.examTool.language}</span>
               <select value={lang} onChange={(e) => setLang(e.target.value)} className="field h-8 px-2 text-xs">
                 {LANGUAGES.map((l) => (
                   <option key={l.value} value={l.value}>
                     {l.label}
-                    {knownBookLang === l.value ? " (book)" : ""}
+                    {knownBookLang === l.value ? t.examTool.bookSuffix : ""}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex items-center gap-1.5 text-xs flex-1 min-w-[10rem]">
-              <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">Title</span>
+              <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">{t.examTool.titleLabel}</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Mid-term Exam (optional)"
+                placeholder={t.examTool.titlePlaceholder}
                 className="field h-8 px-2 text-xs flex-1"
               />
             </label>
@@ -242,14 +246,15 @@ export default function ExamGenerate({
             {error && <span className="text-xs text-red-600 [overflow-wrap:anywhere]">{error}</span>}
             {note && <span className="text-xs text-[#0C8175]">{note}</span>}
             <span className="text-[10px] text-[#98A0A9]">
-              {chosen.length} unit{chosen.length === 1 ? "" : "s"} · {totalQ} question{totalQ === 1 ? "" : "s"}
+              {chosen.length === 1 ? t.examTool.unitsOne : fmt(t.examTool.unitsMany, { n: chosen.length })} ·{" "}
+              {totalQ === 1 ? t.examTool.questionsOne : fmt(t.examTool.questionsMany, { n: totalQ })}
             </span>
             <button
               onClick={() => void generate()}
               disabled={busy || !canGo}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50 ms-auto"
             >
-              {busy ? "Queuing…" : "Generate exam (free)"}
+              {busy ? t.queuing : t.examTool.generate}
             </button>
           </div>
         </div>

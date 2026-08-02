@@ -12,6 +12,10 @@ import CoachRecap from "../coach-recap";
 import AskCoachButton from "../ask-coach-button";
 import ResetPasswordButton from "../reset-password-button";
 import DeleteStudentButton from "../delete-student-button";
+import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { htmlLang } from "@/i18n/locales";
+import { fmt } from "@/i18n/format";
 
 // The parent home: one section per linked child — their school assignments
 // (read-only: completion, due dates, scores) and the test papers this parent
@@ -20,12 +24,25 @@ import DeleteStudentButton from "../delete-student-button";
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABEL: Record<string, string> = {
-  presentation: "Video lesson",
-  activity: "Activities",
-  worksheet: "Worksheet",
-  exam_paper: "Test paper",
-  case_study: "Case study",
+type ChildMessages = Dictionary["school"]["children"];
+
+// The DB's kind and status codes are snake_case and never translated — these
+// map them to the dictionary's camelCase keys, so anything we don't recognise
+// falls through to the raw code rather than a blank row.
+const KIND_KEY: Record<string, keyof ChildMessages["kind"]> = {
+  presentation: "presentation",
+  activity: "activity",
+  worksheet: "worksheet",
+  exam_paper: "examPaper",
+  case_study: "caseStudy",
+};
+const STATUS_KEY: Record<string, keyof ChildMessages["status"]> = {
+  "not started": "notStarted",
+  not_started: "notStarted",
+  in_progress: "inProgress",
+  completed: "completed",
+  revised: "revised",
+  submitted: "submitted",
 };
 
 type ChildItem = {
@@ -41,6 +58,9 @@ type ChildItem = {
 
 export default async function ChildrenPage() {
   if (!parentPortalEnabled()) redirect("/dashboard");
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.children;
   const supabase = await createClient();
   const {
     data: { user },
@@ -122,11 +142,12 @@ export default async function ChildrenPage() {
       const sub = subOf.get(key);
       const score =
         sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}` : null;
+      const kindKey = KIND_KEY[g.kind ?? ""];
       const item: ChildItem = {
         genId: s.generation_id,
         kind: g.kind ?? "",
-        label: g.title || KIND_LABEL[g.kind ?? ""] || "Item",
-        from: direct ? "you" : className.get(s.class_id!) ?? "class",
+        label: g.title || (kindKey && t.kind[kindKey]) || dict.school.fallback.item,
+        from: direct ? t.fromYou : className.get(s.class_id!) ?? t.fromClass,
         due: s.due_at,
         overdue: !!s.due_at && new Date(s.due_at).getTime() < now && status !== "completed" && !sub,
         status: sub ? "submitted" : status,
@@ -148,11 +169,9 @@ export default async function ChildrenPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">My children</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-6">
-          What each child is working on — schoolwork read-only, plus the test papers you assign.
-        </p>
+        <p className="text-[#5B6470] mb-6">{t.subtitle}</p>
 
         {/* What the school is telling families — the reason most parents open
             this page — above their children's work. */}
@@ -160,31 +179,26 @@ export default async function ChildrenPage() {
         {notices && <NoticesCard notices={notices.upcoming} />}
 
         <div className="space-y-5 mb-6">
-          {links.length === 0 && (
-            <div className="card px-5 py-8 text-sm text-[#5B6470]">
-              No children linked yet. Add your child below — or if their school invited you, open the
-              link from that email.
-            </div>
-          )}
+          {links.length === 0 && <div className="card px-5 py-8 text-sm text-[#5B6470]">{t.empty}</div>}
           {links.map((l) => {
             const { school, mine } = itemsFor(l.child_id);
-            const name = l.profiles?.full_name || l.profiles?.username || "Child";
+            const name = l.profiles?.full_name || l.profiles?.username || dict.school.fallback.child;
             const renderRows = (rows: ChildItem[]) =>
               rows.map((it, i) => (
                 <div key={i} className="px-5 py-2.5 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <span className="min-w-0 truncate">
-                      {it.label} <span className="text-xs text-[#5B6470]">· from {it.from}</span>
+                      {it.label} <span className="text-xs text-[#5B6470]">· {fmt(t.from, { source: it.from })}</span>
                       {it.due && (
                         <span className={`text-xs ms-2 ${it.overdue ? "text-[#B3401F]" : "text-[#5B6470]"}`}>
-                          due {new Date(it.due).toLocaleDateString()}
+                          {fmt(t.due, { date: new Date(it.due).toLocaleDateString(htmlLang(locale)) })}
                         </span>
                       )}
                     </span>
                     <span className="flex items-center gap-2 shrink-0">
                       {it.score && <span className="tabular text-xs">{it.score}</span>}
                       <span className={`chip font-sans normal-case tracking-normal ${STATUS_TONE[it.status] ?? "bg-[#EEF0EC] text-[#5B6470]"}`}>
-                        {it.status.replace("_", " ")}
+                        {STATUS_KEY[it.status] ? t.status[STATUS_KEY[it.status]!] : it.status.replace("_", " ")}
                       </span>
                     </span>
                   </div>
@@ -201,21 +215,25 @@ export default async function ChildrenPage() {
                 <div className="px-5 py-3 flex items-center justify-between gap-3">
                   <span className="font-medium text-lg font-display truncate">{name}</span>
                   <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
-                    {!l.verified_at && <span>unverified link · confirm with the school</span>}
+                    {!l.verified_at && <span>{t.unverified}</span>}
                     <ResetPasswordButton targetId={l.child_id} name={name} />
                     {l.source === "self" && <DeleteStudentButton targetId={l.child_id} name={name} />}
                   </span>
                 </div>
-                <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">School work ({school.length})</p>
-                {school.length ? renderRows(school) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">Nothing assigned by school yet.</p>}
-                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">From you ({mine.length})</p>
-                {mine.length ? renderRows(mine) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">No test papers assigned yet — create one under Test Papers.</p>}
+                <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                  {fmt(t.schoolWork, { n: school.length })}
+                </p>
+                {school.length ? renderRows(school) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.noSchoolWork}</p>}
+                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                  {fmt(t.yourWork, { n: mine.length })}
+                </p>
+                {mine.length ? renderRows(mine) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.noTestPapers}</p>}
               </div>
             );
           })}
         </div>
 
-        <AddChild />
+        <AddChild t={{ ...t.add, close: dict.common.close }} />
       </main>
     </div>
   );

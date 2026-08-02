@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { defaultParams } from "./options-modal";
 import { LANGUAGES } from "@/utils/narration";
+import { kindLabel, type LibraryMessages } from "./content-cell";
+import { fmt } from "@/i18n/format";
 
 // Revision papers (0061). A teacher picks a GROUP of chapters at term /
 // mid-term / exam time and generates ONLY worksheets and/or exam papers — no
@@ -15,20 +17,19 @@ import { LANGUAGES } from "@/utils/narration";
 // Revision papers are FREE — they're built from lessons you've already
 // generated (the parent passes only chapters that have a lesson). Results
 // appear in the book's "Revision papers" section.
-const KINDS = [
-  { kind: "worksheet", label: "Worksheet" },
-  { kind: "exam_paper", label: "Test paper" },
-] as const;
+const KINDS = ["worksheet", "exam_paper"] as const;
 
 export default function BatchGenerate({
   bookId,
   schoolId,
   chapters,
+  t,
   language = null,
 }: {
   bookId: string;
   schoolId: string | null;
   chapters: { num: number; title: string }[];
+  t: LibraryMessages;
   /** Detected book language (0056) — papers inherit it. */
   language?: string | null;
 }) {
@@ -76,7 +77,7 @@ export default function BatchGenerate({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(false);
       return;
     }
@@ -86,7 +87,7 @@ export default function BatchGenerate({
     // (params.revision) → the DB charges one credit each.
     type Row = { kind: string; book_id: string; owner_id: string; school_id: string | null; chapter_ref: string | null; params: Record<string, unknown>; status: string };
     const papers: Row[] = [];
-    for (const kind of KINDS.map((k) => k.kind).filter((k) => kindSel.has(k))) {
+    for (const kind of KINDS.filter((k) => kindSel.has(k))) {
       if (combine) {
         papers.push({
           kind,
@@ -120,7 +121,9 @@ export default function BatchGenerate({
       const { error: gErr } = await supabase.from("generations").insert(row);
       if (gErr) {
         stopError = queued
-          ? `Queued ${queued} paper${queued === 1 ? "" : "s"}, then stopped: ${gErr.message}`
+          ? queued === 1
+            ? fmt(t.revision.stoppedOne, { error: gErr.message })
+            : fmt(t.revision.stoppedMany, { n: queued, error: gErr.message })
           : gErr.message;
         break;
       }
@@ -132,7 +135,7 @@ export default function BatchGenerate({
       router.refresh();
       return;
     }
-    setNote(`Queued ${queued} revision paper${queued === 1 ? "" : "s"} — see “Revision papers” below.`);
+    setNote(queued === 1 ? t.revision.queuedOne : fmt(t.revision.queuedMany, { n: queued }));
     setChapterSel(new Set());
     router.refresh();
   }
@@ -145,17 +148,15 @@ export default function BatchGenerate({
         onClick={() => setOpen((v) => !v)}
         className="btn-ghost h-8 px-3 text-xs"
         aria-expanded={open}
-        title="Generate worksheets and test papers for revision across a group of chapters"
+        title={t.revision.openHint}
       >
-        {open ? "▾" : "▸"} Revision papers…
+        {open ? "▾" : "▸"} {t.revision.open}
       </button>
 
       {open && (
         <div className="mt-2 rounded-lg border border-[#E6E8E4] bg-white p-3">
           <p className="text-[10px] text-[#98A0A9] mb-2">
-            For term, mid-term and exam revision: pick a group of chapters and generate worksheets
-            and/or test papers — <span className="text-[#0C8175]">free</span>, from the lessons
-            you&apos;ve already generated.
+            {t.revision.intro} <span className="text-[#0C8175]">{t.revision.introFree}</span>
           </p>
 
           {/* Chapters */}
@@ -166,7 +167,7 @@ export default function BatchGenerate({
               onChange={(e) => setChapterSel(e.target.checked ? new Set(chapters.map((c) => c.num)) : new Set())}
               className="h-3.5 w-3.5 accent-[#0C8175]"
             />
-            All taught chapters ({chapters.length})
+            {fmt(t.revision.allChapters, { n: chapters.length })}
           </label>
           <div className="max-h-44 overflow-y-auto divide-y divide-[#F1F3EF] mb-2">
             {chapters.map((c) => (
@@ -186,28 +187,28 @@ export default function BatchGenerate({
 
           {/* Kinds */}
           <div className="flex items-center gap-4 text-xs mb-2">
-            <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">Papers</span>
+            <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">{t.revision.papers}</span>
             {KINDS.map((k) => (
-              <label key={k.kind} className="flex items-center gap-1.5 cursor-pointer">
+              <label key={k} className="flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={kindSel.has(k.kind)}
-                  onChange={() => toggleKind(k.kind)}
+                  checked={kindSel.has(k)}
+                  onChange={() => toggleKind(k)}
                   className="h-3.5 w-3.5 accent-[#0C8175]"
                 />
-                {k.label}
+                {kindLabel(t, k)}
               </label>
             ))}
           </div>
 
           {/* Language */}
           <label className="flex items-center gap-1.5 text-xs mb-2">
-            <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">Language</span>
+            <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">{t.revision.language}</span>
             <select value={lang} onChange={(e) => setLang(e.target.value)} className="field h-8 px-2 text-xs">
               {LANGUAGES.map((l) => (
                 <option key={l.value} value={l.value}>
                   {l.label}
-                  {knownBookLang === l.value ? " (book)" : ""}
+                  {knownBookLang === l.value ? t.revision.bookSuffix : ""}
                 </option>
               ))}
             </select>
@@ -215,20 +216,20 @@ export default function BatchGenerate({
 
           {/* Mode */}
           <div className="flex flex-col gap-1 text-xs mb-2">
-            <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">Combine</span>
+            <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">{t.revision.combine}</span>
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name={`mode-${bookId}`} checked={combine} onChange={() => setCombine(true)} className="accent-[#0C8175]" />
-              One paper across the selected chapters
-              <span className="text-[10px] text-[#98A0A9]">(a cumulative revision paper)</span>
+              {t.revision.combineAll}
+              <span className="text-[10px] text-[#98A0A9]">{t.revision.combineAllNote}</span>
             </label>
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name={`mode-${bookId}`} checked={!combine} onChange={() => setCombine(false)} className="accent-[#0C8175]" />
-              One paper per chapter
-              <span className="text-[10px] text-[#98A0A9]">(a revision pack)</span>
+              {t.revision.perChapter}
+              <span className="text-[10px] text-[#98A0A9]">{t.revision.perChapterNote}</span>
             </label>
           </div>
           {combine && chosenChapters.length === 1 && (
-            <p className="text-[10px] text-[#9A6400] mb-1">Pick at least two chapters to combine — or switch to one per chapter.</p>
+            <p className="text-[10px] text-[#9A6400] mb-1">{t.revision.needTwo}</p>
           )}
 
           <div className="flex items-center gap-3 mt-1">
@@ -239,7 +240,13 @@ export default function BatchGenerate({
               disabled={busy || !canGo || nPapers === 0}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50 ms-auto"
             >
-              {busy ? "Queuing…" : nPapers > 0 ? `Generate ${nPapers} paper${nPapers === 1 ? "" : "s"} (free)` : "Generate"}
+              {busy
+                ? t.queuing
+                : nPapers === 0
+                  ? t.revision.generate
+                  : nPapers === 1
+                    ? t.revision.generateOne
+                    : fmt(t.revision.generateMany, { n: nPapers })}
             </button>
           </div>
         </div>

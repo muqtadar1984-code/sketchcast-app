@@ -4,6 +4,9 @@ import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 // "Who can see what" — a plain-language, read-only view of the access model so
 // leadership can see exactly how the scoping works (and trust it with minors'
@@ -11,20 +14,14 @@ import { enforceHat } from "@/utils/hats-server";
 // each coordinator's resolved footprint; for a coordinator, their own slice and
 // an explicit statement of what's invisible to them. Behind the flag.
 
-const MODEL: { role: string; sees: string }[] = [
-  { role: "Student", sees: "Only their own lessons, progress, and submissions." },
-  { role: "Teacher", sees: "Only their own classes, students, content, grading, and submissions." },
-  {
-    role: "Coordinator",
-    sees: "A teacher granted oversight of specific grade(s) — and subject(s), if set: the students, teachers, and content in that slice. Nothing outside it. They keep their own teacher dashboard.",
-  },
-  {
-    role: "Principal / Admin",
-    sees: "Whole-school totals and trends, plus named at-risk students on request via the school briefing (each briefing is recorded in the access audit). The day-to-day named worklist stays with the grade/subject coordinator. Admin also manages scopes, reads the access-audit log, and can teach classes of their own.",
-  },
-];
+// The four rows are read out of the dictionary in this fixed order — the model
+// reads top-down from the narrowest view to the widest, in every language.
+const MODEL_ROWS = ["student", "teacher", "coordinator", "principal"] as const;
 
 export default async function AccessModelPage() {
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.access;
   const supabase = await createClient();
   const {
     data: { user },
@@ -88,7 +85,7 @@ export default async function AccessModelPage() {
       .eq("school_id", profile!.school_id);
     people = ((peopleRaw ?? []) as { id: string; full_name: string | null; username: string | null; role: string }[]).map((p) => ({
       id: p.id,
-      name: p.full_name || p.username || "User",
+      name: p.full_name || p.username || dict.school.fallback.user,
       role: p.role,
     }));
   }
@@ -99,31 +96,25 @@ export default async function AccessModelPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-5xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">Who can see what</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-7">
-          Exactly how data is scoped by role. Enforced in the database (row-level security), not just hidden in the UI.
-        </p>
+        <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
         <div className="card divide-y divide-[#EEF0EC] mb-10">
-          {MODEL.map((m) => (
-            <div key={m.role} className="px-5 py-3 grid sm:grid-cols-[160px_1fr] gap-x-4 gap-y-1">
-              <span className="font-medium">{m.role}</span>
-              <span className="text-sm text-[#5B6470]">{m.sees}</span>
+          {MODEL_ROWS.map((key) => (
+            <div key={key} className="px-5 py-3 grid sm:grid-cols-[160px_1fr] gap-x-4 gap-y-1">
+              <span className="font-medium">{t.model[key].role}</span>
+              <span className="text-sm text-[#5B6470]">{t.model[key].sees}</span>
             </div>
           ))}
         </div>
 
         {isAdmin ? (
           <>
-            <h2 className="text-xl mb-1">Coordinators &amp; their reach</h2>
-            <p className="text-sm text-[#5B6470] mb-3">
-              What each coordinator&apos;s scope resolves to right now. Manage these on the Admin screen.
-            </p>
+            <h2 className="text-xl mb-1">{t.reach.title}</h2>
+            <p className="text-sm text-[#5B6470] mb-3">{t.reach.hint}</p>
             {coordinatorIds.length === 0 ? (
-              <div className="card px-5 py-6 text-sm text-[#5B6470]">
-                No coordinators yet — everyone is a teacher (own classes only) or admin (whole school).
-              </div>
+              <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.reach.empty}</div>
             ) : (
               <div className="card divide-y divide-[#EEF0EC]">
                 {coordinatorIds.map((cid) => {
@@ -132,15 +123,15 @@ export default async function AccessModelPage() {
                   return (
                     <div key={cid} className="px-5 py-3">
                       <div className="flex items-center justify-between gap-3 mb-1.5">
-                        <span className="font-medium">{nameOf.get(cid) || "Coordinator"}</span>
+                        <span className="font-medium">{nameOf.get(cid) || dict.school.fallback.coordinator}</span>
                         <span className="text-xs text-[#5B6470] tabular">
-                          {fp.classes} classes · {fp.students} students · {fp.teachers} teachers
+                          {fmt(t.reach.footprint, { classes: fp.classes, students: fp.students, teachers: fp.teachers })}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {mine.map((s) => (
                           <span key={s.id} className="chip font-sans bg-[#EEF0EC] text-[#14181F] normal-case tracking-normal">
-                            Grade {s.grade}{s.subject ? ` · ${s.subject}` : ""}
+                            {fmt(t.grade, { grade: s.grade })}{s.subject ? ` · ${s.subject}` : ""}
                           </span>
                         ))}
                       </div>
@@ -152,18 +143,16 @@ export default async function AccessModelPage() {
           </>
         ) : (
           <>
-            <h2 className="text-xl mb-1">Your access</h2>
-            <p className="text-sm text-[#5B6470] mb-3">Exactly your slice — and nothing beyond it.</p>
+            <h2 className="text-xl mb-1">{t.mine.title}</h2>
+            <p className="text-sm text-[#5B6470] mb-3">{t.mine.hint}</p>
             {scopes.length === 0 ? (
-              <div className="card px-5 py-6 text-sm text-[#9A6400]">
-                You have no scope assigned yet, so you can&apos;t see any student data. Ask your admin to assign you a grade.
-              </div>
+              <div className="card px-5 py-6 text-sm text-[#9A6400]">{t.mine.noScope}</div>
             ) : (
               <div className="card px-5 py-4">
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {scopes.map((s) => (
                     <span key={s.id} className="chip font-sans bg-[#E2F4F1] text-[#0C8175]">
-                      Grade {s.grade}{s.subject ? ` · ${s.subject}` : ""}
+                      {fmt(t.grade, { grade: s.grade })}{s.subject ? ` · ${s.subject}` : ""}
                     </span>
                   ))}
                 </div>
@@ -171,10 +160,7 @@ export default async function AccessModelPage() {
                   const fp = footprint(new Set(scopes.map((s) => s.grade)));
                   return (
                     <p className="text-sm text-[#5B6470]">
-                      That covers <span className="tabular text-[#14181F]">{fp.classes}</span> classes,{" "}
-                      <span className="tabular text-[#14181F]">{fp.students}</span> students, and{" "}
-                      <span className="tabular text-[#14181F]">{fp.teachers}</span> teachers. Anything in other grades is
-                      invisible to you.
+                      {fmt(t.mine.covers, { classes: fp.classes, students: fp.students, teachers: fp.teachers })}
                     </p>
                   );
                 })()}

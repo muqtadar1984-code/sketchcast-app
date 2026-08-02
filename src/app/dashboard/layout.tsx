@@ -5,6 +5,8 @@ import AssistantLauncher from "./assistant-launcher";
 import TourProvider from "@/tour/TourProvider";
 import { tourForRole } from "@/tour/definitions";
 import type { TourSeen } from "@/tour/types";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
 
 // Mounts, once for every dashboard surface: the onboarding TourProvider (which
 // wraps the page tree so the header's "Take a tour" button can drive it) and the
@@ -56,14 +58,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
   }
 
+  // The tour's WORDS (definitions.ts carries only its targets and order), so a
+  // parent taking the tour reads it in the language the rest of the app is in.
+  const t = await getDictionary(await resolveLocale());
+
   return (
-    <TourProvider role={role} seen={seen}>
+    <TourProvider role={role} seen={seen} copy={t.app.tour}>
       {children}
       {/* A principal (school_admin) doesn't teach from books — no teaching
           Assistant. Everyone else keeps it; the launcher also hides itself on
           the leadership School pages, where the School-briefing bot takes over
           the bottom-right slot. */}
-      {role !== "school_admin" && <AssistantLauncher />}
+      {role !== "school_admin" && (
+        <AssistantLauncher t={{ ...t.school.assistant, close: t.common.close }} />
+      )}
     </TourProvider>
   );
 }

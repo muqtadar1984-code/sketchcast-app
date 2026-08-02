@@ -125,5 +125,1381 @@
       "multiPartHint": "Part {n} of {total} (~15 min). Finish a part to check it off — the last part completes the lesson.",
       "singlePartHint": "Watch to the end to mark this lesson complete."
     }
+  },
+  "app": {
+    "auth": {
+      "or": "or",
+      "signIn": "Sign in",
+      "signOut": "Sign out",
+      "fullName": "Full name",
+      "email": "Email",
+      "password": "Password",
+      "alreadyHaveAccount": "Already have an account?",
+      "schoolPrompt": "Setting up a whole school?",
+      "schoolCta": "Set up your school"
+    },
+    "oauth": {
+      "signInWith": "Sign in with {provider}",
+      "signUpWith": "Sign up with {provider}",
+      "redirecting": "Redirecting…"
+    },
+    "login": {
+      "subtitle": "Sign in to your account",
+      "emailOrId": "Email or student ID",
+      "forgot": "Forgot password?",
+      "signingIn": "Signing in…",
+      "newHere": "New here?",
+      "createAccount": "Create an account"
+    },
+    "forgot": {
+      "subtitle": "Reset your password",
+      "sent": "If an account exists for that email, a reset link is on its way. Check your inbox (and spam folder).",
+      "emailPlaceholder": "Your email",
+      "studentHint": "That looks like a student ID. Student accounts don't have an email — ask your teacher or parent to reset your password from their dashboard.",
+      "sending": "Sending…",
+      "send": "Send reset link",
+      "remembered": "Remembered it?",
+      "backToSignIn": "Back to sign in"
+    },
+    "updatePassword": {
+      "subtitle": "Choose a new password",
+      "checking": "One moment…",
+      "expired": "This link has expired or you're not signed in.",
+      "requestNewLink": "Request a new reset link",
+      "signInLink": "sign in",
+      "updated": "Password updated — taking you to your dashboard…",
+      "newPassword": "New password (min 8 characters)",
+      "repeatPassword": "Repeat new password",
+      "tooShort": "Password must be at least 8 characters.",
+      "mismatch": "The two passwords don't match.",
+      "submit": "Set new password"
+    },
+    "signup": {
+      "title": "Create your account",
+      "subtitle": "Free for teachers & students",
+      "passwordMin": "Password (min 6 chars)",
+      "roles": {
+        "teacher": "Teacher",
+        "student": "Student",
+        "parent": "Parent"
+      },
+      "confirmEmail": "Check your email to confirm your account, then sign in.",
+      "creating": "Creating…",
+      "submit": "Create account"
+    },
+    "schoolSignup": {
+      "title": "Set up your school",
+      "subtitle": "Create your school on SketchCast, then invite your teachers.",
+      "yourFullName": "Your full name",
+      "workEmail": "Work email",
+      "createPassword": "Create a password (min 6 chars)",
+      "creating": "Creating…",
+      "continue": "Continue",
+      "confirmEmail": "Check your email to confirm your account — then you'll name your school.",
+      "nextStepHint": "You'll name your school on the next step.",
+      "finish": {
+        "title": "Name your school",
+        "signedInAs": "Signed in as {email}. This creates your school and makes you its admin — you can invite teachers right after.",
+        "schoolName": "School name",
+        "creating": "Creating…",
+        "submit": "Create my school"
+      }
+    },
+    "invite": {
+      "notAvailable": "Invites aren't available right now.",
+      "unavailableTitle": "Invitation unavailable",
+      "used": "This invitation has already been used.",
+      "invalid": "This invitation link is invalid.",
+      "expired": "This invitation has expired.",
+      "goToSignIn": "Go to sign in",
+      "title": "You're invited",
+      "joinAs": "Join {school} as {role}",
+      "forEmail": "for {email}",
+      "fallbackSchool": "your school",
+      "roles": {
+        "schoolAdmin": "School admin",
+        "teacher": "Teacher",
+        "parent": "Parent"
+      },
+      "reason": {
+        "invalid": "This invitation link is invalid.",
+        "expired": "This invitation has expired.",
+        "email": "That invitation is for a different email address — sign out and use that email.",
+        "apply": "Something went wrong accepting the invitation. Please try again.",
+        "server": "Invites aren't configured on the server.",
+        "role": "A student account can't accept a parent invitation — sign out and use the parent's own account."
+      },
+      "accept": "Accept invitation",
+      "wrongAccount": "You're signed in as {signedIn}, but this invite is for {invited}. Sign out and use that email.",
+      "invitedEmail": "Invited email",
+      "createPassword": "Create a password (min 6)",
+      "creating": "Creating…",
+      "submit": "Accept & create account",
+      "confirmEmail": "Check your email to confirm your account — the confirmation link will finish accepting the invite automatically.",
+      "googleHint": "Use the Google account for {email}."
+    },
+    "onboarding": {
+      "title": "Welcome — let's set you up",
+      "subtitle": "A couple of quick questions so SketchCast fits how you'll use it. You can change these later.",
+      "roleQuestion": "I'm here as a…",
+      "teacher": "Teacher",
+      "teacherSub": "Create lessons & teach classes",
+      "parent": "Parent",
+      "parentSub": "Support my child's learning",
+      "fullName": "Your full name",
+      "namePlaceholder": "e.g. Alex Morgan",
+      "whereTeach": "Where do you teach?",
+      "pickOne": "Please pick one.",
+      "schoolName": "School name",
+      "schoolPlaceholder": "e.g. Riverside Secondary",
+      "gradesTeach": "Grade levels you teach",
+      "pickAtLeastOne": "Pick at least one.",
+      "subjectsTeach": "Subjects you teach",
+      "childrenCount": "How many children will you support?",
+      "childrenPlaceholder": "e.g. 2",
+      "childGrades": "Your children's grade levels",
+      "heardFrom": "How did you hear about us?",
+      "optional": "Optional",
+      "completeRequired": "Please complete the required fields marked with *.",
+      "settingUp": "Setting up…",
+      "continue": "Continue",
+      "networkError": "Network error. Please try again.",
+      "affiliations": {
+        "school": "I teach at a school",
+        "independent": "Independent teacher / tutor",
+        "homeschool": "Homeschool educator"
+      },
+      "grades": {
+        "kindergarten": "Early years / Kindergarten",
+        "g1to3": "Grades 1–3",
+        "g4to6": "Grades 4–6",
+        "g7to9": "Grades 7–9",
+        "g10to12": "Grades 10–12"
+      },
+      "subjects": {
+        "maths": "Mathematics",
+        "science": "Science",
+        "english": "English",
+        "computing": "Computing / ICT",
+        "socialStudies": "Social studies",
+        "languages": "Languages",
+        "arts": "Arts",
+        "other": "Other"
+      }
+    },
+    "reportIssue": {
+      "label": "Report a problem",
+      "labelStudent": "Need help?",
+      "titleStudent": "Something not working?",
+      "about": "What is it about?",
+      "summary": "Summary",
+      "summaryStudent": "What happened? (a few words)",
+      "summaryPlaceholder": "e.g. Deck download fails on Unit 3",
+      "summaryPlaceholderStudent": "The video won't play",
+      "details": "Details (optional)",
+      "detailsPlaceholder": "What did you expect, what happened instead?",
+      "screenshots": "Screenshots (optional)",
+      "screenshotsCount": "Screenshots (optional · {n}/{max})",
+      "removeFile": "Remove {name}",
+      "notSignedIn": "Not signed in.",
+      "sendFailedNetwork": "Could not send — check your connection and try again.",
+      "sendFailed": "Could not send — please try again.",
+      "attachedOneFailed": "Sent, but 1 screenshot couldn't be attached.",
+      "attachedSomeFailed": "Sent, but {n} screenshots couldn't be attached.",
+      "sent": "Sent",
+      "sending": "Sending…",
+      "send": "Send",
+      "categories": {
+        "video": "Video lesson",
+        "deckDocs": "Deck / documents",
+        "quiz": "Quiz",
+        "upload": "Uploading a book",
+        "login": "Signing in",
+        "speed": "Slowness",
+        "other": "Something else"
+      }
+    },
+    "betaBanner": {
+      "welcome": "Welcome to SketchCast!",
+      "body": "Your free trial includes {trial}. Classes, assigning, reviewing, and analytics are all unlimited. Questions?",
+      "trial": "1 book and the full kit — video lesson, plan, activities, worksheet, test paper and case study — for one part of one chapter"
+    },
+    "tour": {
+      "teacher_onboarding": {
+        "library": {
+          "title": "Your library",
+          "body": "Every textbook you upload lives here. Open one to turn its chapters into lessons."
+        },
+        "generate": {
+          "title": "Turn a chapter into a lesson",
+          "body": "Pick a chapter and generate a full narrated video lesson from it — automatically."
+        },
+        "output": {
+          "title": "Watch & download",
+          "body": "Play the finished lesson, or download the editable slide deck and worksheets."
+        },
+        "assign": {
+          "title": "Assign to a class",
+          "body": "Share a chapter's lesson, worksheet and quiz with your students in one click."
+        },
+        "assistant": {
+          "title": "AI Teaching Assistant",
+          "body": "A book-grounded helper — ask it anything from your books, and it can check maths too."
+        },
+        "classes": {
+          "title": "Your classes",
+          "body": "Create classes and add students to start tracking their progress."
+        }
+      },
+      "student_onboarding": {
+        "assignments": {
+          "title": "Your work",
+          "body": "Everything your teacher assigns you shows up right here."
+        },
+        "open": {
+          "title": "Watch a lesson",
+          "body": "Open a lesson to watch the video or read through the slides."
+        },
+        "assistant": {
+          "title": "Ask the Assistant",
+          "body": "Stuck on something? Ask the AI assistant — it answers from your own books."
+        },
+        "progress": {
+          "title": "Your progress",
+          "body": "See what you've finished and what's still to do."
+        }
+      },
+      "parent_onboarding": {
+        "assignments": {
+          "title": "Your child's work",
+          "body": "See what each child has been assigned and how they're getting on."
+        },
+        "recap": {
+          "title": "Progress & recap",
+          "body": "Track completion and scores at a glance — no guesswork."
+        },
+        "practice": {
+          "title": "Make extra practice",
+          "body": "Create practice papers for your child anytime under Test Papers."
+        }
+      },
+      "school_admin_onboarding": {
+        "school": {
+          "title": "Manage your school",
+          "body": "Open your school area to add teachers, students and classes."
+        },
+        "branding": {
+          "title": "School branding",
+          "body": "Add your school's logo and colours to every lesson and document."
+        },
+        "health": {
+          "title": "Book health",
+          "body": "A quick quality score shows which textbooks are ready to teach from."
+        },
+        "classes": {
+          "title": "Classes & students",
+          "body": "Create classes and enrol students to track their progress."
+        }
+      },
+      "coordinator_onboarding": {
+        "welcome": {
+          "title": "Welcome to SketchCast",
+          "body": "Here's a quick 30-second look at what you can do as a coordinator."
+        },
+        "oversight": {
+          "title": "What you oversee",
+          "body": "The classes and teachers in your remit will appear in this area."
+        },
+        "help": {
+          "title": "Need a hand?",
+          "body": "Replay this tour anytime with this button — and you can always report a problem."
+        }
+      }
+    }
+  },
+  "comms": {
+    "diary": {
+      "title": "Diary",
+      "teacherIntro": "The daily communication book — notes home, replies, parent signatures, and what happened in class.",
+      "parentIntro": "The daily communication book — one page per day, per child. Sign notes so the teacher knows you've seen them.",
+      "studentIntro": "Notes from your teachers, one day at a time — reply to keep them posted.",
+      "viewingAsTeacher": "Viewing as teacher",
+      "seeChildrensDiary": "see my children's diary",
+      "viewingAsParent": "Viewing as parent",
+      "backToClassDiary": "back to my class diary",
+      "noClasses": "Create a class on your Library first — the diary is written per class.",
+      "noChildrenLinked": "No children linked yet — add your child under My Children first.",
+      "fromClassroom": "From the classroom ({count})",
+      "nothingRecorded": "Nothing recorded for this day.",
+      "notesHeading": "Notes ({count})",
+      "noNotesWriteFirst": "No notes for this day yet — write the first one above.",
+      "noNotes": "No notes for this day.",
+      "addToDiary": "Add to the diary",
+      "saveNoteFailed": "Could not save the note.",
+      "nav": {
+        "previousDay": "Previous day",
+        "nextDay": "Next day",
+        "today": "Today",
+        "diaryDay": "Diary day"
+      },
+      "noteTypes": {
+        "homework": "Homework",
+        "reminder": "Reminder",
+        "praise": "Praise",
+        "concern": "Concern",
+        "health": "Health",
+        "general": "General"
+      },
+      "kinds": {
+        "presentation": "Video lesson",
+        "activity": "Activities",
+        "worksheet": "Worksheet",
+        "exam_paper": "Test paper",
+        "exam": "Exam",
+        "case_study": "Case study",
+        "lesson_plan": "Lesson plan"
+      },
+      "people": {
+        "you": "You",
+        "yourself": "you",
+        "teacher": "Teacher",
+        "parent": "Parent",
+        "aParent": "A parent",
+        "student": "Student",
+        "aStudent": "A student",
+        "oneStudent": "a student",
+        "child": "Child",
+        "theClass": "Class",
+        "yourClass": "your class"
+      },
+      "entry": {
+        "assigned": "Assigned {title}",
+        "assignedToYou": "{title} assigned",
+        "assignedToYouIn": "{title} assigned · {class}",
+        "completedBy": "{name} completed {title}",
+        "youCompleted": "You completed {title}",
+        "withScore": "{text} · {score}",
+        "schoolNotice": "School notice — {title}",
+        "withDeadline": "{text} · {label} {date}",
+        "deadline": "{label} {date}",
+        "by": "By",
+        "fromTheSchool": "from the school",
+        "anAssignment": "an assignment",
+        "anAssignmentStart": "An assignment",
+        "assignment": "Assignment",
+        "assignedIn": "assigned · {where}",
+        "direct": "direct",
+        "classFallback": "class",
+        "assignedChip": "assigned",
+        "completedChip": "completed",
+        "schoolNoticeChip": "school notice",
+        "completedByOne": "completed by 1 student",
+        "completedByMany": "completed by {n} students"
+      },
+      "note": {
+        "parentsOnly": "parents only",
+        "translateLikeLastTime": "Translate like last time",
+        "translate": "Translate",
+        "translating": "Translating…",
+        "translateAria": "Translate this note — sends the text to our AI translation provider",
+        "translateTitle": "Machine translation — the text of this note is sent to our AI provider to translate it",
+        "deleteNote": "Delete this note",
+        "deleteNoteConfirm": "Delete this note and its replies? The parents' signatures on it go too.",
+        "deleting": "Deleting…",
+        "yesDelete": "Yes, delete",
+        "deleteReply": "Delete your reply",
+        "deleteReplyConfirm": "Delete this reply?",
+        "replyPlaceholder": "Write a reply…",
+        "sending": "Sending…",
+        "reply": "Reply",
+        "signedTitle": "Parents who have signed this note, out of the enrolled students with a linked parent account",
+        "signedCount": "Signed {signed}/{total}",
+        "signed": "Signed",
+        "signing": "Signing…",
+        "acknowledge": "Acknowledge",
+        "translationIncomplete": "Translation incomplete — showing the original.",
+        "translationPartial": "Translation incomplete — {missing} of {total} messages still show the original.",
+        "retry": "Retry",
+        "signFailed": "Could not sign — please try again.",
+        "replyFailed": "Could not send the reply.",
+        "deleteNoteFailed": "Could not delete the note.",
+        "deleteReplyFailed": "Could not delete the reply."
+      },
+      "compose": {
+        "title": "Write in the diary",
+        "placeholder": "Write a note home — homework, reminders, how the day went…",
+        "targetAria": "Who is this note for?",
+        "wholeClass": "Whole class — {class}",
+        "onlyStudent": "Only {name}",
+        "parentsOnly": "Parents only",
+        "parentsOnlyHint": "— hidden from students; parents, teachers and school leadership still see it",
+        "added": "Added"
+      },
+      "parentCompose": {
+        "open": "Write a note about {name}",
+        "placeholder": "A private note for {name}'s teachers — e.g. absence, medication, something from home…",
+        "letChildSee": "Let {name} see this note too",
+        "letChildSeeHint": "Off by default — you, {name}'s teachers and school leadership can read it, but {name} cannot."
+      }
+    },
+    "schoolDiary": {
+      "title": "School diary",
+      "intro": "Read-only oversight of the teacher↔home communication book. Writing stays with the participants — this view is recorded in the access audit.",
+      "notesSevenDays": "Notes (7d)",
+      "concernSigned": "Concern signed",
+      "noClassesInScope": "No classes in your scope yet."
+    },
+    "notices": {
+      "banner": {
+        "sectionLabel": "School notices",
+        "important": "Important",
+        "showNotice": "Show notice {n} of {total}",
+        "resumeRotating": "Resume rotating notices",
+        "stopRotating": "Stop rotating notices",
+        "play": "Play",
+        "pause": "Pause",
+        "dismiss": "Dismiss {title}",
+        "dismissTitle": "Hide until your next visit"
+      },
+      "ack": {
+        "acknowledge": "Acknowledge",
+        "confirming": "Confirming…",
+        "confirmed": "Confirmed",
+        "failed": "Could not confirm — please try again."
+      },
+      "card": {
+        "title": "School notices",
+        "subtitle": "What's coming up, soonest first.",
+        "empty": "No school notices right now.",
+        "opensInNewTab": "{label} — opens in a new tab",
+        "important": "important"
+      },
+      "composer": {
+        "title": "Publish a notice",
+        "subtitle": "One announcement to the whole school or to the staff room — with a link, a deadline, or both.",
+        "write": "Write a notice",
+        "audienceEveryone": "Everyone (teachers, parents, students)",
+        "audienceStaff": "Staff only",
+        "consequenceStaff": "Staff will be asked to confirm they have read it.",
+        "consequenceImportant": "Parents will be asked to acknowledge. It also appears in each child's diary day.",
+        "consequenceNormal": "It appears on dashboards and in each child's diary day. Nobody is asked to acknowledge.",
+        "titlePlaceholder": "Title — e.g. Sports Day, 12 September",
+        "bodyPlaceholder": "What people need to know. Keep it short — the details can live behind the link.",
+        "linkPlaceholder": "Link (optional) — https://…",
+        "linkLabelPlaceholder": "Button text — Register",
+        "happensOn": "Happens on (school time, optional)",
+        "actionBy": "Action needed by (optional)",
+        "actionLabelPlaceholder": "What to call the deadline — Register by, Pay by, Reply by",
+        "clocksHint": "The countdown shows the deadline first, then switches to the event date once the deadline passes. A notice can have just one of the two.",
+        "markImportant": "Mark important",
+        "markImportantStaffHint": "— stands out in the staff list",
+        "markImportantParentsHint": "— asks parents to acknowledge",
+        "featureUntil": "Feature this on dashboards until",
+        "featureHint": "— the pin lets go on its own; three notices show at most.",
+        "type": "Type",
+        "publish": "Publish notice",
+        "publishing": "Publishing…",
+        "published": "Published",
+        "publishFailed": "Could not publish the notice."
+      },
+      "revoke": {
+        "revoke": "Revoke",
+        "confirm": "Withdraw “{title}”? It leaves dashboards, class diaries and any subscribed calendar. The record is kept for your audit trail.",
+        "yes": "Yes, withdraw",
+        "withdrawing": "Withdrawing…",
+        "failed": "Could not withdraw the notice."
+      }
+    },
+    "calendar": {
+      "title": "Calendar",
+      "intro": "Meetings, exams, holidays and assignment due dates — everyone sees their own slice.",
+      "prev": "Prev",
+      "next": "Next",
+      "today": "Today",
+      "kinds": {
+        "meeting": "Meeting",
+        "exam": "Exam",
+        "holiday": "Holiday",
+        "activity": "Activity",
+        "pd": "PD / training",
+        "other": "Other"
+      },
+      "by": "By",
+      "dateAllDay": "{date} · all day",
+      "dateAtTime": "{date} · {time}",
+      "dueTooltip": "Due: {title}",
+      "dueEntry": "{title} due",
+      "assignment": "Assignment",
+      "assignmentLower": "assignment",
+      "moreCount": "+{n} more",
+      "manageTitle": "Manage this month's events",
+      "manageSubtitle": "Events you created or can edit in {month}.",
+      "withdrawnNote": "Withdrawn in {month} — kept for your record, and visible to leadership only. Nobody else sees these, on any surface.",
+      "withdrawn": "Withdrawn",
+      "upcoming": "Upcoming",
+      "upcomingSubtitle": "The next 30 days in your slice.",
+      "nothingScheduled": "Nothing scheduled yet.",
+      "editor": {
+        "add": "Add event",
+        "edit": "Edit",
+        "newTitle": "New event",
+        "editTitle": "Edit event",
+        "titlePlaceholder": "Title",
+        "type": "Type",
+        "whoSeesIt": "Who sees it",
+        "class": "Class",
+        "allDay": "All-day",
+        "starts": "Starts",
+        "startsSchoolTime": "Starts (school time, MYT)",
+        "ends": "Ends (optional)",
+        "locationPlaceholder": "Location (optional)",
+        "detailsPlaceholder": "Details (optional)",
+        "delete": "Delete",
+        "audiences": {
+          "staff": "Staff only",
+          "school": "Whole school (incl. students & parents)",
+          "leadership": "Leadership only",
+          "class": "One class"
+        },
+        "titleAndStartRequired": "A title and a start time are required.",
+        "pickAClass": "Pick a class for a class event.",
+        "cannotSave": "You can't save this event (check the audience/class).",
+        "cannotDelete": "You can't delete this event."
+      },
+      "subscribe": {
+        "button": "Link to Google/Outlook",
+        "title": "Subscribe from your calendar app",
+        "googleLabel": "In Google Calendar:",
+        "googleStep1": "Other calendars",
+        "googleStep2": "From URL",
+        "outlookLabel": "In Outlook:",
+        "outlookStep1": "Add calendar",
+        "outlookStep2": "Subscribe from web",
+        "pasteHint": "Paste this personal address — it shows exactly what you can see here, and stays up to date.",
+        "notSignedIn": "Not signed in.",
+        "preparing": "Preparing your address…",
+        "copy": "Copy",
+        "copied": "Copied",
+        "rotate": "Rotate address",
+        "rotateTitle": "Old address stops working immediately",
+        "done": "Done"
+      }
+    }
+  },
+  "library": {
+    "title": "Your library",
+    "subtitle": "Upload a textbook, then generate a narrated lesson from it.",
+    "noBookTools": "Your account is set up for teaching without book tools (PE, music, arts and similar subjects) — your timetable and classes are below. If that's wrong, ask your school to contact SketchCast support.",
+    "notSignedIn": "Not signed in.",
+    "otherLessons": "Other lessons",
+    "untitled": "Untitled lesson",
+    "queuing": "Queuing…",
+    "watch": "Watch",
+    "deck": "Deck",
+    "download": "Download",
+    "assign": "Assign",
+    "chapter": "Chapter {n}",
+    "chapterOne": "Chapter {list}",
+    "chapterMany": "Chapters {list}",
+    "selectedChapters": "selected chapters",
+    "wholeChapter": "Whole chapter",
+    "part": "Part {n}",
+    "partShort": "Pt {n}",
+    "partTitled": "Part {n} — {titles}",
+    "partOne": "Part {list}",
+    "partMany": "Parts {list}",
+    "watchPart": "Watch Pt {n}",
+    "deckPart": "Deck Pt {n}",
+    "kinds": {
+      "presentation": "Lesson",
+      "lesson_plan": "Plan",
+      "activity": "Activities",
+      "worksheet": "Worksheet",
+      "exam_paper": "Test paper",
+      "case_study": "Case study",
+      "exam": "Exam"
+    },
+    "status": {
+      "queued": "Queued",
+      "processing": "Processing",
+      "done": "Done",
+      "error": "Failed"
+    },
+    "group": {
+      "other": "Other",
+      "general": "General"
+    },
+    "empty": {
+      "withStepper": "Your library is empty — start with step 1 above.",
+      "title": "Your library is empty — here's the whole journey:",
+      "step1": "Upload a textbook PDF above",
+      "step2": "Generate a narrated lesson for a chapter",
+      "step3": "Assign it to your class & watch progress",
+      "note": "Chapters are detected automatically — scanned books included."
+    },
+    "book": {
+      "unknownAuthor": "Unknown author",
+      "findingChapters": "Finding chapters…",
+      "chaptersDone": "{done}/{total} chapters",
+      "assignBook": "Assign book",
+      "noChapters": "Couldn't detect chapters.",
+      "generateFullBook": "Generate full book",
+      "scannedLead": "Scanned PDF.",
+      "scannedWarning": "This file has no text layer, so chapters are detected by image recognition — the list below, and anything generated from it, may be unreliable.",
+      "scannedAdvice": "For best results upload a text-based (digitally exported) PDF, and use “Report an issue” on anything that comes out wrong.",
+      "revisionPapers": "Revision papers",
+      "revisionLabel": "{kind} · {scope}",
+      "exams": "Exams",
+      "covers": "Covers: {list}",
+      "examPaper": "Exam paper",
+      "answerKey": "Answer key",
+      "generatedAsSelected": "Generated as selected"
+    },
+    "cell": {
+      "addBack": "+ {label}",
+      "retry": "retry",
+      "failed": "{label} failed",
+      "statusTitle": "{label} — {status}"
+    },
+    "card": {
+      "watchLesson": "Watch the lesson",
+      "trialOnePart": "{part} · your trial covers one part",
+      "notGenerated": "Not generated yet · 1 credit",
+      "generateKit": "Generate kit"
+    },
+    "kit": {
+      "lessonOptions": "Lesson options",
+      "language": "Language",
+      "narration": "Narration",
+      "voice": "Voice",
+      "bookSuffix": " (book)",
+      "premiumSuffix": " ★ premium",
+      "assignChapter": "Assign chapter",
+      "generateFullKit": "Generate full kit",
+      "generateFullKitHint": "The video lesson plus its plan, activities, worksheet, test paper and case study — documents free, one credit per rendered lesson part",
+      "generateFree": "Generate ({n}) — free",
+      "generateFreeHint": "Free — these reuse the lesson's analysis",
+      "trialLocked": "Trial: 1 part — locked",
+      "trialLockedHint": "Your free trial covers the full kit (all six content types) for one part of one chapter",
+      "trialPick": "Trial: pick one part below",
+      "trialPickHint": "This chapter is split into parts — your trial covers the full kit (all six content types) for one part of your choice",
+      "trialPinned": "Trial: Part {n} is your kit",
+      "trialPinnedHint": "Your trial kit lives on this part — retries and every content type for it stay open"
+    },
+    "upload": {
+      "trial": "Trial",
+      "trialTeacher": "The free trial is limited to 1 book — explore all its chapters and generate the full kit for one part of one chapter.",
+      "trialParent": "The free trial is limited to 1 book — generate test papers from its chapters.",
+      "titleLabel": "Title (optional)",
+      "titlePlaceholder": "e.g. Exploring Society",
+      "authorLabel": "Author (optional)",
+      "authorPlaceholder": "e.g. NCERT",
+      "upload": "Upload",
+      "uploading": "Uploading…",
+      "uploadingPct": "Uploading {pct}%",
+      "finishing": "Finishing…",
+      "scanPages": "Scan pages",
+      "scannedPrefix": "Scanned · ",
+      "megabytes": "{n} MB",
+      "bigBook": " — big book; keep this tab open while it uploads",
+      "choosePdf": "Choose a PDF, or scan pages, to enable upload",
+      "limits": "PDF only · one file at a time · up to 200 MB.",
+      "httpFailed": "Upload failed (HTTP {status}).",
+      "networkError": "Network error during upload.",
+      "timedOut": "Upload timed out.",
+      "couldNotStart": "Could not start the upload.",
+      "retryAdvice": "{error} Please check your internet connection and try again — large textbooks need a stable connection for a few minutes."
+    },
+    "scan": {
+      "title": "Scan pages",
+      "intro": "Photograph the pages and we'll turn them into one PDF.",
+      "tips": "Best results: one chapter at a time, page flat, good light, fills the frame.",
+      "takePhotos": "Take photos",
+      "addPages": "Add pages",
+      "choosePhotos": "Choose photos",
+      "inAppBrowser": "Cameras often fail inside the Gmail/WhatsApp browser — open sketchcast.app in Chrome or Safari, or use Choose photos.",
+      "cameraHint": "Nothing came back from the camera? Use Choose photos to pick from your gallery instead.",
+      "notPhotos": "Those files weren't photos — pick images of the pages.",
+      "readingPage": "Reading page {n} of {total}…",
+      "applyingCrop": "Applying crop…",
+      "buildingPdf": "Building the PDF…",
+      "buildFailed": "Couldn't build the PDF.",
+      "budgetStop": "Stopped at {size} — a scan has to stay under 200 MB. Create this PDF and upload it, then scan the next chapter separately.",
+      "tooBig": "That PDF is {size} — over the 200 MB limit. Remove some pages, or scan this book one chapter at a time.",
+      "heicOne": "1 photo couldn't be read — if your camera saves HEIC (“high efficiency”) photos, switch the camera to “Most compatible”/JPEG, or use Choose photos.",
+      "heicMany": "{n} photos couldn't be read — if your camera saves HEIC (“high efficiency”) photos, switch the camera to “Most compatible”/JPEG, or use Choose photos.",
+      "pageCountOne": "1 page · {size}",
+      "pageCountMany": "{n} pages · {size}",
+      "atLimit": "At the 200 MB limit",
+      "leftOfLimit": "{size} left of 200 MB",
+      "uncroppedOne": "1 page wasn't cropped automatically — tap a page to set its edges by hand.",
+      "uncroppedMany": "{n} pages weren't cropped automatically — tap a page to set its edges by hand.",
+      "pageAlt": "Page {n}",
+      "uncropped": "uncropped",
+      "moveEarlier": "Move page {n} earlier",
+      "moveLater": "Move page {n} later",
+      "removePage": "Remove page {n}",
+      "edges": "Edges",
+      "usePages": "Use these pages",
+      "useOne": "Use this page",
+      "useMany": "Use these {n} pages",
+      "editTitle": "Set the page edges",
+      "editIntro": "Drag the four corners to the corners of the page.",
+      "back": "Back",
+      "photoAlt": "Page photo",
+      "useFullPhoto": "Use the full photo",
+      "applyCrop": "Apply crop"
+    },
+    "options": {
+      "titles": {
+        "lesson_plan": "Lesson plan options",
+        "activity": "Activities options",
+        "worksheet": "Worksheet options",
+        "case_study": "Case study options",
+        "exam_paper": "Test paper — question mix"
+      },
+      "fields": {
+        "duration_minutes": "Duration (minutes)",
+        "include_homework": "Include homework",
+        "include_differentiation": "Include differentiation",
+        "num_activities": "Number of activities",
+        "num_questions": "Number of questions",
+        "discussion_questions": "Discussion questions",
+        "difficulty": "Difficulty",
+        "length": "Length",
+        "include_answer_key": "Include answer key",
+        "fill_blank": "Fill in the blanks",
+        "true_false": "True / False",
+        "match_column": "Match the columns",
+        "subjective": "Long-answer questions"
+      },
+      "choices": {
+        "difficulty": {
+          "easy": "Easy",
+          "medium": "Medium",
+          "hard": "Hard"
+        },
+        "length": {
+          "short": "Short",
+          "medium": "Medium",
+          "long": "Long"
+        }
+      },
+      "language": "Language",
+      "bookSuffix": " (book)",
+      "starting": "Starting…",
+      "generate": "Generate"
+    },
+    "revision": {
+      "open": "Revision papers…",
+      "openHint": "Generate worksheets and test papers for revision across a group of chapters",
+      "intro": "For term, mid-term and exam revision: pick a group of chapters and generate worksheets and/or test papers.",
+      "introFree": "Free, from the lessons you've already generated.",
+      "allChapters": "All taught chapters ({n})",
+      "papers": "Papers",
+      "language": "Language",
+      "bookSuffix": " (book)",
+      "combine": "Combine",
+      "combineAll": "One paper across the selected chapters",
+      "combineAllNote": "(a cumulative revision paper)",
+      "perChapter": "One paper per chapter",
+      "perChapterNote": "(a revision pack)",
+      "needTwo": "Pick at least two chapters to combine — or switch to one per chapter.",
+      "generate": "Generate",
+      "generateOne": "Generate 1 paper (free)",
+      "generateMany": "Generate {n} papers (free)",
+      "queuedOne": "Queued 1 revision paper — see “Revision papers” below.",
+      "queuedMany": "Queued {n} revision papers — see “Revision papers” below.",
+      "stoppedOne": "Queued 1 paper, then stopped: {error}",
+      "stoppedMany": "Queued {n} papers, then stopped: {error}"
+    },
+    "examTool": {
+      "open": "Exam…",
+      "openHint": "Build a cumulative exam (paper + answer key) over the chapters and parts you've taught",
+      "intro": "A cumulative exam over everything you've taught — one exam paper plus a separate answer key. Tick the chapters and parts to test (untick to skip), set the difficulty and how many questions of each type.",
+      "introFree": "Free.",
+      "whatToTest": "What to test",
+      "questionsPerType": "Questions per type",
+      "types": {
+        "mcq": "Multiple choice",
+        "fill_blank": "Fill in the blanks",
+        "true_false": "True / False",
+        "match_column": "Match the columns",
+        "short_answer": "Short answer",
+        "long_answer": "Long answer"
+      },
+      "difficulty": "Difficulty",
+      "difficulties": {
+        "easy": "Easy",
+        "medium": "Medium",
+        "hard": "Hard",
+        "mixed": "Mixed"
+      },
+      "language": "Language",
+      "bookSuffix": " (book)",
+      "titleLabel": "Title",
+      "titlePlaceholder": "e.g. Mid-term Exam (optional)",
+      "unitsOne": "1 unit",
+      "unitsMany": "{n} units",
+      "questionsOne": "1 question",
+      "questionsMany": "{n} questions",
+      "generate": "Generate exam (free)",
+      "queued": "Exam queued — the paper and its answer key appear under “Exams” below."
+    },
+    "tools": {
+      "more": "More",
+      "hint": "Revision papers and exam papers",
+      "heading": "Extra papers"
+    },
+    "health": {
+      "badge": "Health {score} · {band}",
+      "hint": "Book health — click for detail",
+      "title": "Book health",
+      "score": "{score}/100",
+      "textQuality": "Text quality",
+      "chapters": "Chapters",
+      "facts": "{pages} pages · {chapters} chapters · {type}",
+      "textPdf": "text PDF",
+      "scanned": "scanned",
+      "bands": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "fair": "Fair",
+        "poor": "Poor"
+      }
+    },
+    "classes": {
+      "heading": "Classes & students",
+      "countOne": "1 class",
+      "countMany": "{n} classes",
+      "newClass": "New class",
+      "namePlaceholder": "Class name (e.g. 5A)",
+      "gradePlaceholder": "Grade (optional)",
+      "create": "Create class",
+      "creating": "…",
+      "duplicate": "You already have a class named “{name}”.",
+      "studentsOne": "1 student",
+      "studentsMany": "{n} students",
+      "joinCode": "join: {code}",
+      "idLabel": "ID:",
+      "passwordLabel": "Password:",
+      "parentLabel": "Parent:",
+      "thisStudent": "this student",
+      "betaFull": "Beta is limited to 2 students — you've added both. You can assign work to them and review their responses freely.",
+      "addStudents": "Add students",
+      "betaSlots": "Beta: {n} of 2 slots left",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "parentEmail": "Parent email",
+      "addRow": "+ Add row",
+      "creatingLogins": "Creating…",
+      "createLogins": "Create logins",
+      "needName": "Add at least one name.",
+      "addFailed": "Could not add students.",
+      "credsCreated": "Logins created — give these to parents",
+      "copyAll": "Copy all"
+    },
+    "progress": {
+      "show": "Show progress",
+      "loading": "Loading progress…",
+      "empty": "No students enrolled, or nothing assigned yet.",
+      "student": "Student",
+      "unnamed": "Student",
+      "completed": "Completed",
+      "revised": "Revised",
+      "incomplete": "Incomplete",
+      "overdue": "Overdue"
+    },
+    "assignModal": {
+      "heading": "Assign to a class",
+      "itemsOne": "1 item — the class's students will see this in their assignments.",
+      "itemsMany": "{n} items — the class's students will see this in their assignments.",
+      "assigned": "Assigned.",
+      "newClass": "New class",
+      "namePlaceholder": "Class name (e.g. 5A)",
+      "gradePlaceholder": "Grade (optional)",
+      "back": "Back",
+      "creating": "Creating…",
+      "createClass": "Create class",
+      "classLabel": "Class",
+      "addClass": "+ New class",
+      "due": "Due date (optional)",
+      "assigning": "Assigning…",
+      "assign": "Assign",
+      "nameRequired": "Class name required.",
+      "duplicate": "You already have a class named “{name}”.",
+      "createFailed": "Could not create class.",
+      "pickClass": "Pick a class."
+    },
+    "deleteLesson": {
+      "confirm": "Remove this lesson? This cancels it if it's still running.",
+      "remove": "Remove lesson"
+    },
+    "branding": {
+      "heading": "School branding",
+      "notSet": "optional · use your school's format & theme",
+      "set": "optional · templates set",
+      "intro": "Upload your school's Word and PowerPoint templates. New documents open from the .docx template; decks and the video slides adopt the .pptx theme, colours and logo.",
+      "docx": "Word template (.docx)",
+      "pptx": "PowerPoint template (.pptx)",
+      "uploading": "Uploading…",
+      "clickToUpload": "Click to upload",
+      "uploaded": "Uploaded"
+    }
+  },
+  "school": {
+    "fallback": {
+      "student": "Student",
+      "teacher": "Teacher",
+      "coordinator": "Coordinator",
+      "class": "Class",
+      "user": "User",
+      "child": "Child",
+      "item": "Item",
+      "school": "School"
+    },
+    "analytics": {
+      "title": "School analytics",
+      "subtitle": "Signals that prompt support — not a ranking.",
+      "scope": {
+        "wholeSchool": "Whole school",
+        "grades": "Grade {grades}",
+        "yourGrades": "Your grades"
+      },
+      "metric": {
+        "students": "Students",
+        "active": "Active (14d)",
+        "completion": "Completion",
+        "atRisk": "At-risk",
+        "overdue": "Overdue"
+      },
+      "worklist": {
+        "title": "Students needing support",
+        "hint": "Flagged by low/declining completion, falling scores, or inactivity — the worklist to act on first.",
+        "empty": "No students flagged in this scope.",
+        "contactParent": "Contact parent",
+        "contactSubject": "Check-in about {name}"
+      },
+      "reason": {
+        "completion": "{pct}% completion",
+        "inactive": "inactive {days}d",
+        "neverStarted": "never started",
+        "avgScore": "avg score {pct}%",
+        "declining": "scores declining",
+        "overdue": "{n} overdue"
+      },
+      "byGrade": {
+        "grade": "Grade {grade}",
+        "atRisk": "{n} at-risk",
+        "note": "Names live in the grade/subject coordinator's worklist, so support stays close to the student. As principal you can also open the School briefing (bottom-right) for names and reasons — every briefing is recorded in the access audit."
+      }
+    },
+    "teachers": {
+      "title": "Teachers",
+      "intro": "Activity and how each teacher's students are doing — to spot who could use support. Not a ranking.",
+      "introBaseline": "Activity and how each teacher's students are doing — to spot who could use support, against the cohort baseline ({pct}% completion). Not a ranking.",
+      "empty": "No teachers in this scope yet.",
+      "col": {
+        "teacher": "Teacher",
+        "lessons": "Lessons",
+        "assigned": "Assigned",
+        "toGrade": "To grade",
+        "completion": "Completion"
+      },
+      "mayNeedSupport": "may need support:",
+      "flag": {
+        "belowCohort": "{pts}pts below cohort",
+        "toGrade": "{n} to grade",
+        "slowGrading": "{days}d to grade"
+      },
+      "footnote": "Teachers can see their own school-visible metrics on their Analytics page — the school sees no more about a teacher than the teacher can see about themselves."
+    },
+    "access": {
+      "title": "Who can see what",
+      "subtitle": "Exactly how data is scoped by role. Enforced in the database (row-level security), not just hidden in the UI.",
+      "grade": "Grade {grade}",
+      "model": {
+        "student": {
+          "role": "Student",
+          "sees": "Only their own lessons, progress, and submissions."
+        },
+        "teacher": {
+          "role": "Teacher",
+          "sees": "Only their own classes, students, content, grading, and submissions."
+        },
+        "coordinator": {
+          "role": "Coordinator",
+          "sees": "A teacher granted oversight of specific grade(s) — and subject(s), if set: the students, teachers, and content in that slice. Nothing outside it. They keep their own teacher dashboard."
+        },
+        "principal": {
+          "role": "Principal / Admin",
+          "sees": "Whole-school totals and trends, plus named at-risk students on request via the school briefing (each briefing is recorded in the access audit). The day-to-day named worklist stays with the grade/subject coordinator. Admin also manages scopes, reads the access-audit log, and can teach classes of their own."
+        }
+      },
+      "reach": {
+        "title": "Coordinators & their reach",
+        "hint": "What each coordinator's scope resolves to right now. Manage these on the Admin screen.",
+        "empty": "No coordinators yet — everyone is a teacher (own classes only) or admin (whole school).",
+        "footprint": "{classes} classes · {students} students · {teachers} teachers"
+      },
+      "mine": {
+        "title": "Your access",
+        "hint": "Exactly your slice — and nothing beyond it.",
+        "noScope": "You have no scope assigned yet, so you can't see any student data. Ask your admin to assign you a grade.",
+        "covers": "That covers {classes} classes, {students} students, and {teachers} teachers. Anything in other grades is invisible to you."
+      }
+    },
+    "admin": {
+      "title": "School admin",
+      "subtitle": "Roles & oversight scopes — who can see which slice of the school, and a log of who looked.",
+      "role": {
+        "teacher": "teacher",
+        "coordinator": "coordinator"
+      },
+      "notices": {
+        "title": "Published notices",
+        "hint": "Everything the school has announced, and how far it has been read. Withdrawing removes a notice from dashboards, class diaries and subscribed calendars — the record stays here.",
+        "empty": "Nothing published yet.",
+        "staffOnly": "Staff only",
+        "everyone": "Everyone",
+        "byFallback": "By",
+        "featuredUntil": "featured until {when}",
+        "important": "important",
+        "link": "link",
+        "readByStaff": "Read by {n} of {total} staff",
+        "noAckAsked": "No acknowledgment asked",
+        "ackParents": "{pct}% acknowledged · {n} of {total} parents",
+        "ackNoParents": "{n} acknowledged — no linked parents on the roster yet",
+        "unverifiedOne": "1 linked parent does not match the email on the student record — on the record for {names}. Nothing is blocked; they still receive every notice. Worth confirming with the family when you next speak.",
+        "unverifiedMany": "{n} linked parents do not match the email on the student record — on the records for {names}. Nothing is blocked; they still receive every notice. Worth confirming with the family when you next speak.",
+        "andMore": "and {n} more"
+      },
+      "members": {
+        "title": "Members",
+        "hint": "Teachers & coordinators in your school. Resetting hands you a temporary password to pass on — it's shown once, and they must choose a new one at their next sign-in.",
+        "empty": "No teachers yet."
+      },
+      "students": {
+        "title": "Students",
+        "hint": "Every student account in your school. Deleting is permanent — the sign-in, class enrollments and submitted work are all removed.",
+        "empty": "No students yet."
+      },
+      "audit": {
+        "title": "Access audit",
+        "hint": "Every leadership view of student data is logged here for the data-protection trail.",
+        "empty": "No access recorded yet.",
+        "atRisk": "{n} at-risk"
+      }
+    },
+    "coordinators": {
+      "title": "Coordinators & scopes",
+      "countOne": "1 coordinator",
+      "countMany": "{n} coordinators",
+      "intro": "Coordinator access is an add-on for a teacher: they keep their own classes and dashboard, and additionally see only the grades (and optional subjects) you assign — nothing outside that slice.",
+      "noGrades": "No class grades exist yet — add a grade to a class first, then you can scope a coordinator to it.",
+      "remove": "Remove coordinator access",
+      "noScope": "No scope yet — add a grade below (otherwise they see nothing).",
+      "removeScope": "Remove scope",
+      "grade": "Grade {grade}",
+      "allSubjects": "All subjects",
+      "addScope": "+ Add scope",
+      "grantTitle": "Give a teacher coordinator access",
+      "allGranted": "Every teacher already has coordinator access.",
+      "addGradeFirst": "Add a grade to a class first.",
+      "chooseTeacher": "Choose a teacher…",
+      "grant": "Grant access"
+    },
+    "briefing": {
+      "launcher": "School briefing",
+      "launcherHint": "Ask about your school",
+      "subtitle": "Answers from your live school data",
+      "reading": "Reading the latest school data…",
+      "unavailable": "The briefing isn't available right now.",
+      "unreachable": "Couldn't reach the briefing. Try again in a moment.",
+      "failed": "The briefing is unavailable right now.",
+      "readAloud": "Read aloud",
+      "stopReading": "Stop reading aloud",
+      "stop": "Stop",
+      "listening": "Listening…",
+      "placeholder": "Ask about completion, at-risk students, grading…",
+      "ask": "Ask",
+      "micStart": "Speak your question",
+      "micStop": "Stop listening",
+      "footnote": "Uses only the analytics you can already see here. Every briefing is recorded in the access audit."
+    },
+    "assistant": {
+      "launcher": "Assistant",
+      "launcherHint": "Open the AI Teaching Assistant",
+      "title": "AI Teaching Assistant",
+      "subtitle": "Answers from your books",
+      "loading": "Getting your books ready…",
+      "unavailable": "The assistant isn't available right now.",
+      "unreachable": "Couldn't reach the assistant. Try again in a moment.",
+      "failed": "The assistant is unavailable right now.",
+      "readAloud": "Read aloud",
+      "stopReading": "Stop reading aloud",
+      "stop": "Stop",
+      "listening": "Listening…",
+      "noBook": "No book yet",
+      "placeholder": "Ask about your books…",
+      "ask": "Ask",
+      "micStart": "Speak your question",
+      "micStop": "Stop listening",
+      "source": "from your {label}",
+      "footnote": "I help you learn from your books — hints and method, never the graded answers."
+    },
+    "timetable": {
+      "title": "Timetable",
+      "intro": "Build each class's week — clashes where a teacher is in two rooms at once light up instantly.",
+      "noClasses": "No classes yet — the timetable appears once your school's classes are set up. SketchCast provisions staff and classes with you during onboarding; contact support to get started.",
+      "gradeScope": "Grade {grades}",
+      "hide": "Hide",
+      "show": "Show",
+      "period": "Period",
+      "schoolHours": "School hours {start} – {end}",
+      "minutes": "{n} min",
+      "days": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      },
+      "absence": {
+        "title": "Absences & cover",
+        "hint": "Everyone is assumed present until marked absent. Cover is computed when you mark — re-mark after big grid changes.",
+        "markPlaceholder": "Mark a teacher absent…",
+        "reasonPlaceholder": "Reason (optional)",
+        "mark": "Mark absent & assign cover",
+        "working": "Working…",
+        "markFailed": "Could not mark the absence.",
+        "removeFailed": "Could not remove the absence.",
+        "updateFailed": "Could not update the cover.",
+        "networkError": "Network error.",
+        "none": "No absences on {date} — full house.",
+        "absent": "absent",
+        "removeAbsence": "Remove (back in school)",
+        "noLessons": "No lessons to cover that day.",
+        "col": {
+          "period": "Period",
+          "class": "Class",
+          "subject": "Subject",
+          "coveredBy": "Covered by"
+        },
+        "noCover": "No cover found",
+        "state": {
+          "inClass": "in class",
+          "covering": "covering",
+          "fullyBooked": "fully booked"
+        }
+      },
+      "generate": {
+        "button": "Auto-generate",
+        "title": "Auto-generate the timetable",
+        "intro": "Confirm who teaches what — the class teacher takes Period 1 every day, core subjects ({core}) run once every day, the other subjects fill the rest of the week, and no teacher is ever in two rooms at once.",
+        "noTeacher": "no teacher — will be reported as a gap",
+        "modeFill": "Fill gaps (keep what's already placed)",
+        "modeReplace": "Start over (replace the whole grid)",
+        "failed": "Generation failed.",
+        "placed": "Placed {n} lessons.",
+        "placedKept": "Placed {n} lessons (kept {kept} existing).",
+        "gapsOne": "Couldn't staff 1 gap:",
+        "gapsMany": "Couldn't staff {n} gaps:",
+        "gapRow": "{class}: {subject} ×{count}",
+        "andMore": "…and {n} more",
+        "gapsHint": "Assign more teachers to those subjects and run “Fill gaps”.",
+        "noGaps": "No gaps — the week is fully staffed.",
+        "staffed": "{n}/{total} subjects staffed",
+        "done": "Done",
+        "generating": "Generating…",
+        "runAgain": "Run again",
+        "generate": "Generate"
+      },
+      "editor": {
+        "byClass": "By class",
+        "byTeacher": "By teacher",
+        "viewOnly": "(view only)",
+        "undo": "Undo {label}",
+        "print": "Print",
+        "clashesOne": "1 clash: a teacher is timetabled in two classes at once — clashing cells are outlined.",
+        "clashesMany": "{n} clashes: a teacher is timetabled in two classes at once — clashing cells are outlined.",
+        "overLimit": "Over the daily limit ({max}/day): {list}",
+        "overLimitItem": "{teacher} — {day} {count}",
+        "nonTeaching": "non-teaching",
+        "editSettingsHint": "edit under Timetable settings below",
+        "dragTip": "Tip: drag a lesson onto another cell to move it (onto a filled cell to swap). 🔒 locked cells are never touched by the auto-generator, day tools, or drags.",
+        "dayTools": "Day tools:",
+        "copyDay": "Copy {day}",
+        "to": "to",
+        "copy": "Copy",
+        "clearDayPrompt": "Clear a day…",
+        "clearDay": "Clear {day}",
+        "clearWeek": "Clear week",
+        "clearWeekLabel": "Clear the whole week",
+        "confirmClear": "{label} for {class}? {n} lesson(s) will be removed (locked cells stay). You can undo this.",
+        "subject": "Subject",
+        "teacher": "Teacher",
+        "teacherOnDuty": "Teacher (optional — on duty)",
+        "unassigned": "— unassigned —",
+        "room": "Room (optional)",
+        "lock": "Lock (auto-generate and day tools never touch it)",
+        "nonTeachingOption": "Non-teaching (assembly, free period — no clash or load counting)",
+        "clearCell": "Clear cell",
+        "subjectRequired": "A subject is required.",
+        "cannotEdit": "You can't edit this class's timetable.",
+        "resync": "{message} — re-syncing the grid.",
+        "undoPartial": "Undo of “{label}” only partly applied",
+        "movePartial": "The move only partly applied",
+        "copyPartial": "Copy day only partly applied",
+        "clearPartial": "{label} only partly applied",
+        "capWarning": "{teacher} already has {count} lessons on {day} (limit {max}). You can still save — the limit is a guideline for humans, a rule for the generator.",
+        "thisTeacher": "This teacher",
+        "undoLabel": {
+          "editCell": "edit cell",
+          "clearCell": "clear cell",
+          "swapCells": "swap cells",
+          "moveCell": "move cell",
+          "copyDay": "copy day"
+        }
+      },
+      "roster": {
+        "title": "Teachers ({n})",
+        "col": {
+          "teacher": "Teacher",
+          "classTeacher": "Class teacher",
+          "teaches": "Teaches",
+          "lessonsPerWeek": "Lessons / week",
+          "blocked": "Blocked",
+          "heaviestDay": "Heaviest day (limit {max})"
+        },
+        "blockedPct": "{pct}% blocked",
+        "blockedFull": "Fully booked every day — cannot be assigned as a substitute",
+        "blockedSpare": "Has spare capacity on at least one day — can take cover then",
+        "positionsTitle": "Class-teacher positions",
+        "allCovered": "Every grade & section has a class teacher.",
+        "uncovered": "Without a serving class teacher: {classes} — assign one below.",
+        "assignPrompt": "assign a class teacher…",
+        "unassigned": "unassigned",
+        "reassignNote": "Reassigning moves the class — its students and join code — to the new class teacher. Timetable lessons keep their own subject teachers.",
+        "reassignFailed": "Could not reassign the class teacher.",
+        "networkError": "Network error."
+      },
+      "settings": {
+        "title": "Timetable settings (hours, breaks, periods)",
+        "startLabel": "School starts (= Period 1)",
+        "periodLength": "Period length (min)",
+        "endLabel": "School ends",
+        "daysPerWeek": "Days / week",
+        "maxPerDay": "Max lessons / teacher / day",
+        "computedNote": "All times are computed: Period 1 starts when school starts, each period runs {min} minutes, and every break pushes the rest of the day later. School ends when the last period does.",
+        "periods": "Periods",
+        "remove": "Remove",
+        "addPeriod": "+ Add period",
+        "breaks": "Breaks",
+        "breakPlaceholder": "Snack break",
+        "breakLength": "Break length (minutes)",
+        "after": "after",
+        "startOfDay": "start of day",
+        "addBreak": "+ Add break",
+        "weekNote": "Week: {days}. Removing periods or days never deletes lessons — anything stranded outside the new shape is reported so you can tidy up.",
+        "invalidStart": "School start time isn't a valid hh:mm time.",
+        "saveFailed": "Save failed.",
+        "savedOrphaned": "Saved. ⚠ {n} existing lesson(s) now sit outside the new shape (a removed day or period) — grow the shape back or clear them.",
+        "saved": "Saved — the timetable now shows the new times.",
+        "networkError": "Network error — nothing saved.",
+        "save": "Save settings",
+        "unsaved": "Unsaved changes — the timetable updates after you save"
+      }
+    },
+    "myTimetable": {
+      "title": "My timetable",
+      "studentIntro": "Your class's week.",
+      "teacherIntro": "The lessons you teach this week.",
+      "covers": "Cover duties",
+      "coveringFor": "— covering for {name}",
+      "myClass": "My class",
+      "empty": "No lessons on the timetable yet — it appears here as soon as the school publishes it."
+    },
+    "myAnalytics": {
+      "title": "Analytics",
+      "subtitle": "How your classes are progressing through what you've assigned.",
+      "metric": {
+        "classes": "Classes",
+        "students": "Students",
+        "assignments": "Assignments",
+        "completion": "Completion",
+        "overdue": "Overdue",
+        "toGrade": "To grade"
+      },
+      "schoolView": {
+        "title": "What your school sees about your teaching",
+        "chip": "transparency",
+        "lessonsMade": "Lessons made",
+        "assignments": "Assignments",
+        "turnaround": "Grading turnaround",
+        "toGrade": "To grade",
+        "note": "Leadership sees these to spot where to help — never as a ranking."
+      },
+      "byClass": "By class",
+      "noAssignments": "No assignments yet.",
+      "done": "done",
+      "mostRevised": "Most revised",
+      "mostRevisedHint": "Topics students re-open most — often the trickiest ones.",
+      "toGradeTitle": "To grade",
+      "toGradeHint": "Submitted worksheets & exams awaiting a mark.",
+      "chapterLabel": "{kind} · Ch {n}",
+      "kind": {
+        "presentation": "Lesson",
+        "worksheet": "Worksheet",
+        "examPaper": "Test paper",
+        "exam": "Exam",
+        "activity": "Activities",
+        "caseStudy": "Case study"
+      }
+    },
+    "children": {
+      "title": "My children",
+      "subtitle": "What each child is working on — schoolwork read-only, plus the test papers you assign.",
+      "empty": "No children linked yet. Add your child below — or if their school invited you, open the link from that email.",
+      "from": "from {source}",
+      "fromYou": "you",
+      "fromClass": "class",
+      "due": "due {date}",
+      "unverified": "unverified link · confirm with the school",
+      "schoolWork": "School work ({n})",
+      "noSchoolWork": "Nothing assigned by school yet.",
+      "yourWork": "From you ({n})",
+      "noTestPapers": "No test papers assigned yet — create one under Test Papers.",
+      "kind": {
+        "presentation": "Video lesson",
+        "activity": "Activities",
+        "worksheet": "Worksheet",
+        "examPaper": "Test paper",
+        "caseStudy": "Case study"
+      },
+      "status": {
+        "notStarted": "not started",
+        "inProgress": "in progress",
+        "completed": "completed",
+        "revised": "revised",
+        "submitted": "submitted"
+      },
+      "add": {
+        "title": "Add a child",
+        "hint": "Creates their sign-in (child ID + a temporary password you hand to them).",
+        "button": "+ Add child",
+        "saveThese": "Save these — shown only once:",
+        "childId": "Child ID",
+        "tempPassword": "Temporary password",
+        "signInNote": "They sign in at app.sketchcast.app with the ID (no email needed) and set their own password.",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "creating": "Creating…",
+        "create": "Create login",
+        "failed": "Could not add the child."
+      }
+    }
   }
 }

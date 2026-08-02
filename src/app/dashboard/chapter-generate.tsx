@@ -3,21 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import ContentCell, { type CellLesson } from "./content-cell";
+import ContentCell, { kindLabel, type CellLesson, type LibraryMessages } from "./content-cell";
 import AssignModal, { type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
 import { kitRows, type GenerationRow } from "./kit";
 import { NARRATION_STYLES, LANGUAGES, availableVoices, defaultVoiceFor, defaultNarrationForGrade } from "@/utils/narration";
 import { TypeIcon } from "./icons";
+import { fmt } from "@/i18n/format";
 
-// All content types a chapter can produce, in display order.
-const KINDS: { kind: string; label: string }[] = [
-  { kind: "presentation", label: "Lesson" },
-  { kind: "lesson_plan", label: "Plan" },
-  { kind: "activity", label: "Activities" },
-  { kind: "worksheet", label: "Worksheet" },
-  { kind: "exam_paper", label: "Test paper" },
-  { kind: "case_study", label: "Case study" },
+// All content types a chapter can produce, in display order. Wording comes from
+// the dictionary (kindLabel), keyed by the kind itself.
+const KINDS: string[] = [
+  "presentation",
+  "lesson_plan",
+  "activity",
+  "worksheet",
+  "exam_paper",
+  "case_study",
 ];
 
 const LABEL = "text-[10px] uppercase tracking-wide text-[#98A0A9]";
@@ -32,6 +34,7 @@ export default function ChapterGenerate({
   chapterNum,
   classes,
   lessons,
+  t,
   beta = null,
   multiPartTrial = false,
   extraAssignableIds = [],
@@ -43,6 +46,7 @@ export default function ChapterGenerate({
   chapterNum: number;
   classes: ClassRow[];
   lessons: Record<string, CellLesson | null>;
+  t: LibraryMessages;
   beta?: { pinned: { bookId: string; chapterRef: string | null; part: number | null } | null } | null;
   /** Beta + the chapter has >1 part: trial kits are per-part, so this
       chapter-level row offers no new generations (the part rows do). */
@@ -87,7 +91,7 @@ export default function ChapterGenerate({
   const kitPending = !betaLocked && !hasLesson;
   const pendingKinds = betaLocked || !hasLesson
     ? []
-    : KINDS.filter((k) => k.kind !== "presentation" && !lessons[k.kind]);
+    : KINDS.filter((k) => k !== "presentation" && !lessons[k]);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +108,7 @@ export default function ChapterGenerate({
     setTtsVoice(defaultVoiceFor(lang)); // voice follows the lesson language
   };
 
-  const chosen = pendingKinds.filter((k) => sel[k.kind]);
+  const chosen = pendingKinds.filter((k) => sel[k]);
   const toggle = (kind: string) => setSel((s) => ({ ...s, [kind]: !s[kind] }));
 
   // "Assign chapter" sends the student-workable items that are ready: the
@@ -128,7 +132,7 @@ export default function ChapterGenerate({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(false);
       return;
     }
@@ -150,12 +154,12 @@ export default function ChapterGenerate({
             r.kind === "presentation" || !(lessons[r.kind] && lessons[r.kind]!.status !== "error"),
         )
       : chosen.map((k) => ({
-          kind: k.kind,
+          kind: k,
           book_id: bookId,
           owner_id: user.id,
           school_id: schoolId,
           chapter_ref: String(chapterNum),
-          params: { ...defaultParams(k.kind), language },
+          params: { ...defaultParams(k), language },
           status: "queued",
         }));
     const { error: gErr } = await supabase.from("generations").insert(rows);
@@ -180,17 +184,18 @@ export default function ChapterGenerate({
         schoolId={schoolId}
         chapterNum={chapterNum}
         kind="presentation"
-        label="Lesson"
+        label={t.kinds.presentation}
         lesson={presL}
         trackViews={!!beta}
         bookLanguage={bookLanguage}
         genLocked={betaLocked}
+        t={t}
       />
     </span>
   ) : null;
 
-  const docCells = KINDS.filter((k) => k.kind !== "presentation").map((k) => {
-    const lesson = lessons[k.kind];
+  const docCells = KINDS.filter((k) => k !== "presentation").map((k) => {
+    const lesson = lessons[k];
     if (!lesson) {
       // Locked chapters offer nothing; pre-lesson, single doc types
       // aren't offered either (the kit button generates everything).
@@ -198,32 +203,33 @@ export default function ChapterGenerate({
       // Lesson exists: missing documents are free add-backs.
       return (
         <label
-          key={k.kind}
+          key={k}
           className="flex items-center gap-1.5 cursor-pointer select-none hover:opacity-80"
         >
           <input
             type="checkbox"
-            checked={!!sel[k.kind]}
-            onChange={() => toggle(k.kind)}
+            checked={!!sel[k]}
+            onChange={() => toggle(k)}
             className="h-3.5 w-3.5 accent-[#0C8175]"
           />
-          <TypeIcon kind={k.kind} />
-          <span className={LABEL}>{k.label}</span>
+          <TypeIcon kind={k} />
+          <span className={LABEL}>{kindLabel(t, k)}</span>
         </label>
       );
     }
     return (
-      <span key={k.kind} className="flex items-center">
+      <span key={k} className="flex items-center">
         <ContentCell
           bookId={bookId}
           schoolId={schoolId}
           chapterNum={chapterNum}
-          kind={k.kind}
-          label={k.label}
+          kind={k}
+          label={kindLabel(t, k)}
           lesson={lesson}
           trackViews={!!beta}
           bookLanguage={bookLanguage}
           genLocked={betaLocked}
+          t={t}
         />
       </span>
     );
@@ -236,25 +242,16 @@ export default function ChapterGenerate({
     // no pin yet → invite the pick; pinned to a part of THIS chapter →
     // name it. (A chapter-level pin on THIS chapter is never locked.)
     (pinnedElsewhere ? (
-      <span
-        className="chip font-sans bg-[#FFF1D6] text-[#9A6400]"
-        title="Your free trial covers the full kit (all six content types) for one part of one chapter"
-      >
-        Trial: 1 part — locked
+      <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]" title={t.kit.trialLockedHint}>
+        {t.kit.trialLocked}
       </span>
     ) : !beta?.pinned ? (
-      <span
-        className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
-        title="This chapter is split into parts — your trial covers the full kit (all six content types) for one part of your choice"
-      >
-        Trial: pick one part below
+      <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175]" title={t.kit.trialPickHint}>
+        {t.kit.trialPick}
       </span>
     ) : (
-      <span
-        className="chip font-sans bg-[#E2F4F1] text-[#0C8175]"
-        title="Your trial kit lives on this part — retries and every content type for it stay open"
-      >
-        Trial: Part {beta.pinned.part} is your kit
+      <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175]" title={t.kit.trialPinnedHint}>
+        {fmt(t.kit.trialPinned, { n: beta.pinned.part ?? 1 })}
       </span>
     ));
 
@@ -262,7 +259,7 @@ export default function ChapterGenerate({
     <span className="ms-auto flex items-center gap-3">
       {assignableIds.length > 0 && (
         <span data-tour="assign-chapter">
-          <AssignModal label="Assign chapter" generationIds={assignableIds} classes={classes} />
+          <AssignModal label={t.kit.assignChapter} generationIds={assignableIds} classes={classes} t={t} />
         </span>
       )}
       {kitPending && (
@@ -271,9 +268,9 @@ export default function ChapterGenerate({
           onClick={generate}
           disabled={busy}
           className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
-          title="The video lesson plus its plan, activities, worksheet, test paper and case study — documents free, one credit per rendered lesson part"
+          title={t.kit.generateFullKitHint}
         >
-          {busy ? "Queuing…" : "Generate full kit"}
+          {busy ? t.queuing : t.kit.generateFullKit}
         </button>
       )}
       {pendingKinds.length > 0 && (
@@ -282,9 +279,9 @@ export default function ChapterGenerate({
           onClick={generate}
           disabled={busy || chosen.length === 0}
           className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
-          title="Free — these reuse the lesson's analysis"
+          title={t.kit.generateFreeHint}
         >
-          {busy ? "Queuing…" : `Generate (${chosen.length}) — free`}
+          {busy ? t.queuing : fmt(t.kit.generateFree, { n: chosen.length })}
         </button>
       )}
     </span>
@@ -314,9 +311,9 @@ export default function ChapterGenerate({
 
       {kitPending && (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">Lesson options</span>
+          <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{t.kit.lessonOptions}</span>
           <label className="flex items-center gap-1.5 text-xs">
-            <span className="text-[#5B6470]">Language</span>
+            <span className="text-[#5B6470]">{t.kit.language}</span>
             <select
               value={language}
               onChange={(e) => pickLanguage(e.target.value)}
@@ -325,13 +322,13 @@ export default function ChapterGenerate({
               {LANGUAGES.map((l) => (
                 <option key={l.value} value={l.value}>
                   {l.label}
-                  {knownBookLang === l.value ? " (book)" : ""}
+                  {knownBookLang === l.value ? t.kit.bookSuffix : ""}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex items-center gap-1.5 text-xs">
-            <span className="text-[#5B6470]">Narration</span>
+            <span className="text-[#5B6470]">{t.kit.narration}</span>
             <select
               value={narrationStyle}
               onChange={(e) => setNarrationStyle(e.target.value)}
@@ -343,7 +340,7 @@ export default function ChapterGenerate({
             </select>
           </label>
           <label className="flex items-center gap-1.5 text-xs">
-            <span className="text-[#5B6470]">Voice</span>
+            <span className="text-[#5B6470]">{t.kit.voice}</span>
             <select
               value={ttsVoice}
               onChange={(e) => setTtsVoice(e.target.value)}
@@ -352,7 +349,7 @@ export default function ChapterGenerate({
               {voices.map((v) => (
                 <option key={v.value} value={v.value}>
                   {v.label}
-                  {v.tier === "premium" ? " ★ premium" : ""}
+                  {v.tier === "premium" ? t.kit.premiumSuffix : ""}
                 </option>
               ))}
             </select>

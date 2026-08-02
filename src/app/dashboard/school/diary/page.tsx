@@ -5,9 +5,13 @@ import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { diaryEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
-import DiaryNote, { type DiaryNoteItem, type DiaryReplyItem } from "../../diary/diary-note";
-import { NOTE_TYPES } from "../../diary/note-types";
+import DiaryNote, { type DiaryNoteItem, type DiaryNoteMessages, type DiaryReplyItem } from "../../diary/diary-note";
+import { NOTE_TYPES, noteTypeLabel } from "../../diary/note-types";
 import DateNav, { dayWindowUtc, isDayKey, shiftDay, todayKey } from "../../diary/date-nav";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { htmlLang } from "@/i18n/locales";
+import { fmt } from "@/i18n/format";
 
 // The LEADERSHIP diary — read-only oversight of the teacher↔home book, scoped
 // by RLS (school_admin → whole school; coordinator → their slice, via
@@ -29,6 +33,15 @@ export default async function SchoolDiaryPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // The page's words. resolveLocale is React-cached, so asking here and in the
+  // header costs one lookup. `diary` carries everything shared with the
+  // teacher/parent/student books; `schoolDiary` is this page's own.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.comms.schoolDiary;
+  const td = dict.comms.diary;
+  const lang = htmlLang(locale);
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -116,7 +129,7 @@ export default async function SchoolDiaryPage({
       .eq("class_id", selected.id);
     students = (enrRaw ?? []) as unknown as EnrRow[];
     for (const s of students)
-      studentName.set(s.student_id, s.profiles?.full_name || s.profiles?.username || "Student");
+      studentName.set(s.student_id, s.profiles?.full_name || s.profiles?.username || td.people.student);
     const studentIds = students.map((s) => s.student_id);
 
     // Class-wide notes plus per-student notes about this class's students
@@ -147,7 +160,7 @@ export default async function SchoolDiaryPage({
     if (authorIds.length) {
       const { data: authRaw } = await supabase.from("profiles").select("id, full_name, username").in("id", authorIds);
       for (const p of (authRaw ?? []) as { id: string; full_name: string | null; username: string | null }[])
-        authorName.set(p.id, p.full_name || p.username || "Parent");
+        authorName.set(p.id, p.full_name || p.username || td.people.parent);
     }
 
     // Derived entries (nothing stored): what was assigned to this class that
@@ -175,13 +188,22 @@ export default async function SchoolDiaryPage({
     if (genIds.length) {
       const { data: gensRaw } = await supabase.from("generations").select("id, title, kind").in("id", genIds);
       for (const g of (gensRaw ?? []) as { id: string; title: string | null; kind: string | null }[])
-        genTitle.set(g.id, g.title || g.kind || "Assignment");
+        genTitle.set(
+          g.id,
+          g.title || (td.kinds as Record<string, string>)[g.kind ?? ""] || td.entry.assignment,
+        );
     }
-    for (const s of shares) autoEntries.push({ label: genTitle.get(s.generation_id) ?? "Assignment", detail: "assigned" });
+    for (const s of shares)
+      autoEntries.push({ label: genTitle.get(s.generation_id) ?? td.entry.assignment, detail: td.entry.assignedChip });
     const completedBy = new Map<string, number>();
     for (const p of prog) completedBy.set(p.generation_id, (completedBy.get(p.generation_id) ?? 0) + 1);
     for (const [gid, n] of completedBy)
-      autoEntries.push({ label: genTitle.get(gid) ?? "Assignment", detail: `completed by ${n} student${n > 1 ? "s" : ""}` });
+      autoEntries.push({
+        label: genTitle.get(gid) ?? td.entry.assignment,
+        // One and many are separate messages: the plural rule is the
+        // translator's, not a trailing "s" this file can guess at.
+        detail: n === 1 ? td.entry.completedByOne : fmt(td.entry.completedByMany, { n }),
+      });
   }
 
   // ── DPDP audit trail: record this leadership view ───────────────────────────
@@ -199,28 +221,34 @@ export default async function SchoolDiaryPage({
     // Logging must never break the page; a missing audit row is recoverable.
   }
 
-  const metrics: { label: string; value: string | number; tone?: "warn" }[] = [
-    { label: "Notes (7d)", value: week.length },
-    ...NOTE_TYPES.map((t) => ({ label: t, value: byType.get(t) ?? 0, ...(t === "concern" ? { tone: "warn" as const } : {}) })),
-    { label: "Concern signed", value: concernAckedPct == null ? "—" : `${concernAckedPct}%` },
+  const metrics: { key: string; label: string; value: string | number; tone?: "warn" }[] = [
+    { key: "total", label: t.notesSevenDays, value: week.length },
+    ...NOTE_TYPES.map((nt) => ({
+      key: nt,
+      label: noteTypeLabel(td.noteTypes, nt),
+      value: byType.get(nt) ?? 0,
+      ...(nt === "concern" ? { tone: "warn" as const } : {}),
+    })),
+    { key: "concernSigned", label: t.concernSigned, value: concernAckedPct == null ? "—" : `${concernAckedPct}%` },
   ];
 
   const href = (dd: string) => `/dashboard/school/diary?${selected ? `c=${selected.id}&` : ""}d=${dd}`;
+
+  // Built once, shared by every card below: one message object in the RSC
+  // payload rather than one per note.
+  const noteT: DiaryNoteMessages = { ...td.note, noteTypes: td.noteTypes, cancel: dict.common.cancel };
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">School diary</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-7">
-          Read-only oversight of the teacher↔home communication book. Writing stays with the
-          participants — this view is recorded in the access audit.
-        </p>
+        <p className="text-[#5B6470] mb-7">{t.intro}</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-10">
           {metrics.map((m) => (
-            <div key={m.label} className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
+            <div key={m.key} className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
               <div className="text-xs text-[#5B6470]">{m.label}</div>
               <div className={`text-2xl tabular mt-0.5 ${m.tone === "warn" && Number(m.value) > 0 ? "text-[#9A6400]" : ""}`}>
                 {m.value}
@@ -230,7 +258,7 @@ export default async function SchoolDiaryPage({
         </div>
 
         {classes.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">No classes in your scope yet.</div>
+          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.noClassesInScope}</div>
         ) : (
           <>
             <div className="flex flex-wrap gap-1.5 mb-4">
@@ -249,11 +277,11 @@ export default async function SchoolDiaryPage({
               ))}
             </div>
 
-            <DateNav day={day} href={href} />
+            <DateNav day={day} href={href} t={td.nav} lang={lang} />
 
             <div className="card divide-y divide-[#EEF0EC]">
               <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
-                From the classroom ({autoEntries.length})
+                {fmt(td.fromClassroom, { count: autoEntries.length })}
               </p>
               {autoEntries.length ? (
                 autoEntries.map((e, i) => (
@@ -265,20 +293,22 @@ export default async function SchoolDiaryPage({
                   </div>
                 ))
               ) : (
-                <p className="px-5 py-2.5 text-sm text-[#98A0A9]">Nothing recorded for this day.</p>
+                <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{td.nothingRecorded}</p>
               )}
 
-              <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">Notes ({notes.length})</p>
+              <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                {fmt(td.notesHeading, { count: notes.length })}
+              </p>
               {notes.length ? (
                 notes.map((n) => {
                   const item: DiaryNoteItem = {
                     id: n.id,
                     type: n.note_type,
                     body: n.body,
-                    author: n.author_id === user.id ? "You" : authorName.get(n.author_id) ?? "Parent",
+                    author: n.author_id === user.id ? td.people.you : authorName.get(n.author_id) ?? td.people.parent,
                     audience: n.student_id
-                      ? studentName.get(n.student_id) ?? "Student"
-                      : selected?.name ?? "Class",
+                      ? studentName.get(n.student_id) ?? td.people.student
+                      : selected?.name ?? td.people.theClass,
                     parentsOnly: n.parents_only,
                     createdAt: n.created_at,
                   };
@@ -286,17 +316,17 @@ export default async function SchoolDiaryPage({
                     .filter((r) => r.note_id === n.id)
                     .map((r) => ({
                       id: r.id,
-                      author: authorName.get(r.author_id) ?? "Parent",
+                      author: authorName.get(r.author_id) ?? td.people.parent,
                       body: r.body,
                       createdAt: r.created_at,
                     }));
                   // Read-only: no reply box, no ack — RLS blocks both anyway —
                   // and no delete either (`mine` left unset): this is the
                   // oversight page; an author retracts from their own diary.
-                  return <DiaryNote key={n.id} note={item} replies={thread} />;
+                  return <DiaryNote key={n.id} note={item} replies={thread} t={noteT} lang={lang} />;
                 })
               ) : (
-                <p className="px-5 py-2.5 text-sm text-[#98A0A9]">No notes for this day.</p>
+                <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{td.noNotes}</p>
               )}
             </div>
           </>

@@ -3,9 +3,13 @@ import { createClient } from "@/utils/supabase/server";
 import { noticesEnabledFor } from "@/utils/flags";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import DiaryNote, { type DiaryNoteItem, type DiaryReplyItem } from "./diary-note";
+import DiaryNote, { type DiaryNoteItem, type DiaryNoteMessages, type DiaryReplyItem } from "./diary-note";
 import DateNav, { dayWindowUtc, isDayKey, todayKey } from "./date-nav";
 import { displayNames } from "./names";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { htmlLang } from "@/i18n/locales";
+import { fmt } from "@/i18n/format";
 
 // The STUDENT page of the diary: a read-only day timeline of their classes'
 // notes + their own per-student notes, each with a reply box (students REPLY,
@@ -18,15 +22,6 @@ import { displayNames } from "./names";
 // a diary page, and neither does a plain calendar entry). No compose, no
 // signature UI — signing is a parent affair.
 
-const KIND_LABEL: Record<string, string> = {
-  presentation: "Video lesson",
-  activity: "Activities",
-  worksheet: "Worksheet",
-  exam_paper: "Test paper",
-  exam: "Exam",
-  case_study: "Case study",
-  lesson_plan: "Lesson plan",
-};
 const KIND_ICON: Record<string, string> = {
   presentation: "🎬",
   activity: "🧩",
@@ -45,12 +40,22 @@ export default async function StudentDiary({ date }: { date?: string }) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // The page's words, and the tag its clocks are written in. resolveLocale is
+  // React-cached, so asking here and in the header costs one lookup.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.comms.diary;
+  const lang = htmlLang(locale);
+  const kindLabel = (kind: string | null | undefined): string =>
+    (t.kinds as Record<string, string>)[kind ?? ""] ?? "";
+
   const day = isDayKey(date) ? date : todayKey();
   const { startUtc, endUtc } = dayWindowUtc(day);
-  // Times render in the school's timezone (calendar doctrine — fixed UTC+8).
-  const timeFmt = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit" });
+  // Times render in the school's timezone (calendar doctrine — fixed UTC+8),
+  // written in the reader's own language.
+  const timeFmt = new Intl.DateTimeFormat(lang, { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit" });
   // A notice's deadline is a DATE, not a time of day.
-  const dateFmt = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short" });
+  const dateFmt = new Intl.DateTimeFormat(lang, { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short" });
 
   // Is the announcement layer live for this student's school? Gated so a
   // pre-0068 database is never asked for status/action_by.
@@ -143,37 +148,48 @@ export default async function StudentDiary({ date }: { date?: string }) {
   for (const s of shares) {
     const g = genOf.get(s.generation_id);
     if (g?.kind === "lesson_plan") continue; // the teacher's doc, never theirs
+    const title = g?.title || kindLabel(g?.kind) || t.entry.anAssignmentStart;
     auto.push({
       key: `s-${s.generation_id}-${s.created_at}`,
       at: s.created_at,
       icon: KIND_ICON[g?.kind ?? ""] ?? "📌",
-      text: `${g?.title || KIND_LABEL[g?.kind ?? ""] || "An assignment"} assigned${
-        s.class_id ? ` · ${className.get(s.class_id) ?? "class"}` : ""
-      }`,
+      text: s.class_id
+        ? fmt(t.entry.assignedToYouIn, { title, class: className.get(s.class_id) ?? t.entry.classFallback })
+        : fmt(t.entry.assignedToYou, { title }),
     });
   }
   for (const p of prog) {
     const g = genOf.get(p.generation_id);
     const sub = subOf.get(p.generation_id);
     const score = sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}` : null;
+    // The score rides on its own message rather than being glued on here, so a
+    // language that punctuates the aside differently still reads as one line.
+    const line = fmt(t.entry.youCompleted, {
+      title: g?.title || kindLabel(g?.kind) || t.entry.anAssignment,
+    });
     auto.push({
       key: `p-${p.generation_id}`,
       at: p.completed_at,
       icon: "✅",
-      text: `You completed ${g?.title || KIND_LABEL[g?.kind ?? ""] || "an assignment"}${score ? ` · ${score}` : ""}`,
+      text: score ? fmt(t.entry.withScore, { text: line, score }) : line,
     });
   }
   // A notice sits on the day it was POSTED — like every other row here, the day
   // is when the thing HAPPENED. Its deadline rides along in the text so the
   // page still answers "by when?".
   for (const n of notices) {
+    const line = fmt(t.entry.schoolNotice, { title: n.title });
     auto.push({
       key: `n-${n.id}`,
       at: n.created_at,
       icon: "📣",
-      text: `School notice — ${n.title}${
-        n.action_by ? ` · ${n.action_label || "By"} ${dateFmt.format(new Date(n.action_by))}` : ""
-      }`,
+      text: n.action_by
+        ? fmt(t.entry.withDeadline, {
+            text: line,
+            label: n.action_label || t.entry.by,
+            date: dateFmt.format(new Date(n.action_by)),
+          })
+        : line,
     });
   }
   auto.sort((a, b) => a.at.localeCompare(b.at));
@@ -184,7 +200,7 @@ export default async function StudentDiary({ date }: { date?: string }) {
     supabase,
     [...notes.map((n) => n.author_id), ...replies.map((r) => r.author_id)].filter((id) => id !== user.id),
   );
-  const nameOf = (id: string) => (id === user.id ? "You" : names.get(id) || "Teacher");
+  const nameOf = (id: string) => (id === user.id ? t.people.you : names.get(id) || t.people.teacher);
 
   const noteItems: { item: DiaryNoteItem; thread: DiaryReplyItem[] }[] = notes.map((n) => ({
     item: {
@@ -192,7 +208,7 @@ export default async function StudentDiary({ date }: { date?: string }) {
       type: n.note_type,
       body: n.body,
       author: nameOf(n.author_id),
-      audience: n.student_id ? "you" : (n.class_id && className.get(n.class_id)) || "your class",
+      audience: n.student_id ? t.people.yourself : (n.class_id && className.get(n.class_id)) || t.people.yourClass,
       parentsOnly: n.parents_only, // always false here — dn_read strips the rest
       createdAt: n.created_at,
       mine: n.author_id === user.id, // always false — students never author notes
@@ -209,21 +225,23 @@ export default async function StudentDiary({ date }: { date?: string }) {
       })),
   }));
 
+  // Built once, shared by every card below: one message object in the RSC
+  // payload rather than one per note.
+  const noteT: DiaryNoteMessages = { ...t.note, noteTypes: t.noteTypes, cancel: dict.common.cancel };
+
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">Diary</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-6">
-          Notes from your teachers, one day at a time — reply to keep them posted.
-        </p>
+        <p className="text-[#5B6470] mb-6">{t.studentIntro}</p>
 
-        <DateNav day={day} href={(d) => `/dashboard/diary?d=${d}`} />
+        <DateNav day={day} href={(d) => `/dashboard/diary?d=${d}`} t={t.nav} lang={lang} />
 
         <div className="card divide-y divide-[#EEF0EC]">
           <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
-            From the classroom ({auto.length})
+            {fmt(t.fromClassroom, { count: auto.length })}
           </p>
           {auto.length ? (
             auto.map((a) => (
@@ -234,14 +252,18 @@ export default async function StudentDiary({ date }: { date?: string }) {
               </div>
             ))
           ) : (
-            <p className="px-5 py-2.5 text-sm text-[#98A0A9]">Nothing recorded for this day.</p>
+            <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.nothingRecorded}</p>
           )}
 
-          <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">Notes ({noteItems.length})</p>
+          <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+            {fmt(t.notesHeading, { count: noteItems.length })}
+          </p>
           {noteItems.length ? (
-            noteItems.map((n) => <DiaryNote key={n.item.id} note={n.item} replies={n.thread} canReply />)
+            noteItems.map((n) => (
+              <DiaryNote key={n.item.id} note={n.item} replies={n.thread} canReply t={noteT} lang={lang} />
+            ))
           ) : (
-            <p className="px-5 py-2.5 text-sm text-[#98A0A9]">No notes for this day.</p>
+            <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.noNotes}</p>
           )}
         </div>
       </main>

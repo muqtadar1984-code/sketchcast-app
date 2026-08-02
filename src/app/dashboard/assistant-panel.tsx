@@ -2,14 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { StreamSpeaker, micSupported, startDictation } from "@/utils/assistant/voice-client";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 type Msg = { role: "student" | "assistant"; content: string; source?: { book: string; label: string } | null };
+
+/** Every word the assistant renders, handed down by the (server) layout that
+ * mounts the launcher. */
+export type AssistantMessages = Dictionary["school"]["assistant"] & Pick<Dictionary["common"], "close">;
 
 // The AI Teaching Assistant panel — book-first chat with mic input and
 // read-aloud (browser voice, on by default, starts as the answer streams and
 // can be stopped). Grounded answers carry a "from your [chapter]" tag. Warm-start
 // GET on mount pre-loads the greeting + book scope so the first turn is fast.
-export default function AssistantPanel({ onClose }: { onClose: () => void }) {
+export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; onClose: () => void }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [ready, setReady] = useState<boolean | null>(null);
   const [input, setInput] = useState("");
@@ -44,17 +50,18 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
         if (cancelled) return;
         setReady(!!d.ready);
         if (d.greeting) setMessages([{ role: "assistant", content: d.greeting }]);
-        else if (!res.ok) setError("The assistant isn't available right now.");
+        else if (!res.ok) setError(t.unavailable);
       } catch {
         if (!cancelled) {
           setReady(false);
-          setError("Couldn't reach the assistant. Try again in a moment.");
+          setError(t.unreachable);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -134,7 +141,7 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error || "The assistant is unavailable right now.");
+        throw new Error(j?.error || t.failed);
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -191,14 +198,14 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
           <div className="min-w-0">
             <div className="font-display font-medium flex items-center gap-1.5">
-              <span aria-hidden>🎓</span> AI Teaching Assistant
+              <span aria-hidden>🎓</span> {t.title}
             </div>
-            <div className="text-xs text-[#98A0A9]">Answers from your books</div>
+            <div className="text-xs text-[#98A0A9]">{t.subtitle}</div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {speaking ? (
-              <button onClick={stopSpeaking} className="text-xs font-medium text-[#B42318] hover:underline" title="Stop reading aloud">
-                ■ Stop
+              <button onClick={stopSpeaking} className="text-xs font-medium text-[#B42318] hover:underline" title={t.stopReading}>
+                ■ {t.stop}
               </button>
             ) : (
               <button
@@ -206,17 +213,17 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
                 aria-pressed={readAloud}
                 className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}
               >
-                {readAloud ? "🔊 Read aloud" : "🔈 Read aloud"}
+                {readAloud ? "🔊" : "🔈"} {t.readAloud}
               </button>
             )}
-            <button onClick={onClose} className="text-[#98A0A9] hover:text-[#5B6470] text-lg leading-none" aria-label="Close">
+            <button onClick={onClose} className="text-[#98A0A9] hover:text-[#5B6470] text-lg leading-none" aria-label={t.close}>
               ×
             </button>
           </div>
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-          {ready === null && <p className="text-sm text-[#98A0A9]">Getting your books ready…</p>}
+          {ready === null && <p className="text-sm text-[#98A0A9]">{t.loading}</p>}
           {messages.map((m, i) => (
             <div key={i} className={m.role === "student" ? "flex justify-end" : "flex flex-col items-start"}>
               <div
@@ -227,7 +234,7 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
                 {m.content || <span className="text-[#98A0A9]">…</span>}
               </div>
               {m.source && (
-                <span className="text-[10px] text-[#0C8175] mt-1 ms-1">📖 from your {m.source.label}</span>
+                <span className="text-[10px] text-[#0C8175] mt-1 ms-1">📖 {fmt(t.source, { label: m.source.label })}</span>
               )}
             </div>
           ))}
@@ -248,7 +255,7 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
                 onClick={toggleMic}
                 disabled={ready === false}
                 aria-pressed={listening}
-                title={listening ? "Stop listening" : "Speak your question"}
+                title={listening ? t.micStop : t.micStart}
                 className={`h-9 w-9 rounded-lg border text-base shrink-0 disabled:opacity-40 ${
                   listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
                 }`}
@@ -262,16 +269,14 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
               onChange={(e) => setInput(e.target.value)}
               maxLength={600}
               disabled={ready === false}
-              placeholder={listening ? "Listening…" : ready === false ? "No book yet" : "Ask about your books…"}
+              placeholder={listening ? t.listening : ready === false ? t.noBook : t.placeholder}
               className="field h-9 px-3 text-sm flex-1"
             />
             <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-              {busy ? "…" : "Ask"}
+              {busy ? "…" : t.ask}
             </button>
           </form>
-          <p className="text-[10px] text-[#98A0A9] mt-1.5">
-            I help you learn from your books — hints and method, never the graded answers.
-          </p>
+          <p className="text-[10px] text-[#98A0A9] mt-1.5">{t.footnote}</p>
         </div>
       </div>
     </div>

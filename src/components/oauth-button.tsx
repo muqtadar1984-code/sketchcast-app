@@ -2,12 +2,17 @@
 
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 // Provider-agnostic OAuth button. `provider` is a small parameter so a Facebook
 // button drops in later with the SAME code path + the same /auth/callback route —
 // only add a new entry to PROVIDERS (no Facebook now).
 type Provider = "google" | "facebook";
 
+// The provider NAME is a brand, never translated — so the whole button label is
+// one message with the name interpolated ("Sign in with {provider}"), which lets
+// a translator move the name to wherever the sentence needs it.
 const PROVIDERS: Record<Provider, { label: string; Logo: () => React.ReactElement }> = {
   google: { label: "Google", Logo: GoogleG },
   facebook: { label: "Facebook", Logo: GoogleG }, // placeholder logo; not rendered yet
@@ -17,15 +22,18 @@ export default function OAuthButton({
   provider = "google",
   mode = "in",
   next,
+  t,
 }: {
   provider?: Provider;
   mode?: "in" | "up";
   next?: string; // path to return to after the callback establishes the session
+  /** The button's words, resolved server-side by the page that renders it. */
+  t: Dictionary["app"]["oauth"];
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { label, Logo } = PROVIDERS[provider];
-  const verb = mode === "up" ? "Sign up" : "Sign in";
+  const cta = fmt(mode === "up" ? t.signUpWith : t.signInWith, { provider: label });
 
   async function onClick() {
     setLoading(true);
@@ -51,11 +59,11 @@ export default function OAuthButton({
         type="button"
         onClick={onClick}
         disabled={loading}
-        aria-label={`${verb} with ${label}`}
+        aria-label={cta}
         className="w-full h-11 inline-flex items-center justify-center gap-2.5 rounded-lg border border-[#E6E8E4] bg-white text-sm font-medium text-[#14181F] transition-colors hover:bg-[#F5F6F3] disabled:opacity-60"
       >
         <Logo />
-        {loading ? "Redirecting…" : `${verb} with ${label}`}
+        {loading ? t.redirecting : cta}
       </button>
       {error && (
         <p role="alert" className="text-sm text-red-600 mt-2">

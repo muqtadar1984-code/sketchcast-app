@@ -12,17 +12,50 @@ import {
   type OnboardingProfile,
   type OnboardingRole,
 } from "@/utils/onboarding";
+import type { Dictionary } from "@/i18n/dictionaries";
+
+type OnboardingMessages = Dictionary["app"]["onboarding"];
+
+// The grade and subject options are STORED as their English strings (they go
+// into profiles.onboarding_profile and are read back by the team), so the value
+// never moves — only what the reader sees does. These maps turn a stored value
+// into its dictionary key, exactly as the notification bell maps status codes;
+// an unrecognised value falls through to itself rather than a blank chip.
+const GRADE_KEY: Record<string, keyof OnboardingMessages["grades"]> = {
+  "Early years / Kindergarten": "kindergarten",
+  "Grades 1–3": "g1to3",
+  "Grades 4–6": "g4to6",
+  "Grades 7–9": "g7to9",
+  "Grades 10–12": "g10to12",
+};
+const SUBJECT_KEY: Record<string, keyof OnboardingMessages["subjects"]> = {
+  Mathematics: "maths",
+  Science: "science",
+  English: "english",
+  "Computing / ICT": "computing",
+  "Social studies": "socialStudies",
+  Languages: "languages",
+  Arts: "arts",
+  Other: "other",
+};
 
 // The new-joiner profile form. The role toggle is SEEDED from the signup pick but
 // the user confirms (or corrects) it here. "Continue" stays disabled until every
 // mandatory field for the chosen role is filled — the exact same missingRequired()
 // the server re-checks, so the client gate and the server gate never disagree.
+//
+// Every word arrives as props from the (server) page; the type import is
+// type-only and erased, so the server-only dictionary never reaches the bundle.
 export default function OnboardingForm({
   seedRole,
   initialName,
+  t,
+  common,
 }: {
   seedRole: OnboardingRole;
   initialName: string;
+  t: OnboardingMessages;
+  common: Dictionary["common"];
 }) {
   const router = useRouter();
   const [role, setRole] = useState<OnboardingRole>(seedRole);
@@ -36,6 +69,9 @@ export default function OnboardingForm({
   const ready = missing.length === 0;
   // Only surface the "still needed" hint once the user has tried to continue.
   const show = (field: string) => attempted && missing.includes(field);
+
+  const gradeLabel = (g: string) => t.grades[GRADE_KEY[g]] ?? g;
+  const subjectLabel = (s: string) => t.subjects[SUBJECT_KEY[s]] ?? s;
 
   function toggleIn(list: string[] | undefined, value: string): string[] {
     const set = new Set(list ?? []);
@@ -58,7 +94,7 @@ export default function OnboardingForm({
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; role?: OnboardingRole };
       if (!res.ok) {
-        setError(data.error ?? "Something went wrong. Please try again.");
+        setError(data.error ?? common.somethingWentWrong);
         setSubmitting(false);
         return;
       }
@@ -67,7 +103,7 @@ export default function OnboardingForm({
       router.replace(homeForRole(data.role ?? role));
       router.refresh();
     } catch {
-      setError("Network error. Please try again.");
+      setError(t.networkError);
       setSubmitting(false);
     }
   }
@@ -91,7 +127,8 @@ export default function OnboardingForm({
     </button>
   );
 
-  const chip = (value: string, selected: boolean, onClick: () => void) => (
+  // `value` is what gets STORED; `text` is what the reader sees.
+  const chip = (value: string, text: string, selected: boolean, onClick: () => void) => (
     <button
       key={value}
       type="button"
@@ -103,7 +140,7 @@ export default function OnboardingForm({
           : "border-[#E6E8E4] bg-white text-[#5B6470] hover:border-[#CBD2CC]"
       }`}
     >
-      {value}
+      {text}
     </button>
   );
 
@@ -119,29 +156,27 @@ export default function OnboardingForm({
       <div className="w-full max-w-lg card rounded-2xl p-8">
         <div className="flex items-center gap-2.5 mb-1">
           <LogoMark size={34} />
-          <h1 className="text-2xl">Welcome — let&apos;s set you up</h1>
+          <h1 className="text-2xl">{t.title}</h1>
         </div>
-        <p className="text-sm text-[#5B6470] mt-1 mb-6">
-          A couple of quick questions so SketchCast fits how you&apos;ll use it. You can change these later.
-        </p>
+        <p className="text-sm text-[#5B6470] mt-1 mb-6">{t.subtitle}</p>
 
         <form onSubmit={onSubmit} className="space-y-6">
           {/* Role */}
           <div>
-            {label("I'm here as a…", true)}
+            {label(t.roleQuestion, true)}
             <div className="flex gap-3">
-              {roleBtn("teacher", "Teacher", "Create lessons & teach classes")}
-              {roleBtn("parent", "Parent", "Support my child's learning")}
+              {roleBtn("teacher", t.teacher, t.teacherSub)}
+              {roleBtn("parent", t.parent, t.parentSub)}
             </div>
           </div>
 
           {/* Name */}
           <div>
-            {label("Your full name", true)}
+            {label(t.fullName, true)}
             <input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Alex Morgan"
+              placeholder={t.namePlaceholder}
               className={`field w-full h-11 px-3 text-[#14181F] ${show("full_name") ? "border-[#C0392B]" : ""}`}
             />
           </div>
@@ -150,7 +185,7 @@ export default function OnboardingForm({
             <>
               {/* Affiliation */}
               <div>
-                {label("Where do you teach?", true)}
+                {label(t.whereTeach, true)}
                 <div className="space-y-2">
                   {AFFILIATIONS.map((a) => (
                     <label
@@ -166,53 +201,53 @@ export default function OnboardingForm({
                         onChange={() => setP((s) => ({ ...s, affiliation: a.value }))}
                         className="accent-[#0C8175]"
                       />
-                      <span className="text-sm text-[#14181F]">{a.label}</span>
+                      <span className="text-sm text-[#14181F]">{t.affiliations[a.value]}</span>
                     </label>
                   ))}
                 </div>
-                {show("affiliation") && <p className="text-xs text-[#C0392B] mt-1">Please pick one.</p>}
+                {show("affiliation") && <p className="text-xs text-[#C0392B] mt-1">{t.pickOne}</p>}
               </div>
 
               {p.affiliation === "school" && (
                 <div>
-                  {label("School name", true)}
+                  {label(t.schoolName, true)}
                   <input
                     value={p.school_name ?? ""}
                     onChange={(e) => setP((s) => ({ ...s, school_name: e.target.value }))}
-                    placeholder="e.g. Riverside Secondary"
+                    placeholder={t.schoolPlaceholder}
                     className={`field w-full h-11 px-3 text-[#14181F] ${show("school_name") ? "border-[#C0392B]" : ""}`}
                   />
                 </div>
               )}
 
               <div>
-                {label("Grade levels you teach", true)}
+                {label(t.gradesTeach, true)}
                 <div className="flex flex-wrap gap-2">
                   {GRADE_OPTIONS.map((g) =>
-                    chip(g, (p.grade_levels ?? []).includes(g), () =>
+                    chip(g, gradeLabel(g), (p.grade_levels ?? []).includes(g), () =>
                       setP((s) => ({ ...s, grade_levels: toggleIn(s.grade_levels, g) })),
                     ),
                   )}
                 </div>
-                {show("grade_levels") && <p className="text-xs text-[#C0392B] mt-1">Pick at least one.</p>}
+                {show("grade_levels") && <p className="text-xs text-[#C0392B] mt-1">{t.pickAtLeastOne}</p>}
               </div>
 
               <div>
-                {label("Subjects you teach", true)}
+                {label(t.subjectsTeach, true)}
                 <div className="flex flex-wrap gap-2">
                   {SUBJECT_OPTIONS.map((sub) =>
-                    chip(sub, (p.subjects ?? []).includes(sub), () =>
+                    chip(sub, subjectLabel(sub), (p.subjects ?? []).includes(sub), () =>
                       setP((s) => ({ ...s, subjects: toggleIn(s.subjects, sub) })),
                     ),
                   )}
                 </div>
-                {show("subjects") && <p className="text-xs text-[#C0392B] mt-1">Pick at least one.</p>}
+                {show("subjects") && <p className="text-xs text-[#C0392B] mt-1">{t.pickAtLeastOne}</p>}
               </div>
             </>
           ) : (
             <>
               <div>
-                {label("How many children will you support?", true)}
+                {label(t.childrenCount, true)}
                 <input
                   type="number"
                   min={1}
@@ -224,39 +259,39 @@ export default function OnboardingForm({
                       children_count: e.target.value ? Math.max(1, Math.min(20, Number(e.target.value))) : undefined,
                     }))
                   }
-                  placeholder="e.g. 2"
+                  placeholder={t.childrenPlaceholder}
                   className={`field w-full h-11 px-3 text-[#14181F] ${show("children_count") ? "border-[#C0392B]" : ""}`}
                 />
               </div>
 
               <div>
-                {label("Your children's grade levels", true)}
+                {label(t.childGrades, true)}
                 <div className="flex flex-wrap gap-2">
                   {GRADE_OPTIONS.map((g) =>
-                    chip(g, (p.child_grade_levels ?? []).includes(g), () =>
+                    chip(g, gradeLabel(g), (p.child_grade_levels ?? []).includes(g), () =>
                       setP((s) => ({ ...s, child_grade_levels: toggleIn(s.child_grade_levels, g) })),
                     ),
                   )}
                 </div>
-                {show("child_grade_levels") && <p className="text-xs text-[#C0392B] mt-1">Pick at least one.</p>}
+                {show("child_grade_levels") && <p className="text-xs text-[#C0392B] mt-1">{t.pickAtLeastOne}</p>}
               </div>
             </>
           )}
 
           {/* Optional */}
           <div>
-            {label("How did you hear about us?")}
+            {label(t.heardFrom)}
             <input
               value={p.heard_from ?? ""}
               onChange={(e) => setP((s) => ({ ...s, heard_from: e.target.value }))}
-              placeholder="Optional"
+              placeholder={t.optional}
               className="field w-full h-11 px-3 text-[#14181F]"
             />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
           {attempted && !ready && !error && (
-            <p className="text-sm text-[#C0392B]">Please complete the required fields marked with *.</p>
+            <p className="text-sm text-[#C0392B]">{t.completeRequired}</p>
           )}
 
           <button
@@ -265,7 +300,7 @@ export default function OnboardingForm({
             aria-disabled={!ready || submitting}
             className={`btn-primary w-full h-11 ${!ready ? "opacity-60" : ""}`}
           >
-            {submitting ? "Setting up…" : "Continue"}
+            {submitting ? t.settingUp : t.continue}
           </button>
         </form>
       </div>

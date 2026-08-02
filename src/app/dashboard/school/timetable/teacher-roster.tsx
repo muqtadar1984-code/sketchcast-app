@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DAY_NAMES, isLesson, teacherDayLoads, type Slot } from "@/utils/timetable";
-import type { StaffDetail } from "./timetable-editor";
+import { isLesson, teacherDayLoads, type Slot } from "@/utils/timetable";
+import { DAY_KEYS, type StaffDetail, type TimetableMessages } from "./timetable-editor";
+import { fmt } from "@/i18n/format";
 
 // The staffing picture under the grid: who is a class teacher (and of what),
 // who isn't, what each person teaches (declared in onboarding ∪ taught on the
@@ -20,6 +21,7 @@ export default function TeacherRoster({
   shapeDays,
   periodsPerDay,
   isAdmin,
+  t,
 }: {
   staff: StaffDetail[];
   classes: { id: string; name: string; grade: string | null; teacher_id: string }[];
@@ -28,6 +30,7 @@ export default function TeacherRoster({
   shapeDays: number;
   periodsPerDay: number;
   isAdmin: boolean;
+  t: TimetableMessages;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
@@ -40,7 +43,7 @@ export default function TeacherRoster({
     () => classes.map((c) => ({ ...c, teacher_id: reassigned[c.id] ?? c.teacher_id })),
     [classes, reassigned],
   );
-  const staffIds = useMemo(() => new Set(staff.map((t) => t.id)), [staff]);
+  const staffIds = useMemo(() => new Set(staff.map((member) => member.id)), [staff]);
   // The check: a position is uncovered when its holder is no longer on staff
   // (left the school, role changed) — the DB never lets it be empty.
   const uncovered = mergedClasses.filter((c) => !staffIds.has(c.teacher_id));
@@ -60,7 +63,7 @@ export default function TeacherRoster({
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setCtErr(json.error ?? "Could not reassign the class teacher.");
+        setCtErr(json.error ?? t.roster.reassignFailed);
         setReassigned((prev) => {
           const next = { ...prev };
           if (prevHolder) next[classId] = prevHolder;
@@ -74,7 +77,7 @@ export default function TeacherRoster({
         router.refresh();
       }
     } catch {
-      setCtErr("Network error.");
+      setCtErr(t.roster.networkError);
       setReassigned((prev) => {
         const next = { ...prev };
         if (prevHolder) next[classId] = prevHolder;
@@ -106,19 +109,19 @@ export default function TeacherRoster({
     const dayLoads = teacherDayLoads(slots);
 
     return staff
-      .map((t) => {
-        const subjects = new Set<string>(t.subjects.map((s) => s.trim()).filter(Boolean));
-        for (const s of taught.get(t.id) ?? []) subjects.add(s);
+      .map((member) => {
+        const subjects = new Set<string>(member.subjects.map((s) => s.trim()).filter(Boolean));
+        for (const s of taught.get(member.id) ?? []) subjects.add(s);
         let worstDay = 0;
         let worstCount = 0;
         for (let d = 1; d <= shapeDays; d++) {
-          const n = dayLoads.get(`${t.id}|${d}`) ?? 0;
+          const n = dayLoads.get(`${member.id}|${d}`) ?? 0;
           if (n > worstCount) {
             worstCount = n;
             worstDay = d;
           }
         }
-        const week = weekly.get(t.id) ?? 0;
+        const week = weekly.get(member.id) ?? 0;
         // "Blocked" = share of the coverable week already taken: the
         // denominator is what a teacher may at most carry (the per-day cap,
         // or the day length if shorter) × days. "Fully" is judged PER DAY —
@@ -128,12 +131,12 @@ export default function TeacherRoster({
         const denom = shapeDays * perDayCapacity;
         let daysWithSpare = 0;
         for (let d = 1; d <= shapeDays; d++) {
-          if ((dayLoads.get(`${t.id}|${d}`) ?? 0) < perDayCapacity) daysWithSpare++;
+          if ((dayLoads.get(`${member.id}|${d}`) ?? 0) < perDayCapacity) daysWithSpare++;
         }
         return {
-          id: t.id,
-          name: t.name,
-          classTeacherOf: classesByTeacher.get(t.id) ?? [],
+          id: member.id,
+          name: member.name,
+          classTeacherOf: classesByTeacher.get(member.id) ?? [],
           subjects: [...subjects].sort(),
           weekly: week,
           blockedPct: denom > 0 ? Math.min(100, Math.round((week / denom) * 100)) : 0,
@@ -148,20 +151,22 @@ export default function TeacherRoster({
   return (
     <div className="card mt-6 p-4 print:hidden">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-start">
-        <span className="font-medium text-sm">Teachers ({rows.length})</span>
-        <span className="text-xs text-[#5B6470]">{open ? "Hide" : "Show"}</span>
+        <span className="font-medium text-sm">{fmt(t.roster.title, { n: rows.length })}</span>
+        <span className="text-xs text-[#5B6470]">{open ? t.hide : t.show}</span>
       </button>
       {open && (
         <div className="overflow-x-auto mt-3">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-                <th className="px-2 py-2 text-start font-normal">Teacher</th>
-                <th className="px-2 py-2 text-start font-normal">Class teacher</th>
-                <th className="px-2 py-2 text-start font-normal">Teaches</th>
-                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">Lessons / week</th>
-                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">Blocked</th>
-                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">Heaviest day (limit {maxPerDay})</th>
+                <th className="px-2 py-2 text-start font-normal">{t.roster.col.teacher}</th>
+                <th className="px-2 py-2 text-start font-normal">{t.roster.col.classTeacher}</th>
+                <th className="px-2 py-2 text-start font-normal">{t.roster.col.teaches}</th>
+                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">{t.roster.col.lessonsPerWeek}</th>
+                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">{t.roster.col.blocked}</th>
+                <th className="px-2 py-2 text-start font-normal whitespace-nowrap">
+                  {fmt(t.roster.col.heaviestDay, { max: maxPerDay })}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -190,19 +195,15 @@ export default function TeacherRoster({
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     <span
                       className={r.fullyBlocked ? "text-[#B42318] font-medium" : "text-[#5B6470]"}
-                      title={
-                        r.fullyBlocked
-                          ? "Fully booked every day — cannot be assigned as a substitute"
-                          : "Has spare capacity on at least one day — can take cover then"
-                      }
+                      title={r.fullyBlocked ? t.roster.blockedFull : t.roster.blockedSpare}
                     >
-                      {r.blockedPct}% blocked
+                      {fmt(t.roster.blockedPct, { pct: r.blockedPct })}
                     </span>
                   </td>
                   <td className="px-2 py-1.5">
                     {r.worstCount ? (
                       <span className={r.worstCount > maxPerDay ? "text-[#9A6400] font-medium" : "text-[#5B6470]"}>
-                        {DAY_NAMES[r.worstDay - 1]} · {r.worstCount}/{maxPerDay}
+                        {t.days[DAY_KEYS[r.worstDay - 1]!]} · {r.worstCount}/{maxPerDay}
                         {r.worstCount > maxPerDay ? " ⚠" : ""}
                       </span>
                     ) : (
@@ -215,13 +216,12 @@ export default function TeacherRoster({
           </table>
 
           <div className="mt-5 border-t border-[#EEF0EC] pt-3">
-            <div className="text-xs font-medium text-[#5B6470] mb-1">Class-teacher positions</div>
+            <div className="text-xs font-medium text-[#5B6470] mb-1">{t.roster.positionsTitle}</div>
             {uncovered.length === 0 ? (
-              <p className="text-xs text-[#0C8175] mb-2">✓ Every grade &amp; section has a class teacher.</p>
+              <p className="text-xs text-[#0C8175] mb-2">✓ {t.roster.allCovered}</p>
             ) : (
               <p className="text-xs text-[#B42318] mb-2">
-                ⚠ Without a serving class teacher:{" "}
-                {uncovered.map((c) => c.name).join(", ")} — assign one below.
+                ⚠ {fmt(t.roster.uncovered, { classes: uncovered.map((c) => c.name).join(", ") })}
               </p>
             )}
             <div className="grid gap-1.5 sm:grid-cols-2">
@@ -239,24 +239,21 @@ export default function TeacherRoster({
                         disabled={ctBusy}
                         className={`field h-8 px-2 text-sm ${staffIds.has(c.teacher_id) ? "" : "text-[#B42318]"}`}
                       >
-                        {!staffIds.has(c.teacher_id) && <option value="">⚠ assign a class teacher…</option>}
-                        {staff.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
+                        {!staffIds.has(c.teacher_id) && <option value="">{`⚠ ${t.roster.assignPrompt}`}</option>}
+                        {staff.map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.name}
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <span>{staff.find((t) => t.id === c.teacher_id)?.name ?? "⚠ unassigned"}</span>
+                      <span>{staff.find((member) => member.id === c.teacher_id)?.name ?? `⚠ ${t.roster.unassigned}`}</span>
                     )}
                   </label>
                 ))}
             </div>
             {isAdmin && (
-              <p className="text-[10px] text-[#98A0A9] mt-1.5">
-                Reassigning moves the class — its students and join code — to the new class teacher. Timetable
-                lessons keep their own subject teachers.
-              </p>
+              <p className="text-[10px] text-[#98A0A9] mt-1.5">{t.roster.reassignNote}</p>
             )}
             {ctErr && <p className="text-sm text-red-600 mt-1">{ctErr}</p>}
           </div>

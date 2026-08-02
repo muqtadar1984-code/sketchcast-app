@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { type LibraryMessages } from "./content-cell";
 
 const CT: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -15,12 +16,14 @@ function TemplateInput({
   state,
   busy,
   onPick,
+  t,
 }: {
   label: string;
   accept: string;
   state: string | null;
   busy: boolean;
   onPick: (f: File) => void;
+  t: LibraryMessages;
 }) {
   return (
     <label className="block border border-dashed border-[#D2D6D1] rounded-lg p-3 cursor-pointer hover:bg-[#F5F6F3]">
@@ -35,7 +38,7 @@ function TemplateInput({
         }}
       />
       <p className="text-xs text-[#5B6470] mt-1 truncate">
-        {busy ? "Uploading…" : state ? `✓ ${state}` : "Click to upload"}
+        {busy ? t.branding.uploading : state ? `✓ ${state}` : t.branding.clickToUpload}
       </p>
     </label>
   );
@@ -46,15 +49,17 @@ function TemplateInput({
 export default function BrandingCard({
   hasDocx,
   hasPptx,
+  t,
 }: {
   hasDocx: boolean;
   hasPptx: boolean;
+  t: LibraryMessages;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [docx, setDocx] = useState<string | null>(hasDocx ? "Uploaded" : null);
-  const [pptx, setPptx] = useState<string | null>(hasPptx ? "Uploaded" : null);
+  const [docx, setDocx] = useState<string | null>(hasDocx ? t.branding.uploaded : null);
+  const [pptx, setPptx] = useState<string | null>(hasPptx ? t.branding.uploaded : null);
 
   async function upload(kind: "docx" | "pptx", file: File) {
     setBusy(kind);
@@ -64,7 +69,7 @@ export default function BrandingCard({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(null);
       return;
     }
@@ -94,29 +99,26 @@ export default function BrandingCard({
   return (
     <details className="card p-5 mb-8">
       <summary className="cursor-pointer flex items-center gap-2 list-none">
-        <span className="font-display font-medium">School branding</span>
-        <span className="text-xs text-[#5B6470]">
-          optional · {docx || pptx ? "templates set" : "use your school's format & theme"}
-        </span>
+        <span className="font-display font-medium">{t.branding.heading}</span>
+        <span className="text-xs text-[#5B6470]">{docx || pptx ? t.branding.set : t.branding.notSet}</span>
       </summary>
-      <p className="text-sm text-[#5B6470] mt-3 mb-3">
-        Upload your school&apos;s Word and PowerPoint templates. New documents open from the .docx
-        template; decks and the video slides adopt the .pptx theme, colours and logo.
-      </p>
+      <p className="text-sm text-[#5B6470] mt-3 mb-3">{t.branding.intro}</p>
       <div className="grid sm:grid-cols-2 gap-3">
         <TemplateInput
-          label="Word template (.docx)"
+          label={t.branding.docx}
           accept=".docx"
           state={docx}
           busy={busy === "docx"}
           onPick={(f) => upload("docx", f)}
+          t={t}
         />
         <TemplateInput
-          label="PowerPoint template (.pptx)"
+          label={t.branding.pptx}
           accept=".pptx"
           state={pptx}
           busy={busy === "pptx"}
           onPick={(f) => upload("pptx", f)}
+          t={t}
         />
       </div>
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}

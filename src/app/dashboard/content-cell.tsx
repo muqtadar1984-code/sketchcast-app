@@ -8,6 +8,8 @@ import AskCoachButton from "./ask-coach-button";
 import ReportFailure from "./report-failure";
 import { recordArtifactView } from "@/utils/views";
 import { etaLabel, type JobStage } from "@/utils/job-stage";
+import { fmt } from "@/i18n/format";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 export type CellLesson = {
   id: string;
@@ -25,6 +27,26 @@ export type CellLesson = {
   params: Record<string, unknown> | null;
   artifactPaths: string[];
 };
+
+/** Every word the Library renders — its own `library` namespace plus the shared
+ * `common` slice — composed ONCE server-side by the dashboard page and handed
+ * down this whole tree as one object (so it is serialized once, not per cell).
+ * Typed from the English dictionary, but the import is type-only: the
+ * server-only module is erased here and no translation file reaches the browser
+ * bundle. Lives in this file because it is already the library's shared-type
+ * module (CellLesson) — every other cell, card and modal imports from here. */
+export type LibraryMessages = Dictionary["library"] & { common: Dictionary["common"] };
+
+/** A generation's raw DB status word ("queued", "processing", …) in the reader's
+ * language; an unknown status shows as itself rather than blank. */
+export const statusLabel = (t: LibraryMessages, status: string): string =>
+  (t.status as Record<string, string>)[status] ?? status;
+
+/** A generation kind ("presentation", "exam_paper", …) as its display name. The
+ * message keys ARE the kind strings, so the DB value indexes the dictionary
+ * directly and no kind → label map has to be kept in sync anywhere. */
+export const kindLabel = (t: LibraryMessages, kind: string): string =>
+  (t.kinds as Record<string, string>)[kind] ?? kind;
 
 // Icon-forward kit cells (2026-07-20): the icon IS the download/watch (no
 // "Download" word); the label is the link text; ↻ regenerate + ✕ delete (delete
@@ -78,6 +100,7 @@ export default function ContentCell({
   chapterNum,
   kind,
   lesson,
+  t,
   label = "",
   trackViews = false,
   part = null,
@@ -90,6 +113,7 @@ export default function ContentCell({
   chapterNum: number;
   kind: string;
   lesson: CellLesson | null;
+  t: LibraryMessages;
   /** Display name — the link text (docs). Presentation ignores it (Watch/Deck). */
   label?: string;
   trackViews?: boolean; // beta: record artifact-opened events (feedback trigger)
@@ -126,23 +150,27 @@ export default function ContentCell({
         label={lbl}
         part={part}
         bookLanguage={bookLanguage}
+        t={t}
       />
     );
 
   // Not generated: a free add-back once its lesson exists ("+ Worksheet"), or a
   // dash when the trial pin locks this unit.
-  if (!lesson) return genLocked ? <span className="text-[#C6CBC4]">—</span> : genControl(`+ ${label}`);
+  if (!lesson) return genLocked ? <span className="text-[#C6CBC4]">—</span> : genControl(fmt(t.cell.addBack, { label }));
 
   if (lesson.status === "queued" || lesson.status === "processing") {
     const eta = lesson.status === "processing" ? etaLabel(kind, lesson.progress, lesson.stage) : "";
     return (
       <span
         className="inline-flex items-center gap-1.5 text-[13px] text-[#98A0A9] whitespace-nowrap"
-        title={`${label || "Lesson"} — ${lesson.status}${eta ? ` (${eta})` : ""}`}
+        title={`${fmt(t.cell.statusTitle, {
+          label: label || t.kinds.presentation,
+          status: statusLabel(t, lesson.status),
+        })}${eta ? ` (${eta})` : ""}`}
       >
         {isPres ? (
           <>
-            <PlayIcon /> Watch
+            <PlayIcon /> {t.watch}
           </>
         ) : (
           label
@@ -164,12 +192,12 @@ export default function ContentCell({
     // artifact for being noisy, and this brings it back just where it earns place.
     return (
       <span className="inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap">
-        <span className="text-[#B42318]">{isPres ? "Watch" : label} failed</span>
-        {!genLocked && genControl("retry")}
+        <span className="text-[#B42318]">{fmt(t.cell.failed, { label: isPres ? t.watch : label })}</span>
+        {!genLocked && genControl(t.cell.retry)}
         <ReportFailure
           generationId={lesson.id}
           kind={kind}
-          label={isPres ? "Lesson" : label}
+          label={isPres ? t.kinds.presentation : label}
           bookId={bookId}
           bookTitle={bookTitle}
           chapterNum={chapterNum}
@@ -191,15 +219,15 @@ export default function ContentCell({
           <span className="inline-flex flex-col gap-1">
             {Array.from({ length: nParts }, (_, i) => (
               <span key={i} className="inline-flex items-center gap-1.5 rounded-full border border-[#DCE6E2] bg-[#FCFCFA] px-2.5 py-1">
-                <span className="text-[#98A0A9] w-8">Pt {i + 1}</span>
+                <span className="text-[#98A0A9] w-8">{fmt(t.partShort, { n: i + 1 })}</span>
                 {videos[i] && (
                   <a href={videos[i]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>
-                    <span className="text-[#1FB8A6]"><PlayIcon /></span>Watch
+                    <span className="text-[#1FB8A6]"><PlayIcon /></span>{t.watch}
                   </a>
                 )}
                 {decks[i] && (
                   <a href={decks[i]} onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")} className={linkCls}>
-                    <span className="text-[#1FB8A6]"><DownloadIcon /></span>Deck
+                    <span className="text-[#1FB8A6]"><DownloadIcon /></span>{t.deck}
                   </a>
                 )}
               </span>
@@ -209,12 +237,12 @@ export default function ContentCell({
           <>
             {videos[0] && (
               <a href={videos[0]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>
-                <span className="text-[#1FB8A6]"><PlayIcon /></span>Watch
+                <span className="text-[#1FB8A6]"><PlayIcon /></span>{t.watch}
               </a>
             )}
             {decks[0] && (
               <a href={decks[0]} onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")} className={linkCls}>
-                <span className="text-[#1FB8A6]"><DownloadIcon /></span>Deck
+                <span className="text-[#1FB8A6]"><DownloadIcon /></span>{t.deck}
               </a>
             )}
           </>
@@ -227,7 +255,7 @@ export default function ContentCell({
         )
       )}
       {isPres && (
-        <AskCoachButton generationId={lesson.id} chapterLabel={`Chapter ${chapterNum + 1}`} className="font-medium text-[#0C8175] hover:underline" />
+        <AskCoachButton generationId={lesson.id} chapterLabel={fmt(t.chapter, { n: chapterNum + 1 })} className="font-medium text-[#0C8175] hover:underline" />
       )}
       {!genLocked && (
         <RegenerateButton
@@ -241,7 +269,7 @@ export default function ContentCell({
           oldArtifactPaths={lesson.artifactPaths}
         />
       )}
-      <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} className="hidden group-hover:inline-flex" />
+      <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} t={t} className="hidden group-hover:inline-flex" />
     </span>
   );
 }

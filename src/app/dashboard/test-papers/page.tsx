@@ -10,6 +10,9 @@ import FairUseMeter from "../fair-use-meter";
 import { GeneratePaperButton, AssignChildButton } from "./paper-actions";
 import ReportContentIssue from "../report-content-issue";
 import BookHealthBadge, { type BookHealth } from "../book-health-badge";
+import { type LibraryMessages } from "../content-cell";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
 
 // The parent's paper-focused view: upload their own book (same pipeline as
 // teachers — chapter detection included), generate a test paper per chapter,
@@ -20,6 +23,12 @@ export const dynamic = "force-dynamic";
 
 export default async function TestPapersPage() {
   if (!parentPortalEnabled()) redirect("/dashboard");
+  // Two Library components are reused verbatim here (the uploader and the book
+  // health badge), so this page composes the same `library` message object they
+  // expect. The rest of this page's own copy is translated separately.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const tLib: LibraryMessages = { ...dict.library, common: dict.common };
   const supabase = await createClient();
   const {
     data: { user },
@@ -152,7 +161,7 @@ export default async function TestPapersPage() {
         {/* Fair-use transparency for parents too (0047). */}
         <FairUseMeter />
 
-        <UploadBook schoolId={(profile?.school_id as string | null) ?? null} betaBlocked={betaBlocked} parent />
+        <UploadBook schoolId={(profile?.school_id as string | null) ?? null} t={tLib} betaBlocked={betaBlocked} parent />
 
         {books.length === 0 ? (
           <div className="card px-5 py-8 text-sm text-[#5B6470]">
@@ -165,7 +174,7 @@ export default async function TestPapersPage() {
                 <div className="px-5 py-3 flex items-center justify-between">
                   <span className="font-medium font-display text-lg">{b.bookTitle}</span>
                   <span className="flex items-center gap-2">
-                    {b.bookStatus === "ready" && <BookHealthBadge health={b.health} />}
+                    {b.bookStatus === "ready" && <BookHealthBadge health={b.health} t={tLib} />}
                     {b.bookStatus !== "ready" && (
                       <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]">{b.bookStatus}…</span>
                     )}

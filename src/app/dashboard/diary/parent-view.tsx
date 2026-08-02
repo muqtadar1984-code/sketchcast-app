@@ -4,10 +4,14 @@ import { createClient } from "@/utils/supabase/server";
 import { noticesEnabledFor } from "@/utils/flags";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import DiaryNote, { type DiaryNoteItem, type DiaryReplyItem } from "./diary-note";
+import DiaryNote, { type DiaryNoteItem, type DiaryNoteMessages, type DiaryReplyItem } from "./diary-note";
 import ParentCompose from "./parent-compose";
 import DateNav, { dayWindowUtc, isDayKey, todayKey } from "./date-nav";
 import { displayNames } from "./names";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { htmlLang } from "@/i18n/locales";
+import { fmt } from "@/i18n/format";
 
 // The PARENT page of the diary: one stacked section per linked child (the
 // children-page shape), each showing the chosen day as a timeline —
@@ -23,23 +27,9 @@ import { displayNames } from "./names";
 //     write class-wide; the API and RLS both enforce it)
 // Every read is RLS-scoped to the parent's own children (0018/0066).
 
-const KIND_LABEL: Record<string, string> = {
-  presentation: "Video lesson",
-  activity: "Activities",
-  worksheet: "Worksheet",
-  exam_paper: "Test paper",
-  exam: "Exam",
-  case_study: "Case study",
-  lesson_plan: "Lesson plan",
-};
-
 // A notice-flavoured row carries no completion state — it is an announcement,
 // not work, so it wears its own chip instead of assigned/completed.
 type AutoEntry = { label: string; detail: string; done: boolean; score: string | null; notice?: boolean };
-
-// A notice's deadline is a DATE, not a time of day (school timezone — the
-// calendar doctrine's fixed UTC+8, same zone the day key is bucketed in).
-const DATE_FMT = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short" });
 
 export default async function ParentDiary({
   date,
@@ -54,6 +44,19 @@ export default async function ParentDiary({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // The page's words, and the tag its clocks are written in. resolveLocale is
+  // React-cached, so asking here and in the header costs one lookup.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.comms.diary;
+  const lang = htmlLang(locale);
+  const kindLabel = (kind: string | null | undefined): string =>
+    (t.kinds as Record<string, string>)[kind ?? ""] ?? "";
+  // A notice's deadline is a DATE, not a time of day (school timezone — the
+  // calendar doctrine's fixed UTC+8, same zone the day key is bucketed in),
+  // written in the reader's own language.
+  const dateFmt = new Intl.DateTimeFormat(lang, { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short" });
 
   const day = isDayKey(date) ? date : todayKey();
   const { startUtc, endUtc } = dayWindowUtc(day);
@@ -181,7 +184,7 @@ export default async function ParentDiary({
     supabase,
     [...notes.map((n) => n.author_id), ...replies.map((r) => r.author_id)].filter((id) => id !== user.id),
   );
-  const nameOf = (id: string) => (id === user.id ? "You" : names.get(id) || "Teacher");
+  const nameOf = (id: string) => (id === user.id ? t.people.you : names.get(id) || t.people.teacher);
 
   const classesOfChild = new Map<string, string[]>();
   for (const e of enr) {
@@ -199,10 +202,13 @@ export default async function ParentDiary({
     for (const n of notices) {
       if (!schoolId || n.school_id !== schoolId) continue;
       out.push({
-        label: `School notice — ${n.title}`,
+        label: fmt(t.entry.schoolNotice, { title: n.title }),
         detail: n.action_by
-          ? `${n.action_label || "By"} ${DATE_FMT.format(new Date(n.action_by))}`
-          : "from the school",
+          ? fmt(t.entry.deadline, {
+              label: n.action_label || t.entry.by,
+              date: dateFmt.format(new Date(n.action_by)),
+            })
+          : t.entry.fromTheSchool,
         done: false,
         score: null,
         notice: true,
@@ -212,8 +218,10 @@ export default async function ParentDiary({
       if (s.student_id !== childId && !(s.class_id && childClasses.has(s.class_id))) continue;
       const g = genOf.get(s.generation_id);
       out.push({
-        label: g?.title || KIND_LABEL[g?.kind ?? ""] || "Assignment",
-        detail: `assigned · ${s.class_id ? className.get(s.class_id) ?? "class" : "direct"}`,
+        label: g?.title || kindLabel(g?.kind) || t.entry.assignment,
+        detail: fmt(t.entry.assignedIn, {
+          where: s.class_id ? className.get(s.class_id) ?? t.entry.classFallback : t.entry.direct,
+        }),
         done: false,
         score: null,
       });
@@ -223,8 +231,8 @@ export default async function ParentDiary({
       const g = genOf.get(p.generation_id);
       const sub = subOf.get(`${p.generation_id}|${childId}`);
       out.push({
-        label: g?.title || KIND_LABEL[g?.kind ?? ""] || "Assignment",
-        detail: "completed",
+        label: g?.title || kindLabel(g?.kind) || t.entry.assignment,
+        detail: t.entry.completedChip,
         done: true,
         score: sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}` : null,
       });
@@ -237,21 +245,30 @@ export default async function ParentDiary({
     return notes.filter((n) => n.student_id === childId || (n.class_id != null && childClasses.has(n.class_id)));
   }
 
+  // Built once, shared by every card below: one message object in the RSC
+  // payload rather than one per note.
+  const noteT: DiaryNoteMessages = { ...t.note, noteTypes: t.noteTypes, cancel: dict.common.cancel };
+  const composeT = {
+    ...t.parentCompose,
+    noteTypes: t.noteTypes,
+    addToDiary: t.addToDiary,
+    saveFailed: t.saveNoteFailed,
+    saving: dict.common.saving,
+    cancel: dict.common.cancel,
+  };
+
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">Diary</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className={`text-[#5B6470] ${teacherHref ? "mb-2" : "mb-6"}`}>
-          The daily communication book — one page per day, per child. Sign notes so the teacher knows
-          you&apos;ve seen them.
-        </p>
+        <p className={`text-[#5B6470] ${teacherHref ? "mb-2" : "mb-6"}`}>{t.parentIntro}</p>
         {teacherHref && (
           <p className="text-sm text-[#5B6470] mb-6">
-            Viewing as parent ·{" "}
+            {t.viewingAsParent} ·{" "}
             <Link href={teacherHref} className="font-medium text-[#0C8175] hover:underline">
-              back to my class diary
+              {t.backToClassDiary}
             </Link>
           </p>
         )}
@@ -260,16 +277,16 @@ export default async function ParentDiary({
         <DateNav
           day={day}
           href={(d) => (teacherHref ? `/dashboard/diary?as=parent&d=${d}` : `/dashboard/diary?d=${d}`)}
+          t={t.nav}
+          lang={lang}
         />
 
         <div className="space-y-5">
           {links.length === 0 && (
-            <div className="card px-5 py-8 text-sm text-[#5B6470]">
-              No children linked yet — add your child under My Children first.
-            </div>
+            <div className="card px-5 py-8 text-sm text-[#5B6470]">{t.noChildrenLinked}</div>
           )}
           {links.map((l) => {
-            const childName = l.profiles?.full_name || l.profiles?.username || "Child";
+            const childName = l.profiles?.full_name || l.profiles?.username || t.people.child;
             const entries = entriesFor(l.child_id, l.profiles?.school_id ?? null);
             const childNotes = notesFor(l.child_id);
             const classLabels = (classesOfChild.get(l.child_id) ?? [])
@@ -284,7 +301,7 @@ export default async function ParentDiary({
                 </div>
 
                 <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
-                  From the classroom ({entries.length})
+                  {fmt(t.fromClassroom, { count: entries.length })}
                 </p>
                 {entries.length ? (
                   entries.map((e, i) => (
@@ -303,17 +320,21 @@ export default async function ParentDiary({
                                 : "bg-[#EEF0EC] text-[#5B6470]"
                           }`}
                         >
-                          {e.notice ? "school notice" : e.done ? "completed" : "assigned"}
+                          {e.notice
+                            ? t.entry.schoolNoticeChip
+                            : e.done
+                              ? t.entry.completedChip
+                              : t.entry.assignedChip}
                         </span>
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">Nothing recorded for this day.</p>
+                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.nothingRecorded}</p>
                 )}
 
                 <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
-                  Notes ({childNotes.length})
+                  {fmt(t.notesHeading, { count: childNotes.length })}
                 </p>
                 {childNotes.length ? (
                   childNotes.map((n) => {
@@ -325,7 +346,7 @@ export default async function ParentDiary({
                       type: n.note_type,
                       body: n.body,
                       author: nameOf(n.author_id),
-                      audience: n.class_id ? className.get(n.class_id) ?? "Class" : childName,
+                      audience: n.class_id ? className.get(n.class_id) ?? t.people.theClass : childName,
                       parentsOnly: n.parents_only,
                       createdAt: n.created_at,
                       // Their own note home — theirs to take back
@@ -348,14 +369,16 @@ export default async function ParentDiary({
                         replies={thread}
                         canReply
                         ack={{ studentId: l.child_id, ackedAt: myAck?.acked_at ?? null }}
+                        t={noteT}
+                        lang={lang}
                       />
                     );
                   })
                 ) : (
-                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">No notes for this day.</p>
+                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.noNotes}</p>
                 )}
 
-                <ParentCompose studentId={l.child_id} childName={childName} entryDate={day} />
+                <ParentCompose studentId={l.child_id} childName={childName} entryDate={day} t={composeT} />
               </div>
             );
           })}

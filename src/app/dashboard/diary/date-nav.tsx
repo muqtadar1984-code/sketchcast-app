@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 // The diary's day picker + the civil-day helpers every diary surface shares.
 // Days follow the calendar page's convention: Malaysia is fixed UTC+8 (no
@@ -29,10 +30,23 @@ export function shiftDay(day: string, days: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 }
 
-/** Prev / label / next — pure links, so the whole page stays a server render. */
-export default function DateNav({ day, href }: { day: string; href: (d: string) => string }) {
+/** Prev / label / next — pure links, so the whole page stays a server render.
+ * `lang` is passed explicitly rather than left to the runtime default, which is
+ * the SERVER's locale here — the reader would get the day name in a language
+ * they never chose. */
+export default function DateNav({
+  day,
+  href,
+  t,
+  lang,
+}: {
+  day: string;
+  href: (d: string) => string;
+  t: Dictionary["comms"]["diary"]["nav"];
+  lang: string;
+}) {
   const today = todayKey();
-  const label = new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
+  const label = new Date(`${day}T00:00:00Z`).toLocaleDateString(lang, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -41,16 +55,16 @@ export default function DateNav({ day, href }: { day: string; href: (d: string) 
   });
   return (
     <div className="flex items-center gap-2 mb-6">
-      <Link href={href(shiftDay(day, -1))} aria-label="Previous day" className="btn-ghost h-9 px-3 text-sm">
+      <Link href={href(shiftDay(day, -1))} aria-label={t.previousDay} className="btn-ghost h-9 px-3 text-sm">
         <span className="rtl-flip">←</span>
       </Link>
       <span className="font-display text-lg whitespace-nowrap">{label}</span>
-      <Link href={href(shiftDay(day, 1))} aria-label="Next day" className="btn-ghost h-9 px-3 text-sm">
+      <Link href={href(shiftDay(day, 1))} aria-label={t.nextDay} className="btn-ghost h-9 px-3 text-sm">
         <span className="rtl-flip">→</span>
       </Link>
       {day !== today && (
         <Link href={href(today)} className="text-sm font-medium text-[#0C8175] hover:underline ms-1">
-          Today
+          {t.today}
         </Link>
       )}
     </div>

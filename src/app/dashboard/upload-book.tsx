@@ -5,13 +5,17 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { cleanBookTitle } from "@/utils/book";
 import PageScanner from "./page-scanner";
+import { fmt } from "@/i18n/format";
+import { type LibraryMessages } from "./content-cell";
 
 export default function UploadBook({
   schoolId,
+  t,
   betaBlocked = false,
   parent = false,
 }: {
   schoolId: string | null;
+  t: LibraryMessages;
   betaBlocked?: boolean; // beta teachers get exactly 1 book (server-enforced too)
   /** Parent surface (test papers): the blocked-card copy must not promise the
       teacher part-kit — parents generate exam papers only (0018). */
@@ -43,9 +47,9 @@ export default function UploadBook({
       xhr.onload = () =>
         xhr.status >= 200 && xhr.status < 300
           ? resolve()
-          : reject(new Error(`Upload failed (HTTP ${xhr.status}).`));
-      xhr.onerror = () => reject(new Error("Network error during upload."));
-      xhr.ontimeout = () => reject(new Error("Upload timed out."));
+          : reject(new Error(fmt(t.upload.httpFailed, { status: xhr.status })));
+      xhr.onerror = () => reject(new Error(t.upload.networkError));
+      xhr.ontimeout = () => reject(new Error(t.upload.timedOut));
       xhr.send(f);
     });
   }
@@ -62,7 +66,7 @@ export default function UploadBook({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(false);
       setPct(null);
       return;
@@ -80,7 +84,7 @@ export default function UploadBook({
         const { data: signed, error: sErr } = await supabase.storage
           .from("uploads")
           .createSignedUploadUrl(path);
-        if (sErr || !signed) throw new Error(sErr?.message ?? "Could not start the upload.");
+        if (sErr || !signed) throw new Error(sErr?.message ?? t.upload.couldNotStart);
         await putWithProgress(signed.signedUrl, file);
         uploaded = true;
       } catch (ex) {
@@ -89,10 +93,7 @@ export default function UploadBook({
       }
     }
     if (!uploaded) {
-      setError(
-        `${lastErr} Please check your internet connection and try again — ` +
-          "large textbooks need a stable connection for a few minutes.",
-      );
+      setError(fmt(t.upload.retryAdvice, { error: lastErr }));
       setBusy(false);
       setPct(null);
       return;
@@ -130,13 +131,8 @@ export default function UploadBook({
   if (betaBlocked) {
     return (
       <div className="card p-5 mb-8 text-sm text-[#5B6470]">
-        <span className="chip bg-[#FFF1D6] text-[#9A6400] me-2">Trial</span>
-        The free trial is limited to <span className="font-medium text-[#14181F]">1 book</span>
-        {parent ? (
-          <> — generate test papers from its chapters.</>
-        ) : (
-          <> — explore all its chapters and generate the full kit for one part of one chapter.</>
-        )}
+        <span className="chip bg-[#FFF1D6] text-[#9A6400] me-2">{t.upload.trial}</span>
+        {parent ? t.upload.trialParent : t.upload.trialTeacher}
       </div>
     );
   }
@@ -145,25 +141,31 @@ export default function UploadBook({
     <form onSubmit={onUpload} className="card p-5 mb-8">
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
         <label className="block">
-          <span className="text-xs text-[#5B6470]">Title (optional)</span>
+          <span className="text-xs text-[#5B6470]">{t.upload.titleLabel}</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Exploring Society"
+            placeholder={t.upload.titlePlaceholder}
             className="field w-full h-10 px-3 mt-1"
           />
         </label>
         <label className="block">
-          <span className="text-xs text-[#5B6470]">Author (optional)</span>
+          <span className="text-xs text-[#5B6470]">{t.upload.authorLabel}</span>
           <input
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
-            placeholder="e.g. NCERT"
+            placeholder={t.upload.authorPlaceholder}
             className="field w-full h-10 px-3 mt-1"
           />
         </label>
         <button type="submit" disabled={!file || busy} className="btn-primary h-10 px-5 whitespace-nowrap">
-          {busy ? (pct === null ? "Uploading…" : pct >= 100 ? "Finishing…" : `Uploading ${pct}%`) : "Upload"}
+          {busy
+            ? pct === null
+              ? t.upload.uploading
+              : pct >= 100
+                ? t.upload.finishing
+                : fmt(t.upload.uploadingPct, { pct })
+            : t.upload.upload}
         </button>
       </div>
 
@@ -194,21 +196,22 @@ export default function UploadBook({
             <path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2" />
             <circle cx="12" cy="12" r="3.2" />
           </svg>
-          Scan pages
+          {t.upload.scanPages}
         </button>
         {file ? (
           <span className="text-xs text-[#5B6470]">
-            {scanned && <span className="text-[#0C8175]">Scanned · </span>}
-            {(file.size / 1e6).toFixed(1)} MB
-            {file.size > 20e6 && " — big book; keep this tab open while it uploads"}
+            {scanned && <span className="text-[#0C8175]">{t.upload.scannedPrefix}</span>}
+            {fmt(t.upload.megabytes, { n: (file.size / 1e6).toFixed(1) })}
+            {file.size > 20e6 && t.upload.bigBook}
           </span>
         ) : (
-          <span className="text-xs text-[#98A0A9]">Choose a PDF, or scan pages, to enable upload</span>
+          <span className="text-xs text-[#98A0A9]">{t.upload.choosePdf}</span>
         )}
       </div>
 
       {scanning && (
         <PageScanner
+          t={t}
           onClose={() => setScanning(false)}
           onDone={(pdf) => {
             setFile(pdf);
@@ -222,9 +225,7 @@ export default function UploadBook({
       {/* Restrictions, stated up front so a wrong file fails at the picker, not
           mid-upload. PDF-only is the file input's accept; single-file (no
           `multiple`); 200 MB is the `uploads` bucket's file_size_limit (0001). */}
-      <p className="mt-2 text-[11px] text-[#98A0A9]">
-        PDF only · one file at a time · up to 200&nbsp;MB.
-      </p>
+      <p className="mt-2 text-[11px] text-[#98A0A9]">{t.upload.limits}</p>
 
       {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
     </form>

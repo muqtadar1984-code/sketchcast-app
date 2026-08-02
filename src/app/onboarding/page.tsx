@@ -3,6 +3,8 @@ import { createClient } from "@/utils/supabase/server";
 import { onboardingEnabled } from "@/utils/flags";
 import { seedRole, homeForRole, type OnboardingRole } from "@/utils/onboarding";
 import OnboardingForm from "./onboarding-form";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
 
 // The blocking new-joiner step. A signed-in user whose profile has never been
 // onboarded (onboarded_at IS NULL) is funnelled here by the dashboard layout to
@@ -38,5 +40,8 @@ export default async function OnboardingPage() {
   const seed: OnboardingRole = seedRole((profile.role as string | null) ?? null);
   const initialName = ((profile.full_name as string | null) ?? "").trim();
 
-  return <OnboardingForm seedRole={seed} initialName={initialName} />;
+  const locale = await resolveLocale();
+  const t = await getDictionary(locale);
+
+  return <OnboardingForm seedRole={seed} initialName={initialName} t={t.app.onboarding} common={t.common} />;
 }

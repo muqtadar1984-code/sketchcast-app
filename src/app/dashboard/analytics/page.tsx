@@ -6,20 +6,29 @@ import GradeList, { type PendingSub } from "../grade-list";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
+import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
-const KIND_LABEL: Record<string, string> = {
-  presentation: "Lesson",
-  worksheet: "Worksheet",
-  exam_paper: "Test paper",
-  exam: "Exam",
-  activity: "Activities",
-  case_study: "Case study",
+// The DB's kind codes are snake_case and never translated — this maps them to
+// the dictionary's camelCase keys, so a kind we don't recognise falls through
+// to the raw code rather than a blank label.
+const KIND_KEY: Record<string, keyof Dictionary["school"]["myAnalytics"]["kind"]> = {
+  presentation: "presentation",
+  worksheet: "worksheet",
+  exam_paper: "examPaper",
+  exam: "exam",
+  activity: "activity",
+  case_study: "caseStudy",
 };
 
 // Teacher analytics — everything in one place: headline metrics, per-class
 // completion, revision hotspots (topics students re-open most), and a grading
 // queue. All from the assigned set (shares × enrollments) ⋈ progress ⋈ submissions.
 export default async function AnalyticsPage() {
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.myAnalytics;
   const supabase = await createClient();
   const {
     data: { user },
@@ -78,7 +87,7 @@ export default async function AnalyticsPage() {
   const studentsByClass = new Map<string, string[]>();
   const allStudents = new Set<string>();
   for (const e of enr) {
-    studentName.set(e.student_id, e.profiles?.full_name || e.profiles?.username || "Student");
+    studentName.set(e.student_id, e.profiles?.full_name || e.profiles?.username || dict.school.fallback.student);
     if (!studentsByClass.has(e.class_id)) studentsByClass.set(e.class_id, []);
     studentsByClass.get(e.class_id)!.push(e.student_id);
     allStudents.add(e.student_id);
@@ -91,9 +100,12 @@ export default async function AnalyticsPage() {
 
   const genLabel = (gid: string): string => {
     const g = genInfo.get(gid);
-    if (!g) return "Item";
-    const kind = KIND_LABEL[g.kind] ?? g.kind;
-    return g.chapter_ref != null ? `${kind} · Ch ${Number(g.chapter_ref) + 1}` : g.title || kind;
+    if (!g) return dict.school.fallback.item;
+    const key = KIND_KEY[g.kind];
+    const kind = key ? t.kind[key] : g.kind;
+    return g.chapter_ref != null
+      ? fmt(t.chapterLabel, { kind, n: Number(g.chapter_ref) + 1 })
+      : g.title || kind;
   };
 
   // ── Aggregate over assigned instances (each gen × each enrolled student) ──
@@ -109,7 +121,11 @@ export default async function AnalyticsPage() {
       total++;
       const key = `${s.generation_id}|${stu}`;
       const done = statusOf.get(key) === "completed" || statusOf.get(key) === "revised" || submittedOf.has(key);
-      const pc = perClass.get(s.class_id) ?? { name: className.get(s.class_id) || "Class", total: 0, completed: 0 };
+      const pc = perClass.get(s.class_id) ?? {
+        name: className.get(s.class_id) || dict.school.fallback.class,
+        total: 0,
+        completed: 0,
+      };
       pc.total++;
       if (done) {
         completed++;
@@ -152,7 +168,7 @@ export default async function AnalyticsPage() {
     .filter((s) => s.grade_status === "pending")
     .map((s) => ({
       id: s.id,
-      studentName: studentName.get(s.student_id) || "Student",
+      studentName: studentName.get(s.student_id) || dict.school.fallback.student,
       label: genLabel(s.generation_id),
       mode: s.mode,
       auto: s.auto_score,
@@ -163,13 +179,13 @@ export default async function AnalyticsPage() {
 
   const completionPct = total ? Math.round((completed / total) * 100) : 0;
   const metrics: { label: string; value: string | number }[] = [
-    { label: "Classes", value: classes.length },
-    { label: "Students", value: allStudents.size },
-    { label: "Assignments", value: shares.length },
+    { label: t.metric.classes, value: classes.length },
+    { label: t.metric.students, value: allStudents.size },
+    { label: t.metric.assignments, value: shares.length },
     // "—" until something is assigned: a measured 0% and no-data-yet are different stories.
-    { label: "Completion", value: total ? `${completionPct}%` : "—" },
-    { label: "Overdue", value: overdue },
-    { label: "To grade", value: pending.length },
+    { label: t.metric.completion, value: total ? `${completionPct}%` : "—" },
+    { label: t.metric.overdue, value: overdue },
+    { label: t.metric.toGrade, value: pending.length },
   ];
 
   // What the school sees about this teacher (transparency — only when the school
@@ -198,10 +214,10 @@ export default async function AnalyticsPage() {
       }
     }
     schoolView = [
-      { label: "Lessons made", value: lessons ?? 0 },
-      { label: "Assignments", value: shares.length },
-      { label: "Grading turnaround", value: tN ? `${Math.round((tSum / tN) * 10) / 10}d` : "—" },
-      { label: "To grade", value: pending.length },
+      { label: t.schoolView.lessonsMade, value: lessons ?? 0 },
+      { label: t.schoolView.assignments, value: shares.length },
+      { label: t.schoolView.turnaround, value: tN ? `${Math.round((tSum / tN) * 10) / 10}d` : "—" },
+      { label: t.schoolView.toGrade, value: pending.length },
     ];
   }
 
@@ -209,9 +225,9 @@ export default async function AnalyticsPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">Analytics</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-7">How your classes are progressing through what you&apos;ve assigned.</p>
+        <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
           {metrics.map((m) => (
@@ -225,8 +241,8 @@ export default async function AnalyticsPage() {
         {schoolView && (
           <div className="rounded-xl bg-[#F5F6F3] border border-[#E6E8E4] px-5 py-4 mb-10">
             <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-sm font-medium">What your school sees about your teaching</h2>
-              <span className="chip bg-[#E2F4F1] text-[#0C8175]">transparency</span>
+              <h2 className="text-sm font-medium">{t.schoolView.title}</h2>
+              <span className="chip bg-[#E2F4F1] text-[#0C8175]">{t.schoolView.chip}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {schoolView.map((m) => (
@@ -236,16 +252,14 @@ export default async function AnalyticsPage() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-[#5B6470] mt-2">
-              Leadership sees these to spot where to help — never as a ranking.
-            </p>
+            <p className="text-xs text-[#5B6470] mt-2">{t.schoolView.note}</p>
           </div>
         )}
 
-        <h2 className="text-xl mb-2">By class</h2>
+        <h2 className="text-xl mb-2">{t.byClass}</h2>
         <div className="card divide-y divide-[#EEF0EC] mb-10">
           {perClass.size === 0 ? (
-            <div className="px-5 py-3 text-sm text-[#5B6470]">No assignments yet.</div>
+            <div className="px-5 py-3 text-sm text-[#5B6470]">{t.noAssignments}</div>
           ) : (
             [...perClass.entries()].map(([id, c]) => {
               const pct = c.total ? Math.round((c.completed / c.total) * 100) : 0;
@@ -254,7 +268,7 @@ export default async function AnalyticsPage() {
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="font-medium">{c.name}</span>
                     <span className="text-sm text-[#5B6470]">
-                      <span className="tabular">{c.completed}/{c.total}</span> done · <span className="tabular text-[#0C8175] font-medium">{pct}%</span>
+                      <span className="tabular">{c.completed}/{c.total}</span> {t.done} · <span className="tabular text-[#0C8175] font-medium">{pct}%</span>
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-[#EEF0EC] overflow-hidden">
@@ -268,8 +282,8 @@ export default async function AnalyticsPage() {
 
         {hotspots.length > 0 && (
           <>
-            <h2 className="text-xl mb-2">Most revised</h2>
-            <p className="text-sm text-[#5B6470] mb-2">Topics students re-open most — often the trickiest ones.</p>
+            <h2 className="text-xl mb-2">{t.mostRevised}</h2>
+            <p className="text-sm text-[#5B6470] mb-2">{t.mostRevisedHint}</p>
             <div className="card px-5 py-3 mb-10">
               <ul className="text-sm space-y-1">
                 {hotspots.map((h, i) => (
@@ -283,8 +297,8 @@ export default async function AnalyticsPage() {
           </>
         )}
 
-        <h2 className="text-xl mb-2">To grade</h2>
-        <p className="text-sm text-[#5B6470] mb-3">Submitted worksheets &amp; exams awaiting a mark.</p>
+        <h2 className="text-xl mb-2">{t.toGradeTitle}</h2>
+        <p className="text-sm text-[#5B6470] mb-3">{t.toGradeHint}</p>
         <GradeList pending={pending} />
       </main>
     </div>

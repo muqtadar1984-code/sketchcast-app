@@ -7,6 +7,9 @@ import { enforceHat } from "@/utils/hats-server";
 import { SchoolAssistantLauncher } from "./school-assistant";
 import ReportIssueWidget from "../report-issue-widget";
 import AdminHelpNote from "../admin-help-note";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 // School analytics — leadership oversight, scoped by RLS (school_admin/principal
 // → whole school; coordinator → their grade/subject slice). Build order #1: the
@@ -34,6 +37,9 @@ type Flagged = {
 };
 
 export default async function SchoolAnalyticsPage() {
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t = dict.school.analytics;
   const supabase = await createClient();
   const {
     data: { user },
@@ -62,7 +68,7 @@ export default async function SchoolAnalyticsPage() {
   // keeps their teacher dashboard. No grant and not an admin → no page.
   const schoolId = (profile?.school_id as string | null) ?? null;
   if (!schoolId) redirect("/dashboard");
-  let scopeLabel = "Whole school";
+  let scopeLabel = t.scope.wholeSchool;
   let isCoordinator = false;
   if (!isAdmin) {
     // School-scoped: a stale grant from a school this user has left must not
@@ -73,7 +79,7 @@ export default async function SchoolAnalyticsPage() {
     const grades = [...new Set((scopes ?? []).map((s) => s.grade as string))];
     const subjects = [...new Set((scopes ?? []).map((s) => s.subject).filter(Boolean))] as string[];
     scopeLabel =
-      (grades.length ? `Grade ${grades.join(", ")}` : "Your grades") +
+      (grades.length ? fmt(t.scope.grades, { grades: grades.join(", ") }) : t.scope.yourGrades) +
       (subjects.length ? ` · ${subjects.join(", ")}` : "");
   }
 
@@ -124,7 +130,7 @@ export default async function SchoolAnalyticsPage() {
   const classOfStudent = new Map<string, string>(); // first in-scope class (for labelling)
   const allStudents = new Set<string>();
   for (const e of enr) {
-    studentName.set(e.student_id, e.profiles?.full_name || e.profiles?.username || "Student");
+    studentName.set(e.student_id, e.profiles?.full_name || e.profiles?.username || dict.school.fallback.student);
     parentEmail.set(e.student_id, e.profiles?.parent_email ?? null);
     if (!studentsByClass.has(e.class_id)) studentsByClass.set(e.class_id, []);
     studentsByClass.get(e.class_id)!.push(e.student_id);
@@ -209,20 +215,20 @@ export default async function SchoolAnalyticsPage() {
     const reasons: string[] = [];
     const hasIncomplete = items.length > completed;
     if (items.length >= MIN_ASSIGNED && completed / items.length < LOW_COMPLETION)
-      reasons.push(`${Math.round((completed / items.length) * 100)}% completion`);
+      reasons.push(fmt(t.reason.completion, { pct: Math.round((completed / items.length) * 100) }));
     if (hasIncomplete && inactiveDays !== Infinity && inactiveDays > INACTIVE_DAYS)
-      reasons.push(`inactive ${inactiveDays}d`);
-    else if (hasIncomplete && inactiveDays === Infinity && items.length > 0) reasons.push("never started");
-    if (avg != null && avg < LOW_SCORE) reasons.push(`avg score ${Math.round(avg * 100)}%`);
-    if (declining) reasons.push("scores declining");
-    if (overdue >= OVERDUE_FLAG) reasons.push(`${overdue} overdue`);
+      reasons.push(fmt(t.reason.inactive, { days: inactiveDays }));
+    else if (hasIncomplete && inactiveDays === Infinity && items.length > 0) reasons.push(t.reason.neverStarted);
+    if (avg != null && avg < LOW_SCORE) reasons.push(fmt(t.reason.avgScore, { pct: Math.round(avg * 100) }));
+    if (declining) reasons.push(t.reason.declining);
+    if (overdue >= OVERDUE_FLAG) reasons.push(fmt(t.reason.overdue, { n: overdue }));
 
     if (reasons.length) {
       const cid = classOfStudent.get(stu);
       const cm = cid ? classMeta.get(cid) : undefined;
       flagged.push({
         studentId: stu,
-        name: studentName.get(stu) || "Student",
+        name: studentName.get(stu) || dict.school.fallback.student,
         className: cm?.name || "—",
         grade: cm?.grade || "—",
         parentEmail: parentEmail.get(stu) ?? null,
@@ -255,22 +261,22 @@ export default async function SchoolAnalyticsPage() {
 
   // "—" for rates that have no denominator yet — no-data-yet ≠ measured zero.
   const metrics: { label: string; value: string | number; tone?: "warn" }[] = [
-    { label: "Students", value: allStudents.size },
-    { label: "Active (14d)", value: allStudents.size ? `${activePct}%` : "—" },
-    { label: "Completion", value: assignedTotal ? `${completionPct}%` : "—" },
-    { label: "At-risk", value: flagged.length, tone: "warn" },
-    { label: "Overdue", value: overdueTotal },
+    { label: t.metric.students, value: allStudents.size },
+    { label: t.metric.active, value: allStudents.size ? `${activePct}%` : "—" },
+    { label: t.metric.completion, value: assignedTotal ? `${completionPct}%` : "—" },
+    { label: t.metric.atRisk, value: flagged.length, tone: "warn" },
+    { label: t.metric.overdue, value: overdueTotal },
   ];
 
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">School analytics</h1>
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">
           <span className="chip bg-[#E2F4F1] text-[#0C8175] me-2">{scopeLabel}</span>
-          Signals that prompt support — not a ranking.
+          {t.subtitle}
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-10">
@@ -284,14 +290,12 @@ export default async function SchoolAnalyticsPage() {
           ))}
         </div>
 
-        <h2 className="text-xl mb-1">Students needing support</h2>
-        <p className="text-sm text-[#5B6470] mb-3">
-          Flagged by low/declining completion, falling scores, or inactivity — the worklist to act on first.
-        </p>
+        <h2 className="text-xl mb-1">{t.worklist.title}</h2>
+        <p className="text-sm text-[#5B6470] mb-3">{t.worklist.hint}</p>
 
         {flagged.length === 0 ? (
           <div className="card px-5 py-6 text-sm text-[#5B6470]">
-            No students flagged in this scope. 🎉
+            {t.worklist.empty} 🎉
           </div>
         ) : isCoordinator ? (
           // Coordinator: the named, actionable worklist within their slice.
@@ -312,10 +316,10 @@ export default async function SchoolAnalyticsPage() {
                 </div>
                 {f.parentEmail && (
                   <a
-                    href={`mailto:${f.parentEmail}?subject=${encodeURIComponent(`Check-in about ${f.name}`)}`}
+                    href={`mailto:${f.parentEmail}?subject=${encodeURIComponent(fmt(t.worklist.contactSubject, { name: f.name }))}`}
                     className="btn-ghost h-9 px-3 text-sm whitespace-nowrap shrink-0"
                   >
-                    Contact parent
+                    {t.worklist.contactParent}
                   </a>
                 )}
               </div>
@@ -329,15 +333,11 @@ export default async function SchoolAnalyticsPage() {
               .sort((a, b) => b[1] - a[1])
               .map(([grade, n]) => (
                 <div key={grade} className="px-5 py-3 flex items-center justify-between">
-                  <span className="font-medium">Grade {grade}</span>
-                  <span className="tabular text-[#9A6400]">{n} at-risk</span>
+                  <span className="font-medium">{fmt(t.byGrade.grade, { grade })}</span>
+                  <span className="tabular text-[#9A6400]">{fmt(t.byGrade.atRisk, { n })}</span>
                 </div>
               ))}
-            <div className="px-5 py-3 text-xs text-[#5B6470]">
-              Names live in the grade/subject coordinator&apos;s worklist, so support stays close to the student.
-              As principal you can also open the School briefing (bottom-right) for names and reasons — every
-              briefing is recorded in the access audit.
-            </div>
+            <div className="px-5 py-3 text-xs text-[#5B6470]">{t.byGrade.note}</div>
           </div>
         )}
 
@@ -350,7 +350,11 @@ export default async function SchoolAnalyticsPage() {
       {/* Floating, bottom-RIGHT: the School briefing bot (replaces the teaching
           Assistant here). Bottom-LEFT: "Report a problem", so leadership can
           raise issues too. */}
-      {assistantOn && <SchoolAssistantLauncher />}
+      {assistantOn && (
+        <SchoolAssistantLauncher
+          t={{ ...dict.school.briefing, close: dict.common.close, loading: dict.common.loading }}
+        />
+      )}
       {platformConsoleEnabled() && <ReportIssueWidget />}
     </div>
   );

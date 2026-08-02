@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { type LibraryMessages } from "./content-cell";
 
 type Row = { name: string; total: number; completed: number; revised: number; incomplete: number; overdue: number };
 
 // Reverse feedback for the teacher: per-student completion across everything
 // assigned to the class. Loaded on demand (a click, not an effect) so we don't
 // fetch progress for every class up front.
-export default function ClassProgress({ classId }: { classId: string }) {
+export default function ClassProgress({ classId, t }: { classId: string; t: LibraryMessages }) {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
@@ -27,7 +28,7 @@ export default function ClassProgress({ classId }: { classId: string }) {
     ]);
     const students = ((enr ?? []) as unknown as EnrRow[]).map((e) => ({
       id: e.student_id,
-      name: e.profiles?.full_name || e.profiles?.username || "Student",
+      name: e.profiles?.full_name || e.profiles?.username || t.progress.unnamed,
     }));
     const shareRows = (shares ?? []) as ShareRow[];
     const genIds = shareRows.map((s) => s.generation_id);
@@ -75,13 +76,13 @@ export default function ClassProgress({ classId }: { classId: string }) {
   if (!loaded) {
     return (
       <button onClick={load} disabled={busy} className="mt-3 text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-50">
-        {busy ? "Loading progress…" : "Show progress"}
+        {busy ? t.progress.loading : t.progress.show}
       </button>
     );
   }
 
   if (rows.length === 0) {
-    return <p className="mt-3 text-xs text-[#5B6470]">No students enrolled, or nothing assigned yet.</p>;
+    return <p className="mt-3 text-xs text-[#5B6470]">{t.progress.empty}</p>;
   }
 
   return (
@@ -89,11 +90,11 @@ export default function ClassProgress({ classId }: { classId: string }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="text-[10px] uppercase tracking-wide text-[#98A0A9] text-start">
-            <th className="font-medium py-1">Student</th>
-            <th className="font-medium py-1 text-end">Completed</th>
-            <th className="font-medium py-1 text-end">Revised</th>
-            <th className="font-medium py-1 text-end">Incomplete</th>
-            <th className="font-medium py-1 text-end">Overdue</th>
+            <th className="font-medium py-1">{t.progress.student}</th>
+            <th className="font-medium py-1 text-end">{t.progress.completed}</th>
+            <th className="font-medium py-1 text-end">{t.progress.revised}</th>
+            <th className="font-medium py-1 text-end">{t.progress.incomplete}</th>
+            <th className="font-medium py-1 text-end">{t.progress.overdue}</th>
           </tr>
         </thead>
         <tbody>

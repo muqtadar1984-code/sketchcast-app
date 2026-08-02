@@ -1,17 +1,22 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { LogoMark } from "../../dashboard/icons";
 import InviteClient from "./invite-client";
+import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
-const ROLE_LABEL: Record<string, string> = { school_admin: "School admin", teacher: "Teacher", parent: "Parent" };
-const REASON: Record<string, string> = {
-  invalid: "This invitation link is invalid.",
-  expired: "This invitation has expired.",
-  email: "That invitation is for a different email address — sign out and use that email.",
-  apply: "Something went wrong accepting the invitation. Please try again.",
-  server: "Invites aren't configured on the server.",
-  role: "A student account can't accept a parent invitation — sign out and use the parent's own account.",
+type InviteMessages = Dictionary["app"]["invite"];
+
+// The invite's role code is the DB enum and never translated — this maps it to
+// the dictionary's camelCase keys, so an unrecognised role falls through to the
+// raw code rather than a blank chip.
+const ROLE_KEY: Record<string, keyof InviteMessages["roles"]> = {
+  school_admin: "schoolAdmin",
+  teacher: "teacher",
+  parent: "parent",
 };
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -42,6 +47,9 @@ export default async function InvitePage({
 }) {
   const { token } = await params;
   const { e } = await searchParams;
+  const locale = await resolveLocale();
+  const t = await getDictionary(locale);
+  const m = t.app.invite;
 
   let admin: ReturnType<typeof createAdminClient>;
   try {
@@ -49,7 +57,7 @@ export default async function InvitePage({
   } catch {
     return (
       <Shell>
-        <p className="text-sm text-red-600">Invites aren&apos;t available right now.</p>
+        <p className="text-sm text-red-600">{m.notAvailable}</p>
       </Shell>
     );
   }
@@ -64,17 +72,13 @@ export default async function InvitePage({
   // eslint-disable-next-line react-hooks/purity
   const dead = !invite || invite.accepted_at || new Date(invite.expires_at).getTime() < Date.now();
   if (dead) {
-    const msg = invite?.accepted_at
-      ? "This invitation has already been used."
-      : !invite
-        ? "This invitation link is invalid."
-        : "This invitation has expired.";
+    const msg = invite?.accepted_at ? m.used : !invite ? m.invalid : m.expired;
     return (
       <Shell>
-        <h1 className="text-xl mb-1">Invitation unavailable</h1>
+        <h1 className="text-xl mb-1">{m.unavailableTitle}</h1>
         <p className="text-sm text-[#5B6470] mb-4">{msg}</p>
         <Link href="/login" className="text-sm text-[#0C8175] font-medium hover:underline">
-          Go to sign in
+          {m.goToSignIn}
         </Link>
       </Shell>
     );
@@ -82,8 +86,15 @@ export default async function InvitePage({
 
   const s = invite.schools as unknown;
   const schoolName =
-    (Array.isArray(s) ? s[0]?.name : (s as { name?: string } | null)?.name) || "your school";
-  const roleLabel = ROLE_LABEL[invite.role] || invite.role;
+    (Array.isArray(s) ? s[0]?.name : (s as { name?: string } | null)?.name) || m.fallbackSchool;
+  const roleKey = ROLE_KEY[invite.role as string];
+  const roleLabel = roleKey ? m.roles[roleKey] : (invite.role as string);
+  const reasonKey = e && e in m.reason ? (e as keyof InviteMessages["reason"]) : null;
+
+  // "Join {school} as {role}" is ONE sentence so a translator owns its word
+  // order — split on the placeholders here so the school name keeps its emphasis
+  // and the role keeps its chip, wherever in the sentence they land.
+  const invited = m.joinAs.split(/(\{school\}|\{role\})/);
 
   const supabase = await createClient();
   const {
@@ -92,18 +103,36 @@ export default async function InvitePage({
 
   return (
     <Shell>
-      <h1 className="text-xl mb-1">You&apos;re invited</h1>
+      <h1 className="text-xl mb-1">{m.title}</h1>
       <p className="text-sm text-[#5B6470] mb-1">
-        Join <span className="font-medium text-[#14181F]">{schoolName}</span> as{" "}
-        <span className="chip bg-[#E2F4F1] text-[#0C8175]">{roleLabel}</span>
+        {invited.map((piece, i) =>
+          piece === "{school}" ? (
+            <span key={i} className="font-medium text-[#14181F]">
+              {schoolName}
+            </span>
+          ) : piece === "{role}" ? (
+            <span key={i} className="chip bg-[#E2F4F1] text-[#0C8175]">
+              {roleLabel}
+            </span>
+          ) : (
+            <Fragment key={i}>{piece}</Fragment>
+          ),
+        )}
       </p>
-      <p className="text-xs text-[#98A0A9] mb-5">for {invite.email}</p>
-      {e && REASON[e] && (
+      <p className="text-xs text-[#98A0A9] mb-5">{fmt(m.forEmail, { email: invite.email })}</p>
+      {reasonKey && (
         <p role="alert" className="text-sm text-red-600 mb-4">
-          {REASON[e]}
+          {m.reason[reasonKey]}
         </p>
       )}
-      <InviteClient token={token} email={invite.email} signedInEmail={user?.email ?? null} />
+      <InviteClient
+        token={token}
+        email={invite.email}
+        signedInEmail={user?.email ?? null}
+        t={m}
+        auth={t.app.auth}
+        oauth={t.app.oauth}
+      />
     </Shell>
   );
 }

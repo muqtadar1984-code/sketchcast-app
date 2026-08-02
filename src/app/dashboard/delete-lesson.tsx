@@ -3,14 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { type LibraryMessages } from "./content-cell";
 
 export default function DeleteLesson({
   genId,
   artifactPaths,
+  t,
   className = "",
 }: {
   genId: string;
   artifactPaths: string[];
+  t: LibraryMessages;
   /** Extra classes — kit rows pass "hidden group-hover:inline-flex" so ✕ only
       shows on hover, keeping the row uncluttered. */
   className?: string;
@@ -19,7 +22,7 @@ export default function DeleteLesson({
   const [busy, setBusy] = useState(false);
 
   async function onDelete() {
-    if (!confirm("Remove this lesson? This cancels it if it's still running.")) return;
+    if (!confirm(t.deleteLesson.confirm)) return;
     setBusy(true);
     const supabase = createClient();
     if (artifactPaths.length) {
@@ -34,8 +37,8 @@ export default function DeleteLesson({
     <button
       onClick={onDelete}
       disabled={busy}
-      aria-label="Remove lesson"
-      title="Remove lesson"
+      aria-label={t.deleteLesson.remove}
+      title={t.deleteLesson.remove}
       className={`w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 ${className}`}
     >
       ✕

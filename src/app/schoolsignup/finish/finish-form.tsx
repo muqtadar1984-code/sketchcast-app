@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { Dictionary } from "@/i18n/dictionaries";
 
-export default function FinishForm() {
+export default function FinishForm({
+  t,
+  common,
+}: {
+  t: Dictionary["app"]["schoolSignup"]["finish"];
+  common: Dictionary["common"];
+}) {
   const router = useRouter();
   const [schoolName, setSchoolName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,7 +29,7 @@ export default function FinishForm() {
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) {
-      setError(json.error ?? "Something went wrong. Please try again.");
+      setError(json.error ?? common.somethingWentWrong);
       return;
     }
     router.push("/dashboard");
@@ -33,14 +40,14 @@ export default function FinishForm() {
     <form onSubmit={submit} className="space-y-4">
       <input
         required
-        placeholder="School name"
+        placeholder={t.schoolName}
         value={schoolName}
         onChange={(e) => setSchoolName(e.target.value)}
         className="field w-full h-11 px-3 text-[#14181F]"
       />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={busy} className="btn-primary w-full h-11">
-        {busy ? "Creating…" : "Create my school"}
+        {busy ? t.creating : t.submit}
       </button>
     </form>
   );
