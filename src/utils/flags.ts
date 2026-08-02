@@ -95,6 +95,27 @@ export async function calendarEnabledFor(
 }
 
 /**
+ * School notices — the announcement layer. Notices ARE school_events rows
+ * (migration 0068 adds the link / countdown / pin / revoke columns), so they
+ * ride the calendar's gate above: no calendar for the tenant ⇒ no notices, and
+ * the per-school rollout path (schools.config {"calendar": true}) is inherited
+ * for free rather than duplicated as a second config key.
+ *
+ * The extra FEATURE_NOTICES env gate is the MIGRATION gate, and it is why this
+ * isn't just calendarEnabledFor: the calendar is already on for live tenants,
+ * so shipping the notices surfaces without one would query status/action_by/
+ * featured_until on a pre-0068 database and break a page that works today.
+ * Turn it on AFTER running 0068 (same discipline as FEATURE_EXAM/0062).
+ */
+export async function noticesEnabledFor(
+  supabase: SupabaseClient,
+  schoolId: string | null | undefined,
+): Promise<boolean> {
+  if (process.env.FEATURE_NOTICES !== "true") return false;
+  return calendarEnabledFor(supabase, schoolId);
+}
+
+/**
  * Timetable (leadership grid builder). Needs migration 0045. Global env
  * FEATURE_TIMETABLE, or per-school schools.config {"timetable_enabled": true}
  * (the shape itself lives under config.timetable — separate key so enabling

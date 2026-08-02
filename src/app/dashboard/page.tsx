@@ -21,6 +21,9 @@ import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import FairUseMeter from "./fair-use-meter";
 import GettingStarted from "./getting-started";
+import NoticeBanner from "./notice-banner";
+import NoticesCard from "./notices-card";
+import { noticesFor } from "@/utils/notices";
 import { examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
@@ -230,6 +233,13 @@ export default async function DashboardPage() {
   // trigger): they fall through to the Library like any other adult, with
   // My Children + Test Papers as extra tabs (see app-header tabsFor). No redirect.
 
+  // School notices (0068): the pinned banner + the "Next 10" card, the same
+  // pair on every dashboard. ONE call resolves the flag (parents included, who
+  // belong through their children) and both lists; null = notices are off for
+  // this viewer, so nothing renders. Read before the student branch below —
+  // students get the same board.
+  const notices = await noticesFor(supabase, { userId: user.id, role, schoolId });
+
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
   // those artifacts with the service role since the storage policy only lets the
@@ -398,7 +408,12 @@ export default async function DashboardPage() {
           </div>
         )}
         <div data-tour="assignments">
-          <StudentDashboard groups={groups} studentId={user.id} downloadsReady={downloadsReady} />
+          <StudentDashboard
+            groups={groups}
+            studentId={user.id}
+            downloadsReady={downloadsReady}
+            notices={notices}
+          />
         </div>
         {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
       </div>
@@ -802,6 +817,8 @@ export default async function DashboardPage() {
           Upload a textbook, then generate a narrated lesson from it.
         </p>
 
+        {notices && <NoticeBanner notices={notices.featured} />}
+
         {gettingStarted && (
           <GettingStarted
             userId={user.id}
@@ -839,6 +856,10 @@ export default async function DashboardPage() {
         <div data-tour="branding">
           <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} />
         </div>
+
+        {/* School-side news sits with the other school cards, above the library
+            itself — the banner already carries anything urgent. */}
+        {notices && <NoticesCard notices={notices.upcoming} />}
 
         {bookList.length === 0 ? (
           gettingStarted ? (

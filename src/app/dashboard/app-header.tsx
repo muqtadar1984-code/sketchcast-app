@@ -5,10 +5,11 @@ import HeaderNav, { type NavTab } from "./header-nav";
 import MobileNav from "./mobile-nav";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
-import NotificationsBell, { type IssueNotification } from "./notifications-bell";
+import NotificationsBell, { type IssueNotification, type NoticeNotification } from "./notifications-bell";
 import {
   calendarEnabledFor,
   diaryEnabled,
+  noticesEnabledFor,
   parentPortalEnabled,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
@@ -146,6 +147,9 @@ export default async function AppHeader() {
   let analyticsOn = false;
   let calendarOn = false;
   let timetableOn = false;
+  // Which school decides the NOTICES gate for this viewer — their own for a
+  // member, a child's for a parent (resolved by the calendar walk below).
+  let noticeSchoolId: string | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -153,6 +157,7 @@ export default async function AppHeader() {
       .eq("id", user.id)
       .maybeSingle();
     role = (profile?.role as string | null) ?? null;
+    noticeSchoolId = (profile?.school_id as string | null) ?? null;
     name = profile?.full_name || user.email || "";
     if (role && role !== "student") {
       // Global env flag OR this school's config override (the sales-demo tenant).
@@ -193,6 +198,8 @@ export default async function AppHeader() {
         for (const l of (pl ?? []) as unknown as { profiles: { school_id: string | null } | null }[]) {
           if (l.profiles?.school_id && (await calendarEnabledFor(supabase, l.profiles.school_id))) {
             calendarOn = true;
+            // The same child school answers "are notices live for me?".
+            noticeSchoolId = l.profiles.school_id;
             break;
           }
         }
@@ -232,6 +239,51 @@ export default async function AppHeader() {
     }
   }
 
+  // The bell's SECOND feed: the school's live notices (0068 — notices ARE
+  // school_events rows, so se_read already delivers exactly the viewer's slice,
+  // parents included). "Live" is three arms OR'd: either clock still ahead (the
+  // deadline or the event date — which is what drops a lapsed pure-deadline
+  // notice off the bell), or simply posted in the last week, so a notice about
+  // something happening THIS MORNING can't expire before the reader ever opens
+  // the bell. Ordinary school-wide calendar entries (a holiday an admin posted
+  // to everyone) share the notice audiences and ride along — that IS an
+  // announcement, so it belongs here.
+  //
+  // Its unread rule is NOT the issue one: a notice counts as unread while it is
+  // NEW (created_at > notices_seen_at), never because someone edited it. So it
+  // reads its OWN watermark, in its OWN query — folding notices_seen_at into
+  // the select above would, on a pre-0068 database, fail that select and mark
+  // every issue unread instead.
+  let bellNotices: NoticeNotification[] = [];
+  let bellNoticesUnread = 0;
+  let noticesOn = false;
+  if (user) {
+    noticesOn = await noticesEnabledFor(supabase, noticeSchoolId);
+    if (noticesOn) {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const freshIso = new Date(now.getTime() - 7 * 86400000).toISOString();
+      const { data: notRaw } = await supabase
+        .from("school_events")
+        .select("id, title, audience, importance, starts_at, action_by, action_label, created_at")
+        .eq("status", "published") // a revoked notice leaves every reader surface
+        .in("audience", ["school", "staff"])
+        .or(`starts_at.gte.${nowIso},action_by.gte.${nowIso},created_at.gte.${freshIso}`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      bellNotices = (notRaw ?? []) as NoticeNotification[];
+      if (bellNotices.length) {
+        const { data: nSeenRow } = await supabase
+          .from("profiles")
+          .select("notices_seen_at")
+          .eq("id", user.id)
+          .maybeSingle();
+        const nSeen = (nSeenRow as { notices_seen_at?: string | null } | null)?.notices_seen_at ?? null;
+        bellNoticesUnread = bellNotices.filter((n) => !nSeen || n.created_at > nSeen).length;
+      }
+    }
+  }
+
   // One-hat mode: filter everything to the active hat; legacy union view when off.
   const diaryOn = diaryEnabled() && !!user && !!role;
   let hats: Hat[] = [];
@@ -266,7 +318,16 @@ export default async function AppHeader() {
             {name}
             {label ? ` · ${label}` : ""}
           </span>
-          {user && <NotificationsBell userId={user.id} issues={bellIssues} initialUnread={bellUnread} />}
+          {user && (
+            <NotificationsBell
+              userId={user.id}
+              issues={bellIssues}
+              initialUnread={bellUnread}
+              notices={bellNotices}
+              noticesUnread={bellNoticesUnread}
+              noticesOn={noticesOn}
+            />
+          )}
           <TourReplayButton />
           <form action="/auth/signout" method="post">
             <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">Sign out</button>

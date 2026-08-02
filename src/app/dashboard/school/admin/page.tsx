@@ -2,15 +2,34 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabledFor } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor, noticesEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import CoordinatorAdmin, { type Member, type Scope } from "../coordinator-admin";
 import ResetPasswordButton from "../../reset-password-button";
 import DeleteStudentButton from "../../delete-student-button";
+import { RevokeNoticeButton } from "../../calendar/notice-composer";
+
+/** The explicit page for the parent-link read. PostgREST caps an unbounded
+ * select at its own default and does not say so; a school would have to be
+ * enormous to reach this one, and if it ever does the shortfall is shown as a
+ * floor instead of quietly distorting the acknowledgment percentages. */
+const PARENT_LINK_CAP = 2000;
+
+/** Which banner pins are still live. The clock is read HERE, outside the
+ * component: a render must never ask the time (react-hooks/purity), and a pin
+ * that expires between two re-renders is exactly the kind of unstable result
+ * that rule exists to catch. */
+function livePinIds(rows: { id: string; featured_until: string | null }[]): Set<string> {
+  const now = Date.now();
+  return new Set(
+    rows.filter((r) => r.featured_until && new Date(r.featured_until).getTime() > now).map((r) => r.id),
+  );
+}
 
 // Admin settings (school_admin only): roster role management + the
 // coordinator → (grade, subject) scope mapping that drives the whole permission
-// model, plus the DPDP access-audit trail. Behind FEATURE_SCHOOL_ANALYTICS.
+// model, the published-notice review, plus the DPDP access-audit trail. Behind
+// FEATURE_SCHOOL_ANALYTICS.
 export default async function SchoolAdminPage() {
   const supabase = await createClient();
   const {
@@ -75,6 +94,125 @@ export default async function SchoolAdminPage() {
   const { data: booksRaw } = await supabase.from("books").select("subject");
   const subjects = [...new Set((booksRaw ?? []).map((b) => (b.subject as string | null)?.trim()).filter(Boolean) as string[])].sort();
 
+  // ── Published notices (0068) ────────────────────────────────────────────────
+  // The review side of the announcement layer: what the school has said, who it
+  // reached, how far the acknowledgment has got, and the one hand that can take
+  // it back. Gated separately from the analytics flag because a pre-0068
+  // database has no status/importance columns — reading them would break a page
+  // that works today.
+  const noticesOn = await noticesEnabledFor(supabase, profile!.school_id as string | null);
+
+  type NoticeRow = {
+    id: string;
+    title: string;
+    audience: string;
+    importance: string;
+    starts_at: string | null;
+    action_by: string | null;
+    action_label: string | null;
+    featured_until: string | null;
+    link_url: string | null;
+    link_label: string | null;
+    created_by: string | null;
+    created_at: string;
+  };
+  let notices: NoticeRow[] = [];
+  const ackCount = new Map<string, number>();
+  let pinnedIds = new Set<string>();
+  let unverifiedNames: string[] = [];
+  let unverifiedLinks = 0;
+  let linkedParents = 0;
+  let linksTruncated = false;
+
+  if (noticesOn) {
+    // Rows published AS notices (is_notice) — school-wide and staff-wide native
+    // ones only. An ordinary calendar entry shares the audience and is NOT an
+    // announcement: without this filter every school-wide holiday already in
+    // the table would appear here demanding a read-rate. 'class' events belong
+    // to their teacher and 'leadership' notes are not announcements either.
+    // Revoked rows stay readable to leadership (se_read keeps the audit trail)
+    // but this is the LIVE list, so it filters them out itself.
+    const { data: noticeRaw } = await supabase
+      .from("school_events")
+      .select(
+        "id, title, audience, importance, starts_at, action_by, action_label, featured_until, link_url, link_label, created_by, created_at",
+      )
+      .eq("school_id", profile!.school_id)
+      .eq("source", "native")
+      .eq("status", "published")
+      .eq("is_notice", true)
+      .in("audience", ["school", "staff"])
+      .order("created_at", { ascending: false })
+      .limit(25);
+    notices = (noticeRaw ?? []) as NoticeRow[];
+    pinnedIds = livePinIds(notices);
+
+    // The signature sheet, COUNTED IN THE DATABASE. Selecting the rows and
+    // counting them here would silently stop at PostgREST's default page —
+    // a notice past that cap would show a read-rate that only ever fell. Asked
+    // exactly of the notices that invite a signature (staff notices, and
+    // important Everyone ones); the rest display no number at all. na_read
+    // hands leadership every ack on their own school's notices; everyone else
+    // sees only their own row.
+    const seeking = notices.filter((n) => n.audience === "staff" || n.importance === "important");
+    const counts = await Promise.all(
+      seeking.map((n) =>
+        supabase.from("notice_acks").select("event_id", { count: "exact", head: true }).eq("event_id", n.id),
+      ),
+    );
+    seeking.forEach((n, i) => ackCount.set(n.id, counts[i].count ?? 0));
+
+    // Parents of this school's students (pl_admin_read scopes the read; an
+    // admin who is ALSO a parent elsewhere would see their own links too, so
+    // the child is checked against the school roster). Two jobs: the
+    // denominator for an important Everyone notice, and the data-quality nudge
+    // below. Bounded on purpose — an unbounded select stops at PostgREST's
+    // default page and says nothing, which would quietly shrink a denominator
+    // and inflate every percentage on the page. The cap is far above any
+    // plausible roster; if it is ever reached the count is a floor, and the
+    // rows say so with a "+" rather than lying with a round number.
+    const studentIds = new Set(students.map((s) => s.id));
+    type LinkRow = { parent_id: string; child_id: string; verified_at: string | null };
+    const { data: plRaw } = await supabase
+      .from("parent_links")
+      .select("parent_id, child_id, verified_at")
+      // School-ISSUED links only: a parent who registered their own child at
+      // home is not part of the school's audience (0068's affiliation rule).
+      .eq("source", "school")
+      .order("created_at")
+      .limit(PARENT_LINK_CAP);
+    linksTruncated = (plRaw?.length ?? 0) >= PARENT_LINK_CAP;
+    const schoolLinks = ((plRaw ?? []) as LinkRow[]).filter((l) => studentIds.has(l.child_id));
+    linkedParents = new Set(schoolLinks.map((l) => l.parent_id)).size;
+    // The parents themselves are unnameable here — they carry no school_id, so
+    // profiles_read_self never returns them to an admin. Name the CHILD whose
+    // record the address didn't match, which is what a principal looks up
+    // anyway. Deduped: two unmatched links on one child is still one student
+    // to ask about.
+    unverifiedLinks = schoolLinks.filter((l) => !l.verified_at).length;
+    unverifiedNames = [
+      ...new Set(schoolLinks.filter((l) => !l.verified_at).map((l) => nameOf.get(l.child_id) || "Student")),
+    ].sort((a, b) => a.localeCompare(b));
+  }
+
+  // Denominators — of who is ASKED, not of who can read. A staff notice asks
+  // the staff room; an important Everyone notice asks the PARENTS (that is the
+  // whole mechanic — a permission slip is a parent's to sign). Counting the
+  // students and the teachers into an Everyone denominator, as this page used
+  // to, made every percentage read low for a reason no principal could see.
+  const staffTotal = people.filter((p) => p.role !== "student").length;
+
+  // Notices are school-time things; format them the way the calendar does
+  // rather than in whatever zone the principal's laptop is set to.
+  const noticeFmt = new Intl.DateTimeFormat("en-MY", {
+    timeZone: "Asia/Kuala_Lumpur",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const when = (iso: string) => noticeFmt.format(new Date(iso));
+
   type LogRow = { id: string; actor_id: string; actor_role: string | null; scope: string; target_kind: string | null; detail: { at_risk?: number; students?: number } | null; created_at: string };
   const { data: logRaw } = await supabase
     .from("analytics_access_log")
@@ -94,6 +232,79 @@ export default async function SchoolAdminPage() {
         </p>
 
         <CoordinatorAdmin members={members} scopes={scopes} grades={grades} subjects={subjects} />
+
+        {noticesOn && (
+          <>
+            <h2 className="text-xl mt-10 mb-1">Published notices</h2>
+            <p className="text-sm text-[#5B6470] mb-3">
+              Everything the school has announced, and how far it has been read. Withdrawing removes a notice from
+              dashboards, class diaries and subscribed calendars — the record stays here.
+            </p>
+            {notices.length === 0 ? (
+              <div className="card px-5 py-6 text-sm text-[#5B6470]">Nothing published yet.</div>
+            ) : (
+              <div className="card divide-y divide-[#EEF0EC]">
+                {notices.map((n) => {
+                  const acked = ackCount.get(n.id) ?? 0;
+                  const staffNotice = n.audience === "staff";
+                  // Staff notices always seek a confirmation, from staff;
+                  // Everyone notices only when they are marked important, and
+                  // then from parents. Anything else asks for nothing, and the
+                  // row says so rather than showing a 0%.
+                  const progress = staffNotice
+                    ? `Read by ${acked} of ${staffTotal} staff`
+                    : n.importance !== "important"
+                      ? "No acknowledgment asked"
+                      : linkedParents > 0
+                        ? `${Math.round((acked / linkedParents) * 100)}% acknowledged · ${acked} of ${linkedParents}${
+                            linksTruncated ? "+" : ""
+                          } parents`
+                        : `${acked} acknowledged — no linked parents on the roster yet`;
+                  const pinned = pinnedIds.has(n.id);
+                  return (
+                    <div key={n.id} className="px-5 py-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-[#14181F] truncate">{n.title}</div>
+                        <div className="text-xs text-[#5B6470]">
+                          {staffNotice ? "Staff only" : "Everyone"}
+                          {" · "}
+                          {nameOf.get(n.created_by ?? "") || "School"}
+                          {n.starts_at ? ` · ${when(n.starts_at)}` : ""}
+                          {n.action_by ? ` · ${n.action_label || "By"} ${when(n.action_by)}` : ""}
+                          {pinned ? ` · featured until ${when(n.featured_until!)}` : ""}
+                        </div>
+                        <div className="text-xs text-[#98A0A9] tabular">{progress}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {n.importance === "important" && (
+                          <span className="chip bg-[#FCEBEA] text-[#B42318]">important</span>
+                        )}
+                        {n.link_url && (
+                          <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal">
+                            {n.link_label || "link"}
+                          </span>
+                        )}
+                        <RevokeNoticeButton eventId={n.id} title={n.title} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* A signal, never a block: these parents keep full access. An
+                unmatched email usually means a sibling's address or a typo at
+                invite time — worth a word at the next parents' evening, and
+                worth knowing before you assume a notice landed. */}
+            {unverifiedLinks > 0 && (
+              <p className="text-xs text-[#98A0A9] mt-2">
+                {unverifiedLinks} linked parent{unverifiedLinks === 1 ? " does" : "s do"} not match the email on the
+                student record — on the records for {unverifiedNames.slice(0, 8).join(", ")}
+                {unverifiedNames.length > 8 ? ` and ${unverifiedNames.length - 8} more` : ""}. Nothing is blocked; they
+                still receive every notice. Worth confirming with the family when you next speak.
+              </p>
+            )}
+          </>
+        )}
 
         <h2 className="text-xl mt-10 mb-1">Members</h2>
         <p className="text-sm text-[#5B6470] mb-3">

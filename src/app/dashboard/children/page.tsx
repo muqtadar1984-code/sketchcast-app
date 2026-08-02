@@ -4,7 +4,10 @@ import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled, aiTutorEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
+import { noticesFor } from "@/utils/notices";
 import AddChild from "./add-child";
+import NoticeBanner from "../notice-banner";
+import NoticesCard from "../notices-card";
 import CoachRecap from "../coach-recap";
 import AskCoachButton from "../ask-coach-button";
 import ResetPasswordButton from "../reset-password-button";
@@ -50,10 +53,15 @@ export default async function ChildrenPage() {
     .eq("id", user.id)
     .maybeSingle();
   const role = (profile?.role as string | null) ?? null;
+  const schoolId = (profile?.school_id as string | null) ?? null;
   if (!role || role === "student") redirect("/dashboard");
   // One-hat mode: My Children belongs to the Parent hat.
-  const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "parent");
+  const hatAway = await enforceHat(supabase, role, schoolId, "parent");
   if (hatAway) redirect(hatAway);
+
+  // School notices (0068) — a parent carries no school_id, so noticesFor
+  // resolves the school through their children (the calendar page's fallback).
+  const notices = await noticesFor(supabase, { userId: user.id, role, schoolId });
 
   // Linked children (RLS: own links only). `source` decides who may delete:
   // self-created children are the parent's to remove; school-issued links are
@@ -145,6 +153,11 @@ export default async function ChildrenPage() {
         <p className="text-[#5B6470] mb-6">
           What each child is working on — schoolwork read-only, plus the test papers you assign.
         </p>
+
+        {/* What the school is telling families — the reason most parents open
+            this page — above their children's work. */}
+        {notices && <NoticeBanner notices={notices.featured} />}
+        {notices && <NoticesCard notices={notices.upcoming} />}
 
         <div className="space-y-5 mb-6">
           {links.length === 0 && (

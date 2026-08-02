@@ -37,20 +37,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     description: string | null;
     location: string | null;
     kind: string;
-    starts_at: string;
+    starts_at: string | null;
+    action_by: string | null;
     ends_at: string | null;
     all_day: boolean;
   };
-  const icsEvents: IcsEvent[] = ((events ?? []) as Row[]).map((e) => ({
-    uid: `${e.id}@sketchcast.app`,
-    title: e.title,
-    description: e.description,
-    location: e.location,
-    startsAt: e.starts_at,
-    endsAt: e.ends_at,
-    allDay: e.all_day,
-    category: e.kind,
-  }));
+  // A notice may be a pure DEADLINE with no event date ("consent forms due
+  // Friday"), so DTSTART falls back to action_by — 0068's has_a_date
+  // constraint guarantees at least one of the two is set. Without this the
+  // deadline notices, the ones most worth landing in a parent's calendar,
+  // would emit an invalid DTSTART.
+  const icsEvents: IcsEvent[] = ((events ?? []) as Row[])
+    .filter((e) => e.starts_at || e.action_by)
+    .map((e) => ({
+      uid: `${e.id}@sketchcast.app`,
+      title: e.title,
+      description: e.description,
+      location: e.location,
+      startsAt: (e.starts_at ?? e.action_by) as string,
+      endsAt: e.ends_at,
+      allDay: e.all_day,
+      category: e.kind,
+    }));
 
   return new Response(buildIcs({ name: "SketchCast — School calendar", events: icsEvents }), {
     headers: {

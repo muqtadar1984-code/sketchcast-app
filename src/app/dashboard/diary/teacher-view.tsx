@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { noticesEnabledFor } from "@/utils/flags";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import DiaryNote, { type DiaryNoteItem, type DiaryReplyItem } from "./diary-note";
@@ -14,8 +15,11 @@ import { displayNames } from "./names";
 // the day reads like a page of the communication book —
 //   · a compose card (class-wide or per-student, type chips, parents-only)
 //   · auto-entries DERIVED at read (nothing stored): what was assigned to the
-//     class that day (generation_shares ⋈ generations) and which students
+//     class that day (generation_shares ⋈ generations), which students
 //     completed what (student_progress, with the submission score when graded)
+//     and the school notices posted that day (school_events, 0068 — rows
+//     PUBLISHED as notices, SCHOOL audience, this school; a staff-room notice
+//     never reaches a diary page, and neither does a plain calendar entry)
 //   · the day's notes — class-wide + per-student, parent-authored ones
 //     included (RLS's diary_teacher_of delivers them) — each with the
 //     "Signed N/M" parent-receipt count, the reply thread and translate
@@ -66,6 +70,8 @@ export default async function TeacherDiary({
   // Times on derived rows render in the school's timezone (calendar doctrine —
   // fixed UTC+8; per-school config when a school outside MY signs up).
   const timeFmt = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit" });
+  // A notice's deadline is a DATE, not a time of day.
+  const dateFmt = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short" });
   const dayLabel = new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
     weekday: "long",
     day: "numeric",
@@ -73,6 +79,13 @@ export default async function TeacherDiary({
     year: "numeric",
     timeZone: "UTC", // the key IS the civil day — don't re-shift it
   });
+
+  // Is the announcement layer live for this teacher's school? Notices fan into
+  // the day the same way everything else here does — derived at read, gated so
+  // a pre-0068 database is never asked for status/action_by.
+  const { data: myProfile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
+  const mySchoolId = (myProfile?.school_id as string | null) ?? null;
+  const noticesOn = await noticesEnabledFor(supabase, mySchoolId);
 
   // Their OWN classes — admins/coordinators can read school-wide rows under
   // RLS, but this page is their teacher hat (the school-wide diary is
@@ -142,7 +155,8 @@ export default async function TeacherDiary({
     type AckRow = { note_id: string; student_id: string };
     type ShareRow = { generation_id: string; created_at: string };
     type ProgRow = { generation_id: string; student_id: string; completed_at: string };
-    const [repliesQ, acksQ, sharesQ, progQ] = await Promise.all([
+    type NoticeRow = { id: string; title: string; action_by: string | null; action_label: string | null; created_at: string };
+    const [repliesQ, acksQ, sharesQ, progQ, noticesQ] = await Promise.all([
       noteIds.length
         ? supabase.from("diary_replies").select("id, note_id, author_id, body, created_at").in("note_id", noteIds).order("created_at")
         : Promise.resolve({ data: [] as ReplyRow[] }),
@@ -161,11 +175,31 @@ export default async function TeacherDiary({
         .eq("class_id", classId)
         .gte("completed_at", startUtc)
         .lt("completed_at", endUtc),
+      // The day's school notices. Four filters carry the whole rule: is_notice
+      // (an ordinary school-wide calendar entry is not an announcement and has
+      // no business on a diary page), the SCHOOL audience (a 'staff' notice is
+      // staff-room business and must never land on a page parents and students
+      // read), status — RLS keeps revoked rows readable for leadership audit,
+      // so every reader surface, this one included, filters them out itself —
+      // and the SCHOOL, because an adult who teaches in one school and parents
+      // in another can read both boards, and only one of them is this class's.
+      noticesOn && mySchoolId
+        ? supabase
+            .from("school_events")
+            .select("id, title, action_by, action_label, created_at")
+            .eq("school_id", mySchoolId)
+            .eq("is_notice", true)
+            .eq("audience", "school")
+            .eq("status", "published")
+            .gte("created_at", startUtc)
+            .lt("created_at", endUtc)
+        : Promise.resolve({ data: [] as NoticeRow[] }),
     ]);
     const replies = (repliesQ.data ?? []) as ReplyRow[];
     const acks = (acksQ.data ?? []) as AckRow[];
     const shares = (sharesQ.data ?? []) as ShareRow[];
     const prog = (progQ.data ?? []) as ProgRow[];
+    const notices = (noticesQ.data ?? []) as NoticeRow[];
 
     // Titles for the derived entries + scores for the day's completions.
     const genIds = [...new Set([...shares.map((s) => s.generation_id), ...prog.map((p) => p.generation_id)])];
@@ -204,6 +238,19 @@ export default async function TeacherDiary({
         at: p.completed_at,
         icon: "✅",
         text: `${rosterName.get(p.student_id) ?? "A student"} completed ${g?.title || KIND_LABEL[g?.kind ?? ""] || "an assignment"}${score ? ` · ${score}` : ""}`,
+      });
+    }
+    // A notice sits on the day it was POSTED — like every other row here, the
+    // day is when the thing HAPPENED. Its deadline rides along in the text so
+    // the page still answers "by when?" without a second date column.
+    for (const n of notices) {
+      auto.push({
+        key: `n-${n.id}`,
+        at: n.created_at,
+        icon: "📣",
+        text: `School notice — ${n.title}${
+          n.action_by ? ` · ${n.action_label || "By"} ${dateFmt.format(new Date(n.action_by))}` : ""
+        }`,
       });
     }
     auto.sort((a, b) => a.at.localeCompare(b.at));

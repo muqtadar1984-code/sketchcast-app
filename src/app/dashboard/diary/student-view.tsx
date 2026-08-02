@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { noticesEnabledFor } from "@/utils/flags";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import DiaryNote, { type DiaryNoteItem, type DiaryReplyItem } from "./diary-note";
@@ -10,9 +11,12 @@ import { displayNames } from "./names";
 // notes + their own per-student notes, each with a reply box (students REPLY,
 // never author notes — and dn_read already strips parents_only rows, so this
 // page can't leak them even by mistake). Auto-entries are the same derived
-// rows as everywhere else: what landed on them that day (generation_shares)
-// and what they finished (student_progress + their submission score). No
-// compose, no signature UI — signing is a parent affair.
+// rows as everywhere else: what landed on them that day (generation_shares),
+// what they finished (student_progress + their submission score), and the
+// school notices posted that day (school_events, 0068 — rows PUBLISHED as
+// notices, SCHOOL audience, their own school; a staff-room notice never reaches
+// a diary page, and neither does a plain calendar entry). No compose, no
+// signature UI — signing is a parent affair.
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Video lesson",
@@ -45,6 +49,14 @@ export default async function StudentDiary({ date }: { date?: string }) {
   const { startUtc, endUtc } = dayWindowUtc(day);
   // Times render in the school's timezone (calendar doctrine — fixed UTC+8).
   const timeFmt = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit" });
+  // A notice's deadline is a DATE, not a time of day.
+  const dateFmt = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short" });
+
+  // Is the announcement layer live for this student's school? Gated so a
+  // pre-0068 database is never asked for status/action_by.
+  const { data: myProfile } = await supabase.from("profiles").select("school_id").eq("id", user.id).maybeSingle();
+  const mySchoolId = (myProfile?.school_id as string | null) ?? null;
+  const noticesOn = await noticesEnabledFor(supabase, mySchoolId);
 
   // ── The student's slice, all RLS-scoped ─────────────────────────────────────
   type NoteRow = {
@@ -57,7 +69,8 @@ export default async function StudentDiary({ date }: { date?: string }) {
     parents_only: boolean;
     created_at: string;
   };
-  const [notesQ, classesQ, sharesQ, progQ] = await Promise.all([
+  type NoticeRow = { id: string; title: string; action_by: string | null; action_label: string | null; created_at: string };
+  const [notesQ, classesQ, sharesQ, progQ, noticesQ] = await Promise.all([
     supabase
       .from("diary_notes")
       .select("id, author_id, class_id, student_id, note_type, body, parents_only, created_at")
@@ -74,11 +87,28 @@ export default async function StudentDiary({ date }: { date?: string }) {
       .select("generation_id, completed_at")
       .gte("completed_at", startUtc)
       .lt("completed_at", endUtc),
+    // The day's school notices: rows published AS notices (an ordinary
+    // school-wide calendar entry is not an announcement), the SCHOOL audience
+    // only — a 'staff' notice is staff-room business and never reaches a diary
+    // page — published only, since RLS keeps revoked rows readable for
+    // leadership audit, and their own school's.
+    noticesOn && mySchoolId
+      ? supabase
+          .from("school_events")
+          .select("id, title, action_by, action_label, created_at")
+          .eq("school_id", mySchoolId)
+          .eq("is_notice", true)
+          .eq("audience", "school")
+          .eq("status", "published")
+          .gte("created_at", startUtc)
+          .lt("created_at", endUtc)
+      : Promise.resolve({ data: [] as NoticeRow[] }),
   ]);
   const notes = (notesQ.data ?? []) as NoteRow[];
   const className = new Map(((classesQ.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const shares = (sharesQ.data ?? []) as { generation_id: string; class_id: string | null; created_at: string }[];
   const prog = (progQ.data ?? []) as { generation_id: string; completed_at: string }[];
+  const notices = (noticesQ.data ?? []) as NoticeRow[];
 
   const noteIds = notes.map((n) => n.id);
   type ReplyRow = { id: string; note_id: string; author_id: string; body: string; created_at: string };
@@ -131,6 +161,19 @@ export default async function StudentDiary({ date }: { date?: string }) {
       at: p.completed_at,
       icon: "✅",
       text: `You completed ${g?.title || KIND_LABEL[g?.kind ?? ""] || "an assignment"}${score ? ` · ${score}` : ""}`,
+    });
+  }
+  // A notice sits on the day it was POSTED — like every other row here, the day
+  // is when the thing HAPPENED. Its deadline rides along in the text so the
+  // page still answers "by when?".
+  for (const n of notices) {
+    auto.push({
+      key: `n-${n.id}`,
+      at: n.created_at,
+      icon: "📣",
+      text: `School notice — ${n.title}${
+        n.action_by ? ` · ${n.action_label || "By"} ${dateFmt.format(new Date(n.action_by))}` : ""
+      }`,
     });
   }
   auto.sort((a, b) => a.at.localeCompare(b.at));

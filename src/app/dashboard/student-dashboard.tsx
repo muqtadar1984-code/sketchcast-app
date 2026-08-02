@@ -1,5 +1,8 @@
 import { EmptyBooks } from "./icons";
 import StudentItem, { type StudentItemData } from "./student-item";
+import NoticeBanner from "./notice-banner";
+import NoticesCard from "./notices-card";
+import type { NoticesData } from "@/utils/notices";
 import { InkUnderline } from "@/components/ink-mark";
 
 export type { StudentItemData };
@@ -13,16 +16,24 @@ export default function StudentDashboard({
   groups,
   studentId,
   downloadsReady,
+  notices = null,
 }: {
   groups: StudentClassGroup[];
   studentId: string;
   downloadsReady: boolean;
+  /** School notices (0068) — null when the feature is off for this school. */
+  notices?: NoticesData | null;
 }) {
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
       <h1 className="text-4xl mb-2">My lessons</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-[#5B6470] mb-7">Everything your teacher has assigned to you.</p>
+
+      {/* The school's own news, above the lessons: a student's page has nothing
+          else competing at the top, so both surfaces sit together. */}
+      {notices && <NoticeBanner notices={notices.featured} />}
+      {notices && <NoticesCard notices={notices.upcoming} />}
 
       {!downloadsReady && (
         <p className="mb-6 text-sm text-[#9A6400] bg-[#FFF1D6] rounded-lg px-3 py-2">
