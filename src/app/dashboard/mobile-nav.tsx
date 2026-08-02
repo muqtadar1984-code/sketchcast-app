@@ -5,12 +5,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isActive, type NavTab } from "./header-nav";
 
-// Phone-width nav: the desktop tabs are `hidden sm:flex`, which left phones
-// with NO route to My children / Test Papers / Timetable / School (Khaja's
-// report). This hamburger sits at the far left of the header and opens the
-// same role-derived tabs as a dropdown panel. Rendered for every role —
-// teacher, student, parent, and all school hats — because it receives the
-// exact tabs the desktop nav shows.
+// Narrow-width nav: the desktop tabs used to be `hidden sm:flex`, which left
+// phones with NO route to My children / Test Papers / Timetable / School
+// (Khaja's report). This hamburger sits at the far left of the header and
+// opens the same role-derived tabs as a dropdown panel. Rendered for every
+// role — teacher, student, parent, and all school hats — because it receives
+// the exact tabs the desktop nav shows.
+//
+// `className` is the mirror of the tab row's: the header hands each of them
+// the same breakpoint from opposite sides, so exactly one is ever on screen.
+// It is no longer a fixed `sm` — a principal carries seven tabs plus two
+// dropdowns and needs far more room before the inline row is honest, while a
+// student with two tabs needs much less.
 //
 // The tab labels arrive already translated (the header builds them from the
 // request's dictionary); the two words this component owns — the button's
@@ -19,16 +25,18 @@ export default function MobileNav({
   tabs,
   openLabel,
   closeLabel,
+  className = "sm:hidden",
 }: {
   tabs: NavTab[];
   openLabel: string;
   closeLabel: string;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
 
   return (
-    <div className="sm:hidden shrink-0">
+    <div className={`${className} shrink-0`}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}

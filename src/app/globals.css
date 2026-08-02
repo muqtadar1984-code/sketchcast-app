@@ -289,6 +289,18 @@ html:is([lang="ar"], [lang="ms-Arab" i], [lang="hi"], [lang="mr"], [lang="te"],
 }
 
 /* ── Component utilities (Tailwind v4 @utility, so they're reliably emitted) ── */
+
+/* A strip that may overflow horizontally and must stay scrollable WITHOUT
+   surrendering height to a scrollbar — the header's tab row, which lives in a
+   64px bar where a 15px gutter would be a fifth of it. Scrolling by wheel,
+   trackpad, touch and keyboard all still work; only the bar itself is gone. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility card {
   background: var(--color-paper);
   border: 1px solid var(--color-line);

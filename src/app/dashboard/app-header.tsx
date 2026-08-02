@@ -18,6 +18,7 @@ import {
   timetableEnabledFor,
 } from "@/utils/flags";
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
+import { headerFit } from "@/utils/header-fit";
 import { activeHatCookie } from "@/utils/hats-server";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -327,6 +328,18 @@ export default async function AppHeader() {
   // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
   // it is lower-cased — a no-op in the scripts that have no case at all.
   const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);
+
+  // Where this viewer's tab row gives way to the hamburger. It is not the flat
+  // `sm` it used to be: the bar's crowding varies by role, and the language
+  // picker joining the right-hand cluster is what pushed a principal's seven
+  // tabs into overlapping their neighbours. See header-fit for the geometry.
+  const i18nOn = i18nEnabled();
+  const { navShow, navHide } = headerFit({
+    tabs: tabs.length,
+    hatSwitcher: hats.length > 1 && !!activeHat,
+    languagePicker: i18nOn,
+  });
+
   return (
     <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
       {/* Full-width bar: the logo alone anchors the left, the tabs float in
@@ -335,13 +348,17 @@ export default async function AppHeader() {
           the tabs are hidden, so a hamburger (far left) opens them as a
           dropdown — every role's tabs, same source. */}
       <div className="px-5 h-16 flex items-center gap-3 sm:gap-5">
-        {tabs.length > 0 && <MobileNav tabs={tabs} openLabel={t.nav.openMenu} closeLabel={t.nav.closeMenu} />}
+        {tabs.length > 0 && (
+          <MobileNav tabs={tabs} openLabel={t.nav.openMenu} closeLabel={t.nav.closeMenu} className={navHide} />
+        )}
         {/* The product name is a name, in every language — never translated. */}
         <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
           <LogoMark size={30} />
           SketchCast <span className="text-[#0C8175]">AI</span>
         </Link>
-        <div className="flex-1 min-w-0 flex justify-center">{tabs.length > 0 && <HeaderNav tabs={tabs} />}</div>
+        <div className="flex-1 min-w-0 flex justify-center">
+          {tabs.length > 0 && <HeaderNav tabs={tabs} className={navShow} />}
+        </div>
         <div className="flex items-center gap-3 text-sm shrink-0">
           {hats.length > 1 && activeHat && (
             <HatSwitcher
@@ -356,7 +373,18 @@ export default async function AppHeader() {
               who can't read the current language has to be able to reach this
               from the device they actually use. */}
           {i18nEnabled() && <LanguageSwitcher locale={locale} t={t.common} />}
-          <span className="text-[#5B6470] hidden xl:inline max-w-[14rem] truncate whitespace-nowrap" title={`${name}${label ? ` · ${label}` : ""}`}>
+          {/* The two purely INFORMATIONAL items in this cluster — who you are,
+              and which school you're in — are the ones that yield when the bar
+              is tight, because everything else beside them is a control you
+              act on. Their breakpoints are deliberately not the device-ish
+              md/xl they were: what they compete with is the tab row's width,
+              not a phone or a laptop, so each returns only once the viewport
+              has grown enough to pay for it (measured: the name is 171px, the
+              school badge 105px). */}
+          <span
+            className="text-[#5B6470] hidden min-[1800px]:inline max-w-[14rem] truncate whitespace-nowrap"
+            title={`${name}${label ? ` · ${label}` : ""}`}
+          >
             {name}
             {label ? ` · ${label}` : ""}
           </span>
@@ -378,7 +406,7 @@ export default async function AppHeader() {
           {/* Logical inset/border (ps-/ms-/border-s) so the school's divider sits
               on the correct side once <html dir="rtl"> mirrors the bar. */}
           {schoolName && (
-            <span className="hidden md:inline-flex items-center ps-4 ms-1 border-s border-[#E6E8E4] font-display text-[#14181F] whitespace-nowrap max-w-[14rem] truncate">
+            <span className="hidden min-[1600px]:inline-flex items-center ps-4 ms-1 border-s border-[#E6E8E4] font-display text-[#14181F] whitespace-nowrap max-w-[14rem] truncate">
               {schoolName}
             </span>
           )}
