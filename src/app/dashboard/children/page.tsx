@@ -8,6 +8,7 @@ import { noticesFor } from "@/utils/notices";
 import AddChild from "./add-child";
 import NoticeBanner from "../notice-banner";
 import NoticesCard from "../notices-card";
+import FairUseMeter from "../fair-use-meter";
 import CoachRecap from "../coach-recap";
 import AskCoachButton from "../ask-coach-button";
 import ResetPasswordButton from "../reset-password-button";
@@ -69,11 +70,16 @@ export default async function ChildrenPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, school_id")
+    .select("role, school_id, lesson_tools")
     .eq("id", user.id)
     .maybeSingle();
   const role = (profile?.role as string | null) ?? null;
   const schoolId = (profile?.school_id as string | null) ?? null;
+  // Same rule as the Library (0052): an account SketchCast staff have flagged
+  // as not teaching from books can't generate at all, so a lesson budget would
+  // be a number they can never spend. Default-true — only an explicit false
+  // hides it, so a pre-0052 database still shows the card.
+  const lessonTools = (profile as { lesson_tools?: boolean | null } | null)?.lesson_tools !== false;
   if (!role || role === "student") redirect("/dashboard");
   // One-hat mode: My Children belongs to the Parent hat.
   const hatAway = await enforceHat(supabase, role, schoolId, "parent");
@@ -177,6 +183,15 @@ export default async function ChildrenPage() {
             this page — above their children's work. */}
         {notices && <NoticeBanner notices={notices.featured} />}
         {notices && <NoticesCard notices={notices.upcoming} />}
+
+        {/* The same fair-use card the Library and Test Papers show. This page
+            is where a parent actually LANDS — onboarding, the parent hat, the
+            school portal and the parent tour all home here (homeForRole,
+            hatHome, school-portal/verify) — so without it a parent who never
+            opens the Library never learns what their plan includes until a
+            generation is refused. It renders nothing for unlimited accounts
+            and reads its own locale, so there is nothing to pass in. */}
+        {lessonTools && <FairUseMeter />}
 
         <div className="space-y-5 mb-6">
           {links.length === 0 && <div className="card px-5 py-8 text-sm text-[#5B6470]">{t.empty}</div>}

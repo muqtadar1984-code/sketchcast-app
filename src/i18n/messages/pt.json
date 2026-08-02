@@ -1552,5 +1552,20 @@
         "el-adam": "Adam — grave"
       }
     }
+  },
+  "fairUse": {
+    "title": "Uso justo neste mês",
+    "resets": "renova em {date} · o que sobrar vale por mais um mês",
+    "lessons": "Aulas",
+    "kitFree": "Cada aula já vem com o kit completo de documentos — plano, atividades, exercícios, prova e estudo de caso — sem custo.",
+    "usage": "{used} de {cap}",
+    "usageCarried": "{used} de {cap} +{carry} acumulados",
+    "trialTitle": "Teste grátis — tudo liberado",
+    "trialEnds": "termina em {date}",
+    "trialLessons": "Aulas do teste",
+    "trialLeft": "Restam {available} de {cap} aulas — cada uma traz o kit completo de documentos sem custo. Depois do teste, o plano grátis cobre uma aula por vez.",
+    "trialSpent": "Você usou as {cap} aulas do teste. Assine para continuar gerando — o plano grátis cobre uma aula por vez.",
+    "parts": "Partes de aula",
+    "documents": "Documentos"
   }
 }

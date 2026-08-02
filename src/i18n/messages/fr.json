@@ -1552,5 +1552,20 @@
         "el-adam": "Adam — grave"
       }
     }
+  },
+  "fairUse": {
+    "title": "Usage raisonnable ce mois-ci",
+    "resets": "renouvellement le {date} · ce qu'il vous reste est reporté sur le mois suivant",
+    "lessons": "Leçons",
+    "kitFree": "Chaque leçon inclut gratuitement son kit complet : préparation, activités, fiche d'exercices, contrôle et étude de cas.",
+    "usage": "{used} sur {cap}",
+    "usageCarried": "{used} sur {cap} +{carry} de report",
+    "trialTitle": "Essai gratuit — toutes les fonctionnalités incluses",
+    "trialEnds": "fin de l'essai le {date}",
+    "trialLessons": "Leçons d'essai",
+    "trialLeft": "{available} sur {cap} leçons d'essai encore disponibles — chacune avec son kit complet, offert. Après l'essai, la formule gratuite vous donne droit à une leçon à la fois.",
+    "trialSpent": "Vous avez utilisé vos {cap} leçons d'essai. Abonnez-vous pour continuer à générer — la formule gratuite vous donne droit à une leçon à la fois.",
+    "parts": "Parties de leçon",
+    "documents": "Documents"
   }
 }

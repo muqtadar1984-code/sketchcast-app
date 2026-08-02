@@ -1552,5 +1552,20 @@
         "el-adam": "Adam — dalam"
       }
     }
+  },
+  "fairUse": {
+    "title": "Penggunaan wajar bulan ini",
+    "resets": "set semula {date} · baki yang tidak digunakan dibawa ke bulan hadapan sahaja",
+    "lessons": "Pelajaran",
+    "kitFree": "Setiap pelajaran sudah termasuk kit dokumen penuhnya — rancangan pengajaran, aktiviti, lembaran kerja, kertas ujian dan kajian kes — semuanya percuma.",
+    "usage": "{used} daripada {cap}",
+    "usageCarried": "{used} daripada {cap} +{carry} dibawa",
+    "trialTitle": "Percubaan percuma — semua ciri dibuka",
+    "trialEnds": "percubaan tamat pada {date}",
+    "trialLessons": "Pelajaran percubaan",
+    "trialLeft": "Tinggal {available} daripada {cap} pelajaran — setiap satu disertakan kit dokumen penuhnya, percuma. Selepas percubaan, pelan percuma merangkumi satu pelajaran pada satu masa.",
+    "trialSpent": "Anda telah menggunakan kesemua {cap} pelajaran percubaan. Langgan untuk terus menjana — pelan percuma merangkumi satu pelajaran pada satu masa.",
+    "parts": "Bahagian pelajaran",
+    "documents": "Dokumen"
   }
 }
