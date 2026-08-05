@@ -809,7 +809,16 @@
       "networkError": "Ralat rangkaian semasa muat naik.",
       "timedOut": "Muat naik tamat masa.",
       "couldNotStart": "Tidak dapat memulakan muat naik.",
-      "retryAdvice": "{error} Sila semak sambungan internet anda dan cuba lagi — buku teks besar memerlukan sambungan yang stabil selama beberapa minit."
+      "retryAdvice": "{error} Sila semak sambungan internet anda dan cuba lagi — buku teks besar memerlukan sambungan yang stabil selama beberapa minit.",
+      "duplicate": {
+        "checking": "Menyemak…",
+        "title": "Sekolah anda sudah ada buku ini",
+        "sameFile": "{title} — fail yang sama sudah ada dalam pustaka sekolah anda.",
+        "sameBook": "{title} — ini nampaknya buku yang sama, sudah pun ada dalam pustaka sekolah anda.",
+        "hint": "Ia sudah ada dalam pustaka anda dan sedia digunakan. Memuat naiknya sekali lagi bermakna buku yang sama dibaca untuk kali kedua.",
+        "useExisting": "Guna yang sedia ada",
+        "uploadAnyway": "Muat naik juga"
+      }
     },
     "scan": {
       "title": "Imbas halaman",

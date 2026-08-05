@@ -67,6 +67,20 @@ const SUBJECT_SYNONYMS: string[][] = [
   ["civics", "sivik"],
 ];
 
+/** Fold a SINGLE token onto its canonical subject name, exact matches only.
+ *
+ *  Exported for title comparison (book-fingerprint), where the same vocabulary
+ *  split shows up inside book titles: "Cambridge Maths 5" and "Cambridge
+ *  Primary Mathematics … 5" are one book, and in Malaysian schools the pair is
+ *  more often Sains/Science or Matematik/Mathematics. No containment here —
+ *  a lone word carries too little context to risk it. */
+export function canonicalSubjectWord(word: string): string {
+  const n = normSubject(word);
+  if (!n) return "";
+  for (const group of SUBJECT_SYNONYMS) if (group.includes(n)) return group[0];
+  return n;
+}
+
 /** Fold a subject onto its canonical name, so "Sains" and "Science" are one
  *  thing. `mapped` says whether the table recognised it, which decides below
  *  whether a looser comparison is still safe. */

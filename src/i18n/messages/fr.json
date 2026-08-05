@@ -809,7 +809,16 @@
       "networkError": "Erreur réseau pendant l'import.",
       "timedOut": "Délai d'import dépassé.",
       "couldNotStart": "Impossible de démarrer l'import.",
-      "retryAdvice": "{error} Vérifiez votre connexion internet et réessayez — les gros manuels demandent une connexion stable pendant quelques minutes."
+      "retryAdvice": "{error} Vérifiez votre connexion internet et réessayez — les gros manuels demandent une connexion stable pendant quelques minutes.",
+      "duplicate": {
+        "checking": "Vérification…",
+        "title": "Votre école a déjà ce livre",
+        "sameFile": "{title} — le même fichier se trouve déjà dans la bibliothèque de votre école.",
+        "sameBook": "{title} — il semble s'agir du même livre, déjà présent dans la bibliothèque de votre école.",
+        "hint": "Il est déjà dans votre bibliothèque, prêt à l'emploi. L'importer de nouveau reviendrait à lire une deuxième fois le même livre.",
+        "useExisting": "Utiliser celui que nous avons",
+        "uploadAnyway": "Importer quand même"
+      }
     },
     "scan": {
       "title": "Scanner des pages",

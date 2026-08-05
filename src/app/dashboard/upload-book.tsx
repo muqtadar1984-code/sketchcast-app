@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { cleanBookTitle } from "@/utils/book";
+import { fingerprintFile, titlesLookSame } from "@/utils/book-fingerprint";
 import PageScanner from "./page-scanner";
 import { fmt } from "@/i18n/format";
 import { type LibraryMessages } from "./content-cell";
@@ -32,6 +33,11 @@ export default function UploadBook({
   // A scan arrives as a normal PDF File, so everything below it — validation,
   // signed upload, retry, the books insert — runs completely unchanged.
   const [scanned, setScanned] = useState(false);
+  // Duplicate check (0070). The shelf makes a colleague's book VISIBLE; this is
+  // what stops us paying to index it a second time — and it has to run before
+  // the transfer, not after, or the expensive part has already happened.
+  const [checking, setChecking] = useState(false);
+  const [dupe, setDupe] = useState<{ title: string; exact: boolean } | null>(null);
 
   // PUT via XHR so we get real upload-progress events (fetch can't report
   // progress) — on slow connections a multi-minute silent "Uploading…" reads
@@ -54,9 +60,65 @@ export default function UploadBook({
     });
   }
 
+  /** Does this school already hold this book? Returns null when it doesn't,
+   *  when there's no school, or when anything at all goes wrong — a failed
+   *  check must never stand between a teacher and their upload. */
+  async function findDuplicate(f: File, fp: string | null): Promise<{ title: string; exact: boolean } | null> {
+    if (!schoolId) return null; // no shelf, nothing to collide with
+    try {
+      const supabase = createClient();
+      // RLS already scopes this to books the reader may see, and the
+      // restrictive removed-books policy keeps retired ones out. The school
+      // filter is what makes it THIS school's shelf — a licensed copy must
+      // never be offered across tenants.
+      const { data } = await supabase
+        .from("books")
+        .select("title, content_hash")
+        .eq("school_id", schoolId)
+        .limit(300);
+      const shelf = (data ?? []) as { title: string; content_hash: string | null }[];
+      if (!shelf.length) return null;
+
+      // Same bytes: the publisher's soft copy passed around the staff room.
+      const exact = fp ? shelf.find((b) => b.content_hash && b.content_hash === fp) : undefined;
+      if (exact) return { title: exact.title, exact: true };
+
+      // Same book, different file: two teachers scanning one textbook. This is
+      // the case that actually costs the indexing bill twice.
+      const candidate = title.trim() || f.name;
+      const near = shelf.find((b) => titlesLookSame(b.title, candidate));
+      return near ? { title: near.title, exact: false } : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function onUpload(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
+
+    // Computed once and reused: it answers the duplicate question now, and is
+    // stored on the row so the NEXT teacher's upload can be matched against it.
+    // Never fatal — a browser without crypto.subtle still uploads fine.
+    let contentHash: string | null = null;
+    try {
+      contentHash = await fingerprintFile(file);
+    } catch {
+      /* fall through with a null hash */
+    }
+
+    // Ask once. If the teacher says "upload anyway", `dupe` is cleared and we
+    // fall straight through on the next submit — the answer is always theirs.
+    if (!dupe) {
+      setChecking(true);
+      const hit = await findDuplicate(file, contentHash);
+      setChecking(false);
+      if (hit) {
+        setDupe(hit);
+        return;
+      }
+    }
+
     setBusy(true);
     setError(null);
     setPct(0);
@@ -105,6 +167,7 @@ export default function UploadBook({
       owner_id: user.id,
       school_id: schoolId,
       storage_path: path,
+      content_hash: contentHash, // so the next teacher's upload can be matched
       status: "indexing", // worker extracts the chapter list, then flips to "ready"
     });
     setBusy(false);
@@ -125,6 +188,7 @@ export default function UploadBook({
     setFile(null);
     setTitle("");
     setAuthor("");
+    setDupe(null);
     router.refresh(); // re-fetch the library (server component) → new book shows
   }
 
@@ -158,14 +222,16 @@ export default function UploadBook({
             className="field w-full h-10 px-3 mt-1"
           />
         </label>
-        <button type="submit" disabled={!file || busy} className="btn-primary h-10 px-5 whitespace-nowrap">
-          {busy
-            ? pct === null
-              ? t.upload.uploading
-              : pct >= 100
-                ? t.upload.finishing
-                : fmt(t.upload.uploadingPct, { pct })
-            : t.upload.upload}
+        <button type="submit" disabled={!file || busy || checking} className="btn-primary h-10 px-5 whitespace-nowrap">
+          {checking
+            ? t.upload.duplicate.checking
+            : busy
+              ? pct === null
+                ? t.upload.uploading
+                : pct >= 100
+                  ? t.upload.finishing
+                  : fmt(t.upload.uploadingPct, { pct })
+              : t.upload.upload}
         </button>
       </div>
 
@@ -182,6 +248,7 @@ export default function UploadBook({
           onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);
             setScanned(false);
+            setDupe(null); // a different file deserves a fresh question
           }}
           className="text-sm text-[#14181F] file:me-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 file:text-[#0C8175] file:font-medium"
         />
@@ -220,6 +287,38 @@ export default function UploadBook({
             setError(null);
           }}
         />
+      )}
+
+      {/* The whole point of the shared shelf. Nothing has been uploaded yet —
+          this is the last moment before the transfer and the indexing bill.
+          A SUGGESTION, never a block: editions differ, and being wrong about
+          that must not stand between a teacher and their book. */}
+      {dupe && (
+        <div className="mt-3 rounded-lg border border-[#BDE8E2] bg-[#F1FBF9] px-4 py-3">
+          <p className="text-sm font-medium text-[#14181F]">{t.upload.duplicate.title}</p>
+          <p className="text-sm text-[#5B6470] mt-0.5 [overflow-wrap:anywhere]">
+            {fmt(dupe.exact ? t.upload.duplicate.sameFile : t.upload.duplicate.sameBook, { title: dupe.title })}
+          </p>
+          <p className="text-xs text-[#98A0A9] mt-1">{t.upload.duplicate.hint}</p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDupe(null);
+                setFile(null);
+                setTitle("");
+                setAuthor("");
+              }}
+              className="btn-primary h-9 px-3 text-sm"
+            >
+              {t.upload.duplicate.useExisting}
+            </button>
+            {/* Clearing `dupe` is what lets the next submit through. */}
+            <button type="submit" onClick={() => setDupe(null)} className="btn-ghost h-9 px-3 text-sm">
+              {t.upload.duplicate.uploadAnyway}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Restrictions, stated up front so a wrong file fails at the picker, not

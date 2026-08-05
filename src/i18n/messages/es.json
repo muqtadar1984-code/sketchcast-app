@@ -809,7 +809,16 @@
       "networkError": "Error de red durante la subida.",
       "timedOut": "Se agotó el tiempo de la subida.",
       "couldNotStart": "No se pudo iniciar la subida.",
-      "retryAdvice": "{error} Revise su conexión a internet e inténtelo de nuevo — los libros de texto grandes necesitan una conexión estable durante unos minutos."
+      "retryAdvice": "{error} Revise su conexión a internet e inténtelo de nuevo — los libros de texto grandes necesitan una conexión estable durante unos minutos.",
+      "duplicate": {
+        "checking": "Comprobando…",
+        "title": "Su escuela ya tiene este libro",
+        "sameFile": "{title} — ese mismo archivo ya está en la biblioteca de su escuela.",
+        "sameBook": "{title} — parece el mismo libro, que ya está en la biblioteca de su escuela.",
+        "hint": "Ya está en su biblioteca, listo para usar. Subirlo de nuevo significaría leer el mismo libro por segunda vez.",
+        "useExisting": "Usar el que ya tenemos",
+        "uploadAnyway": "Subir de todos modos"
+      }
     },
     "scan": {
       "title": "Escanear páginas",

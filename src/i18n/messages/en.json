@@ -809,7 +809,16 @@
       "networkError": "Network error during upload.",
       "timedOut": "Upload timed out.",
       "couldNotStart": "Could not start the upload.",
-      "retryAdvice": "{error} Please check your internet connection and try again — large textbooks need a stable connection for a few minutes."
+      "retryAdvice": "{error} Please check your internet connection and try again — large textbooks need a stable connection for a few minutes.",
+      "duplicate": {
+        "checking": "Checking…",
+        "title": "Your school already has this book",
+        "sameFile": "{title} — the same file is already in your school library.",
+        "sameBook": "{title} — this looks like the same book, already in your school library.",
+        "hint": "It is already in your library, ready to use. Uploading again would read the same book a second time.",
+        "useExisting": "Use the one we have",
+        "uploadAnyway": "Upload anyway"
+      }
     },
     "scan": {
       "title": "Scan pages",

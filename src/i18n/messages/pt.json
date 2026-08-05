@@ -809,7 +809,16 @@
       "networkError": "Erro de conexão durante o envio.",
       "timedOut": "O envio expirou.",
       "couldNotStart": "Não foi possível iniciar o envio.",
-      "retryAdvice": "{error} Verifique sua conexão com a internet e tente de novo — livros grandes precisam de uma conexão estável por alguns minutos."
+      "retryAdvice": "{error} Verifique sua conexão com a internet e tente de novo — livros grandes precisam de uma conexão estável por alguns minutos.",
+      "duplicate": {
+        "checking": "Verificando…",
+        "title": "Sua escola já tem este livro",
+        "sameFile": "{title} — este mesmo arquivo já está na biblioteca da sua escola.",
+        "sameBook": "{title} — parece ser o mesmo livro, que já está na biblioteca da sua escola.",
+        "hint": "Ele já está na sua biblioteca, pronto para usar. Enviar de novo faria o sistema ler o mesmo livro uma segunda vez.",
+        "useExisting": "Usar o que já temos",
+        "uploadAnyway": "Enviar mesmo assim"
+      }
     },
     "scan": {
       "title": "Digitalizar páginas",
