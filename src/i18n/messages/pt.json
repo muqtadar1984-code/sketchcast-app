@@ -827,6 +827,7 @@
       "takePhotos": "Tirar fotos",
       "addPages": "Adicionar páginas",
       "choosePhotos": "Escolher fotos",
+      "androidFlow": "No Android, a câmera devolve uma foto por vez. Fotografe o capítulo inteiro no seu app de câmera e depois use Escolher fotos para pegar todas de uma vez.",
       "inAppBrowser": "A câmera costuma falhar dentro do navegador do Gmail/WhatsApp — abra sketchcast.app no Chrome ou no Safari, ou use Escolher fotos.",
       "cameraHint": "A câmera não devolveu nada? Use Escolher fotos para pegar da sua galeria.",
       "notPhotos": "Esses arquivos não eram fotos — escolha imagens das páginas.",

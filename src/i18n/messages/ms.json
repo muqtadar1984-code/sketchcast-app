@@ -827,6 +827,7 @@
       "takePhotos": "Ambil gambar",
       "addPages": "Tambah halaman",
       "choosePhotos": "Pilih gambar",
+      "androidFlow": "Di Android, kamera memberi satu gambar pada satu masa. Ambil gambar seluruh bab dalam aplikasi kamera anda dahulu, kemudian gunakan Pilih gambar untuk memilih semuanya sekali gus.",
       "inAppBrowser": "Kamera selalunya gagal dalam pelayar Gmail/WhatsApp — buka sketchcast.app dalam Chrome atau Safari, atau gunakan Pilih gambar.",
       "cameraHint": "Tiada apa-apa daripada kamera? Gunakan Pilih gambar untuk memilih dari galeri anda.",
       "notPhotos": "Fail itu bukan gambar — pilih imej halaman.",

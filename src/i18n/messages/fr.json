@@ -827,6 +827,7 @@
       "takePhotos": "Prendre des photos",
       "addPages": "Ajouter des pages",
       "choosePhotos": "Choisir des photos",
+      "androidFlow": "Sur Android, l'appareil photo ne renvoie qu'une photo à la fois. Photographiez d'abord tout le chapitre avec votre application appareil photo, puis choisissez-les toutes ici en une seule fois.",
       "inAppBrowser": "L'appareil photo fonctionne mal dans le navigateur de Gmail/WhatsApp — ouvrez sketchcast.app dans Chrome ou Safari, ou utilisez « Choisir des photos ».",
       "cameraHint": "Rien n'est revenu de l'appareil photo ? Utilisez « Choisir des photos » pour les prendre dans votre galerie.",
       "notPhotos": "Ces fichiers ne sont pas des photos — choisissez des images des pages.",

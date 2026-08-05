@@ -25,8 +25,30 @@ import { type LibraryMessages } from "./content-cell";
 
 const MAX_TOTAL_BYTES = 200 * 1024 * 1024; // must match the bucket's file_size_limit
 const SOFT_BUDGET = Math.round(MAX_TOTAL_BYTES * 0.9); // leave PDF overhead headroom
-const TARGET_PAGE_BYTES = 300 * 1024;
-const MAX_EDGE = 1600; // long-edge px — enough for OCR, far cheaper than a raw photo
+// RESOLUTION — the two constants below move together; changing one alone makes
+// things worse, not better.
+//
+// MAX_EDGE was 1600, and that was about HALF what OCR needs. An A4 page at
+// 1600px on the long edge is 137 ppi. Cap height is roughly 0.70 x point size,
+// so 10pt body text lands at ~13px and 12pt at ~16px. Tesseract asks for 300 DPI,
+// and the resolution study it cites puts the usable band at 20-40px of capital
+// height, best around 30px. We were under the floor.
+//
+// And it was worse than 1600 in practice: the photo is downscaled to MAX_EDGE
+// FIRST, then warpQuad (scan-cv.ts) sizes the flattened page from the quad's edge
+// lengths measured INSIDE that already-downscaled canvas. At a realistic 85-90%
+// frame fill the page came out ~1360-1440px, i.e. ~120 ppi.
+//
+// 2600 puts a 0.85-fill page at ~2210px = ~189 ppi: 10pt -> ~18px, 12pt -> ~22px,
+// inside the band. Native camera stills are 4000px+, so this is still a real
+// downscale rather than an upscale.
+//
+// TARGET_PAGE_BYTES has to rise with it. At 2600px a 300 KB target drives the
+// quality ladder to 0.35-0.42, which puts JPEG ringing straight onto glyph edges
+// — you would trade the new resolution back for artifacts. 900 KB x 40 pages is
+// 36 MB against a 180 MB SOFT_BUDGET, so the headroom is not the constraint.
+const TARGET_PAGE_BYTES = 900 * 1024;
+const MAX_EDGE = 2600; // long-edge px — see the note above before changing
 const QUALITIES = [0.72, 0.6, 0.5, 0.42, 0.35];
 
 type ScannedPage = {
@@ -58,12 +80,48 @@ const inAppBrowser =
 const mobileUA =
   typeof navigator !== "undefined" && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 
+// ANDROID TAKES A DIFFERENT ROUTE THROUGH THIS SHEET, and it is not a preference.
+//
+// `capture` and `multiple` do not conflict — both engines set the flags
+// independently and capture wins. But on Android, Chromium's capture path IGNORES
+// `multiple` outright: SelectFileDialog.captureImage() never reads
+// mAllowMultiple, EXTRA_ALLOW_MULTIPLE is only attached on the picker branch, and
+// the result comes back from a single mCameraOutputUri. So "Take photos" yields
+// exactly ONE photo per tap, and a 40-page chapter is 40 round trips.
+//
+// It cannot be automated away either: reopening the input needs transient
+// activation, and per the HTML spec only keydown/mousedown/pointerdown/pointerup/
+// touchend grant it — `change` does not. So there is no way to advance the camera
+// from the handler that receives the photo.
+//
+// The `library` input below has `multiple` and NO `capture`, which on Android is
+// the system photo picker — and Chromium DOES set EXTRA_PICK_IMAGES_MAX there
+// (50, or MediaStore.getPickImagesMaxLimit() on 13+). One multi-select covers a
+// whole chapter. So on Android the right flow is: shoot the chapter in the camera
+// app, come back, pick them all at once — ONE round trip, and a full-resolution
+// still with real autofocus rather than a preview frame.
+//
+// iOS is left alone: `capture` + `multiple` genuinely does multi-shot there.
+const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
 function canvasFrom(img: CanvasImageSource, w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
   c.getContext("2d")?.drawImage(img, 0, 0, w, h);
   return c;
+}
+
+/** Drop a canvas's backing store immediately instead of waiting for the GC.
+ * Each full-page canvas is width x height x 4 bytes — ~27 MB at 2600px — and a
+ * scan makes three per page (the downscale, the warp target, the encode buffer).
+ * Left to the collector that is ~80 MB of garbage per page racing the next
+ * page's allocations, on a phone that is also holding OpenCV's WASM heap.
+ * Setting either dimension to 0 frees it synchronously. */
+function release(c: HTMLCanvasElement | null | undefined) {
+  if (!c) return;
+  c.width = 0;
+  c.height = 0;
 }
 
 /** Grayscale + contrast (what OCR likes) and encode, stepping quality down to fit. */
@@ -84,6 +142,7 @@ async function encodePage(source: HTMLCanvasElement, target: number) {
     blob = await new Promise<Blob | null>((r) => out.toBlob(r, "image/jpeg", q));
     if (!blob || blob.size <= target) break;
   }
+  release(out); // the blob is independent of the canvas once toBlob resolves
   return blob;
 }
 
@@ -133,6 +192,29 @@ export default function PageScanner({
       document.body.style.overflow = previous;
     };
   }, []);
+
+  // Release every object URL when the sheet closes. remove() and applyQuad()
+  // already revoke the ones they replace, but closing or completing a scan left
+  // the rest alive: an object URL pins its blob for the life of the DOCUMENT, so
+  // a 40-page chapter walked away with ~80 live blobs — tens of MB held on a
+  // phone that has since navigated on. A ref, not `pages`, because an effect
+  // with [] deps would close over the empty first render.
+  const pagesRef = useRef<ScannedPage[]>([]);
+  useEffect(() => {
+    // Synced in an effect, never during render: React may render without
+    // committing, and a render-phase ref write would leave us revoking URLs for
+    // a page list that was never shown.
+    pagesRef.current = pages;
+  }, [pages]);
+  useEffect(
+    () => () => {
+      for (const p of pagesRef.current) {
+        URL.revokeObjectURL(p.url);
+        URL.revokeObjectURL(p.srcUrl);
+      }
+    },
+    [],
+  );
 
   // When focus comes back >3 s after the camera was opened with no `change`
   // event, the capture either failed or was cancelled — either way the gallery
@@ -191,6 +273,11 @@ export default function PageScanner({
         // between pages lets the browser paint and handle input. It costs
         // nothing: the work is bounded by OpenCV, not by this timeout.
         await new Promise((r) => setTimeout(r, 0));
+        // Declared out here so the finally can free them on EVERY exit path —
+        // the two `continue`s and the catch included. At 2600px each of these is
+        // ~27 MB of backing store.
+        let src: HTMLCanvasElement | null = null;
+        let flat: HTMLCanvasElement | null = null;
         try {
           const bitmap = await createImageBitmap(files[i]).catch(() => null);
           if (!bitmap) {
@@ -200,7 +287,7 @@ export default function PageScanner({
           const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
           const sw = Math.max(1, Math.round(bitmap.width * scale));
           const sh = Math.max(1, Math.round(bitmap.height * scale));
-          const src = canvasFrom(bitmap, sw, sh);
+          src = canvasFrom(bitmap, sw, sh);
           bitmap.close?.();
 
           // Cap the wait on detection: the first page can be stuck behind the
@@ -217,9 +304,9 @@ export default function PageScanner({
             detectQuad(src),
             new Promise<Quad | null>((r) => setTimeout(() => r(null), 4000)),
           ]);
-          const flat = quad ? await warpQuad(src, quad) : null;
+          flat = quad ? await warpQuad(src, quad) : null;
           const blob = await encodePage(flat ?? src, TARGET_PAGE_BYTES);
-          const srcBlob = await new Promise<Blob | null>((r) => src.toBlob(r, "image/jpeg", 0.8));
+          const srcBlob = await new Promise<Blob | null>((r) => src!.toBlob(r, "image/jpeg", 0.8));
           if (!blob || !srcBlob) {
             skipped++;
             continue;
@@ -243,6 +330,12 @@ export default function PageScanner({
           // no way back. OpenCV throws on odd inputs more often than you would
           // like; count it as skipped and carry on to the next page.
           skipped++;
+        } finally {
+          // Both blobs are already extracted by here, so the canvases are dead
+          // weight. Freeing them per page is what keeps a 40-page chapter from
+          // stacking hundreds of MB of backing stores against OpenCV's heap.
+          release(src);
+          release(flat);
         }
       }
       if (added.length) setPages((p) => [...p, ...added]);
@@ -313,10 +406,16 @@ export default function PageScanner({
         const page = pdf.addPage([img.width, img.height]);
         page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
       }
+      // pdf.save() types as Uint8Array<ArrayBufferLike>, and BlobPart demands
+      // ArrayBufferView<ArrayBuffer> — SharedArrayBuffer is not assignable. The
+      // previous fix was to memcpy into a fresh ArrayBuffer, which duplicated the
+      // entire PDF at the exact moment peak memory is highest (pdf-lib is still
+      // holding every embedded page image). A re-VIEW over the same buffer
+      // satisfies the type with no copy at all. The cast is sound: pdf-lib
+      // allocates a plain ArrayBuffer, never a shared one.
       const out = await pdf.save();
-      const buf = new ArrayBuffer(out.byteLength);
-      new Uint8Array(buf).set(out);
-      const blob = new Blob([buf], { type: "application/pdf" });
+      const view = new Uint8Array(out.buffer as ArrayBuffer, out.byteOffset, out.byteLength);
+      const blob = new Blob([view], { type: "application/pdf" });
       if (blob.size > MAX_TOTAL_BYTES) {
         setError(fmt(t.scan.tooBig, { size: mb(blob.size, t.upload.megabytes) }));
         setBusy(null);
@@ -330,6 +429,35 @@ export default function PageScanner({
   }
 
   const page = editing === null ? null : pages[editing];
+
+  // The two capture buttons, defined once so the platform decides their ORDER
+  // (see isAndroid) without either being duplicated or losing its wiring.
+  const cameraButton = (
+    <button
+      key="camera"
+      onClick={() => {
+        // Arm the no-return hint only on mobile (see mobileUA).
+        cameraClickedAt.current = mobileUA ? Date.now() : null;
+        cameraReturned.current = false;
+        setCameraHint(false);
+        camera.current?.click();
+      }}
+      disabled={!!busy}
+      className={`${isAndroid ? "btn-ghost" : "btn-primary"} h-10 px-4 text-sm`}
+    >
+      {pages.length ? t.scan.addPages : t.scan.takePhotos}
+    </button>
+  );
+  const pickerButton = (
+    <button
+      key="picker"
+      onClick={() => library.current?.click()}
+      disabled={!!busy}
+      className={`${isAndroid ? "btn-primary" : "btn-ghost"} h-10 px-4 text-sm`}
+    >
+      {t.scan.choosePhotos}
+    </button>
+  );
 
   return (
     // GEOMETRY, and why it is spelled out rather than `inset-0` + `vh`:
@@ -383,23 +511,23 @@ export default function PageScanner({
                 onChange={(e) => { cameraReturned.current = true; cameraClickedAt.current = null; setCameraHint(false); addPhotos(e.target.files); e.target.value = ""; }} />
               <input ref={library} type="file" accept="image/*" multiple className="hidden"
                 onChange={(e) => { setCameraHint(false); addPhotos(e.target.files); e.target.value = ""; }} />
-              <button
-                onClick={() => {
-                  // Arm the no-return hint only on mobile (see mobileUA).
-                  cameraClickedAt.current = mobileUA ? Date.now() : null;
-                  cameraReturned.current = false;
-                  setCameraHint(false);
-                  camera.current?.click();
-                }}
-                disabled={!!busy}
-                className="btn-primary h-10 px-4 text-sm"
-              >
-                {pages.length ? t.scan.addPages : t.scan.takePhotos}
-              </button>
-              <button onClick={() => library.current?.click()} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
-                {t.scan.choosePhotos}
-              </button>
+              {/* ORDER MATTERS, and it is per-platform (see the isAndroid note).
+                  On Android the camera returns ONE photo per tap, so leading with
+                  it walks a teacher into 40 round trips; the picker takes the
+                  whole chapter in one go. Everywhere else the camera is still the
+                  obvious first move. Both buttons stay available on both — this
+                  changes the DEFAULT, not what is possible.
+                  Swapped in the DOM rather than with CSS `order`, so the tab
+                  sequence and what a screen reader announces match what is on
+                  screen. */}
+              {isAndroid ? [pickerButton, cameraButton] : [cameraButton, pickerButton]}
             </div>
+
+            {/* Why the picker is the primary button here — without this the
+                teacher taps "Choose photos" and finds an empty gallery. */}
+            {isAndroid && !pages.length && (
+              <p className="mt-2 text-[11px] text-[#98A0A9]">{t.scan.androidFlow}</p>
+            )}
 
             {inAppBrowser && <p className="mt-2 text-[11px] text-[#98A0A9]">{t.scan.inAppBrowser}</p>}
 
