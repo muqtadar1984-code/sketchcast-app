@@ -24,7 +24,8 @@
       "access": "Akses",
       "admin": "Pentadbir",
       "myChildren": "Anak Saya",
-      "testPapers": "Kertas Ujian"
+      "testPapers": "Kertas Ujian",
+      "books": "Buku"
     },
     "openMenu": "Buka menu",
     "closeMenu": "Tutup menu",
@@ -1048,6 +1049,15 @@
     },
     "shelf": {
       "alsoInSchool": "Juga di sekolah anda ({n})"
+    },
+    "withdrawn": {
+      "title": "Sekolah anda telah menggantikan sebuah buku",
+      "itemOne": "{book} telah ditarik balik — 1 kit anda turut dikeluarkan bersamanya.",
+      "itemMany": "{book} telah ditarik balik — {n} kit anda turut dikeluarkan bersamanya.",
+      "itemUnknownOne": "Sebuah buku telah ditarik balik — 1 kit anda turut dikeluarkan bersamanya.",
+      "itemUnknownMany": "Sebuah buku telah ditarik balik — {n} kit anda turut dikeluarkan bersamanya.",
+      "workKept": "Markah dan kerja yang sudah disiapkan oleh pelajar anda tetap disimpan.",
+      "dismiss": "Ketepikan"
     }
   },
   "school": {
@@ -1502,6 +1512,31 @@
         "creating": "Mencipta…",
         "create": "Cipta log masuk",
         "failed": "Tidak dapat menambah anak."
+      }
+    },
+    "books": {
+      "title": "Buku sekolah",
+      "intro": "Buku teks yang telah dimuat naik oleh sekolah anda. Setiap guru boleh menjana pelajaran daripadanya, jadi tiada sesiapa perlu memuat naik buku yang sama dua kali.",
+      "empty": "Belum ada buku. Buku yang dimuat naik oleh mana-mana guru akan dipaparkan di sini untuk seluruh sekolah.",
+      "unknownAuthor": "Penulis tidak diketahui",
+      "indexing": "Membaca buku",
+      "addedBy": "ditambah oleh {name}",
+      "kitsOne": "1 kit dijana daripada buku ini",
+      "kitsMany": "{n} kit dijana daripada buku ini",
+      "note": "Membuang buku bermakna ia tidak lagi digunakan untuk pelajaran baharu. Kerja yang telah dibuat pelajar tetap disimpan.",
+      "withdraw": {
+        "action": "Buang",
+        "title": "Buang {book} daripada sekolah?",
+        "checking": "Menyemak apa yang menggunakan buku ini…",
+        "summary": "Ini menarik balik {kits} kit yang dijana oleh {teachers} guru.",
+        "unassign": "Ia juga membatalkan tugasan kerja bagi {students} pelajar dan {classes} kelas.",
+        "noKits": "Belum ada pelajaran dijana daripada buku ini.",
+        "recordKept": "Markah dan kerja yang telah disiapkan tetap disimpan. Hanya bahan pengajaran yang ditarik balik.",
+        "typeToConfirm": "Taip {book} untuk mengesahkan",
+        "cancel": "Batal",
+        "confirm": "Buang daripada sekolah",
+        "removing": "Membuang…",
+        "failed": "Itu tidak berjaya. Sila cuba lagi."
       }
     }
   },

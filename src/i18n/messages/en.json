@@ -24,7 +24,8 @@
       "access": "Access",
       "admin": "Admin",
       "myChildren": "My Children",
-      "testPapers": "Test Papers"
+      "testPapers": "Test Papers",
+      "books": "Books"
     },
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
@@ -1048,6 +1049,15 @@
     },
     "shelf": {
       "alsoInSchool": "Also in your school ({n})"
+    },
+    "withdrawn": {
+      "title": "Your school replaced a book",
+      "itemOne": "{book} was removed — 1 of your kits went with it.",
+      "itemMany": "{book} was removed — {n} of your kits went with it.",
+      "itemUnknownOne": "A book was removed — 1 of your kits went with it.",
+      "itemUnknownMany": "A book was removed — {n} of your kits went with it.",
+      "workKept": "Marks and work your students already completed are kept.",
+      "dismiss": "Dismiss"
     }
   },
   "school": {
@@ -1502,6 +1512,31 @@
         "creating": "Creating…",
         "create": "Create login",
         "failed": "Could not add the child."
+      }
+    },
+    "books": {
+      "title": "School books",
+      "intro": "The textbooks your school has uploaded. Every teacher can generate from these, so nobody has to upload the same book twice.",
+      "empty": "No books yet. A book uploaded by any teacher appears here for the whole school.",
+      "unknownAuthor": "Unknown author",
+      "indexing": "Reading the book",
+      "addedBy": "added by {name}",
+      "kitsOne": "1 kit made from this book",
+      "kitsMany": "{n} kits made from this book",
+      "note": "Removing a book stops it being used for new lessons. Work students have already done is kept.",
+      "withdraw": {
+        "action": "Remove",
+        "title": "Remove {book} from the school?",
+        "checking": "Checking what uses this book…",
+        "summary": "This withdraws {kits} kits made by {teachers} teachers.",
+        "unassign": "It also unassigns work from {students} students and {classes} classes.",
+        "noKits": "No lessons have been made from this book yet.",
+        "recordKept": "Marks and completed work are kept. Only the teaching material is withdrawn.",
+        "typeToConfirm": "Type {book} to confirm",
+        "cancel": "Cancel",
+        "confirm": "Remove from school",
+        "removing": "Removing…",
+        "failed": "That did not work. Please try again."
       }
     }
   },

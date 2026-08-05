@@ -80,6 +80,9 @@ function tabsForHat(
       { href: "/dashboard/school/access", label: t.access },
     );
     if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: t.admin });
+    // The school's shelf. Leadership holds no Library tab at all, so without
+    // this there is nowhere for a principal to see what the school owns.
+    tabs.push({ href: "/dashboard/school/books", label: t.books });
   }
   // Leadership's diary is the read-only school surface, not the personal one.
   if (diaryOn) tabs.push({ href: "/dashboard/school/diary", label: t.diary });
@@ -120,6 +123,7 @@ function tabsFor(
       { href: "/dashboard/school/access", label: t.access },
     );
     if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: t.admin });
+    tabs.push({ href: "/dashboard/school/books", label: t.books });
   }
   if (timetableOn)
     tabs.push(

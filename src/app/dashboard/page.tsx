@@ -21,6 +21,7 @@ import FeedbackWidget from "./feedback-widget";
 import ReportIssueWidget from "./report-issue-widget";
 import BetaBanner from "./beta-banner";
 import FairUseMeter from "./fair-use-meter";
+import WithdrawnNotice from "./withdrawn-notice";
 import GettingStarted from "./getting-started";
 import NoticeBanner from "./notice-banner";
 import NoticesCard from "./notices-card";
@@ -587,6 +588,10 @@ export default async function DashboardPage() {
       "id, title, status, created_at, kind, chapter_ref, book_id, params, artifacts(kind, storage_path), jobs(*)",
     )
     .eq("owner_id", user.id)
+    // Kits whose source book the school retired (0070). "Withdrawn" has to
+    // mean gone from the shelf it was taught from, or the whole act is
+    // cosmetic — the row itself survives so past scores keep their title.
+    .is("withdrawn_at", null)
     .order("created_at", { ascending: false });
 
   type LessonRow = {
@@ -927,6 +932,8 @@ export default async function DashboardPage() {
 
         {/* Fair-use transparency: what this month's plan includes, what's used,
             what carried over (0047). The DB triggers are the guard. */}
+        <WithdrawnNotice />
+
         {lessonTools && <FairUseMeter />}
 
         {/* The trial's book slot comes from the 0046 ledger (my_trial_book_used):

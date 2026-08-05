@@ -24,7 +24,8 @@
       "access": "Accès",
       "admin": "Admin",
       "myChildren": "Mes enfants",
-      "testPapers": "Contrôles"
+      "testPapers": "Contrôles",
+      "books": "Livres"
     },
     "openMenu": "Ouvrir le menu",
     "closeMenu": "Fermer le menu",
@@ -1048,6 +1049,15 @@
     },
     "shelf": {
       "alsoInSchool": "Également dans votre école ({n})"
+    },
+    "withdrawn": {
+      "title": "Votre école a remplacé un livre",
+      "itemOne": "« {book} » a été retiré — et 1 de vos kits avec lui.",
+      "itemMany": "« {book} » a été retiré — et {n} de vos kits avec lui.",
+      "itemUnknownOne": "Un livre a été retiré — et 1 de vos kits avec lui.",
+      "itemUnknownMany": "Un livre a été retiré — et {n} de vos kits avec lui.",
+      "workKept": "Les notes et les travaux déjà terminés par vos élèves sont conservés.",
+      "dismiss": "Masquer"
     }
   },
   "school": {
@@ -1502,6 +1512,31 @@
         "creating": "Création…",
         "create": "Créer l'accès",
         "failed": "Impossible d'ajouter l'enfant."
+      }
+    },
+    "books": {
+      "title": "Livres de l'école",
+      "intro": "Les manuels que votre école a importés. Chaque enseignant peut en générer des leçons — personne n'a ainsi à importer deux fois le même livre.",
+      "empty": "Aucun livre pour l'instant. Dès qu'un enseignant importe un livre, celui-ci apparaît ici pour toute l'école.",
+      "unknownAuthor": "Auteur inconnu",
+      "indexing": "Lecture du livre",
+      "addedBy": "ajouté par {name}",
+      "kitsOne": "1 kit généré à partir de ce livre",
+      "kitsMany": "{n} kits générés à partir de ce livre",
+      "note": "Retirer un livre l'empêche de servir à de nouvelles leçons. Le travail déjà réalisé par les élèves est conservé.",
+      "withdraw": {
+        "action": "Retirer",
+        "title": "Retirer {book} de l'école ?",
+        "checking": "Vérification de ce qui utilise ce livre…",
+        "summary": "Cette action retire {kits} kits générés par {teachers} enseignants.",
+        "unassign": "Elle annule aussi l'attribution de ce travail à {students} élèves et {classes} classes.",
+        "noKits": "Aucune leçon n'a encore été générée à partir de ce livre.",
+        "recordKept": "Les notes et les travaux rendus sont conservés. Seul le matériel pédagogique est retiré.",
+        "typeToConfirm": "Saisissez {book} pour confirmer",
+        "cancel": "Annuler",
+        "confirm": "Retirer de l'école",
+        "removing": "Retrait…",
+        "failed": "Cela n'a pas fonctionné. Réessayez."
       }
     }
   },

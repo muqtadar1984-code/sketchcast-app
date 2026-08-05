@@ -24,7 +24,8 @@
       "access": "Acesso",
       "admin": "Admin",
       "myChildren": "Meus filhos",
-      "testPapers": "Provas"
+      "testPapers": "Provas",
+      "books": "Livros"
     },
     "openMenu": "Abrir menu",
     "closeMenu": "Fechar menu",
@@ -1048,6 +1049,15 @@
     },
     "shelf": {
       "alsoInSchool": "Também na sua escola ({n})"
+    },
+    "withdrawn": {
+      "title": "Sua escola substituiu um livro",
+      "itemOne": "O livro {book} foi removido — 1 dos seus kits saiu com ele.",
+      "itemMany": "O livro {book} foi removido — {n} dos seus kits saíram com ele.",
+      "itemUnknownOne": "Um livro foi removido — 1 dos seus kits saiu com ele.",
+      "itemUnknownMany": "Um livro foi removido — {n} dos seus kits saíram com ele.",
+      "workKept": "As notas e os trabalhos que seus alunos já concluíram continuam guardados.",
+      "dismiss": "Dispensar"
     }
   },
   "school": {
@@ -1502,6 +1512,31 @@
         "creating": "Criando…",
         "create": "Criar login",
         "failed": "Não foi possível adicionar o filho."
+      }
+    },
+    "books": {
+      "title": "Livros da escola",
+      "intro": "Os livros didáticos que sua escola enviou. Qualquer professor pode gerar aulas a partir deles, então ninguém precisa enviar o mesmo livro duas vezes.",
+      "empty": "Nenhum livro ainda. Um livro enviado por qualquer professor aparece aqui para a escola toda.",
+      "unknownAuthor": "Autor desconhecido",
+      "indexing": "Lendo o livro",
+      "addedBy": "adicionado por {name}",
+      "kitsOne": "1 kit gerado a partir deste livro",
+      "kitsMany": "{n} kits gerados a partir deste livro",
+      "note": "Remover um livro impede que ele seja usado em novas aulas. O trabalho que os alunos já fizeram é mantido.",
+      "withdraw": {
+        "action": "Remover",
+        "title": "Remover {book} da escola?",
+        "checking": "Verificando o que usa este livro…",
+        "summary": "Isso retira {kits} kits gerados por {teachers} professores.",
+        "unassign": "Também desfaz as atribuições de {students} alunos e {classes} turmas.",
+        "noKits": "Nenhuma aula foi gerada a partir deste livro ainda.",
+        "recordKept": "As notas e os trabalhos já concluídos são mantidos. Só o material didático é retirado.",
+        "typeToConfirm": "Digite {book} para confirmar",
+        "cancel": "Cancelar",
+        "confirm": "Remover da escola",
+        "removing": "Removendo…",
+        "failed": "Não deu certo. Tente de novo."
       }
     }
   },

@@ -24,7 +24,8 @@
       "access": "Acceso",
       "admin": "Admin",
       "myChildren": "Mis hijos",
-      "testPapers": "Exámenes"
+      "testPapers": "Exámenes",
+      "books": "Libros"
     },
     "openMenu": "Abrir menú",
     "closeMenu": "Cerrar menú",
@@ -1048,6 +1049,15 @@
     },
     "shelf": {
       "alsoInSchool": "También en tu escuela ({n})"
+    },
+    "withdrawn": {
+      "title": "Su escuela reemplazó un libro",
+      "itemOne": "Se retiró {book} — y con él, 1 de sus kits.",
+      "itemMany": "Se retiró {book} — y con él, {n} de sus kits.",
+      "itemUnknownOne": "Se retiró un libro — y con él, 1 de sus kits.",
+      "itemUnknownMany": "Se retiró un libro — y con él, {n} de sus kits.",
+      "workKept": "Se conservan las notas y el trabajo que sus alumnos ya completaron.",
+      "dismiss": "Cerrar"
     }
   },
   "school": {
@@ -1502,6 +1512,31 @@
         "creating": "Creando…",
         "create": "Crear acceso",
         "failed": "No se pudo agregar al hijo."
+      }
+    },
+    "books": {
+      "title": "Libros de la escuela",
+      "intro": "Los libros de texto que ha subido su escuela. Todos los profesores pueden generar a partir de ellos, de modo que nadie tenga que subir el mismo libro dos veces.",
+      "empty": "Todavía no hay libros. Cuando cualquier profesor sube un libro, aparece aquí para toda la escuela.",
+      "unknownAuthor": "Autor desconocido",
+      "indexing": "Leyendo el libro",
+      "addedBy": "agregado por {name}",
+      "kitsOne": "1 kit generado a partir de este libro",
+      "kitsMany": "{n} kits generados a partir de este libro",
+      "note": "Quitar un libro impide que se use para nuevas lecciones. El trabajo que los alumnos ya hicieron se conserva.",
+      "withdraw": {
+        "action": "Quitar",
+        "title": "¿Quitar {book} de la escuela?",
+        "checking": "Comprobando qué depende de este libro…",
+        "summary": "Se retirarán {kits} kits generados por {teachers} profesores.",
+        "unassign": "También dejarán de estar asignados a {students} alumnos y {classes} clases.",
+        "noKits": "Todavía no se ha generado ninguna lección a partir de este libro.",
+        "recordKept": "Las notas y el trabajo completado se conservan. Solo se retira el material didáctico.",
+        "typeToConfirm": "Escriba {book} para confirmar",
+        "cancel": "Cancelar",
+        "confirm": "Quitar de la escuela",
+        "removing": "Quitando…",
+        "failed": "No funcionó. Inténtelo de nuevo."
       }
     }
   },
