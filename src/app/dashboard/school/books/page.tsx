@@ -62,6 +62,26 @@ export default async function SchoolBooksPage() {
   const schoolId = (profile?.school_id as string | null) ?? null;
   if (!role || role === "student" || !schoolId) redirect("/dashboard");
   if (!(await schoolAnalyticsEnabledFor(supabase, schoolId))) redirect("/dashboard");
+
+  // THE authorisation gate. enforceHat below is NOT one — it is presentation
+  // only, and returns null whenever there is no `sc_hat` cookie (a teacher who
+  // has never used the hat switcher has none) or when FEATURE_ROLE_HATS is off.
+  // Without this check any teacher in the school could open the leadership
+  // inventory and see a Retire control on every colleague's book; the RPCs
+  // would refuse the act, but the surface itself should never render. Same
+  // shape as school/page.tsx and school/access/page.tsx.
+  const isAdmin = role === "school_admin";
+  if (!isAdmin) {
+    // Scope in THIS school only — a stale grant from a former school must not
+    // open the door (0052).
+    const { data: scopes } = await supabase
+      .from("coordinator_scope")
+      .select("id")
+      .eq("school_id", schoolId)
+      .limit(1);
+    if ((scopes?.length ?? 0) === 0) redirect("/dashboard");
+  }
+
   // One-hat mode: the School pages belong to the leadership hats.
   const hatAway = await enforceHat(supabase, role, schoolId, "leadership");
   if (hatAway) redirect(hatAway);

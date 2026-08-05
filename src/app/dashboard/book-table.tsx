@@ -258,7 +258,14 @@ export default function BookTable({
                 <span className="text-xs text-[#5B6470]">
                   {new Date(b.createdAt).toLocaleDateString(lang)}
                 </span>
-                <DeleteBook bookId={b.id} storagePath={b.storagePath} />
+                {/* Only on your OWN books. books_write is (owner_id =
+                    auth.uid()), so deleting a colleague's school book was
+                    always going to be refused — offering the button just
+                    promised something the database would never allow.
+                    Retiring a shared book is leadership's act, on the School
+                    books page, where it withdraws kits instead of destroying
+                    the source. */}
+                {!b.sharedBy && <DeleteBook bookId={b.id} storagePath={b.storagePath} />}
               </div>
             </div>
 
