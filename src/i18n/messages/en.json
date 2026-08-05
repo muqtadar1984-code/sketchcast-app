@@ -1611,15 +1611,15 @@
   "fairUse": {
     "title": "Fair use this month",
     "resets": "resets {date} · unused allowance carries one month forward",
-    "lessons": "Lessons",
-    "kitFree": "Each lesson includes its full document kit — plan, activities, worksheet, test paper and case study — free.",
+    "lessons": "Generations",
+    "kitFree": "A lesson, plan, activities, worksheet, test paper or case study — each counts as one.",
     "usage": "{used} of {cap}",
     "usageCarried": "{used} of {cap} +{carry} carried",
     "trialTitle": "Free trial — every feature unlocked",
     "trialEnds": "trial ends {date}",
-    "trialLessons": "Trial lessons",
-    "trialLeft": "{available} of {cap} lessons left — each brings its full document kit free. After the trial, the free plan covers one lesson at a time.",
-    "trialSpent": "You have used all {cap} trial lessons. Subscribe to keep generating — the free plan covers one lesson at a time.",
+    "trialLessons": "Trial generations",
+    "trialLeft": "{available} of {cap} generations left. After the trial, the free plan covers one lesson at a time.",
+    "trialSpent": "You have used all {cap} trial generations. Subscribe to keep generating — the free plan covers one lesson at a time.",
     "parts": "Lesson parts",
     "documents": "Documents"
   }

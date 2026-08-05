@@ -1611,15 +1611,15 @@
   "fairUse": {
     "title": "Uso justo neste mês",
     "resets": "renova em {date} · o que sobrar vale por mais um mês",
-    "lessons": "Aulas",
-    "kitFree": "Cada aula já vem com o kit completo de documentos — plano, atividades, exercícios, prova e estudo de caso — sem custo.",
+    "lessons": "Gerações",
+    "kitFree": "Aula, plano, atividades, exercícios, prova ou estudo de caso — cada um conta como uma geração.",
     "usage": "{used} de {cap}",
     "usageCarried": "{used} de {cap} +{carry} acumulados",
     "trialTitle": "Teste grátis — tudo liberado",
     "trialEnds": "termina em {date}",
-    "trialLessons": "Aulas do teste",
-    "trialLeft": "Restam {available} de {cap} aulas — cada uma traz o kit completo de documentos sem custo. Depois do teste, o plano grátis cobre uma aula por vez.",
-    "trialSpent": "Você usou as {cap} aulas do teste. Assine para continuar gerando — o plano grátis cobre uma aula por vez.",
+    "trialLessons": "Gerações do teste",
+    "trialLeft": "Restam {available} de {cap} gerações. Depois do teste, o plano grátis cobre uma aula por vez.",
+    "trialSpent": "Você usou as {cap} gerações do teste. Assine para continuar gerando — o plano grátis cobre uma aula por vez.",
     "parts": "Partes de aula",
     "documents": "Documentos"
   }
