@@ -146,12 +146,24 @@ export default function GenerateKitButton({
       (r) => r.kind === "presentation" || !skipKinds.includes(r.kind),
     );
     const { error: gErr } = await supabase.from("generations").insert(rows);
-    setBusy(false);
     if (gErr) {
+      setBusy(false); // only the failure path frees the button
       setError(gErr.message);
       return;
     }
+    // DO NOT clear busy here. The insert is fast — the real work happens later in
+    // the worker — but nothing on screen changes until router.refresh() lands. It
+    // used to re-enable in that gap, so the teacher saw a live button on an
+    // apparently untouched page, clicked again, and got a SECOND full kit. That
+    // happened twice in production (3.8 s and 18 s apart), and since 0075 a kit is
+    // 6 credits against a Teacher Pro allowance of 24.
+    //
+    // Staying disabled until the refresh replaces this control is the fix. The
+    // timeout is only so a refresh that never lands cannot strand the button
+    // forever — by then the row exists and the server-side guard (0076) covers
+    // the click anyway.
     router.refresh();
+    setTimeout(() => setBusy(false), 15000);
   }
 
   // Rendered OUTSIDE the trigger: the card variant makes the caller's whole
