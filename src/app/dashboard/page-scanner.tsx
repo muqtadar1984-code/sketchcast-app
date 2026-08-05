@@ -116,6 +116,38 @@ function Ring() {
   );
 }
 
+/** The rectangle the user can actually SEE, in layout-viewport coordinates.
+ *
+ * Every CSS unit available to a fixed overlay — `inset-0`, `100vw`, `100dvh` —
+ * resolves against the LAYOUT viewport. When those differ from what is on screen
+ * (pinch zoom, a browser that lays out wider than the device, an in-app browser
+ * with its own ideas) a sheet pinned with CSS is correct by the spec and wrong
+ * on the phone: it lands part-way off the right edge with its buttons cut in
+ * half. Reported exactly that way, twice, and two CSS-only attempts failed to
+ * fix it because CSS cannot see this.
+ *
+ * visualViewport can: width/height are what is visible, offsetLeft/offsetTop are
+ * where that window sits. Returns null when unsupported, and the caller keeps
+ * its CSS fallback. */
+function useVisibleRect() {
+  const [rect, setRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = typeof window === "undefined" ? null : window.visualViewport;
+    if (!vv) return;
+    const update = () =>
+      setRect({ left: vv.offsetLeft, top: vv.offsetTop, width: vv.width, height: vv.height });
+    update();
+    // resize covers zoom and the keyboard; scroll covers panning a zoomed page.
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
+  return rect;
+}
+
 function canvasFrom(img: CanvasImageSource, w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
@@ -491,6 +523,7 @@ export default function PageScanner({
   }
 
   const page = editing === null ? null : pages[editing];
+  const visible = useVisibleRect();
 
   // The two capture buttons, defined once so the platform decides their ORDER
   // (see isAndroid) without either being duplicated or losing its wiring.
@@ -552,6 +585,21 @@ export default function PageScanner({
     // teacher had scrolled to, it lands on screen.
     <div
       className="fixed inset-x-0 top-0 z-50 h-[100dvh] flex items-end sm:items-center justify-center bg-[#14181F]/45 sm:p-4"
+      // Inline wins over the classes above, which stay as the fallback for any
+      // browser without visualViewport. right/bottom are cleared so `inset-x-0`
+      // cannot over-constrain the box and have one of our edges dropped.
+      style={
+        visible
+          ? {
+              left: visible.left,
+              top: visible.top,
+              right: "auto",
+              bottom: "auto",
+              width: visible.width,
+              height: visible.height,
+            }
+          : undefined
+      }
       role="dialog"
       aria-modal="true"
     >
@@ -564,7 +612,10 @@ export default function PageScanner({
           cannot happen however the parent got wide. It never binds on desktop,
           where sm:max-w-2xl is far narrower. `break-words` stops a long
           unbroken string doing the same thing from the inside. */}
-      <div className="w-full max-w-[100vw] sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain [overflow-wrap:anywhere] rounded-t-2xl sm:rounded-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl">
+      {/* Sized against the OVERLAY (max-w-full / max-h-[92%]), not against the
+          viewport — the overlay is now the visible rectangle, so a percentage of
+          it is right whatever the browser claims the viewport is. */}
+      <div className="w-full max-w-full sm:max-w-2xl max-h-[92%] overflow-y-auto overscroll-contain [overflow-wrap:anywhere] rounded-t-2xl sm:rounded-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl">
         {page ? (
           <CornerEditor
             page={page}
@@ -659,14 +710,30 @@ export default function PageScanner({
                 <ul className="mt-4 grid grid-cols-3 sm:grid-cols-5 gap-3">
                   {pages.map((p, i) => (
                     <li key={p.id} className="group relative rounded-lg border border-[#DCE6E2] overflow-hidden bg-[#F5F6F3]">
-                      {/* Local object URL of a just-captured photo — next/image adds nothing. */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.url} alt={fmt(t.scan.pageAlt, { n: i + 1 })} className="w-full h-24 object-cover" />
-                      <span className="absolute top-1 start-1 rounded bg-[#14181F]/70 px-1.5 text-[10px] text-white">{i + 1}</span>
+                      {/* The copy above says "tap a page to set its edges by hand",
+                          so the page itself must be the control. It was not — the
+                          only way in was the Edges button below, which lived
+                          behind group-hover and therefore did not exist on a
+                          phone. Reported as the app freezing: the teacher was
+                          tapping something that could never appear.
+                          Local object URL of a just-captured photo — next/image adds nothing. */}
+                      <button
+                        type="button"
+                        onClick={() => setEditing(i)}
+                        aria-label={`${fmt(t.scan.pageAlt, { n: i + 1 })} — ${t.scan.editTitle}`}
+                        className="block w-full"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.url} alt={fmt(t.scan.pageAlt, { n: i + 1 })} className="w-full h-24 object-cover" />
+                      </button>
+                      {/* Badges sit over the button, so they must not eat its taps. */}
+                      <span className="pointer-events-none absolute top-1 start-1 rounded bg-[#14181F]/70 px-1.5 text-[10px] text-white">{i + 1}</span>
                       {!p.quad && (
-                        <span className="absolute top-1 end-1 rounded bg-[#FFF1D6] px-1 text-[9px] text-[#9A6400]">{t.scan.uncropped}</span>
+                        <span className="pointer-events-none absolute top-1 end-1 rounded bg-[#FFF1D6] px-1 text-[9px] text-[#9A6400]">{t.scan.uncropped}</span>
                       )}
-                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-white/90 px-1 py-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      {/* Always visible. Hover-to-reveal is a desktop idiom that
+                          silently removes the control on every touch device. */}
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-white/90 px-1 py-0.5">
                         <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={fmt(t.scan.moveEarlier, { n: i + 1 })} className="rtl-flip px-1 text-xs disabled:opacity-30">←</button>
                         <button onClick={() => setEditing(i)} className="px-1 text-[10px] font-medium text-[#0C8175]">{t.scan.edges}</button>
                         <button onClick={() => remove(i)} aria-label={fmt(t.scan.removePage, { n: i + 1 })} className="px-1 text-xs text-red-600">✕</button>
@@ -775,7 +842,19 @@ function CornerEditor({
               strokeWidth={Math.max(2, page.srcW * 0.004)}
               style={{ cursor: "grab" }}
               onPointerDown={(e) => {
-                (e.target as Element).releasePointerCapture?.(e.pointerId);
+                // Touch pointers are implicitly captured by their target, which
+                // would keep every move event on this circle instead of letting
+                // it reach the parent's onPointerMove. Release it so dragging
+                // works — but releasePointerCapture THROWS NotFoundError when
+                // the element holds no capture (the mouse case, where there is
+                // no implicit capture at all). `?.` only guards the method
+                // existing, not the throw, and an exception here would abandon
+                // setDrag and leave the corner undraggable.
+                try {
+                  (e.target as Element).releasePointerCapture?.(e.pointerId);
+                } catch {
+                  /* no capture to release — nothing to undo */
+                }
                 setDrag(i);
               }}
             />
