@@ -104,6 +104,18 @@ const mobileUA =
 // iOS is left alone: `capture` + `multiple` genuinely does multi-shot there.
 const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 
+/** A small spinning ring. `shrink-0` so it never collapses when the text beside
+ * it wraps, and aria-hidden because the label next to it already says what is
+ * happening — a screen reader announcing "image" here would add nothing. */
+function Ring() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function canvasFrom(img: CanvasImageSource, w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
@@ -169,6 +181,13 @@ export default function PageScanner({
   const cameraClickedAt = useRef<number | null>(null);
   const cameraReturned = useRef(false);
   const [cameraHint, setCameraHint] = useState(false);
+  // Tapping "Take photos" used to produce NOTHING for 4.5 s — the no-return hint
+  // needs 3 s of elapsed time plus a 1.5 s settle before it can appear, and the
+  // camera itself is an app switch the page gets no event for. A teacher on a
+  // device where the hand-off silently fails (a Chrome Custom Tab opened from
+  // another app, a webview without camera permission) sees a dead button and
+  // reasonably calls it frozen. This flips the instant the tap lands.
+  const [cameraOpening, setCameraOpening] = useState(false);
 
   const total = pages.reduce((n, p) => n + p.bytes, 0);
   const overBudget = total >= SOFT_BUDGET;
@@ -225,7 +244,17 @@ export default function PageScanner({
   // switches) can't re-raise it.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let settle: ReturnType<typeof setTimeout> | null = null;
     const onFocus = () => {
+      // Focus back means the app switch is over, however it ended. Give `change`
+      // a beat to land (on a SUCCESSFUL capture focus arrives first), then stop
+      // claiming the camera is opening — otherwise a cancelled or failed capture
+      // leaves the spinner running for ever.
+      if (settle) clearTimeout(settle);
+      settle = setTimeout(() => {
+        if (!cameraReturned.current) setCameraOpening(false);
+      }, 700);
+
       if (
         cameraClickedAt.current !== null &&
         !cameraReturned.current &&
@@ -244,8 +273,25 @@ export default function PageScanner({
     return () => {
       window.removeEventListener("focus", onFocus);
       if (timer) clearTimeout(timer);
+      if (settle) clearTimeout(settle);
     };
   }, []);
+
+  // The dead-tap safety net. If the camera hand-off silently fails — a Chrome
+  // Custom Tab launched from another app, a webview whose host lacks camera
+  // permission — the page NEVER blurs, so the focus handler above never runs and
+  // nothing would ever clear the spinner. After 10 s of no app switch and no
+  // photo, say so and point at the picker, which works everywhere.
+  useEffect(() => {
+    if (!cameraOpening) return;
+    const t = setTimeout(() => {
+      if (!cameraReturned.current) {
+        setCameraOpening(false);
+        setCameraHint(true);
+      }
+    }, 10000);
+    return () => clearTimeout(t);
+  }, [cameraOpening]);
 
   const addPhotos = useCallback(
     async (list: FileList | null) => {
@@ -440,6 +486,7 @@ export default function PageScanner({
         cameraClickedAt.current = mobileUA ? Date.now() : null;
         cameraReturned.current = false;
         setCameraHint(false);
+        setCameraOpening(true);
         camera.current?.click();
       }}
       disabled={!!busy}
@@ -482,7 +529,16 @@ export default function PageScanner({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl">
+      {/* max-w-[100vw] is a GUARD, not a diagnosis. Reported from a Chrome
+          Custom Tab on an S24 Ultra: the sheet rendered wider than the screen,
+          clipping the right-hand end of every line and half the Cancel button.
+          `w-full` resolves against the overlay, and the overlay against the
+          layout viewport — so if anything on the page has widened the layout
+          viewport, the sheet inherits it. Capping at one viewport width means it
+          cannot happen however the parent got wide. It never binds on desktop,
+          where sm:max-w-2xl is far narrower. `break-words` stops a long
+          unbroken string doing the same thing from the inside. */}
+      <div className="w-full max-w-[100vw] sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain [overflow-wrap:anywhere] rounded-t-2xl sm:rounded-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl">
         {page ? (
           <CornerEditor
             page={page}
@@ -508,9 +564,9 @@ export default function PageScanner({
               {/* `capture` opens the camera on a phone; on desktop it's a file
                   picker, which is also useful (photos already taken). */}
               <input ref={camera} type="file" accept="image/*" capture="environment" multiple className="hidden"
-                onChange={(e) => { cameraReturned.current = true; cameraClickedAt.current = null; setCameraHint(false); addPhotos(e.target.files); e.target.value = ""; }} />
+                onChange={(e) => { cameraReturned.current = true; cameraClickedAt.current = null; setCameraHint(false); setCameraOpening(false); addPhotos(e.target.files); e.target.value = ""; }} />
               <input ref={library} type="file" accept="image/*" multiple className="hidden"
-                onChange={(e) => { setCameraHint(false); addPhotos(e.target.files); e.target.value = ""; }} />
+                onChange={(e) => { setCameraHint(false); setCameraOpening(false); addPhotos(e.target.files); e.target.value = ""; }} />
               {/* ORDER MATTERS, and it is per-platform (see the isAndroid note).
                   On Android the camera returns ONE photo per tap, so leading with
                   it walks a teacher into 40 round trips; the picker takes the
@@ -531,7 +587,22 @@ export default function PageScanner({
 
             {inAppBrowser && <p className="mt-2 text-[11px] text-[#98A0A9]">{t.scan.inAppBrowser}</p>}
 
-            {busy && <p className="mt-3 text-xs text-[#9A6400]">{busy}</p>}
+            {/* Handing off to the camera is an app switch the page gets no event
+                for, and processing a page is seconds of OpenCV. Both used to show
+                nothing, or text with no sign of life. The ring is what tells a
+                teacher the tap landed. */}
+            {cameraOpening && !busy && (
+              <p className="mt-3 flex items-center gap-2 text-xs text-[#5B6470]">
+                <Ring />
+                {t.common.loading}
+              </p>
+            )}
+            {busy && (
+              <p className="mt-3 flex items-center gap-2 text-xs text-[#9A6400]">
+                <Ring />
+                {busy}
+              </p>
+            )}
             {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
             {cameraHint && !busy && <p className="mt-3 text-xs text-[#5B6470]">{t.scan.cameraHint}</p>}
 
