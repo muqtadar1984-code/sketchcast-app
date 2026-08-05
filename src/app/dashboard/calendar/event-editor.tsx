@@ -157,7 +157,7 @@ export default function EventEditor({
           <form
             onSubmit={save}
             onClick={(e) => e.stopPropagation()}
-            className="card w-full max-w-md p-6 space-y-3 max-h-[90vh] overflow-y-auto"
+            className="card w-full max-w-md p-6 space-y-3 max-h-[90dvh] overflow-y-auto"
           >
             <h2 className="text-lg">{existing ? t.editTitle : t.newTitle}</h2>
             <input

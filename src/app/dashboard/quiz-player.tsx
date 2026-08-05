@@ -67,7 +67,7 @@ export default function QuizPlayer({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="card w-full max-w-2xl max-h-[88vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="card w-full max-w-2xl max-h-[88dvh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-xl font-display mb-1">{data.title}</h3>
         {data.instructions && <p className="text-sm text-[#5B6470] mb-4">{data.instructions}</p>}
 

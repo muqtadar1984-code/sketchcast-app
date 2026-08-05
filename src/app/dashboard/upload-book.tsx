@@ -254,10 +254,17 @@ export default function UploadBook({
         />
         {/* No digital copy? Photograph the pages — they become one PDF and take
             exactly this same upload path. */}
+        {/* min-h-11 (44px) is the accessible minimum tap target, and this button
+            badly needed it: as a bare text link it was ~20px tall — half the
+            height of every control it opens (the sheet's own buttons are h-10) —
+            which on a narrow, high-DPI phone screen is a genuinely hard target
+            to hit. A teacher reported "nothing happened" here. The negative
+            margin keeps the label sitting exactly where it did; only the hit
+            area grows. */}
         <button
           type="button"
           onClick={() => setScanning(true)}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0C8175] hover:underline"
+          className="inline-flex min-h-11 items-center gap-1.5 -mx-2 px-2 text-sm font-medium text-[#0C8175] hover:underline"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2" />

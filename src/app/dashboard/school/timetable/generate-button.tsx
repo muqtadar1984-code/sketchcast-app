@@ -78,7 +78,7 @@ export default function GenerateButton({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
           <div
-            className="card w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto"
+            className="card w-full max-w-2xl p-6 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg">{t.title}</h2>

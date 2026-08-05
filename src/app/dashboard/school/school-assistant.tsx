@@ -234,7 +234,7 @@ function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: ()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="card w-full max-w-lg flex flex-col max-h-[86vh]" onClick={(e) => e.stopPropagation()}>
+      <div className="card w-full max-w-lg flex flex-col max-h-[86dvh]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
           <div className="min-w-0">
             <div className="font-display font-medium flex items-center gap-1.5">

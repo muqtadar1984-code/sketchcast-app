@@ -114,7 +114,7 @@ export default function FeedbackWidget({
       {open && !submitted && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !busy && close()}>
           <div
-            className="bg-white rounded-xl border border-[#E6E8E4] p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-xl border border-[#E6E8E4] p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-label="Beta feedback"

@@ -122,6 +122,18 @@ export default function PageScanner({
     void loadCv();
   }, []);
 
+  // Freeze the page behind the sheet. Without this the background scrolls under
+  // a fixed overlay, which is how a teacher ends up scrolling around hunting for
+  // a dialog that never moved. Restores the previous value rather than assuming
+  // "" so a future caller that already locked the body isn't unlocked by us.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
   // When focus comes back >3 s after the camera was opened with no `change`
   // event, the capture either failed or was cancelled — either way the gallery
   // picker is the way forward. Two subtleties: on a SUCCESSFUL capture the
@@ -171,44 +183,67 @@ export default function PageScanner({
           setError(fmt(t.scan.budgetStop, { size: mb(running, t.upload.megabytes) }));
           break;
         }
-        const bitmap = await createImageBitmap(files[i]).catch(() => null);
-        if (!bitmap) {
-          skipped++;
-          continue;
-        }
-        const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-        const sw = Math.max(1, Math.round(bitmap.width * scale));
-        const sh = Math.max(1, Math.round(bitmap.height * scale));
-        const src = canvasFrom(bitmap, sw, sh);
-        bitmap.close?.();
+        // YIELD. detectQuad and warpQuad are async in SIGNATURE only: after the
+        // single `await loadCv()` inside them, every remaining line is a
+        // synchronous OpenCV call. So a multi-page scan is one unbroken block of
+        // main-thread work — the progress label never paints, taps are never
+        // processed, and the app is indistinguishable from frozen. One macrotask
+        // between pages lets the browser paint and handle input. It costs
+        // nothing: the work is bounded by OpenCV, not by this timeout.
+        await new Promise((r) => setTimeout(r, 0));
+        try {
+          const bitmap = await createImageBitmap(files[i]).catch(() => null);
+          if (!bitmap) {
+            skipped++;
+            continue;
+          }
+          const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+          const sw = Math.max(1, Math.round(bitmap.width * scale));
+          const sh = Math.max(1, Math.round(bitmap.height * scale));
+          const src = canvasFrom(bitmap, sw, sh);
+          bitmap.close?.();
 
-        // Cap the wait on detection: the first page can be stuck behind the 8 MB
-        // OpenCV download. Give up on auto-crop after 4 s (loadCv keeps warming in
-        // the background, so later pages still get it) — the page just lands
-        // uncropped, same as any detection miss.
-        const quad = await Promise.race([
-          detectQuad(src),
-          new Promise<Quad | null>((r) => setTimeout(() => r(null), 4000)),
-        ]);
-        const flat = quad ? await warpQuad(src, quad) : null;
-        const blob = await encodePage(flat ?? src, TARGET_PAGE_BYTES);
-        const srcBlob = await new Promise<Blob | null>((r) => src.toBlob(r, "image/jpeg", 0.8));
-        if (!blob || !srcBlob) {
-          skipped++;
-          continue;
-        }
+          // Cap the wait on detection: the first page can be stuck behind the
+          // OpenCV download. Give up on auto-crop after 4 s (loadCv keeps warming
+          // in the background, so later pages still get it) — the page just lands
+          // uncropped, same as any detection miss.
+          //
+          // Honest caveat: this race only bounds the WAIT FOR THE DOWNLOAD. Once
+          // detectQuad is past its await it runs synchronously, and a setTimeout
+          // cannot fire while a synchronous block owns the thread — so the 4 s is
+          // not a guarantee against slow detection. The yield above is what keeps
+          // the UI alive between pages.
+          const quad = await Promise.race([
+            detectQuad(src),
+            new Promise<Quad | null>((r) => setTimeout(() => r(null), 4000)),
+          ]);
+          const flat = quad ? await warpQuad(src, quad) : null;
+          const blob = await encodePage(flat ?? src, TARGET_PAGE_BYTES);
+          const srcBlob = await new Promise<Blob | null>((r) => src.toBlob(r, "image/jpeg", 0.8));
+          if (!blob || !srcBlob) {
+            skipped++;
+            continue;
+          }
 
-        added.push({
-          id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
-          url: URL.createObjectURL(blob),
-          bytes: blob.size,
-          srcUrl: URL.createObjectURL(srcBlob),
-          srcW: sw,
-          srcH: sh,
-          quad: flat ? quad : null,
-          auto: !!flat,
-        });
-        running += blob.size;
+          added.push({
+            id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+            url: URL.createObjectURL(blob),
+            bytes: blob.size,
+            srcUrl: URL.createObjectURL(srcBlob),
+            srcW: sw,
+            srcH: sh,
+            quad: flat ? quad : null,
+            auto: !!flat,
+          });
+          running += blob.size;
+        } catch {
+          // One unreadable photo must not cost the teacher the whole batch, and
+          // it must not leave `busy` set — both buttons are disabled while busy,
+          // so a throw here used to lock the sheet permanently with no error and
+          // no way back. OpenCV throws on odd inputs more often than you would
+          // like; count it as skipped and carry on to the next page.
+          skipped++;
+        }
       }
       if (added.length) setPages((p) => [...p, ...added]);
       if (skipped) {
@@ -297,8 +332,29 @@ export default function PageScanner({
   const page = editing === null ? null : pages[editing];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#14181F]/45 sm:p-4" role="dialog" aria-modal="true">
-      <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl">
+    // GEOMETRY, and why it is spelled out rather than `inset-0` + `vh`:
+    //
+    // `vh` and `inset-0`'s bottom both resolve against the LARGE viewport — the
+    // page height with the browser chrome hidden. Chrome's URL bar and Android's
+    // navigation bar are not subtracted. So on a phone this sheet used to be
+    // pushed down by the height of that chrome AND sized taller than the screen:
+    // it opened below the fold, and its bottom row — the Take photos / Choose
+    // photos buttons — sat under the chrome. Reported on an S24 Ultra as "it
+    // opens but goes way down the screen" with the buttons cut off.
+    //
+    // `dvh` is the DYNAMIC viewport: it tracks the chrome as it shows and hides,
+    // so 100dvh is what the user can actually see right now. top-0 + h-[100dvh]
+    // instead of inset-0 avoids over-constraining (top, bottom and height all set
+    // would make the browser silently drop `bottom`).
+    //
+    // The sheet is fixed, so it does NOT move with the page — wherever the
+    // teacher had scrolled to, it lands on screen.
+    <div
+      className="fixed inset-x-0 top-0 z-50 h-[100dvh] flex items-end sm:items-center justify-center bg-[#14181F]/45 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl">
         {page ? (
           <CornerEditor
             page={page}

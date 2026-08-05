@@ -431,7 +431,7 @@ export default function AskCoach({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className={`card w-full flex flex-col ${twoPane ? "max-w-[1400px] h-[92vh]" : "max-w-lg max-h-[88vh]"}`}
+        className={`card w-full flex flex-col ${twoPane ? "max-w-[1400px] h-[92dvh]" : "max-w-lg max-h-[88dvh]"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
