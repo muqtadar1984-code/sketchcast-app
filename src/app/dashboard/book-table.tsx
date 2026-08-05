@@ -51,6 +51,10 @@ export type BookRow = {
   subject: string | null;
   /** Detected book language (0056) — chip + generation defaults. */
   language: string | null;
+  /** Set when this book belongs to the SCHOOL shelf rather than the reader
+   *  (0070). A teacher works from it exactly like their own — the badge only
+   *  answers "why is this here, and who do I ask about it". */
+  sharedBy?: string | null;
   coverUrl: string | null;
   storagePath: string | null;
   createdAt: string;
@@ -210,7 +214,13 @@ export default function BookTable({
                 </span>
                 <span className="min-w-0">
                   <span className="font-display font-medium truncate block">{cleanBookTitle(b.title, t.utils.book)}</span>
-                  <span className="text-xs text-[#5B6470]">{b.author || t.book.unknownAuthor}</span>
+                  <span className="text-xs text-[#5B6470]">
+                    {b.author || t.book.unknownAuthor}
+                    {/* A school book is used exactly like your own; this only
+                        answers "where did this come from" — hence a quiet
+                        inline note rather than a competing chip. */}
+                    {b.sharedBy && <span className="text-[#0C8175]"> · {b.sharedBy}</span>}
+                  </span>
                 </span>
               </button>
               <span className="text-sm text-[#5B6470] text-end whitespace-nowrap self-center">

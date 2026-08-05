@@ -1045,6 +1045,9 @@
       "uploading": "Import…",
       "clickToUpload": "Cliquez pour importer",
       "uploaded": "Importé"
+    },
+    "shelf": {
+      "alsoInSchool": "Également dans votre école ({n})"
     }
   },
   "school": {

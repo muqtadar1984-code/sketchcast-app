@@ -1045,6 +1045,9 @@
       "uploading": "Enviando…",
       "clickToUpload": "Clique para enviar",
       "uploaded": "Enviado"
+    },
+    "shelf": {
+      "alsoInSchool": "Também na sua escola ({n})"
     }
   },
   "school": {

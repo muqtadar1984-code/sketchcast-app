@@ -1045,6 +1045,9 @@
       "uploading": "Uploading…",
       "clickToUpload": "Click to upload",
       "uploaded": "Uploaded"
+    },
+    "shelf": {
+      "alsoInSchool": "Also in your school ({n})"
     }
   },
   "school": {

@@ -29,6 +29,7 @@ import { diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingE
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
+import { splitShelf } from "@/utils/school-books";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
@@ -495,6 +496,63 @@ export default async function DashboardPage() {
     : withHealth;
   const bookList = (booksRes.data ?? []) as unknown as Book[];
 
+  // ── The school shelf (0070) ─────────────────────────────────────────────────
+  // A school uploads its textbooks once and everyone works from them. The read
+  // needed no migration — books_read has always allowed
+  // (school_id = current_school_id()); the Library simply never asked.
+  //
+  // Merged into bookList rather than rendered apart, so a school book behaves
+  // exactly like the teacher's own everywhere downstream: covers, languages,
+  // grouping, generation, assignment. What a teacher does NOT teach goes to
+  // `shelfRest` and waits behind a disclosure — nothing is hidden, it is only
+  // ordered. Best-effort throughout: this is an addition to a working Library
+  // and must never be the reason it fails to render.
+  const shelfOwners = new Map<string, string>();
+  // Ids of school books this teacher does not teach. They ride the SAME
+  // pipeline as everything else — covers, languages, rows — and are only
+  // separated at the very end, when the groups are laid out.
+  const shelfRestIds = new Set<string>();
+  if (schoolId) {
+    const { data: shelfRaw } = await supabase
+      .from("books")
+      .select(`${bookCols}, health`)
+      .eq("school_id", schoolId)
+      .neq("owner_id", user.id)
+      .order("created_at", { ascending: false });
+    const shelf = (shelfRaw ?? []) as unknown as Book[];
+    if (shelf.length) {
+      // What this teacher actually teaches — their own classes' grades and the
+      // subjects they are timetabled for. Nobody maintains this; it is already
+      // true. A teacher with neither is shown the whole shelf (see splitShelf).
+      const { data: slots } = await supabase
+        .from("timetable_slots")
+        .select("subject")
+        .eq("teacher_id", user.id);
+      const { relevant, rest } = splitShelf(shelf, {
+        grades: classes.map((c) => c.grade).filter((g): g is string => !!g),
+        subjects: [
+          ...new Set(
+            ((slots ?? []) as { subject: string | null }[])
+              .map((s) => s.subject)
+              .filter((s): s is string => !!s),
+          ),
+        ],
+      });
+      // Who to ask about a book you did not upload.
+      const ownerIds = [...new Set(shelf.map((b) => b.owner_id))];
+      const { data: owners } = await supabase
+        .from("profiles")
+        .select("id, full_name, username")
+        .in("id", ownerIds);
+      for (const o of (owners ?? []) as { id: string; full_name: string | null; username: string | null }[]) {
+        const name = o.full_name || o.username;
+        if (name) shelfOwners.set(o.id, name);
+      }
+      for (const b of rest) shelfRestIds.add(b.id);
+      bookList.push(...relevant, ...rest);
+    }
+  }
+
   // Detected book languages (0056) — separate best-effort query so a
   // not-yet-run migration can never break the Library.
   const bookLangs = new Map<string, string>();
@@ -652,6 +710,8 @@ export default async function DashboardPage() {
       grade: b.grade,
       subject: b.subject,
       language: bookLangs.get(b.id) ?? null,
+      // Non-null only for a school book someone else uploaded.
+      sharedBy: b.owner_id === user.id ? null : shelfOwners.get(b.owner_id) ?? null,
       coverUrl: coverUrls[b.id] ?? null,
       storagePath: b.storage_path,
       createdAt: b.created_at,
@@ -794,18 +854,25 @@ export default async function DashboardPage() {
   }
 
   // Group the library Grade → Subject (auto-detected; "Other / General" when unknown).
-  const groupMap = new Map<string, BookRow[]>();
-  for (const br of bookRows) {
-    const key = `${br.grade || t.group.other}|||${br.subject || t.group.general}`;
-    if (!groupMap.has(key)) groupMap.set(key, []);
-    groupMap.get(key)!.push(br);
-  }
-  const groups = [...groupMap.entries()]
-    .map(([key, rows]) => {
-      const [grade, subject] = key.split("|||");
-      return { grade, subject, books: rows };
-    })
-    .sort((a, b) => `${a.grade} ${a.subject}`.localeCompare(`${b.grade} ${b.subject}`));
+  // The school books this teacher does not teach are grouped the same way, but
+  // into their own list — shown behind a disclosure so the shelf is complete
+  // without a Science teacher scrolling through Form 5 Accounting.
+  const groupBy = (rows: BookRow[]) => {
+    const groupMap = new Map<string, BookRow[]>();
+    for (const br of rows) {
+      const key = `${br.grade || t.group.other}|||${br.subject || t.group.general}`;
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(br);
+    }
+    return [...groupMap.entries()]
+      .map(([key, rs]) => {
+        const [grade, subject] = key.split("|||");
+        return { grade, subject, books: rs };
+      })
+      .sort((a, b) => `${a.grade} ${a.subject}`.localeCompare(`${b.grade} ${b.subject}`));
+  };
+  const groups = groupBy(bookRows.filter((br) => !shelfRestIds.has(br.id)));
+  const shelfGroups = groupBy(bookRows.filter((br) => shelfRestIds.has(br.id)));
 
   // Getting-started stepper (inline onboarding, 0064) — new joiners only. Show
   // ONLY when the flag is on, this account has book tools, and the dismissal
@@ -934,6 +1001,38 @@ export default async function DashboardPage() {
               </section>
             ))}
           </div>
+        )}
+
+        {/* The rest of the school's shelf (0070). Closed by default and never
+            filtered away: the relevance rule upstream decides what a teacher
+            sees FIRST, not what they are allowed to use, so being wrong about
+            what someone teaches costs one click and not a missing book. */}
+        {shelfGroups.length > 0 && (
+          <details className="mt-10 group">
+            <summary className="cursor-pointer text-sm text-[#5B6470] hover:text-[#14181F] select-none">
+              <span className="rtl-flip inline-block me-1.5 transition-transform group-open:rotate-90">▶</span>
+              {fmt(t.shelf.alsoInSchool, { n: shelfGroups.reduce((n, g) => n + g.books.length, 0) })}
+            </summary>
+            <div className="space-y-8 mt-5">
+              {shelfGroups.map((g) => (
+                <section key={`shelf-${g.grade}-${g.subject}`}>
+                  <div className="flex items-center gap-2 mb-2.5 px-1">
+                    <h2 className="chip font-sans bg-[#F5F6F3] text-[#5B6470]">{g.grade}</h2>
+                    <span className="text-sm font-medium text-[#5B6470]">{g.subject}</span>
+                  </div>
+                  <BookTable
+                    books={g.books}
+                    schoolId={schoolId}
+                    classes={classes}
+                    t={t}
+                    lang={htmlLang(locale)}
+                    beta={isBeta ? { pinned: betaPinned } : null}
+                    examEnabled={examGenerationEnabled()}
+                  />
+                </section>
+              ))}
+            </div>
+          </details>
         )}
 
         {lessons.filter((l) => l.bookId === null).length > 0 && (

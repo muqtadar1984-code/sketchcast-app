@@ -160,5 +160,13 @@ export function splitShelf<T extends ShelfBook>(
   const relevant: T[] = [];
   const rest: T[] = [];
   for (const b of books) (isRelevant(b, profile) ? relevant : rest).push(b);
+
+  // Nothing matched, but the school HAS books. Showing an empty shelf with the
+  // whole thing folded away behind a disclosure is the worst of both — and a
+  // total miss is far more likely to mean thin metadata (a book indexed with no
+  // grade, a subject spelled a way the table doesn't know) than a school that
+  // genuinely owns nothing for this teacher. Fail open.
+  if (relevant.length === 0) return { relevant: rest, rest: [] };
+
   return { relevant, rest };
 }

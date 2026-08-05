@@ -1045,6 +1045,9 @@
       "uploading": "مموات نايق…",
       "clickToUpload": "کليک اونتوق موات نايق",
       "uploaded": "تله دموات نايق"
+    },
+    "shelf": {
+      "alsoInSchool": "جوݢ د سکوله اندا ({n})"
     }
   },
   "school": {

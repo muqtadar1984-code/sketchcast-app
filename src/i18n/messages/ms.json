@@ -1045,6 +1045,9 @@
       "uploading": "Memuat naik…",
       "clickToUpload": "Klik untuk muat naik",
       "uploaded": "Dimuat naik"
+    },
+    "shelf": {
+      "alsoInSchool": "Juga di sekolah anda ({n})"
     }
   },
   "school": {

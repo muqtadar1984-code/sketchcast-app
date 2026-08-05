@@ -1045,6 +1045,9 @@
       "uploading": "अपलोड हो रहा है…",
       "clickToUpload": "अपलोड के लिए क्लिक करें",
       "uploaded": "अपलोड हो गया"
+    },
+    "shelf": {
+      "alsoInSchool": "आपके स्कूल में भी ({n})"
     }
   },
   "school": {

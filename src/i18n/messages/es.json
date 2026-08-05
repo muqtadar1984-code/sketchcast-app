@@ -1045,6 +1045,9 @@
       "uploading": "Subiendo…",
       "clickToUpload": "Haga clic para subir",
       "uploaded": "Subida"
+    },
+    "shelf": {
+      "alsoInSchool": "También en tu escuela ({n})"
     }
   },
   "school": {

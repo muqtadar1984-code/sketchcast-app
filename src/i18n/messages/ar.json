@@ -1045,6 +1045,9 @@
       "uploading": "جارٍ الرفع…",
       "clickToUpload": "اضغط للرفع",
       "uploaded": "تم الرفع"
+    },
+    "shelf": {
+      "alsoInSchool": "متوفّر أيضًا في مدرستك ({n})"
     }
   },
   "school": {

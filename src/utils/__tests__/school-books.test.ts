@@ -109,4 +109,20 @@ describe("splitShelf", () => {
     const { relevant } = splitShelf(shelf, { grades: [], subjects: ["Science"] });
     expect(relevant.map((b) => b.id)).toEqual(["a"]);
   });
+
+  it("fails OPEN when nothing matches rather than showing an empty shelf", () => {
+    // A real case from prod: an Art teacher in a school whose books are all
+    // Science and Maths. A total miss is more likely thin metadata than a
+    // school that owns nothing for them, and an empty Library with everything
+    // folded behind a disclosure is worse than a slightly noisy one.
+    const { relevant, rest } = splitShelf(shelf, { grades: [], subjects: ["Art"] });
+    expect(relevant).toHaveLength(shelf.length);
+    expect(rest).toHaveLength(0);
+  });
+
+  it("does not fail open when the school has no books at all", () => {
+    const { relevant, rest } = splitShelf([], { grades: ["Form 1"], subjects: ["Science"] });
+    expect(relevant).toEqual([]);
+    expect(rest).toEqual([]);
+  });
 });
