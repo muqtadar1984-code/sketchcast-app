@@ -1067,6 +1067,14 @@
       "itemUnknownMany": "Un livre a été retiré — et {n} de vos kits avec lui.",
       "workKept": "Les notes et les travaux déjà terminés par vos élèves sont conservés.",
       "dismiss": "Masquer"
+    },
+    "reuse": {
+      "title": "Votre école a déjà créé ce kit",
+      "body": "Un autre enseignant a déjà généré cette leçon et ses documents, avec exactement les réglages que vous demandez.",
+      "hint": "Vous en obtenez un exemplaire instantanément. Il devient le vôtre — attribuez-le, régénérez-le ou supprimez-le : cela ne change rien pour personne d'autre.",
+      "useIt": "Utiliser ce kit",
+      "adding": "Ajout…",
+      "makeMyOwn": "Générer le mien"
     }
   },
   "school": {

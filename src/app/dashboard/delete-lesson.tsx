@@ -25,10 +25,26 @@ export default function DeleteLesson({
     if (!confirm(t.deleteLesson.confirm)) return;
     setBusy(true);
     const supabase = createClient();
-    if (artifactPaths.length) {
-      await supabase.storage.from("artifacts").remove(artifactPaths);
+
+    // Deletion goes through the database now (0073). It used to remove every
+    // artifact path from storage and then drop the row, which was safe while
+    // one kit owned its files — but a colleague who reused this kit has a row
+    // of their own pointing at the SAME objects, and wiping them would leave
+    // their lesson pointing at nothing. Only the DB can see who still needs a
+    // file, so it deletes the row and hands back the paths that are genuinely
+    // unreferenced; we remove exactly those.
+    const { data, error } = await supabase.rpc("delete_my_generation", { p_gen: genId });
+    if (error) {
+      // Pre-0073 database: fall back to the old behaviour rather than leaving
+      // the teacher unable to delete anything. Reuse cannot exist there either,
+      // so nothing can be sharing these files yet.
+      if (artifactPaths.length) await supabase.storage.from("artifacts").remove(artifactPaths);
+      await supabase.from("generations").delete().eq("id", genId);
+    } else {
+      const orphans = (data ?? []) as string[];
+      if (orphans.length) await supabase.storage.from("artifacts").remove(orphans);
     }
-    await supabase.from("generations").delete().eq("id", genId);
+
     setBusy(false);
     router.refresh();
   }

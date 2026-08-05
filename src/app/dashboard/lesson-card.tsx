@@ -187,6 +187,7 @@ export default function LessonCard({
         part={part.n}
         language={bookLanguage}
         bookGrade={bookGrade}
+        t={t}
         className="group/new w-full text-start flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
         skipKinds={(
           [

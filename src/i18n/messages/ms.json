@@ -1067,6 +1067,14 @@
       "itemUnknownMany": "Sebuah buku telah ditarik balik — {n} kit anda turut dikeluarkan bersamanya.",
       "workKept": "Markah dan kerja yang sudah disiapkan oleh pelajar anda tetap disimpan.",
       "dismiss": "Ketepikan"
+    },
+    "reuse": {
+      "title": "Sekolah anda sudah menjana kit ini",
+      "body": "Seorang guru lain sudah menjana pelajaran ini beserta dokumennya, dengan tetapan yang sama seperti yang anda minta.",
+      "hint": "Salinan diambil serta-merta. Ia menjadi milik anda — anda boleh menugaskan, menjana semula atau membuangnya tanpa menjejaskan sesiapa pun.",
+      "useIt": "Gunakannya",
+      "adding": "Menambah…",
+      "makeMyOwn": "Jana sendiri"
     }
   },
   "school": {

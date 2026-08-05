@@ -1067,6 +1067,14 @@
       "itemUnknownMany": "Se retiró un libro — y con él, {n} de sus kits.",
       "workKept": "Se conservan las notas y el trabajo que sus alumnos ya completaron.",
       "dismiss": "Cerrar"
+    },
+    "reuse": {
+      "title": "Su escuela ya generó esto",
+      "body": "Otro profesor ya generó esta lección y sus documentos, con las mismas opciones que usted está pidiendo.",
+      "hint": "Hacer una copia es instantáneo. Pasa a ser suya — puede asignarla, volver a generarla o quitarla sin afectar a nadie más.",
+      "useIt": "Usarla",
+      "adding": "Agregando…",
+      "makeMyOwn": "Generar la mía"
     }
   },
   "school": {

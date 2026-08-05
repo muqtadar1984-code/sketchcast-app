@@ -1067,6 +1067,14 @@
       "itemUnknownMany": "Um livro foi removido — {n} dos seus kits saíram com ele.",
       "workKept": "As notas e os trabalhos que seus alunos já concluíram continuam guardados.",
       "dismiss": "Dispensar"
+    },
+    "reuse": {
+      "title": "Sua escola já fez isto",
+      "body": "Outro professor já gerou esta aula e os documentos dela, com as mesmas opções que você escolheu.",
+      "hint": "A cópia é instantânea. Ela passa a ser sua — você pode atribuí-la, gerá-la de novo ou removê-la sem afetar mais ninguém.",
+      "useIt": "Usar esta",
+      "adding": "Adicionando…",
+      "makeMyOwn": "Gerar a minha"
     }
   },
   "school": {

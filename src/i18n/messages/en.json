@@ -1067,6 +1067,14 @@
       "itemUnknownMany": "A book was removed — {n} of your kits went with it.",
       "workKept": "Marks and work your students already completed are kept.",
       "dismiss": "Dismiss"
+    },
+    "reuse": {
+      "title": "Your school already made this",
+      "body": "Another teacher has already generated this lesson and its documents, with the same settings you are asking for.",
+      "hint": "Taking a copy is instant. It becomes yours — assign it, regenerate it or delete it without affecting anyone else.",
+      "useIt": "Use it",
+      "adding": "Adding…",
+      "makeMyOwn": "Make my own"
     }
   },
   "school": {
