@@ -193,12 +193,28 @@ export default function PageScanner({
   const overBudget = total >= SOFT_BUDGET;
   const autoMisses = pages.filter((p) => !p.quad).length;
 
-  // Warm OpenCV as soon as the scanner opens so the first page isn't the one that
-  // waits for the 8 MB download. Fire-and-forget: loadCv resolves null on failure
-  // and every caller degrades to an un-cropped page.
-  useEffect(() => {
-    void loadCv();
-  }, []);
+  // OpenCV is NOT warmed on mount any more, and the reason is the whole bug.
+  //
+  // It used to load the instant this sheet appeared. The <script> is async, so
+  // the ~2.9 MB download is off-thread — but when it lands the browser parses
+  // and executes 9.9 MB of JavaScript SYNCHRONOUSLY on the main thread. On a
+  // phone that is seconds.
+  //
+  // The timing was precisely wrong. The sheet paints, the teacher reads it, and
+  // a second or two later — exactly when they reach for "Take photos" — OpenCV
+  // arrives and locks the thread. The tap is swallowed. Worse, a click that sits
+  // queued long enough loses its TRANSIENT ACTIVATION, and a file input without
+  // activation refuses to open the camera at all. So the button did nothing,
+  // for ever, and the app looked frozen. Reported twice as exactly that.
+  //
+  // It is now kicked off AFTER the capture button is pressed (see the button
+  // handlers), which is strictly better than either warming or pure laziness:
+  // the teacher is inside the camera app for several seconds, this page is
+  // backgrounded, and nobody is waiting on the main thread. By the time they
+  // come back with a photo it is ready.
+  //
+  // detectQuad awaits loadCv() itself, so nothing breaks if it hasn't finished —
+  // addPhotos races it for 4 s and the page just lands un-cropped.
 
   // Freeze the page behind the sheet. Without this the background scrolls under
   // a fixed overlay, which is how a teacher ends up scrolling around hunting for
@@ -487,7 +503,14 @@ export default function PageScanner({
         cameraReturned.current = false;
         setCameraHint(false);
         setCameraOpening(true);
+        // click() FIRST, while the activation this handler was given is still
+        // live and the main thread is still free. Nothing heavy may run above
+        // this line.
         camera.current?.click();
+        // Now warm OpenCV, into the window where the teacher is in the camera
+        // app and this page is backgrounded. Fire-and-forget: loadCv resolves
+        // null on failure and every caller degrades to an un-cropped page.
+        void loadCv();
       }}
       disabled={!!busy}
       className={`${isAndroid ? "btn-ghost" : "btn-primary"} h-10 px-4 text-sm`}
@@ -498,7 +521,10 @@ export default function PageScanner({
   const pickerButton = (
     <button
       key="picker"
-      onClick={() => library.current?.click()}
+      onClick={() => {
+        library.current?.click(); // first — see the camera button's note
+        void loadCv();
+      }}
       disabled={!!busy}
       className={`${isAndroid ? "btn-primary" : "btn-ghost"} h-10 px-4 text-sm`}
     >
