@@ -102,10 +102,19 @@ function tabsFor(
   calendarOn: boolean,
   timetableOn: boolean,
   diaryOn: boolean,
+  /** The student's own landing page label — `student.title`, "My lessons". It
+   * lives outside nav.tabs because the page owns it, so it is passed in rather
+   * than duplicated into the tab dictionary. */
+  myLessons: string,
 ): NavTab[] {
   if (!role || role === "student") {
-    // School-linked students get their class diary + timetable — nothing else.
+    // A student's home IS /dashboard — "My lessons" — and it had NO tab. Every
+    // other role gets one for its landing page; students were the exception, so
+    // opening the Diary or the timetable left them with no way back but the
+    // browser's back button. They are also the least likely of anyone here to
+    // work that out.
     return [
+      { href: "/dashboard", label: myLessons },
       ...(diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : []),
       ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: t.timetable }] : []),
     ];
@@ -328,7 +337,7 @@ export default async function AppHeader() {
   }
   const tabs = activeHat
     ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn)
-    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn, diaryOn);
+    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title);
   // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
   // it is lower-cased — a no-op in the scripts that have no case at all.
   const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);
