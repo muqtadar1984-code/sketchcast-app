@@ -707,6 +707,9 @@
     "part": "Parte {n}",
     "partShort": "Pt {n}",
     "partTitled": "Parte {n} — {titles}",
+    "partOfTotal": "Parte {n} de {total}",
+    "partAnchored": "{chapter} · {part}",
+    "partAnchoredTitled": "{chapter} · {part} — {heading}",
     "partOne": "Parte {list}",
     "partMany": "Partes {list}",
     "watchPart": "Ver pt {n}",
@@ -1043,8 +1046,11 @@
       "pickClass": "Elija una clase."
     },
     "deleteLesson": {
-      "confirm": "¿Quitar esta lección? Si todavía se está generando, se cancelará.",
-      "remove": "Quitar lección"
+      "confirm": "¿Quitar esta lección? Se eliminarán sus archivos y el crédito ya usado no se devuelve.",
+      "remove": "Quitar lección",
+      "cancel": "Cancelar lección",
+      "cancelConfirm": "¿Cancelar esta lección? Todavía no ha empezado, así que no se usará ningún crédito.",
+      "building": "Esta lección se está creando ahora mismo: podrás quitarla en cuanto termine."
     },
     "branding": {
       "heading": "Identidad de la escuela",

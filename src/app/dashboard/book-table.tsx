@@ -22,6 +22,9 @@ import { fmt } from "@/i18n/format";
 export type Lesson = CellLesson & { title: string; kind: string };
 export type PartRow = {
   n: number;
+  /** How many parts the chapter has — carried alongside n so a part can be
+   *  named "<chapter> · Part 3 of 7" rather than a bare, placeless ordinal. */
+  total: number;
   titles: string[];
   presentation: CellLesson | null;
   lessonPlan: CellLesson | null;
@@ -421,7 +424,7 @@ export default function BookTable({
                                 : ""}
                             </span>
                           )}
-                          <DeleteLesson genId={p.id} artifactPaths={p.artifactPaths} t={t} />
+                          <DeleteLesson genId={p.id} status={p.status} t={t} />
                         </div>
                       </div>
                     ))}
@@ -472,7 +475,7 @@ export default function BookTable({
                                 : ""}
                             </span>
                           )}
-                          <DeleteLesson genId={e.id} artifactPaths={e.artifactPaths} t={t} />
+                          <DeleteLesson genId={e.id} status={e.status} t={t} />
                         </div>
                       </div>
                     ))}
@@ -494,7 +497,7 @@ export default function BookTable({
                                 : ""}
                             </span>
                           )}
-                          <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />
+                          <DeleteLesson genId={l.id} status={l.status} t={t} />
                         </div>
                       </div>
                     ))}
@@ -527,7 +530,7 @@ export default function BookTable({
                                   : ""}
                               </span>
                             )}
-                            <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />
+                            <DeleteLesson genId={l.id} status={l.status} t={t} />
                           </div>
                         </div>
                       );

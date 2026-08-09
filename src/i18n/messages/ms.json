@@ -707,6 +707,9 @@
     "part": "Bahagian {n}",
     "partShort": "Bhg {n}",
     "partTitled": "Bahagian {n} — {titles}",
+    "partOfTotal": "Bahagian {n} daripada {total}",
+    "partAnchored": "{chapter} · {part}",
+    "partAnchoredTitled": "{chapter} · {part} — {heading}",
     "partOne": "Bahagian {list}",
     "partMany": "Bahagian {list}",
     "watchPart": "Tonton Bhg {n}",
@@ -1043,8 +1046,11 @@
       "pickClass": "Pilih kelas."
     },
     "deleteLesson": {
-      "confirm": "Buang pelajaran ini? Ini membatalkannya jika ia masih berjalan.",
-      "remove": "Buang pelajaran"
+      "confirm": "Buang pelajaran ini? Failnya akan dipadam, dan kredit yang telah digunakan tidak kembali.",
+      "remove": "Buang pelajaran",
+      "cancel": "Batalkan pelajaran",
+      "cancelConfirm": "Batalkan pelajaran ini? Ia belum mula, jadi tiada kredit akan digunakan.",
+      "building": "Pelajaran ini sedang dibuat — anda boleh membuangnya sebaik ia siap."
     },
     "branding": {
       "heading": "Penjenamaan sekolah",

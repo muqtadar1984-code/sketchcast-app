@@ -707,6 +707,9 @@
     "part": "Parte {n}",
     "partShort": "Pt {n}",
     "partTitled": "Parte {n} — {titles}",
+    "partOfTotal": "Parte {n} de {total}",
+    "partAnchored": "{chapter} · {part}",
+    "partAnchoredTitled": "{chapter} · {part} — {heading}",
     "partOne": "Parte {list}",
     "partMany": "Partes {list}",
     "watchPart": "Ver Pt {n}",
@@ -1043,8 +1046,11 @@
       "pickClass": "Escolha uma turma."
     },
     "deleteLesson": {
-      "confirm": "Remover esta aula? Isso cancela a geração, se ainda estiver em andamento.",
-      "remove": "Remover aula"
+      "confirm": "Remover esta aula? Os arquivos dela serão excluídos e o crédito já usado não é devolvido.",
+      "remove": "Remover aula",
+      "cancel": "Cancelar aula",
+      "cancelConfirm": "Cancelar esta aula? Ela ainda não começou, então nenhum crédito será usado.",
+      "building": "Esta aula está sendo gerada agora — você poderá removê-la assim que terminar."
     },
     "branding": {
       "heading": "Identidade da escola",

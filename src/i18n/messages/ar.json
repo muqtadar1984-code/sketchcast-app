@@ -707,6 +707,9 @@
     "part": "الجزء {n}",
     "partShort": "ج{n}",
     "partTitled": "الجزء {n} — {titles}",
+    "partOfTotal": "الجزء {n} من {total}",
+    "partAnchored": "{chapter} · {part}",
+    "partAnchoredTitled": "{chapter} · {part} — {heading}",
     "partOne": "الجزء {list}",
     "partMany": "الأجزاء {list}",
     "watchPart": "شاهد ج{n}",
@@ -1043,8 +1046,11 @@
       "pickClass": "اختر صفًا."
     },
     "deleteLesson": {
-      "confirm": "هل تحذف هذا الدرس؟ سيُلغى إن كان لا يزال قيد الإنشاء.",
-      "remove": "احذف الدرس"
+      "confirm": "هل تحذف هذا الدرس؟ ستُحذف ملفاته، ولن يُعاد الرصيد الذي استُهلك.",
+      "remove": "احذف الدرس",
+      "cancel": "ألغِ الدرس",
+      "cancelConfirm": "هل تلغي هذا الدرس؟ لم يبدأ بعد، لذا لن يُستهلك أي رصيد.",
+      "building": "يجري إنشاء هذا الدرس الآن — يمكنك حذفه بمجرد أن ينتهي."
     },
     "branding": {
       "heading": "هوية المدرسة",

@@ -8,6 +8,7 @@ import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
 import { etaLabel } from "@/utils/job-stage";
+import { cleanPartTitles, partAnchor, partHeading, partLabel } from "@/utils/part-label";
 import { fmt } from "@/i18n/format";
 
 // Preview-first lesson card (2026-07-21): a part's kit shown as a card — a deck
@@ -19,6 +20,11 @@ import { fmt } from "@/i18n/format";
 
 export type CardPart = {
   n: number;
+  /** How many parts this chapter has. Required, not optional: it is what turns
+   *  a bare "Part 3" into "<chapter> · Part 3 of 7", and an optional field with
+   *  a default is exactly how the chapter name went missing here in the first
+   *  place. A single-part chapter (total 1) suppresses the ordinal entirely. */
+  total: number;
   titles: string[];
   presentation: CellLesson | null;
   lessonPlan: CellLesson | null;
@@ -79,7 +85,11 @@ function SlideThumb({ n, title, video, processing, pct, trackId, watchHint }: {
   const slide = (
     <div className="absolute inset-0 rounded-lg bg-white border border-[#DCE6E2] overflow-hidden">
       <span className="absolute top-2 start-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#1FB8A6] text-[10px] font-medium text-[#04342C]">{n}</span>
-      <span className="absolute top-2.5 start-7 end-2 text-[8px] font-medium text-[#14181F] truncate">{title}</span>
+      {/* <bdi>: the label can mix an RTL chapter name with the Latin/digit run
+          "Part 3 of 7", and without isolation the bidi algorithm reorders them
+          against each other. Same wrapper on every render site of a composed
+          part label — see utils/part-label.ts. */}
+      <span className="absolute top-2.5 start-7 end-2 text-[8px] font-medium text-[#14181F] truncate"><bdi>{title}</bdi></span>
       <span className="absolute top-[19px] start-7 h-[3px] w-8 rounded-full bg-[#E2F4F1]" />
       <span className="absolute bottom-2.5 end-3 h-7 w-9 rounded-md border-2 border-[#1FB8A6] bg-[#F4FBF9]" />
       <span className="absolute bottom-3.5 start-3 h-[3px] w-9 rounded-full bg-[#EEF0EC]" />
@@ -98,7 +108,12 @@ function SlideThumb({ n, title, video, processing, pct, trackId, watchHint }: {
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#14181F]/60 text-white pl-0.5"><PlayGlyph /></span>
     </div>
   ) : null;
-  const body = <div className="relative h-[74px] w-[128px] shrink-0">{slide}{overlay}</div>;
+  // Narrower on a phone. At 375px the fixed 128px thumb left the title column
+  // 64px — measured — which is fewer than eight characters, so a part label that
+  // now carries a chapter name AND "Part k of n" was clipped to the first word.
+  // 100px gives the label back ~28px and costs a preview nobody reads at that
+  // size; the full breakpoint is unchanged.
+  const body = <div className="relative h-[58px] w-[100px] sm:h-[74px] sm:w-[128px] shrink-0">{slide}{overlay}</div>;
   return video && !processing ? (
     <a href={video} target="_blank" onClick={() => trackId && recordArtifactView(trackId, "video_mp4")} className="block hover:opacity-95" title={watchHint}>
       {body}
@@ -147,18 +162,33 @@ export default function LessonCard({
 }) {
   const pres = part.presentation;
   const generated = !!pres && pres.status !== "error";
-  const partLabel = fmt(t.part, { n: part.n });
-  // Section titles come from the book's part map and aren't always usable as a
-  // heading: some are bare numbering ("1", "1.2"), and a single-section part
-  // often just repeats the chapter name, which would echo the heading above it.
-  // Drop both, then fall back to "Part N" rather than showing a stray digit.
-  const chapter = (chapterTitle || "").trim().toLowerCase();
-  const titles = part.titles
-    .map((s) => (s || "").trim())
-    .filter((s) => s && !/^[\d.)\s-]+$/.test(s) && s.toLowerCase() !== chapter);
-  const title = titles[0] || partLabel;
-  const rest = titles.slice(1).join(" · ");
-  const subtitle = rest || (title === partLabel ? "" : partLabel);
+
+  // How a part is NAMED. The founder's rule, verbatim: "ensure that all parts
+  // carry the chapter name and part number and not just say part 1, part 2".
+  //
+  // This card used to compute `titles[0] || fmt(t.part, {n})` — so a part whose
+  // section headings were all unusable (bare numerals, the structurer's
+  // "Content" placeholder, or an echo of the chapter name) rendered as the
+  // literal string the rule forbids. The rules now live in utils/part-label.ts,
+  // a line-for-line mirror of the worker's shared/part_label.py, so the Library
+  // card and the stored generations.title cannot drift apart again — which is
+  // how the two came to disagree in the first place.
+  const heading = partHeading(part.titles, chapterTitle);
+  const anchor = partAnchor(t, chapterTitle, part.n, part.total);
+  const title = heading ?? anchor;
+  // When a real heading takes the title row, the anchor drops to the meta line:
+  // the chapter name and "Part k of n" are on the card either way, never only
+  // one of them and never neither.
+  const extras = cleanPartTitles(part.titles, chapterTitle).slice(1);
+  const subtitle = [heading ? anchor : "", ...extras].filter(Boolean).join(" · ");
+  // One string, for the tooltip — the full composer, same shape the worker
+  // persists ("<chapter> · Part 3 of 7 — Balancing loops").
+  const fullLabel = partLabel(t, {
+    chapterTitle,
+    part: part.n,
+    total: part.total,
+    titles: part.titles,
+  });
 
   // Trial (0057): this part isn't the pinned unit — a muted, non-actionable card.
   if (locked) {
@@ -168,8 +198,8 @@ export default function LessonCard({
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></svg>
         </div>
         <div className="min-w-0">
-          <div className="text-sm font-medium text-[#5B6470] truncate">{title}</div>
-          <div className="text-xs text-[#98A0A9]">{fmt(t.card.trialOnePart, { part: partLabel })}</div>
+          <div className="text-sm font-medium text-[#5B6470] truncate"><bdi>{title}</bdi></div>
+          <div className="text-xs text-[#98A0A9]"><bdi>{fmt(t.card.trialOnePart, { part: subtitle || anchor })}</bdi></div>
         </div>
       </div>
     );
@@ -209,11 +239,11 @@ export default function LessonCard({
             <span className="min-w-0 flex-1">
               {/* Ink is dialled back on the filled card so a made lesson (white,
                   full-contrast) still wins the eye. */}
-              <span className="block text-sm font-medium text-[#556059] truncate">{title}</span>
-              {/* Don't repeat the heading: when the title already fell back to
-                  "Part N", the meta line drops it. */}
+              <span className="block text-sm font-medium text-[#556059] truncate"><bdi>{title}</bdi></span>
+              {/* Don't repeat the heading: when the title already IS the
+                  chapter-anchored label, the meta line drops it. */}
               <span className="block text-xs text-[#87938D] truncate">
-                {subtitle ? `${subtitle} · ` : ""}{t.card.notGenerated}
+                <bdi>{subtitle ? `${subtitle} · ` : ""}{t.card.notGenerated}</bdi>
               </span>
             </span>
             <span className="shrink-0 text-[13px] font-medium text-[#0C8175]">
@@ -253,9 +283,13 @@ export default function LessonCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium truncate" title={titles.join(" · ")}>{title}</div>
+            {/* Two lines on a phone, one on a desktop. `truncate` alone put the
+                chapter name and the ordinal in competition for ~90px and the
+                ordinal always lost — which is the requirement failing on the
+                only screen half these teachers own. */}
+            <div className="text-sm font-medium line-clamp-2 sm:truncate" title={fullLabel}><bdi>{title}</bdi></div>
             <div className="text-xs text-[#98A0A9] truncate">
-              {subtitle}
+              <bdi>{subtitle}</bdi>
               {processing && (
                 <span className="text-[#9A6400]">
                   {subtitle ? " · " : ""}
@@ -265,7 +299,13 @@ export default function LessonCard({
               )}
             </div>
           </div>
-          {/* Lesson-level controls: regenerate + delete (delete on hover). */}
+          {/* Lesson-level controls: regenerate + delete/cancel.
+              The delete used to be `opacity-0 group-hover/card:opacity-100`.
+              A hover-only reveal does not exist on touch — that is the exact
+              pattern that made the scanner's manual-crop control unreachable
+              on every phone and got reported as "frozen" — and this control is
+              now the free Cancel while a lesson is queued, which is precisely
+              when a teacher on a phone needs to reach it. It stays visible. */}
           <span className="flex items-center gap-1 shrink-0">
             <RegenerateButton
               icon
@@ -277,7 +317,7 @@ export default function LessonCard({
               oldGenId={p.id}
               oldArtifactPaths={p.artifactPaths}
             />
-            <DeleteLesson genId={p.id} artifactPaths={p.artifactPaths} t={t} className="opacity-0 group-hover/card:opacity-100 transition-opacity" />
+            <DeleteLesson genId={p.id} status={p.status} t={t} />
           </span>
         </div>
 

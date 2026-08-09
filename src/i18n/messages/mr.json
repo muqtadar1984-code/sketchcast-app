@@ -707,6 +707,9 @@
     "part": "भाग {n}",
     "partShort": "भा {n}",
     "partTitled": "भाग {n} — {titles}",
+    "partOfTotal": "एकूण {total} पैकी भाग {n}",
+    "partAnchored": "{chapter} · {part}",
+    "partAnchoredTitled": "{chapter} · {part} — {heading}",
     "partOne": "भाग {list}",
     "partMany": "भाग {list}",
     "watchPart": "भा {n} पाहा",
@@ -1043,8 +1046,11 @@
       "pickClass": "वर्ग निवडा."
     },
     "deleteLesson": {
-      "confirm": "हा धडा काढून टाकायचा? तो अजून तयार होत असेल तर तो रद्द होईल.",
-      "remove": "धडा काढून टाका"
+      "confirm": "हा धडा काढून टाकायचा? त्याच्या फाइली हटतील आणि वापरलेले क्रेडिट परत मिळणार नाही.",
+      "remove": "धडा काढून टाका",
+      "cancel": "धडा रद्द करा",
+      "cancelConfirm": "हा धडा रद्द करायचा? तो अजून सुरू झालेला नाही, त्यामुळे कोणतेही क्रेडिट वापरले जाणार नाही.",
+      "building": "हा धडा आत्ता तयार होत आहे — तो पूर्ण होताच तुम्ही तो काढून टाकू शकता."
     },
     "branding": {
       "heading": "शाळेची ओळख",

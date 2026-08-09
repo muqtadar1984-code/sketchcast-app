@@ -747,6 +747,10 @@ export default async function DashboardPage() {
           (c.parts?.length ?? 0) > 1
             ? c.parts!.map((p, i) => ({
                 n: i + 1,
+                // The part TOTAL travels with the part number, because the card
+                // names a part "<chapter> · Part 3 of 7" — an ordinal with no
+                // total is a number the teacher cannot place.
+                total: c.parts!.length,
                 titles: (p.titles ?? []).slice(0, 3),
                 presentation: lessonFor(b.id, c.num, "presentation", i + 1) ?? null,
                 lessonPlan: lessonFor(b.id, c.num, "lesson_plan", i + 1) ?? null,
@@ -1071,7 +1075,7 @@ export default async function DashboardPage() {
                             {l.status === "processing" ? ` · ${l.progress}%` : ""}
                           </span>
                         )}
-                        <DeleteLesson genId={l.id} artifactPaths={l.artifactPaths} t={t} />
+                        <DeleteLesson genId={l.id} status={l.status} t={t} />
                       </div>
                     </div>
                   </div>

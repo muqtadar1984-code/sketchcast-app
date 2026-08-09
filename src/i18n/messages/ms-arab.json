@@ -707,6 +707,9 @@
     "part": "بهاݢين {n}",
     "partShort": "بهݢ {n}",
     "partTitled": "بهاݢين {n} — {titles}",
+    "partOfTotal": "بهاݢين {n} درڤد {total}",
+    "partAnchored": "{chapter} · {part}",
+    "partAnchoredTitled": "{chapter} · {part} — {heading}",
     "partOne": "بهاݢين {list}",
     "partMany": "بهاݢين {list}",
     "watchPart": "تونتون بهݢ {n}",
@@ -1043,8 +1046,11 @@
       "pickClass": "ڤيليه کلس."
     },
     "deleteLesson": {
-      "confirm": "بواڠ ڤلاجرن اين؟ اي اکن دباتلکن جک ماسيه برجالن.",
-      "remove": "بواڠ ڤلاجرن"
+      "confirm": "بواڠ ڤلاجرن اين؟ فايلڽ اکن دڤادم، دان کريديت يڠ تله دݢوناکن تيدق کمبالي.",
+      "remove": "بواڠ ڤلاجرن",
+      "cancel": "باتلکن ڤلاجرن",
+      "cancelConfirm": "باتلکن ڤلاجرن اين؟ اي بلوم مولا، جادي تياد کريديت اکن دݢوناکن.",
+      "building": "ڤلاجرن اين سدڠ دبوات — اندا بوليه ممبواڠڽ سباءيق اي سياڤ."
     },
     "branding": {
       "heading": "جنام سکوله",

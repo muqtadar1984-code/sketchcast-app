@@ -276,7 +276,17 @@ export default function ContentCell({
           oldArtifactPaths={lesson.artifactPaths}
         />
       )}
-      <DeleteLesson genId={lesson.id} artifactPaths={lesson.artifactPaths} t={t} className="hidden group-hover:inline-flex" />
+      {/* Only reachable in the done branch — queued/processing return above —
+          but the status is passed anyway so the control decides for itself.
+
+          NO hover reveal. This was `hidden group-hover:inline-flex`, measured
+          as 15 of 15 delete controls rendering 0x0 at 375x812: `group-hover`
+          never fires on a touch device, so the control did not exist on any
+          phone. It is the same idiom that hid the scanner's manual-crop button
+          and got reported as the app freezing (see page-scanner.tsx, which
+          settled on "always visible" for exactly this reason). A little more
+          ink on desktop is the price of a control that exists everywhere. */}
+      <DeleteLesson genId={lesson.id} status={lesson.status} t={t} />
     </span>
   );
 }

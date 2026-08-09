@@ -707,6 +707,9 @@
     "part": "Part {n}",
     "partShort": "Pt {n}",
     "partTitled": "Part {n} — {titles}",
+    "partOfTotal": "Part {n} of {total}",
+    "partAnchored": "{chapter} · {part}",
+    "partAnchoredTitled": "{chapter} · {part} — {heading}",
     "partOne": "Part {list}",
     "partMany": "Parts {list}",
     "watchPart": "Watch Pt {n}",
@@ -1043,8 +1046,11 @@
       "pickClass": "Pick a class."
     },
     "deleteLesson": {
-      "confirm": "Remove this lesson? This cancels it if it's still running.",
-      "remove": "Remove lesson"
+      "confirm": "Remove this lesson? Its files are deleted, and the credit it used is not returned.",
+      "remove": "Remove lesson",
+      "cancel": "Cancel lesson",
+      "cancelConfirm": "Cancel this lesson? It hasn't started yet, so no credit will be used.",
+      "building": "This lesson is being built right now — you can remove it once it finishes."
     },
     "branding": {
       "heading": "School branding",
