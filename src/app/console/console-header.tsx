@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoMark } from "../dashboard/icons";
+import MobileNav from "../dashboard/mobile-nav";
 
 const TABS = [
   { href: "/console", label: "Overview" },
@@ -24,9 +25,26 @@ function isActive(href: string, path: string): boolean {
 export default function ConsoleHeader({ email }: { email: string }) {
   const path = usePathname();
   return (
-    <header className="border-b border-[#2A3140] bg-[#14181F] text-white">
+    // `relative` so the mobile menu panel anchors to this bar rather than the page.
+    <header className="relative border-b border-[#2A3140] bg-[#14181F] text-white">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <span className="flex items-center gap-6">
+        <span className="flex items-center gap-3 sm:gap-6">
+          {/* The tab row below is `hidden sm:flex`, which left a phone with NO
+              route to Issues / Users / Schools / Content / Feedback / Audit —
+              the founder could reach the console and then not navigate it. Same
+              defect, and the same fix, as the teacher header (see mobile-nav's
+              header comment: "Khaja's report"). Reused rather than rewritten so
+              the two menus cannot drift. Staff chrome is English by design (see
+              console/layout.tsx), so the labels are literals here, unlike the
+              dashboard's which arrive translated. */}
+          <MobileNav
+            tabs={TABS}
+            openLabel="Open menu"
+            closeLabel="Close menu"
+            className="sm:hidden"
+            tone="dark"
+            panelTop="top-14"
+          />
           <Link href="/console" className="flex items-center gap-2.5 text-lg font-display text-white">
             <LogoMark size={26} />
             Console

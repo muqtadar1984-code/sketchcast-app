@@ -21,19 +21,54 @@ import { isActive, type NavTab } from "./header-nav";
 // The tab labels arrive already translated (the header builds them from the
 // request's dictionary); the two words this component owns — the button's
 // accessible name in each state — come in as props for the same reason.
+//
+// `tone` exists because the staff console wears a dark band and had the SAME
+// bug this component was written to fix — its tabs were `hidden sm:flex` with
+// no fallback, so a founder on a phone had no route to Issues / Users /
+// Schools / Content / Feedback / Audit at all. Reusing this rather than
+// writing a second menu means a fix to the behaviour (backdrop, aria, active
+// rule) lands on both surfaces at once. The light values are the originals, so
+// the dashboard renders byte-identically to before.
+//
+// `panelTop` is separate from `tone` because it tracks the HEADER's height, not
+// its colour: the dashboard bar is h-16 and the console's is h-14. The panel is
+// absolutely positioned, so whichever header mounts this must be `relative` or
+// the menu will anchor to the page instead of the bar.
+const TONES = {
+  light: {
+    button: "border-[#E6E8E4] bg-white text-[#14181F]",
+    panel: "border-[#E6E8E4] bg-white",
+    divider: "border-[#F1F2EF]",
+    active: "text-[#14181F] font-medium bg-[#F5F6F3]",
+    idle: "text-[#5B6470]",
+  },
+  dark: {
+    button: "border-[#2A3140] bg-[#1B212B] text-white",
+    panel: "border-[#2A3140] bg-[#14181F]",
+    divider: "border-[#2A3140]",
+    active: "text-white font-medium bg-[#1B212B]",
+    idle: "text-[#98A0A9]",
+  },
+} as const;
+
 export default function MobileNav({
   tabs,
   openLabel,
   closeLabel,
   className = "sm:hidden",
+  tone = "light",
+  panelTop = "top-16",
 }: {
   tabs: NavTab[];
   openLabel: string;
   closeLabel: string;
   className?: string;
+  tone?: keyof typeof TONES;
+  panelTop?: string;
 }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
+  const c = TONES[tone];
 
   return (
     <div className={`${className} shrink-0`}>
@@ -41,7 +76,7 @@ export default function MobileNav({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label={open ? closeLabel : openLabel}
-        className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-[#E6E8E4] bg-white text-[#14181F]"
+        className={`h-9 w-9 inline-flex items-center justify-center rounded-lg border ${c.button}`}
       >
         {open ? (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
@@ -58,7 +93,7 @@ export default function MobileNav({
         <>
           {/* Backdrop: tap anywhere else to close. */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <nav className="absolute start-0 end-0 top-16 z-30 border-b border-[#E6E8E4] bg-white shadow-lg">
+          <nav className={`absolute start-0 end-0 ${panelTop} z-30 border-b shadow-lg ${c.panel}`}>
             {tabs.map((t) => {
               const active = isActive(t.href, path, tabs);
               return (
@@ -67,8 +102,8 @@ export default function MobileNav({
                   href={t.href}
                   onClick={() => setOpen(false)}
                   aria-current={active ? "page" : undefined}
-                  className={`block px-5 py-3 text-sm border-b border-[#F1F2EF] last:border-b-0 ${
-                    active ? "text-[#14181F] font-medium bg-[#F5F6F3]" : "text-[#5B6470]"
+                  className={`block px-5 py-3 text-sm border-b last:border-b-0 ${c.divider} ${
+                    active ? c.active : c.idle
                   }`}
                 >
                   {t.label}
