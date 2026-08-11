@@ -51,6 +51,28 @@ function asLatin1(bytes: Uint8Array): string {
   return out;
 }
 
+/** Mimetypes that can never be an Office template, however they were stored.
+ *
+ * Used on READ, where downloading every template to inspect its bytes would tax
+ * each dashboard load. This is a REJECT-KNOWN-BAD list, deliberately not an
+ * accept-known-good one: a real .docx can legitimately arrive as
+ * application/octet-stream or application/zip depending on the browser and
+ * whether the upload's contentType was honoured, and hiding a teacher's valid
+ * template is worse than showing a bad one — the worker degrades gracefully on
+ * a bad template now, so a false positive here costs nothing.
+ *
+ * The 2026-08-10 case stored `image/jpeg`, which this catches.
+ */
+const IMPOSSIBLE_PREFIXES = ["image/", "video/", "audio/", "text/"];
+const IMPOSSIBLE_EXACT = ["application/pdf"];
+
+export function isPossiblyOfficeMimetype(mimetype: string | null | undefined): boolean {
+  if (!mimetype) return true; // unknown — do not hide a template over missing metadata
+  const m = mimetype.toLowerCase();
+  if (IMPOSSIBLE_EXACT.includes(m)) return false;
+  return !IMPOSSIBLE_PREFIXES.some((p) => m.startsWith(p));
+}
+
 export async function inspectOfficeFile(file: File, want: OfficeKind): Promise<OfficeCheck> {
   const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
 

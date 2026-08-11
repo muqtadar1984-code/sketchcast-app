@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { isPossiblyOfficeMimetype } from "@/utils/office-file";
 import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
@@ -484,6 +485,23 @@ export default async function DashboardPage() {
     .eq("owner_id", user.id)
     .maybeSingle();
 
+  // A stored path is not proof of a usable template. Before upload-time
+  // validation existed a teacher uploaded JPEGs as their .docx/.pptx letterheads
+  // and the card still read "templates set", so they had no way to tell why
+  // their documents came out unbranded. Check what is actually in storage and
+  // treat an impossible mimetype as "not set".
+  const brandingFiles = brandingRow
+    ? (await supabase.storage.from("uploads").list(`${user.id}/branding`)).data ?? []
+    : [];
+  const brandingUsable = (path: string | null | undefined) => {
+    if (!path) return false;
+    const name = path.split("/").pop();
+    const obj = brandingFiles.find((f) => f.name === name);
+    // Missing metadata is not evidence of a bad file — only a positively
+    // impossible type hides the template.
+    return isPossiblyOfficeMimetype(obj?.metadata?.mimetype as string | undefined);
+  };
+
   // `health` (migration 0021) is optional — degrade to the health-less select
   // so the library never breaks on a not-yet-applied migration.
   const bookCols = "id, title, author, owner_id, storage_path, status, chapters, grade, subject, cover_path, created_at";
@@ -958,7 +976,11 @@ export default async function DashboardPage() {
         </div>
 
         <div data-tour="branding">
-          <BrandingCard hasDocx={!!brandingRow?.docx_path} hasPptx={!!brandingRow?.pptx_path} t={t} />
+          <BrandingCard
+            hasDocx={brandingUsable(brandingRow?.docx_path)}
+            hasPptx={brandingUsable(brandingRow?.pptx_path)}
+            t={t}
+          />
         </div>
 
         {bookList.length === 0 ? (
