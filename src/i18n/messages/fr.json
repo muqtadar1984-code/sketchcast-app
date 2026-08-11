@@ -1061,7 +1061,10 @@
       "pptx": "Modèle PowerPoint (.pptx)",
       "uploading": "Import…",
       "clickToUpload": "Cliquez pour importer",
-      "uploaded": "Importé"
+      "uploaded": "Importé",
+      "errNotOffice": "Ce fichier ne semble pas être un fichier Word ou PowerPoint. Veuillez envoyer le fichier .docx ou .pptx d'origine — une image ou un PDF de votre en-tête ne fonctionnera pas.",
+      "errLegacy": "Il s'agit d'un ancien fichier .doc ou .ppt. Ouvrez-le dans Word ou PowerPoint et utilisez « Enregistrer sous » pour créer un .docx ou .pptx.",
+      "errWrongType": "C'est l'autre type de modèle. Les fichiers Word vont dans la case Word, les fichiers PowerPoint dans la case PowerPoint."
     },
     "shelf": {
       "alsoInSchool": "Également dans votre école ({n})"

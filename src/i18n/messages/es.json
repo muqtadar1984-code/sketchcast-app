@@ -1061,7 +1061,10 @@
       "pptx": "Plantilla de PowerPoint (.pptx)",
       "uploading": "Subiendo…",
       "clickToUpload": "Haga clic para subir",
-      "uploaded": "Subida"
+      "uploaded": "Subida",
+      "errNotOffice": "Esto no parece un archivo de Word o PowerPoint. Sube el archivo .docx o .pptx original: una imagen o un PDF de tu membrete no funcionará.",
+      "errLegacy": "Es un archivo .doc o .ppt antiguo. Ábrelo en Word o PowerPoint y usa «Guardar como» para crear un .docx o .pptx.",
+      "errWrongType": "Es el otro tipo de plantilla. Los archivos de Word van en la casilla de Word y los de PowerPoint en la de PowerPoint."
     },
     "shelf": {
       "alsoInSchool": "También en tu escuela ({n})"

@@ -1061,7 +1061,10 @@
       "pptx": "PowerPoint template (.pptx)",
       "uploading": "Uploading…",
       "clickToUpload": "Click to upload",
-      "uploaded": "Uploaded"
+      "uploaded": "Uploaded",
+      "errNotOffice": "That doesn't look like a Word or PowerPoint file. Please upload the original .docx or .pptx — an image or PDF of your letterhead won't work.",
+      "errLegacy": "That's an older .doc or .ppt file. Open it in Word or PowerPoint and use Save As to make a .docx or .pptx.",
+      "errWrongType": "That's the other kind of template. Word files go in the Word box, PowerPoint files in the PowerPoint box."
     },
     "shelf": {
       "alsoInSchool": "Also in your school ({n})"

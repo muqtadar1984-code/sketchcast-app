@@ -1061,7 +1061,10 @@
       "pptx": "PowerPoint టెంప్లేట్ (.pptx)",
       "uploading": "అప్‌లోడ్ అవుతోంది…",
       "clickToUpload": "అప్‌లోడ్ చేయడానికి క్లిక్ చేయండి",
-      "uploaded": "అప్‌లోడ్ అయింది"
+      "uploaded": "అప్‌లోడ్ అయింది",
+      "errNotOffice": "ఇది Word లేదా PowerPoint ఫైల్‌లా కనిపించడం లేదు. దయచేసి అసలు .docx లేదా .pptx ఫైల్‌ను అప్‌లోడ్ చేయండి — లెటర్‌హెడ్ చిత్రం లేదా PDF పని చేయదు.",
+      "errLegacy": "ఇది పాత .doc లేదా .ppt ఫైల్. దానిని Word లేదా PowerPointలో తెరిచి «ఇలా సేవ్ చేయి» ఉపయోగించి .docx లేదా .pptx చేయండి.",
+      "errWrongType": "ఇది వేరే రకమైన టెంప్లేట్. Word ఫైల్‌లు Word పెట్టెలో, PowerPoint ఫైల్‌లు PowerPoint పెట్టెలో పెట్టండి."
     },
     "shelf": {
       "alsoInSchool": "మీ పాఠశాలలో కూడా ({n})"

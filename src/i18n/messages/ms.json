@@ -1061,7 +1061,10 @@
       "pptx": "Templat PowerPoint (.pptx)",
       "uploading": "Memuat naik…",
       "clickToUpload": "Klik untuk muat naik",
-      "uploaded": "Dimuat naik"
+      "uploaded": "Dimuat naik",
+      "errNotOffice": "Ini nampaknya bukan fail Word atau PowerPoint. Sila muat naik fail .docx atau .pptx yang asal — imej atau PDF kepala surat tidak boleh digunakan.",
+      "errLegacy": "Ini fail .doc atau .ppt lama. Buka dalam Word atau PowerPoint dan guna Simpan Sebagai untuk menjadikannya .docx atau .pptx.",
+      "errWrongType": "Ini templat jenis yang satu lagi. Fail Word di kotak Word, fail PowerPoint di kotak PowerPoint."
     },
     "shelf": {
       "alsoInSchool": "Juga di sekolah anda ({n})"

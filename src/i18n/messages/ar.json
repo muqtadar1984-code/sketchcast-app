@@ -1061,7 +1061,10 @@
       "pptx": "قالب PowerPoint (.pptx)",
       "uploading": "جارٍ الرفع…",
       "clickToUpload": "اضغط للرفع",
-      "uploaded": "تم الرفع"
+      "uploaded": "تم الرفع",
+      "errNotOffice": "لا يبدو أن هذا ملف Word أو PowerPoint. يرجى رفع ملف .docx أو .pptx الأصلي — لا تصلح صورة أو ملف PDF لترويسة المدرسة.",
+      "errLegacy": "هذا ملف .doc أو .ppt قديم. افتحه في Word أو PowerPoint واستخدم «حفظ باسم» لحفظه بصيغة .docx أو .pptx.",
+      "errWrongType": "هذا هو النوع الآخر من القوالب. ملفات Word في خانة Word، وملفات PowerPoint في خانة PowerPoint."
     },
     "shelf": {
       "alsoInSchool": "متوفّر أيضًا في مدرستك ({n})"

@@ -1061,7 +1061,10 @@
       "pptx": "Modelo do PowerPoint (.pptx)",
       "uploading": "Enviando…",
       "clickToUpload": "Clique para enviar",
-      "uploaded": "Enviado"
+      "uploaded": "Enviado",
+      "errNotOffice": "Isto não parece ser um ficheiro do Word ou do PowerPoint. Envie o ficheiro .docx ou .pptx original — uma imagem ou PDF do seu timbre não funciona.",
+      "errLegacy": "É um ficheiro .doc ou .ppt antigo. Abra-o no Word ou PowerPoint e use «Guardar como» para criar um .docx ou .pptx.",
+      "errWrongType": "É o outro tipo de modelo. Os ficheiros do Word vão na caixa do Word e os do PowerPoint na caixa do PowerPoint."
     },
     "shelf": {
       "alsoInSchool": "Também na sua escola ({n})"

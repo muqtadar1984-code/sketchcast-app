@@ -1061,7 +1061,10 @@
       "pptx": "PowerPoint टेम्पलेट (.pptx)",
       "uploading": "अपलोड होत आहे…",
       "clickToUpload": "अपलोडसाठी क्लिक करा",
-      "uploaded": "अपलोड झाले"
+      "uploaded": "अपलोड झाले",
+      "errNotOffice": "ही Word किंवा PowerPoint फाइल दिसत नाही. कृपया मूळ .docx किंवा .pptx फाइल अपलोड करा — लेटरहेडची इमेज किंवा PDF चालणार नाही.",
+      "errLegacy": "ही जुनी .doc किंवा .ppt फाइल आहे. ती Word किंवा PowerPoint मध्ये उघडा आणि «असे जतन करा» वापरून .docx किंवा .pptx करा.",
+      "errWrongType": "हा दुसऱ्या प्रकारचा टेम्पलेट आहे. Word फाइल Word च्या चौकटीत आणि PowerPoint फाइल PowerPoint च्या चौकटीत टाका."
     },
     "shelf": {
       "alsoInSchool": "तुमच्या शाळेत देखील ({n})"

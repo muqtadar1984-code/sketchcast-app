@@ -1061,7 +1061,10 @@
       "pptx": "تيمڤلت PowerPoint (.pptx)",
       "uploading": "مموات نايق…",
       "clickToUpload": "کليک اونتوق موات نايق",
-      "uploaded": "تله دموات نايق"
+      "uploaded": "تله دموات نايق",
+      "errNotOffice": "اين نمڤقڽ بوکن فايل Word اتاو PowerPoint. سيلا موات نايق فايل .docx اتاو .pptx يڠ اصل — ايميج اتاو PDF کڤالا سورت تيدق بوليه دݢوناکن.",
+      "errLegacy": "اين فايل .doc اتاو .ppt لاما. بوک دالم Word اتاو PowerPoint دان ݢونا سيمڤن سباݢاي اونتوق منجاديکنڽ .docx اتاو .pptx.",
+      "errWrongType": "اين تيمڤلت جنيس يڠ ساتو لاݢي. فايل Word د کوتق Word، فايل PowerPoint د کوتق PowerPoint."
     },
     "shelf": {
       "alsoInSchool": "جوݢ د سکوله اندا ({n})"

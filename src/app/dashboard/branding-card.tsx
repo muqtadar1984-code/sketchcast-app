@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { inspectOfficeFile } from "@/utils/office-file";
 import { type LibraryMessages } from "./content-cell";
 
 const CT: Record<string, string> = {
@@ -64,6 +65,23 @@ export default function BrandingCard({
   async function upload(kind: "docx" | "pptx", file: File) {
     setBusy(kind);
     setError(null);
+
+    // `accept=".docx"` is only a picker hint — "All files" defeats it, and mobile
+    // pickers ignore it. Check the bytes before anything is stored, so the
+    // teacher is told now rather than discovering it when a kit fails to build.
+    const check = await inspectOfficeFile(file, kind);
+    if (!check.ok) {
+      setError(
+        check.reason === "legacy"
+          ? t.branding.errLegacy
+          : check.reason === "wrongType"
+            ? t.branding.errWrongType
+            : t.branding.errNotOffice,
+      );
+      setBusy(null);
+      return;
+    }
+
     const supabase = createClient();
     const {
       data: { user },
