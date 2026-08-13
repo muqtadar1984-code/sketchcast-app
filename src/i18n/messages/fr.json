@@ -982,6 +982,19 @@
         "poor": "Faible"
       }
     },
+    "gate": {
+      "banner": "Ce fichier importé ne ressemble pas à un manuel scolaire. Les leçons générées à partir de celui-ci seront probablement faibles.",
+      "title": "Ne ressemble pas à un manuel scolaire",
+      "body": "La génération utilisera vos crédits, et les résultats seront probablement faibles. Voulez-vous continuer ?",
+      "trialLine": "Ceci utilisera votre unique kit d'essai.",
+      "confirm": "Générer quand même",
+      "cancel": "Annuler",
+      "docType": {
+        "administrative": "Document administratif",
+        "form_or_roster": "Formulaire ou liste d'élèves",
+        "other": "Document non reconnu"
+      }
+    },
     "classes": {
       "heading": "Classes et élèves",
       "countOne": "1 classe",

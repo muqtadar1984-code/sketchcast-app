@@ -982,6 +982,19 @@
         "poor": "Mala"
       }
     },
+    "gate": {
+      "banner": "Este archivo subido no parece un libro de texto. Las lecciones generadas a partir de él probablemente serán débiles.",
+      "title": "No parece un libro de texto",
+      "body": "Generar usará sus créditos, y los resultados probablemente serán débiles. ¿Desea continuar?",
+      "trialLine": "Esto usará su único kit de prueba.",
+      "confirm": "Generar de todos modos",
+      "cancel": "Cancelar",
+      "docType": {
+        "administrative": "Documento administrativo",
+        "form_or_roster": "Formulario o lista de alumnos",
+        "other": "Documento no reconocido"
+      }
+    },
     "classes": {
       "heading": "Clases y alumnos",
       "countOne": "1 clase",

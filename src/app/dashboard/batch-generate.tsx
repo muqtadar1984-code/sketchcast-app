@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { defaultParams } from "./options-modal";
 import { LANGUAGES } from "@/utils/narration";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { kindLabel, type LibraryMessages } from "./content-cell";
 import { fmt } from "@/i18n/format";
 
@@ -25,6 +27,7 @@ export default function BatchGenerate({
   chapters,
   t,
   language = null,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -32,6 +35,8 @@ export default function BatchGenerate({
   t: LibraryMessages;
   /** Detected book language (0056) — papers inherit it. */
   language?: string | null;
+  /** Junk-upload gate: non-null for a gated book — confirm before inserting. */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -39,6 +44,7 @@ export default function BatchGenerate({
   const [kindSel, setKindSel] = useState<Set<string>>(new Set(["worksheet"]));
   const [combine, setCombine] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   // Paper language — defaults to the book's, but a teacher can pick another
@@ -67,7 +73,18 @@ export default function BatchGenerate({
   // Combining needs ≥2 chapters (one chapter isn't a "combination").
   const canGo = chosenChapters.length > 0 && nKinds > 0 && !(combine && chosenChapters.length < 2);
 
-  async function generate() {
+  // Gated book (junk-upload gate): detour through the confirm dialog first;
+  // confirming lands in generate with the stamp.
+  function onGenerate() {
+    if (nPapers === 0) return;
+    if (gate) {
+      setGateOpen(true);
+      return;
+    }
+    void generate(false);
+  }
+
+  async function generate(confirmed: boolean) {
     if (nPapers === 0) return;
     setBusy(true);
     setError(null);
@@ -118,6 +135,8 @@ export default function BatchGenerate({
     let queued = 0;
     let stopError: string | null = null;
     for (const row of papers) {
+      // The record that the teacher was warned — on EVERY row this click queues.
+      if (confirmed) row.params = stampConfirmation(row.params);
       const { error: gErr } = await supabase.from("generations").insert(row);
       if (gErr) {
         stopError = queued
@@ -130,6 +149,7 @@ export default function BatchGenerate({
       queued++;
     }
     setBusy(false);
+    setGateOpen(false); // close either way — an error must not hide behind the overlay
     if (stopError) {
       setError(stopError);
       router.refresh();
@@ -236,7 +256,7 @@ export default function BatchGenerate({
             {error && <span className="text-xs text-red-600 [overflow-wrap:anywhere]">{error}</span>}
             {note && <span className="text-xs text-[#0C8175]">{note}</span>}
             <button
-              onClick={() => void generate()}
+              onClick={onGenerate}
               disabled={busy || !canGo || nPapers === 0}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50 ms-auto"
             >
@@ -250,6 +270,14 @@ export default function BatchGenerate({
             </button>
           </div>
         </div>
+      )}
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void generate(true)}
+          onCancel={() => setGateOpen(false)}
+        />
       )}
     </div>
   );

@@ -6,6 +6,8 @@ import { createClient } from "@/utils/supabase/client";
 import { kitRows } from "./kit";
 import { defaultNarrationForGrade } from "@/utils/narration";
 import { kitSignature } from "@/utils/kit-match";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { type LibraryMessages } from "./content-cell";
 
 // One-click full kit for a chapter part (0059): queues the video lesson plus
@@ -23,6 +25,7 @@ export default function GenerateKitButton({
   t,
   className = "",
   children,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -40,6 +43,10 @@ export default function GenerateKitButton({
       Receives `busy` so the caller can show its own "Queuing…" state. */
   className?: string;
   children?: (state: { busy: boolean }) => React.ReactNode;
+  /** Junk-upload gate: non-null for a gated book — the INSERT path confirms
+      first (and stamps every row); adopting a colleague's finished kit burns
+      nothing, so that path is deliberately NOT gated. */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -49,6 +56,7 @@ export default function GenerateKitButton({
   // minutes — so the question is worth asking before queuing another one.
   const [offer, setOffer] = useState<{ ids: string[] } | null>(null);
   const [adopting, setAdopting] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
 
   const chapterRef = String(chapterNum);
 
@@ -125,6 +133,20 @@ export default function GenerateKitButton({
       }
     }
 
+    // Junk-upload gate: this is the path that INSERTS (and bills) — confirm
+    // first. Adoption above reuses a colleague's kit and burns nothing, so it
+    // never asks.
+    if (gate) {
+      setGateOpen(true);
+      setBusy(false);
+      return;
+    }
+    await insert(false);
+  }
+
+  async function insert(confirmed: boolean) {
+    setBusy(true);
+    setError(null);
     const supabase = createClient();
     const {
       data: { user },
@@ -142,10 +164,12 @@ export default function GenerateKitButton({
       part,
       language,
       narrationStyle: defaultNarrationForGrade(bookGrade),
-    }).filter(
-      (r) => r.kind === "presentation" || !skipKinds.includes(r.kind),
-    );
+    })
+      .filter((r) => r.kind === "presentation" || !skipKinds.includes(r.kind))
+      // The record that the teacher was warned — on EVERY row this click queues.
+      .map((r) => (confirmed ? { ...r, params: stampConfirmation(r.params) } : r));
     const { error: gErr } = await supabase.from("generations").insert(rows);
+    setGateOpen(false); // close either way — an error must not hide behind the overlay
     if (gErr) {
       setBusy(false); // only the failure path frees the button
       setError(gErr.message);
@@ -168,6 +192,15 @@ export default function GenerateKitButton({
 
   // Rendered OUTSIDE the trigger: the card variant makes the caller's whole
   // card a <button>, and a dialog nested inside one is invalid and unusable.
+  // The junk-upload gate's confirm rides the same slot for the same reason.
+  const gateDialog = gateOpen && gate && (
+    <JunkGateDialog
+      gate={gate}
+      busy={busy}
+      onConfirm={() => void insert(true)}
+      onCancel={() => setGateOpen(false)}
+    />
+  );
   const dialog = offer && (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#14181F]/30" onClick={() => !adopting && setOffer(null)} aria-hidden />
@@ -210,6 +243,7 @@ export default function GenerateKitButton({
           )}
         </button>
         {dialog}
+        {gateDialog}
       </>
     );
   }
@@ -226,6 +260,7 @@ export default function GenerateKitButton({
         {busy ? "Queuing…" : "Generate kit"}
       </button>
       {dialog}
+      {gateDialog}
     </span>
   );
 }

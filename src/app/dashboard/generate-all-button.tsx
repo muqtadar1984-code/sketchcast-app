@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { kitRows } from "./kit";
 import { defaultNarrationForGrade } from "@/utils/narration";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 
 type Chapter = { num: number; title: string };
 
@@ -17,6 +19,7 @@ export default function GenerateAllButton({
   chapters,
   language = null,
   bookGrade = null,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -25,14 +28,30 @@ export default function GenerateAllButton({
   language?: string | null;
   /** Book grade — age-appropriate narration default (grades 1–4 → Storytelling). */
   bookGrade?: string | null;
+  /** Junk-upload gate: non-null for a gated book — the whole-book run confirms
+      first (this is the single most expensive click on a junk upload). */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (chapters.length === 0) return null;
 
-  async function onGenerateAll() {
+  // Gated book (junk-upload gate): its dialog comes FIRST — no point asking
+  // the cost question on a run the teacher then abandons; confirming falls
+  // through to the normal flow (native cost confirm included) with the stamp.
+  function onClick() {
+    if (gate) {
+      setGateOpen(true);
+      return;
+    }
+    void onGenerateAll(false);
+  }
+
+  async function onGenerateAll(confirmed: boolean) {
+    setGateOpen(false);
     if (
       !confirm(
         `Generate the full kit (lesson + documents) for ${chapters.length} chapter(s)? Documents are free; each lesson costs one credit per rendered part (long chapters render as several parts).`,
@@ -63,7 +82,8 @@ export default function GenerateAllButton({
         chapterNum: c.num,
         language,
         narrationStyle: defaultNarrationForGrade(bookGrade),
-      });
+        // The record that the teacher was warned — on EVERY row this run queues.
+      }).map((r) => (confirmed ? { ...r, params: stampConfirmation(r.params) } : r));
       const { error: gErr } = await supabase.from("generations").insert(rows);
       if (gErr) {
         stopError = queued
@@ -83,13 +103,21 @@ export default function GenerateAllButton({
   return (
     <>
       <button
-        onClick={onGenerateAll}
+        onClick={onClick}
         disabled={busy}
         className="h-8 px-3 rounded-lg border border-[#1FB8A6] text-[#0C8175] text-xs font-medium hover:bg-[#E2F4F1] disabled:opacity-50 whitespace-nowrap"
       >
         {busy ? "Queuing…" : `Generate all (${chapters.length})`}
       </button>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void onGenerateAll(true)}
+          onCancel={() => setGateOpen(false)}
+        />
+      )}
     </>
   );
 }

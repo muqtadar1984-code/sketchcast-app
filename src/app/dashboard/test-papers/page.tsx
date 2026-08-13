@@ -14,6 +14,8 @@ import { type LibraryMessages } from "../content-cell";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { docDownloadName } from "@/utils/download-name";
+import { docTypeKey, gateReasons, isGated } from "@/utils/junk-gate";
+import { type JunkGateInfo } from "../junk-gate-dialog";
 
 // The parent's paper-focused view: upload their own book (same pipeline as
 // teachers — chapter detection included), generate a test paper per chapter,
@@ -128,6 +130,16 @@ export default async function TestPapersPage() {
     }
   }
 
+  // Junk-upload gate: trial accounts get the dialog's stronger "your only
+  // trial kit" line. Detected by plan_tier via my_fair_use (0047) — NOT
+  // beta_tester, which goes stale on upgrade. Best-effort: a pre-0047 DB just
+  // means no extra line. (Same derivation as the Library page.)
+  let trialTier = false;
+  {
+    const { data: fu } = await supabase.rpc("my_fair_use");
+    trialTier = (fu as { tier?: string } | null)?.tier === "trial";
+  }
+
   const rows: {
     bookId: string;
     bookTitle: string;
@@ -191,7 +203,18 @@ export default async function TestPapersPage() {
                       {c.num + 1}. {c.title}
                     </span>
                     <span className="flex items-center gap-2 shrink-0">
-                      {!c.gen && <GeneratePaperButton bookId={b.bookId} chapterNum={c.num} hasLesson={c.hasLesson} />}
+                      {!c.gen && (
+                        <GeneratePaperButton
+                          bookId={b.bookId}
+                          chapterNum={c.num}
+                          hasLesson={c.hasLesson}
+                          gate={
+                            isGated(b.health)
+                              ? ({ docType: docTypeKey(b.health), reasons: gateReasons(b.health), trial: trialTier, t: tLib } satisfies JunkGateInfo)
+                              : null
+                          }
+                        />
+                      )}
                       {c.gen && c.gen.status === "error" && (
                         <span className="chip font-sans bg-[#FFE9E3] text-[#B3401F]">failed</span>
                       )}

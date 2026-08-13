@@ -12,10 +12,14 @@ export type BookHealth = {
   score: number;
   band: "excellent" | "good" | "fair" | "poor";
   dimensions?: { text_layer?: number; structure?: number };
-  facts?: { pages?: number; chapters?: number; has_text_layer?: boolean; text_coverage?: number };
+  facts?: { pages?: number; chapters?: number; has_text_layer?: boolean; text_coverage?: number; doc_type?: string | null };
   problems?: string[];
   recommendation?: string | null;
   note?: string | null;
+  /** Junk-upload gate (worker-stamped): "confirm" asks before a generation;
+   *  absent (older books) or "none" behaves exactly as before. The app never
+   *  re-derives this — see utils/junk-gate.ts. */
+  gate?: string | null;
 };
 
 // Chip colour per band; the band's WORD comes from the dictionary (t.health.bands),

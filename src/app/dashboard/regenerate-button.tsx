@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 
 // "New version" — was a bare ↻ that silently DESTROYED the old generation
 // (founder 2026-07-21: "people get confused as to the result they should
@@ -55,6 +57,7 @@ export default function RegenerateButton({
   kind = "presentation",
   params = null,
   icon = false,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -66,12 +69,16 @@ export default function RegenerateButton({
   params?: Record<string, unknown> | null;
   /** Compact icon-only trigger (kit cells) — the dialog carries the explanation. */
   icon?: boolean;
+  /** Junk-upload gate: non-null for a gated book — a new version still spends a
+      credit on a weak source, so it confirms too (and stamps the params). */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const noun = KIND_NOUN[kind] ?? "item";
 
@@ -104,7 +111,17 @@ export default function RegenerateButton({
     setChecking(false);
   }
 
-  async function createVersion() {
+  // Gated book (junk-upload gate): the "Create new version" click detours
+  // through the confirm dialog first; confirming lands here with the stamp.
+  function onCreateVersion() {
+    if (gate) {
+      setGateOpen(true);
+      return;
+    }
+    void createVersion(false);
+  }
+
+  async function createVersion(confirmed: boolean) {
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -123,9 +140,10 @@ export default function RegenerateButton({
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(chapterRef),
-      params,
+      params: confirmed ? stampConfirmation(params) : params,
       status: "queued",
     });
+    setGateOpen(false); // close either way — an error must show in the dialog below, not behind it
     if (gErr) {
       setError(gErr.message);
       setBusy(false);
@@ -231,12 +249,21 @@ export default function RegenerateButton({
               <button onClick={() => setOpen(false)} disabled={busy} className="btn-ghost h-9 px-3 text-sm">
                 Cancel
               </button>
-              <button onClick={createVersion} disabled={busy} className="btn-primary h-9 px-3 text-sm">
+              <button onClick={onCreateVersion} disabled={busy} className="btn-primary h-9 px-3 text-sm">
                 {busy ? "Queuing…" : "Create new version"}
               </button>
             </div>
           </div>
         </div>
+      )}
+      {/* Rendered after the version dialog so it paints on top of it. */}
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void createVersion(true)}
+          onCancel={() => setGateOpen(false)}
+        />
       )}
     </>
   );

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { defaultParams } from "../options-modal";
 import { defaultPresentationParams } from "@/utils/narration";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "../junk-gate-dialog";
 
 // Generate a test paper for a chapter, and assign a finished one to a child.
 // Since 0059, papers ride with the chapter's lesson: without one, this queues
@@ -15,17 +17,28 @@ export function GeneratePaperButton({
   bookId,
   chapterNum,
   hasLesson = false,
+  gate = null,
 }: {
   bookId: string;
   chapterNum: number;
   /** The chapter's lesson already exists — the paper alone is a free add-back. */
   hasLesson?: boolean;
+  /** Junk-upload gate: non-null for a gated book — the insert (which can queue
+      a BILLED lesson row when the chapter has none) confirms first and stamps
+      its rows. */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function generate() {
+  async function generate(confirmed = false) {
+    // Gated book (junk-upload gate): detour through the confirm dialog first.
+    if (gate && !confirmed) {
+      setGateOpen(true);
+      return;
+    }
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -73,8 +86,11 @@ export function GeneratePaperButton({
           },
           paperRow,
         ];
-    const { error: gErr } = await supabase.from("generations").insert(rows);
+    // The record that the teacher was warned — on EVERY row this click queues.
+    const stamped = confirmed ? rows.map((r) => ({ ...r, params: stampConfirmation(r.params) })) : rows;
+    const { error: gErr } = await supabase.from("generations").insert(stamped);
     setBusy(false);
+    setGateOpen(false); // close either way — an error must not hide behind the overlay
     if (gErr) {
       setError(gErr.message);
       return;
@@ -86,7 +102,7 @@ export function GeneratePaperButton({
     <span className="inline-flex items-center gap-2">
       {error && <span className="text-xs text-red-600">{error}</span>}
       <button
-        onClick={generate}
+        onClick={() => void generate()}
         disabled={busy}
         className="btn-primary h-8 px-3 text-xs"
         title={
@@ -97,6 +113,14 @@ export function GeneratePaperButton({
       >
         {busy ? "Queuing…" : hasLesson ? "Generate paper (free)" : "Generate lesson + paper"}
       </button>
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void generate(true)}
+          onCancel={() => setGateOpen(false)}
+        />
+      )}
     </span>
   );
 }

@@ -16,6 +16,8 @@ import {
   narrationStyles,
 } from "@/utils/narration";
 import { TypeIcon } from "./icons";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { fmt } from "@/i18n/format";
 
 // All content types a chapter can produce, in display order. Wording comes from
@@ -47,6 +49,7 @@ export default function ChapterGenerate({
   extraAssignableIds = [],
   bookLanguage = null,
   bookGrade = null,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -64,6 +67,9 @@ export default function ChapterGenerate({
   bookLanguage?: string | null;
   /** Book grade — preselects an age-appropriate narration style (grades 1–4 → Storytelling). */
   bookGrade?: string | null;
+  /** Junk-upload gate: non-null for a gated book — every insert path here
+      (full kit AND free add-backs) confirms first and stamps its rows. */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   // Beta mirrors the DB pin (0057): the first generation fixes one
@@ -101,6 +107,7 @@ export default function ChapterGenerate({
     : KINDS.filter((k) => k !== "presentation" && !lessons[k]);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Age-appropriate default from the book's grade (overridable in the picker).
   const [narrationStyle, setNarrationStyle] = useState(defaultNarrationForGrade(bookGrade));
@@ -131,7 +138,18 @@ export default function ChapterGenerate({
     ...extraAssignableIds,
   ];
 
-  async function generate() {
+  // Gated book (junk-upload gate): both buttons detour through the confirm
+  // dialog; confirming lands in generate with the stamp.
+  function onGenerate() {
+    if (chosen.length === 0 && !kitPending) return;
+    if (gate) {
+      setGateOpen(true);
+      return;
+    }
+    void generate(false);
+  }
+
+  async function generate(confirmed: boolean) {
     if (chosen.length === 0 && !kitPending) return;
     setBusy(true);
     setError(null);
@@ -170,8 +188,11 @@ export default function ChapterGenerate({
           params: { ...defaultParams(k), language },
           status: "queued",
         }));
-    const { error: gErr } = await supabase.from("generations").insert(rows);
+    // The record that the teacher was warned — on EVERY row this click queues.
+    const stamped = confirmed ? rows.map((r) => ({ ...r, params: stampConfirmation(r.params) })) : rows;
+    const { error: gErr } = await supabase.from("generations").insert(stamped);
     setBusy(false);
+    setGateOpen(false); // close either way — an error must not hide behind the overlay
     if (gErr) {
       setError(gErr.message);
       return;
@@ -197,6 +218,7 @@ export default function ChapterGenerate({
         trackViews={!!beta}
         bookLanguage={bookLanguage}
         genLocked={betaLocked}
+        gate={gate}
         t={t}
       />
     </span>
@@ -237,6 +259,7 @@ export default function ChapterGenerate({
           trackViews={!!beta}
           bookLanguage={bookLanguage}
           genLocked={betaLocked}
+          gate={gate}
           t={t}
         />
       </span>
@@ -273,7 +296,7 @@ export default function ChapterGenerate({
       {kitPending && (
         <button
           data-tour="generate-lesson"
-          onClick={generate}
+          onClick={onGenerate}
           disabled={busy}
           className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
           title={t.kit.generateFullKitHint}
@@ -284,7 +307,7 @@ export default function ChapterGenerate({
       {pendingKinds.length > 0 && (
         <button
           data-tour="generate-lesson"
-          onClick={generate}
+          onClick={onGenerate}
           disabled={busy || chosen.length === 0}
           className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
           title={t.kit.generateFreeHint}
@@ -368,6 +391,14 @@ export default function ChapterGenerate({
         </div>
       )}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void generate(true)}
+          onCancel={() => setGateOpen(false)}
+        />
+      )}
     </div>
   );
 }

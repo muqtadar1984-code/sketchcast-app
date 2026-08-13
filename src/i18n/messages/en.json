@@ -982,6 +982,19 @@
         "poor": "Poor"
       }
     },
+    "gate": {
+      "banner": "This upload doesn't look like a textbook. Lessons generated from it will likely be weak.",
+      "title": "Doesn't look like a textbook",
+      "body": "Generating will use your credits, and the results will likely be weak. Do you want to continue?",
+      "trialLine": "This will use your only trial kit.",
+      "confirm": "Generate anyway",
+      "cancel": "Cancel",
+      "docType": {
+        "administrative": "Administrative document",
+        "form_or_roster": "Form or roster",
+        "other": "Unrecognized document"
+      }
+    },
     "classes": {
       "heading": "Classes & students",
       "countOne": "1 class",

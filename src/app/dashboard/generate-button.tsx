@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 
 export default function GenerateButton({
   bookId,
@@ -12,6 +14,7 @@ export default function GenerateButton({
   params = null,
   label = "Generate lesson",
   variant = "primary",
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -20,12 +23,26 @@ export default function GenerateButton({
   params?: Record<string, unknown> | null;
   label?: string;
   variant?: "primary" | "ghost";
+  /** Junk-upload gate: non-null for a gated book — ask before inserting, and
+      stamp the confirmation into params. Absent = today's behavior. */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onGenerate() {
+  function onGenerate() {
+    // Gated book: ask first. Confirming proceeds with the stamp — nothing is
+    // ever hard-blocked (soft confirm only, founder decision).
+    if (gate) {
+      setGateOpen(true);
+      return;
+    }
+    void insert(false);
+  }
+
+  async function insert(confirmed: boolean) {
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -45,10 +62,11 @@ export default function GenerateButton({
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: chapterRef === null ? null : String(chapterRef),
-      params,
+      params: confirmed ? stampConfirmation(params) : params,
       status: "queued",
     });
     setBusy(false);
+    setGateOpen(false); // close either way — an error must not hide behind the overlay
     if (gErr) {
       setError(gErr.message);
       return;
@@ -67,6 +85,14 @@ export default function GenerateButton({
         {busy ? "Starting…" : label}
       </button>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void insert(true)}
+          onCancel={() => setGateOpen(false)}
+        />
+      )}
     </>
   );
 }

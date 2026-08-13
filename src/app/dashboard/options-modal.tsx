@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { LANGUAGES } from "@/utils/narration";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { type LibraryMessages } from "./content-cell";
 
 // A field's `label` is a KEY into t.options.fields, never a word: two kinds can
@@ -87,6 +89,7 @@ export default function OptionsModal({
   t,
   part = null,
   bookLanguage = null,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -100,11 +103,14 @@ export default function OptionsModal({
   part?: number | null;
   /** Detected book language (0056) — preselects the document language. */
   bookLanguage?: string | null;
+  /** Junk-upload gate: non-null for a gated book — confirm before inserting. */
+  gate?: JunkGateInfo | null;
 }) {
   const spec = SPECS[kind];
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vals, setVals] = useState<Record<string, unknown>>(() =>
     Object.fromEntries((spec?.fields ?? []).map((f) => [f.key, f.def])),
@@ -115,7 +121,17 @@ export default function OptionsModal({
   if (!spec) return null;
   const set = (k: string, v: unknown) => setVals((s) => ({ ...s, [k]: v }));
 
-  async function submit() {
+  // Gated book (junk-upload gate): "Generate" detours through the confirm
+  // dialog; confirming lands in submit with the stamp.
+  function onSubmit() {
+    if (gate) {
+      setGateOpen(true);
+      return;
+    }
+    void submit(false);
+  }
+
+  async function submit(confirmed: boolean) {
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -127,20 +143,22 @@ export default function OptionsModal({
       setBusy(false);
       return;
     }
+    const params = {
+      ...(spec.build(vals) ?? {}),
+      ...(part ? { part } : {}),
+      language,
+    };
     const { error: gErr } = await supabase.from("generations").insert({
       kind,
       book_id: bookId,
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: String(chapterRef),
-      params: {
-        ...(spec.build(vals) ?? {}),
-        ...(part ? { part } : {}),
-        language,
-      },
+      params: confirmed ? stampConfirmation(params) : params,
       status: "queued",
     });
     setBusy(false);
+    setGateOpen(false); // close either way — an error must show in the modal, not behind it
     if (gErr) {
       setError(gErr.message);
       return;
@@ -233,7 +251,7 @@ export default function OptionsModal({
                 {t.common.cancel}
               </button>
               <button
-                onClick={submit}
+                onClick={onSubmit}
                 disabled={busy}
                 className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
               >
@@ -242,6 +260,15 @@ export default function OptionsModal({
             </div>
           </div>
         </div>
+      )}
+      {/* Rendered after the options modal so it paints on top of it. */}
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void submit(true)}
+          onCancel={() => setGateOpen(false)}
+        />
       )}
     </>
   );

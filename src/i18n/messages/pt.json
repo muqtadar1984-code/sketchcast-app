@@ -982,6 +982,19 @@
         "poor": "Ruim"
       }
     },
+    "gate": {
+      "banner": "Este arquivo enviado não parece um livro didático. As aulas geradas a partir dele provavelmente serão fracas.",
+      "title": "Não parece um livro didático",
+      "body": "Gerar usará seus créditos, e os resultados provavelmente serão fracos. Quer continuar?",
+      "trialLine": "Isto usará seu único kit de teste.",
+      "confirm": "Gerar mesmo assim",
+      "cancel": "Cancelar",
+      "docType": {
+        "administrative": "Documento administrativo",
+        "form_or_roster": "Formulário ou lista de alunos",
+        "other": "Documento não reconhecido"
+      }
+    },
     "classes": {
       "heading": "Turmas e alunos",
       "countOne": "1 turma",

@@ -3,6 +3,7 @@
 import GenerateButton from "./generate-button";
 import RegenerateButton from "./regenerate-button";
 import OptionsModal from "./options-modal";
+import { type JunkGateInfo } from "./junk-gate-dialog";
 import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import ReportFailure from "./report-failure";
@@ -112,6 +113,7 @@ export default function ContentCell({
   bookLanguage = null,
   genLocked = false,
   bookTitle = null,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -131,6 +133,9 @@ export default function ContentCell({
   genLocked?: boolean;
   /** Named in the failure report emailed to staff; falls back to the book id. */
   bookTitle?: string | null;
+  /** Junk-upload gate: non-null for a gated book — every generate/retry/
+      regenerate this cell offers confirms first. */
+  gate?: JunkGateInfo | null;
 }) {
   const isPres = kind === "presentation";
 
@@ -145,6 +150,7 @@ export default function ContentCell({
         variant="ghost"
         label={lbl}
         params={part ? { part } : null}
+        gate={gate}
       />
     ) : (
       <OptionsModal
@@ -155,6 +161,7 @@ export default function ContentCell({
         label={lbl}
         part={part}
         bookLanguage={bookLanguage}
+        gate={gate}
         t={t}
       />
     );
@@ -274,6 +281,7 @@ export default function ContentCell({
           params={lesson.params}
           oldGenId={lesson.id}
           oldArtifactPaths={lesson.artifactPaths}
+          gate={gate}
         />
       )}
       {/* Only reachable in the done branch — queued/processing return above —

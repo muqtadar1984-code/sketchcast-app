@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { LANGUAGES } from "@/utils/narration";
+import { stampConfirmation } from "@/utils/junk-gate";
+import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { type LibraryMessages } from "./content-cell";
 import { fmt } from "@/i18n/format";
 
@@ -40,6 +42,7 @@ export default function ExamGenerate({
   chapters,
   t,
   language = null,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -48,9 +51,12 @@ export default function ExamGenerate({
   t: LibraryMessages;
   /** Detected book language (0056) — the exam inherits it by default. */
   language?: string | null;
+  /** Junk-upload gate: non-null for a gated book — confirm before inserting. */
+  gate?: JunkGateInfo | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
 
   // Every covered unit is ticked by default — the teacher unticks to skip.
   const allKeys = chapters.flatMap((c) => c.units.map((u) => unitKey(c.num, u.part)));
@@ -89,7 +95,18 @@ export default function ExamGenerate({
   const totalQ = QTYPES.reduce((n, q) => n + (counts[q.key] || 0), 0);
   const canGo = chosen.length > 0 && totalQ > 0;
 
-  async function generate() {
+  // Gated book (junk-upload gate): detour through the confirm dialog first;
+  // confirming lands in generate with the stamp.
+  function onGenerate() {
+    if (!canGo) return;
+    if (gate) {
+      setGateOpen(true);
+      return;
+    }
+    void generate(false);
+  }
+
+  async function generate(confirmed: boolean) {
     if (!canGo) return;
     setBusy(true);
     setError(null);
@@ -103,22 +120,24 @@ export default function ExamGenerate({
       setBusy(false);
       return;
     }
+    const params = {
+      scope: chosen.map((u) => ({ chapter: u.chapter, part: u.part })),
+      counts,
+      difficulty,
+      language: lang,
+      ...(title.trim() ? { title: title.trim() } : {}),
+    };
     const { error: gErr } = await supabase.from("generations").insert({
       kind: "exam",
       book_id: bookId,
       owner_id: user.id,
       school_id: schoolId,
       chapter_ref: null,
-      params: {
-        scope: chosen.map((u) => ({ chapter: u.chapter, part: u.part })),
-        counts,
-        difficulty,
-        language: lang,
-        ...(title.trim() ? { title: title.trim() } : {}),
-      },
+      params: confirmed ? stampConfirmation(params) : params,
       status: "queued",
     });
     setBusy(false);
+    setGateOpen(false); // close either way — an error must not hide behind the overlay
     if (gErr) {
       setError(gErr.message);
       return;
@@ -250,7 +269,7 @@ export default function ExamGenerate({
               {totalQ === 1 ? t.examTool.questionsOne : fmt(t.examTool.questionsMany, { n: totalQ })}
             </span>
             <button
-              onClick={() => void generate()}
+              onClick={onGenerate}
               disabled={busy || !canGo}
               className="btn-primary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50 ms-auto"
             >
@@ -258,6 +277,14 @@ export default function ExamGenerate({
             </button>
           </div>
         </div>
+      )}
+      {gateOpen && gate && (
+        <JunkGateDialog
+          gate={gate}
+          busy={busy}
+          onConfirm={() => void generate(true)}
+          onCancel={() => setGateOpen(false)}
+        />
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import ContentCell, { kindLabel, type CellLesson, type LibraryMessages } from ".
 import AssignModal, { type ClassRow } from "./assign-modal";
 import GenerateKitButton from "./generate-kit-button";
 import RegenerateButton from "./regenerate-button";
+import { type JunkGateInfo } from "./junk-gate-dialog";
 import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
@@ -144,6 +145,7 @@ export default function LessonCard({
   trackViews = false,
   bookLanguage = null,
   bookGrade = null,
+  gate = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -159,6 +161,9 @@ export default function LessonCard({
   trackViews?: boolean;
   bookLanguage?: string | null;
   bookGrade?: string | null;
+  /** Junk-upload gate: non-null for a gated book — threaded to every control
+      on this card that inserts generation rows. */
+  gate?: JunkGateInfo | null;
 }) {
   const pres = part.presentation;
   const generated = !!pres && pres.status !== "error";
@@ -217,6 +222,7 @@ export default function LessonCard({
         part={part.n}
         language={bookLanguage}
         bookGrade={bookGrade}
+        gate={gate}
         t={t}
         className="group/new w-full text-start flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
         skipKinds={(
@@ -316,6 +322,7 @@ export default function LessonCard({
               params={p.params}
               oldGenId={p.id}
               oldArtifactPaths={p.artifactPaths}
+              gate={gate}
             />
             <DeleteLesson genId={p.id} status={p.status} t={t} />
           </span>
@@ -365,6 +372,7 @@ export default function LessonCard({
                   trackViews={trackViews}
                   bookLanguage={bookLanguage}
                   bookTitle={bookTitle}
+                  gate={gate}
                   t={t}
                 />
               </Chip>

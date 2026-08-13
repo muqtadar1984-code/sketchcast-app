@@ -450,6 +450,17 @@ export default async function DashboardPage() {
   const dict = await getDictionary(locale);
   const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
 
+  // Junk-upload gate: trial accounts get the dialog's stronger "your only
+  // trial kit" line. Detected by plan_tier — my_fair_use() reports it (0047,
+  // SECURITY DEFINER, auth.uid()-scoped) — and deliberately NOT by
+  // beta_tester, which is never cleared on upgrade (known trap). Best-effort:
+  // a pre-0047 DB just means no extra line.
+  let trialTier = false;
+  {
+    const { data: fu } = await supabase.rpc("my_fair_use");
+    trialTier = (fu as { tier?: string } | null)?.tier === "trial";
+  }
+
   // Teacher surfaces show what the person OWNS. Admins/coordinators can read
   // school-wide rows under RLS, so filter by ownership explicitly — their
   // Library is their teacher hat, not the school view (that's /dashboard/school).
@@ -1039,6 +1050,7 @@ export default async function DashboardPage() {
                   lang={htmlLang(locale)}
                   beta={isBeta ? { pinned: betaPinned } : null}
                   examEnabled={examGenerationEnabled()}
+                  trial={trialTier}
                 />
               </section>
             ))}
@@ -1070,6 +1082,7 @@ export default async function DashboardPage() {
                     lang={htmlLang(locale)}
                     beta={isBeta ? { pinned: betaPinned } : null}
                     examEnabled={examGenerationEnabled()}
+                    trial={trialTier}
                   />
                 </section>
               ))}

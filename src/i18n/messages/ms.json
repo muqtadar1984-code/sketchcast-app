@@ -982,6 +982,19 @@
         "poor": "Lemah"
       }
     },
+    "gate": {
+      "banner": "Muat naik ini tidak kelihatan seperti buku teks. Pelajaran yang dijana daripadanya berkemungkinan lemah.",
+      "title": "Tidak kelihatan seperti buku teks",
+      "body": "Penjanaan akan menggunakan kredit anda, dan hasilnya berkemungkinan lemah. Mahu teruskan?",
+      "trialLine": "Ini akan menggunakan satu-satunya kit percubaan anda.",
+      "confirm": "Jana juga",
+      "cancel": "Batal",
+      "docType": {
+        "administrative": "Dokumen pentadbiran",
+        "form_or_roster": "Borang atau senarai nama",
+        "other": "Dokumen tidak dikenali"
+      }
+    },
     "classes": {
       "heading": "Kelas & pelajar",
       "countOne": "1 kelas",

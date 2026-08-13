@@ -13,6 +13,8 @@ import ChapterGenerate from "./chapter-generate";
 import BatchGenerate from "./batch-generate";
 import ExamGenerate, { type ExamChapterOpt } from "./exam-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
+import { type JunkGateInfo } from "./junk-gate-dialog";
+import { docTypeKey, gateReasons, isGated } from "@/utils/junk-gate";
 import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
 import { jobStageLabel, etaLabel } from "@/utils/job-stage";
@@ -177,6 +179,7 @@ export default function BookTable({
   lang,
   beta = null,
   examEnabled = false,
+  trial = false,
 }: {
   books: BookRow[];
   schoolId: string | null;
@@ -188,6 +191,10 @@ export default function BookTable({
   beta?: BetaState | null; // non-null for a beta teacher (1-chapter cap active)
   /** Exam tool (0062) — gated on FEATURE_EXAM until migration 0062 is applied. */
   examEnabled?: boolean;
+  /** plan_tier === "trial" (junk-upload gate): the confirm dialog adds its
+      stronger "your only trial kit" line. NOT beta_tester — that flag goes
+      stale on upgrade. */
+  trial?: boolean;
 }) {
   // Expand the only book by default; otherwise everything starts collapsed.
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
@@ -200,6 +207,12 @@ export default function BookTable({
       {books.map((b) => {
         const isOpen = !!open[b.id];
         const ready = b.status === "ready";
+        // Junk-upload gate (worker-stamped health.gate): ONE object per book,
+        // threaded to every control that inserts generation rows. Books whose
+        // health lacks the gate (all older books) get null — zero change.
+        const gate: JunkGateInfo | null = isGated(b.health)
+          ? { docType: docTypeKey(b.health), reasons: gateReasons(b.health), trial, t }
+          : null;
         return (
           <div key={b.id} className="border-b border-[#EEF0EC] last:border-b-0">
             <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#EEF3F1]" : ""}`}>
@@ -272,11 +285,24 @@ export default function BookTable({
               </div>
             </div>
 
+            {/* Junk-upload gate: the caution rides the ROW (outside the
+                disclosure), so a collapsed gated book still warns before
+                anyone opens it to generate. Same amber as the scanned-PDF
+                warning below — it is the same kind of news. */}
+            {gate && (
+              <div className="px-5 pb-3">
+                <div className="flex items-start gap-2 rounded-lg bg-[#FFF1D6] text-[#9A6400] px-3 py-2 text-xs">
+                  <span aria-hidden>⚠️</span>
+                  <span>{t.gate.banner}</span>
+                </div>
+              </div>
+            )}
+
             {b.status === "error" && (
               <div className="px-5 pb-3 flex items-center gap-3">
                 <span className="text-xs text-[#B42318]">{t.book.noChapters}</span>
                 {/* Whole-book generation would blow past the 1-chapter beta cap. */}
-                {!beta && <GenerateButton bookId={b.id} schoolId={schoolId} label={t.book.generateFullBook} />}
+                {!beta && <GenerateButton bookId={b.id} schoolId={schoolId} label={t.book.generateFullBook} gate={gate} />}
               </div>
             )}
 
@@ -301,7 +327,7 @@ export default function BookTable({
                   // paper tools sit behind "More" so they stop competing with it.
                   <div className="flex items-center justify-end gap-2 py-1.5">
                     {b.pendingChapters.length > 0 && (
-                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} />
+                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} gate={gate} />
                     )}
                     <BookTools t={t}>
                     {/* Revision papers: worksheets/test papers over a group of
@@ -317,13 +343,14 @@ export default function BookTable({
                         )
                         .map((ch) => ({ num: ch.num, title: ch.title }))}
                       language={b.language}
+                      gate={gate}
                       t={t}
                     />
                     {/* Exam: a cumulative exam paper + separate answer key over
                         the chosen covered chapters/parts (0062). Gated on
                         FEATURE_EXAM until migration 0062 is applied. */}
                     {examEnabled && (
-                      <ExamGenerate bookId={b.id} schoolId={schoolId} chapters={b.examUnits} language={b.language} t={t} />
+                      <ExamGenerate bookId={b.id} schoolId={schoolId} chapters={b.examUnits} language={b.language} gate={gate} t={t} />
                     )}
                     </BookTools>
                   </div>
@@ -355,6 +382,7 @@ export default function BookTable({
                           .map((l) => l.id)}
                         bookLanguage={b.language}
                         bookGrade={b.grade}
+                        gate={gate}
                         t={t}
                       />
                       {/* Per-part lesson units (index-time part map): one row
@@ -384,6 +412,7 @@ export default function BookTable({
                                 trackViews={!!beta}
                                 bookLanguage={b.language}
                                 bookGrade={b.grade}
+                                gate={gate}
                                 t={t}
                               />
                             );
