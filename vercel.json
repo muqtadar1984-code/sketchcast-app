@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/lifecycle/reminders",
+      "schedule": "30 3 * * *"
+    }
+  ]
+}
