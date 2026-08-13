@@ -32,6 +32,7 @@ import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
 import { splitShelf } from "@/utils/school-books";
+import { docDownloadName } from "@/utils/download-name";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
@@ -306,9 +307,13 @@ export default async function DashboardPage() {
     } catch {
       downloadsReady = false;
     }
-    const sign = async (path: string | null): Promise<string | null> => {
+    // `download` bakes a Content-Disposition filename into the signed URL —
+    // only documents pass one; video/deck/quiz URLs must stay untouched.
+    const sign = async (path: string | null, download?: string): Promise<string | null> => {
       if (!path || !admin) return null;
-      const { data } = await admin.storage.from("artifacts").createSignedUrl(path, 3600);
+      const { data } = await admin.storage
+        .from("artifacts")
+        .createSignedUrl(path, 3600, download ? { download } : undefined);
       return data?.signedUrl ?? null;
     };
 
@@ -349,12 +354,12 @@ export default async function DashboardPage() {
         .filter((a) => a.kind === "video_mp4")
         .map((a) => a.storage_path)
         .sort((a, b) => partNum(a) - partNum(b));
-      const videos = await Promise.all(videoPaths.map(sign));
+      const videos = await Promise.all(videoPaths.map((p) => sign(p)));
       const deckPaths = arts
         .filter((a) => a.kind === "deck_pptx")
         .map((a) => a.storage_path)
         .sort((a, b) => partNum(a) - partNum(b));
-      const decks = (await Promise.all(deckPaths.map(sign))).filter((u): u is string => !!u);
+      const decks = (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);
       // Per-part lesson units: label carries the part so three assigned
       // "Lesson"s of one chapter read as Part 1/2/3, not three clones.
       const genPart = g.params?.part;
@@ -373,7 +378,7 @@ export default async function DashboardPage() {
         videos,
         deck: decks[0] ?? null,
         decks,
-        doc: await sign(path("docx")),
+        doc: await sign(path("docx"), docDownloadName(g.kind, "docx")),
         quiz: await sign(path("questions_json")),
         status: (prog?.status as StudentItemData["status"]) ?? null,
         revisionCount: prog?.revisionCount ?? 0,
@@ -629,9 +634,13 @@ export default async function DashboardPage() {
     ((gensRaw ?? []) as unknown as LessonRow[]).map(async (g) => {
       const arts = await Promise.all(
         (g.artifacts ?? []).map(async (a) => {
+          // Documents get a human download filename ("Test Paper.docx", not
+          // the storage basename); everything else signs untouched — a
+          // download disposition on a video URL would break in-tab playback.
+          const dl = docDownloadName(g.kind, a.kind);
           const { data } = await supabase.storage
             .from("artifacts")
-            .createSignedUrl(a.storage_path, 3600);
+            .createSignedUrl(a.storage_path, 3600, dl ? { download: dl } : undefined);
           return { kind: a.kind as string, path: a.storage_path, url: data?.signedUrl ?? null };
         }),
       );

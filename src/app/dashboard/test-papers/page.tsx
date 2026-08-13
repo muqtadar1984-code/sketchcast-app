@@ -13,6 +13,7 @@ import BookHealthBadge, { type BookHealth } from "../book-health-badge";
 import { type LibraryMessages } from "../content-cell";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
+import { docDownloadName } from "@/utils/download-name";
 
 // The parent's paper-focused view: upload their own book (same pipeline as
 // teachers — chapter detection included), generate a test paper per chapter,
@@ -99,10 +100,14 @@ export default async function TestPapersPage() {
       .map((g) => `${g.book_id}|${g.chapter_ref}`),
   );
 
-  // Owner can sign their own artifact paths directly (storage RLS).
+  // Owner can sign their own artifact paths directly (storage RLS). This page
+  // only ever signs exam-paper docx paths, so the download name is constant —
+  // without it the browser saves the storage basename (exam_paper.docx).
   const sign = async (path: string | null) => {
     if (!path) return null;
-    const { data } = await supabase.storage.from("artifacts").createSignedUrl(path, 3600);
+    const { data } = await supabase.storage
+      .from("artifacts")
+      .createSignedUrl(path, 3600, { download: docDownloadName("exam_paper", "docx") });
     return data?.signedUrl ?? null;
   };
 
