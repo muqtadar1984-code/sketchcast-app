@@ -98,3 +98,43 @@ export function renderEmail(
     ].join("\n"),
   };
 }
+
+/**
+ * The one-time welcome email (founder-approved copy, 2026-08-17). Sent on a
+ * new account's first dashboard visit — for most signups (Google OAuth) this
+ * is the ONLY email that would otherwise ever reach their inbox, so its real
+ * job is to exist there as an easy way back in.
+ */
+export function welcomeEmail(f: {
+  firstName: string | null;
+  appUrl: string;
+  unsubscribeUrl: string;
+}): { subject: string; text: string } {
+  return {
+    subject: "Your SketchCast account is ready",
+    text: [
+      greeting(f.firstName),
+      "",
+      "Welcome to SketchCast — your account is set up and ready to use.",
+      "",
+      "SketchCast turns the textbook you already teach from into a complete",
+      "teaching kit: a narrated video lesson, worksheet, test paper, lesson",
+      "plan, activities and a case study — in the language you teach in.",
+      "",
+      "Getting started takes two steps:",
+      "",
+      "1. Upload your textbook (a PDF, or scanned pages straight from your phone)",
+      "2. Pick a chapter and press Generate",
+      "",
+      `Log in any time: ${f.appUrl}/login`,
+      "",
+      "If anything is unclear or doesn't work the way you expect, just reply",
+      "to this email — a real person reads every reply.",
+      "",
+      "— The SketchCast team",
+      "",
+      "---",
+      `Prefer fewer emails? Unsubscribe: ${f.unsubscribeUrl}`,
+    ].join("\n"),
+  };
+}

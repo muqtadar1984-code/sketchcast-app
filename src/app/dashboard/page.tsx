@@ -36,6 +36,7 @@ import { docDownloadName } from "@/utils/download-name";
 import FeedbackQuestionnaire from "./feedback-questionnaire";
 import { tourForRole } from "@/tour/definitions";
 import { shouldAutoStart } from "@/tour/logic";
+import { maybeSendWelcomeEmail } from "@/utils/lifecycle/welcome";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
@@ -1003,6 +1004,13 @@ export default async function DashboardPage() {
       } catch {
         // No service key in this environment — the ask simply doesn't render.
       }
+    }
+    // One-time welcome email for new accounts (claim-first, never throws,
+    // never blocks the render on failure — see utils/lifecycle/welcome.ts).
+    try {
+      await maybeSendWelcomeEmail(createAdminClient(), user.id, user.email);
+    } catch {
+      // best-effort only
     }
   }
 
