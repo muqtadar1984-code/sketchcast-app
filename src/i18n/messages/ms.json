@@ -1,4 +1,28 @@
 {
+  "feedbackAsk": {
+    "intro": "Kami baca setiap satu daripadanya. 2 minit, 6 soalan.",
+    "q1": "Sejauh mana mudahnya untuk mendapatkan kit pengajaran pertama anda?",
+    "q1Low": "Saya bergelut",
+    "q1High": "Sangat mudah",
+    "q2": "Sejauh mana bergunanya bahan yang dijana untuk bilik darjah sebenar anda?",
+    "q3": "Bagaimana anda menilai kualiti bahan itu sendiri — ketepatan, kesesuaian kurikulum, dan bahasa?",
+    "q4": "Bahan manakah yang paling kerap anda gunakan?",
+    "q4Options": {
+      "presentation": "Pelajaran video",
+      "worksheet": "Lembaran kerja",
+      "exam_paper": "Kertas ujian",
+      "lesson_plan": "Rancangan pengajaran",
+      "activity": "Aktiviti",
+      "case_study": "Kajian kes",
+      "none": "Belum menggunakannya lagi"
+    },
+    "q5": "Apakah yang hampir menghalang anda — atau masih menghalang anda — daripada menggunakan SketchCast?",
+    "q6": "Jika kami boleh membina atau membaiki satu perkara untuk anda seterusnya, apakah ia?",
+    "contact": "Anda boleh menghubungi saya tentang jawapan saya",
+    "send": "Hantar",
+    "later": "Mungkin nanti",
+    "error": "Tidak dapat menghantar — sila cuba lagi."
+  },
   "common": {
     "close": "Tutup",
     "cancel": "Batal",

@@ -3,6 +3,12 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 import { demoAccountPassword, partitionByDemo } from "@/utils/demo";
 import { aggregateUserStats, languageSummary, EMPTY_USER_STATS } from "@/utils/console-user-stats";
+import {
+  deriveFeedbackState,
+  deriveRemindState,
+  type FeedbackRequestFacts,
+} from "@/utils/console-actions";
+import UserActions from "./user-actions";
 
 // User roster — search across name/username/email; rows open the account's
 // detail page (activity, issues, ops controls). Two tabs: real users (default)
@@ -18,9 +24,13 @@ import { aggregateUserStats, languageSummary, EMPTY_USER_STATS } from "@/utils/c
 export const dynamic = "force-dynamic";
 
 // One template shared by header + rows so the columns can never drift apart.
-// 11 tracks: the numeric four are deliberately narrow (text-xs, right-aligned)
-// so the roster still fits the max-w-7xl container.
-const GRID = "sm:grid-cols-[1.7fr_2fr_0.9fr_1.3fr_0.7fr_1.2fr_repeat(4,0.55fr)_1fr]";
+// The numeric four are deliberately narrow (text-xs, right-aligned) so the
+// roster still fits the max-w-7xl container. Two variants, both FULL literals
+// (Tailwind's scanner can't see interpolated class strings): the real tab
+// carries a 12th Actions track; demo accounts get no actions, so the demo tab
+// keeps the original 11.
+const GRID_DEMO = "sm:grid-cols-[1.7fr_2fr_0.9fr_1.3fr_0.7fr_1.2fr_repeat(4,0.55fr)_1fr]";
+const GRID_REAL = "sm:grid-cols-[1.6fr_1.9fr_0.8fr_1.2fr_0.6fr_1.1fr_repeat(4,0.5fr)_0.9fr_1.5fr]";
 
 // Numeric roster cell — right-aligned on desktop; a real zero stays visible but
 // muted, so "0 lessons" reads as a fact rather than missing data. The label
@@ -41,23 +51,30 @@ export default async function ConsoleUsersPage({
 }) {
   const { q, tab } = await searchParams;
   const demoTab = tab === "demo";
+  const grid = demoTab ? GRID_DEMO : GRID_REAL;
   const admin = createAdminClient();
 
   const { data: profRaw } = await admin
     .from("profiles")
-    .select("id, full_name, username, role, school_id, beta_tester, is_demo, ui_locale, created_at")
+    .select("id, full_name, username, role, school_id, beta_tester, is_demo, ui_locale, email_optout_at, created_at")
     .order("created_at", { ascending: false })
     .limit(500);
-  type Prof = { id: string; full_name: string | null; username: string | null; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; ui_locale: string | null; created_at: string };
+  type Prof = { id: string; full_name: string | null; username: string | null; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; ui_locale: string | null; email_optout_at: string | null; created_at: string };
   const { real, demo } = partitionByDemo((profRaw ?? []) as Prof[]);
   let profiles = demoTab ? demo : real;
 
-  // Three batched selects → one Map; the render loop below does ZERO queries.
-  const [schoolsQ, booksQ, gensQ, issuesQ] = await Promise.all([
+  // Batched selects → Maps; the render loop below does ZERO queries. The three
+  // action tables (0083 + 0080) are only needed on the real tab — demo
+  // accounts get no actions.
+  const none = Promise.resolve({ data: null });
+  const [schoolsQ, booksQ, gensQ, issuesQ, fbQ, remQ, lifeQ] = await Promise.all([
     admin.from("schools").select("id, name"),
     admin.from("books").select("owner_id, language, removed_at"),
     admin.from("generations").select("owner_id, kind, status"),
     admin.from("platform_issues").select("reporter_id, status"),
+    demoTab ? none : admin.from("feedback_requests").select("user_id, created_at, snoozed_until, responded_at"),
+    demoTab ? none : admin.from("console_reminders").select("user_id, sent_at"),
+    demoTab ? none : admin.from("lifecycle_emails").select("user_id, sent_at"),
   ]);
   const schoolName = new Map((schoolsQ.data ?? []).map((s) => [s.id as string, (s.name as string) || "School"]));
   const stats = aggregateUserStats(
@@ -65,6 +82,29 @@ export default async function ConsoleUsersPage({
     (gensQ.data ?? []) as { owner_id: string; kind: string | null; status: string }[],
     (issuesQ.data ?? []) as { reporter_id: string | null; status: string }[],
   );
+
+  // Actions state, folded per user (same Map doctrine as the stats).
+  const now = new Date();
+  const fbByUser = new Map<string, FeedbackRequestFacts[]>();
+  for (const r of (fbQ.data ?? []) as { user_id: string; created_at: string; snoozed_until: string | null; responded_at: string | null }[]) {
+    const list = fbByUser.get(r.user_id) ?? [];
+    list.push({ createdAt: r.created_at, snoozedUntil: r.snoozed_until, respondedAt: r.responded_at });
+    fbByUser.set(r.user_id, list);
+  }
+  // Latest reminder that reached each user — manual (console_reminders) OR
+  // automated (lifecycle_emails); either one starts the 3-day cooldown.
+  const lastReminder = new Map<string, string>();
+  for (const r of [...(remQ.data ?? []), ...(lifeQ.data ?? [])] as { user_id: string; sent_at: string }[]) {
+    const prev = lastReminder.get(r.user_id);
+    if (!prev || new Date(r.sent_at) > new Date(prev)) lastReminder.set(r.user_id, r.sent_at);
+  }
+  // Generation ATTEMPTS — any row, any status (the segments.ts rule). The
+  // stats util counts done presentations only, so fold attempts separately
+  // from the same generations select.
+  const attempts = new Map<string, number>();
+  for (const g of (gensQ.data ?? []) as { owner_id: string }[]) {
+    attempts.set(g.owner_id, (attempts.get(g.owner_id) ?? 0) + 1);
+  }
 
   // Emails live in auth.users — fetch via the admin auth API (paged).
   const emails = new Map<string, string>();
@@ -121,18 +161,24 @@ export default async function ConsoleUsersPage({
       </form>
 
       <div className="card divide-y divide-[#EEF0EC]">
-        <div className={`hidden sm:grid ${GRID} gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium`}>
+        <div className={`hidden sm:grid ${grid} gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium`}>
           <span>Name</span><span>Email / username</span><span>Role</span><span>School</span>
           <span>Country</span><span>Language</span>
           <span className="text-end">Books</span><span className="text-end">Lessons</span>
           <span className="text-end">Errors</span><span className="text-end">Resolved</span>
           {demoTab ? <span>Password</span> : <span className="text-end">Joined</span>}
+          {!demoTab && <span>Actions</span>}
         </div>
         {profiles.map((p) => {
           const s = stats.get(p.id) ?? EMPTY_USER_STATS;
           const lang = languageSummary(p.ui_locale, s.bookLanguages);
+          // The row is a grid DIV, not a Link: buttons can't nest inside an
+          // anchor. The Link wraps the data cells with display:contents (they
+          // stay grid items of the row, whole-row click preserved) and the
+          // Actions cell sits OUTSIDE it as a sibling grid cell.
           return (
-          <Link key={p.id} href={`/console/users/${p.id}`} className={`grid ${GRID} gap-x-2 gap-y-1 px-5 py-2.5 text-sm items-center hover:bg-[#FAFBF9]`}>
+          <div key={p.id} className={`grid ${grid} gap-x-2 gap-y-1 px-5 py-2.5 text-sm items-center hover:bg-[#FAFBF9]`}>
+          <Link href={`/console/users/${p.id}`} className="contents">
             <span className="font-medium truncate">
               {p.full_name || p.username || "—"}
               {/* Every signup is auto-flagged (0012), so on the demo tab the
@@ -165,6 +211,23 @@ export default async function ConsoleUsersPage({
               <span className="tabular sm:text-end text-xs text-[#5B6470]">{new Date(p.created_at).toLocaleDateString()}</span>
             )}
           </Link>
+          {!demoTab && (
+            <UserActions
+              userId={p.id}
+              feedback={deriveFeedbackState(fbByUser.get(p.id) ?? [], now, p.role)}
+              remind={deriveRemindState(
+                {
+                  role: p.role,
+                  books: s.books,
+                  generationAttempts: attempts.get(p.id) ?? 0,
+                  optedOutAt: p.email_optout_at,
+                  lastReminderAt: lastReminder.get(p.id) ?? null,
+                },
+                now,
+              )}
+            />
+          )}
+          </div>
           );
         })}
         {profiles.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No matches.</div>}

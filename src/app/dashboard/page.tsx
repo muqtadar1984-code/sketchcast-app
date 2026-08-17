@@ -33,6 +33,9 @@ import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
 import { splitShelf } from "@/utils/school-books";
 import { docDownloadName } from "@/utils/download-name";
+import FeedbackQuestionnaire from "./feedback-questionnaire";
+import { tourForRole } from "@/tour/definitions";
+import { shouldAutoStart } from "@/tour/logic";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
@@ -945,6 +948,64 @@ export default async function DashboardPage() {
     }
   }
 
+  // Feedback questionnaire (0083): the founder asks a specific account for
+  // feedback from the console, and the OLDEST still-open request (never
+  // answered, snooze expired or never snoozed) renders the modal over this
+  // page. Adults only — requests target teachers/parents, and students never
+  // reach this branch anyway (they returned above), but the role guard makes
+  // that a rule rather than an accident of control flow.
+  //
+  // The tables are service-role-only (no authenticated RLS policies, by
+  // design — all writes go through /api/feedback), so the read uses the admin
+  // client. Best-effort like every other optional surface on this page: a
+  // missing SUPABASE_SERVICE_ROLE_KEY or a not-yet-applied 0083 means no
+  // modal, never a broken dashboard.
+  //
+  // Coexistence with the other blocking surfaces: onboarding role
+  // confirmation, forced password reset and the hat redirect all `redirect()`
+  // BEFORE this point, so this page render proves none of them fired. The one
+  // overlay that could still fight it is the role tour auto-starting for a
+  // user who has never seen it — same check the client provider makes
+  // (shouldAutoStart), evaluated here server-side; the ask waits for the next
+  // visit rather than stacking on the coach-marks.
+  let feedbackAsk: { requestId: string } | null = null;
+  if (role && role !== "student") {
+    let tourWillAutoStart = false;
+    if (process.env.NEXT_PUBLIC_FEATURE_TOUR === "true") {
+      const def = tourForRole(role);
+      if (def) {
+        // Best-effort (0037): a missing table errors → prog null → the tour
+        // WOULD auto-start, so the ask correctly stays back.
+        const { data: prog } = await supabase
+          .from("user_tour_progress")
+          .select("version, status")
+          .eq("tour_key", def.key)
+          .maybeSingle();
+        const seen = prog
+          ? { version: prog.version as number, status: prog.status as "completed" | "skipped" }
+          : null;
+        tourWillAutoStart = shouldAutoStart(seen, def.version);
+      }
+    }
+    if (!tourWillAutoStart) {
+      try {
+        const admin = createAdminClient();
+        const { data: req } = await admin
+          .from("feedback_requests")
+          .select("id")
+          .eq("user_id", user.id)
+          .is("responded_at", null)
+          .or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (req?.id) feedbackAsk = { requestId: req.id as string };
+      } catch {
+        // No service key in this environment — the ask simply doesn't render.
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AutoRefresh active={hasPending} />
@@ -1139,6 +1200,7 @@ export default async function DashboardPage() {
 
       {feedback && <FeedbackWidget submitted={feedback.submitted} />}
       {platformConsoleEnabled() && <ReportIssueWidget />}
+      {feedbackAsk && <FeedbackQuestionnaire requestId={feedbackAsk.requestId} t={dict.feedbackAsk} />}
     </div>
   );
 }

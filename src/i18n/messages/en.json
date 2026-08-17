@@ -1,4 +1,28 @@
 {
+  "feedbackAsk": {
+    "intro": "We read every one of these. 2 minutes, 6 questions.",
+    "q1": "How easy was it to get your first teaching kit?",
+    "q1Low": "I struggled",
+    "q1High": "Effortless",
+    "q2": "How useful are the generated materials for your actual classroom?",
+    "q3": "How would you rate the quality of the materials themselves — accuracy, curriculum fit, and language?",
+    "q4": "Which material do you use most?",
+    "q4Options": {
+      "presentation": "Video lesson",
+      "worksheet": "Worksheet",
+      "exam_paper": "Test paper",
+      "lesson_plan": "Lesson plan",
+      "activity": "Activities",
+      "case_study": "Case study",
+      "none": "Haven't used them yet"
+    },
+    "q5": "What almost stopped you — or is still stopping you — from using SketchCast?",
+    "q6": "If we could build or fix one thing for you next, what would it be?",
+    "contact": "You may contact me about my answers",
+    "send": "Send",
+    "later": "Maybe later",
+    "error": "Could not send — please try again."
+  },
   "common": {
     "close": "Close",
     "cancel": "Cancel",

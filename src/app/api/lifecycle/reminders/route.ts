@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { renderEmail } from "@/utils/lifecycle/copy";
 import { selectSegment, type Segment, type UserFacts } from "@/utils/lifecycle/segments";
+import { lifecycleAppUrl, sendLifecycleEmail } from "@/utils/lifecycle/send";
 import { secretMatches, unsubscribeToken } from "@/utils/lifecycle/token";
 
 export const runtime = "nodejs";
@@ -23,10 +24,6 @@ export const dynamic = "force-dynamic";
 // The sent-marker is written AFTER a successful send. A provider failure
 // therefore retries tomorrow instead of being silently swallowed.
 
-const FROM = "SketchCast <noreply@sketchcast.app>";
-const REPLY_TO = process.env.LIFECYCLE_REPLY_TO || "muqtadar.quraishi@sketchcast.app";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.sketchcast.app";
-
 /** Belt-and-braces ceiling. At current volume a run sends single digits; if a
  * misconfigured cutoff ever selected everyone, this bounds the damage to 50. */
 const MAX_PER_RUN = 50;
@@ -43,23 +40,6 @@ type Candidate = {
   generation_attempts: number;
   already_sent: string[] | null;
 };
-
-async function send(to: string, subject: string, text: string): Promise<boolean> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.error("lifecycle email skipped: RESEND_API_KEY not set");
-    return false;
-  }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject, text }),
-  });
-  if (!res.ok) {
-    console.error("lifecycle email failed:", res.status, await res.text().catch(() => ""));
-  }
-  return res.ok;
-}
 
 async function run(request: Request) {
   // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` using that exact
@@ -101,6 +81,18 @@ async function run(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Manual console sends (0083) count as "already sent" too — the founder
+  // clicking Remind is the same email, so the cron must never repeat it.
+  // Console segments map onto the copy's vocabulary: no_upload → no_book.
+  // Defensive ?? []: if 0083 hasn't been applied yet the select just errors
+  // and the cron behaves exactly as before.
+  const manualSent = new Map<string, Segment[]>();
+  const { data: manualRows } = await admin.from("console_reminders").select("user_id, segment");
+  for (const r of (manualRows ?? []) as { user_id: string; segment: string }[]) {
+    const seg: Segment = r.segment === "no_upload" ? "no_book" : "no_generation";
+    manualSent.set(r.user_id, [...(manualSent.get(r.user_id) ?? []), seg]);
+  }
+
   const selected: { userId: string; email: string; segment: Segment; subject: string }[] = [];
   for (const c of (data ?? []) as Candidate[] ) {
     const facts: UserFacts = {
@@ -111,7 +103,10 @@ async function run(request: Request) {
       bookCount: Number(c.book_count ?? 0),
       oldestBookAt: c.oldest_book_at,
       generationAttempts: Number(c.generation_attempts ?? 0),
-      alreadySent: (c.already_sent ?? []) as Segment[],
+      alreadySent: [
+        ...((c.already_sent ?? []) as Segment[]),
+        ...(manualSent.get(c.user_id) ?? []),
+      ],
     };
     const segment = selectSegment(facts, now, since);
     if (!segment || !c.email) continue;
@@ -119,7 +114,7 @@ async function run(request: Request) {
     const { subject } = renderEmail(segment, {
       firstName: c.first_name,
       bookTitle: c.newest_book_title,
-      appUrl: `${APP_URL}/dashboard`,
+      appUrl: `${lifecycleAppUrl()}/dashboard`,
       unsubscribeUrl: "",
     });
     selected.push({ userId: c.user_id, email: c.email, segment, subject });
@@ -143,13 +138,13 @@ async function run(request: Request) {
     const { subject, text } = renderEmail(s.segment, {
       firstName: c.first_name,
       bookTitle: c.newest_book_title,
-      appUrl: `${APP_URL}/dashboard`,
-      unsubscribeUrl: `${APP_URL}/api/lifecycle/unsubscribe?t=${encodeURIComponent(
+      appUrl: `${lifecycleAppUrl()}/dashboard`,
+      unsubscribeUrl: `${lifecycleAppUrl()}/api/lifecycle/unsubscribe?t=${encodeURIComponent(
         unsubscribeToken(s.userId),
       )}`,
     });
 
-    if (!(await send(s.email, subject, text))) {
+    if (!(await sendLifecycleEmail(s.email, subject, text))) {
       failed.push(s.email);
       continue; // no marker → retried on tomorrow's run
     }

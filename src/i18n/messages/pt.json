@@ -1,4 +1,28 @@
 {
+  "feedbackAsk": {
+    "intro": "Lemos cada uma destas respostas. 2 minutos, 6 perguntas.",
+    "q1": "Quão fácil foi obter seu primeiro kit de ensino?",
+    "q1Low": "Tive dificuldade",
+    "q1High": "Sem esforço",
+    "q2": "Quão úteis são os materiais gerados para a sua sala de aula real?",
+    "q3": "Como você avalia a qualidade dos materiais em si — precisão, adequação ao currículo e idioma?",
+    "q4": "Qual material você mais usa?",
+    "q4Options": {
+      "presentation": "Aula em vídeo",
+      "worksheet": "Exercícios",
+      "exam_paper": "Prova",
+      "lesson_plan": "Plano de aula",
+      "activity": "Atividades",
+      "case_study": "Estudo de caso",
+      "none": "Ainda não os usei"
+    },
+    "q5": "O que quase impediu você — ou ainda impede — de usar o SketchCast?",
+    "q6": "Se pudéssemos construir ou corrigir uma única coisa para você, qual seria?",
+    "contact": "Podem entrar em contato comigo sobre minhas respostas",
+    "send": "Enviar",
+    "later": "Talvez depois",
+    "error": "Não foi possível enviar — tente de novo."
+  },
   "common": {
     "close": "Fechar",
     "cancel": "Cancelar",

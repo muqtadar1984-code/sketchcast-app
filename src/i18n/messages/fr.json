@@ -1,4 +1,28 @@
 {
+  "feedbackAsk": {
+    "intro": "Nous lisons chacune de ces réponses. 2 minutes, 6 questions.",
+    "q1": "A-t-il été facile d'obtenir votre premier kit pédagogique ?",
+    "q1Low": "J'ai eu du mal",
+    "q1High": "Sans effort",
+    "q2": "Les supports générés sont-ils utiles pour votre classe au quotidien ?",
+    "q3": "Comment évaluez-vous la qualité des supports eux-mêmes — exactitude, adéquation au programme et langue ?",
+    "q4": "Quel support utilisez-vous le plus ?",
+    "q4Options": {
+      "presentation": "Leçon vidéo",
+      "worksheet": "Fiche d'exercices",
+      "exam_paper": "Contrôle",
+      "lesson_plan": "Préparation de cours",
+      "activity": "Activités",
+      "case_study": "Étude de cas",
+      "none": "Je ne les ai pas encore utilisés"
+    },
+    "q5": "Qu'est-ce qui a failli vous empêcher — ou vous empêche encore — d'utiliser SketchCast ?",
+    "q6": "Si nous pouvions construire ou corriger une seule chose pour vous, laquelle serait-ce ?",
+    "contact": "Vous pouvez me contacter au sujet de mes réponses",
+    "send": "Envoyer",
+    "later": "Peut-être plus tard",
+    "error": "Échec de l'envoi — réessayez."
+  },
   "common": {
     "close": "Fermer",
     "cancel": "Annuler",

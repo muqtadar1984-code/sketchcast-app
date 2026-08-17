@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { teacherBetaEnabled } from "@/utils/flags";
 
 export const runtime = "nodejs";
 
-// Beta feedback submission. SAVE FIRST (beta_feedback row — the unique
-// teacher_id constraint enforces single submission), EMAIL SECOND (Resend
-// notification to the founder; a send failure never loses the feedback —
-// logged + retried once, then the request still succeeds).
+// TWO feedback flows share this route, split by the `action` field:
+//
+//  1. action = "submit" | "later" — the founder-requested questionnaire
+//     (feedback_requests / feedback_responses, 0083). Authenticated users
+//     acting on their OWN open request only. The tables are service-role only,
+//     so reads/writes go through the admin client AFTER the ownership check.
+//
+//  2. no action (legacy) — beta feedback submission. SAVE FIRST (beta_feedback
+//     row — the unique teacher_id constraint enforces single submission),
+//     EMAIL SECOND (Resend notification to the founder; a send failure never
+//     loses the feedback — logged + retried once, then the request still
+//     succeeds).
 
 const FEEDBACK_TO = process.env.FEEDBACK_EMAIL_TO || "muqtadar.quraishi@sketchcast.app";
 const FEEDBACK_FROM = "SketchCast AI <noreply@sketchcast.app>";
@@ -42,7 +51,123 @@ async function sendEmail(subject: string, text: string): Promise<boolean> {
   return res.ok;
 }
 
+// ── Questionnaire actions (submit / later) ──────────────────────────────────
+
+const MOST_USED = ["presentation", "worksheet", "exam_paper", "lesson_plan", "activity", "case_study", "none"];
+const SNOOZE_DAYS = 3;
+const DAY_MS = 86_400_000;
+
+type RequestActionBody = {
+  action: "submit" | "later";
+  request_id?: string;
+  ease?: number;
+  usefulness?: number;
+  quality?: number;
+  most_used?: string;
+  blocker?: string | null;
+  wish?: string | null;
+  contact_ok?: boolean;
+};
+
+async function handleRequestAction(body: RequestActionBody) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+
+  const requestId = (body.request_id ?? "").trim();
+  if (!requestId) return NextResponse.json({ error: "request_id is required." }, { status: 400 });
+
+  // Service-role tables (0083) — but only after proving the request is the
+  // caller's own. A request that isn't theirs is indistinguishable from one
+  // that doesn't exist.
+  const admin = createAdminClient();
+  const { data: reqRow, error: qErr } = await admin
+    .from("feedback_requests")
+    .select("id, user_id, responded_at")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 });
+  if (!reqRow || reqRow.user_id !== user.id) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+  if (reqRow.responded_at) {
+    return NextResponse.json({ error: "Already answered — thank you!" }, { status: 409 });
+  }
+
+  if (body.action === "later") {
+    const until = new Date(Date.now() + SNOOZE_DAYS * DAY_MS).toISOString();
+    const { error: uErr } = await admin
+      .from("feedback_requests")
+      .update({ snoozed_until: until })
+      .eq("id", requestId);
+    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true, snoozed_until: until });
+  }
+
+  // submit
+  const ease = rating(body.ease);
+  const usefulness = rating(body.usefulness);
+  const quality = rating(body.quality);
+  if (!ease || !usefulness || !quality) {
+    return NextResponse.json({ error: "All three ratings (1–5) are required." }, { status: 400 });
+  }
+  const mostUsed = body.most_used ?? "";
+  if (!MOST_USED.includes(mostUsed)) {
+    return NextResponse.json({ error: "most_used is invalid." }, { status: 400 });
+  }
+  const blocker = (body.blocker ?? "").toString().slice(0, 4000) || null;
+  const wish = (body.wish ?? "").toString().slice(0, 4000) || null;
+
+  const { error: insErr } = await admin.from("feedback_responses").insert({
+    request_id: requestId,
+    user_id: user.id,
+    ease,
+    usefulness,
+    quality,
+    most_used: mostUsed,
+    blocker,
+    wish,
+    contact_ok: body.contact_ok === true,
+  });
+  if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+  // Stamp AFTER the response row exists — a failure between the two leaves an
+  // open request (re-submittable), never a stamped request with no answer.
+  const { error: stampErr } = await admin
+    .from("feedback_requests")
+    .update({ responded_at: new Date().toISOString() })
+    .eq("id", requestId);
+  if (stampErr) console.error("feedback responded_at stamp failed:", requestId, stampErr.message);
+
+  return NextResponse.json({ ok: true });
+}
+
+// ── Dispatch ────────────────────────────────────────────────────────────────
+
 export async function POST(request: Request) {
+  // Parse once, up front, so the two flows can share the body. `parsed`
+  // stays undefined on bad JSON and the legacy path keeps its original
+  // behaviour (flag → auth → gate → THEN the 400).
+  let parsed: unknown;
+  let parseFailed = false;
+  try {
+    parsed = await request.json();
+  } catch {
+    parseFailed = true;
+  }
+  const action =
+    parsed && typeof parsed === "object" ? (parsed as { action?: unknown }).action : undefined;
+  if (action === "submit" || action === "later") {
+    return handleRequestAction({ ...(parsed as object), action } as RequestActionBody);
+  }
+  return handleBetaFeedback(parsed as Body | undefined, parseFailed);
+}
+
+// ── Legacy beta feedback ────────────────────────────────────────────────────
+
+async function handleBetaFeedback(body: Body | undefined, parseFailed: boolean) {
   if (!teacherBetaEnabled()) {
     return NextResponse.json({ error: "Not enabled." }, { status: 404 });
   }
@@ -75,10 +200,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Feedback is for beta teachers." }, { status: 403 });
   }
 
-  let body: Body;
-  try {
-    body = await request.json();
-  } catch {
+  if (parseFailed || !body) {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
   const overall = rating(body.overall);
