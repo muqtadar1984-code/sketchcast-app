@@ -190,6 +190,10 @@ async function createAccount(opts: {
     must_reset_password: false,
     // Provisioned with a known identity → skip the new-joiner onboarding gate.
     onboarded_at: new Date().toISOString(),
+    // Everything this seeder builds is synthetic (hardcoded roster, shared
+    // password) regardless of slug → the console lists it in the Demo tab and
+    // excludes it from every metric (migration 0081). Requires 0081 applied.
+    is_demo: true,
   };
   if (opts.username) patch.username = opts.username;
   if (opts.parentEmail !== undefined) patch.parent_email = opts.parentEmail;

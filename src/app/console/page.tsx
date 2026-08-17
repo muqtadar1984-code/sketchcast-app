@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
+import { demoSchoolIds } from "@/utils/demo";
 
 // Platform overview — the founder's one-page answer to "how is SketchCast
 // doing and what is it costing?". Server component, service role only; the
@@ -19,11 +20,11 @@ export default async function ConsoleOverviewPage() {
   const admin = createAdminClient();
 
   const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ] = await Promise.all([
-    admin.from("profiles").select("id, role, beta_tester, created_at"),
-    admin.from("schools").select("id", { count: "exact", head: true }),
+    admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, created_at"),
+    admin.from("schools").select("id"),
     admin.from("books").select("id, owner_id, status, created_at"),
     admin.from("generations").select("id, owner_id, kind, status, created_at"),
-    admin.from("beta_feedback").select("id", { count: "exact", head: true }),
+    admin.from("beta_feedback").select("teacher_id"),
     admin.from("artifact_views").select("teacher_id"),
   ]);
 
@@ -31,31 +32,54 @@ export default async function ConsoleOverviewPage() {
   // usage-less select rather than losing the whole jobs panel.
   let jobsQ = await admin
     .from("jobs")
-    .select("id, type, status, error, usage, created_at")
+    .select("id, generation_id, book_id, type, status, error, usage, created_at")
     .order("created_at", { ascending: false })
     .limit(2000);
   if (jobsQ.error) {
     jobsQ = (await admin
       .from("jobs")
-      .select("id, type, status, error, created_at")
+      .select("id, generation_id, book_id, type, status, error, created_at")
       .order("created_at", { ascending: false })
       .limit(2000)) as typeof jobsQ;
   }
 
-  const profiles = (profilesQ.data ?? []) as { id: string; role: string; beta_tester: boolean | null; created_at: string }[];
-  const books = (booksQ.data ?? []) as { id: string; owner_id: string; status: string; created_at: string }[];
-  const gens = (gensQ.data ?? []) as { id: string; owner_id: string; kind: string | null; status: string; created_at: string }[];
-  const jobs = (jobsQ.data ?? []) as { id: string; type: string | null; status: string; error: string | null; usage: { cost_usd?: number } | null; created_at: string }[];
+  const allProfiles = (profilesQ.data ?? []) as { id: string; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; created_at: string }[];
+  const allBooks = (booksQ.data ?? []) as { id: string; owner_id: string; status: string; created_at: string }[];
+  const allGens = (gensQ.data ?? []) as { id: string; owner_id: string; kind: string | null; status: string; created_at: string }[];
+  const allJobs = (jobsQ.data ?? []) as { id: string; generation_id: string | null; book_id: string | null; type: string | null; status: string; error: string | null; usage: { cost_usd?: number } | null; created_at: string }[];
+
+  // Every metric on this page counts REAL usage only: demo tenants
+  // (profiles.is_demo, migration 0081) are seeded sales props, and their
+  // pre-canned books/generations/jobs would drown the actual numbers.
+  const demoIds = new Set(allProfiles.filter((p) => p.is_demo === true).map((p) => p.id));
+  const profiles = allProfiles.filter((p) => !demoIds.has(p.id));
+  const books = allBooks.filter((b) => !demoIds.has(b.owner_id));
+  const gens = allGens.filter((g) => !demoIds.has(g.owner_id));
+  // Jobs carry no owner — attribute through their generation/book. Rows that
+  // resolve to neither are kept (fail open, like the rest of this page).
+  const genOwner = new Map(allGens.map((g) => [g.id, g.owner_id]));
+  const bookOwner = new Map(allBooks.map((b) => [b.id, b.owner_id]));
+  const jobs = allJobs.filter((j) => {
+    const owner =
+      (j.generation_id ? genOwner.get(j.generation_id) : undefined) ??
+      (j.book_id ? bookOwner.get(j.book_id) : undefined);
+    return owner === undefined || !demoIds.has(owner);
+  });
+  // A school whose known members are ALL demo accounts is a seeded demo tenant.
+  const demoSchools = demoSchoolIds(allProfiles);
+  const schoolCount = ((schoolsQ.data ?? []) as { id: string }[]).filter((s) => !demoSchools.has(s.id)).length;
 
   // (server component, rendered once per request — Date.now is fine here)
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const roleCount = new Map<string, number>();
-  let beta = 0;
+  // beta_tester is auto-set on EVERY signup (0012) and drives the trial caps —
+  // it marks a trial account, not beta-programme membership.
+  let trial = 0;
   let signups7 = 0;
   for (const p of profiles) {
     roleCount.set(p.role, (roleCount.get(p.role) ?? 0) + 1);
-    if (p.beta_tester) beta++;
+    if (p.beta_tester) trial++;
     if (now - new Date(p.created_at).getTime() <= 7 * DAY) signups7++;
   }
 
@@ -97,13 +121,16 @@ export default async function ConsoleOverviewPage() {
     if (now - new Date(j.created_at).getTime() <= 30 * DAY) spend30 += c;
   }
 
-  // Beta funnel: signup → uploaded a book → has a finished generation → gave feedback
+  // Activation funnel: signup → uploaded a book → has a finished generation → gave feedback
   const bookOwners = new Set(books.map((b) => b.owner_id));
   const doneOwners = new Set(gens.filter((g) => g.status === "done").map((g) => g.owner_id));
-  const viewers = new Set(((viewsQ.data ?? []) as { teacher_id: string }[]).map((v) => v.teacher_id));
+  const viewers = new Set(
+    ((viewsQ.data ?? []) as { teacher_id: string }[]).map((v) => v.teacher_id).filter((id) => !demoIds.has(id)),
+  );
+  const feedbackCount = ((feedbackQ.data ?? []) as { teacher_id: string }[]).filter((f) => !demoIds.has(f.teacher_id)).length;
 
   const metrics: Metric[] = [
-    { label: "Schools", value: schoolsQ.count ?? 0 },
+    { label: "Schools", value: schoolCount },
     { label: "Teachers", value: (roleCount.get("teacher") ?? 0) + (roleCount.get("coordinator") ?? 0) },
     { label: "Students", value: roleCount.get("student") ?? 0 },
     { label: "Admins", value: roleCount.get("school_admin") ?? 0 },
@@ -122,17 +149,18 @@ export default async function ConsoleOverviewPage() {
   ];
 
   const funnel = [
-    { label: "Beta testers", n: beta },
+    { label: "Trial accounts", n: trial },
     { label: "Uploaded a book", n: [...bookOwners].length },
     { label: "Finished a generation", n: [...doneOwners].length },
     { label: "Viewed artifacts", n: viewers.size },
-    { label: "Gave feedback", n: feedbackQ.count ?? 0 },
+    { label: "Gave feedback", n: feedbackCount },
   ];
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
       <h1 className="text-4xl mb-2">Overview</h1>
-      <InkUnderline className="block h-3 w-28 mb-7" />
+      <InkUnderline className="block h-3 w-28 mb-3" />
+      <p className="text-xs text-[#98A0A9] mb-7">Excludes demo accounts.</p>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
         {metrics.map((m) => (
@@ -163,7 +191,7 @@ export default async function ConsoleOverviewPage() {
             {byKind.size === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No generations yet.</div>}
           </div>
 
-          <h2 className="text-xl mt-8 mb-3">Beta funnel</h2>
+          <h2 className="text-xl mt-8 mb-3">Activation funnel</h2>
           <div className="card px-5 py-4 space-y-2">
             {funnel.map((f, i) => (
               <div key={f.label} className="flex items-center gap-3">

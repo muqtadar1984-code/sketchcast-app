@@ -76,7 +76,9 @@ export default async function ConsoleUserDetailPage({
       </p>
       <h1 className="text-3xl mb-2">
         {(p.full_name as string) || (p.username as string) || "User"}
-        {p.beta_tester === true && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ms-3 align-middle">beta</span>}
+        {/* beta_tester is auto-set on EVERY signup (0012) and drives the trial
+            caps — it is a trial marker, not beta-programme membership. */}
+        {p.beta_tester === true && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ms-3 align-middle">trial</span>}
         {opsReady && p.suspended_at != null && (
           <span className="chip font-sans bg-[#FFE9E3] text-[#B3401F] ms-2 align-middle">suspended</span>
         )}

@@ -95,7 +95,7 @@ export default function OpsControls({
       <div>
         <p className="font-medium text-sm mb-1">Caps</p>
         <p className="text-xs text-[#5B6470] mb-2">
-          Blank = default (beta: 1 book · 1 chapter · 2 students; non-beta: unlimited). Lowering a cap
+          Blank = default (trial: 1 book · 1 chapter · 2 students; non-trial: unlimited). Lowering a cap
           never deletes anything — it only blocks new items.
         </p>
         <div className="flex flex-wrap items-end gap-2">

@@ -113,6 +113,9 @@ async function main() {
         onboarded_at: new Date().toISOString(),
         max_books: 20,
         profile: { subjects: [t.subject] },
+        // Seeder-created staff are demo accounts: Demo tab + excluded from
+        // every console metric (migration 0081). Requires 0081 applied.
+        is_demo: true,
       })
       .eq("id", data.user.id);
     if (pErr) fail(`profile ${email}: ${pErr.message}`);
