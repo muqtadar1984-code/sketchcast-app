@@ -143,6 +143,9 @@ export default async function ConsoleOverviewPage() {
     { label: "Schools", value: schoolCount },
     { label: "Teachers", value: (roleCount.get("teacher") ?? 0) + (roleCount.get("coordinator") ?? 0) },
     { label: "Students", value: roleCount.get("student") ?? 0 },
+    // Parents included so the role cards SUM to the Users page's roster count
+    // (36 teachers + 9 students + 6 parents = 51 — the founder reconciles them).
+    { label: "Parents", value: roleCount.get("parent") ?? 0 },
     { label: "Admins", value: roleCount.get("school_admin") ?? 0 },
     { label: "Signups (7d)", value: signups7 },
     { label: "Books", value: books.length },
