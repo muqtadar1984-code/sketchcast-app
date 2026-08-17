@@ -10,6 +10,7 @@ export default function OpsControls({
   userId,
   suspended,
   caps,
+  country,
   isStaffTarget,
   canGrantStaff,
   opsReady,
@@ -17,6 +18,7 @@ export default function OpsControls({
   userId: string;
   suspended: boolean;
   caps: { books: number | null; chapters: number | null; students: number | null; children: number | null };
+  country: string | null;
   isStaffTarget: boolean;
   canGrantStaff: boolean;
   opsReady: boolean;
@@ -31,6 +33,7 @@ export default function OpsControls({
     students: caps.students?.toString() ?? "",
     children: caps.children?.toString() ?? "",
   });
+  const [countryForm, setCountryForm] = useState(country ?? "");
 
   async function call(payload: Record<string, unknown>, label: string) {
     setBusy(label);
@@ -136,6 +139,32 @@ export default function OpsControls({
             className="btn-ghost h-9 px-4 text-sm"
           >
             {busy === "caps" ? "Saving…" : "Save caps"}
+          </button>
+        </div>
+      </div>
+
+      {/* Country — profiles.country (0085). A staff correction is stamped
+          country_source='staff' (trusted, renders plain on the roster — the
+          "≈ " assumed prefix disappears). Blank clears both columns. */}
+      <div>
+        <p className="font-medium text-sm mb-1">Country</p>
+        <p className="text-xs text-[#5B6470] mb-2">
+          Two-letter ISO code (e.g. MY). Saves as staff-set; blank clears it.
+        </p>
+        <div className="flex items-end gap-2">
+          <input
+            value={countryForm}
+            onChange={(e) => setCountryForm(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2))}
+            placeholder="—"
+            maxLength={2}
+            className="field h-9 px-2 w-24 font-mono uppercase"
+          />
+          <button
+            onClick={() => call({ action: "set_country", country: countryForm.trim() || null }, "country")}
+            disabled={!!busy}
+            className="btn-ghost h-9 px-4 text-sm"
+          >
+            {busy === "country" ? "Saving…" : "Save country"}
           </button>
         </div>
       </div>

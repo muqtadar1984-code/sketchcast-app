@@ -43,5 +43,7 @@ export default async function OnboardingPage() {
   const locale = await resolveLocale();
   const t = await getDictionary(locale);
 
-  return <OnboardingForm seedRole={seed} initialName={initialName} t={t.app.onboarding} common={t.common} />;
+  return (
+    <OnboardingForm seedRole={seed} initialName={initialName} locale={locale} t={t.app.onboarding} common={t.common} />
+  );
 }

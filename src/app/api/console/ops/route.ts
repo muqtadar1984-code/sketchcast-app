@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { founderEmails, isPlatformAdminRequest } from "@/utils/platform-admin";
+import { isCountryCode } from "@/utils/countries";
 
 export const runtime = "nodejs";
 
@@ -8,19 +9,21 @@ export const runtime = "nodejs";
 //   suspend / unsuspend  — profiles.suspended_at (RLS cutoff for live tokens)
 //                          + Supabase auth ban (blocks new logins)
 //   set_caps             — per-teacher overrides of the 0011/0016 caps
+//   set_country          — profiles.country (0085), stamped country_source='staff'
 //   takedown / restore   — soft-delete a book or generation (recoverable)
 //   admin_grant / admin_revoke — platform_admins membership (FOUNDERS only)
 // Non-staff get 404 (the console isn't probeable). Self/staff targets are
 // refused for destructive actions (footgun guard).
 
 type Body = {
-  action?: "suspend" | "unsuspend" | "set_caps" | "takedown" | "restore" | "admin_grant" | "admin_revoke";
+  action?: "suspend" | "unsuspend" | "set_caps" | "set_country" | "takedown" | "restore" | "admin_grant" | "admin_revoke";
   targetId?: string;               // profile id, or book/generation id for takedown
   targetKind?: "book" | "generation"; // takedown/restore only
   maxBooks?: number | null;
   maxChapters?: number | null;
   maxStudents?: number | null;
   maxChildren?: number | null;
+  country?: string | null;         // set_country only; null clears
   note?: string;
 };
 
@@ -57,7 +60,12 @@ export async function POST(request: Request) {
   };
 
   // ── Profile-targeted actions ────────────────────────────────────────────────
-  if (body.action === "suspend" || body.action === "unsuspend" || body.action === "set_caps") {
+  if (
+    body.action === "suspend" ||
+    body.action === "unsuspend" ||
+    body.action === "set_caps" ||
+    body.action === "set_country"
+  ) {
     const { data: target } = await admin
       .from("profiles")
       .select("*")
@@ -105,6 +113,39 @@ export async function POST(request: Request) {
         );
       }
       await audit(body.action, "profile", { was_suspended: !!target.suspended_at });
+      return NextResponse.json({ ok: true });
+    }
+
+    // set_country — the staff correction lever the roster's "≈ assumed" prefix
+    // points at. Only a real assigned alpha-2 code (src/utils/countries.ts) or
+    // null (clear) ever reaches the row; the value is stamped
+    // country_source='staff' so it renders as trusted, and a clear nulls the
+    // source too — the pair moves together (0085).
+    if (body.action === "set_country") {
+      const clearing = body.country === null || body.country === "";
+      if (!clearing && !isCountryCode(body.country)) {
+        return NextResponse.json({ error: "Country must be a two-letter ISO code (e.g. MY)." }, { status: 400 });
+      }
+      const { error: nErr } = await admin
+        .from("profiles")
+        .update(
+          clearing
+            ? { country: null, country_source: null }
+            : { country: body.country, country_source: "staff" },
+        )
+        .eq("id", targetId);
+      if (nErr) {
+        const msg = nErr.message.includes("country") || nErr.message.includes("column")
+          ? "Country columns missing — run migration 0085 first."
+          : nErr.message;
+        return NextResponse.json({ error: msg }, { status: 500 });
+      }
+      await audit("set_country", "profile", {
+        before: { country: target.country ?? null, country_source: target.country_source ?? null },
+        after: clearing
+          ? { country: null, country_source: null }
+          : { country: body.country, country_source: "staff" },
+      });
       return NextResponse.json({ ok: true });
     }
 

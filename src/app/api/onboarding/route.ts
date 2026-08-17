@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { onboardingEnabled } from "@/utils/flags";
 import { missingRequired, type OnboardingProfile, type OnboardingRole } from "@/utils/onboarding";
+import { isCountryCode } from "@/utils/countries";
 
 export const runtime = "nodejs";
 
@@ -53,10 +54,18 @@ export async function POST(request: Request) {
   if (missing.length) {
     return NextResponse.json({ error: "Please complete the required fields.", missing }, { status: 400 });
   }
+  // missingRequired just proved this, but keep the narrowing local and explicit:
+  // only an exact assigned alpha-2 code ever reaches the column write below.
+  const country = isCountryCode(raw.country) ? raw.country : null;
+  if (!country) {
+    return NextResponse.json({ error: "Please complete the required fields.", missing: ["country"] }, { status: 400 });
+  }
 
   // Whitelist the jsonb to the known keys so a client can't stuff arbitrary data.
   const clean: OnboardingProfile = {
-    country: str(raw.country, 80),
+    // Kept in the jsonb snapshot for continuity, but the AUTHORITATIVE copy is
+    // the profiles.country COLUMN written below (0085) — read that, not this.
+    country,
     heard_from: str(raw.heard_from, 200),
     affiliation:
       raw.affiliation === "school" || raw.affiliation === "independent" || raw.affiliation === "homeschool"
@@ -76,6 +85,18 @@ export async function POST(request: Request) {
     .update({ role, full_name: fullName, profile: clean, onboarded_at: new Date().toISOString() })
     .eq("id", user.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Country goes to its own COLUMNS (0085) through the caller's AUTHENTICATED
+  // session — the column-scoped grant + the profiles_update_self row policy are
+  // exactly what authorises this write, the same posture as ui_locale in
+  // /api/locale. 'signup' marks it user-stated, never assumed. Best-effort on a
+  // pre-0085 database (42703 = no column, 42501 = no grant): the preference
+  // doesn't persist yet, but onboarding itself must not trap the user.
+  const { error: cErr } = await supabase
+    .from("profiles")
+    .update({ country, country_source: "signup" })
+    .eq("id", user.id);
+  if (cErr) console.error("onboarding.country:", cErr.code, cErr.message);
 
   return NextResponse.json({ ok: true, role });
 }

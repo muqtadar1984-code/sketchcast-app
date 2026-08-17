@@ -56,10 +56,10 @@ export default async function ConsoleUsersPage({
 
   const { data: profRaw } = await admin
     .from("profiles")
-    .select("id, full_name, username, role, school_id, beta_tester, is_demo, ui_locale, email_optout_at, created_at")
+    .select("id, full_name, username, role, school_id, beta_tester, is_demo, country, country_source, ui_locale, email_optout_at, created_at")
     .order("created_at", { ascending: false })
     .limit(500);
-  type Prof = { id: string; full_name: string | null; username: string | null; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; ui_locale: string | null; email_optout_at: string | null; created_at: string };
+  type Prof = { id: string; full_name: string | null; username: string | null; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; country: string | null; country_source: string | null; ui_locale: string | null; email_optout_at: string | null; created_at: string };
   const { real, demo } = partitionByDemo((profRaw ?? []) as Prof[]);
   let profiles = demoTab ? demo : real;
 
@@ -192,12 +192,23 @@ export default async function ConsoleUsersPage({
             </span>
             <span className={p.role === "student" ? "text-[#98A0A9]" : ""}>{p.role}</span>
             <span className="truncate text-[#5B6470]">{p.school_id ? schoolName.get(p.school_id) ?? "—" : "—"}</span>
-            {/* Country: we capture no country anywhere today — profiles has no
-                such column and auth.users raw_user_meta_data carries only OAuth
-                identity keys (verified against prod 2026-08-17). Whether/how to
-                capture it is a product decision pending with the founder; until
-                then every row shows the same honest dash. */}
-            <span className="text-xs text-[#98A0A9]"><span className="sm:hidden">Country </span>—</span>
+            {/* Country: profiles.country (0085), captured at onboarding since
+                the required signup select landed. The alpha-2 code renders
+                plain when the USER stated it (signup/staff); an assumed one
+                carries a "≈ " prefix so a guess is never mistaken for a fact.
+                NULL (every pre-0085 signup until the founder approves values)
+                stays the honest dash. */}
+            {p.country ? (
+              <span
+                className="text-xs text-[#5B6470]"
+                title={p.country_source === "assumed" ? "Assumed — correct it on the user page" : undefined}
+              >
+                <span className="sm:hidden text-[#98A0A9]">Country </span>
+                {p.country_source === "assumed" ? `≈ ${p.country}` : p.country}
+              </span>
+            ) : (
+              <span className="text-xs text-[#98A0A9]"><span className="sm:hidden">Country </span>—</span>
+            )}
             <span className={`truncate text-xs ${lang === "—" ? "text-[#98A0A9]" : "text-[#5B6470]"}`}>
               <span className="sm:hidden text-[#98A0A9]">Language </span>{lang}
             </span>

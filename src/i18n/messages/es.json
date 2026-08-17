@@ -273,6 +273,8 @@
       "parentSub": "Acompañar el aprendizaje de mi hijo",
       "fullName": "Su nombre completo",
       "namePlaceholder": "p. ej. Alex Morgan",
+      "country": "País",
+      "countryRequired": "Elija su país.",
       "whereTeach": "¿Dónde enseña?",
       "pickOne": "Elija una opción.",
       "schoolName": "Nombre de la escuela",

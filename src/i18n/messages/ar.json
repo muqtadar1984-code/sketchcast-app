@@ -273,6 +273,8 @@
       "parentSub": "دعم تعلّم ابني",
       "fullName": "اسمك الكامل",
       "namePlaceholder": "مثال: Alex Morgan",
+      "country": "البلد",
+      "countryRequired": "يرجى اختيار بلدك.",
       "whereTeach": "أين تُدرّس؟",
       "pickOne": "اختر واحدًا من فضلك.",
       "schoolName": "اسم المدرسة",

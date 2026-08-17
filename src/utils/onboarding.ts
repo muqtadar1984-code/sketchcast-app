@@ -2,6 +2,8 @@
 // "Continue"), the server route (to reject a bypass), and the tests. No React,
 // no DB. The option lists are placeholders the team can refine.
 
+import { isCountryCode } from "@/utils/countries";
+
 export type OnboardingRole = "teacher" | "parent";
 
 export const GRADE_OPTIONS = [
@@ -30,6 +32,8 @@ export const AFFILIATIONS = [
 ] as const;
 
 export type OnboardingProfile = {
+  /** ISO 3166-1 alpha-2 code (src/utils/countries.ts) — REQUIRED since 0085;
+   * also written to profiles.country with country_source='signup'. */
   country?: string;
   heard_from?: string;
   // teacher
@@ -61,6 +65,10 @@ export function missingRequired(
 ): string[] {
   const m: string[] = [];
   if (!fullName || !fullName.trim()) m.push("full_name");
+  // Country is required for BOTH roles, and must be a real assigned alpha-2
+  // code — the select only offers real codes, so anything else is a bypass.
+  // No default: the user must actively choose (an unchosen select posts "").
+  if (!isCountryCode(p.country)) m.push("country");
   if (role !== "teacher" && role !== "parent") {
     m.push("role");
     return m; // no point checking role-specific fields for an invalid role

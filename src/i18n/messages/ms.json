@@ -273,6 +273,8 @@
       "parentSub": "Menyokong pembelajaran anak saya",
       "fullName": "Nama penuh anda",
       "namePlaceholder": "cth. Alex Morgan",
+      "country": "Negara",
+      "countryRequired": "Sila pilih negara anda.",
       "whereTeach": "Di mana anda mengajar?",
       "pickOne": "Sila pilih satu.",
       "schoolName": "Nama sekolah",

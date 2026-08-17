@@ -3,7 +3,9 @@
  *  • seedRole — never silently default a non-parent to parent; anything unknown
  *    seeds teacher (matches the app-wide default we're trying to make explicit).
  *  • missingRequired — the SAME gate the client uses to disable "Continue" and the
- *    server uses to reject a bypass, so they can never disagree.
+ *    server uses to reject a bypass, so they can never disagree. Country became
+ *    required for BOTH roles with 0085 — and only a real assigned alpha-2 code
+ *    passes, because the select offers nothing else.
  *  • homeForRole — where each confirmed role lands.
  * Run: npx vitest run src/utils/__tests__/onboarding.test.ts
  */
@@ -31,6 +33,7 @@ describe("seedRole", () => {
 
 describe("missingRequired — teacher", () => {
   const full = (extra: OnboardingProfile = {}): OnboardingProfile => ({
+    country: "MY",
     affiliation: "independent",
     grade_levels: ["Grades 4–6"],
     subjects: ["Mathematics"],
@@ -52,6 +55,15 @@ describe("missingRequired — teacher", () => {
     expect(m).toContain("subjects");
   });
 
+  it("requires a country, and only a real alpha-2 code passes", () => {
+    expect(missingRequired("teacher", "Alex", full({ country: undefined }))).toContain("country");
+    expect(missingRequired("teacher", "Alex", full({ country: "" }))).toContain("country");
+    // shape-valid junk and casing bypasses are rejected, not normalised
+    expect(missingRequired("teacher", "Alex", full({ country: "XX" }))).toContain("country");
+    expect(missingRequired("teacher", "Alex", full({ country: "my" }))).toContain("country");
+    expect(missingRequired("teacher", "Alex", full({ country: "MY" }))).toEqual([]);
+  });
+
   it("requires school_name only when affiliation is school", () => {
     expect(missingRequired("teacher", "Alex", full({ affiliation: "school" }))).toContain("school_name");
     expect(missingRequired("teacher", "Alex", full({ affiliation: "school", school_name: "Riverside" }))).toEqual([]);
@@ -65,9 +77,9 @@ describe("missingRequired — teacher", () => {
 });
 
 describe("missingRequired — parent", () => {
-  it("is empty with a count ≥ 1 and at least one grade", () => {
+  it("is empty with a country, a count ≥ 1 and at least one grade", () => {
     expect(
-      missingRequired("parent", "Sam Lee", { children_count: 2, child_grade_levels: ["Grades 1–3"] }),
+      missingRequired("parent", "Sam Lee", { country: "MY", children_count: 2, child_grade_levels: ["Grades 1–3"] }),
     ).toEqual([]);
   });
 
@@ -75,9 +87,15 @@ describe("missingRequired — parent", () => {
     const m = missingRequired("parent", "Sam", {});
     expect(m).toContain("children_count");
     expect(m).toContain("child_grade_levels");
-    expect(missingRequired("parent", "Sam", { children_count: 0, child_grade_levels: ["x"] })).toContain(
-      "children_count",
-    );
+    expect(
+      missingRequired("parent", "Sam", { country: "MY", children_count: 0, child_grade_levels: ["x"] }),
+    ).toContain("children_count");
+  });
+
+  it("requires a country for parents too", () => {
+    expect(
+      missingRequired("parent", "Sam", { children_count: 1, child_grade_levels: ["Grades 1–3"] }),
+    ).toContain("country");
   });
 
   it("does NOT require teacher-only fields", () => {

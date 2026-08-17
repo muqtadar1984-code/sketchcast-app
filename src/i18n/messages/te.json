@@ -273,6 +273,8 @@
       "parentSub": "నా బిడ్డ చదువుకు తోడ్పడటానికి",
       "fullName": "మీ పూర్తి పేరు",
       "namePlaceholder": "ఉదా. Alex Morgan",
+      "country": "దేశం",
+      "countryRequired": "దయచేసి మీ దేశాన్ని ఎంచుకోండి.",
       "whereTeach": "మీరు ఎక్కడ బోధిస్తారు?",
       "pickOne": "ఒకటి ఎంచుకోండి.",
       "schoolName": "పాఠశాల పేరు",

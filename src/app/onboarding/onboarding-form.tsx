@@ -12,6 +12,8 @@ import {
   type OnboardingProfile,
   type OnboardingRole,
 } from "@/utils/onboarding";
+import { COUNTRY_CODES } from "@/utils/countries";
+import { htmlLang, type Locale } from "@/i18n/locales";
 import type { Dictionary } from "@/i18n/dictionaries";
 
 type OnboardingMessages = Dictionary["app"]["onboarding"];
@@ -49,11 +51,13 @@ const SUBJECT_KEY: Record<string, keyof OnboardingMessages["subjects"]> = {
 export default function OnboardingForm({
   seedRole,
   initialName,
+  locale,
   t,
   common,
 }: {
   seedRole: OnboardingRole;
   initialName: string;
+  locale: Locale;
   t: OnboardingMessages;
   common: Dictionary["common"];
 }) {
@@ -72,6 +76,32 @@ export default function OnboardingForm({
 
   const gradeLabel = (g: string) => t.grades[GRADE_KEY[g]] ?? g;
   const subjectLabel = (s: string) => t.subjects[SUBJECT_KEY[s]] ?? s;
+
+  // Country options: the codes live in countries.ts, the NAMES come from the
+  // runtime's own CLDR data via Intl.DisplayNames — no country-name strings in
+  // the message files, and every locale gets native names for free. Sorted by
+  // that localized name so the list reads naturally in Arabic as in French.
+  // htmlLang() maps our internal "ms-arab" to the BCP-47 "ms-Arab" that Intl
+  // understands; a runtime without the locale's region data falls back to the
+  // bare code, which still renders and still saves.
+  const countries = useMemo(() => {
+    const tag = htmlLang(locale);
+    let names: Intl.DisplayNames | null = null;
+    try {
+      names = new Intl.DisplayNames([tag], { type: "region" });
+    } catch {
+      names = null;
+    }
+    return COUNTRY_CODES.map((code) => {
+      let name = code as string;
+      try {
+        name = names?.of(code) ?? code;
+      } catch {
+        // an unknown code would throw; the registry only holds assigned ones
+      }
+      return { code, name };
+    }).sort((a, b) => a.name.localeCompare(b.name, tag));
+  }, [locale]);
 
   function toggleIn(list: string[] | undefined, value: string): string[] {
     const set = new Set(list ?? []);
@@ -179,6 +209,30 @@ export default function OnboardingForm({
               placeholder={t.namePlaceholder}
               className={`field w-full h-11 px-3 text-[#14181F] ${show("full_name") ? "border-[#C0392B]" : ""}`}
             />
+          </div>
+
+          {/* Country — required for both roles, saved to profiles.country with
+              country_source='signup' (0085). NO default: the placeholder option
+              is empty, so an untouched select fails missingRequired and the
+              inline error shows; nobody gets a silently-assumed country. */}
+          <div>
+            {label(t.country, true)}
+            <select
+              value={p.country ?? ""}
+              onChange={(e) => setP((s) => ({ ...s, country: e.target.value || undefined }))}
+              required
+              className={`field w-full h-11 px-3 ${p.country ? "text-[#14181F]" : "text-[#98A0A9]"} ${
+                show("country") ? "border-[#C0392B]" : ""
+              }`}
+            >
+              <option value="" />
+              {countries.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {show("country") && <p className="text-xs text-[#C0392B] mt-1">{t.countryRequired}</p>}
           </div>
 
           {role === "teacher" ? (

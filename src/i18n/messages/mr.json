@@ -273,6 +273,8 @@
       "parentSub": "माझ्या मुलाच्या शिक्षणाला मदत करा",
       "fullName": "तुमचे पूर्ण नाव",
       "namePlaceholder": "उदा. Alex Morgan",
+      "country": "देश",
+      "countryRequired": "कृपया तुमचा देश निवडा.",
       "whereTeach": "तुम्ही कुठे शिकवता?",
       "pickOne": "कृपया एक निवडा.",
       "schoolName": "शाळेचे नाव",

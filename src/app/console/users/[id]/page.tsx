@@ -143,6 +143,7 @@ export default async function ConsoleUserDetailPage({
             students: (p.max_students as number | null) ?? null,
             children: (p.max_children as number | null) ?? null,
           }}
+          country={(p.country as string | null) ?? null}
           isStaffTarget={isStaffTarget}
           canGrantStaff={founderEmails().includes(staff.email) && role !== "student"}
           opsReady={opsReady}
