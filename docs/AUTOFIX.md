@@ -22,6 +22,13 @@ to `main` → Vercel deploys. **Nothing reaches production without your tap.**
 - **Your approval is the only release path** — no auto-merge. The links are HMAC-signed,
   single-use (via `autofix_runs.decided_at`), and expire in 7 days.
 - **Kill switch** — `FEATURE_AUTOFIX` off ⇒ every `/api/autofix/*` route 404s and the button hides.
+- **App-repo scope guard** — dispatch hard-refuses (400) worker-pipeline categories
+  (`generation_failed`, `wrong_chapter`, `poor_quality`, `missing_parts`): the Action checks out
+  *this* repo and can't fix the worker (`src/utils/autofix/scope.ts`; worker autofix is Phase 2).
+- **Red-run guarantees** — the workflow FAILS (instead of exiting green) when the final callback
+  to `/api/autofix/pr-opened` gets a non-2xx (e.g. 401 secret mismatch), and when the agent's
+  diff is empty after scrubbing the Claude Code action's own artifacts (`output.txt` never
+  becomes a "fix" PR again).
 - **Least-privilege GitHub token**, scoped to this one repo.
 - **Sensitive-diff flag** — a diff touching `auth/billing/migrations/middleware/stripe/…` is
   flagged "⚠️ sensitive" in the PR + email.

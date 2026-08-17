@@ -4,6 +4,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isPlatformAdminRequest } from "@/utils/platform-admin";
 import { autofixEnabled } from "@/utils/flags";
 import { repositoryDispatch, autofixRepoConfigured } from "@/utils/autofix/github";
+import { workerScopeRefusal } from "@/utils/autofix/scope";
 
 export const runtime = "nodejs";
 
@@ -58,6 +59,14 @@ export async function POST(request: Request) {
     .eq("id", issueId)
     .maybeSingle();
   if (!issue) return NextResponse.json({ error: "Issue not found." }, { status: 404 });
+
+  // App-repo scope: the Action can only change THIS repo. Worker-pipeline
+  // categories (generation failures, content quality, chapter detection) can't
+  // be fixed from here — refuse before any run row exists instead of writing a
+  // doomed PR (live run ee0fb99628f13098: a generation_failed issue produced
+  // junk app PR #24). Worker autofix is Phase 2 — docs/AUTOFIX.md.
+  const refusal = workerScopeRefusal(issue.category);
+  if (refusal) return NextResponse.json({ error: refusal }, { status: 400 });
 
   // One active run per issue. limit(1): two concurrent dispatches can both
   // pass this check-then-insert, and a bare maybeSingle() would then error
