@@ -53,7 +53,7 @@ describe("aggregateUserStats — the console roster's per-user numbers", () => {
   it("a user with no rows anywhere simply has no entry — the page falls back to EMPTY_USER_STATS", () => {
     const stats = aggregateUserStats([], [], []);
     expect(stats.get("ghost")).toBeUndefined();
-    expect(EMPTY_USER_STATS).toEqual({ books: 0, bookLanguages: [], lessons: 0, errors: 0, resolved: 0 });
+    expect(EMPTY_USER_STATS).toEqual({ books: 0, bookLanguages: [], lessons: 0, artifacts: 0, errors: 0, resolved: 0 });
   });
 });
 

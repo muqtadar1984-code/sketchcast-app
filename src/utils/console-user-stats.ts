@@ -11,6 +11,9 @@ export type UserStats = {
   bookLanguages: string[];
   /** Finished lessons: generations with kind='presentation' AND status='done'. */
   lessons: number;
+  /** ALL finished artifacts: generations of any kind with status='done' —
+   * the same number the user-detail page reports as "Generations: N done". */
+  artifacts: number;
   /**
    * platform_issues reported by the user, ANY status — the durable record of
    * user-facing errors. Generation rows are NOT a stable error count: a
@@ -29,6 +32,7 @@ export const EMPTY_USER_STATS: UserStats = Object.freeze({
   books: 0,
   bookLanguages: [],
   lessons: 0,
+  artifacts: 0,
   errors: 0,
   resolved: 0,
 });
@@ -48,7 +52,7 @@ export function aggregateUserStats(
   const get = (id: string): UserStats => {
     let s = stats.get(id);
     if (!s) {
-      s = { books: 0, bookLanguages: [], lessons: 0, errors: 0, resolved: 0 };
+      s = { books: 0, bookLanguages: [], lessons: 0, artifacts: 0, errors: 0, resolved: 0 };
       stats.set(id, s);
     }
     return s;
@@ -66,6 +70,7 @@ export function aggregateUserStats(
   }
 
   for (const g of generations) {
+    if (g.status === "done") get(g.owner_id).artifacts++;
     if (g.kind === "presentation" && g.status === "done") get(g.owner_id).lessons++;
   }
 

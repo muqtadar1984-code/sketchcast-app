@@ -29,8 +29,8 @@ export const dynamic = "force-dynamic";
 // (Tailwind's scanner can't see interpolated class strings): the real tab
 // carries a 12th Actions track; demo accounts get no actions, so the demo tab
 // keeps the original 11.
-const GRID_DEMO = "sm:grid-cols-[1.7fr_2fr_0.9fr_1.3fr_0.7fr_1.2fr_repeat(4,0.55fr)_1fr]";
-const GRID_REAL = "sm:grid-cols-[1.6fr_1.9fr_0.8fr_1.2fr_0.6fr_1.1fr_repeat(4,0.5fr)_0.9fr_1.5fr]";
+const GRID_DEMO = "sm:grid-cols-[1.7fr_2fr_0.9fr_1.3fr_0.7fr_1.2fr_repeat(5,0.55fr)_1fr]";
+const GRID_REAL = "sm:grid-cols-[1.6fr_1.9fr_0.8fr_1.2fr_0.6fr_1.1fr_repeat(5,0.5fr)_0.9fr_1.5fr]";
 
 // Numeric roster cell — right-aligned on desktop; a real zero stays visible but
 // muted, so "0 lessons" reads as a fact rather than missing data. The label
@@ -164,7 +164,7 @@ export default async function ConsoleUsersPage({
         <div className={`hidden sm:grid ${grid} gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium`}>
           <span>Name</span><span>Email / username</span><span>Role</span><span>School</span>
           <span>Country</span><span>Language</span>
-          <span className="text-end">Books</span><span className="text-end">Lessons</span>
+          <span className="text-end">Books</span><span className="text-end">Lessons</span><span className="text-end">Artifacts</span>
           <span className="text-end">Errors</span><span className="text-end">Resolved</span>
           {demoTab ? <span>Password</span> : <span className="text-end">Joined</span>}
           {!demoTab && <span>Actions</span>}
@@ -203,6 +203,7 @@ export default async function ConsoleUsersPage({
             </span>
             <Num label="Books" n={s.books} />
             <Num label="Lessons" n={s.lessons} />
+            <Num label="Artifacts" n={s.artifacts} />
             <Num label="Errors" n={s.errors} />
             <Num label="Resolved" n={s.resolved} />
             {demoTab ? (
