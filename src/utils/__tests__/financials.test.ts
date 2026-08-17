@@ -12,7 +12,8 @@ import {
   modelRouteBreakdown,
   mrrUsd,
   MYR_PER_USD,
-  schoolBlocks,
+  SCHOOL_BANDS,
+  bandForStudents,
   type EntitlementRow,
   type FinGenRow,
   type FinJobRow,
@@ -182,18 +183,29 @@ describe("collectedUsd", () => {
   });
 });
 
-describe("schoolBlocks", () => {
-  it("ceil(students/350): 0→0, 1→1, 350→1, 351→2, 700→2", () => {
-    expect(schoolBlocks(0)).toBe(0);
-    expect(schoolBlocks(1)).toBe(1);
-    expect(schoolBlocks(350)).toBe(1);
-    expect(schoolBlocks(351)).toBe(2);
-    expect(schoolBlocks(700)).toBe(2);
+describe("bandForStudents — the founder's $3/5/7k rate card", () => {
+  it("A up to 350, B to 700, C to 1,200 — boundaries exact", () => {
+    expect(bandForStudents(1)?.usdPerYear).toBe(3000);
+    expect(bandForStudents(350)?.usdPerYear).toBe(3000);
+    expect(bandForStudents(351)?.usdPerYear).toBe(5000);
+    expect(bandForStudents(700)?.usdPerYear).toBe(5000);
+    expect(bandForStudents(701)?.usdPerYear).toBe(7000);
+    expect(bandForStudents(1200)?.usdPerYear).toBe(7000);
   });
 
-  it("never goes negative on garbage input", () => {
-    expect(schoolBlocks(-5)).toBe(0);
-    expect(schoolBlocks(NaN)).toBe(0);
+  it("above the top band prices at Band C (individually negotiated in reality)", () => {
+    expect(bandForStudents(1500)?.usdPerYear).toBe(7000);
+  });
+
+  it("zero or garbage enrolment licenses nothing", () => {
+    expect(bandForStudents(0)).toBeNull();
+    expect(bandForStudents(-5)).toBeNull();
+    expect(bandForStudents(NaN)).toBeNull();
+  });
+
+  it("the card itself: three bands at 3/5/7k", () => {
+    expect(SCHOOL_BANDS.map((b) => b.usdPerYear)).toEqual([3000, 5000, 7000]);
+    expect(SCHOOL_BANDS.map((b) => b.maxStudents)).toEqual([350, 700, 1200]);
   });
 });
 

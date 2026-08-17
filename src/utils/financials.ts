@@ -222,14 +222,27 @@ export function collectedUsd(payments: PaymentRow[]): number {
 
 // ── estimated revenue ───────────────────────────────────────────────────────
 
-export const STUDENTS_PER_BLOCK = 350;
-export const SCHOOL_FLOOR_USD_PER_YEAR = 3000;
 export const TEACHER_PRO_USD_PER_MONTH = 24;
 
-/** ceil(students / 350) licence blocks — 0 students ⇒ 0 blocks. */
-export function schoolBlocks(students: number): number {
-  if (!Number.isFinite(students) || students <= 0) return 0;
-  return Math.ceil(students / STUDENTS_PER_BLOCK);
+/** The school rate card (founder, 2026-08-17): the India-card enrolment bands
+ * (A ≤350, B 351–700, C 701–1,200) at USD $3k/$5k/$7k per school per year —
+ * each one $1k above the original ₹2/4/7-lakh-derived levels. Schools above
+ * 1,200 students are priced individually; estimates show them at Band C. */
+export const SCHOOL_BANDS = [
+  { name: "A", maxStudents: 350, usdPerYear: 3000, range: "≤350" },
+  { name: "B", maxStudents: 700, usdPerYear: 5000, range: "351–700" },
+  { name: "C", maxStudents: 1200, usdPerYear: 7000, range: "701–1,200" },
+] as const;
+
+export type SchoolBand = (typeof SCHOOL_BANDS)[number];
+
+/** The band covering an enrolment. 0 students ⇒ null (nothing to license);
+ * above the top band ⇒ Band C (priced individually in reality — the footer
+ * says so; the estimate needs a number, and understating is the safe error). */
+export function bandForStudents(students: number): SchoolBand | null {
+  if (!Number.isFinite(students) || students <= 0) return null;
+  for (const b of SCHOOL_BANDS) if (students <= b.maxStudents) return b;
+  return SCHOOL_BANDS[SCHOOL_BANDS.length - 1];
 }
 
 export type ConversionScenario = { paying: number; annualUsd: number };

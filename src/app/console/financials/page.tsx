@@ -10,9 +10,8 @@ import {
   kitCostStats,
   modelRouteBreakdown,
   mrrUsd,
-  schoolBlocks,
-  SCHOOL_FLOOR_USD_PER_YEAR,
-  STUDENTS_PER_BLOCK,
+  bandForStudents,
+  SCHOOL_BANDS,
   TEACHER_PRO_USD_PER_MONTH,
   MYR_PER_USD,
   type CsvSection,
@@ -39,9 +38,14 @@ const TABLE2_FOOTER =
   `Prices: Teacher Pro $24/mo, Teacher Pro+ $49/mo, Family $9.99/mo (annual plans at annual/12); ` +
   `school floor $3,000/yr → $250/mo. Stripe school payments (MYR) converted at RM${MYR_PER_USD.toFixed(2)}/USD. ` +
   `Update alongside pricing. Demo accounts excluded.`;
-const TABLE3_FOOTER =
-  "Assumptions: Teacher Pro $24/mo; school floor $3,000/yr per 350 students (ceil); " +
-  "teachers counted = all active non-demo teacher accounts. Estimates, not forecasts.";
+const TABLE3_B2C_FOOTER =
+  "Assumptions: Teacher Pro $24/mo; teachers counted = all active non-demo teacher accounts. " +
+  "Estimates, not forecasts.";
+const TABLE3_B2B_FOOTER =
+  "Rate card: Band A ≤350 students $3,000 · Band B 351–700 $5,000 · Band C 701–1,200 $7,000 " +
+  "per school per year; schools above 1,200 are priced individually (shown at Band C). " +
+  "Assumes the entered number of new schools in year 1 — change it below or via ?pipeline=N " +
+  "(the link carries the scenario). Estimates, not forecasts.";
 
 function dash(v: number | null, fmt: (n: number) => string): string {
   return v === null ? "—" : fmt(v);
@@ -53,9 +57,11 @@ export default async function ConsoleFinancialsPage({
   searchParams: Promise<{ pipeline?: string }>;
 }) {
   const { pipeline: pipelineRaw } = await searchParams;
-  // ?pipeline=N — schools in discussion, carried in the URL so a scenario link
-  // is shareable. Anything unparseable is just 0, never an error.
-  const pipeline = Math.max(0, Math.floor(Number(pipelineRaw)) || 0);
+  // ?pipeline=N — assumed new schools in year 1, carried in the URL so a
+  // scenario link is shareable. Defaults to the founder's 10-schools-in-year-1
+  // assumption; an explicit ?pipeline=0 zeroes it; junk is treated as absent.
+  const parsed = Math.floor(Number(pipelineRaw));
+  const pipeline = pipelineRaw === undefined || !Number.isFinite(parsed) ? 10 : Math.max(0, parsed);
 
   const admin = createAdminClient();
 
@@ -179,31 +185,30 @@ export default async function ConsoleFinancialsPage({
   const teachers = profiles.filter((p) => p.role === "teacher").length;
   const scenarios = [0.1, 0.25, 0.5].map((rate) => ({ rate, ...conversionScenario(teachers, rate) }));
 
-  // B2B floor: schools with at least one real (non-demo) member, priced by
-  // their real student count in 350-student blocks.
+  const b2cRows: { label: string; value: string }[] = scenarios.map((s) => ({
+    label: `${Math.round(s.rate * 100)}% conversion — ${s.paying} of ${teachers} active teachers × $${TEACHER_PRO_USD_PER_MONTH}/mo × 12`,
+    value: fmtUsd(s.annualUsd),
+  }));
+
+  // B2B: the assumed new-schools count priced at each band of the rate card
+  // (one row per band — "if the assumed schools land this size"), plus the
+  // live row for schools already on the platform, priced by real enrolment.
   const schoolsWithReal = new Set(
     profiles.filter((p) => p.school_id !== null).map((p) => p.school_id as string),
   );
-  let floorBlocks = 0;
+  let liveUsd = 0;
   for (const schoolId of schoolsWithReal) {
     const students = profiles.filter((p) => p.school_id === schoolId && p.role === "student").length;
-    floorBlocks += schoolBlocks(students);
+    liveUsd += bandForStudents(students)?.usdPerYear ?? 0;
   }
-  const floorUsd = floorBlocks * SCHOOL_FLOOR_USD_PER_YEAR;
-  const pipelineUsd = pipeline * SCHOOL_FLOOR_USD_PER_YEAR;
-
-  const estimateRows: { label: string; value: string }[] = [
-    ...scenarios.map((s) => ({
-      label: `${Math.round(s.rate * 100)}% conversion — ${s.paying} of ${teachers} active teachers × $${TEACHER_PRO_USD_PER_MONTH}/mo × 12`,
-      value: fmtUsd(s.annualUsd),
+  const b2bRows: { label: string; value: string }[] = [
+    ...SCHOOL_BANDS.map((b) => ({
+      label: `Band ${b.name} — ${pipeline} school${pipeline === 1 ? "" : "s"} of ${b.range} students × $${b.usdPerYear.toLocaleString("en-US")}/yr`,
+      value: fmtUsd(pipeline * b.usdPerYear),
     })),
     {
-      label: `B2B floor — ceil(students/${STUDENTS_PER_BLOCK}) × $${SCHOOL_FLOOR_USD_PER_YEAR.toLocaleString("en-US")}/yr across ${schoolsWithReal.size} school${schoolsWithReal.size === 1 ? "" : "s"} with real members (${floorBlocks} block${floorBlocks === 1 ? "" : "s"})`,
-      value: fmtUsd(floorUsd),
-    },
-    {
-      label: `B2B pipeline — ${pipeline} school${pipeline === 1 ? "" : "s"} in discussion × $${SCHOOL_FLOOR_USD_PER_YEAR.toLocaleString("en-US")}/yr`,
-      value: fmtUsd(pipelineUsd),
+      label: `Live — ${schoolsWithReal.size} school${schoolsWithReal.size === 1 ? "" : "s"} on the platform, priced by actual enrolment`,
+      value: fmtUsd(liveUsd),
     },
   ];
 
@@ -234,10 +239,16 @@ export default async function ConsoleFinancialsPage({
       footer: TABLE2_FOOTER,
     },
     {
-      title: "Estimated revenue (annual)",
+      title: "Estimated revenue — B2C (annual)",
       header: ["Scenario", "Annual USD"],
-      rows: estimateRows.map((r) => [r.label, r.value]),
-      footer: TABLE3_FOOTER,
+      rows: b2cRows.map((r) => [r.label, r.value]),
+      footer: TABLE3_B2C_FOOTER,
+    },
+    {
+      title: "Estimated revenue — B2B schools (annual)",
+      header: ["Scenario", "Annual USD"],
+      rows: b2bRows.map((r) => [r.label, r.value]),
+      footer: TABLE3_B2B_FOOTER,
     },
   ];
 
@@ -336,27 +347,42 @@ export default async function ConsoleFinancialsPage({
         <p className="text-[11px] text-[#98A0A9] mt-2">{TABLE2_FOOTER}</p>
       </section>
 
-      {/* ── Table 3 ─────────────────────────────────────────────────────── */}
+      {/* ── Table 3a: B2C ────────────────────────────── */}
       <section className="mb-10">
-        <h2 className="text-xl mb-3">Estimated revenue (annual)</h2>
+        <h2 className="text-xl mb-3">Estimated revenue — B2C (annual)</h2>
         <div className="card divide-y divide-[#EEF0EC] overflow-x-auto">
           <div className="grid grid-cols-[3fr_1fr] gap-2">
             <span className={th}>Scenario</span>
             <span className={`${th} text-end`}>Annual USD</span>
           </div>
-          {estimateRows.map((r) => (
+          {b2cRows.map((r) => (
             <div key={r.label} className="grid grid-cols-[3fr_1fr] gap-2">
               <span className={td}>{r.label}</span>
               <span className={`${td} tabular text-end`}>{r.value}</span>
             </div>
           ))}
         </div>
-        {/* GET form — the scenario rides in the URL (?pipeline=N), so the link
-            itself carries it into a chat or an email. Input chrome hidden on
-            print; the pipeline ROW above still prints with its N. */}
+        <p className="text-[11px] text-[#98A0A9] mt-2">{TABLE3_B2C_FOOTER}</p>
+      </section>
+
+      {/* ── Table 3b: B2B schools ────────────────────── */}
+      <section className="mb-10">
+        <h2 className="text-xl mb-3">Estimated revenue — B2B schools (annual)</h2>
+        <div className="card divide-y divide-[#EEF0EC] overflow-x-auto">
+          <div className="grid grid-cols-[3fr_1fr] gap-2">
+            <span className={th}>Scenario</span>
+            <span className={`${th} text-end`}>Annual USD</span>
+          </div>
+          {b2bRows.map((r) => (
+            <div key={r.label} className="grid grid-cols-[3fr_1fr] gap-2">
+              <span className={td}>{r.label}</span>
+              <span className={`${td} tabular text-end`}>{r.value}</span>
+            </div>
+          ))}
+        </div>
         <form method="get" className="print:hidden mt-3 flex items-center gap-2 text-sm">
           <label htmlFor="pipeline" className="text-[#5B6470]">
-            Schools in discussion
+            Assumed new schools in year 1
           </label>
           <input
             id="pipeline"
@@ -371,7 +397,7 @@ export default async function ConsoleFinancialsPage({
             Update
           </button>
         </form>
-        <p className="text-[11px] text-[#98A0A9] mt-2">{TABLE3_FOOTER}</p>
+        <p className="text-[11px] text-[#98A0A9] mt-2">{TABLE3_B2B_FOOTER}</p>
       </section>
     </main>
   );
