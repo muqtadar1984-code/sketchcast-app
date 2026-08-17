@@ -182,7 +182,7 @@ export default async function ConsoleIssueDetailPage({
               <p className="text-xs text-[#98A0A9]">generation {issue.generation_id}{issue.book_id ? ` · book ${issue.book_id}` : ""}</p>
             )}
             <p className="text-xs text-[#98A0A9]">
-              Staff-only reasoning and gate signals are in the Audit tab (action prefix &quot;support_agent:&quot;).
+              Staff-only reasoning and gate signals are recorded in the platform audit log (action prefix &quot;support_agent:&quot;).
             </p>
           </div>
         )}

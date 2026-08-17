@@ -77,10 +77,20 @@ export default async function ConsoleOverviewPage() {
   // it marks a trial account, not beta-programme membership.
   let trial = 0;
   let signups7 = 0;
+  // Calendar horizons for the Signups card (local server time, like the 7d
+  // window). Lifetime is just profiles.length — already demo-filtered.
+  const nowDate = new Date(now);
+  const monthStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1).getTime();
+  const yearStart = new Date(nowDate.getFullYear(), 0, 1).getTime();
+  let signupsMtd = 0;
+  let signupsYtd = 0;
   for (const p of profiles) {
     roleCount.set(p.role, (roleCount.get(p.role) ?? 0) + 1);
     if (p.beta_tester) trial++;
-    if (now - new Date(p.created_at).getTime() <= 7 * DAY) signups7++;
+    const t = new Date(p.created_at).getTime();
+    if (now - t <= 7 * DAY) signups7++;
+    if (t >= monthStart) signupsMtd++;
+    if (t >= yearStart) signupsYtd++;
   }
 
   // Generation volume by kind × status
@@ -170,6 +180,22 @@ export default async function ConsoleOverviewPage() {
             {m.hint && <div className="text-[11px] text-[#98A0A9] mt-0.5">{m.hint}</div>}
           </div>
         ))}
+        {/* Signups beyond the 7-day window — one card, three horizons. */}
+        <div className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
+          <div className="text-xs text-[#5B6470]">Signups</div>
+          <div className="mt-1 space-y-1">
+            {[
+              ["Month to date", signupsMtd],
+              ["Year to date", signupsYtd],
+              ["Life to date", profiles.length],
+            ].map(([label, n]) => (
+              <div key={String(label)} className="flex items-baseline justify-between">
+                <span className="text-[11px] text-[#98A0A9]">{label}</span>
+                <span className="tabular text-base">{n}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8">

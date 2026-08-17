@@ -12,7 +12,6 @@ const TABS = [
   { href: "/console/schools", label: "Schools" },
   { href: "/console/content", label: "Content" },
   { href: "/console/feedback", label: "Feedback" },
-  { href: "/console/audit", label: "Audit" },
 ];
 
 function isActive(href: string, path: string): boolean {
