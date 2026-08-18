@@ -31,17 +31,22 @@ describe("creditPacks — the founder-approved catalogue", () => {
     ]);
   });
 
-  const LIVE = "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268";
+  const BUY = "https://aetheltwin.lemonsqueezy.com/checkout/buy/";
+  const LIVE: Record<string, string> = {
+    pack_6: `${BUY}b71a1f57-fcb7-4117-bd8f-786d4cf52268`,
+    pack_18: `${BUY}34a79a65-4c38-4fc6-b765-9011e40eb14b`,
+    pack_36: `${BUY}2e506598-f094-4700-bcb1-dae4effe4148`,
+  };
 
-  it("carries the live SketchCast Credits checkout link; env overrides per pack, blank falls back", () => {
-    expect(creditPacks().every((p) => p.checkoutUrl === LIVE)).toBe(true);
+  it("carries each pack's OWN variant checkout link; env overrides per pack, blank falls back", () => {
+    expect(creditPacks().every((p) => p.checkoutUrl === LIVE[p.key])).toBe(true);
     process.env.LEMONSQUEEZY_CHECKOUT_PACK_18 = "https://aetheltwin.lemonsqueezy.com/checkout/buy/abc";
     process.env.LEMONSQUEEZY_CHECKOUT_PACK_36 = "   "; // blank ≠ configured → literal stands
     const packs = creditPacks();
     expect(packs.find((p) => p.key === "pack_18")?.checkoutUrl).toBe(
       "https://aetheltwin.lemonsqueezy.com/checkout/buy/abc",
     );
-    expect(packs.find((p) => p.key === "pack_36")?.checkoutUrl).toBe(LIVE);
+    expect(packs.find((p) => p.key === "pack_36")?.checkoutUrl).toBe(LIVE.pack_36);
   });
 });
 

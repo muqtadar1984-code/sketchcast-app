@@ -3,15 +3,21 @@
 // quota — see migration 0086). This module is the single source of truth the
 // app AND the webhook read:
 //
-//   * checkoutUrl — the LS hosted-checkout link for the pack. LIVE since
-//     2026-08-18: the founder created ONE product ("SketchCast Credits",
-//     three variants), so all three packs carry its product-level Share link —
-//     checkout opens with the variant picker and the buyer confirms the pack
-//     there; crediting is by the variant actually bought, so a mis-click can
-//     never mis-credit. The env vars (LEMONSQUEEZY_CHECKOUT_PACK_6/18/36)
-//     still override the literal per pack — the upgrade path to per-variant
-//     deep links ("?enabled=<variant id>") without a code change. A null URL
-//     would hide that pack's buy button (the original ships-dark mechanism).
+//   * checkoutUrl — the LS hosted-checkout link for the pack. One LS product
+//     ("SketchCast Credits") with three variants, and each VARIANT carries its
+//     own Share link (/checkout/buy/<variant slug>), so each pack points at
+//     its own. These are per-variant links, NOT a product-level picker: an LS
+//     variant link opens straight into that variant's checkout with no
+//     chooser. All three shipped on 2026-08-18 carrying the "1 kit (6)" slug,
+//     so the $20 and $36 chips opened an $8 checkout and credited 6 — fixed
+//     2026-08-19 by giving each pack its own slug. A wrong link fails
+//     SILENTLY (the buyer is charged by whatever variant the link opens, and
+//     crediting follows the variant actually bought), so verify any repoint
+//     resolves to the intended price. The env vars
+//     (LEMONSQUEEZY_CHECKOUT_PACK_6/18/36) still override the literal per pack
+//     — the swap path for live-mode links once LS activates the store (every
+//     id below is a TEST-mode id). A null URL hides that pack's buy button
+//     (the original ships-dark mechanism).
 //     The dashboard UI consumes this catalogue through src/utils/credit-packs.ts.
 //   * productName — the canonical name for the pack in Lemon Squeezy. The
 //     webhook identifies a pack order by the product-name prefix
@@ -66,7 +72,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "3 kits",
     productName: "SketchCast Credits — 3 kits (18)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_18",
-    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268",
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/34a79a65-4c38-4fc6-b765-9011e40eb14b",
   },
   {
     key: "pack_36",
@@ -75,7 +81,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "6 kits",
     productName: "SketchCast Credits — 6 kits (36)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_36",
-    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268",
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/2e506598-f094-4700-bcb1-dae4effe4148",
   },
 ] as const;
 
