@@ -382,7 +382,18 @@ export default async function DashboardPage() {
         videos,
         deck: decks[0] ?? null,
         decks,
-        doc: await sign(path("docx"), docDownloadName(g.kind, "docx")),
+        // Answer keys stay with the adult (founder, 2026-08-18): every
+        // assignable document kind EMBEDS its answers in the docx itself —
+        // exam_paper carries its key section, worksheet/activity their answer
+        // panels, case_study its teacher-guidance page. The one exception is
+        // the cumulative exam (0062), whose docx is the key-LESS paper (the
+        // key is a separate answer_key_docx artifact, never signed here). So
+        // students get a document link ONLY for 'exam'; everything else they
+        // work through the interactive quiz or on paper the teacher/parent
+        // prints from their own Library. Storage RLS backs this up: artifact
+        // files live under the ADULT's folder, so a student session cannot
+        // sign these paths itself — this line is the only door.
+        doc: g.kind === "exam" ? await sign(path("docx"), docDownloadName(g.kind, "docx")) : null,
         quiz: await sign(path("questions_json")),
         status: (prog?.status as StudentItemData["status"]) ?? null,
         revisionCount: prog?.revisionCount ?? 0,
