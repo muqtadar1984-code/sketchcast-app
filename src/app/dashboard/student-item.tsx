@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import QuizPlayer, { type QuizData } from "./quiz-player";
+import QuizPlayer, { type StudentQuizData } from "./quiz-player";
 import AskCoach from "./ask-coach";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
@@ -29,7 +29,10 @@ export type StudentItemData = {
   /** One deck per part, same order. */
   decks?: string[];
   doc: string | null;
-  quiz: string | null; // signed URL of questions.json, if the worker emitted one
+  /** Route that serves the ANSWER-STRIPPED paper (/api/quiz/{genId}), or null
+   * when this generation has no interactive quiz. Never a signed artifact URL:
+   * questions.json carries the marking scheme and is service-role only. */
+  quiz: string | null;
   status: ProgressStatus | null;
   revisionCount: number;
   /** Encodes per-part progress for multi-part lessons: part k of N done ⇒
@@ -91,7 +94,7 @@ export default function StudentItem({
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [quiz, setQuiz] = useState<QuizData | null>(null);
+  const [quiz, setQuiz] = useState<StudentQuizData | null>(null);
   const [coaching, setCoaching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // Long chapters arrive as several ~15-min parts — designed to be watched ONE
@@ -211,11 +214,46 @@ export default function StudentItem({
       setBusy(false);
       return;
     }
+    // Every mark-bearing column is written NULL on purpose, not left out.
+    // Migration 0091 confines a student session to mode='file' rows that carry
+    // no score at all (that is what stops a browser from authoring its own
+    // grade), so an upsert that merely omitted teacher_score would keep the
+    // OLD value on a resubmit and be rejected by the policy. Nulling them is
+    // also the honest meaning of a resubmit: these are new answers, ungraded —
+    // and `feedback` is in that list for the same reason. It is the TEACHER's
+    // column (grade-list.tsx is its only other writer); the policy now pins it
+    // to NULL here so a student cannot put words into it, and the words a
+    // teacher wrote were about answers that no longer exist.
+    // attempt_count is deliberately absent: it defaults to 0 on insert, keeps
+    // its value on update, and 0091 pins it to 0 for a student write.
     const { error: sErr } = await supabase
       .from("submissions")
-      .upsert({ ...subBase, mode: "file", file_path: path, grade_status: "pending", submitted_at: new Date().toISOString() }, { onConflict: "generation_id,student_id" });
+      .upsert(
+        {
+          ...subBase,
+          mode: "file",
+          file_path: path,
+          answers: null,
+          auto_score: null,
+          max_score: null,
+          teacher_score: null,
+          feedback: null,
+          graded_by: null,
+          graded_at: null,
+          grade_status: "pending",
+          submitted_at: new Date().toISOString(),
+        },
+        { onConflict: "generation_id,student_id" },
+      );
     if (sErr) {
-      setError(sErr.message);
+      // 0091's UPDATE policy requires the EXISTING row to be mode='file', so a
+      // student who already answered in-app cannot overwrite that submission
+      // with a file (which would erase the score and the attempt count). That
+      // refusal arrives as a bare 42501 "row-level security" string — useless
+      // to a child. Name the actual situation instead; every other failure
+      // still shows its own message.
+      const denied = sErr.code === "42501" || /row-level security/i.test(sErr.message);
+      setError(denied ? t.item.quizAlreadyAnswered : sErr.message);
       setBusy(false);
       return;
     }
@@ -224,12 +262,19 @@ export default function StudentItem({
     setBusy(false);
   }
 
+  // item.quiz is /api/quiz/{genId} — the answer-STRIPPED paper. It used to be a
+  // service-role signed URL straight to questions.json, which a verifier could
+  // fetch from production with no credentials and read the key out of.
   async function takeQuiz() {
     if (!item.quiz) return;
     setError(null);
     try {
       const res = await fetch(item.quiz);
-      const data = (await res.json()) as QuizData;
+      if (!res.ok) {
+        setError(t.item.quizUnavailable);
+        return;
+      }
+      const data = (await res.json()) as StudentQuizData;
       if (!data?.questions?.length) {
         setError(t.item.quizUnavailable);
         return;
@@ -241,17 +286,25 @@ export default function StudentItem({
     }
   }
 
-  async function onQuizSubmit(answers: Record<string, unknown>, auto: number, max: number, needsReview: boolean) {
-    const { error: sErr } = await supabase
-      .from("submissions")
-      .upsert(
-        { ...subBase, mode: "interactive", answers, auto_score: auto, max_score: max, grade_status: needsReview ? "pending" : "auto", submitted_at: new Date().toISOString() },
-        { onConflict: "generation_id,student_id" },
-      );
-    if (sErr) {
+  // The score is the SERVER's answer, not the browser's: the route grades
+  // against the key and writes the row with the service role. The response is
+  // read for its error text only — nothing on this screen shows a mark.
+  async function onQuizSubmit(answers: Record<string, unknown>) {
+    let res: Response;
+    try {
+      res = await fetch("/api/quiz/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generationId: item.genId, answers }),
+      });
+    } catch {
       // Thrown so the quiz modal shows it inline and re-enables Submit —
       // a swallowed error here left the player stuck with no feedback.
-      throw new Error(sErr.message);
+      throw new Error("Couldn't submit — please try again.");
+    }
+    if (!res.ok) {
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(json?.error || "Couldn't submit — please try again.");
     }
     await markComplete();
     setSubmitted(true);

@@ -135,7 +135,8 @@
       "resubmit": "पुन्हा सादर करा",
       "submitFile": "फाइल सादर करा",
       "quizUnavailable": "क्विझ उपलब्ध नाही — त्याऐवजी ‘उत्तर सादर करा’ वापरा.",
-      "quizLoadFailed": "क्विझ लोड करता आली नाही."
+      "quizLoadFailed": "क्विझ लोड करता आली नाही.",
+      "quizAlreadyAnswered": "तुम्ही हा क्विझ ॲपमध्येच सोडवला आहे — फाइल त्या उत्तरांची जागा घेऊ शकत नाही. फाइल पाठवायची असल्यास तुमच्या शिक्षकांना सांगा."
     },
     "player": {
       "partDone": "{total} पैकी भाग {n} पूर्ण — छान!",
@@ -313,11 +314,11 @@
         "arts": "कला",
         "other": "इतर"
       },
-      "purposeQuestion": "What best describes you?",
-      "purposeSchool": "Supporting school learning",
-      "purposeSchoolSub": "My children attend school — I help alongside it",
-      "purposeHomeschool": "Homeschooling or tutoring",
-      "purposeHomeschoolSub": "I teach my learners myself — full lesson-building tools"
+      "purposeQuestion": "तुम्हाला यापैकी काय लागू होते?",
+      "purposeSchool": "शाळेच्या शिक्षणाला मदत",
+      "purposeSchoolSub": "माझी मुले शाळेत जातात — मी त्यासोबत घरून मदत करतो",
+      "purposeHomeschool": "घरशाळा किंवा शिकवणी",
+      "purposeHomeschoolSub": "माझ्या विद्यार्थ्यांना मीच शिकवतो — धडे तयार करण्याची संपूर्ण साधने"
     },
     "reportIssue": {
       "label": "अडचण कळवा",
@@ -1056,7 +1057,7 @@
       "addFailed": "विद्यार्थी जोडता आले नाहीत.",
       "credsCreated": "लॉगिन तयार — हे पालकांना द्या",
       "copyAll": "सर्व कॉपी करा",
-      "progressRecord": "Progress record"
+      "progressRecord": "प्रगती नोंद"
     },
     "progress": {
       "show": "प्रगती दाखवा",
@@ -1089,13 +1090,13 @@
       "duplicate": "“{name}” नावाचा वर्ग तुमच्याकडे आधीच आहे.",
       "createFailed": "वर्ग तयार करता आला नाही.",
       "pickClass": "वर्ग निवडा.",
-      "headingChildren": "Assign to your children",
-      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
-      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
-      "childrenLabel": "Your children",
-      "pickChild": "Pick at least one child.",
-      "noChildren": "No children linked yet.",
-      "manageChildren": "Add children"
+      "headingChildren": "तुमच्या मुलांना सोपवा",
+      "itemsOneChildren": "1 गोष्ट — निवडलेल्या मुलांना ती त्यांच्या कामात दिसेल.",
+      "itemsManyChildren": "{n} गोष्टी — निवडलेल्या मुलांना त्या त्यांच्या कामात दिसतील.",
+      "childrenLabel": "तुमची मुले",
+      "pickChild": "किमान एक मूल निवडा.",
+      "noChildren": "अजून कोणतेही मूल जोडलेले नाही.",
+      "manageChildren": "मुले जोडा"
     },
     "deleteLesson": {
       "confirm": "हा धडा काढून टाकायचा? त्याच्या फाइली हटतील आणि वापरलेले क्रेडिट परत मिळणार नाही.",
@@ -1524,7 +1525,7 @@
         "completion": "पूर्तता",
         "overdue": "मुदत उलटली",
         "toGrade": "तपासायचे",
-        "learners": "Learners"
+        "learners": "विद्यार्थी"
       },
       "schoolView": {
         "title": "तुमच्या अध्यापनाबद्दल शाळेला काय दिसते",
@@ -1551,8 +1552,8 @@
         "activity": "कृती",
         "caseStudy": "केस स्टडी"
       },
-      "subtitleHome": "How your learners are progressing through what you've assigned.",
-      "byLearner": "By learner"
+      "subtitleHome": "तुम्ही सोपवलेल्या कामात तुमच्या विद्यार्थ्यांची प्रगती कशी आहे.",
+      "byLearner": "विद्यार्थ्यानुसार"
     },
     "children": {
       "title": "माझी मुले",
@@ -1623,33 +1624,33 @@
     }
   },
   "reports": {
-    "title": "Progress record",
-    "preparedBy": "Prepared by {name}",
-    "generated": "Generated {date}",
-    "range": "Activity from {from} to {to}",
-    "print": "Print",
-    "empty": "No recorded work yet.",
-    "emptyHint": "Assigned work, completions and scores will appear here as they are recorded.",
-    "chaptersCovered": "Chapters covered: {list}",
-    "otherWork": "Other work",
-    "subject": "Subject: {subject}",
-    "summaryLine": "{assigned} assigned · {completed} completed · average score {avg}%",
-    "summaryLineNoScores": "{assigned} assigned · {completed} completed · no scores recorded",
-    "overall": "Overall",
+    "title": "प्रगती नोंद",
+    "preparedBy": "तयार करणारे: {name}",
+    "generated": "{date} रोजी तयार",
+    "range": "{from} ते {to} या काळातील हालचाल",
+    "print": "प्रिंट",
+    "empty": "अजून कोणत्याही कामाची नोंद नाही.",
+    "emptyHint": "सोपवलेले काम, पूर्तता आणि गुण नोंदले जातील तसे इथे दिसू लागतील.",
+    "chaptersCovered": "घेतलेली प्रकरणे: {list}",
+    "otherWork": "इतर काम",
+    "subject": "विषय: {subject}",
+    "summaryLine": "{assigned} सोपवले · {completed} पूर्ण · सरासरी गुण {avg}%",
+    "summaryLineNoScores": "{assigned} सोपवले · {completed} पूर्ण · गुणांची नोंद नाही",
+    "overall": "एकूण",
     "scoreValue": "{points}/{max} ({pct}%)",
-    "gradingOn": "{grading} {date}",
+    "gradingOn": "{date} रोजी {grading}",
     "columns": {
-      "item": "Item",
-      "assigned": "Assigned",
-      "due": "Due",
-      "status": "Status",
-      "completed": "Completed",
-      "score": "Score"
+      "item": "गोष्ट",
+      "assigned": "सोपवले",
+      "due": "मुदत",
+      "status": "स्थिती",
+      "completed": "पूर्ण",
+      "score": "गुण"
     },
     "grading": {
-      "auto": "auto-marked",
-      "graded": "teacher-marked",
-      "pending": "awaiting marking"
+      "auto": "आपोआप तपासले",
+      "graded": "शिक्षकांनी तपासले",
+      "pending": "तपासणी बाकी"
     }
   },
   "utils": {
@@ -1717,12 +1718,12 @@
     "trialSpent": "तुम्ही सर्व {cap} चाचणी निर्मिती वापरल्या आहेत. पुढे तयार करत राहण्यासाठी सदस्यत्व घ्या — मोफत योजनेत एका वेळी एकच धडा ठेवता येतो.",
     "parts": "धड्याचे भाग",
     "documents": "कागदपत्रे",
-    "buyTitle": "Buy credits",
-    "buyHint": "One-time credit packs. They never expire — your monthly allowance is used first.",
-    "packLabel": "{credits} credits — ${price} ({kits})",
-    "packKitsOne": "{n} kit",
-    "packKitsMany": "{n} kits",
-    "purchased": "{n} purchased credits available",
-    "upgradeCta": "Need more? See plans and pricing"
+    "buyTitle": "क्रेडिट घ्या",
+    "buyHint": "एकदाच घ्यायचे क्रेडिट पॅक. ते कधीच कालबाह्य होत नाहीत — आधी महिन्याची तुमची मर्यादा वापरली जाते.",
+    "packLabel": "{credits} क्रेडिट — ${price} ({kits})",
+    "packKitsOne": "{n} संच",
+    "packKitsMany": "{n} संच",
+    "purchased": "विकत घेतलेली {n} क्रेडिट शिल्लक",
+    "upgradeCta": "आणखी हवे? योजना व किंमती पाहा"
   }
 }

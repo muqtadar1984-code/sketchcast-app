@@ -135,7 +135,8 @@
       "resubmit": "Resubmit",
       "submitFile": "Submit file",
       "quizUnavailable": "Quiz unavailable — use Submit answer instead.",
-      "quizLoadFailed": "Could not load the quiz."
+      "quizLoadFailed": "Could not load the quiz.",
+      "quizAlreadyAnswered": "You answered this quiz in the app — a file cannot replace those answers. Ask your teacher if you need to send a file."
     },
     "player": {
       "partDone": "Part {n} of {total} done — nice work!",

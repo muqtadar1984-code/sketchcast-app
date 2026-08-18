@@ -401,7 +401,15 @@ export default async function DashboardPage() {
           g.kind === "exam" || arts.some((a) => a.kind === "answer_key_docx")
             ? await sign(path("docx"), docDownloadName(g.kind, "docx"))
             : null,
-        quiz: await sign(path("questions_json")),
+        // NOT a signed URL. questions.json IS the marking scheme — the
+        // fill_blank/true_false answers, the match pairs, the subjective
+        // answer_outline — and this line used to hand the person being tested
+        // a service-role signed link to it. A verifier pulled three of those
+        // links from production with no credentials and read the keys back.
+        // The student now gets a route that serves an answer-STRIPPED paper
+        // (src/app/api/quiz/[generationId]) and nothing else; the raw artifact
+        // stays service-role only, exactly like answer_key_docx above.
+        quiz: path("questions_json") ? `/api/quiz/${g.id}` : null,
         status: (prog?.status as StudentItemData["status"]) ?? null,
         revisionCount: prog?.revisionCount ?? 0,
         progressPct: prog?.progressPct ?? 0,

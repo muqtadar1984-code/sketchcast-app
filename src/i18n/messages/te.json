@@ -135,7 +135,8 @@
       "resubmit": "మళ్లీ సమర్పించండి",
       "submitFile": "ఫైల్ సమర్పించండి",
       "quizUnavailable": "క్విజ్ అందుబాటులో లేదు — బదులుగా ‘సమాధానం సమర్పించండి’ వాడండి.",
-      "quizLoadFailed": "క్విజ్‌ను లోడ్ చేయలేకపోయాం."
+      "quizLoadFailed": "క్విజ్‌ను లోడ్ చేయలేకపోయాం.",
+      "quizAlreadyAnswered": "మీరు ఈ క్విజ్‌ను యాప్‌లోనే పూర్తి చేశారు — ఫైల్ ఆ సమాధానాల స్థానంలోకి రాదు. ఫైల్ పంపాల్సి వస్తే మీ ఉపాధ్యాయుడికి తెలియజేయండి."
     },
     "player": {
       "partDone": "{total}లో భాగం {n} పూర్తయింది — భలే!",
@@ -313,11 +314,11 @@
         "arts": "కళలు",
         "other": "ఇతరం"
       },
-      "purposeQuestion": "What best describes you?",
-      "purposeSchool": "Supporting school learning",
-      "purposeSchoolSub": "My children attend school — I help alongside it",
-      "purposeHomeschool": "Homeschooling or tutoring",
-      "purposeHomeschoolSub": "I teach my learners myself — full lesson-building tools"
+      "purposeQuestion": "మీకు ఏది బాగా సరిపోతుంది?",
+      "purposeSchool": "పాఠశాల చదువుకు తోడ్పడటం",
+      "purposeSchoolSub": "నా పిల్లలు పాఠశాలకు వెళ్తారు — నేను దానికి తోడుగా సాయం చేస్తాను",
+      "purposeHomeschool": "ఇంటి వద్ద బోధన లేదా ట్యూషన్",
+      "purposeHomeschoolSub": "నా అభ్యాసకులకు నేనే బోధిస్తాను — పూర్తి పాఠ తయారీ సాధనాలు"
     },
     "reportIssue": {
       "label": "సమస్యను నివేదించండి",
@@ -1039,7 +1040,7 @@
       "studentsOne": "1 విద్యార్థి",
       "studentsMany": "{n} విద్యార్థులు",
       "joinCode": "కోడ్: {code}",
-      "idLabel": "ID:",
+      "idLabel": "ఐడీ:",
       "passwordLabel": "పాస్‌వర్డ్:",
       "parentLabel": "తల్లిదండ్రులు:",
       "thisStudent": "ఈ విద్యార్థి",
@@ -1056,7 +1057,7 @@
       "addFailed": "విద్యార్థులను చేర్చలేకపోయాం.",
       "credsCreated": "లాగిన్‌లు సిద్ధం — వీటిని తల్లిదండ్రులకు ఇవ్వండి",
       "copyAll": "అన్నీ కాపీ",
-      "progressRecord": "Progress record"
+      "progressRecord": "పురోగతి నివేదిక"
     },
     "progress": {
       "show": "పురోగతి చూపండి",
@@ -1089,13 +1090,13 @@
       "duplicate": "“{name}” పేరుతో మీకు ఇప్పటికే ఒక తరగతి ఉంది.",
       "createFailed": "తరగతిని సృష్టించలేకపోయాం.",
       "pickClass": "ఒక తరగతి ఎంచుకోండి.",
-      "headingChildren": "Assign to your children",
-      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
-      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
-      "childrenLabel": "Your children",
-      "pickChild": "Pick at least one child.",
-      "noChildren": "No children linked yet.",
-      "manageChildren": "Add children"
+      "headingChildren": "మీ పిల్లలకు అప్పగించండి",
+      "itemsOneChildren": "1 అంశం — అప్పగించిన పిల్లలకు ఇది వారి అసైన్‌మెంట్లలో కనిపిస్తుంది.",
+      "itemsManyChildren": "{n} అంశాలు — అప్పగించిన పిల్లలకు ఇవి వారి అసైన్‌మెంట్లలో కనిపిస్తాయి.",
+      "childrenLabel": "మీ పిల్లలు",
+      "pickChild": "కనీసం ఒక బిడ్డను ఎంచుకోండి.",
+      "noChildren": "ఇంకా పిల్లలను జోడించలేదు.",
+      "manageChildren": "పిల్లలను చేర్చండి"
     },
     "deleteLesson": {
       "confirm": "ఈ పాఠాన్ని తొలగించాలా? దీని ఫైళ్లు తొలగిపోతాయి, వాడిన క్రెడిట్ తిరిగి రాదు.",
@@ -1524,7 +1525,7 @@
         "completion": "పూర్తి",
         "overdue": "గడువు దాటినవి",
         "toGrade": "దిద్దాల్సినవి",
-        "learners": "Learners"
+        "learners": "అభ్యాసకులు"
       },
       "schoolView": {
         "title": "మీ బోధన గురించి పాఠశాలకు కనిపించేది",
@@ -1551,8 +1552,8 @@
         "activity": "కృత్యాలు",
         "caseStudy": "కేస్ స్టడీ"
       },
-      "subtitleHome": "How your learners are progressing through what you've assigned.",
-      "byLearner": "By learner"
+      "subtitleHome": "మీరు అప్పగించిన వాటిలో మీ అభ్యాసకులు ఎలా ముందుకు సాగుతున్నారు.",
+      "byLearner": "అభ్యాసకులవారీగా"
     },
     "children": {
       "title": "నా పిల్లలు",
@@ -1623,33 +1624,33 @@
     }
   },
   "reports": {
-    "title": "Progress record",
-    "preparedBy": "Prepared by {name}",
-    "generated": "Generated {date}",
-    "range": "Activity from {from} to {to}",
-    "print": "Print",
-    "empty": "No recorded work yet.",
-    "emptyHint": "Assigned work, completions and scores will appear here as they are recorded.",
-    "chaptersCovered": "Chapters covered: {list}",
-    "otherWork": "Other work",
-    "subject": "Subject: {subject}",
-    "summaryLine": "{assigned} assigned · {completed} completed · average score {avg}%",
-    "summaryLineNoScores": "{assigned} assigned · {completed} completed · no scores recorded",
-    "overall": "Overall",
+    "title": "పురోగతి నివేదిక",
+    "preparedBy": "{name} తయారుచేశారు",
+    "generated": "{date}న రూపొందించింది",
+    "range": "{from} నుంచి {to} వరకు జరిగిన పని",
+    "print": "ప్రింట్",
+    "empty": "ఇంకా నమోదైన పని ఏదీ లేదు.",
+    "emptyHint": "అప్పగించిన పని, పూర్తయినవి, మార్కులు నమోదవుతున్న కొద్దీ ఇక్కడ కనిపిస్తాయి.",
+    "chaptersCovered": "కవర్ చేసిన అధ్యాయాలు: {list}",
+    "otherWork": "ఇతర పని",
+    "subject": "సబ్జెక్టు: {subject}",
+    "summaryLine": "{assigned} అప్పగించారు · {completed} పూర్తయ్యాయి · సగటు మార్కు {avg}%",
+    "summaryLineNoScores": "{assigned} అప్పగించారు · {completed} పూర్తయ్యాయి · మార్కులు నమోదు కాలేదు",
+    "overall": "మొత్తం",
     "scoreValue": "{points}/{max} ({pct}%)",
     "gradingOn": "{grading} {date}",
     "columns": {
-      "item": "Item",
-      "assigned": "Assigned",
-      "due": "Due",
-      "status": "Status",
-      "completed": "Completed",
-      "score": "Score"
+      "item": "అంశం",
+      "assigned": "అప్పగించినది",
+      "due": "గడువు",
+      "status": "స్థితి",
+      "completed": "పూర్తయింది",
+      "score": "మార్కులు"
     },
     "grading": {
-      "auto": "auto-marked",
-      "graded": "teacher-marked",
-      "pending": "awaiting marking"
+      "auto": "స్వయంచాలకంగా దిద్దినది",
+      "graded": "ఉపాధ్యాయుడు దిద్దినది",
+      "pending": "దిద్దుబాటు కోసం ఎదురుచూస్తోంది"
     }
   },
   "utils": {
@@ -1717,12 +1718,12 @@
     "trialSpent": "మీ {cap} ట్రయల్ తయారీలూ అయిపోయాయి. కొత్తవి తయారు చేస్తూ ఉండాలంటే సబ్‌స్క్రైబ్ చేయండి — ఉచిత ప్లాన్‌లో ఒకేసారి ఒక పాఠం ఉంచుకోవచ్చు.",
     "parts": "పాఠ భాగాలు",
     "documents": "పత్రాలు",
-    "buyTitle": "Buy credits",
-    "buyHint": "One-time credit packs. They never expire — your monthly allowance is used first.",
-    "packLabel": "{credits} credits — ${price} ({kits})",
-    "packKitsOne": "{n} kit",
-    "packKitsMany": "{n} kits",
-    "purchased": "{n} purchased credits available",
-    "upgradeCta": "Need more? See plans and pricing"
+    "buyTitle": "క్రెడిట్లు కొనండి",
+    "buyHint": "ఒకసారి కొనే క్రెడిట్ ప్యాక్‌లు. ఇవి ఎప్పటికీ ముగియవు — ముందుగా మీ నెలవారీ కోటానే వాడతాం.",
+    "packLabel": "{credits} క్రెడిట్లు — ${price} ({kits})",
+    "packKitsOne": "{n} కిట్",
+    "packKitsMany": "{n} కిట్‌లు",
+    "purchased": "{n} కొన్న క్రెడిట్లు అందుబాటులో ఉన్నాయి",
+    "upgradeCta": "ఇంకా కావాలా? ప్లాన్లు, ధరలు చూడండి"
   }
 }

@@ -135,7 +135,8 @@
       "resubmit": "Enviar de novo",
       "submitFile": "Enviar arquivo",
       "quizUnavailable": "Quiz indisponível — use “Enviar resposta”.",
-      "quizLoadFailed": "Não foi possível carregar o quiz."
+      "quizLoadFailed": "Não foi possível carregar o quiz.",
+      "quizAlreadyAnswered": "Você já respondeu a este quiz no aplicativo — um arquivo não pode substituir essas respostas. Avise seu professor se precisar enviar um arquivo."
     },
     "player": {
       "partDone": "Parte {n} de {total} concluída — muito bem!",
@@ -313,11 +314,11 @@
         "arts": "Artes",
         "other": "Outra"
       },
-      "purposeQuestion": "What best describes you?",
-      "purposeSchool": "Supporting school learning",
-      "purposeSchoolSub": "My children attend school — I help alongside it",
-      "purposeHomeschool": "Homeschooling or tutoring",
-      "purposeHomeschoolSub": "I teach my learners myself — full lesson-building tools"
+      "purposeQuestion": "Qual opção descreve melhor você?",
+      "purposeSchool": "Apoio aos estudos da escola",
+      "purposeSchoolSub": "Meus filhos vão à escola — eu ajudo em casa",
+      "purposeHomeschool": "Ensino em casa ou aulas particulares",
+      "purposeHomeschoolSub": "Eu mesmo ensino meus estudantes — ferramentas completas para montar aulas"
     },
     "reportIssue": {
       "label": "Relatar um problema",
@@ -1056,7 +1057,7 @@
       "addFailed": "Não foi possível adicionar os alunos.",
       "credsCreated": "Logins criados — entregue aos responsáveis",
       "copyAll": "Copiar tudo",
-      "progressRecord": "Progress record"
+      "progressRecord": "Registro de progresso"
     },
     "progress": {
       "show": "Ver progresso",
@@ -1089,13 +1090,13 @@
       "duplicate": "Você já tem uma turma chamada “{name}”.",
       "createFailed": "Não foi possível criar a turma.",
       "pickClass": "Escolha uma turma.",
-      "headingChildren": "Assign to your children",
-      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
-      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
-      "childrenLabel": "Your children",
-      "pickChild": "Pick at least one child.",
-      "noChildren": "No children linked yet.",
-      "manageChildren": "Add children"
+      "headingChildren": "Atribuir aos seus filhos",
+      "itemsOneChildren": "1 item — os filhos escolhidos verão isto nas tarefas deles.",
+      "itemsManyChildren": "{n} itens — os filhos escolhidos verão isto nas tarefas deles.",
+      "childrenLabel": "Seus filhos",
+      "pickChild": "Escolha pelo menos um filho.",
+      "noChildren": "Nenhum filho vinculado ainda.",
+      "manageChildren": "Adicionar filhos"
     },
     "deleteLesson": {
       "confirm": "Remover esta aula? Os arquivos dela serão excluídos e o crédito já usado não é devolvido.",
@@ -1524,7 +1525,7 @@
         "completion": "Conclusão",
         "overdue": "Atrasadas",
         "toGrade": "A corrigir",
-        "learners": "Learners"
+        "learners": "Estudantes"
       },
       "schoolView": {
         "title": "O que sua escola vê sobre seu trabalho",
@@ -1551,8 +1552,8 @@
         "activity": "Atividades",
         "caseStudy": "Estudo de caso"
       },
-      "subtitleHome": "How your learners are progressing through what you've assigned.",
-      "byLearner": "By learner"
+      "subtitleHome": "Como seus estudantes estão avançando no que você atribuiu.",
+      "byLearner": "Por estudante"
     },
     "children": {
       "title": "Meus filhos",
@@ -1623,33 +1624,33 @@
     }
   },
   "reports": {
-    "title": "Progress record",
-    "preparedBy": "Prepared by {name}",
-    "generated": "Generated {date}",
-    "range": "Activity from {from} to {to}",
-    "print": "Print",
-    "empty": "No recorded work yet.",
-    "emptyHint": "Assigned work, completions and scores will appear here as they are recorded.",
-    "chaptersCovered": "Chapters covered: {list}",
-    "otherWork": "Other work",
-    "subject": "Subject: {subject}",
-    "summaryLine": "{assigned} assigned · {completed} completed · average score {avg}%",
-    "summaryLineNoScores": "{assigned} assigned · {completed} completed · no scores recorded",
-    "overall": "Overall",
+    "title": "Registro de progresso",
+    "preparedBy": "Preparado por {name}",
+    "generated": "Gerado em {date}",
+    "range": "Atividades de {from} a {to}",
+    "print": "Imprimir",
+    "empty": "Nenhum trabalho registrado ainda.",
+    "emptyHint": "As tarefas atribuídas, as conclusões e as notas vão aparecer aqui conforme forem registradas.",
+    "chaptersCovered": "Capítulos dados: {list}",
+    "otherWork": "Outros trabalhos",
+    "subject": "Matéria: {subject}",
+    "summaryLine": "{assigned} atribuídas · {completed} concluídas · nota média {avg}%",
+    "summaryLineNoScores": "{assigned} atribuídas · {completed} concluídas · sem notas registradas",
+    "overall": "Geral",
     "scoreValue": "{points}/{max} ({pct}%)",
     "gradingOn": "{grading} {date}",
     "columns": {
       "item": "Item",
-      "assigned": "Assigned",
-      "due": "Due",
+      "assigned": "Atribuído",
+      "due": "Entrega",
       "status": "Status",
-      "completed": "Completed",
-      "score": "Score"
+      "completed": "Concluído",
+      "score": "Nota"
     },
     "grading": {
-      "auto": "auto-marked",
-      "graded": "teacher-marked",
-      "pending": "awaiting marking"
+      "auto": "corrigido automaticamente",
+      "graded": "corrigido pelo professor",
+      "pending": "aguardando correção"
     }
   },
   "utils": {
@@ -1717,12 +1718,12 @@
     "trialSpent": "Você usou as {cap} gerações do teste. Assine para continuar gerando — o plano grátis cobre uma aula por vez.",
     "parts": "Partes de aula",
     "documents": "Documentos",
-    "buyTitle": "Buy credits",
-    "buyHint": "One-time credit packs. They never expire — your monthly allowance is used first.",
-    "packLabel": "{credits} credits — ${price} ({kits})",
+    "buyTitle": "Comprar créditos",
+    "buyHint": "Pacotes de créditos avulsos. Eles não expiram — sua cota mensal é usada primeiro.",
+    "packLabel": "{credits} créditos — ${price} ({kits})",
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kits",
-    "purchased": "{n} purchased credits available",
-    "upgradeCta": "Need more? See plans and pricing"
+    "purchased": "{n} créditos comprados disponíveis",
+    "upgradeCta": "Precisa de mais? Veja os planos e preços"
   }
 }

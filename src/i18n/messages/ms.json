@@ -135,7 +135,8 @@
       "resubmit": "Hantar semula",
       "submitFile": "Hantar fail",
       "quizUnavailable": "Kuiz tidak tersedia — gunakan Hantar jawapan.",
-      "quizLoadFailed": "Kuiz tidak dapat dimuatkan."
+      "quizLoadFailed": "Kuiz tidak dapat dimuatkan.",
+      "quizAlreadyAnswered": "Anda telah menjawab kuiz ini dalam aplikasi — fail tidak boleh menggantikan jawapan itu. Beritahu guru anda jika anda perlu menghantar fail."
     },
     "player": {
       "partDone": "Bahagian {n} daripada {total} selesai — syabas!",
@@ -313,11 +314,11 @@
         "arts": "Seni",
         "other": "Lain-lain"
       },
-      "purposeQuestion": "What best describes you?",
-      "purposeSchool": "Supporting school learning",
-      "purposeSchoolSub": "My children attend school — I help alongside it",
-      "purposeHomeschool": "Homeschooling or tutoring",
-      "purposeHomeschoolSub": "I teach my learners myself — full lesson-building tools"
+      "purposeQuestion": "Apakah yang paling menggambarkan anda?",
+      "purposeSchool": "Menyokong pembelajaran di sekolah",
+      "purposeSchoolSub": "Anak saya bersekolah — saya membantu di sampingnya",
+      "purposeHomeschool": "Homeschool atau tuisyen",
+      "purposeHomeschoolSub": "Saya sendiri mengajar murid saya — alat pembinaan pelajaran yang penuh"
     },
     "reportIssue": {
       "label": "Laporkan masalah",
@@ -1056,7 +1057,7 @@
       "addFailed": "Tidak dapat menambah pelajar.",
       "credsCreated": "Log masuk dicipta — berikan ini kepada ibu bapa",
       "copyAll": "Salin semua",
-      "progressRecord": "Progress record"
+      "progressRecord": "Rekod kemajuan"
     },
     "progress": {
       "show": "Papar kemajuan",
@@ -1089,13 +1090,13 @@
       "duplicate": "Anda sudah mempunyai kelas bernama “{name}”.",
       "createFailed": "Tidak dapat mencipta kelas.",
       "pickClass": "Pilih kelas.",
-      "headingChildren": "Assign to your children",
-      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
-      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
-      "childrenLabel": "Your children",
-      "pickChild": "Pick at least one child.",
-      "noChildren": "No children linked yet.",
-      "manageChildren": "Add children"
+      "headingChildren": "Tugaskan kepada anak anda",
+      "itemsOneChildren": "1 item — anak yang ditugaskan akan melihatnya dalam tugasan mereka.",
+      "itemsManyChildren": "{n} item — anak yang ditugaskan akan melihatnya dalam tugasan mereka.",
+      "childrenLabel": "Anak anda",
+      "pickChild": "Pilih sekurang-kurangnya seorang anak.",
+      "noChildren": "Belum ada anak dipautkan.",
+      "manageChildren": "Tambah anak"
     },
     "deleteLesson": {
       "confirm": "Buang pelajaran ini? Failnya akan dipadam, dan kredit yang telah digunakan tidak kembali.",
@@ -1524,7 +1525,7 @@
         "completion": "Kadar siap",
         "overdue": "Lewat",
         "toGrade": "Perlu markah",
-        "learners": "Learners"
+        "learners": "Murid"
       },
       "schoolView": {
         "title": "Apa yang sekolah anda lihat tentang pengajaran anda",
@@ -1551,8 +1552,8 @@
         "activity": "Aktiviti",
         "caseStudy": "Kajian kes"
       },
-      "subtitleHome": "How your learners are progressing through what you've assigned.",
-      "byLearner": "By learner"
+      "subtitleHome": "Kemajuan murid anda menerusi apa yang anda tugaskan.",
+      "byLearner": "Ikut murid"
     },
     "children": {
       "title": "Anak saya",
@@ -1623,33 +1624,33 @@
     }
   },
   "reports": {
-    "title": "Progress record",
-    "preparedBy": "Prepared by {name}",
-    "generated": "Generated {date}",
-    "range": "Activity from {from} to {to}",
-    "print": "Print",
-    "empty": "No recorded work yet.",
-    "emptyHint": "Assigned work, completions and scores will appear here as they are recorded.",
-    "chaptersCovered": "Chapters covered: {list}",
-    "otherWork": "Other work",
-    "subject": "Subject: {subject}",
-    "summaryLine": "{assigned} assigned · {completed} completed · average score {avg}%",
-    "summaryLineNoScores": "{assigned} assigned · {completed} completed · no scores recorded",
-    "overall": "Overall",
+    "title": "Rekod kemajuan",
+    "preparedBy": "Disediakan oleh {name}",
+    "generated": "Dijana {date}",
+    "range": "Aktiviti dari {from} hingga {to}",
+    "print": "Cetak",
+    "empty": "Belum ada kerja yang direkodkan.",
+    "emptyHint": "Kerja yang ditugaskan, penyiapan dan markah akan muncul di sini apabila ia direkodkan.",
+    "chaptersCovered": "Bab yang diliputi: {list}",
+    "otherWork": "Kerja lain",
+    "subject": "Mata pelajaran: {subject}",
+    "summaryLine": "{assigned} ditugaskan · {completed} siap · markah purata {avg}%",
+    "summaryLineNoScores": "{assigned} ditugaskan · {completed} siap · tiada markah direkodkan",
+    "overall": "Keseluruhan",
     "scoreValue": "{points}/{max} ({pct}%)",
     "gradingOn": "{grading} {date}",
     "columns": {
       "item": "Item",
-      "assigned": "Assigned",
-      "due": "Due",
+      "assigned": "Ditugaskan",
+      "due": "Tarikh akhir",
       "status": "Status",
-      "completed": "Completed",
-      "score": "Score"
+      "completed": "Siap",
+      "score": "Markah"
     },
     "grading": {
-      "auto": "auto-marked",
-      "graded": "teacher-marked",
-      "pending": "awaiting marking"
+      "auto": "dimarkahkan automatik",
+      "graded": "dimarkahkan guru",
+      "pending": "menunggu pemarkahan"
     }
   },
   "utils": {
@@ -1717,12 +1718,12 @@
     "trialSpent": "Anda telah menggunakan kesemua {cap} janaan percubaan. Langgan untuk terus menjana — pelan percuma merangkumi satu pelajaran pada satu masa.",
     "parts": "Bahagian pelajaran",
     "documents": "Dokumen",
-    "buyTitle": "Buy credits",
-    "buyHint": "One-time credit packs. They never expire — your monthly allowance is used first.",
-    "packLabel": "{credits} credits — ${price} ({kits})",
+    "buyTitle": "Beli kredit",
+    "buyHint": "Pek kredit sekali beli. Ia tidak luput — peruntukan bulanan anda digunakan dahulu.",
+    "packLabel": "{credits} kredit — ${price} ({kits})",
     "packKitsOne": "{n} kit",
-    "packKitsMany": "{n} kits",
-    "purchased": "{n} purchased credits available",
-    "upgradeCta": "Need more? See plans and pricing"
+    "packKitsMany": "{n} kit",
+    "purchased": "{n} kredit yang dibeli tersedia",
+    "upgradeCta": "Perlukan lebih? Lihat pelan dan harga"
   }
 }
