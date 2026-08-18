@@ -49,6 +49,11 @@ function tabsForHat(
   calendarOn: boolean,
   timetableOn: boolean,
   diaryOn: boolean,
+  /** Test Papers is a SCHOOL-portal surface: only parents the school
+   * provisioned (a parent_links row with source='school') get the tab.
+   * Consumer parents — Home Basic and homeschool alike — author from the
+   * Library (founder, 2026-08-18). */
+  testPapersOn: boolean,
 ): NavTab[] {
   const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: t.calendar }] : [];
   const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : [];
@@ -69,7 +74,7 @@ function tabsForHat(
       { href: "/dashboard/analytics", label: t.myAnalytics },
       { href: "/dashboard/children", label: t.myChildren },
       ...diary,
-      { href: "/dashboard/test-papers", label: t.testPapers },
+      ...(testPapersOn ? [{ href: "/dashboard/test-papers", label: t.testPapers }] : []),
       ...calendar,
     ];
   const tabs: NavTab[] = [];
@@ -98,6 +103,7 @@ function tabsFor(
   role: string | null,
   hasScope: boolean,
   hasChildren: boolean,
+  testPapersOn: boolean,
   analyticsOn: boolean,
   calendarOn: boolean,
   timetableOn: boolean,
@@ -147,7 +153,8 @@ function tabsFor(
     tabs.push({ href: "/dashboard/school/diary", label: t.schoolDiary });
   if (hasChildren) {
     tabs.push({ href: "/dashboard/children", label: t.myChildren });
-    tabs.push({ href: "/dashboard/test-papers", label: t.testPapers });
+    // School-provisioned parents only — see tabsForHat's note.
+    if (testPapersOn) tabs.push({ href: "/dashboard/test-papers", label: t.testPapers });
   }
   return tabs;
 }
@@ -185,6 +192,7 @@ export default async function AppHeader() {
   let schoolName = "";
   let hasScope = false;
   let hasChildren = false;
+  let hasSchoolParentLinks = false;
   let analyticsOn = false;
   let calendarOn = false;
   let timetableOn = false;
@@ -249,9 +257,11 @@ export default async function AppHeader() {
     if (parentPortalEnabled() && role && role !== "student") {
       // Any adult with links (a parent, or a teacher who is also a parent):
       // pl_parent_read returns only the viewer's own links. Best-effort — table
-      // missing (0018 not applied) just means no tab.
-      const { data: pl } = await supabase.from("parent_links").select("id").limit(1);
+      // missing (0018 not applied) just means no tab. `source` decides the
+      // Test Papers tab: 'school' = the school provisioned this portal.
+      const { data: pl } = await supabase.from("parent_links").select("source").limit(20);
       hasChildren = (pl?.length ?? 0) > 0;
+      hasSchoolParentLinks = ((pl ?? []) as { source: string | null }[]).some((l) => l.source === "school");
     }
   }
 
@@ -336,8 +346,8 @@ export default async function AppHeader() {
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const tabs = activeHat
-    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn)
-    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title);
+    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks)
+    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title);
   // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
   // it is lower-cased — a no-op in the scripts that have no case at all.
   const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);

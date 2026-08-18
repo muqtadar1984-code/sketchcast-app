@@ -50,11 +50,21 @@ export default async function TestPapersPage() {
   if (hatAway) redirect(hatAway);
 
   // Children for the assign dropdown (own links only).
-  type LinkRow = { child_id: string; profiles: { full_name: string | null; username: string | null } | null };
+  type LinkRow = { child_id: string; source: string | null; profiles: { full_name: string | null; username: string | null } | null };
   const { data: linksRaw } = await supabase
     .from("parent_links")
-    .select("child_id, profiles:child_id(full_name, username)");
-  const childrenList = ((linksRaw ?? []) as unknown as LinkRow[]).map((l) => ({
+    .select("child_id, source, profiles:child_id(full_name, username)");
+  const links = (linksRaw ?? []) as unknown as LinkRow[];
+
+  // This paper-first view exists for SCHOOL-provisioned parent portals only
+  // (a parent_links row with source='school' — the school created the login,
+  // typically reached via the school's own portal URL). Consumer parents —
+  // Home Basic and homeschool alike — author from the Library, which now
+  // carries per-child assignment too (founder, 2026-08-18). The header hides
+  // the tab under the same rule; this covers bookmarks and typed URLs.
+  if (!links.some((l) => l.source === "school")) redirect("/dashboard");
+
+  const childrenList = links.map((l) => ({
     id: l.child_id,
     name: l.profiles?.full_name || l.profiles?.username || "Child",
   }));
