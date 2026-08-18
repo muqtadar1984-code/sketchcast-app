@@ -32,6 +32,10 @@ function job(generation_id: string | null, cost?: number): FinJobRow {
   return { generation_id, usage: cost === undefined ? null : { cost_usd: cost } };
 }
 
+// (grossEstimateUsd and friends are imported lazily below to keep the existing
+// import block untouched by the 2026-08-18 additions.)
+import { PLAN_KITS_PER_MONTH, SCHOOL_CURRICULUM_KITS_PER_YEAR, grossEstimateUsd } from "../financials";
+
 describe("kitKey / kit grouping", () => {
   it("groups generations of the same (book, chapter, part) into one kit", () => {
     const a = gen("g1", { params: { part: 1 } });
@@ -230,6 +234,27 @@ describe("conversionScenario", () => {
 
   it("handles zero teachers", () => {
     expect(conversionScenario(0, 0.5)).toEqual({ paying: 0, annualUsd: 0 });
+  });
+});
+
+describe("gross estimates (2026-08-18: revenue minus measured serving cost)", () => {
+  it("pins the kit allowances the cost side assumes (0086 caps ÷ 6)", () => {
+    expect(PLAN_KITS_PER_MONTH).toEqual({ teacher_pro: 4, teacher_pro_plus: 12, family: 2, homeschool: 8 });
+  });
+
+  it("pins the flat school cost basis (~940 chapter kits per school per year)", () => {
+    expect(SCHOOL_CURRICULUM_KITS_PER_YEAR).toBe(940);
+  });
+
+  it("computes revenue minus kits × measured cost, and can go negative", () => {
+    // A Pro subscriber: $288/yr revenue, 48 kits/yr at $2.11 = $101.28 cost.
+    expect(grossEstimateUsd(288, 48, 2.11)).toBeCloseTo(288 - 101.28, 6);
+    // Band A at a high kit cost is a loss — the estimate must SHOW that.
+    expect(grossEstimateUsd(3000, 940, 4)).toBe(3000 - 3760);
+  });
+
+  it("returns null (renders as —) while no kit cost has been measured", () => {
+    expect(grossEstimateUsd(1000, 48, null)).toBeNull();
   });
 });
 

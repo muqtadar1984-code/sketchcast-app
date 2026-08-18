@@ -13,6 +13,9 @@ import {
   bandForStudents,
   SCHOOL_BANDS,
   PLAN_PRICES_USD_MONTHLY,
+  PLAN_KITS_PER_MONTH,
+  SCHOOL_CURRICULUM_KITS_PER_YEAR,
+  grossEstimateUsd,
   MYR_PER_USD,
   type CsvSection,
   type EntitlementRow,
@@ -42,10 +45,15 @@ const TABLE3_B2C_FOOTER =
   "Prices: Teacher Pro $24 · Teacher Pro+ $49 · Home Basic $9.99 · Homeschool $34 per month; annual = 12×. " +
   "Teachers = active non-demo teacher accounts; parents = non-demo parent accounts (home educators included). " +
   "Each column assumes that share of the row's base converts to that plan — rows are ALTERNATIVE scenarios, " +
-  "never additive. Estimates, not forecasts.";
+  "never additive. Gross = revenue minus AI serving cost at the measured lifetime avg kit cost (Table 1), " +
+  "with every subscriber using their FULL kit allowance (Pro 4 · Pro+ 12 · Home Basic 2 · Homeschool 8 kits/mo) " +
+  "— the conservative bound. Estimates, not forecasts.";
 const TABLE3_B2B_FOOTER =
   "Rate card: Band A ≤350 students $3,000 · Band B 351–700 $5,000 · Band C 701–1,200 $7,000 " +
   "per school per year; schools above 1,200 are priced individually (shown at Band C). " +
+  "Gross = revenue minus AI serving cost at the measured lifetime avg kit cost × ~940 chapter kits " +
+  "per school per year (full-curriculum coverage — content cost is FLAT in enrolment, which is why " +
+  "the bigger bands carry the margin). " +
   "Assumes the entered number of new schools in year 1 — change it below or via ?pipeline=N " +
   "(the link carries the scenario). Estimates, not forecasts.";
 
@@ -192,16 +200,23 @@ export default async function ConsoleFinancialsPage({
   const teachers = profiles.filter((p) => p.role === "teacher").length;
   const parents = profiles.filter((p) => p.role === "parent").length;
   const B2C_RATES = [0.1, 0.25, 0.5];
+  // Gross uses the MEASURED lifetime avg kit cost (the "actual" from Table 1)
+  // at each plan's full monthly kit allowance — see PLAN_KITS_PER_MONTH.
+  const avgKitLife = statsLife.avgPerKitUsd;
   const b2cRows = [
-    { plan: "Teacher Pro", monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_monthly, base: teachers, baseLabel: "teachers" },
-    { plan: "Teacher Pro+", monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_plus_monthly, base: teachers, baseLabel: "teachers" },
-    { plan: "Home Basic", monthly: PLAN_PRICES_USD_MONTHLY.family_monthly, base: parents, baseLabel: "parents" },
-    { plan: "Homeschool", monthly: PLAN_PRICES_USD_MONTHLY.homeschool_monthly, base: parents, baseLabel: "parents" },
+    { plan: "Teacher Pro", monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_monthly, base: teachers, baseLabel: "teachers", kitsMo: PLAN_KITS_PER_MONTH.teacher_pro },
+    { plan: "Teacher Pro+", monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_plus_monthly, base: teachers, baseLabel: "teachers", kitsMo: PLAN_KITS_PER_MONTH.teacher_pro_plus },
+    { plan: "Home Basic", monthly: PLAN_PRICES_USD_MONTHLY.family_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_PER_MONTH.family },
+    { plan: "Homeschool", monthly: PLAN_PRICES_USD_MONTHLY.homeschool_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_PER_MONTH.homeschool },
   ].map((p) => ({
     plan: p.plan,
     monthly: `$${p.monthly.toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
     base: `${p.base} ${p.baseLabel}`,
-    cells: B2C_RATES.map((rate) => fmtUsd(conversionScenario(p.base, rate, p.monthly).annualUsd)),
+    cells: B2C_RATES.map((rate) => {
+      const s = conversionScenario(p.base, rate, p.monthly);
+      const gross = grossEstimateUsd(s.annualUsd, s.paying * p.kitsMo * 12, avgKitLife);
+      return { revenue: fmtUsd(s.annualUsd), gross: gross === null ? "—" : fmtUsd(gross) };
+    }),
   }));
 
   // B2B: the assumed new-schools count priced at each band of the rate card
@@ -215,6 +230,13 @@ export default async function ConsoleFinancialsPage({
     const students = profiles.filter((p) => p.school_id === schoolId && p.role === "student").length;
     liveUsd += bandForStudents(students)?.usdPerYear ?? 0;
   }
+  // School gross: content cost is FLAT in enrolment (the 2026-08 cost-basis
+  // memo) — every school costs full-curriculum coverage at the measured kit
+  // cost, whatever its band. The flat cost is why bigger bands carry margin.
+  const schoolGross = (revenueUsd: number, schools: number): string => {
+    const g = grossEstimateUsd(revenueUsd, schools * SCHOOL_CURRICULUM_KITS_PER_YEAR, avgKitLife);
+    return g === null ? "—" : fmtUsd(g);
+  };
   const b2bRows = [
     ...SCHOOL_BANDS.map((b) => ({
       band: `Band ${b.name}`,
@@ -222,6 +244,7 @@ export default async function ConsoleFinancialsPage({
       rate: `$${b.usdPerYear.toLocaleString("en-US")}`,
       schools: String(pipeline),
       value: fmtUsd(pipeline * b.usdPerYear),
+      gross: schoolGross(pipeline * b.usdPerYear, pipeline),
     })),
     {
       band: "Live",
@@ -229,6 +252,7 @@ export default async function ConsoleFinancialsPage({
       rate: "—",
       schools: String(schoolsWithReal.size),
       value: fmtUsd(liveUsd),
+      gross: schoolGross(liveUsd, schoolsWithReal.size),
     },
   ];
 
@@ -260,14 +284,14 @@ export default async function ConsoleFinancialsPage({
     },
     {
       title: "Estimated revenue — B2C (annual)",
-      header: ["Plan", "Per month", "Base", "10% conv", "25% conv", "50% conv"],
-      rows: b2cRows.map((r) => [r.plan, r.monthly, r.base, ...r.cells]),
+      header: ["Plan", "Per month", "Base", "10% conv", "10% gross", "25% conv", "25% gross", "50% conv", "50% gross"],
+      rows: b2cRows.map((r) => [r.plan, r.monthly, r.base, ...r.cells.flatMap((c) => [c.revenue, c.gross])]),
       footer: TABLE3_B2C_FOOTER,
     },
     {
       title: "Estimated revenue — B2B schools (annual)",
-      header: ["Band", "Enrolment", "Per school/yr", "Schools", "Annual USD"],
-      rows: b2bRows.map((r) => [r.band, r.enrolment, r.rate, r.schools, r.value]),
+      header: ["Band", "Enrolment", "Per school/yr", "Schools", "Annual USD", "Gross (est.)"],
+      rows: b2bRows.map((r) => [r.band, r.enrolment, r.rate, r.schools, r.value, r.gross]),
       footer: TABLE3_B2B_FOOTER,
     },
   ];
@@ -385,7 +409,10 @@ export default async function ConsoleFinancialsPage({
               <span className={`${td} tabular text-end`}>{r.monthly}</span>
               <span className={`${td} tabular text-end`}>{r.base}</span>
               {r.cells.map((c, i) => (
-                <span key={i} className={`${td} tabular text-end`}>{c}</span>
+                <span key={i} className={`${td} tabular text-end`}>
+                  {c.revenue}
+                  <span className="block text-[11px] text-[#0C8175]">gross {c.gross}</span>
+                </span>
               ))}
             </div>
           ))}
@@ -397,20 +424,22 @@ export default async function ConsoleFinancialsPage({
       <section className="mb-10">
         <h2 className="text-xl mb-3">Estimated revenue — B2B schools (annual)</h2>
         <div className="card divide-y divide-[#EEF0EC] overflow-x-auto">
-          <div className="grid grid-cols-[.9fr_1.4fr_1.1fr_.8fr_1.2fr] gap-2 min-w-[560px]">
+          <div className="grid grid-cols-[.8fr_1.3fr_1fr_.7fr_1.1fr_1.1fr] gap-2 min-w-[640px]">
             <span className={th}>Band</span>
             <span className={th}>Enrolment</span>
             <span className={`${th} text-end`}>Per school/yr</span>
             <span className={`${th} text-end`}>Schools</span>
             <span className={`${th} text-end`}>Annual USD</span>
+            <span className={`${th} text-end`}>Gross (est.)</span>
           </div>
           {b2bRows.map((r) => (
-            <div key={r.band} className="grid grid-cols-[.9fr_1.4fr_1.1fr_.8fr_1.2fr] gap-2 min-w-[560px]">
+            <div key={r.band} className="grid grid-cols-[.8fr_1.3fr_1fr_.7fr_1.1fr_1.1fr] gap-2 min-w-[640px]">
               <span className={`${td} font-medium`}>{r.band}</span>
               <span className={td}>{r.enrolment}</span>
               <span className={`${td} tabular text-end`}>{r.rate}</span>
               <span className={`${td} tabular text-end`}>{r.schools}</span>
               <span className={`${td} tabular text-end`}>{r.value}</span>
+              <span className={`${td} tabular text-end text-[#0C8175]`}>{r.gross}</span>
             </div>
           ))}
         </div>

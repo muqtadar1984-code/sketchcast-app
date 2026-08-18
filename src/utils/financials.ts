@@ -251,6 +251,35 @@ export function bandForStudents(students: number): SchoolBand | null {
   return SCHOOL_BANDS[SCHOOL_BANDS.length - 1];
 }
 
+/** Monthly kit allowance per consumer plan (the 0086 generation caps ÷ 6 —
+ * a kit is six generations). The estimate tables cost a subscriber at FULL
+ * allowance: the conservative bound, and the steady state too (rollover only
+ * shifts kits between adjacent months; the two-month total never exceeds
+ * 2× cap, so average use converges on the cap). */
+export const PLAN_KITS_PER_MONTH = {
+  teacher_pro: 4,
+  teacher_pro_plus: 12,
+  family: 2,
+  homeschool: 8,
+} as const;
+
+/** The documented school cost basis (2026-08 memo): content cost is FLAT in
+ * enrolment — a school consumes full-curriculum coverage, ~940 chapter kits a
+ * year (the CBSE 1–12 count the rate card was built against), whatever its
+ * size. That flatness is exactly why the bigger bands carry the margin. */
+export const SCHOOL_CURRICULUM_KITS_PER_YEAR = 940;
+
+/** Annual gross estimate: revenue minus serving cost at the measured average
+ * kit cost. Null when no kit cost has been measured yet — "—" beats a fake
+ * zero-cost margin. */
+export function grossEstimateUsd(
+  revenueAnnualUsd: number,
+  kitsPerYear: number,
+  avgKitUsd: number | null,
+): number | null {
+  return avgKitUsd === null ? null : revenueAnnualUsd - kitsPerYear * avgKitUsd;
+}
+
 export type ConversionScenario = { paying: number; annualUsd: number };
 
 /** N teachers × rate, rounded to whole teachers so the printed maths is the
