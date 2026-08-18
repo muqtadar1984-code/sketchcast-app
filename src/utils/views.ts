@@ -6,7 +6,10 @@ import { createClient } from "@/utils/supabase/client";
 // or doc). One row per (teacher, generation, kind) — duplicates are ignored —
 // feeding the beta "you've seen everything → give feedback" trigger.
 // Fire-and-forget: never blocks or breaks the click it decorates.
-export function recordArtifactView(generationId: string, kind: "video_mp4" | "deck_pptx" | "docx"): void {
+export function recordArtifactView(
+  generationId: string,
+  kind: "video_mp4" | "deck_pptx" | "docx" | "answer_key_docx",
+): void {
   const supabase = createClient();
   void supabase.auth.getUser().then(({ data: { user } }) => {
     if (!user) return;

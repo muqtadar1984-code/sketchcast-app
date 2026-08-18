@@ -86,6 +86,8 @@ export type RevisionPaper = {
   progress: number;
   stage?: import("@/utils/job-stage").JobStage;
   doc: string | null;
+  /** Separate answer key (post-split papers) — adult-only, labeled like the exams'. */
+  answerKey: string | null;
   artifactPaths: string[];
 };
 export type ExamPaper = {
@@ -146,6 +148,11 @@ function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }
             ⬇ {t.download}
           </a>
         )}
+        {lesson.answerKey && (
+          <a href={lesson.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+            ⬇ {t.book.answerKey}
+          </a>
+        )}
       </span>
     );
   }
@@ -165,6 +172,14 @@ function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }
       {lesson.doc && (
         <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
           ⬇ {t.download}
+        </a>
+      )}
+      {/* The split answer-key / teacher-notes document (2026-08-18): this
+          component only ever renders on adult surfaces, so it is always
+          offered, labeled with the same key as the exams section's. */}
+      {lesson.answerKey && (
+        <a href={lesson.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+          ⬇ {t.book.answerKey}
         </a>
       )}
     </>
@@ -443,6 +458,11 @@ export default function BookTable({
                               {p.doc && (
                                 <a href={p.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
                                   ⬇ {t.download}
+                                </a>
+                              )}
+                              {p.answerKey && (
+                                <a href={p.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                  ⬇ {t.book.answerKey}
                                 </a>
                               )}
                               <AssignModal label={t.assign} generationIds={[p.id]} classes={classes} childTargets={childTargets} t={t} />

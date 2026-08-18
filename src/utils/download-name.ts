@@ -28,7 +28,17 @@ const DOC_NAME: Record<string, string> = {
  * break in-tab playback.
  */
 export function docDownloadName(genKind: string | null | undefined, artifactKind: string): string | undefined {
-  if (artifactKind === "answer_key_docx") return "Answer Key.docx";
+  if (artifactKind === "answer_key_docx") {
+    // Since the student/teacher document split (2026-08-18) every document
+    // kind can carry a key, so the key is prefixed with its paper's name —
+    // a chapter's "Worksheet Answer Key.docx" and "Test Paper Answer
+    // Key.docx" must not collide in the Downloads folder. The cumulative
+    // exam (0062) keeps the plain "Answer Key.docx" it has shipped with
+    // since birth, and an unknown kind falls back to it too — a key should
+    // never leave named after its storage basename.
+    const name = genKind ? DOC_NAME[genKind] : undefined;
+    return name && genKind !== "exam" ? `${name} Answer Key.docx` : "Answer Key.docx";
+  }
   if (artifactKind !== "docx") return undefined;
   const name = genKind ? DOC_NAME[genKind] : undefined;
   return name ? `${name}.docx` : undefined;

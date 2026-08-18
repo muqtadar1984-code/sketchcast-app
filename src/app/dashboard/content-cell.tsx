@@ -25,6 +25,12 @@ export type CellLesson = {
   /** One deck per video part, same order. */
   decks?: string[];
   doc: string | null;
+  /** The separate answer-key / teacher-notes document (artifact kind
+   *  'answer_key_docx'). Non-null once the student/teacher document split
+   *  (2026-08-18) has run for this generation — legacy combined documents
+   *  have none. Adult surfaces offer it beside the doc, clearly labeled;
+   *  students never receive it (see the student gate in dashboard/page.tsx). */
+  answerKey?: string | null;
   params: Record<string, unknown> | null;
   artifactPaths: string[];
 };
@@ -262,11 +268,21 @@ export default function ContentCell({
           </>
         )
       ) : (
-        lesson.doc && (
-          <a href={lesson.doc} onClick={() => trackViews && recordArtifactView(lesson.id, "docx")} className={linkCls}>
-            <span className="text-[#1FB8A6]"><DownloadIcon /></span>{label}
-          </a>
-        )
+        <>
+          {lesson.doc && (
+            <a href={lesson.doc} onClick={() => trackViews && recordArtifactView(lesson.id, "docx")} className={linkCls}>
+              <span className="text-[#1FB8A6]"><DownloadIcon /></span>{label}
+            </a>
+          )}
+          {/* The split key/teacher-notes document (2026-08-18) — adult-only
+              surface, so it is always offered when it exists, labeled with the
+              same dictionary key the exams section uses. */}
+          {lesson.answerKey && (
+            <a href={lesson.answerKey} onClick={() => trackViews && recordArtifactView(lesson.id, "answer_key_docx")} className={linkCls}>
+              <span className="text-[#1FB8A6]"><DownloadIcon /></span>{t.book.answerKey}
+            </a>
+          )}
+        </>
       )}
       {isPres && (
         <AskCoachButton generationId={lesson.id} chapterLabel={fmt(t.chapter, { n: chapterNum + 1 })} className="font-medium text-[#0C8175] hover:underline" />

@@ -113,13 +113,15 @@ export default async function TestPapersPage() {
   );
 
   // Owner can sign their own artifact paths directly (storage RLS). This page
-  // only ever signs exam-paper docx paths, so the download name is constant —
-  // without it the browser saves the storage basename (exam_paper.docx).
-  const sign = async (path: string | null) => {
+  // signs exam-paper documents only — the paper's docx and, once the
+  // student/teacher document split (2026-08-18) has run, its separate
+  // answer_key_docx — so the download name comes from the artifact kind alone.
+  // Without it the browser saves the storage basename (exam_paper.docx).
+  const sign = async (path: string | null, artifactKind: "docx" | "answer_key_docx" = "docx") => {
     if (!path) return null;
     const { data } = await supabase.storage
       .from("artifacts")
-      .createSignedUrl(path, 3600, { download: docDownloadName("exam_paper", "docx") });
+      .createSignedUrl(path, 3600, { download: docDownloadName("exam_paper", artifactKind) });
     return data?.signedUrl ?? null;
   };
 
@@ -155,18 +157,23 @@ export default async function TestPapersPage() {
     bookTitle: string;
     bookStatus: string;
     health: BookHealth | null;
-    chapters: { num: number; title: string; gen: Gen | undefined; doc: string | null; hasLesson: boolean }[];
+    chapters: { num: number; title: string; gen: Gen | undefined; doc: string | null; answerKey: string | null; hasLesson: boolean }[];
   }[] = [];
   for (const b of books) {
     const chapters = [];
     for (const c of b.chapters ?? []) {
       const gen = paperFor.get(`${b.id}|${c.num}`);
       const docPath = gen?.artifacts?.find((a) => a.kind === "docx")?.storage_path ?? null;
+      // The split answer key (2026-08-18): a parent surface is an adult
+      // surface, so the key is offered right beside the paper. Legacy papers
+      // (answers embedded in the docx) simply have no such artifact.
+      const keyPath = gen?.artifacts?.find((a) => a.kind === "answer_key_docx")?.storage_path ?? null;
       chapters.push({
         num: c.num,
         title: c.title,
         gen,
         doc: await sign(docPath),
+        answerKey: await sign(keyPath, "answer_key_docx"),
         hasLesson: lessonExists.has(`${b.id}|${c.num}`),
       });
     }
@@ -238,6 +245,11 @@ export default async function TestPapersPage() {
                           {c.doc && (
                             <a href={c.doc} className="btn-ghost h-8 px-3 text-xs">
                               Download
+                            </a>
+                          )}
+                          {c.answerKey && (
+                            <a href={c.answerKey} className="btn-ghost h-8 px-3 text-xs">
+                              {tLib.book.answerKey}
                             </a>
                           )}
                           <AssignChildButton generationId={c.gen.id} childrenList={childrenList} />

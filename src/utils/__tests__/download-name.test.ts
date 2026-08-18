@@ -21,8 +21,24 @@ describe("docDownloadName", () => {
     expect(docDownloadName("exam", "docx")).toBe("Exam.docx");
   });
 
-  it("names the answer key regardless of generation kind", () => {
+  it("keeps the cumulative exam's key at its original plain name (0062)", () => {
     expect(docDownloadName("exam", "answer_key_docx")).toBe("Answer Key.docx");
+  });
+
+  it("prefixes split answer keys with their paper's name so two keys from one chapter don't collide", () => {
+    // Student/teacher document split (2026-08-18): exam_paper / worksheet /
+    // activity / case_study each ship a student-clean docx PLUS a separate
+    // answer_key_docx sibling.
+    expect(docDownloadName("exam_paper", "answer_key_docx")).toBe("Test Paper Answer Key.docx");
+    expect(docDownloadName("worksheet", "answer_key_docx")).toBe("Worksheet Answer Key.docx");
+    expect(docDownloadName("activity", "answer_key_docx")).toBe("Activities Answer Key.docx");
+    expect(docDownloadName("case_study", "answer_key_docx")).toBe("Case Study Answer Key.docx");
+  });
+
+  it("falls back to the plain key name on an unknown or absent kind — never the storage basename", () => {
+    expect(docDownloadName(null, "answer_key_docx")).toBe("Answer Key.docx");
+    expect(docDownloadName(undefined, "answer_key_docx")).toBe("Answer Key.docx");
+    expect(docDownloadName("something_new", "answer_key_docx")).toBe("Answer Key.docx");
   });
 
   it("leaves non-document artifacts untouched — a disposition would break in-tab playback", () => {

@@ -217,13 +217,14 @@ function KitPreview() {
 
         <div className="card overflow-hidden bg-[#EEF3F1]">
           <div className="px-5 py-3">
-            {/* Fully generated — every artifact + Assign on one line. */}
+            {/* Fully generated — every artifact + Assign on one line. Post-split
+                (2026-08-18) documents also carry the separate answer key. */}
             <Row label="Part 1 (done)">
               <ContentCell {...COMMON} kind="presentation" label="Lesson" lesson={pres()} />
               <ContentCell {...COMMON} kind="lesson_plan" label="Plan" lesson={doc()} />
               <ContentCell {...COMMON} kind="activity" label="Activities" lesson={doc()} />
-              <ContentCell {...COMMON} kind="worksheet" label="Worksheet" lesson={doc()} />
-              <ContentCell {...COMMON} kind="exam_paper" label="Test paper" lesson={doc()} />
+              <ContentCell {...COMMON} kind="worksheet" label="Worksheet" lesson={doc({ answerKey: "#" })} />
+              <ContentCell {...COMMON} kind="exam_paper" label="Test paper" lesson={doc({ answerKey: "#" })} />
               <ContentCell {...COMMON} kind="case_study" label="Case study" lesson={doc()} />
             </Row>
 

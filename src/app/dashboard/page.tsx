@@ -382,18 +382,25 @@ export default async function DashboardPage() {
         videos,
         deck: decks[0] ?? null,
         decks,
-        // Answer keys stay with the adult (founder, 2026-08-18): every
-        // assignable document kind EMBEDS its answers in the docx itself —
-        // exam_paper carries its key section, worksheet/activity their answer
-        // panels, case_study its teacher-guidance page. The one exception is
-        // the cumulative exam (0062), whose docx is the key-LESS paper (the
-        // key is a separate answer_key_docx artifact, never signed here). So
-        // students get a document link ONLY for 'exam'; everything else they
-        // work through the interactive quiz or on paper the teacher/parent
-        // prints from their own Library. Storage RLS backs this up: artifact
-        // files live under the ADULT's folder, so a student session cannot
-        // sign these paths itself — this line is the only door.
-        doc: g.kind === "exam" ? await sign(path("docx"), docDownloadName(g.kind, "docx")) : null,
+        // Answer keys stay with the adult (founder, 2026-08-18). Whether a
+        // generation's 'docx' is safe to hand a student is decided by ONE
+        // proof: the presence of an 'answer_key_docx' SIBLING artifact. The
+        // worker now splits every document kind (exam_paper / worksheet /
+        // activity / case_study) into a student-clean 'docx' plus that
+        // separate key/teacher-notes sibling — so a sibling means the split
+        // ran and the 'docx' carries no answers. LEGACY generations kept
+        // their combined document under 'docx' with NO sibling, so they get
+        // no student link, ever. The one kind that needs no proof is the
+        // cumulative exam (0062, kind 'exam'): its docx has been the
+        // key-LESS paper since birth. The answer_key_docx itself is NEVER
+        // signed for a student under any code path. Storage RLS backs this
+        // up: artifact files live under the ADULT's folder, so a student
+        // session cannot sign these paths itself — this line is the only
+        // door.
+        doc:
+          g.kind === "exam" || arts.some((a) => a.kind === "answer_key_docx")
+            ? await sign(path("docx"), docDownloadName(g.kind, "docx"))
+            : null,
         quiz: await sign(path("questions_json")),
         status: (prog?.status as StudentItemData["status"]) ?? null,
         revisionCount: prog?.revisionCount ?? 0,
@@ -861,6 +868,9 @@ export default async function DashboardPage() {
             progress: l.progress,
             stage: l.stage,
             doc: l.doc,
+            // Post-split papers carry their key as a separate document —
+            // offered here (an adult surface) exactly like the exams section.
+            answerKey: l.answerKey,
             artifactPaths: l.artifactPaths,
           };
         }),
