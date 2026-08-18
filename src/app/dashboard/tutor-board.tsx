@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { SceneGraph, renderSvg, starterLibrary, type Library, type SceneGraphSnapshot, type BoardEvent } from "@/ere";
+import { speakableText } from "@/utils/speakable";
 
 // The persistent teaching board (ERE / TAL). A PURE renderer of the server's
 // authoritative board: each turn the server applies TAL and returns the new
@@ -54,7 +55,8 @@ const TutorBoard = forwardRef<TutorBoardHandle, { generationId: string; readAlou
       if (!readAloud || !text || reducedMotion()) return;
       const synth = window.speechSynthesis;
       if (!synth) return;
-      const u = new SpeechSynthesisUtterance(text);
+      // Never read markdown markers aloud ("asterisk asterisk", 2026-08-18).
+      const u = new SpeechSynthesisUtterance(speakableText(text));
       u.rate = 1;
       u.pitch = 1.05;
       synth.cancel();

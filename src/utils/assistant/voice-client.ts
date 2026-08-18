@@ -3,6 +3,8 @@
 // later without touching the panel. Read-aloud starts AS the answer streams
 // (sentence by sentence), and is interruptible.
 
+import { speakableText } from "@/utils/speakable";
+
 // ── Read-aloud (TTS) — streaming speaker ─────────────────────────────────────
 
 export class StreamSpeaker {
@@ -32,7 +34,12 @@ export class StreamSpeaker {
   }
 
   private enqueue(sentence: string): void {
-    this.queue.push(sentence);
+    // Models answer in markdown despite their prompts — sanitize at the
+    // speech boundary so the voice never says "asterisk" (2026-08-18).
+    // A sentence that was ONLY markup (e.g. a "---" rule) speaks nothing.
+    const clean = speakableText(sentence);
+    if (!clean) return;
+    this.queue.push(clean);
     if (!this.speaking) this.next();
   }
 

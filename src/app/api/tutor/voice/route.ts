@@ -6,6 +6,7 @@ import { elevenLabsEnabled } from "@/utils/narration";
 import { resolveVoice } from "@/utils/tutor/models";
 import { resolveTutorContext, tutorEntitled, loadOwnCoachMessage } from "@/utils/tutor/service";
 import { synthesizeVoice } from "@/utils/tutor/voice";
+import { speakableText } from "@/utils/speakable";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,9 @@ export async function POST(request: Request) {
   if (!text) return NextResponse.json({ error: "Nothing to speak." }, { status: 404 });
 
   const voice = resolveVoice(body.voiceId, { premiumAllowed: elevenLabsEnabled() });
-  const result = await synthesizeVoice(admin, user.id, voice, text.slice(0, 2000));
+  // Hosted TTS reads markdown markers aloud just like the browser voice does
+  // ("asterisk asterisk", 2026-08-18) — sanitize before synthesis. The cache
+  // key derives from the text, so old asterisk-clips fall out naturally.
+  const result = await synthesizeVoice(admin, user.id, voice, speakableText(text).slice(0, 2000));
   return NextResponse.json(result);
 }

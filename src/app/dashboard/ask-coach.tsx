@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import CoachRecap from "./coach-recap";
 import TutorBoard, { type TutorBoardHandle } from "./tutor-board";
+import { speakableText } from "@/utils/speakable";
 
 type Msg = { role: "student" | "coach"; content: string; videoUrl?: string };
 
@@ -116,7 +117,8 @@ export default function AskCoach({
   function speakBrowser(text: string) {
     const synth = window.speechSynthesis;
     if (!synth) return;
-    const u = new SpeechSynthesisUtterance(text);
+    // Never read markdown markers aloud ("asterisk asterisk", 2026-08-18).
+    const u = new SpeechSynthesisUtterance(speakableText(text));
     u.rate = 1;
     u.pitch = 1.05; // a touch warmer
     synth.cancel();
