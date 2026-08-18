@@ -3,14 +3,16 @@
 // quota — see migration 0086). This module is the single source of truth the
 // app AND the webhook read:
 //
-//   * checkoutUrl — the LS hosted-checkout link for the pack. The LS products
-//     DO NOT EXIST yet, so every URL ships null; a null URL means the pack's
-//     buy button simply does not render (the feature ships dark). When the
-//     founder creates the products, set the pack's env var
-//     (LEMONSQUEEZY_CHECKOUT_PACK_6/18/36 — swaps test/live without a code
-//     change, same pattern as LEMONSQUEEZY_VARIANT_*) or paste the "Share"
-//     checkout URL into the literal here; resolvedPacks() prefers env. The
-//     dashboard UI consumes this catalogue through src/utils/credit-packs.ts.
+//   * checkoutUrl — the LS hosted-checkout link for the pack. LIVE since
+//     2026-08-18: the founder created ONE product ("SketchCast Credits",
+//     three variants), so all three packs carry its product-level Share link —
+//     checkout opens with the variant picker and the buyer confirms the pack
+//     there; crediting is by the variant actually bought, so a mis-click can
+//     never mis-credit. The env vars (LEMONSQUEEZY_CHECKOUT_PACK_6/18/36)
+//     still override the literal per pack — the upgrade path to per-variant
+//     deep links ("?enabled=<variant id>") without a code change. A null URL
+//     would hide that pack's buy button (the original ships-dark mechanism).
+//     The dashboard UI consumes this catalogue through src/utils/credit-packs.ts.
 //   * productName — the canonical name for the pack in Lemon Squeezy. The
 //     webhook identifies a pack order by the product-name prefix
 //     "SketchCast Credits" plus a trailing "(N)" credit count, which may sit
@@ -40,7 +42,7 @@ export type CreditPack = {
   productName: string;
   /** Env var that may carry the LS hosted-checkout URL (test/live swap). */
   urlEnv: string;
-  /** Literal LS hosted-checkout URL fallback; null until the product exists. */
+  /** Literal LS hosted-checkout URL (env var overrides); null hides the pack. */
   checkoutUrl: string | null;
 };
 
@@ -55,7 +57,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "1 kit",
     productName: "SketchCast Credits — 1 kit (6)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_6",
-    checkoutUrl: null,
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268",
   },
   {
     key: "pack_18",
@@ -64,7 +66,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "3 kits",
     productName: "SketchCast Credits — 3 kits (18)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_18",
-    checkoutUrl: null,
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268",
   },
   {
     key: "pack_36",
@@ -73,7 +75,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "6 kits",
     productName: "SketchCast Credits — 6 kits (36)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_36",
-    checkoutUrl: null,
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268",
   },
 ] as const;
 

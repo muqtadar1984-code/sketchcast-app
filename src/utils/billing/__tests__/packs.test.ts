@@ -4,7 +4,8 @@
  *   * product-name matching: exact names work, drift in dashes/spacing is
  *     tolerated, but the prefix and the "(N)" credit count are load-bearing
  *   * unknown names NEVER guess (a mismatched sale must alert, not miscount)
- *   * packs ship dark: no checkout URL configured → not purchasable
+ *   * packs are LIVE: all three carry the SketchCast Credits checkout link
+ *     (one product, three variants — LS product created 2026-08-18)
  * Run: npx vitest run
  */
 
@@ -28,9 +29,10 @@ describe("credit pack catalogue", () => {
     ]);
   });
 
-  it("ships dark: no checkout URLs yet, so nothing is purchasable", () => {
-    expect(CREDIT_PACKS.every((p) => p.checkoutUrl === null)).toBe(true);
-    expect(purchasablePacks()).toEqual([]);
+  it("is LIVE: every pack carries the SketchCast Credits checkout link, all purchasable", () => {
+    const LIVE = "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268";
+    expect(CREDIT_PACKS.every((p) => p.checkoutUrl === LIVE)).toBe(true);
+    expect(purchasablePacks().map((p) => p.key)).toEqual(["pack_6", "pack_18", "pack_36"]);
   });
 });
 

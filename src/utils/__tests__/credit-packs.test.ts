@@ -1,8 +1,8 @@
 /**
  * One-time credit packs (homeschool release). The load-bearing decisions:
  *  • the founder-approved catalogue — 6/$8 (1 kit), 18/$20 (3 kits),
- *    36/$36 (6 kits) — with checkout URLs from env, null while the LS
- *    products don't exist (the affordance ships dark);
+ *    36/$36 (6 kits) — LIVE via the SketchCast Credits product-level
+ *    checkout link (env vars still override, e.g. for per-variant links);
  *  • purchasablePacks — a null checkoutUrl must never render a button;
  *  • packsAllowedForTier — paid tiers only, NEVER trial/free/promo, and
  *    unknown tiers fail closed.
@@ -31,27 +31,28 @@ describe("creditPacks — the founder-approved catalogue", () => {
     ]);
   });
 
-  it("resolves checkout URLs from env — null (dark) when unset or blank", () => {
-    expect(creditPacks().every((p) => p.checkoutUrl === null)).toBe(true);
+  const LIVE = "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268";
+
+  it("carries the live SketchCast Credits checkout link; env overrides per pack, blank falls back", () => {
+    expect(creditPacks().every((p) => p.checkoutUrl === LIVE)).toBe(true);
     process.env.LEMONSQUEEZY_CHECKOUT_PACK_18 = "https://aetheltwin.lemonsqueezy.com/checkout/buy/abc";
-    process.env.LEMONSQUEEZY_CHECKOUT_PACK_36 = "   "; // blank ≠ configured
+    process.env.LEMONSQUEEZY_CHECKOUT_PACK_36 = "   "; // blank ≠ configured → literal stands
     const packs = creditPacks();
     expect(packs.find((p) => p.key === "pack_18")?.checkoutUrl).toBe(
       "https://aetheltwin.lemonsqueezy.com/checkout/buy/abc",
     );
-    expect(packs.find((p) => p.key === "pack_36")?.checkoutUrl).toBeNull();
+    expect(packs.find((p) => p.key === "pack_36")?.checkoutUrl).toBe(LIVE);
   });
 });
 
 describe("purchasablePacks — a button to nowhere must not render", () => {
-  it("is empty while no product exists (the ship-dark state)", () => {
-    expect(purchasablePacks(creditPacks())).toEqual([]);
+  it("sells all three packs in the live state", () => {
+    expect(purchasablePacks(creditPacks()).map((p) => p.key)).toEqual(["pack_6", "pack_18", "pack_36"]);
   });
 
-  it("keeps exactly the packs with a URL", () => {
-    process.env.LEMONSQUEEZY_CHECKOUT_PACK_6 = "https://example.com/6";
-    const vis = purchasablePacks(creditPacks());
-    expect(vis.map((p) => p.key)).toEqual(["pack_6"]);
+  it("drops any pack whose URL is null (the ships-dark mechanism still guards)", () => {
+    const packs = creditPacks().map((p) => (p.key === "pack_18" ? { ...p, checkoutUrl: null } : p));
+    expect(purchasablePacks(packs).map((p) => p.key)).toEqual(["pack_6", "pack_36"]);
   });
 });
 
