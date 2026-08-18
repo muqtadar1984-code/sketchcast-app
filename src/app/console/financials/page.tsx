@@ -35,7 +35,7 @@ const DAY = 86400000;
 const TABLE1_FOOTER =
   "Measured from jobs.usage (AI generation cost only — infra excluded). Averages use cost-tracked rows only — some early jobs predate tracking, so AI spend ÷ kit count differs slightly. Demo accounts excluded.";
 const TABLE2_FOOTER =
-  `Prices: Teacher Pro $24/mo, Teacher Pro+ $49/mo, Family $9.99/mo (annual plans at annual/12); ` +
+  `Prices: Teacher Pro $24/mo, Teacher Pro+ $49/mo, Home Basic (family_*) $9.99/mo, Homeschool $34/mo (annual plans at annual/12); ` +
   `school floor $3,000/yr → $250/mo. Stripe school payments (MYR) converted at RM${MYR_PER_USD.toFixed(2)}/USD. ` +
   `Update alongside pricing. Demo accounts excluded.`;
 const TABLE3_B2C_FOOTER =

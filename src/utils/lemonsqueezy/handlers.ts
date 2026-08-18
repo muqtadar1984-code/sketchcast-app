@@ -23,6 +23,7 @@
 // only a cross-checked fast-path.
 
 import { planKeyForVariant as defaultPlanKeyForVariant } from "@/utils/stripe/plans";
+import { packForProductName } from "@/utils/billing/packs";
 
 export type Db = {
   from(table: string): {
@@ -33,6 +34,9 @@ export type Db = {
     };
     upsert(row: Record<string, unknown>, opts?: { onConflict?: string }): PromiseLike<{ error: { message: string } | null }>;
     insert(row: Record<string, unknown>): PromiseLike<{ error: { code?: string; message: string } | null }>;
+    update(row: Record<string, unknown>): {
+      eq(col: string, v: unknown): PromiseLike<{ error: { message: string } | null }>;
+    };
   };
 };
 
@@ -41,6 +45,8 @@ type LsSubscriptionAttributes = {
   customer_id: number | string;
   variant_id?: number | string | null; // identifies WHICH product/cycle was bought
   product_id?: number | string | null;
+  product_name?: string | null; // fallback mapping for products whose variant env isn't set yet
+  variant_name?: string | null;
   user_email?: string | null; // buyer email — the only identity signal on a public-link purchase
   user_name?: string | null;
   order_id?: number | string | null; // to look up the applied discount (founding)
@@ -50,9 +56,27 @@ type LsSubscriptionAttributes = {
   urls?: { customer_portal?: string | null } | null;
 };
 
+// One-time purchase (credit packs). LS puts the bought product on
+// first_order_item; single-item checkouts (ours) never populate more.
+type LsOrderAttributes = {
+  customer_id: number | string;
+  user_email?: string | null;
+  status?: string | null; // paid | refunded | ...
+  refunded?: boolean | null;
+  total?: number | null; // USD minor units
+  currency?: string | null;
+  updated_at?: string | null;
+  first_order_item?: {
+    product_id?: number | string | null;
+    variant_id?: number | string | null;
+    product_name?: string | null;
+    variant_name?: string | null;
+  } | null;
+};
+
 export type LsEvent = {
   meta?: { event_name?: string; custom_data?: { user_id?: string; plan_key?: string } | null } | null;
-  data?: { type?: string; id?: string; attributes?: LsSubscriptionAttributes } | null;
+  data?: { type?: string; id?: string; attributes?: LsSubscriptionAttributes | LsOrderAttributes } | null;
 };
 
 export type HandleLsDeps = {
@@ -147,6 +171,21 @@ async function resolvePlanKey(
     }
     return fromVariant;
   }
+  // Homeschool by PRODUCT NAME: the product exists before its variant ids are
+  // wired into env (LEMONSQUEEZY_VARIANT_HOMESCHOOL_MONTHLY/_ANNUAL — the
+  // primary, most robust mapping the founder must still set). Until then the
+  // stable product name carries the sale: variant_name decides the cycle
+  // ("Annual"/"Yearly" → annual, anything else → monthly — access is identical
+  // either way; only console MRR arithmetic differs, so monthly is the safe
+  // default). Deliberately ABOVE the custom_data fast-path: the name comes
+  // from LS's own object, custom_data from the client. EXACT match, as the
+  // docs promise — a future "SketchCast Homeschool Plus" must surface as
+  // unmapped, not silently sell at this plan's caps.
+  if ((attrs.product_name ?? "").trim() === "SketchCast Homeschool") {
+    const cycle = /annual|year/i.test(attrs.variant_name ?? "") ? "homeschool_annual" : "homeschool_monthly";
+    log("plan_key_from_product_name", { subscription: lsSubscriptionId, product: attrs.product_name, variant_name: attrs.variant_name ?? null, plan: cycle });
+    return cycle;
+  }
   // No variant mapping — fall back to the (cross-checked) fast-path, then to any
   // plan_key we already stored for this subscription.
   if (claimed) return claimed;
@@ -188,6 +227,10 @@ export async function handleLsEvent(db: Db, event: LsEvent, deps: HandleLsDeps =
   const detectFounding = deps.detectFounding ?? (async () => false);
 
   const name = event.meta?.event_name ?? "";
+  if (name.startsWith("order")) {
+    await handleLsOrderEvent(db, event, name);
+    return;
+  }
   if (!name.startsWith("subscription")) {
     log("ignored", { event: name });
     return;
@@ -204,7 +247,7 @@ export async function handleLsEvent(db: Db, event: LsEvent, deps: HandleLsDeps =
     log("ignored_non_subscription_object", { event: name, type: sub.type });
     return;
   }
-  const attrs = sub?.attributes;
+  const attrs = sub?.attributes as LsSubscriptionAttributes | undefined;
   const subId = sub?.id;
   if (!attrs || !subId) return;
 
@@ -312,5 +355,139 @@ export async function handleLsEvent(db: Db, event: LsEvent, deps: HandleLsDeps =
     // Not an error — money is safely recorded and reconcilable. Alert-tier so
     // ops can see paid-but-unclaimed customers (they get access on sign-in).
     console.warn("billing.ls.subscription_parked_unclaimed", { subscription: subId, email, plan: planKey, status: attrs.status });
+  }
+}
+
+// ── one-time orders: credit packs (0086) ────────────────────────────────────
+// The `order_*` family covers EVERY purchase, including the initial order of a
+// subscription — so an order only matters here when its product name resolves
+// to a configured credit pack (src/utils/billing/packs.ts: prefix
+// "SketchCast Credits" + trailing "(N)"). Everything else is logged and left
+// to the subscription_* events.
+//
+// Identity works exactly like subscriptions: an in-app checkout carries
+// custom_data.user_id (trusted — we created that checkout); a public-link
+// purchase has only the buyer-typed email, so the pack is PARKED
+// (credit_purchases.owner_id NULL, claim_email set) and claim.ts binds it when
+// the account holder signs in with that verified email. Idempotency is the
+// UNIQUE ls_order_id: LS re-delivery and order-update re-fires insert-conflict
+// into a no-op, so one order credits exactly once.
+async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise<void> {
+  const order = event.data;
+  if (order?.type && order.type !== "orders") {
+    log("ignored_non_order_object", { event: name, type: order.type });
+    return;
+  }
+  const attrs = order?.attributes as LsOrderAttributes | undefined;
+  const orderId = order?.id;
+  if (!attrs || !orderId) return;
+
+  const item = attrs.first_order_item ?? null;
+  const pack = packForProductName(item?.product_name);
+  if (!pack) {
+    log("order_ignored_not_pack", { order: orderId, product: item?.product_name ?? null });
+    return;
+  }
+
+  // Refund (or a late-delivered order already refunded): the pack stops
+  // contributing to the balance. Credits already spent stand — the DB clamps
+  // the balance at 0 (fair_use_purchased_remaining). Idempotent by nature.
+  const refunded = name === "order_refunded" || attrs.refunded === true || attrs.status === "refunded";
+  if (name === "order_refunded") {
+    const now = new Date().toISOString();
+    const { error } = await db.from("credit_purchases").update({ refunded_at: now }).eq("ls_order_id", orderId);
+    if (error) throw new Error(`LS pack refund update failed: ${error.message}`);
+    await db.from("payments").update({ status: "refunded" }).eq("ls_order_id", orderId);
+    // Refund-before-create race: if the order_created delivery failed and LS
+    // is still retrying it, there was no row for the update above to stamp —
+    // and the retried payload (frozen at status "paid") would later insert an
+    // un-refunded pack. Insert a refunded TOMBSTONE now (parked by email;
+    // owner doesn't matter — a refunded row never contributes to the balance)
+    // so that retry lands on the unique ls_order_id and no-ops. In the normal
+    // order the tombstone itself is the 23505 no-op.
+    const { error: tombErr } = await db.from("credit_purchases").insert({
+      owner_id: null,
+      claim_email: norm(attrs.user_email),
+      credits: pack.credits,
+      pack_key: pack.key,
+      usd: pack.usd,
+      provider: "lemonsqueezy",
+      ls_order_id: orderId,
+      refunded_at: now,
+    });
+    if (tombErr && tombErr.code !== "23505") {
+      // The stamp above succeeded on whatever row exists — this is belt over
+      // braces, never worth failing the webhook (LS would retry the refund).
+      console.warn("billing.ls.pack_refund_tombstone_failed", { order: orderId, err: tombErr.message });
+    }
+    log("pack_refunded", { order: orderId, pack: pack.key });
+    return;
+  }
+
+  const lsCustomerId = String(attrs.customer_id);
+  const email = norm(attrs.user_email);
+  const who = await resolveIdentity(db, event.meta?.custom_data, lsCustomerId, email);
+  if (who.kind === "refused") return; // money stays reconcilable in LS; never guess an owner
+
+  const boundUserId = who.kind === "user" ? who.userId : null;
+  const claimEmail = who.kind === "unclaimed" ? who.email : null;
+
+  // Keep the customer mapping current (same dedupe key as subscriptions); a
+  // failure aborts so LS retries — never credit without a customer record.
+  const { error: mapErr } = await db.from("billing_customers").upsert(
+    {
+      user_id: boundUserId,
+      email,
+      school_id: null,
+      provider: "lemonsqueezy",
+      ls_customer_id: lsCustomerId,
+      stripe_customer_id: null,
+      role: "",
+    },
+    { onConflict: "ls_customer_id" },
+  );
+  if (mapErr) throw new Error(`LS customer mapping failed: ${mapErr.message}`);
+
+  const { error: insErr } = await db.from("credit_purchases").insert({
+    owner_id: boundUserId, // NULL while parked
+    claim_email: claimEmail, // set only while parked
+    credits: pack.credits,
+    pack_key: pack.key,
+    usd: pack.usd,
+    provider: "lemonsqueezy",
+    ls_order_id: orderId,
+    refunded_at: refunded ? new Date().toISOString() : null,
+  });
+  if (insErr) {
+    if (insErr.code === "23505") {
+      log("pack_duplicate_order", { order: orderId, pack: pack.key });
+      return; // already credited — LS re-delivery / order-update re-fire
+    }
+    throw new Error(`LS pack purchase insert failed: ${insErr.message}`);
+  }
+
+  // Revenue record for the console (Collected to date). payments.user_id is
+  // NOT NULL, so a parked pack records revenue only once claimed — acceptable:
+  // packs are sold from inside the app to signed-in paid users, so the parked
+  // path is the rare fallback. Duplicate-tolerant like the Stripe path.
+  if (boundUserId) {
+    const { error: payErr } = await db.from("payments").insert({
+      user_id: boundUserId,
+      school_id: null,
+      provider: "lemonsqueezy",
+      ls_order_id: orderId,
+      amount: typeof attrs.total === "number" ? attrs.total : Math.round(pack.usd * 100),
+      currency: (attrs.currency ?? "USD").toLowerCase(),
+      plan_key: pack.key,
+      status: attrs.status ?? "paid",
+    });
+    if (payErr && payErr.code !== "23505") {
+      // The credits are already granted — a payments hiccup must not make LS
+      // retry into a duplicate-looking failure loop. Log loudly instead.
+      console.warn("billing.ls.pack_payment_record_failed", { order: orderId, err: payErr.message });
+    }
+    log("pack_credited", { order: orderId, pack: pack.key, credits: pack.credits, user: boundUserId });
+  } else {
+    console.warn("billing.ls.pack_parked_unclaimed", { order: orderId, pack: pack.key, email: claimEmail });
   }
 }

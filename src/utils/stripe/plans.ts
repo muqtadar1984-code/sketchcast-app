@@ -5,11 +5,22 @@
 //     seller of record for B2C: it handles global VAT/GST/sales tax and pays
 //     Aethel Twin a payout, so we never carry consumer-tax liability.
 //
-// The LS store sells three PRODUCTS (Teacher Pro, Teacher Pro+, Family), each
-// with a monthly and an annual variant, so there are six LS plan keys. Each key
-// maps to one LS variant id (via env). The public pricing page links straight
-// to LS hosted checkout, so the webhook identifies which plan was bought by the
-// variant id on the subscription — see planKeyForVariant().
+// The LS store sells the consumer PRODUCTS (Teacher Pro, Teacher Pro+,
+// "Home Basic" — the family_* keys' display name since the homeschool release;
+// the plan_key/tier strings stay 'family' in billing and the DB, display-name
+// only — and "SketchCast Homeschool", $34/mo · $340/yr), each with a monthly
+// and an annual variant. Each key maps to one LS variant id (via env). The
+// public pricing page links straight to LS hosted checkout, so the webhook
+// identifies which plan was bought by the variant id on the subscription — see
+// planKeyForVariant().
+//
+// FOUNDER TODO for the Homeschool product: set
+// LEMONSQUEEZY_VARIANT_HOMESCHOOL_MONTHLY / _ANNUAL to the product's two
+// variant ids (the robust, primary mapping). Until they're set, the webhook
+// falls back to the product NAME — the product must be named exactly
+// "SketchCast Homeschool" and its variants "Monthly" / "Annual"
+// (handlers.ts resolvePlanKey). One-time credit packs are separate products —
+// see src/utils/billing/packs.ts for their exact required names.
 //
 // The app gates access on the provider-agnostic `entitlements` table, so the
 // provider split is invisible downstream. assertMyrPrice() still hard-gates the
@@ -30,12 +41,14 @@ export type PlanKey =
   | "teacher_pro_plus_annual"
   | "family_monthly"
   | "family_annual"
+  | "homeschool_monthly"
+  | "homeschool_annual"
   | "school_annual"
   | "school_onetime";
 
 /** The product family — capability gating and the founding cohort key on this,
  * not on the billing cycle. */
-export type PlanTier = "teacher_pro" | "teacher_pro_plus" | "family" | "school";
+export type PlanTier = "teacher_pro" | "teacher_pro_plus" | "family" | "homeschool" | "school";
 
 export type Plan = {
   key: PlanKey;
@@ -51,7 +64,8 @@ export type Plan = {
 };
 
 const TEACHER_ROLES = ["teacher", "school_admin", "coordinator"] as const;
-// Family is a personal/home plan; parents primarily, but any adult may buy it.
+// Home Basic (plan_key family_*) is a personal/home plan; parents primarily,
+// but any adult may buy it.
 const FAMILY_ROLES = ["parent", "teacher", "school_admin", "coordinator"] as const;
 
 export const PLANS: Record<PlanKey, Plan> = {
@@ -103,7 +117,9 @@ export const PLANS: Record<PlanKey, Plan> = {
     interval: "month",
     productEnv: "LEMONSQUEEZY_VARIANT_FAMILY_MONTHLY",
     roles: FAMILY_ROLES,
-    label: "Family · monthly",
+    // "Home Basic" everywhere user-visible (homeschool release); the key and
+    // tier stay 'family' — billing/DB identifiers never rename.
+    label: "Home Basic · monthly",
   },
   family_annual: {
     key: "family_annual",
@@ -113,7 +129,27 @@ export const PLANS: Record<PlanKey, Plan> = {
     interval: "year",
     productEnv: "LEMONSQUEEZY_VARIANT_FAMILY_ANNUAL",
     roles: FAMILY_ROLES,
-    label: "Family · annual",
+    label: "Home Basic · annual",
+  },
+  homeschool_monthly: {
+    key: "homeschool_monthly",
+    provider: "lemonsqueezy",
+    tier: "homeschool",
+    mode: "subscription",
+    interval: "month",
+    productEnv: "LEMONSQUEEZY_VARIANT_HOMESCHOOL_MONTHLY",
+    roles: FAMILY_ROLES,
+    label: "Homeschool · monthly",
+  },
+  homeschool_annual: {
+    key: "homeschool_annual",
+    provider: "lemonsqueezy",
+    tier: "homeschool",
+    mode: "subscription",
+    interval: "year",
+    productEnv: "LEMONSQUEEZY_VARIANT_HOMESCHOOL_ANNUAL",
+    roles: FAMILY_ROLES,
+    label: "Homeschool · annual",
   },
   school_annual: {
     key: "school_annual",

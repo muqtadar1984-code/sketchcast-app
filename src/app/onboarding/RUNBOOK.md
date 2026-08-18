@@ -37,7 +37,10 @@ gate "Continue"; `/api/onboarding` re-runs it to reject a bypass. Keep them call
 function so they can never disagree. Required fields:
 
 - **Teacher:** full name + affiliation (+ school_name iff affiliation = school) + ≥1 grade + ≥1 subject.
-- **Parent:** full name + children_count ≥ 1 + ≥1 child grade level.
+- **Parent:** full name + purpose (school-support vs homeschooling/tutoring) + children_count ≥ 1
+  + ≥1 child grade level. Purpose "homeschool" writes `profiles.home_educator = true` (0087) and
+  homes the account on the full Library instead of `/dashboard/children`. Existing parents are
+  never re-prompted (the gate only fires while `onboarded_at IS NULL`).
 
 ## To enable
 
@@ -46,8 +49,8 @@ function so they can never disagree. Required fields:
 2. Set `FEATURE_ONBOARDING=true` in Vercel (server-only flag — no `NEXT_PUBLIC_` needed; the
    gate is server-side).
 3. Verify: a fresh email signup lands on `/onboarding`, can't Continue until the required
-   fields are filled, and after submit lands on `/dashboard` (teacher) or `/dashboard/children`
-   (parent) and never sees the gate again.
+   fields are filled, and after submit lands on `/dashboard` (teacher, and home-educator
+   parents) or `/dashboard/children` (school-supporting parent) and never sees the gate again.
 
 ## To disable / roll back
 

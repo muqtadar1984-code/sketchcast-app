@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
@@ -239,6 +240,14 @@ export default async function ChildrenPage() {
                   <span className="font-medium text-lg font-display truncate">{name}</span>
                   <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
                     {!l.verified_at && <span>{t.unverified}</span>}
+                    {/* The printable per-child record (assignments, completions,
+                        scores) — same report a teacher prints per student. */}
+                    <Link
+                      href={`/dashboard/reports/${l.child_id}`}
+                      className="font-medium text-[#0C8175] hover:underline"
+                    >
+                      {dict.reports.title}
+                    </Link>
                     <ResetPasswordButton targetId={l.child_id} name={name} />
                     {l.source === "self" && <DeleteStudentButton targetId={l.child_id} name={name} />}
                   </span>

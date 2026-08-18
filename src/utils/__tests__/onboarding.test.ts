@@ -77,29 +77,45 @@ describe("missingRequired — teacher", () => {
 });
 
 describe("missingRequired — parent", () => {
-  it("is empty with a country, a count ≥ 1 and at least one grade", () => {
+  const full = (extra: OnboardingProfile = {}): OnboardingProfile => ({
+    country: "MY",
+    purpose: "school",
+    children_count: 2,
+    child_grade_levels: ["Grades 1–3"],
+    ...extra,
+  });
+
+  it("is empty with a country, a purpose, a count ≥ 1 and at least one grade", () => {
+    expect(missingRequired("parent", "Sam Lee", full())).toEqual([]);
+    expect(missingRequired("parent", "Sam Lee", full({ purpose: "homeschool" }))).toEqual([]);
+  });
+
+  it("requires a purpose — the two answers route to two different homes, so no default", () => {
+    expect(missingRequired("parent", "Sam", full({ purpose: undefined }))).toContain("purpose");
+    // only the two known values pass — anything else is a client bypass
     expect(
-      missingRequired("parent", "Sam Lee", { country: "MY", children_count: 2, child_grade_levels: ["Grades 1–3"] }),
-    ).toEqual([]);
+      missingRequired("parent", "Sam", full({ purpose: "tutoring" as unknown as "school" })),
+    ).toContain("purpose");
+  });
+
+  it("never asks teachers for a purpose", () => {
+    const m = missingRequired("teacher", "Alex", {});
+    expect(m).not.toContain("purpose");
   });
 
   it("requires children_count ≥ 1 and child_grade_levels", () => {
     const m = missingRequired("parent", "Sam", {});
     expect(m).toContain("children_count");
     expect(m).toContain("child_grade_levels");
-    expect(
-      missingRequired("parent", "Sam", { country: "MY", children_count: 0, child_grade_levels: ["x"] }),
-    ).toContain("children_count");
+    expect(missingRequired("parent", "Sam", full({ children_count: 0 }))).toContain("children_count");
   });
 
   it("requires a country for parents too", () => {
-    expect(
-      missingRequired("parent", "Sam", { children_count: 1, child_grade_levels: ["Grades 1–3"] }),
-    ).toContain("country");
+    expect(missingRequired("parent", "Sam", full({ country: undefined }))).toContain("country");
   });
 
   it("does NOT require teacher-only fields", () => {
-    const m = missingRequired("parent", "Sam", { children_count: 1, child_grade_levels: ["Grades 1–3"] });
+    const m = missingRequired("parent", "Sam", full());
     expect(m).not.toContain("affiliation");
     expect(m).not.toContain("subjects");
   });
@@ -109,5 +125,12 @@ describe("homeForRole", () => {
   it("sends parents to their children, teachers to the dashboard", () => {
     expect(homeForRole("parent")).toBe("/dashboard/children");
     expect(homeForRole("teacher")).toBe("/dashboard");
+  });
+
+  it("sends a home-educator parent to the full Library (0087)", () => {
+    expect(homeForRole("parent", { homeEducator: true })).toBe("/dashboard");
+    expect(homeForRole("parent", { homeEducator: false })).toBe("/dashboard/children");
+    // the flag is a parent concept — it never moves a teacher
+    expect(homeForRole("teacher", { homeEducator: true })).toBe("/dashboard");
   });
 });

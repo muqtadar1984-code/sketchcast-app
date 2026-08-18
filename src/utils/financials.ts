@@ -169,6 +169,10 @@ export function modelRouteBreakdown(gens: FinGenRow[], jobs: FinJobRow[]): Model
 // src/utils/stripe/plans.ts). Annual plans count at annual/12 so MRR means
 // what it says. NOTE: Teacher Pro+ is $49/mo on the pricing page — 72 is its
 // generations-per-month CAP, not a price. School = floor $3,000/yr → $250/mo.
+// family_* is SOLD as "Home Basic" (display rename, homeschool release) — the
+// plan_key stays 'family_*' here because billing identifiers never rename.
+// One-time credit packs are deliberately absent: they are not recurring
+// revenue, so they show up in "Collected to date" (payments) but never in MRR.
 export const PLAN_PRICES_USD_MONTHLY: Record<string, number> = {
   teacher_pro_monthly: 24,
   teacher_pro_annual: 240 / 12,
@@ -176,6 +180,8 @@ export const PLAN_PRICES_USD_MONTHLY: Record<string, number> = {
   teacher_pro_plus_annual: 490 / 12,
   family_monthly: 9.99,
   family_annual: 99 / 12,
+  homeschool_monthly: 34,
+  homeschool_annual: 340 / 12,
   school_annual: 3000 / 12,
   school_onetime: 3000 / 12,
 };

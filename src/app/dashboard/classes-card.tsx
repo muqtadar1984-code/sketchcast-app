@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import ClassProgress from "./class-progress";
@@ -179,6 +180,14 @@ export default function ClassesCard({
                               {t.classes.idLabel} <span className="text-[#14181F]">{s.username}</span>
                               {s.parent_email ? ` · ${s.parent_email}` : ""}
                             </span>
+                            {/* Printable per-student record: assignments,
+                                completions, scores across everything shared. */}
+                            <Link
+                              href={`/dashboard/reports/${s.id}`}
+                              className="font-medium text-[#0C8175] hover:underline"
+                            >
+                              {t.classes.progressRecord}
+                            </Link>
                             <ResetPasswordButton targetId={s.id} name={s.full_name || s.username || t.classes.thisStudent} />
                             <DeleteStudentButton targetId={s.id} name={s.full_name || s.username || t.classes.thisStudent} />
                           </span>

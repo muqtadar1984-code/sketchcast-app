@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { type LibraryMessages } from "./content-cell";
 
-type Row = { name: string; total: number; completed: number; revised: number; incomplete: number; overdue: number };
+type Row = { id: string; name: string; total: number; completed: number; revised: number; incomplete: number; overdue: number };
 
 // Reverse feedback for the teacher: per-student completion across everything
 // assigned to the class. Loaded on demand (a click, not an effect) so we don't
@@ -65,7 +66,7 @@ export default function ClassProgress({ classId, t }: { classId: string; t: Libr
         }
       }
       const done = completed + revised;
-      return { name: stu.name, total: genIds.length, completed, revised, incomplete: genIds.length - done, overdue };
+      return { id: stu.id, name: stu.name, total: genIds.length, completed, revised, incomplete: genIds.length - done, overdue };
     });
 
     setRows(out);
@@ -100,7 +101,12 @@ export default function ClassProgress({ classId, t }: { classId: string; t: Libr
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-[#EEF0EC]">
-              <td className="py-1.5 truncate">{r.name}</td>
+              <td className="py-1.5 truncate">
+                {/* The name opens the printable per-student record. */}
+                <Link href={`/dashboard/reports/${r.id}`} className="hover:underline" title={t.classes.progressRecord}>
+                  {r.name}
+                </Link>
+              </td>
               <td className="py-1.5 text-end font-medium text-[#0C8175] tabular">{r.completed}/{r.total}</td>
               <td className="py-1.5 text-end text-[#9A6400] tabular">{r.revised || "—"}</td>
               <td className="py-1.5 text-end text-[#5B6470] tabular">{r.incomplete}</td>

@@ -7,7 +7,7 @@ import {
   schoolAnalyticsEnabledFor,
   timetableEnabledFor,
 } from "./flags";
-import { HAT_COOKIE, isHat, type Hat } from "./hats";
+import { HAT_COOKIE, isHat, parentHatHome, type Hat } from "./hats";
 
 // Server-side half of the hat model: read the cookie, verify a hat is actually
 // held, and decide when a page should bounce the user to their active hat's
@@ -59,7 +59,25 @@ export async function verifyHat(
 
 /** Where a verified hat lands — flag-aware (see invariant above). */
 export async function hatHome(supabase: SupabaseClient, schoolId: string | null, hat: Hat): Promise<string> {
-  if (hat === "parent") return "/dashboard/children";
+  if (hat === "parent") {
+    // Homeschool release (0087): a home-EDUCATOR parent's home is the full
+    // Library, not the children page. The pure rule (and the loop-safety
+    // argument for why only role === "parent" qualifies) lives in
+    // parentHatHome(); this block only fetches its two inputs. Best-effort:
+    // any failure — pre-0087 column, missing session — lands on the children
+    // page exactly as before, which every parent-hat holder accepts.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return "/dashboard/children";
+    const { data: p } = await supabase
+      .from("profiles")
+      .select("role, home_educator")
+      .eq("id", user.id)
+      .maybeSingle();
+    const row = p as { role?: string | null; home_educator?: boolean | null } | null;
+    return parentHatHome(row?.role ?? null, row?.home_educator === true);
+  }
   if (hat === "teacher") return "/dashboard";
   if (hat === "coordinator") {
     // Valid only when analytics, the timetable OR the diary is on; land on

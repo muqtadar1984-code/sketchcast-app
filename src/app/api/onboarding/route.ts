@@ -75,6 +75,11 @@ export async function POST(request: Request) {
     title: str(raw.title, 80),
     grade_levels: arr(raw.grade_levels),
     subjects: arr(raw.subjects),
+    // Parent purpose (homeschool release) — missingRequired above already
+    // proved it's one of the two known values for parents; the whitelist keeps
+    // the jsonb snapshot clean either way. The AUTHORITATIVE copy is the
+    // profiles.home_educator COLUMN written below (0087) — read that, not this.
+    purpose: raw.purpose === "school" || raw.purpose === "homeschool" ? raw.purpose : undefined,
     children_count: num(raw.children_count),
     child_grade_levels: arr(raw.child_grade_levels),
     school_on_platform: str(raw.school_on_platform, 20),
@@ -98,5 +103,22 @@ export async function POST(request: Request) {
     .eq("id", user.id);
   if (cErr) console.error("onboarding.country:", cErr.code, cErr.message);
 
-  return NextResponse.json({ ok: true, role });
+  // Home educator (0087) — same posture as country above: the caller's OWN
+  // authenticated session writes their own answer through the column-scoped
+  // grant. Parents only; a homeschooling/tutoring parent homes on the full
+  // Library, so the response carries the flag for the client's landing
+  // redirect. Best-effort on a pre-0087 database: the flag stays false (the
+  // column default), the parent lands on their children as before, and
+  // onboarding itself never traps the user.
+  let homeEducator = false;
+  if (role === "parent" && clean.purpose === "homeschool") {
+    const { error: hErr } = await supabase
+      .from("profiles")
+      .update({ home_educator: true })
+      .eq("id", user.id);
+    if (hErr) console.error("onboarding.home_educator:", hErr.code, hErr.message);
+    else homeEducator = true;
+  }
+
+  return NextResponse.json({ ok: true, role, home_educator: homeEducator });
 }

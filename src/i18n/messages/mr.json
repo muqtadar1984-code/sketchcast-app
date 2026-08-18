@@ -312,7 +312,12 @@
         "languages": "भाषा",
         "arts": "कला",
         "other": "इतर"
-      }
+      },
+      "purposeQuestion": "What best describes you?",
+      "purposeSchool": "Supporting school learning",
+      "purposeSchoolSub": "My children attend school — I help alongside it",
+      "purposeHomeschool": "Homeschooling or tutoring",
+      "purposeHomeschoolSub": "I teach my learners myself — full lesson-building tools"
     },
     "reportIssue": {
       "label": "अडचण कळवा",
@@ -1050,7 +1055,8 @@
       "needName": "किमान एक नाव भरा.",
       "addFailed": "विद्यार्थी जोडता आले नाहीत.",
       "credsCreated": "लॉगिन तयार — हे पालकांना द्या",
-      "copyAll": "सर्व कॉपी करा"
+      "copyAll": "सर्व कॉपी करा",
+      "progressRecord": "Progress record"
     },
     "progress": {
       "show": "प्रगती दाखवा",
@@ -1606,6 +1612,36 @@
       }
     }
   },
+  "reports": {
+    "title": "Progress record",
+    "preparedBy": "Prepared by {name}",
+    "generated": "Generated {date}",
+    "range": "Activity from {from} to {to}",
+    "print": "Print",
+    "empty": "No recorded work yet.",
+    "emptyHint": "Assigned work, completions and scores will appear here as they are recorded.",
+    "chaptersCovered": "Chapters covered: {list}",
+    "otherWork": "Other work",
+    "subject": "Subject: {subject}",
+    "summaryLine": "{assigned} assigned · {completed} completed · average score {avg}%",
+    "summaryLineNoScores": "{assigned} assigned · {completed} completed · no scores recorded",
+    "overall": "Overall",
+    "scoreValue": "{points}/{max} ({pct}%)",
+    "gradingOn": "{grading} {date}",
+    "columns": {
+      "item": "Item",
+      "assigned": "Assigned",
+      "due": "Due",
+      "status": "Status",
+      "completed": "Completed",
+      "score": "Score"
+    },
+    "grading": {
+      "auto": "auto-marked",
+      "graded": "teacher-marked",
+      "pending": "awaiting marking"
+    }
+  },
   "utils": {
     "job": {
       "readingPart": "भाग {n}/{total} वाचत आहे",
@@ -1670,6 +1706,13 @@
     "trialLeft": "{cap} पैकी {available} निर्मिती शिल्लक. चाचणीनंतर मोफत योजनेत एका वेळी एकच धडा ठेवता येतो.",
     "trialSpent": "तुम्ही सर्व {cap} चाचणी निर्मिती वापरल्या आहेत. पुढे तयार करत राहण्यासाठी सदस्यत्व घ्या — मोफत योजनेत एका वेळी एकच धडा ठेवता येतो.",
     "parts": "धड्याचे भाग",
-    "documents": "कागदपत्रे"
+    "documents": "कागदपत्रे",
+    "buyTitle": "Buy credits",
+    "buyHint": "One-time credit packs. They never expire — your monthly allowance is used first.",
+    "packLabel": "{credits} credits — ${price} ({kits})",
+    "packKitsOne": "{n} kit",
+    "packKitsMany": "{n} kits",
+    "purchased": "{n} purchased credits available",
+    "upgradeCta": "Need more? See plans and pricing"
   }
 }

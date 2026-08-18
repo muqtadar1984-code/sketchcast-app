@@ -67,7 +67,24 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle();
   const capData = capRow as { beta_tester?: boolean; max_children?: number | null } | null;
-  const cap = capData?.max_children ?? (capData?.beta_tester ? 2 : null);
+  // Learner cap (0086): learners_cap(uid) is a SECURITY DEFINER read of
+  // effective_cap(uid,'children') — the EXACT number enforce_beta_child_cap
+  // enforces (homeschool → 10, everything else → 2, profiles.max_children
+  // override wins; 2147483647 = console-blessed unlimited). service_role only,
+  // so it rides the admin client. On a pre-0086 DB the RPC doesn't exist yet —
+  // fall back to the my_fair_use tier read, then the legacy beta heuristic.
+  let cap: number | null = null;
+  const { data: capRpc, error: capRpcErr } = await admin.rpc("learners_cap", { uid: user.id });
+  if (!capRpcErr && typeof capRpc === "number") {
+    cap = capRpc >= 2147483647 ? null : capRpc;
+  } else {
+    let tierCap: number | null = null;
+    {
+      const { data: fu } = await supabase.rpc("my_fair_use");
+      if ((fu as { tier?: string } | null)?.tier === "homeschool") tierCap = 10;
+    }
+    cap = capData?.max_children ?? tierCap ?? (capData?.beta_tester ? 2 : null);
+  }
   if (cap != null && (current ?? 0) + children.length > cap) {
     return NextResponse.json(
       { error: `Your account is limited to ${cap} child${cap === 1 ? "" : "ren"} — you have ${current ?? 0}.` },

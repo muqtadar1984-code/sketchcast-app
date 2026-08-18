@@ -167,6 +167,17 @@ describe("entitlement revenue", () => {
     expect(mrrUsd([ent("school_annual")])).toBeCloseTo(250, 10);
   });
 
+  it("prices the homeschool plans ($34/mo, $340/yr at annual/12)", () => {
+    expect(mrrUsd([ent("homeschool_monthly")])).toBe(34);
+    expect(mrrUsd([ent("homeschool_annual")])).toBeCloseTo(340 / 12, 10);
+  });
+
+  it("credit packs are NOT MRR — their keys price at 0 here", () => {
+    // Packs are one-time purchases: they land in Collected to date via the
+    // payments table, never in recurring revenue.
+    expect(mrrUsd([ent("pack_6"), ent("pack_18"), ent("pack_36")])).toBe(0);
+  });
+
   it("prices an unknown plan_key at 0 rather than guessing", () => {
     expect(mrrUsd([ent("mystery_plan")])).toBe(0);
   });

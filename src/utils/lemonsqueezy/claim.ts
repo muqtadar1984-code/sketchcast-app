@@ -45,6 +45,16 @@ export async function claimLsPurchasesWith(db: ClaimDb, userId: string | null | 
   if (!userId || !email) return 0;
 
   try {
+    // Credit packs (0086) park the same way subscriptions do — bind any parked
+    // pack rows by the verified email FIRST (this must run even when no
+    // subscription is parked: a pack can be the only thing bought). The
+    // balance then surfaces through my_fair_use() with no entitlement needed.
+    await db
+      .from("credit_purchases")
+      .update({ owner_id: userId, claim_email: null })
+      .is("owner_id", null)
+      .eq("claim_email", email);
+
     const { data } = await db
       .from("subscriptions")
       .select("ls_subscription_id, plan_key, status, current_period_end")

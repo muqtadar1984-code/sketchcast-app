@@ -28,9 +28,17 @@ export default async function OnboardingPage() {
     .maybeSingle();
 
   // Already onboarded (or 0038 not applied so the column reads back as set) — don't
-  // trap them on this page; send them to their role's home.
+  // trap them on this page; send them to their role's home. A home-educator
+  // parent (0087) homes on the Library; separate best-effort query so a
+  // pre-0087 database can't break the main select above.
   if (!profile || profile.onboarded_at != null) {
-    redirect(homeForRole(seedRole((profile?.role as string | null) ?? null)));
+    const { data: he } = await supabase
+      .from("profiles")
+      .select("home_educator")
+      .eq("id", user.id)
+      .maybeSingle();
+    const homeEducator = (he as { home_educator?: boolean | null } | null)?.home_educator === true;
+    redirect(homeForRole(seedRole((profile?.role as string | null) ?? null), { homeEducator }));
   }
 
   // Students are never routed here (the gate exempts them); if one somehow lands,

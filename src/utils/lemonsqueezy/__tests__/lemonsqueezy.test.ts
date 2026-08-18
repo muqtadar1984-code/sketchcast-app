@@ -23,20 +23,31 @@ type Row = Record<string, unknown>;
 // ── handler stub DB (single-row-per-table reads) ────────────────────────────
 class FakeDb {
   tables: Record<string, Row | null>;
-  writes: Array<{ table: string; op: "insert" | "upsert"; row: Row }> = [];
+  writes: Array<{ table: string; op: "insert" | "upsert" | "update"; row: Row; filter?: [string, unknown] }> = [];
+  /** Per-table injected insert error (e.g. a unique-violation for idempotency tests). */
+  insertErrors: Record<string, { code?: string; message: string }> = {};
   constructor(tables: Record<string, Row | null> = {}) {
     this.tables = tables;
   }
   from(table: string) {
     const read = async () => ({ data: this.tables[table] ?? null });
-    const record = (op: "insert" | "upsert") => async (row: Row) => {
-      this.writes.push({ table, op, row });
-      return { error: null };
-    };
     return {
       select: () => ({ eq: () => ({ maybeSingle: read }) }),
-      upsert: record("upsert"),
-      insert: record("insert"),
+      upsert: async (row: Row) => {
+        this.writes.push({ table, op: "upsert" as const, row });
+        return { error: null };
+      },
+      insert: async (row: Row) => {
+        const error = this.insertErrors[table] ?? null;
+        if (!error) this.writes.push({ table, op: "insert" as const, row });
+        return { error };
+      },
+      update: (row: Row) => ({
+        eq: async (col: string, v: unknown) => {
+          this.writes.push({ table, op: "update" as const, row, filter: [col, v] });
+          return { error: null };
+        },
+      }),
     };
   }
   ent() {
@@ -47,6 +58,12 @@ class FakeDb {
   }
   cust() {
     return this.writes.find((w) => w.table === "billing_customers");
+  }
+  pack() {
+    return this.writes.find((w) => w.table === "credit_purchases");
+  }
+  pay() {
+    return this.writes.find((w) => w.table === "payments");
   }
 }
 
@@ -67,6 +84,8 @@ const subEvent = (over: {
   customerId?: number;
   subId?: string;
   variantId?: number | string | null;
+  productName?: string | null;
+  variantName?: string | null;
   email?: string | null;
   ends_at?: string | null;
   renews_at?: string | null;
@@ -80,11 +99,46 @@ const subEvent = (over: {
       status: over.status ?? "active",
       customer_id: over.customerId ?? 555,
       variant_id: over.variantId === undefined ? 1875871 : over.variantId,
+      product_name: over.productName ?? null,
+      variant_name: over.variantName ?? null,
       user_email: over.email === undefined ? null : over.email,
       renews_at: over.renews_at ?? "2999-01-01T00:00:00.000000Z",
       ends_at: over.ends_at ?? null,
       updated_at: over.updated_at ?? "2026-07-06T12:00:00Z",
       urls: { customer_portal: "https://x.lemonsqueezy.com/portal/abc" },
+    },
+  },
+});
+
+// One-time order events (credit packs). `productName: null` = order with no
+// first_order_item at all.
+const orderEvent = (over: {
+  event?: string;
+  custom?: { user_id?: string } | null;
+  orderId?: string;
+  customerId?: number;
+  email?: string | null;
+  productName?: string | null;
+  status?: string;
+  refunded?: boolean;
+  total?: number;
+}): LsEvent => ({
+  meta: { event_name: over.event ?? "order_created", custom_data: over.custom === undefined ? undefined : over.custom },
+  data: {
+    type: "orders",
+    id: over.orderId ?? "ord_1",
+    attributes: {
+      customer_id: over.customerId ?? 777,
+      user_email: over.email === undefined ? null : over.email,
+      status: over.status ?? "paid",
+      refunded: over.refunded ?? false,
+      total: over.total ?? 800,
+      currency: "USD",
+      updated_at: "2026-08-18T12:00:00Z",
+      first_order_item:
+        over.productName === null
+          ? null
+          : { product_id: 42, variant_id: 4242, product_name: over.productName ?? "SketchCast Credits — 1 kit (6)", variant_name: "Default" },
     },
   },
 });
@@ -211,10 +265,38 @@ describe("LS subscription → entitlement", () => {
     expect(db.writes.length).toBe(0);
   });
 
-  it("ignores non-subscription events", async () => {
+  it("ignores unrelated events", async () => {
     const db = new FakeDb({});
-    await run(db, { meta: { event_name: "order_created" }, data: { id: "1", attributes: { status: "paid", customer_id: 1, renews_at: null, ends_at: null } } } as LsEvent);
+    await run(db, { meta: { event_name: "license_key_created" }, data: { id: "1", attributes: { status: "paid", customer_id: 1, renews_at: null, ends_at: null } } } as LsEvent);
     expect(db.writes.length).toBe(0);
+  });
+
+  it("maps an unmapped-variant Homeschool sub by PRODUCT NAME (annual + monthly)", async () => {
+    // The product can go live before its variant env vars are set; the stable
+    // product name must carry the sale rather than dropping it.
+    const dbA = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(dbA, subEvent({ custom: { user_id: "user-A" }, variantId: 999999, productName: "SketchCast Homeschool", variantName: "Annual" }));
+    expect(dbA.ent()!.row.plan_key).toBe("homeschool_annual");
+    const dbM = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(dbM, subEvent({ custom: { user_id: "user-A" }, variantId: 999999, productName: "SketchCast Homeschool", variantName: "Monthly" }));
+    expect(dbM.ent()!.row.plan_key).toBe("homeschool_monthly");
+  });
+
+  it("the variant env mapping stays authoritative over the name fallback", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    // VMAP maps 1875871 → teacher_pro_monthly; a (mislabelled) product name
+    // must not override the trusted variant id.
+    await run(db, subEvent({ custom: { user_id: "user-A" }, variantId: 1875871, productName: "SketchCast Homeschool", variantName: "Monthly" }));
+    expect(db.ent()!.row.plan_key).toBe("teacher_pro_monthly");
+  });
+
+  it("a product merely SHARING the Homeschool name prefix is not mapped by name", async () => {
+    // The name fallback is an exact match: a future "SketchCast Homeschool
+    // Plus" must surface as unmapped (and get its own mapping), never silently
+    // sell at this plan's price/caps.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, subEvent({ custom: { user_id: "user-A" }, variantId: 999999, productName: "SketchCast Homeschool Plus", variantName: "Monthly" }));
+    expect(db.ent()).toBeUndefined();
   });
 
   it("persists no card data", async () => {
@@ -223,6 +305,104 @@ describe("LS subscription → entitlement", () => {
     const keys = db.writes.flatMap((w) => Object.keys(w.row));
     for (const k of keys) expect(k).not.toMatch(/card|pan|cvv|cvc|number/i);
     expect(JSON.stringify(db.writes)).not.toMatch(/\b\d{13,19}\b/);
+  });
+});
+
+// ── one-time orders → credit packs ───────────────────────────────────────────
+describe("LS order → credit pack", () => {
+  it("credits a pack to a KNOWN customer and records the payment", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, email: "a@x.com", productName: "SketchCast Credits — 1 kit (6)", total: 800 }));
+    expect(db.pack()!.op).toBe("insert");
+    expect(db.pack()!.row.owner_id).toBe("user-A");
+    expect(db.pack()!.row.claim_email).toBeNull();
+    expect(db.pack()!.row.credits).toBe(6);
+    expect(db.pack()!.row.pack_key).toBe("pack_6");
+    expect(db.pack()!.row.ls_order_id).toBe("ord_1");
+    expect(db.pack()!.row.refunded_at).toBeNull();
+    expect(db.pay()!.row.amount).toBe(800);
+    expect(db.pay()!.row.plan_key).toBe("pack_6");
+    expect(db.pay()!.row.user_id).toBe("user-A");
+    expect(db.cust()).toBeDefined(); // customer mapping kept current
+    expect(db.ent()).toBeUndefined(); // a pack is credits, never an entitlement
+  });
+
+  it("identifies the pack size from the product name (18 and 36)", async () => {
+    for (const [name, credits, key] of [
+      ["SketchCast Credits — 3 kits (18)", 18, "pack_18"],
+      ["SketchCast Credits — 6 kits (36)", 36, "pack_36"],
+    ] as const) {
+      const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+      await run(db, orderEvent({ custom: { user_id: "user-A" }, productName: name }));
+      expect(db.pack()!.row.credits).toBe(credits);
+      expect(db.pack()!.row.pack_key).toBe(key);
+    }
+  });
+
+  it("PUBLIC-LINK pack purchase is PARKED by email — credits recorded, no payment row yet", async () => {
+    const db = new FakeDb({ billing_customers: null });
+    await run(db, orderEvent({ custom: undefined, email: "Buyer@X.com" }));
+    expect(db.pack()!.row.owner_id).toBeNull();
+    expect(db.pack()!.row.claim_email).toBe("buyer@x.com"); // normalised
+    expect(db.pay()).toBeUndefined(); // payments.user_id is NOT NULL — records on claim path instead
+  });
+
+  it("ignores a non-pack order (a subscription's own order_created)", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, productName: "SketchCast Homeschool" }));
+    expect(db.writes.length).toBe(0);
+  });
+
+  it("ignores an order with no line item at all", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, productName: null }));
+    expect(db.writes.length).toBe(0);
+  });
+
+  it("a re-delivered order credits exactly once (unique ls_order_id → no-op)", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    db.insertErrors["credit_purchases"] = { code: "23505", message: "duplicate key value violates unique constraint" };
+    await run(db, orderEvent({ custom: { user_id: "user-A" } }));
+    expect(db.pack()).toBeUndefined(); // insert refused by the unique key
+    expect(db.pay()).toBeUndefined(); // and nothing double-recorded after it
+  });
+
+  it("no identity signal at all → refused, nothing written", async () => {
+    const db = new FakeDb({ billing_customers: null });
+    await run(db, orderEvent({ custom: undefined, email: null }));
+    expect(db.writes.length).toBe(0);
+  });
+
+  it("order_refunded voids the pack's contribution (and the payment record)", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ event: "order_refunded", custom: { user_id: "user-A" }, status: "refunded", refunded: true }));
+    const packUpd = db.writes.find((w) => w.table === "credit_purchases" && w.op === "update");
+    expect(packUpd).toBeDefined();
+    expect(packUpd!.row.refunded_at).toBeTruthy();
+    expect(packUpd!.filter).toEqual(["ls_order_id", "ord_1"]);
+    const payUpd = db.writes.find((w) => w.table === "payments" && w.op === "update");
+    expect(payUpd!.row.status).toBe("refunded");
+  });
+
+  it("an order_created already flagged refunded lands with refunded_at set", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, status: "refunded", refunded: true }));
+    expect(db.pack()!.row.refunded_at).toBeTruthy();
+  });
+
+  it("a refund arriving BEFORE its order_created inserts a refunded tombstone", async () => {
+    // Race: order_created delivery fails, the refund processes first, then LS
+    // retries the stale 'paid' payload. The tombstone occupies the unique
+    // ls_order_id so that retry 23505-no-ops instead of crediting a refunded
+    // pack.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ event: "order_refunded", custom: { user_id: "user-A" }, status: "refunded", refunded: true }));
+    const tomb = db.writes.find((w) => w.table === "credit_purchases" && w.op === "insert");
+    expect(tomb).toBeDefined();
+    expect(tomb!.row.refunded_at).toBeTruthy();
+    expect(tomb!.row.ls_order_id).toBe("ord_1");
+    // In the normal order (row already credited) the same insert is refused by
+    // the unique key and swallowed — covered by the duplicate-order test.
   });
 });
 
@@ -295,6 +475,21 @@ describe("claim-on-sign-in", () => {
     const n = await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
     expect(n).toBe(0);
     expect(db.writes.find((w) => w.table === "entitlements")).toBeUndefined();
+  });
+
+  it("binds a parked CREDIT PACK by the verified email — even with no parked sub", async () => {
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [
+        { owner_id: null, claim_email: "buyer@x.com", credits: 6 },
+        { owner_id: null, claim_email: "someone@else.com", credits: 18 },
+      ],
+    });
+    const n = await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "Buyer@X.com");
+    expect(n).toBe(0); // the count reports subscriptions; the pack rides along
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A");
+    expect((db.tables.credit_purchases[0] as Row).claim_email).toBeNull();
+    expect((db.tables.credit_purchases[1] as Row).owner_id).toBeNull(); // other email untouched
   });
 
   it("no-ops on missing user or email", async () => {

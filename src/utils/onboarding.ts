@@ -43,6 +43,11 @@ export type OnboardingProfile = {
   grade_levels?: string[];
   subjects?: string[];
   // parent
+  /** REQUIRED for parents (homeschool release): why they're here. "homeschool"
+   * (homeschooling or tutoring) also writes profiles.home_educator = true
+   * (0087), which makes the full Library their home surface. Existing parents
+   * are never re-prompted — the onboarding gate only fires pre-onboarded_at. */
+  purpose?: "school" | "homeschool";
   children_count?: number;
   child_grade_levels?: string[];
   school_on_platform?: string;
@@ -79,13 +84,23 @@ export function missingRequired(
     if (!(p.grade_levels && p.grade_levels.length)) m.push("grade_levels");
     if (!(p.subjects && p.subjects.length)) m.push("subjects");
   } else {
+    // Purpose is required (homeschool release): the two answers route to two
+    // different home surfaces, so there is no safe default to assume. Only the
+    // two known values pass — the radios offer nothing else, so anything else
+    // is a bypass, exactly like country above.
+    if (p.purpose !== "school" && p.purpose !== "homeschool") m.push("purpose");
     if (!p.children_count || p.children_count < 1) m.push("children_count");
     if (!(p.child_grade_levels && p.child_grade_levels.length)) m.push("child_grade_levels");
   }
   return m;
 }
 
-/** Where to send the user after onboarding, by their confirmed role. */
-export function homeForRole(role: OnboardingRole): string {
-  return role === "parent" ? "/dashboard/children" : "/dashboard";
+/** Where to send the user after onboarding, by their confirmed role.
+ * homeEducator (profiles.home_educator, 0087): a homeschooling/tutoring parent
+ * authors like a teacher, so their home is the full Library — the children
+ * page stays one tab away for linking learners. School-supporting parents keep
+ * landing on their children. */
+export function homeForRole(role: OnboardingRole, opts?: { homeEducator?: boolean }): string {
+  if (role === "parent") return opts?.homeEducator ? "/dashboard" : "/dashboard/children";
+  return "/dashboard";
 }

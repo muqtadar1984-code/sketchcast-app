@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hatsFor, resolveHat, isHat } from "../hats";
+import { hatsFor, parentHatHome, resolveHat, isHat } from "../hats";
 
 describe("hatsFor — which hats an account holds", () => {
   it("students and signed-out users hold no hats", () => {
@@ -60,5 +60,19 @@ describe("isHat", () => {
   it("accepts exactly the four hats", () => {
     for (const h of ["principal", "coordinator", "teacher", "parent"]) expect(isHat(h)).toBe(true);
     for (const h of ["student", "admin", "", null, undefined]) expect(isHat(h as string | null)).toBe(false);
+  });
+});
+
+describe("parentHatHome — where the parent hat lands (homeschool release, 0087)", () => {
+  it("a home-educator PARENT homes on the full Library", () => {
+    expect(parentHatHome("parent", true)).toBe("/dashboard");
+  });
+  it("a school-supporting parent keeps the children page", () => {
+    expect(parentHatHome("parent", false)).toBe("/dashboard/children");
+  });
+  it("ignores the flag for multi-role adults — /dashboard's teacher domain only accepts the parent hat on a parent-ROLE account, so anything else would redirect-loop", () => {
+    expect(parentHatHome("teacher", true)).toBe("/dashboard/children");
+    expect(parentHatHome("school_admin", true)).toBe("/dashboard/children");
+    expect(parentHatHome(null, true)).toBe("/dashboard/children");
   });
 });

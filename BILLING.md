@@ -58,14 +58,25 @@ bank. Hosted Checkout + Billing Customer Portal only.
 |---|---|---|---|---|
 | `teacher_pro_monthly` / `teacher_pro_annual` | Lemon Squeezy | teacher_pro | monthly / yearly | teachers |
 | `teacher_pro_plus_monthly` / `teacher_pro_plus_annual` | Lemon Squeezy | teacher_pro_plus | monthly / yearly | teachers |
-| `family_monthly` / `family_annual` | Lemon Squeezy | family | monthly / yearly | parents (any adult) |
+| `family_monthly` / `family_annual` | Lemon Squeezy | family | monthly / yearly | parents (any adult) — sold as **"Home Basic"** (display name only; keys never rename) |
+| `homeschool_monthly` / `homeschool_annual` | Lemon Squeezy | homeschool | monthly / yearly | parents (any adult) — product **"SketchCast Homeschool"**, $34 / $340 |
 | `school_annual` | Stripe | school | yearly | school admins (card) |
 | `school_onetime` | Stripe | school | 365-day licence | school admins (card) |
 
-Each LS **product** (Teacher Pro, Teacher Pro+, Family) serves both cycles on one
-hosted-checkout page; the six `plan_key`s map 1:1 to LS **variant ids** (via env).
-The public pricing page carries no `plan_key`, so the webhook derives it from the
-subscription's `variant_id` — see `planKeyForVariant()` in `plans.ts`.
+Each LS **product** (Teacher Pro, Teacher Pro+, Home Basic, Homeschool) serves
+both cycles on one hosted-checkout page; the eight `plan_key`s map 1:1 to LS
+**variant ids** (via env). The public pricing page carries no `plan_key`, so the
+webhook derives it from the subscription's `variant_id` — see
+`planKeyForVariant()` in `plans.ts`. Homeschool only: if its variant envs are
+unset, the webhook falls back to the **product name** `SketchCast Homeschool`
+(+ variant name `Monthly`/`Annual`) rather than dropping the sale.
+
+**One-time CREDIT PACKS** (top-ups, not plans — they never touch
+`entitlements`): `pack_6` 6 credits $8 · `pack_18` 18 credits $20 · `pack_36`
+36 credits $36. Config + the exact LS product names live in
+`src/utils/billing/packs.ts`; accounting in migration `0086` (persistent
+balance, consumed after the monthly quota). Sold only to paid tiers (UI gate);
+ships dark until each pack's `checkoutUrl` is filled in.
 
 **Most schools pay by bank transfer against a direct Aethel Twin invoice —
 outside Stripe entirely.** The `school_*` plans exist only for schools that
@@ -118,6 +129,8 @@ LEMONSQUEEZY_VARIANT_TEACHER_PRO_PLUS_MONTHLY=...
 LEMONSQUEEZY_VARIANT_TEACHER_PRO_PLUS_ANNUAL=...
 LEMONSQUEEZY_VARIANT_FAMILY_MONTHLY=...
 LEMONSQUEEZY_VARIANT_FAMILY_ANNUAL=...
+LEMONSQUEEZY_VARIANT_HOMESCHOOL_MONTHLY=...
+LEMONSQUEEZY_VARIANT_HOMESCHOOL_ANNUAL=...
 
 BILLING_ENABLED=false
 APP_URL=https://app.sketchcast.app
@@ -162,11 +175,23 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
 ### Lemon Squeezy Dashboard setup (by hand)
 - Create/verify the LS **store** for Aethel Twin (LS onboards you as the
   software company; LS is MoR on top). Set the store currency to **USD**.
-- Create three **subscription products** priced in **USD**, each with a Monthly
+- Create four **subscription products** priced in **USD**, each with a Monthly
   and an Annual variant: **Teacher Pro** ($24 / $240), **Teacher Pro+** ($49 /
-  $490), **Family** ($9.99 / $99). Copy the six **Variant IDs** into the six
-  `LEMONSQUEEZY_VARIANT_*` env vars (below). The webhook maps a subscription's
-  `variant_id` back to a `plan_key`, so these must match the live store.
+  $490), **Home Basic** ($9.99 / $99 — the family_* keys), and
+  **SketchCast Homeschool** ($34 / $340 — name it EXACTLY that, variants
+  `Monthly`/`Annual`, because the webhook's name fallback matches on it). Copy
+  the eight **Variant IDs** into the eight `LEMONSQUEEZY_VARIANT_*` env vars
+  (below). The webhook maps a subscription's `variant_id` back to a `plan_key`,
+  so these must match the live store.
+- Create three **single-payment products** for the credit packs, named EXACTLY
+  (the webhook identifies a pack by the `SketchCast Credits` prefix + the
+  trailing credit count in parentheses):
+  - `SketchCast Credits — 1 kit (6)` — $8
+  - `SketchCast Credits — 3 kits (18)` — $20
+  - `SketchCast Credits — 6 kits (36)` — $36
+  Then paste each product's Share/checkout URL into `checkoutUrl` in
+  `src/utils/billing/packs.ts` — a null URL keeps that pack's buy button
+  hidden, so the feature ships dark until this step.
 - Create the founding discount code **`FOUNDINGTEACHER`** on the Teacher Pro
   product (→ $10/mo, price-locked 24 months). It is a *discount*, not a separate
   product — the public pricing page shows the code and tells teachers to paste
@@ -179,11 +204,14 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
   long random string and put the SAME value in `LEMONSQUEEZY_WEBHOOK_SECRET`.
   Select the subscription **lifecycle** events: `subscription_created`,
   `subscription_updated`, `subscription_cancelled`, `subscription_resumed`,
-  `subscription_paused`, `subscription_expired`. Payment health already flows
-  through `subscription_updated` (→ `past_due`/`unpaid`), so the
+  `subscription_paused`, `subscription_expired`, **plus the order events for
+  credit packs**: `order_created` and `order_refunded`. Payment health already
+  flows through `subscription_updated` (→ `past_due`/`unpaid`), so the
   `subscription_payment_*` events are optional; the handler ignores
   invoice-shaped events (`data.type = "subscription-invoices"`) either way, so
-  subscribing to them is harmless but unnecessary.
+  subscribing to them is harmless but unnecessary. (An `order_created` whose
+  product is not a credit pack — e.g. a subscription's own initial order — is
+  ignored by name, so subscribing to order events adds no double-counting.)
 - Enable the **Customer Portal** in the store so parents/teachers can manage
   and cancel their own subscription.
 

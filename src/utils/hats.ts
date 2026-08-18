@@ -67,6 +67,21 @@ export function resolveHat(cookie: string | null | undefined, hats: Hat[]): Hat 
   return hats[0];
 }
 
+/**
+ * Where the PARENT hat lands (pure piece of hatHome, homeschool release).
+ * A home educator (profiles.home_educator, 0087) authors like a teacher, so
+ * their home is the full Library — but ONLY for a parent-ROLE account.
+ *
+ * LOOP-SAFETY: /dashboard's teacher domain accepts the parent hat only when
+ * role === "parent" (enforceHat's merged-world rule). A multi-role adult (a
+ * teacher who is also a parent) wearing the parent hat would be bounced OFF
+ * /dashboard straight back to hatHome — an infinite redirect — so for them the
+ * flag is deliberately ignored and the children page stays home.
+ */
+export function parentHatHome(role: string | null, homeEducator: boolean): string {
+  return role === "parent" && homeEducator ? "/dashboard" : "/dashboard/children";
+}
+
 // NOTE: where a hat "lands" lives in hats-server.ts (hatHome) — it depends on
 // the tenant's analytics flag, so it can't be pure. Keep exactly one source of
 // truth for it.

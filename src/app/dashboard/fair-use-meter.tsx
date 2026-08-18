@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { creditPacks, packsAllowedForTier, purchasablePacks, type CreditPack } from "@/utils/credit-packs";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang, type Locale } from "@/i18n/locales";
@@ -28,6 +29,10 @@ type FairUse = {
   promo?: boolean;
   trial_ends?: string;
   resets_on: string;
+  /** 0086 (homeschool release): the purchased-pack balance, once the metering
+   * side exposes it. Shape defensively unknown until that lands — a number or
+   * a bucket both read correctly, anything else is ignored. */
+  purchased?: number | Partial<Bucket>;
 };
 
 type Messages = Dictionary["fairUse"];
@@ -57,6 +62,40 @@ function Row({ label, b, t }: { label: string; b: Bucket; t: Messages }) {
   );
 }
 
+// The marketing site's plans page — the app itself has no pricing surface.
+const PRICING_URL = "https://sketchcast.app/pricing";
+
+/** The one-time pack list (paid tiers only). Renders nothing while no pack has
+ * a checkout URL — the LS products ship dark until the founder creates them. */
+function BuyCredits({ packs, t }: { packs: CreditPack[]; t: Messages }) {
+  if (!packs.length) return null;
+  const kitsLabel = (kits: number) =>
+    kits === 1 ? fmt(t.packKitsOne, { n: kits }) : fmt(t.packKitsMany, { n: kits });
+  return (
+    <details>
+      <summary className="cursor-pointer select-none text-xs font-medium text-[#0C8175] hover:underline">
+        {t.buyTitle}
+      </summary>
+      <div className="mt-1.5 space-y-1">
+        <p className="text-[10px] text-[#98A0A9]">{t.buyHint}</p>
+        <div className="flex flex-wrap gap-2">
+          {packs.map((p) => (
+            <a
+              key={p.key}
+              href={p.checkoutUrl!}
+              target="_blank"
+              rel="noreferrer"
+              className="chip font-sans normal-case tracking-normal bg-[#E2F4F1] text-[#0C8175] hover:bg-[#D2EEE9]"
+            >
+              {fmt(t.packLabel, { credits: p.credits, price: p.priceUsd, kits: kitsLabel(p.kits) })}
+            </a>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export default async function FairUseMeter() {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("my_fair_use");
@@ -67,6 +106,23 @@ export default async function FairUseMeter() {
   const locale: Locale = await resolveLocale();
   const dict = await getDictionary(locale);
   const t = dict.fairUse;
+
+  // Credit packs (homeschool release): a one-time top-up for tiers that
+  // already pay; trial/promo get the plans link instead — a pack must never be
+  // a way to generate without ever subscribing. purchasablePacks drops any
+  // pack whose LS product (checkout URL) doesn't exist yet, so this whole
+  // affordance ships dark until the founder creates the products.
+  const packs = packsAllowedForTier(fu.tier) ? purchasablePacks(creditPacks()) : [];
+
+  // Purchased balance — shown only when > 0. my_fair_use() reports it as
+  // fu.purchased.available since 0086: total non-refunded credit_purchases
+  // minus non-voided purchase-sourced ledger rows (the DB consumes the
+  // monthly quota FIRST, then this balance — the meter just mirrors it). A
+  // pre-0086 DB has no `purchased` key AND no credit_purchases table, so no
+  // pack can exist and 0 is the truth, not a fallback.
+  let purchased = 0;
+  if (typeof fu.purchased === "number") purchased = fu.purchased;
+  else if (fu.purchased && typeof fu.purchased.available === "number") purchased = fu.purchased.available;
   // The month/day reads in the reader's own language and order — "1 Sept" is
   // not how every locale writes a date.
   const lang = htmlLang(locale);
@@ -93,6 +149,15 @@ export default async function FairUseMeter() {
             ? fmt(t.trialLeft, { available: fu.credits.available, cap: fu.credits.cap })
             : fmt(t.trialSpent, { cap: fu.credits.cap })}
         </p>
+        {/* Trial accounts can't buy packs — the way to more credits is a plan. */}
+        <a
+          href={PRICING_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block text-xs font-medium text-[#0C8175] hover:underline"
+        >
+          {t.upgradeCta}
+        </a>
       </section>
     );
   }
@@ -114,6 +179,27 @@ export default async function FairUseMeter() {
           {fu.parts && <Row label={t.parts} b={fu.parts} t={t} />}
           {fu.docs && <Row label={t.documents} b={fu.docs} t={t} />}
         </>
+      )}
+      {/* Purchased packs outlive the month, so they sit OUTSIDE the monthly
+          row — a separate line that only appears once there is a balance. */}
+      {purchased > 0 && (
+        <p className="text-[10px] text-[#0C8175]">{fmt(t.purchased, { n: purchased })}</p>
+      )}
+      {packs.length > 0 ? (
+        <BuyCredits packs={packs} t={t} />
+      ) : (
+        // Post-promo free/trial accounts on the standard meter: no packs —
+        // the plans page is the honest next step when the cap runs out.
+        !packsAllowedForTier(fu.tier) && (
+          <a
+            href={PRICING_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block text-xs font-medium text-[#0C8175] hover:underline"
+          >
+            {t.upgradeCta}
+          </a>
+        )
       )}
     </section>
   );

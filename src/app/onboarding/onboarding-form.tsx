@@ -122,15 +122,21 @@ export default function OnboardingForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role, full_name: fullName.trim(), profile: p }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; role?: OnboardingRole };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        role?: OnboardingRole;
+        home_educator?: boolean;
+      };
       if (!res.ok) {
         setError(data.error ?? common.somethingWentWrong);
         setSubmitting(false);
         return;
       }
       // Land on the confirmed role's home. A hard replace + refresh so the server
-      // layout re-reads the now-onboarded profile (no bounce back here).
-      router.replace(homeForRole(data.role ?? role));
+      // layout re-reads the now-onboarded profile (no bounce back here). The
+      // SERVER's word on home_educator decides the parent landing (0087): a
+      // homeschooling/tutoring parent homes on the full Library.
+      router.replace(homeForRole(data.role ?? role, { homeEducator: data.home_educator === true }));
       router.refresh();
     } catch {
       setError(t.networkError);
@@ -300,6 +306,44 @@ export default function OnboardingForm({
             </>
           ) : (
             <>
+              {/* Purpose — required for parents (homeschool release). The two
+                  answers route to two different home surfaces ("homeschool"
+                  writes profiles.home_educator = true, 0087, and lands on the
+                  full Library), so no default is pre-selected: an untouched
+                  group fails missingRequired and the inline hint shows. Same
+                  radio pattern as the teacher affiliation above. */}
+              <div>
+                {label(t.purposeQuestion, true)}
+                <div className="space-y-2">
+                  {(
+                    [
+                      { value: "school", text: t.purposeSchool, sub: t.purposeSchoolSub },
+                      { value: "homeschool", text: t.purposeHomeschool, sub: t.purposeHomeschoolSub },
+                    ] as const
+                  ).map((o) => (
+                    <label
+                      key={o.value}
+                      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer ${
+                        p.purpose === o.value ? "border-[#1FB8A6] bg-[#E2F4F1]" : "border-[#E6E8E4] bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="purpose"
+                        checked={p.purpose === o.value}
+                        onChange={() => setP((s) => ({ ...s, purpose: o.value }))}
+                        className="accent-[#0C8175]"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm text-[#14181F]">{o.text}</span>
+                        <span className="block text-xs text-[#5B6470]">{o.sub}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {show("purpose") && <p className="text-xs text-[#C0392B] mt-1">{t.pickOne}</p>}
+              </div>
+
               <div>
                 {label(t.childrenCount, true)}
                 <input
