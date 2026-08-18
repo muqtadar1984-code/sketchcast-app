@@ -183,15 +183,24 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
   the eight **Variant IDs** into the eight `LEMONSQUEEZY_VARIANT_*` env vars
   (below). The webhook maps a subscription's `variant_id` back to a `plan_key`,
   so these must match the live store.
-- Create three **single-payment products** for the credit packs, named EXACTLY
-  (the webhook identifies a pack by the `SketchCast Credits` prefix + the
-  trailing credit count in parentheses):
-  - `SketchCast Credits — 1 kit (6)` — $8
-  - `SketchCast Credits — 3 kits (18)` — $20
-  - `SketchCast Credits — 6 kits (36)` — $36
-  Then paste each product's Share/checkout URL into `checkoutUrl` in
-  `src/utils/billing/packs.ts` — a null URL keeps that pack's buy button
-  hidden, so the feature ships dark until this step.
+- Create the credit packs as **ONE single-payment product** named exactly
+  `SketchCast Credits` with three variants (the same shape as the Homeschool
+  product's Monthly/Annual):
+  - variant `1 kit (6)` — $8
+  - variant `3 kits (18)` — $20
+  - variant `6 kits (36)` — $36
+  The webhook identifies a pack by the `SketchCast Credits` product-name
+  prefix plus the trailing credit count in parentheses, which may sit on the
+  product name OR the variant name — so three separate products named
+  `SketchCast Credits — 1 kit (6)` / `— 3 kits (18)` / `— 6 kits (36)` work
+  identically if that layout is ever preferred. Either way the count in
+  `(…)` is load-bearing; an order whose count matches no configured pack is
+  logged and ignored, never guessed.
+  Then paste each pack's checkout URL (per-variant Share links; if LS only
+  offers one product-level link with a variant picker, the same URL in all
+  three slots is fine) into `LEMONSQUEEZY_CHECKOUT_PACK_6/18/36` or the
+  literals in `src/utils/billing/packs.ts` — a null URL keeps that pack's
+  buy button hidden, so the feature ships dark until this step.
 - Create the founding discount code **`FOUNDINGTEACHER`** on the Teacher Pro
   product (→ $10/mo, price-locked 24 months). It is a *discount*, not a separate
   product — the public pricing page shows the code and tells teachers to paste

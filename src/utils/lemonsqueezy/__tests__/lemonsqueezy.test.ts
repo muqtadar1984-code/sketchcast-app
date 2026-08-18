@@ -119,6 +119,7 @@ const orderEvent = (over: {
   customerId?: number;
   email?: string | null;
   productName?: string | null;
+  variantName?: string;
   status?: string;
   refunded?: boolean;
   total?: number;
@@ -138,7 +139,12 @@ const orderEvent = (over: {
       first_order_item:
         over.productName === null
           ? null
-          : { product_id: 42, variant_id: 4242, product_name: over.productName ?? "SketchCast Credits — 1 kit (6)", variant_name: "Default" },
+          : {
+              product_id: 42,
+              variant_id: 4242,
+              product_name: over.productName ?? "SketchCast Credits — 1 kit (6)",
+              variant_name: over.variantName ?? "Default",
+            },
     },
   },
 });
@@ -350,6 +356,22 @@ describe("LS order → credit pack", () => {
   it("ignores a non-pack order (a subscription's own order_created)", async () => {
     const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
     await run(db, orderEvent({ custom: { user_id: "user-A" }, productName: "SketchCast Homeschool" }));
+    expect(db.writes.length).toBe(0);
+  });
+
+  it("credits the ONE-product shape: 'SketchCast Credits' + the pack on the variant name", async () => {
+    // The founder's preferred LS layout (same as Homeschool's Monthly/Annual):
+    // one product, three variants — the credit count rides on the variant.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, productName: "SketchCast Credits", variantName: "3 kits (18)", total: 2000 }));
+    expect(db.pack()!.row.credits).toBe(18);
+    expect(db.pack()!.row.pack_key).toBe("pack_18");
+    expect(db.pay()!.row.plan_key).toBe("pack_18");
+  });
+
+  it("ignores a bare 'SketchCast Credits' order whose variant carries no known count", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, productName: "SketchCast Credits", variantName: "Default" }));
     expect(db.writes.length).toBe(0);
   });
 

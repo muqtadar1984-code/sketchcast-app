@@ -23,7 +23,7 @@
 // only a cross-checked fast-path.
 
 import { planKeyForVariant as defaultPlanKeyForVariant } from "@/utils/stripe/plans";
-import { packForProductName } from "@/utils/billing/packs";
+import { packForOrderItem } from "@/utils/billing/packs";
 
 export type Db = {
   from(table: string): {
@@ -360,10 +360,12 @@ export async function handleLsEvent(db: Db, event: LsEvent, deps: HandleLsDeps =
 
 // ── one-time orders: credit packs (0086) ────────────────────────────────────
 // The `order_*` family covers EVERY purchase, including the initial order of a
-// subscription — so an order only matters here when its product name resolves
-// to a configured credit pack (src/utils/billing/packs.ts: prefix
-// "SketchCast Credits" + trailing "(N)"). Everything else is logged and left
-// to the subscription_* events.
+// subscription — so an order only matters here when its line item resolves to
+// a configured credit pack (src/utils/billing/packs.ts: product-name prefix
+// "SketchCast Credits" + a trailing "(N)" on the product OR variant name, so
+// both LS shapes — three products, or one product with three variants —
+// credit correctly). Everything else is logged and left to the
+// subscription_* events.
 //
 // Identity works exactly like subscriptions: an in-app checkout carries
 // custom_data.user_id (trusted — we created that checkout); a public-link
@@ -383,7 +385,7 @@ async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise
   if (!attrs || !orderId) return;
 
   const item = attrs.first_order_item ?? null;
-  const pack = packForProductName(item?.product_name);
+  const pack = packForOrderItem(item?.product_name, item?.variant_name);
   if (!pack) {
     log("order_ignored_not_pack", { order: orderId, product: item?.product_name ?? null });
     return;

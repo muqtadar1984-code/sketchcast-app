@@ -11,14 +11,18 @@
 //     change, same pattern as LEMONSQUEEZY_VARIANT_*) or paste the "Share"
 //     checkout URL into the literal here; resolvedPacks() prefers env. The
 //     dashboard UI consumes this catalogue through src/utils/credit-packs.ts.
-//   * productName — the EXACT product name the founder must use in Lemon
-//     Squeezy. The webhook identifies a pack order by the product-name prefix
-//     "SketchCast Credits" plus the trailing "(N)" credit count, so the names
-//     below are load-bearing, not decorative:
+//   * productName — the canonical name for the pack in Lemon Squeezy. The
+//     webhook identifies a pack order by the product-name prefix
+//     "SketchCast Credits" plus a trailing "(N)" credit count, which may sit
+//     on EITHER the product name or the variant name — so both LS shapes
+//     work, and the names are load-bearing, not decorative:
 //
-//       "SketchCast Credits — 1 kit (6)"
-//       "SketchCast Credits — 3 kits (18)"
-//       "SketchCast Credits — 6 kits (36)"
+//       three products:  "SketchCast Credits — 1 kit (6)" / "— 3 kits (18)"
+//                        / "— 6 kits (36)"
+//       ONE product:     "SketchCast Credits" with variants named
+//                        "1 kit (6)" / "3 kits (18)" / "6 kits (36)"
+//                        (the founder's preferred shape — same as the
+//                        Homeschool product's Monthly/Annual variants)
 //
 // Packs are purchasable on any PAID tier (pro, pro_plus, family/Home Basic,
 // homeschool) — never trial/free. That gate lives where the button renders;
@@ -87,20 +91,35 @@ export function purchasablePacks(): CreditPack[] {
   return resolvedPacks().filter((p) => p.checkoutUrl !== null);
 }
 
+const TRAILING_COUNT = /\((\d{1,4})\)\s*$/;
+
 /**
- * Identify a pack from an LS order's product name. Matching is deliberately
- * tolerant of dash/spacing drift (an em-dash typed as a hyphen must not drop
- * a real sale) but strict about the two things that matter: the
- * "SketchCast Credits" prefix and the trailing "(N)" credit count, which must
- * equal a configured pack's size. Returns null for anything else — the
- * webhook treats that as "not a pack order", never as a guess.
+ * Identify a pack from an LS order line. Matching is deliberately tolerant of
+ * dash/spacing drift (an em-dash typed as a hyphen must not drop a real sale)
+ * but strict about the two things that matter: the "SketchCast Credits"
+ * product-name prefix, and a trailing "(N)" credit count equal to a
+ * configured pack's size. The count may ride on EITHER name — three separate
+ * products carry it on the product name; one product with three variants
+ * carries it on the variant name. When the product name itself ends in a
+ * count, that count is authoritative: an unknown one returns null rather
+ * than falling through to the variant. Null always means "not a pack order",
+ * never a guess.
  */
+export function packForOrderItem(
+  productName: string | null | undefined,
+  variantName?: string | null,
+): CreditPack | null {
+  if (!productName) return null;
+  const product = productName.trim();
+  if (!product.toLowerCase().startsWith(CREDIT_PACK_PRODUCT_PREFIX.toLowerCase())) return null;
+  const own = product.match(TRAILING_COUNT);
+  if (own) return CREDIT_PACKS.find((p) => p.credits === Number(own[1])) ?? null;
+  const v = (variantName ?? "").trim().match(TRAILING_COUNT);
+  if (v) return CREDIT_PACKS.find((p) => p.credits === Number(v[1])) ?? null;
+  return null;
+}
+
+/** The product-name-only view of packForOrderItem (three-products shape). */
 export function packForProductName(name: string | null | undefined): CreditPack | null {
-  if (!name) return null;
-  const trimmed = name.trim();
-  if (!trimmed.toLowerCase().startsWith(CREDIT_PACK_PRODUCT_PREFIX.toLowerCase())) return null;
-  const m = trimmed.match(/\((\d{1,4})\)\s*$/);
-  if (!m) return null;
-  const credits = Number(m[1]);
-  return CREDIT_PACKS.find((p) => p.credits === credits) ?? null;
+  return packForOrderItem(name, null);
 }
