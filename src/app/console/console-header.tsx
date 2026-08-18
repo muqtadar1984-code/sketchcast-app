@@ -27,7 +27,10 @@ export default function ConsoleHeader({ email }: { email: string }) {
   return (
     // `relative` so the mobile menu panel anchors to this bar rather than the page.
     <header className="relative border-b border-[#2A3140] bg-[#14181F] text-white">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+      {/* Full-bleed like the landing header (founder, 2026-08-18): the brand
+          sits at the true left edge and the account cluster at the true right,
+          instead of floating inside a centered max-w-7xl column. */}
+      <div className="px-6 h-14 flex items-center justify-between">
         <span className="flex items-center gap-3 sm:gap-6">
           {/* The tab row below is `hidden sm:flex`, which left a phone with NO
               route to Issues / Users / Schools / Content / Feedback / Audit —
