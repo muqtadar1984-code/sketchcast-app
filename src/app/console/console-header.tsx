@@ -27,11 +27,13 @@ export default function ConsoleHeader({ email }: { email: string }) {
   return (
     // `relative` so the mobile menu panel anchors to this bar rather than the page.
     <header className="relative border-b border-[#2A3140] bg-[#14181F] text-white">
-      {/* Full-bleed like the landing header (founder, 2026-08-18): the brand
-          sits at the true left edge and the account cluster at the true right,
-          instead of floating inside a centered max-w-7xl column. */}
-      <div className="px-6 h-14 flex items-center justify-between">
-        <span className="flex items-center gap-3 sm:gap-6">
+      {/* Full-bleed, three zones (founder, 2026-08-18): brand at the true left
+          edge, TABS CENTERED in the bar, account cluster at the true right —
+          edge-pinning alone left the tabs hugging the brand with a void in the
+          middle of a wide screen. The nav takes the flexible middle and centers
+          its row; brand/account keep their natural widths at the edges. */}
+      <div className="px-6 h-14 flex items-center justify-between gap-6">
+        <span className="flex items-center gap-3 shrink-0">
           {/* The tab row below is `hidden sm:flex`, which left a phone with NO
               route to Issues / Users / Schools / Content / Feedback / Audit —
               the founder could reach the console and then not navigate it. Same
@@ -52,24 +54,24 @@ export default function ConsoleHeader({ email }: { email: string }) {
             <LogoMark size={26} />
             Console
           </Link>
-          <nav className="hidden sm:flex items-center gap-5 text-sm">
-            {TABS.map((t) => (
-              <Link
-                key={t.href}
-                href={t.href}
-                aria-current={isActive(t.href, path) ? "page" : undefined}
-                className={
-                  isActive(t.href, path)
-                    ? "text-white font-medium border-b-2 border-[#1FB8A6] pb-0.5"
-                    : "text-[#98A0A9] hover:text-white"
-                }
-              >
-                {t.label}
-              </Link>
-            ))}
-          </nav>
         </span>
-        <div className="flex items-center gap-4 text-sm">
+        <nav className="hidden sm:flex flex-1 items-center justify-center gap-5 text-sm min-w-0">
+          {TABS.map((t) => (
+            <Link
+              key={t.href}
+              href={t.href}
+              aria-current={isActive(t.href, path) ? "page" : undefined}
+              className={
+                (isActive(t.href, path)
+                  ? "text-white font-medium border-b-2 border-[#1FB8A6] pb-0.5"
+                  : "text-[#98A0A9] hover:text-white") + " whitespace-nowrap"
+              }
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex items-center gap-4 text-sm shrink-0">
           <span className="text-[#98A0A9] hidden md:inline">{email} · staff</span>
           {/* On the dedicated console subdomain the teacher app is a different
               host (and @sketchcast.app has no teacher side), so drop the cross-link
