@@ -34,7 +34,7 @@ function job(generation_id: string | null, cost?: number): FinJobRow {
 
 // (grossEstimateUsd and friends are imported lazily below to keep the existing
 // import block untouched by the 2026-08-18 additions.)
-import { PLAN_KITS_PER_MONTH, SCHOOL_CURRICULUM_KITS_PER_YEAR, grossEstimateUsd } from "../financials";
+import { PLAN_KITS_PER_MONTH, SCHOOL_CURRICULUM_KITS_PER_YEAR, grossMarginPct, fmtPct } from "../financials";
 
 describe("kitKey / kit grouping", () => {
   it("groups generations of the same (book, chapter, part) into one kit", () => {
@@ -246,15 +246,26 @@ describe("gross estimates (2026-08-18: revenue minus measured serving cost)", ()
     expect(SCHOOL_CURRICULUM_KITS_PER_YEAR).toBe(940);
   });
 
-  it("computes revenue minus kits × measured cost, and can go negative", () => {
-    // A Pro subscriber: $288/yr revenue, 48 kits/yr at $2.11 = $101.28 cost.
-    expect(grossEstimateUsd(288, 48, 2.11)).toBeCloseTo(288 - 101.28, 6);
-    // Band A at a high kit cost is a loss — the estimate must SHOW that.
-    expect(grossEstimateUsd(3000, 940, 4)).toBe(3000 - 3760);
+  it("margin is a ratio — subscriber count cancels, so monthly and annual agree", () => {
+    // Pro: $24/mo vs 4 kits × $2.11 = 64.83…% — same fraction at annual scale.
+    expect(grossMarginPct(24, 4, 2.11)).toBeCloseTo((24 - 8.44) / 24, 6);
+    expect(grossMarginPct(288, 48, 2.11)).toBeCloseTo(grossMarginPct(24, 4, 2.11)!, 10);
   });
 
-  it("returns null (renders as —) while no kit cost has been measured", () => {
-    expect(grossEstimateUsd(1000, 48, null)).toBeNull();
+  it("a loss-making band shows NEGATIVE, never clamped", () => {
+    // Band A at a $4 kit: 940 kits = $3,760 against $3,000.
+    expect(grossMarginPct(3000, 940, 4)).toBeCloseTo((3000 - 3760) / 3000, 6);
+    expect(grossMarginPct(3000, 940, 4)!).toBeLessThan(0);
+  });
+
+  it("returns null (renders as —) for unmeasured cost or zero revenue", () => {
+    expect(grossMarginPct(1000, 48, null)).toBeNull();
+    expect(grossMarginPct(0, 48, 2.11)).toBeNull(); // a margin on nothing is not 100%
+  });
+
+  it("formats with one decimal, the memo convention", () => {
+    expect(fmtPct(0.256)).toBe("25.6%");
+    expect(fmtPct(-0.2533333)).toBe("-25.3%");
   });
 });
 

@@ -269,15 +269,24 @@ export const PLAN_KITS_PER_MONTH = {
  * size. That flatness is exactly why the bigger bands carry the margin. */
 export const SCHOOL_CURRICULUM_KITS_PER_YEAR = 940;
 
-/** Annual gross estimate: revenue minus serving cost at the measured average
- * kit cost. Null when no kit cost has been measured yet — "—" beats a fake
- * zero-cost margin. */
-export function grossEstimateUsd(
-  revenueAnnualUsd: number,
-  kitsPerYear: number,
+/** Gross margin as a FRACTION (0.648 = 64.8%): (revenue − kits × measured
+ * avg kit cost) / revenue. A ratio, so it is independent of subscriber count
+ * — one margin per plan, not per conversion scenario. Null when no kit cost
+ * has been measured yet OR revenue is zero (a margin on nothing is not 100%)
+ * — "—" beats a fake number. Can be negative: a loss-making band must SHOW
+ * as one. */
+export function grossMarginPct(
+  revenueUsd: number,
+  kitsForThatRevenue: number,
   avgKitUsd: number | null,
 ): number | null {
-  return avgKitUsd === null ? null : revenueAnnualUsd - kitsPerYear * avgKitUsd;
+  if (avgKitUsd === null || revenueUsd <= 0) return null;
+  return (revenueUsd - kitsForThatRevenue * avgKitUsd) / revenueUsd;
+}
+
+/** Display form: one decimal, the memo convention ("25.6%"). */
+export function fmtPct(fraction: number): string {
+  return `${(fraction * 100).toFixed(1)}%`;
 }
 
 export type ConversionScenario = { paying: number; annualUsd: number };

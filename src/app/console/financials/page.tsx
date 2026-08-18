@@ -15,7 +15,8 @@ import {
   PLAN_PRICES_USD_MONTHLY,
   PLAN_KITS_PER_MONTH,
   SCHOOL_CURRICULUM_KITS_PER_YEAR,
-  grossEstimateUsd,
+  grossMarginPct,
+  fmtPct,
   MYR_PER_USD,
   type CsvSection,
   type EntitlementRow,
@@ -45,15 +46,14 @@ const TABLE3_B2C_FOOTER =
   "Prices: Teacher Pro $24 · Teacher Pro+ $49 · Home Basic $9.99 · Homeschool $34 per month; annual = 12×. " +
   "Teachers = active non-demo teacher accounts; parents = non-demo parent accounts (home educators included). " +
   "Each column assumes that share of the row's base converts to that plan — rows are ALTERNATIVE scenarios, " +
-  "never additive. Gross = revenue minus AI serving cost at the measured lifetime avg kit cost (Table 1), " +
-  "with every subscriber using their FULL kit allowance (Pro 4 · Pro+ 12 · Home Basic 2 · Homeschool 8 kits/mo) " +
-  "— the conservative bound. Estimates, not forecasts.";
+  "never additive. Gross margin = (price − allowance × measured lifetime avg kit cost) / price, with every " +
+  "subscriber using their FULL kit allowance (Pro 4 · Pro+ 12 · Home Basic 2 · Homeschool 8 kits/mo) — the " +
+  "conservative bound; a ratio, so it holds at any conversion. Estimates, not forecasts.";
 const TABLE3_B2B_FOOTER =
   "Rate card: Band A ≤350 students $3,000 · Band B 351–700 $5,000 · Band C 701–1,200 $7,000 " +
   "per school per year; schools above 1,200 are priced individually (shown at Band C). " +
-  "Gross = revenue minus AI serving cost at the measured lifetime avg kit cost × ~940 chapter kits " +
-  "per school per year (full-curriculum coverage — content cost is FLAT in enrolment, which is why " +
-  "the bigger bands carry the margin). " +
+  "Gross margin = (rate − ~940 chapter kits × measured lifetime avg kit cost) / rate — full-curriculum " +
+  "coverage per school per year, FLAT in enrolment, which is why the bigger bands carry the margin. " +
   "Assumes the entered number of new schools in year 1 — change it below or via ?pipeline=N " +
   "(the link carries the scenario). Estimates, not forecasts.";
 
@@ -208,16 +208,18 @@ export default async function ConsoleFinancialsPage({
     { plan: "Teacher Pro+", monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_plus_monthly, base: teachers, baseLabel: "teachers", kitsMo: PLAN_KITS_PER_MONTH.teacher_pro_plus },
     { plan: "Home Basic", monthly: PLAN_PRICES_USD_MONTHLY.family_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_PER_MONTH.family },
     { plan: "Homeschool", monthly: PLAN_PRICES_USD_MONTHLY.homeschool_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_PER_MONTH.homeschool },
-  ].map((p) => ({
-    plan: p.plan,
-    monthly: `$${p.monthly.toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
-    base: `${p.base} ${p.baseLabel}`,
-    cells: B2C_RATES.map((rate) => {
-      const s = conversionScenario(p.base, rate, p.monthly);
-      const gross = grossEstimateUsd(s.annualUsd, s.paying * p.kitsMo * 12, avgKitLife);
-      return { revenue: fmtUsd(s.annualUsd), gross: gross === null ? "—" : fmtUsd(gross) };
-    }),
-  }));
+  ].map((p) => {
+    // Margin is a ratio — subscriber count cancels out — so it is ONE number
+    // per plan, from unit economics: monthly price vs the allowance's cost.
+    const margin = grossMarginPct(p.monthly, p.kitsMo, avgKitLife);
+    return {
+      plan: p.plan,
+      monthly: `$${p.monthly.toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+      base: `${p.base} ${p.baseLabel}`,
+      margin: margin === null ? "—" : fmtPct(margin),
+      cells: B2C_RATES.map((rate) => fmtUsd(conversionScenario(p.base, rate, p.monthly).annualUsd)),
+    };
+  });
 
   // B2B: the assumed new-schools count priced at each band of the rate card
   // (one row per band — "if the assumed schools land this size"), plus the
@@ -230,12 +232,13 @@ export default async function ConsoleFinancialsPage({
     const students = profiles.filter((p) => p.school_id === schoolId && p.role === "student").length;
     liveUsd += bandForStudents(students)?.usdPerYear ?? 0;
   }
-  // School gross: content cost is FLAT in enrolment (the 2026-08 cost-basis
-  // memo) — every school costs full-curriculum coverage at the measured kit
-  // cost, whatever its band. The flat cost is why bigger bands carry margin.
+  // School gross margin: content cost is FLAT in enrolment (the 2026-08
+  // cost-basis memo) — every school costs full-curriculum coverage at the
+  // measured kit cost, whatever its band. Flat cost is why the bigger bands
+  // carry the margin, and a percentage shows it starkly.
   const schoolGross = (revenueUsd: number, schools: number): string => {
-    const g = grossEstimateUsd(revenueUsd, schools * SCHOOL_CURRICULUM_KITS_PER_YEAR, avgKitLife);
-    return g === null ? "—" : fmtUsd(g);
+    const g = grossMarginPct(revenueUsd, schools * SCHOOL_CURRICULUM_KITS_PER_YEAR, avgKitLife);
+    return g === null ? "—" : fmtPct(g);
   };
   const b2bRows = [
     ...SCHOOL_BANDS.map((b) => ({
@@ -284,13 +287,13 @@ export default async function ConsoleFinancialsPage({
     },
     {
       title: "Estimated revenue — B2C (annual)",
-      header: ["Plan", "Per month", "Base", "10% conv", "10% gross", "25% conv", "25% gross", "50% conv", "50% gross"],
-      rows: b2cRows.map((r) => [r.plan, r.monthly, r.base, ...r.cells.flatMap((c) => [c.revenue, c.gross])]),
+      header: ["Plan", "Per month", "Base", "Gross margin", "10% conv", "25% conv", "50% conv"],
+      rows: b2cRows.map((r) => [r.plan, r.monthly, r.base, r.margin, ...r.cells]),
       footer: TABLE3_B2C_FOOTER,
     },
     {
       title: "Estimated revenue — B2B schools (annual)",
-      header: ["Band", "Enrolment", "Per school/yr", "Schools", "Annual USD", "Gross (est.)"],
+      header: ["Band", "Enrolment", "Per school/yr", "Schools", "Annual USD", "Gross margin"],
       rows: b2bRows.map((r) => [r.band, r.enrolment, r.rate, r.schools, r.value, r.gross]),
       footer: TABLE3_B2B_FOOTER,
     },
@@ -395,24 +398,23 @@ export default async function ConsoleFinancialsPage({
       <section className="mb-10">
         <h2 className="text-xl mb-3">Estimated revenue — B2C (annual)</h2>
         <div className="card divide-y divide-[#EEF0EC] overflow-x-auto">
-          <div className="grid grid-cols-[1.3fr_.8fr_1.1fr_1fr_1fr_1fr] gap-2 min-w-[640px]">
+          <div className="grid grid-cols-[1.2fr_.8fr_1fr_.9fr_1fr_1fr_1fr] gap-2 min-w-[680px]">
             <span className={th}>Plan</span>
             <span className={`${th} text-end`}>Per month</span>
             <span className={`${th} text-end`}>Base</span>
+            <span className={`${th} text-end`}>Gross margin</span>
             <span className={`${th} text-end`}>10% conv</span>
             <span className={`${th} text-end`}>25% conv</span>
             <span className={`${th} text-end`}>50% conv</span>
           </div>
           {b2cRows.map((r) => (
-            <div key={r.plan} className="grid grid-cols-[1.3fr_.8fr_1.1fr_1fr_1fr_1fr] gap-2 min-w-[640px]">
+            <div key={r.plan} className="grid grid-cols-[1.2fr_.8fr_1fr_.9fr_1fr_1fr_1fr] gap-2 min-w-[680px]">
               <span className={`${td} font-medium`}>{r.plan}</span>
               <span className={`${td} tabular text-end`}>{r.monthly}</span>
               <span className={`${td} tabular text-end`}>{r.base}</span>
+              <span className={`${td} tabular text-end text-[#0C8175] font-medium`}>{r.margin}</span>
               {r.cells.map((c, i) => (
-                <span key={i} className={`${td} tabular text-end`}>
-                  {c.revenue}
-                  <span className="block text-[11px] text-[#0C8175]">gross {c.gross}</span>
-                </span>
+                <span key={i} className={`${td} tabular text-end`}>{c}</span>
               ))}
             </div>
           ))}
@@ -430,7 +432,7 @@ export default async function ConsoleFinancialsPage({
             <span className={`${th} text-end`}>Per school/yr</span>
             <span className={`${th} text-end`}>Schools</span>
             <span className={`${th} text-end`}>Annual USD</span>
-            <span className={`${th} text-end`}>Gross (est.)</span>
+            <span className={`${th} text-end`}>Gross margin</span>
           </div>
           {b2bRows.map((r) => (
             <div key={r.band} className="grid grid-cols-[.8fr_1.3fr_1fr_.7fr_1.1fr_1.1fr] gap-2 min-w-[640px]">
