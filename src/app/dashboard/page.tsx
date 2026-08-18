@@ -499,11 +499,13 @@ export default async function DashboardPage() {
     students: (c.enrollments ?? []).map((e) => e.profiles).filter((p): p is RosterStudent => !!p),
   }));
 
-  const { data: brandingRow } = await supabase
-    .from("branding")
-    .select("docx_path, pptx_path")
-    .eq("owner_id", user.id)
-    .maybeSingle();
+  // Letterhead branding is a teacher/school affordance. Parent accounts (home
+  // educators included) don't get the card (founder, 2026-08-18) — so skip the
+  // reads too. Gated on ROLE, not hat: a teacher-who-is-a-parent keeps theirs.
+  const { data: brandingRow } =
+    role === "parent"
+      ? { data: null }
+      : await supabase.from("branding").select("docx_path, pptx_path").eq("owner_id", user.id).maybeSingle();
 
   // A stored path is not proof of a usable template. Before upload-time
   // validation existed a teacher uploaded JPEGs as their .docx/.pptx letterheads
@@ -1064,13 +1066,17 @@ export default async function DashboardPage() {
           <ClassesCard classes={classRosters} t={t} betaSlotsLeft={betaSlotsLeft} />
         </div>
 
-        <div data-tour="branding">
-          <BrandingCard
-            hasDocx={brandingUsable(brandingRow?.docx_path)}
-            hasPptx={brandingUsable(brandingRow?.pptx_path)}
-            t={t}
-          />
-        </div>
+        {/* Teachers/schools only — parents never see the letterhead card. The
+            school-admin tour's branding step tolerates the absent marker. */}
+        {role !== "parent" && (
+          <div data-tour="branding">
+            <BrandingCard
+              hasDocx={brandingUsable(brandingRow?.docx_path)}
+              hasPptx={brandingUsable(brandingRow?.pptx_path)}
+              t={t}
+            />
+          </div>
+        )}
 
         {bookList.length === 0 ? (
           gettingStarted ? (
