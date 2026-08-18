@@ -12,7 +12,7 @@ import {
   mrrUsd,
   bandForStudents,
   SCHOOL_BANDS,
-  TEACHER_PRO_USD_PER_MONTH,
+  PLAN_PRICES_USD_MONTHLY,
   MYR_PER_USD,
   type CsvSection,
   type EntitlementRow,
@@ -39,8 +39,10 @@ const TABLE2_FOOTER =
   `school floor $3,000/yr → $250/mo. Stripe school payments (MYR) converted at RM${MYR_PER_USD.toFixed(2)}/USD. ` +
   `Update alongside pricing. Demo accounts excluded.`;
 const TABLE3_B2C_FOOTER =
-  "Assumptions: Teacher Pro $24/mo; teachers counted = all active non-demo teacher accounts. " +
-  "Estimates, not forecasts.";
+  "Prices: Teacher Pro $24 · Teacher Pro+ $49 · Home Basic $9.99 · Homeschool $34 per month; annual = 12×. " +
+  "Teachers = active non-demo teacher accounts; parents = non-demo parent accounts (home educators included). " +
+  "Each column assumes that share of the row's base converts to that plan — rows are ALTERNATIVE scenarios, " +
+  "never additive. Estimates, not forecasts.";
 const TABLE3_B2B_FOOTER =
   "Rate card: Band A ≤350 students $3,000 · Band B 351–700 $5,000 · Band C 701–1,200 $7,000 " +
   "per school per year; schools above 1,200 are priced individually (shown at Band C). " +
@@ -182,12 +184,24 @@ export default async function ConsoleFinancialsPage({
   ];
 
   // ── Table 3: estimated revenue (annual) ───────────────────────────────────
+  // One row per consumer plan, one column per conversion rate (founder,
+  // 2026-08-18). Teachers convert to the teacher plans, parents (home
+  // educators included) to the home plans; a row assumes that share of ITS
+  // base converts to THAT plan, so rows are alternative scenarios — summing
+  // them would double-count the same people.
   const teachers = profiles.filter((p) => p.role === "teacher").length;
-  const scenarios = [0.1, 0.25, 0.5].map((rate) => ({ rate, ...conversionScenario(teachers, rate) }));
-
-  const b2cRows: { label: string; value: string }[] = scenarios.map((s) => ({
-    label: `${Math.round(s.rate * 100)}% conversion — ${s.paying} of ${teachers} active teachers × $${TEACHER_PRO_USD_PER_MONTH}/mo × 12`,
-    value: fmtUsd(s.annualUsd),
+  const parents = profiles.filter((p) => p.role === "parent").length;
+  const B2C_RATES = [0.1, 0.25, 0.5];
+  const b2cRows = [
+    { plan: "Teacher Pro", monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_monthly, base: teachers, baseLabel: "teachers" },
+    { plan: "Teacher Pro+", monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_plus_monthly, base: teachers, baseLabel: "teachers" },
+    { plan: "Home Basic", monthly: PLAN_PRICES_USD_MONTHLY.family_monthly, base: parents, baseLabel: "parents" },
+    { plan: "Homeschool", monthly: PLAN_PRICES_USD_MONTHLY.homeschool_monthly, base: parents, baseLabel: "parents" },
+  ].map((p) => ({
+    plan: p.plan,
+    monthly: `$${p.monthly.toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+    base: `${p.base} ${p.baseLabel}`,
+    cells: B2C_RATES.map((rate) => fmtUsd(conversionScenario(p.base, rate, p.monthly).annualUsd)),
   }));
 
   // B2B: the assumed new-schools count priced at each band of the rate card
@@ -201,13 +215,19 @@ export default async function ConsoleFinancialsPage({
     const students = profiles.filter((p) => p.school_id === schoolId && p.role === "student").length;
     liveUsd += bandForStudents(students)?.usdPerYear ?? 0;
   }
-  const b2bRows: { label: string; value: string }[] = [
+  const b2bRows = [
     ...SCHOOL_BANDS.map((b) => ({
-      label: `Band ${b.name} — ${pipeline} school${pipeline === 1 ? "" : "s"} of ${b.range} students × $${b.usdPerYear.toLocaleString("en-US")}/yr`,
+      band: `Band ${b.name}`,
+      enrolment: `${b.range} students`,
+      rate: `$${b.usdPerYear.toLocaleString("en-US")}`,
+      schools: String(pipeline),
       value: fmtUsd(pipeline * b.usdPerYear),
     })),
     {
-      label: `Live — ${schoolsWithReal.size} school${schoolsWithReal.size === 1 ? "" : "s"} on the platform, priced by actual enrolment`,
+      band: "Live",
+      enrolment: "actual enrolment",
+      rate: "—",
+      schools: String(schoolsWithReal.size),
       value: fmtUsd(liveUsd),
     },
   ];
@@ -240,14 +260,14 @@ export default async function ConsoleFinancialsPage({
     },
     {
       title: "Estimated revenue — B2C (annual)",
-      header: ["Scenario", "Annual USD"],
-      rows: b2cRows.map((r) => [r.label, r.value]),
+      header: ["Plan", "Per month", "Base", "10% conv", "25% conv", "50% conv"],
+      rows: b2cRows.map((r) => [r.plan, r.monthly, r.base, ...r.cells]),
       footer: TABLE3_B2C_FOOTER,
     },
     {
       title: "Estimated revenue — B2B schools (annual)",
-      header: ["Scenario", "Annual USD"],
-      rows: b2bRows.map((r) => [r.label, r.value]),
+      header: ["Band", "Enrolment", "Per school/yr", "Schools", "Annual USD"],
+      rows: b2bRows.map((r) => [r.band, r.enrolment, r.rate, r.schools, r.value]),
       footer: TABLE3_B2B_FOOTER,
     },
   ];
@@ -347,18 +367,26 @@ export default async function ConsoleFinancialsPage({
         <p className="text-[11px] text-[#98A0A9] mt-2">{TABLE2_FOOTER}</p>
       </section>
 
-      {/* ── Table 3a: B2C ────────────────────────────── */}
+      {/* ── Table 3a: B2C — plan × conversion matrix ─── */}
       <section className="mb-10">
         <h2 className="text-xl mb-3">Estimated revenue — B2C (annual)</h2>
         <div className="card divide-y divide-[#EEF0EC] overflow-x-auto">
-          <div className="grid grid-cols-[3fr_1fr] gap-2">
-            <span className={th}>Scenario</span>
-            <span className={`${th} text-end`}>Annual USD</span>
+          <div className="grid grid-cols-[1.3fr_.8fr_1.1fr_1fr_1fr_1fr] gap-2 min-w-[640px]">
+            <span className={th}>Plan</span>
+            <span className={`${th} text-end`}>Per month</span>
+            <span className={`${th} text-end`}>Base</span>
+            <span className={`${th} text-end`}>10% conv</span>
+            <span className={`${th} text-end`}>25% conv</span>
+            <span className={`${th} text-end`}>50% conv</span>
           </div>
           {b2cRows.map((r) => (
-            <div key={r.label} className="grid grid-cols-[3fr_1fr] gap-2">
-              <span className={td}>{r.label}</span>
-              <span className={`${td} tabular text-end`}>{r.value}</span>
+            <div key={r.plan} className="grid grid-cols-[1.3fr_.8fr_1.1fr_1fr_1fr_1fr] gap-2 min-w-[640px]">
+              <span className={`${td} font-medium`}>{r.plan}</span>
+              <span className={`${td} tabular text-end`}>{r.monthly}</span>
+              <span className={`${td} tabular text-end`}>{r.base}</span>
+              {r.cells.map((c, i) => (
+                <span key={i} className={`${td} tabular text-end`}>{c}</span>
+              ))}
             </div>
           ))}
         </div>
@@ -369,13 +397,19 @@ export default async function ConsoleFinancialsPage({
       <section className="mb-10">
         <h2 className="text-xl mb-3">Estimated revenue — B2B schools (annual)</h2>
         <div className="card divide-y divide-[#EEF0EC] overflow-x-auto">
-          <div className="grid grid-cols-[3fr_1fr] gap-2">
-            <span className={th}>Scenario</span>
+          <div className="grid grid-cols-[.9fr_1.4fr_1.1fr_.8fr_1.2fr] gap-2 min-w-[560px]">
+            <span className={th}>Band</span>
+            <span className={th}>Enrolment</span>
+            <span className={`${th} text-end`}>Per school/yr</span>
+            <span className={`${th} text-end`}>Schools</span>
             <span className={`${th} text-end`}>Annual USD</span>
           </div>
           {b2bRows.map((r) => (
-            <div key={r.label} className="grid grid-cols-[3fr_1fr] gap-2">
-              <span className={td}>{r.label}</span>
+            <div key={r.band} className="grid grid-cols-[.9fr_1.4fr_1.1fr_.8fr_1.2fr] gap-2 min-w-[560px]">
+              <span className={`${td} font-medium`}>{r.band}</span>
+              <span className={td}>{r.enrolment}</span>
+              <span className={`${td} tabular text-end`}>{r.rate}</span>
+              <span className={`${td} tabular text-end`}>{r.schools}</span>
               <span className={`${td} tabular text-end`}>{r.value}</span>
             </div>
           ))}
