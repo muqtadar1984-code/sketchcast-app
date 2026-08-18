@@ -115,6 +115,12 @@ export default function StudentItem({
   const revisedOnceRef = useRef(false);
 
   const base = { generation_id: item.genId, student_id: studentId, class_id: item.classId };
+  // submissions has NO class_id column (0006) — spreading `base` into it made
+  // PostgREST reject EVERY submission (quiz and file alike) while the sr-only
+  // error span hid the failure. Caught 2026-08-18 by the founder's homeschool
+  // demo: every submissions row in prod was seed data; no real student had
+  // ever submitted. student_progress keeps `base` — it has the column.
+  const subBase = { generation_id: item.genId, student_id: studentId };
 
   async function markOpen() {
     if (status === "completed" || status === "revised") {
@@ -207,7 +213,7 @@ export default function StudentItem({
     }
     const { error: sErr } = await supabase
       .from("submissions")
-      .upsert({ ...base, mode: "file", file_path: path, grade_status: "pending", submitted_at: new Date().toISOString() }, { onConflict: "generation_id,student_id" });
+      .upsert({ ...subBase, mode: "file", file_path: path, grade_status: "pending", submitted_at: new Date().toISOString() }, { onConflict: "generation_id,student_id" });
     if (sErr) {
       setError(sErr.message);
       setBusy(false);
@@ -239,12 +245,13 @@ export default function StudentItem({
     const { error: sErr } = await supabase
       .from("submissions")
       .upsert(
-        { ...base, mode: "interactive", answers, auto_score: auto, max_score: max, grade_status: needsReview ? "pending" : "auto", submitted_at: new Date().toISOString() },
+        { ...subBase, mode: "interactive", answers, auto_score: auto, max_score: max, grade_status: needsReview ? "pending" : "auto", submitted_at: new Date().toISOString() },
         { onConflict: "generation_id,student_id" },
       );
     if (sErr) {
-      setError(sErr.message);
-      return;
+      // Thrown so the quiz modal shows it inline and re-enables Submit —
+      // a swallowed error here left the player stuck with no feedback.
+      throw new Error(sErr.message);
     }
     await markComplete();
     setSubmitted(true);
@@ -338,7 +345,8 @@ export default function StudentItem({
         )}
       </span>
 
-      {error && <span className="sr-only">{error}</span>}
+      {/* Visible, not sr-only: a failed file upload must be seen to be retried. */}
+      {error && <span className="text-xs text-[#B42318]">{error}</span>}
 
       {playing && parts.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setPlaying(false)}>

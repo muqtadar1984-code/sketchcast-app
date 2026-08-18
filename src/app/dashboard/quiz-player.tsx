@@ -27,6 +27,7 @@ export default function QuizPlayer({
 }) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const set = (id: string, v: unknown) => setAnswers((a) => ({ ...a, [id]: v }));
 
   // Right-hand options per match question, ordered deterministically (alphabetical)
@@ -43,6 +44,7 @@ export default function QuizPlayer({
 
   async function submit() {
     setBusy(true);
+    setError(null);
     let auto = 0;
     let max = 0;
     let needsReview = false;
@@ -61,8 +63,15 @@ export default function QuizPlayer({
         needsReview = true; // short / subjective → teacher marks
       }
     }
-    await onSubmit(answers, auto, max, needsReview);
-    setBusy(false);
+    // A rejected write must SHOW — the answers stay on screen for a retry.
+    // (The original swallowed the error and the player sat busy forever.)
+    try {
+      await onSubmit(answers, auto, max, needsReview);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't submit — please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -139,6 +148,7 @@ export default function QuizPlayer({
           ))}
         </ol>
 
+        {error && <p className="text-xs text-red-600 mt-4 text-end">{error}</p>}
         <div className="flex items-center justify-end gap-2 mt-5">
           <button onClick={onClose} disabled={busy} className="btn-ghost h-9 px-3 text-sm">Cancel</button>
           <button onClick={submit} disabled={busy} className="btn-primary h-9 px-4 text-sm">
