@@ -10,18 +10,12 @@
 // (@sketchcast.app), so surfacing it here is intentional, not a leak.
 export const SHARED_DEMO_PASSWORD = "SketchDemo2026";
 
-// The shared password is only known for accounts scripts/seed-school.ts (or
-// add-subject-teachers.ts) actually provisioned, so coverage is decided by
-// PROVENANCE, not by is_demo alone:
-//   - tenant adults live at @{slug}.sketchcast.app (a SUBDOMAIN — never the
-//     bare @sketchcast.app of staff/founder-made accounts like
-//     principal.test@sketchcast.app, and never the synthetic students domain);
-//   - tenant students share the synthetic @students.sketchcast.app domain with
-//     REAL students, so a students-domain email counts only when the account
-//     belongs to a school (the seeder always attaches its students; the 6/29
-//     standalone seed batch predates the seeder and its password is unknown).
-// Everything else — legacy supabase/seed_demo.mjs accounts, hand-made test
-// accounts, the standalone batch — renders as "—" in the console.
+// Coverage was once decided by PROVENANCE (only seeder-provisioned accounts
+// verifiably used the shared password; legacy/hand-made demo rows rendered
+// "—"). On 2026-08-18 the founder had every is_demo account RESET to the
+// shared password (verified in-DB: 53/53 bcrypt-match), so when the caller
+// can say "this row is a demo account", that alone answers it. The pattern
+// rules remain as the fallback for callers without the flag.
 const SEEDED_TENANT_ADULT = /^[^@]+@(?!students\.)[^@.]+\.sketchcast\.app$/i;
 const STUDENTS_DOMAIN = /@students\.sketchcast\.app$/i;
 
@@ -32,7 +26,9 @@ const STUDENTS_DOMAIN = /@students\.sketchcast\.app$/i;
 export function demoAccountPassword(
   email: string | null | undefined,
   schoolId?: string | null,
+  isDemo?: boolean | null,
 ): string | null {
+  if (isDemo === true) return SHARED_DEMO_PASSWORD;
   const e = (email ?? "").trim();
   if (!e) return null;
   if (SEEDED_TENANT_ADULT.test(e)) return SHARED_DEMO_PASSWORD;

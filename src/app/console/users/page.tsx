@@ -218,7 +218,7 @@ export default async function ConsoleUsersPage({
             <Num label="Errors" n={s.errors} />
             <Num label="Resolved" n={s.resolved} />
             {demoTab ? (
-              <span className="font-mono text-xs text-[#5B6470]">{demoAccountPassword(emails.get(p.id), p.school_id) ?? "—"}</span>
+              <span className="font-mono text-xs text-[#5B6470]">{demoAccountPassword(emails.get(p.id), p.school_id, p.is_demo) ?? "—"}</span>
             ) : (
               <span className="tabular sm:text-end text-xs text-[#5B6470]">{new Date(p.created_at).toLocaleDateString()}</span>
             )}

@@ -34,6 +34,16 @@ describe("demoAccountPassword — what the console's Password column shows", () 
     expect(demoAccountPassword(undefined)).toBeNull();
     expect(demoAccountPassword("")).toBeNull();
   });
+
+  it("any account the caller KNOWS is demo shares the password (2026-08-18 reset: 53/53 verified)", () => {
+    // The founder's consumer-demo accounts match no provenance pattern —
+    // the is_demo flag answers instead.
+    expect(demoAccountPassword("muqtadar1984+hsdemo@gmail.com", null, true)).toBe(SHARED_DEMO_PASSWORD);
+    expect(demoAccountPassword("adam.demo@students.sketchcast.app", null, true)).toBe(SHARED_DEMO_PASSWORD);
+    // And the flag never widens coverage for REAL accounts.
+    expect(demoAccountPassword("someone@gmail.com", null, false)).toBeNull();
+    expect(demoAccountPassword("someone@gmail.com", null, null)).toBeNull();
+  });
 });
 
 describe("partitionByDemo — roster split for the Users tabs", () => {
