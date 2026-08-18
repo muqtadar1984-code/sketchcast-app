@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import CoachRecap from "./coach-recap";
 import TutorBoard, { type TutorBoardHandle } from "./tutor-board";
 import { speakableText } from "@/utils/speakable";
+import RichText from "@/components/rich-text";
 
 type Msg = { role: "student" | "coach"; content: string; videoUrl?: string };
 
@@ -358,13 +359,13 @@ export default function AskCoach({
             </div>
           ) : (
             <div
-              className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
+              className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
                 m.role === "student"
                   ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm"
                   : "bg-[#F4F6F3] text-[#14181F] rounded-es-sm"
               }`}
             >
-              {m.content || <span className="text-[#98A0A9]">…</span>}
+              {m.content ? <RichText text={m.content} /> : <span className="text-[#98A0A9]">…</span>}
             </div>
           )}
         </div>

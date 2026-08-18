@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { StreamSpeaker, micSupported, startDictation } from "@/utils/assistant/voice-client";
+import RichText from "@/components/rich-text";
 import type { Dictionary } from "@/i18n/dictionaries";
 
 type Msg = { role: "you" | "assistant"; content: string; greeting?: boolean };
@@ -271,7 +272,7 @@ function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: ()
                   m.role === "you" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-[#14181F] rounded-es-sm"
                 }`}
               >
-                {m.content || <span className="text-[#98A0A9]">…</span>}
+                {m.content ? <RichText text={m.content} /> : <span className="text-[#98A0A9]">…</span>}
               </div>
             </div>
           ))}
