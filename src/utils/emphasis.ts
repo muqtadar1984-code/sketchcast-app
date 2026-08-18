@@ -11,7 +11,10 @@
 
 export type EmphasisSegment = { text: string; bold: boolean; italic: boolean };
 
-const EMPHASIS = /\*\*\*([^*\n]+)\*\*\*|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*/g;
+// Markdown's edge rule, enforced: emphasis content never starts or ends with
+// whitespace — so "2 ** 3" and a lone dangling * stay literal arithmetic/text.
+const EDGE = "([^*\\s](?:[^*\\n]*[^*\\s])?)";
+const EMPHASIS = new RegExp(`\\*\\*\\*${EDGE}\\*\\*\\*|\\*\\*${EDGE}\\*\\*|\\*${EDGE}\\*`, "g");
 
 export function emphasisSegments(text: string): EmphasisSegment[] {
   const s = String(text ?? "");
