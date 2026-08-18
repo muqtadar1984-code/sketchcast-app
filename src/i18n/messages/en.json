@@ -1523,7 +1523,8 @@
         "assignments": "Assignments",
         "completion": "Completion",
         "overdue": "Overdue",
-        "toGrade": "To grade"
+        "toGrade": "To grade",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "What your school sees about your teaching",
@@ -1549,7 +1550,9 @@
         "exam": "Exam",
         "activity": "Activities",
         "caseStudy": "Case study"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "My children",

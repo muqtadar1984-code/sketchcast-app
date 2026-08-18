@@ -1523,7 +1523,8 @@
         "assignments": "అసైన్‌మెంట్లు",
         "completion": "పూర్తి",
         "overdue": "గడువు దాటినవి",
-        "toGrade": "దిద్దాల్సినవి"
+        "toGrade": "దిద్దాల్సినవి",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "మీ బోధన గురించి పాఠశాలకు కనిపించేది",
@@ -1549,7 +1550,9 @@
         "exam": "పరీక్ష",
         "activity": "కృత్యాలు",
         "caseStudy": "కేస్ స్టడీ"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "నా పిల్లలు",

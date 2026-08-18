@@ -1523,7 +1523,8 @@
         "assignments": "असाइनमेंट",
         "completion": "पूर्णता",
         "overdue": "बकाया",
-        "toGrade": "जाँच बाकी"
+        "toGrade": "जाँच बाकी",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "आपके पढ़ाने के बारे में स्कूल को क्या दिखता है",
@@ -1549,7 +1550,9 @@
         "exam": "परीक्षा",
         "activity": "गतिविधियाँ",
         "caseStudy": "केस स्टडी"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "मेरे बच्चे",

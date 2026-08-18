@@ -1523,7 +1523,8 @@
         "assignments": "स्वाध्याय",
         "completion": "पूर्तता",
         "overdue": "मुदत उलटली",
-        "toGrade": "तपासायचे"
+        "toGrade": "तपासायचे",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "तुमच्या अध्यापनाबद्दल शाळेला काय दिसते",
@@ -1549,7 +1550,9 @@
         "exam": "परीक्षा",
         "activity": "कृती",
         "caseStudy": "केस स्टडी"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "माझी मुले",

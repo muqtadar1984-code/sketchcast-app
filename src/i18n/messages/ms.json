@@ -1523,7 +1523,8 @@
         "assignments": "Tugasan",
         "completion": "Kadar siap",
         "overdue": "Lewat",
-        "toGrade": "Perlu markah"
+        "toGrade": "Perlu markah",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "Apa yang sekolah anda lihat tentang pengajaran anda",
@@ -1549,7 +1550,9 @@
         "exam": "Peperiksaan",
         "activity": "Aktiviti",
         "caseStudy": "Kajian kes"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "Anak saya",

@@ -1523,7 +1523,8 @@
         "assignments": "Devoirs",
         "completion": "Achèvement",
         "overdue": "En retard",
-        "toGrade": "À corriger"
+        "toGrade": "À corriger",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "Ce que votre école voit de votre enseignement",
@@ -1549,7 +1550,9 @@
         "exam": "Examen",
         "activity": "Activités",
         "caseStudy": "Étude de cas"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "Mes enfants",

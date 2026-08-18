@@ -1523,7 +1523,8 @@
         "assignments": "توݢسن",
         "completion": "ڤڽياڤن",
         "overdue": "لوڤوت تمڤوه",
-        "toGrade": "ڤرلو دتندا"
+        "toGrade": "ڤرلو دتندا",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "اڤ يڠ سکوله اندا ليهت تنتڠ ڤڠاجرن اندا",
@@ -1549,7 +1550,9 @@
         "exam": "ڤڤريقساءن",
         "activity": "اکتيۏيتي",
         "caseStudy": "کاجين کيس"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "انق ساي",

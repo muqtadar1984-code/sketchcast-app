@@ -22,9 +22,15 @@ const KIND_KEY: Record<string, keyof Dictionary["school"]["myAnalytics"]["kind"]
   case_study: "caseStudy",
 };
 
-// Teacher analytics — everything in one place: headline metrics, per-class
-// completion, revision hotspots (topics students re-open most), and a grading
-// queue. All from the assigned set (shares × enrollments) ⋈ progress ⋈ submissions.
+// Teaching analytics — everything in one place: headline metrics, completion,
+// revision hotspots (topics students re-open most), and a grading queue.
+//
+// Two audiences, one page (2026-08-18): TEACHERS aggregate over the class
+// register (shares × enrollments); PARENT-role accounts (home educators and
+// tutors) have named learners, not classes — their assigned set is their own
+// DIRECT child shares (student_id rows they shared), grouped per learner with
+// a link to each child's printable progress record. The school-transparency
+// block only renders for people who actually belong to a school.
 export default async function AnalyticsPage() {
   const locale = await resolveLocale();
   const dict = await getDictionary(locale);
@@ -46,28 +52,43 @@ export default async function AnalyticsPage() {
   const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "teacher");
   if (hatAway) redirect(hatAway);
 
+  const parentMode = role === "parent";
+
   // "My Analytics" is the person's OWN teaching. Admins/coordinators can read
   // school-wide rows under RLS, so pin every dataset to their classes/lessons
   // (a no-op for plain teachers, whose RLS already equals ownership).
-  const { data: classesRaw } = await supabase
-    .from("classes")
-    .select("id, name")
-    .eq("teacher_id", user.id)
-    .order("created_at", { ascending: false });
+  const { data: classesRaw } = parentMode
+    ? { data: [] }
+    : await supabase.from("classes").select("id, name").eq("teacher_id", user.id).order("created_at", { ascending: false });
   const classes = (classesRaw ?? []) as { id: string; name: string }[];
   const myClassIds = new Set(classes.map((c) => c.id));
 
   type EnrRow = { class_id: string; student_id: string; profiles: { full_name: string | null; username: string | null } | null };
-  const { data: enrRaw } = await supabase
-    .from("enrollments")
-    .select("class_id, student_id, profiles(full_name, username)");
+  const { data: enrRaw } = parentMode
+    ? { data: [] }
+    : await supabase.from("enrollments").select("class_id, student_id, profiles(full_name, username)");
   const enr = ((enrRaw ?? []) as unknown as EnrRow[]).filter((e) => myClassIds.has(e.class_id));
 
-  type ShareRow = { generation_id: string; class_id: string; due_at: string | null; generations: { kind: string; chapter_ref: string | null; title: string | null } | null };
-  const { data: sharesRaw } = await supabase
-    .from("generation_shares")
-    .select("generation_id, class_id, due_at, generations(kind, chapter_ref, title)");
-  const shares = ((sharesRaw ?? []) as unknown as ShareRow[]).filter((s) => myClassIds.has(s.class_id));
+  // Parent mode: the learners are the linked children, and "what you've
+  // assigned" is the parent's own direct shares to them.
+  type LinkRow = { child_id: string; profiles: { full_name: string | null; username: string | null } | null };
+  const { data: linksRaw } = parentMode
+    ? await supabase.from("parent_links").select("child_id, profiles:child_id(full_name, username)")
+    : { data: [] };
+  const links = (linksRaw ?? []) as unknown as LinkRow[];
+  const childIds = new Set(links.map((l) => l.child_id));
+
+  type ShareRow = { generation_id: string; class_id: string | null; student_id: string | null; due_at: string | null; generations: { kind: string; chapter_ref: string | null; title: string | null } | null };
+  const { data: sharesRaw } = parentMode
+    ? await supabase
+        .from("generation_shares")
+        .select("generation_id, class_id, student_id, due_at, generations(kind, chapter_ref, title)")
+        .eq("shared_by", user.id)
+        .not("student_id", "is", null)
+    : await supabase.from("generation_shares").select("generation_id, class_id, student_id, due_at, generations(kind, chapter_ref, title)");
+  const shares = ((sharesRaw ?? []) as unknown as ShareRow[]).filter((s) =>
+    parentMode ? s.student_id !== null && childIds.has(s.student_id) : s.class_id !== null && myClassIds.has(s.class_id),
+  );
   const myGenIds = new Set(shares.map((s) => s.generation_id));
 
   type ProgRow = { generation_id: string; student_id: string; status: string };
@@ -92,6 +113,10 @@ export default async function AnalyticsPage() {
     studentsByClass.get(e.class_id)!.push(e.student_id);
     allStudents.add(e.student_id);
   }
+  for (const l of links) {
+    studentName.set(l.child_id, l.profiles?.full_name || l.profiles?.username || dict.school.fallback.child);
+    allStudents.add(l.child_id);
+  }
   const genInfo = new Map<string, { kind: string; chapter_ref: string | null; title: string | null }>();
   for (const s of shares) if (s.generations) genInfo.set(s.generation_id, s.generations);
   const className = new Map(classes.map((c) => [c.id, c.name] as const));
@@ -108,33 +133,53 @@ export default async function AnalyticsPage() {
       : g.title || kind;
   };
 
-  // ── Aggregate over assigned instances (each gen × each enrolled student) ──
+  // ── Aggregate over assigned instances ────────────────────────────────────
+  // Teacher: each gen × each enrolled student. Parent: each direct share IS
+  // one instance (one gen × one child). The group rows are classes for
+  // teachers, learners for parents (keyed by child id → links to the child's
+  // printable record).
   // (server component, rendered once per request — Date.now is fine here)
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   let total = 0;
   let completed = 0;
   let overdue = 0;
-  const perClass = new Map<string, { name: string; total: number; completed: number }>();
+  const perGroup = new Map<string, { name: string; total: number; completed: number }>();
+  const instances: { genId: string; studentId: string; groupId: string; groupName: string; dueAt: string | null }[] = [];
   for (const s of shares) {
-    for (const stu of studentsByClass.get(s.class_id) ?? []) {
-      total++;
-      const key = `${s.generation_id}|${stu}`;
-      const done = statusOf.get(key) === "completed" || statusOf.get(key) === "revised" || submittedOf.has(key);
-      const pc = perClass.get(s.class_id) ?? {
-        name: className.get(s.class_id) || dict.school.fallback.class,
-        total: 0,
-        completed: 0,
-      };
-      pc.total++;
-      if (done) {
-        completed++;
-        pc.completed++;
-      } else if (s.due_at && new Date(s.due_at).getTime() < now) {
-        overdue++;
+    if (parentMode) {
+      instances.push({
+        genId: s.generation_id,
+        studentId: s.student_id!,
+        groupId: s.student_id!,
+        groupName: studentName.get(s.student_id!) || dict.school.fallback.child,
+        dueAt: s.due_at,
+      });
+    } else {
+      for (const stu of studentsByClass.get(s.class_id!) ?? []) {
+        instances.push({
+          genId: s.generation_id,
+          studentId: stu,
+          groupId: s.class_id!,
+          groupName: className.get(s.class_id!) || dict.school.fallback.class,
+          dueAt: s.due_at,
+        });
       }
-      perClass.set(s.class_id, pc);
     }
+  }
+  for (const inst of instances) {
+    total++;
+    const key = `${inst.genId}|${inst.studentId}`;
+    const done = statusOf.get(key) === "completed" || statusOf.get(key) === "revised" || submittedOf.has(key);
+    const pc = perGroup.get(inst.groupId) ?? { name: inst.groupName, total: 0, completed: 0 };
+    pc.total++;
+    if (done) {
+      completed++;
+      pc.completed++;
+    } else if (inst.dueAt && new Date(inst.dueAt).getTime() < now) {
+      overdue++;
+    }
+    perGroup.set(inst.groupId, pc);
   }
 
   const revByGen = new Map<string, number>();
@@ -178,21 +223,31 @@ export default async function AnalyticsPage() {
     }));
 
   const completionPct = total ? Math.round((completed / total) * 100) : 0;
-  const metrics: { label: string; value: string | number }[] = [
-    { label: t.metric.classes, value: classes.length },
-    { label: t.metric.students, value: allStudents.size },
-    { label: t.metric.assignments, value: shares.length },
-    // "—" until something is assigned: a measured 0% and no-data-yet are different stories.
-    { label: t.metric.completion, value: total ? `${completionPct}%` : "—" },
-    { label: t.metric.overdue, value: overdue },
-    { label: t.metric.toGrade, value: pending.length },
-  ];
+  const metrics: { label: string; value: string | number }[] = parentMode
+    ? [
+        { label: t.metric.learners, value: links.length },
+        { label: t.metric.assignments, value: shares.length },
+        // "—" until something is assigned: a measured 0% and no-data-yet are different stories.
+        { label: t.metric.completion, value: total ? `${completionPct}%` : "—" },
+        { label: t.metric.overdue, value: overdue },
+        { label: t.metric.toGrade, value: pending.length },
+      ]
+    : [
+        { label: t.metric.classes, value: classes.length },
+        { label: t.metric.students, value: allStudents.size },
+        { label: t.metric.assignments, value: shares.length },
+        { label: t.metric.completion, value: total ? `${completionPct}%` : "—" },
+        { label: t.metric.overdue, value: overdue },
+        { label: t.metric.toGrade, value: pending.length },
+      ];
 
   // What the school sees about this teacher (transparency — only when the school
   // analytics feature is on). The same activity metrics leadership sees, computed
-  // from the teacher's OWN data, so there are no surprises.
+  // from the teacher's OWN data, so there are no surprises. Only meaningful for
+  // people who BELONG to a school — parents, home educators and independent
+  // teachers have no leadership watching, so the block would only mislead.
   let schoolView: { label: string; value: string | number }[] | null = null;
-  if (await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null)) {
+  if (!parentMode && profile?.school_id && (await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null))) {
     const { count: lessons } = await supabase
       .from("generations")
       .select("*", { count: "exact", head: true })
@@ -227,7 +282,7 @@ export default async function AnalyticsPage() {
       <main className="max-w-7xl mx-auto px-6 py-10">
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
+        <p className="text-[#5B6470] mb-7">{parentMode ? t.subtitleHome : t.subtitle}</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
           {metrics.map((m) => (
@@ -256,17 +311,25 @@ export default async function AnalyticsPage() {
           </div>
         )}
 
-        <h2 className="text-xl mb-2">{t.byClass}</h2>
+        <h2 className="text-xl mb-2">{parentMode ? t.byLearner : t.byClass}</h2>
         <div className="card divide-y divide-[#EEF0EC] mb-10">
-          {perClass.size === 0 ? (
+          {perGroup.size === 0 ? (
             <div className="px-5 py-3 text-sm text-[#5B6470]">{t.noAssignments}</div>
           ) : (
-            [...perClass.entries()].map(([id, c]) => {
+            [...perGroup.entries()].map(([id, c]) => {
               const pct = c.total ? Math.round((c.completed / c.total) * 100) : 0;
               return (
                 <div key={id} className="px-5 py-3">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-medium">{c.name}</span>
+                    {/* Parent rows are learners — the name opens the child's
+                        printable progress record. */}
+                    {parentMode ? (
+                      <a href={`/dashboard/reports/${id}`} className="font-medium hover:underline">
+                        {c.name}
+                      </a>
+                    ) : (
+                      <span className="font-medium">{c.name}</span>
+                    )}
                     <span className="text-sm text-[#5B6470]">
                       <span className="tabular">{c.completed}/{c.total}</span> {t.done} · <span className="tabular text-[#0C8175] font-medium">{pct}%</span>
                     </span>

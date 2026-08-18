@@ -1523,7 +1523,8 @@
         "assignments": "المهام",
         "completion": "الإنجاز",
         "overdue": "متأخر",
-        "toGrade": "للتصحيح"
+        "toGrade": "للتصحيح",
+        "learners": "Learners"
       },
       "schoolView": {
         "title": "ما تراه مدرستك عن تدريسك",
@@ -1549,7 +1550,9 @@
         "exam": "امتحان",
         "activity": "أنشطة",
         "caseStudy": "دراسة حالة"
-      }
+      },
+      "subtitleHome": "How your learners are progressing through what you've assigned.",
+      "byLearner": "By learner"
     },
     "children": {
       "title": "أبنائي",
