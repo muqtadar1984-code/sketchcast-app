@@ -1088,7 +1088,14 @@
       "nameRequired": "Nama kelas diperlukan.",
       "duplicate": "Anda sudah mempunyai kelas bernama “{name}”.",
       "createFailed": "Tidak dapat mencipta kelas.",
-      "pickClass": "Pilih kelas."
+      "pickClass": "Pilih kelas.",
+      "headingChildren": "Assign to your children",
+      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
+      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
+      "childrenLabel": "Your children",
+      "pickChild": "Pick at least one child.",
+      "noChildren": "No children linked yet.",
+      "manageChildren": "Add children"
     },
     "deleteLesson": {
       "confirm": "Buang pelajaran ini? Failnya akan dipadam, dan kredit yang telah digunakan tidak kembali.",

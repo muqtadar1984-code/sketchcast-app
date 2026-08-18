@@ -1088,7 +1088,14 @@
       "nameRequired": "نام کلس دڤرلوکن.",
       "duplicate": "اندا سوده اد کلس برنام “{name}”.",
       "createFailed": "کلس تيدق داڤت دچيڤتا.",
-      "pickClass": "ڤيليه کلس."
+      "pickClass": "ڤيليه کلس.",
+      "headingChildren": "Assign to your children",
+      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
+      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
+      "childrenLabel": "Your children",
+      "pickChild": "Pick at least one child.",
+      "noChildren": "No children linked yet.",
+      "manageChildren": "Add children"
     },
     "deleteLesson": {
       "confirm": "بواڠ ڤلاجرن اين؟ فايلڽ اکن دڤادم، دان کريديت يڠ تله دݢوناکن تيدق کمبالي.",

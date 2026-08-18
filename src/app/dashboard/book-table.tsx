@@ -8,7 +8,7 @@ import DeleteLesson from "./delete-lesson";
 import { kindLabel, statusLabel, type CellLesson, type LibraryMessages } from "./content-cell";
 import LessonCard from "./lesson-card";
 import BookTools from "./book-tools";
-import AssignModal, { type ClassRow } from "./assign-modal";
+import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
 import BatchGenerate from "./batch-generate";
 import ExamGenerate, { type ExamChapterOpt } from "./exam-generate";
@@ -175,6 +175,7 @@ export default function BookTable({
   books,
   schoolId,
   classes,
+  childTargets = null,
   t,
   lang,
   beta = null,
@@ -184,6 +185,8 @@ export default function BookTable({
   books: BookRow[];
   schoolId: string | null;
   classes: ClassRow[];
+  /** Parent-role viewers: linked children for direct assignment (null = class mode). */
+  childTargets?: ChildRow[] | null;
   t: LibraryMessages;
   /** BCP-47 tag for the reader's locale — the one date on this surface (the
       book's upload day) formats in their own calendar conventions. */
@@ -268,6 +271,7 @@ export default function BookTable({
                     label={t.book.assignBook}
                     generationIds={b.presentationIds}
                     classes={classes}
+                    childTargets={childTargets}
                     t={t}
                   />
                 )}
@@ -366,6 +370,7 @@ export default function BookTable({
                         schoolId={schoolId}
                         chapterNum={ch.num}
                         classes={classes}
+                        childTargets={childTargets}
                         beta={beta}
                         multiPartTrial={!!beta && ch.parts.length > 1}
                         lessons={{
@@ -406,6 +411,7 @@ export default function BookTable({
                                 chapterNum={ch.num}
                                 part={p}
                                 classes={classes}
+                                childTargets={childTargets}
                                 chapterTitle={ch.title}
                                 bookTitle={b.title}
                                 locked={locked}
@@ -439,7 +445,7 @@ export default function BookTable({
                                   ⬇ {t.download}
                                 </a>
                               )}
-                              <AssignModal label={t.assign} generationIds={[p.id]} classes={classes} t={t} />
+                              <AssignModal label={t.assign} generationIds={[p.id]} classes={classes} childTargets={childTargets} t={t} />
                             </>
                           ) : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[p.status] ?? ""}`}>

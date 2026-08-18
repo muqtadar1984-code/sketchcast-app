@@ -1088,7 +1088,14 @@
       "nameRequired": "اسم الصف مطلوب.",
       "duplicate": "لديك صف باسم «{name}» بالفعل.",
       "createFailed": "تعذّر إنشاء الصف.",
-      "pickClass": "اختر صفًا."
+      "pickClass": "اختر صفًا.",
+      "headingChildren": "Assign to your children",
+      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
+      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
+      "childrenLabel": "Your children",
+      "pickChild": "Pick at least one child.",
+      "noChildren": "No children linked yet.",
+      "manageChildren": "Add children"
     },
     "deleteLesson": {
       "confirm": "هل تحذف هذا الدرس؟ ستُحذف ملفاته، ولن يُعاد الرصيد الذي استُهلك.",

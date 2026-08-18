@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import ContentCell, { kindLabel, type CellLesson, type LibraryMessages } from "./content-cell";
-import AssignModal, { type ClassRow } from "./assign-modal";
+import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-modal";
 import { kitRows, type GenerationRow } from "./kit";
 import {
@@ -42,6 +42,7 @@ export default function ChapterGenerate({
   schoolId,
   chapterNum,
   classes,
+  childTargets = null,
   lessons,
   t,
   beta = null,
@@ -55,6 +56,8 @@ export default function ChapterGenerate({
   schoolId: string | null;
   chapterNum: number;
   classes: ClassRow[];
+  /** Parent-role viewers: linked children for direct assignment (null = class mode). */
+  childTargets?: ChildRow[] | null;
   lessons: Record<string, CellLesson | null>;
   t: LibraryMessages;
   beta?: { pinned: { bookId: string; chapterRef: string | null; part: number | null } | null } | null;
@@ -290,7 +293,7 @@ export default function ChapterGenerate({
     <span className="ms-auto flex items-center gap-3">
       {assignableIds.length > 0 && (
         <span data-tour="assign-chapter">
-          <AssignModal label={t.kit.assignChapter} generationIds={assignableIds} classes={classes} t={t} />
+          <AssignModal label={t.kit.assignChapter} generationIds={assignableIds} classes={classes} childTargets={childTargets} t={t} />
         </span>
       )}
       {kitPending && (

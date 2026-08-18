@@ -7,14 +7,21 @@ import { fmt } from "@/i18n/format";
 import { type LibraryMessages } from "./content-cell";
 
 export type ClassRow = { id: string; name: string; grade: string | null };
+export type ChildRow = { id: string; name: string };
 
-// Assign a chapter (one generation) or a whole book (many) to a class. Persists
-// to generation_shares (→ the class's enrolled students). Supports creating a
-// class inline when the teacher has none yet.
+// Assign a chapter (one generation) or a whole book (many). Persists to
+// generation_shares. Two audiences, one modal:
+//   · teachers → a CLASS (→ its enrolled students), with inline class creation;
+//   · parent-role accounts (home educators, 2026-08-18) → their linked
+//     CHILDREN directly (student_id shares — the same rows and RLS policy the
+//     Test Papers page uses), because a family has named learners, not a
+//     class register. `childTargets` non-null switches the mode; the caller
+//     derives it from the PROFILE ROLE server-side.
 export default function AssignModal({
   label,
   generationIds,
   classes,
+  childTargets = null,
   t,
 }: {
   /** The trigger's text — already translated by the caller ("Assign chapter",
@@ -22,6 +29,8 @@ export default function AssignModal({
   label: string;
   generationIds: string[];
   classes: ClassRow[];
+  /** Parent mode: the viewer's linked children (null = class mode). */
+  childTargets?: ChildRow[] | null;
   t: LibraryMessages;
 }) {
   const router = useRouter();
@@ -36,6 +45,71 @@ export default function AssignModal({
   const [creating, setCreating] = useState(classes.length === 0);
   const [newName, setNewName] = useState("");
   const [newGrade, setNewGrade] = useState("");
+
+  const childMode = childTargets !== null;
+  // A kit usually goes to the whole family — start with everyone selected and
+  // let the parent narrow, rather than making three checks the common case.
+  const [picked, setPicked] = useState<Set<string>>(
+    () => new Set((childTargets ?? []).map((c) => c.id)),
+  );
+  const toggleChild = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  async function assignToChildren() {
+    const targets = (childTargets ?? []).filter((c) => picked.has(c.id));
+    if (!targets.length) {
+      setError(t.assignModal.pickChild);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setError(t.notSignedIn);
+      setBusy(false);
+      return;
+    }
+    // Per-row insert, duplicate → update the due date: shares_gen_student_uq
+    // is a PARTIAL unique index, which upsert's onConflict cannot target
+    // (same reason the Test Papers page does insert-then-update).
+    for (const gid of generationIds) {
+      for (const child of targets) {
+        const { error: iErr } = await supabase.from("generation_shares").insert({
+          generation_id: gid,
+          student_id: child.id,
+          class_id: null,
+          shared_by: user.id,
+          due_at: due ? due : null,
+        });
+        if (iErr && iErr.code === "23505") {
+          await supabase
+            .from("generation_shares")
+            .update({ due_at: due ? due : null })
+            .eq("generation_id", gid)
+            .eq("student_id", child.id);
+        } else if (iErr) {
+          setError(iErr.message);
+          setBusy(false);
+          return;
+        }
+      }
+    }
+    setBusy(false);
+    setDone(true);
+    router.refresh();
+    setTimeout(() => {
+      setOpen(false);
+      setDone(false);
+    }, 1200);
+  }
 
   async function createClass() {
     const name = newName.trim();
@@ -131,16 +205,77 @@ export default function AssignModal({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-medium mb-1" style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}>
-              {t.assignModal.heading}
+              {childMode ? t.assignModal.headingChildren : t.assignModal.heading}
             </h3>
             <p className="text-xs text-[#5B6470] mb-3">
               {generationIds.length === 1
-                ? t.assignModal.itemsOne
-                : fmt(t.assignModal.itemsMany, { n: generationIds.length })}
+                ? childMode
+                  ? t.assignModal.itemsOneChildren
+                  : t.assignModal.itemsOne
+                : fmt(childMode ? t.assignModal.itemsManyChildren : t.assignModal.itemsMany, {
+                    n: generationIds.length,
+                  })}
             </p>
 
             {done ? (
               <p className="text-sm text-[#0C8175] py-4">✓ {t.assignModal.assigned}</p>
+            ) : childMode ? (
+              (childTargets ?? []).length === 0 ? (
+                <div className="space-y-2 py-2">
+                  <p className="text-sm text-[#5B6470]">{t.assignModal.noChildren}</p>
+                  <a
+                    href="/dashboard/children"
+                    className="text-xs font-medium text-[#0C8175] hover:underline"
+                  >
+                    {t.assignModal.manageChildren}
+                  </a>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-xs text-[#5B6470]">{t.assignModal.childrenLabel}</span>
+                    <div className="mt-1 space-y-0.5">
+                      {(childTargets ?? []).map((c) => (
+                        <label key={c.id} className="flex items-center gap-2 text-sm py-0.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={picked.has(c.id)}
+                            onChange={() => toggleChild(c.id)}
+                            className="accent-[#0C8175]"
+                          />
+                          {c.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="block">
+                    <span className="text-xs text-[#5B6470]">{t.assignModal.due}</span>
+                    <input
+                      type="date"
+                      value={due}
+                      onChange={(e) => setDue(e.target.value)}
+                      className="w-full h-9 px-3 mt-1 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
+                    />
+                  </label>
+                  {error && <p className="text-xs text-red-600">{error}</p>}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => setOpen(false)}
+                      disabled={busy}
+                      className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
+                    >
+                      {t.common.cancel}
+                    </button>
+                    <button
+                      onClick={assignToChildren}
+                      disabled={busy}
+                      className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
+                    >
+                      {busy ? t.assignModal.assigning : t.assignModal.assign}
+                    </button>
+                  </div>
+                </div>
+              )
             ) : creating ? (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-[#5B6470]">{t.assignModal.newClass}</p>

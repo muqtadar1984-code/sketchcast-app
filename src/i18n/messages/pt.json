@@ -1088,7 +1088,14 @@
       "nameRequired": "O nome da turma é obrigatório.",
       "duplicate": "Você já tem uma turma chamada “{name}”.",
       "createFailed": "Não foi possível criar a turma.",
-      "pickClass": "Escolha uma turma."
+      "pickClass": "Escolha uma turma.",
+      "headingChildren": "Assign to your children",
+      "itemsOneChildren": "1 item — assigned children will see it in their assignments.",
+      "itemsManyChildren": "{n} items — assigned children will see it in their assignments.",
+      "childrenLabel": "Your children",
+      "pickChild": "Pick at least one child.",
+      "noChildren": "No children linked yet.",
+      "manageChildren": "Add children"
     },
     "deleteLesson": {
       "confirm": "Remover esta aula? Os arquivos dela serão excluídos e o crédito já usado não é devolvido.",

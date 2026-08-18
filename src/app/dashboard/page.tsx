@@ -454,6 +454,22 @@ export default async function DashboardPage() {
   const dict = await getDictionary(locale);
   const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
 
+  // Parent-role accounts (home educators): the Assign modal targets their
+  // LINKED CHILDREN, not classes — a family has named learners, not a class
+  // register (founder, 2026-08-18). RLS scopes parent_links to the viewer's
+  // own rows; null (teachers/admins) keeps the class mode untouched.
+  type ChildLinkJoin = { child_id: string; profiles: { full_name: string | null; username: string | null } | null };
+  const childTargets =
+    role === "parent"
+      ? (
+          ((await supabase.from("parent_links").select("child_id, profiles:child_id(full_name, username)"))
+            .data ?? []) as unknown as ChildLinkJoin[]
+        ).map((l) => ({
+          id: l.child_id,
+          name: l.profiles?.full_name || l.profiles?.username || dict.school.fallback.child,
+        }))
+      : null;
+
   // Junk-upload gate: trial accounts get the dialog's stronger "your only
   // trial kit" line. Detected by plan_tier — my_fair_use() reports it (0047,
   // SECURITY DEFINER, auth.uid()-scoped) — and deliberately NOT by
@@ -1121,6 +1137,7 @@ export default async function DashboardPage() {
                   books={g.books}
                   schoolId={schoolId}
                   classes={classes}
+                  childTargets={childTargets}
                   t={t}
                   lang={htmlLang(locale)}
                   beta={isBeta ? { pinned: betaPinned } : null}

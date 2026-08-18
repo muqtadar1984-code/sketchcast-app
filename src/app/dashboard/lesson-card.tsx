@@ -1,7 +1,7 @@
 "use client";
 
 import ContentCell, { kindLabel, type CellLesson, type LibraryMessages } from "./content-cell";
-import AssignModal, { type ClassRow } from "./assign-modal";
+import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import GenerateKitButton from "./generate-kit-button";
 import RegenerateButton from "./regenerate-button";
 import { type JunkGateInfo } from "./junk-gate-dialog";
@@ -138,6 +138,7 @@ export default function LessonCard({
   chapterNum,
   part,
   classes,
+  childTargets = null,
   t,
   chapterTitle = "",
   bookTitle = null,
@@ -152,6 +153,8 @@ export default function LessonCard({
   chapterNum: number;
   part: CardPart;
   classes: ClassRow[];
+  /** Parent-role viewers: linked children for direct assignment (null = class mode). */
+  childTargets?: ChildRow[] | null;
   t: LibraryMessages;
   /** Used to suppress a part title that just repeats the chapter heading. */
   chapterTitle?: string;
@@ -385,7 +388,7 @@ export default function LessonCard({
 
           {assignable.length > 0 && (
             <span className="ms-auto">
-              <AssignModal label={t.assign} generationIds={assignable} classes={classes} t={t} />
+              <AssignModal label={t.assign} generationIds={assignable} classes={classes} childTargets={childTargets} t={t} />
             </span>
           )}
         </div>
