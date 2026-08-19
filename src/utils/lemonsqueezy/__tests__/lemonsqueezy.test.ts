@@ -8,6 +8,10 @@
  *     email with NO entitlement — money recorded, access withheld until claimed
  *   * we never attribute a sale with no identity signal at all
  *   * claim-on-sign-in binds a parked sub to the verified account + grants it
+ *   * a claimed credit pack RECORDS ITS REVENUE (payments.user_id is NOT NULL,
+ *     so the webhook cannot write that row for the parked path — and parked is
+ *     the only path a pack can take), idempotently, and never at the cost of
+ *     the credits themselves
  *   * status → access mapping (grace vs revoke), monotonicity, no card data
  * Run: npx vitest run
  */
@@ -333,6 +337,24 @@ describe("LS order → credit pack", () => {
     expect(db.ent()).toBeUndefined(); // a pack is credits, never an entitlement
   });
 
+  it("stamps what LS CHARGED onto the purchase, separately from the credit grant", async () => {
+    // credit_purchases.usd is the catalogue constant, so a parked pack used to
+    // carry no record of what was actually collected and claim.ts had to book
+    // it at list. These three columns (0092) are what the claim bills from.
+    const db = new FakeDb({ billing_customers: null });
+    await run(db, orderEvent({ custom: undefined, email: "buyer@x.com", total: 400, status: "paid" }));
+    const grant = db.writes.find((w) => w.table === "credit_purchases" && w.op === "insert");
+    // The credit grant names ONLY columns that shipped with 0086: naming a
+    // column 0092 has not added yet would throw, LS would retry, and the buyer
+    // would wait on bookkeeping for credits they have paid for.
+    expect(grant!.row.total_minor).toBeUndefined();
+    const money = db.writes.find((w) => w.table === "credit_purchases" && w.op === "update");
+    expect(money!.row.total_minor).toBe(400); // a discounted $8 pack — LS collected $4
+    expect(money!.row.total_currency).toBe("usd");
+    expect(money!.row.order_status).toBe("paid");
+    expect(money!.filter).toEqual(["ls_order_id", "ord_1"]);
+  });
+
   it("identifies the pack size from the product name (18 and 36)", async () => {
     for (const [name, credits, key] of [
       ["SketchCast Credits — 3 kits (18)", 18, "pack_18"],
@@ -432,23 +454,72 @@ describe("LS order → credit pack", () => {
 class FakeClaimDb {
   tables: Record<string, Row[]>;
   writes: Array<{ table: string; op: string; row: Row; matched: number }> = [];
+  /** Per-table injected insert error, mirroring FakeDb — so the payments unique
+   * (23505) can be simulated on the CLAIM path too, which is now where a pack's
+   * revenue row is written. */
+  insertErrors: Record<string, { code?: string; message: string }> = {};
+  /** Per-table injected READ error. supabase-js resolves errors instead of
+   * throwing, and every one of these paths used to be discarded — a stale
+   * PostgREST schema cache or an unapplied 0092 has to be reproducible. */
+  selectErrors: Record<string, { message: string }> = {};
+  /** Injected error for an UPDATE ... RETURNING (i.e. .select() chained onto an
+   * update). This is the pre-0092 shape specifically: the update itself is
+   * legal, only naming the new columns in the representation fails. */
+  updateSelectErrors: Record<string, { message: string }> = {};
+  /** Injected error for a plain UPDATE — the fallback bind failing too. */
+  updateErrors: Record<string, { message: string }> = {};
+  /** Runs immediately after a SELECT resolves. The ONLY way to model another
+   * writer (a webhook delivery, a refund) landing between the probe and the
+   * bind, which a single-threaded fake cannot otherwise exhibit. */
+  afterSelect?: (table: string) => void;
   constructor(tables: Record<string, Row[]> = {}) {
     this.tables = tables;
   }
   from(table: string) {
+    // Every nested callback below is an arrow so `this` stays the instance:
+    // the injected-error maps and afterSelect are read at CALL time, not
+    // captured at construction, which is what lets a hook disarm itself.
     const tables = this.tables;
     const writes = this.writes;
+    const insertErrors = this.insertErrors;
     const make = (kind: "select" | "update", payload?: Row) => {
       const filters: Array<[string, unknown]> = [];
+      const matched = () => (tables[table] ?? []).filter((r) => filters.every(([c, v]) => (r[c] ?? null) === v));
+      const apply = () => {
+        const rows = matched();
+        rows.forEach((r) => Object.assign(r, payload));
+        writes.push({ table, op: "update", row: payload ?? {}, matched: rows.length });
+        return rows;
+      };
       const thenable = {
         eq(col: string, v: unknown) { filters.push([col, v]); return thenable; },
         is(col: string, v: unknown) { filters.push([col, v]); return thenable; },
-        then(resolve: (v: unknown) => void, reject?: (e: unknown) => void) {
+        /** `Prefer: return=representation` — the rows the UPDATE actually
+         * matched, snapshotted AFTER it ran, exactly as PostgREST hands them
+         * back. */
+        select: () => ({
+          then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) => {
+            try {
+              const error = this.updateSelectErrors[table] ?? this.updateErrors[table] ?? null;
+              if (error) return resolve({ data: null, error });
+              return resolve({ data: apply().map((r) => ({ ...r })), error: null });
+            } catch (e) {
+              reject?.(e);
+            }
+          },
+        }),
+        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) => {
           try {
-            const rows = (tables[table] ?? []).filter((r) => filters.every(([c, v]) => (r[c] ?? null) === v));
-            if (kind === "select") return resolve({ data: rows });
-            rows.forEach((r) => Object.assign(r, payload)); // update
-            writes.push({ table, op: "update", row: payload ?? {}, matched: rows.length });
+            if (kind === "select") {
+              const error = this.selectErrors[table] ?? null;
+              if (error) return resolve({ data: null, error });
+              const rows = matched();
+              this.afterSelect?.(table);
+              return resolve({ data: rows });
+            }
+            const error = this.updateErrors[table] ?? null;
+            if (error) return resolve({ error });
+            apply();
             return resolve({ error: null });
           } catch (e) {
             reject?.(e);
@@ -463,6 +534,14 @@ class FakeClaimDb {
       upsert: async (row: Row) => {
         writes.push({ table, op: "upsert", row, matched: 1 });
         return { error: null };
+      },
+      insert: async (row: Row) => {
+        const error = insertErrors[table] ?? null;
+        if (!error) {
+          (tables[table] ??= []).push(row);
+          writes.push({ table, op: "insert", row, matched: 1 });
+        }
+        return { error };
       },
     };
   }
@@ -519,5 +598,243 @@ describe("claim-on-sign-in", () => {
     expect(await claimLsPurchasesWith(db as unknown as ClaimDb, "", "buyer@x.com")).toBe(0);
     expect(await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", null)).toBe(0);
     expect(db.writes.length).toBe(0);
+  });
+});
+
+// ── claimed pack → revenue record ────────────────────────────────────────────
+// payments.user_id is NOT NULL, so the webhook can only write a pack's revenue
+// row when the buyer was already bound at webhook time. The in-app buy chip is
+// a plain link to the LS hosted checkout with no custom_data, so that never
+// happens: the claim is the first moment a user_id exists for the order, and
+// therefore the only place the row can be written.
+describe("claim-on-sign-in → credit pack revenue", () => {
+  // Shaped exactly like a webhook-written parked pack. `usd` is a STRING
+  // because credit_purchases.usd is numeric(8,2) and postgres serialises
+  // numerics as text to protect precision — the conversion trap this pins.
+  // total_minor/total_currency/order_status are NULL here on purpose: this is a
+  // PRE-0092 sale, the shape every pack already in the table has, so the
+  // catalogue fallback is what the default fixture exercises.
+  const parkedPack = (over: Partial<Row> = {}): Row => ({
+    owner_id: null,
+    claim_email: "buyer@x.com",
+    credits: 6,
+    pack_key: "pack_6",
+    usd: "8.00",
+    total_minor: null,
+    total_currency: null,
+    order_status: null,
+    ls_order_id: "9251234", // the real production order that went unrecorded
+    refunded_at: null,
+    created_at: "2026-08-18T12:34:56Z",
+    ...over,
+  });
+
+  it("a bound pack writes the payments row the webhook could not", async () => {
+    const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack()] });
+    const n = await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "Buyer@X.com");
+    expect(n).toBe(0); // the return value still reports SUBSCRIPTIONS only
+
+    // the pack itself bound (credits first, always)
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A");
+    expect((db.tables.credit_purchases[0] as Row).claim_email).toBeNull();
+
+    const pay = db.writes.find((w) => w.table === "payments");
+    expect(pay).toBeDefined();
+    expect(pay!.op).toBe("insert");
+    expect(pay!.row.user_id).toBe("user-A");
+    expect(pay!.row.amount).toBe(800); // "8.00" dollars → 800 MINOR UNITS
+    expect(pay!.row.currency).toBe("usd");
+    expect(pay!.row.plan_key).toBe("pack_6");
+    expect(pay!.row.ls_order_id).toBe("9251234");
+    expect(pay!.row.status).toBe("paid");
+    expect(pay!.row.provider).toBe("lemonsqueezy");
+    expect(pay!.row.school_id).toBeNull(); // personal (B2C) — never school-scoped
+    // Dated to the PURCHASE, not to this sign-in: "Collected to date" is a time
+    // series and 0092's backfill copies credit_purchases.created_at, so the two
+    // writers must agree or history and future stop being comparable.
+    expect(pay!.row.created_at).toBe("2026-08-18T12:34:56Z");
+  });
+
+  it("prices the bigger packs from the numeric column, not the pack size", async () => {
+    // usd DELIBERATELY disagrees with the catalogue (packs.ts has pack_18 at $20
+    // and pack_36 at $36) so this can actually tell the column and the constant
+    // apart — with matching values it proved nothing.
+    for (const [usd, key, amount] of [
+      ["17.00", "pack_18", 1700],
+      [31, "pack_36", 3100], // already a number (driver/version dependent) — same answer
+    ] as const) {
+      const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack({ usd, pack_key: key, ls_order_id: `ord_${key}` })] });
+      await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+      const pay = db.writes.find((w) => w.table === "payments");
+      expect(pay!.row.amount).toBe(amount);
+      expect(pay!.row.plan_key).toBe(key);
+    }
+  });
+
+  it("books what LS CHARGED (total_minor), not the catalogue list price", async () => {
+    // A discount code at the LS hosted checkout: list $20, collected $10. usd
+    // still holds the catalogue constant the webhook copied in, so pricing from
+    // it would overstate "Collected to date" by the whole discount, silently.
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [parkedPack({ pack_key: "pack_18", usd: "20.00", total_minor: 1000, total_currency: "usd" })],
+    });
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    expect(db.writes.find((w) => w.table === "payments")!.row.amount).toBe(1000);
+  });
+
+  it("falls back to the list price when the charge is in a currency payments cannot hold", async () => {
+    // payments_currency_check (0023) admits only myr/usd. Booking foreign minor
+    // units as dollars would be worse than booking list, so list wins.
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [parkedPack({ usd: "8.00", total_minor: 960, total_currency: "eur" })],
+    });
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    const pay = db.writes.find((w) => w.table === "payments");
+    expect(pay!.row.amount).toBe(800);
+    expect(pay!.row.currency).toBe("usd");
+  });
+
+  it("echoes LS's order status instead of asserting 'paid'", async () => {
+    // A delayed payment method delivers order_created as "pending". Credits are
+    // granted by the webhook either way, but collectedUsd() counts only
+    // PAID_STATUSES — and if that order later fails, no order_refunded ever
+    // fires to correct a row we called "paid".
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [parkedPack({ order_status: "pending" })],
+    });
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    expect(db.writes.find((w) => w.table === "payments")!.row.status).toBe("pending");
+  });
+
+  it("a duplicate payments row (23505) is swallowed and the binding still stands", async () => {
+    // The webhook got there first, 0092's backfill did, or a second tab claimed
+    // concurrently. payments_ls_order_uq makes all three a harmless no-op.
+    const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack()] });
+    db.insertErrors["payments"] = { code: "23505", message: 'duplicate key value violates unique constraint "payments_ls_order_uq"' };
+    await expect(claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com")).resolves.toBe(0);
+    expect(db.writes.find((w) => w.table === "payments")).toBeUndefined(); // refused by the unique key
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A"); // credits kept regardless
+    expect((db.tables.credit_purchases[0] as Row).claim_email).toBeNull();
+  });
+
+  it("a HARD payments failure never costs the buyer their credits", async () => {
+    // The credits are what was paid for; the revenue row is bookkeeping 0092
+    // can rebuild. This is the ordering invariant, not just error tolerance.
+    const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack()] });
+    db.insertErrors["payments"] = { code: "42501", message: "permission denied for table payments" };
+    await expect(claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com")).resolves.toBe(0);
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A");
+  });
+
+  it("a REFUNDED parked pack binds, but records NO revenue", async () => {
+    // Money that was given back is not "Collected to date". The pack still
+    // binds — ownership must be right even for a voided purchase.
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [parkedPack({ refunded_at: "2026-08-19T00:00:00Z" })],
+    });
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A");
+    expect(db.writes.find((w) => w.table === "payments")).toBeUndefined();
+  });
+
+  it("binds billing_customers for a pack-only buyer (no subscription parked)", async () => {
+    // The regression this closes: the customer mapping used to sit BELOW the
+    // "no parked subscriptions" early return, so a buyer who only ever bought a
+    // pack was never mapped — no portal link, no console attribution.
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [parkedPack()],
+      billing_customers: [{ email: "buyer@x.com", user_id: null, provider: "lemonsqueezy" }],
+    });
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    expect((db.tables.billing_customers[0] as Row).user_id).toBe("user-A");
+  });
+
+  it("writes NOTHING when nothing is parked — this now runs on every dashboard render", async () => {
+    // dashboard/layout.tsx calls the claim on every authenticated adult
+    // navigation, so the empty case must stay two index probes and zero writes.
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [],
+      billing_customers: [{ email: "buyer@x.com", user_id: null, provider: "lemonsqueezy" }],
+    });
+    expect(await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com")).toBe(0);
+    expect(db.writes.length).toBe(0);
+    expect((db.tables.billing_customers[0] as Row).user_id).toBeNull(); // not touched speculatively
+  });
+
+  it("a pack that arrives BETWEEN the probe and the bind still gets its revenue row", async () => {
+    // The bind's predicate is `owner_id is null AND claim_email = <email>`, not
+    // the id set the probe read, so a webhook delivery landing in that window is
+    // bound too. Billing from the probe's snapshot silently lost that sale for
+    // good: the row is now bound, so it never matches `owner_id is null` again,
+    // and 0092 is a one-shot repair, not a sweep. Reading the recordable set
+    // back FROM the UPDATE is what closes it.
+    const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack()] });
+    db.afterSelect = (table) => {
+      if (table !== "credit_purchases") return;
+      db.afterSelect = undefined; // exactly one interleaving
+      db.tables.credit_purchases.push(parkedPack({ ls_order_id: "9251299", pack_key: "pack_18", usd: "20.00" }));
+    };
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    const recorded = db.writes.filter((w) => w.table === "payments").map((w) => w.row.ls_order_id);
+    expect(recorded).toEqual(["9251234", "9251299"]);
+  });
+
+  it("a refund that lands mid-claim binds the pack but is never booked as paid", async () => {
+    // The refund webhook stamps payments by ls_order_id and matches NOTHING when
+    // the claim has not inserted yet, so a 'paid' row written afterwards from a
+    // stale snapshot would sit in "Collected to date" forever — nothing runs
+    // again to correct it. refunded_at is therefore read as of the bind.
+    const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack()] });
+    db.afterSelect = (table) => {
+      if (table !== "credit_purchases") return;
+      db.afterSelect = undefined;
+      (db.tables.credit_purchases[0] as Row).refunded_at = "2026-08-19T10:00:00Z";
+    };
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A"); // ownership is still right
+    expect(db.writes.find((w) => w.table === "payments")).toBeUndefined();
+  });
+
+  it("a failed probe still attempts the bind — 'unknown' is not 'nothing parked'", async () => {
+    // supabase-js resolves read errors rather than throwing them, so discarding
+    // one turns the only bind path into a silent no-op on every render.
+    const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack()] });
+    db.selectErrors["credit_purchases"] = { message: "PGRST002 schema cache load failed" };
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A");
+    expect(db.writes.find((w) => w.table === "payments")).toBeDefined();
+  });
+
+  it("credits still bind when 0092's money columns are missing (deployed out of order)", async () => {
+    // The UPDATE ... RETURNING names three columns 0092 adds. If the code ships
+    // first that statement fails — and the buyer must not pay for a deploy
+    // ordering mistake: the bind re-runs blind, exactly as it did before the
+    // revenue row existed, and 0092's re-runnable backfill supplies the row.
+    const db = new FakeClaimDb({
+      subscriptions: [],
+      credit_purchases: [parkedPack()],
+      billing_customers: [{ email: "buyer@x.com", user_id: null, provider: "lemonsqueezy" }],
+    });
+    db.updateSelectErrors["credit_purchases"] = { message: 'column credit_purchases.total_minor does not exist' };
+    await claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com");
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBe("user-A"); // credits before revenue
+    expect((db.tables.credit_purchases[0] as Row).claim_email).toBeNull();
+    expect(db.writes.find((w) => w.table === "payments")).toBeUndefined(); // waits for the backfill
+    expect((db.tables.billing_customers[0] as Row).user_id).toBe("user-A"); // still mapped
+  });
+
+  it("a bind that fails outright leaves the pack parked and reclaimable next render", async () => {
+    const db = new FakeClaimDb({ subscriptions: [], credit_purchases: [parkedPack()] });
+    db.updateErrors["credit_purchases"] = { message: "permission denied for table credit_purchases" };
+    await expect(claimLsPurchasesWith(db as unknown as ClaimDb, "user-A", "buyer@x.com")).resolves.toBe(0);
+    expect((db.tables.credit_purchases[0] as Row).owner_id).toBeNull();
+    expect((db.tables.credit_purchases[0] as Row).claim_email).toBe("buyer@x.com");
+    expect(db.writes.find((w) => w.table === "payments")).toBeUndefined();
   });
 });

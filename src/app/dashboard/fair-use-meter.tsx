@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import BuyCreditsReturn from "./buy-credits-return";
 import { creditPacks, packsAllowedForTier, purchasablePacks, type CreditPack } from "@/utils/credit-packs";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -78,7 +79,13 @@ function BuyCredits({ packs, t }: { packs: CreditPack[]; t: Messages }) {
       </summary>
       <div className="mt-1.5 space-y-1">
         <p className="text-[10px] text-[#98A0A9]">{t.buyHint}</p>
-        <div className="flex flex-wrap gap-2">
+        {/* The chips are plain links to the LS hosted checkout, opened in a new
+            tab — so the app tab never reloads and the layout's claim-on-render
+            never runs when the buyer comes back. BuyCreditsReturn watches for
+            that return and refreshes the route so the credits appear; see its
+            header. It is a wrapper, not a rewrite: the anchors stay server-
+            rendered and keep working with JS disabled. */}
+        <BuyCreditsReturn className="flex flex-wrap gap-2">
           {packs.map((p) => (
             <a
               key={p.key}
@@ -90,7 +97,7 @@ function BuyCredits({ packs, t }: { packs: CreditPack[]; t: Messages }) {
               {fmt(t.packLabel, { credits: p.credits, price: p.priceUsd, kits: kitsLabel(p.kits) })}
             </a>
           ))}
-        </div>
+        </BuyCreditsReturn>
       </div>
     </details>
   );

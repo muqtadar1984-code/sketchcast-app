@@ -468,10 +468,51 @@ async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise
     throw new Error(`LS pack purchase insert failed: ${insErr.message}`);
   }
 
+  // THE MONEY FACTS, stamped as a SEPARATE best-effort statement (0092 columns).
+  // `usd` above is the catalogue LIST price — a TS constant from packs.ts that
+  // cannot see a discount code — and it is the only price a parked pack used to
+  // carry, so claim.ts had nothing else to bill from and a discounted sale was
+  // booked at full price. total/currency/status are what LS actually reports,
+  // and they are the same three values the payments insert below uses, so both
+  // writers now price a pack from one definition of "the amount".
+  //
+  // WHY NOT JUST ADD THEM TO THE INSERT ABOVE: that insert is the CREDIT GRANT.
+  // Naming a column that does not exist yet (0092 unapplied, or a stale
+  // PostgREST schema cache right after a deploy) fails the whole statement,
+  // which throws, which makes LS retry — and the buyer waits on a bookkeeping
+  // column for credits they have already paid for. Credits before revenue: the
+  // grant names only columns that shipped with 0086, and the money rides in
+  // behind it where a failure is a warning and nothing more. 0092's backfill
+  // and claim.ts's catalogue fallback both cover the gap.
+  const { error: moneyErr } = await db
+    .from("credit_purchases")
+    .update({
+      total_minor: typeof attrs.total === "number" ? attrs.total : null,
+      total_currency: attrs.currency ? String(attrs.currency).toLowerCase() : null,
+      order_status: attrs.status ?? null,
+    })
+    .eq("ls_order_id", orderId);
+  if (moneyErr) {
+    console.warn("billing.ls.pack_money_stamp_failed", { order: orderId, err: moneyErr.message });
+  }
+
   // Revenue record for the console (Collected to date). payments.user_id is
-  // NOT NULL, so a parked pack records revenue only once claimed — acceptable:
-  // packs are sold from inside the app to signed-in paid users, so the parked
-  // path is the rare fallback. Duplicate-tolerant like the Stripe path.
+  // NOT NULL, so a parked pack records revenue only once claimed — claim.ts
+  // writes that row at the moment it binds the pack, and 0092 backfills the
+  // sales made before it did (a migration that must be APPLIED, present tense:
+  // it is what repairs the packs already sold). Duplicate-tolerant like the
+  // Stripe path (the unique ls_order_id makes webhook-vs-claim a race nobody
+  // can lose).
+  //
+  // CORRECTION (2026-08-19): this block used to claim the parked path was "the
+  // rare fallback" because packs are "sold from inside the app to signed-in
+  // paid users". That was FALSE, and it hid a revenue hole for every pack ever
+  // sold. The in-app buy chip (dashboard/fair-use-meter.tsx) is a plain
+  // <a href> to the LS hosted checkout with NO custom_data, so resolveIdentity
+  // never sees a user_id from it — PARKED IS THE ONLY PATH A PACK CAN TAKE
+  // today, and this branch effectively never runs. It is kept because an
+  // authenticated createLsCheckout pack flow would land here, and because a
+  // repeat buyer whose ls_customer_id is already bound resolves as "user".
   if (boundUserId) {
     const { error: payErr } = await db.from("payments").insert({
       user_id: boundUserId,
