@@ -29,7 +29,18 @@ import hi from "@/i18n/messages/hi.json";
 import msArab from "@/i18n/messages/ms-arab.json";
 import { dirFor, isLocale, DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
 
-const MESSAGES: Record<Locale, typeof en> = {
+// ONLY the three slices this gallery renders. This map used to be typed
+// `Record<Locale, typeof en>` — the WHOLE dictionary — which quietly demanded
+// more than the i18n contract gives: a locale file is a SUBSET of English by
+// design (i18n/dictionaries.ts: `Messages = DeepPartial<Dictionary>`, and
+// getDictionary layers English underneath at runtime). Under the old type, an
+// English key added anywhere in the dictionary — a new fair-use string, say —
+// failed the type-check of a dev-only route that never renders it. Narrowed to
+// library/common/utils, this map now breaks only when something it ACTUALLY
+// shows goes untranslated, which is the check worth having.
+type GalleryMessages = Pick<typeof en, "library" | "common" | "utils">;
+
+const MESSAGES: Record<Locale, GalleryMessages> = {
   en,
   ms,
   ar,

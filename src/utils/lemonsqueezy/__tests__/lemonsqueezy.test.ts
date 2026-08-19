@@ -238,6 +238,20 @@ describe("LS subscription → entitlement", () => {
     expect(db.sub()!.row.is_founding).toBe(true);
   });
 
+  it("never UNSETS the founding flag when a later event's detection fails", async () => {
+    // detectFounding is a best-effort LS lookup that returns false for every
+    // failure mode, and this handler re-runs on every renewal and status
+    // change. Without monotonicity a routine subscription_updated arriving
+    // during an LS outage would quietly demote a real founding subscriber —
+    // and that row is what /api/public/founding-places counts when LS is
+    // unreachable, i.e. during exactly those outages.
+    for (const detect of [async () => false, async () => { throw new Error("LS 429"); }]) {
+      const db = new FakeDb({ billing_customers: { user_id: "user-A" }, subscriptions: { user_id: "user-A", is_founding: true } });
+      await run(db, subEvent({ custom: { user_id: "user-A" }, event: "subscription_updated", variantId: 1875871 }), { detectFounding: detect });
+      expect(db.sub()!.row.is_founding).toBe(true);
+    }
+  });
+
   it("cancelled keeps access until ends_at (grace); paused/expired revoke", async () => {
     const db1 = new FakeDb({ billing_customers: { user_id: "user-A" } });
     await run(db1, subEvent({ custom: { user_id: "user-A" }, event: "subscription_cancelled", status: "cancelled", ends_at: "2999-01-01T00:00:00Z" }));

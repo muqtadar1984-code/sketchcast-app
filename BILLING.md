@@ -131,6 +131,15 @@ LEMONSQUEEZY_VARIANT_FAMILY_MONTHLY=...
 LEMONSQUEEZY_VARIANT_FAMILY_ANNUAL=...
 LEMONSQUEEZY_VARIANT_HOMESCHOOL_MONTHLY=...
 LEMONSQUEEZY_VARIANT_HOMESCHOOL_ANNUAL=...
+# The FOUNDINGTEACHER discount's id (LS dashboard URL, or GET /v1/discounts).
+# Not a secret — an object id. Read only by /api/public/founding-places, which
+# reports how many of the capped founding places are gone; unset just means that
+# endpoint falls back to counting `subscriptions.is_founding`.
+LEMONSQUEEZY_FOUNDING_DISCOUNT_ID=...
+# Optional: EXTRA origins allowed to read the public marketing endpoints
+# (comma-separated). sketchcast.app and www.sketchcast.app are always allowed;
+# this is for a Cloudflare preview deployment. Never a wildcard.
+MARKETING_ORIGINS=
 
 BILLING_ENABLED=false
 APP_URL=https://app.sketchcast.app
@@ -206,6 +215,20 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
   product — the public pricing page shows the code and tells teachers to paste
   it at checkout. The webhook flags such subs `is_founding` (same access as
   Teacher Pro, tracked for grandfathering).
+  **The 50-place cap lives in LS and only in LS** (`is_limited_redemptions`
+  + `max_redemptions`), so LS itself refuses the 51st teacher — "Only the first
+  50 teachers" on /pricing is a mechanism, not an honour system. Put the
+  discount's id in `LEMONSQUEEZY_FOUNDING_DISCOUNT_ID`; this repo holds no cap
+  literal and no claimed-count literal anywhere.
+  > ⚠️ **On store activation, re-point `LEMONSQUEEZY_FOUNDING_DISCOUNT_ID`.**
+  > LS keeps test-mode and live-mode objects as separate data sets, so going
+  > live creates a **new** FOUNDINGTEACHER discount with a **new id**. The old
+  > test-mode id does not error — it keeps answering `0 redemptions` forever,
+  > which would publish "0 of 50 claimed · 50 left" on /pricing while real
+  > teachers consumed real places. `/api/public/founding-places` refuses a
+  > test-mode discount in production for exactly this reason (it degrades to
+  > counting `subscriptions.is_founding`, which is mode-agnostic), so the
+  > symptom of a forgotten re-point is a **missing** counter, not a wrong one.
 - **Settings → API** → create an API key → `LEMONSQUEEZY_API_KEY`. Copy the
   **Store ID** → `LEMONSQUEEZY_STORE_ID`.
 - **Settings → Webhooks** → add `https://app.sketchcast.app/api/webhooks/lemonsqueezy`.
@@ -263,6 +286,43 @@ manage → POST /api/billing/portal → fresh LS Customer Portal URL (24h-signed
 > what each tier unlocks (seat/student caps, premium voices, book limits, Family
 > child cap) and gate on `entitlement.plan_key`. Until then the three tiers
 > unlock the same feature set.
+
+### Founding places — the one PUBLIC billing-adjacent endpoint
+
+`GET /api/public/founding-places` — how many of the capped Founding Teacher
+places are gone. Unauthenticated by design: the static marketing site
+(sketchcast.app/pricing) reads it cross-origin so its scarcity line can state a
+**measured** number instead of a written-down one.
+
+```
+200 {"status":"ok","claimed":0,"max":50,"remaining":50,
+     "source":"lemonsqueezy","asOf":"2026-08-19T…Z"}
+200 {"status":"unknown"}          ← no numeric keys at all
+```
+
+- **Never 500.** Failure is a body, not a status code — a marketing page's fetch
+  must not put a red line in a visitor's console.
+- **`unknown` carries no numbers.** Not zeroes, not nulls. `0` is a publishable
+  count; `unknown` is the absence of one, and the shapes must not be confusable
+  — that is what makes a fabricated "0 of 50" impossible downstream.
+- **Sources, in order:** LS `discount-redemptions` total (+ `max_redemptions`
+  for the cap) → `count(subscriptions where is_founding)` (count only, no cap)
+  → unknown. Never blended: the DB figure is a proxy that can lag a webhook.
+- **The LS answer requires the discount to exist.** A redemption total alone is
+  unfalsifiable — a deleted, mistyped or test-mode id also answers `0`, which
+  reads exactly like a real zero. So `GET /discounts/{id}` must succeed (and,
+  in production, must not be `test_mode`) before any count is published.
+- **A cap below the count is dropped** (`max: null`): lowering `max_redemptions`
+  after redemptions exist is a true pair that cannot be said in one sentence.
+- **Timeouts** 2s per source; **cached** `s-maxage=300, stale-while-revalidate=86400`
+  at the CDN plus a 60s in-process memo **and single-flight dedup** (concurrent
+  cache misses share one resolve), so a busy — or hostile — pricing page never
+  becomes an LS API amplifier. A `unknown` body is cached for 15s only, so a
+  brief outage cannot pin a counter-less page in front of readers for minutes.
+- **CORS** echoes one exact allow-listed origin (`src/utils/marketing/cors.ts`),
+  never `*`, and grants no credentials.
+- Logic + tests: `src/utils/lemonsqueezy/founding-places.ts`,
+  `src/utils/lemonsqueezy/__tests__/founding-places.test.ts`.
 
 ### Local dev (Lemon Squeezy)
 ```bash

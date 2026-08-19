@@ -270,7 +270,7 @@ export async function handleLsEvent(db: Db, event: LsEvent, deps: HandleLsDeps =
   const incomingTs = attrs.updated_at ?? null;
   const { data: existingSub } = await db
     .from("subscriptions")
-    .select("provider_updated_at, user_id")
+    .select("provider_updated_at, user_id, is_founding")
     .eq("ls_subscription_id", subId)
     .maybeSingle();
   const storedTs = (existingSub?.provider_updated_at as string | null) ?? null;
@@ -325,6 +325,18 @@ export async function handleLsEvent(db: Db, event: LsEvent, deps: HandleLsDeps =
   } catch (e) {
     log("founding_detect_failed", { subscription: subId, err: (e as Error).message });
   }
+  // ⚠️ THE FLAG IS MONOTONIC: it may be set, never cleared. Detection is a
+  // best-effort LS lookup that returns false for EVERY failure — a throw, a
+  // getOrder error, a rate limit — and this handler runs again on every later
+  // lifecycle event (renewal, payment status, cancel). Without this line a
+  // routine subscription_updated arriving while LS is erroring would silently
+  // turn a genuine founding subscriber's row back into a non-founding one, and
+  // nothing would ever set it back. That is wrong twice over: the customer's
+  // cohort is a historical fact about how they bought, and the row is what
+  // /api/public/founding-places counts when LS is unreachable — i.e. exactly
+  // when these failures cluster — so a cleared flag would understate how many
+  // places are gone and overstate availability on the pricing page.
+  if (!isFounding && existingSub?.is_founding === true) isFounding = true;
 
   await db.from("subscriptions").upsert(
     {

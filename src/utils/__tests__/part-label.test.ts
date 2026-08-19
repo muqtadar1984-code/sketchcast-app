@@ -34,7 +34,17 @@ const PDI = "\u2069";
 /** What the reader sees: the isolates are invisible, so assertions strip them. */
 const seen = (s: string) => s.split(FSI).join("").split(PDI).join("");
 
-const M = (m: typeof en): PartLabelMessages => ({
+/** The four strings partLabel needs, and nothing else. Typed as a Pick of the
+ *  English shape rather than the whole `typeof en`: a locale file is a SUBSET
+ *  of English by contract (i18n/dictionaries.ts layers English underneath it),
+ *  so demanding the complete dictionary here turned every English string that
+ *  had not been translated yet — anywhere in the file, in any section — into a
+ *  type error in a test that reads four keys. */
+type PartLabelSource = {
+  library: Pick<typeof en.library, "partOfTotal" | "partAnchored" | "partAnchoredTitled" | "untitled">;
+};
+
+const M = (m: PartLabelSource): PartLabelMessages => ({
   partOfTotal: m.library.partOfTotal,
   partAnchored: m.library.partAnchored,
   partAnchoredTitled: m.library.partAnchoredTitled,
