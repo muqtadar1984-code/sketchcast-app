@@ -323,6 +323,49 @@ describe("LS subscription → entitlement", () => {
     expect(db.ent()).toBeUndefined();
   });
 
+  it("maps EVERY live product by name when the whole variant map is stale", async () => {
+    // The 2026-08-20 go-live scenario: the store was activated, every id in
+    // env was still a dead TEST-mode object, and planKeyForVariant returned
+    // null for all four products. Homeschool survived on its name fallback;
+    // Teacher Pro / Pro+ / Home Basic had none and reached `no_plan_key`,
+    // which returns BEFORE any entitlement write — a real card charged and no
+    // record of the buyer. All four must now map.
+    const cases: Array<[string, string, string]> = [
+      ["SketchCast Teacher Pro", "Monthly", "teacher_pro_monthly"],
+      ["SketchCast Teacher Pro", "Annual", "teacher_pro_annual"],
+      ["SketchCast Teacher Pro+", "Monthly", "teacher_pro_plus_monthly"],
+      ["SketchCast Teacher Pro+", "Annual", "teacher_pro_plus_annual"],
+      ["SketchCast Home Basic", "Monthly", "family_monthly"],
+      ["SketchCast Home Basic", "Annual", "family_annual"],
+      ["SketchCast Homeschool", "Monthly", "homeschool_monthly"],
+      ["SketchCast Homeschool", "Annual", "homeschool_annual"],
+    ];
+    for (const [productName, variantName, expected] of cases) {
+      const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+      // 2037937 et al are the LIVE ids — deliberately absent from VMAP here,
+      // standing in for an env that was never repointed.
+      await run(db, subEvent({ custom: { user_id: "user-A" }, variantId: 2037937, productName, variantName }));
+      expect(db.ent()!.row.plan_key).toBe(expected);
+    }
+  });
+
+  it("'Teacher Pro' does not swallow 'Teacher Pro+' (exact match, not prefix)", async () => {
+    // The two product names share a prefix and differ by one character. A
+    // prefix/startsWith match would sell Pro+ at Pro's caps for $49.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, subEvent({ custom: { user_id: "user-A" }, variantId: 999999, productName: "SketchCast Teacher Pro+", variantName: "Monthly" }));
+    expect(db.ent()!.row.plan_key).toBe("teacher_pro_plus_monthly");
+  });
+
+  it("Home Basic maps to the family_* plan keys, not a 'home_*' key", async () => {
+    // The user-visible name changed in the homeschool release; the billing
+    // identifier did not. Getting this wrong yields a plan_key no PLANS entry
+    // matches, so entitlements would carry a key the app cannot price.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, subEvent({ custom: { user_id: "user-A" }, variantId: 999999, productName: "SketchCast Home Basic", variantName: "Annual" }));
+    expect(db.ent()!.row.plan_key).toBe("family_annual");
+  });
+
   it("persists no card data", async () => {
     const db = new FakeDb({ billing_customers: null });
     await run(db, subEvent({ custom: { user_id: "user-A" }, email: "a@x.com" }));
@@ -349,6 +392,41 @@ describe("LS order → credit pack", () => {
     expect(db.pay()!.row.user_id).toBe("user-A");
     expect(db.cust()).toBeDefined(); // customer mapping kept current
     expect(db.ent()).toBeUndefined(); // a pack is credits, never an entitlement
+  });
+
+  it("a $0 pack order credits NOTHING", async () => {
+    // The live FOUNDINGTEACHER discount was created is_limited_to_products:
+    // false, so its $14 fixed amount applied to every variant in the store —
+    // fetching the pack_6 checkout with the code returns total 0, and LS then
+    // takes its no-payment-details path, so the order completes with no card.
+    // The code is printed with a Copy button on /pricing in all ten languages.
+    // There is no legitimate $0 pack sale (comps go through credit_grants), so
+    // nothing may be granted and no revenue row written.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, email: "a@x.com", productName: "SketchCast Credits — 1 kit (6)", total: 0 }));
+    expect(db.pack()).toBeUndefined();
+    expect(db.pay()).toBeUndefined();
+    expect(db.writes.length).toBe(0);
+  });
+
+  it("a pack order with an UNKNOWN total still credits", async () => {
+    // The guard is `=== 0` on a number, deliberately not a falsy test: an
+    // absent or unparsable total is not proof of a free order, and dropping a
+    // real sale over a missing bookkeeping field would be the worse failure.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    const ev = orderEvent({ custom: { user_id: "user-A" }, email: "a@x.com", productName: "SketchCast Credits — 1 kit (6)" });
+    delete (ev.data!.attributes as Record<string, unknown>).total;
+    await run(db, ev);
+    expect(db.pack()!.row.credits).toBe(6);
+  });
+
+  it("a DISCOUNTED but non-zero pack order still credits, at the price paid", async () => {
+    // $20 pack with the $14 code applied = $6 collected. A real sale: credit
+    // the pack, and bill from what LS reports rather than the catalogue price.
+    const db = new FakeDb({ billing_customers: { user_id: "user-A" } });
+    await run(db, orderEvent({ custom: { user_id: "user-A" }, email: "a@x.com", productName: "SketchCast Credits — 3 kits (18)", total: 600 }));
+    expect(db.pack()!.row.credits).toBe(18);
+    expect(db.pay()!.row.amount).toBe(600);
   });
 
   it("stamps what LS CHARGED onto the purchase, separately from the credit grant", async () => {

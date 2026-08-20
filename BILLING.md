@@ -205,11 +205,25 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
   identically if that layout is ever preferred. Either way the count in
   `(…)` is load-bearing; an order whose count matches no configured pack is
   logged and ignored, never guessed.
-  Then paste each pack's checkout URL (per-variant Share links; if LS only
-  offers one product-level link with a variant picker, the same URL in all
-  three slots is fine) into `LEMONSQUEEZY_CHECKOUT_PACK_6/18/36` or the
-  literals in `src/utils/billing/packs.ts` — a null URL keeps that pack's
-  buy button hidden, so the feature ships dark until this step.
+  Then paste **each pack's own** checkout URL into
+  `LEMONSQUEEZY_CHECKOUT_PACK_6/18/36` or the literals in
+  `src/utils/billing/packs.ts` — a null URL keeps that pack's buy button
+  hidden, so the feature ships dark until this step.
+  > ⚠️ **`/checkout/buy/<slug>` is a VARIANT share link. There is no
+  > product-level link with a variant picker, so the same URL in all three
+  > slots is NOT fine** — it is precisely the bug that shipped on 2026-08-18,
+  > when all three chips carried the `1 kit (6)` slug and the $20 and $36
+  > buttons opened an $8 checkout and credited 6. A variant link opens one
+  > variant at one price and shows no chooser (its own page state reports
+  > `isMultiVariant: false`). Nothing errors when this is wrong — the buyer is
+  > simply charged by whatever variant the link opens, and crediting follows
+  > the variant actually bought. **Verify every repoint by fetching the URL
+  > and reading the subtotal it renders**, never by trusting a slug written in
+  > a comment or a doc; LS mints a new slug whenever a variant is edited.
+  > Note also that `LEMONSQUEEZY_CHECKOUT_PACK_6/18/36` **override** the
+  > literals in `packs.ts` (`resolvedPacks()` reads env first), so one stale
+  > value in Vercel silently defeats a correct `packs.ts` with no test failure
+  > and no error. Audit these three alongside the variant ids.
 - Create the founding discount code **`FOUNDINGTEACHER`** on the Teacher Pro
   product (→ $10/mo, price-locked 24 months). It is a *discount*, not a separate
   product — the public pricing page shows the code and tells teachers to paste

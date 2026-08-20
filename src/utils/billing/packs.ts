@@ -14,10 +14,18 @@
 //     SILENTLY (the buyer is charged by whatever variant the link opens, and
 //     crediting follows the variant actually bought), so verify any repoint
 //     resolves to the intended price. The env vars
-//     (LEMONSQUEEZY_CHECKOUT_PACK_6/18/36) still override the literal per pack
-//     — the swap path for live-mode links once LS activates the store (every
-//     id below is a TEST-mode id). A null URL hides that pack's buy button
-//     (the original ships-dark mechanism).
+//     (LEMONSQUEEZY_CHECKOUT_PACK_6/18/36) still override the literal per pack.
+//     A null URL hides that pack's buy button (the original ships-dark
+//     mechanism).
+//
+//     LIVE since 2026-08-20. The store was activated that day and the three
+//     ids below are now LIVE-mode variant slugs, each fetched and confirmed to
+//     render its own subtotal ($8 / $20 / $36) with test_mode:false. The
+//     TEST-mode ids they replaced (b71a1f57…, 34a79a65…, 2e506598…) are dead
+//     objects — a real card DECLINES on them — so nothing may point at them
+//     again. ⚠️ LS reassigns a variant id and mints a new slug whenever the
+//     variant is edited, so re-read the catalogue from the API rather than
+//     trusting any id written in this comment.
 //     The dashboard UI consumes this catalogue through src/utils/credit-packs.ts.
 //   * productName — the canonical name for the pack in Lemon Squeezy. The
 //     webhook identifies a pack order by the product-name prefix
@@ -63,7 +71,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "1 kit",
     productName: "SketchCast Credits — 1 kit (6)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_6",
-    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/b71a1f57-fcb7-4117-bd8f-786d4cf52268",
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/af3f9267-4dba-4c8f-861d-1a542f0ccc47",
   },
   {
     key: "pack_18",
@@ -72,7 +80,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "3 kits",
     productName: "SketchCast Credits — 3 kits (18)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_18",
-    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/34a79a65-4c38-4fc6-b765-9011e40eb14b",
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/5d248c46-538d-42aa-a5c4-c35c3ef55561",
   },
   {
     key: "pack_36",
@@ -81,7 +89,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     label: "6 kits",
     productName: "SketchCast Credits — 6 kits (36)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_36",
-    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/2e506598-f094-4700-bcb1-dae4effe4148",
+    checkoutUrl: "https://aetheltwin.lemonsqueezy.com/checkout/buy/235265c9-7841-4c1a-8b74-db10b2b505e1",
   },
 ] as const;
 

@@ -1,8 +1,10 @@
 /**
  * One-time credit packs (homeschool release). The load-bearing decisions:
  *  • the founder-approved catalogue — 6/$8 (1 kit), 18/$20 (3 kits),
- *    36/$36 (6 kits) — LIVE via the SketchCast Credits product-level
- *    checkout link (env vars still override, e.g. for per-variant links);
+ *    36/$36 (6 kits) — LIVE, each pack on its OWN variant checkout link
+ *    (an LS link is variant-locked: it opens one variant at one price, with
+ *    no picker, so a shared link would charge every pack the same $8). The
+ *    slugs below are LIVE-mode as of 2026-08-20; env vars still override;
  *  • purchasablePacks — a null checkoutUrl must never render a button;
  *  • packsAllowedForTier — paid tiers only, NEVER trial/free/promo, and
  *    unknown tiers fail closed.
@@ -33,9 +35,9 @@ describe("creditPacks — the founder-approved catalogue", () => {
 
   const BUY = "https://aetheltwin.lemonsqueezy.com/checkout/buy/";
   const LIVE: Record<string, string> = {
-    pack_6: `${BUY}b71a1f57-fcb7-4117-bd8f-786d4cf52268`,
-    pack_18: `${BUY}34a79a65-4c38-4fc6-b765-9011e40eb14b`,
-    pack_36: `${BUY}2e506598-f094-4700-bcb1-dae4effe4148`,
+    pack_6: `${BUY}af3f9267-4dba-4c8f-861d-1a542f0ccc47`,
+    pack_18: `${BUY}5d248c46-538d-42aa-a5c4-c35c3ef55561`,
+    pack_36: `${BUY}235265c9-7841-4c1a-8b74-db10b2b505e1`,
   };
 
   it("carries each pack's OWN variant checkout link; env overrides per pack, blank falls back", () => {

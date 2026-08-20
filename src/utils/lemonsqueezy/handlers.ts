@@ -154,6 +154,24 @@ async function resolveIdentity(
 }
 
 // ── plan_key ──────────────────────────────────────────────────────────────
+
+/** LS product name → the plan_key pair for its two cycles.
+ *
+ *  These are the EXACT live product names (verified against the LS catalogue
+ *  on 2026-08-20: products 1302951 / 1302956 / 1302959 / 1302964). They are
+ *  load-bearing strings, not labels — renaming a product in the LS dashboard
+ *  disables this fallback for it, so rename here in the same change.
+ *
+ *  Note the plan_key spelling: Home Basic's keys are `family_*`. The
+ *  user-visible name changed in the homeschool release; billing/DB identifiers
+ *  never rename (see PLANS in utils/stripe/plans.ts). */
+const PRODUCT_NAME_TO_PLAN: Record<string, { monthly: string; annual: string }> = {
+  "SketchCast Teacher Pro": { monthly: "teacher_pro_monthly", annual: "teacher_pro_annual" },
+  "SketchCast Teacher Pro+": { monthly: "teacher_pro_plus_monthly", annual: "teacher_pro_plus_annual" },
+  "SketchCast Home Basic": { monthly: "family_monthly", annual: "family_annual" },
+  "SketchCast Homeschool": { monthly: "homeschool_monthly", annual: "homeschool_annual" },
+};
+
 async function resolvePlanKey(
   db: Db,
   attrs: LsSubscriptionAttributes,
@@ -171,18 +189,38 @@ async function resolvePlanKey(
     }
     return fromVariant;
   }
-  // Homeschool by PRODUCT NAME: the product exists before its variant ids are
-  // wired into env (LEMONSQUEEZY_VARIANT_HOMESCHOOL_MONTHLY/_ANNUAL — the
-  // primary, most robust mapping the founder must still set). Until then the
-  // stable product name carries the sale: variant_name decides the cycle
-  // ("Annual"/"Yearly" → annual, anything else → monthly — access is identical
-  // either way; only console MRR arithmetic differs, so monthly is the safe
-  // default). Deliberately ABOVE the custom_data fast-path: the name comes
-  // from LS's own object, custom_data from the client. EXACT match, as the
-  // docs promise — a future "SketchCast Homeschool Plus" must surface as
-  // unmapped, not silently sell at this plan's caps.
-  if ((attrs.product_name ?? "").trim() === "SketchCast Homeschool") {
-    const cycle = /annual|year/i.test(attrs.variant_name ?? "") ? "homeschool_annual" : "homeschool_monthly";
+  // PRODUCT NAME fallback — the safety net under a stale variant map.
+  //
+  // The variant id above is the primary mapping and the only one that
+  // distinguishes cycle reliably, but it lives entirely in env, and LS
+  // REASSIGNS a variant id whenever the variant is edited. On 2026-08-20 the
+  // store went live and every id in env was still a dead TEST-mode object:
+  // planKeyForVariant returned null for all four live products, and only
+  // Homeschool (which already had this fallback) survived. The other three
+  // reached `no_plan_key` and returned BEFORE writing billing_customers,
+  // subscriptions or entitlements — i.e. a real card was charged and the app
+  // held no record that the buyer existed. That is the failure this table now
+  // covers for every plan, not just one.
+  //
+  // The product name is a stable, human-authored string on LS's own object
+  // (custom_data, by contrast, comes from the client) — hence this sits ABOVE
+  // the custom_data fast-path. variant_name decides the cycle ("Annual"/
+  // "Yearly" → annual, anything else → monthly); access is identical either
+  // way, only console MRR arithmetic differs, so monthly is the safe default.
+  //
+  // EXACT match, deliberately: a future "SketchCast Homeschool Plus" or
+  // "SketchCast Teacher Pro Max" must surface as unmapped rather than silently
+  // sell at a neighbouring plan's caps. Note "SketchCast Teacher Pro" and
+  // "SketchCast Teacher Pro+" are distinct keys — exact matching is what keeps
+  // the shorter one from swallowing the longer.
+  //
+  // ⚠️ This is a NET, not a replacement. It cannot tell a $240/yr buyer from a
+  // $24/mo one when the variant is unmapped AND the variant name is unusual,
+  // and it will not fire at all for a product renamed in the dashboard. Set
+  // the eight LEMONSQUEEZY_VARIANT_* ids correctly and keep them correct.
+  const byName = PRODUCT_NAME_TO_PLAN[(attrs.product_name ?? "").trim()];
+  if (byName) {
+    const cycle = /annual|year/i.test(attrs.variant_name ?? "") ? byName.annual : byName.monthly;
     log("plan_key_from_product_name", { subscription: lsSubscriptionId, product: attrs.product_name, variant_name: attrs.variant_name ?? null, plan: cycle });
     return cycle;
   }
@@ -435,6 +473,42 @@ async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise
       console.warn("billing.ls.pack_refund_tombstone_failed", { order: orderId, err: tombErr.message });
     }
     log("pack_refunded", { order: orderId, pack: pack.key });
+    return;
+  }
+
+  // ZERO-VALUE PACK ORDERS NEVER CREDIT.
+  //
+  // A credit pack is a one-time purchase; there is no legitimate $0 pack sale.
+  // The comp lever is migration 0079's `credit_grants`, not a free pack — so a
+  // pack order that collected nothing is either a fully-discounted checkout or
+  // a mistake, and in both cases granting generations for it is wrong.
+  //
+  // This is not hypothetical. On 2026-08-20 the live FOUNDINGTEACHER discount
+  // (id 1105799, $14 fixed, repeating 24 months) was created with
+  // is_limited_to_products:false, so it applied to EVERY variant in the store.
+  // Fetching the pack_6 checkout with that code returns subtotal 800,
+  // discount_total 800, total 0 — and LS flips the cart to its
+  // no-payment-details path, so the order completes with no card at all. The
+  // code is printed in plain text with a Copy button on /pricing in all ten
+  // languages. Without this guard each such order granted 6 generations, and
+  // each one also burned one of the 50 store-wide redemptions the founding
+  // teachers are meant to get.
+  //
+  // The real fix is scoping the discount to Teacher Pro in the LS dashboard;
+  // this guard is the belt under that brace, and it stays either way because
+  // "paid nothing" must never mean "credited". Deliberately `=== 0` on a
+  // number, not a falsy test: an absent/unparsable total is NOT proof of a
+  // free order, so it falls through and credits as before rather than
+  // silently dropping a real sale. Logged loudly — a hit here means money and
+  // the catalogue disagree, and someone must look.
+  if (typeof attrs.total === "number" && attrs.total === 0) {
+    log("pack_zero_total_refused", {
+      order: orderId,
+      pack: pack.key,
+      credits_withheld: pack.credits,
+      currency: attrs.currency ?? null,
+      status: attrs.status ?? null,
+    }); // ALERT: a $0 pack order — check the discount's product scope in LS
     return;
   }
 
