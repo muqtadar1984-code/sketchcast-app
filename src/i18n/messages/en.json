@@ -1728,6 +1728,7 @@
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kits",
     "purchased": "{n} purchased credits available",
+    "availableNow": "{n} generations available right now — {monthly} this month plus {purchased} purchased",
     "upgradeCta": "Need more? See plans and pricing"
   }
 }

@@ -115,12 +115,24 @@ const MAX_IDENTICAL_PROSE = 0.06;
  * waits here is the interior of a dialog they open on purpose — and the two
  * strings that carry a number into it are wrapped in <bdi> at the render site,
  * because an English fallback inside an RTL page reorders otherwise.
+ *
+ * 2026-08-20 — purchased credits moved ONTO the fair-use meter (the bar gained
+ * a second, hatched segment for the purchased pool). Exactly ONE new English
+ * string, and it is worth saying why only one. The purchased line reuses
+ * fairUse.purchased and the "these never expire" sentence reuses
+ * fairUse.buyHint — both already translated in all ten locales — so the only
+ * thing without a translation is the total-available figure, which answers
+ * "what can I generate right now" and did not exist in any form before. It
+ * renders ONLY for accounts holding a purchased balance (a handful today), and
+ * it is wrapped in <bdi> at the render site because it carries three numbers
+ * into a sentence that will fall back to English inside an RTL page.
  */
 const PENDING_TRANSLATION: readonly string[] = [
   "fairUse.buyNewTab",
   "fairUse.buyClose",
   "fairUse.packCredits",
   "fairUse.packPrice",
+  "fairUse.availableNow",
 ];
 const pending = new Set(PENDING_TRANSLATION);
 

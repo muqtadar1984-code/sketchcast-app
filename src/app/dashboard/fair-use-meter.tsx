@@ -52,20 +52,118 @@ const usageText = (b: Bucket, t: Messages) =>
     ? fmt(t.usageCarried, { used: b.used, cap: b.cap, carry: b.carry })
     : fmt(t.usage, { used: b.used, cap: b.cap });
 
-function Row({ label, b, t }: { label: string; b: Bucket; t: Messages }) {
-  const total = b.cap + b.carry;
-  const pct = total > 0 ? Math.min(100, Math.round((b.used / total) * 100)) : 0;
-  const low = b.available <= Math.max(2, Math.round(total * 0.1));
+/** THE ONE PLACE THE CARD ANSWERS "how many more can I generate right now",
+ * shared by the bar's segment widths, the amber warning, and the total-available
+ * sentence so those three can never disagree.
+ *
+ * IT REPRODUCES enforce_fair_use EXACTLY, and the subtlety it exists for is that
+ * the RPC payload does NOT. my_fair_use() returns `greatest(0, c.available)`
+ * (0086), while fair_use_avail computes available = cap + carry - used
+ * UNCLAMPED (0059) and the trigger gates on that raw, possibly-NEGATIVE value:
+ *   if a.available < 1 and a.available + fair_use_purchased_remaining(...) < 1
+ * The value goes negative for real: a chapter lesson is charged WHOLE to
+ * whichever pool had any room left (the bounded one-chapter overshoot 0047
+ * accepted by design), so 11 used of a cap of 12 plus a four-part chapter leaves
+ * used = 15 and a raw available of -3. Reading the clamped 0 and adding a 6-pack
+ * would promise 6 more generations where the database admits 3 — and would keep
+ * the meter calm teal through the whole overstated window. The overdraft is a
+ * genuine claim on the purchased pool, so it is subtracted there.
+ *
+ * `used`, `cap` and `carry` all ride in the payload, so the raw figure is
+ * reconstructible with no migration and no new RPC field. */
+function spendable(b: Bucket, purchased: number) {
+  const monthly = b.cap + b.carry; // this month's allowance, carry-over included
+  const overdraft = Math.max(0, b.used - monthly); // already charged against the purchased pool
+  const monthlyLeft = Math.max(0, monthly - b.used); // === b.available (the clamped figure)
+  const purchasedLeft = Math.max(0, purchased - overdraft);
+  return { monthly, monthlyLeft, purchasedLeft, total: monthlyLeft + purchasedLeft };
+}
+
+/** The purchased pool's fill — deliberately NOT another flat colour.
+ *
+ * Same teal family, because these are the same currency as the monthly
+ * allowance, but hatched, because they behave differently: they were paid for
+ * separately and they do not reset. A texture rather than a second hue survives
+ * greyscale and colour-blindness, and it cannot be mistaken for "more of the
+ * same bar" the way a lighter teal could. The same fill paints the legend swatch
+ * next to the purchased line below, which is what ties the two together without
+ * needing a colour name in any of ten languages. */
+const PURCHASED_FILL =
+  "repeating-linear-gradient(135deg, #0C8175, #0C8175 3px, #8ED6CD 3px, #8ED6CD 6px)";
+
+/**
+ * One meter row. The bar spans MONTHLY ALLOWANCE + PURCHASED BALANCE, in that
+ * order, as two visually distinct regions.
+ *
+ * ═══ WHY NOT ONE MERGED "0 of 18" ═══
+ * Because the two pools have different lifetimes and merging them would lie
+ * about paid credits once a month. The monthly allowance RESETS (the card says
+ * "resets Sep 1") and carry-over rolls exactly one month forward; purchased
+ * credits NEVER expire, and the database spends the monthly quota FIRST and
+ * only then dips into the purchased pool (fair_use_purchased_remaining +
+ * enforce_fair_use). A single "0 of 18" would therefore fall to "0 of 12" on the
+ * 1st and read as though six PAID credits had vanished — a support ticket, and a
+ * deserved one. Two segments in one bar say "these are all yours to spend" and
+ * "these two things are not the same thing" at once, which is the whole point.
+ *
+ * The number on the right stays the MONTHLY figure. It is what "resets {date}"
+ * refers to, and the buy dialog quotes the same composer (usageText), so
+ * changing it here would silently change what the dialog claims.
+ */
+function Row({ label, b, t, purchased = 0 }: { label: string; b: Bucket; t: Messages; purchased?: number }) {
+  const { monthly, monthlyLeft, purchasedLeft } = spendable(b, purchased);
+  const span = monthly + purchased; // the full width the bar represents
+  // Spent is clamped at the SPAN, not at `monthly`. A multi-unit kit is charged
+  // whole to whichever pool had room left (0086), so `used` can overshoot the
+  // monthly pool — and when it does those purchased credits really are
+  // committed: enforce_fair_use settles the overdraft out of the purchased
+  // balance before admitting the next generation. Stopping the spent segment at
+  // `monthly` would draw the hatched region at full width while the number
+  // beside it said three were left. Everything below derives from the same
+  // spendable() split, so the picture and the figures cannot diverge.
+  const spent = Math.min(b.used, span);
+  const pct = (v: number) => (span > 0 ? (v / span) * 100 : 0);
+  // "Low" means low on EVERYTHING that can actually be spent. Warning a
+  // subscriber who is holding 36 purchased credits that they are nearly out
+  // would be false, and the amber was only ever there to say "you are about to
+  // be blocked" — so it has to use the figure the trigger uses.
+  const low = monthlyLeft + purchasedLeft <= Math.max(2, Math.round(monthly * 0.1));
   return (
-    <div className="flex items-center gap-3 min-w-0">
+    // WRAPS ON A PHONE, and the bar is what moves. The label is w-28 (112px) and
+    // the usage figure is a whole clause ("0 of 12 +12 carried" ≈ 130px in
+    // JetBrains Mono at text-xs); inside the dashboard's own box — max-w-7xl
+    // px-6 minus the card's px-5 — a 375px viewport leaves the row 287px, so a
+    // flex-1 bar between two shrink-0 neighbours collapsed to ~15-25px. A bar
+    // that narrow cannot show two segments: the purchased region measured ~3px,
+    // less than one cycle of the 6px hatch, so it read as a solid nub. Giving
+    // the bar its own full-width line below the label/figure pair (order-last +
+    // basis-full, only below sm) restores the whole 287px and with it the whole
+    // point of the second segment. Unchanged from sm up.
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0">
       <span className="text-xs text-[#5B6470] w-28 shrink-0">{label}</span>
-      <div className="h-1.5 flex-1 rounded-full bg-[#EEF0EC] overflow-hidden">
+      {/* flex, not one nested fill: the segments sit side by side and the track
+          (#EEF0EC) shows through the untouched middle one. overflow-hidden on
+          the rounded parent is what gives whichever segment lands at each end
+          its cap, so the bar keeps its shape at every ratio. */}
+      <div className="order-last basis-full sm:order-none sm:basis-auto h-1.5 flex-1 rounded-full bg-[#EEF0EC] overflow-hidden flex">
         <div
-          className={`h-full rounded-full ${low ? "bg-[#9A6400]" : "bg-[#0C8175]"}`}
-          style={{ width: `${pct}%` }}
+          className={`h-full shrink-0 ${low ? "bg-[#9A6400]" : "bg-[#0C8175]"}`}
+          style={{ width: `${pct(spent)}%` }}
         />
+        {/* the monthly allowance still unspent — track colour, no fill */}
+        <div className="h-full shrink-0" style={{ width: `${pct(monthlyLeft)}%` }} />
+        {purchasedLeft > 0 && (
+          <div
+            className="h-full shrink-0"
+            style={{ width: `${pct(purchasedLeft)}%`, backgroundImage: PURCHASED_FILL }}
+          />
+        )}
       </div>
-      <span className={`text-xs tabular shrink-0 ${low ? "text-[#9A6400]" : "text-[#5B6470]"}`}>
+      {/* ms-auto, NOT ml-auto: on the wrapped mobile line this is what pushes
+          the figure to the far end of the row, and "the far end" is the LEFT in
+          Arabic and Jawi. margin-inline-start flips with the direction; a
+          physical margin-left would strand the figure mid-row in RTL. */}
+      <span className={`text-xs tabular shrink-0 ms-auto sm:ms-0 ${low ? "text-[#9A6400]" : "text-[#5B6470]"}`}>
         {usageText(b, t)}
       </span>
     </div>
@@ -239,6 +337,14 @@ export default async function FairUseMeter() {
   let purchased = 0;
   if (typeof fu.purchased === "number") purchased = fu.purchased;
   else if (fu.purchased && typeof fu.purchased.available === "number") purchased = fu.purchased.available;
+  // The SPENDABLE split of that balance — see spendable(). `purchased` above is
+  // the pool's stored balance and is what decides whether this account has a
+  // purchased pool AT ALL (the render guards below); `avail` is what it can
+  // actually spend right now, which is the only honest thing to put next to the
+  // word "available". They differ only while the monthly pool is overdrawn, and
+  // the guards stay on the stored balance so a fully-committed pack still shows
+  // itself rather than silently disappearing from the card.
+  const avail = fu.credits ? spendable(fu.credits, purchased) : null;
   // The month/day reads in the reader's own language and order — "1 Sept" is
   // not how every locale writes a date.
   const lang = htmlLang(locale);
@@ -286,20 +392,65 @@ export default async function FairUseMeter() {
       </div>
       {fu.credits ? (
         <>
-          <Row label={t.lessons} b={fu.credits} t={t} />
+          {/* Purchased credits are ON the meter now, as the bar's second
+              segment — see Row for why they are a segment and not merged into
+              the monthly total. */}
+          <Row label={t.lessons} b={fu.credits} t={t} purchased={purchased} />
           <p className="text-[10px] text-[#98A0A9]">{t.kitFree}</p>
         </>
       ) : (
-        // Pre-0059 DB (deploy window): the old two-pool shape.
+        // Pre-0059 DB (deploy window): the old two-pool shape. No purchased
+        // segment here on purpose — packs are 0086, so a DB old enough to
+        // report this shape has no credit_purchases table for a balance to come
+        // from, and the lines below still state the balance in words if one
+        // somehow exists.
         <>
           {fu.parts && <Row label={t.parts} b={fu.parts} t={t} />}
           {fu.docs && <Row label={t.documents} b={fu.docs} t={t} />}
         </>
       )}
-      {/* Purchased packs outlive the month, so they sit OUTSIDE the monthly
-          row — a separate line that only appears once there is a balance. */}
+      {/* THE ANSWER TO "what can I generate right now" — monthly available +
+          carried + purchased, as one number, because that is the question the
+          bar alone cannot answer once it has two segments. Rendered ONLY when a
+          balance exists, which keeps the meter byte-for-byte unchanged for the
+          overwhelming majority of accounts (and keeps the one English-only
+          string off their screens entirely).
+
+          <bdi> because the string carries numbers into a sentence that renders
+          in English inside an RTL page until the next translation round — the
+          same wrapping the buy dialog's number-carrying strings use, for the
+          same reason.
+
+          The purchased LINE keeps its own swatch, painted from the same fill as
+          the bar segment: that is what makes the hatched region self-explaining
+          without naming a colour in ten languages. And the non-expiry statement
+          is fairUse.buyHint — already written, already translated everywhere,
+          and already the exact sentence required ("They never expire — your
+          monthly allowance is used first"). Reused rather than re-authored so
+          no reader of Telugu or Jawi meets a new English sentence on the card. */}
       {purchased > 0 && (
-        <p className="text-[10px] text-[#0C8175]">{fmt(t.purchased, { n: purchased })}</p>
+        <div className="space-y-1 pt-0.5">
+          {avail && (
+            <p className="text-[11px] font-medium text-[#14181F]">
+              <bdi>
+                {fmt(t.availableNow, {
+                  n: avail.total,
+                  monthly: avail.monthlyLeft,
+                  purchased: avail.purchasedLeft,
+                })}
+              </bdi>
+            </p>
+          )}
+          <p className="flex items-center gap-1.5 text-[10px] text-[#0C8175]">
+            <span
+              aria-hidden="true"
+              className="inline-block h-2 w-3 shrink-0 rounded-[2px]"
+              style={{ backgroundImage: PURCHASED_FILL }}
+            />
+            <bdi>{fmt(t.purchased, { n: avail ? avail.purchasedLeft : purchased })}</bdi>
+          </p>
+          <p className="text-[10px] text-[#98A0A9]">{t.buyHint}</p>
+        </div>
       )}
       {/* The decision, visible on the card itself. `packs` is already empty for
           every tier that may not buy (packsAllowedForTier) and for every pack
@@ -309,7 +460,10 @@ export default async function FairUseMeter() {
           backdrop hides the meter that was showing it. */}
       <MeterActions
         packs={packs}
-        purchased={purchased}
+        // The SPENDABLE figure, not the stored balance: the dialog prints the
+        // same fairUse.purchased string the card does, over a backdrop that
+        // hides the card, so the two must never quote different numbers.
+        purchased={avail ? avail.purchasedLeft : purchased}
         usage={fu.credits ? { label: t.lessons, value: usageText(fu.credits, t) } : null}
         paidTier={paidTier}
         t={t}

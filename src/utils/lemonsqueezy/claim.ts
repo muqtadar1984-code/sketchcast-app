@@ -2,7 +2,7 @@
 // public pricing page (parked "unclaimed" by the buyer's email) to the account
 // holder once they are authenticated with that same VERIFIED email — and only
 // then create the entitlement that grants access (subscriptions), or record the
-// revenue (credit packs).
+// revenue (credit packs, and subscription invoices since 0093).
 //
 // SECURITY: the caller MUST pass the Supabase-verified session email (never a
 // value from the request body). A buyer can type any email at LS checkout, so
@@ -33,9 +33,22 @@
 // flowing on the old blind UPDATE while the revenue row waits for the migration
 // — degraded and loud in the logs, never a buyer paying for nothing.
 
+// SUBSCRIPTIONS PARK THE SAME WAY, AND THEIR MONEY WAS NEVER RECORDED AT ALL
+// (2026-08-20). The pack incident above was one half of the hole; the other
+// half was larger and older. A subscription's initial order reaches the webhook
+// but resolves to no credit pack, so it returns before writing anything; a
+// RENEWAL never reaches that handler at all, because LS sends a renewal as an
+// invoice-shaped `subscription_payment_success` and no order. Result: not one
+// subscription payment has ever appeared in the console's "Collected to date".
+// 0093 adds the invoice branch to the webhook and public.subscription_invoices
+// as the durable record — and because payments.user_id is NOT NULL, a
+// public-link subscription bought while logged out parks exactly like a pack,
+// so bindParkedInvoices below is the mirror of bindParkedPacks and is the only
+// place a parked subscription's revenue row can be written.
+
 import { createAdminClient } from "@/utils/supabase/admin";
 import { CREDIT_PACKS } from "@/utils/billing/packs";
-import { lsActiveFromStored } from "./handlers";
+import { lsActiveFromStored, lsRevenueAmount } from "./handlers";
 
 type ClaimError = { code?: string; message: string };
 
@@ -78,7 +91,10 @@ type ParkedPack = {
   /** `numeric(8,2)` LIST price — see packAmountMinor: postgres hands numerics
    * over as STRINGS, and list is not necessarily what was charged. */
   usd: number | string | null;
-  /** 0092: what LS actually COLLECTED, in minor units of total_currency. */
+  /** 0092's column, 0093's meaning: what the business CHARGED, NET OF TAX, in
+   * minor units of total_currency (LS `subtotal - discount_total`). The name is
+   * inherited from the gross era and no longer describes a "total" — 0093
+   * corrects the column comment; handlers.ts's lsNetOfTax is the only writer. */
   total_minor: number | string | null;
   /** 0092: the currency those minor units are denominated in (lower-cased). */
   total_currency: string | null;
@@ -95,6 +111,41 @@ type ParkedPack = {
  * Three of these columns arrive with 0092, which is exactly why the probe that
  * runs first names none of them. */
 const PACK_REVENUE_COLS = "ls_order_id, pack_key, usd, total_minor, total_currency, order_status, refunded_at, created_at";
+
+/** One parked LS subscription invoice (0093). The direct analogue of
+ * ParkedPack: a durable record of one charge, waiting for an owner. */
+type ParkedInvoice = {
+  /** LS's own invoice id — the idempotency key on payments.ls_invoice_id.
+   *  Deliberately NOT an order id: the two are separate LS sequences sharing
+   *  one numeric space, so mixing them would eventually swallow a real sale as
+   *  a duplicate. */
+  ls_invoice_id: string | null;
+  /** Resolved from the subscription at webhook time — an invoice carries no
+   *  variant or product name, so it cannot be re-derived here. */
+  plan_key: string | null;
+  /** NET OF TAX, in minor units of total_currency — stamped by lsNetOfTax at
+   *  webhook time so this path inherits the policy instead of re-deciding it.
+   *  Named for the gross era like credit_purchases.total_minor, and for the
+   *  same reason: one concept, one column name across both tables. */
+  total_minor: number | string | null;
+  total_currency: string | null;
+  /** LS's own USD conversion, netted the same way, for a charge in a currency
+   *  payments cannot hold. */
+  total_usd_minor: number | string | null;
+  /** 'pending' | 'paid' | 'void' | 'refunded' | 'partial_refund'. Only 'paid'
+   *  is collected money. */
+  invoice_status: string | null;
+  test_mode: boolean | null;
+  refunded_at: string | null;
+  /** The INVOICE's own date — when the money was taken. payments is a time
+   *  series and a subscription can be claimed long after it was bought. */
+  invoiced_at: string | null;
+};
+
+/** Read back FROM THE BIND, for the same reason PACK_REVENUE_COLS is: the rows
+ * an UPDATE actually matched, as of its own snapshot. */
+const INVOICE_REVENUE_COLS =
+  "ls_invoice_id, plan_key, total_minor, total_currency, total_usd_minor, invoice_status, test_mode, refunded_at, invoiced_at";
 
 /** Caller entry point — creates the service-role client and reconciles. */
 export async function claimLsPurchases(userId: string | null | undefined, verifiedEmail: string | null | undefined): Promise<number> {
@@ -138,19 +189,24 @@ function usdCharge(p: ParkedPack): boolean {
  *
  * WHY NOT SIMPLY `usd`. credit_purchases.usd is the CATALOGUE list price — 0086
  * annotates it "display/reconciliation only" — a TS constant (packs.ts) copied
- * in by the webhook, so it cannot see a discount code. LS's `total` is what the
- * buyer was actually charged, and it is what the webhook's OWN payments row
- * uses (handlers.ts). Pricing the two writers from two different definitions of
- * "the amount" would make "Collected to date" a single series built out of two
- * incompatible numbers, so the collected total (0092's total_minor) wins
- * wherever the webhook stamped it, and the catalogue is the fallback for the
- * sales that predate that column.
+ * in by the webhook, so it cannot see a discount code. total_minor is what the
+ * business actually charged, and it is what the webhook's OWN payments row uses
+ * (handlers.ts). Pricing the two writers from two different definitions of "the
+ * amount" would make "Collected to date" a single series built out of two
+ * incompatible numbers, so the stamped figure wins wherever the webhook wrote
+ * one, and the catalogue is the fallback for the sales that predate 0092.
  *
- * TAX, stated plainly because this is easy to misread as "net revenue": LS is
- * Merchant of Record, so `total` can include VAT the business never keeps. Both
- * writers now share that definition — the invariant this function exists to
- * protect — but netting tax out is a console-side decision, not a reason to
- * fork the two paths.
+ * TAX: nothing to do here, and that is the point. total_minor is already NET —
+ * lsNetOfTax books `subtotal - discount_total` at the webhook boundary, so LS's
+ * tax never enters this file. LS is Merchant of Record and remits that tax, so
+ * the business never keeps it and it is not revenue ("Collected to date" is net
+ * of tax, founder 2026-08-22). Re-deriving anything tax-shaped here would be
+ * the second definition this function exists to prevent.
+ *
+ * That also puts the catalogue fallback on the right side of the rule for the
+ * first time: a LIST price is net of tax by construction, so booking list for a
+ * pre-0092 sale is now exact where it used to understate a taxed one. It still
+ * cannot see a discount, which is why it stays the fallback and not the price.
  *
  * CURRENCY: payments_currency_check (0023) admits only 'myr' and 'usd', so a
  * charge denominated in anything else cannot be recorded faithfully. Booking
@@ -208,7 +264,7 @@ async function recordPackRevenue(db: ClaimDb, userId: string, packs: ParkedPack[
       school_id: null, // LS packs are personal (B2C) — never school-scoped
       provider: "lemonsqueezy",
       ls_order_id: p.ls_order_id,
-      amount, // MINOR UNITS
+      amount, // MINOR UNITS, NET of tax — see packAmountMinor
       // Packs are a USD-priced catalogue (packs.ts `usd`) and the webhook
       // lower-cases LS's currency; a charge stamped in any other currency was
       // rejected by packAmountMinor above and is booked in USD at list.
@@ -333,6 +389,158 @@ async function bindParkedPacks(db: ClaimDb, userId: string, email: string): Prom
   return bound.length;
 }
 
+/** One payments row per subscription invoice we just bound. The exact mirror of
+ * recordPackRevenue — same field shape, same skip rules, same "never throws,
+ * each row independent" contract — so the console reads ONE revenue series
+ * whichever path recorded a sale.
+ *
+ * It prices through lsRevenueAmount (exported by handlers.ts) rather than
+ * re-implementing the rule, because the webhook writes this same row when the
+ * buyer happens to be bound at charge time. Two writers, one definition of "the
+ * amount": that is the invariant 0092's comments were written to protect, and a
+ * second copy of the arithmetic here is exactly how it would be lost again.
+ *
+ * TAX has already been taken out upstream and must not be touched here. The
+ * stored total_minor / total_usd_minor are NET (lsNetOfTax, at the webhook
+ * boundary), so this path books 999 for invoice 8235804 — the $9.99 charged,
+ * not the $11.79 collected, because the $1.80 IGST is LS's to remit as Merchant
+ * of Record and the business never keeps it. The tax figure is not stored
+ * anywhere by decision, so there is nothing here to net out and nothing to
+ * check against: subtracting again would halve-tax the sale. */
+async function recordSubscriptionRevenue(db: ClaimDb, userId: string, invoices: ParkedInvoice[]): Promise<void> {
+  for (const inv of invoices) {
+    // Read as of THE BIND, not an earlier probe. The webhook's refund path
+    // stamps payments.status by ls_invoice_id and matches NOTHING when the
+    // refund lands before the claim has inserted — so a 'paid' row written
+    // afterwards from a stale snapshot would sit in "Collected to date" forever
+    // with nothing left to correct it. (Same hole 0092 had to repair for packs.)
+    if (inv.refunded_at) continue;
+    // No invoice id means no idempotency key: payments_ls_invoice_uq is a plain
+    // unique index and postgres treats NULLs as DISTINCT, so this would
+    // duplicate on every re-claim — i.e. on every dashboard render.
+    if (!inv.ls_invoice_id) {
+      console.warn("billing.ls.invoice_payment_skipped_no_id", { user: userId, plan: inv.plan_key });
+      continue;
+    }
+    // Only a PAID invoice is collected money; 'pending' is a delayed payment
+    // method that has not settled, and booking it would leave a row nothing
+    // later corrects (the success event carries the same invoice id and would
+    // 23505 into a no-op). A NULL status is a pre-status row and reads as paid.
+    const status = (inv.invoice_status ?? "paid").toLowerCase();
+    if (status !== "paid") continue;
+    // A test-mode charge is not money. See 0093's test_mode column comment.
+    if (inv.test_mode === true) continue;
+    const booked = lsRevenueAmount(toNumber(inv.total_minor), inv.total_currency, toNumber(inv.total_usd_minor));
+    if (!booked) {
+      // Unlike a pack there is NO catalogue fallback to reach for, and inventing
+      // one would still be the worst option available. PLAN_PRICES_USD_MONTHLY
+      // is a TypeScript constant holding the LIST price — the right SHAPE of
+      // number under the net-of-tax rule, which is exactly what makes reaching
+      // for it tempting and wrong: it cannot see a discount code, it cannot see
+      // a mid-cycle proration, and a row that got this far may carry plan_key
+      // NULL, so it would not even know which list price to invent. Skip and
+      // surface it instead.
+      console.warn("billing.ls.invoice_payment_skipped_no_price", {
+        user: userId,
+        invoice: inv.ls_invoice_id,
+        currency: inv.total_currency,
+      });
+      continue;
+    }
+    const { error } = await db.from("payments").insert({
+      user_id: userId, // the whole reason this row has to wait for the claim
+      school_id: null, // LS subscriptions are personal (B2C) — never school-scoped
+      provider: "lemonsqueezy",
+      ls_invoice_id: inv.ls_invoice_id,
+      amount: booked.amount, // MINOR UNITS, NET of tax — stamped that way by the webhook
+      currency: booked.currency,
+      plan_key: inv.plan_key,
+      status: "paid",
+      // Dated to the INVOICE, exactly as 0093's backfill and the webhook date
+      // theirs. A subscription can be claimed weeks after it was bought and
+      // "Collected to date" is a time series: defaulting to now() would move
+      // real revenue into the month the buyer happened to next sign in.
+      // Omitted rather than nulled — payments.created_at is NOT NULL.
+      ...(inv.invoiced_at ? { created_at: inv.invoiced_at } : {}),
+    });
+    if (!error) continue;
+    if (error.code === "23505") continue; // the webhook, 0093's backfill, or a second tab got there first
+    // Bookkeeping must never be allowed to undo the bind above. 0093's backfill
+    // is re-runnable and picks up whatever was missed here.
+    console.warn("billing.ls.invoice_payment_record_failed", { user: userId, invoice: inv.ls_invoice_id, err: error.message });
+  }
+}
+
+/** Bind every subscription invoice (0093) parked under this verified email,
+ * then record each one's revenue. Returns how many were bound. Self-contained
+ * and NON-THROWING so an invoice problem can never cost the caller their
+ * subscription claim or their credits.
+ *
+ * WHY THIS IS NOT bindParkedPacks WITH A DIFFERENT TABLE NAME, in one respect:
+ * a pack bind grants CREDITS, so it earned a blind-bind fallback for the case
+ * where the money columns are missing. Nothing here grants anything — the
+ * entitlement comes from the subscriptions bind below, which is untouched — so
+ * a failure just leaves the invoice parked and reclaimable on the next render.
+ * That makes this path strictly safer, and its failure modes strictly duller. */
+async function bindParkedInvoices(db: ClaimDb, userId: string, email: string): Promise<number> {
+  let bound: ParkedInvoice[] = [];
+  try {
+    // PROBE, then bind. This runs on every dashboard render and the
+    // overwhelmingly common answer is "nothing parked", so the cheap case stays
+    // one index probe — subscription_invoices_claim_idx (claim_email) WHERE
+    // owner_id IS NULL — that returns nothing and writes nothing.
+    const { data, error: readErr } = await db
+      .from("subscription_invoices")
+      .select("ls_invoice_id")
+      .is("owner_id", null)
+      .eq("claim_email", email);
+    if (readErr) {
+      // A failed read is NOT "nothing parked". supabase-js resolves errors
+      // rather than throwing, so swallowing this would make the only bind path
+      // a silent no-op on every render — the same shape of silent failure that
+      // hid the pack hole for every pack ever sold. "Unknown" must mean "try".
+      // (Before 0093 is applied this is the expected path: the table does not
+      // exist yet, the bind below fails too, and nothing is lost — no
+      // subscription invoice can be parked when nothing writes them.)
+      console.error("billing.ls.invoice_read_failed", { user: userId, err: readErr.message });
+    } else if ((data ?? []).length === 0) {
+      return 0;
+    }
+
+    // ONE statement binds AND names the rows to bill for. .select() on an
+    // UPDATE returns exactly the rows it matched, as of its own snapshot, which
+    // closes the two holes a separate read cannot — an invoice arriving between
+    // the probe and the bind is still billed, and a refund committed mid-claim
+    // is seen (recordSubscriptionRevenue skips it) rather than booked as paid.
+    // Race-safe by the same `.is("owner_id", null)` predicate: a concurrent
+    // claim can only take rows FROM us, never hand us someone else's.
+    const { data: boundRows, error } = await db
+      .from("subscription_invoices")
+      .update({ owner_id: userId, claim_email: null })
+      .is("owner_id", null)
+      .eq("claim_email", email)
+      .select(INVOICE_REVENUE_COLS);
+    if (error) {
+      console.error("billing.ls.invoice_bind_failed", { user: userId, err: error.message });
+      return 0;
+    }
+    bound = (boundRows ?? []) as ParkedInvoice[];
+    if (bound.length === 0) return 0; // another tab got there first
+  } catch (e) {
+    console.error("billing.ls.invoice_claim_failed", { user: userId, err: (e as Error).message });
+    return 0;
+  }
+
+  // Strictly AFTER the bind is committed, and inside its own guard.
+  try {
+    await recordSubscriptionRevenue(db, userId, bound);
+  } catch (e) {
+    console.warn("billing.ls.invoice_payment_record_failed", { user: userId, err: (e as Error).message });
+  }
+  console.log("billing.ls.invoices_claimed", { user: userId, count: bound.length });
+  return bound.length;
+}
+
 /** Testable core. Returns the number of SUBSCRIPTIONS claimed (0 when there is
  * nothing to do — the cheap common case; a pack-only claim rides along and is
  * deliberately not counted here, since the return value reports entitlement
@@ -356,6 +564,19 @@ export async function claimLsPurchasesWith(db: ClaimDb, userId: string | null | 
     packsBound = await bindParkedPacks(db, userId, email);
   } catch (e) {
     console.error("billing.ls.pack_claim_failed", { user: userId, err: (e as Error).message });
+  }
+
+  // Subscription invoices (0093) park exactly like packs and, like packs, can
+  // only record their revenue once a user_id exists. Its own try for the same
+  // reason: a bookkeeping problem must not cost the buyer the ENTITLEMENT the
+  // subscriptions bind below grants. Ordered after packs and before the
+  // entitlement work so the sequence reads credits → revenue → access, each
+  // isolated from the next.
+  let invoicesBound = 0;
+  try {
+    invoicesBound = await bindParkedInvoices(db, userId, email);
+  } catch (e) {
+    console.error("billing.ls.invoice_claim_failed", { user: userId, err: (e as Error).message });
   }
 
   try {
@@ -382,7 +603,7 @@ export async function claimLsPurchasesWith(db: ClaimDb, userId: string | null | 
     // true exactly when a mapping needs binding. 0092 repairs the hand-bound
     // legacy rows in bulk, rather than making every no-op dashboard render pay
     // for a write to catch a state that no longer arises.
-    if (packsBound > 0 || parked.length > 0) {
+    if (packsBound > 0 || invoicesBound > 0 || parked.length > 0) {
       await db
         .from("billing_customers")
         .update({ user_id: userId })

@@ -250,14 +250,30 @@ reason for using LS here. Card data never touches us (LS hosted checkout).
   long random string and put the SAME value in `LEMONSQUEEZY_WEBHOOK_SECRET`.
   Select the subscription **lifecycle** events: `subscription_created`,
   `subscription_updated`, `subscription_cancelled`, `subscription_resumed`,
-  `subscription_paused`, `subscription_expired`, **plus the order events for
-  credit packs**: `order_created` and `order_refunded`. Payment health already
-  flows through `subscription_updated` (→ `past_due`/`unpaid`), so the
-  `subscription_payment_*` events are optional; the handler ignores
-  invoice-shaped events (`data.type = "subscription-invoices"`) either way, so
-  subscribing to them is harmless but unnecessary. (An `order_created` whose
-  product is not a credit pack — e.g. a subscription's own initial order — is
-  ignored by name, so subscribing to order events adds no double-counting.)
+  `subscription_paused`, `subscription_expired`; the order events for
+  **credit packs**: `order_created` and `order_refunded`; and — **required
+  since 0093, not optional** — the invoice events that carry subscription
+  money: `subscription_payment_success` and `subscription_payment_refunded`
+  (`subscription_payment_failed` / `_recovered` are recommended, so a delayed
+  payment is recorded the moment it settles).
+  > ⚠️ This bullet used to say the `subscription_payment_*` events were
+  > *optional* because the handler ignored them. That was true and it was the
+  > bug: **no subscription payment had ever reached the console**. Access flows
+  > from `subscription_updated` (→ `past_due`/`unpaid`), but REVENUE does not —
+  > a renewal produces an invoice and **no order at all**, so without these
+  > events every recurring charge is invisible. Leaving them unsubscribed today
+  > means "Collected to date" silently undercounts by the whole subscription
+  > book.
+- **Where subscription money comes from — invoices, never orders.** LS
+  represents the *first* charge twice (an order **and** an invoice: order
+  9261749 and invoice 8235804 are the same $11.79, field for field) and every
+  later charge once (an invoice only). So `handleLsInvoiceEvent` books every
+  subscription charge from `subscription_payment_success`, and `order_created`
+  keeps **ignoring** subscription orders — that ignore is what makes it exactly
+  once. Do not "fix" it. Credit packs are the other way round: they are orders,
+  never invoices. Keys: `payments.ls_order_id` for packs,
+  `payments.ls_invoice_id` for subscriptions — two LS id sequences in one
+  numeric space, so they must never share a column.
 - Enable the **Customer Portal** in the store so parents/teachers can manage
   and cancel their own subscription.
 
@@ -289,6 +305,59 @@ manage → POST /api/billing/portal → fresh LS Customer Portal URL (24h-signed
   email, `claimLsPurchases()` binds the sub and creates the entitlement.
   Parked-but-unclaimed subs log `billing.ls.subscription_parked_unclaimed`
   (ops-visible); an unmapped variant logs `billing.ls.unmapped_variant`.
+- **Revenue takes the same two-sided path, for the same reason.**
+  `payments.user_id` is NOT NULL, so a parked purchase has nobody to attribute
+  money to at webhook time. Every charge is therefore written twice over: the
+  durable record first (`subscription_invoices` for subscriptions,
+  `credit_purchases` for packs — written whether or not an owner is known), then
+  the `payments` row either immediately (buyer already bound) or at **claim**
+  time (`claimLsPurchases()`). Both writers price from ONE definition of "the
+  amount" — `lsRevenueAmount()`, exported by `handlers.ts` — so "Collected to
+  date" is a single series no matter which path recorded a sale. Every write
+  tolerates 23505 as a no-op, because LS re-delivers, the recovered-payment pair
+  fires twice for one charge, and the claim runs on every dashboard render.
+- **Revenue is NET OF TAX** (founder, 2026-08-22). LS is Merchant of Record: it
+  added $1.80 IGST to a $9.99 list price for an Indian buyer and remits that
+  $1.80 itself, so the business never keeps it and it is not revenue. Amounts are
+  MINOR UNITS of **`subtotal - discount_total`**, computed once by `lsNetOfTax()`
+  at the webhook boundary and stored already-netted, so no other file does tax
+  arithmetic:
+
+  | LS object | subtotal | discount | tax | total | booked |
+  |---|---|---|---|---|---|
+  | invoice 8235804 (live sub) | 999 | 0 | 180 | 1179 | **999** |
+  | order 9261766 (live pack) | 800 | 0 | 144 | 944 | **800** |
+  | a FOUNDINGTEACHER order | 2400 | 1400 | 0 | 1000 | **1000** |
+
+  Bare `subtotal` is wrong as often as `total` is — it is **before** the
+  discount, so it would report $24 for a $10 founding sale. **The tax figure is
+  discarded, never stored:** there is no tax column and none is to be added, so
+  this database cannot answer "how much tax did LS remit for us" — that lives in
+  Lemon Squeezy. `credit_purchases.total_minor` and
+  `subscription_invoices.total_minor` keep names inherited from the gross era;
+  0093 corrects their column comments and repairs the rows booked gross.
+
+  **What the repair cannot see, because the tax was discarded rather than
+  stored.** 0093 §4 spots a gross pack row by `stored > list` (`usd`, the
+  catalogue price, is the only surviving evidence) — and that expands to
+  `tax > discount`. So a gross row whose **discount beat its tax** sits at or
+  below list and is *identical* to a correct net discounted sale: two unknowns,
+  one equation, nothing in the schema to break the tie. Those rows are counted
+  (`below_list`) and left alone rather than guessed at; settling one means
+  pulling the LS receipt. The only way to create one is the window between
+  applying the migration and deploying the app, while the old gross-writing
+  handler still owns the endpoint — which is a third reason to keep that window
+  short.
+- **Shipping 0093 is three steps, not two.** Apply the migration → deploy the
+  app → **re-run the migration** (or just its final
+  `delete from public.webhook_events where id like 'ls!_subscription!_payment%'
+  escape '!'`), and only then click *resend* in the LS dashboard. The delete
+  releases the idempotency claims the old code stamped while it was throwing
+  subscription payments away; between the migration and the deploy the OLD
+  handler is still live, and anything it drops in that window re-stamps the very
+  key that was just released, after which a resend is short-circuited as a
+  duplicate and the charge is unrecoverable (its amount lives only in LS). The
+  migration is inert on a second run in every other respect.
 - Webhook is Node-runtime, raw-body HMAC-verified, idempotent via a constructed
   event key (LS has no persistent event id), monotonic (out-of-order-safe).
 - Entitlement statuses: `on_trial`/`active`/`past_due`/`cancelled` keep access
@@ -347,7 +416,10 @@ places are gone. Unauthenticated by design: the static marketing site
 
 ## Tax seam (deliberately out of scope for direct code)
 No tax calc/registration logic lives in our code — on the LS path it's handled
-by LS as MoR; on the Stripe path B2B buyers self-account. Nothing to build.
+by LS as MoR; on the Stripe path B2B buyers self-account. Nothing to build. The
+one place tax touches code is **reporting**: LS's tax is subtracted out of every
+booked amount (see the net-of-tax rule above) and then discarded, so it is never
+calculated here, only dropped.
 
 ## Going live (later — NOT part of this build)
 1. Aethel Twin's live Stripe account verified; swap `sk_live_...` keys.
