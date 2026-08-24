@@ -318,7 +318,18 @@
       "purposeSchool": "مڽوکوڠ ڤمبلاجرن د سکوله",
       "purposeSchoolSub": "انق ساي برسکوله — ساي ممبنتو د سمڤيڠڽ",
       "purposeHomeschool": "Homeschool اتاو تيوشن",
-      "purposeHomeschoolSub": "ساي سنديري مڠاجر موريد ساي — الت ڤمبيناءن ڤلاجرن يڠ ڤنوه"
+      "purposeHomeschoolSub": "ساي سنديري مڠاجر موريد ساي — الت ڤمبيناءن ڤلاجرن يڠ ڤنوه",
+      "heardChoose": "ڤيليه ساتو",
+      "heardDetail": "اد لاݢي؟ (ڤيليهن)",
+      "heardChannels": {
+        "ai": "ChatGPT اتاو ڤمبنتو AI لاين",
+        "colleague": "راكن سكرجا اتاو كاون",
+        "messaging": "WhatsApp اتاو Telegram",
+        "search": "Google اتاو اينجين چارين لاين",
+        "youtube": "YouTube",
+        "social": "Facebook اتاو LinkedIn",
+        "other": "لاين-لاين"
+      }
     },
     "reportIssue": {
       "label": "لاڤور مسئله",

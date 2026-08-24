@@ -318,7 +318,18 @@
       "purposeSchool": "Apoio aos estudos da escola",
       "purposeSchoolSub": "Meus filhos vão à escola — eu ajudo em casa",
       "purposeHomeschool": "Ensino em casa ou aulas particulares",
-      "purposeHomeschoolSub": "Eu mesmo ensino meus estudantes — ferramentas completas para montar aulas"
+      "purposeHomeschoolSub": "Eu mesmo ensino meus estudantes — ferramentas completas para montar aulas",
+      "heardChoose": "Escolha uma opção",
+      "heardDetail": "Mais alguma coisa? (opcional)",
+      "heardChannels": {
+        "ai": "ChatGPT ou outro assistente de IA",
+        "colleague": "Um colega ou amigo",
+        "messaging": "WhatsApp ou Telegram",
+        "search": "Google ou outro motor de busca",
+        "youtube": "YouTube",
+        "social": "Facebook ou LinkedIn",
+        "other": "Outra coisa"
+      }
     },
     "reportIssue": {
       "label": "Relatar um problema",

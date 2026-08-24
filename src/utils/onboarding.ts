@@ -31,10 +31,32 @@ export const AFFILIATIONS = [
   { value: "homeschool", label: "Homeschool educator" },
 ] as const;
 
+/** The discovery channels the picker offers. STABLE ENGLISH CODES, exactly like
+ * the role values — the label is translated, the stored value never is.
+ *
+ * The list is drawn from what the first 20 free-text answers actually said, not
+ * from a generic template: assistants were the single largest channel and were
+ * written seven different ways ("chatgpt", "chat gpt", "gpt", and four Arabic
+ * transliterations), which is precisely the kind of answer a free-text box
+ * cannot count. `heard_from` survives underneath as the optional detail — the
+ * picker makes the answer countable, the text keeps it informative. */
+export const HEARD_CHANNELS = ["ai", "colleague", "messaging", "search", "youtube", "social", "other"] as const;
+export type HeardChannel = (typeof HEARD_CHANNELS)[number];
+
+export function isHeardChannel(v: unknown): v is HeardChannel {
+  return typeof v === "string" && (HEARD_CHANNELS as readonly string[]).includes(v);
+}
+
 export type OnboardingProfile = {
   /** ISO 3166-1 alpha-2 code (src/utils/countries.ts) — REQUIRED since 0085;
    * also written to profiles.country with country_source='signup'. */
   country?: string;
+  /** One of HEARD_CHANNELS — the countable answer. Optional: an unanswered
+   * picker is far better than a required one that pushes people to pick
+   * anything to get past it. */
+  heard_channel?: HeardChannel;
+  /** Free text, kept as the DETAIL beside heard_channel. Pre-0094 accounts have
+   * only this, so never treat its absence as "no answer given". */
   heard_from?: string;
   // teacher
   affiliation?: "school" | "independent" | "homeschool";

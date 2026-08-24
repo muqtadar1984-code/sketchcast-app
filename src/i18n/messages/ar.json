@@ -318,7 +318,18 @@
       "purposeSchool": "دعم التعلّم المدرسي",
       "purposeSchoolSub": "أبنائي يدرسون في المدرسة — وأنا أساندهم إلى جانبها",
       "purposeHomeschool": "تعليم منزلي أو تدريس خصوصي",
-      "purposeHomeschoolSub": "أُدرّس متعلّميّ بنفسي — أدوات كاملة لبناء الدروس"
+      "purposeHomeschoolSub": "أُدرّس متعلّميّ بنفسي — أدوات كاملة لبناء الدروس",
+      "heardChoose": "اختر واحداً",
+      "heardDetail": "أي تفاصيل أخرى؟ (اختياري)",
+      "heardChannels": {
+        "ai": "ChatGPT أو مساعد ذكاء اصطناعي آخر",
+        "colleague": "زميل أو صديق",
+        "messaging": "واتساب أو تيليجرام",
+        "search": "جوجل أو محرك بحث آخر",
+        "youtube": "يوتيوب",
+        "social": "فيسبوك أو لينكدإن",
+        "other": "شيء آخر"
+      }
     },
     "reportIssue": {
       "label": "أبلغ عن مشكلة",

@@ -6,8 +6,10 @@ import { LogoMark } from "../dashboard/icons";
 import {
   AFFILIATIONS,
   GRADE_OPTIONS,
+  HEARD_CHANNELS,
   SUBJECT_OPTIONS,
   homeForRole,
+  isHeardChannel,
   missingRequired,
   type OnboardingProfile,
   type OnboardingRole,
@@ -379,11 +381,32 @@ export default function OnboardingForm({
           {/* Optional */}
           <div>
             {label(t.heardFrom)}
+            {/* The picker carries the countable answer; the text box under it
+                keeps whatever the picker cannot express. Both stay OPTIONAL —
+                this question sits below the required fields and must never be
+                the thing that stops someone finishing onboarding. */}
+            <select
+              value={p.heard_channel ?? ""}
+              onChange={(e) =>
+                setP((s) => ({
+                  ...s,
+                  heard_channel: isHeardChannel(e.target.value) ? e.target.value : undefined,
+                }))
+              }
+              className="field w-full h-11 px-3 text-[#14181F]"
+            >
+              <option value="">{t.heardChoose}</option>
+              {HEARD_CHANNELS.map((c) => (
+                <option key={c} value={c}>
+                  {t.heardChannels[c]}
+                </option>
+              ))}
+            </select>
             <input
               value={p.heard_from ?? ""}
               onChange={(e) => setP((s) => ({ ...s, heard_from: e.target.value }))}
-              placeholder={t.optional}
-              className="field w-full h-11 px-3 text-[#14181F]"
+              placeholder={t.heardDetail}
+              className="field w-full h-11 px-3 mt-2 text-[#14181F]"
             />
           </div>
 

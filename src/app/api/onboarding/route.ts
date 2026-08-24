@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { onboardingEnabled } from "@/utils/flags";
-import { missingRequired, type OnboardingProfile, type OnboardingRole } from "@/utils/onboarding";
+import { isHeardChannel, missingRequired, type OnboardingProfile, type OnboardingRole } from "@/utils/onboarding";
 import { isCountryCode } from "@/utils/countries";
 
 export const runtime = "nodejs";
@@ -66,6 +66,10 @@ export async function POST(request: Request) {
     // Kept in the jsonb snapshot for continuity, but the AUTHORITATIVE copy is
     // the profiles.country COLUMN written below (0085) — read that, not this.
     country,
+    // The countable half of "how did you hear about us". Whitelisted to the
+    // known codes exactly like affiliation/purpose below, so the column can be
+    // grouped without cleaning.
+    heard_channel: isHeardChannel(raw.heard_channel) ? raw.heard_channel : undefined,
     heard_from: str(raw.heard_from, 200),
     affiliation:
       raw.affiliation === "school" || raw.affiliation === "independent" || raw.affiliation === "homeschool"

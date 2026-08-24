@@ -318,7 +318,18 @@
       "purposeSchool": "शाळेच्या शिक्षणाला मदत",
       "purposeSchoolSub": "माझी मुले शाळेत जातात — मी त्यासोबत घरून मदत करतो",
       "purposeHomeschool": "घरशाळा किंवा शिकवणी",
-      "purposeHomeschoolSub": "माझ्या विद्यार्थ्यांना मीच शिकवतो — धडे तयार करण्याची संपूर्ण साधने"
+      "purposeHomeschoolSub": "माझ्या विद्यार्थ्यांना मीच शिकवतो — धडे तयार करण्याची संपूर्ण साधने",
+      "heardChoose": "एक निवडा",
+      "heardDetail": "आणखी काही? (ऐच्छिक)",
+      "heardChannels": {
+        "ai": "ChatGPT किंवा दुसरा AI सहाय्यक",
+        "colleague": "सहकारी किंवा मित्र",
+        "messaging": "WhatsApp किंवा Telegram",
+        "search": "Google किंवा दुसरे सर्च इंजिन",
+        "youtube": "YouTube",
+        "social": "Facebook किंवा LinkedIn",
+        "other": "इतर काही"
+      }
     },
     "reportIssue": {
       "label": "अडचण कळवा",

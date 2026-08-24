@@ -77,9 +77,22 @@ type LsMoneyAttributes = {
   total_usd?: number | null;
 };
 
+// WHO SENT THE SALE. Deliberately NOT folded into LsMoneyAttributes: the
+// comment above that type states lsNetOfTax() is the only reader of those
+// fields, and that invariant is worth more than saving a type. LS stamps these
+// on both orders and invoices, so both intersect this.
+//
+// `referral_amount` is assumed to be MINOR UNITS like every other money field
+// on the same object. It has been null on every sale to date, so the assumption
+// has never actually been observed — see the column comment in 0094.
+type LsAttributionAttributes = {
+  affiliate_id?: number | string | null;
+  referral_amount?: number | null;
+};
+
 // One-time purchase (credit packs). LS puts the bought product on
 // first_order_item; single-item checkouts (ours) never populate more.
-type LsOrderAttributes = LsMoneyAttributes & {
+type LsOrderAttributes = LsMoneyAttributes & LsAttributionAttributes & {
   customer_id: number | string;
   user_email?: string | null;
   status?: string | null; // paid | refunded | ...
@@ -108,7 +121,7 @@ type LsOrderAttributes = LsMoneyAttributes & {
 // and buyer email (so park-and-claim works unchanged), the money in MINOR
 // UNITS, and billing_reason — LS's own proof that an invoice is the initial
 // charge rather than a renewal.
-type LsInvoiceAttributes = LsMoneyAttributes & {
+type LsInvoiceAttributes = LsMoneyAttributes & LsAttributionAttributes & {
   subscription_id?: number | string | null;
   customer_id: number | string;
   user_email?: string | null;
@@ -278,6 +291,29 @@ function norm(email: string | null | undefined): string | null {
 
 function log(kind: string, detail: Record<string, unknown>) {
   console.log(`billing.ls.${kind}`, detail);
+}
+
+// The affiliate pair, normalised for the DB (0094). Returned as a spreadable
+// object so every writer stamps it identically and none can drift.
+//
+// NULL, never 0 or "": a direct sale and a sale whose affiliate we failed to
+// read must stay distinguishable from a referred sale that paid no commission,
+// because affiliateCac() divides by the count of non-null rows. Coercing an
+// absent affiliate to 0 would quietly put every direct sale into the CAC
+// denominator and drive the number to zero.
+//
+// affiliate_id is text in the DB because LS sends it as a number here and a
+// string elsewhere; String() at the boundary keeps one shape in the column.
+function lsAttribution(attrs: LsAttributionAttributes): {
+  affiliate_id: string | null;
+  referral_amount_minor: number | null;
+} {
+  const id = attrs.affiliate_id;
+  const amt = attrs.referral_amount;
+  return {
+    affiliate_id: id === null || id === undefined || id === "" ? null : String(id),
+    referral_amount_minor: typeof amt === "number" && Number.isFinite(amt) ? Math.round(amt) : null,
+  };
 }
 
 // ── identity ────────────────────────────────────────────────────────────────
@@ -761,6 +797,11 @@ async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise
     provider: "lemonsqueezy",
     ls_order_id: orderId,
     refunded_at: refunded ? new Date().toISOString() : null,
+    // WHO SENT THIS SALE (0094). Stamped HERE, on the durable row, because this
+    // is the only moment the LS payload exists: a parked pack is booked into
+    // payments by claim.ts whenever the buyer eventually signs in, long after
+    // this webhook returned. Parked is the path essentially every pack takes.
+    ...lsAttribution(attrs),
   });
   if (insErr) {
     if (insErr.code === "23505") {
@@ -855,6 +896,7 @@ async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise
       currency: booked.currency,
       plan_key: pack.key,
       status: attrs.status ?? "paid",
+      ...lsAttribution(attrs), // 0094 — the already-bound path; parked packs carry it across in claim.ts
     });
     if (payErr && payErr.code !== "23505") {
       // The credits are already granted — a payments hiccup must not make LS
@@ -1051,6 +1093,9 @@ async function handleLsInvoiceEvent(db: Db, event: LsEvent, name: string): Promi
     test_mode: attrs.test_mode ?? null,
     invoiced_at: attrs.created_at ?? null,
     refunded_at: null,
+    // Same reason as the pack row above: captured on the durable row because
+    // claim.ts books the payment later, with no access to this payload.
+    ...lsAttribution(attrs),
   });
   if (invErr && invErr.code !== "23505") {
     throw new Error(`LS subscription invoice insert failed: ${invErr.message}`);
@@ -1146,6 +1191,7 @@ async function handleLsInvoiceEvent(db: Db, event: LsEvent, name: string): Promi
     currency: booked.currency,
     plan_key: planKey,
     status: "paid", // the guard above admits nothing else
+    ...lsAttribution(attrs), // 0094
     // Dated to the INVOICE, never to now(): "Collected to date" is a time
     // series, so a replayed or late-claimed invoice must land in the month the
     // money was actually taken. 0093's backfill and claim.ts copy the same field.

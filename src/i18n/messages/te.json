@@ -318,7 +318,18 @@
       "purposeSchool": "పాఠశాల చదువుకు తోడ్పడటం",
       "purposeSchoolSub": "నా పిల్లలు పాఠశాలకు వెళ్తారు — నేను దానికి తోడుగా సాయం చేస్తాను",
       "purposeHomeschool": "ఇంటి వద్ద బోధన లేదా ట్యూషన్",
-      "purposeHomeschoolSub": "నా అభ్యాసకులకు నేనే బోధిస్తాను — పూర్తి పాఠ తయారీ సాధనాలు"
+      "purposeHomeschoolSub": "నా అభ్యాసకులకు నేనే బోధిస్తాను — పూర్తి పాఠ తయారీ సాధనాలు",
+      "heardChoose": "ఒకటి ఎంచుకోండి",
+      "heardDetail": "ఇంకేమైనా? (ఐచ్ఛికం)",
+      "heardChannels": {
+        "ai": "ChatGPT లేదా మరో AI సహాయకుడు",
+        "colleague": "సహోద్యోగి లేదా స్నేహితుడు",
+        "messaging": "WhatsApp లేదా Telegram",
+        "search": "Google లేదా మరో సెర్చ్ ఇంజిన్",
+        "youtube": "YouTube",
+        "social": "Facebook లేదా LinkedIn",
+        "other": "మరేదైనా"
+      }
     },
     "reportIssue": {
       "label": "సమస్యను నివేదించండి",

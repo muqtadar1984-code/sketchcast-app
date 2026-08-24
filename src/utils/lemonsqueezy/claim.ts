@@ -105,12 +105,17 @@ type ParkedPack = {
   /** The PURCHASE date. payments is a time series and a pack can be claimed
    * months after it was bought — see recordPackRevenue. */
   created_at: string | null;
+  /** 0094: who sent the sale, captured at webhook time. Carried across the
+   * claim rather than re-read, because the LS payload is long gone by now. */
+  affiliate_id: string | null;
+  referral_amount_minor: number | string | null;
 };
 
 /** Everything the revenue row needs, read back FROM THE BIND (bindParkedPacks).
  * Three of these columns arrive with 0092, which is exactly why the probe that
  * runs first names none of them. */
-const PACK_REVENUE_COLS = "ls_order_id, pack_key, usd, total_minor, total_currency, order_status, refunded_at, created_at";
+const PACK_REVENUE_COLS =
+  "ls_order_id, pack_key, usd, total_minor, total_currency, order_status, refunded_at, created_at, affiliate_id, referral_amount_minor";
 
 /** One parked LS subscription invoice (0093). The direct analogue of
  * ParkedPack: a durable record of one charge, waiting for an owner. */
@@ -140,12 +145,35 @@ type ParkedInvoice = {
   /** The INVOICE's own date — when the money was taken. payments is a time
    *  series and a subscription can be claimed long after it was bought. */
   invoiced_at: string | null;
+  /** 0094 — see ParkedPack. */
+  affiliate_id: string | null;
+  referral_amount_minor: number | string | null;
 };
 
 /** Read back FROM THE BIND, for the same reason PACK_REVENUE_COLS is: the rows
  * an UPDATE actually matched, as of its own snapshot. */
 const INVOICE_REVENUE_COLS =
-  "ls_invoice_id, plan_key, total_minor, total_currency, total_usd_minor, invoice_status, test_mode, refunded_at, invoiced_at";
+  "ls_invoice_id, plan_key, total_minor, total_currency, total_usd_minor, invoice_status, test_mode, refunded_at, invoiced_at, affiliate_id, referral_amount_minor";
+
+/** The affiliate pair as stored on the durable row, normalised for payments
+ * (0094). Defensive about the numeric-as-string habit the money columns above
+ * document: referral_amount_minor is an `integer` so postgres hands it back as
+ * a number, but reading it the same careful way costs nothing and cannot be the
+ * thing that breaks if the column type ever widens.
+ *
+ * NULL is preserved as NULL, never coerced to 0 — a direct sale must stay
+ * distinguishable from a referred one, because affiliateCac() counts non-null
+ * rows as its denominator. */
+function claimAttribution(r: { affiliate_id: string | null; referral_amount_minor: number | string | null }): {
+  affiliate_id: string | null;
+  referral_amount_minor: number | null;
+} {
+  const n = r.referral_amount_minor == null ? null : Number(r.referral_amount_minor);
+  return {
+    affiliate_id: r.affiliate_id ?? null,
+    referral_amount_minor: n != null && Number.isFinite(n) ? Math.round(n) : null,
+  };
+}
 
 /** Caller entry point — creates the service-role client and reconciles. */
 export async function claimLsPurchases(userId: string | null | undefined, verifiedEmail: string | null | undefined): Promise<number> {
@@ -270,6 +298,7 @@ async function recordPackRevenue(db: ClaimDb, userId: string, packs: ParkedPack[
       // rejected by packAmountMinor above and is booked in USD at list.
       currency: "usd",
       plan_key: p.pack_key,
+      ...claimAttribution(p), // 0094 — carried from the durable row, not re-read from LS
       // Mirrors the webhook's `attrs.status ?? "paid"` instead of asserting
       // "paid": LS's delayed payment methods can deliver an order as "pending",
       // and collectedUsd() (utils/financials.ts) counts only PAID_STATUSES — so
@@ -456,6 +485,7 @@ async function recordSubscriptionRevenue(db: ClaimDb, userId: string, invoices: 
       currency: booked.currency,
       plan_key: inv.plan_key,
       status: "paid",
+      ...claimAttribution(inv), // 0094
       // Dated to the INVOICE, exactly as 0093's backfill and the webhook date
       // theirs. A subscription can be claimed weeks after it was bought and
       // "Collected to date" is a time series: defaulting to now() would move

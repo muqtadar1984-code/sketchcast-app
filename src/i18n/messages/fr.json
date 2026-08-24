@@ -318,7 +318,18 @@
       "purposeSchool": "J'accompagne la scolarité",
       "purposeSchoolSub": "Mes enfants vont à l'école — je les aide en parallèle",
       "purposeHomeschool": "École à la maison ou cours particuliers",
-      "purposeHomeschoolSub": "J'enseigne moi-même à mes apprenants — outils complets de création de leçons"
+      "purposeHomeschoolSub": "J'enseigne moi-même à mes apprenants — outils complets de création de leçons",
+      "heardChoose": "Choisissez une option",
+      "heardDetail": "Autre chose à ajouter ? (facultatif)",
+      "heardChannels": {
+        "ai": "ChatGPT ou un autre assistant IA",
+        "colleague": "Un collègue ou un ami",
+        "messaging": "WhatsApp ou Telegram",
+        "search": "Google ou un autre moteur de recherche",
+        "youtube": "YouTube",
+        "social": "Facebook ou LinkedIn",
+        "other": "Autre chose"
+      }
     },
     "reportIssue": {
       "label": "Signaler un problème",

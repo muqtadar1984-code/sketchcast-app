@@ -8,8 +8,10 @@ import {
   Noto_Sans_Devanagari,
   Noto_Sans_Telugu,
 } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { dirFor, htmlLang } from "@/i18n/locales";
 import { resolveLocale } from "@/i18n/resolve";
+import SourceCapture from "@/components/source-capture";
 import "./globals.css";
 
 // Live Ink type system: a geometric grotesk for display, Inter for body,
@@ -137,7 +139,16 @@ export default async function RootLayout({
       dir={dirFor(locale)}
       className={`${fontVars} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        {/* Both render nothing. SourceCapture parks a first-touch origin in a
+            cookie and stamps it onto the profile once; Analytics is Vercel's
+            pageview beacon, which needs the project's Web Analytics toggle
+            switched on in the dashboard before it reports anything. Neither
+            can affect what is above it in the tree. */}
+        <SourceCapture />
+        <Analytics />
+      </body>
     </html>
   );
 }

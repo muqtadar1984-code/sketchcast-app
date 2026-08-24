@@ -318,7 +318,18 @@
       "purposeSchool": "Menyokong pembelajaran di sekolah",
       "purposeSchoolSub": "Anak saya bersekolah — saya membantu di sampingnya",
       "purposeHomeschool": "Homeschool atau tuisyen",
-      "purposeHomeschoolSub": "Saya sendiri mengajar murid saya — alat pembinaan pelajaran yang penuh"
+      "purposeHomeschoolSub": "Saya sendiri mengajar murid saya — alat pembinaan pelajaran yang penuh",
+      "heardChoose": "Pilih satu",
+      "heardDetail": "Ada lagi? (pilihan)",
+      "heardChannels": {
+        "ai": "ChatGPT atau pembantu AI lain",
+        "colleague": "Rakan sekerja atau kawan",
+        "messaging": "WhatsApp atau Telegram",
+        "search": "Google atau enjin carian lain",
+        "youtube": "YouTube",
+        "social": "Facebook atau LinkedIn",
+        "other": "Lain-lain"
+      }
     },
     "reportIssue": {
       "label": "Laporkan masalah",

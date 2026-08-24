@@ -318,7 +318,18 @@
       "purposeSchool": "Supporting school learning",
       "purposeSchoolSub": "My children attend school — I help alongside it",
       "purposeHomeschool": "Homeschooling or tutoring",
-      "purposeHomeschoolSub": "I teach my learners myself — full lesson-building tools"
+      "purposeHomeschoolSub": "I teach my learners myself — full lesson-building tools",
+      "heardChoose": "Choose one",
+      "heardDetail": "Anything more? (optional)",
+      "heardChannels": {
+        "ai": "ChatGPT or another AI assistant",
+        "colleague": "A colleague or friend",
+        "messaging": "WhatsApp or Telegram",
+        "search": "Google or another search engine",
+        "youtube": "YouTube",
+        "social": "Facebook or LinkedIn",
+        "other": "Something else"
+      }
     },
     "reportIssue": {
       "label": "Report a problem",
