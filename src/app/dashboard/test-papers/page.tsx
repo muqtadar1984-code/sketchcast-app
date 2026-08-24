@@ -14,7 +14,7 @@ import { type LibraryMessages } from "../content-cell";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { docDownloadName } from "@/utils/download-name";
-import { docTypeKey, gateReasons, isGated } from "@/utils/junk-gate";
+import { docTypeKey, gateReasons, isGated, isStructureGate } from "@/utils/junk-gate";
 import { type JunkGateInfo } from "../junk-gate-dialog";
 
 // The parent's paper-focused view: upload their own book (same pipeline as
@@ -227,7 +227,13 @@ export default async function TestPapersPage() {
                           hasLesson={c.hasLesson}
                           gate={
                             isGated(b.health)
-                              ? ({ docType: docTypeKey(b.health), reasons: gateReasons(b.health), trial: trialTier, t: tLib } satisfies JunkGateInfo)
+                              ? ({
+                                  docType: docTypeKey(b.health),
+                                  structure: isStructureGate(b.health),
+                                  reasons: gateReasons(b.health),
+                                  trial: trialTier,
+                                  t: tLib,
+                                } satisfies JunkGateInfo)
                               : null
                           }
                         />

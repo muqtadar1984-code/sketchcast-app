@@ -40,7 +40,23 @@ import { dirFor, isLocale, DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
 // shows goes untranslated, which is the check worth having.
 type GalleryMessages = Pick<typeof en, "library" | "common" | "utils">;
 
-const MESSAGES: Record<Locale, GalleryMessages> = {
+// …minus keys still in PENDING_TRANSLATION. The narrowing above was not quite
+// enough: the chapter-quality gate strings (2026-08-23) live INSIDE library —
+// a slice this gallery does render — so English-only keys there hit the same
+// wall the fair-use ones dodged by being top-level. The gate slice is typed
+// partial and English is layered underneath where T is built, which is exactly
+// the runtime contract (getDictionary overlays English under every locale);
+// every other library key stays required, so the check worth having — a
+// rendered slice going untranslated fails the build — still holds everywhere
+// except the one slice with a declared, dated exemption.
+type GateStrings = GalleryMessages["library"]["gate"];
+type GalleryFile = Omit<GalleryMessages, "library"> & {
+  library: Omit<GalleryMessages["library"], "gate"> & {
+    gate: Partial<Omit<GateStrings, "docType">> & { docType?: Partial<GateStrings["docType"]> };
+  };
+};
+
+const MESSAGES: Record<Locale, GalleryFile> = {
   en,
   ms,
   ar,
@@ -102,7 +118,18 @@ function KitPreview() {
 
   const T: LibraryMessages = useMemo(() => {
     const m = MESSAGES[locale];
-    return { ...m.library, common: m.common, utils: m.utils };
+    // English under the locale for the gate slice — the runtime overlay
+    // (getDictionary) in miniature, for the keys PENDING_TRANSLATION exempts.
+    return {
+      ...m.library,
+      gate: {
+        ...en.library.gate,
+        ...m.library.gate,
+        docType: { ...en.library.gate.docType, ...(m.library.gate.docType ?? {}) },
+      },
+      common: m.common,
+      utils: m.utils,
+    };
   }, [locale]);
   const COMMON = useMemo(
     () => ({ bookId: "demo", schoolId: null, chapterNum: 0, t: T }),

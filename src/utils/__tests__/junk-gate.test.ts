@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { docTypeKey, gateReasons, isGated, stampConfirmation } from "@/utils/junk-gate";
+import { docTypeKey, gateReasons, isGated, isStructureGate, stampConfirmation } from "@/utils/junk-gate";
 
 describe("isGated", () => {
   it("treats absent health as not gated — every book indexed before the gate existed", () => {
@@ -45,10 +45,49 @@ describe("docTypeKey", () => {
     expect(docTypeKey({ facts: { doc_type: "other" } })).toBe("other");
   });
 
+  it('"textbook" is its own key — a gated real book must not render as "Unrecognized document"', () => {
+    expect(docTypeKey({ facts: { doc_type: "textbook" } })).toBe("textbook");
+  });
+
   it('falls back to "other" for unknown or missing doc_type', () => {
     expect(docTypeKey({ facts: { doc_type: "novel" } })).toBe("other");
     expect(docTypeKey({ facts: {} })).toBe("other");
     expect(docTypeKey(null)).toBe("other");
+  });
+});
+
+describe("isStructureGate", () => {
+  const suspect = { chapter_quality: { suspect: true } };
+
+  it("follows the worker's stamped chapter-quality verdict, not the doc label", () => {
+    // The Sara shape: a genuine textbook whose chapter MAP is suspect.
+    expect(isStructureGate({ gate: "confirm", facts: { doc_type: "textbook", ...suspect } })).toBe(true);
+    // A 2-page textbook gated by the VOLUME rule with a sound map keeps the
+    // junk-material copy — chapter-problem copy would contradict the quoted
+    // "only 2 pages" reason.
+    expect(
+      isStructureGate({ gate: "confirm", facts: { doc_type: "textbook", chapter_quality: { suspect: false } } }),
+    ).toBe(false);
+  });
+
+  it("gives accurate framing when the classifier was down or the doc is teaching material", () => {
+    // doc_type "unknown" (classifier outage, fail-open) with a junk map must
+    // NOT collapse to "Doesn't look like a textbook" — Sara's trust problem
+    // reproduced whenever the classifier is down.
+    expect(isStructureGate({ gate: "confirm", facts: { doc_type: "unknown", ...suspect } })).toBe(true);
+    expect(isStructureGate({ gate: "confirm", facts: { doc_type: "workbook", ...suspect } })).toBe(true);
+    expect(isStructureGate({ gate: "confirm", facts: { doc_type: "exam_material", ...suspect } })).toBe(true);
+  });
+
+  it("junk-MATERIAL categories keep their own framing even with a suspect map", () => {
+    expect(isStructureGate({ gate: "confirm", facts: { doc_type: "administrative", ...suspect } })).toBe(false);
+    expect(isStructureGate({ gate: "confirm", facts: { doc_type: "form_or_roster", ...suspect } })).toBe(false);
+  });
+
+  it("degrades safely on older health payloads without the stamp", () => {
+    expect(isStructureGate({ gate: "confirm", facts: { doc_type: "textbook" } })).toBe(false);
+    expect(isStructureGate(null)).toBe(false);
+    expect(isStructureGate(undefined)).toBe(false);
   });
 });
 

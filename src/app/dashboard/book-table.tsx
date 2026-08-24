@@ -14,7 +14,7 @@ import BatchGenerate from "./batch-generate";
 import ExamGenerate, { type ExamChapterOpt } from "./exam-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
 import { type JunkGateInfo } from "./junk-gate-dialog";
-import { docTypeKey, gateReasons, isGated } from "@/utils/junk-gate";
+import { docTypeKey, gateReasons, isGated, isStructureGate } from "@/utils/junk-gate";
 import { BookCover } from "./icons";
 import { cleanBookTitle } from "@/utils/book";
 import { jobStageLabel, etaLabel } from "@/utils/job-stage";
@@ -229,7 +229,13 @@ export default function BookTable({
         // threaded to every control that inserts generation rows. Books whose
         // health lacks the gate (all older books) get null — zero change.
         const gate: JunkGateInfo | null = isGated(b.health)
-          ? { docType: docTypeKey(b.health), reasons: gateReasons(b.health), trial, t }
+          ? {
+              docType: docTypeKey(b.health),
+              structure: isStructureGate(b.health),
+              reasons: gateReasons(b.health),
+              trial,
+              t,
+            }
           : null;
         return (
           <div key={b.id} className="border-b border-[#EEF0EC] last:border-b-0">
@@ -312,7 +318,10 @@ export default function BookTable({
               <div className="px-5 pb-3">
                 <div className="flex items-start gap-2 rounded-lg bg-[#FFF1D6] text-[#9A6400] px-3 py-2 text-xs">
                   <span aria-hidden>⚠️</span>
-                  <span>{t.gate.banner}</span>
+                  {/* A suspect CHAPTER MAP is a structure problem, not a
+                      junk-material one — "doesn't look like a textbook" over
+                      a real book was the wrong claim (see junk-gate.ts). */}
+                  <span>{gate.structure ? t.gate.structureBanner : t.gate.banner}</span>
                 </div>
               </div>
             )}

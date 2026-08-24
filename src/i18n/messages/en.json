@@ -1016,7 +1016,9 @@
     },
     "gate": {
       "banner": "This upload doesn't look like a textbook. Lessons generated from it will likely be weak.",
+      "structureBanner": "This book indexed, but its chapter list looks unreliable. Check the chapters before generating — lessons follow these boundaries.",
       "title": "Doesn't look like a textbook",
+      "structureTitle": "Check this book's chapters first",
       "body": "Generating will use your credits, and the results will likely be weak. Do you want to continue?",
       "trialLine": "This will use your only trial kit.",
       "confirm": "Generate anyway",
@@ -1024,6 +1026,7 @@
       "docType": {
         "administrative": "Administrative document",
         "form_or_roster": "Form or roster",
+        "textbook": "Textbook with an unclear chapter structure",
         "other": "Unrecognized document"
       }
     },
