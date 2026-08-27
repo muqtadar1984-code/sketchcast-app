@@ -262,3 +262,34 @@ export function toSegments(stroke: Stroke, tension = 1): Segment[] {
  *  the fewest real points. */
 export const tensionFor = (profile: CaptureProfile): number =>
   profile.smoothing === "heavy" ? 1.25 : 1;
+
+// ── width runs ───────────────────────────────────────────────────────────────
+
+/**
+ * Quantise a width so a slowly-varying stroke does not start a new path on every
+ * segment. A quarter of a page unit is well under a pixel at any sane zoom.
+ */
+export const quantise = (w: number): number => Math.max(0.1, Math.round(w * 4) / 4);
+
+/** Consecutive segments that share a quantised width, and that width. */
+export type Run = { width: number; segs: Segment[] };
+
+/**
+ * A stroke as runs of constant width.
+ *
+ * SHARED BY THE SCREEN AND THE PDF, deliberately. Both need to break a stroke
+ * wherever its width changes — a canvas path and a PDF path each carry ONE line
+ * width — and if they computed the break points separately they would eventually
+ * disagree, so the exported page would stop being what the teacher saw. One
+ * function, one answer.
+ */
+export function strokeRuns(stroke: Stroke, tension = 1): Run[] {
+  const runs: Run[] = [];
+  for (const s of toSegments(stroke, tension)) {
+    const w = quantise(stroke.width * ((s.w0 + s.w1) / 2));
+    const last = runs[runs.length - 1];
+    if (last && last.width === w) last.segs.push(s);
+    else runs.push({ width: w, segs: [s] });
+  }
+  return runs;
+}

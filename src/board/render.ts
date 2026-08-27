@@ -20,7 +20,7 @@
 // needs a canvas and is exercised in the dev gallery.
 
 import type { CaptureProfile } from "./capabilities";
-import { toSegments, tensionFor, type Segment } from "./ink";
+import { quantise, toSegments, tensionFor, type Run, type Segment } from "./ink";
 import {
   PAGE_W,
   PAGE_H,
@@ -153,34 +153,35 @@ export function drawSegments(
 ): void {
   if (!segs.length) return;
   applyTool(ctx, stroke);
-
-  const widthOf = (w: number) => {
-    const px = stroke.width * w;
-    // Quantise to 1/4 unit so a slowly-varying width does not start a new path
-    // on every segment.
-    return Math.max(0.1, Math.round(px * 4) / 4);
-  };
-
-  let i = 0;
-  while (i < segs.length) {
-    const w = widthOf((segs[i].w0 + segs[i].w1) / 2);
+  // Runs come from ink.ts so the PDF exporter breaks a stroke in exactly the
+  // same places — see strokeRuns().
+  for (const run of runsOf(segs, stroke)) {
     ctx.beginPath();
-    ctx.lineWidth = w;
-    ctx.moveTo(segs[i].x0, segs[i].y0);
-    // Extend this path while the width holds.
-    while (i < segs.length && widthOf((segs[i].w0 + segs[i].w1) / 2) === w) {
-      const s = segs[i];
+    ctx.lineWidth = run.width;
+    ctx.moveTo(run.segs[0].x0, run.segs[0].y0);
+    for (const s of run.segs) {
       if (s.x0 === s.x1 && s.y0 === s.y1 && segs.length === 1) {
         // A lone point: a zero-length line with a round cap is a dot.
         ctx.lineTo(s.x1 + 0.01, s.y1);
       } else {
         ctx.bezierCurveTo(s.c1x, s.c1y, s.c2x, s.c2y, s.x1, s.y1);
       }
-      i++;
     }
     ctx.stroke();
   }
   resetTool(ctx);
+}
+
+/** Group already-computed segments into constant-width runs. */
+function runsOf(segs: Segment[], stroke: Stroke): Run[] {
+  const runs: Run[] = [];
+  for (const s of segs) {
+    const w = quantise(stroke.width * ((s.w0 + s.w1) / 2));
+    const last = runs[runs.length - 1];
+    if (last && last.width === w) last.segs.push(s);
+    else runs.push({ width: w, segs: [s] });
+  }
+  return runs;
 }
 
 /** Draw a stroke end to end. */

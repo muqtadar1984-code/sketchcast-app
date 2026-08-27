@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notFound } from "next/navigation";
 import { probeStatic, newObservations, profileFor, type CaptureProfile } from "@/board/capabilities";
 import type { TouchMode } from "@/board/ink";
 import { newRoll, PAGE_W, PAGE_H, type PageBackground, type Tool } from "@/board/model";
 import type { Rect } from "@/board/render";
 import { RollView, type RollHandle } from "@/board/roll";
+import { exportRoll, pdfPageCount, pdfPathCount, warmExport } from "@/board/export-pdf";
 
 // The board library, driven from outside it — DEV ONLY (notFound in production,
 // the same guard /preview/kit uses).
@@ -42,6 +43,13 @@ function Board() {
   const [touchMode, setTouchMode] = useState<TouchMode>("draw");
   const [where, setWhere] = useState({ page: 0, count: 1 });
   const [strokes, setStrokes] = useState(0);
+  const [pdf, setPdf] = useState<string | null>(null);
+
+  // Pay pdf-lib's dynamic import while she is teaching, not when she presses
+  // Export at the bell.
+  useEffect(() => {
+    void warmExport();
+  }, []);
 
   const spec = TOOLS.find((t) => t.key === tool)!;
 
@@ -79,6 +87,27 @@ function Board() {
       prompt: `Page ${Date.now() % 1000}`,
     });
   }, []);
+
+  const onExport = useCallback(async () => {
+    setPdf("working…");
+    const t0 = performance.now();
+    const bytes = await exportRoll(roll, {
+      title: "Board gallery",
+      text: (bg) => (bg.kind === "question" ? bg.prompt : null),
+    });
+    const ms = Math.round(performance.now() - t0);
+    setPdf(
+      `${(bytes.length / 1024).toFixed(1)} KB · ${pdfPageCount(roll)} pages · ` +
+        `${pdfPathCount(roll)} paths · ${ms}ms`,
+    );
+    // A viewer download, so the file can actually be opened and looked at.
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "board.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [roll]);
 
   const btn =
     "rounded-lg border border-[#DCE6E2] bg-white px-3 py-2 text-sm text-[#5B6470] disabled:opacity-40";
@@ -164,12 +193,16 @@ function Board() {
           <p className="text-center font-mono text-[11px] text-[#5B6470]">
             {where.page + 1} / {where.count}
           </p>
+          <button type="button" className={btn} onClick={onExport}>
+            Export
+          </button>
         </aside>
       </div>
 
       <p className="mt-2 font-mono text-[11px] text-[#5B6470]">
         tier {profile.tier} · {strokes} strokes drawn · page {PAGE_W}×{PAGE_H}, letterboxed to fit ·
         touch draws by default: {profile.touchDrawsDefault ? "yes" : "no"}
+        {pdf ? ` · pdf ${pdf}` : ""}
       </p>
     </main>
   );

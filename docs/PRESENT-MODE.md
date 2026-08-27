@@ -343,7 +343,7 @@ including the worst one available, which is what defines Tier C.
 | # | Phase | Gate |
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
-| 1 | The board as a library — `src/board/`, zero app imports. **DONE: capabilities, model, ink, render, roll + `/preview/board` gallery. LEFT: export-pdf, store, and the gate itself.** | 500 strokes over 10 pages at 60 fps; model round-trips; two exports identical |
+| 1 | The board as a library — `src/board/`, zero app imports. **DONE: capabilities, model, ink, render, roll, export-pdf + `/preview/board` gallery. LEFT: store, and the gate itself.** | 500 strokes over 10 pages at 60 fps; model round-trips; two exports identical |
 | 2 | Present mode in the app — `/present`, gate, context bar, kit rail + worksheet picker, stage, `present_items`, 0097, `/api/present/*` | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
@@ -352,8 +352,8 @@ including the worst one available, which is what defines Tier C.
 
 `src/board/` is `capabilities` + `model` + `ink` + `render` + `roll`, with
 `/preview/board` driving all of it from OUTSIDE the library — which is the test
-of whether the boundary holds, not a demo. Still to come: `export-pdf`, `store`,
-and the 500-strokes-over-10-pages gate.
+of whether the boundary holds, not a demo. Still to come: `store`, and the
+500-strokes-over-10-pages gate.
 
 Three things the build settled that the plan had not:
 
@@ -369,6 +369,15 @@ Three things the build settled that the plan had not:
   however long the lesson ran, and the visible page is always the low-latency
   canvas. The slide is blitted INSIDE the one canvas, because nothing may be
   stacked above a desynchronised one.
+
+**Export is VECTOR, and byte-identical across two runs** — the gate. Ink is
+curves in the roll, so it is curves in the PDF: a two-page board with three
+strokes is 3.8 KB and 18 paths, where a raster export would be hundreds of KB
+and turn to mush the moment a student zoomed in. Byte-identity needed fixed
+metadata: PDF writers stamp the current time into /CreationDate, which would make
+every export of an unchanged board a different file. The first export pays for
+pdf-lib's dynamic import (seconds, cold), so `warmExport()` exists for a host to
+call when the lesson opens rather than at the bell.
 
 And one rule worth carrying into every later animation: **never gate input on an
 animation completing.** The first version refused strokes during the page slide;
