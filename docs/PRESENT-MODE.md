@@ -344,7 +344,7 @@ including the worst one available, which is what defines Tier C.
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
-| 2 | Present mode in the app — `/present`, gate, context bar, kit rail + worksheet picker, stage, `present_items`, 0097, `/api/present/*` | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
+| 2 | Present mode in the app — **STARTED: migration 0097 written (NOT applied), the context resolver, and `/present` with the bar. LEFT: kit rail + worksheet picker, the stage, session API, wiring the board in.** | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
@@ -400,6 +400,32 @@ animation completing.** The first version refused strokes during the page slide;
 `requestAnimationFrame` does not run in a hidden or non-compositing tab, so the
 slide never finished and the board became permanently un-drawable. A pointerdown
 now lands the slide and takes the stroke.
+
+## Phase 2 so far
+
+Migration **0097** is written and NOT applied — five tables: `present_sessions`,
+`present_pages`, `present_strokes`, `present_items`, `present_last_taught`.
+Student visibility is deliberately absent; every policy is the teacher reading
+her own rows, and the roll reaches students in Phase 3 against a PUBLISHED recap
+rather than a live board.
+
+Two things the context bar settled:
+
+* **The resolver runs on the CLIENT.** Vercel is UTC and the classroom is not; a
+  period is a local-time fact, and the panel's own clock is the classroom's.
+  A server-rendered "Period 3" would be wrong by eight hours in Malaysia.
+* **The bar reports its own confidence** — `slot` (the timetable named this class
+  and subject), `period` (a period is running but she teaches nothing in it), or
+  `none` (no timetable, outside hours, or a non-teaching day). A guess must not
+  look like a fact, and `none` is the permanent state of every independent
+  teacher, so it has to look deliberate rather than broken.
+
+The resolver also owns `advancesPointer`, the rule the schema is shaped around:
+only the slot's OWN video or kit worksheet may move `present_last_taught`.
+A break belongs to the period AFTER it, because a teacher opening the board
+during the interval is setting up for the next lesson; after the last period the
+answer is null rather than the last period of the day, because pre-filling a
+finished period would have her confirm something simply wrong.
 
 ## Going public — the release steps that are easy to miss
 
