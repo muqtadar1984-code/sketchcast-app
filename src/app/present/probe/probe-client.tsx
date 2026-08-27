@@ -88,12 +88,14 @@ const STRATEGIES: { key: Strategy; title: string; note: string }[] = [
   {
     key: "desync",
     title: "Canvas, desynchronized",
-    note: "Same, with a low-latency context that may bypass the compositor.",
+    note:
+      "Same, with a low-latency context that may bypass the compositor. Its paper is PAINTED IN — a desynchronized canvas presents as an opaque overlay on some GPUs, so anything left transparent shows as black.",
   },
   {
     key: "predict",
     title: "Desync + prediction",
-    note: "Adds getPredictedEvents() as throwaway lead ink. Watch for smear on direction changes.",
+    note:
+      "Adds getPredictedEvents() as throwaway lead ink on a normal canvas above (nothing may be stacked desynchronized). Watch for smear on direction changes.",
   },
 ];
 
@@ -183,6 +185,7 @@ type Pt = { x: number; y: number };
 
 const INK = "#14181F";
 const LEAD = "#1FB8A6";
+const PAPER = "#FFFFFF";
 
 function line(ctx: CanvasRenderingContext2D, a: Pt, b: Pt, width: number, color: string): void {
   ctx.beginPath();
@@ -196,6 +199,28 @@ function line(ctx: CanvasRenderingContext2D, a: Pt, b: Pt, width: number, color:
 }
 
 /** Size a canvas to its box at device resolution and return a CSS-pixel context. */
+/**
+ * Size a canvas to its box at device resolution and return a CSS-pixel context.
+ *
+ * A DESYNCHRONIZED CANVAS MUST NOT BE TREATED AS TRANSPARENT — this is the
+ * finding that came off the first real run, and it is a platform trap rather
+ * than a bug in this file. `getContextAttributes()` cheerfully reports
+ * `alpha: true`, and a virgin pixel really does read [0,0,0,0], so the BITMAP is
+ * transparent. Presentation is another matter: to get its latency, Chrome may
+ * promote the canvas to a low-latency overlay (a DirectComposition swap chain on
+ * Windows), and an overlay is not blended with the page behind it. Every
+ * transparent pixel then presents as BLACK.
+ *
+ * It is GPU- and driver-dependent, which is what makes it dangerous: it did not
+ * reproduce in the dev browser at all, and on the founder's Chrome it turned
+ * both desynchronized pads into black rectangles — one showing nothing but the
+ * grey antialiased fringe of a near-black stroke, the other showing nothing at
+ * all because a second desynchronized canvas stacked on top was opaque.
+ *
+ * So the rule, and it holds on every platform: paint the paper INTO a
+ * desynchronized canvas rather than letting the page show through, and never
+ * stack anything above one.
+ */
 function fitCanvas(
   canvas: HTMLCanvasElement,
   desynchronized: boolean,
@@ -210,7 +235,14 @@ function fitCanvas(
   ) as CanvasRenderingContext2D | null;
   if (!ctx) return null;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (desynchronized) paint(ctx, rect.width, rect.height);
   return ctx;
+}
+
+/** Fill a canvas with paper. The opaque background a desynchronized canvas needs. */
+function paint(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, w, h);
 }
 
 // PointerEvent.getPredictedEvents is not in every TS lib yet.
@@ -273,7 +305,13 @@ function Pad({
     if (!ink) return;
     ctxRef.current = fitCanvas(ink, desynchronized);
     const lead = leadRef.current;
-    if (lead) leadCtxRef.current = fitCanvas(lead, desynchronized);
+    // NEVER desynchronized, even on the desync pad. This canvas is stacked ABOVE
+    // the ink canvas, and a desynchronized overlay is opaque — as itself this
+    // layer was what hid the prediction pad's ink completely. It has to be a
+    // normal, genuinely transparent canvas so the ink below shows through. It
+    // costs nothing measurable: only the real ink's draw is timed, never the
+    // throwaway lead.
+    if (lead) leadCtxRef.current = fitCanvas(lead, false);
     rectRef.current = ink.getBoundingClientRect();
   }, [desynchronized]);
 
@@ -459,8 +497,14 @@ function Pad({
     const ctx = ctxRef.current;
     if (ink && ctx) {
       const dpr = window.devicePixelRatio || 1;
-      ctx.clearRect(0, 0, ink.width / dpr, ink.height / dpr);
+      const w = ink.width / dpr;
+      const h = ink.height / dpr;
+      // Clearing a desynchronized canvas to transparent clears it to BLACK on
+      // screen — see fitCanvas. Paper, not nothing.
+      if (desynchronized) paint(ctx, w, h);
+      else ctx.clearRect(0, 0, w, h);
     }
+    lastRef.current = null;
   };
 
   const { p50, p95, paint95, n } = stats;

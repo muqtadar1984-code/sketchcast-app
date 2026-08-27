@@ -110,12 +110,57 @@ last-taught pointer.** Revising chapters 1-5 must not claim chapter 5 is taught.
 
 ## Architecture
 
-Four layers per page; only the wet-ink layer runs at pen rate.
+~~Four stacked layers; only the wet-ink layer runs at pen rate.~~
+
+**CORRECTED 27 Aug 2026 by the first run on real hardware. The stacked-layer
+model is impossible.** It was:
 
     chrome     tool rail, push button, period clock      — normal React
     wet ink    stroke in progress                        — desynchronised canvas, no React
     dry ink    committed strokes                         — blitted on pointerup
     content    frozen frame | question | ERE SVG | blank
+
+**A DESYNCHRONISED CANVAS CANNOT BE A TRANSPARENT OVERLAY.** To deliver its
+latency, Chrome may promote the canvas to a low-latency overlay (a
+DirectComposition swap chain on Windows), and an overlay is not blended with
+the page behind it: every transparent pixel presents as BLACK. The bitmap lies
+about this — `getContextAttributes()` reports `alpha: true` and a virgin pixel
+reads `[0,0,0,0]` — so it is invisible to every check except looking at the
+screen.
+
+It is GPU/driver dependent, which is what makes it dangerous. It did NOT
+reproduce in the dev browser. On the founder's Chrome 151 it turned both
+desynchronised probe pads into black rectangles: one showing only the grey
+antialiased fringe of a near-black stroke, the other showing nothing whatsoever
+because a second desynchronised canvas stacked above it was opaque.
+
+The desynchronised context is also the one worth having — 0.8ms input-to-draw
+against 4.5ms plain and 6.4ms through React state. So the board keeps it and
+changes shape around it:
+
+**ONE opaque canvas.** Content, committed ink and the live stroke all go into
+the same bitmap, bottom to top, and nothing is stacked above it:
+
+    chrome        tool rail, push button, clock     — normal React, DOM, beside the canvas
+    ─ one desynchronised, opaque canvas ────────────────────────────────
+      wet ink     the live stroke + predicted lead
+      dry ink     committed strokes
+      content     frozen frame | question | ERE SVG | paper
+    ─ offscreen (normal canvas, never displayed) ───────────────────────
+      content + dry ink, kept to restore regions the wet stroke dirtied
+
+Erasing the live stroke or the predicted lead is then a dirty-rect blit from the
+offscreen backing store rather than a `clearRect` on a transparent layer. That
+is more machinery than stacked canvases, and it is the only shape compatible
+with a low-latency canvas.
+
+Two rules fall out of this, and they hold on every platform, so the board follows
+them rather than feature-detecting:
+
+* **Paint the paper INTO a desynchronised canvas.** Never let the page show
+  through, and never `clearRect` it to transparent — clear it to paper.
+* **Never stack anything above one.** The tool rail is DOM beside the canvas, not
+  over it. Anything that must appear over the ink is drawn into the same bitmap.
 
 **The roll** — vertical only, quantised into pages of **1600 x 900 logical
 units**: one screen, one 16:9 frame, one landscape PDF page, the same rectangle
@@ -221,6 +266,25 @@ from fewer than 50 samples for exactly that reason — the first live run report
   `list_migrations` against the LIVE DB, not just the folder — the two are not
   1:1 (0094 alone is three entries upstream), and the folder already carries a
   pre-existing collision at 0052.
+
+**First real run, 27 Aug** (laptop + mouse, so it does NOT move the Phase 0 gate).
+Well-sampled and it settled the strategy question: input-to-draw p50 of **0.8ms
+desynchronised** vs 4.5ms plain canvas vs 6.4ms through React state, and React
+costs about a full frame end-to-end (23.1ms paint vs ~9.8ms). Two things to read
+carefully in any run: a pad's percentiles mean nothing below n=50 (the UI marks
+them), and **input-to-paint is not comparable across the desynchronised
+boundary** — `afterPaint` is rAF-based and pinned to the compositor's frame
+cadence, which is exactly what a desynchronised canvas is allowed to escape.
+Compare input-to-draw across all four; compare input-to-paint only among the
+non-desync pads.
+
+The tier logic validated itself on that run: every static capability was green,
+including `desynchronized`, but `pressureDistinct: 1` with min == max == 0.5 (a
+mouse) correctly held it at Tier B with velocity width. A capability-only check
+would have picked pressure-varied width on a device with no pressure sensor.
+
+**And the screenshots caught what no number could** — see the corrected layer
+model above. The winning strategy was rendering black.
 
 **Adversarial review, 27 Aug** (13 agents, 5 lenses, refutation pass). 25 findings
 raised, 8 verified, 3 survived. What was fixed:
