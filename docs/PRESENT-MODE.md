@@ -343,10 +343,38 @@ including the worst one available, which is what defines Tier C.
 | # | Phase | Gate |
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
-| 1 | The board as a library — `src/board/`, zero app imports (model, capabilities, ink, render, roll, export-pdf, store) + dev gallery | 500 strokes over 10 pages at 60 fps; model round-trips; two exports identical |
+| 1 | The board as a library — `src/board/`, zero app imports. **DONE: capabilities, model, ink, render, roll + `/preview/board` gallery. LEFT: export-pdf, store, and the gate itself.** | 500 strokes over 10 pages at 60 fps; model round-trips; two exports identical |
 | 2 | Present mode in the app — `/present`, gate, context bar, kit rail + worksheet picker, stage, `present_items`, 0097, `/api/present/*` | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
+
+## Phase 1 so far
+
+`src/board/` is `capabilities` + `model` + `ink` + `render` + `roll`, with
+`/preview/board` driving all of it from OUTSIDE the library — which is the test
+of whether the boundary holds, not a demo. Still to come: `export-pdf`, `store`,
+and the 500-strokes-over-10-pages gate.
+
+Three things the build settled that the plan had not:
+
+* **The third number in a point is a WIDTH MULTIPLIER, not raw pressure**,
+  resolved at capture time. Store the raw signal and a roll drawn on a
+  pressureless panel carries 0.5 at every point and can never be re-rendered as
+  it looked, and every renderer needs to know what drew it.
+* **Redo needs its own stack.** Deriving it by scanning for the last voided
+  stroke finds the one latest in APPEND order, not the one most recently voided:
+  undo c, undo b, redo brought back c and left b voided.
+* **One page is visible at a time, and the roll winds between them.** A
+  half-visible page on a projector is worse than useless, memory stays constant
+  however long the lesson ran, and the visible page is always the low-latency
+  canvas. The slide is blitted INSIDE the one canvas, because nothing may be
+  stacked above a desynchronised one.
+
+And one rule worth carrying into every later animation: **never gate input on an
+animation completing.** The first version refused strokes during the page slide;
+`requestAnimationFrame` does not run in a hidden or non-compositing tab, so the
+slide never finished and the board became permanently un-drawable. A pointerdown
+now lands the slide and takes the stroke.
 
 ## Going public — the release steps that are easy to miss
 
