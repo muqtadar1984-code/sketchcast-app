@@ -338,3 +338,48 @@ export function diaryEnabled(): boolean {
 export function i18nEnabled(): boolean {
   return process.env.FEATURE_I18N === "true";
 }
+
+/**
+ * Present mode — the classroom whiteboard (docs/PRESENT-MODE.md). Restricted to
+ * a NAMED LIST OF ACCOUNTS, not a boolean, because it ships to production while
+ * it is still being built in front of a real class.
+ *
+ * `PRESENT_ALLOWED_EMAILS` is a comma-separated allowlist. Unset or empty means
+ * NOBODY — the empty allowlist is the kill switch, so there is no second flag to
+ * forget to turn off. Server-only on purpose: never expose this as
+ * NEXT_PUBLIC_*, or the list of addresses ships in the browser bundle. Client
+ * components receive a boolean prop instead.
+ *
+ * This is the FIRST of three gates and the weakest — a hidden nav item is not
+ * access control. The /present pages redirect on it, every /api/present/* route
+ * 404s on it (404, not 403: a 403 advertises that the surface exists), and RLS
+ * on the present_* tables confines every row to its own teacher.
+ */
+/** The slice of a Supabase user this gate needs. Taking the USER and not a bare
+ *  string is deliberate: the confirmation check below then cannot be forgotten at
+ *  a call site, because there is no way to call this without supplying it. */
+export type PresentGateUser = { email?: string | null; email_confirmed_at?: string | null };
+
+export function presentAllowed(user: PresentGateUser | null | undefined): boolean {
+  const allow = (process.env.PRESENT_ALLOWED_EMAILS ?? "")
+    .split(",")
+    // Surrounding quotes are stripped because the realistic operator mistake is
+    // pasting `"someone@example.com"` into a dashboard field, and the cost of
+    // that is a founder locked out of a probe while standing in a classroom.
+    // It cannot widen access: the value is operator-supplied, never attacker-
+    // supplied, and stripping quotes only ever makes the INTENDED address match.
+    .map((e) => e.trim().replace(/^["']|["']$/g, "").trim().toLowerCase())
+    .filter(Boolean);
+  if (!allow.length) return false;
+  // An UNVERIFIED address is not an identity. The repo already applies this test
+  // wherever an email decides something that matters (auth/callback and the
+  // Stripe caller, both binding money to a person); an access gate deserves it
+  // at least as much. Verified as safe before adding: the one allowlisted
+  // account is confirmed, so this narrows without locking anyone out.
+  if (!user?.email_confirmed_at) return false;
+  const e = (user.email ?? "").trim().toLowerCase();
+  // Exact match only. Deliberately NOT normalising Gmail plus-tags or dots: that
+  // would WIDEN the allowlist, and an access gate must only ever narrow when in
+  // doubt. `!!e` keeps a blank email from matching a blank list entry.
+  return !!e && allow.includes(e);
+}

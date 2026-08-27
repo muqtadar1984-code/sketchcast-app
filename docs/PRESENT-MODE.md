@@ -1,6 +1,6 @@
 # Present mode — the classroom whiteboard
 
-Status: **pre-code, decisions settled** (22 Aug 2026). Nothing here is built.
+Status: **Phase 0 built, not yet run on a panel** (24 Aug 2026).
 Full plan (narrative, risks, phase gates): https://claude.ai/code/artifact/3391f463-1692-4861-90cc-1051ecbac012
 
 A whiteboard a teacher drives on a classroom panel. It plays the lesson video,
@@ -156,11 +156,19 @@ timetable slot: `chapter_grounding` for every distinct chapter actually shown
 "opened the worksheet" banned. Draft -> she edits -> publish. No credit
 consumed; rate-limited instead.
 
+**Configuration.** One variable, and it takes an ADDRESS, not `true`:
+
+    PRESENT_ALLOWED_EMAILS=someone@example.com,another@example.com
+
+Note it is NOT in `.env.example` — `.gitignore` matches `.env*`, so that file is
+untracked and anything written there stays on one machine. `src/utils/flags.ts`
+is the tracked documentation for this variable.
+
 **Access** — `PRESENT_ALLOWED_EMAILS`, server-only, default empty = nobody.
 Never `NEXT_PUBLIC_`. Enforced in three places: the `/present` page (redirect),
 every `/api/present/*` route (404, not 403), and RLS (`teacher_id = auth.uid()`).
 
-## Migration 0094 — four tables
+## Migration 0097 — four tables (Phase 2)
 
 `present_sessions` (one row per period: teacher, class, book, chapter, part,
 slot day/period, page_count, pdf_path, recap_draft, recap_body,
@@ -172,13 +180,92 @@ generation_id, kind `video|worksheet|blank`, detail jsonb, opened_at; PK
 Shaped after `tutor_board` / `tutor_board_event`: a session row, a page row, and
 two append-only streams. A 40-minute lesson is ~1-3k strokes.
 
+## Phase 0 — what shipped (24 Aug 2026)
+
+| File | What it is |
+|---|---|
+| `src/board/capabilities.ts` | The runtime probe + tier selection. Phase 1's library arriving early: zero app imports, injectable host, unit-tested |
+| `src/board/__tests__/capabilities.test.ts` | 18 tests, incl. the one that matters: a panel that ADVERTISES pressure never reaches Tier A until a stroke proves it varies |
+| `src/app/present/probe/page.tsx` | The gated surface. Redirects; not translated (measurement scaffolding, one reader) |
+| `src/app/present/probe/probe-client.tsx` | The harness: 4 strategies, latency percentiles, frame health, camera-test instructions, save |
+| `src/app/api/present/probe/route.ts` | POST records a run, GET reads them back. 404 on every failure, never 403 |
+| `supabase/migrations/0096_present_probe.sql` | One row per run. RLS: own-read only, NO write policy — the route writes under the service role |
+| `src/app/preview/board-probe/page.tsx` | Same harness, no gate, `notFound()` in production — how it gets checked without a prod login |
+| `src/utils/flags.ts` | `presentAllowed(email)` — `PRESENT_ALLOWED_EMAILS`, empty = nobody |
+| `src/utils/__tests__/present-gate.test.ts` | 13 tests on the allowlist — the only thing between an unreleased surface and a live app |
+
+**Measured on a Windows laptop / Chrome 1280x860 (the control, not the answer):**
+
+| Strategy | input→draw p50 | p95 | input→paint p95 |
+|---|---|---|---|
+| React state | 15.3 ms | 34.1 ms | 58.1 ms |
+| Canvas 2D | 7.3 ms | 22.1 ms | 37.5 ms |
+| Canvas, desynchronized | 0.6 ms | 0.9 ms | 23.3 ms |
+| Desync + prediction | 0.6 ms | 1.0 ms | 27.2 ms |
+
+Directionally what the plan predicted — React state costs roughly a frame, the
+desynchronised context is ~25x cheaper to the draw call. **Do not quote these as
+a result:** they came off a fast laptop with a mouse, tiny samples, and a dev
+server compiling in the background. The harness now marks any percentile taken
+from fewer than 50 samples for exactly that reason — the first live run reported
+"p50 7.3ms" off SIX points and it looked authoritative.
+
+**Two field notes from wiring it up (27 Aug):**
+
+* `PRESENT_ALLOWED_EMAILS` takes an ADDRESS, not `true`. It was first set to
+  `true` by analogy with every other `FEATURE_*` flag — which allowlists an
+  account called "true" and locks out everyone, silently. Pinned as a test.
+* **The migration was renumbered 0094 → 0096.** Both 0094 (`attribution`) and
+  0095 (`refund_when_nothing_was_delivered`) were written and applied to
+  production in the days between this one being drafted and applied. Check
+  `list_migrations` against the LIVE DB, not just the folder — the two are not
+  1:1 (0094 alone is three entries upstream), and the folder already carries a
+  pre-existing collision at 0052.
+
+**Adversarial review, 27 Aug** (13 agents, 5 lenses, refutation pass). 25 findings
+raised, 8 verified, 3 survived. What was fixed:
+
+| | |
+|---|---|
+| React pad recorded every `toDraw` TWICE | the other three pass `NaN` on the deferred leg; React spread the sample. Its `n` was 2x the others', so it cleared the MIN_SAMPLES honesty gate on half the drawing. **Verified fixed: 25 moves now give n=25 on both pads, was 50 vs 25** |
+| React pad's `pointerdown` timestamp skipped `toHiRes()` | the only such path of five. On an epoch-clock WebView — the Tier C panels this exists to characterise — it produced a finite ~-1.7e12 ms sample that sailed past the NaN guard and destroyed the control's saved mean. The seed is gone entirely: it also timed a draw of ZERO points |
+| `shift()` at the sample cap | an O(n) memmove **on the pointer path** — closer to the hot path than anything the review filed. Now an amortised splice |
+| stale `rect` on scroll | the page scrolls; a stroke surviving one was offset for its whole length |
+| deferred React batch outliving its stroke | drew a line across the pad from the next stroke's origin. Batches are now stroke-scoped |
+| inverted pressure sentinels | a device reporting no pressure saved a range of "1 to 0" |
+| `observePointer`'s `seen` was optional | omitting it pinned `pressureDistinct` at 0 for ever, making Tier A silently unreachable |
+| auto-generated `OPTIONS` | replied 204 + `Allow` to anyone, contradicting this route's own 404-never-403 rule |
+| `JSON.parse("null")` | a valid-JSON non-object threw a TypeError -> 500 instead of 400 |
+| migration | added `revoke all from anon, authenticated` (0079/0086/0093 pattern), an index on `teacher_id` (it is the sole filter AND the FK — unindexed it taxes account deletion elsewhere), and a `lock_timeout` so DDL on a live DB fails rather than queues |
+| the gate | now takes the USER, not an address, so `email_confirmed_at` cannot be forgotten at a call site |
+
+Two claims were correctly REFUTED and are worth recording: the missing `revoke`
+was *not* a security hole (0080 and 0083 ship live tables in the same posture,
+and RLS holds writes shut regardless — it is a consistency and defence-in-depth
+fix), and the 1 Hz summariser's sorting does *not* corrupt `toDraw`, because
+`t0` is the newest coalesced timestamp, so a main-thread stall lands in the
+coalesced counts rather than in latency.
+
+**0096 IS APPLIED** (production, 27 Aug 2026, ledger version `20260827035459`,
+recorded as `present_probe`). Verified after the fact rather than trusted:
+table present, RLS on, exactly one policy and it is SELECT-only, three indexes,
+`anon`/`authenticated` grants **NONE**, FK `on delete set null`, and the route's
+exact insert shape proven by an insert rolled back so the table stayed empty.
+Supabase's security advisor raises **nothing** against it (the project's 151
+existing lints are all pre-existing and unrelated).
+
+`PRESENT_ALLOWED_EMAILS` is set in Vercel.
+
+**The only thing left before the gate can be called:** run it on real panels —
+including the worst one available, which is what defines Tier C.
+
 ## Phases (each gated by the one before)
 
 | # | Phase | Gate |
 |---|---|---|
-| 0 | Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
+| 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | The board as a library — `src/board/`, zero app imports (model, capabilities, ink, render, roll, export-pdf, store) + dev gallery | 500 strokes over 10 pages at 60 fps; model round-trips; two exports identical |
-| 2 | Present mode in the app — `/present`, gate, context bar, kit rail + worksheet picker, stage, `present_items`, 0094, `/api/present/*` | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
+| 2 | Present mode in the app — `/present`, gate, context bar, kit rail + worksheet picker, stage, `present_items`, 0097, `/api/present/*` | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
