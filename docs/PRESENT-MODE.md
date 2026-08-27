@@ -343,17 +343,33 @@ including the worst one available, which is what defines Tier C.
 | # | Phase | Gate |
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
-| 1 | The board as a library — `src/board/`, zero app imports. **DONE: capabilities, model, ink, render, roll, export-pdf + `/preview/board` gallery. LEFT: store, and the gate itself.** | 500 strokes over 10 pages at 60 fps; model round-trips; two exports identical |
+| 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
 | 2 | Present mode in the app — `/present`, gate, context bar, kit rail + worksheet picker, stage, `present_items`, 0097, `/api/present/*` | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
-## Phase 1 so far
+## Phase 1 — done, and what it settled
 
-`src/board/` is `capabilities` + `model` + `ink` + `render` + `roll`, with
-`/preview/board` driving all of it from OUTSIDE the library — which is the test
-of whether the boundary holds, not a demo. Still to come: `store`, and the
-500-strokes-over-10-pages gate.
+`src/board/` is `capabilities` + `model` + `ink` + `render` + `roll` +
+`export-pdf` + `store`, with `/preview/board` driving all of it from OUTSIDE the
+library — which is the test of whether the boundary holds, not a demo.
+
+**The gate passed with room to spare.** 500 strokes over 10 pages: a full page
+repaint — what runs after every stroke ends — is p50 1.9ms and p95 3.6ms against
+a 16.7ms frame, about four and a half times under budget. The worst single
+sample was 25.3ms, one frame dropped right after a page wind, which is the cost
+of a cold repaint rather than a steady-state problem. **The page-quantised design
+is what buys this**: repaint is bounded by one page's fifty strokes, not by how
+long the lesson ran, so the number does not grow through the period.
+
+The store is local-first: the log is the truth and the roll is its fold, the same
+shape as the server's `present_strokes` table, so client and server reconcile by
+folding one sequence rather than diffing two snapshots. A failed flush KEEPS its
+records and retries oldest-first — dropping them would let the local board and
+the server disagree silently, and nobody would find out until a student opened a
+lesson with holes in it. IndexedDB missing (private window, old WebView) falls
+back to memory and reports `durable === false`, so a host can say the board will
+not survive a reload rather than implying it will.
 
 Three things the build settled that the plan had not:
 

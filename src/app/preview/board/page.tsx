@@ -4,7 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notFound } from "next/navigation";
 import { probeStatic, newObservations, profileFor, type CaptureProfile } from "@/board/capabilities";
 import type { TouchMode } from "@/board/ink";
-import { newRoll, PAGE_W, PAGE_H, type PageBackground, type Tool } from "@/board/model";
+import {
+  newRoll,
+  addPage,
+  addStroke,
+  pageStrokes,
+  PAGE_W,
+  PAGE_H,
+  type PageBackground,
+  type Stroke,
+  type Tool,
+} from "@/board/model";
+import { percentile } from "@/board/capabilities";
 import type { Rect } from "@/board/render";
 import { RollView, type RollHandle } from "@/board/roll";
 import { exportRoll, pdfPageCount, pdfPathCount, warmExport } from "@/board/export-pdf";
@@ -44,6 +55,7 @@ function Board() {
   const [where, setWhere] = useState({ page: 0, count: 1 });
   const [strokes, setStrokes] = useState(0);
   const [pdf, setPdf] = useState<string | null>(null);
+  const [gate, setGate] = useState<string | null>(null);
 
   // Pay pdf-lib's dynamic import while she is teaching, not when she presses
   // Export at the bell.
@@ -107,6 +119,66 @@ function Board() {
     a.download = "board.pdf";
     a.click();
     URL.revokeObjectURL(url);
+  }, [roll]);
+
+  /**
+   * THE PHASE 1 GATE: 500 strokes over 10 pages, still at 60 fps.
+   *
+   * What is actually timed is `repaint()` — a full redraw of one page from the
+   * backing store — because that is what runs after EVERY stroke ends. If a page
+   * carrying fifty strokes cannot repaint inside a frame, the teacher feels it
+   * as a hitch every time she lifts the pen, and the one-canvas design needs
+   * tiling. The wind between pages is given time to settle first so its own
+   * animation is not counted.
+   */
+  const runGate = useCallback(async () => {
+    setGate("building 500 strokes…");
+    const PAGES = 10;
+    const PER_PAGE = 50;
+    while (roll.pages.length < PAGES) addPage(roll, { kind: "blank" });
+    let n = 0;
+    for (let p = 0; p < PAGES; p++) {
+      for (let i = 0; i < PER_PAGE; i++) {
+        const pts: number[] = [];
+        const y = 60 + (i % PER_PAGE) * 16;
+        for (let k = 0; k <= 24; k++) {
+          pts.push(40 + k * 62, y + Math.sin(k / 3 + i) * 22, 0.6 + ((k + i) % 5) / 10);
+        }
+        const s: Stroke = {
+          id: `gate-${n++}`,
+          page: p,
+          tool: i % 7 === 0 ? "highlighter" : "pen",
+          color: i % 7 === 0 ? "#F5D547" : "#14181F",
+          width: i % 7 === 0 ? 26 : 4,
+          pts,
+        };
+        addStroke(roll, s);
+      }
+    }
+
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const samples: number[] = [];
+    for (let p = 0; p < PAGES; p++) {
+      board.current?.goTo(p);
+      await wait(420); // let the wind settle so its animation is not timed
+      for (let k = 0; k < 12; k++) {
+        const t0 = performance.now();
+        board.current?.repaint();
+        samples.push(performance.now() - t0);
+        await wait(8);
+      }
+    }
+    const p50 = percentile(samples, 50) ?? 0;
+    const p95 = percentile(samples, 95) ?? 0;
+    const worst = Math.max(...samples);
+    setWhere({ page: 0, count: roll.pages.length });
+    setStrokes(roll.strokes.length);
+    setGate(
+      `${roll.strokes.length} strokes / ${roll.pages.length} pages · ` +
+        `repaint p50 ${p50.toFixed(1)}ms · p95 ${p95.toFixed(1)}ms · worst ${worst.toFixed(1)}ms · ` +
+        `${p95 < 16.7 ? "WITHIN a 60fps frame" : "OVER a 60fps frame"} · ` +
+        `page 0 has ${pageStrokes(roll, 0).length}`,
+    );
   }, [roll]);
 
   const btn =
@@ -196,6 +268,9 @@ function Board() {
           <button type="button" className={btn} onClick={onExport}>
             Export
           </button>
+          <button type="button" className={btn} onClick={runGate}>
+            Gate
+          </button>
         </aside>
       </div>
 
@@ -204,6 +279,7 @@ function Board() {
         touch draws by default: {profile.touchDrawsDefault ? "yes" : "no"}
         {pdf ? ` · pdf ${pdf}` : ""}
       </p>
+      {gate && <p className="mt-1 font-mono text-[11px] text-[#0C8175]">GATE · {gate}</p>}
     </main>
   );
 }
