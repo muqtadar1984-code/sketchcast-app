@@ -811,7 +811,7 @@
     "card": {
       "watchLesson": "Assistir à aula",
       "trialOnePart": "{part} · seu teste cobre uma parte",
-      "notGenerated": "Ainda não gerado · 1 crédito",
+      "notGenerated": "Ainda não gerado",
       "generateKit": "Gerar kit"
     },
     "kit": {

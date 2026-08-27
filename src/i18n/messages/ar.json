@@ -811,7 +811,7 @@
     "card": {
       "watchLesson": "شاهد الدرس",
       "trialOnePart": "{part} · تجربتك تشمل جزءًا واحدًا",
-      "notGenerated": "لم يُنشأ بعد · رصيد واحد",
+      "notGenerated": "لم يُنشأ بعد",
       "generateKit": "أنشئ الحزمة"
     },
     "kit": {

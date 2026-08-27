@@ -811,7 +811,7 @@
     "card": {
       "watchLesson": "Tonton pelajaran",
       "trialOnePart": "{part} · percubaan anda merangkumi satu bahagian",
-      "notGenerated": "Belum dijana · 1 kredit",
+      "notGenerated": "Belum dijana",
       "generateKit": "Jana kit"
     },
     "kit": {

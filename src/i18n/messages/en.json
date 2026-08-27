@@ -811,7 +811,7 @@
     "card": {
       "watchLesson": "Watch the lesson",
       "trialOnePart": "{part} · your trial covers one part",
-      "notGenerated": "Not generated yet · 1 credit",
+      "notGenerated": "Not generated yet",
       "generateKit": "Generate kit"
     },
     "kit": {

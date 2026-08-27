@@ -811,7 +811,7 @@
     "card": {
       "watchLesson": "పాఠం చూడండి",
       "trialOnePart": "{part} · మీ ట్రయల్‌లో ఒక భాగం",
-      "notGenerated": "ఇంకా తయారు కాలేదు · 1 క్రెడిట్",
+      "notGenerated": "ఇంకా తయారు కాలేదు",
       "generateKit": "కిట్ తయారు చేయండి"
     },
     "kit": {

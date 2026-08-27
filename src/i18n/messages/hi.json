@@ -811,7 +811,7 @@
     "card": {
       "watchLesson": "पाठ देखें",
       "trialOnePart": "{part} · आपके ट्रायल में एक भाग है",
-      "notGenerated": "अभी नहीं बना · 1 क्रेडिट",
+      "notGenerated": "अभी नहीं बना",
       "generateKit": "किट बनाएँ"
     },
     "kit": {

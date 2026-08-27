@@ -3,16 +3,32 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { kitRows } from "./kit";
+import { kitRows, kitUnitsFor } from "./kit";
 import { defaultNarrationForGrade } from "@/utils/narration";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 
-type Chapter = { num: number; title: string };
+type Chapter = { num: number; title: string; partCount: number };
 
 // Generates the full KIT (lesson + five documents, 0059) for every chapter
 // passed in (the parent passes only the chapters without a lesson). Each row
 // fires the on_generation_created trigger → one job each.
+//
+// PER PART, not per chapter (founder decision 2026-08-27). A chapter with a
+// part map used to get ONE chapter-level kit: a single presentation that
+// rendered as N video parts, plus one set of documents for the whole chapter.
+// The Library then still showed N empty "Generate kit" rows underneath it, so
+// the same chapter appeared twice — once as a block of Pt chips, once as a list
+// of rows asking for more credits. Sara hit exactly that on a 4-part Magnetism
+// chapter. Queuing the parts themselves means the rows the teacher can see are
+// the rows that fill in, and each part gets its own worksheet, activity and
+// case study for the week it is taught.
+//
+// ONE PART AT A TIME. Each part is its own INSERT, so its rows carry a later
+// created_at than the part before — and claim_next_job orders by created_at.
+// Part 1 builds while the rest sit visibly queued, then part 2 starts. Batching
+// them into a single statement would give every row the same timestamp and let
+// the queue pick them in any order.
 export default function GenerateAllButton({
   bookId,
   schoolId,
@@ -52,9 +68,16 @@ export default function GenerateAllButton({
 
   async function onGenerateAll(confirmed: boolean) {
     setGateOpen(false);
+    // Say the real size of the click. The old text promised "Documents are
+    // free", which the ledger has never agreed with: every artifact is one
+    // credit (fair_use_used sums them all), so a 6-artifact kit is 6.
+    const totalKits = chapters.reduce((n, c) => n + Math.max(1, c.partCount), 0);
+    const kitsWord = totalKits === 1 ? "kit" : "kits";
     if (
       !confirm(
-        `Generate the full kit (lesson + documents) for ${chapters.length} chapter(s)? Documents are free; each lesson costs one credit per rendered part (long chapters render as several parts).`,
+        `Generate ${totalKits} ${kitsWord} across ${chapters.length} chapter(s)? ` +
+          `A chapter with several parts gets one kit per part, built one after another. ` +
+          `Each kit is a lesson plus five documents, and every generated item costs one credit.`,
       )
     )
       return;
@@ -74,20 +97,29 @@ export default function GenerateAllButton({
     // already queued instead of aborting the whole run.
     let queued = 0;
     let stopError: string | null = null;
-    for (const c of chapters) {
+    // Chapter, then part within it — the order the teacher reads the Library in,
+    // and the order the queue will build them in.
+    const units = kitUnitsFor(chapters);
+    for (const u of units) {
       const rows = kitRows({
         bookId,
         schoolId,
         userId: user.id,
-        chapterNum: c.num,
+        chapterNum: u.chapterNum,
+        part: u.part,
         language,
         narrationStyle: defaultNarrationForGrade(bookGrade),
         // The record that the teacher was warned — on EVERY row this run queues.
       }).map((r) => (confirmed ? { ...r, params: stampConfirmation(r.params) } : r));
       const { error: gErr } = await supabase.from("generations").insert(rows);
       if (gErr) {
+        // Name the unit that stopped it: "chapter 9" is not enough to find when
+        // the run was queuing part 3 of it.
+        const where = u.part
+          ? `chapter ${u.chapterNum + 1} part ${u.part}`
+          : `chapter ${u.chapterNum + 1}`;
         stopError = queued
-          ? `Queued ${queued} kit${queued === 1 ? "" : "s"}, then stopped at chapter ${c.num + 1}: ${gErr.message}`
+          ? `Queued ${queued} kit${queued === 1 ? "" : "s"}, then stopped at ${where}: ${gErr.message}`
           : gErr.message;
         break;
       }

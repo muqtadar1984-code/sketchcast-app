@@ -68,7 +68,9 @@ export type BookRow = {
   totalChapters: number;
   presentationIds: string[];
   chapters: ChapterRow[];
-  pendingChapters: { num: number; title: string }[];
+  /** Chapters with no kit yet. partCount is the index-time part map's size —
+   *  "Generate all" queues one kit PER PART, so it needs the count. */
+  pendingChapters: { num: number; title: string; partCount: number }[];
   otherLessons: (CellLesson & { title: string })[];
   /** Lessons queued via "Generate selected" (params.batch) — own section at the book's end. */
   batchLessons: (CellLesson & { title: string; kind: string; chapterRef: string | null })[];

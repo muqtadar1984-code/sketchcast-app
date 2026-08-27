@@ -811,7 +811,7 @@
     "card": {
       "watchLesson": "धडा पाहा",
       "trialOnePart": "{part} · तुमच्या चाचणीत एकच भाग",
-      "notGenerated": "अजून तयार नाही · 1 क्रेडिट",
+      "notGenerated": "अजून तयार नाही",
       "generateKit": "संच तयार करा"
     },
     "kit": {

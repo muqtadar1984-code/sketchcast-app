@@ -851,11 +851,18 @@ export default async function DashboardPage() {
       // chapter whose parts already have kits must not get a chapter-level
       // kit on top (it would duplicate the part videos and charge one credit
       // per rendered part, 0059).
-      pendingChapters: chs.filter(
-        (c) =>
-          !lessonForChapter(b.id, c.num) &&
-          !(c.parts ?? []).some((_, i) => lessonFor(b.id, c.num, "presentation", i + 1)),
-      ),
+      pendingChapters: chs
+        .filter(
+          (c) =>
+            !lessonForChapter(b.id, c.num) &&
+            !(c.parts ?? []).some((_, i) => lessonFor(b.id, c.num, "presentation", i + 1)),
+        )
+        // partCount travels with the chapter because "Generate all" now queues a
+        // kit PER PART (founder decision 2026-08-27) rather than one
+        // chapter-level kit. Without it the button cannot know how many rows a
+        // chapter is worth, and Sara's Magnetism produced a chapter-level block
+        // ABOVE four still-empty part rows — the same chapter offered twice.
+        .map((c) => ({ num: c.num, title: c.title, partCount: c.parts?.length ?? 0 })),
       // Revision papers (0061): standalone worksheets/exams over a group of
       // chapters, in their own section. Cumulative ones carry params.chapters.
       revisionPapers: lessons
