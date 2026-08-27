@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { resolveContext, type LastTaught, type PresentContext } from "@/utils/present/context";
 import { GROUP_LABEL, type PickerGroup } from "@/utils/present/kit";
+import BoardSession, { type SessionInfo } from "./board-session";
 import type { Slot, TimetableShape } from "@/utils/timetable";
 
 // The context bar and the kit rail.
@@ -180,6 +181,43 @@ export default function PresentClient({
 
   const choose = useCallback((id: string) => setPicked(key ? { key, id } : null), [key]);
 
+  // The running lesson. Starting one is a server round trip because the session
+  // id is what every later write is scoped to — strokes, items, the close.
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  const start = useCallback(async () => {
+    if (!bookId || chapter === null) return;
+    setStarting(true);
+    setStartError(null);
+    try {
+      const r = await fetch("/api/present/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          bookId,
+          chapterNum: chapter,
+          classId: ctx?.classId ?? null,
+          subject: ctx?.subject ?? null,
+          slotDay: ctx?.day ?? null,
+          slotPeriod: ctx?.period?.period ?? null,
+        }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!r.ok || !d.id) throw new Error(d.error || `Could not start (${r.status})`);
+      setSession({ id: d.id, bookId, chapterNum: chapter, part: null });
+    } catch (e) {
+      // Starting is the one action where a silent failure is unacceptable: she
+      // taps it and turns to the class.
+      setStartError(e instanceof Error ? e.message : "Could not start the board.");
+    } finally {
+      setStarting(false);
+    }
+  }, [bookId, chapter, ctx]);
+
+  const endSession = useCallback(() => setSession(null), []);
+
   return (
     <main className="min-h-dvh bg-[#0F1417] text-[#E7EDE9]">
       {/* Dark, because it sits above a lit board in a room with the lights down,
@@ -231,49 +269,42 @@ export default function PresentClient({
         </div>
       </header>
 
-      {ready ? (
+      {session ? (
+        <BoardSession session={session} kit={kit} onEnd={endSession} />
+      ) : ready ? (
         <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">
           <aside className="grid content-start gap-2">
             <h2 className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
               Chapter kit
             </h2>
-
             {loading && <p className="text-sm text-[#93A09A]">Loading…</p>}
             {kitError && <p className="text-sm text-[#E58A93]">{kitError}</p>}
 
             {kit?.video && (
-              <button
-                type="button"
-                className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-start text-sm text-[#4FD6C2]"
-              >
+              <div className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-sm text-[#4FD6C2]">
                 ▶ Video
                 <span className="mt-0.5 block font-mono text-[10px] opacity-70">
                   {kit.video.urls.length > 1 ? `${kit.video.urls.length} parts` : "ready"}
                 </span>
-              </button>
+              </div>
             )}
 
             {kit?.docs.map((d) => (
-              <button
+              <div
                 key={d.id}
-                type="button"
-                onClick={() => (d.projects ? choose(d.id) : undefined)}
-                className={`rounded-xl border px-3 py-3 text-start text-sm ${
+                className={`rounded-xl border px-3 py-3 text-sm ${
                   d.projects
                     ? "border-[#2A363B] bg-[#141B1F] text-[#E7EDE9]"
                     : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
                 }`}
               >
                 {d.label}
-                {/* The reason is SHOWN, not swallowed. A rail that silently
-                    omitted the test paper would read as a bug, and she would go
-                    looking for something that was working as intended. */}
                 {d.note && (
                   <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
                     {d.note}
                   </span>
                 )}
-              </button>
+              </div>
             ))}
 
             {kit && !kit.video && kit.docs.length === 0 && (
@@ -310,17 +341,21 @@ export default function PresentClient({
 
           <div className="grid place-items-center rounded-xl border border-[#222C30] bg-[#0B0F11] p-6 text-center">
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
-                The stage
-              </p>
+              <h1 className="text-2xl font-semibold tracking-tight">Ready when you are</h1>
               <p className="mt-2 max-w-md text-sm text-[#93A09A]">
-                The never-unmounting video and the roll land here next. The rail is
-                live: it reads your real kits, and it only offers a worksheet that
-                can actually go on a board.
+                Starting the board opens a session: the roll is saved as you write,
+                and what you show is recorded so the lesson note can be about the
+                concept rather than the timetable.
               </p>
-              {pickedId && (
-                <p className="mt-3 font-mono text-[11px] text-[#4FD6C2]">selected: {pickedId}</p>
-              )}
+              <button
+                type="button"
+                onClick={start}
+                disabled={starting}
+                className="mt-5 rounded-xl bg-[#0C8175] px-6 py-3 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {starting ? "Starting…" : "Start the board"}
+              </button>
+              {startError && <p className="mt-3 text-sm text-[#E58A93]">{startError}</p>}
             </div>
           </div>
         </section>
@@ -328,7 +363,7 @@ export default function PresentClient({
         <section className="grid place-items-center px-4" style={{ minHeight: "70dvh" }}>
           <div className="text-center">
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
-              Present mode · Phase 2 in progress
+              Present mode
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">
               Choose what you are teaching

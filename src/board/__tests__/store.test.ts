@@ -218,3 +218,47 @@ describe("the store", () => {
     expect(await log.all()).toHaveLength(0);
   });
 });
+
+describe("linking a void to the stroke it voids", () => {
+  it("carries the STROKE RECORD's seq, not the stroke's own id", () => {
+    // A stroke has two different numbers — the id the board minted and the seq
+    // this log assigned — and only the store knows both. A server holding rows
+    // keyed by seq would otherwise have to parse one out of the other, which is
+    // a guess that works right up until the id format changes.
+    const log = new MemoryLog();
+    const s = new BoardStore("r1", { log });
+    return (async () => {
+      await s.open();
+      await s.addStroke(stroke({ id: "a" }));
+      await s.addStroke(stroke({ id: "b" }));
+      await s.voidStroke("b");
+      const records = await log.all();
+      const v = records.find((r) => r.kind === "void") as { targetSeq?: number } | undefined;
+      expect(v?.targetSeq).toBe(1); // b was the second record
+    })();
+  });
+
+  it("still links a stroke drawn BEFORE a reload", async () => {
+    // The map is rebuilt on open, or a stroke from earlier in the lesson could
+    // never be undone in a way the server could match.
+    const log = new MemoryLog();
+    const a = new BoardStore("r1", { log });
+    await a.open();
+    await a.addStroke(stroke({ id: "early" }));
+
+    const b = new BoardStore("r1", { log });
+    await b.open();
+    await b.voidStroke("early");
+    const v = (await log.all()).find((r) => r.kind === "void") as { targetSeq?: number } | undefined;
+    expect(v?.targetSeq).toBe(0);
+  });
+
+  it("leaves the target undefined for a stroke this device never saw", async () => {
+    // Which a merge of two devices' logs makes possible. Undefined is a fact the
+    // server can act on; a guessed number is not.
+    const s = new BoardStore("r1", { log: new MemoryLog() });
+    await s.open();
+    await s.voidStroke("from-another-device");
+    expect(s.unsent).toBe(0); // local-only, nothing to flush
+  });
+});

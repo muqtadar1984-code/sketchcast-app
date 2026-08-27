@@ -27,7 +27,23 @@ import {
 export type LogRecord =
   | { kind: "stroke"; seq: number; stroke: Stroke }
   | { kind: "page"; seq: number; index: number; background: PageBackground }
-  | { kind: "void"; seq: number; strokeId: string };
+  | {
+      kind: "void";
+      seq: number;
+      strokeId: string;
+      /**
+       * The seq of the STROKE RECORD this voids.
+       *
+       * A stroke carries two different numbers — the id the board minted for it
+       * and the sequence this log assigned it — and only the store knows both.
+       * Without carrying the link, a server holding rows keyed by sequence has
+       * to guess which stroke an id refers to, and parsing it out of the id is
+       * a guess that works until the id format changes. Undefined when the void
+       * arrives for a stroke this store never saw, which a merge of two devices
+       * makes possible.
+       */
+      targetSeq?: number;
+    };
 
 /** Somewhere to append records and read them back in order. */
 export interface StrokeLog {
@@ -209,6 +225,8 @@ export class BoardStore {
   private readonly intervalMs: number;
   private pending: LogRecord[] = [];
   private seq = 0;
+  /** stroke id -> the seq of the record that carried it. */
+  private strokeSeq = new Map<string, number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private flushing = false;
   /** False when IndexedDB was unavailable and this is memory-only. */
@@ -243,6 +261,9 @@ export class BoardStore {
     }
     const records = await this.log.all().catch(() => [] as LogRecord[]);
     this.seq = records.reduce((m, r) => Math.max(m, r.seq), -1) + 1;
+    // Rebuilt on open, or a stroke drawn before a reload could never be voided
+    // in a way the server could match.
+    for (const r of records) if (r.kind === "stroke") this.strokeSeq.set(r.stroke.id, r.seq);
     return replay(this.rollId, records);
   }
 
@@ -259,7 +280,9 @@ export class BoardStore {
   }
 
   addStroke(stroke: Stroke): Promise<void> {
-    return this.record({ kind: "stroke", seq: this.seq++, stroke });
+    const seq = this.seq++;
+    this.strokeSeq.set(stroke.id, seq);
+    return this.record({ kind: "stroke", seq, stroke });
   }
 
   addPage(index: number, background: PageBackground): Promise<void> {
@@ -267,7 +290,12 @@ export class BoardStore {
   }
 
   voidStroke(strokeId: string): Promise<void> {
-    return this.record({ kind: "void", seq: this.seq++, strokeId });
+    return this.record({
+      kind: "void",
+      seq: this.seq++,
+      strokeId,
+      targetSeq: this.strokeSeq.get(strokeId),
+    });
   }
 
   private schedule(): void {
@@ -307,6 +335,7 @@ export class BoardStore {
   async reset(): Promise<void> {
     this.pending = [];
     this.seq = 0;
+    this.strokeSeq.clear();
     await this.log.clear().catch(() => {});
   }
 

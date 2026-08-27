@@ -344,7 +344,7 @@ including the worst one available, which is what defines Tier C.
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
-| 2 | Present mode in the app — **IN PROGRESS: 0097 APPLIED, the context resolver, `/present` with the bar, the kit rail + worksheet picker, and the stage. LEFT: the session API, wiring the board in.** | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
+| 2 | Present mode in the app — **BUILT** — 0097 applied, context resolver, `/present` with the bar, kit rail + worksheet picker, the stage, the session API (`session` / `sync` / `items`), and the board assembled behind it. ⚠️ **The gate below is UNRUN** — it needs a signed-in teacher and a panel. | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
@@ -459,6 +459,32 @@ A break belongs to the period AFTER it, because a teacher opening the board
 during the interval is setting up for the next lesson; after the last period the
 answer is null rather than the last period of the day, because pre-filling a
 finished period would have her confirm something simply wrong.
+
+**The pointer decision is made on the SERVER, at close.** The client knows what
+it showed; the server decides what that means, reading `present_items` and
+applying `advancesPointer`. A rule enforced in a browser holds only until
+somebody writes a second client, and this is the rule the whole schema is shaped
+around. Closing is idempotent: a panel that loses its network at the bell retries,
+and the second attempt must neither fail nor advance the pointer twice.
+
+**A void carries the sequence of the stroke it voids.** A stroke has two numbers
+— the id the board minted and the seq the log assigned — and only the store knows
+both. The first version of the sync route parsed one out of the other, which
+works right up until the id format changes; the store now carries the link, and
+rebuilds it on open so a stroke drawn before a reload can still be undone in a
+way the server can match. A void with no target — possible when two devices'
+logs merge — is dropped rather than guessed at.
+
+## Phase 2's gate is UNRUN
+
+The plan's gate is "a full mock lesson on the panel — including the part's
+worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh
+that loses nothing, and a last-taught pointer that did NOT move because of the
+revision paper." None of that has been run: it needs a signed-in teacher, real
+kits and a panel, and the pieces have only been verified individually —
+element identity in `/preview/stage`, the roll and its export in
+`/preview/board`, the resolver and the kit rules in unit tests, and every gate
+by an unauthenticated request. **Phase 2 is built, not proven.**
 
 ## Going public — the release steps that are easy to miss
 
