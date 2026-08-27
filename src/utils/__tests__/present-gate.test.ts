@@ -16,7 +16,12 @@ import { presentAllowed } from "../flags";
 //     with no other gate to catch it.
 
 const KEY = "PRESENT_ALLOWED_EMAILS";
-const FOUNDER = "muqtadar1984@gmail.com";
+// A PLACEHOLDER, deliberately not the live allowlisted address. The allowlist is
+// a temporary gate — Present mode is being tested on one account before it goes
+// to the public — so a test that hardcoded the real value would encode something
+// designed to change, in a public repo, for no gain: what is under test is the
+// matching logic, and that is identical whichever address it runs on.
+const FOUNDER = "founder@example.test";
 const CONFIRMED = "2026-01-01T00:00:00Z";
 
 /** A signed-in, email-VERIFIED account. presentAllowed takes the user rather
@@ -71,8 +76,8 @@ describe("presentAllowed — who gets in", () => {
   });
 
   it("is case-insensitive on both sides", () => {
-    process.env[KEY] = "Muqtadar1984@GMAIL.com";
-    expect(presentAllowed(asUser("MUQTADAR1984@gmail.COM"))).toBe(true);
+    process.env[KEY] = "Founder@EXAMPLE.test";
+    expect(presentAllowed(asUser("FOUNDER@example.TEST"))).toBe(true);
   });
 
   it("tolerates whitespace and a trailing comma around entries", () => {
@@ -138,15 +143,15 @@ describe("presentAllowed — refuses to widen", () => {
     // as equal would widen an access gate on an assumption about one provider's
     // routing rules. An allowlist should only ever narrow when in doubt.
     process.env[KEY] = FOUNDER;
-    expect(presentAllowed(asUser("muqtadar1984+probe@gmail.com"))).toBe(false);
-    expect(presentAllowed(asUser("muqtadar.1984@gmail.com"))).toBe(false);
+    expect(presentAllowed(asUser("founder+probe@example.test"))).toBe(false);
+    expect(presentAllowed(asUser("foun.der@example.test"))).toBe(false);
   });
 
   it("does not match on prefix, suffix or substring", () => {
     process.env[KEY] = FOUNDER;
-    expect(presentAllowed(asUser("muqtadar1984@gmail.com.attacker.test"))).toBe(false);
-    expect(presentAllowed(asUser("xmuqtadar1984@gmail.com"))).toBe(false);
-    expect(presentAllowed(asUser("muqtadar1984@gmail.co"))).toBe(false);
+    expect(presentAllowed(asUser("founder@example.test.attacker.invalid"))).toBe(false);
+    expect(presentAllowed(asUser("xfounder@example.test"))).toBe(false);
+    expect(presentAllowed(asUser("founder@example.tes"))).toBe(false);
   });
 
   it("never treats a wildcard as a wildcard", () => {

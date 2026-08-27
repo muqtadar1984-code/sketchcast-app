@@ -269,6 +269,31 @@ including the worst one available, which is what defines Tier C.
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
+## Going public — the release steps that are easy to miss
+
+The allowlist is a TEMPORARY gate: Present mode is being proven on one account
+before it reaches teachers. Two things about that are not obvious from the code.
+
+1. **The probe must not go public with Present mode.** `/present/probe` is a page
+   of four canvases and latency percentiles — measurement scaffolding, useful to
+   exactly one person for exactly one decision. It currently shares
+   `presentAllowed()` with everything Present mode will add, so **the moment
+   `PRESENT_ALLOWED_EMAILS` widens to a pilot group, the harness widens with
+   it.** When Phase 0 closes: delete `src/app/present/probe/`,
+   `src/app/preview/board-probe/`, `src/app/api/present/probe/` and drop the
+   `present_probe` table. Keep `src/board/capabilities.ts` — that is the part
+   that ships inside the board. Deleting is better than a second flag: a page
+   with no users should not survive as a permanent thing to keep gated.
+2. **Widening is a change of mechanism, not just of value.** An email allowlist
+   is right for one tester and wrong for a cohort — it has no notion of plan,
+   school or trial. The step after "my ID" is a per-school config key
+   (`schools.config`, as calendar/notices/timetable already do) or a plan gate,
+   with `PRESENT_ALLOWED_EMAILS` kept as the staff override. Nothing in the
+   schema assumes one user: `present_*` rows are keyed by teacher and confined
+   by RLS, and the capture tier is per-device.
+
+Nothing else about Phase 0 is load-bearing for the public release.
+
 ## Out of scope
 
 AI drawing on the board (TAL stays parked) · **test papers on the board**
