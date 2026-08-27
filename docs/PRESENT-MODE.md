@@ -157,10 +157,25 @@ with a low-latency canvas.
 Two rules fall out of this, and they hold on every platform, so the board follows
 them rather than feature-detecting:
 
-* **Paint the paper INTO a desynchronised canvas.** Never let the page show
-  through, and never `clearRect` it to transparent — clear it to paper.
-* **Never stack anything above one.** The tool rail is DOM beside the canvas, not
-  over it. Anything that must appear over the ink is drawn into the same bitmap.
+* **A desynchronised canvas must be opaque, by declaration and by paint.**
+  Create it `alpha: false`, fill it with paper across the whole BITMAP (device
+  pixels — filling in CSS pixels leaves a sub-pixel fringe when the bitmap size
+  rounds up), and never `clearRect` it: clear it to paper.
+* **Never stack another DESYNCHRONISED canvas above one** — this is the hard
+  rule, and breaking it is what turned the prediction pad black. A transparent
+  overlay on top is opaque, and it wins.
+* **Prefer not to stack anything above one at all** — this is the soft rule, and
+  it costs latency rather than correctness. A normal DOM element over a promoted
+  canvas does not turn black; Chromium's occlusion handling either declines the
+  promotion or makes it an underlay with the overlapping region punched through.
+  So an overlapping toast or popover is safe to render and merely risks giving
+  back the 3.7ms the promotion bought. Keep the tool rail beside the canvas, put
+  content that belongs to the page into the bitmap, and treat anything that must
+  float over the ink as a latency trade made on purpose.
+
+  This distinction matters for Phase 2: the parked corner video, a worksheet
+  popover and a confirm dialog are all ordinary DOM over the stage, and none of
+  them is forbidden.
 
 **The roll** — vertical only, quantised into pages of **1600 x 900 logical
 units**: one screen, one 16:9 frame, one landscape PDF page, the same rectangle

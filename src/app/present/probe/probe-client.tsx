@@ -231,18 +231,50 @@ function fitCanvas(
   canvas.height = Math.max(1, Math.round(rect.height * dpr));
   const ctx = canvas.getContext(
     "2d",
-    desynchronized ? { desynchronized: true, alpha: true } : undefined,
+    // alpha:FALSE on the desynchronized path. Painting paper in is discipline —
+    // one missed code path and a transparent pixel is back. Declaring the canvas
+    // opaque makes it structural: the compositor is told there is nothing to
+    // blend, which is also the honest description of a surface we intend to be
+    // paper. It does not replace paint() (an alpha:false canvas starts BLACK,
+    // not white) and it is why wipe() must never touch this canvas: clearRect on
+    // an opaque context clears to black, not to nothing.
+    desynchronized ? { desynchronized: true, alpha: false } : undefined,
   ) as CanvasRenderingContext2D | null;
   if (!ctx) return null;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (desynchronized) paint(ctx, rect.width, rect.height);
+  if (desynchronized) paint(ctx);
   return ctx;
 }
 
-/** Fill a canvas with paper. The opaque background a desynchronized canvas needs. */
-function paint(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+/**
+ * Fill a canvas with paper — the opaque background a desynchronized canvas needs.
+ *
+ * DEVICE PIXELS, not CSS pixels, and that is the whole point. The bitmap is
+ * `Math.round(cssWidth * dpr)`, which ROUNDS UP as often as down, so filling
+ * `cssWidth` under a dpr transform can leave a sub-pixel column at the right or
+ * bottom edge unwritten. On an ordinary canvas that is invisible. On a
+ * desynchronized one every unwritten pixel is a transparent pixel, and a
+ * transparent pixel on a promoted overlay is black — a hairline of exactly the
+ * bug this function exists to prevent. Resetting the transform also makes it
+ * immune to a stale devicePixelRatio (a window dragged to a monitor at a
+ * different scale), because it stops depending on dpr at all.
+ */
+function paint(ctx: CanvasRenderingContext2D): void {
+  const c = ctx.canvas;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = PAPER;
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.restore();
+}
+
+/** Erase to transparent — safe ONLY on a canvas that is not desynchronized. */
+function wipe(ctx: CanvasRenderingContext2D): void {
+  const c = ctx.canvas;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.restore();
 }
 
 // PointerEvent.getPredictedEvents is not in every TS lib yet.
@@ -308,9 +340,13 @@ function Pad({
     // NEVER desynchronized, even on the desync pad. This canvas is stacked ABOVE
     // the ink canvas, and a desynchronized overlay is opaque — as itself this
     // layer was what hid the prediction pad's ink completely. It has to be a
-    // normal, genuinely transparent canvas so the ink below shows through. It
-    // costs nothing measurable: only the real ink's draw is timed, never the
-    // throwaway lead.
+    // normal, genuinely transparent canvas so the ink below shows through.
+    //
+    // The predict pad's timestamp is taken AFTER the lead is cleared and drawn,
+    // so its input-to-draw DOES include that work. That is deliberate and it is
+    // what the strategy costs — but an earlier version of this comment claimed
+    // the opposite, so: the number is predict's real cost, not desync's cost
+    // with a free extra. Compare the two knowing that.
     if (lead) leadCtxRef.current = fitCanvas(lead, false);
     rectRef.current = ink.getBoundingClientRect();
   }, [desynchronized]);
@@ -450,8 +486,7 @@ function Pad({
         const lead = leadCtxRef.current;
         const leadCanvas = leadRef.current;
         if (lead && leadCanvas) {
-          const dpr = window.devicePixelRatio || 1;
-          lead.clearRect(0, 0, leadCanvas.width / dpr, leadCanvas.height / dpr);
+          wipe(lead);
           const predicted = native.getPredictedEvents?.() ?? [];
           let prev = lastRef.current;
           for (const p of predicted) {
@@ -482,11 +517,7 @@ function Pad({
         /* nothing to release */
       }
       const lead = leadCtxRef.current;
-      const leadCanvas = leadRef.current;
-      if (lead && leadCanvas) {
-        const dpr = window.devicePixelRatio || 1;
-        lead.clearRect(0, 0, leadCanvas.width / dpr, leadCanvas.height / dpr);
-      }
+      if (lead) wipe(lead);
       onStroke(strategy, strokePoints.current, strokeCoalesced.current);
     },
     [onStroke, strategy],
@@ -496,13 +527,12 @@ function Pad({
     const ink = inkRef.current;
     const ctx = ctxRef.current;
     if (ink && ctx) {
-      const dpr = window.devicePixelRatio || 1;
-      const w = ink.width / dpr;
-      const h = ink.height / dpr;
       // Clearing a desynchronized canvas to transparent clears it to BLACK on
-      // screen — see fitCanvas. Paper, not nothing.
-      if (desynchronized) paint(ctx, w, h);
-      else ctx.clearRect(0, 0, w, h);
+      // screen — see paint(). Paper, not nothing. Both paths work in device
+      // pixels so neither depends on devicePixelRatio still being what it was
+      // when the canvas was fitted.
+      if (desynchronized) paint(ctx);
+      else wipe(ctx);
     }
     lastRef.current = null;
   };
@@ -632,7 +662,21 @@ export default function ProbeClient() {
   // Frame health: the refresh rate we actually get, and how often a frame is
   // missed. A panel that claims 60 Hz and delivers 45 under load is a finding in
   // itself, and it would be invisible in a latency percentile alone.
-  const frames = useRef<{ deltas: number[]; last: number }>({ deltas: [], last: 0 });
+  // `deltas` is a ROLLING window and drives the live refresh-rate readout. The
+  // two totals are CUMULATIVE and never roll, which is the whole point:
+  // longFrames used to be counted from the rolling window on both the screen and
+  // the saved row, so a panel that stuttered while being drawn on and then sat
+  // idle for ten seconds before Save recorded ZERO. That was observed — a run
+  // showed "6/600" on screen and stored 0 — and it erases exactly the signal a
+  // panel test exists to capture. `budget` is the frame time to judge against,
+  // refreshed once a second from the rolling median so the rAF tick never sorts.
+  const frames = useRef<{
+    deltas: number[];
+    last: number;
+    budget: number;
+    framesTotal: number;
+    longTotal: number;
+  }>({ deltas: [], last: 0, budget: 0, framesTotal: 0, longTotal: 0 });
 
   // ONE snapshot, published on a 1 Hz timer. Observations and frame deltas are
   // written thousands of times a second on the pointer path; rendering from them
@@ -659,10 +703,16 @@ export default function ProbeClient() {
     const tick = (t: number) => {
       const f = frames.current;
       if (f.last) {
-        f.deltas.push(t - f.last);
+        const d = t - f.last;
+        f.deltas.push(d);
         // ~10s at 60 Hz. Bounded so a probe left open all afternoon does not
         // grow an array until the tab dies.
         if (f.deltas.length > 600) f.deltas.shift();
+        f.framesTotal++;
+        // Judged against a budget cached by the 1 Hz timer — comparing against a
+        // freshly-sorted median here would put a sort in the frame loop, which is
+        // the one place this file refuses to spend anything.
+        if (f.budget && d > f.budget * 1.5) f.longTotal++;
       }
       f.last = t;
       raf = requestAnimationFrame(tick);
@@ -670,8 +720,10 @@ export default function ProbeClient() {
     raf = requestAnimationFrame(tick);
 
     const id = setInterval(() => {
-      const d = frames.current.deltas;
+      const f = frames.current;
+      const d = f.deltas;
       const med = percentile(d, 50);
+      if (med && med > 0) f.budget = med;
       const o = obs.current;
       const cur = statsRef.current;
       setLive({
@@ -688,8 +740,8 @@ export default function ProbeClient() {
           predict: summarise(cur.predict),
         },
         refreshHz: med && med > 0 ? Math.round(1000 / med) : null,
-        longFrames: med ? d.filter((x) => x > med * 1.5).length : 0,
-        framesSampled: d.length,
+        longFrames: f.longTotal,
+        framesSampled: f.framesTotal,
         clock: clockRef.current,
       });
     }, 1000);
@@ -735,8 +787,8 @@ export default function ProbeClient() {
    *  save must never miss the last second of drawing. */
   const report = useCallback(() => {
     const o = obs.current;
-    const d = frames.current.deltas;
-    const med = percentile(d, 50);
+    const f = frames.current;
+    const med = percentile(f.deltas, 50);
     const refreshHz = med && med > 0 ? Math.round(1000 / med) : null;
     const strategies = Object.fromEntries(
       STRATEGIES.map(({ key }) => {
@@ -782,8 +834,9 @@ export default function ProbeClient() {
         clock: clockRef.current ?? "unknown",
         refreshHz,
         frameBudgetMs: refreshHz ? 1000 / refreshHz : null,
-        longFrames: med ? d.filter((x) => x > med * 1.5).length : 0,
-        framesSampled: d.length,
+        // Cumulative for the whole session, NOT the last ten seconds.
+        longFrames: f.longTotal,
+        framesSampled: f.framesTotal,
         strategies,
         tier: caps ? tierFor(caps, o) : null,
         profile: caps ? profileFor(caps, o) : null,
@@ -921,7 +974,14 @@ export default function ProbeClient() {
               {row("tilt seen", o.sawTilt)}
               {row("coalesced mean", o.coalescedSamples ? coalescedMean(o).toFixed(2) : "")}
               {row("coalesced max", o.coalescedMax)}
-              {row("long frames", `${live.longFrames}/${live.framesSampled}`, live.longFrames > 0)}
+              {/* "0/0" reads as a broken instrument rather than as "no frames
+                  counted yet" — which is what it means before the first second,
+                  or in any context where requestAnimationFrame is paused. */}
+              {row(
+                "long frames",
+                live.framesSampled ? `${live.longFrames}/${live.framesSampled}` : "",
+                live.longFrames > 0,
+              )}
               {row("clock", live.clock ?? "", live.clock === "epoch")}
             </div>
           </section>
