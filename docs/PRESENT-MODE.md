@@ -344,7 +344,7 @@ including the worst one available, which is what defines Tier C.
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
-| 2 | Present mode in the app — **IN PROGRESS: 0097 APPLIED, the context resolver, `/present` with the bar, and the kit rail + worksheet picker. LEFT: the stage, the session API, wiring the board in.** | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
+| 2 | Present mode in the app — **IN PROGRESS: 0097 APPLIED, the context resolver, `/present` with the bar, the kit rail + worksheet picker, and the stage. LEFT: the session API, wiring the board in.** | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
@@ -434,6 +434,24 @@ made. A classroom panel is woken at 07:00 and Period 6 is at 13:15, so a one-hou
 URL would have expired by mid-morning and the video would fail in front of a
 class with nothing on screen to say why. This is the "panel woken early" case the
 plan flagged, and the fix is the TTL rather than a retry.
+
+**The stage is one `<video>`, rendered unconditionally.** Not behind `src &&`,
+not behind a mode check — only the style of its fixed container changes. The
+moment a video is conditionally rendered into a different parent, React unmounts
+it and it reloads from zero in front of the class. `away` translates it
+off-screen at zero opacity rather than using `display: none`, because a browser
+is within its rights to deprioritise or unload media that is not displayed.
+Verified in `/preview/stage`: the same DOM node, and exactly one video, across
+full -> corner -> away -> full.
+
+**Freeze-frame needs CORS, and CORS needs the attribute.** Capturing a frame is
+`drawImage(video)` into a canvas, and a canvas that has drawn a CROSS-ORIGIN
+video is tainted — `toBlob` throws SecurityError. Checked against a real signed
+URL rather than assumed: the artifacts bucket answers
+`access-control-allow-origin: *` and honours Range (206). But the browser only
+makes it a CORS request if `crossOrigin` is on the element BEFORE it loads, so
+the attribute is in the JSX; assigning it after `src` has no effect. Verified end
+to end: a 640x360 JPEG blob out of a real clip.
 
 The resolver also owns `advancesPointer`, the rule the schema is shaped around:
 only the slot's OWN video or kit worksheet may move `present_last_taught`.
