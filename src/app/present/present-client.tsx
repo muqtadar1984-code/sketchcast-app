@@ -1,17 +1,15 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
-import {
-  resolveContext,
-  type LastTaught,
-  type PresentContext,
-} from "@/utils/present/context";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { resolveContext, type LastTaught, type PresentContext } from "@/utils/present/context";
+import { GROUP_LABEL, type PickerGroup } from "@/utils/present/kit";
 import type { Slot, TimetableShape } from "@/utils/timetable";
 
-// The context bar: what the board knows before she taps anything.
+// The context bar and the kit rail.
 //
-// THE CLOCK IS THE PANEL'S. Resolved here rather than on the server because the
-// server is in UTC and the classroom is not. A period is a local-time fact.
+// THE CLOCK IS THE PANEL'S. The context is resolved here rather than on the
+// server because the server is in UTC and the classroom is not. A period is a
+// local-time fact.
 //
 // The bar reports its own confidence rather than presenting a guess with the
 // same weight as a fact. Her timetable naming the class is one thing; a
@@ -32,6 +30,22 @@ export type BookOption = {
   chapters: { num: number; title?: string; parts?: unknown[] }[];
 };
 
+type RailDoc = {
+  id: string;
+  kind: string;
+  label: string;
+  projects: boolean;
+  note?: string;
+  title: string | null;
+  download: string | null;
+};
+
+type Kit = {
+  video: { id: string; title: string | null; urls: string[] } | null;
+  docs: RailDoc[];
+  picker: { group: PickerGroup; items: { id: string; label: string; title: string | null }[] }[];
+};
+
 type Props = {
   teacherId: string;
   teacherName: string | null;
@@ -46,9 +60,9 @@ type Props = {
 //
 // A ticking clock is an external system, so it is read through
 // useSyncExternalStore rather than pushed into state from an effect. The
-// snapshot keeps a STABLE identity between minutes: returning a fresh object
-// every call would make React re-render forever, and returning a new Date()
-// would do it sixty times a second.
+// snapshot keeps a STABLE identity between minutes: returning a fresh object on
+// every call would re-render for ever, and returning a new Date() would do it
+// sixty times a second.
 
 /** JS Sunday=0; timetable_slots uses Monday=1. */
 const timetableDay = (d: Date) => ((d.getDay() + 6) % 7) + 1;
@@ -106,8 +120,8 @@ export default function PresentClient({
     return resolveContext({ teacherId, shape, slots, lastTaught, day: now.day, minutes: now.minutes });
   }, [now, teacherId, shape, slots, lastTaught]);
 
-  // DERIVED, not synced. An effect that copied the suggestion into state would
-  // have to be careful never to overwrite a choice she had already made; a null
+  // DERIVED, not synced. An effect copying the suggestion into state would have
+  // to be careful never to overwrite a choice she had already made; a null
   // `pick` meaning "she has not chosen" needs no such care, and it makes
   // "explicitly cleared" a state the suggestion cannot quietly undo.
   const [pick, setPick] = useState<{ book: string | null; chapter: number | null } | null>(null);
@@ -117,13 +131,59 @@ export default function PresentClient({
   const klass = classes.find((c) => c.id === ctx?.classId) ?? null;
   const book = books.find((b) => b.id === bookId) ?? null;
   const chapters = book?.chapters ?? [];
-
   const ready = !!bookId && chapter !== null;
+
+  // The rail, fetched once she has named a book and chapter.
+  //
+  // THE RESULT CARRIES THE SELECTION IT WAS FETCHED FOR, and what renders is
+  // whatever matches the CURRENT one. That does two jobs with one mechanism.
+  // It keeps every setState on an async path — clearing state synchronously in
+  // an effect cascades a render, and React's compiler refuses it. And it makes
+  // a late response from a superseded selection structurally unable to land: a
+  // `live` flag closes the window, a key comparison closes the question.
+  const key = bookId && chapter !== null ? `${bookId}|${chapter}` : null;
+  const [loaded, setLoaded] = useState<{ key: string; kit: Kit | null; error: string | null } | null>(
+    null,
+  );
+  const [picked, setPicked] = useState<{ key: string; id: string } | null>(null);
+
+  useEffect(() => {
+    if (!key || !bookId || chapter === null) return;
+    let live = true;
+    const q = new URLSearchParams({ book: bookId, chapter: String(chapter) });
+    fetch(`/api/present/kit?${q.toString()}`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(r.status === 404 ? "Not available." : `Failed (${r.status})`);
+        return (await r.json()) as Kit;
+      })
+      .then((k) => {
+        if (live) setLoaded({ key, kit: k, error: null });
+      })
+      .catch((e: unknown) => {
+        // A rail that fails silently looks like a chapter with no kit, which is
+        // a very different thing from a request that broke.
+        if (live) {
+          setLoaded({ key, kit: null, error: e instanceof Error ? e.message : "Could not load the kit." });
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [key, bookId, chapter]);
+
+  const current = loaded && loaded.key === key ? loaded : null;
+  const kit = current?.kit ?? null;
+  const kitError = current?.error ?? null;
+  const loading = !!key && !current;
+  // A selection made on another chapter is not a selection on this one.
+  const pickedId = picked && picked.key === key ? picked.id : null;
+
+  const choose = useCallback((id: string) => setPicked(key ? { key, id } : null), [key]);
 
   return (
     <main className="min-h-dvh bg-[#0F1417] text-[#E7EDE9]">
-      {/* The bar. Dark, because it sits above a lit board in a room with the
-          lights down, and because it must read from the back of the class. */}
+      {/* Dark, because it sits above a lit board in a room with the lights down,
+          and because it must read from the back of the class. */}
       <header className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
         <Chip label="Grade" value={klass?.grade ?? "—"} />
         <Chip label="Subject" value={ctx?.subject ?? "—"} />
@@ -155,6 +215,7 @@ export default function PresentClient({
           <option value="">Chapter…</option>
           {chapters.map((c) => (
             <option key={c.num} value={c.num}>
+              {/* chapter_ref is 0-based in the database and rendered +1. */}
               {c.title ? `${c.num + 1}. ${c.title}` : `Chapter ${c.num + 1}`}
             </option>
           ))}
@@ -170,33 +231,118 @@ export default function PresentClient({
         </div>
       </header>
 
-      <section className="grid place-items-center px-4" style={{ minHeight: "70dvh" }}>
-        <div className="text-center">
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
-            Present mode · Phase 2 in progress
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            {ready ? "Ready to start the board" : "Choose what you are teaching"}
-          </h1>
-          <p className="mt-2 max-w-md text-sm text-[#93A09A]">
-            {ctx?.confidence === "slot"
-              ? "Your timetable filled in the class and subject. The book and chapter come from where this class got to last time."
-              : ctx?.confidence === "period"
-                ? "A period is running, but your timetable has no lesson for you in it."
-                : "No timetable for right now — pick what you are teaching."}
-          </p>
-          <button
-            type="button"
-            disabled={!ready}
-            className="mt-5 rounded-xl bg-[#0C8175] px-6 py-3 text-sm font-medium text-white disabled:opacity-40"
-          >
-            Start the board
-          </button>
-          <p className="mt-3 font-mono text-[11px] text-[#5F6F69]">
-            The kit rail, the stage and the roll land next.
-          </p>
-        </div>
-      </section>
+      {ready ? (
+        <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">
+          <aside className="grid content-start gap-2">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
+              Chapter kit
+            </h2>
+
+            {loading && <p className="text-sm text-[#93A09A]">Loading…</p>}
+            {kitError && <p className="text-sm text-[#E58A93]">{kitError}</p>}
+
+            {kit?.video && (
+              <button
+                type="button"
+                className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-start text-sm text-[#4FD6C2]"
+              >
+                ▶ Video
+                <span className="mt-0.5 block font-mono text-[10px] opacity-70">
+                  {kit.video.urls.length > 1 ? `${kit.video.urls.length} parts` : "ready"}
+                </span>
+              </button>
+            )}
+
+            {kit?.docs.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => (d.projects ? choose(d.id) : undefined)}
+                className={`rounded-xl border px-3 py-3 text-start text-sm ${
+                  d.projects
+                    ? "border-[#2A363B] bg-[#141B1F] text-[#E7EDE9]"
+                    : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
+                }`}
+              >
+                {d.label}
+                {/* The reason is SHOWN, not swallowed. A rail that silently
+                    omitted the test paper would read as a bug, and she would go
+                    looking for something that was working as intended. */}
+                {d.note && (
+                  <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
+                    {d.note}
+                  </span>
+                )}
+              </button>
+            ))}
+
+            {kit && !kit.video && kit.docs.length === 0 && (
+              <p className="text-sm text-[#93A09A]">Nothing generated for this chapter yet.</p>
+            )}
+
+            {!!kit?.picker.length && (
+              <>
+                <h2 className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
+                  Other worksheets
+                </h2>
+                {kit.picker.map((g) => (
+                  <div key={g.group} className="grid gap-1">
+                    <p className="font-mono text-[10px] text-[#5F6F69]">{GROUP_LABEL[g.group]}</p>
+                    {g.items.map((i) => (
+                      <button
+                        key={i.id}
+                        type="button"
+                        onClick={() => choose(i.id)}
+                        className={`rounded-lg border px-3 py-2 text-start text-sm ${
+                          pickedId === i.id
+                            ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
+                            : "border-[#2A363B] bg-[#141B1F] text-[#C2CCC7]"
+                        }`}
+                      >
+                        {i.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </>
+            )}
+          </aside>
+
+          <div className="grid place-items-center rounded-xl border border-[#222C30] bg-[#0B0F11] p-6 text-center">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
+                The stage
+              </p>
+              <p className="mt-2 max-w-md text-sm text-[#93A09A]">
+                The never-unmounting video and the roll land here next. The rail is
+                live: it reads your real kits, and it only offers a worksheet that
+                can actually go on a board.
+              </p>
+              {pickedId && (
+                <p className="mt-3 font-mono text-[11px] text-[#4FD6C2]">selected: {pickedId}</p>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="grid place-items-center px-4" style={{ minHeight: "70dvh" }}>
+          <div className="text-center">
+            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
+              Present mode · Phase 2 in progress
+            </p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+              Choose what you are teaching
+            </h1>
+            <p className="mt-2 max-w-md text-sm text-[#93A09A]">
+              {ctx?.confidence === "slot"
+                ? "Your timetable filled in the class and subject. Pick the book and chapter to see the kit."
+                : ctx?.confidence === "period"
+                  ? "A period is running, but your timetable has no lesson for you in it."
+                  : "No timetable for right now — pick what you are teaching."}
+            </p>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

@@ -344,7 +344,7 @@ including the worst one available, which is what defines Tier C.
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
-| 2 | Present mode in the app — **STARTED: migration 0097 written (NOT applied), the context resolver, and `/present` with the bar. LEFT: kit rail + worksheet picker, the stage, session API, wiring the board in.** | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
+| 2 | Present mode in the app — **IN PROGRESS: 0097 APPLIED, the context resolver, `/present` with the bar, and the kit rail + worksheet picker. LEFT: the stage, the session API, wiring the board in.** | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
@@ -403,7 +403,7 @@ now lands the slide and takes the stroke.
 
 ## Phase 2 so far
 
-Migration **0097** is written and NOT applied — five tables: `present_sessions`,
+Migration **0097** is APPLIED (production, 27 Aug) — five tables: `present_sessions`,
 `present_pages`, `present_strokes`, `present_items`, `present_last_taught`.
 Student visibility is deliberately absent; every policy is the teacher reading
 her own rows, and the roll reaches students in Phase 3 against a PUBLISHED recap
@@ -419,6 +419,21 @@ Two things the context bar settled:
   `none` (no timetable, outside hours, or a non-teaching day). A guess must not
   look like a fact, and `none` is the permanent state of every independent
   teacher, so it has to look deliberate rather than broken.
+
+**The kit rail shows what it will not do, and why.** A test paper appears in the
+rail marked download-only rather than being hidden: she generated it, she knows
+it exists, and a rail that silently omitted it would read as a bug and send her
+looking for something that was working as intended. The note says "a paper the
+class has watched is no longer a test", which teaches the rule once instead of
+hiding it for ever. A lesson plan is also download-only, for a different reason —
+no structured text to put on a board — and says so separately.
+
+**Present mode signs artifact URLs for EIGHT hours, not one.** Every other
+surface uses 3600s and is right to: a Library link is clicked seconds after it is
+made. A classroom panel is woken at 07:00 and Period 6 is at 13:15, so a one-hour
+URL would have expired by mid-morning and the video would fail in front of a
+class with nothing on screen to say why. This is the "panel woken early" case the
+plan flagged, and the fix is the TTL rather than a retry.
 
 The resolver also owns `advancesPointer`, the rule the schema is shaped around:
 only the slot's OWN video or kit worksheet may move `present_last_taught`.
