@@ -580,7 +580,7 @@
         "added": "Added"
       },
       "parentCompose": {
-        "open": "Write a note about {name}",
+        "open": "Write a note to {name}'s teacher",
         "placeholder": "A private note for {name}'s teachers — e.g. absence, medication, something from home…",
         "letChildSee": "Let {name} see this note too",
         "letChildSeeHint": "Off by default — you, {name}'s teachers and school leadership can read it, but {name} cannot."

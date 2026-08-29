@@ -580,7 +580,7 @@
         "added": "Ditambah"
       },
       "parentCompose": {
-        "open": "Tulis nota tentang {name}",
+        "open": "Tulis nota kepada guru {name}",
         "placeholder": "Nota peribadi untuk guru {name} — cth. ketidakhadiran, ubat, sesuatu dari rumah…",
         "letChildSee": "Benarkan {name} melihat nota ini juga",
         "letChildSeeHint": "Dimatikan secara lalai — anda, guru {name} dan pimpinan sekolah boleh membacanya, tetapi {name} tidak."

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
-import HeaderNav, { type NavTab } from "./header-nav";
+import HeaderNav from "./header-nav";
 import MobileNav from "./mobile-nav";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
@@ -19,6 +19,7 @@ import {
 } from "@/utils/flags";
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
 import { headerFit } from "@/utils/header-fit";
+import { tabsFor, tabsForHat } from "@/utils/nav-tabs";
 import { activeHatCookie } from "@/utils/hats-server";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -38,126 +39,6 @@ import { fmt } from "@/i18n/format";
 // tab builders take the `nav` slice rather than repeating the strings: one tab
 // exists in exactly one place, in ten languages.
 type NavMessages = Dictionary["nav"];
-
-// One-hat-at-a-time tabs (FEATURE_ROLE_HATS): only the ACTIVE hat's world
-// renders — a principal in Teacher mode sees a plain teacher header, nothing
-// leadership. Presentation only; every page keeps its own server-side gates.
-function tabsForHat(
-  t: NavMessages["tabs"],
-  hat: Hat,
-  analyticsOn: boolean,
-  calendarOn: boolean,
-  timetableOn: boolean,
-  diaryOn: boolean,
-  /** Test Papers is a SCHOOL-portal surface: only parents the school
-   * provisioned (a parent_links row with source='school') get the tab.
-   * Consumer parents — Home Basic and homeschool alike — author from the
-   * Library (founder, 2026-08-18). */
-  testPapersOn: boolean,
-): NavTab[] {
-  const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: t.calendar }] : [];
-  const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : [];
-  if (hat === "teacher")
-    return [
-      { href: "/dashboard", label: t.library },
-      { href: "/dashboard/analytics", label: t.myAnalytics },
-      ...diary,
-      // School-linked teachers get THEIR schedule (read-only, plus cover duties).
-      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: t.timetable }] : []),
-      ...calendar,
-    ];
-  if (hat === "parent")
-    // Parents get the full authoring facilities directly (founder,
-    // 2026-07-19) — no switching to a teacher hat to reach the Library.
-    return [
-      { href: "/dashboard", label: t.library },
-      { href: "/dashboard/analytics", label: t.myAnalytics },
-      { href: "/dashboard/children", label: t.myChildren },
-      ...diary,
-      ...(testPapersOn ? [{ href: "/dashboard/test-papers", label: t.testPapers }] : []),
-      ...calendar,
-    ];
-  const tabs: NavTab[] = [];
-  if (analyticsOn) {
-    tabs.push(
-      { href: "/dashboard/school", label: t.school },
-      { href: "/dashboard/school/teachers", label: t.teachers },
-      { href: "/dashboard/school/access", label: t.access },
-    );
-    if (hat === "principal") tabs.push({ href: "/dashboard/school/admin", label: t.admin });
-    // The school's shelf. Leadership holds no Library tab at all, so without
-    // this there is nowhere for a principal to see what the school owns.
-    tabs.push({ href: "/dashboard/school/books", label: t.books });
-  }
-  // Leadership's diary is the read-only school surface, not the personal one.
-  if (diaryOn) tabs.push({ href: "/dashboard/school/diary", label: t.diary });
-  if (timetableOn) tabs.push({ href: "/dashboard/school/timetable", label: t.timetable });
-  tabs.push(...calendar);
-  // Invites (parents only since 0052 — teacher accounts are staff-managed)
-  // live under the Admin surface, not a top-level tab.
-  return tabs;
-}
-
-function tabsFor(
-  t: NavMessages["tabs"],
-  role: string | null,
-  hasScope: boolean,
-  hasChildren: boolean,
-  testPapersOn: boolean,
-  analyticsOn: boolean,
-  calendarOn: boolean,
-  timetableOn: boolean,
-  diaryOn: boolean,
-  /** The student's own landing page label — `student.title`, "My lessons". It
-   * lives outside nav.tabs because the page owns it, so it is passed in rather
-   * than duplicated into the tab dictionary. */
-  myLessons: string,
-): NavTab[] {
-  if (!role || role === "student") {
-    // A student's home IS /dashboard — "My lessons" — and it had NO tab. Every
-    // other role gets one for its landing page; students were the exception, so
-    // opening the Diary or the timetable left them with no way back but the
-    // browser's back button. They are also the least likely of anyone here to
-    // work that out.
-    return [
-      { href: "/dashboard", label: myLessons },
-      ...(diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : []),
-      ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: t.timetable }] : []),
-    ];
-  }
-  const tabs: NavTab[] = [
-    { href: "/dashboard", label: t.library },
-    { href: "/dashboard/analytics", label: t.myAnalytics },
-  ];
-  if (diaryOn) tabs.push({ href: "/dashboard/diary", label: t.diary });
-  if (calendarOn) tabs.push({ href: "/dashboard/calendar", label: t.calendar });
-  if (analyticsOn && (role === "school_admin" || hasScope)) {
-    tabs.push(
-      { href: "/dashboard/school", label: t.school },
-      { href: "/dashboard/school/teachers", label: t.teachers },
-      { href: "/dashboard/school/access", label: t.access },
-    );
-    if (role === "school_admin") tabs.push({ href: "/dashboard/school/admin", label: t.admin });
-    tabs.push({ href: "/dashboard/school/books", label: t.books });
-  }
-  if (timetableOn)
-    tabs.push(
-      role === "school_admin" || hasScope
-        ? { href: "/dashboard/school/timetable", label: t.timetable }
-        : { href: "/dashboard/my-timetable", label: t.timetable },
-    );
-  // Union view carries BOTH diary doors: the personal one above, and the
-  // leadership read-only surface (distinct label — two "Diary" tabs would be
-  // indistinguishable here).
-  if (diaryOn && (role === "school_admin" || hasScope))
-    tabs.push({ href: "/dashboard/school/diary", label: t.schoolDiary });
-  if (hasChildren) {
-    tabs.push({ href: "/dashboard/children", label: t.myChildren });
-    // School-provisioned parents only — see tabsForHat's note.
-    if (testPapersOn) tabs.push({ href: "/dashboard/test-papers", label: t.testPapers });
-  }
-  return tabs;
-}
 
 // The union-view descriptor beside the name ("teacher & coordinator"). The
 // combinations are whole messages rather than words glued with "&": the

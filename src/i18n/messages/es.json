@@ -580,7 +580,7 @@
         "added": "Agregada"
       },
       "parentCompose": {
-        "open": "Escribir una nota sobre {name}",
+        "open": "Escribir una nota al profesor de {name}",
         "placeholder": "Una nota privada para los profesores de {name} — p. ej. una ausencia, medicamentos, algo de casa…",
         "letChildSee": "Permitir que {name} también vea esta nota",
         "letChildSeeHint": "Desactivado por defecto — usted, los profesores de {name} y la dirección pueden leerla, pero {name} no."

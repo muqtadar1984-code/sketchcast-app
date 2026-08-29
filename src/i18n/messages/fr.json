@@ -580,7 +580,7 @@
         "added": "Ajouté"
       },
       "parentCompose": {
-        "open": "Écrire un mot au sujet de {name}",
+        "open": "Écrire un mot à l'enseignant de {name}",
         "placeholder": "Un mot privé pour les enseignants de {name} — ex. absence, traitement, un point venant de la maison…",
         "letChildSee": "Autoriser {name} à voir ce mot",
         "letChildSeeHint": "Désactivé par défaut — vous, les enseignants de {name} et la direction pouvez le lire, mais pas {name}."

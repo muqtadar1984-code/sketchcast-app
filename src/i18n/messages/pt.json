@@ -580,7 +580,7 @@
         "added": "Adicionado"
       },
       "parentCompose": {
-        "open": "Escrever um recado sobre {name}",
+        "open": "Escrever um recado para o professor de {name}",
         "placeholder": "Um recado particular para os professores de {name} — ex.: falta, medicação, algo de casa…",
         "letChildSee": "Deixar {name} ver este recado também",
         "letChildSeeHint": "Desligado por padrão — você, os professores de {name} e a direção podem ler, mas {name} não."

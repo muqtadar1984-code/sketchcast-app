@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { calendarEnabledFor, noticesEnabledFor } from "@/utils/flags";
+import { activeHatCookie } from "@/utils/hats-server";
 import EventEditor, { type EditorClass, type EditableEvent, type EventEditorMessages } from "./event-editor";
 import NoticeComposer from "./notice-composer";
 import SubscribeButton from "./subscribe-button";
@@ -248,13 +249,30 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       : await supabase.from("classes").select("id, name").eq("teacher_id", user.id).order("name");
     editorClasses = (clsRaw ?? []) as EditorClass[];
   }
-  const canCreate = !!schoolId && (isAdmin || editorClasses.length > 0) && role !== "student";
+  // A PARENT reads this calendar; they never write to it (founder, 2026-08-29).
+  //
+  // For a parent-role account the controls were already absent, but by
+  // accident rather than by rule: canCreate needs a class they teach, and they
+  // teach none. The case that rule misses is the common one in a school — a
+  // TEACHER whose own child attends it. Wearing the parent hat they still own
+  // classes, so "Add event" rendered and, unlike everything else here, actually
+  // worked: se_teacher_write grants it on the strength of owns_class. Whether a
+  // school event gets created should not depend on which hat someone happens to
+  // be wearing, and a parent looking at their child's calendar should not be
+  // offered the school's authoring tools.
+  //
+  // RLS remains the real gate for a pure parent — se_admin_write,
+  // se_coordinator_write and se_teacher_write each demand standing a parent has
+  // none of. This makes the surface honest rather than making it safe.
+  const actingAsParent = role === "parent" || (await activeHatCookie()) === "parent";
+  const canCreate =
+    !actingAsParent && !!schoolId && (isAdmin || editorClasses.length > 0) && role !== "student";
   const canManage = (e: EventRow) =>
     e.source === "native" && (isAdmin || (!!e.class_id && editorClasses.some((c) => c.id === e.class_id)));
   // The composer's own gate: publishing a notice is a leadership act (0068's
   // se_coordinator_write gave coordinators their first write path). The card is
   // only offered where the feature is live and the person may actually publish.
-  const canPublishNotices = noticesOn && !!ownSchoolId && isLeadership;
+  const canPublishNotices = noticesOn && !actingAsParent && !!ownSchoolId && isLeadership;
 
   /** The event editor handles ordinary DATED calendar rows. A pure-deadline
    * notice has no starts_at for it to edit, so it hands back null and the row
