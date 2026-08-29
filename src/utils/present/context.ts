@@ -183,23 +183,48 @@ export function resolveContext(input: ResolveInput): PresentContext {
 }
 
 /**
- * Should this session move the class's pointer?
+ * Does this item count as teaching the session's own chapter?
  *
- * THE RULE THE WHOLE SCHEMA IS SHAPED AROUND. She can pull a cumulative revision
- * worksheet spanning chapters 1-5 onto the board during a lesson whose slot says
- * Chapter 4 Part 2. Advancing the pointer to chapter 5 because that is what was
- * on screen would open her next lesson on the wrong chapter, with nothing to
- * explain why. Only teaching the slot's OWN part counts as having taught it.
+ * THE RULE THE WHOLE SCHEMA IS SHAPED AROUND, and it is about the CHAPTER, not
+ * the part. She can pull a cumulative revision worksheet spanning chapters 1-5
+ * onto the board during a Chapter 4 lesson; that does not match, and the pointer
+ * must not move. Which PART she taught is not something she declares up front —
+ * the rail shows every part of the chapter and she opens what she needs — so the
+ * part is read off what she actually showed rather than checked against a
+ * declaration.
  */
 export function advancesPointer(
-  session: { book_id: string | null; chapter_num: number | null; part: number | null },
-  shown: { kind: "video" | "worksheet" | "blank"; bookId?: string | null; chapterNum?: number | null; part?: number | null },
+  session: { book_id: string | null; chapter_num: number | null },
+  shown: { kind: "video" | "worksheet" | "blank"; bookId?: string | null; chapterNum?: number | null },
 ): boolean {
   if (shown.kind === "blank") return false;
   if (!session.book_id || session.chapter_num === null) return false;
-  return (
-    shown.bookId === session.book_id &&
-    shown.chapterNum === session.chapter_num &&
-    (shown.part ?? null) === (session.part ?? null)
-  );
+  return shown.bookId === session.book_id && shown.chapterNum === session.chapter_num;
+}
+
+export type ShownItem = {
+  kind: "video" | "worksheet" | "blank";
+  bookId?: string | null;
+  chapterNum?: number | null;
+  part?: number | null;
+};
+
+/**
+ * Where the class actually got to, from what was shown.
+ *
+ * The FURTHEST part she opened that belonged to this chapter — she may work
+ * through parts 1 and 2 in one period, and the pointer should land on 2. Null
+ * when nothing she showed belonged to the session's own chapter, which is
+ * exactly the revision-lesson case: recorded in present_items, moving nothing.
+ */
+export function pointerFor(
+  session: { book_id: string | null; chapter_num: number | null },
+  items: ShownItem[],
+): { chapterNum: number; part: number | null } | null {
+  const own = items.filter((i) => advancesPointer(session, i));
+  if (!own.length || session.chapter_num === null) return null;
+  const parts = own
+    .map((i) => (typeof i.part === "number" ? i.part : null))
+    .filter((p): p is number => p !== null);
+  return { chapterNum: session.chapter_num, part: parts.length ? Math.max(...parts) : null };
 }

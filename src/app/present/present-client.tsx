@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { resolveContext, type LastTaught, type PresentContext } from "@/utils/present/context";
-import { GROUP_LABEL, type PickerGroup } from "@/utils/present/kit";
-import BoardSession, { type SessionInfo } from "./board-session";
+import { GROUP_LABEL } from "@/utils/present/kit";
+import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
 import type { Slot, TimetableShape } from "@/utils/timetable";
 
 // The context bar and the kit rail.
@@ -28,24 +28,11 @@ export type BookOption = {
   title: string;
   grade: string | null;
   subject: string | null;
-  chapters: { num: number; title?: string; parts?: unknown[] }[];
+  chapters: { num: number; title?: string }[];
 };
 
-type RailDoc = {
-  id: string;
-  kind: string;
-  label: string;
-  projects: boolean;
-  note?: string;
-  title: string | null;
-  download: string | null;
-};
-
-type Kit = {
-  video: { id: string; title: string | null; urls: string[] } | null;
-  docs: RailDoc[];
-  picker: { group: PickerGroup; items: { id: string; label: string; title: string | null }[] }[];
-};
+/** Exactly what /api/present/kit returns, and exactly what the board consumes. */
+type Kit = SessionKit;
 
 type Props = {
   teacherId: string;
@@ -132,6 +119,13 @@ export default function PresentClient({
   const klass = classes.find((c) => c.id === ctx?.classId) ?? null;
   const book = books.find((b) => b.id === bookId) ?? null;
   const chapters = book?.chapters ?? [];
+
+  // SHE PICKS A CHAPTER, NOT A PART. A long chapter is split into parts at index
+  // time and every kit is generated per part, so a rail that matched only
+  // part-less generations would find nothing at all and read "nothing generated
+  // for this chapter yet" while sitting on a full set. The rail returns every
+  // unit in the chapter instead, and she opens one once the board is running —
+  // which is also when she actually knows, since a period often spans two.
   const ready = !!bookId && chapter !== null;
 
   // The rail, fetched once she has named a book and chapter.
@@ -146,8 +140,6 @@ export default function PresentClient({
   const [loaded, setLoaded] = useState<{ key: string; kit: Kit | null; error: string | null } | null>(
     null,
   );
-  const [picked, setPicked] = useState<{ key: string; id: string } | null>(null);
-
   useEffect(() => {
     if (!key || !bookId || chapter === null) return;
     let live = true;
@@ -176,10 +168,6 @@ export default function PresentClient({
   const kit = current?.kit ?? null;
   const kitError = current?.error ?? null;
   const loading = !!key && !current;
-  // A selection made on another chapter is not a selection on this one.
-  const pickedId = picked && picked.key === key ? picked.id : null;
-
-  const choose = useCallback((id: string) => setPicked(key ? { key, id } : null), [key]);
 
   // The running lesson. Starting one is a server round trip because the session
   // id is what every later write is scoped to — strokes, items, the close.
@@ -206,7 +194,7 @@ export default function PresentClient({
       });
       const d = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!r.ok || !d.id) throw new Error(d.error || `Could not start (${r.status})`);
-      setSession({ id: d.id, bookId, chapterNum: chapter, part: null });
+      setSession({ id: d.id, bookId, chapterNum: chapter });
     } catch (e) {
       // Starting is the one action where a silent failure is unacceptable: she
       // taps it and turns to the class.
@@ -280,58 +268,58 @@ export default function PresentClient({
             {loading && <p className="text-sm text-[#93A09A]">Loading…</p>}
             {kitError && <p className="text-sm text-[#E58A93]">{kitError}</p>}
 
-            {kit?.video && (
-              <div className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-sm text-[#4FD6C2]">
-                ▶ Video
-                <span className="mt-0.5 block font-mono text-[10px] opacity-70">
-                  {kit.video.urls.length > 1 ? `${kit.video.urls.length} parts` : "ready"}
-                </span>
-              </div>
-            )}
-
-            {kit?.docs.map((d) => (
-              <div
-                key={d.id}
-                className={`rounded-xl border px-3 py-3 text-sm ${
-                  d.projects
-                    ? "border-[#2A363B] bg-[#141B1F] text-[#E7EDE9]"
-                    : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
-                }`}
-              >
-                {d.label}
-                {d.note && (
-                  <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
-                    {d.note}
-                  </span>
+            {kit?.units.map((u) => (
+              <div key={u.part === null ? "whole" : u.part} className="grid gap-1">
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
+                  {u.label}
+                </p>
+                {u.video && (
+                  <div className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-sm text-[#4FD6C2]">
+                    ▶ Video
+                    <span className="mt-0.5 block font-mono text-[10px] opacity-70">
+                      {u.video.urls.length > 1 ? `${u.video.urls.length} parts` : "ready"}
+                    </span>
+                  </div>
                 )}
+                {u.docs.map((d) => (
+                  <div
+                    key={d.id}
+                    className={`rounded-xl border px-3 py-3 text-sm ${
+                      d.projects
+                        ? "border-[#2A363B] bg-[#141B1F] text-[#E7EDE9]"
+                        : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
+                    }`}
+                  >
+                    {d.label}
+                    {d.note && (
+                      <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
+                        {d.note}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             ))}
 
-            {kit && !kit.video && kit.docs.length === 0 && (
+            {kit && !kit.units.length && (
               <p className="text-sm text-[#93A09A]">Nothing generated for this chapter yet.</p>
             )}
 
+            {/* Listed, not tappable: opening one is something the running board
+                does, and a button here that only highlighted itself would be a
+                control that looked like it had done something. */}
             {!!kit?.picker.length && (
               <>
                 <h2 className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-                  Other worksheets
+                  Also available on the board
                 </h2>
                 {kit.picker.map((g) => (
                   <div key={g.group} className="grid gap-1">
                     <p className="font-mono text-[10px] text-[#5F6F69]">{GROUP_LABEL[g.group]}</p>
                     {g.items.map((i) => (
-                      <button
-                        key={i.id}
-                        type="button"
-                        onClick={() => choose(i.id)}
-                        className={`rounded-lg border px-3 py-2 text-start text-sm ${
-                          pickedId === i.id
-                            ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
-                            : "border-[#2A363B] bg-[#141B1F] text-[#C2CCC7]"
-                        }`}
-                      >
+                      <p key={i.id} className="text-sm text-[#93A09A]">
                         {i.label}
-                      </button>
+                      </p>
                     ))}
                   </div>
                 ))}

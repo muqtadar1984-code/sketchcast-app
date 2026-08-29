@@ -5,6 +5,7 @@ import {
   slotFor,
   resolveContext,
   advancesPointer,
+  pointerFor,
   type LastTaught,
 } from "@/utils/present/context";
 import { DEFAULT_SHAPE, type Slot, type TimetableShape } from "@/utils/timetable";
@@ -175,27 +176,25 @@ describe("resolving the bar", () => {
 });
 
 describe("what may advance the class's pointer", () => {
-  const session = { book_id: "bk1", chapter_num: 4, part: 2 };
+  const session = { book_id: "bk1", chapter_num: 4 };
 
-  it("advances on the slot's OWN video or worksheet", () => {
-    expect(advancesPointer(session, { kind: "video", bookId: "bk1", chapterNum: 4, part: 2 })).toBe(true);
-    expect(advancesPointer(session, { kind: "worksheet", bookId: "bk1", chapterNum: 4, part: 2 })).toBe(true);
+  it("counts the session's OWN chapter, whichever part she opened", () => {
+    // She does not declare a part up front — the rail shows every part of the
+    // chapter and she opens what she needs — so the rule is about the chapter.
+    expect(advancesPointer(session, { kind: "video", bookId: "bk1", chapterNum: 4 })).toBe(true);
+    expect(advancesPointer(session, { kind: "worksheet", bookId: "bk1", chapterNum: 4 })).toBe(true);
   });
 
   it("REFUSES a revision worksheet from another chapter", () => {
     // The rule the whole schema is shaped around. Revising chapters 1-5 during a
     // Chapter 4 lesson must not claim chapter 5 is taught, or her next lesson
     // opens on the wrong chapter with nothing to explain why.
-    expect(advancesPointer(session, { kind: "worksheet", bookId: "bk1", chapterNum: 1, part: null })).toBe(false);
-    expect(advancesPointer(session, { kind: "worksheet", bookId: "bk1", chapterNum: null, part: null })).toBe(false);
-  });
-
-  it("refuses another part of the same chapter", () => {
-    expect(advancesPointer(session, { kind: "video", bookId: "bk1", chapterNum: 4, part: 3 })).toBe(false);
+    expect(advancesPointer(session, { kind: "worksheet", bookId: "bk1", chapterNum: 1 })).toBe(false);
+    expect(advancesPointer(session, { kind: "worksheet", bookId: "bk1", chapterNum: null })).toBe(false);
   });
 
   it("refuses another book entirely", () => {
-    expect(advancesPointer(session, { kind: "video", bookId: "bk2", chapterNum: 4, part: 2 })).toBe(false);
+    expect(advancesPointer(session, { kind: "video", bookId: "bk2", chapterNum: 4 })).toBe(false);
   });
 
   it("never advances on a blank board", () => {
@@ -204,7 +203,47 @@ describe("what may advance the class's pointer", () => {
 
   it("advances nothing when the session had no book to begin with", () => {
     expect(
-      advancesPointer({ book_id: null, chapter_num: null, part: null }, { kind: "video", bookId: "bk1" }),
+      advancesPointer({ book_id: null, chapter_num: null }, { kind: "video", bookId: "bk1" }),
     ).toBe(false);
+  });
+});
+
+describe("where the class actually got to", () => {
+  const session = { book_id: "bk1", chapter_num: 4 };
+
+  it("takes the FURTHEST part she opened in this chapter", () => {
+    // She may work through parts 1 and 2 in one period; the pointer lands on 2.
+    expect(
+      pointerFor(session, [
+        { kind: "video", bookId: "bk1", chapterNum: 4, part: 1 },
+        { kind: "worksheet", bookId: "bk1", chapterNum: 4, part: 2 },
+      ]),
+    ).toEqual({ chapterNum: 4, part: 2 });
+  });
+
+  it("IGNORES a revision paper's part when scoring how far she got", () => {
+    // A cumulative paper over chapters 1-5 is not progress through chapter 4.
+    expect(
+      pointerFor(session, [
+        { kind: "video", bookId: "bk1", chapterNum: 4, part: 1 },
+        { kind: "worksheet", bookId: "bk1", chapterNum: null, part: 9 },
+      ]),
+    ).toEqual({ chapterNum: 4, part: 1 });
+  });
+
+  it("returns null for a lesson spent entirely on revision", () => {
+    expect(
+      pointerFor(session, [{ kind: "worksheet", bookId: "bk1", chapterNum: 1, part: 1 }]),
+    ).toBeNull();
+  });
+
+  it("returns null when she showed nothing at all", () => {
+    expect(pointerFor(session, [])).toBeNull();
+  });
+
+  it("keeps the chapter with a null part when the chapter was never split", () => {
+    expect(
+      pointerFor(session, [{ kind: "video", bookId: "bk1", chapterNum: 4, part: null }]),
+    ).toEqual({ chapterNum: 4, part: null });
   });
 });

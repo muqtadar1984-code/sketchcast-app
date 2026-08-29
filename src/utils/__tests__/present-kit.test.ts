@@ -124,53 +124,67 @@ describe("grouping for the picker", () => {
   });
 });
 
-describe("the rail for one part", () => {
-  const here = { chapter: 3, part: 2 };
+describe("the rail for a chapter", () => {
+  const here = { chapter: 3 };
   const kit: KitGeneration[] = [
-    gen({ id: "vid", kind: "presentation", artifacts: [{ kind: "video_mp4", storage_path: "v.mp4" }] }),
-    gen({ id: "ws" }),
-    gen({ id: "paper", kind: "exam_paper" }),
-    gen({ id: "plan", kind: "lesson_plan", artifacts: [{ kind: "docx", storage_path: "p.docx" }] }),
-    gen({ id: "other-part", params: { part: 7 } }),
+    gen({ id: "vid1", kind: "presentation", params: { part: 1 }, artifacts: [{ kind: "video_mp4", storage_path: "v1.mp4" }] }),
+    gen({ id: "ws1", params: { part: 1 } }),
+    gen({ id: "paper1", kind: "exam_paper", params: { part: 1 } }),
+    gen({ id: "plan1", kind: "lesson_plan", params: { part: 1 }, artifacts: [{ kind: "docx", storage_path: "p.docx" }] }),
+    gen({ id: "vid2", kind: "presentation", params: { part: 2 }, artifacts: [{ kind: "video_mp4", storage_path: "v2.mp4" }] }),
+    gen({ id: "ws2", params: { part: 2 } }),
+    gen({ id: "far", chapter_ref: "8", params: { part: 1 } }),
     gen({ id: "rev", params: { revision: true } }),
   ];
 
-  it("finds this part's video and nothing else's", () => {
-    expect(railFor(kit, here).video?.id).toBe("vid");
+  it("RETURNS EVERY PART OF THE CHAPTER, not one", () => {
+    // Every kit is generated per part, so a rail scoped to a single part would
+    // make her declare which part she is teaching before it showed her anything
+    // — and a rail scoped to none would match nothing at all.
+    const units = railFor(kit, here);
+    expect(units.map((u) => u.part)).toEqual([1, 2]);
+    expect(units[0].video?.id).toBe("vid1");
+    expect(units[1].video?.id).toBe("vid2");
+  });
+
+  it("labels each unit with its place in the chapter", () => {
+    expect(railFor(kit, here).map((u) => u.label)).toEqual(["Part 1 of 2", "Part 2 of 2"]);
+  });
+
+  it("includes a chapter-level kit as its own unit, first", () => {
+    const units = railFor([...kit, gen({ id: "whole", params: {} })], here);
+    expect(units[0].part).toBeNull();
+    expect(units[0].label).toBe("Whole chapter");
   });
 
   it("INCLUDES the test paper, marked download-only, rather than hiding it", () => {
     // She generated it and knows it exists; a rail that silently omitted it
     // would read as a bug and she would go looking.
-    const paper = railFor(kit, here).docs.find((d) => d.kind === "exam_paper");
-    expect(paper).toBeDefined();
-    expect(paper!.projects).toBe(false);
-    expect(paper!.note).toContain("no longer a test");
+    const paper = railFor(kit, here)[0].docs.find((d) => d.kind === "exam_paper");
+    expect(paper?.projects).toBe(false);
+    expect(paper?.note).toContain("no longer a test");
   });
 
   it("marks a lesson plan download-only for a different reason, and says which", () => {
-    const plan = railFor(kit, here).docs.find((d) => d.kind === "lesson_plan");
-    expect(plan!.projects).toBe(false);
-    expect(plan!.note).toContain("no structured text");
+    const plan = railFor(kit, here)[0].docs.find((d) => d.kind === "lesson_plan");
+    expect(plan?.projects).toBe(false);
+    expect(plan?.note).toContain("no structured text");
   });
 
-  it("puts what projects at the top", () => {
-    const docs = railFor(kit, here).docs;
+  it("puts what projects at the top of each unit", () => {
+    const docs = railFor(kit, here)[0].docs;
     expect(docs[0].kind).toBe("worksheet");
     expect(docs[0].projects).toBe(true);
   });
 
-  it("leaves other parts and revision papers out of the rail", () => {
-    const ids = railFor(kit, here).docs.map((d) => d.id);
-    expect(ids).not.toContain("other-part");
+  it("leaves other chapters and revision papers out of the rail", () => {
+    const ids = railFor(kit, here).flatMap((u) => u.docs.map((d) => d.id));
+    expect(ids).not.toContain("far");
     expect(ids).not.toContain("rev");
   });
 
-  it("treats a chapter-level document as part 1's when the chapter has no parts", () => {
-    const chapterOnly = [gen({ id: "cw", params: {} })];
-    expect(railFor(chapterOnly, { chapter: 3, part: null }).docs.map((d) => d.id)).toEqual(["cw"]);
-    expect(railFor(chapterOnly, { chapter: 3, part: 1 }).docs.map((d) => d.id)).toEqual(["cw"]);
-    expect(railFor(chapterOnly, { chapter: 3, part: 2 }).docs).toHaveLength(0);
+  it("returns nothing for a chapter with no kits", () => {
+    expect(railFor(kit, { chapter: 99 })).toEqual([]);
   });
 });
 
@@ -192,6 +206,21 @@ describe("the picker", () => {
     expect(all).toEqual(["mine", "sibling", "far", "revision"]);
     expect(all).not.toContain("paper");
     expect(all).not.toContain("plan");
+  });
+
+  it("CARRIES WHERE EACH ONE SITS, so projecting it can be recorded truthfully", () => {
+    // Without this the board stamps the session's own chapter onto whatever she
+    // opened, and a cumulative revision paper reads as progress through the
+    // chapter she is teaching — the one mistake the pointer rule exists to stop.
+    const items = pickerFor(
+      [
+        gen({ id: "mine" }),
+        gen({ id: "cumulative", params: { revision: true, chapters: [0, 1, 2] }, chapter_ref: null }),
+      ],
+      here,
+    ).flatMap((g) => g.items);
+    expect(items.find((i) => i.id === "mine")).toMatchObject({ chapter: 3, part: 2 });
+    expect(items.find((i) => i.id === "cumulative")).toMatchObject({ chapter: null, part: null });
   });
 
   it("omits a group with nothing in it rather than showing an empty heading", () => {

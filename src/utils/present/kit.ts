@@ -147,69 +147,121 @@ const DOC_LABEL: Record<string, string> = {
   exam: "Exam",
 };
 
+export type RailUnit = {
+  /** null = a kit generated for the whole chapter rather than a part of it. */
+  part: number | null;
+  label: string;
+  video: { id: string; title: string | null } | null;
+  docs: RailDoc[];
+};
+
+function docFor(g: KitGeneration): RailDoc {
+  const label = DOC_LABEL[g.kind] ?? g.kind;
+  if (NEVER_PROJECT.has(g.kind)) {
+    return {
+      id: g.id,
+      kind: g.kind,
+      label,
+      projects: false,
+      note: "Download only — a paper the class has watched is no longer a test",
+    };
+  }
+  if (boardEligible(g)) return { id: g.id, kind: g.kind, label, projects: true };
+  return {
+    id: g.id,
+    kind: g.kind,
+    label,
+    projects: false,
+    note: "Download only — this kind has no structured text to put on a board",
+  };
+}
+
 /**
- * The kit for the part she is teaching.
+ * Everything generated for this chapter, grouped by the unit it belongs to.
  *
- * A test paper is INCLUDED and marked as download-only rather than hidden. She
- * generated it and she knows it exists; a rail that silently omitted it would
- * read as a bug, and she would go looking. Saying "download only — projecting it
- * would spend the paper" is the honest version, and it teaches the rule once
- * instead of hiding it for ever.
+ * NOT FILTERED TO ONE PART. A chapter is split into parts at index time and
+ * every kit is generated per part, so asking for "the chapter's kit" and
+ * matching only part-less generations finds nothing at all — the rail reads
+ * "nothing generated yet" while sitting on a full set. And a teacher should not
+ * have to declare which part she is about to teach before she can see what
+ * exists; she opens the chapter and the rail shows what is there.
+ *
+ * Chapter-level kits (a chapter that was never split) come first, then parts in
+ * order. Revision papers are deliberately absent — they belong to the picker,
+ * because they are a different KIND of thing rather than a place in the book.
  */
-export function railFor(
-  gens: KitGeneration[],
-  here: { chapter: number; part: number | null },
-): { video: KitGeneration | null; docs: RailDoc[] } {
+export function railFor(gens: KitGeneration[], here: { chapter: number }): RailUnit[] {
   const mine = gens.filter((g) => {
     if (isRevision(g)) return false;
     const s = scopeOf(g);
-    if (s.kind !== "part" && s.kind !== "chapter") return false;
-    if (s.chapter !== here.chapter) return false;
-    return s.kind === "part" ? s.part === here.part : here.part === null || here.part === 1;
+    return (s.kind === "part" || s.kind === "chapter") && s.chapter === here.chapter;
   });
 
-  const video = mine.find((g) => g.kind === "presentation" && hasArtifact(g, "video_mp4")) ?? null;
+  const byPart = new Map<number | null, KitGeneration[]>();
+  for (const g of mine) {
+    const s = scopeOf(g);
+    const key = s.kind === "part" ? s.part : null;
+    const list = byPart.get(key);
+    if (list) list.push(g);
+    else byPart.set(key, [g]);
+  }
 
-  const docs: RailDoc[] = mine
-    .filter((g) => g.kind !== "presentation")
-    .map((g) => {
-      if (NEVER_PROJECT.has(g.kind)) {
-        return {
-          id: g.id,
-          kind: g.kind,
-          label: DOC_LABEL[g.kind] ?? g.kind,
-          projects: false,
-          note: "Download only — a paper the class has watched is no longer a test",
-        };
-      }
-      if (boardEligible(g)) {
-        return { id: g.id, kind: g.kind, label: DOC_LABEL[g.kind] ?? g.kind, projects: true };
-      }
-      return {
-        id: g.id,
-        kind: g.kind,
-        label: DOC_LABEL[g.kind] ?? g.kind,
-        projects: false,
-        note: "Download only — this kind has no structured text to put on a board",
-      };
-    })
-    // Worksheet first: it is the one that goes on the board.
-    .sort((a, b) => Number(b.projects) - Number(a.projects) || a.label.localeCompare(b.label));
+  const parts = [...byPart.keys()].sort((a, b) => (a ?? 0) - (b ?? 0));
+  const total = parts.filter((p) => p !== null).length;
 
-  return { video, docs };
+  return parts.map((part) => {
+    const group = byPart.get(part)!;
+    const vid = group.find((g) => g.kind === "presentation" && hasArtifact(g, "video_mp4")) ?? null;
+    return {
+      part,
+      label: part === null ? "Whole chapter" : total > 1 ? `Part ${part} of ${total}` : `Part ${part}`,
+      video: vid ? { id: vid.id, title: vid.title } : null,
+      docs: group
+        .filter((g) => g.kind !== "presentation")
+        .map(docFor)
+        // What projects goes first: it is the one that reaches the board.
+        .sort((a, b) => Number(b.projects) - Number(a.projects) || a.label.localeCompare(b.label)),
+    };
+  });
 }
+
+export type PickerItem = {
+  id: string;
+  label: string;
+  title: string | null;
+  /**
+   * WHERE IT ACTUALLY SITS, carried so the item recorded when she projects it can
+   * be truthful. Stamping the session's own chapter onto whatever she opened
+   * would make a cumulative revision paper look like progress through the
+   * chapter she is teaching, and moving the class's pointer on that is the one
+   * mistake the pointer rule exists to prevent.
+   */
+  chapter: number | null;
+  part: number | null;
+};
 
 /** Every worksheet in this book that may reach the board, grouped for the picker. */
 export function pickerFor(
   gens: KitGeneration[],
   here: { chapter: number | null; part: number | null },
-): { group: PickerGroup; items: { id: string; label: string; title: string | null }[] }[] {
+): { group: PickerGroup; items: PickerItem[] }[] {
   const eligible = gens.filter(boardEligible);
   const out = GROUP_ORDER.map((group) => ({
     group,
     items: eligible
       .filter((g) => groupOf(g, here) === group)
-      .map((g) => ({ id: g.id, label: scopeLabel(g), title: g.title })),
+      .map((g) => {
+        const s = scopeOf(g);
+        return {
+          id: g.id,
+          label: scopeLabel(g),
+          title: g.title,
+          // A cumulative paper spans chapters, so it sits in NO chapter — null,
+          // which is exactly what advancesPointer refuses.
+          chapter: s.kind === "part" || s.kind === "chapter" ? s.chapter : null,
+          part: s.kind === "part" ? s.part : null,
+        };
+      }),
   }));
   return out.filter((g) => g.items.length > 0);
 }

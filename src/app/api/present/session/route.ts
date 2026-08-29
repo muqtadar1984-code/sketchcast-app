@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { caller, ownedSession, jsonBody, NOT_FOUND } from "@/utils/present/server";
-import { advancesPointer } from "@/utils/present/context";
+import { pointerFor, type ShownItem } from "@/utils/present/context";
 
 export const runtime = "nodejs";
 
@@ -79,16 +79,18 @@ export async function PATCH(request: Request) {
   type Item = { kind: string; detail: Record<string, unknown> | null };
   const items = (itemRows ?? []) as Item[];
 
-  const taught = items.some((i) =>
-    advancesPointer(
-      { book_id: session.book_id, chapter_num: session.chapter_num, part: session.part },
-      {
-        kind: i.kind === "video" || i.kind === "worksheet" ? i.kind : "blank",
-        bookId: typeof i.detail?.bookId === "string" ? i.detail.bookId : null,
-        chapterNum: typeof i.detail?.chapterNum === "number" ? i.detail.chapterNum : null,
-        part: typeof i.detail?.part === "number" ? i.detail.part : null,
-      },
-    ),
+  const shown: ShownItem[] = items.map((i) => ({
+    kind: i.kind === "video" || i.kind === "worksheet" ? i.kind : "blank",
+    bookId: typeof i.detail?.bookId === "string" ? i.detail.bookId : null,
+    chapterNum: typeof i.detail?.chapterNum === "number" ? i.detail.chapterNum : null,
+    part: typeof i.detail?.part === "number" ? i.detail.part : null,
+  }));
+  // Where she actually got to — the furthest part of THIS chapter that she
+  // opened. Null when nothing she showed belonged to it, which is the revision
+  // lesson: recorded in present_items, moving nothing.
+  const reached = pointerFor(
+    { book_id: session.book_id, chapter_num: session.chapter_num },
+    shown,
   );
 
   const { error } = await c.admin
@@ -100,20 +102,20 @@ export async function PATCH(request: Request) {
   // The pointer needs a class AND a subject to be about; an independent teacher
   // with neither simply has nowhere to record where she got to, and that is not
   // a failure worth reporting.
-  if (taught && session.class_id && session.subject) {
+  if (reached && session.class_id && session.subject) {
     await c.admin.from("present_last_taught").upsert(
       {
         teacher_id: c.userId,
         class_id: session.class_id,
         subject: session.subject,
         book_id: session.book_id,
-        chapter_num: session.chapter_num,
-        part: session.part,
+        chapter_num: reached.chapterNum,
+        part: reached.part,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "teacher_id,class_id,subject" },
     );
   }
 
-  return NextResponse.json({ ok: true, pointerMoved: taught });
+  return NextResponse.json({ ok: true, pointerMoved: !!reached, reached });
 }
