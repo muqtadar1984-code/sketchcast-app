@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -7,6 +8,7 @@ import InviteClient from "./invite-client";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { fmt } from "@/i18n/format";
+import { countryFromHeaders } from "@/utils/geo";
 
 type InviteMessages = Dictionary["app"]["invite"];
 
@@ -50,6 +52,11 @@ export default async function InvitePage({
   const locale = await resolveLocale();
   const t = await getDictionary(locale);
   const m = t.app.invite;
+  // Same capture as /signup: read on the server, sent back with the
+  // registration so 0098's trigger can stamp it at INSERT. This path stamps
+  // onboarded_at at creation and therefore NEVER sees the onboarding step that
+  // asks for a country — without this it would have no country, ever.
+  const country = countryFromHeaders(await headers());
 
   let admin: ReturnType<typeof createAdminClient>;
   try {
@@ -129,6 +136,7 @@ export default async function InvitePage({
         token={token}
         email={invite.email}
         signedInEmail={user?.email ?? null}
+        country={country}
         t={m}
         auth={t.app.auth}
         oauth={t.app.oauth}

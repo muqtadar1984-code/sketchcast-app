@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { studentEmail, usernameBase } from "@/utils/student";
 import { generateTempPassword } from "@/utils/temp-password";
+import { countryFromHeaders } from "@/utils/geo";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,11 @@ type NewStudent = { firstName?: string; lastName?: string; parentEmail?: string 
 // student, fills the profile (username/parent_email/must_reset_password) and
 // enrolls them. Returns the credentials so the teacher can hand them to parents.
 export async function POST(request: Request) {
+  // The provisioning teacher's country, which is the school's country — a
+  // student created here may never sign in at all, and 0098's trigger reads
+  // this out of the metadata below, so this is the only chance to record where
+  // they are. Assumed, like every edge-derived value.
+  const country = countryFromHeaders(request.headers);
   const supabase = await createClient();
   const {
     data: { user },
@@ -129,7 +135,7 @@ export async function POST(request: Request) {
       email: studentEmail(username),
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role: "student" },
+      user_metadata: { full_name: fullName, role: "student", ...(country ? { country } : {}) },
     });
     if (cErr || !createdUser?.user) {
       errors.push(`${fullName || username}: ${cErr?.message ?? "could not create user"}`);

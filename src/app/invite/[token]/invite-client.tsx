@@ -17,6 +17,7 @@ export default function InviteClient({
   token,
   email,
   signedInEmail,
+  country,
   t,
   auth,
   oauth,
@@ -24,6 +25,9 @@ export default function InviteClient({
   token: string;
   email: string;
   signedInEmail: string | null;
+  /** The edge's guess at where this invitee is, from the invite page's server
+   * render. Null is normal and simply sends nothing. */
+  country: string | null;
   t: Dictionary["app"]["invite"];
   auth: Dictionary["app"]["auth"];
   oauth: Dictionary["app"]["oauth"];
@@ -67,7 +71,7 @@ export default function InviteClient({
       email,
       password,
       options: {
-        data: { full_name: name },
+        data: { full_name: name, ...(country ? { country } : {}) },
         // After confirming their email, land straight back on the accept route —
         // without this, invitees had to manually reopen the invite link.
         emailRedirectTo: `${location.origin}/auth/confirm?next=${encodeURIComponent(acceptPath)}`,

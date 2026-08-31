@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { claimLsPurchases } from "@/utils/lemonsqueezy/claim";
+import { stampAssumedCountry } from "@/utils/assumed-country";
 
 export const runtime = "nodejs";
 
@@ -64,6 +65,12 @@ export async function GET(request: Request) {
         "This sign-in is for teachers. Students log in with the ID from their teacher.",
       );
     }
+    // Google sends no country, so the 0098 trigger had nothing to store for
+    // this account. This is the first — and for someone who signs in with one
+    // tap and leaves, the only — server hop where the edge header is in reach.
+    // Assumed, and never overwrites a stated answer.
+    await stampAssumedCountry(supabase, user.id);
+
     // Bind any Lemon Squeezy purchase parked under this (provider-verified)
     // email from a public pricing-page checkout. Best-effort; never blocks login.
     if (user.email && user.email_confirmed_at) {

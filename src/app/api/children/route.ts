@@ -4,6 +4,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { studentEmail, usernameBase } from "@/utils/student";
 import { parentPortalEnabled } from "@/utils/flags";
 import { generateTempPassword } from "@/utils/temp-password";
+import { countryFromHeaders } from "@/utils/geo";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,10 @@ export const runtime = "nodejs";
 type NewChild = { firstName?: string; lastName?: string };
 
 export async function POST(request: Request) {
+  // The parent's country, which is the child's — a learner created here may
+  // never sign in, so the metadata handed to createUser below (read by 0098's
+  // trigger) is the only chance to record where they are.
+  const country = countryFromHeaders(request.headers);
   if (!parentPortalEnabled()) {
     return NextResponse.json({ error: "Not enabled." }, { status: 404 });
   }
@@ -140,7 +145,7 @@ export async function POST(request: Request) {
       email: studentEmail(username),
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role: "student" },
+      user_metadata: { full_name: fullName, role: "student", ...(country ? { country } : {}) },
     });
     if (cErr || !createdUser?.user) {
       errors.push(`${fullName || username}: ${cErr?.message ?? "could not create user"}`);

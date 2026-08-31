@@ -1,16 +1,25 @@
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { LogoMark } from "../dashboard/icons";
 import AuthError from "@/components/auth-error";
 import SignupForm from "./signup-form";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
+import { countryFromHeaders } from "@/utils/geo";
 
 // Self-signup. A Server Component around the client form, so the headings and
 // links resolve from the request's dictionary while nobody is signed in yet.
 export default async function SignupPage() {
   const locale = await resolveLocale();
   const t = await getDictionary(locale);
+  // The country is read HERE, on the server, and handed to the form to send
+  // with the registration — the browser cannot see the edge header itself, and
+  // this render is the last server hop before the account exists. Everyone who
+  // signs up by email gets a country from this, including the people who never
+  // confirm and never sign in. Null on localhost and wherever the edge can't
+  // place the address; the form simply sends nothing then.
+  const country = countryFromHeaders(await headers());
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#FCFCFA] px-4">
       <div className="w-full max-w-sm card rounded-2xl p-8">
@@ -24,7 +33,7 @@ export default async function SignupPage() {
           <AuthError />
         </Suspense>
 
-        <SignupForm t={t.app.signup} auth={t.app.auth} oauth={t.app.oauth} />
+        <SignupForm t={t.app.signup} auth={t.app.auth} oauth={t.app.oauth} country={country} />
 
         <p className="text-sm text-[#5B6470] mt-6 text-center">
           {t.app.auth.alreadyHaveAccount}{" "}

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { LogoMark } from "../dashboard/icons";
 import OAuthButton from "@/components/oauth-button";
@@ -6,6 +7,7 @@ import AuthError from "@/components/auth-error";
 import SchoolSignupForm from "./schoolsignup-form";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
+import { countryFromHeaders } from "@/utils/geo";
 
 // Public "Set up your school" (option C). Create an account (email or Google),
 // then name your NEW school on the next step and become its admin. Both paths
@@ -14,6 +16,11 @@ import { resolveLocale } from "@/i18n/resolve";
 export default async function SchoolSignupPage() {
   const locale = await resolveLocale();
   const t = await getDictionary(locale);
+  // Same capture as /signup: read on the server, sent back with the
+  // registration so 0098's trigger can stamp it at INSERT. This path stamps
+  // onboarded_at at creation and therefore NEVER sees the onboarding step that
+  // asks for a country — without this it would have no country, ever.
+  const country = countryFromHeaders(await headers());
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#FCFCFA] px-4">
       <div className="w-full max-w-sm card rounded-2xl p-8">
@@ -27,7 +34,7 @@ export default async function SchoolSignupPage() {
           <AuthError />
         </Suspense>
 
-        <SchoolSignupForm t={t.app.schoolSignup} />
+        <SchoolSignupForm t={t.app.schoolSignup} country={country} />
 
         <div className="flex items-center gap-3 my-5">
           <span className="h-px flex-1 bg-[#E6E8E4]" />

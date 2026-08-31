@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { onboardingEnabled } from "@/utils/flags";
 import { claimLsPurchases } from "@/utils/lemonsqueezy/claim";
+import { stampAssumedCountry } from "@/utils/assumed-country";
 import { assertAdultRole } from "@/utils/stripe/guards";
 import AssistantLauncher from "./assistant-launcher";
 import TourProvider from "@/tour/TourProvider";
@@ -48,6 +49,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
       redirect("/onboarding");
     }
     role = (profile?.role as string | null) ?? null;
+
+    // Backstop the country capture (0098) for every account that predates it,
+    // and for anyone the trigger couldn't reach. Placed BELOW the redirect for
+    // the same reason the claim below is — redirect() throws, and nothing
+    // should sit between that decision and the throw.
+    //
+    // Not read-then-written, and deliberately not folded into the profile read
+    // above: the helper's own `.is("country", null)` filter is the guard, so a
+    // stated country can never be clobbered, and the gate's query keeps working
+    // unchanged on a database behind on 0085. The cost of asking every time is
+    // one primary-key UPDATE matching zero rows on a hard load — a shared
+    // layout does not re-run on soft navigation (see the note below).
+    if (user) await stampAssumedCountry(supabase, user.id);
 
     // Bind any Lemon Squeezy purchase parked under this verified email. A
     // public-link checkout carries no custom_data, so the webhook can only park

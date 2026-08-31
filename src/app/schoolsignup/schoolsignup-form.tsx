@@ -8,7 +8,15 @@ import type { Dictionary } from "@/i18n/dictionaries";
 // The account half of "Set up your school" — create the account here, name the
 // school on /schoolsignup/finish. Split out of the page so the page can stay a
 // Server Component and resolve the copy from the request's dictionary.
-export default function SchoolSignupForm({ t }: { t: Dictionary["app"]["schoolSignup"] }) {
+export default function SchoolSignupForm({
+  t,
+  country,
+}: {
+  t: Dictionary["app"]["schoolSignup"];
+  /** The edge's guess at where this school is, from the page's server render.
+   * Null is normal and simply sends nothing. */
+  country: string | null;
+}) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -27,7 +35,7 @@ export default function SchoolSignupForm({ t }: { t: Dictionary["app"]["schoolSi
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: fullName, ...(country ? { country } : {}) },
         // If email confirmation is on, land back on the finish step after confirming.
         emailRedirectTo: `${location.origin}/auth/confirm?next=/schoolsignup/finish`,
       },

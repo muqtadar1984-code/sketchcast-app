@@ -18,10 +18,16 @@ export default function SignupForm({
   t,
   auth,
   oauth,
+  country,
 }: {
   t: Dictionary["app"]["signup"];
   auth: Dictionary["app"]["auth"];
   oauth: Dictionary["app"]["oauth"];
+  /** The edge's guess at where this visitor is, resolved server-side by the
+   * page (src/utils/geo.ts). Passed straight back up in the signup metadata so
+   * handle_new_user can stamp profiles.country at INSERT — the only moment that
+   * reaches someone who never confirms their email. Null is normal. */
+  country: string | null;
 }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
@@ -45,7 +51,11 @@ export default function SignupForm({
       email,
       password,
       options: {
-        data: { full_name: fullName, role },
+        // country: an ASSUMED value (0085/0098) — the user's own answer on the
+        // onboarding step overwrites it and is recorded as 'signup'. Omitted
+        // entirely when the edge couldn't place the request, so the trigger
+        // stores no country rather than a fabricated one.
+        data: { full_name: fullName, role, ...(country ? { country } : {}) },
         emailRedirectTo: `${location.origin}/auth/confirm`,
       },
     });
