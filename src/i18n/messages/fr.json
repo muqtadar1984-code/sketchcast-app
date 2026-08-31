@@ -1818,7 +1818,7 @@
       "endLesson": "Terminer la leçon",
       "ending": "Enregistrement du tableau…",
       "endFailed": "Impossible de terminer la leçon — vérifiez la connexion et appuyez de nouveau sur Terminer la leçon.",
-      "push": "AFFICHER",
+      "push": "NOUVELLE PAGE",
       "blank": "Tableau vierge",
       "resumeVideo": "Reprendre la vidéo",
       "pageOf": "{n} / {total}",

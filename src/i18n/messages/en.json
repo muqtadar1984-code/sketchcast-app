@@ -1826,7 +1826,7 @@
       "endLesson": "End lesson",
       "ending": "Saving the board…",
       "endFailed": "Could not end the lesson — check the connection and tap End lesson again.",
-      "push": "PUSH",
+      "push": "NEW PAGE",
       "blank": "Blank board",
       "resumeVideo": "Resume video",
       "pageOf": "{n} / {total}",

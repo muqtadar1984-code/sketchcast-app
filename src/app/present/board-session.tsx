@@ -662,6 +662,13 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
       </div>
 
       <aside className="grid content-start gap-2">
+        {/* The big one, beside the page arrows. It was labelled "PUSH" — the
+            roll metaphor, pushing the paper up for fresh space — and eight of
+            the nine translators read it as "send" because nothing on the button
+            says which. It appends a blank page, so it now says so.
+            ⚠️ "Blank board" in the left rail calls exactly this, with the same
+            argument. Two controls, one behaviour; one of them should go, and
+            which is a product call rather than a translation one. */}
         <button
           type="button"
           disabled={saving}

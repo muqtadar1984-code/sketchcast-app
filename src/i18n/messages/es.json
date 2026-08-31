@@ -1818,7 +1818,7 @@
       "endLesson": "Terminar lección",
       "ending": "Guardando la pizarra…",
       "endFailed": "No se pudo terminar la lección: revisa la conexión y vuelve a tocar Terminar lección.",
-      "push": "ENVIAR",
+      "push": "PÁGINA NUEVA",
       "blank": "Pizarra en blanco",
       "resumeVideo": "Reanudar video",
       "pageOf": "{n} / {total}",
