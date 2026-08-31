@@ -345,7 +345,7 @@ including the worst one available, which is what defines Tier C.
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
 | 2 | Present mode in the app — **BUILT** — 0097 applied, context resolver, `/present` with the bar, kit rail + worksheet picker, the stage, the session API (`session` / `sync` / `items`), and the board assembled behind it. ⚠️ **The gate below is UNRUN** — it needs a signed-in teacher and a panel. Access is now the PLAN (Pro / Pro+ / school), not the email allowlist. | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
-| 3 | **BUILT** — after the lesson: recap draft/edit/publish (`/api/present/recap`), the roll exported and uploaded (`/api/present/roll`), and `/present/recap/[id]` for a student or parent. 0099 applied. ⚠️ **The gate below is UNRUN** — it needs a class, a student account and a published lesson. | A published note that names the concept; a student account that can open both |
+| 3 | **BUILT** — after the lesson: recap draft/edit/publish (`/api/present/recap`), the roll exported and uploaded (`/api/present/roll`), and `/present/recap/[id]` for a student or parent. 0099 applied; all ten locales translated; reachable from a Board tab. ⚠️ **The gate below is UNRUN** — it needs a class, a student account and a published lesson. | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
 ## Phase 1 — done, and what it settled
@@ -635,22 +635,59 @@ and currently inert** — it will admit its first teacher on the first Pro
 subscription, and its first school on the first school plan. The founder's own
 account is `trial`, which is why the override was kept rather than deleted.
 
-### Still English-only, and that now has a real audience
+### Translated into all ten locales, 29 Aug 2026
 
-Every Present surface hardcodes English. That was defensible for one allowlisted
-teacher; it is not for a Malaysian Pro subscriber, and `/present/recap/[id]` is
-read by students and parents. Nothing breaks — `i18n/dictionaries.ts` layers a
-locale over an English base — but ~60 strings across `/present`, the board, the
-wrap-up panel and both recap pages need to reach the ten message files, RTL
-included. **This is the outstanding work between "entitled" and "usable".**
+132 keys under `present.*` plus `nav.tabs.board`, in every one of the ten
+locales. The message-catalogue suite passes all 58 assertions on it: coverage,
+placeholders, no empty values, no bidi controls, the identical-prose ratio, and
+both Jawi checks (70% of Jawi values carry a Jawi-only letter; exactly one value
+matches Arabic, the `{n} / {total}` format string). No key went onto
+`PENDING_TRANSLATION` — the round shipped with the feature.
 
-### And there is no way in yet
+**The pure modules stopped composing prose, and that was the actual work.**
+`kit.ts` built an English `label` from a generation kind, `"Part 1 of 4"`,
+`"Chapter 4 · Part 2"`, `"This part"`, and a sentence explaining why a test paper
+only downloads. `audience.ts` and `access.ts` each carried a map of refusal
+sentences. All of it ran on the server and reached a page that now renders in ten
+languages. They return **places, kinds and reason codes**; `app/present/words.ts`
+is the one file that turns them into words, shared by the pre-lesson rail and the
+running board so two renderings of the same unit cannot disagree about whether it
+is "Part 2" or "Part 2 of 4".
 
-`/present` has no nav tab and no link from anywhere. It was URL-only on purpose
-while it was secret. A teacher who is now entitled still has to be told the URL,
-so an entry point is the other half of "provided to every teacher" — and adding
-one is a ten-locale `nav.tabs` string plus a header that has already been pushed
-over the brand once by a seventh tab. Worth measuring the rendered box.
+The API routes send `reason` codes and the UI renders `present.publish.<reason>`;
+the English `error` survives only as the fallback for a code the build has never
+seen. Sorting moved with the labels: the rail sorted docs by LABEL, which would
+have reordered itself per language, and now sorts by kind.
+
+**The recap draft is generated in her language.** It is the one piece of prose
+this product WRITES rather than displays, so `fallbackRecap` composes from words
+handed in and the prompt carries a "write in {language}" rule. ⚠️ **The
+banned-machinery check is English regexes**, so in another language it is weaker
+than it looks — "lembaran kerja" is not "worksheet". It is not nothing: the
+prompt rule applies in any language, untranslated English machinery words are
+still caught, and the note is a draft she reads before publishing. Extending the
+ban per locale is the honest next step.
+
+**Two things the translators found that the English had wrong.** The Malay
+translator read `board-session.tsx` and discovered that "PUSH" — the roll
+metaphor — appends a blank page; eight of the nine had rendered it as "send",
+because nothing on the button says which. It is "NEW PAGE" now, in all ten. And
+"Blank board" in the left rail calls exactly the same thing with the same
+argument: **two controls, one behaviour**, which is a product call still open.
+
+⚠️ **Arabic has dual and plural forms a flat `{n}` template cannot express**, so
+"{n} parts" reads naturally for 3–10 and slightly off for 2 and 11+. Only ICU
+plural categories would fix it; this catalogue has none, and the house pattern is
+a `...One`/`...Many` pair, used wherever the count is one-versus-many.
+
+### The way in
+
+`/present` had no nav entry at all — URL-only while it was secret, which made
+"provided to every teacher" untrue in practice. There is a **Board** tab now,
+**teacher hat only**: the board is a surface you stand at, and a principal in
+Leadership mode is not teaching a period. It is gated on the same entitlement as
+the page itself, because a tab leading somewhere you would be turned away from is
+an invitation to be refused on every page load.
 
 ## What the allowlist still does
 
