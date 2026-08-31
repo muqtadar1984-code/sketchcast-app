@@ -363,3 +363,10 @@ async function chapterFacts(
     };
   });
 }
+
+/** Same reasoning as OPTIONS: Next answers a GET on a POST-only route with 405
+ *  and an `Allow` header, which tells an unauthenticated prober the route
+ *  exists. A 404 tells them nothing, which is the whole doctrine here. */
+export async function GET() {
+  return NOT_FOUND();
+}
