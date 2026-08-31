@@ -34,9 +34,20 @@
 // PURE. Facts in, verdict out. The fetching is entitlement.ts, and the split is
 // what lets every branch of this be a test rather than a hope.
 
-/** Plans that carry the board. `pro_plus` is the paid differentiator elsewhere
- *  (the AI Tutor); the board is deliberately wider — a Pro teacher standing at a
- *  panel is exactly the person this was built for. */
+/**
+ * Plans that carry the board. `pro_plus` is the paid differentiator elsewhere
+ * (the AI Tutor); the board is deliberately wider — a Pro teacher standing at a
+ * panel is exactly the person this was built for.
+ *
+ * ⚠️ THIS SET MUST BE REVISITED WHEN plan_tier() GAINS A TIER. The approved
+ * school self-serve registration plan adds `school_trial` (a 30-day school
+ * trial) and `school_expired` to that function. An unknown tier fails CLOSED
+ * here, which is the right default and also the silent one: the day trial
+ * schools exist, they will not get the board and nothing will say why. The
+ * intended answer is almost certainly `school_trial` in, `school_expired` out —
+ * a board is exactly what you demonstrate to sell a school plan — but that is a
+ * product decision, not one to make by leaving a set alone.
+ */
 export const PRESENT_TIERS: ReadonlySet<string> = new Set(["school", "pro", "pro_plus"]);
 
 /**

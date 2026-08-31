@@ -116,6 +116,19 @@ describe("the staff override", () => {
   });
 });
 
+describe("a tier this build has never heard of", () => {
+  it("FAILS CLOSED, and that is the hazard worth naming", () => {
+    // The approved school self-serve plan adds `school_trial` and
+    // `school_expired` to plan_tier(). Failing closed is the right default, and
+    // it is also the silent one: the day trial schools exist they will not get
+    // the board and nothing will explain it. Pinned so the set is revisited
+    // rather than left alone.
+    expect(presentAccess(facts({ tier: "school_trial" }))).toEqual({ ok: false, why: "plan" });
+    expect(presentAccess(facts({ tier: "school_expired" }))).toEqual({ ok: false, why: "plan" });
+    expect(presentAccess(facts({ tier: "something_new" }))).toEqual({ ok: false, why: "plan" });
+  });
+});
+
 describe("the sets themselves", () => {
   it("carries exactly the three plans the founder named", () => {
     expect([...PRESENT_TIERS].sort()).toEqual(["pro", "pro_plus", "school"]);
