@@ -228,7 +228,10 @@ export class BoardStore {
   /** stroke id -> the seq of the record that carried it. */
   private strokeSeq = new Map<string, number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private flushing = false;
+  /** The flush currently in flight, so a second caller chains rather than
+   *  skipping — see flush(). */
+  private inflight: Promise<void> | null = null;
+  private closed = false;
   /** False when IndexedDB was unavailable and this is memory-only. */
   durable = false;
 
@@ -260,7 +263,13 @@ export class BoardStore {
       this.log = mem;
     }
     const records = await this.log.all().catch(() => [] as LogRecord[]);
-    this.seq = records.reduce((m, r) => Math.max(m, r.seq), -1) + 1;
+    // RECONCILED, NEVER ASSIGNED. The host publishes the store before this
+    // resolves — opening IndexedDB is two awaits — so a page pushed or a stroke
+    // drawn in that window has ALREADY taken seq 0. Assigning would hand the
+    // same number out twice, and /api/present/sync upserts on (session_id, seq):
+    // the second record would silently overwrite the first, and a tombstone
+    // aimed at one stroke would void the other.
+    this.seq = Math.max(this.seq, records.reduce((m, r) => Math.max(m, r.seq), -1) + 1);
     // Rebuilt on open, or a stroke drawn before a reload could never be voided
     // in a way the server could match.
     for (const r of records) if (r.kind === "stroke") this.strokeSeq.set(r.stroke.id, r.seq);
@@ -299,31 +308,53 @@ export class BoardStore {
   }
 
   private schedule(): void {
-    if (this.timer !== null) return;
+    // A closed store has nobody left to send for it. Without this a flush that
+    // fails after close() re-arms a timer on a dead store and retries every
+    // three seconds for the life of the page.
+    if (this.closed || this.timer !== null) return;
     this.timer = setTimeout(() => {
       this.timer = null;
       void this.flush();
     }, this.intervalMs);
   }
 
-  /** Send everything pending. Safe to call at any time; only one runs at once. */
-  async flush(): Promise<void> {
-    if (this.flushing || !this.flushFn || !this.pending.length) return;
+  /**
+   * Send everything pending, and MEAN IT.
+   *
+   * Awaiting this has to mean "everything queued when I called has been
+   * attempted", because that is what the two callers assume — the end-of-lesson
+   * reconciliation and the unmount cleanup. An earlier version returned
+   * immediately while another flush was in flight, which made the await a no-op
+   * at exactly the two moments it was load-bearing: a batch that filled up on
+   * its own (20 records) put a flush in flight, and the awaited one then
+   * returned with the remainder still queued and nothing but a 3s timer to send
+   * it — a timer close() was about to clear.
+   *
+   * So concurrent callers CHAIN rather than skip. One request is in flight at a
+   * time; the second waits for it and then sends what accumulated.
+   */
+  flush(): Promise<void> {
+    if (!this.flushFn) return Promise.resolve();
+    const run = (this.inflight ?? Promise.resolve()).then(() => this.send());
+    // The chain must not break on a failure — send() already swallows its own.
+    this.inflight = run.catch(() => {});
+    return run;
+  }
+
+  private async send(): Promise<void> {
+    if (!this.flushFn || !this.pending.length) return;
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
     const batch = this.pending;
     this.pending = [];
-    this.flushing = true;
     try {
       await this.flushFn(batch);
     } catch {
       // Back on the queue, oldest first, to be retried with the next batch.
       this.pending = batch.concat(this.pending);
       this.schedule();
-    } finally {
-      this.flushing = false;
     }
   }
 
@@ -340,6 +371,7 @@ export class BoardStore {
   }
 
   close(): void {
+    this.closed = true;
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     this.log.close();

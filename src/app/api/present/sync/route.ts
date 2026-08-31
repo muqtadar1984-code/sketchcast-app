@@ -126,3 +126,11 @@ export async function POST(request: Request) {
     voids: voids.length,
   });
 }
+
+/** Taken back explicitly. Next auto-implements OPTIONS when a route file does
+ *  not, replying 204 with an `Allow` header to ANY caller, signed in or not —
+ *  which tells an unauthenticated prober that this surface exists. The whole
+ *  point of answering 404 everywhere else is undone by that one reply. */
+export async function OPTIONS() {
+  return NOT_FOUND();
+}

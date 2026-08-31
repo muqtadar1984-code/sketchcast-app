@@ -60,18 +60,40 @@ export default async function PresentPage() {
   // Class names and grades for the bar. Through the service role for the same
   // reason my-timetable does it: a member's RLS view of classes is narrower than
   // the grid they can already see, and a bar reading "Class" helps nobody.
-  const classIds = [...new Set(slots.map((s) => s.class_id))];
-  let classes: ClassName[] = [];
-  if (classIds.length) {
-    try {
-      const admin = createAdminClient();
-      const { data } = await admin.from("classes").select("id, name, grade").in("id", classIds);
-      classes = (data ?? []) as ClassName[];
-    } catch {
-      const { data } = await supabase.from("classes").select("id, name, grade").in("id", classIds);
-      classes = (data ?? []) as ClassName[];
+  //
+  // HER OWN CLASSES AS WELL AS HER TIMETABLE'S. The two are different sets and
+  // only their union is useful: a school teacher's lessons come from the grid,
+  // but an independent teacher has classes and no grid at all, and without her
+  // own list the bar would offer nothing to attach a lesson to — which means no
+  // audience for the note afterwards, discovered at the bell.
+  const slotClassIds = [...new Set(slots.map((s) => s.class_id))];
+  const classById = new Map<string, ClassName>();
+  const collect = (rows: ClassName[] | null) => {
+    for (const c of rows ?? []) classById.set(c.id, c);
+  };
+  try {
+    const admin = createAdminClient();
+    if (slotClassIds.length) {
+      const { data } = await admin.from("classes").select("id, name, grade").in("id", slotClassIds);
+      collect(data as ClassName[] | null);
     }
+    const { data: own } = await admin
+      .from("classes")
+      .select("id, name, grade")
+      .eq("teacher_id", user.id);
+    collect(own as ClassName[] | null);
+  } catch {
+    if (slotClassIds.length) {
+      const { data } = await supabase.from("classes").select("id, name, grade").in("id", slotClassIds);
+      collect(data as ClassName[] | null);
+    }
+    const { data: own } = await supabase
+      .from("classes")
+      .select("id, name, grade")
+      .eq("teacher_id", user.id);
+    collect(own as ClassName[] | null);
   }
+  const classes: ClassName[] = [...classById.values()].sort((a, b) => a.name.localeCompare(b.name));
 
   // Where each of her classes has got to. Absent before 0097 — see the header.
   let lastTaught: LastTaught[] = [];

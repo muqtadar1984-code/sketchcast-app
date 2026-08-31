@@ -41,13 +41,23 @@ export async function caller(): Promise<Caller | null> {
 export type SessionRow = {
   id: string;
   teacher_id: string;
+  school_id: string | null;
   class_id: string | null;
   subject: string | null;
   book_id: string | null;
   chapter_num: number | null;
   part: number | null;
+  started_at: string | null;
   ended_at: string | null;
+  page_count: number | null;
+  pdf_path: string | null;
+  recap_draft: string | null;
+  recap_body: string | null;
+  recap_published_at: string | null;
 };
+
+const SESSION_COLUMNS =
+  "id, teacher_id, school_id, class_id, subject, book_id, chapter_num, part, started_at, ended_at, page_count, pdf_path, recap_draft, recap_body, recap_published_at";
 
 /**
  * A session the caller actually owns.
@@ -61,11 +71,33 @@ export async function ownedSession(c: Caller, sessionId: string): Promise<Sessio
   if (!sessionId) return null;
   const { data } = await c.admin
     .from("present_sessions")
-    .select("id, teacher_id, class_id, subject, book_id, chapter_num, part, ended_at")
+    .select(SESSION_COLUMNS)
     .eq("id", sessionId)
     .maybeSingle();
   const row = (data ?? null) as SessionRow | null;
   return row && row.teacher_id === c.userId ? row : null;
+}
+
+/**
+ * A session by id, WITHOUT the ownership check — for the read path, where the
+ * reader is deliberately not the owner.
+ *
+ * Separate from ownedSession() on purpose. The two differ by one line and mean
+ * opposite things, and a boolean parameter on one function is how a write path
+ * eventually gets called with `false`. Everything that calls this must apply
+ * mayReadRecap() to what it gets back; nothing that writes may call it at all.
+ */
+export async function sessionById(
+  admin: ReturnType<typeof createAdminClient>,
+  sessionId: string,
+): Promise<SessionRow | null> {
+  if (!sessionId) return null;
+  const { data } = await admin
+    .from("present_sessions")
+    .select(SESSION_COLUMNS)
+    .eq("id", sessionId)
+    .maybeSingle();
+  return (data ?? null) as SessionRow | null;
 }
 
 /** Parse a JSON body, refusing anything that is valid JSON but not an object —

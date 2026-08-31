@@ -345,7 +345,7 @@ including the worst one available, which is what defines Tier C.
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
 | 2 | Present mode in the app — **BUILT** — 0097 applied, context resolver, `/present` with the bar, kit rail + worksheet picker, the stage, the session API (`session` / `sync` / `items`), and the board assembled behind it. ⚠️ **The gate below is UNRUN** — it needs a signed-in teacher and a panel. | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
-| 3 | After the lesson — recap draft/edit/publish, roll to storage, student + absentee visibility | A published note that names the concept; a student account that can open both |
+| 3 | **BUILT** — after the lesson: recap draft/edit/publish (`/api/present/recap`), the roll exported and uploaded (`/api/present/roll`), and `/present/recap/[id]` for a student or parent. 0099 applied. ⚠️ **The gate below is UNRUN** — it needs a class, a student account and a published lesson. | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
 ## Phase 1 — done, and what it settled
@@ -485,6 +485,97 @@ kits and a panel, and the pieces have only been verified individually —
 element identity in `/preview/stage`, the roll and its export in
 `/preview/board`, the resolver and the kit rules in unit tests, and every gate
 by an unauthenticated request. **Phase 2 is built, not proven.**
+
+## Phase 3 so far — what it settled
+
+**The reader's right to a recap is not a property of the reader.** `presentAllowed()`
+answers one question — may this account drive a board — about one operator-listed
+address. A student is never on that list, has no email at all (student accounts
+sign in with an ID), and adding one would hand them `/api/present/kit` and its
+eight-hour signed URLs to every artifact the teacher owns. So the allowlist is
+checked against the lesson's **author**, and the reader's right is three facts
+ANDed (`src/utils/present/audience.ts`, unit-tested):
+
+* the AUTHOR is allowlisted — the same shape the AI Tutor already uses, where the
+  entitlement belongs to the lesson's owner rather than to the student asking;
+* `recap_published_at` is set, and `recap_body` is served — never `recap_draft`,
+  never the live ink of an open session;
+* the reader is enrolled in the session's class, is a verified parent of someone
+  who is, is the teacher, or is leadership of the session's school.
+
+**0099 grants a student nothing, on purpose.** 0097 said student visibility would
+arrive "through a later migration"; this is that migration and it still leaves
+`revoke all ... from anon, authenticated` in place. An RLS policy filters ROWS,
+not columns, and `recap_draft` sits in the same row as `recap_body` — so the
+grant that let a student read the published note would also hand them the
+sentence she deleted. The reader is served through the service role instead, with
+every check RLS would have done done in code. That is the same doctrine as
+`ownedSession()`, for the same reason: the service role is a key, not a policy.
+
+**The ban is CHECKED, not requested.** "never 'played the video'" lives in the
+prompt *and* in `cleanRecap()`, which names each rule broken so the one retry can
+be told what to fix. Prompt compliance has already failed silently twice in this
+product — a Gemini kit shipped SSML inside a field documented as clean text
+because nothing checked. A second violation gets the fallback sentence, which is
+built from the grounding and is a real sentence rather than an apology: she has
+thirty seconds between periods and "drafting failed, try again" spends all of
+them.
+
+**The recap is grounded on `present_items`, and in practice on `source_text`.**
+Measured on 2026-08-29: of 244 `chapter_grounding` rows, 235 carry `source_text`,
+25 carry a title or concepts, 23 carry narration. So the book's own contents page
+supplies the chapter name and the index-time text supplies the evidence; the
+concepts path is real but rare. A recap that had required `concepts` would have
+produced nothing on the founder's own book.
+
+**A frozen frame is uploaded and the page stores its PATH.** This was a hole
+under Phase 2 rather than a Phase 3 feature: `URL.createObjectURL` is meaningless
+outside the tab that made it, so a page background holding one survived until the
+panel closed and not one second longer — gone from a reload, gone from the PDF
+(which never passed `image` at all), gone from anything a student could open. The
+model already said `src` may be "a blob/object URL or a storage path", so the
+durable value goes straight in and `board-session.tsx` resolves it: from the
+local capture during the lesson, from a signed URL afterwards.
+
+**Two more Phase 2 gaps closed by necessity.** `RollView` had no way to report a
+page, so `BoardStore.addPage()` had zero call sites and `present_pages` was empty
+for every session — a rebuilt roll would have been her annotations floating on
+blank paper. And `voidStroke()` had zero call sites, so every stroke she undid
+was still live on the server. Undos are now reconciled **at close**, as one
+authoritative set, because the log has no un-void record and streaming each undo
+would leave a tombstone for a stroke she brought back.
+
+**The upload does not go through a route.** The board exports the PDF in the
+browser and uploads it straight to the artifacts bucket with the teacher's own
+session — the bucket carries exactly one policy,
+`(storage.foldername(name))[1] = auth.uid()::text`, so she may write under her own
+uid folder and nowhere else. `/api/present/roll` exists only to RECORD the path,
+which it derives itself from the session row and confirms in storage before
+writing, so `pdf_path` can never point at a file that failed to arrive. A
+client-supplied path would be a client-supplied claim.
+
+**The class is now pickable.** The bar took the class from the timetable, which
+an independent teacher does not have — and a session with no class has nobody to
+publish to. That refusal is enforced server-side (`checkPublish` →
+`no-audience`), so the picker is what stops her meeting it at the bell with the
+note already written. The warning is shown *before* she starts, not after.
+
+**Three smaller things fixed in passing**, all inside this feature: `/api/present/{session,items,sync,kit}` had no `OPTIONS` handler, so Next answered 204 with an `Allow` header to any unauthenticated caller — an existence disclosure the probe route already guarded against; the kit route sorted multi-part videos by path string, and ICU collation puts `.` after `_`, so `lesson.mp4` (Part 1) sorted *behind* `lesson_part2.mp4`; and `checkPublish` refuses a body on an open session, so a note can never describe a lesson still being taught.
+
+## Phase 3's gate is UNRUN
+
+"A published note that names the concept; a student account that can open both."
+Untestable on the founder's account as it stands: there is no school, no class,
+no enrolled student, so `class_id` is null on every session and `checkPublish`
+refuses — correctly. Running the gate means creating a class, adding one student
+through `/api/students`, teaching a lesson with that class picked on the bar, and
+opening `/present/recap/{id}` signed in as the student. **Phase 3 is built, not
+proven** — the same status Phase 2 is still in.
+
+**And the translation gap now matters.** The rest of Present mode is English-only
+because it is behind a one-account allowlist. `/present/recap/[id]` is the first
+Present surface with a real audience, and that audience is Malaysian and includes
+RTL readers. It is a release blocker for widening the allowlist, not a nicety.
 
 ## Going public — the release steps that are easy to miss
 

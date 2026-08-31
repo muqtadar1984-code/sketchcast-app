@@ -77,7 +77,29 @@ export type RollViewProps = {
   drawBackground?: (ctx: CanvasRenderingContext2D, bg: PageBackground, page: Rect) => void;
   /** Called once per finished stroke — the hook a store flushes from. */
   onStroke?: (stroke: Stroke) => void;
+  /**
+   * Called once per page APPENDED, with what sits under it.
+   *
+   * Separate from onPageChange, which fires on every wind including the ones
+   * that create nothing. A page is the only part of the roll that carries
+   * content the ink alone cannot reconstruct — a frozen frame, a question — so
+   * a store that recorded strokes and not pages would rebuild every background
+   * as blank paper and lose exactly the pages she annotated most.
+   */
+  onPage?: (index: number, background: PageBackground) => void;
   onPageChange?: (page: number, pageCount: number) => void;
+  /**
+   * Refuse new ink, without unmounting.
+   *
+   * For the seconds between "End lesson" and the note panel: the export is
+   * walking this exact roll page by page, the tombstones have already been
+   * reconciled, and the page count has been captured — so a stroke landing now
+   * reaches the PDF non-deterministically and can never be undone in a way the
+   * server sees. Checked at pointerdown rather than by removing the handlers,
+   * because a stroke ALREADY in progress must still finish: dropping a builder
+   * mid-stroke leaves the wet ink painted and uncommitted.
+   */
+  readOnly?: boolean;
   className?: string;
   style?: CSSProperties;
 };
@@ -85,7 +107,7 @@ export type RollViewProps = {
 type PredictingPointer = PointerEvent & { getPredictedEvents?: () => PointerEvent[] };
 
 export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
-  { roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPageChange, className, style },
+  { roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, onPageChange, readOnly, className, style },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -105,10 +127,10 @@ export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
   // Everything the pointer path reads goes through a ref. A handler that closed
   // over `tool` from a render would keep drawing with the tool she had selected
   // when that render happened.
-  const live = useRef({ roll, profile, tool, color, width, touchMode, drawBackground, onStroke });
+  const live = useRef({ roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, readOnly });
   useEffect(() => {
-    live.current = { roll, profile, tool, color, width, touchMode, drawBackground, onStroke };
-  }, [roll, profile, tool, color, width, touchMode, drawBackground, onStroke]);
+    live.current = { roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, readOnly };
+  }, [roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, readOnly]);
 
   const paintPage = useCallback((n: number) => {
     const r = rendererRef.current;
@@ -213,8 +235,12 @@ export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
     ref,
     (): RollHandle => ({
       push(background) {
-        const { roll: rl } = live.current;
-        const n = addPage(rl, background ?? { kind: "blank" });
+        const { roll: rl, onPage: report } = live.current;
+        const bg = background ?? { kind: "blank" };
+        const n = addPage(rl, bg);
+        // Reported BEFORE the wind, which animates: a host that persists pages
+        // must not have that write racing a 260ms transition.
+        report?.(n, bg);
         wind(n);
       },
       goTo(n) {
@@ -247,7 +273,8 @@ export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const r = rendererRef.current;
       if (!r || activeRef.current !== null) return;
-      const { profile: prof, touchMode: tm, tool: tl, color: c, width: w, roll: rl } = live.current;
+      const { profile: prof, touchMode: tm, tool: tl, color: c, width: w, roll: rl, readOnly: ro } = live.current;
+      if (ro) return;
       if (!accepts({ profile: prof, touchMode: tm }, e.nativeEvent)) return;
 
       // A stroke started mid-slide would land at the wrong place on a page that

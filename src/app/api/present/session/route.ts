@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { caller, ownedSession, jsonBody, NOT_FOUND } from "@/utils/present/server";
+import { caller, ownedSession, jsonBody, NOT_FOUND, type Caller } from "@/utils/present/server";
 import { pointerFor, type ShownItem } from "@/utils/present/context";
 
 export const runtime = "nodejs";
@@ -16,6 +16,28 @@ export const runtime = "nodejs";
 // not what the session set out to teach. She can spend a Chapter 4 lesson
 // revising chapters 1-5, and the pointer must not move at all.
 
+/**
+ * Is this her class?
+ *
+ * Two ways, matching the two ways the bar can offer one: she owns it
+ * (`classes.teacher_id`, what the picker lists), or she teaches it in the
+ * timetable (`timetable_slots`, which is how a school teacher reaches a class
+ * she does not own). Anything else is refused rather than silently downgraded to
+ * null — a lesson quietly published to nobody is a bug report, not a fix.
+ */
+async function teaches(c: Caller, classId: string): Promise<boolean> {
+  const [own, slot] = await Promise.all([
+    c.admin.from("classes").select("id").eq("id", classId).eq("teacher_id", c.userId).maybeSingle(),
+    c.admin
+      .from("timetable_slots")
+      .select("class_id")
+      .eq("class_id", classId)
+      .eq("teacher_id", c.userId)
+      .limit(1),
+  ]);
+  return !!own.data || !!slot.data?.length;
+}
+
 export async function POST(request: Request) {
   const c = await caller();
   if (!c) return NOT_FOUND();
@@ -28,12 +50,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A book and chapter are required." }, { status: 400 });
   }
 
+  // THE CLASS IS AN AUDIENCE, NOT A LABEL — checked here, not taken.
+  //
+  // It was a label until Phase 3: a name on her own row, wrong at worst. It is
+  // now the audience selector, because mayReadRecap() grants a published note to
+  // everyone enrolled in present_sessions.class_id. Taken from the body and
+  // written through the service role, it would let an allowlisted caller publish
+  // a lesson note into a class she does not teach — this route's own header says
+  // why that is not acceptable: "a rule enforced in a browser is a rule that
+  // holds until somebody writes a second client."
+  //
+  // The school is DERIVED rather than checked, for the same reason and more
+  // simply: it is her school or it is nothing.
+  const claimedClass = typeof b.classId === "string" ? b.classId : null;
+  const classId = claimedClass && (await teaches(c, claimedClass)) ? claimedClass : null;
+  if (claimedClass && !classId) {
+    // 403 here, not the 404 every other refusal in Present mode answers. The
+    // 404 rule exists so an unauthenticated prober cannot learn the surface
+    // exists; this caller is signed in AND allowlisted, so the surface is
+    // already known to them and a silent null would be worse — a lesson
+    // published to nobody, discovered at the bell.
+    return NextResponse.json({ error: "That is not your class." }, { status: 403 });
+  }
+
+  const { data: me } = await c.admin
+    .from("profiles")
+    .select("school_id")
+    .eq("id", c.userId)
+    .maybeSingle();
+
   const { data, error } = await c.admin
     .from("present_sessions")
     .insert({
       teacher_id: c.userId,
-      school_id: typeof b.schoolId === "string" ? b.schoolId : null,
-      class_id: typeof b.classId === "string" ? b.classId : null,
+      school_id: (me?.school_id as string | null) ?? null,
+      class_id: classId,
       subject: typeof b.subject === "string" ? b.subject : null,
       book_id: bookId,
       chapter_num: chapterNum,
@@ -118,4 +169,12 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({ ok: true, pointerMoved: !!reached, reached });
+}
+
+/** Taken back explicitly. Next auto-implements OPTIONS when a route file does
+ *  not, replying 204 with an `Allow` header to ANY caller, signed in or not —
+ *  which tells an unauthenticated prober that this surface exists. The whole
+ *  point of answering 404 everywhere else is undone by that one reply. */
+export async function OPTIONS() {
+  return NOT_FOUND();
 }

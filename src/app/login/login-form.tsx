@@ -26,7 +26,15 @@ export default function LoginForm({
   // ?email= prefills the field — makes per-role login links bookmarkable
   // (e.g. teacher.sketchcast.app/login?email=demo.teacher1@sketchcast.app for
   // side-by-side multi-account testing across subdomains).
-  const prefill = useSearchParams().get("email") ?? "";
+  const params = useSearchParams();
+  const prefill = params.get("email") ?? "";
+  // ?next= sends her back where she was going. A link to a published lesson note
+  // is the first thing in this app handed to somebody who may not be signed in,
+  // and dropping them on the dashboard loses the URL they were sent.
+  //
+  // SAME-SITE PATHS ONLY. A bare "/..." that is not "//..." — anything else is
+  // an open redirect, and this is a form that has just accepted a password.
+  const next = safeNext(params.get("next"));
   const [email, setEmail] = useState(prefill);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +54,7 @@ export default function LoginForm({
       setError(error.message);
       return;
     }
-    router.push("/dashboard");
+    router.push(next);
     router.refresh();
   }
 
@@ -73,4 +81,12 @@ export default function LoginForm({
       </button>
     </form>
   );
+}
+
+/** A path we are willing to send a freshly signed-in account to: same-site,
+ *  absolute, and not protocol-relative. Anything else becomes the dashboard. */
+function safeNext(raw: string | null): string {
+  if (!raw) return "/dashboard";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  return raw;
 }

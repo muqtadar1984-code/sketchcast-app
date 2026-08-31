@@ -116,7 +116,19 @@ export default function PresentClient({
   const bookId = pick ? pick.book : (ctx?.suggestion?.bookId ?? null);
   const chapter = pick ? pick.chapter : (ctx?.suggestion?.chapterNum ?? null);
 
-  const klass = classes.find((c) => c.id === ctx?.classId) ?? null;
+  // WHICH CLASS. The timetable names it when there is one; otherwise she picks,
+  // and she has to be able to — an independent teacher has classes and no
+  // timetable, and a lesson with no class has nobody to publish the note to.
+  // That refusal is enforced server-side (checkPublish -> "no-audience"), so
+  // the picker is what stops her meeting it after the lesson rather than before.
+  // HER CHOICE FIRST. The timetable is a default she can see and change, not a
+  // value that reclaims the field: the clock keeps resolving, so `ctx.classId`
+  // winning would silently replace a class she picked for a covering lesson the
+  // moment the period rolled over — and the picker was hidden whenever the
+  // timetable had an opinion, so she could not have seen it happen.
+  const [pickedClass, setPickedClass] = useState<string | null>(null);
+  const classId = pickedClass ?? ctx?.classId ?? null;
+  const klass = classes.find((c) => c.id === classId) ?? null;
   const book = books.find((b) => b.id === bookId) ?? null;
   const chapters = book?.chapters ?? [];
 
@@ -128,6 +140,29 @@ export default function PresentClient({
   // which is also when she actually knows, since a period often spans two.
   const ready = !!bookId && chapter !== null;
 
+  // The running lesson. Declared here rather than beside its own handlers
+  // because the kit fetch below has to know whether one exists.
+  const [session, setSession] = useState<SessionInfo | null>(null);
+
+  // ONCE A LESSON IS RUNNING, THE CHOICE IS FIXED.
+  //
+  // `ctx` is recomputed every time the 30-second clock crosses a minute, and
+  // `bookId`/`chapter` fall back to `ctx.suggestion` — which is the whole point
+  // of the bar before a lesson and a hazard during one. Crossing a period
+  // boundary mid-lesson is the case this feature is explicitly built for ("she
+  // opens the board during the interval and teaches through the bell"), and it
+  // is exactly when the suggestion changes: the kit key would change, the kit
+  // would go null for a render, and <Stage src> would lose its source — the one
+  // thing stage.tsx forbids, because it reloads the video in front of the class.
+  // Worse quietly: a kit reloaded for a different chapter makes the rail's first
+  // unit a part she never taught, which is what the pointer would then record.
+  //
+  // So the session carries its own book and chapter, and while it exists nothing
+  // else is consulted.
+  const locked = !!session;
+  const liveBook = session ? session.bookId : bookId;
+  const liveChapter = session ? session.chapterNum : chapter;
+
   // The rail, fetched once she has named a book and chapter.
   //
   // THE RESULT CARRIES THE SELECTION IT WAS FETCHED FOR, and what renders is
@@ -136,14 +171,14 @@ export default function PresentClient({
   // an effect cascades a render, and React's compiler refuses it. And it makes
   // a late response from a superseded selection structurally unable to land: a
   // `live` flag closes the window, a key comparison closes the question.
-  const key = bookId && chapter !== null ? `${bookId}|${chapter}` : null;
+  const key = liveBook && liveChapter !== null ? `${liveBook}|${liveChapter}` : null;
   const [loaded, setLoaded] = useState<{ key: string; kit: Kit | null; error: string | null } | null>(
     null,
   );
   useEffect(() => {
-    if (!key || !bookId || chapter === null) return;
+    if (!key || !liveBook || liveChapter === null) return;
     let live = true;
-    const q = new URLSearchParams({ book: bookId, chapter: String(chapter) });
+    const q = new URLSearchParams({ book: liveBook, chapter: String(liveChapter) });
     fetch(`/api/present/kit?${q.toString()}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 404 ? "Not available." : `Failed (${r.status})`);
@@ -162,7 +197,7 @@ export default function PresentClient({
     return () => {
       live = false;
     };
-  }, [key, bookId, chapter]);
+  }, [key, liveBook, liveChapter]);
 
   const current = loaded && loaded.key === key ? loaded : null;
   const kit = current?.kit ?? null;
@@ -171,7 +206,6 @@ export default function PresentClient({
 
   // The running lesson. Starting one is a server round trip because the session
   // id is what every later write is scoped to — strokes, items, the close.
-  const [session, setSession] = useState<SessionInfo | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
@@ -186,15 +220,15 @@ export default function PresentClient({
         body: JSON.stringify({
           bookId,
           chapterNum: chapter,
-          classId: ctx?.classId ?? null,
-          subject: ctx?.subject ?? null,
+          classId,
+          subject: ctx?.subject ?? klass?.name ?? null,
           slotDay: ctx?.day ?? null,
           slotPeriod: ctx?.period?.period ?? null,
         }),
       });
       const d = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!r.ok || !d.id) throw new Error(d.error || `Could not start (${r.status})`);
-      setSession({ id: d.id, bookId, chapterNum: chapter });
+      setSession({ id: d.id, teacherId, bookId, chapterNum: chapter });
     } catch (e) {
       // Starting is the one action where a silent failure is unacceptable: she
       // taps it and turns to the class.
@@ -202,7 +236,7 @@ export default function PresentClient({
     } finally {
       setStarting(false);
     }
-  }, [bookId, chapter, ctx]);
+  }, [bookId, chapter, ctx, classId, klass, teacherId]);
 
   const endSession = useCallback(() => setSession(null), []);
 
@@ -213,13 +247,27 @@ export default function PresentClient({
       <header className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
         <Chip label="Grade" value={klass?.grade ?? "—"} />
         <Chip label="Subject" value={ctx?.subject ?? "—"} />
-        <Chip label="Class" value={klass?.name ?? "—"} />
+        <select
+          aria-label="Class"
+          value={classId ?? ""}
+          disabled={locked}
+          onChange={(e) => setPickedClass(e.target.value || null)}
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
+        >
+          <option value="">No class…</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.grade ? `${c.name} · ${c.grade}` : c.name}
+            </option>
+          ))}
+        </select>
 
         <select
           aria-label="Book"
           value={bookId ?? ""}
+          disabled={locked}
           onChange={(e) => setPick({ book: e.target.value || null, chapter: null })}
-          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm"
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
         >
           <option value="">Choose a book…</option>
           {books.map((b) => (
@@ -232,7 +280,7 @@ export default function PresentClient({
         <select
           aria-label="Chapter"
           value={chapter ?? ""}
-          disabled={!book}
+          disabled={locked || !book}
           onChange={(e) =>
             setPick({ book: bookId, chapter: e.target.value === "" ? null : Number(e.target.value) })
           }
@@ -335,6 +383,15 @@ export default function PresentClient({
                 and what you show is recorded so the lesson note can be about the
                 concept rather than the timetable.
               </p>
+              {/* Said BEFORE she teaches, not after. The publish step refuses a
+                  lesson with no class, and meeting that refusal at the bell — with
+                  the note already written — would be the wrong moment to learn it. */}
+              {!classId && (
+                <p className="mx-auto mt-3 max-w-md rounded-lg border border-[#4A3A1C] bg-[#2C2318] px-3 py-2 text-sm text-[#E0A664]">
+                  No class picked, so afterwards you can save the board but not publish the
+                  note — there would be nobody to publish it to.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={start}

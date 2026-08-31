@@ -262,3 +262,101 @@ describe("linking a void to the stroke it voids", () => {
     expect(s.unsent).toBe(0); // local-only, nothing to flush
   });
 });
+
+// ── the three failures Phase 3 leant on ──────────────────────────────────────
+//
+// The end of a lesson does `await store.flush()` and then exports, uploads and
+// closes. Each of these was a way for that await to mean less than it says.
+
+describe("flush means everything queued has been attempted", () => {
+  /** A flush that resolves only when the test lets it. */
+  const gate = () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    return { held, release };
+  };
+
+  it("CHAINS a concurrent caller rather than skipping it", async () => {
+    // The bug this replaces: flush() returned immediately whenever another was
+    // in flight, so `await store.flush()` at the bell could return with records
+    // still queued — and close() was about to clear the only timer that would
+    // have sent them.
+    const g = gate();
+    const sent: LogRecord[][] = [];
+    let first = true;
+    const store = new BoardStore("r1", {
+      log: new MemoryLog(),
+      batchSize: 1000,
+      flush: async (records) => {
+        sent.push(records);
+        if (first) {
+          first = false;
+          await g.held;
+        }
+      },
+    });
+    await store.open();
+
+    await store.addStroke(stroke({ id: "a" }));
+    const inflight = store.flush(); // parks inside flushFn
+    await store.addStroke(stroke({ id: "b" }));
+    const second = store.flush();
+
+    g.release();
+    await Promise.all([inflight, second]);
+
+    expect(sent).toHaveLength(2);
+    expect(sent[1].map((r) => r.kind === "stroke" && r.stroke.id)).toEqual(["b"]);
+    expect(store.unsent).toBe(0);
+  });
+
+  it("STOPS RETRYING once closed, instead of re-arming a timer on a dead store", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const store = new BoardStore("r2", {
+        log: new MemoryLog(),
+        batchSize: 1,
+        intervalMs: 10,
+        flush: async () => {
+          calls++;
+          throw new Error("offline");
+        },
+      });
+      await store.open();
+      await store.addStroke(stroke({ id: "a" })); // batch of 1 → flushes, fails
+      await vi.advanceTimersByTimeAsync(0);
+      const afterFirst = calls;
+      store.close();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(calls).toBe(afterFirst);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("open() reconciles the sequence rather than assigning it", () => {
+  it("NEVER HANDS OUT A NUMBER ALREADY USED, even for a fresh log", async () => {
+    // The host publishes the store before open() resolves, so a page pushed in
+    // that window has already taken seq 0. Assigning would hand 0 out twice, and
+    // /api/present/sync upserts on (session_id, seq): the second record would
+    // silently overwrite the first, and a tombstone aimed at one stroke would
+    // void the other.
+    const sent: LogRecord[] = [];
+    const store = new BoardStore("r3", {
+      log: new MemoryLog(),
+      batchSize: 1000,
+      flush: async (records) => {
+        sent.push(...records);
+      },
+    });
+    const opening = store.open(); // not awaited — exactly what the board does
+    await store.addPage(0, { kind: "blank" });
+    await opening;
+    await store.addStroke(stroke({ id: "a" }));
+    await store.flush();
+
+    expect(sent.map((r) => r.seq)).toEqual([0, 1]);
+  });
+});

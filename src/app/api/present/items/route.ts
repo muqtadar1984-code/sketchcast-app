@@ -33,6 +33,37 @@ export async function POST(request: Request) {
 
   // Continue the sequence rather than restarting it: a second batch in the same
   // lesson must not collide with the first, and the order is the point.
+  //
+  // READ-THEN-INSERT, SO IT RETRIES. There is no sequence to allocate from —
+  // (session_id, seq) is the primary key and the next number is whatever the
+  // last read said plus one — so two writes landing together both compute the
+  // same seq and the second gets 23505. That is not rare in the shape this
+  // route is actually used: the board fires an item on every tap, and a teacher
+  // opening the video and a worksheet in quick succession is the normal case.
+  // A lost item costs the recap a piece of its evidence and the pointer a part,
+  // silently, so the collision is retried rather than reported.
+  const build = (from: number): Record<string, unknown>[] => {
+    let seq = from;
+    const rows: Record<string, unknown>[] = [];
+    for (const raw of items) {
+      if (!raw || typeof raw !== "object") continue;
+      const i = raw as Record<string, unknown>;
+      const kind = typeof i.kind === "string" ? i.kind : "";
+      if (!KINDS.has(kind)) continue;
+      const detail = i.detail && typeof i.detail === "object" && !Array.isArray(i.detail)
+        ? (i.detail as Record<string, unknown>)
+        : null;
+      rows.push({
+        session_id: sessionId,
+        seq: seq++,
+        generation_id: typeof i.generationId === "string" ? i.generationId : null,
+        kind,
+        detail,
+      });
+    }
+    return rows;
+  };
+
   const { data: last } = await c.admin
     .from("present_items")
     .select("seq")
@@ -40,28 +71,37 @@ export async function POST(request: Request) {
     .order("seq", { ascending: false })
     .limit(1)
     .maybeSingle();
-  let seq = ((last?.seq as number | undefined) ?? -1) + 1;
 
-  const rows: Record<string, unknown>[] = [];
-  for (const raw of items) {
-    if (!raw || typeof raw !== "object") continue;
-    const i = raw as Record<string, unknown>;
-    const kind = typeof i.kind === "string" ? i.kind : "";
-    if (!KINDS.has(kind)) continue;
-    const detail = i.detail && typeof i.detail === "object" && !Array.isArray(i.detail)
-      ? (i.detail as Record<string, unknown>)
-      : null;
-    rows.push({
-      session_id: sessionId,
-      seq: seq++,
-      generation_id: typeof i.generationId === "string" ? i.generationId : null,
-      kind,
-      detail,
-    });
+  let next = ((last?.seq as number | undefined) ?? -1) + 1;
+  if (!build(next).length) {
+    return NextResponse.json({ error: "Nothing recognisable." }, { status: 400 });
   }
-  if (!rows.length) return NextResponse.json({ error: "Nothing recognisable." }, { status: 400 });
 
-  const { error } = await c.admin.from("present_items").insert(rows);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, recorded: rows.length });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const rows = build(next);
+    const { error } = await c.admin.from("present_items").insert(rows);
+    if (!error) return NextResponse.json({ ok: true, recorded: rows.length });
+    // 23505 — somebody took these numbers between the read and the write. Ask
+    // again where the sequence has got to and re-number.
+    if (error.code !== "23505") {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    const { data: again } = await c.admin
+      .from("present_items")
+      .select("seq")
+      .eq("session_id", sessionId)
+      .order("seq", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    next = ((again?.seq as number | undefined) ?? next) + 1;
+  }
+  return NextResponse.json({ error: "Could not record the item." }, { status: 409 });
+}
+
+/** Taken back explicitly. Next auto-implements OPTIONS when a route file does
+ *  not, replying 204 with an `Allow` header to ANY caller, signed in or not —
+ *  which tells an unauthenticated prober that this surface exists. The whole
+ *  point of answering 404 everywhere else is undone by that one reply. */
+export async function OPTIONS() {
+  return NOT_FOUND();
 }

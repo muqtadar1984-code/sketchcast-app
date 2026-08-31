@@ -27,6 +27,12 @@ export const runtime = "nodejs";
 // 404 ON EVERY FAILURE, never 403: a 403 would advertise that the surface exists.
 
 const SIGN_TTL = 8 * 60 * 60;
+
+/** lesson.mp4 is part 1; lesson_part2.mp4, lesson_part3.mp4 follow. */
+const videoPart = (path: string): number => {
+  const m = /_part(\d+)\.[a-z0-9]+$/i.exec(path);
+  return m ? Number(m[1]) : 1;
+};
 const NOT_FOUND = () => NextResponse.json({ error: "Not found." }, { status: 404 });
 
 export async function GET(request: Request) {
@@ -98,7 +104,12 @@ export async function GET(request: Request) {
       const paths = (vg?.artifacts ?? [])
         .filter((a) => a.kind === "video_mp4")
         .map((a) => a.storage_path)
-        .sort();
+        // BY EXTRACTED PART NUMBER, never by path string. ICU collation sorts
+        // "." AFTER "_", so a plain .sort() puts lesson.mp4 (Part 1) BEHIND
+        // lesson_part2.mp4 and the class watches the middle of the lesson
+        // first. The dashboard already learned this; this route had the buggy
+        // form.
+        .sort((a, b) => videoPart(a) - videoPart(b));
       const urls = (await Promise.all(paths.map((pth) => sign(pth)))).filter(
         (x): x is string => !!x,
       );
@@ -125,4 +136,12 @@ export async function GET(request: Request) {
   );
 
   return NextResponse.json({ units: out, picker });
+}
+
+/** Taken back explicitly. Next auto-implements OPTIONS when a route file does
+ *  not, replying 204 with an `Allow` header to ANY caller, signed in or not —
+ *  which tells an unauthenticated prober that this surface exists. The whole
+ *  point of answering 404 everywhere else is undone by that one reply. */
+export async function OPTIONS() {
+  return NOT_FOUND();
 }

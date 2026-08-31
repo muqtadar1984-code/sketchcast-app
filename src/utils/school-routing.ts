@@ -46,6 +46,13 @@ export const RESERVED_SEGMENTS = new Set([
   "onboarding",
   "staff-login",
   "school",
+  // Real top-level app routes. Omitting one makes it a TENANT SLUG on the
+  // school host: school.sketchcast.app/present/recap/<id> rewrites to a school
+  // named "present" and 404s — and the portal host is the only origin a portal
+  // student is ever signed in on, so a published lesson note would be
+  // unreachable by exactly the audience it was published for.
+  "present",
+  "preview",
   "favicon.ico",
   "_next",
 ]);
