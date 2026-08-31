@@ -21,6 +21,11 @@ export type CellLesson = {
   video: string | null;
   /** All video parts in order — a long chapter renders as Part 1..N (~15 min each). */
   videos?: string[];
+  /** TEMPORARY (2026-08-31): download-dispositioned twins of `videos`, same
+   *  order and indices (a slot may be null if that path failed to sign). Only
+   *  signed for the accounts allow-listed in @/utils/video-download — empty for
+   *  everyone else, so the Save link simply never renders. */
+  videoDownloads?: (string | null)[];
   deck: string | null;
   /** One deck per video part, same order. */
   decks?: string[];
@@ -230,6 +235,9 @@ export default function ContentCell({
   // done — multi-video presentations stack one chip per part ("Pt 2 · Watch · Deck").
   const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
   const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
+  // TEMPORARY (2026-08-31): founder-only "Save" links, index-aligned with
+  // `videos`. Empty for every other account, so nothing extra renders.
+  const videoDownloads = lesson.videoDownloads ?? [];
   const nParts = Math.max(videos.length, decks.length);
   const linkCls = "inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline";
   return (
@@ -245,6 +253,17 @@ export default function ContentCell({
                     <span className="text-[#1FB8A6]"><PlayIcon /></span>{t.watch}
                   </a>
                 )}
+                {/* TEMPORARY founder-only download. No target="_blank" (a
+                    disposition download would strand an empty tab) and no
+                    recordArtifactView — a save is not a view, and this must not
+                    colour the analytics. The label is a plain English literal on
+                    purpose: a dictionary key would have to land in all 10
+                    locales, and this affordance is never shown to a customer. */}
+                {videoDownloads[i] && (
+                  <a href={videoDownloads[i]!} className={linkCls}>
+                    <span className="text-[#1FB8A6]"><DownloadIcon /></span>Save
+                  </a>
+                )}
                 {decks[i] && (
                   <a href={decks[i]} onClick={() => trackViews && recordArtifactView(lesson.id, "deck_pptx")} className={linkCls}>
                     <span className="text-[#1FB8A6]"><DownloadIcon /></span>{t.deck}
@@ -258,6 +277,12 @@ export default function ContentCell({
             {videos[0] && (
               <a href={videos[0]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>
                 <span className="text-[#1FB8A6]"><PlayIcon /></span>{t.watch}
+              </a>
+            )}
+            {/* TEMPORARY founder-only download — see the multi-part branch. */}
+            {videoDownloads[0] && (
+              <a href={videoDownloads[0]!} className={linkCls}>
+                <span className="text-[#1FB8A6]"><DownloadIcon /></span>Save
               </a>
             )}
             {decks[0] && (

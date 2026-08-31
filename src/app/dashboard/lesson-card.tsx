@@ -269,6 +269,9 @@ export default function LessonCard({
   const processing = p.status === "queued" || p.status === "processing";
   const videos = p.videos?.length ? p.videos : p.video ? [p.video] : [];
   const decks = p.decks?.length ? p.decks : p.deck ? [p.deck] : [];
+  // TEMPORARY (2026-08-31): founder-only "Save" links, index-aligned with
+  // `videos`. Empty for every other account. See @/utils/video-download.
+  const videoDownloads = p.videoDownloads ?? [];
   const multi = Math.max(videos.length, decks.length) > 1;
   const eta =
     p.status === "processing" ? etaLabel("presentation", p.progress, p.stage, t.utils.job) : "";
@@ -343,6 +346,13 @@ export default function LessonCard({
                     <span className="text-[#1FB8A6]"><PlayGlyph size={12} /></span>{t.watch}
                   </a>
                 )}
+                {/* TEMPORARY founder-only download — English literal, no view
+                    tracking; see the note in content-cell.tsx. */}
+                {videoDownloads[i] && (
+                  <a href={videoDownloads[i]!} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline ms-2">
+                    <span className="text-[#1FB8A6]"><DownloadGlyph /></span>Save
+                  </a>
+                )}
                 {decks[i] && (
                   <a href={decks[i]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline ms-2">
                     <span className="text-[#1FB8A6]"><DownloadGlyph /></span>{t.deck}
@@ -351,13 +361,25 @@ export default function LessonCard({
               </Chip>
             ))
           ) : (
-            decks[0] && (
-              <Chip>
-                <a href={decks[0]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline">
-                  <span className="text-[#1FB8A6]"><DownloadGlyph /></span>{t.deck}
-                </a>
-              </Chip>
-            )
+            <>
+              {/* TEMPORARY founder-only download. Single-part cards have no
+                  Watch link (the thumbnail is the play affordance), so Save
+                  gets its own chip rather than riding the deck's. */}
+              {videoDownloads[0] && (
+                <Chip>
+                  <a href={videoDownloads[0]!} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline">
+                    <span className="text-[#1FB8A6]"><DownloadGlyph /></span>Save
+                  </a>
+                </Chip>
+              )}
+              {decks[0] && (
+                <Chip>
+                  <a href={decks[0]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline">
+                    <span className="text-[#1FB8A6]"><DownloadGlyph /></span>{t.deck}
+                  </a>
+                </Chip>
+              )}
+            </>
           )}
 
           {DOCS.map(([kind, field]) => {

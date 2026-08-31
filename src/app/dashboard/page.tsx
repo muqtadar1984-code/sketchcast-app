@@ -33,6 +33,7 @@ import { type JobStage } from "@/utils/job-stage";
 import { enforceHat } from "@/utils/hats-server";
 import { splitShelf } from "@/utils/school-books";
 import { docDownloadName } from "@/utils/download-name";
+import { canDownloadVideo, videoDownloadName } from "@/utils/video-download";
 import FeedbackQuestionnaire from "./feedback-questionnaire";
 import { tourForRole } from "@/tour/definitions";
 import { shouldAutoStart } from "@/tour/logic";
@@ -688,6 +689,10 @@ export default async function DashboardPage() {
     jobs: { progress: number | null; status: string; stage?: JobStage | null }[] | null;
   };
 
+  // TEMPORARY (2026-08-31): founder-only lesson-video download. Resolved once
+  // per request, not per artifact — see @/utils/video-download to revoke.
+  const mayDownloadVideo = canDownloadVideo(user.email);
+
   // Build signed download URLs for finished artifacts.
   const lessons = await Promise.all(
     ((gensRaw ?? []) as unknown as LessonRow[]).map(async (g) => {
@@ -706,10 +711,25 @@ export default async function DashboardPage() {
       // Multi-part lessons: a long chapter renders as several ~15-min videos
       // (lesson.mp4, lesson_part2.mp4, …) with a deck per part — collect ALL of
       // them in PART order. `video`/`deck` stay the first part for old call sites.
-      const videos = arts
+      const videoArts = arts
         .filter((a) => a.kind === "video_mp4" && a.url)
-        .sort((a, b) => partNum(a.path) - partNum(b.path))
-        .map((a) => a.url!);
+        .sort((a, b) => partNum(a.path) - partNum(b.path));
+      const videos = videoArts.map((a) => a.url!);
+      // TEMPORARY (2026-08-31): a second, download-dispositioned signing of the
+      // SAME paths, for the allow-listed accounts only. `videos` above is left
+      // disposition-free so in-tab playback still works. Index-aligned with
+      // `videos` — a path that fails to sign keeps its slot as null rather than
+      // being dropped, so Save never lands under the wrong part's Watch.
+      const videoDownloads: (string | null)[] = mayDownloadVideo
+        ? await Promise.all(
+            videoArts.map(async (a, i) => {
+              const { data } = await supabase.storage
+                .from("artifacts")
+                .createSignedUrl(a.path, 3600, { download: videoDownloadName(i, videoArts.length) });
+              return data?.signedUrl ?? null;
+            }),
+          )
+        : [];
       const decks = arts
         .filter((a) => a.kind === "deck_pptx" && a.url)
         .sort((a, b) => partNum(a.path) - partNum(b.path))
@@ -728,6 +748,7 @@ export default async function DashboardPage() {
         decks,
         video: videos[0] ?? null,
         videos,
+        videoDownloads,
         doc: arts.find((a) => a.kind === "docx")?.url ?? null,
         // Cumulative exams (0062) carry a SECOND doc — the answer key — as its
         // own artifact kind so it never rides the student's `docx` download.
