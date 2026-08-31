@@ -20,6 +20,8 @@ import {
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
 import { headerFit } from "@/utils/header-fit";
 import { tabsFor, tabsForHat } from "@/utils/nav-tabs";
+import { presentEntitled } from "@/utils/present/entitlement";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { activeHatCookie } from "@/utils/hats-server";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -77,6 +79,11 @@ export default async function AppHeader() {
   let analyticsOn = false;
   let calendarOn = false;
   let timetableOn = false;
+  // The classroom board is carried by the plan (Pro, Pro+, school). Resolving it
+  // needs plan_tier(), which carries EXECUTE for the service role alone — so a
+  // deployment with no service key simply shows no tab, which is the same answer
+  // /present itself would give.
+  let boardOn = false;
   // Which school decides the NOTICES gate for this viewer — their own for a
   // member, a child's for a parent (resolved by the calendar walk below).
   let noticeSchoolId: string | null = null;
@@ -92,6 +99,11 @@ export default async function AppHeader() {
     if (role && role !== "student") {
       // Global env flag OR this school's config override (the sales-demo tenant).
       analyticsOn = await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null);
+      try {
+        boardOn = (await presentEntitled(createAdminClient(), user.id, user)).ok;
+      } catch {
+        boardOn = false;
+      }
     }
     // Timetable reaches every school member — students see their class grid.
     if (role && profile?.school_id) {
@@ -227,8 +239,8 @@ export default async function AppHeader() {
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const tabs = activeHat
-    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks)
-    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title);
+    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn)
+    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn);
   // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
   // it is lower-cased — a no-op in the scripts that have no case at all.
   const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);

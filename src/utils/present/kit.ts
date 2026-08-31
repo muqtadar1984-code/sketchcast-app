@@ -97,83 +97,42 @@ export function groupOf(
 }
 
 export const GROUP_ORDER: PickerGroup[] = ["this-part", "this-chapter", "this-book", "revision"];
-export const GROUP_LABEL: Record<PickerGroup, string> = {
-  "this-part": "This part",
-  "this-chapter": "This chapter",
-  "this-book": "Elsewhere in this book",
-  revision: "Revision papers",
-};
-
-/** A human label for a worksheet in the picker. Falls back to the stored title,
- *  which the worker already composes to carry the chapter name and part. */
-export function scopeLabel(g: KitGeneration): string {
-  const s = scopeOf(g);
-  switch (s.kind) {
-    case "part":
-      // chapter_ref is 0-based in the database and rendered +1 everywhere.
-      return `Chapter ${s.chapter + 1} · Part ${s.part}`;
-    case "chapter":
-      return `Chapter ${s.chapter + 1}`;
-    case "chapters": {
-      const nums = [...s.chapters].sort((a, b) => a - b).map((n) => n + 1);
-      return nums.length > 3
-        ? `Chapters ${nums[0]}–${nums[nums.length - 1]}`
-        : `Chapters ${nums.join(", ")}`;
-    }
-    default:
-      return g.title ?? "Worksheet";
-  }
-}
 
 // ── the rail for one part ────────────────────────────────────────────────────
 
+/**
+ * WHAT it is and WHETHER it projects — never the words for either.
+ *
+ * This module ran on the server and composed English: a `label` from a kind and
+ * a sentence explaining why a test paper only downloads. Both are now keys the
+ * UI renders in the reader's own language, because the board reaches ten
+ * locales and a rail labelled "Worksheet" in the middle of a Malay page is the
+ * kind of half-translation nobody files a bug about.
+ */
 export type RailDoc = {
   id: string;
   kind: string;
-  label: string;
   /** True when tapping it projects; false when it only downloads. */
   projects: boolean;
-  /** Why it does not project, when it does not. Shown to her, not swallowed. */
-  note?: string;
-};
-
-const DOC_LABEL: Record<string, string> = {
-  presentation: "Video",
-  worksheet: "Worksheet",
-  lesson_plan: "Lesson plan",
-  activity: "Activity",
-  case_study: "Case study",
-  exam_paper: "Test paper",
-  exam: "Exam",
+  /** WHY it does not project, when it does not. A reason, not a sentence. */
+  note?: "never-project" | "no-text";
 };
 
 export type RailUnit = {
   /** null = a kit generated for the whole chapter rather than a part of it. */
   part: number | null;
-  label: string;
+  /** How many parts this chapter has kits for, so the UI can say "1 of 4". */
+  total: number;
   video: { id: string; title: string | null } | null;
   docs: RailDoc[];
 };
 
 function docFor(g: KitGeneration): RailDoc {
-  const label = DOC_LABEL[g.kind] ?? g.kind;
   if (NEVER_PROJECT.has(g.kind)) {
-    return {
-      id: g.id,
-      kind: g.kind,
-      label,
-      projects: false,
-      note: "Download only — a paper the class has watched is no longer a test",
-    };
+    return { id: g.id, kind: g.kind, projects: false, note: "never-project" };
   }
-  if (boardEligible(g)) return { id: g.id, kind: g.kind, label, projects: true };
-  return {
-    id: g.id,
-    kind: g.kind,
-    label,
-    projects: false,
-    note: "Download only — this kind has no structured text to put on a board",
-  };
+  if (boardEligible(g)) return { id: g.id, kind: g.kind, projects: true };
+  return { id: g.id, kind: g.kind, projects: false, note: "no-text" };
 }
 
 /**
@@ -214,20 +173,24 @@ export function railFor(gens: KitGeneration[], here: { chapter: number }): RailU
     const vid = group.find((g) => g.kind === "presentation" && hasArtifact(g, "video_mp4")) ?? null;
     return {
       part,
-      label: part === null ? "Whole chapter" : total > 1 ? `Part ${part} of ${total}` : `Part ${part}`,
+      total,
       video: vid ? { id: vid.id, title: vid.title } : null,
       docs: group
         .filter((g) => g.kind !== "presentation")
         .map(docFor)
-        // What projects goes first: it is the one that reaches the board.
-        .sort((a, b) => Number(b.projects) - Number(a.projects) || a.label.localeCompare(b.label)),
+        // What projects goes first: it is the one that reaches the board. Then
+        // by KIND rather than by label — the label is a translation now, and
+        // sorting on it would reorder the rail per language.
+        .sort((a, b) => Number(b.projects) - Number(a.projects) || a.kind.localeCompare(b.kind)),
     };
   });
 }
 
 export type PickerItem = {
   id: string;
-  label: string;
+  /** Where it sits, for the UI to render as "Chapter 4 · Part 2". Structured
+   *  rather than composed, for the same reason RailDoc lost its label. */
+  scope: Scope;
   title: string | null;
   /**
    * WHERE IT ACTUALLY SITS, carried so the item recorded when she projects it can
@@ -254,7 +217,7 @@ export function pickerFor(
         const s = scopeOf(g);
         return {
           id: g.id,
-          label: scopeLabel(g),
+          scope: s,
           title: g.title,
           // A cumulative paper spans chapters, so it sits in NO chapter — null,
           // which is exactly what advancesPointer refuses.

@@ -92,10 +92,5 @@ export function presentAccess(f: PresentFacts): PresentVerdict {
   return { ok: false, why: "plan" };
 }
 
-/** What to tell somebody who is refused, on a surface where they already know
- *  the feature exists. The API routes still answer a bare 404 — a refusal there
- *  must not describe itself. */
-export const PRESENT_REFUSAL: Record<Exclude<PresentVerdict, { ok: true }>["why"], string> = {
-  "not-teaching": "The classroom board is for teachers.",
-  plan: "The classroom board comes with Pro, Pro+ and every school plan.",
-};
+// The sentence for a refusal lives in `present.gate.<why>`, not here — the page
+// that renders it resolves the dictionary, and this module stays pure.

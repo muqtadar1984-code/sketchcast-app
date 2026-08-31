@@ -5,6 +5,9 @@ import { sessionById } from "@/utils/present/server";
 import { mayReadRecap } from "@/utils/present/audience";
 import { authorAllowed, readerFacts } from "@/utils/present/reader";
 import { chaptersShown, type RecapItem } from "@/utils/present/recap";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { fmt } from "@/i18n/format";
 
 export const dynamic = "force-dynamic";
 
@@ -30,16 +33,22 @@ export const dynamic = "force-dynamic";
 // sentence the teacher deleted. Every check RLS would have done is done in
 // mayReadRecap() instead, against facts fetched in reader.ts.
 //
-// NOT TRANSLATED. The rest of Present mode is English-only because it is behind
-// a one-account allowlist, and that argument is weakest exactly here — this is
-// the first Present surface with a real audience, and that audience is
-// Malaysian. It is a release blocker for widening the allowlist, recorded in
-// docs/PRESENT-MODE.md rather than left to be discovered.
+// TRANSLATED, AND THIS IS THE PAGE THAT FORCED IT. Every other Present surface
+// is driven by the teacher who chose to open it; this one is sent to students
+// and parents who did not, and it went out to a Malaysian class. The locale is
+// resolved per REQUEST rather than per lesson, because a student and their
+// teacher need not share one.
 
 const SIGN_TTL = 8 * 60 * 60;
 
 export default async function RecapPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // The reader's own language, and the tag every date on this page is written
+  // in. A student and their teacher may not share one, which is the whole point
+  // of resolving it per request rather than per lesson.
+  const locale = await resolveLocale();
+  const t = (await getDictionary(locale)).present;
 
   const supabase = await createClient();
   const {
@@ -115,14 +124,14 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
         <header className="grid gap-1">
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#6B7A75]">
             {klass.data?.name ? `${klass.data.name} · ` : ""}
-            {session.subject ?? "Lesson"}
+            {session.subject ?? t.recap.lesson}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {book.data?.title ?? "Lesson note"}
+            {book.data?.title ?? t.recap.lessonNote}
           </h1>
           <p className="font-mono text-[11px] text-[#6B7A75]">
-            {teacher.data?.full_name ?? "Your teacher"}
-            {taught ? ` · ${taught.toLocaleDateString(undefined, { dateStyle: "medium" })}` : ""}
+            {teacher.data?.full_name ?? t.recap.yourTeacher}
+            {taught ? ` · ${taught.toLocaleDateString(locale, { dateStyle: "medium" })}` : ""}
           </p>
         </header>
 
@@ -135,24 +144,29 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
         {!!covered.chapters.length && (
           <section className="grid gap-1">
             <h2 className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B7A75]">
-              What this covered
+              {t.recap.covered}
             </h2>
             <ul className="grid gap-1 text-sm">
               {covered.chapters.map((c) => (
                 <li key={c.chapterNum}>
                   {/* chapter_ref is 0-based in the database and rendered +1. */}
                   <span className="font-medium">
-                    {chapters[c.chapterNum]?.title ?? `Chapter ${c.chapterNum + 1}`}
+                    {chapters[c.chapterNum]?.title ?? fmt(t.bar.chapterN, { n: c.chapterNum + 1 })}
                   </span>
                   {c.parts.length > 0 && (
                     <span className="text-[#6B7A75]">
                       {" "}
-                      · {c.parts.length === 1 ? "Part" : "Parts"} {c.parts.join(", ")}
+                      ·{" "}
+                      {fmt(c.parts.length === 1 ? t.recap.partOne : t.recap.partMany, {
+                        list: c.parts.join(", "),
+                      })}
                     </span>
                   )}
                 </li>
               ))}
-              {covered.revision && <li className="text-[#6B7A75]">Revision across other chapters</li>}
+              {covered.revision && (
+                <li className="text-[#6B7A75]">{t.recap.revisionElsewhere}</li>
+              )}
             </ul>
           </section>
         )}
@@ -164,15 +178,17 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
             rel="noopener noreferrer"
             className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#0C8175] px-5 py-3 text-sm font-medium text-white"
           >
-            Open what was written on the board
+            {t.recap.openBoard}
             <span className="font-mono text-[11px] opacity-80">
-              {session.page_count ?? 1} {(session.page_count ?? 1) === 1 ? "page" : "pages"} · PDF
+              {(session.page_count ?? 1) === 1
+                ? t.recap.boardOne
+                : fmt(t.recap.boardMany, { n: session.page_count ?? 1 })}
             </span>
           </a>
         ) : (
           // Said, not hidden. A missing board is a fact about this lesson, and a
           // student hunting for a button that was never there is worse.
-          <p className="text-sm text-[#6B7A75]">Nothing was written on the board in this lesson.</p>
+          <p className="text-sm text-[#6B7A75]">{t.recap.noBoard}</p>
         )}
       </article>
     </main>

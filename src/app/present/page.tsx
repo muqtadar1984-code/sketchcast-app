@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { presentEntitled } from "@/utils/present/entitlement";
-import { PRESENT_REFUSAL } from "@/utils/present/access";
+import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
 import { shapeFromConfig, type Slot } from "@/utils/timetable";
 import type { LastTaught } from "@/utils/present/context";
 import PresentClient, { type BookOption, type ClassName } from "./present-client";
@@ -45,8 +46,13 @@ export default async function PresentPage() {
   // them. Now that the board ships with Pro, Pro+ and every school plan, landing
   // them back on the Library with no explanation is the product refusing to say
   // what it wants. The API routes keep their bare 404s: those answer strangers.
+  // The page's words. Resolved on the SERVER and handed down as props — ten
+  // message files must never reach the browser bundle, which is the whole reason
+  // dictionaries.ts is server-only.
+  const t = (await getDictionary(await resolveLocale())).present;
+
   const verdict = await presentEntitled(admin, user.id, user);
-  if (!verdict.ok) return <Refused why={PRESENT_REFUSAL[verdict.why]} />;
+  if (!verdict.ok) return <Refused t={t} why={verdict.why} />;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -143,6 +149,7 @@ export default async function PresentPage() {
     <PresentClient
       teacherId={user.id}
       teacherName={(profile?.full_name as string | null) ?? null}
+      t={t}
       shape={shape}
       slots={slots}
       classes={classes}
@@ -155,20 +162,22 @@ export default async function PresentPage() {
 /** What a teacher sees when the board is not on their plan. Deliberately not a
  *  redirect and deliberately not a 404: they are signed in, they followed a link
  *  we gave them, and the honest answer is short. */
-function Refused({ why }: { why: string }) {
+function Refused({ t, why }: { t: Dictionary["present"]; why: "not-teaching" | "plan" }) {
   return (
     <main className="grid min-h-dvh place-items-center bg-[#0F1417] px-6 text-[#E7EDE9]">
       <div className="max-w-md text-center">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
-          Present mode
+          SketchCast
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">The classroom board</h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#93A09A]">{why}</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t.title}</h1>
+        <p className="mt-3 text-sm leading-relaxed text-[#93A09A]">
+          {why === "plan" ? t.gate.plan : t.gate.notTeaching}
+        </p>
         <a
           href="/dashboard"
           className="mt-6 inline-block rounded-xl bg-[#0C8175] px-6 py-3 text-sm font-medium text-white"
         >
-          Back to your library
+          {t.gate.back}
         </a>
       </div>
     </main>

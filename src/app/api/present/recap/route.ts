@@ -3,7 +3,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/utils/tutor/service";
 import { TUTOR_MODELS } from "@/utils/tutor/models";
 import { caller, ownedSession, jsonBody, NOT_FOUND, type Caller } from "@/utils/present/server";
-import { checkPublish, PUBLISH_MESSAGE, MAX_BODY } from "@/utils/present/audience";
+import { checkPublish, MAX_BODY } from "@/utils/present/audience";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { LOCALES, type Locale } from "@/i18n/locales";
 import {
   buildGround,
   cleanRecap,
@@ -58,7 +61,13 @@ export async function POST(request: Request) {
   // The evidence is only complete once the lesson is. Drafting mid-period would
   // describe half a lesson and then look stale for the rest of it.
   if (!session.ended_at) {
-    return NextResponse.json({ error: PUBLISH_MESSAGE["not-closed"] }, { status: 409 });
+    // A CODE, not a sentence. The board speaks ten languages; the UI renders
+    // `present.publish.<reason>` and the English `error` is a developer's
+    // fallback for anything that is not the UI.
+    return NextResponse.json(
+      { error: "End the lesson first.", reason: "not-closed" },
+      { status: 409 },
+    );
   }
 
   // ── the evidence ───────────────────────────────────────────────────────────
@@ -101,32 +110,40 @@ export async function POST(request: Request) {
     // it. Same for a transport failure.
     if (error) {
       console.error("[present/recap] reserve failed", error.message);
-      return { ok: false, why: "the note could not be drafted just now" };
+      return { ok: false, why: "failed" };
     }
-    return data === true
-      ? { ok: true }
-      : { ok: false, why: "you have reached this month's drafting limit" };
+    return data === true ? { ok: true } : { ok: false, why: "rate-limited" };
   };
 
   let draft = "";
   let source: "model" | "fallback" = "fallback";
   let note: string | null = null;
 
+  // The fallback sentence is the one piece of prose this product WRITES rather
+  // than displays, so it is composed in HER language — a Malay teacher editing
+  // an English sentence about her own lesson is exactly the half-translated
+  // state the i18n pass was for.
+  const locale = await resolveLocale();
+  const words = (await getDictionary(locale)).present.fallback;
+  // Her language, by name, so the model writes the note in it rather than
+  // handing a Malay teacher an English sentence about her own lesson.
+  const language = languageOf(locale);
+
   if (!process.env.ANTHROPIC_API_KEY) {
-    draft = fallbackRecap(ground);
-    note = "drafting is not configured on this deployment";
+    draft = fallbackRecap(ground, words);
+    note = "not-configured";
   } else if (!ground.chapters.length && !ground.revision) {
     // Nothing was shown. There is no prompt worth sending and no sentence the
     // model could write that fallbackRecap does not write for free.
-    draft = fallbackRecap(ground);
-    note = "nothing was opened in this lesson, so there was nothing to describe";
+    draft = fallbackRecap(ground, words);
+    note = "nothing-shown";
   } else {
-    const written = await write(ground, reserve);
+    const written = await write(ground, reserve, language);
     if (written.ok) {
       draft = written.text;
       source = "model";
     } else {
-      draft = fallbackRecap(ground);
+      draft = fallbackRecap(ground, words);
       note = written.why;
     }
   }
@@ -171,7 +188,7 @@ export async function PATCH(request: Request) {
   // rather than the text.
   if (publish && !check.ok) {
     return NextResponse.json(
-      { error: PUBLISH_MESSAGE[check.reason], reason: check.reason },
+      { error: `Cannot publish: ${check.reason}.`, reason: check.reason },
       { status: 409 },
     );
   }
@@ -182,7 +199,10 @@ export async function PATCH(request: Request) {
   // published while she reworded it, which is the exact trap the withdraw
   // button exists to open.
   if (!publish && !withdraw && body.length > MAX_BODY) {
-    return NextResponse.json({ error: PUBLISH_MESSAGE["too-long"] }, { status: 400 });
+    return NextResponse.json(
+      { error: `Over ${MAX_BODY} characters.`, reason: "too-long" },
+      { status: 400 },
+    );
   }
   // 0099's CHECK — recap_published_at implies recap_body — would reject this as
   // a 500 that reads like a bug. Emptying a note that people can already read is
@@ -190,7 +210,7 @@ export async function PATCH(request: Request) {
   // something inferred from a cleared textarea.
   if (!body && !withdraw && session.recap_published_at) {
     return NextResponse.json(
-      { error: "This note is published. Withdraw it first, then clear it.", reason: "published" },
+      { error: "This note is published; withdraw it first.", reason: "already-published" },
       { status: 409 },
     );
   }
@@ -231,13 +251,15 @@ export async function OPTIONS() {
 async function write(
   ground: ReturnType<typeof buildGround>,
   reserve: () => Promise<{ ok: true } | { ok: false; why: string }>,
+  language: string,
 ): Promise<{ ok: true; text: string } | { ok: false; why: string }> {
-  const { instructions, context } = recapPrompt(ground);
+  const { instructions, context } = recapPrompt(ground, language);
   // LOCAL, not module-level. A serverless function handles concurrent requests
   // in one process, and a module-level `let` here would let one teacher's
   // rejected draft become another's retry context.
-  let lastWhy = "the model did not answer";
+  let lastWhy = "failed";
   let lastAnswer = "";
+  let lastCorrection = "the model did not answer";
 
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const allowance = await reserve();
@@ -264,7 +286,7 @@ ${RECAP_USER_TURN}`,
     if (attempt > 0) {
       messages.push(
         { role: "assistant", content: lastAnswer || "…" },
-        { role: "user", content: correction(lastWhy) },
+        { role: "user", content: correction(lastCorrection) },
       );
     }
 
@@ -283,18 +305,23 @@ ${RECAP_USER_TURN}`,
       // truncated text is still the evidence the retry should see.
       if (resp.stop_reason === "max_tokens") {
         lastAnswer = text;
-        lastWhy = "it ran past the length limit";
+        lastCorrection = "it ran past the length limit";
+        lastWhy = "failed";
         continue;
       }
     } catch (e) {
       console.error("[present/recap] model call failed", e);
-      return { ok: false, why: "the note could not be drafted just now" };
+      return { ok: false, why: "failed" };
     }
 
     lastAnswer = text;
     const cleaned = cleanRecap(text);
     if (cleaned.ok) return { ok: true, text: cleaned.text };
-    lastWhy = cleaned.reason;
+    // The model's own violation is fed back to it VERBATIM on the retry — that
+    // is a prompt, not UI, and stays English. What reaches the teacher is the
+    // code below.
+    lastCorrection = cleaned.reason;
+    lastWhy = "failed";
   }
 
   return { ok: false, why: lastWhy };
@@ -369,4 +396,12 @@ async function chapterFacts(
  *  exists. A 404 tells them nothing, which is the whole doctrine here. */
 export async function GET() {
   return NOT_FOUND();
+}
+
+/** The locale's own name for itself, which is what a model recognises. Falls
+ *  back to English rather than to a code — "write in ms-arab" is an instruction
+ *  no model follows well. */
+function languageOf(locale: Locale): string {
+  const hit = LOCALES.find((l) => l.value === locale);
+  return hit ? hit.label : "English";
 }

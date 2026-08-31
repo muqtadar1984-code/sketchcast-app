@@ -133,7 +133,7 @@ export async function GET(request: Request) {
       );
       return {
         part: u.part,
-        label: u.label,
+        total: u.total,
         video: u.video ? { id: u.video.id, title: u.video.title, urls } : null,
         docs,
       };

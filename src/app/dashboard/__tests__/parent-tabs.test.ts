@@ -22,10 +22,13 @@ const T = {
   diary: "Diary", testPapers: "Test Papers", calendar: "Calendar",
   timetable: "Timetable", school: "School", teachers: "Teachers",
   access: "Access", admin: "Admin", books: "Books", schoolDiary: "School diary",
+  board: "Board",
 } as unknown as Parameters<typeof tabsForHat>[0];
 
 const labels = (schoolParent: boolean) =>
-  tabsForHat(T, "parent", true, true, true, true, schoolParent).map((x: { label: string }) => x.label);
+  tabsForHat(T, "parent", true, true, true, true, schoolParent, true).map(
+    (x: { label: string }) => x.label,
+  );
 
 describe("the parent hat's tabs", () => {
   it("gives a school parent no authoring surfaces", () => {
@@ -61,7 +64,9 @@ describe("the parent hat's tabs", () => {
   it("does not touch the teacher hat", () => {
     // A teacher who is also a school parent keeps everything under their own
     // hat — that is what hats are for.
-    const t = tabsForHat(T, "teacher", true, true, true, true, true).map((x: { label: string }) => x.label);
+    const t = tabsForHat(T, "teacher", true, true, true, true, true, true).map(
+      (x: { label: string }) => x.label,
+    );
     expect(t).toContain("Library");
     expect(t).toContain("My Analytics");
   });
@@ -70,5 +75,37 @@ describe("the parent hat's tabs", () => {
     // With the Library gone it becomes the landing tab; parentHatHome already
     // sends a non-home-educator parent there.
     expect(labels(true)[0]).toBe("My Children");
+  });
+});
+
+describe("the classroom board's tab", () => {
+  const teacher = (boardOn: boolean) =>
+    tabsForHat(T, "teacher", true, true, true, true, false, boardOn).map(
+      (x: { label: string }) => x.label,
+    );
+
+  it("appears for a teacher whose plan carries it", () => {
+    expect(teacher(true)).toContain("Board");
+  });
+
+  it("IS ABSENT WHEN THE PLAN DOES NOT CARRY IT — a tab is a promise", () => {
+    // /present refuses with a sentence about Pro; a tab that led there anyway
+    // would be an invitation to be turned away, on every page load.
+    expect(teacher(false)).not.toContain("Board");
+  });
+
+  it("NEVER APPEARS UNDER A LEADERSHIP HAT, however the plan is set", () => {
+    // The board is a surface you stand at. A principal in Leadership mode is
+    // not teaching a period, and hats exist so each world shows only its own.
+    for (const hat of ["principal", "coordinator"] as const) {
+      const t = tabsForHat(T, hat, true, true, true, true, false, true).map(
+        (x: { label: string }) => x.label,
+      );
+      expect(t, hat).not.toContain("Board");
+    }
+  });
+
+  it("never appears under the parent hat either", () => {
+    expect(labels(false)).not.toContain("Board");
   });
 });

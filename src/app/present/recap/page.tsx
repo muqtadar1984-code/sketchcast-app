@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { authorAllowed, readerFacts } from "@/utils/present/reader";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,9 @@ export default async function RecapListPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=${encodeURIComponent("/present/recap")}`);
+
+  const locale = await resolveLocale();
+  const t = (await getDictionary(locale)).present;
 
   let rows: Row[] = [];
   let books = new Map<string, string>();
@@ -102,12 +107,9 @@ export default async function RecapListPage() {
   return (
     <main className="min-h-dvh bg-[#F7F9F8] text-[#14181F]">
       <div className="mx-auto grid max-w-2xl gap-5 px-5 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight">Lesson notes</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.recap.listTitle}</h1>
         {!rows.length ? (
-          <p className="text-sm text-[#6B7A75]">
-            Nothing published yet. A note appears here once a teacher publishes one to a class you
-            are in.
-          </p>
+          <p className="text-sm text-[#6B7A75]">{t.recap.listEmpty}</p>
         ) : (
           <ul className="grid gap-3">
             {rows.map((r) => (
@@ -117,9 +119,9 @@ export default async function RecapListPage() {
                   className="block rounded-2xl border border-[#D9E2DE] bg-white px-5 py-4 hover:border-[#0C8175]"
                 >
                   <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B7A75]">
-                    {(r.book_id && books.get(r.book_id)) || r.subject || "Lesson"}
+                    {(r.book_id && books.get(r.book_id)) || r.subject || t.recap.lesson}
                     {r.recap_published_at
-                      ? ` · ${new Date(r.recap_published_at).toLocaleDateString(undefined, {
+                      ? ` · ${new Date(r.recap_published_at).toLocaleDateString(locale, {
                           dateStyle: "medium",
                         })}`
                       : ""}

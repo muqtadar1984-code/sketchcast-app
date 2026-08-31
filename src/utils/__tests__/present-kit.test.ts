@@ -5,7 +5,6 @@ import {
   partOf,
   chapterOf,
   scopeOf,
-  scopeLabel,
   groupOf,
   railFor,
   pickerFor,
@@ -84,17 +83,6 @@ describe("where a generation sits", () => {
     expect(chapterOf(gen({ chapter_ref: null }))).toBeNull();
   });
 
-  it("renders chapter numbers +1, because chapter_ref is 0-based", () => {
-    expect(scopeLabel(gen())).toBe("Chapter 4 · Part 2");
-    expect(scopeLabel(gen({ params: {} }))).toBe("Chapter 4");
-    expect(scopeLabel(gen({ chapter_ref: null, params: { chapters: [0, 1, 2] } }))).toBe(
-      "Chapters 1, 2, 3",
-    );
-    expect(scopeLabel(gen({ chapter_ref: null, params: { chapters: [0, 1, 2, 3, 4] } }))).toBe(
-      "Chapters 1–5",
-    );
-  });
-
   it("knows a revision paper when it sees one", () => {
     expect(isRevision(gen({ params: { revision: true } }))).toBe(true);
     expect(isRevision(gen())).toBe(false);
@@ -147,14 +135,15 @@ describe("the rail for a chapter", () => {
     expect(units[1].video?.id).toBe("vid2");
   });
 
-  it("labels each unit with its place in the chapter", () => {
-    expect(railFor(kit, here).map((u) => u.label)).toEqual(["Part 1 of 2", "Part 2 of 2"]);
+  it("COUNTS THE CHAPTER'S PARTS so the UI can say \"1 of 2\" in any language", () => {
+    // The label used to be composed here, in English, on the server. What the
+    // rail needs is the arithmetic; the words belong to the reader's locale.
+    expect(railFor(kit, here).map((u) => u.total)).toEqual([2, 2]);
   });
 
   it("includes a chapter-level kit as its own unit, first", () => {
     const units = railFor([...kit, gen({ id: "whole", params: {} })], here);
     expect(units[0].part).toBeNull();
-    expect(units[0].label).toBe("Whole chapter");
   });
 
   it("INCLUDES the test paper, marked download-only, rather than hiding it", () => {
@@ -162,13 +151,16 @@ describe("the rail for a chapter", () => {
     // would read as a bug and she would go looking.
     const paper = railFor(kit, here)[0].docs.find((d) => d.kind === "exam_paper");
     expect(paper?.projects).toBe(false);
-    expect(paper?.note).toContain("no longer a test");
+    expect(paper?.note).toBe("never-project");
   });
 
-  it("marks a lesson plan download-only for a different reason, and says which", () => {
+  it("DISTINGUISHES the two reasons a doc only downloads", () => {
+    // A test paper is excluded on principle; a lesson plan has nothing
+    // structured to put on a board. Two reasons, two sentences in ten
+    // languages — so the module returns which, never the sentence.
     const plan = railFor(kit, here)[0].docs.find((d) => d.kind === "lesson_plan");
     expect(plan?.projects).toBe(false);
-    expect(plan?.note).toContain("no structured text");
+    expect(plan?.note).toBe("no-text");
   });
 
   it("puts what projects at the top of each unit", () => {
@@ -221,6 +213,12 @@ describe("the picker", () => {
     ).flatMap((g) => g.items);
     expect(items.find((i) => i.id === "mine")).toMatchObject({ chapter: 3, part: 2 });
     expect(items.find((i) => i.id === "cumulative")).toMatchObject({ chapter: null, part: null });
+    // And its SCOPE, so the UI can write "Chapter 4 · Part 2" in its own words.
+    expect(items.find((i) => i.id === "mine")?.scope).toEqual({
+      kind: "part",
+      chapter: 3,
+      part: 2,
+    });
   });
 
   it("omits a group with nothing in it rather than showing an empty heading", () => {

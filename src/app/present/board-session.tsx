@@ -9,7 +9,10 @@ import { BoardStore, type LogRecord } from "@/board/store";
 import { exportRoll, warmExport } from "@/board/export-pdf";
 import { probeStatic, newObservations, profileFor } from "@/board/capabilities";
 import type { TouchMode } from "@/board/ink";
-import type { PickerGroup } from "@/utils/present/kit";
+import type { PickerGroup, Scope } from "@/utils/present/kit";
+import { fmt } from "@/i18n/format";
+import { docLabel, groupLabel, scopeLabel, toolLabel, unitLabel, unitShort } from "./words";
+import type { PresentWords } from "./present-client";
 import { framePath, rollPdfPath } from "@/utils/present/paths";
 import { Stage, type StageHandle, type StageMode } from "./stage";
 import WrapUp from "./wrap-up";
@@ -50,10 +53,10 @@ import WrapUp from "./wrap-up";
 // she brought back. The final voided set is one authoritative statement and
 // cannot disagree with itself.
 
-const TOOLS: { key: Tool; label: string; color: string; width: number }[] = [
-  { key: "pen", label: "Pen", color: "#14181F", width: 4 },
-  { key: "highlighter", label: "Highlighter", color: "#F5D547", width: 26 },
-  { key: "eraser", label: "Eraser", color: "#FFFFFF", width: 28 },
+const TOOLS: { key: Tool; color: string; width: number }[] = [
+  { key: "pen", color: "#14181F", width: 4 },
+  { key: "highlighter", color: "#F5D547", width: 26 },
+  { key: "eraser", color: "#FFFFFF", width: 28 },
 ];
 
 export type SessionInfo = {
@@ -69,9 +72,9 @@ export type SessionInfo = {
 export type KitDoc = {
   id: string;
   kind: string;
-  label: string;
   projects: boolean;
-  note?: string;
+  /** A reason, not a sentence — the UI renders it. */
+  note?: "never-project" | "no-text";
   title: string | null;
   download: string | null;
 };
@@ -79,7 +82,7 @@ export type KitDoc = {
 export type KitUnit = {
   /** null = a kit generated for the whole chapter rather than a part of it. */
   part: number | null;
-  label: string;
+  total: number;
   video: { id: string; title: string | null; urls: string[] } | null;
   docs: KitDoc[];
 };
@@ -88,7 +91,13 @@ export type SessionKit = {
   units: KitUnit[];
   picker: {
     group: PickerGroup;
-    items: { id: string; label: string; chapter: number | null; part: number | null }[];
+    items: {
+      id: string;
+      scope: Scope;
+      title: string | null;
+      chapter: number | null;
+      part: number | null;
+    }[];
   }[];
 };
 
@@ -96,9 +105,9 @@ export type SessionKit = {
  *  usable as identity across a reload and null needs a name of its own. */
 const unitKey = (u: { part: number | null }) => (u.part === null ? "whole" : `p${u.part}`);
 
-type Props = { session: SessionInfo; kit: SessionKit | null; onEnd: () => void };
+type Props = { session: SessionInfo; kit: SessionKit | null; t: PresentWords; onEnd: () => void };
 
-export default function BoardSession({ session, kit, onEnd }: Props) {
+export default function BoardSession({ session, kit, t, onEnd }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -256,7 +265,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
   const freeze = useCallback(async () => {
     const f = await stage.current?.freeze();
     if (!f) {
-      setNote("Could not capture the frame.");
+      setNote(t.board.freezeFailed);
       return;
     }
     // addPage appends, so the page it is about to occupy is the current count.
@@ -264,7 +273,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
     localFrames.current.set(path, f.url);
     board.current?.push({ kind: "frame", src: path, generationId: unit?.video?.id, t: f.t });
     setMode("corner");
-    setNote(`Frozen at ${f.t.toFixed(1)}s — the frame is on the board`);
+    setNote(fmt(t.board.frozen, { t: f.t.toFixed(1) }));
 
     void (async () => {
       try {
@@ -276,10 +285,10 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
       } catch {
         // Not worth interrupting a lesson for. The frame is on the board and in
         // the export; what it loses is surviving a reload.
-        setNote("Frozen — but this frame could not be saved, so a reload would lose it.");
+        setNote(t.board.frozenUnsaved);
       }
     })();
-  }, [unit, session.teacherId, session.id, roll, db]);
+  }, [unit, session.teacherId, session.id, roll, db, t]);
 
   const resume = useCallback(() => {
     setMode("full");
@@ -358,7 +367,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
   );
 
   const exportPdf = useCallback(async () => {
-    setNote("Building the PDF…");
+    setNote(t.board.buildingPdf);
     const bytes = await exportRoll(roll, exportOpts);
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
     const a = document.createElement("a");
@@ -366,8 +375,8 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
     a.download = "board.pdf";
     a.click();
     URL.revokeObjectURL(url);
-    setNote(`PDF ready — ${(bytes.length / 1024).toFixed(0)} KB, ${roll.pages.length} pages`);
-  }, [roll, exportOpts]);
+    setNote(fmt(t.board.pdfReady, { kb: (bytes.length / 1024).toFixed(0), pages: roll.pages.length }));
+  }, [roll, exportOpts, t]);
 
   /**
    * End the lesson: reconcile, export, upload, close.
@@ -439,12 +448,12 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
 
     if (!closed) {
       setPhase("board");
-      setNote("Could not end the lesson — check the connection and tap End lesson again.");
+      setNote(t.board.endFailed);
       return;
     }
 
     setPhase("wrap");
-  }, [phase, roll, exportOpts, session.teacherId, session.id, where.count, db]);
+  }, [phase, roll, exportOpts, session.teacherId, session.id, where.count, db, t]);
 
   const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]";
   // EVERY CONTROL, not just the End button. The export walks the live roll page
@@ -463,7 +472,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
   if (phase === "wrap") {
     return (
       <div className="min-h-[70dvh]">
-        <WrapUp sessionId={session.id} roll={rollSaved} onDone={onEnd} />
+        <WrapUp sessionId={session.id} roll={rollSaved} t={t} onDone={onEnd} />
       </div>
     );
   }
@@ -488,7 +497,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
                       : "border-[#2A363B] bg-[#141B1F] text-[#93A09A]"
                   }`}
                 >
-                  {u.part === null ? "Whole" : `P${u.part}`}
+                  {unitShort(t, u)}
                 </button>
               );
             })}
@@ -497,7 +506,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
 
         {unit && (
           <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-            {unit.label}
+            {unitLabel(t, unit)}
           </p>
         )}
 
@@ -508,17 +517,17 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
             onClick={playVideo}
             className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-start text-sm text-[#4FD6C2]"
           >
-            ▶ Video
+            ▶ {t.doc.presentation}
             {unit.video.urls.length > 1 && (
               <span className="mt-0.5 block font-mono text-[10px] opacity-70">
-                {unit.video.urls.length} parts — first one plays
+                {fmt(t.kit.videoPartsFirst, { n: unit.video.urls.length })}
               </span>
             )}
           </button>
         )}
         {mode === "corner" && (
           <button type="button" onClick={resume} className={btn}>
-            Resume video
+            {t.board.resumeVideo}
           </button>
         )}
         {unit?.docs.map((d) => (
@@ -528,7 +537,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
             disabled={saving}
             onClick={() =>
               d.projects
-                ? openWorksheet(d.id, d.label, {
+                ? openWorksheet(d.id, docLabel(t, d.kind), {
                     chapterNum: session.chapterNum,
                     part: unit.part,
                   })
@@ -540,17 +549,17 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
                 : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
             }`}
           >
-            {d.label}
+            {docLabel(t, d.kind)}
             {d.note && (
               <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
-                {d.note}
+                {d.note === "never-project" ? t.doc.noteNeverProject : t.doc.noteNoText}
               </span>
             )}
           </button>
         ))}
 
         {kit && !units.length && (
-          <p className="text-sm text-[#93A09A]">Nothing generated for this chapter yet.</p>
+          <p className="text-sm text-[#93A09A]">{t.kit.empty}</p>
         )}
 
         <button
@@ -559,7 +568,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
           onClick={() => board.current?.push({ kind: "blank" })}
           className={btn}
         >
-          Blank board
+          {t.board.blank}
         </button>
 
         {/* Anything else in the book she may want mid-lesson — the other parts'
@@ -568,21 +577,25 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
         {!!kit?.picker.length && (
           <>
             <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-              Other worksheets
+              {t.kit.otherWorksheets}
             </p>
             {kit.picker.map((g) => (
               <div key={g.group} className="grid gap-1">
+                <p className="font-mono text-[10px] text-[#5F6F69]">{groupLabel(t, g.group)}</p>
                 {g.items.map((i) => (
                   <button
                     key={i.id}
                     type="button"
                     disabled={saving}
                     onClick={() =>
-                      openWorksheet(i.id, i.label, { chapterNum: i.chapter, part: i.part })
+                      openWorksheet(i.id, scopeLabel(t, i.scope, i.title), {
+                        chapterNum: i.chapter,
+                        part: i.part,
+                      })
                     }
                     className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-start text-sm text-[#C2CCC7]"
                   >
-                    {i.label}
+                    {scopeLabel(t, i.scope, i.title)}
                   </button>
                 ))}
               </div>
@@ -593,39 +606,39 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
 
       <div className="grid gap-2">
         <div className="flex flex-wrap gap-2">
-          {TOOLS.map((t) => (
+          {TOOLS.map((tool2) => (
             <button
-              key={t.key}
+              key={tool2.key}
               type="button"
-              onClick={() => setTool(t.key)}
+              onClick={() => setTool(tool2.key)}
               disabled={saving}
               className={`rounded-lg border px-3 py-2 text-sm ${
-                tool === t.key
+                tool === tool2.key
                   ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
                   : "border-[#2A363B] bg-[#141B1F] text-[#C2CCC7]"
               }`}
             >
-              {t.label}
+              {toolLabel(t, tool2.key)}
             </button>
           ))}
           <button type="button" className={btn} disabled={saving} onClick={() => board.current?.undo()}>
-            Undo
+            {t.board.undo}
           </button>
           <button type="button" className={btn} disabled={saving} onClick={() => board.current?.redo()}>
-            Redo
+            {t.board.redo}
           </button>
           <button
             type="button"
             className={btn}
             onClick={() => setTouchMode((m) => (m === "draw" ? "scroll" : "draw"))}
           >
-            Touch: {touchMode}
+            {touchMode === "draw" ? t.board.touchDraw : t.board.touchScroll}
           </button>
           <button type="button" className={`${btn} ms-auto`} disabled={saving} onClick={exportPdf}>
-            Export PDF
+            {t.board.exportPdf}
           </button>
           <button type="button" className={btn} disabled={phase !== "board"} onClick={end}>
-            {phase === "ending" ? "Saving the board…" : "End lesson"}
+            {phase === "ending" ? t.board.ending : t.board.endLesson}
           </button>
         </div>
 
@@ -655,7 +668,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
           onClick={() => board.current?.push({ kind: "blank" })}
           className="rounded-lg bg-[#0C8175] px-3 py-4 text-sm font-medium text-white disabled:opacity-50"
         >
-          PUSH
+          {t.board.push}
         </button>
         <button
           type="button"
@@ -674,7 +687,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
           ↓
         </button>
         <p className="text-center font-mono text-[11px] text-[#5F6F69]">
-          {where.page + 1} / {where.count}
+          {fmt(t.board.pageOf, { n: where.page + 1, total: where.count })}
         </p>
       </aside>
 
@@ -685,7 +698,7 @@ export default function BoardSession({ session, kit, onEnd }: Props) {
         mode={mode}
         onTapToFreeze={freeze}
         onEnded={() => setMode("corner")}
-        onError={() => setNote("The video link expired — reopen the lesson to refresh it.")}
+        onError={() => setNote(t.board.videoExpired)}
       />
     </div>
   );

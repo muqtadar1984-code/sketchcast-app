@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { resolveContext, type LastTaught, type PresentContext } from "@/utils/present/context";
-import { GROUP_LABEL } from "@/utils/present/kit";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { fmt } from "@/i18n/format";
 import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
+import { docLabel, groupLabel, scopeLabel, unitLabel } from "./words";
 import type { Slot, TimetableShape } from "@/utils/timetable";
 
 // The context bar and the kit rail.
@@ -18,9 +20,11 @@ import type { Slot, TimetableShape } from "@/utils/timetable";
 // — the permanent state of every independent teacher — is a third that has to
 // look deliberate rather than broken.
 //
-// Not translated yet: Present mode is behind a single-account allowlist, and the
-// ten locales land when it reaches a second teacher. English is the fallback
-// base in this repo, so that is additive rather than a rewrite.
+// EVERY WORD ON THIS PAGE ARRIVES AS A PROP. The dictionary is resolved by the
+// server shell and handed down, because dictionaries.ts is server-only and ten
+// message files have no business in the browser bundle. Anything the API used to
+// compose in English — a doc's label, "Part 1 of 4", "Chapter 4 · Part 2" —
+// now arrives as a place or a kind and is turned into words in ./words.ts.
 
 export type ClassName = { id: string; name: string; grade: string | null };
 export type BookOption = {
@@ -34,9 +38,14 @@ export type BookOption = {
 /** Exactly what /api/present/kit returns, and exactly what the board consumes. */
 type Kit = SessionKit;
 
+export type PresentWords = Dictionary["present"];
+
 type Props = {
   teacherId: string;
   teacherName: string | null;
+  /** Resolved on the server and handed down, so ten message files never reach
+   *  the browser bundle. */
+  t: PresentWords;
   shape: TimetableShape;
   slots: Slot[];
   classes: ClassName[];
@@ -95,6 +104,7 @@ const clockServerSnapshot = (): ClockTime | null => null;
 export default function PresentClient({
   teacherId,
   teacherName,
+  t,
   shape,
   slots,
   classes,
@@ -181,7 +191,7 @@ export default function PresentClient({
     const q = new URLSearchParams({ book: liveBook, chapter: String(liveChapter) });
     fetch(`/api/present/kit?${q.toString()}`)
       .then(async (r) => {
-        if (!r.ok) throw new Error(r.status === 404 ? "Not available." : `Failed (${r.status})`);
+        if (!r.ok) throw new Error(r.status === 404 ? t.kit.unavailable : `Failed (${r.status})`);
         return (await r.json()) as Kit;
       })
       .then((k) => {
@@ -191,13 +201,13 @@ export default function PresentClient({
         // A rail that fails silently looks like a chapter with no kit, which is
         // a very different thing from a request that broke.
         if (live) {
-          setLoaded({ key, kit: null, error: e instanceof Error ? e.message : "Could not load the kit." });
+          setLoaded({ key, kit: null, error: e instanceof Error ? e.message : t.kit.failed });
         }
       });
     return () => {
       live = false;
     };
-  }, [key, liveBook, liveChapter]);
+  }, [key, liveBook, liveChapter, t]);
 
   const current = loaded && loaded.key === key ? loaded : null;
   const kit = current?.kit ?? null;
@@ -232,11 +242,11 @@ export default function PresentClient({
     } catch (e) {
       // Starting is the one action where a silent failure is unacceptable: she
       // taps it and turns to the class.
-      setStartError(e instanceof Error ? e.message : "Could not start the board.");
+      setStartError(e instanceof Error ? e.message : t.start.failed);
     } finally {
       setStarting(false);
     }
-  }, [bookId, chapter, ctx, classId, klass, teacherId]);
+  }, [bookId, chapter, ctx, classId, klass, teacherId, t]);
 
   const endSession = useCallback(() => setSession(null), []);
 
@@ -245,16 +255,16 @@ export default function PresentClient({
       {/* Dark, because it sits above a lit board in a room with the lights down,
           and because it must read from the back of the class. */}
       <header className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
-        <Chip label="Grade" value={klass?.grade ?? "—"} />
-        <Chip label="Subject" value={ctx?.subject ?? "—"} />
+        <Chip label={t.bar.grade} value={klass?.grade ?? "—"} />
+        <Chip label={t.bar.subject} value={ctx?.subject ?? "—"} />
         <select
-          aria-label="Class"
+          aria-label={t.bar.class}
           value={classId ?? ""}
           disabled={locked}
           onChange={(e) => setPickedClass(e.target.value || null)}
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
         >
-          <option value="">No class…</option>
+          <option value="">{t.bar.noClass}</option>
           {classes.map((c) => (
             <option key={c.id} value={c.id}>
               {c.grade ? `${c.name} · ${c.grade}` : c.name}
@@ -263,13 +273,13 @@ export default function PresentClient({
         </select>
 
         <select
-          aria-label="Book"
+          aria-label={t.bar.book}
           value={bookId ?? ""}
           disabled={locked}
           onChange={(e) => setPick({ book: e.target.value || null, chapter: null })}
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
         >
-          <option value="">Choose a book…</option>
+          <option value="">{t.bar.chooseBook}</option>
           {books.map((b) => (
             <option key={b.id} value={b.id}>
               {b.title}
@@ -278,7 +288,7 @@ export default function PresentClient({
         </select>
 
         <select
-          aria-label="Chapter"
+          aria-label={t.bar.chapter}
           value={chapter ?? ""}
           disabled={locked || !book}
           onChange={(e) =>
@@ -286,46 +296,48 @@ export default function PresentClient({
           }
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-40"
         >
-          <option value="">Chapter…</option>
+          <option value="">{t.bar.chooseChapter}</option>
           {chapters.map((c) => (
             <option key={c.num} value={c.num}>
               {/* chapter_ref is 0-based in the database and rendered +1. */}
-              {c.title ? `${c.num + 1}. ${c.title}` : `Chapter ${c.num + 1}`}
+              {c.title ? `${c.num + 1}. ${c.title}` : fmt(t.bar.chapterN, { n: c.num + 1 })}
             </option>
           ))}
         </select>
 
-        <Confidence ctx={ctx} />
+        <Confidence t={t} ctx={ctx} />
 
         <div className="ms-auto text-end font-mono text-[11px] leading-tight text-[#93A09A]">
           <div>{teacherName ?? ""}</div>
           <div>
-            {ctx?.period ? `${ctx.period.label} · ${ctx.timeLabel}` : now ? "Outside lesson hours" : "…"}
+            {ctx?.period ? `${ctx.period.label} · ${ctx.timeLabel}` : now ? t.bar.outsideHours : "…"}
           </div>
         </div>
       </header>
 
       {session ? (
-        <BoardSession session={session} kit={kit} onEnd={endSession} />
+        <BoardSession session={session} kit={kit} t={t} onEnd={endSession} />
       ) : ready ? (
         <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">
           <aside className="grid content-start gap-2">
             <h2 className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-              Chapter kit
+              {t.kit.heading}
             </h2>
-            {loading && <p className="text-sm text-[#93A09A]">Loading…</p>}
+            {loading && <p className="text-sm text-[#93A09A]">{t.kit.loading}</p>}
             {kitError && <p className="text-sm text-[#E58A93]">{kitError}</p>}
 
             {kit?.units.map((u) => (
               <div key={u.part === null ? "whole" : u.part} className="grid gap-1">
                 <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-                  {u.label}
+                  {unitLabel(t, u)}
                 </p>
                 {u.video && (
                   <div className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-sm text-[#4FD6C2]">
-                    ▶ Video
+                    ▶ {t.doc.presentation}
                     <span className="mt-0.5 block font-mono text-[10px] opacity-70">
-                      {u.video.urls.length > 1 ? `${u.video.urls.length} parts` : "ready"}
+                      {u.video.urls.length > 1
+                        ? fmt(t.kit.videoParts, { n: u.video.urls.length })
+                        : t.kit.videoReady}
                     </span>
                   </div>
                 )}
@@ -338,10 +350,10 @@ export default function PresentClient({
                         : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
                     }`}
                   >
-                    {d.label}
+                    {docLabel(t, d.kind)}
                     {d.note && (
                       <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
-                        {d.note}
+                        {d.note === "never-project" ? t.doc.noteNeverProject : t.doc.noteNoText}
                       </span>
                     )}
                   </div>
@@ -350,7 +362,7 @@ export default function PresentClient({
             ))}
 
             {kit && !kit.units.length && (
-              <p className="text-sm text-[#93A09A]">Nothing generated for this chapter yet.</p>
+              <p className="text-sm text-[#93A09A]">{t.kit.empty}</p>
             )}
 
             {/* Listed, not tappable: opening one is something the running board
@@ -359,14 +371,14 @@ export default function PresentClient({
             {!!kit?.picker.length && (
               <>
                 <h2 className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-                  Also available on the board
+                  {t.kit.alsoAvailable}
                 </h2>
                 {kit.picker.map((g) => (
                   <div key={g.group} className="grid gap-1">
-                    <p className="font-mono text-[10px] text-[#5F6F69]">{GROUP_LABEL[g.group]}</p>
+                    <p className="font-mono text-[10px] text-[#5F6F69]">{groupLabel(t, g.group)}</p>
                     {g.items.map((i) => (
                       <p key={i.id} className="text-sm text-[#93A09A]">
-                        {i.label}
+                        {scopeLabel(t, i.scope, i.title)}
                       </p>
                     ))}
                   </div>
@@ -377,19 +389,16 @@ export default function PresentClient({
 
           <div className="grid place-items-center rounded-xl border border-[#222C30] bg-[#0B0F11] p-6 text-center">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Ready when you are</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">{t.start.ready}</h1>
               <p className="mt-2 max-w-md text-sm text-[#93A09A]">
-                Starting the board opens a session: the roll is saved as you write,
-                and what you show is recorded so the lesson note can be about the
-                concept rather than the timetable.
+                {t.start.readyBody}
               </p>
               {/* Said BEFORE she teaches, not after. The publish step refuses a
                   lesson with no class, and meeting that refusal at the bell — with
                   the note already written — would be the wrong moment to learn it. */}
               {!classId && (
                 <p className="mx-auto mt-3 max-w-md rounded-lg border border-[#4A3A1C] bg-[#2C2318] px-3 py-2 text-sm text-[#E0A664]">
-                  No class picked, so afterwards you can save the board but not publish the
-                  note — there would be nobody to publish it to.
+                  {t.start.noAudience}
                 </p>
               )}
               <button
@@ -398,7 +407,7 @@ export default function PresentClient({
                 disabled={starting}
                 className="mt-5 rounded-xl bg-[#0C8175] px-6 py-3 text-sm font-medium text-white disabled:opacity-50"
               >
-                {starting ? "Starting…" : "Start the board"}
+                {starting ? t.start.starting : t.start.cta}
               </button>
               {startError && <p className="mt-3 text-sm text-[#E58A93]">{startError}</p>}
             </div>
@@ -408,17 +417,17 @@ export default function PresentClient({
         <section className="grid place-items-center px-4" style={{ minHeight: "70dvh" }}>
           <div className="text-center">
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
-              Present mode
+              {t.title}
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-              Choose what you are teaching
+              {t.start.heading}
             </h1>
             <p className="mt-2 max-w-md text-sm text-[#93A09A]">
               {ctx?.confidence === "slot"
-                ? "Your timetable filled in the class and subject. Pick the book and chapter to see the kit."
+                ? t.start.hintSlot
                 : ctx?.confidence === "period"
-                  ? "A period is running, but your timetable has no lesson for you in it."
-                  : "No timetable for right now — pick what you are teaching."}
+                  ? t.start.hintPeriod
+                  : t.start.hintNone}
             </p>
           </div>
         </section>
@@ -437,12 +446,12 @@ function Chip({ label, value }: { label: string; value: string }) {
 }
 
 /** How much of the bar is actually known. A guess must not look like a fact. */
-function Confidence({ ctx }: { ctx: PresentContext | null }) {
+function Confidence({ t, ctx }: { t: PresentWords; ctx: PresentContext | null }) {
   if (!ctx) return null;
   const map = {
-    slot: { text: "Set from timetable", cls: "border-[#17544C] bg-[#12302C] text-[#4FD6C2]" },
-    period: { text: "No lesson this period", cls: "border-[#4A3A1C] bg-[#2C2318] text-[#E0A664]" },
-    none: { text: "Pick manually", cls: "border-[#2A363B] bg-[#141B1F] text-[#93A09A]" },
+    slot: { text: t.bar.fromTimetable, cls: "border-[#17544C] bg-[#12302C] text-[#4FD6C2]" },
+    period: { text: t.bar.freePeriod, cls: "border-[#4A3A1C] bg-[#2C2318] text-[#E0A664]" },
+    none: { text: t.bar.pickManually, cls: "border-[#2A363B] bg-[#141B1F] text-[#93A09A]" },
   }[ctx.confidence];
   return (
     <span className={`rounded-lg border px-3 py-2 text-sm ${map.cls}`}>

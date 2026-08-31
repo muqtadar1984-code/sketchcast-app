@@ -28,13 +28,22 @@ export function tabsForHat(
    * person who does not teach (founder, 2026-08-29). Consumer parents — Home
    * Basic and homeschool alike — are the mirror image on both counts. */
   testPapersOn: boolean,
+  /** Does this account's plan carry the classroom board? Pro, Pro+ and every
+   * school plan do (utils/present/access.ts). Passed in rather than derived
+   * here because the answer needs plan_tier(), which only the service role may
+   * call — and because this module is pure and stays that way. */
+  boardOn: boolean,
 ): NavTab[] {
   const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: t.calendar }] : [];
   const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : [];
+  // The classroom board. Teacher hat only: it is a surface you STAND at, and a
+  // principal in Leadership mode is not teaching a period.
+  const board: NavTab[] = boardOn ? [{ href: "/present", label: t.board }] : [];
   if (hat === "teacher")
     return [
       { href: "/dashboard", label: t.library },
       { href: "/dashboard/analytics", label: t.myAnalytics },
+      ...board,
       ...diary,
       // School-linked teachers get THEIR schedule (read-only, plus cover duties).
       ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: t.timetable }] : []),
@@ -103,6 +112,11 @@ export function tabsFor(
    * lives outside nav.tabs because the page owns it, so it is passed in rather
    * than duplicated into the tab dictionary. */
   myLessons: string,
+  /** Does this account's plan carry the classroom board? Pro, Pro+ and every
+   * school plan do (utils/present/access.ts). Passed in rather than derived
+   * here because the answer needs plan_tier(), which only the service role may
+   * call — and because this module is pure and stays that way. */
+  boardOn: boolean,
 ): NavTab[] {
   if (!role || role === "student") {
     // A student's home IS /dashboard — "My lessons" — and it had NO tab. Every
@@ -120,6 +134,9 @@ export function tabsFor(
     { href: "/dashboard", label: t.library },
     { href: "/dashboard/analytics", label: t.myAnalytics },
   ];
+  // Right after the authoring surfaces and before the school ones: the board is
+  // something she opens to teach, not something she administers.
+  if (boardOn) tabs.push({ href: "/present", label: t.board });
   if (diaryOn) tabs.push({ href: "/dashboard/diary", label: t.diary });
   if (calendarOn) tabs.push({ href: "/dashboard/calendar", label: t.calendar });
   if (analyticsOn && (role === "school_admin" || hasScope)) {

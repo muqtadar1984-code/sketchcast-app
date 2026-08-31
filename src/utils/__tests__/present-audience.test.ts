@@ -3,7 +3,6 @@ import {
   mayReadRecap,
   checkPublish,
   MAX_BODY,
-  PUBLISH_MESSAGE,
   type RecapSession,
   type RecapReader,
 } from "@/utils/present/audience";
@@ -156,11 +155,6 @@ describe("what may be published", () => {
     });
   });
 
-  it("has a sentence for every refusal it can produce", () => {
-    for (const reason of ["empty", "too-long", "not-closed", "no-audience"] as const) {
-      expect(PUBLISH_MESSAGE[reason]).toBeTruthy();
-    }
-  });
 });
 
 describe("where a lesson's files live", () => {

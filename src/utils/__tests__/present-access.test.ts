@@ -3,7 +3,6 @@ import {
   presentAccess,
   PRESENT_TIERS,
   NON_TEACHING_ROLES,
-  PRESENT_REFUSAL,
   type PresentFacts,
 } from "@/utils/present/access";
 
@@ -138,13 +137,4 @@ describe("the sets themselves", () => {
     expect([...NON_TEACHING_ROLES].sort()).toEqual(["parent", "student"]);
   });
 
-  it("has a sentence for every refusal it can produce", () => {
-    for (const why of ["not-teaching", "plan"] as const) {
-      expect(PRESENT_REFUSAL[why]).toBeTruthy();
-    }
-    // The plan sentence has to name the plans, or it is a wall rather than an
-    // answer.
-    expect(PRESENT_REFUSAL.plan).toMatch(/Pro\+/);
-    expect(PRESENT_REFUSAL.plan).toMatch(/school/i);
-  });
 });

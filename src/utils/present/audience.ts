@@ -121,15 +121,9 @@ export function checkPublish(
   return { ok: true, body: text };
 }
 
-/** Why a refusal is worded the way it is, for the UI. Kept beside the reasons so
- *  a new reason cannot ship without a sentence. */
-export const PUBLISH_MESSAGE: Record<
-  Exclude<PublishCheck, { ok: true }>["reason"],
-  string
-> = {
-  empty: "Write a sentence first — a published note with nothing in it helps nobody.",
-  "too-long": `Keep it under ${MAX_BODY} characters. This is the line a parent reads, not a report.`,
-  "not-closed": "End the lesson first. The note points at the roll you finish with.",
-  "no-audience":
-    "This lesson has no class attached, so there is nobody to publish it to. Pick a class on the bar before you start.",
-};
+// NO SENTENCES HERE ANY MORE. This module used to carry PUBLISH_MESSAGE — one
+// English string per refusal — and the routes returned them verbatim. The board
+// now speaks ten languages, so the reason travels as a CODE (`reason` in the
+// 409 body) and the UI renders `present.publish.<reason>` in the reader's own.
+// Keeping both would be two copies of the same sentence, and the English one
+// would be the one that never got updated.
