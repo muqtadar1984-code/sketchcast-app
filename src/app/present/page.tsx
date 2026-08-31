@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { presentAllowed } from "@/utils/flags";
+import { presentEntitled } from "@/utils/present/entitlement";
+import { PRESENT_REFUSAL } from "@/utils/present/access";
 import { shapeFromConfig, type Slot } from "@/utils/timetable";
 import type { LastTaught } from "@/utils/present/context";
 import PresentClient, { type BookOption, type ClassName } from "./present-client";
@@ -28,8 +29,24 @@ export default async function PresentPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  if (!presentAllowed(user)) redirect("/dashboard");
+  if (!user) redirect("/login?next=%2Fpresent");
+
+  // plan_tier is service_role-only, so the gate needs the admin client. Built
+  // once here and reused below for the class lookup.
+  let admin: ReturnType<typeof createAdminClient> | null = null;
+  try {
+    admin = createAdminClient();
+  } catch {
+    admin = null;
+  }
+
+  // A SENTENCE, NOT A SILENT REDIRECT. Bouncing a Pro-less teacher to the
+  // dashboard was right while the surface was secret — there was nothing to tell
+  // them. Now that the board ships with Pro, Pro+ and every school plan, landing
+  // them back on the Library with no explanation is the product refusing to say
+  // what it wants. The API routes keep their bare 404s: those answer strangers.
+  const verdict = await presentEntitled(admin, user.id, user);
+  if (!verdict.ok) return <Refused why={PRESENT_REFUSAL[verdict.why]} />;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -72,7 +89,7 @@ export default async function PresentPage() {
     for (const c of rows ?? []) classById.set(c.id, c);
   };
   try {
-    const admin = createAdminClient();
+    if (!admin) throw new Error("no service role");
     if (slotClassIds.length) {
       const { data } = await admin.from("classes").select("id, name, grade").in("id", slotClassIds);
       collect(data as ClassName[] | null);
@@ -132,5 +149,28 @@ export default async function PresentPage() {
       lastTaught={lastTaught}
       books={books}
     />
+  );
+}
+
+/** What a teacher sees when the board is not on their plan. Deliberately not a
+ *  redirect and deliberately not a 404: they are signed in, they followed a link
+ *  we gave them, and the honest answer is short. */
+function Refused({ why }: { why: string }) {
+  return (
+    <main className="grid min-h-dvh place-items-center bg-[#0F1417] px-6 text-[#E7EDE9]">
+      <div className="max-w-md text-center">
+        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#5F6F69]">
+          Present mode
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">The classroom board</h1>
+        <p className="mt-3 text-sm leading-relaxed text-[#93A09A]">{why}</p>
+        <a
+          href="/dashboard"
+          className="mt-6 inline-block rounded-xl bg-[#0C8175] px-6 py-3 text-sm font-medium text-white"
+        >
+          Back to your library
+        </a>
+      </div>
+    </main>
   );
 }

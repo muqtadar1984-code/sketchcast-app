@@ -1,7 +1,7 @@
 import "server-only";
 import type { createAdminClient } from "@/utils/supabase/admin";
-import { presentAllowed } from "@/utils/flags";
 import type { RecapReader } from "./audience";
+import { presentEntitled } from "./entitlement";
 
 // The three facts mayReadRecap() needs, fetched.
 //
@@ -22,25 +22,21 @@ import type { RecapReader } from "./audience";
 type Admin = ReturnType<typeof createAdminClient>;
 
 /**
- * Is the LESSON'S AUTHOR allowed to run Present mode?
+ * Is the LESSON'S AUTHOR entitled to Present mode?
  *
- * The allowlist is checked against the teacher, never against the reader — a
- * student is never on it and must never need to be. The address lives in
- * auth.users rather than profiles, so this goes through the admin auth API; a
- * failure there is a refusal, not an exception, because the alternative to
- * "cannot confirm the author" is not "assume yes".
+ * Asked about the TEACHER, never about the reader — a student is on no plan of
+ * their own and must never need to be. Exactly the shape the AI Tutor uses,
+ * where the entitlement belongs to the lesson's owner rather than to the student
+ * asking the question.
+ *
+ * IT IS ASKED AT READ TIME, WHICH MEANS A LAPSED PLAN TAKES THE NOTES WITH IT.
+ * That is the intended behaviour rather than an accident: a teacher who stops
+ * paying stops publishing to her class, and notes that outlived the plan would
+ * be a surface nobody could turn off. It is also why this is a question about
+ * entitlement and not about a row — there is no per-note flag to go stale.
  */
 export async function authorAllowed(admin: Admin, teacherId: string): Promise<boolean> {
-  try {
-    const { data, error } = await admin.auth.admin.getUserById(teacherId);
-    if (error || !data?.user) return false;
-    return presentAllowed({
-      email: data.user.email ?? null,
-      email_confirmed_at: data.user.email_confirmed_at ?? null,
-    });
-  } catch {
-    return false;
-  }
+  return (await presentEntitled(admin, teacherId)).ok;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { presentAllowed } from "@/utils/flags";
+import { presentEntitled } from "@/utils/present/entitlement";
 import { docDownloadName } from "@/utils/download-name";
 import { railFor, pickerFor, type KitGeneration } from "@/utils/present/kit";
 
@@ -40,7 +40,18 @@ export async function GET(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !presentAllowed(user)) return NOT_FOUND();
+  if (!user) return NOT_FOUND();
+
+  // Signing needs the service role, and so does the gate: plan_tier is
+  // service_role-only. One client, obtained once, used for both — and if it
+  // cannot be built there is nothing to sign and nobody to let in.
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return NOT_FOUND();
+  }
+  if (!(await presentEntitled(admin, user.id, user)).ok) return NOT_FOUND();
 
   const url = new URL(request.url);
   const bookId = url.searchParams.get("book");
@@ -77,16 +88,10 @@ export async function GET(request: Request) {
     (g) => g.group === "this-book" || g.group === "revision",
   );
 
-  // Signing needs the service role: the artifacts bucket is not readable through
-  // a member session, exactly as the Library does it.
-  let admin: ReturnType<typeof createAdminClient> | null = null;
-  try {
-    admin = createAdminClient();
-  } catch {
-    admin = null;
-  }
+  // The artifacts bucket is not readable through a member session, exactly as
+  // the Library does it — hence the admin client obtained above.
   const sign = async (path: string | null, download?: string): Promise<string | null> => {
-    if (!path || !admin) return null;
+    if (!path) return null;
     const { data } = await admin.storage
       .from("artifacts")
       .createSignedUrl(path, SIGN_TTL, download ? { download } : undefined);

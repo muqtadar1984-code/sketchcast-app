@@ -344,7 +344,7 @@ including the worst one available, which is what defines Tier C.
 |---|---|---|
 | 0 | ✅ BUILT — Latency truth on every device reachable — capability report (recorded, not just shown), 4 draw strategies, pointer-to-paint p50/p95, 240 fps nib-gap check. Run it on the WORST device you can find, not only the best | Tier A hits one frame on the best device to hand; **Tier C is still judged usable on the worst**. If Tier C fails on hardware a school would plausibly own, that changes the product (native shell, or a stated minimum spec), not the schedule |
 | 1 | ✅ **DONE** — the board as a library: `src/board/` = capabilities · model · ink · render · roll · export-pdf · store, zero app imports, driven from `/preview/board` | ✅ **PASSED.** 500 strokes / 10 pages: repaint p50 **1.9ms**, p95 **3.6ms** against a 16.7ms frame. Model round-trips byte-identically; two exports are byte-identical |
-| 2 | Present mode in the app — **BUILT** — 0097 applied, context resolver, `/present` with the bar, kit rail + worksheet picker, the stage, the session API (`session` / `sync` / `items`), and the board assembled behind it. ⚠️ **The gate below is UNRUN** — it needs a signed-in teacher and a panel. | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
+| 2 | Present mode in the app — **BUILT** — 0097 applied, context resolver, `/present` with the bar, kit rail + worksheet picker, the stage, the session API (`session` / `sync` / `items`), and the board assembled behind it. ⚠️ **The gate below is UNRUN** — it needs a signed-in teacher and a panel. Access is now the PLAN (Pro / Pro+ / school), not the email allowlist. | A full mock lesson on the panel — including the part's worksheet, THEN a revision worksheet from another chapter, a mid-lesson refresh that loses nothing, and a last-taught pointer that did NOT move because of the revision paper |
 | 3 | **BUILT** — after the lesson: recap draft/edit/publish (`/api/present/recap`), the roll exported and uploaded (`/api/present/roll`), and `/present/recap/[id]` for a student or parent. 0099 applied. ⚠️ **The gate below is UNRUN** — it needs a class, a student account and a published lesson. | A published note that names the concept; a student account that can open both |
 | 4 | One real period — instrument strokes, freezes, pushes, crashes, recap edit distance | Five consecutive periods with no fallback to the old way |
 
@@ -577,30 +577,97 @@ because it is behind a one-account allowlist. `/present/recap/[id]` is the first
 Present surface with a real audience, and that audience is Malaysian and includes
 RTL readers. It is a release blocker for widening the allowlist, not a nicety.
 
-## Going public — the release steps that are easy to miss
+## The gate is the PLAN, since 29 Aug 2026
 
-The allowlist is a TEMPORARY gate: Present mode is being proven on one account
-before it reaches teachers. Two things about that are not obvious from the code.
+Founder's rule, verbatim: *"this board needs to be provided to every teacher,
+regardless of school affiliation or not. the only gate for individual teachers
+should be pro or pro+ subscription. schools get this by default."*
 
-1. **The probe must not go public with Present mode.** `/present/probe` is a page
-   of four canvases and latency percentiles — measurement scaffolding, useful to
-   exactly one person for exactly one decision. It currently shares
-   `presentAllowed()` with everything Present mode will add, so **the moment
-   `PRESENT_ALLOWED_EMAILS` widens to a pilot group, the harness widens with
-   it.** When Phase 0 closes: delete `src/app/present/probe/`,
-   `src/app/preview/board-probe/`, `src/app/api/present/probe/` and drop the
-   `present_probe` table. Keep `src/board/capabilities.ts` — that is the part
-   that ships inside the board. Deleting is better than a second flag: a page
-   with no users should not survive as a permanent thing to keep gated.
-2. **Widening is a change of mechanism, not just of value.** An email allowlist
-   is right for one tester and wrong for a cohort — it has no notion of plan,
-   school or trial. The step after "my ID" is a per-school config key
-   (`schools.config`, as calendar/notices/timetable already do) or a plan gate,
-   with `PRESENT_ALLOWED_EMAILS` kept as the staff override. Nothing in the
-   schema assumes one user: `present_*` rows are keyed by teacher and confined
-   by RLS, and the capture tier is per-device.
+This is the "widening is a change of mechanism, not just of value" step the
+section below used to describe as future work. `PRESENT_ALLOWED_EMAILS` was
+right for proving a feature in front of one real class and wrong for a cohort:
+an allowlist has no notion of plan, school or trial, and it cannot answer "has
+this teacher paid".
 
-Nothing else about Phase 0 is load-bearing for the public release.
+**`plan_tier(uuid)` is the plan, and it is not re-derived.** The taxonomy already
+lives in one SECURITY DEFINER function that resolves, in precedence order: a
+school plan held by the school, the buyer's own plan, the launch promo, then
+`trial`. `utils/present/access.ts` takes its answer and admits
+`school | pro | pro_plus`.
+
+**"Schools get this by default" means the school's PLAN, not the school FIELD.**
+`plan_tier` returns `'school'` only when the account's school holds an *active*
+school entitlement. A `profiles.school_id` with nothing paid behind it is a
+person who was invited to a school, not a customer — reading it as entitlement
+would have handed the board to 38 unbilled accounts.
+
+**A plan is not a role, and here that is load-bearing rather than tidy.**
+`plan_tier` returns `'school'` for *every* member of a paying school, students
+included — it answers "what is bought for this account", which is a different
+question from "may this account teach". Without the role check, the pupils of a
+paying school could open their teacher's whiteboard. The check is a DENY list
+(`student`, `parent`) rather than an allow list of teaching roles, because
+"coordinator" is a scope grant in this schema and a real coordinator's
+`profiles.role` is `teacher` — an allow list would have excluded every one of
+them.
+
+**`plan_tier` is EXECUTE-able by `service_role` only.** `authenticated` and
+`anon` were never granted it, so every gate that consults it needs the admin
+client, and a deployment without a service key fails closed to the override.
+
+**The refusal is a sentence on `/present` and a bare 404 in the API.** A signed-in
+teacher who followed a link we gave them deserves "the classroom board comes with
+Pro, Pro+ and every school plan"; a stranger probing `/api/present/*` gets 404,
+because a session id must never become an oracle for which lessons exist.
+
+**A lapsed plan takes the published notes with it.** `authorAllowed()` asks the
+entitlement question at READ time, so a teacher who stops paying stops publishing
+to her class. That is intended: notes that outlived the plan would be a surface
+nobody could switch off, and keying on a per-note flag would leave rows to go
+stale.
+
+### Measured the day it shipped
+
+`0` accounts gain access. Every one of the 78 teachers resolves to `trial` or
+`family`; neither of the two schools holds an active school plan; the single
+active entitlement in the system is one `family_monthly`. **The gate is correct
+and currently inert** — it will admit its first teacher on the first Pro
+subscription, and its first school on the first school plan. The founder's own
+account is `trial`, which is why the override was kept rather than deleted.
+
+### Still English-only, and that now has a real audience
+
+Every Present surface hardcodes English. That was defensible for one allowlisted
+teacher; it is not for a Malaysian Pro subscriber, and `/present/recap/[id]` is
+read by students and parents. Nothing breaks — `i18n/dictionaries.ts` layers a
+locale over an English base — but ~60 strings across `/present`, the board, the
+wrap-up panel and both recap pages need to reach the ten message files, RTL
+included. **This is the outstanding work between "entitled" and "usable".**
+
+### And there is no way in yet
+
+`/present` has no nav tab and no link from anywhere. It was URL-only on purpose
+while it was secret. A teacher who is now entitled still has to be told the URL,
+so an entry point is the other half of "provided to every teacher" — and adding
+one is a ten-locale `nav.tabs` string plus a header that has already been pushed
+over the brand once by a seventh tab. Worth measuring the rendered box.
+
+## What the allowlist still does
+
+`PRESENT_ALLOWED_EMAILS` was kept, not deleted, for two reasons.
+
+1. **Staff reach the board without buying it.** The founder's account resolves to
+   `trial`; without the override, shipping the plan gate would have locked the
+   only person testing the feature out of it.
+2. **The probe stays behind it, alone.** `/present/probe`,
+   `/api/present/probe` and `/preview/board-probe` are a four-canvas latency
+   harness useful to exactly one person. The danger this section used to warn
+   about — "the moment `PRESENT_ALLOWED_EMAILS` widens to a pilot group, the
+   harness widens with it" — is now gone *by construction*, because the board no
+   longer reads that variable. **So the probe no longer has to be deleted to stay
+   private**, and it can survive until the Phase 0 panel gate has actually been
+   run. Delete it when that gate closes, not before. Keep
+   `src/board/capabilities.ts` either way — that ships inside the real board.
 
 ## Out of scope
 

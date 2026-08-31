@@ -3,6 +3,12 @@ import { createClient } from "@/utils/supabase/server";
 import { presentAllowed } from "@/utils/flags";
 import ProbeClient from "./probe-client";
 
+// STILL ON THE EMAIL ALLOWLIST, AND NOW THE ONLY THING ON IT. Present mode moved
+// to a plan gate on 2026-08-29 (utils/present/access.ts); this harness did not.
+// That is the whole point: docs/PRESENT-MODE.md warned that widening
+// PRESENT_ALLOWED_EMAILS would widen the probe with it, and the fix turned out
+// to be separating the two rather than deleting this — so the Phase 0 panel gate
+// can still be run when a panel is finally in front of somebody.
 export const dynamic = "force-dynamic";
 
 // Present mode, Phase 0 — the ink-latency probe (docs/PRESENT-MODE.md).

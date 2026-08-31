@@ -2,14 +2,21 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { presentAllowed } from "@/utils/flags";
+import { presentEntitled } from "./entitlement";
 
 // What every /api/present/* route needs before it does anything.
 //
-// 404 ON EVERY REFUSAL, never 403. Present mode is unreleased and restricted to
-// a named account; a 403 tells anyone probing the app that the surface exists
-// and that they merely lack permission. Not signed in, not on the allowlist, not
-// your session — all the same reply.
+// 404 ON EVERY REFUSAL, never 403. Not signed in, not entitled, not your session
+// — all the same reply. That discipline outlived its first reason: it was there
+// because Present mode was unreleased and a 403 would have advertised it. It
+// stays because a session id must never become an oracle for which lessons
+// exist, and because "you are not on the right plan" is a sentence for the
+// /present page to say, not for an API to leak to an unauthenticated prober.
+//
+// THE GATE IS THE PLAN, since 2026-08-29. Pro, Pro+ and every school plan carry
+// the board; PRESENT_ALLOWED_EMAILS survives as a staff override. See
+// utils/present/access.ts for why the role check is load-bearing rather than
+// belt-and-braces.
 
 export const NOT_FOUND = () => NextResponse.json({ error: "Not found." }, { status: 404 });
 
@@ -30,12 +37,19 @@ export async function caller(): Promise<Caller | null> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !presentAllowed(user)) return null;
+  if (!user) return null;
+
+  // The admin client is needed BEFORE the check, not after: plan_tier carries
+  // EXECUTE for service_role alone, so without it there is no plan to read.
+  let admin: ReturnType<typeof createAdminClient>;
   try {
-    return { userId: user.id, admin: createAdminClient() };
+    admin = createAdminClient();
   } catch {
     return null;
   }
+
+  const verdict = await presentEntitled(admin, user.id, user);
+  return verdict.ok ? { userId: user.id, admin } : null;
 }
 
 export type SessionRow = {
