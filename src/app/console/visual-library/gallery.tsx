@@ -153,8 +153,14 @@ function Card({
       aria-label={`Inspect ${a.canonical_key}`}
     >
       {/* Line art is judged against white — a tinted panel hides thin strokes
-          and grey fills, which is exactly what this tool exists to catch. */}
-      <div className="relative bg-white aspect-4/3 flex items-center justify-center border-b border-[#EEF0EC]">
+          and grey fills, which is exactly what this tool exists to catch.
+          A DEFINITE height, not aspect-ratio: `max-h-full` is a percentage,
+          and a percentage max-height against an aspect-sized (indefinite)
+          parent does not resolve — measured on a contact sheet of the real
+          assets, portrait avatars stretched their card instead of fitting it,
+          leaving a ragged grid. A fixed stage makes every tile the same size,
+          which is also what makes a grid scannable. */}
+      <div className="relative bg-white h-52 flex items-center justify-center border-b border-[#EEF0EC]">
         <Thumb url={item.url} alt={a.description || a.canonical_key} />
         <span className="absolute top-2 left-2">
           <TypeChip type={a.asset_type} />
