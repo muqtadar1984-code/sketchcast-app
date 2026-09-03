@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import BuyCreditsReturn from "./buy-credits-return";
 import BuyCreditsModal, { type BuyCreditsCopy, type UsageLine } from "./buy-credits-modal";
+import RequestActivationButton from "./request-activation-button";
 import { creditPacks, packsAllowedForTier, purchasablePacks, type CreditPack } from "@/utils/credit-packs";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -30,6 +31,13 @@ type FairUse = {
   /** 0060: the launch free-trial period — every feature, a period-total cap. */
   promo?: boolean;
   trial_ends?: string;
+  /** 0100: a self-serve school inside its 30-day trial — same period-total
+   * shape as promo, under its own flag so the next step reads "ask us to
+   * activate", never "subscribe". */
+  school_trial?: boolean;
+  /** 0100: school_expired / school_suspended — generation is blocked, everything
+   * made stays readable. The bucket arrives as zeros. */
+  locked?: boolean;
   resets_on: string;
   /** 0086 (homeschool release): the purchased-pack balance, once the metering
    * side exposes it. Shape defensively unknown until that lands — a number or
@@ -191,6 +199,10 @@ const PRICING_URL = "https://sketchcast.app/pricing";
 // lets the pill grow instead of spilling. whitespace-nowrap would NOT be the
 // fix — it only trades a vertical overflow for a horizontal one.
 const BTN_PRIMARY = "btn-primary min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
+// The school cards' second action (0100): the same address the marketing
+// site's school CTA has always used — a school's next step is a conversation.
+const BTN_GHOST = "btn-ghost min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
+const CONTACT_MAILTO = "mailto:sales@sketchcast.app";
 
 /** The strings the client dialog needs, copied out FIELD BY FIELD rather than
  * spread. dict.fairUse is a server-side object; listing the ten keys by hand is
@@ -350,6 +362,61 @@ export default async function FairUseMeter() {
   const lang = htmlLang(locale);
   const dateLabel = (iso: string) =>
     new Date(`${iso}T00:00:00Z`).toLocaleDateString(lang, { month: "short", day: "numeric" });
+
+  // 0100: a school whose trial ended, or a suspended school. The DB refuses
+  // every generation; this card says why and offers the one honest next step.
+  // No plans link and no packs: a school does not subscribe on the marketing
+  // page, it gets activated by us. The card is the dashboard's banner for
+  // these states — it sits on every surface the meter does.
+  if (fu.locked) {
+    const suspended = fu.tier === "school_suspended";
+    return (
+      <section className="card px-5 py-3.5 mb-6 space-y-2 border-[#F3D3C8] bg-[#FFF6F2]" data-tour="fair-use">
+        <span className="text-xs font-medium text-[#B3401F]">
+          {suspended ? t.schoolSuspendedTitle : t.schoolExpiredTitle}
+        </span>
+        <p className="text-[10px] text-[#5B6470]">{suspended ? t.schoolSuspendedBody : t.schoolExpiredBody}</p>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {/* Suspension is ours to lift, not theirs to request — contact only. */}
+          {!suspended && (
+            <RequestActivationButton label={t.requestActivation} done={t.activationRequested} className={BTN_PRIMARY} />
+          )}
+          <a href={CONTACT_MAILTO} className={BTN_GHOST}>
+            {t.contactUs}
+          </a>
+        </div>
+      </section>
+    );
+  }
+
+  // 0100: the school trial — promo's shape (a period budget with an end date),
+  // school's words. The next step is "ask us to activate", never "subscribe".
+  if (fu.school_trial && fu.credits) {
+    return (
+      <section className="card px-5 py-3.5 mb-6 space-y-2 border-[#BDE8E2] bg-[#F1FBF9]" data-tour="fair-use">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-[#0C8175]">{t.schoolTrialTitle}</span>
+          {fu.trial_ends && (
+            <span className="text-[10px] text-[#98A0A9]">
+              {fmt(t.trialEnds, { date: dateLabel(fu.trial_ends) })}
+            </span>
+          )}
+        </div>
+        <Row label={t.trialLessons} b={fu.credits} t={t} />
+        <p className="text-[10px] text-[#98A0A9]">
+          {fu.credits.available > 0
+            ? fmt(t.schoolTrialLeft, { available: fu.credits.available, cap: fu.credits.cap })
+            : fmt(t.schoolTrialSpent, { cap: fu.credits.cap })}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <RequestActivationButton label={t.requestActivation} done={t.activationRequested} className={BTN_PRIMARY} />
+          <a href={CONTACT_MAILTO} className={BTN_GHOST}>
+            {t.contactUs}
+          </a>
+        </div>
+      </section>
+    );
+  }
 
   // Launch free-trial period (0060): every feature unlocked, a single
   // period-total budget of lessons that ends on the trial date (no monthly

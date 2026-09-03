@@ -215,21 +215,64 @@
       "submit": "Create account"
     },
     "schoolSignup": {
-      "title": "Set up your school",
-      "subtitle": "Create your school on SketchCast, then invite your teachers.",
+      "title": "Create your school's workspace",
+      "subtitle": "30 days free for your school, no credit card. Create your account, confirm your email, then tell us about your school.",
       "yourFullName": "Your full name",
       "workEmail": "Work email",
       "createPassword": "Create a password (min 6 chars)",
       "creating": "Creating…",
       "continue": "Continue",
-      "confirmEmail": "Check your email to confirm your account — then you'll name your school.",
-      "nextStepHint": "You'll name your school on the next step.",
+      "confirmEmail": "Check your email to confirm your account — then you'll set up your school.",
+      "nextStepHint": "You'll set up your school on the next step.",
       "finish": {
-        "title": "Name your school",
-        "signedInAs": "Signed in as {email}. This creates your school and makes you its admin — you can invite teachers right after.",
+        "title": "About your school",
+        "signedInAs": "Signed in as {email}. This creates your school's workspace with a 30-day free trial and makes you its admin.",
         "schoolName": "School name",
+        "portalPreview": "Your school's address will be {url}",
+        "country": "Country",
+        "schoolType": "Type of school",
+        "types": {
+          "primary": "Primary",
+          "secondary": "Secondary",
+          "k12": "K-12 / all-through",
+          "international": "International",
+          "tuition": "Tuition or enrichment centre",
+          "university": "College or university",
+          "other": "Other"
+        },
+        "sizeBand": "Approximate number of students",
+        "sizes": {
+          "under100": "Fewer than 100",
+          "s100_500": "100 – 500",
+          "s500_1500": "500 – 1,500",
+          "over1500": "More than 1,500"
+        },
+        "yourRole": "Your role at the school",
+        "roles": {
+          "principal": "Principal or head",
+          "administrator": "Administrator",
+          "coordinator": "Coordinator or head of department",
+          "teacher": "Teacher",
+          "it": "IT or technology lead"
+        },
+        "curricula": "Curriculum — choose any that apply",
+        "curriculumOptions": {
+          "malaysia": "Malaysian national (KSSR / KSSM)",
+          "cbse": "CBSE",
+          "cambridge": "Cambridge / IGCSE",
+          "ib": "IB",
+          "other": "Other"
+        },
+        "phone": "Phone (optional)",
+        "heardFrom": "How did you hear about SketchCast? (optional)",
+        "chooseOne": "Choose…",
+        "consent": "I agree to the {terms} and the {privacy}.",
+        "termsLabel": "Terms of Service",
+        "privacyLabel": "Privacy Policy",
+        "consentRequired": "Please agree to the terms to continue.",
+        "captchaRequired": "Please complete the verification to continue.",
         "creating": "Creating…",
-        "submit": "Create my school"
+        "submit": "Start your 30-day free trial"
       }
     },
     "invite": {
@@ -1744,7 +1787,17 @@
     "packKitsMany": "{n} kits",
     "purchased": "{n} purchased credits available",
     "availableNow": "{n} generations available right now — {monthly} this month plus {purchased} purchased",
-    "upgradeCta": "Need more? See plans and pricing"
+    "upgradeCta": "Need more? See plans and pricing",
+    "schoolTrialTitle": "School trial — every feature unlocked",
+    "schoolTrialLeft": "{available} of {cap} generations left in your school's trial. When you're ready, ask us to activate your school for unlimited use.",
+    "schoolTrialSpent": "Your school's trial generations are all used. Ask us to activate your school to keep generating.",
+    "schoolExpiredTitle": "Your school's free trial has ended",
+    "schoolExpiredBody": "Everything you made is still here to read and use in class. Generating new lessons and documents resumes once your school is activated.",
+    "schoolSuspendedTitle": "Your school's access is paused",
+    "schoolSuspendedBody": "Generating is paused for everyone at your school. Everything already made is still here. Please get in touch with us.",
+    "requestActivation": "Request activation",
+    "activationRequested": "Thanks — we'll be in touch shortly.",
+    "contactUs": "Contact us"
   },
   "present": {
     "title": "The classroom board",
