@@ -52,3 +52,57 @@ export async function notifySignupOnce(
     console.error("signup notification error:", e);
   }
 }
+
+// Founder notification for a self-serve SCHOOL registration (0100). Fired by
+// /api/school-finish right after finish_school_registration() reports
+// created=true — which happens on exactly one call per school by construction,
+// so no dedup marker is needed. Never throws: the registration has already
+// committed by the time this runs, and an email must never un-succeed it.
+export async function notifySchoolRegistration(input: {
+  schoolId: string;
+  name: string;
+  slug: string | null;
+  country: string | null;
+  registrantEmail: string | null;
+  registrantName: string | null;
+  registrantRole: string | null;
+  schoolType: string | null;
+  sizeBand: string | null;
+  curricula: string[];
+  trialEndsAt: string | null;
+}): Promise<void> {
+  try {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) return;
+    // The console lives at /console/… on its own host when that is configured,
+    // and at the same path on the main host otherwise (console-routing.ts).
+    const consoleHost = process.env.NEXT_PUBLIC_CONSOLE_HOST || "app.sketchcast.app";
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: FROM,
+        to: [TO],
+        subject: `New school trial: ${input.name}`,
+        text: [
+          `A school just registered itself and started a 30-day trial.`,
+          "",
+          `School:     ${input.name}`,
+          `Portal:     ${input.slug ? `school.sketchcast.app/${input.slug}` : "—"}`,
+          `Country:    ${input.country || "—"}`,
+          `Type/size:  ${input.schoolType || "—"} · ${input.sizeBand || "—"}`,
+          `Curricula:  ${input.curricula.length ? input.curricula.join(", ") : "—"}`,
+          `Registrant: ${input.registrantName || "—"} <${input.registrantEmail || "—"}> · ${input.registrantRole || "role unknown"}`,
+          `Trial ends: ${input.trialEndsAt ? input.trialEndsAt.slice(0, 10) : "—"}`,
+          "",
+          `Console: https://${consoleHost}/console/schools/${input.schoolId}`,
+        ].join("\n"),
+      }),
+    });
+    if (!res.ok) {
+      console.error("school registration notification failed:", res.status, await res.text().catch(() => ""));
+    }
+  } catch (e) {
+    console.error("school registration notification error:", e);
+  }
+}

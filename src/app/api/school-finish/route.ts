@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { countryFromHeaders } from "@/utils/geo";
+import { notifySchoolRegistration } from "@/utils/notify";
 
 export const runtime = "nodejs";
 
@@ -105,5 +106,29 @@ export async function POST(request: Request) {
   }
 
   const result = (data ?? {}) as { school_id?: string; slug?: string; created?: boolean };
+
+  // Founder notification — only on the call that actually inserted the school
+  // (a retry returns created=false), so it fires once per school.
+  if (result.created === true && result.school_id) {
+    const [{ data: school }, { data: me }] = await Promise.all([
+      admin.from("schools").select("name, slug, country, trial_ends_at, meta").eq("id", result.school_id).maybeSingle(),
+      admin.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+    ]);
+    const meta = (school?.meta ?? {}) as { school_type?: string; size_band?: string; curricula?: string[] };
+    await notifySchoolRegistration({
+      schoolId: result.school_id,
+      name: (school?.name as string) || schoolName,
+      slug: (school?.slug as string) ?? result.slug ?? null,
+      country: (school?.country as string) ?? country ?? null,
+      registrantEmail: user.email ?? null,
+      registrantName: (me?.full_name as string) ?? null,
+      registrantRole: clip(body.registration?.registrant_role, 40),
+      schoolType: meta.school_type ?? null,
+      sizeBand: meta.size_band ?? null,
+      curricula: Array.isArray(meta.curricula) ? meta.curricula : [],
+      trialEndsAt: (school?.trial_ends_at as string) ?? null,
+    });
+  }
+
   return NextResponse.json({ ok: true, slug: result.slug ?? null, created: result.created === true });
 }
