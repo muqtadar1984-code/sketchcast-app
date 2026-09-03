@@ -67,9 +67,26 @@ function resolveRelative(from: string, spec: string): string | null {
   return null;
 }
 
-// `import { a, type B, c as d } from "./x"` — the type-only FORM
-// (`import type {…}`) is skipped by the negative lookahead.
-const NAMED_IMPORT = /import\s+(?!type\s)\{([^}]*)\}\s*from\s*["'']((?:\.|@\/)[^"']+)["'']/g;
+// Every statement that can carry a named binding across a module boundary:
+//   import { a, type B, c as d } from "./x"
+//   import Default, { a } from "./x"        ← the form two files used before this
+//                                             test existed; a regex that only
+//                                             matched the pure named form let it by
+//   export { a } from "./x"                 ← a server module re-exporting a client
+//                                             helper hands the reference on to
+//                                             whoever imports it from HERE
+// The type-only FORMS (`import type {…}`, `export type {…}`) are skipped by the
+// negative lookahead; `type` on an individual specifier is handled per name.
+const NAMED_IMPORT = /(?:import|export)\s+(?!type\s)(?:\w+\s*,\s*)?\{([^}]*)\}\s*from\s*["']((?:\.|@\/)[^"']+)["']/g;
+
+/** Exported for the self-test below, which pins the statement forms the
+ * scanner recognises — the one way a regex-based guard can be kept honest. */
+export function bindingsFrom(statement: string): { names: string[]; spec: string }[] {
+  return [...statement.matchAll(NAMED_IMPORT)].map((m) => ({
+    names: m[1].split(",").map((s) => s.trim()).filter((s) => s && !s.startsWith("type ")).map((s) => s.split(/\s+as\s+/)[0].trim()),
+    spec: m[2],
+  }));
+}
 
 type Offence = { from: string; name: string; to: string };
 
@@ -92,6 +109,17 @@ function offences(): Offence[] {
   }
   return found;
 }
+
+describe("the scanner recognises every statement form that carries a binding", () => {
+  it("sees pure, mixed and re-export forms, and ignores type-only ones", () => {
+    expect(bindingsFrom('import { a, type B, c as d } from "./x";')).toEqual([{ names: ["a", "c"], spec: "./x" }]);
+    expect(bindingsFrom('import Cell, { kindLabel, type T } from "./content-cell";')).toEqual([{ names: ["kindLabel"], spec: "./content-cell" }]);
+    expect(bindingsFrom('export { helper } from "@/app/dashboard/thing";')).toEqual([{ names: ["helper"], spec: "@/app/dashboard/thing" }]);
+    expect(bindingsFrom('import type { A } from "./x";')).toEqual([]);
+    expect(bindingsFrom('export type { A } from "./x";')).toEqual([]);
+    expect(bindingsFrom('import { a } from "react";')).toEqual([]); // bare specifiers are not ours to judge
+  });
+});
 
 describe("server modules never call into client modules", () => {
   it("scans a meaningful number of modules", () => {
