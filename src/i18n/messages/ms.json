@@ -1117,6 +1117,15 @@
       "cancelConfirm": "Batalkan pelajaran ini? Ia belum mula, jadi tiada kredit akan digunakan.",
       "building": "Pelajaran ini sedang dibuat — anda boleh membuangnya sebaik ia siap."
     },
+    "deleteBook": {
+      "delete": "Padam buku",
+      "confirmEmpty": "Padam “{title}”? Tindakan ini tidak boleh dibatalkan.",
+      "confirm": "Padam “{title}”? Semua yang dijana daripadanya — {kits} kit dan failnya — turut dipadam. Kredit yang telah digunakan tidak kembali.",
+      "studentWork": "{submissions} hasil kerja yang dihantar pelajar untuk kit ini turut akan dipadam.",
+      "shared": "Guru lain telah menjana kit daripada buku ini. Minta penyelaras atau pengetua menariknya balik dari halaman Buku sekolah, supaya kerja mereka dikeluarkan dengan betul dan bukan dimusnahkan.",
+      "building": "Satu kit daripada buku ini masih dibina — anda boleh memadam buku ini sebaik ia siap.",
+      "indexing": "Buku ini masih diindeks — anda boleh memadamnya sebaik proses itu siap."
+    },
     "branding": {
       "heading": "Penjenamaan sekolah",
       "notSet": "pilihan · guna format & tema sekolah anda",

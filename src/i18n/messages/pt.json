@@ -1117,6 +1117,15 @@
       "cancelConfirm": "Cancelar esta aula? Ela ainda não começou, então nenhum crédito será usado.",
       "building": "Esta aula está sendo gerada agora — você poderá removê-la assim que terminar."
     },
+    "deleteBook": {
+      "delete": "Excluir livro",
+      "confirmEmpty": "Excluir “{title}”? Isso não pode ser desfeito.",
+      "confirm": "Excluir “{title}”? Tudo o que foi gerado a partir dele — {kits} kits e seus arquivos — será excluído junto. Os créditos já usados não são devolvidos.",
+      "studentWork": "{submissions} trabalhos enviados pelos alunos para esses kits também serão excluídos.",
+      "shared": "Outros professores geraram kits a partir deste livro. Peça a um coordenador ou ao diretor que o retire pela página Livros da escola, para que o trabalho deles seja retirado corretamente em vez de destruído.",
+      "building": "Um kit deste livro ainda está sendo gerado — você poderá excluir o livro assim que terminar.",
+      "indexing": "Este livro ainda está sendo indexado — você poderá excluí-lo assim que terminar."
+    },
     "branding": {
       "heading": "Identidade da escola",
       "notSet": "opcional · use o formato e o tema da sua escola",

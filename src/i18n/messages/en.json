@@ -1120,6 +1120,15 @@
       "cancelConfirm": "Cancel this lesson? It hasn't started yet, so no credit will be used.",
       "building": "This lesson is being built right now — you can remove it once it finishes."
     },
+    "deleteBook": {
+      "delete": "Delete book",
+      "confirmEmpty": "Delete “{title}”? This can't be undone.",
+      "confirm": "Delete “{title}”? Everything generated from it — {kits} kits and their files — is deleted with it. Credits already used are not returned.",
+      "studentWork": "{submissions} pieces of work students submitted for these kits will be deleted too.",
+      "shared": "Other teachers made kits from this book. Ask a coordinator or the principal to retire it from the School books page, so their work is withdrawn properly instead of destroyed.",
+      "building": "A kit from this book is still being built — you can delete the book once it finishes.",
+      "indexing": "This book is still being indexed — you can delete it once that finishes."
+    },
     "branding": {
       "heading": "School branding",
       "notSet": "optional · use your school's format & theme",

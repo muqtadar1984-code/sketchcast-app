@@ -1117,6 +1117,15 @@
       "cancelConfirm": "Annuler cette leçon ? Elle n'a pas encore commencé, donc aucun crédit ne sera utilisé.",
       "building": "Cette leçon est en cours de création — vous pourrez la supprimer dès qu'elle sera terminée."
     },
+    "deleteBook": {
+      "delete": "Supprimer le livre",
+      "confirmEmpty": "Supprimer « {title} » ? Cette action est irréversible.",
+      "confirm": "Supprimer « {title} » ? Tout ce qui en a été généré — {kits} kits et leurs fichiers — sera supprimé avec lui. Les crédits déjà utilisés ne sont pas restitués.",
+      "studentWork": "{submissions} travaux remis par les élèves pour ces kits seront aussi supprimés.",
+      "shared": "D’autres enseignants ont généré des kits à partir de ce livre. Demandez à un coordinateur ou au chef d’établissement de le retirer depuis la page Livres de l’école, afin que leur travail soit retiré proprement plutôt que détruit.",
+      "building": "Un kit de ce livre est encore en cours de création — vous pourrez supprimer le livre dès qu’il sera terminé.",
+      "indexing": "Ce livre est encore en cours d’indexation — vous pourrez le supprimer dès que ce sera terminé."
+    },
     "branding": {
       "heading": "Identité de l'école",
       "notSet": "facultatif · utilisez le format et le thème de votre école",

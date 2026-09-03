@@ -309,7 +309,7 @@ export default function BookTable({
                     Retiring a shared book is leadership's act, on the School
                     books page, where it withdraws kits instead of destroying
                     the source. */}
-                {!b.sharedBy && <DeleteBook bookId={b.id} storagePath={b.storagePath} />}
+                {!b.sharedBy && <DeleteBook bookId={b.id} title={b.title} t={t} />}
               </div>
             </div>
 
