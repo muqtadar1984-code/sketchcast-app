@@ -14,6 +14,7 @@ import { type LibraryMessages } from "../labels";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { docDownloadName } from "@/utils/download-name";
+import { builderJob } from "@/utils/builder-job";
 import { docTypeKey, gateReasons, isGated, isStructureGate } from "@/utils/junk-gate";
 import { type JunkGateInfo } from "../junk-gate-dialog";
 
@@ -87,7 +88,9 @@ export default async function TestPapersPage() {
   // needs to know whether the lesson already exists.
   const { data: gensRaw } = await supabase
     .from("generations")
-    .select("id, kind, book_id, chapter_ref, status, params, artifacts(kind, storage_path), jobs(progress, status)")
+    // type + created_at: builderJob() needs them to skip the support agent's
+    // diagnosis row and pick the newest builder (see @/utils/builder-job).
+    .select("id, kind, book_id, chapter_ref, status, params, artifacts(kind, storage_path), jobs(progress, status, type, created_at)")
     .eq("owner_id", user.id)
     .in("kind", ["exam_paper", "presentation"]);
   type Gen = {
@@ -98,7 +101,7 @@ export default async function TestPapersPage() {
     status: string;
     params: Record<string, unknown> | null;
     artifacts: { kind: string; storage_path: string }[] | null;
-    jobs: { progress: number | null; status: string }[] | null;
+    jobs: { progress: number | null; status: string; type?: string | null; created_at?: string | null }[] | null;
   };
   const gens = (gensRaw ?? []) as Gen[];
   // Chapter-level rows only (params.part absent) — this view is paper-first.
@@ -243,7 +246,7 @@ export default async function TestPapersPage() {
                       )}
                       {c.gen && c.gen.status !== "done" && c.gen.status !== "error" && (
                         <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]">
-                          generating {(c.gen.jobs?.[0]?.progress ?? 0)}%
+                          generating {(builderJob(c.gen.jobs)?.progress ?? 0)}%
                         </span>
                       )}
                       {c.gen && c.gen.status === "done" && (
