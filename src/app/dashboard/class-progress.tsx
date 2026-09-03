@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 type Row = { id: string; name: string; total: number; completed: number; revised: number; incomplete: number; overdue: number };
 

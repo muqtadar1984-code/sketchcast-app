@@ -7,7 +7,7 @@ import { cleanBookTitle } from "@/utils/book";
 import { fingerprintFile, titlesLookSame } from "@/utils/book-fingerprint";
 import PageScanner from "./page-scanner";
 import { fmt } from "@/i18n/format";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 export default function UploadBook({
   schoolId,

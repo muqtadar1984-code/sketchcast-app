@@ -8,7 +8,7 @@ import { defaultNarrationForGrade } from "@/utils/narration";
 import { kitSignature } from "@/utils/kit-match";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 // One-click full kit for a chapter part (0059): queues the video lesson plus
 // its five documents together — one lesson credit, documents free. Used on

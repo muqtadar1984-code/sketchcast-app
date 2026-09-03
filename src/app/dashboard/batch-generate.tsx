@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { defaultParams } from "./options-modal";
+import { defaultParams } from "./options-spec";
 import { LANGUAGES } from "@/utils/narration";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
-import { kindLabel, type LibraryMessages } from "./content-cell";
+import { kindLabel, type LibraryMessages } from "./labels";
 import { fmt } from "@/i18n/format";
 
 // Revision papers (0061). A teacher picks a GROUP of chapters at term /

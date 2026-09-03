@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 // "Calm the hierarchy" (founder 2026-07-21): a book header used to present up to
 // seven same-weight buttons — Generate all, Revision papers, Exam, Generate full

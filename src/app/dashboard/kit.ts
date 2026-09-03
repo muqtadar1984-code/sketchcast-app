@@ -1,4 +1,4 @@
-import { defaultParams } from "./options-modal";
+import { defaultParams } from "./options-spec";
 import { DEFAULT_STYLE, defaultVoiceFor } from "@/utils/narration";
 
 // One lesson credit = the lesson plus its FREE document kit (0059). This

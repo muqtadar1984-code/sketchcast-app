@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import ContentCell, { kindLabel, type CellLesson, type LibraryMessages } from "./content-cell";
+import ContentCell, { type CellLesson } from "./content-cell";
+import { kindLabel, type LibraryMessages } from "./labels";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
-import { defaultParams } from "./options-modal";
+import { defaultParams } from "./options-spec";
 import { kitRows, type GenerationRow } from "./kit";
 import {
   LANGUAGES,

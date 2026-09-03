@@ -7,7 +7,7 @@ import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
-import { statusLabel, type LibraryMessages } from "./content-cell";
+import { statusLabel, type LibraryMessages } from "./labels";
 import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";

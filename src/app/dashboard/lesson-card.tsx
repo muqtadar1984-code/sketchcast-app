@@ -1,6 +1,7 @@
 "use client";
 
-import ContentCell, { kindLabel, type CellLesson, type LibraryMessages } from "./content-cell";
+import ContentCell, { type CellLesson } from "./content-cell";
+import { kindLabel, type LibraryMessages } from "./labels";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import GenerateKitButton from "./generate-kit-button";
 import RegenerateButton from "./regenerate-button";

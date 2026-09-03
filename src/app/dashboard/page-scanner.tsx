@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { detectQuad, warpQuad, loadCv, type Quad, type Corner } from "@/utils/scan-cv";
 import { fmt } from "@/i18n/format";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 // Page scanner: photograph a physical book and hand the existing upload path ONE
 // assembled PDF. Built for parents who have no digital copy of their child's book.

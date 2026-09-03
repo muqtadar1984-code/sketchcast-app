@@ -8,7 +8,7 @@ import ClassProgress from "./class-progress";
 import ResetPasswordButton from "./reset-password-button";
 import DeleteStudentButton from "./delete-student-button";
 import { fmt } from "@/i18n/format";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 export type RosterStudent = { id: string; full_name: string | null; username: string | null; parent_email: string | null };
 export type ClassRoster = {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { defaultParams } from "../options-modal";
+import { defaultParams } from "../options-spec";
 import { defaultPresentationParams } from "@/utils/narration";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "../junk-gate-dialog";

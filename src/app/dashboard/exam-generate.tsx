@@ -6,7 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import { LANGUAGES } from "@/utils/narration";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 import { fmt } from "@/i18n/format";
 
 // Exam generation (0062). A teacher builds ONE cumulative exam over everything

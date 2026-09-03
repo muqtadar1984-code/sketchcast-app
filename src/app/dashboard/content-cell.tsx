@@ -10,7 +10,7 @@ import ReportFailure from "./report-failure";
 import { recordArtifactView } from "@/utils/views";
 import { etaLabel, type JobStage } from "@/utils/job-stage";
 import { fmt } from "@/i18n/format";
-import type { Dictionary } from "@/i18n/dictionaries";
+import { statusLabel, type LibraryMessages } from "./labels";
 
 export type CellLesson = {
   id: string;
@@ -40,30 +40,14 @@ export type CellLesson = {
   artifactPaths: string[];
 };
 
-/** Every word the Library renders — its own `library` namespace plus the shared
- * `common` slice and the `utils` one (the strings the shared helpers in
- * src/utils emit: progress chips, ETAs, narration and voice names, the untitled
- * book) — composed ONCE server-side by the dashboard page and handed down this
- * whole tree as one object (so it is serialized once, not per cell). Typed from
- * the English dictionary, but the import is type-only: the server-only module is
- * erased here and no translation file reaches the browser bundle. Lives in this
- * file because it is already the library's shared-type module (CellLesson) —
- * every other cell, card and modal imports from here. */
-export type LibraryMessages = Dictionary["library"] & {
-  common: Dictionary["common"];
-  utils: Dictionary["utils"];
-};
-
-/** A generation's raw DB status word ("queued", "processing", …) in the reader's
- * language; an unknown status shows as itself rather than blank. */
-export const statusLabel = (t: LibraryMessages, status: string): string =>
-  (t.status as Record<string, string>)[status] ?? status;
-
-/** A generation kind ("presentation", "exam_paper", …) as its display name. The
- * message keys ARE the kind strings, so the DB value indexes the dictionary
- * directly and no kind → label map has to be kept in sync anywhere. */
-export const kindLabel = (t: LibraryMessages, kind: string): string =>
-  (t.kinds as Record<string, string>)[kind] ?? kind;
+// LibraryMessages, statusLabel and kindLabel moved to ./labels on 2026-09-03:
+// this file is a Client Component, so a Server Component that imported a
+// helper from it and CALLED it threw at render time (see labels.ts). The type
+// is re-exported so the dozen cells, cards and modals that name it from here
+// keep working — a type re-export is erased and carries no such hazard. The
+// two functions are deliberately NOT re-exported: through this module they
+// would reach a server importer as client references all over again.
+export type { LibraryMessages } from "./labels";
 
 // Icon-forward kit cells (2026-07-20): the icon IS the download/watch (no
 // "Download" word); the label is the link text; ↻ regenerate + ✕ delete (delete

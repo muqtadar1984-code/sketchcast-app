@@ -1,7 +1,7 @@
 "use client";
 
 import { type DocTypeKey } from "@/utils/junk-gate";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 // The junk-upload gate's confirm dialog (soft confirm ONLY — see
 // utils/junk-gate.ts). One shared dialog for every surface that inserts

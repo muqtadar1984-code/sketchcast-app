@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { fmt } from "@/i18n/format";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 // Book Health Score badge — a compact colored chip on the library row that
 // expands to the dimensions, problems, and recommendation. Computed by the

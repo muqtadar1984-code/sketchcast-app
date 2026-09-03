@@ -6,79 +6,11 @@ import { createClient } from "@/utils/supabase/client";
 import { LANGUAGES } from "@/utils/narration";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
-// A field's `label` is a KEY into t.options.fields, never a word: two kinds can
-// share a param key with different wording (case_study's num_questions reads
-// "Discussion questions"), so the display name is looked up separately from the
-// param the worker receives. Select choices work the same way — the option
-// VALUES stay the English tokens the worker expects; only their labels are
-// translated. The modal's heading is looked up by kind (t.options.titles).
-type FieldLabel = keyof LibraryMessages["options"]["fields"];
-type ChoiceSet = keyof LibraryMessages["options"]["choices"];
-
-type Field =
-  | { type: "number"; key: string; label: FieldLabel; min: number; max: number; def: number }
-  | { type: "select"; key: string; label: FieldLabel; choices: ChoiceSet; options: string[]; def: string }
-  | { type: "checkbox"; key: string; label: FieldLabel; def: boolean };
-
-type Spec = { fields: Field[]; build: (v: Record<string, unknown>) => Record<string, unknown> };
-
-// Per-kind customization. `build` shapes the flat field values into the params
-// the worker expects (exam nests its objective counts).
-const SPECS: Record<string, Spec> = {
-  lesson_plan: {
-    fields: [
-      { type: "number", key: "duration_minutes", label: "duration_minutes", min: 10, max: 180, def: 45 },
-      { type: "checkbox", key: "include_homework", label: "include_homework", def: true },
-      { type: "checkbox", key: "include_differentiation", label: "include_differentiation", def: true },
-    ],
-    build: (v) => v,
-  },
-  activity: {
-    fields: [{ type: "number", key: "num_activities", label: "num_activities", min: 1, max: 8, def: 4 }],
-    build: (v) => v,
-  },
-  worksheet: {
-    fields: [
-      { type: "number", key: "num_questions", label: "num_questions", min: 1, max: 40, def: 10 },
-      { type: "select", key: "difficulty", label: "difficulty", choices: "difficulty", options: ["easy", "medium", "hard"], def: "medium" },
-      { type: "checkbox", key: "include_answer_key", label: "include_answer_key", def: true },
-    ],
-    build: (v) => v,
-  },
-  case_study: {
-    fields: [
-      { type: "select", key: "length", label: "length", choices: "length", options: ["short", "medium", "long"], def: "medium" },
-      { type: "number", key: "num_questions", label: "discussion_questions", min: 1, max: 15, def: 4 },
-    ],
-    build: (v) => v,
-  },
-  exam_paper: {
-    fields: [
-      { type: "number", key: "fill_blank", label: "fill_blank", min: 0, max: 20, def: 5 },
-      { type: "number", key: "true_false", label: "true_false", min: 0, max: 20, def: 5 },
-      { type: "number", key: "match_column", label: "match_column", min: 0, max: 20, def: 4 },
-      { type: "number", key: "subjective", label: "subjective", min: 0, max: 20, def: 3 },
-      { type: "checkbox", key: "include_answer_key", label: "include_answer_key", def: true },
-    ],
-    build: (v) => ({
-      objective: { fill_blank: v.fill_blank, true_false: v.true_false, match_column: v.match_column },
-      subjective: v.subjective,
-      include_answer_key: v.include_answer_key,
-    }),
-  },
-};
-
-// The params OptionsModal would submit with nothing changed — lets a batch
-// "Generate" queue document kinds without opening each modal. Unknown kinds
-// carry no params (null); presentation defaults live in utils/narration.ts.
-export function defaultParams(kind: string): Record<string, unknown> | null {
-  const spec = SPECS[kind];
-  if (!spec) return null;
-  const vals = Object.fromEntries(spec.fields.map((f) => [f.key, f.def]));
-  return spec.build(vals);
-}
+// Field specs, SPECS and defaultParams live in ./options-spec (pure) — see the
+// note there. This file only RENDERS them.
+import { SPECS } from "./options-spec";
 
 export default function OptionsModal({
   bookId,

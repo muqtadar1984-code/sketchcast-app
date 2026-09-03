@@ -10,7 +10,7 @@ import FairUseMeter from "../fair-use-meter";
 import { GeneratePaperButton, AssignChildButton } from "./paper-actions";
 import ReportContentIssue from "../report-content-issue";
 import BookHealthBadge, { type BookHealth } from "../book-health-badge";
-import { type LibraryMessages } from "../content-cell";
+import { type LibraryMessages } from "../labels";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { docDownloadName } from "@/utils/download-name";

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { fmt } from "@/i18n/format";
-import { type LibraryMessages } from "./content-cell";
+import { type LibraryMessages } from "./labels";
 
 export type ClassRow = { id: string; name: string; grade: string | null };
 export type ChildRow = { id: string; name: string };
