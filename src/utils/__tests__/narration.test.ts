@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
   AUTO_VOICE,
   NARRATION_STYLES,
@@ -123,6 +123,12 @@ describe("narration + voice pickers", () => {
 // Premium voices follow the PLAN (my_fair_use) and the deployment's active
 // provider — mirroring the worker's gate, which has the last word anyway.
 describe("premium voices — plan and provider", () => {
+  // the legacy assertions must not depend on the ambient shell (a dev
+  // machine's .env.local may carry the provider variable)
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "");
+    vi.stubEnv("NEXT_PUBLIC_ELEVENLABS_ENABLED", "");
+  });
   afterEach(() => vi.unstubAllEnvs());
   const paid = { premium: true };
 
@@ -184,6 +190,14 @@ describe("premium voices — plan and provider", () => {
     expect(both).toEqual(["auto", "edge-zariyah", "edge-hamed", "el-rachel", "el-adam", "g-ar-f", "g-ar-m"]);
   });
 
+  it("elevenlabs mode: a paid account sees el-* even with the legacy flag off", () => {
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "elevenlabs");
+    expect(availableVoices(T, "ar", paid).map((v) => v.value)).toEqual([
+      "auto", "edge-zariyah", "edge-hamed", "el-rachel", "el-adam",
+    ]);
+    expect(availableVoices(T, "ar").map((v) => v.value)).toEqual(["auto", "edge-zariyah", "edge-hamed"]);
+  });
+
   it("every Google entry has a label that names its gender, since star names carry no cue", () => {
     for (const v of VOICES.filter((v) => providerOf(v.value) === "google")) {
       const label = T.voices[v.value];
@@ -193,6 +207,7 @@ describe("premium voices — plan and provider", () => {
 });
 
 describe("expectedVoiceFor — what `auto` will render as", () => {
+  beforeEach(() => vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", ""));
   afterEach(() => vi.unstubAllEnvs());
 
   it("legacy or free: the language's free voice (today's behaviour)", () => {
@@ -209,8 +224,9 @@ describe("expectedVoiceFor — what `auto` will render as", () => {
     expect(expectedVoiceFor("ar", false)).toBe("edge-zariyah"); // still free for a free plan
   });
 
-  it("a language Google has no entry for falls to the free default in THAT language", () => {
+  it("a language with no Google entry falls to defaultVoiceFor — the global default when the language has no free voice either", () => {
     vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "google");
+    expect(expectedVoiceFor("zh", true)).toBe(defaultVoiceFor("zh"));
     expect(expectedVoiceFor("zh", true)).toBe("edge-aria");
   });
 

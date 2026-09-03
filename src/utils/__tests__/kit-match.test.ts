@@ -132,8 +132,18 @@ describe("kitSignature — effective voice", () => {
     expect(wanted).toBe(kitSignature({ ...base, params: {}, defaultVoice: "g-en-f" }));
   });
 
-  it("without a prediction two unset requests still compare equal (older callers)", () => {
-    expect(kitSignature({ ...base, params: { tts_voice: "auto" } })).toBe(kitSignature({ ...base, params: {} }));
+  it("models the real call: the click predicts its plan's default, a finished kit resolves to the FREE default", () => {
+    // GenerateKitButton passes expectedVoiceFor() for what THIS click will
+    // render as, and defaultVoiceFor() for a colleague's finished kit that
+    // carries no voice record (it predates the premium era and rendered free).
+    const wantedPaid = kitSignature({ ...base, params: { tts_voice: "auto" }, defaultVoice: "g-en-f" });
+    const wantedFree = kitSignature({ ...base, params: { tts_voice: "auto" }, defaultVoice: "edge-aria" });
+    const oldRow = kitSignature({ ...base, params: {}, defaultVoice: "edge-aria" });
+    const premiumRow = kitSignature({ ...base, params: { tts_voice_used: "g-en-f" }, defaultVoice: "edge-aria" });
+    expect(wantedFree).toBe(oldRow);            // a free plan adopts the old free kit
+    expect(wantedPaid).not.toBe(oldRow);        // a paid plan after the flip does NOT
+    expect(wantedPaid).toBe(premiumRow);        // …but adopts a colleague's premium render
+    expect(wantedFree).not.toBe(premiumRow);
   });
 
   it("the prediction never touches documents", () => {

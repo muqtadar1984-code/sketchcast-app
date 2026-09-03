@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { kitRows } from "./kit";
-import { defaultNarrationForGrade, expectedVoiceFor } from "@/utils/narration";
+import { defaultNarrationForGrade, defaultVoiceFor, expectedVoiceFor } from "@/utils/narration";
 import { kitSignature } from "@/utils/kit-match";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
@@ -66,6 +66,11 @@ export default function GenerateKitButton({
   const chapterRef = String(chapterNum);
   // This click sends `auto`; the comparison needs what that will render as.
   const defaultVoice = expectedVoiceFor(language, premiumVoices);
+  // A colleague's FINISHED kit with no voice record at all predates the
+  // premium era and rendered on the free voice — it resolves to the FREE
+  // default, never to this account's premium prediction (which would have
+  // offered a paying school a free-voice kit as if it were premium).
+  const rowDefaultVoice = defaultVoiceFor(language);
 
   /** What this click WOULD produce, as signatures — so the school's kits can be
    *  compared against it rather than against "same chapter, near enough". */
@@ -96,7 +101,7 @@ export default function GenerateKitButton({
       if (!rows.length) return null;
       const wanted = wantedSignatures();
       const usable = rows.filter((r) =>
-        wanted.has(kitSignature({ kind: r.kind, chapterRef, params: r.params, grade: bookGrade, defaultVoice })),
+        wanted.has(kitSignature({ kind: r.kind, chapterRef, params: r.params, grade: bookGrade, defaultVoice: rowDefaultVoice })),
       );
       // Only offer when the LESSON itself is there. A stray worksheet is not a
       // kit, and swapping one document for a colleague's would be a surprise
