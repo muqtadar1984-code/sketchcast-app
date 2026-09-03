@@ -39,16 +39,17 @@
  * (the AI Tutor); the board is deliberately wider — a Pro teacher standing at a
  * panel is exactly the person this was built for.
  *
- * ⚠️ THIS SET MUST BE REVISITED WHEN plan_tier() GAINS A TIER. The approved
- * school self-serve registration plan adds `school_trial` (a 30-day school
- * trial) and `school_expired` to that function. An unknown tier fails CLOSED
- * here, which is the right default and also the silent one: the day trial
- * schools exist, they will not get the board and nothing will say why. The
- * intended answer is almost certainly `school_trial` in, `school_expired` out —
- * a board is exactly what you demonstrate to sell a school plan — but that is a
- * product decision, not one to make by leaving a set alone.
+ * ⚠️ THIS SET MUST BE REVISITED WHEN plan_tier() GAINS A TIER — an unknown tier
+ * fails CLOSED here, which is the right default and also the silent one.
+ *
+ * 2026-09-03, migration 0100: plan_tier() gained `school_trial` (a 30-day
+ * self-serve school trial), `school_expired` and `school_suspended`. Founder's
+ * decision, verbatim: "yes school_trial unlocks Present mode" — a board is
+ * exactly what you demonstrate to sell a school plan. The two locked states
+ * stay out, by the same rule that keeps `trial` out: nothing is paid and the
+ * trial is over.
  */
-export const PRESENT_TIERS: ReadonlySet<string> = new Set(["school", "pro", "pro_plus"]);
+export const PRESENT_TIERS: ReadonlySet<string> = new Set(["school", "school_trial", "pro", "pro_plus"]);
 
 /**
  * Who may never drive a board, whatever the plan pays for.
@@ -87,7 +88,9 @@ export type PresentVerdict =
 export function presentAccess(f: PresentFacts): PresentVerdict {
   if (f.override) return { ok: true, via: "override" };
   if (!f.role || NON_TEACHING_ROLES.has(f.role)) return { ok: false, why: "not-teaching" };
-  if (f.tier === "school") return { ok: true, via: "school" };
+  // A trial school is still "via the school": the plan is the school's, not
+  // the teacher's own, and that is what `via` reports.
+  if (f.tier === "school" || f.tier === "school_trial") return { ok: true, via: "school" };
   if (f.tier && PRESENT_TIERS.has(f.tier)) return { ok: true, via: "plan" };
   return { ok: false, why: "plan" };
 }

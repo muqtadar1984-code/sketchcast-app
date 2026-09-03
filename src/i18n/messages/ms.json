@@ -215,21 +215,64 @@
       "submit": "Cipta akaun"
     },
     "schoolSignup": {
-      "title": "Sediakan sekolah anda",
-      "subtitle": "Cipta sekolah anda di SketchCast, kemudian jemput guru-guru anda.",
+      "title": "Cipta ruang kerja sekolah anda",
+      "subtitle": "Percuma 30 hari untuk sekolah anda, tanpa kad kredit. Cipta akaun anda, sahkan e-mel anda, kemudian ceritakan tentang sekolah anda.",
       "yourFullName": "Nama penuh anda",
       "workEmail": "E-mel kerja",
       "createPassword": "Cipta kata laluan (minimum 6 aksara)",
       "creating": "Mencipta…",
       "continue": "Teruskan",
-      "confirmEmail": "Semak e-mel anda untuk mengesahkan akaun — kemudian anda akan menamakan sekolah anda.",
-      "nextStepHint": "Anda akan menamakan sekolah anda pada langkah seterusnya.",
+      "confirmEmail": "Semak e-mel anda untuk mengesahkan akaun — kemudian anda akan menyediakan sekolah anda.",
+      "nextStepHint": "Anda akan menyediakan sekolah anda pada langkah seterusnya.",
       "finish": {
-        "title": "Namakan sekolah anda",
-        "signedInAs": "Log masuk sebagai {email}. Ini mencipta sekolah anda dan menjadikan anda pentadbirnya — anda boleh menjemput guru sebaik selepas itu.",
+        "title": "Tentang sekolah anda",
+        "signedInAs": "Log masuk sebagai {email}. Ini mencipta ruang kerja sekolah anda dengan percubaan percuma 30 hari dan menjadikan anda pentadbirnya.",
         "schoolName": "Nama sekolah",
+        "portalPreview": "Alamat sekolah anda akan menjadi {url}",
+        "country": "Negara",
+        "schoolType": "Jenis sekolah",
+        "types": {
+          "primary": "Rendah",
+          "secondary": "Menengah",
+          "k12": "K-12 / semua peringkat",
+          "international": "Antarabangsa",
+          "tuition": "Pusat tuisyen atau pengayaan",
+          "university": "Kolej atau universiti",
+          "other": "Lain-lain"
+        },
+        "sizeBand": "Anggaran bilangan pelajar",
+        "sizes": {
+          "under100": "Kurang daripada 100",
+          "s100_500": "100 – 500",
+          "s500_1500": "500 – 1,500",
+          "over1500": "Lebih daripada 1,500"
+        },
+        "yourRole": "Peranan anda di sekolah",
+        "roles": {
+          "principal": "Pengetua atau guru besar",
+          "administrator": "Pentadbir",
+          "coordinator": "Penyelaras atau ketua jabatan",
+          "teacher": "Guru",
+          "it": "Ketua IT atau teknologi"
+        },
+        "curricula": "Kurikulum — pilih mana-mana yang berkenaan",
+        "curriculumOptions": {
+          "malaysia": "Kebangsaan Malaysia (KSSR / KSSM)",
+          "cbse": "CBSE",
+          "cambridge": "Cambridge / IGCSE",
+          "ib": "IB",
+          "other": "Lain-lain"
+        },
+        "phone": "Telefon (pilihan)",
+        "heardFrom": "Bagaimana anda tahu tentang SketchCast? (pilihan)",
+        "chooseOne": "Pilih…",
+        "consent": "Saya bersetuju dengan {terms} dan {privacy}.",
+        "termsLabel": "Terma Perkhidmatan",
+        "privacyLabel": "Dasar Privasi",
+        "consentRequired": "Sila bersetuju dengan terma untuk meneruskan.",
+        "captchaRequired": "Sila lengkapkan pengesahan untuk meneruskan.",
         "creating": "Mencipta…",
-        "submit": "Cipta sekolah saya"
+        "submit": "Mulakan percubaan percuma 30 hari anda"
       }
     },
     "invite": {
@@ -1769,7 +1812,17 @@
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kit",
     "purchased": "{n} kredit yang dibeli tersedia",
-    "upgradeCta": "Perlukan lebih? Lihat pelan dan harga"
+    "upgradeCta": "Perlukan lebih? Lihat pelan dan harga",
+    "schoolTrialTitle": "Percubaan sekolah — semua ciri dibuka",
+    "schoolTrialLeft": "Tinggal {available} daripada {cap} janaan dalam percubaan sekolah anda. Apabila anda bersedia, minta kami mengaktifkan sekolah anda untuk penggunaan tanpa had.",
+    "schoolTrialSpent": "Semua janaan percubaan sekolah anda telah digunakan. Minta kami mengaktifkan sekolah anda untuk terus menjana.",
+    "schoolExpiredTitle": "Percubaan percuma sekolah anda telah tamat",
+    "schoolExpiredBody": "Semua yang anda hasilkan masih ada di sini untuk dibaca dan digunakan di dalam kelas. Penjanaan pelajaran dan dokumen baharu akan disambung semula sebaik sahaja sekolah anda diaktifkan.",
+    "schoolSuspendedTitle": "Akses sekolah anda dijeda",
+    "schoolSuspendedBody": "Penjanaan dijeda untuk semua orang di sekolah anda. Semua yang telah dihasilkan masih ada di sini. Sila hubungi kami.",
+    "requestActivation": "Minta pengaktifan",
+    "activationRequested": "Terima kasih — kami akan menghubungi anda tidak lama lagi.",
+    "contactUs": "Hubungi kami"
   },
   "present": {
     "title": "Papan bilik darjah",

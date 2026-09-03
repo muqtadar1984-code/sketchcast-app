@@ -215,21 +215,64 @@
       "submit": "Créer le compte"
     },
     "schoolSignup": {
-      "title": "Configurez votre école",
-      "subtitle": "Créez votre école sur SketchCast, puis invitez vos enseignants.",
+      "title": "Créez l'espace de travail de votre école",
+      "subtitle": "30 jours gratuits pour votre école, sans carte bancaire. Créez votre compte, confirmez votre e-mail, puis parlez-nous de votre école.",
       "yourFullName": "Votre nom complet",
       "workEmail": "E-mail professionnel",
       "createPassword": "Créez un mot de passe (6 caractères min.)",
       "creating": "Création…",
       "continue": "Continuer",
-      "confirmEmail": "Vérifiez votre e-mail pour confirmer votre compte — vous nommerez ensuite votre école.",
-      "nextStepHint": "Vous nommerez votre école à l'étape suivante.",
+      "confirmEmail": "Vérifiez votre e-mail pour confirmer votre compte — vous configurerez ensuite votre école.",
+      "nextStepHint": "Vous configurerez votre école à l'étape suivante.",
       "finish": {
-        "title": "Nommez votre école",
-        "signedInAs": "Connecté en tant que {email}. Cette étape crée votre école et vous en désigne administrateur — vous pourrez inviter vos enseignants juste après.",
+        "title": "À propos de votre école",
+        "signedInAs": "Connecté en tant que {email}. Cette étape crée l'espace de travail de votre école avec un essai gratuit de 30 jours et vous en désigne administrateur.",
         "schoolName": "Nom de l'école",
+        "portalPreview": "L'adresse de votre école sera {url}",
+        "country": "Pays",
+        "schoolType": "Type d'établissement",
+        "types": {
+          "primary": "Primaire",
+          "secondary": "Secondaire",
+          "k12": "K-12 / tous niveaux",
+          "international": "International",
+          "tuition": "Centre de soutien scolaire ou d'enrichissement",
+          "university": "Université ou enseignement supérieur",
+          "other": "Autre"
+        },
+        "sizeBand": "Nombre approximatif d'élèves",
+        "sizes": {
+          "under100": "Moins de 100",
+          "s100_500": "100 – 500",
+          "s500_1500": "500 – 1 500",
+          "over1500": "Plus de 1 500"
+        },
+        "yourRole": "Votre rôle dans l'établissement",
+        "roles": {
+          "principal": "Directeur ou chef d'établissement",
+          "administrator": "Administrateur",
+          "coordinator": "Coordinateur ou chef de département",
+          "teacher": "Enseignant",
+          "it": "Responsable informatique ou technologie"
+        },
+        "curricula": "Programme — cochez tout ce qui s'applique",
+        "curriculumOptions": {
+          "malaysia": "Programme national malaisien (KSSR / KSSM)",
+          "cbse": "CBSE",
+          "cambridge": "Cambridge / IGCSE",
+          "ib": "IB",
+          "other": "Autre"
+        },
+        "phone": "Téléphone (facultatif)",
+        "heardFrom": "Comment avez-vous connu SketchCast ? (facultatif)",
+        "chooseOne": "Choisir…",
+        "consent": "J'accepte les {terms} et la {privacy}.",
+        "termsLabel": "Conditions d'utilisation",
+        "privacyLabel": "Politique de confidentialité",
+        "consentRequired": "Veuillez accepter les conditions pour continuer.",
+        "captchaRequired": "Veuillez compléter la vérification pour continuer.",
         "creating": "Création…",
-        "submit": "Créer mon école"
+        "submit": "Démarrer votre essai gratuit de 30 jours"
       }
     },
     "invite": {
@@ -1769,7 +1812,17 @@
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kits",
     "purchased": "{n} crédits achetés disponibles",
-    "upgradeCta": "Besoin de plus ? Voir les offres et les tarifs"
+    "upgradeCta": "Besoin de plus ? Voir les offres et les tarifs",
+    "schoolTrialTitle": "Essai école — toutes les fonctionnalités incluses",
+    "schoolTrialLeft": "{available} sur {cap} générations encore disponibles dans l'essai de votre école. Quand vous serez prêt, demandez-nous d'activer votre école pour un usage illimité.",
+    "schoolTrialSpent": "Les générations d'essai de votre école ont toutes été utilisées. Demandez-nous d'activer votre école pour continuer à générer.",
+    "schoolExpiredTitle": "L'essai gratuit de votre école est terminé",
+    "schoolExpiredBody": "Tout ce que vous avez créé reste consultable et utilisable en classe. La génération de nouvelles leçons et de nouveaux documents reprendra dès l'activation de votre école.",
+    "schoolSuspendedTitle": "L'accès de votre école est suspendu",
+    "schoolSuspendedBody": "La génération est suspendue pour tout le monde dans votre école. Tout ce qui a déjà été créé reste disponible. Merci de nous contacter.",
+    "requestActivation": "Demander l'activation",
+    "activationRequested": "Merci — nous vous recontactons très vite.",
+    "contactUs": "Nous contacter"
   },
   "present": {
     "title": "Le tableau de la classe",

@@ -106,3 +106,43 @@ export async function notifySchoolRegistration(input: {
     console.error("school registration notification error:", e);
   }
 }
+
+// A trial or expired school pressed "Request activation" (0100, Phase 3). The
+// route sends this on the FIRST request only. Never throws.
+export async function notifyActivationRequest(input: {
+  schoolId: string;
+  name: string;
+  slug: string | null;
+  requesterEmail: string | null;
+  requesterName: string | null;
+  requesterRole: string;
+}): Promise<void> {
+  try {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) return;
+    const consoleHost = process.env.NEXT_PUBLIC_CONSOLE_HOST || "app.sketchcast.app";
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: FROM,
+        to: [TO],
+        subject: `Activation requested: ${input.name}`,
+        text: [
+          `A school asked to be activated.`,
+          "",
+          `School:  ${input.name}`,
+          `Portal:  ${input.slug ? `school.sketchcast.app/${input.slug}` : "—"}`,
+          `Asked by: ${input.requesterName || "—"} <${input.requesterEmail || "—"}> · ${input.requesterRole}`,
+          "",
+          `Activate or issue an invoice from the console: https://${consoleHost}/console/schools/${input.schoolId}`,
+        ].join("\n"),
+      }),
+    });
+    if (!res.ok) {
+      console.error("activation request notification failed:", res.status, await res.text().catch(() => ""));
+    }
+  } catch (e) {
+    console.error("activation request notification error:", e);
+  }
+}

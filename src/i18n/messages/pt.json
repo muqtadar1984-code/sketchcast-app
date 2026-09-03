@@ -215,21 +215,64 @@
       "submit": "Criar conta"
     },
     "schoolSignup": {
-      "title": "Cadastre sua escola",
-      "subtitle": "Crie sua escola no SketchCast e depois convide seus professores.",
+      "title": "Crie o espaço de trabalho da sua escola",
+      "subtitle": "30 dias grátis para sua escola, sem cartão de crédito. Crie sua conta, confirme seu e-mail e depois conte-nos sobre sua escola.",
       "yourFullName": "Seu nome completo",
       "workEmail": "E-mail institucional",
       "createPassword": "Crie uma senha (mín. 6 caracteres)",
       "creating": "Criando…",
       "continue": "Continuar",
-      "confirmEmail": "Confira seu e-mail para confirmar a conta — depois você dá o nome da escola.",
-      "nextStepHint": "Você dá o nome da escola na próxima etapa.",
+      "confirmEmail": "Confira seu e-mail para confirmar a conta — depois você configura sua escola.",
+      "nextStepHint": "Você configura sua escola na próxima etapa.",
       "finish": {
-        "title": "Dê o nome da escola",
-        "signedInAs": "Conectado como {email}. Isso cria sua escola e torna você o admin dela — em seguida já dá para convidar professores.",
+        "title": "Sobre sua escola",
+        "signedInAs": "Conectado como {email}. Isso cria o espaço de trabalho da sua escola com um teste grátis de 30 dias e torna você o admin dela.",
         "schoolName": "Nome da escola",
+        "portalPreview": "O endereço da sua escola será {url}",
+        "country": "País",
+        "schoolType": "Tipo de escola",
+        "types": {
+          "primary": "Ensino fundamental",
+          "secondary": "Ensino médio",
+          "k12": "K-12 / todas as etapas",
+          "international": "Internacional",
+          "tuition": "Centro de reforço ou enriquecimento",
+          "university": "Faculdade ou universidade",
+          "other": "Outro"
+        },
+        "sizeBand": "Número aproximado de alunos",
+        "sizes": {
+          "under100": "Menos de 100",
+          "s100_500": "100 – 500",
+          "s500_1500": "500 – 1.500",
+          "over1500": "Mais de 1.500"
+        },
+        "yourRole": "Seu cargo na escola",
+        "roles": {
+          "principal": "Diretor ou gestor escolar",
+          "administrator": "Administrador",
+          "coordinator": "Coordenador ou chefe de departamento",
+          "teacher": "Professor",
+          "it": "Responsável de TI ou tecnologia"
+        },
+        "curricula": "Currículo — marque todos que se aplicam",
+        "curriculumOptions": {
+          "malaysia": "Nacional da Malásia (KSSR / KSSM)",
+          "cbse": "CBSE",
+          "cambridge": "Cambridge / IGCSE",
+          "ib": "IB",
+          "other": "Outro"
+        },
+        "phone": "Telefone (opcional)",
+        "heardFrom": "Como você conheceu o SketchCast? (opcional)",
+        "chooseOne": "Escolher…",
+        "consent": "Concordo com os {terms} e a {privacy}.",
+        "termsLabel": "Termos de Serviço",
+        "privacyLabel": "Política de Privacidade",
+        "consentRequired": "Aceite os termos para continuar.",
+        "captchaRequired": "Conclua a verificação para continuar.",
         "creating": "Criando…",
-        "submit": "Criar minha escola"
+        "submit": "Comece seu teste grátis de 30 dias"
       }
     },
     "invite": {
@@ -1769,7 +1812,17 @@
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kits",
     "purchased": "{n} créditos comprados disponíveis",
-    "upgradeCta": "Precisa de mais? Veja os planos e preços"
+    "upgradeCta": "Precisa de mais? Veja os planos e preços",
+    "schoolTrialTitle": "Teste da escola — tudo liberado",
+    "schoolTrialLeft": "Restam {available} de {cap} gerações no teste da sua escola. Quando estiver pronto, peça para ativarmos sua escola para uso ilimitado.",
+    "schoolTrialSpent": "As gerações do teste da sua escola acabaram. Peça para ativarmos sua escola para continuar gerando.",
+    "schoolExpiredTitle": "O teste grátis da sua escola terminou",
+    "schoolExpiredBody": "Tudo o que você criou continua aqui para ler e usar em sala. A geração de novas aulas e documentos volta assim que sua escola for ativada.",
+    "schoolSuspendedTitle": "O acesso da sua escola está pausado",
+    "schoolSuspendedBody": "A geração está pausada para todos na sua escola. Tudo o que já foi criado continua aqui. Por favor, fale com a gente.",
+    "requestActivation": "Solicitar ativação",
+    "activationRequested": "Obrigado — entraremos em contato em breve.",
+    "contactUs": "Fale conosco"
   },
   "present": {
     "title": "A lousa da sala de aula",
