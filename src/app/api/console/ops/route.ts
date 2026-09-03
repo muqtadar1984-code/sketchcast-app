@@ -12,26 +12,47 @@ export const runtime = "nodejs";
 //   set_country          — profiles.country (0085), stamped country_source='staff'
 //   takedown / restore   — soft-delete a book or generation (recoverable)
 //   admin_grant / admin_revoke — platform_admins membership (FOUNDERS only)
+//   school_* (0100)      — targetId is a SCHOOL id:
+//     school_suspend / school_restore — schools.status; plan_tier() branch 1,
+//                          beats even a paid entitlement (the kill switch)
+//     school_extend_trial — trial_ends_at += days (from now if already past)
+//     school_activate     — the bank-transfer lever: a manual school_onetime
+//                          entitlement held by the school's admin (0101)
+//     school_set_sales    — school_registrations.sales_stage / sales_notes
 // Non-staff get 404 (the console isn't probeable). Self/staff targets are
 // refused for destructive actions (footgun guard).
 
 type Body = {
-  action?: "suspend" | "unsuspend" | "set_caps" | "set_country" | "takedown" | "restore" | "admin_grant" | "admin_revoke";
-  targetId?: string;               // profile id, or book/generation id for takedown
+  action?:
+    | "suspend" | "unsuspend" | "set_caps" | "set_country" | "takedown" | "restore" | "admin_grant" | "admin_revoke"
+    | "school_suspend" | "school_restore" | "school_extend_trial" | "school_activate" | "school_set_sales";
+  targetId?: string;               // profile id, book/generation id for takedown, school id for school_*
   targetKind?: "book" | "generation"; // takedown/restore only
   maxBooks?: number | null;
   maxChapters?: number | null;
   maxStudents?: number | null;
   maxChildren?: number | null;
   country?: string | null;         // set_country only; null clears
+  days?: number;                   // school_extend_trial (default 30) / school_activate (default 365)
+  salesStage?: string;             // school_set_sales
+  salesNotes?: string | null;      // school_set_sales; null clears
   note?: string;
 };
+
+const SALES_STAGES = ["new", "contacted", "invoice_sent", "paid", "lost"];
 
 function capVal(v: unknown): number | null | undefined {
   if (v === undefined) return undefined;
   if (v === null) return null;
   const n = Number(v);
   return Number.isInteger(n) && n >= 0 && n <= 100000 ? n : undefined;
+}
+
+/** Whole days in [1, max]; the default when absent; null when given but invalid. */
+function dayVal(v: unknown, dflt: number, max: number): number | null {
+  if (v === undefined || v === null || v === "") return dflt;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= max ? n : null;
 }
 
 export async function POST(request: Request) {
@@ -222,6 +243,142 @@ export async function POST(request: Request) {
     }
     await audit(body.action, "profile", {});
     return NextResponse.json({ ok: true });
+  }
+
+  // ── School-targeted actions (0100, Phase 2) ─────────────────────────────────
+  // targetId is the school id. Every action lands in platform_audit_log with
+  // target_kind 'school'; the school page reads that trail back.
+  if (typeof body.action === "string" && body.action.startsWith("school_")) {
+    const { data: school } = await admin
+      .from("schools")
+      .select("id, name, status, created_by, trial_started_at, trial_ends_at")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!school) return NextResponse.json({ error: "School not found." }, { status: 404 });
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+
+    if (body.action === "school_suspend" || body.action === "school_restore") {
+      const next = body.action === "school_suspend" ? "suspended" : "active";
+      if (school.status === next) return NextResponse.json({ ok: true, unchanged: true });
+      const { error } = await admin.from("schools").update({ status: next }).eq("id", targetId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await audit(body.action, "school", { before: school.status, after: next });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "school_extend_trial") {
+      const days = dayVal(body.days, 30, 365);
+      if (days === null) return NextResponse.json({ error: "days must be a whole number from 1 to 365." }, { status: 400 });
+      // From whichever is later — the current end, or now: an expired clock
+      // restarts from today rather than granting back-dated days.
+      const currentEnd = school.trial_ends_at ? new Date(school.trial_ends_at as string).getTime() : 0;
+      const end = new Date(Math.max(nowMs, currentEnd) + days * 86400000).toISOString();
+      const patch: Record<string, string> = { trial_ends_at: end };
+      // A school that never had a clock (pre-0100) gets its anchor stamped now,
+      // so the trial budget counts from today, not from the school's creation.
+      if (!school.trial_started_at) patch.trial_started_at = nowIso;
+      const { error } = await admin.from("schools").update(patch).eq("id", targetId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await audit("school_extend_trial", "school", { days, before: school.trial_ends_at ?? null, after: end });
+      return NextResponse.json({ ok: true, trial_ends_at: end });
+    }
+
+    if (body.action === "school_activate") {
+      const days = dayVal(body.days, 365, 1095);
+      if (days === null) return NextResponse.json({ error: "days must be a whole number from 1 to 1095." }, { status: 400 });
+      // The licence is ONE row held by an adult and scoped to the school —
+      // plan_tier() joins entitlements.school_id, so every member resolves to
+      // 'school'. Prefer the creator; fall back to the first school_admin.
+      let holder = (school.created_by as string | null) ?? null;
+      if (!holder) {
+        const { data: adminRow } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("school_id", targetId)
+          .eq("role", "school_admin")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        holder = (adminRow?.id as string | undefined) ?? null;
+      }
+      if (!holder) {
+        return NextResponse.json({ error: "This school has no admin account to hold the licence." }, { status: 400 });
+      }
+      const { data: existing } = await admin
+        .from("entitlements")
+        .select("active, current_period_end, provider")
+        .eq("user_id", holder)
+        .eq("plan_key", "school_onetime")
+        .maybeSingle();
+      // Renewal extends from the current end; a lapsed or fresh licence starts now.
+      const existingEnd =
+        existing?.active && existing.current_period_end ? new Date(existing.current_period_end as string).getTime() : 0;
+      const end = new Date(Math.max(nowMs, existingEnd) + days * 86400000).toISOString();
+      const { error } = await admin.from("entitlements").upsert(
+        {
+          user_id: holder,
+          school_id: targetId,
+          provider: "manual",
+          active: true,
+          plan_key: "school_onetime",
+          status: "activated",
+          current_period_end: end,
+          updated_at: nowIso,
+        },
+        { onConflict: "user_id,plan_key" },
+      );
+      if (error) {
+        const msg = error.message.includes("provider")
+          ? "Manual activation needs migration 0101 applied first."
+          : error.message;
+        return NextResponse.json({ error: msg }, { status: 500 });
+      }
+      // Money landed — the pipeline says so too. A pre-0100 school has no
+      // registration row yet; the upsert creates it.
+      await admin
+        .from("school_registrations")
+        .upsert({ school_id: targetId, sales_stage: "paid", updated_at: nowIso }, { onConflict: "school_id" });
+      await audit("school_activate", "school", {
+        holder,
+        days,
+        before: existing?.current_period_end ?? null,
+        after: end,
+        previous_provider: existing?.provider ?? null,
+      });
+      return NextResponse.json({ ok: true, current_period_end: end });
+    }
+
+    if (body.action === "school_set_sales") {
+      const patch: Record<string, string | null> = { school_id: targetId, updated_at: nowIso };
+      if (body.salesStage !== undefined) {
+        if (!SALES_STAGES.includes(body.salesStage)) {
+          return NextResponse.json({ error: `salesStage must be one of ${SALES_STAGES.join(", ")}.` }, { status: 400 });
+        }
+        patch.sales_stage = body.salesStage;
+      }
+      if (body.salesNotes !== undefined) {
+        const notes = body.salesNotes === null ? "" : String(body.salesNotes).trim();
+        patch.sales_notes = notes ? notes.slice(0, 2000) : null;
+      }
+      if (patch.sales_stage === undefined && patch.sales_notes === undefined) {
+        return NextResponse.json({ error: "Nothing to save." }, { status: 400 });
+      }
+      const { data: before } = await admin
+        .from("school_registrations")
+        .select("sales_stage, sales_notes")
+        .eq("school_id", targetId)
+        .maybeSingle();
+      const { error } = await admin.from("school_registrations").upsert(patch, { onConflict: "school_id" });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await audit("school_set_sales", "school", {
+        before: { sales_stage: before?.sales_stage ?? null, notes_len: (before?.sales_notes as string | null)?.length ?? 0 },
+        after: { sales_stage: patch.sales_stage ?? before?.sales_stage ?? null, notes_len: patch.sales_notes?.length ?? 0 },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json({ error: "Unknown school action." }, { status: 400 });
   }
 
   return NextResponse.json({ error: "Unknown action." }, { status: 400 });
