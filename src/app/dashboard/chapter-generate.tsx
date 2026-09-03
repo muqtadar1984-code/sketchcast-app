@@ -9,10 +9,10 @@ import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-spec";
 import { kitRows, type GenerationRow } from "./kit";
 import {
+  AUTO_VOICE,
   LANGUAGES,
   availableVoices,
   defaultNarrationForGrade,
-  defaultVoiceFor,
   narrationStyleHint,
   narrationStyles,
 } from "@/utils/narration";
@@ -52,6 +52,7 @@ export default function ChapterGenerate({
   bookLanguage = null,
   bookGrade = null,
   gate = null,
+  premiumVoices = false,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -74,6 +75,10 @@ export default function ChapterGenerate({
   /** Junk-upload gate: non-null for a gated book — every insert path here
       (full kit AND free add-backs) confirms first and stamps its rows. */
   gate?: JunkGateInfo | null;
+  /** The account's plan allows premium voices (paid tier or comp override):
+      the picker offers the active premium provider's voices. The worker
+      enforces the same gate regardless of what is sent. */
+  premiumVoices?: boolean;
 }) {
   const router = useRouter();
   // Beta mirrors the DB pin (0057): the first generation fixes one
@@ -119,12 +124,15 @@ export default function ChapterGenerate({
   // value must never leave the Language select without a matching option.
   const knownBookLang = LANGUAGES.some((l) => l.value === bookLanguage) ? bookLanguage : null;
   const [language, setLanguage] = useState(knownBookLang || "en");
-  const [ttsVoice, setTtsVoice] = useState(defaultVoiceFor(knownBookLang));
-  const voices = availableVoices(t.utils.narration, language);
+  // "auto" until the teacher picks: the worker chooses the language's voice,
+  // premium for a paid account (AUTO_VOICE). No "touched" flag is needed —
+  // a concrete id IS the record that someone chose.
+  const [ttsVoice, setTtsVoice] = useState<string>(AUTO_VOICE);
+  const voices = availableVoices(t.utils.narration, language, { premium: premiumVoices });
   const styles = narrationStyles(t.utils.narration);
   const pickLanguage = (lang: string) => {
     setLanguage(lang);
-    setTtsVoice(defaultVoiceFor(lang)); // voice follows the lesson language
+    setTtsVoice(AUTO_VOICE); // a picked voice is language-specific — back to automatic
   };
 
   const chosen = pendingKinds.filter((k) => sel[k]);

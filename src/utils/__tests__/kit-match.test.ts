@@ -95,3 +95,59 @@ describe("kitsInterchangeable", () => {
     expect(kitsInterchangeable(sara, raj)).toBe(false);
   });
 });
+
+// The EFFECTIVE voice (founder, 2026-09-03): the app now sends `auto`, so the
+// comparison must read what a kit RENDERED with, and predict what `auto` will
+// render as for this account. Getting this wrong in the "match" direction hands
+// a paying school a colleague's free-voice lesson and calls it a saving.
+describe("kitSignature — effective voice", () => {
+  it("`auto` and an absent voice are the same non-choice", () => {
+    expect(kitSignature({ ...base, params: { tts_voice: "auto" } })).toBe(kitSignature({ ...base, params: {} }));
+    expect(kitSignature({ ...base, params: { tts_voice: "AUTO" } })).toBe(kitSignature({ ...base, params: {} }));
+  });
+
+  it("what a finished kit rendered with wins over what was asked", () => {
+    const rendered = kitSignature({ ...base, params: { tts_voice: "auto", tts_voice_used: "g-en-f" } });
+    expect(rendered).toBe(kitSignature({ ...base, params: { tts_voice: "g-en-f" } }));
+    expect(rendered).not.toBe(kitSignature({ ...base, params: { tts_voice: "auto" } }));
+    // A downgraded render (asked premium, got free) compares as what it IS.
+    expect(kitSignature({ ...base, params: { tts_voice: "el-rachel", tts_voice_used: "edge-aria" } })).toBe(
+      kitSignature({ ...base, params: { tts_voice: "edge-aria" } }),
+    );
+  });
+
+  it("tolerates the list shape of the rendered voice", () => {
+    expect(kitSignature({ ...base, params: { tts_voice_used: ["edge-aria", "edge-guy"] } })).toBe(
+      kitSignature({ ...base, params: { tts_voice: "edge-aria" } }),
+    );
+  });
+
+  it("a predicted default lets an `auto` request match a kit that rendered with that voice", () => {
+    const wanted = kitSignature({ ...base, params: { tts_voice: "auto" }, defaultVoice: "g-en-f" });
+    expect(wanted).toBe(kitSignature({ ...base, params: { tts_voice_used: "g-en-f" } }));
+    // …and NOT a colleague's free-voice kit — the case that would matter most
+    // for a paying school after the provider flip.
+    expect(wanted).not.toBe(kitSignature({ ...base, params: { tts_voice_used: "edge-aria" } }));
+    // Two untouched requests on the same plan still match each other.
+    expect(wanted).toBe(kitSignature({ ...base, params: {}, defaultVoice: "g-en-f" }));
+  });
+
+  it("models the real call: the click predicts its plan's default, a finished kit resolves to the FREE default", () => {
+    // GenerateKitButton passes expectedVoiceFor() for what THIS click will
+    // render as, and defaultVoiceFor() for a colleague's finished kit that
+    // carries no voice record (it predates the premium era and rendered free).
+    const wantedPaid = kitSignature({ ...base, params: { tts_voice: "auto" }, defaultVoice: "g-en-f" });
+    const wantedFree = kitSignature({ ...base, params: { tts_voice: "auto" }, defaultVoice: "edge-aria" });
+    const oldRow = kitSignature({ ...base, params: {}, defaultVoice: "edge-aria" });
+    const premiumRow = kitSignature({ ...base, params: { tts_voice_used: "g-en-f" }, defaultVoice: "edge-aria" });
+    expect(wantedFree).toBe(oldRow);            // a free plan adopts the old free kit
+    expect(wantedPaid).not.toBe(oldRow);        // a paid plan after the flip does NOT
+    expect(wantedPaid).toBe(premiumRow);        // …but adopts a colleague's premium render
+    expect(wantedFree).not.toBe(premiumRow);
+  });
+
+  it("the prediction never touches documents", () => {
+    const doc = { ...base, kind: "worksheet" };
+    expect(kitSignature({ ...doc, params: {}, defaultVoice: "g-en-f" })).toBe(kitSignature({ ...doc, params: {} }));
+  });
+});

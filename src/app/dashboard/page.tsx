@@ -43,6 +43,7 @@ import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
+import { premiumVoicesFor } from "@/utils/narration";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -504,9 +505,16 @@ export default async function DashboardPage() {
   // beta_tester, which is never cleared on upgrade (known trap). Best-effort:
   // a pre-0047 DB just means no extra line.
   let trialTier = false;
+  let premiumVoices = false;
   {
     const { data: fu } = await supabase.rpc("my_fair_use");
-    trialTier = (fu as { tier?: string } | null)?.tier === "trial";
+    const f = fu as { tier?: string; unlimited?: boolean } | null;
+    trialTier = f?.tier === "trial";
+    // Premium voices in the picker follow the PLAN — a paid tier or the comp
+    // override — the same allow-list the worker's gate enforces. Free and
+    // trial accounts see free voices; `auto` still gives everyone the right
+    // language.
+    premiumVoices = premiumVoicesFor(f);
   }
 
   // Teacher surfaces show what the person OWNS. Admins/coordinators can read
@@ -1217,6 +1225,7 @@ export default async function DashboardPage() {
                   beta={isBeta ? { pinned: betaPinned } : null}
                   examEnabled={examGenerationEnabled()}
                   trial={trialTier}
+                  premiumVoices={premiumVoices}
                 />
               </section>
             ))}
@@ -1249,6 +1258,7 @@ export default async function DashboardPage() {
                     beta={isBeta ? { pinned: betaPinned } : null}
                     examEnabled={examGenerationEnabled()}
                     trial={trialTier}
+                    premiumVoices={premiumVoices}
                   />
                 </section>
               ))}
