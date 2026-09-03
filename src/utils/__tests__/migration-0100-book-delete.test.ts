@@ -55,13 +55,25 @@ describe("0100_book_delete_takes_its_kits.sql", () => {
 
   it("measures other teachers' kits so the client can refuse before asking", () => {
     const body = fn("my_book_impact");
-    expect(body).toMatch(/'others',\s+\(select count\(\*\) from generations g\s+where g\.book_id = p_book and g\.owner_id <> me and g\.withdrawn_at is null\)/);
+    // No withdrawn_at filter: a withdrawn colleague's kit still counts (the
+    // console can restore the retired book it sits on).
+    expect(body).toMatch(/'others',\s+\(select count\(\*\) from generations g\s+where g\.book_id = p_book and g\.owner_id <> me\)/);
+    expect(body).not.toMatch(/g\.owner_id <> me and g\.withdrawn_at is null/);
+  });
+
+  it("measures indexing against the word books.status actually holds", () => {
+    // upload-book.tsx writes 'indexing'; the worker flips it to 'ready' or
+    // 'error'. 'processing' is the jobs/generations enum and is NEVER written
+    // to books — a first draft compared against it and the refusal could not
+    // fire, which two independent verifiers caught. Pin the real literal.
+    expect(fn("my_book_impact")).toMatch(/'indexing',\s+\(b\.status = 'indexing'\)/);
+    expect(fn("delete_my_book")).not.toMatch(/b\.status = 'processing'/);
   });
 
   it("refuses — shared kits, then indexing, then building — before touching any row", () => {
     const body = fn("delete_my_book");
-    const shared = body.search(/g\.owner_id <> me and g\.withdrawn_at is null\) then\s+raise exception 'shared_kits'/);
-    const indexing = body.search(/if b\.status = 'processing' then\s+raise exception 'book_indexing'/);
+    const shared = body.search(/g\.owner_id <> me\) then\s+raise exception 'shared_kits'/);
+    const indexing = body.search(/if b\.status = 'indexing' then\s+raise exception 'book_indexing'/);
     const building = body.search(/g\.status = 'processing'\) then\s+raise exception 'kit_building'/);
     const firstDelete = body.indexOf("delete from");
     expect(shared).toBeGreaterThan(0);

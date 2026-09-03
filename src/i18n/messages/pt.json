@@ -1122,6 +1122,7 @@
       "confirmEmpty": "Excluir “{title}”? Isso não pode ser desfeito.",
       "confirm": "Excluir “{title}”? Tudo o que foi gerado a partir dele — {kits} kits e seus arquivos — será excluído junto. Os créditos já usados não são devolvidos.",
       "studentWork": "{submissions} trabalhos enviados pelos alunos para esses kits também serão excluídos.",
+      "assigned": "Ele está atribuído a {students} alunos, cujo progresso nesses kits também será excluído.",
       "shared": "Outros professores geraram kits a partir deste livro. Peça a um coordenador ou ao diretor que o retire pela página Livros da escola, para que o trabalho deles seja retirado corretamente em vez de destruído.",
       "building": "Um kit deste livro ainda está sendo gerado — você poderá excluir o livro assim que terminar.",
       "indexing": "Este livro ainda está sendo indexado — você poderá excluí-lo assim que terminar."

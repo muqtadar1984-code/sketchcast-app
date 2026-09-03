@@ -4,9 +4,10 @@
  * What must hold:
  *  • an empty book gets the short confirm — never "0 kits and their files";
  *  • a book with kits names the count and says credits are not returned;
- *  • a book whose kits carry student submissions ALSO says how many — this is
- *    the sentence a teacher may not have expected, so it must be present with
- *    its number whenever submissions > 0 and absent otherwise;
+ *  • a book whose kits carry student submissions ALSO says how many, and a
+ *    book assigned to students ALSO says how many — these are the sentences
+ *    a teacher may not have expected, so each must be present with its number
+ *    exactly when its count is > 0 and absent otherwise;
  *  • the placeholders are filled — a stray "{kits}" on screen means the
  *    dictionary and the code disagree about a key;
  *  • the three refusals are recognised, from the impact row (before asking)
@@ -28,6 +29,7 @@ const T: DeleteBookMessages = {
   confirmEmpty: "Delete “{title}”? This can't be undone.",
   confirm: "Delete “{title}”? {kits} kits go with it. Credits are not returned.",
   studentWork: "{submissions} pieces of student work will be deleted too.",
+  assigned: "Assigned to {students} students; their progress goes too.",
   shared: "other teachers' kits",
   building: "still building",
   indexing: "still indexing",
@@ -52,13 +54,27 @@ describe("bookDeleteConfirmText", () => {
   it("adds the student-work sentence, with its number, only when submissions exist", () => {
     const withWork = bookDeleteConfirmText(T, "Science 8", impact({ kits: 3, submissions: 12 }));
     expect(withWork).toMatch(/3 kits go with it/);
-    expect(withWork).toMatch(/12 pieces of student work will be deleted too\.$/);
+    expect(withWork).toMatch(/12 pieces of student work will be deleted too\./);
     const without = bookDeleteConfirmText(T, "Science 8", impact({ kits: 3 }));
     expect(without).not.toMatch(/student work/);
   });
 
+  it("adds the assigned-students sentence, with its number, only when students are assigned", () => {
+    const assigned = bookDeleteConfirmText(T, "Science 8", impact({ kits: 3, students: 28 }));
+    expect(assigned).toMatch(/Assigned to 28 students; their progress goes too\.$/);
+    expect(assigned).not.toMatch(/student work/);
+    const none = bookDeleteConfirmText(T, "Science 8", impact({ kits: 3 }));
+    expect(none).not.toMatch(/Assigned/);
+  });
+
+  it("says both when both are true, submissions first", () => {
+    const s = bookDeleteConfirmText(T, "Science 8", impact({ kits: 3, submissions: 12, students: 28 }));
+    expect(s.indexOf("12 pieces")).toBeGreaterThan(0);
+    expect(s.indexOf("Assigned to 28")).toBeGreaterThan(s.indexOf("12 pieces"));
+  });
+
   it("leaves no placeholder unfilled", () => {
-    const s = bookDeleteConfirmText(T, "Science 8", impact({ kits: 2, submissions: 1 }));
+    const s = bookDeleteConfirmText(T, "Science 8", impact({ kits: 2, submissions: 1, students: 5 }));
     expect(s).not.toMatch(/\{\w+\}/);
   });
 });

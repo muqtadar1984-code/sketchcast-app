@@ -41,7 +41,11 @@
 --                     counts other teachers' kits at the moment the BOOK row is
 --                     deleted, and this function deletes the kits before the
 --                     book — so without its own check it would have removed the
---                     very rows the trigger exists to count.
+--                     very rows the trigger exists to count. It also counts
+--                     WITHDRAWN kits, which the trigger ignores: a retired book
+--                     can be restored from the console, and the owner could
+--                     then delete it with a colleague's withdrawn kit still on
+--                     it.
 --   'book_indexing' — the book is still being indexed.
 --   'kit_building'  — a kit is still being built.
 -- The last two leave a worker mid-write against rows that would vanish under
@@ -81,9 +85,9 @@ begin
   return jsonb_build_object(
     'kits',        (select count(*) from generations g where g.book_id = p_book),
     'others',      (select count(*) from generations g
-                     where g.book_id = p_book and g.owner_id <> me and g.withdrawn_at is null),
+                     where g.book_id = p_book and g.owner_id <> me),
     'processing',  (select count(*) from generations g where g.book_id = p_book and g.status = 'processing'),
-    'indexing',    (b.status = 'processing'),
+    'indexing',    (b.status = 'indexing'),
     'submissions', (select count(*) from submissions s
                       join generations g on g.id = s.generation_id
                      where g.book_id = p_book),
@@ -127,13 +131,20 @@ begin
 
   -- Other teachers' kits are not ours to delete. Checked before anything is
   -- touched — see the header on why this cannot be left to the books trigger.
+  -- WITHDRAWN kits count too: a withdrawn kit sits on a book leadership
+  -- retired, the console can restore that book, and the owner could then
+  -- delete it — taking a colleague's kit and its students' work with it.
   if exists (select 1 from generations g
-              where g.book_id = p_book and g.owner_id <> me and g.withdrawn_at is null) then
+              where g.book_id = p_book and g.owner_id <> me) then
     raise exception 'shared_kits';
   end if;
 
-  -- Never pull rows out from under a running worker.
-  if b.status = 'processing' then
+  -- Never pull rows out from under a running worker. books.status is
+  -- 'indexing' while the index job runs (upload-book.tsx writes it, the
+  -- worker flips it to 'ready' or 'error'); 'processing' is the JOB/GENERATION
+  -- enum and is never written to books — a first draft compared against it
+  -- and the guard could never fire. Two verifiers caught that before it shipped.
+  if b.status = 'indexing' then
     raise exception 'book_indexing';
   end if;
   if exists (select 1 from generations g where g.book_id = p_book and g.status = 'processing') then

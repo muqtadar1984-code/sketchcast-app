@@ -2,11 +2,11 @@
 // refused — the pure half of src/app/dashboard/delete-book.tsx.
 //
 // Deleting a book takes every kit generated from it (0100), and a kit can
-// carry work students submitted. The confirm has to say so in numbers, not
-// adjectives: "3 kits" and "12 pieces of student work" are what let a teacher
-// decide, and they come from my_book_impact() rather than from anything the
-// page happens to know. Kept out of the component so the wording for every
-// shape (empty book, kits only, kits with student work) is pinned by a test
+// carry work students submitted and progress students made. The confirm has
+// to say so in numbers, not adjectives: "3 kits", "12 pieces of student work",
+// "assigned to 28 students" are what let a teacher decide, and they come from
+// my_book_impact() rather than from anything the page happens to know. Kept
+// out of the component so the wording for every shape is pinned by a test
 // that needs no React and no dictionary.
 
 import { fmt } from "@/i18n/format";
@@ -19,6 +19,10 @@ export type BookImpact = {
   processing: number;
   indexing: boolean;
   submissions: number;
+  /** Distinct students any of these kits is assigned to. Their
+   * student_progress rows go with the kits — 0070's doctrine that retiring
+   * material never destroys the student record does NOT hold for a delete,
+   * so the confirm says it. */
   students: number;
   classes: number;
 };
@@ -29,6 +33,7 @@ export type DeleteBookMessages = {
   confirmEmpty: string;
   confirm: string;
   studentWork: string;
+  assigned: string;
   shared: string;
   building: string;
   indexing: string;
@@ -38,8 +43,9 @@ export type BlockedReason = "shared" | "indexing" | "building";
 
 /** The error tokens delete_my_book raises. The client checks the impact
  * first, but the RPC is the authority — this maps its refusal back to the
- * same messages. */
-export const BLOCKED_TOKENS: Record<string, BlockedReason> = {
+ * same messages. Keys are typed as well as values, so a token typo on either
+ * side is a compile error here and a failing parse-check on the SQL side. */
+export const BLOCKED_TOKENS: Record<"shared_kits" | "book_indexing" | "kit_building", BlockedReason> = {
   shared_kits: "shared",
   book_indexing: "indexing",
   kit_building: "building",
@@ -72,16 +78,19 @@ export function blockedReasonFromError(message: string | null | undefined): Bloc
 }
 
 /**
- * The confirm text. Three shapes, deliberately distinct:
- *   • no kits          — the short form; "0 kits and their files" is noise
- *   • kits, no work    — names the count and that credits are not returned
- *   • kits with work   — adds the sentence about students' submissions, with
- *                        its own number, because that is the one a teacher
- *                        may not have expected and must not miss
+ * The confirm text. Built up in sentences, each present only when it is true:
+ *   • no kits          — the short form alone; "0 kits and their files" is noise
+ *   • kits             — the count, and that credits are not returned
+ *   • + submissions    — how many pieces of submitted student work go too
+ *   • + assigned       — how many students it is assigned to, whose progress
+ *                        records go too
+ * The student sentences are the ones a teacher may not have expected, so
+ * each carries its own number and never hides behind an adjective.
  */
 export function bookDeleteConfirmText(t: DeleteBookMessages, title: string, i: BookImpact): string {
   if (i.kits <= 0) return fmt(t.confirmEmpty, { title });
-  const base = fmt(t.confirm, { title, kits: i.kits });
-  if (i.submissions <= 0) return base;
-  return `${base} ${fmt(t.studentWork, { submissions: i.submissions })}`;
+  const parts = [fmt(t.confirm, { title, kits: i.kits })];
+  if (i.submissions > 0) parts.push(fmt(t.studentWork, { submissions: i.submissions }));
+  if (i.students > 0) parts.push(fmt(t.assigned, { students: i.students }));
+  return parts.join(" ");
 }

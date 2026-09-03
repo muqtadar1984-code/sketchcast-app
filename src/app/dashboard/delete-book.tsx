@@ -66,18 +66,25 @@ export default function DeleteBook({
       return;
     }
 
-    const res = await fetch(`/api/books/${encodeURIComponent(bookId)}`, { method: "DELETE" });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      // The race the impact check cannot close: a kit that started building
-      // between the question and the answer. The RPC's token says which.
-      const reason = blockedReasonFromError(body.error);
-      alert(reason ? m[reason] : body.error || t.common.somethingWentWrong);
+    // try/catch because fetch REJECTS on a network failure rather than
+    // returning a non-ok response — without it the button stayed disabled
+    // until a reload, with nothing said.
+    try {
+      const res = await fetch(`/api/books/${encodeURIComponent(bookId)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        // The race the impact check cannot close: a kit that started building
+        // between the question and the answer. The RPC's token says which.
+        const reason = blockedReasonFromError(body.error);
+        alert(reason ? m[reason] : body.error || t.common.somethingWentWrong);
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert(t.common.somethingWentWrong);
+    } finally {
       setBusy(false);
-      return;
     }
-    setBusy(false);
-    router.refresh();
   }
 
   return (
