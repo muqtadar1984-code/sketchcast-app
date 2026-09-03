@@ -113,8 +113,15 @@ export default function KitPreviewPage() {
 
 function KitPreview() {
   const [showScanner, setShowScanner] = useState(false);
-  const wanted = useSearchParams().get("locale");
+  const sp = useSearchParams();
+  const wanted = sp.get("locale");
   const locale: Locale = isLocale(wanted) ? wanted : DEFAULT_LOCALE;
+  // Voice-picker block below: ?premium=1 plays a paid account (the picker
+  // offers the active premium provider's voices — set
+  // NEXT_PUBLIC_TTS_PREMIUM_PROVIDER in the dev env to see them), ?lang=ar
+  // plays a book detected in that language.
+  const premiumVoices = sp.get("premium") === "1";
+  const bookLanguage = sp.get("lang");
 
   const T: LibraryMessages = useMemo(() => {
     const m = MESSAGES[locale];
@@ -319,6 +326,25 @@ function KitPreview() {
                 exam_paper: doc(),
                 case_study: doc(),
               }}
+            />
+          </div>
+        </div>
+
+        {/* Ungenerated chapter row — the REAL ChapterGenerate with its
+            narration + voice pickers. The voice list starts at Automatic and
+            shows premium voices only for a paid account (?premium=1). */}
+        <p className="text-xs text-[#98A0A9] mt-10 mb-2">
+          Ungenerated chapter row with the voice picker (REAL ChapterGenerate) — dev only.
+          {" "}premium={premiumVoices ? "on" : "off"} · lang={bookLanguage ?? "(none)"}
+        </p>
+        <div className="card overflow-hidden bg-[#EEF3F1] mb-10">
+          <div className="px-5 py-3">
+            <ChapterGenerate
+              {...COMMON}
+              classes={[]}
+              lessons={{}}
+              bookLanguage={bookLanguage}
+              premiumVoices={premiumVoices}
             />
           </div>
         </div>

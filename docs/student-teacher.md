@@ -9,6 +9,7 @@ admin invites, and self-serve school setup (`/schoolsignup`).
 - `FEATURE_SCHOOL_ANALYTICS` — the leadership suite (School / Teachers / Access /
   Admin tabs, at-risk worklist, coordinator scoping). Requires migrations
   0009+0010 applied. Set to `true` in Vercel env + redeploy to enable.
+- `NEXT_PUBLIC_TTS_PREMIUM_PROVIDER` — `legacy` | `google` | `elevenlabs`: the premium family the voice picker shows to paid accounts (mirrors the worker's `TTS_PREMIUM_PROVIDER`)
 - `NEXT_PUBLIC_ELEVENLABS_ENABLED` — shows premium voices in the lesson
   generate form (the worker enforces the real gate server-side).
 

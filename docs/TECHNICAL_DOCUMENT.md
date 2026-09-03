@@ -1002,7 +1002,8 @@ All server flags live in `sketchcast-app/src/utils/flags.ts`. The convention is 
 
 Two client flags live **outside** `flags.ts` and are read directly from `process.env` in the component:
 - `NEXT_PUBLIC_FEATURE_TOUR` — the driver.js onboarding tour (`src/tour/TourProvider.tsx`). **ON** in prod (user set it 2026-07-12).
-- `NEXT_PUBLIC_ELEVENLABS_ENABLED` — a display-only toggle in the app that shows premium-voice options; actual synthesis is gated by the worker's `ELEVENLABS_ENABLED`. **OFF**.
+- `NEXT_PUBLIC_TTS_PREMIUM_PROVIDER` — mirrors the worker's `TTS_PREMIUM_PROVIDER` (`legacy` | `google` | `elevenlabs`): which premium family the voice picker shows to PAID accounts (plan from `my_fair_use`) and what an `auto` voice is predicted to render as for kit reuse. Display only; the worker resolves and enforces. Unset = `legacy`.
+- `NEXT_PUBLIC_ELEVENLABS_ENABLED` — the pre-Google display toggle; while on, ElevenLabs voices stay pickable for paid accounts. Actual synthesis is gated by the worker's `ELEVENLABS_ENABLED`. **OFF**.
 
 **Tutor-family caveat:** the AI-tutor lineage (`FEATURE_AI_TUTOR*`) was superseded by the AI Teaching Assistant pivot. The current `flags.ts` comment on `aiAssistantEnabled()` states the Assistant "replaces Ask Coach as the active student path (the TAL board stays preserved behind `FEATURE_AI_TUTOR_TAL`, off)." Because flag values are operator-set env vars in Vercel, the tutor-family on/off states above are the reconciled intent — confirm the live values in the Vercel project if operating this subsystem.
 
@@ -1015,7 +1016,7 @@ Three deployment targets hold secrets: **Vercel** (the Next.js app), **Railway**
 | **Supabase** | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public); `SUPABASE_SERVICE_ROLE_KEY` (server-only) | Vercel. Worker/mathsvc use `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on Railway |
 | **Email (Resend)** | `RESEND_API_KEY`, `FEEDBACK_EMAIL_TO`, `FOUNDER_EMAILS` (also drives the staff allowlist, §12.3) | Vercel |
 | **LLM (Anthropic / Gemini)** | `ANTHROPIC_API_KEY` | Railway worker (generation + support diagnosis); GitHub Actions secret (autofix). The app's Assistant/tutor also needs an LLM provider key at runtime (per `docs/qa/LOCAL-DEV.md`), though it is **not declared in the app `.env.example`** — a gap to close |
-| **ElevenLabs (premium TTS)** | app: `NEXT_PUBLIC_ELEVENLABS_ENABLED` (display only). worker: `ELEVENLABS_ENABLED`, `ELEVENLABS_API_KEY`, optional `ELEVENLABS_CHAR_CAP`, `ELEVENLABS_USD_PER_1K_CHARS` | Vercel (toggle) / Railway (actual synthesis + cost caps) |
+| **Premium TTS (Google / ElevenLabs)** | app: `NEXT_PUBLIC_TTS_PREMIUM_PROVIDER`, `NEXT_PUBLIC_ELEVENLABS_ENABLED` (display only). worker: `TTS_PREMIUM_PROVIDER`, `GOOGLE_TTS_ENABLED`, `GOOGLE_TTS_CHAR_CAP`, `ELEVENLABS_ENABLED`, `ELEVENLABS_API_KEY`, optional `ELEVENLABS_CHAR_CAP`, `ELEVENLABS_USD_PER_1K_CHARS` | Vercel (toggle) / Railway (actual synthesis + cost caps) |
 | **Stripe (schools, MYR)** | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_SCHOOL_ANNUAL`, `STRIPE_PRICE_SCHOOL_ONETIME`; plus `BILLING_ENABLED`, `APP_URL` | Vercel |
 | **Lemon Squeezy (parents/teachers, USD, MoR)** | `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_WEBHOOK_SECRET`, and six `LEMONSQUEEZY_VARIANT_*` ids (product×cycle; the webhook maps `variant_id`→`plan_key`) | Vercel |
 | **Board token (Phase-2 canvas)** | `BOARD_TOKEN_SECRET` (≥16 chars), `NEXT_PUBLIC_BOARD_URL`, `BOARD_APP_ORIGIN` (CORS override) | Vercel |

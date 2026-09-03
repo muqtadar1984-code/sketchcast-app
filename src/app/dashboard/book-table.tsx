@@ -199,6 +199,7 @@ export default function BookTable({
   beta = null,
   examEnabled = false,
   trial = false,
+  premiumVoices = false,
 }: {
   books: BookRow[];
   schoolId: string | null;
@@ -216,6 +217,9 @@ export default function BookTable({
       stronger "your only trial kit" line. NOT beta_tester — that flag goes
       stale on upgrade. */
   trial?: boolean;
+  /** Paid plan or comp override (my_fair_use): the voice pickers offer
+      premium voices and kit reuse predicts the premium default. */
+  premiumVoices?: boolean;
 }) {
   // Expand the only book by default; otherwise everything starts collapsed.
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
@@ -415,6 +419,7 @@ export default function BookTable({
                         bookLanguage={b.language}
                         bookGrade={b.grade}
                         gate={gate}
+                        premiumVoices={premiumVoices}
                         t={t}
                       />
                       {/* Per-part lesson units (index-time part map): one row
@@ -446,6 +451,7 @@ export default function BookTable({
                                 bookLanguage={b.language}
                                 bookGrade={b.grade}
                                 gate={gate}
+                                premiumVoices={premiumVoices}
                                 t={t}
                               />
                             );

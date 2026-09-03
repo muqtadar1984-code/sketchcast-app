@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { kitRows } from "./kit";
-import { defaultNarrationForGrade } from "@/utils/narration";
+import { defaultNarrationForGrade, expectedVoiceFor } from "@/utils/narration";
 import { kitSignature } from "@/utils/kit-match";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
@@ -26,6 +26,7 @@ export default function GenerateKitButton({
   className = "",
   children,
   gate = null,
+  premiumVoices = false,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -47,6 +48,10 @@ export default function GenerateKitButton({
       first (and stamps every row); adopting a colleague's finished kit burns
       nothing, so that path is deliberately NOT gated. */
   gate?: JunkGateInfo | null;
+  /** The account's plan allows premium voices (paid tier or comp override).
+      Decides what `auto` is expected to render as when comparing with a
+      colleague's kit — the worker resolves the real thing. */
+  premiumVoices?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -59,6 +64,8 @@ export default function GenerateKitButton({
   const [gateOpen, setGateOpen] = useState(false);
 
   const chapterRef = String(chapterNum);
+  // This click sends `auto`; the comparison needs what that will render as.
+  const defaultVoice = expectedVoiceFor(language, premiumVoices);
 
   /** What this click WOULD produce, as signatures — so the school's kits can be
    *  compared against it rather than against "same chapter, near enough". */
@@ -73,7 +80,9 @@ export default function GenerateKitButton({
       narrationStyle: defaultNarrationForGrade(bookGrade),
     });
     return new Set(
-      rows.map((r) => kitSignature({ kind: r.kind, chapterRef: r.chapter_ref, params: r.params, grade: bookGrade })),
+      rows.map((r) =>
+        kitSignature({ kind: r.kind, chapterRef: r.chapter_ref, params: r.params, grade: bookGrade, defaultVoice }),
+      ),
     );
   }
 
@@ -87,7 +96,7 @@ export default function GenerateKitButton({
       if (!rows.length) return null;
       const wanted = wantedSignatures();
       const usable = rows.filter((r) =>
-        wanted.has(kitSignature({ kind: r.kind, chapterRef, params: r.params, grade: bookGrade })),
+        wanted.has(kitSignature({ kind: r.kind, chapterRef, params: r.params, grade: bookGrade, defaultVoice })),
       );
       // Only offer when the LESSON itself is there. A stray worksheet is not a
       // kit, and swapping one document for a colleague's would be a surprise

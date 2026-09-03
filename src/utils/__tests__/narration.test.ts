@@ -1,12 +1,20 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
+  AUTO_VOICE,
   NARRATION_STYLES,
+  PAID_VOICE_TIERS,
   VOICES,
   availableVoices,
   defaultNarrationForGrade,
+  defaultPresentationParams,
+  defaultVoiceFor,
+  expectedVoiceFor,
   gradeLevel,
   narrationStyleHint,
   narrationStyles,
+  premiumProvider,
+  premiumVoicesFor,
+  providerOf,
   voiceLabel,
 } from "../narration";
 import en from "@/i18n/messages/en.json";
@@ -92,14 +100,122 @@ describe("narration + voice pickers", () => {
     expect(voiceLabel(ar, "edge-zariyah")).toBe("زارية — العربية");
   });
 
-  it("offers the lesson language's voices (Jawi borrows Malay's)", () => {
-    expect(availableVoices(T, "ar").map((v) => v.value)).toEqual(["edge-zariyah", "edge-hamed"]);
-    expect(availableVoices(T, "ms-arab").map((v) => v.value)).toEqual(["edge-yasmin", "edge-osman"]);
+  it("offers Automatic first, then the lesson language's voices (Jawi borrows Malay's)", () => {
+    expect(availableVoices(T, "ar").map((v) => v.value)).toEqual(["auto", "edge-zariyah", "edge-hamed"]);
+    expect(availableVoices(T, "ms-arab").map((v) => v.value)).toEqual(["auto", "edge-yasmin", "edge-osman"]);
     expect(availableVoices(T, null)).toHaveLength(VOICES.filter((v) => v.tier === "free").length);
+  });
+
+  it("the untouched picker sends `auto`, never a frozen concrete default", () => {
+    expect(AUTO_VOICE).toBe("auto");
+    expect(defaultPresentationParams(null).tts_voice).toBe("auto");
+    expect(defaultPresentationParams("ms").tts_voice).toBe("auto");
+    // The free default still exists — it is what `auto` renders as on a free plan.
+    expect(defaultVoiceFor("ms-arab")).toBe("edge-yasmin");
   });
 
   it("an id the dictionary no longer knows shows as itself, never blank", () => {
     expect(voiceLabel(T, "edge-retired")).toBe("edge-retired");
     expect(narrationStyleHint(T, "retired_style")).toBe("");
+  });
+});
+
+// Premium voices follow the PLAN (my_fair_use) and the deployment's active
+// provider — mirroring the worker's gate, which has the last word anyway.
+describe("premium voices — plan and provider", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const paid = { premium: true };
+
+  it("the paid allow-list is the worker's PAID_TIERS; trial, promo and school_trial are not paid", () => {
+    expect([...PAID_VOICE_TIERS].sort()).toEqual(["family", "homeschool", "pro", "pro_plus", "school"]);
+    for (const tier of ["pro", "pro_plus", "family", "homeschool", "school"]) {
+      expect(premiumVoicesFor({ tier })).toBe(true);
+    }
+    for (const tier of ["trial", "promo", "school_trial", "school_expired", "legacy", ""]) {
+      expect(premiumVoicesFor({ tier })).toBe(false);
+    }
+    expect(premiumVoicesFor({ tier: "unlimited", unlimited: true })).toBe(true); // comp override
+    expect(premiumVoicesFor(null)).toBe(false);
+    expect(premiumVoicesFor(undefined)).toBe(false);
+  });
+
+  it("families come from the id prefix, like the worker's registry", () => {
+    expect(providerOf("edge-aria")).toBe("edge");
+    expect(providerOf("el-rachel")).toBe("elevenlabs");
+    expect(providerOf("g-ar-f")).toBe("google");
+    expect(providerOf("auto")).toBe("edge");
+  });
+
+  it("unset or unknown provider is legacy — nothing premium is shown, as today", () => {
+    expect(premiumProvider()).toBe("legacy");
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "openai");
+    expect(premiumProvider()).toBe("legacy");
+    expect(availableVoices(T, "ar", paid).every((v) => v.tier === "free")).toBe(true);
+  });
+
+  it("a free account never sees premium voices, whatever the provider", () => {
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "google");
+    vi.stubEnv("NEXT_PUBLIC_ELEVENLABS_ENABLED", "true");
+    expect(availableVoices(T, "ar").every((v) => v.tier === "free")).toBe(true);
+    expect(availableVoices(T, "ar", { premium: false }).every((v) => v.tier === "free")).toBe(true);
+  });
+
+  it("google: a paid account sees the language's Google pair, not other languages'", () => {
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "google");
+    expect(availableVoices(T, "ar", paid).map((v) => v.value)).toEqual([
+      "auto", "edge-zariyah", "edge-hamed", "g-ar-f", "g-ar-m",
+    ]);
+    expect(availableVoices(T, "ms-arab", paid).map((v) => v.value)).toEqual([
+      "auto", "edge-yasmin", "edge-osman", "g-ms-f", "g-ms-m",
+    ]);
+    const en = availableVoices(T, "en", paid).map((v) => v.value);
+    expect(en).toContain("g-en-f");
+    expect(en).toContain("g-en-in-m");
+    expect(en).not.toContain("el-rachel"); // legacy flag off
+  });
+
+  it("the legacy ElevenLabs flag keeps el-* pickable for paid accounts in every mode", () => {
+    vi.stubEnv("NEXT_PUBLIC_ELEVENLABS_ENABLED", "true");
+    expect(availableVoices(T, "ar", paid).map((v) => v.value)).toEqual([
+      "auto", "edge-zariyah", "edge-hamed", "el-rachel", "el-adam",
+    ]);
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "google");
+    const both = availableVoices(T, "ar", paid).map((v) => v.value);
+    expect(both).toEqual(["auto", "edge-zariyah", "edge-hamed", "el-rachel", "el-adam", "g-ar-f", "g-ar-m"]);
+  });
+
+  it("every Google entry has a label that names its gender, since star names carry no cue", () => {
+    for (const v of VOICES.filter((v) => providerOf(v.value) === "google")) {
+      const label = T.voices[v.value];
+      expect(label, v.value).toMatch(v.value.endsWith("-f") ? /female/ : /(^|[^e])male/);
+    }
+  });
+});
+
+describe("expectedVoiceFor — what `auto` will render as", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("legacy or free: the language's free voice (today's behaviour)", () => {
+    expect(expectedVoiceFor("ar", false)).toBe("edge-zariyah");
+    expect(expectedVoiceFor("ar", true)).toBe("edge-zariyah"); // legacy
+    expect(expectedVoiceFor(null, true)).toBe("edge-aria");
+  });
+
+  it("google + paid: the female Chirp voice for the language, WaveNet A for Malay", () => {
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "google");
+    expect(expectedVoiceFor("ar", true)).toBe("g-ar-f");
+    expect(expectedVoiceFor("en", true)).toBe("g-en-f");
+    expect(expectedVoiceFor("ms-arab", true)).toBe("g-ms-f");
+    expect(expectedVoiceFor("ar", false)).toBe("edge-zariyah"); // still free for a free plan
+  });
+
+  it("a language Google has no entry for falls to the free default in THAT language", () => {
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "google");
+    expect(expectedVoiceFor("zh", true)).toBe("edge-aria");
+  });
+
+  it("elevenlabs + paid: the multilingual Rachel, whatever the language", () => {
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "elevenlabs");
+    expect(expectedVoiceFor("hi", true)).toBe("el-rachel");
   });
 });
