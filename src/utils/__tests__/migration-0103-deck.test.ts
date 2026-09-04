@@ -21,13 +21,29 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const sql = readFileSync(path.resolve(__dirname, "../../../supabase/migrations/0103_deck_kind.sql"), "utf-8");
-const code = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "").toLowerCase();
+const raw = readFileSync(path.resolve(__dirname, "../../../supabase/migrations/0103_deck_kind.sql"), "utf-8");
 
-const fn = (name: string) => {
-  const m = code.match(new RegExp(`create or replace function public\\.${name}\\(\\)([\\s\\S]*?)\\$\\$;`));
-  if (!m) throw new Error(`${name} not found`);
-  return m[1];
+// The file is committed LF, but core.autocrlf=true (set on the founder's
+// checkout) hands a fresh clone CRLF — and the branch markers below are
+// matched with a literal "\n", so an unnormalised read found no `return new;
+// end if;` and two cases failed with end = -1. Normalise first; the CRLF
+// case at the bottom pins that this stays true.
+const normalise = (text: string) => {
+  const code = text.replace(/\r\n/g, "\n").replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "").toLowerCase();
+  const fn = (name: string) => {
+    const m = code.match(new RegExp(`create or replace function public\\.${name}\\(\\)([\\s\\S]*?)\\$\\$;`));
+    if (!m) throw new Error(`${name} not found`);
+    return m[1];
+  };
+  return { code, fn };
+};
+const { code, fn } = normalise(raw);
+
+/** The deck branch of enforce_fair_use: from its `if` to its own `return new; end if;`. */
+const deckBranch = (body: string) => {
+  const start = body.search(/if new\.kind::text = 'deck' then/);
+  const end = body.indexOf("return new;\n  end if;", start);
+  return { start, end, branch: body.slice(start, end) };
 };
 
 describe("0103_deck_kind.sql", () => {
@@ -47,13 +63,11 @@ describe("0103_deck_kind.sql", () => {
 
   it("the deck branch needs the unit's lesson and caps regeneration at 3 a month", () => {
     const body = fn("enforce_fair_use");
-    const start = body.search(/if new\.kind::text = 'deck' then/);
-    expect(start).toBeGreaterThan(0);
     // The branch ends at its own `return new; end if;` — everything it does
     // lives between those two markers.
-    const end = body.indexOf("return new;\n  end if;", start);
+    const { start, end, branch } = deckBranch(body);
+    expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
-    const branch = body.slice(start, end);
     expect(branch).toMatch(/pg_advisory_xact_lock\(hashtext\('fair_use:' \|\| new\.owner_id::text\)\)/);
     expect(branch).toMatch(/p\.kind = 'presentation' and p\.status <> 'error'/);
     expect(branch).toMatch(/\) into has_lesson;/);
@@ -67,9 +81,8 @@ describe("0103_deck_kind.sql", () => {
 
   it("the deck branch returns BEFORE any credit check — free with its lesson", () => {
     const body = fn("enforce_fair_use");
-    const start = body.search(/if new\.kind::text = 'deck' then/);
-    const end = body.indexOf("return new;\n  end if;", start);
-    const branch = body.slice(start, end);
+    const { start, end, branch } = deckBranch(body);
+    expect(end).toBeGreaterThan(start);
     for (const credit of ["fair_use_avail(", "fair_use_used(", "fair_use_used_since(", "fair_use_purchased_remaining(", "credit_ledger"]) {
       expect(branch).not.toContain(credit);
     }
@@ -129,5 +142,18 @@ describe("0103_deck_kind.sql", () => {
   it("changes no data and no tables", () => {
     const outside = code.replace(/as\s*\$\$[\s\S]*?\$\$;/g, "");
     expect(outside).not.toMatch(/\b(insert|update|delete|alter table|drop)\b/);
+  });
+
+  it("survives a CRLF checkout (core.autocrlf=true) — the branch markers still match", () => {
+    // The same bytes git hands a Windows clone: every line ending doubled.
+    const crlfRaw = raw.replace(/\r?\n/g, "\r\n");
+    const crlf = normalise(crlfRaw);
+    expect(crlf.code).toBe(code);
+    const { start, end } = deckBranch(crlf.fn("enforce_fair_use"));
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    // And an un-normalised read really would miss the marker — the reason
+    // this case exists.
+    expect(crlfRaw.toLowerCase().indexOf("return new;\n  end if;")).toBe(-1);
   });
 });
