@@ -11,6 +11,11 @@
 
 import { RESERVED_SEGMENTS } from "./school-routing";
 
+/** The Turnstile action the school form renders with and the route demands
+ * back from siteverify — one string, one place, so a token solved for any
+ * other surface can never register a school. */
+export const TURNSTILE_ACTION = "school_register";
+
 export const SCHOOL_TYPES = ["primary", "secondary", "k12", "international", "tuition", "university", "other"] as const;
 export const SIZE_BANDS = ["under100", "s100_500", "s500_1500", "over1500"] as const;
 export const REGISTRANT_ROLES = ["principal", "administrator", "coordinator", "teacher", "it"] as const;

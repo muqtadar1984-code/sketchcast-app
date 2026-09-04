@@ -26,10 +26,15 @@ const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render
 
 export default function Turnstile({
   siteKey,
+  action,
   onToken,
   className,
 }: {
   siteKey: string;
+  /** Bound into the token and checked by the server (utils/turnstile.ts):
+   *  a token solved for one surface cannot be replayed against another.
+   *  1–32 chars of [A-Za-z0-9_-]. */
+  action: string;
   onToken: (token: string | null) => void;
   className?: string;
 }) {
@@ -43,6 +48,7 @@ export default function Turnstile({
       if (cancelled || !host.current || !window.turnstile) return;
       widgetId = window.turnstile.render(host.current, {
         sitekey: siteKey,
+        action,
         callback: (token: string) => onToken(token),
         "expired-callback": () => onToken(null),
         "error-callback": () => onToken(null),
@@ -74,7 +80,7 @@ export default function Turnstile({
         }
       }
     };
-  }, [siteKey, onToken]);
+  }, [siteKey, action, onToken]);
 
   return <div ref={host} className={className} />;
 }

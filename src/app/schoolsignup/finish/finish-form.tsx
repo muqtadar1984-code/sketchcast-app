@@ -6,7 +6,7 @@ import type { Dictionary } from "@/i18n/dictionaries";
 import { htmlLang, type Locale } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 import { COUNTRY_CODES } from "@/utils/countries";
-import { SCHOOL_TYPES, SIZE_BANDS, REGISTRANT_ROLES, CURRICULA, previewSlug } from "@/utils/school-registration-options";
+import { SCHOOL_TYPES, SIZE_BANDS, REGISTRANT_ROLES, CURRICULA, TURNSTILE_ACTION, previewSlug } from "@/utils/school-registration-options";
 import Turnstile from "@/components/turnstile";
 
 // Step two of "Create your school's workspace" (0101, Phase 3): everything
@@ -263,7 +263,7 @@ export default function FinishForm({
 
       {siteKey && (
         <div>
-          <Turnstile siteKey={siteKey} onToken={onToken} />
+          <Turnstile siteKey={siteKey} action={TURNSTILE_ACTION} onToken={onToken} />
           {show("captcha") && <p className={hint}>{t.captchaRequired}</p>}
         </div>
       )}
