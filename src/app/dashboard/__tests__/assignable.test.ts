@@ -140,7 +140,11 @@ describe("the student's deck click is a download that is honest about its result
     const body = item.slice(item.indexOf("async function openDeck("), item.indexOf("const isLesson ="));
     // The expiry check comes first, prevents the navigation, and shows the
     // load-failure line; the completion upsert is only reached after it.
-    const check = body.indexOf("signedUrlExpired(deckUrl)");
+    // It measures the link's AGE from the row's mount (a ref taken once), never
+    // the device clock against the token's exp — a fast clock refused every
+    // click forever.
+    expect(item).toMatch(/const mountedAt = useRef\(Date\.now\(\)\);/);
+    const check = body.indexOf("signedUrlExpired(deckUrl, mountedAt.current)");
     const refuse = body.indexOf("setError(t.item.deckWontLoad)");
     const write = body.indexOf('status: "completed"');
     expect(check).toBeGreaterThan(0);

@@ -8,6 +8,7 @@ import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
 import { kindLabel, statusLabel, type LibraryMessages } from "./labels";
+import { assignedDeckUnits, studentDeckLinks } from "./kit";
 import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
@@ -349,7 +350,13 @@ export default async function DashboardPage() {
     // (server component, rendered once per request — Date.now is fine here)
     // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
-    for (const g of (gensRaw ?? []) as GenRow[]) {
+    const gens = (gensRaw ?? []) as GenRow[];
+    // The units whose deck arrives as its own assigned row (kind 'deck'): a
+    // lesson from before 0103 still carries that unit's deck EMBEDDED, and
+    // offering it twice put the recording link (the deck row's) next to one
+    // that records nothing (the lesson row's). Same rule as the Library's.
+    const deckUnits = assignedDeckUnits(gens, (id) => shareByGen.has(id));
+    for (const g of gens) {
       const info = shareByGen.get(g.id);
       if (!info || g.kind === "lesson_plan") continue; // only assigned, never the teacher plan
       const arts = g.artifacts ?? [];
@@ -369,10 +376,16 @@ export default async function DashboardPage() {
         .map((a) => a.storage_path)
         .sort((a, b) => partNum(a) - partNum(b));
       const videos = await Promise.all(videoPaths.map((p) => sign(p)));
-      const deckPaths = arts
-        .filter((a) => a.kind === "deck_pptx")
-        .map((a) => a.storage_path)
-        .sort((a, b) => partNum(a) - partNum(b));
+      // A presentation whose unit has an assigned deck row keeps NO embedded
+      // deck link (studentDeckLinks) — and nothing is signed for it.
+      const deckPaths = studentDeckLinks(
+        g,
+        deckUnits,
+        arts
+          .filter((a) => a.kind === "deck_pptx")
+          .map((a) => a.storage_path)
+          .sort((a, b) => partNum(a) - partNum(b)),
+      );
       // A deck-kind row's .pptx is signed WITH a download disposition
       // ("Deck.pptx"): the student's click on it is a download and nothing
       // else — without the disposition iOS Safari opens the file inline in

@@ -128,6 +128,41 @@ export function deckParams(opts: {
   return Object.keys(params).length ? params : null;
 }
 
+/** The unit a generation belongs to — one book, one chapter, one part (a
+ * chapter with no part map is its own single part, 1). The same key for a
+ * lesson and for the deck that rides with it. */
+export type UnitRow = { book_id: string | null; chapter_ref: string | null; params: { part?: unknown } | null };
+
+export function unitKey(g: UnitRow): string {
+  const part = g.params?.part;
+  return `${g.book_id ?? ""}|${g.chapter_ref ?? ""}|${typeof part === "number" && part >= 1 ? part : 1}`;
+}
+
+/**
+ * The units whose deck a STUDENT gets as its own row: every assigned
+ * deck-kind generation (0103). A pre-0103 kit kept its deck embedded on the
+ * presentation (deck_pptx artifacts on the lesson row); a chapter that has
+ * BOTH — its lesson from before the deck kind, its deck re-queued since — must
+ * offer the deck once, on the deck row, because only that row's link records
+ * the download (the lesson row's embedded link records nothing). This mirrors
+ * the adult Library's rule (lesson-card: `deckGen ? [] : legacyDecks`).
+ */
+export function assignedDeckUnits(
+  gens: ReadonlyArray<UnitRow & { id: string; kind: string }>,
+  assigned: (genId: string) => boolean,
+): Set<string> {
+  const units = new Set<string>();
+  for (const g of gens) if (g.kind === "deck" && assigned(g.id)) units.add(unitKey(g));
+  return units;
+}
+
+/** The deck links a student row shows: a presentation whose unit has an
+ * assigned deck row shows NONE (that row carries the deck); every other row
+ * keeps what it had. Pure — the caller signs only what survives. */
+export function studentDeckLinks<T>(g: UnitRow & { kind: string }, deckUnits: ReadonlySet<string>, own: T[]): T[] {
+  return g.kind === "presentation" && deckUnits.has(unitKey(g)) ? [] : own;
+}
+
 /** One queued kit: a chapter, or one PART of it. */
 export type KitUnit = { chapterNum: number; part: number | null };
 

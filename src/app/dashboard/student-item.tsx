@@ -119,6 +119,12 @@ export default function StudentItem({
   // A revisit of a completed lesson counts as ONE revision per page visit —
   // not one per part chip clicked (that would inflate revision counts ~N×).
   const revisedOnceRef = useRef(false);
+  // When this row first HELD its signed URLs — they were minted at the server
+  // render just before. The deck link's expiry check measures the age of the
+  // link against the token's own lifetime from here, never the device clock
+  // against the token's exp (a fast clock refused every click forever).
+  // eslint-disable-next-line react-hooks/purity
+  const mountedAt = useRef(Date.now());
 
   const base = { generation_id: item.genId, student_id: studentId, class_id: item.classId };
   // submissions has NO class_id column (0006) — spreading `base` into it made
@@ -329,9 +335,11 @@ export default function StudentItem({
   // click stays a download and the dashboard stays put — without it iOS
   // Safari opens a .pptx inline in the same tab and unloads this row before
   // its write finishes. And a link whose hour has run out is refused HERE,
-  // before anything is written: the signed URL carries its own expiry, and a
-  // student returning to a tab left open over lunch would otherwise get a
-  // storage error in one tab and "Completed" in the other. The refusal reads
+  // before anything is written: the signed URL carries its own lifetime, the
+  // row knows when it mounted, and a student returning to a tab left open
+  // over lunch would otherwise get a storage error in one tab and "Completed"
+  // in the other. The age is measured on the device's clock alone (mount →
+  // click), so a wrong clock cannot refuse a fresh link. The refusal reads
   // exactly like a part that would not load — refresh the page.
   //
   // The write's failure is SHOWN (the file path already does this; the first
@@ -339,7 +347,7 @@ export default function StudentItem({
   // save never looks like a saved one. The download itself still goes ahead —
   // the deck is the student's either way.
   async function openDeck(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (deckUrl && signedUrlExpired(deckUrl)) {
+    if (deckUrl && signedUrlExpired(deckUrl, mountedAt.current)) {
       e.preventDefault();
       setError(t.item.deckWontLoad);
       return;
