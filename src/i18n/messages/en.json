@@ -803,6 +803,7 @@
     "deckPart": "Deck Pt {n}",
     "kinds": {
       "presentation": "Lesson",
+      "deck": "Deck",
       "lesson_plan": "Plan",
       "activity": "Activities",
       "worksheet": "Worksheet",

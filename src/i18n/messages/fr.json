@@ -803,6 +803,7 @@
     "deckPart": "Diapos P{n}",
     "kinds": {
       "presentation": "Leçon",
+      "deck": "Diapos",
       "lesson_plan": "Préparation",
       "activity": "Activités",
       "worksheet": "Fiche d'exercices",

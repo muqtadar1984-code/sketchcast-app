@@ -803,6 +803,7 @@
     "deckPart": "स्लाइड्स भा {n}",
     "kinds": {
       "presentation": "धडा",
+      "deck": "स्लाइड्स",
       "lesson_plan": "नियोजन",
       "activity": "कृती",
       "worksheet": "कार्यपत्रिका",

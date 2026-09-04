@@ -803,6 +803,7 @@
     "deckPart": "Diapos {n}",
     "kinds": {
       "presentation": "Lección",
+      "deck": "Diapositivas",
       "lesson_plan": "Plan",
       "activity": "Actividades",
       "worksheet": "Hoja de trabajo",

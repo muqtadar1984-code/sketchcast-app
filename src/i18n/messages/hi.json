@@ -803,6 +803,7 @@
     "deckPart": "स्लाइड भा {n}",
     "kinds": {
       "presentation": "पाठ",
+      "deck": "स्लाइड",
       "lesson_plan": "योजना",
       "activity": "गतिविधियाँ",
       "worksheet": "वर्कशीट",

@@ -803,6 +803,7 @@
     "deckPart": "Slides Pt {n}",
     "kinds": {
       "presentation": "Aula",
+      "deck": "Slides",
       "lesson_plan": "Plano",
       "activity": "Atividades",
       "worksheet": "Exercícios",
