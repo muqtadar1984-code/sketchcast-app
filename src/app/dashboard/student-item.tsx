@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import QuizPlayer, { type StudentQuizData } from "./quiz-player";
 import AskCoach from "./ask-coach";
-import { deckRouteAgreed } from "./deck-click";
+import { deckRouteAgreed, deckRouteRefused } from "./deck-click";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 
@@ -330,9 +330,17 @@ export default function StudentItem({
   // is down — and every refusal is JSON. As a plain anchor, that JSON landed
   // in the student's Downloads folder with nothing on screen to explain it,
   // AFTER this row had written "Completed"; clicking again then counted as a
-  // revision. So the click probes first (`redirect: "manual"`,
-  // deckRouteAgreed) and a refusal shows the load-failure line and records
-  // NOTHING.
+  // revision. So the click probes first (`redirect: "manual"`) and a refusal
+  // shows the load-failure line and records NOTHING.
+  //
+  // THE PROBE IS AN INFORMANT, NOT A DOORMAN. The two directions fail
+  // opposite ways, and deck-click.ts holds the reasons: only a CLEAR refusal
+  // (deckRouteRefused — a readable 4xx/5xx) stops the navigation, so a thrown
+  // fetch or a response shape this code did not anticipate still lets the
+  // student through to the route, which enforces the share and the session
+  // server-side; and only a CLEAR success (deckRouteAgreed) records anything,
+  // so an unreadable probe can never manufacture a completion. The gap
+  // between them navigates and records nothing, on purpose.
   //
   // PRODUCT DECISION (for the founder to confirm): completion is still
   // recorded on the route's agreement, not on the bytes arriving — the
@@ -349,17 +357,21 @@ export default function StudentItem({
     setError(null);
     setBusy(true);
     try {
-      let res: Response;
+      let res: Response | null = null;
       try {
         // The probe spends one signed URL it never reads; the navigation
         // below asks the route for another. Two mints, both cheap, and no
         // window in which the row is holding a link it cannot vouch for.
         res = await fetch(deckUrl, { redirect: "manual" });
       } catch {
-        setError(t.item.deckWontLoad);
-        return;
+        // NOT a refusal. A fetch can throw for reasons that have nothing to
+        // say about this student's right to the deck — a moment offline, an
+        // extension, a proxy — and the old code turned every one of them into
+        // a locked door. `res` stays null: nothing is recorded, and the
+        // navigation below hands the question to the route itself.
+        res = null;
       }
-      if (!deckRouteAgreed(res)) {
+      if (res && deckRouteRefused(res)) {
         // Deliberately the dictionary's line, not the route's own sentence:
         // the route answers in English (it is read by no one else), and a
         // child reading Telugu must not be handed it. Every refusal a student
@@ -368,18 +380,24 @@ export default function StudentItem({
         setError(t.item.deckWontLoad);
         return;
       }
-      if (status === "completed" || status === "revised") {
-        await markOpen();
-      } else {
-        const at = new Date().toISOString();
-        const { error: pErr } = await supabase
-          .from("student_progress")
-          .upsert(
-            { ...base, status: "completed", opened_at: at, completed_at: at, progress_pct: 100 },
-            { onConflict: "generation_id,student_id" },
-          );
-        if (pErr) setError(pErr.message);
-        else setStatus("completed");
+      if (res && deckRouteAgreed(res)) {
+        // Recorded only on an answer this code could actually read. An
+        // unreadable probe navigates (below) but leaves the badge alone —
+        // better a completion the student has to earn twice than one they
+        // never got.
+        if (status === "completed" || status === "revised") {
+          await markOpen();
+        } else {
+          const at = new Date().toISOString();
+          const { error: pErr } = await supabase
+            .from("student_progress")
+            .upsert(
+              { ...base, status: "completed", opened_at: at, completed_at: at, progress_pct: 100 },
+              { onConflict: "generation_id,student_id" },
+            );
+          if (pErr) setError(pErr.message);
+          else setStatus("completed");
+        }
       }
       // The signed URL's Content-Disposition makes this a download, so the
       // page stays put; a bare navigation is still how the browser is handed

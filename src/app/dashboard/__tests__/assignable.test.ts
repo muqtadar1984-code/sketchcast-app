@@ -165,6 +165,10 @@ describe("the student page WIRES the one-deck-per-unit rule, not just the helper
 describe("the student's deck click is a download that is honest about its result", () => {
   const item = src("app/dashboard/student-item.tsx");
   const page = src("app/dashboard/page.tsx");
+  /** Just openDeck's body — the ordering assertions below are all about what
+   * this one function does before it hands the page to the browser. */
+  const deckBody = () =>
+    item.slice(item.indexOf("async function openDeck("), item.indexOf("const isLesson ="));
 
   it("hands a deck row the ROUTE, never a signed URL — a lesson's embedded decks are still signed here", () => {
     // A signed URL rendered into the page is an hour-long link the row then
@@ -212,20 +216,69 @@ describe("the student's deck click is a download that is honest about its result
     const button = /<button\s+onClick=\{\(\) => void openDeck\(\)\}[\s\S]{0,200}?>/.exec(item);
     expect(button).not.toBeNull();
     expect(button![0]).not.toMatch(/target=/);
-    expect(item).toMatch(/import \{ deckRouteAgreed \} from "\.\/deck-click";/);
-    const body = item.slice(item.indexOf("async function openDeck("), item.indexOf("const isLesson ="));
+    expect(item).toMatch(/import \{ deckRouteAgreed, deckRouteRefused \} from "\.\/deck-click";/);
+    const body = deckBody();
     expect(body).toMatch(/await fetch\(deckUrl, \{ redirect: "manual" \}\)/);
     // The refusal path returns BEFORE any write — and before markOpen, which
     // is what turned a retry into a revision.
-    const probe = body.indexOf("if (!deckRouteAgreed(res))");
+    const probe = body.indexOf("if (res && deckRouteRefused(res))");
     const write = body.indexOf('.from("student_progress")');
     const revise = body.indexOf("await markOpen();");
     expect(probe).toBeGreaterThan(0);
     expect(probe).toBeLessThan(write);
     expect(probe).toBeLessThan(revise);
-    expect(body).toMatch(/if \(!deckRouteAgreed\(res\)\) \{[\s\S]{0,600}?setError\(t\.item\.deckWontLoad\);\s*return;/);
+    expect(body).toMatch(
+      /if \(res && deckRouteRefused\(res\)\) \{[\s\S]{0,600}?setError\(t\.item\.deckWontLoad\);\s*return;/,
+    );
     // The download is handed over LAST, after the row has been recorded.
     expect(body.indexOf("window.location.href = deckUrl;")).toBeGreaterThan(write);
+  });
+
+  it("fails OPEN on the navigation and CLOSED on the record — a probe it cannot read withholds nothing and claims nothing", () => {
+    // THE PASS-5 FINDING. The first fix had one predicate doing both jobs:
+    // `if (!deckRouteAgreed(res)) { setError(...); return; }`, with the
+    // fetch's catch doing the same. So a thrown fetch — a second offline, an
+    // extension, a proxy — or a browser where redirect:"manual" does not hand
+    // back the opaque-redirect this code expects took the deck away from a
+    // student who was entitled to it, and blamed a load failure that never
+    // happened. Meanwhile a refusal that slipped past the predicate would
+    // still have navigated. Both directions are now safe, and the source is
+    // where that has to be proved: vitest collects no .tsx, so the wiring is
+    // read rather than rendered.
+    const body = deckBody();
+
+    // NAVIGATION, fail-open. The one and only early return is the CLEAR
+    // refusal; every other path falls through to the navigation.
+    const returns = body.match(/^\s*return;$/gm) ?? [];
+    expect(returns.length).toBe(1);
+    const refuse = body.indexOf("if (res && deckRouteRefused(res))");
+    const nav = body.indexOf("window.location.href = deckUrl;");
+    expect(body.indexOf("return;", refuse)).toBeLessThan(nav);
+
+    // A THROWN fetch is not a refusal: the catch neither shows the error line
+    // nor returns — it drops `res` and lets the route be asked for real.
+    const caught = /\} catch \{([\s\S]*?)\n      \}/.exec(body.slice(body.indexOf("redirect: \"manual\"")));
+    expect(caught).not.toBeNull();
+    expect(caught![1]).toMatch(/res = null;/);
+    expect(caught![1]).not.toMatch(/setError|return;/);
+    // …and `res` has to be nullable for that to compile at all.
+    expect(body).toMatch(/let res: Response \| null = null;/);
+
+    // RECORDING, fail-closed. Both writes sit INSIDE the agreement branch —
+    // a null or unreadable probe reaches neither.
+    const agreed = body.indexOf("if (res && deckRouteAgreed(res))");
+    expect(agreed).toBeGreaterThan(refuse);
+    expect(agreed).toBeLessThan(body.indexOf("await markOpen();"));
+    expect(agreed).toBeLessThan(body.indexOf('.from("student_progress")'));
+    expect(agreed).toBeLessThan(nav);
+    // The negation trap: `!deckRouteAgreed` guarding the navigation is
+    // exactly the fail-closed shape that was wrong.
+    expect(body).not.toMatch(/!deckRouteAgreed/);
+    // …and the gates are two functions, not one wearing a second name.
+    const gates = src("app/dashboard/deck-click.ts");
+    expect(gates).toMatch(/export function deckRouteAgreed/);
+    expect(gates).toMatch(/export function deckRouteRefused/);
+    expect(gates).not.toMatch(/deckRouteRefused[\s\S]{0,120}!deckRouteAgreed/);
   });
 
   it("holds NO signed URL and runs NO client-side expiry check — the router defeats every version of one", () => {
@@ -246,7 +299,7 @@ describe("the student's deck click is a download that is honest about its result
   });
 
   it("shows the write's own failure and leaves the row's status alone", () => {
-    const body = item.slice(item.indexOf("async function openDeck("), item.indexOf("const isLesson ="));
+    const body = deckBody();
     expect(body).toMatch(/const \{ error: pErr \} = await supabase/);
     // The status moves ONLY on a write that landed; a failed one says so and
     // leaves the badge where it was.
