@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { stripe } from "@/utils/stripe/client";
+import { ensureStripeCustomer } from "@/utils/stripe/customer";
 import { getPlan, productIdFor, assertMyrPrice, type Plan } from "@/utils/stripe/plans";
 import { assertAdultRole, assertBillingEnabled, BillingGuardError } from "@/utils/stripe/guards";
 import { resolveBillingCaller, type BillingCaller } from "@/utils/stripe/caller";
@@ -73,44 +74,14 @@ async function stripeCheckout(plan: Plan, caller: BillingCaller, backPath: strin
   // non-school plan so a personal purchase never credits or leaks to a school.
   const schoolForPlan = plan.key.startsWith("school_") ? caller.schoolId : null;
 
-  // Look up or create the Stripe Customer for this account (provider-scoped).
-  const { data: existing } = await admin
-    .from("billing_customers")
-    .select("stripe_customer_id")
-    .eq("user_id", caller.userId)
-    .eq("provider", "stripe")
-    .maybeSingle();
-  let customerId = existing?.stripe_customer_id as string | undefined;
-  if (!customerId) {
-    const customer = await s.customers.create({
-      email: caller.email ?? undefined,
-      metadata: { user_id: caller.userId, school_id: caller.schoolId ?? "", role: caller.role },
-    });
-    customerId = customer.id;
-    const { error: insErr } = await admin.from("billing_customers").insert({
-      user_id: caller.userId,
-      school_id: caller.schoolId,
-      provider: "stripe",
-      stripe_customer_id: customerId,
-      role: caller.role,
-    });
-    if (insErr) {
-      if (insErr.code === "23505") {
-        const { data: winner } = await admin
-          .from("billing_customers")
-          .select("stripe_customer_id")
-          .eq("user_id", caller.userId)
-          .eq("provider", "stripe")
-          .maybeSingle();
-        if (winner?.stripe_customer_id) customerId = winner.stripe_customer_id;
-        else throw new Error("billing_customers race resolved to no row.");
-      } else {
-        // Fail closed: never charge without a customer↔user mapping, or the
-        // webhook can't attribute the payment.
-        throw new Error(`billing_customers insert failed: ${insErr.message}`);
-      }
-    }
-  }
+  // Look up or create the Stripe Customer for this account (provider-scoped) —
+  // the mapping the webhook trusts. Shared with the console's invoice path.
+  const customerId = await ensureStripeCustomer(admin, s, {
+    userId: caller.userId,
+    schoolId: caller.schoolId,
+    email: caller.email,
+    role: caller.role,
+  });
 
   // MYR hard gate — re-check the LIVE price, not just our config.
   const price = await s.prices.retrieve(productIdFor(plan));

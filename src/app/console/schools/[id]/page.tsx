@@ -239,6 +239,8 @@ export default async function ConsoleSchoolPage({ params }: { params: Promise<{ 
           licenceEnd={licence?.current_period_end ?? null}
           salesStage={(reg?.sales_stage as string | null) ?? null}
           salesNotes={(reg?.sales_notes as string | null) ?? null}
+          stripeReady={!!process.env.STRIPE_SECRET_KEY}
+          invoiceUrl={(reg?.hosted_invoice_url as string | null) ?? null}
         />
       </div>
     </main>

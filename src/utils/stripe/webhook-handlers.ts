@@ -246,8 +246,63 @@ export async function handleStripeEvent(
       if (subId) {
         const sub = await stripeClient.subscriptions.retrieve(subId);
         await syncSubscription(db, sub as Stripe.Subscription);
+        log("invoice_paid", { invoice: invoice.id, subscription: subId });
+        return;
       }
-      log("invoice_paid", { invoice: invoice.id, subscription: subId });
+
+      // No subscription: a one-off SCHOOL licence invoice issued from the
+      // console (utils/stripe/school-invoice.ts). Its metadata — set by us,
+      // immutable to the payer — names the school, the plan, and the licence
+      // window; the customer on the invoice is cross-checked against
+      // billing_customers like every other object. Anything else without a
+      // subscription is not ours to act on.
+      const meta = (invoice.metadata ?? {}) as Meta & { licence_days?: string; extend_from?: string };
+      if (!meta.school_id || !(meta.plan_key ?? "").startsWith("school")) {
+        log("invoice_paid_ignored", { invoice: invoice.id });
+        return;
+      }
+      const customer = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
+      const who = await verifiedIdentity(db, meta, customer);
+      if (!who || !who.schoolId) return;
+      if ((invoice.currency || "").toLowerCase() !== "myr") {
+        log("non_myr_invoice_skipped", { invoice: invoice.id, currency: invoice.currency });
+        return;
+      }
+      // The window: licence_days from max(now, extend_from) — a renewal paid
+      // early adds to the current end, a renewal paid late starts today.
+      const days = Math.min(1095, Math.max(1, parseInt(meta.licence_days ?? "", 10) || ONETIME_LICENCE_DAYS));
+      const extendFrom = meta.extend_from ? Date.parse(meta.extend_from) || 0 : 0;
+      const end = new Date(Math.max(Date.now(), extendFrom) + days * 86400000).toISOString();
+      // Newer API versions carry the charge in invoice.payments, older ones in
+      // invoice.payment_intent; the invoice id itself is the stable dedupe key.
+      const pi = (invoice as unknown as { payment_intent?: string | { id: string } | null }).payment_intent;
+      const paymentRef = (typeof pi === "string" ? pi : pi?.id) ?? invoice.id;
+      const { error } = await db.from("payments").insert({
+        user_id: who.userId,
+        school_id: who.schoolId,
+        stripe_payment_intent_id: paymentRef,
+        amount: invoice.amount_paid ?? 0,
+        currency: "myr",
+        plan_key: meta.plan_key,
+        status: "paid",
+      });
+      if (error && error.code !== "23505") throw new Error(`payment insert failed: ${error.message}`);
+      await upsertEntitlement(db, {
+        userId: who.userId,
+        schoolId: who.schoolId,
+        active: true,
+        planKey: meta.plan_key!,
+        status: "paid",
+        currentPeriodEnd: end,
+      });
+      // The pipeline says paid too. (school_registrations is console-only; the
+      // service role writes it. A pre-self-serve school gets its row here.)
+      const { error: regErr } = await db.from("school_registrations").upsert(
+        { school_id: who.schoolId, sales_stage: "paid", updated_at: new Date().toISOString() },
+        { onConflict: "school_id" },
+      );
+      if (regErr) log("registration_stage_failed", { invoice: invoice.id, err: regErr.message });
+      log("school_invoice_paid", { invoice: invoice.id, school: who.schoolId, days, end });
       return;
     }
 

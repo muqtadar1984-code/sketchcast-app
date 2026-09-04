@@ -252,6 +252,87 @@ describe("webhook handlers", () => {
     expect(ent!.row.status).toBe("past_due");
   });
 
+  // ── invoice.paid for a console-issued SCHOOL licence (Phase 4) ────────────
+  const paidInvoice = (over: Record<string, unknown> = {}, meta: Record<string, string> = {}) =>
+    ({
+      id: "evt_inv",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: "in_school_1",
+          customer: "cus_1",
+          currency: "myr",
+          amount_paid: 300000,
+          metadata: {
+            user_id: "user-A",
+            school_id: "school-A",
+            plan_key: "school_onetime",
+            licence_days: "365",
+            extend_from: "",
+            ...meta,
+          },
+          ...over,
+        },
+      },
+    }) as unknown as Stripe.Event;
+  const DAY = 86400000;
+
+  it("a paid school invoice records the payment, grants a 365-day school licence, and marks the pipeline paid", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: "school-A" } });
+    const before = Date.now();
+    await handleStripeEvent(db as never, stripeStub, paidInvoice());
+    const pay = db.writes.find((w) => w.table === "payments");
+    expect(pay!.row).toMatchObject({ user_id: "user-A", school_id: "school-A", currency: "myr", amount: 300000, plan_key: "school_onetime", status: "paid" });
+    expect(pay!.row.stripe_payment_intent_id).toBe("in_school_1"); // the invoice id is the dedupe key when no PI is exposed
+    const ent = db.writes.find((w) => w.table === "entitlements");
+    expect(ent!.row).toMatchObject({ user_id: "user-A", school_id: "school-A", plan_key: "school_onetime", active: true, status: "paid", provider: "stripe" });
+    const end = new Date(ent!.row.current_period_end as string).getTime();
+    expect(end).toBeGreaterThanOrEqual(before + 365 * DAY - 1000);
+    expect(end).toBeLessThanOrEqual(Date.now() + 365 * DAY + 1000);
+    const reg = db.writes.find((w) => w.table === "school_registrations");
+    expect(reg!.row).toMatchObject({ school_id: "school-A", sales_stage: "paid" });
+  });
+
+  it("a renewal paid EARLY extends from the current licence end; paid LATE starts today", async () => {
+    const future = new Date(Date.now() + 100 * DAY).toISOString();
+    let db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: "school-A" } });
+    await handleStripeEvent(db as never, stripeStub, paidInvoice({}, { extend_from: future, licence_days: "30" }));
+    let end = new Date(db.writes.find((w) => w.table === "entitlements")!.row.current_period_end as string).getTime();
+    expect(Math.abs(end - (Date.parse(future) + 30 * DAY))).toBeLessThan(1000);
+
+    const past = new Date(Date.now() - 100 * DAY).toISOString();
+    db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: "school-A" } });
+    await handleStripeEvent(db as never, stripeStub, paidInvoice({}, { extend_from: past, licence_days: "30" }));
+    end = new Date(db.writes.find((w) => w.table === "entitlements")!.row.current_period_end as string).getTime();
+    expect(Math.abs(end - (Date.now() + 30 * DAY))).toBeLessThan(2000);
+  });
+
+  it("refuses a school invoice whose customer maps to a different user — metadata alone unlocks nothing", async () => {
+    const db = new FakeDb({ billing_customers: { user_id: "user-B", school_id: "school-A" } });
+    await handleStripeEvent(db as never, stripeStub, paidInvoice());
+    expect(db.writes.length).toBe(0);
+  });
+
+  it("skips a non-MYR school invoice, and an invoice that names no school", async () => {
+    let db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: "school-A" } });
+    await handleStripeEvent(db as never, stripeStub, paidInvoice({ currency: "usd" }));
+    expect(db.writes.length).toBe(0);
+    db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: "school-A" } });
+    await handleStripeEvent(db as never, stripeStub, paidInvoice({ metadata: {} }));
+    expect(db.writes.length).toBe(0);
+  });
+
+  it("clamps a tampered licence_days to the 1–1095 window and falls back to 365 when absent", async () => {
+    let db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: "school-A" } });
+    await handleStripeEvent(db as never, stripeStub, paidInvoice({}, { licence_days: "99999" }));
+    let end = new Date(db.writes.find((w) => w.table === "entitlements")!.row.current_period_end as string).getTime();
+    expect(Math.abs(end - (Date.now() + 1095 * DAY))).toBeLessThan(2000);
+    db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: "school-A" } });
+    await handleStripeEvent(db as never, stripeStub, paidInvoice({}, { licence_days: "not-a-number" }));
+    end = new Date(db.writes.find((w) => w.table === "entitlements")!.row.current_period_end as string).getTime();
+    expect(Math.abs(end - (Date.now() + 365 * DAY))).toBeLessThan(2000);
+  });
+
   // ── 9. no card data persisted ─────────────────────────────────────────────
   it("persists only Stripe IDs and statuses — never card data", async () => {
     const db = new FakeDb({ billing_customers: { user_id: "user-A", school_id: null } });
