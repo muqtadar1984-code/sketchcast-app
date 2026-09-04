@@ -318,8 +318,10 @@ export default async function DashboardPage() {
       downloadsReady = false;
     }
     // `download` bakes a Content-Disposition filename into the signed URL —
-    // documents and the deck generation's own .pptx pass one (docDownloadName
-    // decides); video URLs and a lesson's embedded decks must stay untouched.
+    // documents pass one (docDownloadName decides); video URLs and a lesson's
+    // embedded decks must stay untouched. A deck-kind row's own .pptx is not
+    // signed here at all any more: /api/deck/{id} signs it on the click, and
+    // names it there.
     const sign = async (path: string | null, download?: string): Promise<string | null> => {
       if (!path || !admin) return null;
       const { data } = await admin.storage
@@ -386,14 +388,25 @@ export default async function DashboardPage() {
           .map((a) => a.storage_path)
           .sort((a, b) => partNum(a) - partNum(b)),
       );
-      // A deck-kind row's .pptx is signed WITH a download disposition
-      // ("Deck.pptx"): the student's click on it is a download and nothing
-      // else — without the disposition iOS Safari opens the file inline in
-      // the same tab and unloads the dashboard while the row is still
-      // recording the download. A presentation's embedded decks keep the bare
-      // URL they always had (docDownloadName returns undefined for them).
-      const deckName = docDownloadName(g.kind, "deck_pptx");
-      const decks = (await Promise.all(deckPaths.map((p) => sign(p, deckName)))).filter((u): u is string => !!u);
+      // A deck-kind row's .pptx is NEVER signed for the client. The row gets
+      // the ROUTE /api/deck/{id} instead, which re-checks the share and signs
+      // for one minute at CLICK time (with the "Deck.pptx" disposition that
+      // keeps the click a download). A signed URL rendered into the page is
+      // an hour-long link the row then has to reason about, and it cannot: a
+      // client-router restore hands the row that cached URL with a fresh
+      // mount clock, so an hour-old link looked new, recorded the item
+      // complete, and failed at storage. Same move `quiz` below already made.
+      //
+      // A presentation's EMBEDDED decks (pre-0103 kits, and the per-part
+      // decks a lesson still carries) keep the bare signed URL they always
+      // had: they record nothing when clicked, so a stale one costs a
+      // refresh and no false completion.
+      const decks =
+        g.kind === "deck"
+          ? deckPaths.length
+            ? [`/api/deck/${g.id}`]
+            : []
+          : (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);
       // Per-part lesson units: label carries the part so three assigned
       // "Lesson"s of one chapter read as Part 1/2/3, not three clones. Both
       // halves come from the dictionary (the kind via kindLabel — the message

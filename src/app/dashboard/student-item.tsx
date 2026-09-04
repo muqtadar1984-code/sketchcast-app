@@ -5,7 +5,6 @@ import { createClient } from "@/utils/supabase/client";
 import QuizPlayer, { type StudentQuizData } from "./quiz-player";
 import AskCoach from "./ask-coach";
 import { fmt } from "@/i18n/format";
-import { signedUrlExpired } from "@/utils/signed-url";
 import type { Dictionary } from "@/i18n/dictionaries";
 
 // Pro+ AI tutor entry point on lessons. Client flag mirrors the server gate
@@ -119,13 +118,6 @@ export default function StudentItem({
   // A revisit of a completed lesson counts as ONE revision per page visit —
   // not one per part chip clicked (that would inflate revision counts ~N×).
   const revisedOnceRef = useRef(false);
-  // When this row first HELD its signed URLs — they were minted at the server
-  // render just before. The deck link's expiry check measures the age of the
-  // link against the token's own lifetime from here, never the device clock
-  // against the token's exp (a fast clock refused every click forever).
-  // eslint-disable-next-line react-hooks/purity
-  const mountedAt = useRef(Date.now());
-
   const base = { generation_id: item.genId, student_id: studentId, class_id: item.classId };
   // submissions has NO class_id column (0006) — spreading `base` into it made
   // PostgREST reject EVERY submission (quiz and file alike) while the sr-only
@@ -330,28 +322,26 @@ export default function StudentItem({
   //
   // PRODUCT DECISION (for the founder to confirm): completion is recorded on
   // the CLICK, not on the bytes arriving — the browser hands a download off to
-  // its own manager and tells the page nothing. Two things keep that honest.
-  // The page signs the deck WITH a Content-Disposition (Deck.pptx), so the
-  // click stays a download and the dashboard stays put — without it iOS
-  // Safari opens a .pptx inline in the same tab and unloads this row before
-  // its write finishes. And a link whose hour has run out is refused HERE,
-  // before anything is written: the signed URL carries its own lifetime, the
-  // row knows when it mounted, and a student returning to a tab left open
-  // over lunch would otherwise get a storage error in one tab and "Completed"
-  // in the other. The age is measured on the device's clock alone (mount →
-  // click), so a wrong clock cannot refuse a fresh link. The refusal reads
-  // exactly like a part that would not load — refresh the page.
+  // its own manager and tells the page nothing.
+  //
+  // That is honest because the click no longer depends on anything this row
+  // is holding. `deckUrl` for a deck is the ROUTE /api/deck/{genId}, which
+  // never goes stale: it re-checks the share and mints a one-minute signed URL
+  // (named Deck.pptx, so the click stays a download and iOS Safari cannot
+  // open the .pptx inline and unload this row mid-write) at the moment it is
+  // followed. The first cut rendered an hour-long signed URL here and tried to
+  // refuse a stale one on the client by measuring the link's age from this
+  // row's mount — which a client-router restore defeats exactly: back/forward
+  // remounts the row with the CACHED hour-old URL and a fresh mount clock, so
+  // the expired link passed, the row said "Completed", and the download failed
+  // at storage. There is no client-side version of that check that works, so
+  // there is no check here.
   //
   // The write's failure is SHOWN (the file path already does this; the first
   // version discarded it) and the row's status is left alone, so a failed
   // save never looks like a saved one. The download itself still goes ahead —
   // the deck is the student's either way.
-  async function openDeck(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (deckUrl && signedUrlExpired(deckUrl, mountedAt.current)) {
-      e.preventDefault();
-      setError(t.item.deckWontLoad);
-      return;
-    }
+  async function openDeck() {
     setError(null);
     if (status === "completed" || status === "revised") return markOpen();
     const at = new Date().toISOString();
@@ -370,11 +360,13 @@ export default function StudentItem({
 
   const isLesson = item.kind === "presentation";
   const isDeck = item.kind === "deck";
-  // The student page signs a deck-kind generation's own deck_pptx into
-  // `deck`/`decks` (one per part, same as a lesson's). A deck row is a single
-  // part-unit, so the first URL is the deck; a missing one is a signing
-  // failure this render (service role unavailable), not an unbuilt deck — a
-  // share only exists once the row was "done".
+  // For a DECK row this is /api/deck/{genId} — a route, not a signed URL, the
+  // same way `item.quiz` is a route rather than a link to questions.json. For
+  // a LESSON it is still that unit's embedded deck, signed at render. A deck
+  // row is a single part-unit, so the first entry is the one. Absent means the
+  // generation carried no deck_pptx when the page read it — a share only
+  // exists once the row was "done", so that is a read that came back short,
+  // which a refresh fixes; it is never an unbuilt deck.
   const deckUrl = item.decks?.[0] ?? item.deck;
   const done = status === "completed" || status === "revised" || submitted;
   const overdue = item.dueOverdue && !done;
@@ -448,12 +440,13 @@ export default function StudentItem({
           </>
         ) : isDeck ? (
           deckUrl ? (
-            // `download` matches the ⬇ affordance (the URL's own disposition is
-            // what the browser obeys cross-origin). Deliberately NO
+            // `download` matches the ⬇ affordance; what the browser actually
+            // obeys once the route redirects cross-origin is the signed URL's
+            // own Content-Disposition, which /api/deck sets. Deliberately NO
             // target="_blank": the Library's rule for a disposition download
             // (content-cell.tsx) — it would strand an empty tab, and the
             // disposition already keeps this page in place.
-            <a href={deckUrl} download onClick={(e) => void openDeck(e)} className="font-medium text-[#0C8175] hover:underline">
+            <a href={deckUrl} download onClick={() => void openDeck()} className="font-medium text-[#0C8175] hover:underline">
               ⬇ {t.item.deck}
             </a>
           ) : (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { STUDENT_KINDS, assignableIds } from "../kit";
@@ -96,11 +96,43 @@ describe("an assigned deck has a name and a control on every surface", () => {
     expect(item).toMatch(/\{t\.item\.deckWontLoad\}/);
   });
 
-  it("the student page keeps signing deck_pptx for every kind, deck included", () => {
+  it("the student page collects deck_pptx for every kind, deck included", () => {
     const page = src("app/dashboard/page.tsx");
     // The student branch skips only the teacher plan; a deck-kind row passes.
     expect(page).toMatch(/if \(!info \|\| g\.kind === "lesson_plan"\) continue;/);
     expect(page).toMatch(/\.filter\(\(a\) => a\.kind === "deck_pptx"\)/);
+  });
+});
+
+/* The dedup that keeps ONE deck link per unit lives in two pure helpers
+ * (kit.ts, covered by student-deck-dedup.test.ts) — but the helpers only do
+ * anything if the page calls them, in the right place, with the right
+ * arguments, and vitest collects no .tsx. Wired wrong, both suites stay green
+ * while a student sees the deck twice: once on the deck row (which records the
+ * download) and once on the lesson row (which records nothing). */
+describe("the student page WIRES the one-deck-per-unit rule, not just the helpers", () => {
+  const page = src("app/dashboard/page.tsx");
+
+  it("builds the assigned-deck unit set from the generations and the share map", () => {
+    expect(page).toMatch(/const deckUnits = assignedDeckUnits\(gens, \(id\) => shareByGen\.has\(id\)\);/);
+    expect(page).toMatch(/import \{ assignedDeckUnits, studentDeckLinks \} from "\.\/kit";/);
+  });
+
+  it("filters each row's own deck paths through studentDeckLinks(g, deckUnits, …)", () => {
+    // The third argument is the row's OWN deck_pptx paths in part order; the
+    // helper returns [] only for a presentation whose unit has a deck row.
+    expect(page).toMatch(
+      /const deckPaths = studentDeckLinks\(\s*g,\s*deckUnits,\s*arts\s*\.filter\(\(a\) => a\.kind === "deck_pptx"\)/,
+    );
+  });
+
+  it("computes the unit set BEFORE the item loop — inside it, every row would see an empty set", () => {
+    const units = page.indexOf("const deckUnits = assignedDeckUnits(");
+    const loop = page.indexOf("for (const g of gens) {");
+    const use = page.indexOf("const deckPaths = studentDeckLinks(");
+    expect(units).toBeGreaterThan(0);
+    expect(units).toBeLessThan(loop);
+    expect(loop).toBeLessThan(use);
   });
 });
 
@@ -123,33 +155,38 @@ describe("the student's deck click is a download that is honest about its result
   const item = src("app/dashboard/student-item.tsx");
   const page = src("app/dashboard/page.tsx");
 
-  it("the page signs a deck-kind row's .pptx WITH a download disposition, a lesson's embedded decks without", () => {
-    expect(page).toMatch(/const deckName = docDownloadName\(g\.kind, "deck_pptx"\);/);
-    expect(page).toMatch(/deckPaths\.map\(\(p\) => sign\(p, deckName\)\)/);
+  it("hands a deck row the ROUTE, never a signed URL — a lesson's embedded decks are still signed here", () => {
+    // A signed URL rendered into the page is an hour-long link the row then
+    // has to reason about, and cannot: see the expiry test below.
+    expect(page).toMatch(/\? \[`\/api\/deck\/\$\{g\.id\}`\]/);
+    expect(page).toMatch(/g\.kind === "deck"/);
+    // The lesson branch signs its embedded decks BARE — no disposition, the
+    // shape those links have always had.
+    expect(page).toMatch(/deckPaths\.map\(\(p\) => sign\(p\)\)/);
+    expect(page).not.toMatch(/sign\(p, deckName\)/);
+    // The name moved to the route, which is now the only thing that sets it.
+    expect(page).not.toMatch(/docDownloadName\(g\.kind, "deck_pptx"\)/);
+    expect(src("app/api/deck/logic.ts")).toMatch(/DECK_FILENAME = "Deck\.pptx"/);
     expect(docDownloadName("deck", "deck_pptx")).toBe("Deck.pptx");
     expect(docDownloadName("presentation", "deck_pptx")).toBeUndefined();
   });
 
   it("the anchor carries the download affordance and no target — a disposition download in a new tab strands it", () => {
-    const anchor = /<a href=\{deckUrl\} download onClick=\{\(e\) => void openDeck\(e\)\}[^>]*>/.exec(item);
+    const anchor = /<a href=\{deckUrl\} download onClick=\{\(\) => void openDeck\(\)\}[^>]*>/.exec(item);
     expect(anchor).not.toBeNull();
     expect(anchor![0]).not.toMatch(/target=/);
   });
 
-  it("refuses an expired link BEFORE writing anything, in the words the lesson uses for a part that won't load", () => {
-    const body = item.slice(item.indexOf("async function openDeck("), item.indexOf("const isLesson ="));
-    // The expiry check comes first, prevents the navigation, and shows the
-    // load-failure line; the completion upsert is only reached after it.
-    // It measures the link's AGE from the row's mount (a ref taken once), never
-    // the device clock against the token's exp — a fast clock refused every
-    // click forever.
-    expect(item).toMatch(/const mountedAt = useRef\(Date\.now\(\)\);/);
-    const check = body.indexOf("signedUrlExpired(deckUrl, mountedAt.current)");
-    const refuse = body.indexOf("setError(t.item.deckWontLoad)");
-    const write = body.indexOf('status: "completed"');
-    expect(check).toBeGreaterThan(0);
-    expect(body.slice(check, refuse)).toMatch(/e\.preventDefault\(\)/);
-    expect(refuse).toBeLessThan(write);
+  it("holds NO signed URL and runs NO client-side expiry check — the router defeats every version of one", () => {
+    // The interim fix measured the link's age from the row's mount. A
+    // client-router restore hands the row the CACHED hour-old URL together
+    // with a FRESH mount clock, so the expired link read as new, the row
+    // wrote "Completed", and the download failed at storage. The check is
+    // gone, the module it lived in is gone, and the URL it guarded is gone:
+    // the href is a route that mints a one-minute URL when it is followed.
+    expect(item).not.toMatch(/signedUrlExpired|mountedAt|signed-url/);
+    expect(existsSync(join(process.cwd(), "src/utils/signed-url.ts"))).toBe(false);
+    expect(src("app/api/deck/logic.ts")).toMatch(/DECK_URL_TTL_SECONDS = 60/);
   });
 
   it("shows the write's own failure and leaves the row's status alone", () => {
