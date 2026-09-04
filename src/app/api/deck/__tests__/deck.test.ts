@@ -9,7 +9,8 @@
  * hour-old URL and a FRESH mount clock, so the age reads as zero, the expired
  * link passes, the row writes "Completed", and the download then fails at
  * storage. The row now holds no signed URL at all — it holds this path, and
- * the URL is minted on the click with a one-minute life.
+ * the URL is minted on the click, with a life measured in minutes rather than
+ * the hour a rendered link used to sit around for.
  *
  * What is pinned below:
  *   * the PERMISSION DECISION — the quiz route's share check, reused, not
@@ -19,9 +20,10 @@
  *   * the ARTIFACT SELECTION — only deck_pptx is eligible, so naming a
  *     generation can never fetch its docx (legacy ones carry the answer key)
  *     or its questions_json (which IS the marking scheme);
- *   * the handler: 401 before the service role is built, a signed URL that
- *     lives ~60 s and carries the Deck.pptx disposition, and a 302 that is
- *     never cached.
+ *   * the handler: 401 before the service role is built, a short-lived signed
+ *     URL (minutes, not the rendered hour — but long enough to carry the
+ *     transfer, which is why it is not the 60 s the first cut used) carrying
+ *     the Deck.pptx disposition, and a 302 that is never cached.
  *
  * Run: npx vitest run src/app/api/deck/__tests__/deck.test.ts
  */
@@ -70,6 +72,22 @@ const classStore = () =>
 
 const store = (s: FakeStore) => s as unknown as DeckStore;
 
+/** The same store, wrapped so every table it is asked for is RECORDED. The
+ * "reads nothing" claim needs this: the FakeStore's own tables cannot show it,
+ * because a read never changes them — asserting a row count after a refusal
+ * passes just as happily when the refusal read the whole database first. */
+function counting(s: FakeStore) {
+  const reads: string[] = [];
+  const wrapped = {
+    from: (table: string) => {
+      reads.push(table);
+      return s.from(table);
+    },
+    storage: s.storage,
+  };
+  return { reads, store: wrapped as unknown as DeckStore };
+}
+
 // ── 1. the permission decision ──────────────────────────────────────────────
 
 describe("resolveDeckWith — who may have the file", () => {
@@ -112,14 +130,31 @@ describe("resolveDeckWith — who may have the file", () => {
   });
 
   it("404s an id that is not a UUID, without reading anything", async () => {
-    const db = directStore();
-    const before = db.tables.generation_shares.length;
-    await expect(resolveDeckWith(store(db), STU, "../../etc/passwd")).resolves.toEqual({
+    // Counted through a wrapping store, not inferred from row counts: reads
+    // leave no trace in the tables, so "nothing was read" has to be OBSERVED.
+    const bad = counting(directStore());
+    await expect(resolveDeckWith(bad.store, STU, "../../etc/passwd")).resolves.toEqual({
       ok: false,
       status: 404,
       error: "No such deck.",
     });
-    expect(db.tables.generation_shares).toHaveLength(before);
+    expect(bad.reads).toEqual([]);
+
+    // The control: the same counter, a real id — proof the counter can see a
+    // read at all, so the empty list above means the guard, not a dead probe.
+    const good = counting(directStore());
+    await expect(resolveDeckWith(good.store, STU, GEN)).resolves.toMatchObject({ ok: true });
+    expect(good.reads.length).toBeGreaterThan(0);
+  });
+
+  it("refuses a stranger before reading a single storage path", async () => {
+    // Order, not just outcome: the share is checked BEFORE artifacts, so a
+    // caller who merely knows a generation id never causes its files to be
+    // looked up — and learns nothing about whether the generation exists.
+    const seen = counting(directStore());
+    await expect(resolveDeckWith(seen.store, OTHER_STU, GEN)).resolves.toMatchObject({ ok: false, status: 403 });
+    expect(seen.reads).not.toContain("artifacts");
+    expect(seen.reads).toContain("generation_shares");
   });
 
   it("404s an assigned generation that carries no deck file", async () => {
@@ -233,12 +268,18 @@ describe("GET /api/deck/[genId]", () => {
     expect(a.signed[0].path).toBe(DECK_PATH);
   });
 
-  it("signs for about a minute, with the Deck.pptx disposition — not the hour the page used to render", async () => {
+  it("signs for minutes, with the Deck.pptx disposition — not the hour the page used to render", async () => {
     const a = adminFor(directStore());
     mocks.createAdminClient.mockReturnValue(a.client);
     await get(GEN);
     expect(a.signed[0].expiresIn).toBe(DECK_URL_TTL_SECONDS);
-    expect(DECK_URL_TTL_SECONDS).toBeLessThanOrEqual(120);
+    // A BAND, not a literal. The floor is the finding this replaced: 60 s
+    // covered the redirect and not the transfer behind it, so a deck that took
+    // longer than a minute on a shared school connection died mid-download
+    // with no way to resume — the browser retries the same dead token. The
+    // ceiling keeps it nothing like the rendered hour that started all this.
+    expect(DECK_URL_TTL_SECONDS).toBeGreaterThanOrEqual(300);
+    expect(DECK_URL_TTL_SECONDS).toBeLessThanOrEqual(900);
     expect(a.signed[0].opts).toEqual({ download: "Deck.pptx" });
   });
 

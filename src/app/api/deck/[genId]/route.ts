@@ -46,8 +46,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gen
     .createSignedUrl(result.path, DECK_URL_TTL_SECONDS, { download: result.filename });
   if (!data?.signedUrl) return json({ error: "Deck couldn't load — refresh the page" }, 502);
 
-  // 302 to a URL that lives one minute. Never cached: the target expires, the
-  // decision is per-student, and a cached redirect would outlive both.
+  // 302 to a URL that lives DECK_URL_TTL_SECONDS — long enough for the
+  // transfer itself, on a school connection. Never cached: the target
+  // expires, the decision is per-student, and a cached redirect would
+  // outlive both.
   const res = NextResponse.redirect(data.signedUrl, 302);
   res.headers.set("Cache-Control", "no-store");
   return res;

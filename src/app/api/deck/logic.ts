@@ -28,11 +28,21 @@ import { isAssignedToStudent, type QuizDb } from "../quiz/logic";
  * plus the artifacts table. Nothing writes. */
 export type DeckStore = QuizDb;
 
-/** How long the signed URL lives. Sixty seconds: it exists only to carry ONE
- * redirect into the browser's download manager, which follows it immediately.
- * The hour the dashboard used to sign for was a lifetime the link spent
- * sitting in a rendered page — the very thing this route removes. */
-export const DECK_URL_TTL_SECONDS = 60;
+/** How long the signed URL lives. Five minutes: minted on the click, followed
+ * at once, and then it has to survive the DOWNLOAD ITSELF.
+ *
+ * The first cut said sixty seconds, on the reasoning that the URL only had to
+ * carry one redirect into the download manager. It has to carry more than
+ * that: a deck is tens of megabytes, a school connection is shared by a class
+ * of thirty, and a transfer interrupted at minute two cannot be resumed once
+ * the token is dead — the browser retries the same expired URL and the student
+ * is left with a part-file and no way back except a page reload. Five minutes
+ * is still nothing like the HOUR the dashboard used to sign for, and that hour
+ * was dangerous for a different reason entirely: it was a lifetime the link
+ * spent sitting in a rendered page, which is the thing this route removes.
+ * Nothing here is held anywhere — it is minted per click, behind the share
+ * check, and never cached. */
+export const DECK_URL_TTL_SECONDS = 300;
 
 /** The name the file saves as. Baked into the signed URL as a
  * Content-Disposition, which is what keeps the click a DOWNLOAD: without it
