@@ -111,6 +111,7 @@
     "subtitle": "Todo lo que te ha asignado tu profesor.",
     "downloadsNotReady": "Las descargas aún no están disponibles — pídele a tu profesor que termine la configuración.",
     "empty": "Aún no tienes nada asignado. Vuelve cuando tu profesor comparta una lección.",
+    "noChapter": "Lecciones",
     "status": {
       "completed": "Completada",
       "revised": "Repasada",
@@ -129,7 +130,7 @@
       "partWontLoad": "La parte {n} no se pudo cargar — actualiza la página",
       "deck": "Diapositivas",
       "deckPart": "Diapos {n}",
-      "deckNotReady": "Diapositivas aún no listas — vuelve pronto",
+      "deckWontLoad": "Las diapositivas no se pudieron cargar — actualiza la página",
       "assistant": "Asistente",
       "open": "Abrir",
       "takeQuiz": "Hacer el test",

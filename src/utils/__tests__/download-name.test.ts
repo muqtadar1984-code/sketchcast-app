@@ -47,6 +47,20 @@ describe("docDownloadName", () => {
     expect(docDownloadName("exam_paper", "questions_json")).toBeUndefined();
   });
 
+  it("names the deck generation's own .pptx (0103) — a student's click must be a download, not an inline open", () => {
+    // Without a disposition iOS Safari shows a .pptx inline in the SAME tab,
+    // unloading the student dashboard while it is still recording the click.
+    expect(docDownloadName("deck", "deck_pptx")).toBe("Deck.pptx");
+  });
+
+  it("leaves a lesson's embedded decks alone — only the deck KIND gets the name", () => {
+    expect(docDownloadName("presentation", "deck_pptx")).toBeUndefined();
+    expect(docDownloadName(null, "deck_pptx")).toBeUndefined();
+    expect(docDownloadName(undefined, "deck_pptx")).toBeUndefined();
+    // The deck kind has no docx of its own; its kind must not leak a name onto one.
+    expect(docDownloadName("deck", "docx")).toBeUndefined();
+  });
+
   it("leaves an unknown or absent generation kind untouched rather than guessing", () => {
     expect(docDownloadName(null, "docx")).toBeUndefined();
     expect(docDownloadName(undefined, "docx")).toBeUndefined();

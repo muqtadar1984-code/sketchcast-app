@@ -111,6 +111,7 @@
     "subtitle": "Everything your teacher has assigned to you.",
     "downloadsNotReady": "Downloads aren't available yet — ask your teacher to finish setup.",
     "empty": "Nothing assigned yet. Check back after your teacher shares a lesson.",
+    "noChapter": "Lessons",
     "status": {
       "completed": "Completed",
       "revised": "Revised",
@@ -129,7 +130,7 @@
       "partWontLoad": "Part {n} couldn't load — refresh the page",
       "deck": "Deck",
       "deckPart": "Deck Pt {n}",
-      "deckNotReady": "Deck not ready yet — check back soon",
+      "deckWontLoad": "Deck couldn't load — refresh the page",
       "assistant": "Assistant",
       "open": "Open",
       "takeQuiz": "Take quiz",

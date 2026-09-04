@@ -7,7 +7,7 @@ import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
-import { statusLabel, type LibraryMessages } from "./labels";
+import { kindLabel, statusLabel, type LibraryMessages } from "./labels";
 import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
@@ -44,17 +44,6 @@ import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 import { premiumVoicesFor } from "@/utils/narration";
-
-const KIND_LABEL: Record<string, string> = {
-  presentation: "Lesson",
-  deck: "Deck",
-  worksheet: "Worksheet",
-  exam_paper: "Test paper",
-  exam: "Exam",
-  activity: "Activities",
-  case_study: "Case study",
-  lesson_plan: "Lesson plan",
-};
 
 type Chapter = { num: number; title: string; parts?: { titles?: string[]; words?: number }[] | null };
 
@@ -264,6 +253,18 @@ export default async function DashboardPage() {
   // FEATURE_NOTICES, so this really can be false while notices are live.
   const diaryReachable = diaryEnabled() && !!role;
 
+  // The Library's words, resolved ONCE here and threaded down the whole client
+  // tree as one object: every cell, card and modal below is a client component,
+  // so they take the strings as a prop rather than importing the (server-only)
+  // dictionary. resolveLocale is React-cached, so asking here costs nothing
+  // beyond what the header already paid. Resolved BEFORE the student branch:
+  // a student's row label ("Lesson", "Deck · Part 2") and chapter headings
+  // are built from the same `library` words the adult surfaces use, so the
+  // dashboard itself reads in the family's language, not just its rows.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
+
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
   // those artifacts with the service role since the storage policy only lets the
@@ -316,7 +317,8 @@ export default async function DashboardPage() {
       downloadsReady = false;
     }
     // `download` bakes a Content-Disposition filename into the signed URL —
-    // only documents pass one; video/deck/quiz URLs must stay untouched.
+    // documents and the deck generation's own .pptx pass one (docDownloadName
+    // decides); video URLs and a lesson's embedded decks must stay untouched.
     const sign = async (path: string | null, download?: string): Promise<string | null> => {
       if (!path || !admin) return null;
       const { data } = await admin.storage
@@ -371,15 +373,26 @@ export default async function DashboardPage() {
         .filter((a) => a.kind === "deck_pptx")
         .map((a) => a.storage_path)
         .sort((a, b) => partNum(a) - partNum(b));
-      const decks = (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);
+      // A deck-kind row's .pptx is signed WITH a download disposition
+      // ("Deck.pptx"): the student's click on it is a download and nothing
+      // else — without the disposition iOS Safari opens the file inline in
+      // the same tab and unloads the dashboard while the row is still
+      // recording the download. A presentation's embedded decks keep the bare
+      // URL they always had (docDownloadName returns undefined for them).
+      const deckName = docDownloadName(g.kind, "deck_pptx");
+      const decks = (await Promise.all(deckPaths.map((p) => sign(p, deckName)))).filter((u): u is string => !!u);
       // Per-part lesson units: label carries the part so three assigned
-      // "Lesson"s of one chapter read as Part 1/2/3, not three clones.
+      // "Lesson"s of one chapter read as Part 1/2/3, not three clones. Both
+      // halves come from the dictionary (the kind via kindLabel — the message
+      // keys ARE the kind strings, `deck` included), so the row reads in the
+      // student's language on the dashboard itself, not only on the adult
+      // surfaces that report on it.
       const genPart = g.params?.part;
-      const partLabel = typeof genPart === "number" && genPart >= 1 ? ` · Part ${genPart}` : "";
+      const partLabel = typeof genPart === "number" && genPart >= 1 ? ` · ${fmt(t.part, { n: genPart })}` : "";
       items.push({
         genId: g.id,
         kind: g.kind,
-        label: `${KIND_LABEL[g.kind] ?? g.kind}${partLabel}`,
+        label: `${kindLabel(t, g.kind)}${partLabel}`,
         dueAt: info.due,
         dueOverdue: !!info.due && new Date(info.due).getTime() < now,
         classId: info.classId,
@@ -442,12 +455,13 @@ export default async function DashboardPage() {
           .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0))
           .map(([chKey, its]) => ({
             key: chKey,
-            // Prefer the chapter's real title ("Unit 1: Be a designer").
+            // Prefer the chapter's real title ("Unit 1: Be a designer"); the
+            // fallbacks are dictionary words, like the row labels.
             heading:
               chKey === "—"
-                ? "Lessons"
+                ? dict.student.noChapter
                 : chapterTitle.get(`${its[0]?.bookId}|${Number(chKey)}`) ||
-                  `Chapter ${Number(chKey) + 1}`,
+                  fmt(t.chapter, { n: Number(chKey) + 1 }),
             items: its,
           })),
       }));
@@ -479,14 +493,8 @@ export default async function DashboardPage() {
   }
 
   // ── Teacher / parent library ──────────────────────────────────────────────
-  // The Library's words, resolved ONCE here and threaded down the whole client
-  // tree as one object: every cell, card and modal below is a client component,
-  // so they take the strings as a prop rather than importing the (server-only)
-  // dictionary. resolveLocale is React-cached, so asking here costs nothing
-  // beyond what the header already paid.
-  const locale = await resolveLocale();
-  const dict = await getDictionary(locale);
-  const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
+  // (`locale`, `dict` and `t` — the Library's words — were resolved above the
+  // student branch, which shares them.)
 
   // Parent-role accounts (home educators): the Assign modal targets their
   // LINKED CHILDREN, not classes — a family has named learners, not a class

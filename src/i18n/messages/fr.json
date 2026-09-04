@@ -111,6 +111,7 @@
     "subtitle": "Tout ce que ton enseignant t'a donné à faire.",
     "downloadsNotReady": "Les téléchargements ne sont pas encore disponibles — demande à ton enseignant de terminer la configuration.",
     "empty": "Rien à faire pour l'instant. Reviens quand ton enseignant aura partagé une leçon.",
+    "noChapter": "Leçons",
     "status": {
       "completed": "Terminé",
       "revised": "Révisé",
@@ -129,7 +130,7 @@
       "partWontLoad": "La partie {n} n'a pas pu se charger — actualise la page",
       "deck": "Diapos",
       "deckPart": "Diapos P{n}",
-      "deckNotReady": "Diapos pas encore prêtes — revenez bientôt",
+      "deckWontLoad": "Les diapos n'ont pas pu se charger — actualise la page",
       "assistant": "Assistant",
       "open": "Ouvrir",
       "takeQuiz": "Faire le quiz",

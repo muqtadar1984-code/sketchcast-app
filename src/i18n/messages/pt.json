@@ -111,6 +111,7 @@
     "subtitle": "Tudo o que seu professor passou para você.",
     "downloadsNotReady": "Os downloads ainda não estão disponíveis — peça ao seu professor para concluir a configuração.",
     "empty": "Nada por aqui ainda. Volte depois que seu professor compartilhar uma aula.",
+    "noChapter": "Aulas",
     "status": {
       "completed": "Concluída",
       "revised": "Revisada",
@@ -129,7 +130,7 @@
       "partWontLoad": "A Parte {n} não carregou — atualize a página",
       "deck": "Slides",
       "deckPart": "Slides Pt {n}",
-      "deckNotReady": "Slides ainda não prontos — volte em breve",
+      "deckWontLoad": "Os slides não carregaram — atualize a página",
       "assistant": "Assistente",
       "open": "Abrir",
       "takeQuiz": "Fazer o quiz",

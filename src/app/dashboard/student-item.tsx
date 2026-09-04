@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import QuizPlayer, { type StudentQuizData } from "./quiz-player";
 import AskCoach from "./ask-coach";
 import { fmt } from "@/i18n/format";
+import { signedUrlExpired } from "@/utils/signed-url";
 import type { Dictionary } from "@/i18n/dictionaries";
 
 // Pro+ AI tutor entry point on lessons. Client flag mirrors the server gate
@@ -320,15 +321,42 @@ export default function StudentItem({
   // button and no file picker: item.quiz is null for a deck (the worker
   // writes it no questions_json) and a submission row would be a file
   // answering nothing.
-  async function openDeck() {
+  //
+  // PRODUCT DECISION (for the founder to confirm): completion is recorded on
+  // the CLICK, not on the bytes arriving — the browser hands a download off to
+  // its own manager and tells the page nothing. Two things keep that honest.
+  // The page signs the deck WITH a Content-Disposition (Deck.pptx), so the
+  // click stays a download and the dashboard stays put — without it iOS
+  // Safari opens a .pptx inline in the same tab and unloads this row before
+  // its write finishes. And a link whose hour has run out is refused HERE,
+  // before anything is written: the signed URL carries its own expiry, and a
+  // student returning to a tab left open over lunch would otherwise get a
+  // storage error in one tab and "Completed" in the other. The refusal reads
+  // exactly like a part that would not load — refresh the page.
+  //
+  // The write's failure is SHOWN (the file path already does this; the first
+  // version discarded it) and the row's status is left alone, so a failed
+  // save never looks like a saved one. The download itself still goes ahead —
+  // the deck is the student's either way.
+  async function openDeck(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (deckUrl && signedUrlExpired(deckUrl)) {
+      e.preventDefault();
+      setError(t.item.deckWontLoad);
+      return;
+    }
+    setError(null);
     if (status === "completed" || status === "revised") return markOpen();
     const at = new Date().toISOString();
-    await supabase
+    const { error: pErr } = await supabase
       .from("student_progress")
       .upsert(
         { ...base, status: "completed", opened_at: at, completed_at: at, progress_pct: 100 },
         { onConflict: "generation_id,student_id" },
       );
+    if (pErr) {
+      setError(pErr.message);
+      return;
+    }
     setStatus("completed");
   }
 
@@ -412,11 +440,16 @@ export default function StudentItem({
           </>
         ) : isDeck ? (
           deckUrl ? (
-            <a href={deckUrl} onClick={() => void openDeck()} className="font-medium text-[#0C8175] hover:underline">
+            // `download` matches the ⬇ affordance (the URL's own disposition is
+            // what the browser obeys cross-origin). Deliberately NO
+            // target="_blank": the Library's rule for a disposition download
+            // (content-cell.tsx) — it would strand an empty tab, and the
+            // disposition already keeps this page in place.
+            <a href={deckUrl} download onClick={(e) => void openDeck(e)} className="font-medium text-[#0C8175] hover:underline">
               ⬇ {t.item.deck}
             </a>
           ) : (
-            <span className="text-[#98A0A9]">{t.item.deckNotReady}</span>
+            <span className="text-[#98A0A9]">{t.item.deckWontLoad}</span>
           )
         ) : (
           <>
