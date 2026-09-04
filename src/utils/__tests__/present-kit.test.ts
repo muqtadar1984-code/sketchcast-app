@@ -178,6 +178,22 @@ describe("the rail for a chapter", () => {
   it("returns nothing for a chapter with no kits", () => {
     expect(railFor(kit, { chapter: 99 })).toEqual([]);
   });
+
+  it("keeps the slide deck off the rail — it is a generation of its own now, not a document the board can show", () => {
+    // 0103: the deck is queued as kind 'deck' with a deck_pptx artifact. The
+    // rail's route signs only docx, and a .pptx has no board text, so a deck
+    // on the rail would be a dead tile with a raw, untranslated label.
+    const deck = gen({
+      id: "deck-1",
+      kind: "deck",
+      title: "Book · Chapter 4 · Part 2 · Deck",
+      artifacts: [{ kind: "deck_pptx", storage_path: "a/deck.pptx" }],
+    });
+    const units = railFor([gen(), deck], { chapter: 3 });
+    expect(units).toHaveLength(1);
+    expect(units[0].docs.map((d) => d.kind)).toEqual(["worksheet"]);
+    expect(units[0].docs.some((d) => d.id === "deck-1")).toBe(false);
+  });
 });
 
 describe("the picker", () => {
