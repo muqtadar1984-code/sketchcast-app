@@ -4,8 +4,15 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { countryFromHeaders } from "@/utils/geo";
 import { isCountryCode } from "@/utils/countries";
 import { notifySchoolRegistration } from "@/utils/notify";
-import { verifyTurnstile } from "@/utils/turnstile";
-import { SCHOOL_TYPES, SIZE_BANDS, REGISTRANT_ROLES, CURRICULA, pickOption } from "@/utils/school-registration-options";
+import { verifyTurnstile, hostnameOf } from "@/utils/turnstile";
+import {
+  SCHOOL_TYPES,
+  SIZE_BANDS,
+  REGISTRANT_ROLES,
+  CURRICULA,
+  TURNSTILE_ACTION,
+  pickOption,
+} from "@/utils/school-registration-options";
 
 export const runtime = "nodejs";
 
@@ -80,7 +87,11 @@ export async function POST(request: Request) {
     null;
 
   // Bot check — dark until TURNSTILE_SECRET_KEY exists (utils/turnstile.ts).
-  const captcha = await verifyTurnstile(body.turnstileToken, regIp);
+  // The token must have been solved for THIS surface (action) on THIS host.
+  const captcha = await verifyTurnstile(body.turnstileToken, regIp, {
+    action: TURNSTILE_ACTION,
+    hostname: hostnameOf(request.headers.get("host")),
+  });
   if (!captcha.ok) {
     return NextResponse.json(
       { error: "Please complete the verification and try again.", code: "captcha" },

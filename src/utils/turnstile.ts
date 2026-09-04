@@ -18,20 +18,48 @@ export function turnstileEnabled(): boolean {
   return !!process.env.TURNSTILE_SECRET_KEY;
 }
 
-export async function verifyTurnstile(token: string | null | undefined, ip: string | null): Promise<TurnstileResult> {
+/** The `host` header as siteverify reports hostnames: lower-case, no port. */
+export function hostnameOf(host: string | null | undefined): string | null {
+  const h = (host ?? "").trim().toLowerCase().split(":")[0].replace(/\.+$/, "");
+  return h || null;
+}
+
+/**
+ * Canonical siteverify (developers.cloudflare.com/turnstile): `success` alone
+ * is not enough. A token is also bound to the ACTION the widget was rendered
+ * with and the HOSTNAME it was solved on, and both are checked here — a token
+ * minted on another site, or on this site's other widget, is refused even
+ * though Cloudflare says it was solved. `expect.hostname` is the request's own
+ * host, so every domain the widget lists works without a second allowlist.
+ */
+export async function verifyTurnstile(
+  token: string | null | undefined,
+  ip: string | null,
+  expect: { action: string; hostname: string | null },
+): Promise<TurnstileResult> {
   const secret = process.env.TURNSTILE_SECRET_KEY;
   if (!secret) return { ok: true, skipped: true };
-  if (!token) return { ok: false, reason: "missing" };
+  if (!token || token.length > 2048) return { ok: false, reason: "missing" };
+  if (!expect.hostname) return { ok: false, reason: "no-host" };
   try {
     const form = new URLSearchParams({ secret, response: token });
     if (ip) form.set("remoteip", ip);
     const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
       body: form,
+      signal: AbortSignal.timeout(10_000),
     });
-    const json = (await res.json().catch(() => ({}))) as { success?: boolean; "error-codes"?: string[] };
-    if (json.success) return { ok: true, skipped: false };
-    return { ok: false, reason: (json["error-codes"] ?? []).join(",") || "failed" };
+    if (!res.ok) return { ok: false, reason: `siteverify ${res.status}` };
+    const json = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      action?: string;
+      hostname?: string;
+      "error-codes"?: string[];
+    };
+    if (!json.success) return { ok: false, reason: (json["error-codes"] ?? []).join(",") || "failed" };
+    if (json.action !== expect.action) return { ok: false, reason: "action" };
+    if (hostnameOf(json.hostname) !== expect.hostname) return { ok: false, reason: "hostname" };
+    return { ok: true, skipped: false };
   } catch (e) {
     // Cloudflare unreachable is not the user's fault, but letting the form
     // through would make the guard a fair-weather one. Refuse, and log so an
