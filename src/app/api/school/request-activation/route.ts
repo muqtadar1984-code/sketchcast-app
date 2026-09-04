@@ -5,7 +5,7 @@ import { notifyActivationRequest } from "@/utils/notify";
 
 export const runtime = "nodejs";
 
-// "Request activation" from a trial or expired school (0100, Phase 3). Any adult
+// "Request activation" from a trial or expired school (0101, Phase 3). Any adult
 // member of the school may ask; the request is stamped once on the school's
 // private registration row (console-only table — service role) and the founder
 // is emailed on the FIRST request only. Idempotent: later clicks return
@@ -36,7 +36,7 @@ export async function POST() {
   if (reg?.activation_requested_at) return NextResponse.json({ ok: true, already: true });
 
   const now = new Date().toISOString();
-  // A pre-0100 school has no registration row; the upsert creates one so the
+  // A pre-0101 school has no registration row; the upsert creates one so the
   // console sees the request either way.
   const { error } = await admin
     .from("school_registrations")

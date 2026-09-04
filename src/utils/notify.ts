@@ -53,7 +53,7 @@ export async function notifySignupOnce(
   }
 }
 
-// Founder notification for a self-serve SCHOOL registration (0100). Fired by
+// Founder notification for a self-serve SCHOOL registration (0101). Fired by
 // /api/school-finish right after finish_school_registration() reports
 // created=true — which happens on exactly one call per school by construction,
 // so no dedup marker is needed. Never throws: the registration has already
@@ -107,7 +107,7 @@ export async function notifySchoolRegistration(input: {
   }
 }
 
-// A trial or expired school pressed "Request activation" (0100, Phase 3). The
+// A trial or expired school pressed "Request activation" (0101, Phase 3). The
 // route sends this on the FIRST request only. Never throws.
 export async function notifyActivationRequest(input: {
   schoolId: string;

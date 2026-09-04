@@ -5,7 +5,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { schoolLifecycle, daysUntil, type SchoolLifecycle } from "@/utils/school-lifecycle";
 import SchoolControls from "./school-controls";
 
-// One school (0100, Phase 2): what the form told us, the derived lifecycle,
+// One school (0101, Phase 2): what the form told us, the derived lifecycle,
 // the licence, who is in it and what they made, the private registration
 // half, the staff audit trail, and the levers.
 

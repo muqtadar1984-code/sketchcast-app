@@ -10,7 +10,7 @@ import { SCHOOL_TYPES, SIZE_BANDS, REGISTRANT_ROLES, CURRICULA, pickOption } fro
 export const runtime = "nodejs";
 
 // Finalize "Create your school's workspace": create a NEW school with a 30-day
-// trial and make the signed-in user its school_admin (migration 0100).
+// trial and make the signed-in user its school_admin (migration 0101).
 // Self-serve is SAFE here because the school is brand-new and empty — the
 // admin only ever sees their own school's data (not a claim over an existing
 // school's students).

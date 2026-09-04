@@ -42,7 +42,7 @@
  * ⚠️ THIS SET MUST BE REVISITED WHEN plan_tier() GAINS A TIER — an unknown tier
  * fails CLOSED here, which is the right default and also the silent one.
  *
- * 2026-09-03, migration 0100: plan_tier() gained `school_trial` (a 30-day
+ * 2026-09-03, migration 0101: plan_tier() gained `school_trial` (a 30-day
  * self-serve school trial), `school_expired` and `school_suspended`. Founder's
  * decision, verbatim: "yes school_trial unlocks Present mode" — a board is
  * exactly what you demonstrate to sell a school plan. The two locked states

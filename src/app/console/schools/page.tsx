@@ -10,7 +10,7 @@ import {
   type DupFlag,
 } from "@/utils/school-lifecycle";
 
-// The registrations view (0100, Phase 2): one row per school with its derived
+// The registrations view (0101, Phase 2): one row per school with its derived
 // lifecycle (mirrors plan_tier — never hand-set), the qualification data the
 // form collected, usage, the founder's sales stage, and "same organisation?"
 // flags. Default order is the hot/cold signal: live trials ending soonest on
