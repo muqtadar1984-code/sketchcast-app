@@ -2,6 +2,7 @@
 
 import ContentCell, { type CellLesson } from "./content-cell";
 import { kindLabel, type LibraryMessages } from "./labels";
+import { lessonLanguageOf } from "./kit";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import GenerateKitButton from "./generate-kit-button";
 import RegenerateButton from "./regenerate-button";
@@ -29,6 +30,10 @@ export type CardPart = {
   total: number;
   titles: string[];
   presentation: CellLesson | null;
+  /** The slide deck GENERATION (0103). Null on a pre-0103 kit, whose deck is
+   *  an artifact of the presentation itself (`presentation.deck(s)`) and is
+   *  rendered by the legacy chip below. */
+  deck: CellLesson | null;
   lessonPlan: CellLesson | null;
   activity: CellLesson | null;
   worksheet: CellLesson | null;
@@ -36,9 +41,10 @@ export type CardPart = {
   caseStudy: CellLesson | null;
 };
 
-// Document kinds shown as chips (the presentation is the thumbnail, not a chip).
-// Second element is the matching CardPart field; the chip's wording comes from
-// the dictionary via kindLabel(), keyed by the kind itself.
+// Document kinds shown as chips (the presentation is the thumbnail, not a chip;
+// the deck chip is rendered separately, because it has a legacy shape to
+// fall back to). Second element is the matching CardPart field; the chip's
+// wording comes from the dictionary via kindLabel(), keyed by the kind itself.
 const DOCS = [
   ["lesson_plan", "lessonPlan"],
   ["activity", "activity"],
@@ -235,6 +241,7 @@ export default function LessonCard({
         className="group/new w-full text-start flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
         skipKinds={(
           [
+            ["deck", part.deck],
             ["lesson_plan", part.lessonPlan],
             ["activity", part.activity],
             ["worksheet", part.worksheet],
@@ -273,11 +280,20 @@ export default function LessonCard({
   const p = pres!;
   const processing = p.status === "queued" || p.status === "processing";
   const videos = p.videos?.length ? p.videos : p.video ? [p.video] : [];
-  const decks = p.decks?.length ? p.decks : p.deck ? [p.deck] : [];
+  // The deck (0103): a generation of its own, rendered as a ContentCell chip
+  // with a status, ✎ and ✕ like the documents. A pre-0103 kit has no such row
+  // — its deck is an artifact ON the presentation, shown by the legacy link
+  // below (no ✎/✕: those artifacts belong to the presentation row). Once a
+  // deck generation exists the legacy links are suppressed, so a unit never
+  // offers the same deck twice; and where neither exists the chip becomes the
+  // free "+ Deck" add-back, because the lesson is there for it to ride on.
+  const deckGen = part.deck;
+  const legacyDecks = deckGen ? [] : p.decks?.length ? p.decks : p.deck ? [p.deck] : [];
+  const showDeckChip = !!deckGen || legacyDecks.length === 0;
   // TEMPORARY (2026-08-31): founder-only "Save" links, index-aligned with
   // `videos`. Empty for every other account. See @/utils/video-download.
   const videoDownloads = p.videoDownloads ?? [];
-  const multi = Math.max(videos.length, decks.length) > 1;
+  const multi = Math.max(videos.length, legacyDecks.length) > 1;
   const eta =
     p.status === "processing" ? etaLabel("presentation", p.progress, p.stage, t.utils.job) : "";
 
@@ -342,8 +358,8 @@ export default function LessonCard({
         {/* Artifact chips: Deck + Ask Coach + the five documents. */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px]">
           {multi ? (
-            // Long lesson: one Watch·Deck chip per rendered part.
-            Array.from({ length: Math.max(videos.length, decks.length) }, (_, i) => (
+            // Long lesson: one Watch(·Deck, on a legacy kit) chip per rendered part.
+            Array.from({ length: Math.max(videos.length, legacyDecks.length) }, (_, i) => (
               <Chip key={i}>
                 <span className="text-[#98A0A9] me-1.5">{fmt(t.partShort, { n: i + 1 })}</span>
                 {videos[i] && (
@@ -358,8 +374,8 @@ export default function LessonCard({
                     <span className="text-[#1FB8A6]"><DownloadGlyph /></span>Save
                   </a>
                 )}
-                {decks[i] && (
-                  <a href={decks[i]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline ms-2">
+                {legacyDecks[i] && (
+                  <a href={legacyDecks[i]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline ms-2">
                     <span className="text-[#1FB8A6]"><DownloadGlyph /></span>{t.deck}
                   </a>
                 )}
@@ -377,14 +393,36 @@ export default function LessonCard({
                   </a>
                 </Chip>
               )}
-              {decks[0] && (
+              {legacyDecks[0] && (
                 <Chip>
-                  <a href={decks[0]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline">
+                  <a href={legacyDecks[0]} onClick={() => trackViews && recordArtifactView(p.id, "deck_pptx")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline">
                     <span className="text-[#1FB8A6]"><DownloadGlyph /></span>{t.deck}
                   </a>
                 </Chip>
               )}
             </>
+          )}
+
+          {/* The deck generation (0103) — or its free add-back when the unit
+              has no deck of either shape. */}
+          {showDeckChip && (
+            <Chip>
+              <ContentCell
+                bookId={bookId}
+                schoolId={schoolId}
+                chapterNum={chapterNum}
+                kind="deck"
+                label={kindLabel(t, "deck")}
+                lesson={deckGen}
+                part={part.n}
+                trackViews={trackViews}
+                bookLanguage={bookLanguage}
+                lessonLanguage={lessonLanguageOf(p)}
+                bookTitle={bookTitle}
+                gate={gate}
+                t={t}
+              />
+            </Chip>
           )}
 
           {DOCS.map(([kind, field]) => {

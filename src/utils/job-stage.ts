@@ -51,6 +51,7 @@ export function jobStageLabel(progress: number, stage?: JobStage, t: JobMessages
 // (the slow bit is the render); documents are quick. Returns "" when there's
 // nothing useful to say (near-done, or not enough signal).
 const KIND_MINUTES: Record<string, number> = {
+  deck: 1.5,
   lesson_plan: 1.5,
   activity: 1.5,
   worksheet: 1.5,

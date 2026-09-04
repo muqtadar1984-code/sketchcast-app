@@ -60,8 +60,12 @@ describe("kitUnitsFor", () => {
       bookId: "b", schoolId: null, userId: "u",
       chapterNum: unit.chapterNum, part: unit.part,
     });
-    expect(rows).toHaveLength(1 + DOC_KINDS.length); // lesson + five documents
+    expect(rows).toHaveLength(1 + DOC_KINDS.length); // lesson + deck + five documents
     expect(rows[0].kind).toBe("presentation"); // order is load-bearing (0059)
+    // The deck (0103) rides free right behind the lesson: its DB guard, like
+    // the documents', needs the presentation row inserted earlier in the same
+    // statement.
+    expect(rows[1].kind).toBe("deck");
     for (const r of rows) {
       expect(r.params.part).toBe(1);
       expect(r.chapter_ref).toBe("8");

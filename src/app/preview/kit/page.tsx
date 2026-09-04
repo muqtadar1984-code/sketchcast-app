@@ -171,7 +171,10 @@ function KitPreview() {
     // half of what makes an ordinal mean anything.
     total: 7,
     titles: [],
-    presentation: pres(),
+    // A post-0103 kit: the deck is a generation of its own, so the
+    // presentation carries no legacy deck link.
+    presentation: pres({ deck: null }),
+    deck: L({ deck: "#" }),
     lessonPlan: doc(),
     activity: doc(),
     worksheet: doc(),
@@ -243,6 +246,23 @@ function KitPreview() {
               titles: ["A long lesson"],
               presentation: pres({ videos: ["#", "#", "#"], decks: ["#", "#", "#"] }),
             })} />
+            {/* A pre-0103 kit: no deck generation, the deck rides on the
+                presentation — the legacy chip, with no ✎/✕ and no add-back. */}
+            <LessonCard {...CARD} part={part(2, {
+              titles: ["A legacy kit"],
+              presentation: pres(),
+              deck: null,
+            })} />
+            {/* The deck still being authored, and an old kit whose deck
+                never existed at all — the free "+ Deck" add-back. */}
+            <LessonCard {...CARD} part={part(3, {
+              titles: ["Deck in progress"],
+              deck: L({ status: "processing", progress: 40, deck: null }),
+            })} />
+            <LessonCard {...CARD} part={part(4, {
+              titles: ["No deck of either shape"],
+              deck: null,
+            })} />
             {/* A chapter with exactly one part: no ordinal at all. "Part 1 of 1"
                 is noise, and a re-index that shrinks a part map used to emit it. */}
             <LessonCard {...CARD} part={part(1, { total: 1, titles: [] })} />
@@ -265,7 +285,8 @@ function KitPreview() {
             {/* Fully generated — every artifact + Assign on one line. Post-split
                 (2026-08-18) documents also carry the separate answer key. */}
             <Row label="Part 1 (done)">
-              <ContentCell {...COMMON} kind="presentation" label="Lesson" lesson={pres()} />
+              <ContentCell {...COMMON} kind="presentation" label="Lesson" lesson={pres()} hideDeck />
+              <ContentCell {...COMMON} kind="deck" label="Deck" lesson={L({ deck: "#" })} />
               <ContentCell {...COMMON} kind="lesson_plan" label="Plan" lesson={doc()} />
               <ContentCell {...COMMON} kind="activity" label="Activities" lesson={doc()} />
               <ContentCell {...COMMON} kind="worksheet" label="Worksheet" lesson={doc({ answerKey: "#" })} />
@@ -276,6 +297,7 @@ function KitPreview() {
             {/* Generating — rings; the video shows %/ETA, done docs show ⬇. */}
             <Row label="Part 2 (generating)">
               <ContentCell {...COMMON} kind="presentation" label="Lesson" lesson={pres({ status: "processing", progress: 45, video: null, deck: null })} />
+              <ContentCell {...COMMON} kind="deck" label="Deck" lesson={L({ status: "queued", progress: 0, deck: null })} />
               <ContentCell {...COMMON} kind="lesson_plan" label="Plan" lesson={doc()} />
               <ContentCell {...COMMON} kind="activity" label="Activities" lesson={doc({ status: "processing", progress: 62, doc: null })} />
               <ContentCell {...COMMON} kind="worksheet" label="Worksheet" lesson={doc({ status: "processing", progress: 12, doc: null })} />
@@ -320,6 +342,7 @@ function KitPreview() {
               classes={[]}
               lessons={{
                 presentation: pres({ videos: ["#", "#", "#"], decks: ["#", "#", "#"] }),
+                deck: L({ deck: "#" }),
                 lesson_plan: doc(),
                 activity: doc(),
                 worksheet: doc(),

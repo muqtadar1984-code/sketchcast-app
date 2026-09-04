@@ -803,6 +803,7 @@
     "deckPart": "Slaid Bhg {n}",
     "kinds": {
       "presentation": "Pelajaran",
+      "deck": "Slaid",
       "lesson_plan": "Rancangan",
       "activity": "Aktiviti",
       "worksheet": "Lembaran kerja",

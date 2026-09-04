@@ -803,6 +803,7 @@
     "deckPart": "స్లయిడ్‌లు భా {n}",
     "kinds": {
       "presentation": "పాఠం",
+      "deck": "స్లయిడ్‌లు",
       "lesson_plan": "ప్రణాళిక",
       "activity": "కృత్యాలు",
       "worksheet": "వర్క్‌షీట్",

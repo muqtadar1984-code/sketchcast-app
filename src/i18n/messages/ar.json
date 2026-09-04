@@ -803,6 +803,7 @@
     "deckPart": "شرائح ج{n}",
     "kinds": {
       "presentation": "درس",
+      "deck": "الشرائح",
       "lesson_plan": "خطة",
       "activity": "أنشطة",
       "worksheet": "ورقة عمل",

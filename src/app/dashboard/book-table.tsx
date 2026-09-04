@@ -30,6 +30,9 @@ export type PartRow = {
   total: number;
   titles: string[];
   presentation: CellLesson | null;
+  /** The slide deck GENERATION (0103) — null on pre-0103 kits, whose deck is
+   *  an artifact of the presentation itself (`presentation.deck(s)`). */
+  deck: CellLesson | null;
   lessonPlan: CellLesson | null;
   activity: CellLesson | null;
   worksheet: CellLesson | null;
@@ -40,6 +43,7 @@ export type ChapterRow = {
   num: number;
   title: string;
   presentation: CellLesson | null;
+  deck: CellLesson | null;
   lessonPlan: CellLesson | null;
   activity: CellLesson | null;
   worksheet: CellLesson | null;
@@ -406,6 +410,7 @@ export default function BookTable({
                         multiPartTrial={!!beta && ch.parts.length > 1}
                         lessons={{
                           presentation: ch.presentation,
+                          deck: ch.deck,
                           lesson_plan: ch.lessonPlan,
                           activity: ch.activity,
                           worksheet: ch.worksheet,

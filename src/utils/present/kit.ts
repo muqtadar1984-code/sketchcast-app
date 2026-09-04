@@ -176,7 +176,11 @@ export function railFor(gens: KitGeneration[], here: { chapter: number }): RailU
       total,
       video: vid ? { id: vid.id, title: vid.title } : null,
       docs: group
-        .filter((g) => g.kind !== "presentation")
+        // The slide deck is a generation of its own since 0103, but it is not
+        // a document the board can show: a .pptx has no text for the rail and
+        // the route signs only docx. Keeping it off the rail is the whole
+        // rule; the Library is where a deck is opened.
+        .filter((g) => g.kind !== "presentation" && g.kind !== "deck")
         .map(docFor)
         // What projects goes first: it is the one that reaches the board. Then
         // by KIND rather than by label — the label is a translation now, and
