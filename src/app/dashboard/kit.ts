@@ -1,5 +1,5 @@
 import { defaultParams } from "./options-spec";
-import { DEFAULT_STYLE, defaultVoiceFor } from "@/utils/narration";
+import { AUTO_VOICE, DEFAULT_STYLE } from "@/utils/narration";
 
 // One lesson credit = the lesson plus its FREE document kit (0059). This
 // builds the rows a single "Generate kit" click queues. The presentation row
@@ -49,7 +49,10 @@ export function kitRows(opts: {
       kind: "presentation",
       params: {
         narration_style: opts.narrationStyle ?? DEFAULT_STYLE,
-        tts_voice: opts.ttsVoice ?? defaultVoiceFor(language),
+        // "auto": the worker resolves the voice per generation (language,
+        // plan, active premium provider). A concrete default here would
+        // freeze it at click time — see AUTO_VOICE.
+        tts_voice: opts.ttsVoice ?? AUTO_VOICE,
         ...extra,
       },
     },

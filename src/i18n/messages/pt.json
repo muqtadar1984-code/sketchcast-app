@@ -1160,6 +1160,16 @@
       "cancelConfirm": "Cancelar esta aula? Ela ainda não começou, então nenhum crédito será usado.",
       "building": "Esta aula está sendo gerada agora — você poderá removê-la assim que terminar."
     },
+    "deleteBook": {
+      "delete": "Excluir livro",
+      "confirmEmpty": "Excluir “{title}”? Isso não pode ser desfeito.",
+      "confirm": "Excluir “{title}”? Tudo o que foi gerado a partir dele — {kits} kits e seus arquivos — será excluído junto. Os créditos já usados não são devolvidos.",
+      "studentWork": "{submissions} trabalhos enviados pelos alunos para esses kits também serão excluídos.",
+      "assigned": "Ele está atribuído a {students} alunos, cujo progresso nesses kits também será excluído.",
+      "shared": "Outros professores geraram kits a partir deste livro. Peça a um coordenador ou ao diretor que o retire pela página Livros da escola, para que o trabalho deles seja retirado corretamente em vez de destruído.",
+      "building": "Um kit deste livro ainda está sendo gerado — você poderá excluir o livro assim que terminar.",
+      "indexing": "Este livro ainda está sendo indexado — você poderá excluí-lo assim que terminar."
+    },
     "branding": {
       "heading": "Identidade da escola",
       "notSet": "opcional · use o formato e o tema da sua escola",
@@ -1755,7 +1765,30 @@
         "edge-swara": "Swara — hindi",
         "edge-madhur": "Madhur — hindi",
         "el-rachel": "Rachel — natural",
-        "el-adam": "Adam — grave"
+        "el-adam": "Adam — grave",
+        "auto": "Automática — recomendada",
+        "g-en-f": "Achernar — feminina, natural",
+        "g-en-m": "Achird — masculina, natural",
+        "g-en-gb-f": "Achernar — feminina, inglês britânico",
+        "g-en-gb-m": "Achird — masculina, inglês britânico",
+        "g-en-in-f": "Achernar — feminina, inglês indiano",
+        "g-en-in-m": "Achird — masculina, inglês indiano",
+        "g-ms-f": "Voz A — feminina, malaio",
+        "g-ms-m": "Voz B — masculina, malaio",
+        "g-ar-f": "Achernar — feminina, árabe",
+        "g-ar-m": "Achird — masculina, árabe",
+        "g-fr-f": "Achernar — feminina, francês",
+        "g-fr-m": "Achird — masculina, francês",
+        "g-es-f": "Achernar — feminina, espanhol",
+        "g-es-m": "Achird — masculina, espanhol",
+        "g-pt-f": "Achernar — feminina, português",
+        "g-pt-m": "Achird — masculina, português",
+        "g-te-f": "Achernar — feminina, télugo",
+        "g-te-m": "Achird — masculina, télugo",
+        "g-mr-f": "Achernar — feminina, marati",
+        "g-mr-m": "Achird — masculina, marati",
+        "g-hi-f": "Achernar — feminina, hindi",
+        "g-hi-m": "Achird — masculina, hindi"
       }
     }
   },

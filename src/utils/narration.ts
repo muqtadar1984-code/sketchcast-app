@@ -76,9 +76,17 @@ export type VoiceOpt = { value: string; label: string; tier: "free" | "premium";
  * time (a voice added here without its label fails the type check). */
 export type VoiceId = keyof NarrationMessages["voices"];
 
+/** What the app sends when the teacher did not pick a voice. The worker
+ * resolves it PER GENERATION: the lesson language's free voice, or — for a
+ * paid account while a premium provider is active — that provider's voice
+ * for the language. A concrete default here would freeze the choice at
+ * click time and the premium default could never apply to anyone. */
+export const AUTO_VOICE = "auto";
+
 // The registry: ids, tier and language only. The name a teacher reads
 // ("Aria — neutral") is `utils.narration.voices[id]` in the dictionary.
 export const VOICES: { value: VoiceId; tier: "free" | "premium"; lang: string }[] = [
+  { value: "auto", tier: "free", lang: "*" },
   { value: "edge-aria", tier: "free", lang: "en" },
   { value: "edge-guy", tier: "free", lang: "en" },
   { value: "edge-neerja", tier: "free", lang: "en" },
@@ -102,8 +110,40 @@ export const VOICES: { value: VoiceId; tier: "free" | "premium"; lang: string }[
   // Premium ElevenLabs voices are multilingual — offered for every language.
   { value: "el-rachel", tier: "premium", lang: "*" },
   { value: "el-adam", tier: "premium", lang: "*" },
+  // Premium Google voices — Chirp 3 HD Achernar (female) / Achird (male) per
+  // language, WaveNet for Malay (no Chirp exists for ms-MY). Ids mirror the
+  // worker's shared/tts/registry.py exactly; female first, as the worker's
+  // default for `auto` is.
+  { value: "g-en-f", tier: "premium", lang: "en" },
+  { value: "g-en-m", tier: "premium", lang: "en" },
+  { value: "g-en-gb-f", tier: "premium", lang: "en" },
+  { value: "g-en-gb-m", tier: "premium", lang: "en" },
+  { value: "g-en-in-f", tier: "premium", lang: "en" },
+  { value: "g-en-in-m", tier: "premium", lang: "en" },
+  { value: "g-ms-f", tier: "premium", lang: "ms" },
+  { value: "g-ms-m", tier: "premium", lang: "ms" },
+  { value: "g-ar-f", tier: "premium", lang: "ar" },
+  { value: "g-ar-m", tier: "premium", lang: "ar" },
+  { value: "g-fr-f", tier: "premium", lang: "fr" },
+  { value: "g-fr-m", tier: "premium", lang: "fr" },
+  { value: "g-es-f", tier: "premium", lang: "es" },
+  { value: "g-es-m", tier: "premium", lang: "es" },
+  { value: "g-pt-f", tier: "premium", lang: "pt" },
+  { value: "g-pt-m", tier: "premium", lang: "pt" },
+  { value: "g-te-f", tier: "premium", lang: "te" },
+  { value: "g-te-m", tier: "premium", lang: "te" },
+  { value: "g-mr-f", tier: "premium", lang: "mr" },
+  { value: "g-mr-m", tier: "premium", lang: "mr" },
+  { value: "g-hi-f", tier: "premium", lang: "hi" },
+  { value: "g-hi-m", tier: "premium", lang: "hi" },
 ];
 export const DEFAULT_VOICE = "edge-aria"; // free — reproduces today's behaviour
+
+/** The family an id belongs to, from its prefix — the same rule the worker's
+ * registry encodes as `provider`. `auto` counts as free. */
+export type VoiceProvider = "edge" | "elevenlabs" | "google";
+export const providerOf = (id: string): VoiceProvider =>
+  id.startsWith("el-") ? "elevenlabs" : id.startsWith("g-") ? "google" : "edge";
 
 /** A voice's display name; an id no longer in the dictionary shows as itself
  * rather than blank (same rule as statusLabel/kindLabel on the Library). */
@@ -137,31 +177,87 @@ export function defaultVoiceFor(lang: string | null | undefined): string {
   return VOICES.find((v) => v.tier === "free" && v.lang === l)?.value ?? DEFAULT_VOICE;
 }
 
-// Premium (ElevenLabs) voices are offered ONLY when explicitly enabled; the free
-// tier never sees them. The worker enforces the same gate server-side regardless.
+/** Mirrors the worker's TTS_PREMIUM_PROVIDER: the premium family `auto`
+ * becomes for a paid account. Unset = legacy = no premium default (today).
+ * Display only — the worker resolves and enforces regardless. */
+export type PremiumProvider = "legacy" | "google" | "elevenlabs";
+export function premiumProvider(): PremiumProvider {
+  const v = (process.env.NEXT_PUBLIC_TTS_PREMIUM_PROVIDER ?? "").trim().toLowerCase();
+  return v === "google" || v === "elevenlabs" ? v : "legacy";
+}
+
+// The pre-Google display flag. Kept: while it is on, ElevenLabs voices stay
+// pickable for paid accounts whatever the active provider (the worker honours
+// an explicit el-* pick when its own ELEVENLABS_ENABLED is on). The Ask Coach
+// voice route reads it too.
 export function elevenLabsEnabled(): boolean {
   return process.env.NEXT_PUBLIC_ELEVENLABS_ENABLED === "true";
 }
 
-export function availableVoices(t: NarrationMessages, lang?: string | null): VoiceOpt[] {
-  const pool = elevenLabsEnabled() ? VOICES : VOICES.filter((v) => v.tier === "free");
+/** The premium families the picker may show a paid account. */
+export function shownPremiumProviders(): Set<VoiceProvider> {
+  const s = new Set<VoiceProvider>();
+  const active = premiumProvider();
+  if (active !== "legacy") s.add(active);
+  if (elevenLabsEnabled()) s.add("elevenlabs");
+  return s;
+}
+
+/** Paid plans as plan_tier / my_fair_use name them — the same allow-list the
+ * worker's gate enforces (PAID_TIERS). `unlimited` is the comp override
+ * (max_books / max_chapters set), which the worker also treats as paid.
+ * Trial, promo, school_trial and expired plans are NOT paid. */
+export const PAID_VOICE_TIERS: ReadonlySet<string> = new Set(["pro", "pro_plus", "family", "homeschool", "school"]);
+export function premiumVoicesFor(
+  fairUse: { tier?: string; unlimited?: boolean } | null | undefined,
+): boolean {
+  if (!fairUse) return false;
+  return fairUse.unlimited === true || PAID_VOICE_TIERS.has(fairUse.tier ?? "");
+}
+
+// Premium voices are offered ONLY to accounts whose plan allows them (opts.premium)
+// and only from the families the deployment shows; the free tier never sees
+// them. The worker enforces the same gate server-side regardless.
+export function availableVoices(
+  t: NarrationMessages,
+  lang?: string | null,
+  opts: { premium?: boolean } = {},
+): VoiceOpt[] {
+  const shown = opts.premium ? shownPremiumProviders() : new Set<VoiceProvider>();
+  const pool = VOICES.filter((v) => v.tier === "free" || shown.has(providerOf(v.value)));
   const l = lang === "ms-arab" ? "ms" : lang; // Jawi is spoken Malay
-  // The chosen language's voices lead; premium multilingual voices follow.
+  // Automatic leads, then the chosen language's voices; premium follow.
   const chosen = l ? pool.filter((v) => v.lang === l || v.lang === "*") : pool;
   return chosen.map((v) => ({ ...v, label: voiceLabel(t, v.value) }));
 }
 
+/** What `auto` will RENDER as, predicted the way the worker resolves it —
+ * the active provider's voice for the language for a paid account, else the
+ * free default. Used to compare a not-yet-generated kit with a colleague's
+ * finished one (kit-match). A prediction: the worker has the last word. */
+export function expectedVoiceFor(lang: string | null | undefined, premium: boolean): string {
+  const active = premiumProvider();
+  if (premium && active !== "legacy") {
+    const l = lang === "ms-arab" ? "ms" : lang || "en";
+    const pool = VOICES.filter((v) => v.tier === "premium" && providerOf(v.value) === active);
+    const hit = pool.find((v) => v.lang === l) ?? pool.find((v) => v.lang === "*");
+    if (hit) return hit.value;
+  }
+  return defaultVoiceFor(lang);
+}
+
 // The params every presentation generation should carry when the user hasn't
 // picked options (batch/full-book buttons). One source of truth — matches what
-// the chapter row's pickers default to. Language-aware (Malay book → Malay
-// voice) and grade-aware (grades 1–4 → Storytelling, see defaultNarrationForGrade).
+// the chapter row's pickers default to. The voice is `auto` (the worker picks
+// by language and plan); the style is grade-aware (grades 1–4 → Storytelling,
+// see defaultNarrationForGrade).
 export function defaultPresentationParams(
   language?: string | null,
   grade?: string | null,
 ): Record<string, unknown> {
   return {
     narration_style: defaultNarrationForGrade(grade),
-    tts_voice: defaultVoiceFor(language),
+    tts_voice: AUTO_VOICE,
     ...(language ? { language } : {}),
   };
 }

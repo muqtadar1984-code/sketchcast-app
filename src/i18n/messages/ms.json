@@ -1160,6 +1160,16 @@
       "cancelConfirm": "Batalkan pelajaran ini? Ia belum mula, jadi tiada kredit akan digunakan.",
       "building": "Pelajaran ini sedang dibuat — anda boleh membuangnya sebaik ia siap."
     },
+    "deleteBook": {
+      "delete": "Padam buku",
+      "confirmEmpty": "Padam “{title}”? Tindakan ini tidak boleh dibatalkan.",
+      "confirm": "Padam “{title}”? Semua yang dijana daripadanya — {kits} kit dan failnya — turut dipadam. Kredit yang telah digunakan tidak kembali.",
+      "studentWork": "{submissions} hasil kerja yang dihantar pelajar untuk kit ini turut akan dipadam.",
+      "assigned": "Ia telah ditugaskan kepada {students} pelajar, dan kemajuan mereka pada kit ini turut akan dipadam.",
+      "shared": "Guru lain telah menjana kit daripada buku ini. Minta penyelaras atau pengetua menariknya balik dari halaman Buku sekolah, supaya kerja mereka dikeluarkan dengan betul dan bukan dimusnahkan.",
+      "building": "Satu kit daripada buku ini masih dibina — anda boleh memadam buku ini sebaik ia siap.",
+      "indexing": "Buku ini masih diindeks — anda boleh memadamnya sebaik proses itu siap."
+    },
     "branding": {
       "heading": "Penjenamaan sekolah",
       "notSet": "pilihan · guna format & tema sekolah anda",
@@ -1755,7 +1765,30 @@
         "edge-swara": "Swara — Hindi",
         "edge-madhur": "Madhur — Hindi",
         "el-rachel": "Rachel — semula jadi",
-        "el-adam": "Adam — dalam"
+        "el-adam": "Adam — dalam",
+        "auto": "Automatik — disyorkan",
+        "g-en-f": "Achernar — wanita, semula jadi",
+        "g-en-m": "Achird — lelaki, semula jadi",
+        "g-en-gb-f": "Achernar — wanita, Inggeris British",
+        "g-en-gb-m": "Achird — lelaki, Inggeris British",
+        "g-en-in-f": "Achernar — wanita, Inggeris India",
+        "g-en-in-m": "Achird — lelaki, Inggeris India",
+        "g-ms-f": "Suara A — wanita, Bahasa Melayu",
+        "g-ms-m": "Suara B — lelaki, Bahasa Melayu",
+        "g-ar-f": "Achernar — wanita, Arab",
+        "g-ar-m": "Achird — lelaki, Arab",
+        "g-fr-f": "Achernar — wanita, Perancis",
+        "g-fr-m": "Achird — lelaki, Perancis",
+        "g-es-f": "Achernar — wanita, Sepanyol",
+        "g-es-m": "Achird — lelaki, Sepanyol",
+        "g-pt-f": "Achernar — wanita, Portugis",
+        "g-pt-m": "Achird — lelaki, Portugis",
+        "g-te-f": "Achernar — wanita, Telugu",
+        "g-te-m": "Achird — lelaki, Telugu",
+        "g-mr-f": "Achernar — wanita, Marathi",
+        "g-mr-m": "Achird — lelaki, Marathi",
+        "g-hi-f": "Achernar — wanita, Hindi",
+        "g-hi-m": "Achird — lelaki, Hindi"
       }
     }
   },

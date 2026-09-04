@@ -147,6 +147,7 @@ export default function LessonCard({
   trackViews = false,
   bookLanguage = null,
   bookGrade = null,
+  premiumVoices = false,
   gate = null,
 }: {
   bookId: string;
@@ -165,6 +166,8 @@ export default function LessonCard({
   trackViews?: boolean;
   bookLanguage?: string | null;
   bookGrade?: string | null;
+  /** Paid plan or comp override — threaded to the kit button (kit reuse). */
+  premiumVoices?: boolean;
   /** Junk-upload gate: non-null for a gated book — threaded to every control
       on this card that inserts generation rows. */
   gate?: JunkGateInfo | null;
@@ -227,6 +230,7 @@ export default function LessonCard({
         language={bookLanguage}
         bookGrade={bookGrade}
         gate={gate}
+        premiumVoices={premiumVoices}
         t={t}
         className="group/new w-full text-start flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
         skipKinds={(

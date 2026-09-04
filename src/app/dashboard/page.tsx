@@ -30,6 +30,7 @@ import { noticesFor } from "@/utils/notices";
 import { diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
+import { builderJob } from "@/utils/builder-job";
 import { enforceHat } from "@/utils/hats-server";
 import { splitShelf } from "@/utils/school-books";
 import { docDownloadName } from "@/utils/download-name";
@@ -42,6 +43,7 @@ import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
+import { premiumVoicesFor } from "@/utils/narration";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
@@ -503,9 +505,16 @@ export default async function DashboardPage() {
   // beta_tester, which is never cleared on upgrade (known trap). Best-effort:
   // a pre-0047 DB just means no extra line.
   let trialTier = false;
+  let premiumVoices = false;
   {
     const { data: fu } = await supabase.rpc("my_fair_use");
-    trialTier = (fu as { tier?: string } | null)?.tier === "trial";
+    const f = fu as { tier?: string; unlimited?: boolean } | null;
+    trialTier = f?.tier === "trial";
+    // Premium voices in the picker follow the PLAN — a paid tier or the comp
+    // override — the same allow-list the worker's gate enforces. Free and
+    // trial accounts see free voices; `auto` still gives everyone the right
+    // language.
+    premiumVoices = premiumVoicesFor(f);
   }
 
   // Teacher surfaces show what the person OWNS. Admins/coordinators can read
@@ -686,7 +695,19 @@ export default async function DashboardPage() {
     book_id: string | null;
     params: Record<string, unknown> | null;
     artifacts: { kind: string; storage_path: string }[] | null;
-    jobs: { progress: number | null; status: string; stage?: JobStage | null }[] | null;
+    // More than one row since the support agent (a support_diagnose job that
+    // REPORTS on the generation) and its transient retry (a second builder).
+    // `type` and `created_at` are what builderJob() needs to pick the live
+    // build; jobs(*) already returns them.
+    jobs:
+      | {
+          progress: number | null;
+          status: string;
+          stage?: JobStage | null;
+          type?: string | null;
+          created_at?: string | null;
+        }[]
+      | null;
   };
 
   // TEMPORARY (2026-08-31): founder-only lesson-video download. Resolved once
@@ -734,12 +755,16 @@ export default async function DashboardPage() {
         .filter((a) => a.kind === "deck_pptx" && a.url)
         .sort((a, b) => partNum(a.path) - partNum(b.path))
         .map((a) => a.url!);
+      // The job that is BUILDING this generation — not the support agent's
+      // diagnosis of it, and not a dead earlier attempt. `jobs[0]` was both of
+      // those at different times (2026-09-03).
+      const job = builderJob(g.jobs);
       return {
         id: g.id,
         title: g.title || t.untitled,
         status: g.status,
-        progress: g.jobs?.[0]?.progress ?? 0,
-        stage: g.jobs?.[0]?.stage ?? null,
+        progress: job?.progress ?? 0,
+        stage: job?.stage ?? null,
         kind: g.kind || "presentation",
         params: g.params ?? null,
         bookId: g.book_id ?? null,
@@ -1200,6 +1225,7 @@ export default async function DashboardPage() {
                   beta={isBeta ? { pinned: betaPinned } : null}
                   examEnabled={examGenerationEnabled()}
                   trial={trialTier}
+                  premiumVoices={premiumVoices}
                 />
               </section>
             ))}
@@ -1232,6 +1258,7 @@ export default async function DashboardPage() {
                     beta={isBeta ? { pinned: betaPinned } : null}
                     examEnabled={examGenerationEnabled()}
                     trial={trialTier}
+                    premiumVoices={premiumVoices}
                   />
                 </section>
               ))}

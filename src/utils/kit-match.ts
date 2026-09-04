@@ -1,4 +1,4 @@
-import { DEFAULT_STYLE, defaultNarrationForGrade } from "./narration";
+import { AUTO_VOICE, DEFAULT_STYLE, defaultNarrationForGrade } from "./narration";
 
 // When is a colleague's kit the SAME kit?
 //
@@ -21,12 +21,39 @@ import { DEFAULT_STYLE, defaultNarrationForGrade } from "./narration";
 /** The choices that change what the worker produces. */
 export type KitParams = Record<string, unknown>;
 
+/** One side of a comparison: a finished kit, or the kit a click would queue. */
+export type KitRef = {
+  kind: string;
+  chapterRef: string | null;
+  params: KitParams | null;
+  grade: string | null;
+  /** What an unset / `auto` voice is expected to RENDER as for this
+   *  account (narration.expectedVoiceFor) — a paid school's premium default
+   *  must not match a colleague's free-voice kit. Omitted = no prediction,
+   *  and two unset requests still compare equal. */
+  defaultVoice?: string | null;
+};
+
 const str = (v: unknown): string | null =>
   typeof v === "string" && v.trim() !== "" ? v.trim().toLowerCase() : null;
 
 const num = (v: unknown): number | null => {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
   return Number.isFinite(n) ? n : null;
+};
+
+/** A voice the teacher actually chose. `auto` (and the older absent value)
+ *  mean "whatever the worker picks", which is not a choice. */
+const chosenVoice = (v: unknown): string | null => {
+  const s = str(v);
+  return s && s !== AUTO_VOICE ? s : null;
+};
+
+/** The voice a finished kit RENDERED with — the worker records it after
+ *  synthesis as `tts_voice_used` (a string; tolerate a list). */
+const renderedVoice = (p: KitParams): string | null => {
+  const u = p.tts_voice_used;
+  return Array.isArray(u) ? str(u[0]) : str(u);
 };
 
 /**
@@ -38,12 +65,7 @@ const num = (v: unknown): number | null => {
  *
  * `grade` is the book's, and only used to resolve the narration default.
  */
-export function kitSignature(opts: {
-  kind: string;
-  chapterRef: string | null;
-  params: KitParams | null;
-  grade: string | null;
-}): string {
+export function kitSignature(opts: KitRef): string {
   const p = opts.params ?? {};
   // Two spellings exist in the wild — the picker writes narration_style, some
   // older rows carry narrationStyle.
@@ -52,8 +74,19 @@ export function kitSignature(opts: {
   // for everyone reading it, so an unset value is simply "the book's".
   const language = str(p.language) ?? "(book)";
   // Voice only reaches audio. A doc kit has none, so it must not split docs
-  // that are otherwise identical.
-  const voice = opts.kind === "presentation" ? (str(p.tts_voice) ?? str(p.ttsVoice) ?? "(default)") : "(n/a)";
+  // that are otherwise identical. The EFFECTIVE voice is what counts
+  // (founder, 2026-09-03): what a finished kit rendered with wins over what
+  // was asked; an unset / `auto` request resolves to the caller's prediction
+  // of the default, so two untouched requests on the same plan still match
+  // and a premium default never matches a free-voice kit.
+  const voice =
+    opts.kind === "presentation"
+      ? (renderedVoice(p) ??
+        chosenVoice(p.tts_voice) ??
+        chosenVoice(p.ttsVoice) ??
+        str(opts.defaultVoice) ??
+        "(default)")
+      : "(n/a)";
   // Difficulty only exists on the assessment kinds.
   const difficulty = str(p.difficulty) ?? "(n/a)";
   const part = num(p.part) ?? 0;
@@ -62,9 +95,6 @@ export function kitSignature(opts: {
 }
 
 /** Would this existing kit serve a teacher asking for `wanted`? */
-export function kitsInterchangeable(
-  a: { kind: string; chapterRef: string | null; params: KitParams | null; grade: string | null },
-  b: { kind: string; chapterRef: string | null; params: KitParams | null; grade: string | null },
-): boolean {
+export function kitsInterchangeable(a: KitRef, b: KitRef): boolean {
   return kitSignature(a) === kitSignature(b);
 }
