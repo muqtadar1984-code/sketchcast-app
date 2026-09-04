@@ -26,6 +26,7 @@ import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 
 const KIND_NOUN: Record<string, string> = {
   presentation: "video lesson",
+  deck: "slide deck",
   lesson_plan: "lesson plan",
   activity: "activities sheet",
   worksheet: "worksheet",

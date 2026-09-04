@@ -47,6 +47,7 @@ import { premiumVoicesFor } from "@/utils/narration";
 
 const KIND_LABEL: Record<string, string> = {
   presentation: "Lesson",
+  deck: "Deck",
   worksheet: "Worksheet",
   exam_paper: "Test paper",
   exam: "Exam",

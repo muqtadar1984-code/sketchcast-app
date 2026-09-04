@@ -6,7 +6,12 @@ import { AUTO_VOICE, DEFAULT_STYLE } from "@/utils/narration";
 // MUST stay first: the DB's docs-ride-with-their-lesson guard checks for an
 // existing lesson row, and rows inserted earlier in the same statement are
 // visible to the later rows' triggers — order is load-bearing.
-export const DOC_KINDS = ["lesson_plan", "activity", "worksheet", "exam_paper", "case_study"] as const;
+//
+// The slide deck (0103) is its own kind and rides free exactly like the
+// documents: it is listed right after the lesson so the kit is still ONE
+// insert with the lesson first. defaultParams("deck") is null, which spreads
+// to nothing — the deck takes no options.
+export const DOC_KINDS = ["deck", "lesson_plan", "activity", "worksheet", "exam_paper", "case_study"] as const;
 
 /** One generations insert row — wide types so mixed batches unify cleanly. */
 export type GenerationRow = {

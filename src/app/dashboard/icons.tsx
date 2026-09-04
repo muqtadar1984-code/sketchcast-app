@@ -50,6 +50,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M10 9l4 2.5-4 2.5z" fill={G} stroke="none" />
     </>
   ),
+  // A slide with a heading rule and a bullet block — the deck (0103).
+  deck: (
+    <>
+      <rect x="3" y="5" width="18" height="13" rx="1.5" />
+      <path d="M7 9h10M7 12.5h6M7 15h4" />
+    </>
+  ),
   lesson_plan: (
     <>
       <rect x="5" y="3" width="14" height="18" rx="1.5" />
