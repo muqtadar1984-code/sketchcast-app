@@ -25,6 +25,7 @@ import { fmt } from "@/i18n/format";
 // the dictionary (kindLabel), keyed by the kind itself.
 const KINDS: string[] = [
   "presentation",
+  "deck",
   "lesson_plan",
   "activity",
   "worksheet",
@@ -111,9 +112,13 @@ export default function ChapterGenerate({
       presL?.decks?.length ?? (presL?.deck ? 1 : 0),
     ) > 1;
   const kitPending = !betaLocked && !hasLesson;
+  // A pre-0103 kit carries its deck ON the presentation row. That deck is
+  // shown by the presentation cell, so the free "+ Deck" add-back is offered
+  // only where no deck of either shape exists.
+  const legacyDeck = !lessons["deck"] && !!(presL?.decks?.length || presL?.deck);
   const pendingKinds = betaLocked || !hasLesson
     ? []
-    : KINDS.filter((k) => k !== "presentation" && !lessons[k]);
+    : KINDS.filter((k) => k !== "presentation" && !lessons[k] && !(k === "deck" && legacyDeck));
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
@@ -174,8 +179,9 @@ export default function ChapterGenerate({
       setBusy(false);
       return;
     }
-    // Kit mode: lesson + all five docs in one batch (presentation FIRST — the
-    // DB's docs-with-lesson guard reads earlier rows of the same insert).
+    // Kit mode: lesson + deck + all five docs in one batch (presentation
+    // FIRST — the DB's docs-with-lesson guard reads earlier rows of the same
+    // insert).
     // Add-back mode: just the checked documents (free, analysis reused).
     const rows: GenerationRow[] = kitPending
       ? kitRows({
@@ -213,11 +219,11 @@ export default function ChapterGenerate({
     router.refresh();
   }
 
-  // The six cells, split so the two layouts below can share them: (a) the
+  // The seven cells, split so the two layouts below can share them: (a) the
   // presentation (its tour anchor must render exactly once, visible in both
-  // layouts) and (b) the five document kinds. Already generated (or in
-  // progress): icon-forward cell — the label IS the watch/download link now,
-  // so no separate type icon + caption.
+  // layouts) and (b) the deck and the five document kinds. Already generated
+  // (or in progress): icon-forward cell — the label IS the watch/download
+  // link now, so no separate type icon + caption.
   const presCell = presL ? (
     <span data-tour="lesson-output" className="flex items-center">
       <ContentCell
@@ -231,6 +237,7 @@ export default function ChapterGenerate({
         bookLanguage={bookLanguage}
         genLocked={betaLocked}
         gate={gate}
+        hideDeck={!!lessons["deck"]}
         t={t}
       />
     </span>
@@ -242,6 +249,8 @@ export default function ChapterGenerate({
       // Locked chapters offer nothing; pre-lesson, single doc types
       // aren't offered either (the kit button generates everything).
       if (betaLocked || !hasLesson) return null;
+      // A legacy deck is already on the presentation cell — no add-back.
+      if (k === "deck" && legacyDeck) return null;
       // Lesson exists: missing documents are free add-backs.
       return (
         <label

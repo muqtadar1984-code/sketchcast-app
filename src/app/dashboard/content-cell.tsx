@@ -92,9 +92,10 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
-// One content type for a chapter/part: presentation (video + deck) or a .docx
-// kind. The label ("Plan", "Worksheet"…) is now the link text; presentation
-// shows "Watch" + "Deck" instead.
+// One content type for a chapter/part: presentation (video, plus a legacy
+// deck on pre-0103 kits), the slide deck (.pptx, 0103) or a .docx kind. The
+// label ("Deck", "Plan", "Worksheet"…) is now the link text; presentation
+// shows "Watch" (+ "Deck" for a legacy kit) instead.
 export default function ContentCell({
   bookId,
   schoolId,
@@ -109,6 +110,7 @@ export default function ContentCell({
   genLocked = false,
   bookTitle = null,
   gate = null,
+  hideDeck = false,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -131,12 +133,21 @@ export default function ContentCell({
   /** Junk-upload gate: non-null for a gated book — every generate/retry/
       regenerate this cell offers confirms first. */
   gate?: JunkGateInfo | null;
+  /** The presentation cell of a unit that has a deck GENERATION (0103): hide
+      the legacy deck link(s) riding on the presentation row, so the row does
+      not offer the same deck twice. */
+  hideDeck?: boolean;
 }) {
   const isPres = kind === "presentation";
+  // The slide deck (0103): its own generation, free with its lesson. It has
+  // no options, so it generates directly like the presentation, and its one
+  // artifact is the .pptx — rendered through the document branch below.
+  const isDeck = kind === "deck";
 
-  // Presentation generates directly; document kinds open a customization modal.
+  // Presentation and deck generate directly; document kinds open a
+  // customization modal.
   const genControl = (lbl: string) =>
-    isPres ? (
+    isPres || isDeck ? (
       <GenerateButton
         bookId={bookId}
         schoolId={schoolId}
@@ -218,7 +229,13 @@ export default function ContentCell({
 
   // done — multi-video presentations stack one chip per part ("Pt 2 · Watch · Deck").
   const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
-  const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
+  // Legacy decks (built inside the presentation job, pre-0103) — suppressed
+  // once the unit has a deck generation of its own.
+  const decks = hideDeck ? [] : lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
+  // Document branch: the deck generation's artifact is its .pptx, the rest
+  // download a .docx. Only the documents can carry a split answer key.
+  const docHref = isDeck ? lesson.deck : lesson.doc;
+  const docViewKind = isDeck ? "deck_pptx" : "docx";
   // TEMPORARY (2026-08-31): founder-only "Save" links, index-aligned with
   // `videos`. Empty for every other account, so nothing extra renders.
   const videoDownloads = lesson.videoDownloads ?? [];
@@ -278,15 +295,15 @@ export default function ContentCell({
         )
       ) : (
         <>
-          {lesson.doc && (
-            <a href={lesson.doc} onClick={() => trackViews && recordArtifactView(lesson.id, "docx")} className={linkCls}>
+          {docHref && (
+            <a href={docHref} onClick={() => trackViews && recordArtifactView(lesson.id, docViewKind)} className={linkCls}>
               <span className="text-[#1FB8A6]"><DownloadIcon /></span>{label}
             </a>
           )}
           {/* The split key/teacher-notes document (2026-08-18) — adult-only
               surface, so it is always offered when it exists, labeled with the
               same dictionary key the exams section uses. */}
-          {lesson.answerKey && (
+          {!isDeck && lesson.answerKey && (
             <a href={lesson.answerKey} onClick={() => trackViews && recordArtifactView(lesson.id, "answer_key_docx")} className={linkCls}>
               <span className="text-[#1FB8A6]"><DownloadIcon /></span>{t.book.answerKey}
             </a>

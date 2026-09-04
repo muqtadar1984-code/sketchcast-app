@@ -869,6 +869,9 @@ export default async function DashboardPage() {
         num: c.num,
         title: c.title,
         presentation: lessonFor(b.id, c.num, "presentation") ?? null,
+        // The deck generation (0103); a pre-0103 kit's deck stays on the
+        // presentation's own `deck`/`decks` above.
+        deck: lessonFor(b.id, c.num, "deck") ?? null,
         lessonPlan: lessonFor(b.id, c.num, "lesson_plan") ?? null,
         activity: lessonFor(b.id, c.num, "activity") ?? null,
         worksheet: lessonFor(b.id, c.num, "worksheet") ?? null,
@@ -886,6 +889,7 @@ export default async function DashboardPage() {
                 total: c.parts!.length,
                 titles: (p.titles ?? []).slice(0, 3),
                 presentation: lessonFor(b.id, c.num, "presentation", i + 1) ?? null,
+                deck: lessonFor(b.id, c.num, "deck", i + 1) ?? null,
                 lessonPlan: lessonFor(b.id, c.num, "lesson_plan", i + 1) ?? null,
                 activity: lessonFor(b.id, c.num, "activity", i + 1) ?? null,
                 worksheet: lessonFor(b.id, c.num, "worksheet", i + 1) ?? null,
