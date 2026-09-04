@@ -354,6 +354,10 @@ export default async function DashboardPage() {
       const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
       const prog = progByGen.get(g.id);
       // Multi-part lessons: every video/deck part, in PART order (Part 1 first).
+      // A deck-kind generation (0103, assignable since 2026-09-04) comes
+      // through the same lines: its one deck_pptx lands in `deck`/`decks`, it
+      // has no video, no docx and no questions_json, so `doc` and `quiz` stay
+      // null and StudentItem renders it as a download alone.
       // NULL SLOTS ARE KEPT for videos: parts.length must always equal the true
       // part count — silently dropping a transiently-unsignable URL would shift
       // part numbering and corrupt the per-part progress math (a student could

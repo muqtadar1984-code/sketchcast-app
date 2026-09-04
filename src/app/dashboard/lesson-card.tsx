@@ -2,7 +2,7 @@
 
 import ContentCell, { type CellLesson } from "./content-cell";
 import { kindLabel, type LibraryMessages } from "./labels";
-import { lessonLanguageOf } from "./kit";
+import { assignableIds, lessonLanguageOf } from "./kit";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import GenerateKitButton from "./generate-kit-button";
 import RegenerateButton from "./regenerate-button";
@@ -297,9 +297,10 @@ export default function LessonCard({
   const eta =
     p.status === "processing" ? etaLabel("presentation", p.progress, p.stage, t.utils.job) : "";
 
-  const assignable = [part.presentation, part.worksheet, part.exam]
-    .filter((l): l is CellLesson => !!l && l.status === "done")
-    .map((l) => l.id);
+  // What "Assign" hands the class — STUDENT_KINDS, in that order. The deck
+  // (0103) goes with the lesson, the worksheet and the test paper (founder
+  // 2026-09-04); a pre-0103 kit has no deck row and simply sends three.
+  const assignable = assignableIds([part.presentation, part.deck, part.worksheet, part.exam]);
 
   return (
     <div className="group/card flex gap-3.5 rounded-xl border border-[#DCE6E2] bg-white px-3.5 py-3">

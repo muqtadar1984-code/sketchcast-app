@@ -33,6 +33,7 @@ type ChildMessages = Dictionary["school"]["children"];
 // falls through to the raw code rather than a blank row.
 const KIND_KEY: Record<string, keyof ChildMessages["kind"]> = {
   presentation: "presentation",
+  deck: "deck",
   activity: "activity",
   worksheet: "worksheet",
   exam_paper: "examPaper",

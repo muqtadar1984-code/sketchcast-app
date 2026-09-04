@@ -67,8 +67,10 @@ function Badge({
 
 // One assigned item on the student dashboard. The lesson plays in-app and is
 // marked complete when watched to the end (re-opening a finished one -> revised);
-// worksheets/exams are opened, then an answer file is uploaded to submit. All
-// writes go through the student's own session (RLS).
+// worksheets/exams are opened, then an answer file is uploaded to submit; the
+// slide deck (kind 'deck', assignable since 2026-09-04) is downloaded, and that
+// download is the whole task. All writes go through the student's own session
+// (RLS).
 //
 // Its words arrive whole from the server (`t`) — the part counters read
 // "Part {n} of {total}" from the file rather than being glued together here, so
@@ -311,7 +313,33 @@ export default function StudentItem({
     setQuiz(null);
   }
 
+  // A deck has no questions and nothing to hand in — the download IS the
+  // work. The first one completes the item, the way a lesson completes when
+  // watched to the end; a later one counts as a revision, exactly as markOpen
+  // already does for a finished lesson. The deck branch below renders no quiz
+  // button and no file picker: item.quiz is null for a deck (the worker
+  // writes it no questions_json) and a submission row would be a file
+  // answering nothing.
+  async function openDeck() {
+    if (status === "completed" || status === "revised") return markOpen();
+    const at = new Date().toISOString();
+    await supabase
+      .from("student_progress")
+      .upsert(
+        { ...base, status: "completed", opened_at: at, completed_at: at, progress_pct: 100 },
+        { onConflict: "generation_id,student_id" },
+      );
+    setStatus("completed");
+  }
+
   const isLesson = item.kind === "presentation";
+  const isDeck = item.kind === "deck";
+  // The student page signs a deck-kind generation's own deck_pptx into
+  // `deck`/`decks` (one per part, same as a lesson's). A deck row is a single
+  // part-unit, so the first URL is the deck; a missing one is a signing
+  // failure this render (service role unavailable), not an unbuilt deck — a
+  // share only exists once the row was "done".
+  const deckUrl = item.decks?.[0] ?? item.deck;
   const done = status === "completed" || status === "revised" || submitted;
   const overdue = item.dueOverdue && !done;
 
@@ -382,6 +410,14 @@ export default function StudentItem({
               <button onClick={() => setCoaching(true)} className="font-medium text-[#0C8175] hover:underline">🎓 {t.item.assistant}</button>
             )}
           </>
+        ) : isDeck ? (
+          deckUrl ? (
+            <a href={deckUrl} onClick={() => void openDeck()} className="font-medium text-[#0C8175] hover:underline">
+              ⬇ {t.item.deck}
+            </a>
+          ) : (
+            <span className="text-[#98A0A9]">{t.item.deckNotReady}</span>
+          )
         ) : (
           <>
             {item.doc && (

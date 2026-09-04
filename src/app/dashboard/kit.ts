@@ -13,6 +13,28 @@ import { AUTO_VOICE, DEFAULT_STYLE } from "@/utils/narration";
 // to nothing — the deck takes no options.
 export const DOC_KINDS = ["deck", "lesson_plan", "activity", "worksheet", "exam_paper", "case_study"] as const;
 
+// The kinds a STUDENT is handed — what every Assign control collects out of a
+// kit: the lesson, the worksheet and the test paper (founder 2026-07-19), and
+// since 2026-09-04 the slide deck too ("students get decks similar to
+// worksheets"). The teacher plan, the class activities and the case study are
+// teaching aids and never travel. Three Assign sites (the part card, the
+// chapter row, the chapter row's per-part roll-up) used to each carry their
+// own copy of this list; the deck was the kind that showed why one list is
+// better than three.
+export const STUDENT_KINDS = ["presentation", "deck", "worksheet", "exam_paper"] as const;
+
+/** The generation ids an Assign control sends: the student kinds that have
+ * FINISHED building. A queued or failed row has nothing to hand over yet; a
+ * null slot is a kind the kit never had. The caller passes the slots in
+ * STUDENT_KINDS order so the shares land in that order too. */
+export function assignableIds(
+  lessons: ReadonlyArray<{ id: string; status: string } | null | undefined>,
+): string[] {
+  return lessons
+    .filter((l): l is { id: string; status: string } => !!l && l.status === "done")
+    .map((l) => l.id);
+}
+
 /** One generations insert row — wide types so mixed batches unify cleanly. */
 export type GenerationRow = {
   kind: string;
