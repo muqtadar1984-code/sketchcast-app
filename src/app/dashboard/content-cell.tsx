@@ -11,6 +11,7 @@ import { recordArtifactView } from "@/utils/views";
 import { etaLabel, type JobStage } from "@/utils/job-stage";
 import { fmt } from "@/i18n/format";
 import { statusLabel, type LibraryMessages } from "./labels";
+import { deckParams } from "./kit";
 
 export type CellLesson = {
   id: string;
@@ -111,6 +112,7 @@ export default function ContentCell({
   bookTitle = null,
   gate = null,
   hideDeck = false,
+  lessonLanguage = null,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -137,6 +139,10 @@ export default function ContentCell({
       the legacy deck link(s) riding on the presentation row, so the row does
       not offer the same deck twice. */
   hideDeck?: boolean;
+  /** The unit's lesson language (the presentation row's params.language,
+      see lessonLanguageOf). A deck (0103) queued from this cell inherits it,
+      so an add-back deck matches its lesson rather than the book. */
+  lessonLanguage?: string | null;
 }) {
   const isPres = kind === "presentation";
   // The slide deck (0103): its own generation, free with its lesson. It has
@@ -145,7 +151,9 @@ export default function ContentCell({
   const isDeck = kind === "deck";
 
   // Presentation and deck generate directly; document kinds open a
-  // customization modal.
+  // customization modal. The deck's row carries the lesson's language as
+  // well as the part (a retry keeps the failed row's) — the presentation's
+  // retry stays as it was.
   const genControl = (lbl: string) =>
     isPres || isDeck ? (
       <GenerateButton
@@ -155,7 +163,7 @@ export default function ContentCell({
         kind={kind}
         variant="ghost"
         label={lbl}
-        params={part ? { part } : null}
+        params={isDeck ? deckParams({ part, lessonLanguage, prior: lesson?.params }) : part ? { part } : null}
         gate={gate}
       />
     ) : (

@@ -7,7 +7,7 @@ import ContentCell, { type CellLesson } from "./content-cell";
 import { kindLabel, type LibraryMessages } from "./labels";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-spec";
-import { kitRows, type GenerationRow } from "./kit";
+import { kitRows, lessonLanguageOf, type GenerationRow } from "./kit";
 import {
   AUTO_VOICE,
   LANGUAGES,
@@ -182,7 +182,13 @@ export default function ChapterGenerate({
     // Kit mode: lesson + deck + all five docs in one batch (presentation
     // FIRST — the DB's docs-with-lesson guard reads earlier rows of the same
     // insert).
-    // Add-back mode: just the checked documents (free, analysis reused).
+    // Add-back mode: just the checked documents (free, analysis reused), in
+    // the LESSON's language — the picker is not rendered once a lesson
+    // exists, so `language` here is only the book's default, and a lesson
+    // generated in another language must not get its deck or documents in
+    // the book's (the worker falls back to books.language when a row carries
+    // none).
+    const addBackLanguage = lessonLanguageOf(presL) ?? language;
     const rows: GenerationRow[] = kitPending
       ? kitRows({
           bookId,
@@ -203,7 +209,7 @@ export default function ChapterGenerate({
           owner_id: user.id,
           school_id: schoolId,
           chapter_ref: String(chapterNum),
-          params: { ...defaultParams(k), language },
+          params: { ...defaultParams(k), language: addBackLanguage },
           status: "queued",
         }));
     // The record that the teacher was warned — on EVERY row this click queues.
@@ -279,6 +285,7 @@ export default function ChapterGenerate({
           lesson={lesson}
           trackViews={!!beta}
           bookLanguage={bookLanguage}
+          lessonLanguage={lessonLanguageOf(presL)}
           genLocked={betaLocked}
           gate={gate}
           t={t}

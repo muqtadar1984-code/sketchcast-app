@@ -2,6 +2,7 @@
 
 import ContentCell, { type CellLesson } from "./content-cell";
 import { kindLabel, type LibraryMessages } from "./labels";
+import { lessonLanguageOf } from "./kit";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import GenerateKitButton from "./generate-kit-button";
 import RegenerateButton from "./regenerate-button";
@@ -416,6 +417,7 @@ export default function LessonCard({
                 part={part.n}
                 trackViews={trackViews}
                 bookLanguage={bookLanguage}
+                lessonLanguage={lessonLanguageOf(p)}
                 bookTitle={bookTitle}
                 gate={gate}
                 t={t}

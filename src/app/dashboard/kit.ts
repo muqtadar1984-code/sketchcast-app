@@ -69,6 +69,43 @@ export function kitRows(opts: {
   ];
 }
 
+/** The language a lesson was generated in — its row's params.language when
+ *  the teacher picked one, else null (the worker then used books.language). */
+export function lessonLanguageOf(
+  lesson: { params: Record<string, unknown> | null } | null | undefined,
+): string | null {
+  const v = lesson?.params?.language;
+  return typeof v === "string" && v ? v : null;
+}
+
+/**
+ * Params for a deck (0103) queued from its own chip — the "+ Deck" add-back
+ * or a failed deck's retry. The deck asks no options, but it must land in
+ * the LESSON's language, not the book's: the worker resolves
+ * `params.language or books.language`, and a lesson generated in another
+ * language (the kit picker allows it) would otherwise get its add-back deck
+ * in the book's language. So the row carries the unit's part and, when
+ * known, a language — a retry keeps the failed row's own language (it was
+ * right when queued), an add-back inherits the lesson's. Nothing else from
+ * the failed row is copied: a stale junk-gate stamp or batch marker is not
+ * the deck's to carry.
+ */
+export function deckParams(opts: {
+  part?: number | null;
+  lessonLanguage?: string | null;
+  /** The failed row's params on a retry. */
+  prior?: Record<string, unknown> | null;
+}): Record<string, unknown> | null {
+  const { part = null, lessonLanguage = null, prior = null } = opts;
+  const priorLang = typeof prior?.language === "string" && prior.language ? prior.language : null;
+  const language = priorLang ?? lessonLanguage;
+  const params = {
+    ...(part ? { part } : {}),
+    ...(language ? { language } : {}),
+  };
+  return Object.keys(params).length ? params : null;
+}
+
 /** One queued kit: a chapter, or one PART of it. */
 export type KitUnit = { chapterNum: number; part: number | null };
 
