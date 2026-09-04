@@ -129,6 +129,7 @@
       "partWontLoad": "Bahagian {n} tidak dapat dimuatkan — muat semula halaman",
       "deck": "Slaid",
       "deckPart": "Slaid Bhg {n}",
+      "deckNotReady": "Slaid belum sedia — cuba lagi sebentar",
       "assistant": "Pembantu",
       "open": "Buka",
       "takeQuiz": "Jawab kuiz",
@@ -540,6 +541,7 @@
       },
       "kinds": {
         "presentation": "Pelajaran video",
+        "deck": "Slaid",
         "activity": "Aktiviti",
         "worksheet": "Lembaran kerja",
         "exam_paper": "Kertas ujian",
@@ -1612,6 +1614,7 @@
       "chapterLabel": "{kind} · Bab {n}",
       "kind": {
         "presentation": "Pelajaran",
+        "deck": "Slaid",
         "worksheet": "Lembaran kerja",
         "examPaper": "Kertas ujian",
         "exam": "Peperiksaan",
@@ -1636,6 +1639,7 @@
       "noTestPapers": "Belum ada kertas ujian ditugaskan — cipta satu di bawah Kertas Ujian.",
       "kind": {
         "presentation": "Pelajaran video",
+        "deck": "Slaid",
         "activity": "Aktiviti",
         "worksheet": "Lembaran kerja",
         "examPaper": "Kertas ujian",

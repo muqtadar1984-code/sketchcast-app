@@ -129,6 +129,7 @@
       "partWontLoad": "La parte {n} no se pudo cargar — actualiza la página",
       "deck": "Diapositivas",
       "deckPart": "Diapos {n}",
+      "deckNotReady": "Diapositivas aún no listas — vuelve pronto",
       "assistant": "Asistente",
       "open": "Abrir",
       "takeQuiz": "Hacer el test",
@@ -540,6 +541,7 @@
       },
       "kinds": {
         "presentation": "Videolección",
+        "deck": "Diapositivas",
         "activity": "Actividades",
         "worksheet": "Hoja de trabajo",
         "exam_paper": "Prueba",
@@ -1612,6 +1614,7 @@
       "chapterLabel": "{kind} · Cap. {n}",
       "kind": {
         "presentation": "Lección",
+        "deck": "Diapositivas",
         "worksheet": "Hoja de trabajo",
         "examPaper": "Prueba",
         "exam": "Examen",
@@ -1636,6 +1639,7 @@
       "noTestPapers": "Todavía no hay pruebas asignadas — cree una en Exámenes.",
       "kind": {
         "presentation": "Videolección",
+        "deck": "Diapositivas",
         "activity": "Actividades",
         "worksheet": "Hoja de trabajo",
         "examPaper": "Prueba",

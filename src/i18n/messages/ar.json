@@ -129,6 +129,7 @@
       "partWontLoad": "تعذّر تحميل الجزء {n} — حدّث الصفحة",
       "deck": "الشرائح",
       "deckPart": "شرائح ج{n}",
+      "deckNotReady": "الشرائح غير جاهزة بعد — عد لاحقاً",
       "assistant": "المساعد",
       "open": "افتح",
       "takeQuiz": "ابدأ الاختبار",
@@ -540,6 +541,7 @@
       },
       "kinds": {
         "presentation": "درس مصوّر",
+        "deck": "الشرائح",
         "activity": "أنشطة",
         "worksheet": "ورقة عمل",
         "exam_paper": "ورقة اختبار",
@@ -1612,6 +1614,7 @@
       "chapterLabel": "{kind} · ف{n}",
       "kind": {
         "presentation": "درس",
+        "deck": "الشرائح",
         "worksheet": "ورقة عمل",
         "examPaper": "ورقة اختبار",
         "exam": "امتحان",
@@ -1636,6 +1639,7 @@
       "noTestPapers": "لا أوراق اختبار مُسندة بعد — أنشئ واحدة من «أوراق الاختبار».",
       "kind": {
         "presentation": "درس مصوّر",
+        "deck": "الشرائح",
         "activity": "أنشطة",
         "worksheet": "ورقة عمل",
         "examPaper": "ورقة اختبار",

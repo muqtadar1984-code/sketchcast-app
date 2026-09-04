@@ -129,6 +129,7 @@
       "partWontLoad": "Part {n} couldn't load — refresh the page",
       "deck": "Deck",
       "deckPart": "Deck Pt {n}",
+      "deckNotReady": "Deck not ready yet — check back soon",
       "assistant": "Assistant",
       "open": "Open",
       "takeQuiz": "Take quiz",
@@ -540,6 +541,7 @@
       },
       "kinds": {
         "presentation": "Video lesson",
+        "deck": "Deck",
         "activity": "Activities",
         "worksheet": "Worksheet",
         "exam_paper": "Test paper",
@@ -1615,6 +1617,7 @@
       "chapterLabel": "{kind} · Ch {n}",
       "kind": {
         "presentation": "Lesson",
+        "deck": "Deck",
         "worksheet": "Worksheet",
         "examPaper": "Test paper",
         "exam": "Exam",
@@ -1639,6 +1642,7 @@
       "noTestPapers": "No test papers assigned yet — create one under Test Papers.",
       "kind": {
         "presentation": "Video lesson",
+        "deck": "Deck",
         "activity": "Activities",
         "worksheet": "Worksheet",
         "examPaper": "Test paper",

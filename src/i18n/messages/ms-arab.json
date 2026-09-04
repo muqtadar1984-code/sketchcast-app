@@ -129,6 +129,7 @@
       "partWontLoad": "بهاݢين {n} تيدق داڤت دمواتکن — موات سمولا هلامن",
       "deck": "سلايد",
       "deckPart": "سلايد بهݢ {n}",
+      "deckNotReady": "سلايد بلوم سديا — چوبا لاڬي سبنتر",
       "assistant": "ڤمبنتو",
       "open": "بوک",
       "takeQuiz": "جواب کويز",
@@ -540,6 +541,7 @@
       },
       "kinds": {
         "presentation": "ڤلاجرن ۏيديو",
+        "deck": "سلايد",
         "activity": "اکتيۏيتي",
         "worksheet": "لمبرن کرجا",
         "exam_paper": "کرتس اوجين",
@@ -1612,6 +1614,7 @@
       "chapterLabel": "{kind} · باب {n}",
       "kind": {
         "presentation": "ڤلاجرن",
+        "deck": "سلايد",
         "worksheet": "لمبرن کرجا",
         "examPaper": "کرتس اوجين",
         "exam": "ڤڤريقساءن",
@@ -1636,6 +1639,7 @@
       "noTestPapers": "بلوم اد کرتس اوجين دتوݢسکن — چيڤتا ساتو د باوه کرتس اوجين.",
       "kind": {
         "presentation": "ڤلاجرن ۏيديو",
+        "deck": "سلايد",
         "activity": "اکتيۏيتي",
         "worksheet": "لمبرن کرجا",
         "examPaper": "کرتس اوجين",

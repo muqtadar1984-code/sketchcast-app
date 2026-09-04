@@ -129,6 +129,7 @@
       "partWontLoad": "भाग {n} लोड नहीं हो सका — पेज रीफ़्रेश करें",
       "deck": "स्लाइड",
       "deckPart": "स्लाइड भा {n}",
+      "deckNotReady": "स्लाइड अभी तैयार नहीं — थोड़ी देर बाद देखें",
       "assistant": "सहायक",
       "open": "खोलें",
       "takeQuiz": "क्विज़ दें",
@@ -540,6 +541,7 @@
       },
       "kinds": {
         "presentation": "वीडियो पाठ",
+        "deck": "स्लाइड",
         "activity": "गतिविधियाँ",
         "worksheet": "वर्कशीट",
         "exam_paper": "प्रश्नपत्र",
@@ -1612,6 +1614,7 @@
       "chapterLabel": "{kind} · अध्याय {n}",
       "kind": {
         "presentation": "पाठ",
+        "deck": "स्लाइड",
         "worksheet": "वर्कशीट",
         "examPaper": "प्रश्नपत्र",
         "exam": "परीक्षा",
@@ -1636,6 +1639,7 @@
       "noTestPapers": "अभी कोई प्रश्नपत्र नहीं दिया — ‘प्रश्नपत्र’ में एक बनाएँ।",
       "kind": {
         "presentation": "वीडियो पाठ",
+        "deck": "स्लाइड",
         "activity": "गतिविधियाँ",
         "worksheet": "वर्कशीट",
         "examPaper": "प्रश्नपत्र",
