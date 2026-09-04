@@ -17,6 +17,8 @@ export default function SchoolControls({
   licenceEnd,
   salesStage,
   salesNotes,
+  stripeReady,
+  invoiceUrl,
 }: {
   schoolId: string;
   status: string;
@@ -25,6 +27,10 @@ export default function SchoolControls({
   licenceEnd: string | null;
   salesStage: string | null;
   salesNotes: string | null;
+  /** STRIPE_SECRET_KEY exists on this deployment — the invoice lever is live. */
+  stripeReady: boolean;
+  /** The last issued invoice's hosted page, if any. */
+  invoiceUrl: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,6 +40,11 @@ export default function SchoolControls({
   const [licenceDays, setLicenceDays] = useState("365");
   const [stage, setStage] = useState(salesStage ?? "new");
   const [notes, setNotes] = useState(salesNotes ?? "");
+  const [amountMyr, setAmountMyr] = useState("");
+  const [dueDays, setDueDays] = useState("30");
+  const [invoiceLicenceDays, setInvoiceLicenceDays] = useState("365");
+  const [sendEmail, setSendEmail] = useState(true);
+  const [issued, setIssued] = useState<{ url: string | null; due: string | null; emailed: boolean } | null>(null);
 
   async function call(payload: Record<string, unknown>, label: string, done?: string) {
     setBusy(label);
@@ -52,6 +63,7 @@ export default function SchoolControls({
     }
     if (json.warning) setNotice(json.warning);
     else if (done) setNotice(done);
+    if (label === "invoice") setIssued({ url: json.url ?? null, due: json.due ?? null, emailed: !!json.emailed });
     router.refresh();
   }
 
@@ -149,6 +161,99 @@ export default function SchoolControls({
             {busy === "activate" ? "Saving…" : lifecycle === "paid" ? "Renew" : "Activate"}
           </button>
         </div>
+      </div>
+
+      {/* Issue invoice — the founder's conversion lever (Phase 4). A Stripe
+          INVOICE at the quoted amount; its hosted page is the payment link.
+          Paying it activates the school through the webhook, no click here. */}
+      <div className="pt-1 border-t border-[#EEF0EC]">
+        <p className="font-medium text-sm mb-1">{lifecycle === "paid" ? "Invoice a renewal (Stripe)" : "Issue an invoice (Stripe)"}</p>
+        <p className="text-xs text-[#5B6470] mb-2">
+          {stripeReady
+            ? "Bills the school's admin the quoted amount in MYR. Stripe emails the invoice (PDF + hosted payment page) unless you untick it; either way the link appears here to paste into your own email. When it is paid, the licence activates on its own and the stage moves to paid."
+            : "Stripe is not configured on this deployment (STRIPE_SECRET_KEY) — the invoice lever is dark. Bank-transfer schools: use Activate above."}
+        </p>
+        {invoiceUrl && !issued && (
+          <p className="text-xs mb-2">
+            Last invoice:{" "}
+            <a href={invoiceUrl} target="_blank" rel="noreferrer" className="text-[#0C8175] underline break-all">
+              {invoiceUrl}
+            </a>
+          </p>
+        )}
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block">
+            <span className="text-xs text-[#5B6470]">Amount (MYR)</span>
+            <input
+              type="number"
+              min={1}
+              step="0.01"
+              value={amountMyr}
+              onChange={(e) => setAmountMyr(e.target.value)}
+              placeholder="e.g. 3000"
+              disabled={!stripeReady}
+              className="field h-9 px-2 mt-1 w-32"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-[#5B6470]">Due in (days)</span>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              value={dueDays}
+              onChange={(e) => setDueDays(e.target.value)}
+              disabled={!stripeReady}
+              className="field h-9 px-2 mt-1 w-24"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-[#5B6470]">Licence (days)</span>
+            <input
+              type="number"
+              min={1}
+              max={1095}
+              value={invoiceLicenceDays}
+              onChange={(e) => setInvoiceLicenceDays(e.target.value)}
+              disabled={!stripeReady}
+              className="field h-9 px-2 mt-1 w-24"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 h-9 text-xs text-[#5B6470]">
+            <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} disabled={!stripeReady} />
+            Stripe emails it
+          </label>
+          <button
+            onClick={() =>
+              call(
+                {
+                  action: "school_issue_invoice",
+                  amountMyr: Number(amountMyr),
+                  dueDays: days(dueDays),
+                  licenceDays: days(invoiceLicenceDays),
+                  sendEmail,
+                },
+                "invoice",
+                "Invoice issued.",
+              )
+            }
+            disabled={!!busy || !stripeReady || !amountMyr}
+            className="btn-primary h-9 px-4 text-sm"
+          >
+            {busy === "invoice" ? "Issuing…" : "Issue invoice"}
+          </button>
+        </div>
+        {issued && (
+          <p className="text-xs mt-2">
+            {issued.emailed ? "Emailed by Stripe. " : "Not emailed — send this link yourself. "}
+            {issued.url && (
+              <a href={issued.url} target="_blank" rel="noreferrer" className="text-[#0C8175] underline break-all">
+                {issued.url}
+              </a>
+            )}
+            {issued.due && <span className="text-[#5B6470]"> · due {issued.due.slice(0, 10)}</span>}
+          </p>
+        )}
       </div>
 
       {/* Sales stage + notes — hand-set, never derived (the chip above is). */}

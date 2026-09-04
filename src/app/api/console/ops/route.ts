@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { founderEmails, isPlatformAdminRequest } from "@/utils/platform-admin";
 import { isCountryCode } from "@/utils/countries";
+import { stripe } from "@/utils/stripe/client";
+import { ensureStripeCustomer } from "@/utils/stripe/customer";
+import { issueSchoolInvoice, SCHOOL_INVOICE_PLAN_KEY } from "@/utils/stripe/school-invoice";
 
 export const runtime = "nodejs";
 
@@ -19,13 +22,21 @@ export const runtime = "nodejs";
 //     school_activate     — the bank-transfer lever: a manual school_onetime
 //                          entitlement held by the school's admin (0102)
 //     school_set_sales    — school_registrations.sales_stage / sales_notes
+//     school_issue_invoice — a Stripe INVOICE at the quoted MYR amount, the
+//                          hosted page being "the payment link"; the webhook's
+//                          invoice.paid branch activates the school when paid
 // Non-staff get 404 (the console isn't probeable). Self/staff targets are
 // refused for destructive actions (footgun guard).
 
 type Body = {
   action?:
     | "suspend" | "unsuspend" | "set_caps" | "set_country" | "takedown" | "restore" | "admin_grant" | "admin_revoke"
-    | "school_suspend" | "school_restore" | "school_extend_trial" | "school_activate" | "school_set_sales";
+    | "school_suspend" | "school_restore" | "school_extend_trial" | "school_activate" | "school_set_sales"
+    | "school_issue_invoice";
+  amountMyr?: number;              // school_issue_invoice: quoted amount in ringgit (major units)
+  dueDays?: number;                // school_issue_invoice (default 30)
+  licenceDays?: number;            // school_issue_invoice (default 365)
+  sendEmail?: boolean;             // school_issue_invoice: let Stripe email it (default true)
   targetId?: string;               // profile id, book/generation id for takedown, school id for school_*
   targetKind?: "book" | "generation"; // takedown/restore only
   maxBooks?: number | null;
@@ -376,6 +387,119 @@ export async function POST(request: Request) {
         after: { sales_stage: patch.sales_stage ?? before?.sales_stage ?? null, notes_len: patch.sales_notes?.length ?? 0 },
       });
       return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "school_issue_invoice") {
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return NextResponse.json(
+          { error: "Stripe is not configured on this deployment (STRIPE_SECRET_KEY). Use Activate for a bank transfer, or add the key first." },
+          { status: 400 },
+        );
+      }
+      const amount = Number(body.amountMyr);
+      if (!Number.isFinite(amount) || amount < 1 || amount > 1_000_000) {
+        return NextResponse.json({ error: "amountMyr must be between 1 and 1,000,000 ringgit." }, { status: 400 });
+      }
+      const amountSen = Math.round(amount * 100);
+      const dueDays = dayVal(body.dueDays, 30, 90);
+      const licenceDays = dayVal(body.licenceDays, 365, 1095);
+      if (dueDays === null || licenceDays === null) {
+        return NextResponse.json({ error: "dueDays must be 1–90 and licenceDays 1–1095." }, { status: 400 });
+      }
+      const sendEmail = body.sendEmail !== false;
+
+      // The invoice is billed to the school's admin — the same adult whose
+      // entitlement row plan_tier() will read (school_activate uses the same
+      // rule): the creator, else the first school_admin.
+      let holder = (school.created_by as string | null) ?? null;
+      if (!holder) {
+        const { data: adminRow } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("school_id", targetId)
+          .eq("role", "school_admin")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        holder = (adminRow?.id as string | undefined) ?? null;
+      }
+      if (!holder) {
+        return NextResponse.json({ error: "This school has no admin account to bill." }, { status: 400 });
+      }
+      let holderEmail: string | null = null;
+      try {
+        const { data: u } = await admin.auth.admin.getUserById(holder);
+        holderEmail = u?.user?.email ?? null;
+      } catch {
+        // billed without an email on the Stripe customer — the founder sends the link by hand
+      }
+
+      // A renewal extends from the current licence end; the webhook applies it.
+      const { data: existing } = await admin
+        .from("entitlements")
+        .select("active, current_period_end")
+        .eq("user_id", holder)
+        .eq("plan_key", SCHOOL_INVOICE_PLAN_KEY)
+        .maybeSingle();
+      const extendFrom =
+        existing?.active && existing.current_period_end && new Date(existing.current_period_end as string).getTime() > nowMs
+          ? (existing.current_period_end as string)
+          : null;
+
+      try {
+        const s = stripe();
+        // FIRST the customer mapping — the webhook refuses any object whose
+        // customer it cannot map back to this user.
+        const customerId = await ensureStripeCustomer(admin, s, {
+          userId: holder,
+          schoolId: targetId,
+          email: holderEmail,
+          role: "school_admin",
+        });
+        const inv = await issueSchoolInvoice(s, {
+          customerId,
+          userId: holder,
+          schoolId: targetId,
+          schoolName: (school.name as string) || "School",
+          amountSen,
+          daysUntilDue: dueDays,
+          licenceDays,
+          extendFrom,
+          issuedBy: staff.id,
+          sendEmail,
+        });
+        await admin.from("school_registrations").upsert(
+          {
+            school_id: targetId,
+            stripe_customer_id: customerId,
+            stripe_invoice_id: inv.invoiceId,
+            hosted_invoice_url: inv.hostedUrl,
+            sales_stage: "invoice_sent",
+            updated_at: nowIso,
+          },
+          { onConflict: "school_id" },
+        );
+        await audit("school_issue_invoice", "school", {
+          holder,
+          invoice: inv.invoiceId,
+          amount_sen: amountSen,
+          due_days: dueDays,
+          licence_days: licenceDays,
+          extend_from: extendFrom,
+          emailed: sendEmail,
+        });
+        return NextResponse.json({
+          ok: true,
+          invoice: inv.invoiceId,
+          url: inv.hostedUrl,
+          pdf: inv.pdfUrl,
+          due: inv.dueDate,
+          emailed: sendEmail,
+        });
+      } catch (e) {
+        console.error("console.school_issue_invoice", { school: targetId, err: (e as Error).message });
+        return NextResponse.json({ error: `Stripe refused the invoice: ${(e as Error).message}` }, { status: 502 });
+      }
     }
 
     return NextResponse.json({ error: "Unknown school action." }, { status: 400 });
