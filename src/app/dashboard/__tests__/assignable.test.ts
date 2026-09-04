@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { STUDENT_KINDS, assignableIds } from "../kit";
+import { DECK_URL_TTL_SECONDS } from "@/app/api/deck/logic";
 import { docDownloadName } from "@/utils/download-name";
 import en from "@/i18n/messages/en.json";
 import ms from "@/i18n/messages/ms.json";
@@ -150,6 +151,16 @@ describe("the student page WIRES the one-deck-per-unit rule, not just the helper
  * 3. The row label came from an English-only map on the page, so the deck
  *    (and every other kind) read in English on the student's own dashboard
  *    while the parent, teacher and diary surfaces were translated.
+ *
+ * The fourth pass (2026-09-05) found two more about the same click, both
+ * pinned here too:
+ * 4. The row rendered the route link even when the PAGE could not build a
+ *    service-role client — and /api/deck builds its own from that same env,
+ *    so every click was a 500 whose JSON body the browser saved as the file,
+ *    over a row that had just written "Completed".
+ * 5. Every refusal reached the student that way: a downloaded JSON body, no
+ *    message on screen, the completion already written, and a retry counted
+ *    as a revision. The click now asks the route first.
  */
 describe("the student's deck click is a download that is honest about its result", () => {
   const item = src("app/dashboard/student-item.tsx");
@@ -160,6 +171,14 @@ describe("the student's deck click is a download that is honest about its result
     // has to reason about, and cannot: see the expiry test below.
     expect(page).toMatch(/\? \[`\/api\/deck\/\$\{g\.id\}`\]/);
     expect(page).toMatch(/g\.kind === "deck"/);
+    // …and only when the page HAS a service role. /api/deck builds its own
+    // from the same env, so a page that could not build one is looking at a
+    // route that will answer 500 to every click. Ungated, the row rendered a
+    // live-looking ⬇ Deck that saved a JSON error and recorded "Completed";
+    // gated, it falls back to the deckWontLoad span and records nothing.
+    // (Every other download on the page is already absent in that state —
+    // `sign` returns null the moment `admin` is null.)
+    expect(page).toMatch(/deckPaths\.length && downloadsReady/);
     // The lesson branch signs its embedded decks BARE — no disposition, the
     // shape those links have always had.
     expect(page).toMatch(/deckPaths\.map\(\(p\) => sign\(p\)\)/);
@@ -171,10 +190,42 @@ describe("the student's deck click is a download that is honest about its result
     expect(docDownloadName("presentation", "deck_pptx")).toBeUndefined();
   });
 
-  it("the anchor carries the download affordance and no target — a disposition download in a new tab strands it", () => {
-    const anchor = /<a href=\{deckUrl\} download onClick=\{\(\) => void openDeck\(\)\}[^>]*>/.exec(item);
-    expect(anchor).not.toBeNull();
-    expect(anchor![0]).not.toMatch(/target=/);
+  it("gates the route link on the service role the route itself needs", () => {
+    // The gate is only a gate if it is decided BEFORE the row is built.
+    const ready = page.indexOf("let downloadsReady = true;");
+    const loop = page.indexOf("for (const g of gens) {");
+    const gate = page.indexOf("deckPaths.length && downloadsReady");
+    expect(ready).toBeGreaterThan(0);
+    expect(ready).toBeLessThan(loop);
+    expect(loop).toBeLessThan(gate);
+    // The same flag the student dashboard already explains to the student.
+    expect(page).toMatch(/downloadsReady=\{downloadsReady\}/);
+    expect(src("app/dashboard/student-dashboard.tsx")).toMatch(/!downloadsReady &&/);
+  });
+
+  it("the deck control is a BUTTON that asks the route first — an anchor cannot wait for an answer", () => {
+    // An anchor navigates whatever the route is about to say, so the row's
+    // onClick wrote "Completed" over refusals that arrived as downloaded
+    // JSON. The click now probes with redirect:"manual" and records only
+    // when deckRouteAgreed (../deck-click.ts) says the route agreed.
+    expect(item).not.toMatch(/<a href=\{deckUrl\}/);
+    const button = /<button\s+onClick=\{\(\) => void openDeck\(\)\}[\s\S]{0,200}?>/.exec(item);
+    expect(button).not.toBeNull();
+    expect(button![0]).not.toMatch(/target=/);
+    expect(item).toMatch(/import \{ deckRouteAgreed \} from "\.\/deck-click";/);
+    const body = item.slice(item.indexOf("async function openDeck("), item.indexOf("const isLesson ="));
+    expect(body).toMatch(/await fetch\(deckUrl, \{ redirect: "manual" \}\)/);
+    // The refusal path returns BEFORE any write — and before markOpen, which
+    // is what turned a retry into a revision.
+    const probe = body.indexOf("if (!deckRouteAgreed(res))");
+    const write = body.indexOf('.from("student_progress")');
+    const revise = body.indexOf("await markOpen();");
+    expect(probe).toBeGreaterThan(0);
+    expect(probe).toBeLessThan(write);
+    expect(probe).toBeLessThan(revise);
+    expect(body).toMatch(/if \(!deckRouteAgreed\(res\)\) \{[\s\S]{0,600}?setError\(t\.item\.deckWontLoad\);\s*return;/);
+    // The download is handed over LAST, after the row has been recorded.
+    expect(body.indexOf("window.location.href = deckUrl;")).toBeGreaterThan(write);
   });
 
   it("holds NO signed URL and runs NO client-side expiry check — the router defeats every version of one", () => {
@@ -183,16 +234,24 @@ describe("the student's deck click is a download that is honest about its result
     // with a FRESH mount clock, so the expired link read as new, the row
     // wrote "Completed", and the download failed at storage. The check is
     // gone, the module it lived in is gone, and the URL it guarded is gone:
-    // the href is a route that mints a one-minute URL when it is followed.
+    // the href is a route that mints a short-lived URL when it is followed.
     expect(item).not.toMatch(/signedUrlExpired|mountedAt|signed-url/);
     expect(existsSync(join(process.cwd(), "src/utils/signed-url.ts"))).toBe(false);
-    expect(src("app/api/deck/logic.ts")).toMatch(/DECK_URL_TTL_SECONDS = 60/);
+    // A BAND, not the literal this used to spell out: the number is the
+    // route's business (deck.test.ts holds the floor and the reason for it —
+    // 60 s outlived the redirect but not the download). What matters HERE is
+    // only that the page is not back to rendering an hour-long link.
+    expect(DECK_URL_TTL_SECONDS).toBeLessThanOrEqual(900);
+    expect(page).not.toMatch(/createSignedUrl\([^)]*3600[^)]*deck/i);
   });
 
   it("shows the write's own failure and leaves the row's status alone", () => {
     const body = item.slice(item.indexOf("async function openDeck("), item.indexOf("const isLesson ="));
     expect(body).toMatch(/const \{ error: pErr \} = await supabase/);
-    expect(body).toMatch(/if \(pErr\) \{\s*setError\(pErr\.message\);\s*return;\s*\}\s*setStatus\("completed"\);/);
+    // The status moves ONLY on a write that landed; a failed one says so and
+    // leaves the badge where it was.
+    expect(body).toMatch(/if \(pErr\) setError\(pErr\.message\);\s*else setStatus\("completed"\);/);
+    expect(body).not.toMatch(/setStatus\("completed"\);[\s\S]*?if \(pErr\)/);
   });
 
   it("the empty state names a load failure, not an unbuilt deck — the same tail as partWontLoad, in every locale", () => {

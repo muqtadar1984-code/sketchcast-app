@@ -390,12 +390,22 @@ export default async function DashboardPage() {
       );
       // A deck-kind row's .pptx is NEVER signed for the client. The row gets
       // the ROUTE /api/deck/{id} instead, which re-checks the share and signs
-      // for one minute at CLICK time (with the "Deck.pptx" disposition that
-      // keeps the click a download). A signed URL rendered into the page is
-      // an hour-long link the row then has to reason about, and it cannot: a
-      // client-router restore hands the row that cached URL with a fresh
-      // mount clock, so an hour-old link looked new, recorded the item
-      // complete, and failed at storage. Same move `quiz` below already made.
+      // at CLICK time (with the "Deck.pptx" disposition that keeps the click a
+      // download). A signed URL rendered into the page is an hour-long link
+      // the row then has to reason about, and it cannot: a client-router
+      // restore hands the row that cached URL with a fresh mount clock, so an
+      // hour-old link looked new, recorded the item complete, and failed at
+      // storage. Same move `quiz` below already made.
+      //
+      // `downloadsReady` GATES IT. The route mints its URL with a service-role
+      // client of its own, built from the same env this page just failed to
+      // build one from — so when this page has no service role, that route
+      // answers 500 for every click. Rendering the link anyway offered a
+      // live-looking download that saved a JSON error body while the row
+      // recorded "Completed"; without it the row falls back to the
+      // deckWontLoad span (and the page's own downloadsNotReady banner says
+      // why), and records nothing. Every OTHER download on this page is
+      // already absent in that state, because `sign` returns null.
       //
       // A presentation's EMBEDDED decks (pre-0103 kits, and the per-part
       // decks a lesson still carries) keep the bare signed URL they always
@@ -403,7 +413,7 @@ export default async function DashboardPage() {
       // refresh and no false completion.
       const decks =
         g.kind === "deck"
-          ? deckPaths.length
+          ? deckPaths.length && downloadsReady
             ? [`/api/deck/${g.id}`]
             : []
           : (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);

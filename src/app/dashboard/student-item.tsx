@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import QuizPlayer, { type StudentQuizData } from "./quiz-player";
 import AskCoach from "./ask-coach";
+import { deckRouteAgreed } from "./deck-click";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 
@@ -320,42 +321,73 @@ export default function StudentItem({
   // writes it no questions_json) and a submission row would be a file
   // answering nothing.
   //
-  // PRODUCT DECISION (for the founder to confirm): completion is recorded on
-  // the CLICK, not on the bytes arriving — the browser hands a download off to
-  // its own manager and tells the page nothing.
+  // THE ROUTE IS ASKED BEFORE ANYTHING IS RECORDED. `deckUrl` for a deck is
+  // /api/deck/{genId} — a route, not a signed URL, so it never goes stale: it
+  // re-checks the share and mints a short-lived signed URL (named Deck.pptx,
+  // so the click stays a download and iOS Safari cannot open the .pptx inline
+  // and unload this row mid-write) at the moment it is followed. But it can
+  // REFUSE — an unassigned deck, a session that expired, a service role that
+  // is down — and every refusal is JSON. As a plain anchor, that JSON landed
+  // in the student's Downloads folder with nothing on screen to explain it,
+  // AFTER this row had written "Completed"; clicking again then counted as a
+  // revision. So the click probes first (`redirect: "manual"`,
+  // deckRouteAgreed) and a refusal shows the load-failure line and records
+  // NOTHING.
   //
-  // That is honest because the click no longer depends on anything this row
-  // is holding. `deckUrl` for a deck is the ROUTE /api/deck/{genId}, which
-  // never goes stale: it re-checks the share and mints a one-minute signed URL
-  // (named Deck.pptx, so the click stays a download and iOS Safari cannot
-  // open the .pptx inline and unload this row mid-write) at the moment it is
-  // followed. The first cut rendered an hour-long signed URL here and tried to
-  // refuse a stale one on the client by measuring the link's age from this
-  // row's mount — which a client-router restore defeats exactly: back/forward
-  // remounts the row with the CACHED hour-old URL and a fresh mount clock, so
-  // the expired link passed, the row said "Completed", and the download failed
-  // at storage. There is no client-side version of that check that works, so
-  // there is no check here.
+  // PRODUCT DECISION (for the founder to confirm): completion is still
+  // recorded on the route's agreement, not on the bytes arriving — the
+  // browser hands a download off to its own manager and tells the page
+  // nothing. The probe is what makes that honest: the row now knows the file
+  // was there and was this student's to have.
   //
-  // The write's failure is SHOWN (the file path already does this; the first
-  // version discarded it) and the row's status is left alone, so a failed
-  // save never looks like a saved one. The download itself still goes ahead —
-  // the deck is the student's either way.
+  // The write's failure is SHOWN and the row's status is left alone, so a
+  // failed save never looks like a saved one. The download still goes ahead —
+  // the deck is the student's either way — and it is started LAST, because a
+  // download is the one thing here that could take the page with it.
   async function openDeck() {
+    if (!deckUrl || busy) return;
     setError(null);
-    if (status === "completed" || status === "revised") return markOpen();
-    const at = new Date().toISOString();
-    const { error: pErr } = await supabase
-      .from("student_progress")
-      .upsert(
-        { ...base, status: "completed", opened_at: at, completed_at: at, progress_pct: 100 },
-        { onConflict: "generation_id,student_id" },
-      );
-    if (pErr) {
-      setError(pErr.message);
-      return;
+    setBusy(true);
+    try {
+      let res: Response;
+      try {
+        // The probe spends one signed URL it never reads; the navigation
+        // below asks the route for another. Two mints, both cheap, and no
+        // window in which the row is holding a link it cannot vouch for.
+        res = await fetch(deckUrl, { redirect: "manual" });
+      } catch {
+        setError(t.item.deckWontLoad);
+        return;
+      }
+      if (!deckRouteAgreed(res)) {
+        // Deliberately the dictionary's line, not the route's own sentence:
+        // the route answers in English (it is read by no one else), and a
+        // child reading Telugu must not be handed it. Every refusal a student
+        // can actually hit — the share pulled, the session gone, the signing
+        // down — is fixed or explained by the same reload.
+        setError(t.item.deckWontLoad);
+        return;
+      }
+      if (status === "completed" || status === "revised") {
+        await markOpen();
+      } else {
+        const at = new Date().toISOString();
+        const { error: pErr } = await supabase
+          .from("student_progress")
+          .upsert(
+            { ...base, status: "completed", opened_at: at, completed_at: at, progress_pct: 100 },
+            { onConflict: "generation_id,student_id" },
+          );
+        if (pErr) setError(pErr.message);
+        else setStatus("completed");
+      }
+      // The signed URL's Content-Disposition makes this a download, so the
+      // page stays put; a bare navigation is still how the browser is handed
+      // the file, exactly as the anchor used to do it.
+      window.location.href = deckUrl;
+    } finally {
+      setBusy(false);
     }
-    setStatus("completed");
   }
 
   const isLesson = item.kind === "presentation";
@@ -363,10 +395,12 @@ export default function StudentItem({
   // For a DECK row this is /api/deck/{genId} — a route, not a signed URL, the
   // same way `item.quiz` is a route rather than a link to questions.json. For
   // a LESSON it is still that unit's embedded deck, signed at render. A deck
-  // row is a single part-unit, so the first entry is the one. Absent means the
-  // generation carried no deck_pptx when the page read it — a share only
-  // exists once the row was "done", so that is a read that came back short,
-  // which a refresh fixes; it is never an unbuilt deck.
+  // row is a single part-unit, so the first entry is the one. Absent means
+  // one of two things, and both are load failures a reload can fix, never an
+  // unbuilt deck (a share only exists once the row was "done"): the
+  // generation carried no deck_pptx when the page read it, or the page had no
+  // service role — in which case /api/deck has none either and would refuse
+  // every click, so it is not offered.
   const deckUrl = item.decks?.[0] ?? item.deck;
   const done = status === "completed" || status === "revised" || submitted;
   const overdue = item.dueOverdue && !done;
@@ -440,15 +474,22 @@ export default function StudentItem({
           </>
         ) : isDeck ? (
           deckUrl ? (
-            // `download` matches the ⬇ affordance; what the browser actually
-            // obeys once the route redirects cross-origin is the signed URL's
-            // own Content-Disposition, which /api/deck sets. Deliberately NO
-            // target="_blank": the Library's rule for a disposition download
-            // (content-cell.tsx) — it would strand an empty tab, and the
-            // disposition already keeps this page in place.
-            <a href={deckUrl} download onClick={() => void openDeck()} className="font-medium text-[#0C8175] hover:underline">
+            // A BUTTON, not an anchor: the click has to hear back from
+            // /api/deck before this row records anything (openDeck), and an
+            // anchor's navigation cannot be conditional on an answer that has
+            // not arrived. What makes the hand-off a download once openDeck
+            // navigates is the signed URL's own Content-Disposition, which
+            // /api/deck sets. Still deliberately no new tab: the Library's
+            // rule for a disposition download (content-cell.tsx) — it would
+            // strand an empty tab, and the disposition already keeps this
+            // page in place.
+            <button
+              onClick={() => void openDeck()}
+              disabled={busy}
+              className="font-medium text-[#0C8175] hover:underline disabled:opacity-50"
+            >
               ⬇ {t.item.deck}
-            </a>
+            </button>
           ) : (
             <span className="text-[#98A0A9]">{t.item.deckWontLoad}</span>
           )
