@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { pickOption, previewSlug, SCHOOL_TYPES, SIZE_BANDS, REGISTRANT_ROLES, CURRICULA } from "../school-registration-options";
 import en from "../../i18n/messages/en.json";
 
-describe("previewSlug — what the form promises matches what 0042/0100 mint", () => {
+describe("previewSlug — what the form promises matches what 0042/0101 mint", () => {
   it("lowercases, collapses runs of non-alphanumerics, trims dashes", () => {
     expect(previewSlug("Sekolah  Kebangsaan (Taman) Bukit!")).toBe("sekolah-kebangsaan-taman-bukit");
     expect(previewSlug("  ABC School  ")).toBe("abc-school");
   });
   it("falls back for a name with nothing usable — and 'school' is itself reserved, so it lands on school-school", () => {
-    // Same two steps as the DB: school_slugify() → 'school', then the 0100
-    // reserved-slug rule appends -school. Before 0100 such a school got the
+    // Same two steps as the DB: school_slugify() → 'school', then the 0101
+    // reserved-slug rule appends -school. Before 0101 such a school got the
     // bare slug `school`, which the portal proxy never routed to a tenant.
     expect(previewSlug("!!!")).toBe("school-school");
     expect(previewSlug("学校")).toBe("school-school");

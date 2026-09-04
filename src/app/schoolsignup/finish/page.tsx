@@ -10,7 +10,7 @@ import { countryFromHeaders } from "@/utils/geo";
 import { schoolHostname } from "@/utils/school-routing";
 
 // Both signup paths (email + Google) land here after auth to set up the
-// school (0100, Phase 3). A Server Component: it resolves the copy, the edge's
+// school (0101, Phase 3). A Server Component: it resolves the copy, the edge's
 // country guess and the Turnstile site key, and hands them to the form.
 export default async function SchoolFinishPage() {
   const supabase = await createClient();

@@ -1,5 +1,9 @@
--- 0100 — self-serve school registration: a school becomes a BOUNDED tenant the
+-- 0101 — self-serve school registration: a school becomes a BOUNDED tenant the
 -- moment it is created (a 30-day trial), and the tiers that make that true.
+--
+-- APPLIED TO PROD 2026-09-03 under the history name `0100_school_self_serve_trial`
+-- (supabase_migrations version 20260903120051). Renumbered to 0101 in the repo
+-- the next day: a book-delete migration landed on main as 0100 first. Same SQL.
 --
 -- WHY. /schoolsignup has been public since 0042 and creates a school with just
 -- a name. Nothing distinguishes that school from a paying one except the
@@ -54,7 +58,7 @@ alter table public.schools
   add column if not exists meta             jsonb not null default '{}'::jsonb;
 
 -- Derived once, for the console's "same organisation?" flags. NULL when there
--- is no contact (every pre-0100 school).
+-- is no contact (every pre-0101 school).
 alter table public.schools
   add column if not exists email_domain text
     generated always as (nullif(lower(split_part(coalesce(contact_email, ''), '@', 2)), '')) stored;
@@ -81,9 +85,9 @@ create index if not exists schools_trial_ends_idx
   on public.schools (trial_ends_at) where trial_ends_at is not null;
 
 comment on column public.schools.trial_ends_at is
-  '0100: NULL = no trial clock (legacy/seeded/staff-activated). Set only by self-serve registration and the console. plan_tier() reads it AFTER the paid entitlement check, so expiry can never override a paying school.';
+  '0101: NULL = no trial clock (legacy/seeded/staff-activated). Set only by self-serve registration and the console. plan_tier() reads it AFTER the paid entitlement check, so expiry can never override a paying school.';
 comment on column public.schools.meta is
-  '0100: member-readable qualification data from the registration form — source, school_type, size_band, curricula, name_key. Nothing private: see school_registrations.';
+  '0101: member-readable qualification data from the registration form — source, school_type, size_band, curricula, name_key. Nothing private: see school_registrations.';
 
 -- ── 2. school_registrations: the private half of a registration ─────────────
 -- Console-only. No policies, no client grants — service role reads and writes.
@@ -210,7 +214,7 @@ $function$
     ('family',    12, 0, 2),           -- 2 kits — sold as "Home Basic" (plan_key unchanged)
     ('homeschool',48, 0, 4),           -- 8 kits, 4 books/month, 10 learners
     ('school',    2147483647, 2147483647, 2147483647),
-    -- 0100: school states. school_trial is a PERIOD budget for the whole trial
+    -- 0101: school states. school_trial is a PERIOD budget for the whole trial
     -- (any mix of kinds — docs_cap has been retired since 0059), counted from
     -- school_trial_anchor(); the two locked states are hard-stopped in the
     -- enforcers before these zeros are ever read.
@@ -225,7 +229,7 @@ create or replace function public.plan_tier(uid uuid) returns text
   language sql stable security definer set search_path = public as
 $function$
   select coalesce(
-    -- 0100 (1): a suspended school locks every member — paid or not. This is
+    -- 0101 (1): a suspended school locks every member — paid or not. This is
     -- the console kill switch; nothing below can out-rank it.
     (select 'school_suspended'
      from profiles p join schools s on s.id = p.school_id
@@ -259,13 +263,13 @@ $function$
        when e.plan_key like 'family%'           then 5
        else 6 end
      limit 1),
-    -- 0100 (4): a school inside its trial window.
+    -- 0101 (4): a school inside its trial window.
     (select 'school_trial'
      from profiles p join schools s on s.id = p.school_id
      where p.id = uid and s.trial_ends_at is not null and s.trial_ends_at > now()),
-    -- 0100 (5): the clock ran out and nothing was paid — read-only until the
+    -- 0101 (5): the clock ran out and nothing was paid — read-only until the
     -- console activates it. A school with NO clock (every school that predates
-    -- 0100) skips (4) and (5) and resolves exactly as it did before.
+    -- 0101) skips (4) and (5) and resolves exactly as it did before.
     (select 'school_expired'
      from profiles p join schools s on s.id = p.school_id
      where p.id = uid and s.trial_ends_at is not null and s.trial_ends_at <= now()),
@@ -294,7 +298,7 @@ declare
 begin
   tier := plan_tier(new.owner_id);
 
-  -- 0100: the locked school states are decided FIRST. Suspension is the console
+  -- 0101: the locked school states are decided FIRST. Suspension is the console
   -- kill switch, so it sits above even the console cap override; expiry sits
   -- just below that override (a blessed account stays blessed). Both must come
   -- before the exam and revision-paper branches, which return without ever
@@ -362,7 +366,7 @@ begin
       end if;
       return new;
     end if;
-    -- 0100: the school trial is a period total from its anchor, not a month.
+    -- 0101: the school trial is a period total from its anchor, not a month.
     if tier = 'school_trial' then
       if fair_use_used_since(new.owner_id, school_trial_anchor(new.owner_id)) >= eff_cap then
         raise exception 'Your school''s free trial includes % generations, and you''ve used them all. Ask your SketchCast contact to activate the school to keep generating.',
@@ -449,7 +453,7 @@ begin
           eff_cap;
       end if;
     elsif tier = 'school_trial' then
-      -- 0100: same period budget as the lesson path.
+      -- 0101: same period budget as the lesson path.
       if fair_use_used_since(new.owner_id, school_trial_anchor(new.owner_id)) >= eff_cap then
         raise exception 'Your school''s free trial includes % generations, and you''ve used them all. Ask your SketchCast contact to activate the school to keep generating.',
           eff_cap;
@@ -478,7 +482,7 @@ declare
 begin
   tier := plan_tier(new.owner_id);
 
-  -- 0100: locked school states. Uploads stop; nothing already on the shelf is
+  -- 0101: locked school states. Uploads stop; nothing already on the shelf is
   -- touched. Only new rows are refused — service-role UPDATEs (indexing, health,
   -- chapter heals) run with auth.uid() NULL and must keep flowing, and the
   -- per-tier UPDATE branches below already refuse a member's own re-upload.
@@ -518,7 +522,7 @@ begin
     return new;
   end if;
 
-  -- 0100: the school trial — the promo shape, anchored at the school's trial
+  -- 0101: the school trial — the promo shape, anchored at the school's trial
   -- start. A period total, so it cannot reset on the 1st.
   if tier = 'school_trial'
      and (select max_books from profiles where id = new.owner_id) is null then
@@ -635,15 +639,15 @@ begin
   end if;
   tier := plan_tier(uid);
 
-  -- 0100: the school's trial end, as the meter's date. NULL for every school
+  -- 0101: the school's trial end, as the meter's date. NULL for every school
   -- without a clock, and for everyone outside a school.
   select to_char(s.trial_ends_at at time zone 'UTC', 'YYYY-MM-DD') into trial_end
     from profiles p join schools s on s.id = p.school_id
    where p.id = uid;
 
-  -- 0100: locked states, in the enforcers' order — suspension above the
+  -- 0101: locked states, in the enforcers' order — suspension above the
   -- console override, expiry below it. `locked` is the meter's cue; the zero
-  -- bucket keeps the pre-0100 readers rendering something sane.
+  -- bucket keeps the pre-0101 readers rendering something sane.
   if tier = 'school_suspended' then
     return jsonb_build_object(
       'tier', tier, 'unlimited', false, 'locked', true,
@@ -691,7 +695,7 @@ begin
     );
   end if;
 
-  -- 0100: the school trial reads like promo did — a period budget with an end
+  -- 0101: the school trial reads like promo did — a period budget with an end
   -- date — under its own flag so the meter can word the next step honestly
   -- ("ask us to activate", not "subscribe").
   if tier = 'school_trial' then

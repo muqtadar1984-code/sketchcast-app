@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// School levers (0100, Phase 2) — POSTs /api/console/ops with the school id as
+// School levers (0101, Phase 2) — POSTs /api/console/ops with the school id as
 // targetId. Same shape as the user page's OpsControls so the two panels
 // cannot drift: one `call`, one error line, router.refresh() on success.
 

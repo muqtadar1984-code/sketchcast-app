@@ -115,7 +115,7 @@ describe("the staff override", () => {
   });
 });
 
-describe("the self-serve school states (0100)", () => {
+describe("the self-serve school states (0101)", () => {
   it("a trial school gets the board, via the school — the founder's call, 2026-09-03", () => {
     expect(presentAccess(facts({ tier: "school_trial" }))).toEqual({ ok: true, via: "school" });
     expect(presentAccess(facts({ role: "school_admin", tier: "school_trial" }))).toEqual({ ok: true, via: "school" });

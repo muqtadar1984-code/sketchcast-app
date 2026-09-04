@@ -12,12 +12,12 @@ export const runtime = "nodejs";
 //   set_country          — profiles.country (0085), stamped country_source='staff'
 //   takedown / restore   — soft-delete a book or generation (recoverable)
 //   admin_grant / admin_revoke — platform_admins membership (FOUNDERS only)
-//   school_* (0100)      — targetId is a SCHOOL id:
+//   school_* (0101)      — targetId is a SCHOOL id:
 //     school_suspend / school_restore — schools.status; plan_tier() branch 1,
 //                          beats even a paid entitlement (the kill switch)
 //     school_extend_trial — trial_ends_at += days (from now if already past)
 //     school_activate     — the bank-transfer lever: a manual school_onetime
-//                          entitlement held by the school's admin (0101)
+//                          entitlement held by the school's admin (0102)
 //     school_set_sales    — school_registrations.sales_stage / sales_notes
 // Non-staff get 404 (the console isn't probeable). Self/staff targets are
 // refused for destructive actions (footgun guard).
@@ -245,7 +245,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // ── School-targeted actions (0100, Phase 2) ─────────────────────────────────
+  // ── School-targeted actions (0101, Phase 2) ─────────────────────────────────
   // targetId is the school id. Every action lands in platform_audit_log with
   // target_kind 'school'; the school page reads that trail back.
   if (typeof body.action === "string" && body.action.startsWith("school_")) {
@@ -275,7 +275,7 @@ export async function POST(request: Request) {
       const currentEnd = school.trial_ends_at ? new Date(school.trial_ends_at as string).getTime() : 0;
       const end = new Date(Math.max(nowMs, currentEnd) + days * 86400000).toISOString();
       const patch: Record<string, string> = { trial_ends_at: end };
-      // A school that never had a clock (pre-0100) gets its anchor stamped now,
+      // A school that never had a clock (pre-0101) gets its anchor stamped now,
       // so the trial budget counts from today, not from the school's creation.
       if (!school.trial_started_at) patch.trial_started_at = nowIso;
       const { error } = await admin.from("schools").update(patch).eq("id", targetId);
@@ -330,11 +330,11 @@ export async function POST(request: Request) {
       );
       if (error) {
         const msg = error.message.includes("provider")
-          ? "Manual activation needs migration 0101 applied first."
+          ? "Manual activation needs migration 0102 applied first."
           : error.message;
         return NextResponse.json({ error: msg }, { status: 500 });
       }
-      // Money landed — the pipeline says so too. A pre-0100 school has no
+      // Money landed — the pipeline says so too. A pre-0101 school has no
       // registration row yet; the upsert creates it.
       await admin
         .from("school_registrations")

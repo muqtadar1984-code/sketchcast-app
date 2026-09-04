@@ -31,11 +31,11 @@ type FairUse = {
   /** 0060: the launch free-trial period — every feature, a period-total cap. */
   promo?: boolean;
   trial_ends?: string;
-  /** 0100: a self-serve school inside its 30-day trial — same period-total
+  /** 0101: a self-serve school inside its 30-day trial — same period-total
    * shape as promo, under its own flag so the next step reads "ask us to
    * activate", never "subscribe". */
   school_trial?: boolean;
-  /** 0100: school_expired / school_suspended — generation is blocked, everything
+  /** 0101: school_expired / school_suspended — generation is blocked, everything
    * made stays readable. The bucket arrives as zeros. */
   locked?: boolean;
   resets_on: string;
@@ -199,7 +199,7 @@ const PRICING_URL = "https://sketchcast.app/pricing";
 // lets the pill grow instead of spilling. whitespace-nowrap would NOT be the
 // fix — it only trades a vertical overflow for a horizontal one.
 const BTN_PRIMARY = "btn-primary min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
-// The school cards' second action (0100): the same address the marketing
+// The school cards' second action (0101): the same address the marketing
 // site's school CTA has always used — a school's next step is a conversation.
 const BTN_GHOST = "btn-ghost min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
 const CONTACT_MAILTO = "mailto:sales@sketchcast.app";
@@ -363,7 +363,7 @@ export default async function FairUseMeter() {
   const dateLabel = (iso: string) =>
     new Date(`${iso}T00:00:00Z`).toLocaleDateString(lang, { month: "short", day: "numeric" });
 
-  // 0100: a school whose trial ended, or a suspended school. The DB refuses
+  // 0101: a school whose trial ended, or a suspended school. The DB refuses
   // every generation; this card says why and offers the one honest next step.
   // No plans link and no packs: a school does not subscribe on the marketing
   // page, it gets activated by us. The card is the dashboard's banner for
@@ -389,7 +389,7 @@ export default async function FairUseMeter() {
     );
   }
 
-  // 0100: the school trial — promo's shape (a period budget with an end date),
+  // 0101: the school trial — promo's shape (a period budget with an end date),
   // school's words. The next step is "ask us to activate", never "subscribe".
   if (fu.school_trial && fu.credits) {
     return (

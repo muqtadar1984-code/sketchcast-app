@@ -1,4 +1,4 @@
-// The vocabulary of the school registration form (0100, Phase 3) — PURE, so the
+// The vocabulary of the school registration form (0101, Phase 3) — PURE, so the
 // client form and the server route import the same sets. (Exporting these from
 // the "use client" form would hand the route client-reference proxies, not
 // values — the boundary src/__tests__/server-client-boundary.test.ts guards.)
@@ -27,7 +27,7 @@ export function pickOption<T extends string>(v: unknown, allowed: readonly T[]):
 }
 
 /** The slug the DB will mint for a school name — 0042's school_slugify plus
- * 0100's reserved-slug rule — for the address preview on the form. The "-2"
+ * 0101's reserved-slug rule — for the address preview on the form. The "-2"
  * uniquifier for a taken slug cannot be previewed. */
 export function previewSlug(name: string): string {
   const base =

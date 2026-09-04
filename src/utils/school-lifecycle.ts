@@ -1,4 +1,4 @@
-// Pure derivations for the console's school views (0100, Phase 2). Mirrors the
+// Pure derivations for the console's school views (0101, Phase 2). Mirrors the
 // SCHOOL branches of plan_tier() so the console can never disagree with the
 // enforcer about what state a school is in — and keeps that logic testable
 // without a database. Nothing here renders prose: the pages word it.
@@ -9,7 +9,7 @@ export type SchoolState = { status: string; trial_ends_at: string | null };
 export type EntitlementRow = { active: boolean; plan_key: string | null; current_period_end: string | null };
 
 /** plan_tier() order, school branches only: suspended > paid > trial > expired
- * > legacy (no clock — every school that predates 0100). A member's OWN paid
+ * > legacy (no clock — every school that predates 0101). A member's OWN paid
  * plan sits between paid and trial in plan_tier(), but that is a per-member
  * fact, not a school state, so it has no place here. */
 export function schoolLifecycle(s: SchoolState, ents: EntitlementRow[], now: Date): SchoolLifecycle {

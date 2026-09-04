@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 // "Request activation" on the fair-use meter's school-trial and expired cards
-// (0100, Phase 3). One POST to /api/school/request-activation; the server
+// (0101, Phase 3). One POST to /api/school/request-activation; the server
 // stamps the request and emails the founder. Idempotent on the server, so a
 // second click (or a second admin) is harmless — the button just says thanks.
 export default function RequestActivationButton({

@@ -9,7 +9,7 @@ import { COUNTRY_CODES } from "@/utils/countries";
 import { SCHOOL_TYPES, SIZE_BANDS, REGISTRANT_ROLES, CURRICULA, previewSlug } from "@/utils/school-registration-options";
 import Turnstile from "@/components/turnstile";
 
-// Step two of "Create your school's workspace" (0100, Phase 3): everything
+// Step two of "Create your school's workspace" (0101, Phase 3): everything
 // about the SCHOOL, in one screen. The account already exists and the email is
 // confirmed by the time this renders. POSTs /api/school-finish, which does the
 // only writes.
