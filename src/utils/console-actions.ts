@@ -9,6 +9,26 @@ export type RemindSegment = "no_upload" | "no_generation";
  * or automated (lifecycle_emails) — disables manual sending for 3 days. */
 export const REMIND_COOLDOWN_DAYS = 3;
 
+/**
+ * The largest per-teacher cap the console may set (`set_caps` in
+ * /api/console/ops). It is the ONLY place in this repo's TypeScript that
+ * carries this number.
+ *
+ * It is load-bearing beyond the form. Since migration 0105 a comp override of
+ * at least a THRESHOLD — held once, in `premium_voices_allowed()` in
+ * supabase/migrations/0105_premium_voices_threshold.sql — also unlocks the
+ * premium narration voices. That threshold is deliberately NOT repeated here:
+ * the database is the only thing that knows it, which is what stops the app
+ * and the worker drifting apart.
+ *
+ * But the two numbers are related, and nothing in the type system says so:
+ * if this ceiling ever drops BELOW the threshold, comping a teacher into the
+ * premium voices becomes impossible through the console and nothing would
+ * fail. src/__tests__/premium-voices-migration.test.ts reads the threshold out
+ * of the migration and pins `CAP_CEILING >= threshold` for exactly that reason.
+ */
+export const CAP_CEILING = 100000;
+
 const DAY_MS = 86_400_000;
 
 /**

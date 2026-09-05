@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { founderEmails, isPlatformAdminRequest } from "@/utils/platform-admin";
 import { isCountryCode } from "@/utils/countries";
+import { CAP_CEILING } from "@/utils/console-actions";
 import { stripe } from "@/utils/stripe/client";
 import { ensureStripeCustomer } from "@/utils/stripe/customer";
 import { issueSchoolInvoice, SCHOOL_INVOICE_PLAN_KEY } from "@/utils/stripe/school-invoice";
@@ -52,11 +53,15 @@ type Body = {
 
 const SALES_STAGES = ["new", "contacted", "invoice_sent", "paid", "lost"];
 
+// The ceiling is CAP_CEILING, not a literal, because it is also the smallest
+// comp that buys the premium voices since 0105 — see the constant's note in
+// src/utils/console-actions.ts. Dropping it below the migration's threshold
+// would silently make that comp ungrantable from here.
 function capVal(v: unknown): number | null | undefined {
   if (v === undefined) return undefined;
   if (v === null) return null;
   const n = Number(v);
-  return Number.isInteger(n) && n >= 0 && n <= 100000 ? n : undefined;
+  return Number.isInteger(n) && n >= 0 && n <= CAP_CEILING ? n : undefined;
 }
 
 /** Whole days in [1, max]; the default when absent; null when given but invalid. */
@@ -192,7 +197,7 @@ export async function POST(request: Request) {
     if (ms !== undefined) patch.max_students = ms;
     if (mk !== undefined) patch.max_children = mk;
     if (Object.keys(patch).length === 0) {
-      return NextResponse.json({ error: "No valid caps given (0–100000 or null)." }, { status: 400 });
+      return NextResponse.json({ error: `No valid caps given (0–${CAP_CEILING} or null).` }, { status: 400 });
     }
     const { error: cErr } = await admin.from("profiles").update(patch).eq("id", targetId);
     if (cErr) {

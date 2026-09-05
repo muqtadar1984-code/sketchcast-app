@@ -221,8 +221,10 @@ export default function BookTable({
       stronger "your only trial kit" line. NOT beta_tester — that flag goes
       stale on upgrade. */
   trial?: boolean;
-  /** Paid plan or comp override (my_fair_use): the voice pickers offer
-      premium voices and kit reuse predicts the premium default. */
+  /** my_fair_use().premium_voices (0105) — a paid plan, or a comp override at
+      or above the threshold: the voice pickers offer premium voices and kit
+      reuse predicts the premium default. A SMALLER comp override is still
+      `unlimited` for metering, but is not this. */
   premiumVoices?: boolean;
 }) {
   // Expand the only book by default; otherwise everything starts collapsed.

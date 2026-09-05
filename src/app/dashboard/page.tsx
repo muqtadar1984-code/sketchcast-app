@@ -557,12 +557,14 @@ export default async function DashboardPage() {
   let premiumVoices = false;
   {
     const { data: fu } = await supabase.rpc("my_fair_use");
-    const f = fu as { tier?: string; unlimited?: boolean } | null;
+    const f = fu as { tier?: string; unlimited?: boolean; premium_voices?: boolean } | null;
     trialTier = f?.tier === "trial";
-    // Premium voices in the picker follow the PLAN — a paid tier or the comp
-    // override — the same allow-list the worker's gate enforces. Free and
-    // trial accounts see free voices; `auto` still gives everyone the right
-    // language.
+    // Premium voices in the picker follow the DATABASE's one answer — 0105's
+    // premium_voices_allowed(): a paid tier, or a comp override at or above the
+    // threshold that function carries. my_fair_use() reports it as
+    // `premium_voices`; the worker's gate asks the same function, so the picker
+    // and the render agree. Free and trial accounts see free voices; `auto`
+    // still gives everyone the right language.
     premiumVoices = premiumVoicesFor(f);
   }
 
