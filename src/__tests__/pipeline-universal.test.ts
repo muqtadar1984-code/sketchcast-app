@@ -46,7 +46,10 @@ describe("book upload + generation is one shared, universal path", () => {
     expect(uploaders.sort()).toEqual([...ALLOWED_UPLOADERS].sort());
   });
 
-  it("every generation entry point relies on the DB trigger (never creates its own job) so the shared worker path always runs", () => {
+  // 20s, not the 5s default: this walks every source file under src/ and the
+  // tree keeps growing (the deck route and its tests pushed it over). A slow
+  // scan is not a failing invariant.
+  it("every generation entry point relies on the DB trigger (never creates its own job) so the shared worker path always runs", { timeout: 20_000 }, () => {
     // Files that insert a `generations` row must NOT also insert a `jobs` row —
     // the on_generation_created trigger owns that, uniformly for all roles. A
     // hand-rolled job insert could diverge (wrong type, skip the pipeline).
