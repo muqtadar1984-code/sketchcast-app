@@ -30,7 +30,8 @@ export type CreditPack = {
   credits: number;
   /** One-time price, USD (Lemon Squeezy is the USD/consumer provider). */
   priceUsd: number;
-  /** How many six-piece kits the credits amount to — the founder's shorthand. */
+  /** How many kits the credits amount to — the founder's shorthand. A kit is
+   * seven pieces but costs 6 credits, so the divisor is 6, not the kit size. */
   kits: number;
   /** LS hosted-checkout URL, or null while the product doesn't exist yet. */
   checkoutUrl: string | null;

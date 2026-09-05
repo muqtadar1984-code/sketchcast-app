@@ -412,7 +412,7 @@
     "betaBanner": {
       "welcome": "Welcome to SketchCast!",
       "body": "Your free trial includes {trial}. Classes, assigning, reviewing, and analytics are all unlimited. Questions?",
-      "trial": "1 book and the full kit — video lesson, plan, activities, worksheet, test paper and case study — for one part of one chapter"
+      "trial": "1 book and the full kit — video lesson, slide deck, plan, activities, worksheet, test paper and case study — for one part of one chapter"
     },
     "tour": {
       "teacher_onboarding": {
@@ -871,13 +871,13 @@
       "premiumSuffix": " ★ premium",
       "assignChapter": "Assign chapter",
       "generateFullKit": "Generate full kit",
-      "generateFullKitHint": "The video lesson plus its plan, activities, worksheet, test paper and case study — documents free, one credit per rendered lesson part",
-      "generateFree": "Generate ({n}) — free",
-      "generateFreeHint": "Free — these reuse the lesson's analysis",
+      "generateFullKitHint": "The video lesson plus its slide deck, plan, activities, worksheet, test paper and case study — the slide deck is free; every other piece costs one credit, and a long lesson one per rendered part",
+      "generateFree": "Generate ({n})",
+      "generateFreeHint": "These reuse the lesson's analysis. The slide deck is free; every other piece costs one credit.",
       "trialLocked": "Trial: 1 part — locked",
-      "trialLockedHint": "Your free trial covers the full kit (all six content types) for one part of one chapter",
+      "trialLockedHint": "Your free trial covers the full kit (all seven content types) for one part of one chapter",
       "trialPick": "Trial: pick one part below",
-      "trialPickHint": "This chapter is split into parts — your trial covers the full kit (all six content types) for one part of your choice",
+      "trialPickHint": "This chapter is split into parts — your trial covers the full kit (all seven content types) for one part of your choice",
       "trialPinned": "Trial: Part {n} is your kit",
       "trialPinnedHint": "Your trial kit lives on this part — retries and every content type for it stay open"
     },
@@ -1805,7 +1805,7 @@
     "title": "Fair use this month",
     "resets": "resets {date} · unused allowance carries one month forward",
     "lessons": "Generations",
-    "kitFree": "A lesson, plan, activities, worksheet, test paper or case study — each counts as one.",
+    "kitFree": "A lesson, plan, activities, worksheet, test paper or case study — each counts as one. The slide deck is free.",
     "usage": "{used} of {cap}",
     "usageCarried": "{used} of {cap} +{carry} carried",
     "trialTitle": "Free trial — every feature unlocked",

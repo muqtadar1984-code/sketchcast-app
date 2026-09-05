@@ -1,8 +1,12 @@
 import { defaultParams } from "./options-spec";
 import { AUTO_VOICE, DEFAULT_STYLE } from "@/utils/narration";
 
-// One lesson credit = the lesson plus its FREE document kit (0059). This
-// builds the rows a single "Generate kit" click queues. The presentation row
+// The rows a single "Generate kit" click queues: SEVEN artifacts costing SIX
+// credits. 0059 shipped the documents free; 0075 made every artifact a credit
+// and only the deck has ridden free since (0103 left 'deck' out of
+// credit_ledger_write, fair_use_used and fair_use_used_since). Any copy that
+// still says "documents free" is wrong — the ledger is the authority.
+// The presentation row
 // MUST stay first: the DB's docs-ride-with-their-lesson guard checks for an
 // existing lesson row, and rows inserted earlier in the same statement are
 // visible to the later rows' triggers — order is load-bearing.

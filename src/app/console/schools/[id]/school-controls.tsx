@@ -104,7 +104,7 @@ export default function SchoolControls({
           {trialEndsAt
             ? `Trial ends ${trialEndsAt.slice(0, 10)}. Extending adds days to that date, or to today if it has already passed.`
             : "This school has no trial clock (it predates self-serve). Extending gives it one, starting today — its members move from the individual trial to the school trial."}
-          {" "}The 12-generation budget is not reset by an extension; comp credits from the user page for more.
+          {" "}The 14-generation budget is not reset by an extension; comp credits from the user page for more.
         </p>
         <div className="flex items-end gap-2">
           <label className="block">
