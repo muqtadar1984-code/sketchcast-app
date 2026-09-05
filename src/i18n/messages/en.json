@@ -111,6 +111,7 @@
     "subtitle": "Everything your teacher has assigned to you.",
     "downloadsNotReady": "Downloads aren't available yet — ask your teacher to finish setup.",
     "empty": "Nothing assigned yet. Check back after your teacher shares a lesson.",
+    "noChapter": "Lessons",
     "status": {
       "completed": "Completed",
       "revised": "Revised",
@@ -129,6 +130,7 @@
       "partWontLoad": "Part {n} couldn't load — refresh the page",
       "deck": "Deck",
       "deckPart": "Deck Pt {n}",
+      "deckWontLoad": "Deck couldn't load — refresh the page",
       "assistant": "Assistant",
       "open": "Open",
       "takeQuiz": "Take quiz",
@@ -540,6 +542,7 @@
       },
       "kinds": {
         "presentation": "Video lesson",
+        "deck": "Deck",
         "activity": "Activities",
         "worksheet": "Worksheet",
         "exam_paper": "Test paper",
@@ -1615,6 +1618,7 @@
       "chapterLabel": "{kind} · Ch {n}",
       "kind": {
         "presentation": "Lesson",
+        "deck": "Deck",
         "worksheet": "Worksheet",
         "examPaper": "Test paper",
         "exam": "Exam",
@@ -1639,6 +1643,7 @@
       "noTestPapers": "No test papers assigned yet — create one under Test Papers.",
       "kind": {
         "presentation": "Video lesson",
+        "deck": "Deck",
         "activity": "Activities",
         "worksheet": "Worksheet",
         "examPaper": "Test paper",

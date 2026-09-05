@@ -13,6 +13,28 @@ import { AUTO_VOICE, DEFAULT_STYLE } from "@/utils/narration";
 // to nothing — the deck takes no options.
 export const DOC_KINDS = ["deck", "lesson_plan", "activity", "worksheet", "exam_paper", "case_study"] as const;
 
+// The kinds a STUDENT is handed — what every Assign control collects out of a
+// kit: the lesson, the worksheet and the test paper (founder 2026-07-19), and
+// since 2026-09-04 the slide deck too ("students get decks similar to
+// worksheets"). The teacher plan, the class activities and the case study are
+// teaching aids and never travel. Three Assign sites (the part card, the
+// chapter row, the chapter row's per-part roll-up) used to each carry their
+// own copy of this list; the deck was the kind that showed why one list is
+// better than three.
+export const STUDENT_KINDS = ["presentation", "deck", "worksheet", "exam_paper"] as const;
+
+/** The generation ids an Assign control sends: the student kinds that have
+ * FINISHED building. A queued or failed row has nothing to hand over yet; a
+ * null slot is a kind the kit never had. The caller passes the slots in
+ * STUDENT_KINDS order so the shares land in that order too. */
+export function assignableIds(
+  lessons: ReadonlyArray<{ id: string; status: string } | null | undefined>,
+): string[] {
+  return lessons
+    .filter((l): l is { id: string; status: string } => !!l && l.status === "done")
+    .map((l) => l.id);
+}
+
 /** One generations insert row — wide types so mixed batches unify cleanly. */
 export type GenerationRow = {
   kind: string;
@@ -104,6 +126,41 @@ export function deckParams(opts: {
     ...(language ? { language } : {}),
   };
   return Object.keys(params).length ? params : null;
+}
+
+/** The unit a generation belongs to — one book, one chapter, one part (a
+ * chapter with no part map is its own single part, 1). The same key for a
+ * lesson and for the deck that rides with it. */
+export type UnitRow = { book_id: string | null; chapter_ref: string | null; params: { part?: unknown } | null };
+
+export function unitKey(g: UnitRow): string {
+  const part = g.params?.part;
+  return `${g.book_id ?? ""}|${g.chapter_ref ?? ""}|${typeof part === "number" && part >= 1 ? part : 1}`;
+}
+
+/**
+ * The units whose deck a STUDENT gets as its own row: every assigned
+ * deck-kind generation (0103). A pre-0103 kit kept its deck embedded on the
+ * presentation (deck_pptx artifacts on the lesson row); a chapter that has
+ * BOTH — its lesson from before the deck kind, its deck re-queued since — must
+ * offer the deck once, on the deck row, because only that row's link records
+ * the download (the lesson row's embedded link records nothing). This mirrors
+ * the adult Library's rule (lesson-card: `deckGen ? [] : legacyDecks`).
+ */
+export function assignedDeckUnits(
+  gens: ReadonlyArray<UnitRow & { id: string; kind: string }>,
+  assigned: (genId: string) => boolean,
+): Set<string> {
+  const units = new Set<string>();
+  for (const g of gens) if (g.kind === "deck" && assigned(g.id)) units.add(unitKey(g));
+  return units;
+}
+
+/** The deck links a student row shows: a presentation whose unit has an
+ * assigned deck row shows NONE (that row carries the deck); every other row
+ * keeps what it had. Pure — the caller signs only what survives. */
+export function studentDeckLinks<T>(g: UnitRow & { kind: string }, deckUnits: ReadonlySet<string>, own: T[]): T[] {
+  return g.kind === "presentation" && deckUnits.has(unitKey(g)) ? [] : own;
 }
 
 /** One queued kit: a chapter, or one PART of it. */

@@ -111,6 +111,7 @@
     "subtitle": "Tudo o que seu professor passou para você.",
     "downloadsNotReady": "Os downloads ainda não estão disponíveis — peça ao seu professor para concluir a configuração.",
     "empty": "Nada por aqui ainda. Volte depois que seu professor compartilhar uma aula.",
+    "noChapter": "Aulas",
     "status": {
       "completed": "Concluída",
       "revised": "Revisada",
@@ -129,6 +130,7 @@
       "partWontLoad": "A Parte {n} não carregou — atualize a página",
       "deck": "Slides",
       "deckPart": "Slides Pt {n}",
+      "deckWontLoad": "Os slides não carregaram — atualize a página",
       "assistant": "Assistente",
       "open": "Abrir",
       "takeQuiz": "Fazer o quiz",
@@ -540,6 +542,7 @@
       },
       "kinds": {
         "presentation": "Videoaula",
+        "deck": "Slides",
         "activity": "Atividades",
         "worksheet": "Exercícios",
         "exam_paper": "Prova",
@@ -1612,6 +1615,7 @@
       "chapterLabel": "{kind} · Cap. {n}",
       "kind": {
         "presentation": "Aula",
+        "deck": "Slides",
         "worksheet": "Exercícios",
         "examPaper": "Prova",
         "exam": "Exame",
@@ -1636,6 +1640,7 @@
       "noTestPapers": "Nenhuma prova atribuída ainda — crie uma em Provas.",
       "kind": {
         "presentation": "Videoaula",
+        "deck": "Slides",
         "activity": "Atividades",
         "worksheet": "Exercícios",
         "examPaper": "Prova",

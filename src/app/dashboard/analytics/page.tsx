@@ -15,6 +15,7 @@ import { fmt } from "@/i18n/format";
 // to the raw code rather than a blank label.
 const KIND_KEY: Record<string, keyof Dictionary["school"]["myAnalytics"]["kind"]> = {
   presentation: "presentation",
+  deck: "deck",
   worksheet: "worksheet",
   exam_paper: "examPaper",
   exam: "exam",

@@ -23,11 +23,19 @@ const DOC_NAME: Record<string, string> = {
 
 /**
  * The filename a signed URL should download as, or undefined to leave the URL
- * untouched. Only document artifacts get a name: videos, decks and quiz JSON
- * must stay disposition-free — a download disposition on the Watch link would
- * break in-tab playback.
+ * untouched. Only document artifacts get a name: videos, a lesson's embedded
+ * decks and quiz JSON must stay disposition-free — a download disposition on
+ * the Watch link would break in-tab playback.
+ *
+ * The one non-docx that IS named is the deck generation's own .pptx (kind
+ * 'deck', 0103). Nothing plays a .pptx in-tab, and the disposition is what
+ * keeps a student's click a download: without it, iOS Safari opens the file
+ * inline in the SAME tab (Quick Look), unloading the dashboard mid-write. A
+ * presentation's embedded deck_pptx (pre-0103 kits, and the per-part decks a
+ * lesson still carries) keeps its bare URL — those links never changed shape.
  */
 export function docDownloadName(genKind: string | null | undefined, artifactKind: string): string | undefined {
+  if (artifactKind === "deck_pptx") return genKind === "deck" ? "Deck.pptx" : undefined;
   if (artifactKind === "answer_key_docx") {
     // Since the student/teacher document split (2026-08-18) every document
     // kind can carry a key, so the key is prefixed with its paper's name —

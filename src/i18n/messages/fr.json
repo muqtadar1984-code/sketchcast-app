@@ -111,6 +111,7 @@
     "subtitle": "Tout ce que ton enseignant t'a donné à faire.",
     "downloadsNotReady": "Les téléchargements ne sont pas encore disponibles — demande à ton enseignant de terminer la configuration.",
     "empty": "Rien à faire pour l'instant. Reviens quand ton enseignant aura partagé une leçon.",
+    "noChapter": "Leçons",
     "status": {
       "completed": "Terminé",
       "revised": "Révisé",
@@ -129,6 +130,7 @@
       "partWontLoad": "La partie {n} n'a pas pu se charger — actualise la page",
       "deck": "Diapos",
       "deckPart": "Diapos P{n}",
+      "deckWontLoad": "Les diapos n'ont pas pu se charger — actualise la page",
       "assistant": "Assistant",
       "open": "Ouvrir",
       "takeQuiz": "Faire le quiz",
@@ -540,6 +542,7 @@
       },
       "kinds": {
         "presentation": "Leçon vidéo",
+        "deck": "Diapos",
         "activity": "Activités",
         "worksheet": "Fiche d'exercices",
         "exam_paper": "Contrôle",
@@ -1612,6 +1615,7 @@
       "chapterLabel": "{kind} · ch. {n}",
       "kind": {
         "presentation": "Leçon",
+        "deck": "Diapos",
         "worksheet": "Fiche d'exercices",
         "examPaper": "Contrôle",
         "exam": "Examen",
@@ -1636,6 +1640,7 @@
       "noTestPapers": "Aucun contrôle attribué — créez-en un dans Contrôles.",
       "kind": {
         "presentation": "Leçon vidéo",
+        "deck": "Diapos",
         "activity": "Activités",
         "worksheet": "Fiche d'exercices",
         "examPaper": "Contrôle",

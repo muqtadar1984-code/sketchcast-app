@@ -7,7 +7,7 @@ import ContentCell, { type CellLesson } from "./content-cell";
 import { kindLabel, type LibraryMessages } from "./labels";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import { defaultParams } from "./options-spec";
-import { kitRows, lessonLanguageOf, type GenerationRow } from "./kit";
+import { STUDENT_KINDS, assignableIds, kitRows, lessonLanguageOf, type GenerationRow } from "./kit";
 import {
   AUTO_VOICE,
   LANGUAGES,
@@ -143,15 +143,12 @@ export default function ChapterGenerate({
   const chosen = pendingKinds.filter((k) => sel[k]);
   const toggle = (kind: string) => setSel((s) => ({ ...s, [kind]: !s[kind] }));
 
-  // "Assign chapter" sends the student-workable items that are ready: the
-  // lesson, the worksheet and the test paper (founder 2026-07-19). The teacher
-  // plan, class activities and case study are teaching aids, never assigned.
-  const studentKinds = ["presentation", "worksheet", "exam_paper"];
-  const assignableIds = [
-    ...studentKinds
-      .map((k) => lessons[k])
-      .filter((l): l is CellLesson => !!l && l.status === "done")
-      .map((l) => l.id),
+  // "Assign chapter" sends the student-workable items that are ready — the
+  // lesson, the deck, the worksheet and the test paper (STUDENT_KINDS; the
+  // teacher plan, class activities and case study are teaching aids, never
+  // assigned) — plus the same kinds from every per-part row beneath.
+  const assignable = [
+    ...assignableIds(STUDENT_KINDS.map((k) => lessons[k])),
     ...extraAssignableIds,
   ];
 
@@ -316,9 +313,9 @@ export default function ChapterGenerate({
 
   const actions = (
     <span className="ms-auto flex items-center gap-3">
-      {assignableIds.length > 0 && (
+      {assignable.length > 0 && (
         <span data-tour="assign-chapter">
-          <AssignModal label={t.kit.assignChapter} generationIds={assignableIds} classes={classes} childTargets={childTargets} t={t} />
+          <AssignModal label={t.kit.assignChapter} generationIds={assignable} classes={classes} childTargets={childTargets} t={t} />
         </span>
       )}
       {kitPending && (

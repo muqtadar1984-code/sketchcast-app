@@ -111,6 +111,7 @@
     "subtitle": "Todo lo que te ha asignado tu profesor.",
     "downloadsNotReady": "Las descargas aún no están disponibles — pídele a tu profesor que termine la configuración.",
     "empty": "Aún no tienes nada asignado. Vuelve cuando tu profesor comparta una lección.",
+    "noChapter": "Lecciones",
     "status": {
       "completed": "Completada",
       "revised": "Repasada",
@@ -129,6 +130,7 @@
       "partWontLoad": "La parte {n} no se pudo cargar — actualiza la página",
       "deck": "Diapositivas",
       "deckPart": "Diapos {n}",
+      "deckWontLoad": "Las diapositivas no se pudieron cargar — actualiza la página",
       "assistant": "Asistente",
       "open": "Abrir",
       "takeQuiz": "Hacer el test",
@@ -540,6 +542,7 @@
       },
       "kinds": {
         "presentation": "Videolección",
+        "deck": "Diapositivas",
         "activity": "Actividades",
         "worksheet": "Hoja de trabajo",
         "exam_paper": "Prueba",
@@ -1612,6 +1615,7 @@
       "chapterLabel": "{kind} · Cap. {n}",
       "kind": {
         "presentation": "Lección",
+        "deck": "Diapositivas",
         "worksheet": "Hoja de trabajo",
         "examPaper": "Prueba",
         "exam": "Examen",
@@ -1636,6 +1640,7 @@
       "noTestPapers": "Todavía no hay pruebas asignadas — cree una en Exámenes.",
       "kind": {
         "presentation": "Videolección",
+        "deck": "Diapositivas",
         "activity": "Actividades",
         "worksheet": "Hoja de trabajo",
         "examPaper": "Prueba",

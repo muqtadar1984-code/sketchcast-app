@@ -34,6 +34,7 @@ import { fmt } from "@/i18n/format";
 
 const KIND_ICON: Record<string, string> = {
   presentation: "🎬",
+  deck: "🖼️",
   activity: "🧩",
   worksheet: "📝",
   exam_paper: "🧪",

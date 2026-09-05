@@ -7,7 +7,8 @@ import UploadBook from "./upload-book";
 import AutoRefresh from "./auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
-import { statusLabel, type LibraryMessages } from "./labels";
+import { kindLabel, statusLabel, type LibraryMessages } from "./labels";
+import { assignedDeckUnits, studentDeckLinks } from "./kit";
 import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
@@ -44,17 +45,6 @@ import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 import { premiumVoicesFor } from "@/utils/narration";
-
-const KIND_LABEL: Record<string, string> = {
-  presentation: "Lesson",
-  deck: "Deck",
-  worksheet: "Worksheet",
-  exam_paper: "Test paper",
-  exam: "Exam",
-  activity: "Activities",
-  case_study: "Case study",
-  lesson_plan: "Lesson plan",
-};
 
 type Chapter = { num: number; title: string; parts?: { titles?: string[]; words?: number }[] | null };
 
@@ -264,6 +254,18 @@ export default async function DashboardPage() {
   // FEATURE_NOTICES, so this really can be false while notices are live.
   const diaryReachable = diaryEnabled() && !!role;
 
+  // The Library's words, resolved ONCE here and threaded down the whole client
+  // tree as one object: every cell, card and modal below is a client component,
+  // so they take the strings as a prop rather than importing the (server-only)
+  // dictionary. resolveLocale is React-cached, so asking here costs nothing
+  // beyond what the header already paid. Resolved BEFORE the student branch:
+  // a student's row label ("Lesson", "Deck · Part 2") and chapter headings
+  // are built from the same `library` words the adult surfaces use, so the
+  // dashboard itself reads in the family's language, not just its rows.
+  const locale = await resolveLocale();
+  const dict = await getDictionary(locale);
+  const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
+
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
   // those artifacts with the service role since the storage policy only lets the
@@ -316,7 +318,10 @@ export default async function DashboardPage() {
       downloadsReady = false;
     }
     // `download` bakes a Content-Disposition filename into the signed URL —
-    // only documents pass one; video/deck/quiz URLs must stay untouched.
+    // documents pass one (docDownloadName decides); video URLs and a lesson's
+    // embedded decks must stay untouched. A deck-kind row's own .pptx is not
+    // signed here at all any more: /api/deck/{id} signs it on the click, and
+    // names it there.
     const sign = async (path: string | null, download?: string): Promise<string | null> => {
       if (!path || !admin) return null;
       const { data } = await admin.storage
@@ -347,13 +352,23 @@ export default async function DashboardPage() {
     // (server component, rendered once per request — Date.now is fine here)
     // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
-    for (const g of (gensRaw ?? []) as GenRow[]) {
+    const gens = (gensRaw ?? []) as GenRow[];
+    // The units whose deck arrives as its own assigned row (kind 'deck'): a
+    // lesson from before 0103 still carries that unit's deck EMBEDDED, and
+    // offering it twice put the recording link (the deck row's) next to one
+    // that records nothing (the lesson row's). Same rule as the Library's.
+    const deckUnits = assignedDeckUnits(gens, (id) => shareByGen.has(id));
+    for (const g of gens) {
       const info = shareByGen.get(g.id);
       if (!info || g.kind === "lesson_plan") continue; // only assigned, never the teacher plan
       const arts = g.artifacts ?? [];
       const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
       const prog = progByGen.get(g.id);
       // Multi-part lessons: every video/deck part, in PART order (Part 1 first).
+      // A deck-kind generation (0103, assignable since 2026-09-04) comes
+      // through the same lines: its one deck_pptx lands in `deck`/`decks`, it
+      // has no video, no docx and no questions_json, so `doc` and `quiz` stay
+      // null and StudentItem renders it as a download alone.
       // NULL SLOTS ARE KEPT for videos: parts.length must always equal the true
       // part count — silently dropping a transiently-unsignable URL would shift
       // part numbering and corrupt the per-part progress math (a student could
@@ -363,19 +378,57 @@ export default async function DashboardPage() {
         .map((a) => a.storage_path)
         .sort((a, b) => partNum(a) - partNum(b));
       const videos = await Promise.all(videoPaths.map((p) => sign(p)));
-      const deckPaths = arts
-        .filter((a) => a.kind === "deck_pptx")
-        .map((a) => a.storage_path)
-        .sort((a, b) => partNum(a) - partNum(b));
-      const decks = (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);
+      // A presentation whose unit has an assigned deck row keeps NO embedded
+      // deck link (studentDeckLinks) — and nothing is signed for it.
+      const deckPaths = studentDeckLinks(
+        g,
+        deckUnits,
+        arts
+          .filter((a) => a.kind === "deck_pptx")
+          .map((a) => a.storage_path)
+          .sort((a, b) => partNum(a) - partNum(b)),
+      );
+      // A deck-kind row's .pptx is NEVER signed for the client. The row gets
+      // the ROUTE /api/deck/{id} instead, which re-checks the share and signs
+      // at CLICK time (with the "Deck.pptx" disposition that keeps the click a
+      // download). A signed URL rendered into the page is an hour-long link
+      // the row then has to reason about, and it cannot: a client-router
+      // restore hands the row that cached URL with a fresh mount clock, so an
+      // hour-old link looked new, recorded the item complete, and failed at
+      // storage. Same move `quiz` below already made.
+      //
+      // `downloadsReady` GATES IT. The route mints its URL with a service-role
+      // client of its own, built from the same env this page just failed to
+      // build one from — so when this page has no service role, that route
+      // answers 500 for every click. Rendering the link anyway offered a
+      // live-looking download that saved a JSON error body while the row
+      // recorded "Completed"; without it the row falls back to the
+      // deckWontLoad span (and the page's own downloadsNotReady banner says
+      // why), and records nothing. Every OTHER download on this page is
+      // already absent in that state, because `sign` returns null.
+      //
+      // A presentation's EMBEDDED decks (pre-0103 kits, and the per-part
+      // decks a lesson still carries) keep the bare signed URL they always
+      // had: they record nothing when clicked, so a stale one costs a
+      // refresh and no false completion.
+      const decks =
+        g.kind === "deck"
+          ? deckPaths.length && downloadsReady
+            ? [`/api/deck/${g.id}`]
+            : []
+          : (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);
       // Per-part lesson units: label carries the part so three assigned
-      // "Lesson"s of one chapter read as Part 1/2/3, not three clones.
+      // "Lesson"s of one chapter read as Part 1/2/3, not three clones. Both
+      // halves come from the dictionary (the kind via kindLabel — the message
+      // keys ARE the kind strings, `deck` included), so the row reads in the
+      // student's language on the dashboard itself, not only on the adult
+      // surfaces that report on it.
       const genPart = g.params?.part;
-      const partLabel = typeof genPart === "number" && genPart >= 1 ? ` · Part ${genPart}` : "";
+      const partLabel = typeof genPart === "number" && genPart >= 1 ? ` · ${fmt(t.part, { n: genPart })}` : "";
       items.push({
         genId: g.id,
         kind: g.kind,
-        label: `${KIND_LABEL[g.kind] ?? g.kind}${partLabel}`,
+        label: `${kindLabel(t, g.kind)}${partLabel}`,
         dueAt: info.due,
         dueOverdue: !!info.due && new Date(info.due).getTime() < now,
         classId: info.classId,
@@ -438,12 +491,13 @@ export default async function DashboardPage() {
           .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0))
           .map(([chKey, its]) => ({
             key: chKey,
-            // Prefer the chapter's real title ("Unit 1: Be a designer").
+            // Prefer the chapter's real title ("Unit 1: Be a designer"); the
+            // fallbacks are dictionary words, like the row labels.
             heading:
               chKey === "—"
-                ? "Lessons"
+                ? dict.student.noChapter
                 : chapterTitle.get(`${its[0]?.bookId}|${Number(chKey)}`) ||
-                  `Chapter ${Number(chKey) + 1}`,
+                  fmt(t.chapter, { n: Number(chKey) + 1 }),
             items: its,
           })),
       }));
@@ -475,14 +529,8 @@ export default async function DashboardPage() {
   }
 
   // ── Teacher / parent library ──────────────────────────────────────────────
-  // The Library's words, resolved ONCE here and threaded down the whole client
-  // tree as one object: every cell, card and modal below is a client component,
-  // so they take the strings as a prop rather than importing the (server-only)
-  // dictionary. resolveLocale is React-cached, so asking here costs nothing
-  // beyond what the header already paid.
-  const locale = await resolveLocale();
-  const dict = await getDictionary(locale);
-  const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
+  // (`locale`, `dict` and `t` — the Library's words — were resolved above the
+  // student branch, which shares them.)
 
   // Parent-role accounts (home educators): the Assign modal targets their
   // LINKED CHILDREN, not classes — a family has named learners, not a class

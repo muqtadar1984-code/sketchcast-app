@@ -418,7 +418,7 @@ export default function BookTable({
                           case_study: ch.caseStudy,
                         }}
                         extraAssignableIds={ch.parts
-                          .flatMap((p) => [p.presentation, p.worksheet, p.exam])
+                          .flatMap((p) => [p.presentation, p.deck, p.worksheet, p.exam])
                           .filter((l): l is CellLesson => !!l && l.status === "done")
                           .map((l) => l.id)}
                         bookLanguage={b.language}

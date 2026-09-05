@@ -111,6 +111,7 @@
     "subtitle": "Semua yang diberikan oleh guru anda.",
     "downloadsNotReady": "Muat turun belum tersedia — minta guru anda melengkapkan persediaan.",
     "empty": "Belum ada tugasan. Semak semula selepas guru anda berkongsi pelajaran.",
+    "noChapter": "Pelajaran",
     "status": {
       "completed": "Selesai",
       "revised": "Diulang kaji",
@@ -129,6 +130,7 @@
       "partWontLoad": "Bahagian {n} tidak dapat dimuatkan — muat semula halaman",
       "deck": "Slaid",
       "deckPart": "Slaid Bhg {n}",
+      "deckWontLoad": "Slaid tidak dapat dimuatkan — muat semula halaman",
       "assistant": "Pembantu",
       "open": "Buka",
       "takeQuiz": "Jawab kuiz",
@@ -540,6 +542,7 @@
       },
       "kinds": {
         "presentation": "Pelajaran video",
+        "deck": "Slaid",
         "activity": "Aktiviti",
         "worksheet": "Lembaran kerja",
         "exam_paper": "Kertas ujian",
@@ -1612,6 +1615,7 @@
       "chapterLabel": "{kind} · Bab {n}",
       "kind": {
         "presentation": "Pelajaran",
+        "deck": "Slaid",
         "worksheet": "Lembaran kerja",
         "examPaper": "Kertas ujian",
         "exam": "Peperiksaan",
@@ -1636,6 +1640,7 @@
       "noTestPapers": "Belum ada kertas ujian ditugaskan — cipta satu di bawah Kertas Ujian.",
       "kind": {
         "presentation": "Pelajaran video",
+        "deck": "Slaid",
         "activity": "Aktiviti",
         "worksheet": "Lembaran kerja",
         "examPaper": "Kertas ujian",

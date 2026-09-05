@@ -25,6 +25,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   loadPaperWith,
   optionOrderKey,
@@ -659,6 +661,30 @@ const permOf = (source: readonly string[], served: readonly string[]) => served.
  * A space would NOT do: "Captures light" has one. */
 const NUL = String.fromCharCode(0);
 
+/* WHY TWO TESTS IN HERE CARRY THEIR OWN TIMEOUT (2026-09-05).
+ *
+ * The attack sweeps below serve a whole paper 200 and 300 times over, and
+ * every service goes through `optionOrderSeed` → `crypto.subtle` — so each
+ * round is an importKey plus a sign, ~1000 WebCrypto calls between the two
+ * tests. Node runs those on the libuv threadpool (4 threads by default), which
+ * is shared by every vitest worker in the run.
+ *
+ * Alone, the file finishes them in 61–644 ms across repeated runs. In the FULL
+ * suite (92 files, all of them competing for the same four threads) both blew
+ * through the 5000 ms default and reported "Test timed out in 5000ms".
+ *
+ * That is a slow test, not a failing one, and the difference matters: nothing
+ * in either assertion depends on time, ordering or luck. Both are pure
+ * functions of an HMAC — same key, same scope, same digest, same permutation,
+ * every run on every machine. A timeout here can only ever mean "the box was
+ * busy"; it can never mean "the shuffle leaked".
+ *
+ * So the headroom is added and the ASSERTIONS ARE UNTOUCHED — the sweeps still
+ * run their full 200 and 300 rounds, and still demand `recovered === 0` and
+ * >150 distinct orders. Per test rather than a global `testTimeout`, so the
+ * other 1500 tests keep the default and a genuine hang still surfaces fast. */
+const CRYPTO_SWEEP_TIMEOUT_MS = 30000;
+
 describe("the match option order", () => {
   it("WAS recoverable with zero probes under the old public seed (the defect, reproduced)", () => {
     // Not hypothetical: this is the entire attack against the shipped code.
@@ -682,7 +708,7 @@ describe("the match option order", () => {
       expect([...options].sort()).toEqual([...RIGHTS6].sort());
     }
     expect(recovered).toBe(0);
-  });
+  }, CRYPTO_SWEEP_TIMEOUT_MS);
 
   it("is not reproduced by ANY seed a student can assemble from public material", async () => {
     const options = await servedOptions(match6(RIGHTS6), KEY, `${GEN}:${STU}`);
@@ -705,7 +731,7 @@ describe("the match option order", () => {
     for (let i = 0; i < 300; i++)
       orders.add((await servedOptions(match6(RIGHTS6), `server-only-secret-#${i}`, `${GEN}:${STU}`)).join(NUL));
     expect(orders.size).toBeGreaterThan(150);
-  });
+  }, CRYPTO_SWEEP_TIMEOUT_MS);
 
   it("does not seed from the answer material, so no brute force can self-verify", async () => {
     // The rejected alternative was to digest the PAIRS: secret-looking, and
@@ -772,5 +798,42 @@ describe("the option-order key", () => {
     // route already shows for a missing service-role key: never a config leak.
     expect(res).toMatchObject({ ok: false, status: 500, error: "Quizzes are unavailable right now." });
     expect(res).not.toMatchObject({ ok: true });
+  });
+});
+
+// ── 8. the headroom is headroom, not a loosened assertion ───────────────────
+
+/* The two crypto sweeps above carry a 30 s timeout because the full suite
+ * starves the libuv threadpool they run on, not because they were flaky — see
+ * the note above `CRYPTO_SWEEP_TIMEOUT_MS`.
+ *
+ * The failure mode a timeout raise invites is the quiet one: someone hits it
+ * again next year and "fixes" it by cutting the sweep to 20 rounds, or by
+ * relaxing `recovered === 0`, and the suite stays green over a shuffle that
+ * leaks. So the sweeps' SHAPE is pinned here — the round counts and both
+ * thresholds — and so is the fact that the extra time was granted to exactly
+ * these two tests rather than to the whole run. */
+describe("the crypto sweeps' headroom", () => {
+  const self = readFileSync(new URL(import.meta.url), "utf8");
+
+  it("grants the extra time to the two sweeps and to nothing else", () => {
+    expect(CRYPTO_SWEEP_TIMEOUT_MS).toBeGreaterThanOrEqual(20000);
+    expect(self.match(/\}, CRYPTO_SWEEP_TIMEOUT_MS\);/g) ?? []).toHaveLength(2);
+    // NOT a global relaxation: every other test in the repo keeps the 5 s
+    // default, so a real hang still surfaces in seconds.
+    expect(readFileSync(join(process.cwd(), "vitest.config.ts"), "utf8")).not.toMatch(/testTimeout/);
+  });
+
+  it("leaves the sweeps at full strength — the rounds and both thresholds", () => {
+    // 200 independent chances for the zero-probe attack, and it must recover
+    // NOTHING. Not "few": none.
+    expect(self).toMatch(/for \(let i = 0; i < 200; i\+\+\)/);
+    expect(self).toMatch(/expect\(recovered\)\.toBe\(0\);/);
+    // 300 different server keys, >150 distinct orders — the order moving with
+    // a secret the student does not hold.
+    expect(self).toMatch(/for \(let i = 0; i < 300; i\+\+\)/);
+    expect(self).toMatch(/expect\(orders\.size\)\.toBeGreaterThan\(150\);/);
+    // And no one has quietly excused either sweep instead of timing it.
+    expect(self).not.toMatch(/it\.(skip|todo)\(/);
   });
 });
