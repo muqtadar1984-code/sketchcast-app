@@ -132,7 +132,13 @@ describe("premium voices — plan and provider", () => {
   afterEach(() => vi.unstubAllEnvs());
   const paid = { premium: true };
 
-  it("the paid allow-list is the worker's PAID_TIERS; trial, promo and school_trial are not paid", () => {
+  // 0105 moved the decision into the database (premium_voices_allowed: a paid
+  // tier, or a comp override of 100000+). What this case now pins is the
+  // FALLBACK the app uses when my_fair_use() carries no `premium_voices` key —
+  // an un-migrated database, i.e. the window between deploy and migration.
+  // The full truth table lives in premium-voice-gate.test.ts, shared with the
+  // worker.
+  it("with no answer from the database, the paid allow-list decides — and only it", () => {
     expect([...PAID_VOICE_TIERS].sort()).toEqual(["family", "homeschool", "pro", "pro_plus", "school"]);
     for (const tier of ["pro", "pro_plus", "family", "homeschool", "school"]) {
       expect(premiumVoicesFor({ tier })).toBe(true);
@@ -140,9 +146,18 @@ describe("premium voices — plan and provider", () => {
     for (const tier of ["trial", "promo", "school_trial", "school_expired", "legacy", ""]) {
       expect(premiumVoicesFor({ tier })).toBe(false);
     }
-    expect(premiumVoicesFor({ tier: "unlimited", unlimited: true })).toBe(true); // comp override
+    // WAS `true` before 0105, and that was the bug: `unlimited` is set by a
+    // comp override of ANY size, so 11 seeded 20-book accounts counted as paid.
+    // The fallback must never reach back to it.
+    expect(premiumVoicesFor({ tier: "unlimited", unlimited: true })).toBe(false);
     expect(premiumVoicesFor(null)).toBe(false);
     expect(premiumVoicesFor(undefined)).toBe(false);
+  });
+
+  it("the database's answer, when present, is the answer", () => {
+    expect(premiumVoicesFor({ tier: "unlimited", unlimited: true, premium_voices: true })).toBe(true);
+    expect(premiumVoicesFor({ tier: "unlimited", unlimited: true, premium_voices: false })).toBe(false);
+    expect(premiumVoicesFor({ tier: "pro", premium_voices: false })).toBe(false);
   });
 
   it("families come from the id prefix, like the worker's registry", () => {

@@ -204,15 +204,36 @@ export function shownPremiumProviders(): Set<VoiceProvider> {
 }
 
 /** Paid plans as plan_tier / my_fair_use name them — the same allow-list the
- * worker's gate enforces (PAID_TIERS). `unlimited` is the comp override
- * (max_books / max_chapters set), which the worker also treats as paid.
- * Trial, promo, school_trial and expired plans are NOT paid. */
+ * worker's gate enforces (PAID_TIERS). Trial, promo, school_trial and expired
+ * plans are NOT paid.
+ *
+ * Since 0105 this list is only the FALLBACK: the database decides (see below).
+ * Kept exported because that fallback, and the worker's own, are both this
+ * list, and a test pins them equal. */
 export const PAID_VOICE_TIERS: ReadonlySet<string> = new Set(["pro", "pro_plus", "family", "homeschool", "school"]);
+
+/** May this account use the premium voices?
+ *
+ * The DATABASE decides, once, for both halves of the product: migration 0105
+ * added `premium_voices_allowed(uid)` — a paid tier, or a comp override of at
+ * least the threshold that function alone carries — and my_fair_use() now
+ * reports its answer as `premium_voices` in every branch it returns. The
+ * worker asks the same function (worker/client.py resolve_tier →
+ * tier_info["premium"]), so the picker and the render cannot disagree.
+ *
+ * If the key is ABSENT the database has not run 0105 yet — the window between
+ * this deploy and the migration. Degrade to PAID TIERS ONLY. Deliberately NOT
+ * back to the old `fairUse.unlimited === true` rule: `unlimited` is true for a
+ * comp override of ANY size (measured on prod: 18 accounts, of which 11 are
+ * seeded ones capped at 20 books), and handing those 11 the premium voices is
+ * precisely the over-grant 0105 exists to remove. Under-offering for a few
+ * minutes is a smaller wrong, and the worker refuses them anyway. */
 export function premiumVoicesFor(
-  fairUse: { tier?: string; unlimited?: boolean } | null | undefined,
+  fairUse: { tier?: string; unlimited?: boolean; premium_voices?: boolean } | null | undefined,
 ): boolean {
   if (!fairUse) return false;
-  return fairUse.unlimited === true || PAID_VOICE_TIERS.has(fairUse.tier ?? "");
+  if (typeof fairUse.premium_voices === "boolean") return fairUse.premium_voices;
+  return PAID_VOICE_TIERS.has(fairUse.tier ?? "");
 }
 
 // Premium voices are offered ONLY to accounts whose plan allows them (opts.premium)
