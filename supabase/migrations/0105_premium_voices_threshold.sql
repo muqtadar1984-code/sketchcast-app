@@ -40,6 +40,28 @@
 --
 -- Idempotent. Requires 0101 (school trial states in my_fair_use).
 
+-- RE-CHECK THE BASE BODY BEFORE APPLYING. This file is a DIFF of the
+-- my_fair_use() that is running, and `create or replace` has no guard: if
+-- anything redefines that function between now and the moment this is applied,
+-- applying it silently reverts that change. Measured read-only 2026-09-05,
+-- twice (second time after the adversarial review):
+--
+--   md5(pg_get_functiondef(...)) = 9181329080e1f6f44b1802a628ff4f1b
+--   md5(prosrc)                  = 3a0b4a8e7c0d9a2f042d572e7e0f54c4  (3834 bytes)
+--   newest applied migration     = 20260905054301  (0104, applied by the WORKER repo)
+--
+-- If either md5 differs at apply time, STOP and re-diff: take pg_get_functiondef,
+-- strip this file's four declared additions back out (the `-- 0105:` comment,
+-- `premium boolean;`, `premium := premium_voices_allowed(uid);`, and the
+-- `'premium_voices', premium` pair in each returned object — the early
+-- `unlimited` return carries it inline as `, 'premium_voices', premium)`),
+-- normalise the `0101:`/`pre-0101` comment tokens back to `0100:`/`pre-0100`
+-- (prod's applied name for that migration is 0100_school_self_serve_trial;
+-- this repo renumbered it), and the remainder must match byte for byte.
+-- src/__tests__/premium-voices-migration.test.ts does the same arithmetic
+-- against the repo's 0101 on every run — but it cannot see prod, so the check
+-- above is the one that matters on apply day.
+
 -- ── 1. The threshold, once ───────────────────────────────────────────────────
 -- SECURITY INVOKER on purpose. Its two real callers already have the reach
 -- they need — my_fair_use() is SECURITY DEFINER (the definer's rights carry
@@ -82,6 +104,25 @@ comment on function public.premium_voices_allowed(uuid) is
   'override of at least the threshold held inside this function. The single '
   'source of truth for both the app (via my_fair_use().premium_voices) and '
   'the worker (via RPC).';
+
+-- WHO MAY CALL IT. Supabase's default ACL for a function postgres creates in
+-- `public` is {postgres, anon, authenticated, service_role} — measured on prod
+-- 2026-09-05 (pg_default_acl, defaclobjtype 'f'). So without the two lines
+-- below this function would ship EXECUTABLE BY ANY SIGNED-IN USER, which is
+-- exactly the leak the SECURITY INVOKER note above says it does not want: a
+-- browser client could ask whether SOMEONE ELSE is comped, for every profile
+-- row RLS lets it see (self, a school_admin's whole school, a teacher's
+-- students, a parent's children). And it would not even answer cleanly — the
+-- fall-through calls plan_tier(), which `authenticated` may not execute, so a
+-- non-comped row raises "permission denied" instead of returning false.
+--
+-- Locked to the same ACL plan_tier and school_trial_anchor already carry
+-- (measured: {postgres=X, service_role=X}). Both real callers keep working:
+-- my_fair_use() is SECURITY DEFINER owned by postgres, and privilege is
+-- checked against the DEFINER, not the caller; the worker holds service_role.
+-- `create or replace` preserves an existing ACL, so this is idempotent too.
+revoke execute on function public.premium_voices_allowed(uuid) from public, anon, authenticated;
+grant execute on function public.premium_voices_allowed(uuid) to service_role;
 
 -- ── 2. The meter's read carries the answer, in EVERY branch ──────────────────
 -- Reproduced from the live prod body (pg_get_functiondef, diffed line by line

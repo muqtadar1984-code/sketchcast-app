@@ -16,6 +16,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
+import { CAP_CEILING } from "@/utils/console-actions";
 
 const MIGRATIONS = join(process.cwd(), "supabase", "migrations");
 const read = (f: string) => readFileSync(join(MIGRATIONS, f), "utf8").replace(/\r\n/g, "\n");
@@ -86,6 +87,55 @@ describe("0105 — the migration file", () => {
     // A null uid must answer "no", not blow up inside my_fair_use.
     expect(M0105).toMatch(/if uid is null then\n\s*return false;/);
   });
+  it("locks the helper to the service role — the default ACL would expose it", () => {
+    /**
+     * Review finding. Supabase's pg_default_acl for functions postgres creates
+     * in `public` is {postgres, anon, authenticated, service_role} (measured on
+     * prod 2026-09-05), so a bare `create function` is executable by every
+     * signed-in user. That is the leak this file's own SECURITY INVOKER note
+     * says it does not want — a browser client could ask whether SOMEONE ELSE
+     * is comped, for every profiles row RLS lets it see (self, a school_admin's
+     * whole school, a teacher's students, a parent's children). It would not
+     * even answer cleanly: the fall-through calls plan_tier(), which
+     * `authenticated` may not execute (measured proacl: {postgres, service_role}),
+     * so a non-comped row raises "permission denied" instead of returning false.
+     *
+     * Both real callers are unaffected. my_fair_use() is SECURITY DEFINER owned
+     * by postgres and privilege is checked against the DEFINER; the worker holds
+     * service_role.
+     */
+    expect(M0105).toContain(
+      "revoke execute on function public.premium_voices_allowed(uuid) from public, anon, authenticated;",
+    );
+    expect(M0105).toContain(
+      "grant execute on function public.premium_voices_allowed(uuid) to service_role;",
+    );
+    // The grant has to come AFTER the create or it grants nothing.
+    expect(M0105.indexOf("grant execute on function public.premium_voices_allowed")).toBeGreaterThan(
+      M0105.indexOf("create or replace function public.premium_voices_allowed"),
+    );
+    // …and must never be widened back to the roles a browser client holds.
+    const grants = M0105.split("\n").filter((l) =>
+      /^\s*grant execute on function public\.premium_voices_allowed/.test(l));
+    expect(grants).toHaveLength(1);
+    // Only the GRANTEE list matters — `public.` in the function's own name is
+    // the schema, not the PUBLIC role.
+    for (const g of grants) {
+      expect(g.slice(g.lastIndexOf(" to "))).not.toMatch(/\b(anon|authenticated|public)\b/);
+    }
+  });
+
+  it("records the prod fingerprint it was diffed against, so apply day can re-check", () => {
+    // This file is a `create or replace` with no guard: if anything redefines
+    // my_fair_use before it is applied, applying it reverts that change. The
+    // byte-diff below can only compare against the repo's 0101 — it cannot see
+    // prod — so the recorded measurement is what makes the apply-day re-check
+    // possible. Measured read-only 2026-09-05.
+    expect(M0105).toContain("9181329080e1f6f44b1802a628ff4f1b"); // pg_get_functiondef md5
+    expect(M0105).toContain("3a0b4a8e7c0d9a2f042d572e7e0f54c4"); // prosrc md5
+    expect(M0105).toContain("20260905054301");                   // newest applied migration
+  });
+
 });
 
 describe("0105 — my_fair_use is the prod body plus premium_voices, and nothing else", () => {
@@ -130,5 +180,39 @@ describe("0105 — my_fair_use is the prod body plus premium_voices, and nothing
     ]) {
       expect(after).toContain(line);
     }
+  });
+});
+
+describe("0105 — the console can still reach the threshold", () => {
+  /** Read out of the migration, never retyped: this must fail when the SQL
+   * moves, not quietly agree with a stale copy. */
+  const threshold = Number(/comp_threshold constant integer := (\d+);/.exec(M0105)?.[1]);
+
+  it("parses a threshold out of the migration at all", () => {
+    expect(Number.isInteger(threshold)).toBe(true);
+    expect(threshold).toBeGreaterThan(0);
+  });
+
+  it("lets an operator set a cap that reaches it", () => {
+    /**
+     * Review finding. /api/console/ops clamps caps to CAP_CEILING, and that
+     * number happens to equal the migration's threshold — measured on prod,
+     * every console-settable comp that qualifies for premium sits exactly at
+     * the ceiling (6 accounts at 100000; the 7th, at 2147483647, was set
+     * outside that route). Nothing tied the two together, so lowering the
+     * ceiling would have silently made a premium comp ungrantable from the
+     * console with no test failing. This is that tie.
+     */
+    expect(CAP_CEILING).toBeGreaterThanOrEqual(threshold);
+  });
+
+  it("keeps the threshold itself out of the app's TypeScript", () => {
+    // The ceiling is a form limit and lives in ONE constant; the threshold
+    // belongs to the database alone. A literal back in the route is how the
+    // two halves of the product start to drift.
+    const route = readFileSync(
+      join(process.cwd(), "src", "app", "api", "console", "ops", "route.ts"), "utf8");
+    expect(route).not.toMatch(new RegExp(`(?<![0-9])${threshold}(?![0-9])`));
+    expect(route).toContain("CAP_CEILING");
   });
 });
