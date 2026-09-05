@@ -2,7 +2,7 @@ import { AUTO_VOICE, DEFAULT_STYLE, defaultNarrationForGrade } from "./narration
 
 // When is a colleague's kit the SAME kit?
 //
-// Generation is the expensive step — a full kit is six artifacts and roughly
+// Generation is the expensive step — a full kit is seven artifacts and roughly
 // 56 minutes of worker time — and five teachers of the same form generating
 // the same chapter is that cost five times over for near-identical output.
 // Book dedup saves an indexing run; this saves the whole generation.

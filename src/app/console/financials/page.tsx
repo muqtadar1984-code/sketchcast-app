@@ -14,6 +14,9 @@ import {
   SCHOOL_BANDS,
   PLAN_PRICES_USD_MONTHLY,
   PLAN_KITS_PER_MONTH,
+  PLAN_KITS_COSTED_PER_MONTH,
+  KIT_PIECES,
+  KIT_CREDITS,
   SCHOOL_CURRICULUM_KITS_PER_YEAR,
   grossMarginPct,
   fmtPct,
@@ -89,13 +92,23 @@ const CAC_FOOTER =
   `The affiliate slice IS knowable per sale: Lemon Squeezy's affiliate program went live 2026-08-22 at ` +
   `${(AFFILIATE_COMMISSION_RATE * 100).toFixed(0)}%, and its order and invoice objects carry affiliate_id and referral_amount. ` +
   `Only paid, non-refunded sales count, on the same basis as Collected to date. Demo accounts excluded.`;
+/** One decimal, trailing ".0" dropped — "14" and "4.7", never "14.0". */
+const kitCount = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+const COSTED = PLAN_KITS_COSTED_PER_MONTH;
+const ADVERTISED = PLAN_KITS_PER_MONTH;
 const TABLE3_B2C_FOOTER =
   "Prices: Teacher Pro $24 · Teacher Pro+ $49 · Home Basic $9.99 · Homeschool $34 per month; annual = 12×. " +
   "Teachers = active non-demo teacher accounts; parents = non-demo parent accounts (home educators included). " +
   "Each column assumes that share of the row's base converts to that plan — rows are ALTERNATIVE scenarios, " +
   "never additive. Gross margin = (price − allowance × measured lifetime avg kit cost) / price, with every " +
-  "subscriber using their FULL kit allowance (Pro 4 · Pro+ 12 · Home Basic 2 · Homeschool 8 kits/mo) — the " +
-  "conservative bound; a ratio, so it holds at any conversion. Estimates, not forecasts.";
+  "subscriber spending their FULL generation allowance — the conservative bound; a ratio, so it holds at any " +
+  `conversion. A kit is ${KIT_PIECES} pieces but costs ${KIT_CREDITS} credits (the slide deck rides free), so an ` +
+  `allowance buys Pro ${kitCount(COSTED.teacher_pro)} · Pro+ ${kitCount(COSTED.teacher_pro_plus)} · ` +
+  `Home Basic ${kitCount(COSTED.family)} · Homeschool ${kitCount(COSTED.homeschool)} kits/mo, MORE than the ` +
+  `Pro ${ADVERTISED.teacher_pro} · Pro+ ${ADVERTISED.teacher_pro_plus} · Home Basic ${ADVERTISED.family} · ` +
+  `Homeschool ${ADVERTISED.homeschool} the pricing page advertises. The cost side uses the larger, real number: ` +
+  "costing the advertised count would understate the allowance by a sixth and call it conservative. " +
+  "Estimates, not forecasts.";
 const LTV_FOOTER =
   `LTV = contribution per subscriber-month × subscriber lifetime. Contribution/mo = list price (in the table above) × the gross margin above, ` +
   `so it carries the MEASURED kit cost and nothing else — it is the half of an LTV this business can already prove. ` +
@@ -388,7 +401,11 @@ export default async function ConsoleFinancialsPage({
   const parents = profiles.filter((p) => p.role === "parent").length;
   const B2C_RATES = [0.1, 0.25, 0.5];
   // Gross uses the MEASURED lifetime avg kit cost (the "actual" from Table 1)
-  // at each plan's full monthly kit allowance — see PLAN_KITS_PER_MONTH.
+  // at what each plan's full allowance actually BUYS — caps ÷ 6, because a kit
+  // costs six credits (the deck is free). NOT PLAN_KITS_PER_MONTH, which is
+  // caps ÷ 7, the advertised count: costing 12 Pro+ kits when 84 credits fund
+  // 14 understates the allowance by a sixth on a table whose whole claim is
+  // that it cannot flatter us. See PLAN_KITS_COSTED_PER_MONTH.
   const avgKitLife = statsLife.avgPerKitUsd;
   // Hoisted out of the .map() below because the LTV table under it prices the
   // SAME four plans off the SAME margin — one list, so a price or an allowance
@@ -398,10 +415,10 @@ export default async function ConsoleFinancialsPage({
   // and annual share a row because they are one product at one monthly-
   // equivalent price — the same basis PLAN_PRICES_USD_MONTHLY already uses.
   const b2cPlans = [
-    { plan: "Teacher Pro", planKeys: ["teacher_pro_monthly", "teacher_pro_annual"], monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_monthly, base: teachers, baseLabel: "teachers", kitsMo: PLAN_KITS_PER_MONTH.teacher_pro },
-    { plan: "Teacher Pro+", planKeys: ["teacher_pro_plus_monthly", "teacher_pro_plus_annual"], monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_plus_monthly, base: teachers, baseLabel: "teachers", kitsMo: PLAN_KITS_PER_MONTH.teacher_pro_plus },
-    { plan: "Home Basic", planKeys: ["family_monthly", "family_annual"], monthly: PLAN_PRICES_USD_MONTHLY.family_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_PER_MONTH.family },
-    { plan: "Homeschool", planKeys: ["homeschool_monthly", "homeschool_annual"], monthly: PLAN_PRICES_USD_MONTHLY.homeschool_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_PER_MONTH.homeschool },
+    { plan: "Teacher Pro", planKeys: ["teacher_pro_monthly", "teacher_pro_annual"], monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_monthly, base: teachers, baseLabel: "teachers", kitsMo: PLAN_KITS_COSTED_PER_MONTH.teacher_pro },
+    { plan: "Teacher Pro+", planKeys: ["teacher_pro_plus_monthly", "teacher_pro_plus_annual"], monthly: PLAN_PRICES_USD_MONTHLY.teacher_pro_plus_monthly, base: teachers, baseLabel: "teachers", kitsMo: PLAN_KITS_COSTED_PER_MONTH.teacher_pro_plus },
+    { plan: "Home Basic", planKeys: ["family_monthly", "family_annual"], monthly: PLAN_PRICES_USD_MONTHLY.family_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_COSTED_PER_MONTH.family },
+    { plan: "Homeschool", planKeys: ["homeschool_monthly", "homeschool_annual"], monthly: PLAN_PRICES_USD_MONTHLY.homeschool_monthly, base: parents, baseLabel: "parents", kitsMo: PLAN_KITS_COSTED_PER_MONTH.homeschool },
   ];
   const b2cRows = b2cPlans.map((p) => {
     // Margin is a ratio — subscriber count cancels out — so it is ONE number

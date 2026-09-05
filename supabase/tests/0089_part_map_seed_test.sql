@@ -1,6 +1,10 @@
 -- SketchCast AI — part-map seeding verification for 0089
 -- ============================================================================
 -- Run in the Supabase SQL editor AFTER applying 0089_fix_part_map_seed.sql.
+--
+-- CAP BASELINE: 0107 (trial 7 · pro 28 · homeschool 56). The seeded quota fills
+-- below are arithmetic against public.fair_use_caps, so they move when it does.
+-- A kit still costs SIX credits — the deck rides free (0103).
 -- Seeds throwaway users and drives the REAL triggers with direct inserts.
 -- Proves, in order:
 --   1. seeding: a chapter-level lesson on a 3-part chapter charges 3 units
@@ -142,17 +146,17 @@ begin
   -- ── 4. The 0060 hole is closed ───────────────────────────────────────────
   -- used so far: g1 (1) + g2 (1) + g3 (1) + g4 (1) + g5 (2) + w1 (1) = 7.
   perform _expect_eq(fair_use_used(H, 'credits', m0), 7, 'checkpoint: 7 used');
-  -- Burn to 46/48: available 2 — enough to ADMIT one more lesson…
+  -- Burn to 54/56: available 2 — enough to ADMIT one more lesson…
   insert into credit_ledger (owner_id, kind, units, part, source, created_at)
-  values (H, 'presentation', 39, 0, 'plan', now() - interval '1 hour');
+  values (H, 'presentation', 47, 0, 'plan', now() - interval '1 hour');
   insert into generations (id, kind, book_id, chapter_ref, owner_id, created_at)
   values (g6, 'presentation', bh, '1', H, now() - interval '4 minutes');
   perform _expect_eq((select units from credit_ledger where generation_id = g6), 3,
     '…which lands at its real 3-unit weight');
-  perform _expect_eq(fair_use_used(H, 'credits', m0), 49,
-    'used 49/48 — the accepted single-statement overshoot');
+  perform _expect_eq(fair_use_used(H, 'credits', m0), 57,
+    'used 57/56 — the accepted single-statement overshoot');
   -- The NEXT statement now sees the truth and blocks. Under the dead-seed
-  -- code g6 read as 1 (used 47) and this insert was admitted — the exact
+  -- code g6 read as 1 (used 55) and this insert was admitted — the exact
   -- fast-batch hole 0060 described and never actually closed.
   perform _expect_block(
     format('insert into generations (kind, book_id, chapter_ref, owner_id) values (''presentation'', %L, ''2'', %L)', bh, H),

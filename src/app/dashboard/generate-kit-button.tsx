@@ -11,9 +11,11 @@ import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { type LibraryMessages } from "./labels";
 
 // One-click full kit for a chapter part (0059): queues the video lesson plus
-// its five documents together — one lesson credit, documents free. Used on
-// per-part rows; the chapter-level row has its own kit flow with narration
-// options (chapter-generate.tsx).
+// its deck and five documents together. SEVEN pieces, SIX credits — since 0075
+// every artifact is a credit and only the deck rides free (0103 left 'deck' out
+// of credit_ledger_write). "Documents are free" was true under 0059 and has not
+// been since; do not put it back. Used on per-part rows; the chapter-level row
+// has its own kit flow with narration options (chapter-generate.tsx).
 export default function GenerateKitButton({
   bookId,
   schoolId,
@@ -57,7 +59,7 @@ export default function GenerateKitButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A finished kit for exactly this part that someone else in the school
-  // already made. Generation is the expensive step — six artifacts, ~56 worker
+  // already made. Generation is the expensive step — seven artifacts, ~56 worker
   // minutes — so the question is worth asking before queuing another one.
   const [offer, setOffer] = useState<{ ids: string[] } | null>(null);
   const [adopting, setAdopting] = useState(false);
@@ -194,7 +196,7 @@ export default function GenerateKitButton({
     // used to re-enable in that gap, so the teacher saw a live button on an
     // apparently untouched page, clicked again, and got a SECOND full kit. That
     // happened twice in production (3.8 s and 18 s apart), and since 0075 a kit is
-    // 6 credits against a Teacher Pro allowance of 24.
+    // 6 credits (the deck rides free) against a Teacher Pro allowance of 28.
     //
     // Staying disabled until the refresh replaces this control is the fix. The
     // timeout is only so a refresh that never lands cannot strand the button
@@ -249,7 +251,7 @@ export default function GenerateKitButton({
           onClick={generate}
           disabled={busy}
           className={className}
-          title="Generates the video lesson plus its plan, activities, worksheet, test paper and case study — one lesson credit, documents free"
+          title="Generates the video lesson plus its slide deck, plan, activities, worksheet, test paper and case study — the slide deck is free; every other piece costs one credit, and a long lesson one per rendered part"
         >
           {children({ busy })}
           {error && (
@@ -269,7 +271,7 @@ export default function GenerateKitButton({
         onClick={generate}
         disabled={busy}
         className="font-medium text-[#0C8175] hover:underline disabled:opacity-60 text-xs"
-        title="Generates the video lesson plus its plan, activities, worksheet, test paper and case study — one lesson credit, documents free"
+        title="Generates the video lesson plus its slide deck, plan, activities, worksheet, test paper and case study — the slide deck is free; every other piece costs one credit, and a long lesson one per rendered part"
       >
         {busy ? "Queuing…" : "Generate kit"}
       </button>

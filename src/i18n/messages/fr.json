@@ -412,7 +412,7 @@
     "betaBanner": {
       "welcome": "Bienvenue sur SketchCast !",
       "body": "Votre essai gratuit comprend {trial}. Classes, attributions, corrections et statistiques sont illimitées. Des questions ?",
-      "trial": "1 livre et le kit complet — leçon vidéo, préparation, activités, fiche d'exercices, contrôle et étude de cas — pour une partie d'un chapitre"
+      "trial": "1 livre et le kit complet — leçon vidéo, diaporama, préparation, activités, fiche d'exercices, contrôle et étude de cas — pour une partie d'un chapitre"
     },
     "tour": {
       "teacher_onboarding": {
@@ -871,13 +871,13 @@
       "premiumSuffix": " ★ premium",
       "assignChapter": "Attribuer le chapitre",
       "generateFullKit": "Générer le kit complet",
-      "generateFullKitHint": "La leçon vidéo avec sa préparation, ses activités, sa fiche d'exercices, son contrôle et son étude de cas — documents gratuits, un crédit par partie de leçon générée",
-      "generateFree": "Générer ({n}) — gratuit",
-      "generateFreeHint": "Gratuit — ces documents réutilisent l'analyse de la leçon",
+      "generateFullKitHint": "La leçon vidéo avec son diaporama, sa préparation, ses activités, sa fiche d'exercices, son contrôle et son étude de cas — le diaporama est gratuit ; chaque autre élément coûte un crédit, et une leçon longue un crédit par partie générée",
+      "generateFree": "Générer ({n})",
+      "generateFreeHint": "Ces éléments réutilisent l'analyse de la leçon. Le diaporama est gratuit ; chaque autre élément coûte un crédit.",
       "trialLocked": "Essai : 1 partie — verrouillé",
-      "trialLockedHint": "Votre essai gratuit couvre le kit complet (les six types de contenu) pour une partie d'un chapitre",
+      "trialLockedHint": "Votre essai gratuit couvre le kit complet (les sept types de contenu) pour une partie d'un chapitre",
       "trialPick": "Essai : choisissez une partie ci-dessous",
-      "trialPickHint": "Ce chapitre est découpé en parties — votre essai couvre le kit complet (les six types de contenu) pour la partie de votre choix",
+      "trialPickHint": "Ce chapitre est découpé en parties — votre essai couvre le kit complet (les sept types de contenu) pour la partie de votre choix",
       "trialPinned": "Essai : la partie {n} est votre kit",
       "trialPinnedHint": "Votre kit d'essai est rattaché à cette partie — les nouvelles tentatives et tous ses types de contenu y restent ouverts"
     },
@@ -1802,7 +1802,7 @@
     "title": "Usage raisonnable ce mois-ci",
     "resets": "renouvellement le {date} · ce qu'il vous reste est reporté sur le mois suivant",
     "lessons": "Générations",
-    "kitFree": "Une leçon, une préparation, des activités, une fiche d'exercices, un contrôle ou une étude de cas — chacun compte pour une génération.",
+    "kitFree": "Une leçon, une préparation, des activités, une fiche d'exercices, un contrôle ou une étude de cas — chacun compte pour une génération. Le diaporama est gratuit.",
     "usage": "{used} sur {cap}",
     "usageCarried": "{used} sur {cap} +{carry} de report",
     "trialTitle": "Essai gratuit — toutes les fonctionnalités incluses",

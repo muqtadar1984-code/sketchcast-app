@@ -95,8 +95,9 @@ export default function ChapterGenerate({
     !!beta && (beta.pinned ? !pinIsThisChapterLevel : !!multiPartTrial);
   // 0059: documents generate only WITH their lesson. Before a LIVE lesson
   // exists the sole action is the full kit (an errored lesson re-kits — the
-  // DB requires a non-error presentation before docs ride free); after,
-  // missing documents are free add-backs.
+  // DB requires a non-error presentation before a document may be queued);
+  // after, missing pieces can be added back one at a time. "Free" is the wrong
+  // word for those add-backs since 0075: only the deck rides free.
   const hasLesson = !!lessons["presentation"] && lessons["presentation"]!.status !== "error";
   // A chunked lesson renders as Part 1..N videos/decks. Its Pt stack breaks
   // the flat cell row, so the render below swaps to a bordered card (same
@@ -254,7 +255,8 @@ export default function ChapterGenerate({
       if (betaLocked || !hasLesson) return null;
       // A legacy deck is already on the presentation cell — no add-back.
       if (k === "deck" && legacyDeck) return null;
-      // Lesson exists: missing documents are free add-backs.
+      // Lesson exists: missing pieces can be added back (one credit each — the
+      // deck is the only free one).
       return (
         <label
           key={k}

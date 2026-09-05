@@ -1,10 +1,19 @@
 -- SketchCast AI — homeschool tier + credit-pack verification for 0086
 -- ============================================================================
 -- Run in the Supabase SQL editor AFTER applying 0086_homeschool_tier.sql.
+--
+-- CAP BASELINE: 0107. Every seeded fill below is arithmetic against the caps
+-- public.fair_use_caps returns, so this script has to move whenever they do —
+-- it is hand-run, no CI reads .sql, and a stale number here reports a metering
+-- regression that is really just an out-of-date seed. Pinned here:
+--   trial 7 · pro 28 · homeschool 56 (0107; they were 6 · 24 · 48 under 0086).
+-- A kit still COSTS SIX credits and the credit packs are still 6/18/36 — the
+-- deck is the seventh piece and rides free (0103), so 0107 moved the ceiling,
+-- never the price. Do not "scale" the pack sizes to match a cap.
 -- Seeds throwaway users and drives the REAL triggers with direct inserts (the
 -- strongest bypass attempt — every API call goes through the same triggers).
 -- Proves, in order:
---   1. tier plumbing: homeschool caps (48/4), trial 96 → 6, plan_tier mapping;
+--   1. tier plumbing: homeschool caps (56/4), trial 96 → 7, plan_tier mapping;
 --   2. learner cap: homeschool 10, others 2, console override wins;
 --   3. consumption ORDER: monthly quota first, then the purchased balance
 --      (ledger rows stamped source='plan' / 'purchase' accordingly);
@@ -90,9 +99,9 @@ begin
   -- ── 1. Tier plumbing ─────────────────────────────────────────────────────
   perform _expect_eq(plan_tier(H), 'homeschool', 'homeschool_% entitlement maps to tier homeschool');
   perform _expect_eq(plan_tier(T), 'trial',      'no entitlement (promo over) = trial');
-  perform _expect_eq((select parts_cap from fair_use_caps('homeschool')), 48, 'homeschool = 48 generations/month');
+  perform _expect_eq((select parts_cap from fair_use_caps('homeschool')), 56, 'homeschool = 56 generations/month');
   perform _expect_eq((select books_cap from fair_use_caps('homeschool')), 4,  'homeschool = 4 books/month');
-  perform _expect_eq((select parts_cap from fair_use_caps('trial')), 6,       'trial dropped 96 -> 6 (= one kit, the 0057 pin)');
+  perform _expect_eq((select parts_cap from fair_use_caps('trial')), 7,       'trial dropped 96 -> 7 (= one kit, the 0057 pin)');
 
   -- ── 2. Learner cap ───────────────────────────────────────────────────────
   perform _expect_eq(learners_cap(H), 10, 'homeschool learner cap = 10');
@@ -103,16 +112,16 @@ begin
 
   -- ── 3. Consumption order: monthly quota FIRST, then purchased ────────────
   insert into books (id, title, owner_id) values (bh, 'H Book', H);
-  -- Fill 47 of the 48 plan credits with a synthetic ledger row (units carry
+  -- Fill 55 of the 56 plan credits with a synthetic ledger row (units carry
   -- the weight; fair_use_used sums units).
   insert into credit_ledger (owner_id, kind, units, part, source, created_at)
-  values (H, 'presentation', 47, 0, 'plan', now() - interval '1 hour');
+  values (H, 'presentation', 55, 0, 'plan', now() - interval '1 hour');
 
   perform _expect_ok(
     format('insert into generations (id, kind, book_id, chapter_ref, owner_id) values (%L, ''presentation'', %L, ''1'', %L)', g1, bh, H),
-    'homeschool: 48th generation admitted on plan quota');
+    'homeschool: 56th generation admitted on plan quota');
   perform _expect_eq((select source from credit_ledger where generation_id = g1), 'plan',
-    'row 48/48 charged to the PLAN pool');
+    'row 56/56 charged to the PLAN pool');
 
   perform _expect_block(
     format('insert into generations (id, kind, book_id, chapter_ref, owner_id) values (%L, ''presentation'', %L, ''2'', %L)', g2, bh, H),
@@ -151,7 +160,7 @@ begin
 
   -- ── 6. Exhausted quota + exhausted/refunded balance blocks ───────────────
   insert into credit_ledger (owner_id, kind, units, part, source)
-  values (H, 'presentation', 48, 0, 'plan'); -- burn this month's quota (48 + g3 = 49 used)
+  values (H, 'presentation', 56, 0, 'plan'); -- burn this month's quota (56 + g3 = 57 used)
   perform _expect_ok(
     format('insert into generations (id, kind, book_id, chapter_ref, owner_id) values (%L, ''presentation'', %L, ''4'', %L)', g4, bh, H),
     'over-quota generation rides the balance');
@@ -164,32 +173,33 @@ begin
     format('insert into generations (kind, book_id, chapter_ref, owner_id) values (''presentation'', %L, ''5'', %L)', bh, H),
     'Monthly limit reached', 'no quota + no live balance = blocked');
 
-  -- ── Trial: 6 = exactly one kit; a leftover balance still spends ──────────
+  -- ── Trial: 7 = exactly one kit; a leftover balance still spends ──────────
   insert into books (id, title, owner_id) values (bt, 'T Book', T);
-  for i in 1..6 loop
+  for i in 1..7 loop
     -- Staggered created_at keeps each retry outside 0076's 10-second
     -- duplicate window; all rows stay inside the current month.
     insert into generations (kind, book_id, chapter_ref, owner_id, created_at)
     values ('presentation', bt, '0', T, now() - interval '10 minutes' + (i * interval '30 seconds'));
   end loop;
-  raise notice 'PASS (allowed): trial: six generations of the pinned unit';
+  raise notice 'PASS (allowed): trial: seven generations of the pinned unit';
   perform _expect_block(
     format('insert into generations (kind, book_id, chapter_ref, owner_id) values (''presentation'', %L, ''0'', %L)', bt, T),
-    'Monthly limit reached', 'trial blocked at 7 (cap is 6 now, was 96)');
+    'Monthly limit reached', 'trial blocked at 8 (cap is 7 now, was 96)');
   -- A pack balance held by a (lapsed) free account still spends — purchased
   -- credits never expire, so a subscriber who lapses keeps what they paid for.
   insert into credit_purchases (owner_id, credits, pack_key, usd, ls_order_id)
   values (T, 6, 'pack_6', 8.00, 'ord_t_1');
   perform _expect_ok(
     format('insert into generations (kind, book_id, chapter_ref, owner_id) values (''presentation'', %L, ''0'', %L)', bt, T),
-    'trial + purchased balance: 7th generation admitted');
+    'trial + purchased balance: 8th generation admitted');
   perform _expect_eq(fair_use_purchased_remaining(T), 5, 'trial drawdown hit the balance');
 
   -- ── 7. One-statement kit: split correctly / fail whole ───────────────────
-  -- P: 21/24 plan used, balance 3 (pack 6 minus 3 already drawn).
+  -- P: 25/28 plan used, balance 3 (pack 6 minus 3 already drawn). A kit is
+  -- still SIX rows and SIX credits — 0107 moved the cap, not the price.
   insert into books (id, title, owner_id) values (bp, 'P Book', P);
   insert into credit_ledger (owner_id, kind, units, part, source, created_at)
-  values (P, 'presentation', 21, 0, 'plan', now() - interval '1 hour');
+  values (P, 'presentation', 25, 0, 'plan', now() - interval '1 hour');
   insert into credit_purchases (owner_id, credits, pack_key, usd, ls_order_id)
   values (P, 6, 'pack_6', 8.00, 'ord_p_1');
   insert into credit_ledger (owner_id, kind, units, part, source, created_at)
@@ -218,7 +228,7 @@ begin
   -- Q: same shape but balance only 2 — the kit must fail WHOLE (atomic).
   insert into books (id, title, owner_id) values (bq, 'Q Book', Q);
   insert into credit_ledger (owner_id, kind, units, part, source, created_at)
-  values (Q, 'presentation', 21, 0, 'plan', now() - interval '1 hour');
+  values (Q, 'presentation', 25, 0, 'plan', now() - interval '1 hour');
   insert into credit_purchases (owner_id, credits, pack_key, usd, ls_order_id)
   values (Q, 6, 'pack_6', 8.00, 'ord_q_1');
   insert into credit_ledger (owner_id, kind, units, part, source, created_at)

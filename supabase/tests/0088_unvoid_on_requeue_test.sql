@@ -1,6 +1,10 @@
 -- SketchCast AI — requeue-to-success un-void verification for 0088
 -- ============================================================================
 -- Run in the Supabase SQL editor AFTER applying 0088_unvoid_on_requeued_success.sql.
+--
+-- CAP BASELINE: 0107 (trial 7 · pro 28 · homeschool 56). The seeded quota fills
+-- below are arithmetic against public.fair_use_caps, so they move when it does.
+-- A kit still costs SIX credits — the deck rides free (0103).
 -- Seeds throwaway users and drives the REAL trigger with the same plain
 -- status UPDATEs the worker's finish_job and every requeue path issue.
 -- Proves, in order:
@@ -134,7 +138,7 @@ begin
 
   -- ── 6. Purchase pool: un-void re-draws the balance ───────────────────────
   insert into credit_ledger (owner_id, kind, units, part, source, created_at)
-  values (P, 'presentation', 24, 0, 'plan', now() - interval '1 hour'); -- pro quota spent
+  values (P, 'presentation', 28, 0, 'plan', now() - interval '1 hour'); -- pro quota spent (0107 cap)
   insert into credit_purchases (owner_id, credits, pack_key, usd, ls_order_id)
   values (P, 6, 'pack_6', 8.00, 'ord_unvoid_1');
   perform _expect_eq(fair_use_purchased_remaining(P), 6, 'pack credited: balance 6');

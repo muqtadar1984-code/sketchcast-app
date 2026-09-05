@@ -268,16 +268,48 @@ export function bandForStudents(students: number): SchoolBand | null {
   return SCHOOL_BANDS[SCHOOL_BANDS.length - 1];
 }
 
-/** Monthly kit allowance per consumer plan (the 0086 generation caps ÷ 6 —
- * a kit is six generations). The estimate tables cost a subscriber at FULL
- * allowance: the conservative bound, and the steady state too (rollover only
- * shifts kits between adjacent months; the two-month total never exceeds
- * 2× cap, so average use converges on the cap). */
+/** A kit ships SEVEN artifacts and COSTS SIX credits: the slide deck rides free
+ * (0103 left 'deck' out of credit_ledger_write, fair_use_used and
+ * fair_use_used_since, and 0107 did not change that). Two different divisors
+ * follow from that one fact, and confusing them is how a margin flatters
+ * itself — so both live here, named for what they are. */
+export const KIT_PIECES = 7;
+export const KIT_CREDITS = 6;
+
+/** The 0107 monthly generation caps for the four consumer plans — the numbers
+ * public.fair_use_caps returns and the pricing page prints. */
+export const PLAN_GENERATION_CAPS = {
+  teacher_pro: 28,
+  teacher_pro_plus: 84,
+  family: 14,
+  homeschool: 56,
+} as const;
+
+/** What the pricing page ADVERTISES: caps ÷ 7. Deliberately the larger divisor,
+ * so the marketed kit count can only understate what a plan buys. Display only
+ * — never a cost basis, because nobody is charged for the seventh piece. */
 export const PLAN_KITS_PER_MONTH = {
-  teacher_pro: 4,
-  teacher_pro_plus: 12,
-  family: 2,
-  homeschool: 8,
+  teacher_pro: PLAN_GENERATION_CAPS.teacher_pro / KIT_PIECES,
+  teacher_pro_plus: PLAN_GENERATION_CAPS.teacher_pro_plus / KIT_PIECES,
+  family: PLAN_GENERATION_CAPS.family / KIT_PIECES,
+  homeschool: PLAN_GENERATION_CAPS.homeschool / KIT_PIECES,
+} as const;
+
+/** What a FULL allowance actually BUYS: caps ÷ 6, because six credits is what
+ * a kit costs. This is the cost basis the gross-margin and LTV tables must use
+ * — an 84-credit Pro+ month funds 14 kits, not 12, and costing it at 12 would
+ * understate the allowance's cost by exactly a sixth on every plan and call the
+ * result "the conservative bound". Fractional on purpose: Teacher Pro's 28
+ * credits buy 4 kits and 4 leftover credits, and 4⅔ is the honest way to price
+ * a subscriber who spends every one of them. Costing a subscriber at FULL
+ * allowance is the conservative bound, and the steady state too (rollover only
+ * shifts kits between adjacent months; the two-month total never exceeds 2×
+ * cap, so average use converges on the cap). */
+export const PLAN_KITS_COSTED_PER_MONTH = {
+  teacher_pro: PLAN_GENERATION_CAPS.teacher_pro / KIT_CREDITS,
+  teacher_pro_plus: PLAN_GENERATION_CAPS.teacher_pro_plus / KIT_CREDITS,
+  family: PLAN_GENERATION_CAPS.family / KIT_CREDITS,
+  homeschool: PLAN_GENERATION_CAPS.homeschool / KIT_CREDITS,
 } as const;
 
 /** The documented school cost basis (2026-08 memo): content cost is FLAT in

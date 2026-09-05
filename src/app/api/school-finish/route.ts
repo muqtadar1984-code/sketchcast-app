@@ -43,7 +43,7 @@ const FUNCTION_ERRORS: Record<string, { status: number; error: string }> = {
 
 /** Schools one network address may register per day before we ask them to
  * talk to us. Three is generous for a real network (a district office setting
- * up several schools) and cheap for us either way — each is 12 generations. */
+ * up several schools) and cheap for us either way — each is 14 generations. */
 const SCHOOLS_PER_IP_PER_DAY = 3;
 
 const clip = (v: unknown, max: number): string | null => {

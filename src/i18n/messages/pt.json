@@ -412,7 +412,7 @@
     "betaBanner": {
       "welcome": "Boas-vindas ao SketchCast!",
       "body": "Seu teste grátis inclui {trial}. Turmas, atribuições, correção e estatísticas são ilimitados. Dúvidas?",
-      "trial": "1 livro e o kit completo — videoaula, plano, atividades, exercícios, prova e estudo de caso — para uma parte de um capítulo"
+      "trial": "1 livro e o kit completo — videoaula, slides, plano, atividades, exercícios, prova e estudo de caso — para uma parte de um capítulo"
     },
     "tour": {
       "teacher_onboarding": {
@@ -871,13 +871,13 @@
       "premiumSuffix": " ★ premium",
       "assignChapter": "Atribuir capítulo",
       "generateFullKit": "Gerar o kit completo",
-      "generateFullKitHint": "A videoaula mais o plano, as atividades, os exercícios, a prova e o estudo de caso — documentos grátis, um crédito por parte de aula renderizada",
-      "generateFree": "Gerar ({n}) — grátis",
-      "generateFreeHint": "Grátis — isto reaproveita a análise da aula",
+      "generateFullKitHint": "A videoaula mais os slides, o plano, as atividades, os exercícios, a prova e o estudo de caso — os slides são grátis; cada uma das outras peças custa um crédito, e uma aula longa um crédito por parte renderizada",
+      "generateFree": "Gerar ({n})",
+      "generateFreeHint": "Isto reaproveita a análise da aula. Os slides são grátis; cada uma das outras peças custa um crédito.",
       "trialLocked": "Teste: 1 parte — bloqueado",
-      "trialLockedHint": "Seu teste grátis cobre o kit completo (os seis tipos de conteúdo) para uma parte de um capítulo",
+      "trialLockedHint": "Seu teste grátis cobre o kit completo (os sete tipos de conteúdo) para uma parte de um capítulo",
       "trialPick": "Teste: escolha uma parte abaixo",
-      "trialPickHint": "Este capítulo é dividido em partes — seu teste cobre o kit completo (os seis tipos de conteúdo) para uma parte à sua escolha",
+      "trialPickHint": "Este capítulo é dividido em partes — seu teste cobre o kit completo (os sete tipos de conteúdo) para uma parte à sua escolha",
       "trialPinned": "Teste: a Parte {n} é o seu kit",
       "trialPinnedHint": "Seu kit de teste está nesta parte — as novas tentativas e todos os tipos de conteúdo dela continuam liberados"
     },
@@ -1802,7 +1802,7 @@
     "title": "Uso justo neste mês",
     "resets": "renova em {date} · o que sobrar vale por mais um mês",
     "lessons": "Gerações",
-    "kitFree": "Aula, plano, atividades, exercícios, prova ou estudo de caso — cada um conta como uma geração.",
+    "kitFree": "Aula, plano, atividades, exercícios, prova ou estudo de caso — cada um conta como uma geração. Os slides são grátis.",
     "usage": "{used} de {cap}",
     "usageCarried": "{used} de {cap} +{carry} acumulados",
     "trialTitle": "Teste grátis — tudo liberado",

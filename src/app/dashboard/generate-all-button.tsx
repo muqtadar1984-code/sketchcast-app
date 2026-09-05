@@ -10,7 +10,7 @@ import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 
 type Chapter = { num: number; title: string; partCount: number };
 
-// Generates the full KIT (lesson + five documents, 0059) for every chapter
+// Generates the full KIT (lesson + deck + five documents, 0059) for every chapter
 // passed in (the parent passes only the chapters without a lesson). Each row
 // fires the on_generation_created trigger → one job each.
 //
@@ -70,14 +70,15 @@ export default function GenerateAllButton({
     setGateOpen(false);
     // Say the real size of the click. The old text promised "Documents are
     // free", which the ledger has never agreed with: every artifact is one
-    // credit (fair_use_used sums them all), so a 6-artifact kit is 6.
+    // credit (fair_use_used sums the SIX billable kinds; 0103 left the deck
+    // out), so a 7-artifact kit still costs 6.
     const totalKits = chapters.reduce((n, c) => n + Math.max(1, c.partCount), 0);
     const kitsWord = totalKits === 1 ? "kit" : "kits";
     if (
       !confirm(
         `Generate ${totalKits} ${kitsWord} across ${chapters.length} chapter(s)? ` +
           `A chapter with several parts gets one kit per part, built one after another. ` +
-          `Each kit is a lesson plus five documents, and every generated item costs one credit.`,
+          `Each kit is a lesson, a slide deck and five documents. The deck is free; every other item costs one credit.`,
       )
     )
       return;

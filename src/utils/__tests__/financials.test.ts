@@ -34,7 +34,16 @@ function job(generation_id: string | null, cost?: number): FinJobRow {
 
 // (grossEstimateUsd and friends are imported lazily below to keep the existing
 // import block untouched by the 2026-08-18 additions.)
-import { PLAN_KITS_PER_MONTH, SCHOOL_CURRICULUM_KITS_PER_YEAR, grossMarginPct, fmtPct } from "../financials";
+import {
+  PLAN_KITS_PER_MONTH,
+  PLAN_KITS_COSTED_PER_MONTH,
+  PLAN_GENERATION_CAPS,
+  KIT_PIECES,
+  KIT_CREDITS,
+  SCHOOL_CURRICULUM_KITS_PER_YEAR,
+  grossMarginPct,
+  fmtPct,
+} from "../financials";
 
 describe("kitKey / kit grouping", () => {
   it("groups generations of the same (book, chapter, part) into one kit", () => {
@@ -238,8 +247,29 @@ describe("conversionScenario", () => {
 });
 
 describe("gross estimates (2026-08-18: revenue minus measured serving cost)", () => {
-  it("pins the kit allowances the cost side assumes (0086 caps ÷ 6)", () => {
+  it("pins the ADVERTISED kit counts (0107 caps ÷ 7, the seven pieces)", () => {
     expect(PLAN_KITS_PER_MONTH).toEqual({ teacher_pro: 4, teacher_pro_plus: 12, family: 2, homeschool: 8 });
+  });
+
+  it("pins the caps and the two divisors a kit has", () => {
+    expect(PLAN_GENERATION_CAPS).toEqual({ teacher_pro: 28, teacher_pro_plus: 84, family: 14, homeschool: 56 });
+    expect(KIT_PIECES).toBe(7); // artefacts delivered
+    expect(KIT_CREDITS).toBe(6); // artefacts CHARGED — the deck rides free (0103)
+  });
+
+  it("costs the allowance at caps ÷ 6, not the advertised ÷ 7", () => {
+    // The bug this pins: 84 Pro+ credits fund 14 kits, and costing 12 of them
+    // understates the allowance by exactly a sixth while the footer calls the
+    // result "the conservative bound".
+    for (const plan of ["teacher_pro", "teacher_pro_plus", "family", "homeschool"] as const) {
+      expect(PLAN_KITS_COSTED_PER_MONTH[plan]).toBeCloseTo(PLAN_GENERATION_CAPS[plan] / KIT_CREDITS, 10);
+      expect(PLAN_KITS_PER_MONTH[plan]).toBeCloseTo(PLAN_GENERATION_CAPS[plan] / KIT_PIECES, 10);
+      // The cost basis is never below the advertised count, or the console
+      // would be modelling a cheaper subscriber than the page promises.
+      expect(PLAN_KITS_COSTED_PER_MONTH[plan]).toBeGreaterThan(PLAN_KITS_PER_MONTH[plan]);
+    }
+    expect(PLAN_KITS_COSTED_PER_MONTH.teacher_pro_plus).toBe(14);
+    expect(PLAN_KITS_COSTED_PER_MONTH.homeschool).toBeCloseTo(56 / 6, 10);
   });
 
   it("pins the flat school cost basis (~940 chapter kits per school per year)", () => {

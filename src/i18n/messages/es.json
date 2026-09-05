@@ -412,7 +412,7 @@
     "betaBanner": {
       "welcome": "¡Bienvenido a SketchCast!",
       "body": "Su prueba gratuita incluye {trial}. Las clases, las asignaciones, la revisión y las estadísticas son ilimitadas. ¿Dudas?",
-      "trial": "1 libro y el kit completo — videolección, plan, actividades, hoja de trabajo, prueba y caso práctico — para una parte de un capítulo"
+      "trial": "1 libro y el kit completo — videolección, diapositivas, plan, actividades, hoja de trabajo, prueba y caso práctico — para una parte de un capítulo"
     },
     "tour": {
       "teacher_onboarding": {
@@ -871,13 +871,13 @@
       "premiumSuffix": " ★ premium",
       "assignChapter": "Asignar capítulo",
       "generateFullKit": "Generar kit completo",
-      "generateFullKitHint": "La videolección más su plan, actividades, hoja de trabajo, prueba y caso práctico — los documentos son gratis, un crédito por cada parte de lección renderizada",
-      "generateFree": "Generar ({n}) — gratis",
-      "generateFreeHint": "Gratis — reutilizan el análisis de la lección",
+      "generateFullKitHint": "La videolección más sus diapositivas, plan, actividades, hoja de trabajo, prueba y caso práctico — las diapositivas son gratis; cada una de las demás piezas cuesta un crédito, y una lección larga un crédito por cada parte renderizada",
+      "generateFree": "Generar ({n})",
+      "generateFreeHint": "Reutilizan el análisis de la lección. Las diapositivas son gratis; cada una de las demás piezas cuesta un crédito.",
       "trialLocked": "Prueba: 1 parte — bloqueado",
-      "trialLockedHint": "Su prueba gratuita cubre el kit completo (los seis tipos de contenido) para una parte de un capítulo",
+      "trialLockedHint": "Su prueba gratuita cubre el kit completo (los siete tipos de contenido) para una parte de un capítulo",
       "trialPick": "Prueba: elija una parte abajo",
-      "trialPickHint": "Este capítulo está dividido en partes — su prueba cubre el kit completo (los seis tipos de contenido) para la parte que elija",
+      "trialPickHint": "Este capítulo está dividido en partes — su prueba cubre el kit completo (los siete tipos de contenido) para la parte que elija",
       "trialPinned": "Prueba: la parte {n} es su kit",
       "trialPinnedHint": "Su kit de prueba está en esta parte — los reintentos y todos los tipos de contenido siguen disponibles para ella"
     },
@@ -1802,7 +1802,7 @@
     "title": "Uso justo este mes",
     "resets": "se reinicia el {date} · lo que no use pasa al mes siguiente",
     "lessons": "Generaciones",
-    "kitFree": "Lección, plan, actividades, hoja de trabajo, prueba o caso práctico: cada uno cuenta como una generación.",
+    "kitFree": "Lección, plan, actividades, hoja de trabajo, prueba o caso práctico: cada uno cuenta como una generación. Las diapositivas son gratis.",
     "usage": "{used} de {cap}",
     "usageCarried": "{used} de {cap} +{carry} acumulados",
     "trialTitle": "Prueba gratuita — todas las funciones desbloqueadas",

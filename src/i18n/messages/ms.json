@@ -412,7 +412,7 @@
     "betaBanner": {
       "welcome": "Selamat datang ke SketchCast!",
       "body": "Percubaan percuma anda merangkumi {trial}. Kelas, tugasan, semakan dan analitik semuanya tanpa had. Ada soalan?",
-      "trial": "1 buku dan kit penuh — pelajaran video, rancangan, aktiviti, lembaran kerja, kertas ujian dan kajian kes — untuk satu bahagian daripada satu bab"
+      "trial": "1 buku dan kit penuh — pelajaran video, slaid, rancangan, aktiviti, lembaran kerja, kertas ujian dan kajian kes — untuk satu bahagian daripada satu bab"
     },
     "tour": {
       "teacher_onboarding": {
@@ -871,13 +871,13 @@
       "premiumSuffix": " ★ premium",
       "assignChapter": "Tugaskan bab",
       "generateFullKit": "Jana kit penuh",
-      "generateFullKitHint": "Pelajaran video berserta rancangan, aktiviti, lembaran kerja, kertas ujian dan kajian kesnya — dokumen percuma, satu kredit bagi setiap bahagian pelajaran yang dijana",
-      "generateFree": "Jana ({n}) — percuma",
-      "generateFreeHint": "Percuma — ini menggunakan semula analisis pelajaran",
+      "generateFullKitHint": "Pelajaran video berserta slaid, rancangan, aktiviti, lembaran kerja, kertas ujian dan kajian kesnya — slaid percuma; setiap bahagian lain berharga satu kredit, dan pelajaran panjang satu bagi setiap bahagian yang dijana",
+      "generateFree": "Jana ({n})",
+      "generateFreeHint": "Ini menggunakan semula analisis pelajaran. Slaid percuma; setiap bahagian lain berharga satu kredit.",
       "trialLocked": "Percubaan: 1 bahagian — dikunci",
-      "trialLockedHint": "Percubaan percuma anda merangkumi kit penuh (kesemua enam jenis kandungan) untuk satu bahagian daripada satu bab",
+      "trialLockedHint": "Percubaan percuma anda merangkumi kit penuh (kesemua tujuh jenis kandungan) untuk satu bahagian daripada satu bab",
       "trialPick": "Percubaan: pilih satu bahagian di bawah",
-      "trialPickHint": "Bab ini dipecahkan kepada beberapa bahagian — percubaan anda merangkumi kit penuh (kesemua enam jenis kandungan) untuk satu bahagian pilihan anda",
+      "trialPickHint": "Bab ini dipecahkan kepada beberapa bahagian — percubaan anda merangkumi kit penuh (kesemua tujuh jenis kandungan) untuk satu bahagian pilihan anda",
       "trialPinned": "Percubaan: Bahagian {n} ialah kit anda",
       "trialPinnedHint": "Kit percubaan anda terikat pada bahagian ini — percubaan semula dan setiap jenis kandungan untuknya kekal terbuka"
     },
@@ -1802,7 +1802,7 @@
     "title": "Penggunaan wajar bulan ini",
     "resets": "set semula {date} · baki yang tidak digunakan dibawa ke bulan hadapan sahaja",
     "lessons": "Janaan",
-    "kitFree": "Pelajaran, rancangan, aktiviti, lembaran kerja, kertas ujian atau kajian kes — setiap satu dikira satu janaan.",
+    "kitFree": "Pelajaran, rancangan, aktiviti, lembaran kerja, kertas ujian atau kajian kes — setiap satu dikira satu janaan. Slaid percuma.",
     "usage": "{used} daripada {cap}",
     "usageCarried": "{used} daripada {cap} +{carry} dibawa",
     "trialTitle": "Percubaan percuma — semua ciri dibuka",

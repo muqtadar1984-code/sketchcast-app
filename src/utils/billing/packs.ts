@@ -50,7 +50,8 @@ export type CreditPack = {
   key: CreditPackKey;
   credits: number;
   usd: number;
-  /** Marketing size — a kit is 6 generations (lesson + 5 documents). */
+  /** Marketing size — a kit COSTS 6 credits (lesson + 5 documents; the deck
+   * is the 7th piece and rides free since 0103). */
   label: string;
   /** Exact LS product name (webhook matches on it — keep verbatim). */
   productName: string;

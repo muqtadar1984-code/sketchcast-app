@@ -51,8 +51,9 @@ export function GeneratePaperButton({
       return;
     }
     // 0059: documents ride with their lesson. If the chapter's lesson exists,
-    // the paper is a free add-back; otherwise queue lesson + paper together
-    // (one lesson credit) — the presentation row must stay FIRST so the DB's
+    // the paper is queued alone (one credit); otherwise queue lesson + paper
+    // together (two credits — since 0075 every artifact but the deck is a
+    // credit) — the presentation row must stay FIRST so the DB's
     // docs-with-lesson guard sees it.
     type Row = {
       kind: string;
