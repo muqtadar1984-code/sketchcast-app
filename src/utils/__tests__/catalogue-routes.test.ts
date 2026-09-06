@@ -7,12 +7,14 @@
  *   2. The FIRST await in every exported handler is isLibraryMemberRequest( —
  *      the layout does not guard route handlers, so each one must, before it
  *      reads a body, opens a client, or touches a table.
- *   3. Nothing under /api/library reads or writes `generations` — Phases 1–2a
- *      are taxonomy only; catalogue builds arrive in a later phase behind their
- *      own guards, and the harvest and derive jobs are OBSERVER jobs
- *      (generation_id NULL; derive also book_id NULL, its input in jobs.params).
- *   4. Exactly TWO files insert into `jobs` (the harvest and derive routes), and
- *      neither inserts into `generations` (pipeline-universal.test.ts' invariant).
+ *   3. Nothing under /api/library reads or writes `generations` — Phases 1–2b
+ *      are taxonomy and the article; catalogue builds arrive in a later phase
+ *      behind their own guards, and the harvest, derive, article and figure
+ *      jobs are OBSERVER jobs (generation_id NULL; all but harvest also
+ *      book_id NULL, their input in jobs.params).
+ *   4. Exactly THREE files insert into `jobs` (the harvest, derive and article
+ *      routes), and none inserts into `generations` (pipeline-universal.test.ts'
+ *      invariant).
  *   5. Every POST handler writes platform_audit_log.
  *   6. Phase 2a: a grouped candidate maps its node_ids; create-from-node maps
  *      the ticked children; the bulk create checks every key ONCE (insertTopic's
@@ -22,6 +24,20 @@
  *      planned nodes up first (existingNodeIds) and take a topic they could not
  *      map back out (rollbackTopic after the mapping write), so a stale id is a
  *      dropped mapping, never a 23503 that orphans a half-made topic.
+ *   8. Phase 2b (the article): the article route checks the role per action
+ *      (edit_article to generate / save / submit / render, approve to approve /
+ *      reject) BEFORE it opens a client; a version is approved ONLY through
+ *      approve_topic_article() with the reviewer's id — no route writes
+ *      topic_articles.status = 'approved' itself (plan §1.3); both article jobs
+ *      are observers with a live-job check keyed like their 0114 index and a
+ *      23505 read back as the same 409; every status transition — save,
+ *      submit, reject — is a guarded UPDATE read back with .select("id") whose
+ *      zero rows are a 409 (a Save landing after an approve never overwrites
+ *      the approved version); reject needs notes; a rendered figure whose
+ *      spec changed is reset to draft (figureNeedsReset) so it re-renders;
+ *      figures are rendered only for a draft / in-review / approved version;
+ *      an article is not approved while its topic is still a candidate; every
+ *      action is audited on the topic — only when it happened.
  *
  * Source scan, like server-client-boundary.test.ts: nothing static in the
  * toolchain checks any of this, and a forgotten guard is a public write path.
@@ -58,7 +74,7 @@ function handlers(text: string): { method: string; body: string }[] {
 }
 
 describe("the /api/library routes exist and are scanned", () => {
-  it("has the Phase 1 + 2a routes", () => {
+  it("has the Phase 1 + 2a + 2b routes", () => {
     const names = routes.map(rel).sort();
     expect(names).toEqual(
       [
@@ -68,6 +84,7 @@ describe("the /api/library routes exist and are scanned", () => {
         "curricula/route.ts",
         "derive/route.ts",
         "harvest/route.ts",
+        "topics/[id]/article/route.ts",
         "topics/[id]/route.ts",
         "topics/route.ts",
       ].sort(),
@@ -101,10 +118,10 @@ describe("every /api/library route", () => {
     }
   });
 
-  it("inserts into `jobs` from exactly the harvest and derive routes, and nowhere else", () => {
+  it("inserts into `jobs` from exactly the harvest, derive and article routes, and nowhere else", () => {
     const jobInsert = /\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/;
     const inserters = [...source].filter(([, text]) => jobInsert.test(text)).map(([f]) => rel(f)).sort();
-    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts"]);
+    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts", "topics/[id]/article/route.ts"]);
     // The harvest job is an observer: it owns no generation.
     const harvest = source.get(routes.find((f) => rel(f) === "harvest/route.ts")!)!;
     expect(harvest).toMatch(/type:\s*HARVEST_JOB_TYPE|type:\s*["']topic_harvest["']/);
@@ -118,6 +135,23 @@ describe("every /api/library route", () => {
     expect(derive).toMatch(/book_id:\s*null/);
     expect(derive).toMatch(/status:\s*["']queued["']/);
     expect(derive).toMatch(/params:\s*\{\s*curriculum_id:\s*curriculumId\s*\}/);
+    // The article route's two jobs are observers too (0114): the article job
+    // carries the topic, the language, the hints and the source version; the
+    // figure job carries the article. Neither owns a generation or a book.
+    const article = source.get(routes.find((f) => rel(f) === "topics/[id]/article/route.ts")!)!;
+    expect(article).toMatch(/const\s+ARTICLE_JOB_TYPE\s*=\s*["']topic_article["']/);
+    expect(article).toMatch(/const\s+FIGURE_JOB_TYPE\s*=\s*["']figure_render["']/);
+    expect(article).toMatch(/type:\s*ARTICLE_JOB_TYPE/);
+    expect(article).toMatch(/type:\s*FIGURE_JOB_TYPE/);
+    expect(article).toMatch(/params:\s*\{\s*topic_id:\s*id,\s*language:\s*LANGUAGE,\s*hints,\s*source_article_id:\s*sourceArticleId\s*\}/);
+    expect(article).toMatch(/params:\s*\{\s*article_id:\s*article\.id\s*\}/);
+    const inserts = [...article.matchAll(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(\{([\s\S]*?)\}\)/g)].map((m) => m[1]);
+    expect(inserts).toHaveLength(2);
+    for (const payload of inserts) {
+      expect(payload).toMatch(/generation_id:\s*null/);
+      expect(payload).toMatch(/book_id:\s*null/);
+      expect(payload).toMatch(/status:\s*["']queued["']/);
+    }
   });
 
   it("audits every mutation (each POST handler writes platform_audit_log)", () => {
@@ -177,13 +211,16 @@ describe("every /api/library route", () => {
     expect(steps.match(/\bdbError\(/g) ?? []).toHaveLength(0);
   });
 
-  it("the harvest and derive routes map a lost race on their one-live index (23505) to the 409", () => {
-    for (const name of ["harvest/route.ts", "derive/route.ts"]) {
+  it("the harvest, derive and article routes map a lost race on their one-live index (23505) to the 409", () => {
+    for (const name of ["harvest/route.ts", "derive/route.ts", "topics/[id]/article/route.ts"]) {
       const text = source.get(routes.find((f) => rel(f) === name)!)!;
       expect(text, name).toMatch(/jErr\.code\s*===\s*["']23505["']/);
-      const branch = text.slice(text.indexOf('jErr.code === "23505"'));
-      expect(branch.indexOf("conflict("), name).toBeGreaterThan(-1);
-      expect(branch.indexOf("conflict("), name).toBeLessThan(branch.indexOf("dbError("));
+      // every 23505 branch answers conflict( before any dbError( that follows it
+      for (const m of text.matchAll(/jErr\.code\s*===\s*["']23505["']/g)) {
+        const branch = text.slice(m.index!);
+        expect(branch.indexOf("conflict("), name).toBeGreaterThan(-1);
+        expect(branch.indexOf("conflict("), name).toBeLessThan(branch.indexOf("dbError("));
+      }
     }
     // …and both check for a live job BEFORE inserting (the friendly 409 that names it).
     const derive = source.get(routes.find((f) => rel(f) === "derive/route.ts")!)!;
@@ -314,5 +351,178 @@ describe("every /api/library route", () => {
     expect(get.method).toBe("GET");
     expect(get.body).toMatch(/isLibraryMemberRequest\(\s*\)/);
     expect(post.body).toMatch(/isLibraryMemberRequest\(\s*["']curate["']\s*\)/);
+  });
+});
+
+describe("the article route (Phase 2b): /api/library/topics/[id]/article", () => {
+  const ARTICLE = "topics/[id]/article/route.ts";
+  const text = () => source.get(routes.find((f) => rel(f) === ARTICLE)!)!;
+  const section = (action: string) => {
+    const t = text();
+    const at = t.indexOf(`if (action === "${action}")`);
+    expect(at, `${ARTICLE} has an "${action}" branch`).toBeGreaterThan(-1);
+    const rest = t.slice(at + 1);
+    const next = rest.search(/\n  if \(action === "/);
+    return rest.slice(0, next === -1 ? undefined : next);
+  };
+
+  it("checks the role per action — edit_article to write, approve to review — BEFORE it opens a client", () => {
+    const t = text();
+    for (const a of ["generate", "save", "submit", "render_figures"]) {
+      expect(t, a).toMatch(new RegExp(`${a}:\\s*"edit_article"`));
+    }
+    for (const a of ["approve", "reject"]) {
+      expect(t, a).toMatch(new RegExp(`${a}:\\s*"approve"`));
+    }
+    const check = t.search(/if\s*\(\s*!libraryAllows\(m\.role,\s*NEEDS\[action\]\)\s*\)\s*return\s+notFound\(\)/);
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(t.indexOf("createAdminClient()"));
+    // an article id is only reachable through its own topic
+    expect(t).toMatch(/\.from\(\s*["']topic_articles["']\s*\)\s*\.select\([^)]*\)\s*\.eq\(\s*["']id["']\s*,\s*articleId\s*\)\s*\.eq\(\s*["']topic_id["']\s*,\s*id\s*\)/);
+  });
+
+  it("approves ONLY through approve_topic_article() with the reviewer's id — no route writes topic_articles.status = 'approved'", () => {
+    const approve = section("approve");
+    expect(approve).toMatch(/admin\.rpc\(\s*["']approve_topic_article["']\s*,\s*\{\s*p_article:\s*article\.id,\s*p_reviewer:\s*m\.id,\s*p_notes:\s*notes\s*\}\s*\)/);
+    expect(approve).not.toMatch(/\.from\(\s*["']topic_articles["']\s*\)\s*\.update\(/);
+    // the whole route never spells the approved status into a payload…
+    expect(text()).not.toMatch(/status:\s*["']approved["']/);
+    // …and nowhere under /api/library does a topic_articles write carry it.
+    for (const [f, t] of source) {
+      for (const m of t.matchAll(/\.from\(\s*["']topic_articles["']\s*\)/g)) {
+        const chain = t.slice(m.index!, t.indexOf(";", m.index!));
+        if (/\.(update|insert|upsert)\(/.test(chain)) {
+          expect(chain, `${rel(f)}: a topic_articles write may not set approved`).not.toMatch(/["']?status["']?\s*:\s*["']approved["']/);
+        }
+      }
+    }
+    // the RPC's own refusals (not reviewable, vanished) are the 409, not a 500
+    expect(approve).toMatch(/RPC_REFUSALS\.has\(/);
+    expect(approve.indexOf("conflict(")).toBeLessThan(approve.indexOf("dbError("));
+  });
+
+  /** The guarded-transition shape: `.update({…}).eq("id", article.id)` +
+   *  the status guard + `.select("id")`, its rows read back, and zero rows
+   *  answered with conflict( BEFORE anything else happens. */
+  const guardedWrite = (branch: string, rows: string, guard: RegExp) => {
+    const write = branch.search(/\.from\(\s*["']topic_articles["']\s*\)\s*\.update\(/);
+    expect(write).toBeGreaterThan(-1);
+    const chain = branch.slice(write, branch.indexOf(";", write));
+    expect(chain).toMatch(/\.eq\(\s*["']id["']\s*,\s*article\.id\s*\)/);
+    expect(chain).toMatch(guard);
+    expect(chain).toMatch(/\.select\(\s*["']id["']\s*\)\s*$/);
+    // the rows come back into a named binding and their absence is the 409
+    expect(branch).toMatch(new RegExp(`const\\s*\\{\\s*data:\\s*${rows}\\s*,\\s*error(?::\\s*\\w+)?\\s*\\}\\s*=\\s*await\\s+admin`));
+    const zero = branch.search(new RegExp(`if\\s*\\(\\s*!${rows}\\?\\.length\\s*\\)`));
+    expect(zero, `${rows}: zero rows written is checked`).toBeGreaterThan(write);
+    expect(branch.slice(zero, branch.indexOf("}", zero))).toMatch(/return\s+conflict\(/);
+    return zero;
+  };
+
+  it("submit and reject are guarded transitions read back (zero rows → 409, no audit); reject needs notes", () => {
+    const submit = section("submit");
+    expect(submit).toMatch(/canSubmitArticle\(article\.status\)/);
+    expect(submit).toMatch(
+      /\.update\(\s*\{\s*status:\s*["']in_review["']\s*\}\s*\)\s*\.eq\(\s*["']id["']\s*,\s*article\.id\s*\)\s*\.eq\(\s*["']status["']\s*,\s*["']draft["']\s*\)\s*\.select\(\s*["']id["']\s*\)/,
+    );
+    const submitZero = guardedWrite(submit, "moved", /\.eq\(\s*["']status["']\s*,\s*["']draft["']\s*\)/);
+    expect(submit.indexOf("audit(")).toBeGreaterThan(submitZero);
+
+    const reject = section("reject");
+    expect(reject).toMatch(/canRejectArticle\(article\.status\)/);
+    expect(reject).toMatch(/if\s*\(\s*!notes\s*\)\s*return\s+bad\(/);
+    expect(reject).toMatch(/status:\s*["']rejected["']/);
+    expect(reject).toMatch(/reviewer_id:\s*m\.id/);
+    const rejectZero = guardedWrite(reject, "rejected", /\.in\(\s*["']status["']\s*,\s*\[\s*["']draft["']\s*,\s*["']in_review["']\s*\]\s*\)/);
+    expect(reject.indexOf("audit(")).toBeGreaterThan(rejectZero);
+  });
+
+  it("save runs the pure validator first, then a status-guarded write read back — a Save after an approve is a 409, never an overwrite", () => {
+    const save = section("save");
+    expect(save).toMatch(/canEditArticle\(article\.status\)/);
+    const validate = save.indexOf("validateArticle(body.article)");
+    const write = save.search(/\.from\(\s*["']topic_articles["']\s*\)\s*\.update\(/);
+    expect(validate).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(validate);
+    expect(save).toMatch(/word_count:\s*v\.wordCount/);
+    // the body update is guarded on the editable statuses and read back; the
+    // zero-rows 409 comes BEFORE the figures are touched, so a version that
+    // was approved or rejected under the editor is left exactly as it is
+    const zero = guardedWrite(save, "written", /\.in\(\s*["']status["']\s*,\s*\[\s*["']draft["']\s*,\s*["']in_review["']\s*\]\s*\)/);
+    const figures = save.search(/\.from\(\s*["']article_figures["']\s*\)/);
+    expect(figures).toBeGreaterThan(zero);
+    expect(save.indexOf("audit(")).toBeGreaterThan(zero);
+  });
+
+  it("save upserts figures by key, resets a rendered figure whose spec changed, and deletes only draft figures", () => {
+    const save = section("save");
+    expect(save).toMatch(/onConflict:\s*["']article_id,figure_key["']/);
+    expect(save).toMatch(/\.delete\(\)\s*\.eq\(\s*["']article_id["']\s*,\s*article\.id\s*\)\s*\.eq\(\s*["']status["']\s*,\s*["']draft["']\s*\)/);
+    // the existing rows are read WITH their spec, so the reset rule can compare
+    expect(save).toMatch(/\.from\(\s*["']article_figures["']\s*\)\s*\.select\(\s*["']id, figure_key, status, spec["']\s*\)/);
+    // the upsert payload is the editable columns — an existing row keeps the
+    // renderer's visual_asset_id, labels, status and render_error — plus the
+    // reset columns for exactly the figures figureNeedsReset() names
+    expect(save).toMatch(
+      /\.upsert\(\s*next\.figures\.map\(\(f: ArticleFigureInput\) => \(\{\s*article_id:\s*article\.id,\s*figure_key:\s*f\.figure_key,\s*caption:\s*f\.caption,\s*spec:\s*f\.spec,\s*sort:\s*f\.sort,\s*\.\.\.\(resetKeys\.has\(f\.figure_key\)\s*\?\s*FIGURE_RESET\s*:\s*\{\}\),?\s*\}\)\)/,
+    );
+    expect(save).toMatch(/figureNeedsReset\(prior,\s*f\.spec\)/);
+    // the reset is exactly: back to draft, no asset, no labels, no stale error
+    expect(text()).toMatch(/const\s+FIGURE_RESET\s*=\s*\{\s*status:\s*["']draft["'],\s*visual_asset_id:\s*null,\s*labels:\s*\[\][^,]*,\s*render_error:\s*null\s*\}/);
+    // …and it is reported next to the kept figures, in the answer and the audit row
+    expect(save).toMatch(/figuresReset:\s*reset/);
+    expect(save).toMatch(/figures_reset:\s*reset/);
+    expect(save).toMatch(/figuresKept:\s*kept/);
+  });
+
+  it("render_figures refuses a version that is history (rejected, superseded) before it counts or enqueues anything", () => {
+    const render = section("render_figures");
+    const gate = render.indexOf("canRenderFigures(article.status)");
+    expect(gate).toBeGreaterThan(-1);
+    const count = render.search(/\.from\(\s*["']article_figures["']\s*\)/);
+    const insert = render.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/);
+    expect(gate).toBeLessThan(count);
+    expect(gate).toBeLessThan(insert);
+    expect(render.slice(gate, count)).toMatch(/return\s+conflict\(/);
+  });
+
+  it("approve refuses while the TOPIC is still a candidate — before the RPC runs", () => {
+    const approve = section("approve");
+    const gate = approve.search(/topic\.status\s*===\s*["']candidate["']/);
+    const rpc = approve.indexOf('admin.rpc("approve_topic_article"');
+    expect(gate).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(rpc);
+    expect(approve.slice(gate, rpc)).toMatch(/return\s+conflict\(/);
+  });
+
+  it("both jobs check for a live one BEFORE inserting, keyed like their 0114 index", () => {
+    const generate = section("generate");
+    const gCheck = generate.indexOf('.in("status", ["queued", "processing"])');
+    const gInsert = generate.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/);
+    expect(gCheck).toBeGreaterThan(-1);
+    expect(gInsert).toBeGreaterThan(gCheck);
+    // jobs_one_live_article: (params->>'topic_id', coalesce(params->>'language','en'))
+    expect(generate).toMatch(/\.eq\(\s*["']params->>topic_id["']\s*,\s*id\s*\)/);
+    expect(generate).toMatch(/\.eq\(\s*["']params->>language["']\s*,\s*LANGUAGE\s*\)/);
+    expect(generate).toMatch(/topicAcceptsArticle\(topic\.status\)/);
+
+    const render = section("render_figures");
+    const rCheck = render.indexOf('.in("status", ["queued", "processing"])');
+    const rInsert = render.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/);
+    expect(rCheck).toBeGreaterThan(-1);
+    expect(rInsert).toBeGreaterThan(rCheck);
+    // jobs_one_live_figure_render: (params->>'article_id')
+    expect(render).toMatch(/\.eq\(\s*["']params->>article_id["']\s*,\s*article\.id\s*\)/);
+    // nothing to render is a 400, not a job
+    expect(render.indexOf("return bad(")).toBeLessThan(rInsert);
+  });
+
+  it("audits every action on the topic (approve is audited by the RPC itself)", () => {
+    const t = text();
+    for (const verb of ["article_generate", "article_save", "article_submit", "figures_render", "article_reject"]) {
+      expect(t, verb).toMatch(new RegExp(`audit\\(admin,\\s*m\\.id,\\s*"${verb}",\\s*"topic",\\s*id`));
+    }
+    expect(section("approve")).not.toMatch(/\baudit\(/);
+    expect(section("approve")).toMatch(/Audited by the RPC/);
   });
 });

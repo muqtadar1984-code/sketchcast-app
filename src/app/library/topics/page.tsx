@@ -5,6 +5,7 @@ import { requireLibraryMember } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
 import { InkUnderline } from "@/components/ink-mark";
 import {
+  ARTICLE_FILTERS,
   TOPIC_STATUSES,
   catalogueMissing,
   clampPage,
@@ -18,17 +19,25 @@ import {
   searchOr,
   withTopicFilter,
 } from "@/utils/catalogue/status";
+import { articleStatusLabel, articleSummaries } from "@/utils/catalogue/article";
 import type { Curriculum, NodeKind, Topic } from "@/utils/catalogue/types";
-import { ErrorBanner, MaturityChip, MissingTablesBanner, Pager, StatusChip, fmtDate } from "../catalogue-ui";
+import { ArticleStatusChip, ErrorBanner, MaturityChip, MissingTablesBanner, Pager, StatusChip, fmtDate } from "../catalogue-ui";
 import NewTopicForm from "./new-topic-form";
 
 // /library/topics — the canonical topics, filterable (subject, curriculum,
-// grade, sub-strand / unit, status, free text), paginated in Postgres. Every
-// filter is a GET with a querystring so the server re-queries; the browser
-// never holds more than one page (the visual-library stance). A ?page= past
-// the end lands on the last page (redirect), never on an empty page or
-// PostgREST's 416. The sub-strand filter matches a topic mapped to the group
-// OR to any node under it (its objectives) — mappings point at either.
+// grade, sub-strand / unit, status, article state, free text), paginated in
+// Postgres. Every filter is a GET with a querystring so the server re-queries;
+// the browser never holds more than one page (the visual-library stance). A
+// ?page= past the end lands on the last page (redirect), never on an empty
+// page or PostgREST's 416. The sub-strand filter matches a topic mapped to the
+// group OR to any node under it (its objectives) — mappings point at either.
+// The article filter (?article=draft|in_review|approved|none) is the overview's
+// review-queue link: `approved` = the topic has an approved version; `draft` /
+// `in_review` = it has a version pending in that state (whatever else it has —
+// a topic with an approved v1 and a draft v2 matches both); `none` = no version
+// at all. The Article column says the same two things per topic: the approved
+// version and the pending one (articleSummaries) — never the newest version's
+// status alone, which would read "rejected" over a live approved article.
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +88,13 @@ export default async function TopicsPage({
   // and PostgREST resolves it in one query — the only id list in the URL is a
   // sub-strand's own objectives. The same filters build the count-only query
   // used to find the last page.
-  const embed = f.curriculum || f.grade ? ", topic_curriculum_map!inner(node_id, curriculum_nodes!inner(curriculum_id, grade))" : "";
+  const mapEmbed = f.curriculum || f.grade ? ", topic_curriculum_map!inner(node_id, curriculum_nodes!inner(curriculum_id, grade))" : "";
+  // The article filter: an INNER embed on topic_articles restricted to the
+  // state (a topic with a draft AND an approved version matches both); "none"
+  // is a LEFT embed filtered to null (PostgREST's null filtering on an
+  // embedded resource).
+  const articleEmbed = f.article === "none" ? ", topic_articles(id)" : f.article ? ", topic_articles!inner(status)" : "";
+  const embed = mapEmbed + articleEmbed;
   const search = searchOr(f.q, ["title", "canonical_key", "summary"]);
   const filtered = (head: boolean) => {
     let query = head
@@ -90,6 +105,8 @@ export default async function TopicsPage({
     if (f.curriculum) query = query.eq("topic_curriculum_map.curriculum_nodes.curriculum_id", f.curriculum);
     if (f.grade) query = query.eq("topic_curriculum_map.curriculum_nodes.grade", f.grade);
     if (nodeIds.length) query = query.in("topic_curriculum_map.node_id", nodeIds);
+    if (f.article === "none") query = query.is("topic_articles", null);
+    else if (f.article) query = query.eq("topic_articles.status", f.article);
     if (search) query = query.or(search);
     return query;
   };
@@ -126,12 +143,17 @@ export default async function TopicsPage({
   // count says where the last page is either way.
   if (f.page > pages) redirect(href(pages));
 
-  // Mapping counts for THIS page only (≤ pageSize ids), plus the filter facets.
+  // Mapping counts and the article versions for THIS page only (≤ pageSize
+  // ids, one grouped query each — never a query per row), plus the filter
+  // facets.
   const ids = rows.map((r) => r.id);
-  const [mapQ, subjQ, currQ] = await Promise.all([
+  const [mapQ, artQ, subjQ, currQ] = await Promise.all([
     ids.length
       ? admin.from("topic_curriculum_map").select("topic_id").in("topic_id", ids)
       : Promise.resolve({ data: [] as { topic_id: string }[] }),
+    ids.length
+      ? admin.from("topic_articles").select("topic_id, version, status").in("topic_id", ids).eq("language", "en")
+      : Promise.resolve({ data: [] as { topic_id: string; version: number; status: string }[] }),
     admin.from("topics").select("subject").not("subject", "is", null).limit(2000),
     admin.from("curricula").select("id, code, name, kind, country, edition, source_url").order("name"),
   ]);
@@ -139,6 +161,7 @@ export default async function TopicsPage({
   for (const r of (mapQ.data ?? []) as { topic_id: string }[]) {
     mappingCount.set(r.topic_id, (mappingCount.get(r.topic_id) ?? 0) + 1);
   }
+  const articleSummary = articleSummaries((artQ.data ?? []) as { topic_id: string; version: number; status: string }[]);
   const subjects = [...new Set(((subjQ.data ?? []) as { subject: string | null }[]).map((r) => (r.subject ?? "").trim()).filter(Boolean))].sort();
   const curricula = (currQ.data ?? []) as Curriculum[];
   const grades = [...new Set(curriculumNodes.map((n) => (n.grade ?? "").trim()).filter(Boolean))].sort((a, b) =>
@@ -210,6 +233,20 @@ export default async function TopicsPage({
             </option>
           ))}
         </select>
+        <select
+          name="article"
+          defaultValue={f.article}
+          className="field h-9 px-2"
+          aria-label="Article state"
+          title="approved: has an approved version · draft / in review: has a version pending in that state · no article: no version at all"
+        >
+          <option value="">Any article state</option>
+          {ARTICLE_FILTERS.map((s) => (
+            <option key={s} value={s}>
+              {s === "none" ? "no article" : s === "approved" ? "article approved" : `article ${articleStatusLabel(s)} pending`}
+            </option>
+          ))}
+        </select>
         {f.pageSize !== 50 && <input type="hidden" name="pageSize" value={f.pageSize} />}
         <div className="flex items-center gap-2 lg:col-span-7">
           <button type="submit" className="btn-primary h-9 px-4">
@@ -272,6 +309,7 @@ export default async function TopicsPage({
                 <th className="px-4 py-2.5 font-medium">Title</th>
                 <th className="px-4 py-2.5 font-medium">Subject</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 font-medium">Article</th>
                 <th className="px-4 py-2.5 font-medium">Bank</th>
                 <th className="px-4 py-2.5 font-medium text-right">Mappings</th>
                 <th className="px-4 py-2.5 font-medium">Updated</th>
@@ -289,6 +327,36 @@ export default async function TopicsPage({
                   <td className="px-4 py-2.5 text-[#5B6470]">{t.subject ?? "—"}</td>
                   <td className="px-4 py-2.5">
                     <StatusChip status={t.status} />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {(() => {
+                      // Two facts: the approved (live) version and the newest
+                      // pending one. A rejected or superseded version never
+                      // stands in for either; "none" means no version at all.
+                      const s = articleSummary.get(t.id);
+                      if (!s) return <span className="chip bg-[#F4F6F3] text-[#98A0A9]">none</span>;
+                      if (!s.approved && !s.pending && s.latest) {
+                        return (
+                          <span title={`Newest version: v${s.latest.version} (${articleStatusLabel(s.latest.status)}); no approved or pending version`}>
+                            <ArticleStatusChip status={s.latest.status} label={`v${s.latest.version} ${articleStatusLabel(s.latest.status)}`} />
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="inline-flex flex-wrap items-center gap-1">
+                          {s.approved && (
+                            <span title={`v${s.approved.version} is the approved version — kits are generated from it`}>
+                              <ArticleStatusChip status="approved" label={`approved v${s.approved.version}`} />
+                            </span>
+                          )}
+                          {s.pending && (
+                            <span title={`v${s.pending.version} is ${s.pending.status === "draft" ? "a draft awaiting submission" : "in review"}`}>
+                              <ArticleStatusChip status={s.pending.status} label={`v${s.pending.version} ${s.pending.status === "draft" ? "draft pending" : "in review"}`} />
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-2.5">
                     <MaturityChip maturity={t.bank_maturity} />
