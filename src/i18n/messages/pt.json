@@ -1075,7 +1075,9 @@
     },
     "gate": {
       "banner": "Este arquivo enviado não parece um livro didático. As aulas geradas a partir dele provavelmente serão fracas.",
+      "structureBanner": "Este livro foi indexado, mas a lista de capítulos parece pouco confiável. Confira os capítulos antes de gerar — as aulas seguem esses limites.",
       "title": "Não parece um livro didático",
+      "structureTitle": "Confira primeiro os capítulos deste livro",
       "body": "Gerar usará seus créditos, e os resultados provavelmente serão fracos. Quer continuar?",
       "trialLine": "Isto usará seu único kit de teste.",
       "confirm": "Gerar mesmo assim",
@@ -1083,6 +1085,7 @@
       "docType": {
         "administrative": "Documento administrativo",
         "form_or_roster": "Formulário ou lista de alunos",
+        "textbook": "Livro didático com estrutura de capítulos pouco clara",
         "other": "Documento não reconhecido"
       }
     },
@@ -1814,10 +1817,15 @@
     "documents": "Documentos",
     "buyTitle": "Comprar créditos",
     "buyHint": "Pacotes de créditos avulsos. Eles não expiram — sua cota mensal é usada primeiro.",
+    "buyNewTab": "O checkout abre em uma nova aba. Volte aqui quando terminar — seus créditos aparecerão nesta página.",
+    "buyClose": "Fechar",
     "packLabel": "{credits} créditos — ${price} ({kits})",
+    "packCredits": "{credits} créditos",
+    "packPrice": "${price}",
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kits",
     "purchased": "{n} créditos comprados disponíveis",
+    "availableNow": "{n} gerações disponíveis agora — {monthly} neste mês mais {purchased} compradas",
     "upgradeCta": "Precisa de mais? Veja os planos e preços",
     "schoolTrialTitle": "Teste da escola — tudo liberado",
     "schoolTrialLeft": "Restam {available} de {cap} gerações no teste da sua escola. Quando estiver pronto, peça para ativarmos sua escola para uso ilimitado.",
