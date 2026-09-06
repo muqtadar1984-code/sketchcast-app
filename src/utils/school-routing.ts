@@ -53,6 +53,10 @@ export const RESERVED_SEGMENTS = new Set([
   // unreachable by exactly the audience it was published for.
   "present",
   "preview",
+  // The Library portal's top-level routes (topic catalogue, 0110). They only
+  // exist on library.sketchcast.app, but they must not become tenant slugs here.
+  "library",
+  "library-login",
   "favicon.ico",
   "_next",
 ]);

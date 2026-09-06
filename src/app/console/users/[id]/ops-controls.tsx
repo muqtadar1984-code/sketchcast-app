@@ -14,6 +14,9 @@ export default function OpsControls({
   isStaffTarget,
   canGrantStaff,
   opsReady,
+  libraryRole = null,
+  libraryReady = true,
+  canGrantLibrary = false,
 }: {
   userId: string;
   suspended: boolean;
@@ -22,6 +25,11 @@ export default function OpsControls({
   isStaffTarget: boolean;
   canGrantStaff: boolean;
   opsReady: boolean;
+  /** 0110: current Library portal role ('editor' | 'reviewer'), or null. */
+  libraryRole?: string | null;
+  /** false when migration 0110 is not applied — the lever explains instead of failing. */
+  libraryReady?: boolean;
+  canGrantLibrary?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,6 +42,7 @@ export default function OpsControls({
     children: caps.children?.toString() ?? "",
   });
   const [countryForm, setCountryForm] = useState(country ?? "");
+  const [libraryForm, setLibraryForm] = useState<"editor" | "reviewer">(libraryRole === "reviewer" ? "reviewer" : "editor");
 
   async function call(payload: Record<string, unknown>, label: string) {
     setBusy(label);
@@ -170,6 +179,50 @@ export default function OpsControls({
           </button>
         </div>
       </div>
+
+      {canGrantLibrary && (
+        <div className="pt-1 border-t border-[#EEF0EC]">
+          <p className="font-medium text-sm">Library access</p>
+          <p className="text-xs text-[#5B6470] mb-2">
+            Who may enter library.sketchcast.app (the topic catalogue). Staff are admins there already; this
+            grants an <span className="font-medium">editor</span> (curate, edit and approve articles, generate)
+            or a <span className="font-medium">reviewer</span> (approve or reject only). Publishing stays with staff.
+          </p>
+          {!libraryReady ? (
+            <p className="text-xs text-[#9A6400]">Needs migration <span className="font-medium">0110</span>.</p>
+          ) : isStaffTarget ? (
+            <p className="text-xs text-[#5B6470]">Staff — admin of the Library implicitly.</p>
+          ) : (
+            <div className="flex items-end gap-2">
+              <select
+                value={libraryForm}
+                onChange={(e) => setLibraryForm(e.target.value === "reviewer" ? "reviewer" : "editor")}
+                className="field h-9 px-2"
+                disabled={!!busy}
+              >
+                <option value="editor">editor</option>
+                <option value="reviewer">reviewer</option>
+              </select>
+              <button
+                onClick={() => call({ action: "library_grant", libraryRole: libraryForm }, "library")}
+                disabled={!!busy}
+                className="btn-ghost h-9 px-4 text-sm"
+              >
+                {busy === "library" ? "…" : libraryRole ? `Set ${libraryForm}` : `Grant ${libraryForm}`}
+              </button>
+              {libraryRole && (
+                <button
+                  onClick={() => call({ action: "library_revoke" }, "library-revoke")}
+                  disabled={!!busy}
+                  className="btn-ghost h-9 px-4 text-sm"
+                >
+                  {busy === "library-revoke" ? "…" : "Revoke access"}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {canGrantStaff && (
         <div className="flex items-center justify-between gap-3 pt-1 border-t border-[#EEF0EC]">
