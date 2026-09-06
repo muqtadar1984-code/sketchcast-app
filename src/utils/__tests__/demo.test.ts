@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SHARED_DEMO_PASSWORD, demoAccountPassword, partitionByDemo, demoSchoolIds } from "../demo";
+import { SHARED_DEMO_PASSWORD, demoAccountPassword, partitionByDemo, partitionRoster, demoSchoolIds } from "../demo";
 
 describe("demoAccountPassword — what the console's Password column shows", () => {
   it("seed-school.ts tenant adults (@{slug}.sketchcast.app subdomains) get the shared demo password", () => {
@@ -61,6 +61,47 @@ describe("partitionByDemo — roster split for the Users tabs", () => {
 
   it("empty input yields two empty lists", () => {
     expect(partitionByDemo([])).toEqual({ real: [], demo: [] });
+  });
+});
+
+describe("partitionRoster — the Users / Staff / Demo tabs", () => {
+  const staffIds = new Set(["founder", "sara", "catalogue"]);
+  const isStaff = (r: { id: string }) => staffIds.has(r.id);
+
+  it("staff (platform_admins membership) leave the real roster for their own tab", () => {
+    const rows = [
+      { id: "founder", is_demo: false },
+      { id: "sara", is_demo: null },
+      { id: "catalogue" },
+      { id: "teacher", is_demo: false },
+      { id: "parent", is_demo: null },
+    ];
+    const { real, staff, demo } = partitionRoster(rows, isStaff);
+    expect(staff.map((r) => r.id)).toEqual(["founder", "sara", "catalogue"]);
+    expect(real.map((r) => r.id)).toEqual(["teacher", "parent"]);
+    expect(demo).toEqual([]);
+  });
+
+  it("demo wins: a seeded account with a stray admin row stays in the Demo tab", () => {
+    const { real, staff, demo } = partitionRoster([{ id: "sara", is_demo: true }, { id: "t", is_demo: false }], isStaff);
+    expect(demo.map((r) => r.id)).toEqual(["sara"]);
+    expect(staff).toEqual([]);
+    expect(real.map((r) => r.id)).toEqual(["t"]);
+  });
+
+  it("staff is decided by the predicate, never by the e-mail domain (demo tenant adults are not staff)", () => {
+    // principal.test@sketchcast.app / demo.parent1@sketchcast.app hold no
+    // platform_admins row — the predicate says no, so they stay real (or demo
+    // when flagged), exactly like the staff tier's plan_tier() rule.
+    const rows = [{ id: "principal.test", is_demo: false }, { id: "demo.parent1", is_demo: true }];
+    const { real, staff, demo } = partitionRoster(rows, () => false);
+    expect(staff).toEqual([]);
+    expect(real.map((r) => r.id)).toEqual(["principal.test"]);
+    expect(demo.map((r) => r.id)).toEqual(["demo.parent1"]);
+  });
+
+  it("preserves the incoming order inside every bucket and yields three empty lists for no rows", () => {
+    expect(partitionRoster([], isStaff)).toEqual({ real: [], demo: [], staff: [] });
   });
 });
 
