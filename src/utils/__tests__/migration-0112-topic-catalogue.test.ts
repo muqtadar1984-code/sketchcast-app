@@ -185,16 +185,28 @@ describe("0112 — trigger exemptions", () => {
     expect(between.split("\n").every((l) => l.trim() === "" || l.trim().startsWith("--"))).toBe(true);
     const lock = body.indexOf("pg_advisory_xact_lock");
     if (lock >= 0) expect(guard).toBeLessThan(lock);
-    expect(body.slice(guard, guard + 200)).toContain("return new;");
+    const guardBlock = body.slice(guard, guard + 400);
+    // params is client-writable: the flag alone must never open the door.
+    expect(guardBlock).toContain("if not public.is_platform_admin(new.owner_id) then");
+    expect(guardBlock).toContain("raise exception 'params.catalogue is reserved for the catalogue system account.';");
+    expect(guardBlock).toContain("return new;");
   });
 
   it.each(cases)("%s: minus the guard, the body is the last defining migration's body", (name, prior) => {
     const mine = code(fn(M0112, name))
       .split("\n")
-      .filter((l) => !l.includes("'catalogue'") && l.trim() !== "return new;" && l.trim() !== "end if;")
+      .filter(
+        (l) =>
+          !l.includes("'catalogue'") &&
+          !l.includes("params.catalogue") &&
+          !l.includes("is_platform_admin(new.owner_id)") &&
+          l.trim() !== "return new;" &&
+          l.trim() !== "end if;",
+      )
       .join("\n");
     // The prior body loses the same two token kinds so the comparison is fair:
-    // the guard contributes exactly one `return new;` and one `end if;`.
+    // the guard contributes `return new;` and `end if;` lines and nothing else
+    // that survives the filters above.
     const theirs = code(fn(prior, name))
       .split("\n")
       .filter((l) => l.trim() !== "return new;" && l.trim() !== "end if;")

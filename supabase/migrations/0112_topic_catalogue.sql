@@ -73,6 +73,12 @@
 --                       creates the worker job.
 --     on_generation_ledger_used                AFTER INSERT   → no-op with
 --                       book_id NULL.
+--   THE FLAG IS NOT TRUSTED ON ITS OWN. generations.params is written by the
+--   client on insert (gen_write, 0001/0020), so a user could set
+--   params.catalogue = true on their own row. The guard therefore also requires
+--   is_platform_admin(new.owner_id) (0014) — the catalogue system account is a
+--   platform admin — and REFUSES any other row carrying the flag, so a forgery
+--   surfaces as an error instead of a free, uncapped, un-deduplicated kit.
 --   Each exempted function is re-declared from its LIVE prod body
 --   (pg_get_functiondef, 2026-09-06; equal to its last defining migration:
 --   reject_double_submit and enforce_fair_use → 0103, credit_ledger_write →
@@ -443,8 +449,15 @@ declare
 begin
   -- 0112: a catalogue generation (topic kit, owned by the catalogue system
   -- account; params.catalogue = true) is never deduplicated, capped or metered
-  -- here. See 0112's header for the trigger-by-trigger reasoning.
+  -- here. `params` is CLIENT-writable on insert, so the flag alone proves
+  -- nothing: only a platform admin's row may carry it (the catalogue system
+  -- account is one); anyone else's is refused outright rather than metered as
+  -- if the flag were absent, so a forgery is visible, not silently ignored.
+  -- See 0112's header for the trigger-by-trigger reasoning.
   if coalesce(new.params->>'catalogue', '') = 'true' then
+    if not public.is_platform_admin(new.owner_id) then
+      raise exception 'params.catalogue is reserved for the catalogue system account.';
+    end if;
     return new;
   end if;
   if new.kind::text not in
@@ -495,8 +508,15 @@ declare
 begin
   -- 0112: a catalogue generation (topic kit, owned by the catalogue system
   -- account; params.catalogue = true) is never deduplicated, capped or metered
-  -- here. See 0112's header for the trigger-by-trigger reasoning.
+  -- here. `params` is CLIENT-writable on insert, so the flag alone proves
+  -- nothing: only a platform admin's row may carry it (the catalogue system
+  -- account is one); anyone else's is refused outright rather than metered as
+  -- if the flag were absent, so a forgery is visible, not silently ignored.
+  -- See 0112's header for the trigger-by-trigger reasoning.
   if coalesce(new.params->>'catalogue', '') = 'true' then
+    if not public.is_platform_admin(new.owner_id) then
+      raise exception 'params.catalogue is reserved for the catalogue system account.';
+    end if;
     return new;
   end if;
   tier := plan_tier(new.owner_id);
@@ -727,8 +747,15 @@ declare
 begin
   -- 0112: a catalogue generation (topic kit, owned by the catalogue system
   -- account; params.catalogue = true) is never deduplicated, capped or metered
-  -- here. See 0112's header for the trigger-by-trigger reasoning.
+  -- here. `params` is CLIENT-writable on insert, so the flag alone proves
+  -- nothing: only a platform admin's row may carry it (the catalogue system
+  -- account is one); anyone else's is refused outright rather than metered as
+  -- if the flag were absent, so a forgery is visible, not silently ignored.
+  -- See 0112's header for the trigger-by-trigger reasoning.
   if coalesce(new.params->>'catalogue', '') = 'true' then
+    if not public.is_platform_admin(new.owner_id) then
+      raise exception 'params.catalogue is reserved for the catalogue system account.';
+    end if;
     return new;
   end if;
   if new.kind in ('presentation', 'worksheet', 'exam_paper', 'lesson_plan', 'activity', 'case_study') then
