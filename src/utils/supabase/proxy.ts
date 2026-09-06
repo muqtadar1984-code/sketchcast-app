@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { consoleHostname, consoleRoute, bareHost, STAFF_LOGIN_PATH } from "@/utils/console-routing";
 import { schoolHostname, schoolRoute } from "@/utils/school-routing";
+import { libraryHostname, libraryRoute } from "@/utils/library-routing";
 import { sessionScoped } from "@/utils/supabase/session-cookies";
 
 // Refreshes the Supabase auth session on every request and guards routes.
@@ -66,6 +67,20 @@ export async function updateSession(request: NextRequest) {
     // The staff login exists only as part of the subdomain feature. While that's
     // off, it must not be a reachable page on the teacher host.
     return redirectTo("/login");
+  }
+
+  // ── Library portal host (library.sketchcast.app; topic catalogue) ──────────
+  // Same shape as the console block: its own host, its own sign-in, and the
+  // portal's paths do not exist on any other host. Dormant (= the portal does
+  // not exist anywhere) unless NEXT_PUBLIC_LIBRARY_HOST is set. Membership is
+  // decided by the portal layout / API guards (library-access.ts), not here.
+  const lHost = libraryHostname();
+  {
+    const decision = libraryRoute({ libraryHostname: lHost, host: host ?? "", path, hasUser: !!user });
+    if (decision.type === "redirect") return redirectTo(decision.path, true);
+    // On the portal host every route is handled by the rules above — never fall
+    // through to the teacher-app guards.
+    if (lHost && bareHost(host) === lHost) return response;
   }
 
   // ── School-portal host (dormant unless NEXT_PUBLIC_SCHOOL_HOST is set) ──────

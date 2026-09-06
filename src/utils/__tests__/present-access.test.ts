@@ -140,7 +140,7 @@ describe("a tier this build has never heard of", () => {
 
 describe("the sets themselves", () => {
   it("carries exactly the three plans the founder named, plus the school trial", () => {
-    expect([...PRESENT_TIERS].sort()).toEqual(["pro", "pro_plus", "school", "school_trial"]);
+    expect([...PRESENT_TIERS].sort()).toEqual(["pro", "pro_plus", "school", "school_trial", "staff"]);
   });
 
   it("denies exactly the two roles that do not teach", () => {

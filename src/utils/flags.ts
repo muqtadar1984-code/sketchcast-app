@@ -3,6 +3,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { consoleModeOn } from "./console-routing";
+import { libraryModeOn } from "./library-routing";
 
 /**
  * Console subdomain — when NEXT_PUBLIC_CONSOLE_HOST is set (e.g.
@@ -14,6 +15,18 @@ import { consoleModeOn } from "./console-routing";
  */
 export function consoleSubdomainEnabled(): boolean {
   return consoleModeOn();
+}
+
+/**
+ * Library portal — when NEXT_PUBLIC_LIBRARY_HOST is set (e.g.
+ * "library.sketchcast.app"), the topic-catalogue portal exists on that host with
+ * its own sign-in (/library-login); access is membership (library_members, 0110;
+ * platform admins implicitly), granted from the console Users page. Unset ⇒ the
+ * portal does not exist anywhere. See src/utils/library-routing.ts +
+ * docs/LIBRARY-PORTAL.md.
+ */
+export function libraryPortalEnabled(): boolean {
+  return libraryModeOn();
 }
 
 /**

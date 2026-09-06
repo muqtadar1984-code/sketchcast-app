@@ -73,10 +73,13 @@ describe("0105 — the migration file", () => {
       .join("\n");
     expect(code.split("100000").length - 1).toBe(1);
     expect(code).toContain("comp_threshold constant integer := 100000;");
-    // …and nowhere else in the repo's SQL.
-    for (const f of readdirSync(MIGRATIONS).filter((x) => x.endsWith(".sql") && x !== "0105_premium_voices_threshold.sql")) {
-      expect(read(f)).not.toContain("premium_voices_allowed");
-    }
+    // …and the helper is (re)defined in exactly the files that own the rule:
+    // 0105 (born) and 0109 (the staff tier joined the paid list). A third file
+    // must be added HERE on purpose, with its own parse test, never by accident.
+    const definers = readdirSync(MIGRATIONS)
+      .filter((x) => x.endsWith(".sql") && read(x).includes("premium_voices_allowed"))
+      .sort();
+    expect(definers).toEqual(["0105_premium_voices_threshold.sql", "0109_staff_tier.sql"]);
   });
 
   it("defines premium_voices_allowed(uid) as the one place the rule lives", () => {

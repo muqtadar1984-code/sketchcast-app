@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { founderEmails, isPlatformAdminRequest } from "@/utils/platform-admin";
+import { isGrantableLibraryRole } from "@/utils/library-routing";
 import { isCountryCode } from "@/utils/countries";
 import { CAP_CEILING } from "@/utils/console-actions";
 import { stripe } from "@/utils/stripe/client";
@@ -16,6 +17,9 @@ export const runtime = "nodejs";
 //   set_country          — profiles.country (0085), stamped country_source='staff'
 //   takedown / restore   — soft-delete a book or generation (recoverable)
 //   admin_grant / admin_revoke — platform_admins membership (FOUNDERS only)
+//   library_grant / library_revoke — library_members (0110): who may enter the
+//                          Library portal, as 'editor' or 'reviewer'. Any staff
+//                          member may grant; platform admins are members implicitly
 //   school_* (0101)      — targetId is a SCHOOL id:
 //     school_suspend / school_restore — schools.status; plan_tier() branch 1,
 //                          beats even a paid entitlement (the kill switch)
@@ -32,6 +36,7 @@ export const runtime = "nodejs";
 type Body = {
   action?:
     | "suspend" | "unsuspend" | "set_caps" | "set_country" | "takedown" | "restore" | "admin_grant" | "admin_revoke"
+    | "library_grant" | "library_revoke"
     | "school_suspend" | "school_restore" | "school_extend_trial" | "school_activate" | "school_set_sales"
     | "school_issue_invoice";
   amountMyr?: number;              // school_issue_invoice: quoted amount in ringgit (major units)
@@ -49,6 +54,7 @@ type Body = {
   salesStage?: string;             // school_set_sales
   salesNotes?: string | null;      // school_set_sales; null clears
   note?: string;
+  libraryRole?: string;            // library_grant: 'editor' | 'reviewer'
 };
 
 const SALES_STAGES = ["new", "contacted", "invoice_sent", "paid", "lost"];
@@ -258,6 +264,42 @@ export async function POST(request: Request) {
       if (rErr) return NextResponse.json({ error: rErr.message }, { status: 500 });
     }
     await audit(body.action, "profile", {});
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Library portal membership (0110) ────────────────────────────────────────
+  // Who may enter library.sketchcast.app, and as what. Staff (not only founders)
+  // may grant: the founder's decision is that the console controls access, and
+  // the roles are deliberately narrow — an editor cannot publish to YouTube and a
+  // reviewer can only approve or reject (src/utils/library-routing.ts).
+  if (body.action === "library_grant" || body.action === "library_revoke") {
+    if (body.action === "library_grant") {
+      if (!isGrantableLibraryRole(body.libraryRole)) {
+        return NextResponse.json({ error: "libraryRole must be 'editor' or 'reviewer'." }, { status: 400 });
+      }
+      const { data: prof } = await admin.from("profiles").select("role").eq("id", targetId).maybeSingle();
+      if (!prof) return NextResponse.json({ error: "No such account." }, { status: 404 });
+      if (prof.role === "student") {
+        return NextResponse.json({ error: "Students cannot be Library members." }, { status: 400 });
+      }
+      const { error: gErr } = await admin
+        .from("library_members")
+        .upsert({ user_id: targetId, role: body.libraryRole, granted_by: staff.id, note: body.note ?? null, revoked_at: null });
+      if (gErr) {
+        // 0110 not applied yet → say so instead of a bare 500.
+        const missing = /library_members/.test(gErr.message) && /relation|schema cache/i.test(gErr.message);
+        return NextResponse.json({ error: missing ? "Library access needs migration 0110." : gErr.message }, { status: missing ? 409 : 500 });
+      }
+      await audit("library_grant", "profile", { library_role: body.libraryRole });
+    } else {
+      const { error: rErr } = await admin
+        .from("library_members")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("user_id", targetId)
+        .is("revoked_at", null);
+      if (rErr) return NextResponse.json({ error: rErr.message }, { status: 500 });
+      await audit("library_revoke", "profile", {});
+    }
     return NextResponse.json({ ok: true });
   }
 

@@ -46,6 +46,15 @@ export default async function ConsoleUserDetailPage({
     admin.from("platform_audit_log").select("action, detail, created_at").eq("target_id", id).order("created_at", { ascending: false }).limit(10),
     admin.from("platform_admins").select("user_id").eq("user_id", id).is("revoked_at", null).maybeSingle(),
   ]);
+  // 0110: Library portal membership. Read separately so a database without the
+  // migration degrades to "no membership" instead of failing the whole page.
+  let libraryRole: string | null = null;
+  let libraryReady = true;
+  {
+    const q = await admin.from("library_members").select("role").eq("user_id", id).is("revoked_at", null).maybeSingle();
+    if (q.error) libraryReady = false;
+    else libraryRole = (q.data?.role as string | null) ?? null;
+  }
 
   const gens = (gensQ.data ?? []) as { kind: string | null; status: string }[];
   const gensDone = gens.filter((g) => g.status === "done").length;
@@ -83,6 +92,9 @@ export default async function ConsoleUserDetailPage({
           <span className="chip font-sans bg-[#FFE9E3] text-[#B3401F] ms-2 align-middle">suspended</span>
         )}
         {isStaffTarget && <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ms-2 align-middle">staff</span>}
+        {!isStaffTarget && libraryRole && (
+          <span className="chip font-sans bg-[#E6F4EC] text-[#1F6B45] ms-2 align-middle">library · {libraryRole}</span>
+        )}
       </h1>
       <InkUnderline className="block h-3 w-28 mb-6" />
 
@@ -147,6 +159,9 @@ export default async function ConsoleUserDetailPage({
           isStaffTarget={isStaffTarget}
           canGrantStaff={founderEmails().includes(staff.email) && role !== "student"}
           opsReady={opsReady}
+          libraryRole={libraryRole}
+          libraryReady={libraryReady}
+          canGrantLibrary={role !== "student"}
         />
       </div>
     </main>

@@ -1,0 +1,34 @@
+-- 0111_script_json_kind
+--
+-- A new artifact kind: 'script_json' — the lesson's script AND scene plan,
+-- uploaded next to the video.
+--
+-- Topic-catalogue plan (founder, 2026-09-06), §2 and §6: the worker writes the
+-- full EpisodeScript (segments, scenes, scene_assets, visual_plan, avatars) to
+-- LOCAL disk only (save_script → storage/scripts/…), never to Supabase. The
+-- catalogue's translate-and-re-render path needs that plan back — swap each
+-- segment's narration, keep every scene, re-run TTS and the encoder — so the
+-- worker will upload it as an artifact of kind 'script_json' at
+-- {owner}/{generation}/script.json for EVERY presentation, not only catalogue
+-- ones (it is small, and it makes any lesson re-renderable).
+--
+-- No 'pdf_student' / 'pdf_answer_key' kinds: the founder deferred the
+-- LibreOffice PDF step on 2026-09-06 ("ignore LibreOffice image build").
+--
+-- ONE RULE FOR THE WORKER (Phase 3): upload script.json in the SAME final
+-- artifact block as the mp4, never earlier. credit_ledger_void_unconsumed
+-- (0095) refunds a cancelled generation only when it has NO artifacts; a
+-- script uploaded before the render finished would make a mid-render cancel
+-- look "delivered" and silently undo that refund fix.
+--
+-- ============================================================================
+-- ⚠️  APPLY ORDER: this file is the ONE statement below and nothing else.
+--   ALTER TYPE … ADD VALUE cannot run inside a transaction block alongside
+--   statements that USE the new label (0009 / 0062 / 0103 carry the same
+--   warning). Run it on its own; 0112 follows in its own run.
+--   Verify: select enum_range(null::artifact_kind);
+-- ============================================================================
+--
+-- Applied to prod by the agent on the founder's explicit 2026-09-06 instruction, after a rolled-back dry run.
+
+alter type public.artifact_kind add value if not exists 'script_json';

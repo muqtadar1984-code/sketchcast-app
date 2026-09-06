@@ -205,12 +205,12 @@ export function shownPremiumProviders(): Set<VoiceProvider> {
 
 /** Paid plans as plan_tier / my_fair_use name them — the same allow-list the
  * worker's gate enforces (PAID_TIERS). Trial, promo, school_trial and expired
- * plans are NOT paid.
+ * plans are NOT paid. `staff` (0109: platform_admins members) is.
  *
  * Since 0105 this list is only the FALLBACK: the database decides (see below).
  * Kept exported because that fallback, and the worker's own, are both this
  * list, and a test pins them equal. */
-export const PAID_VOICE_TIERS: ReadonlySet<string> = new Set(["pro", "pro_plus", "family", "homeschool", "school"]);
+export const PAID_VOICE_TIERS: ReadonlySet<string> = new Set(["pro", "pro_plus", "family", "homeschool", "school", "staff"]);
 
 /** May this account use the premium voices?
  *
