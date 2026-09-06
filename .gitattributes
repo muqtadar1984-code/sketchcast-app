@@ -1,0 +1,3 @@
+# This fixture is pinned by sha256 in BOTH repos. EOL conversion on checkout
+# breaks that pin on Windows while changing nothing any test asserts.
+src/utils/__tests__/fixtures/premium-voice-cases.json -text

@@ -29,11 +29,11 @@ const emptyRow = (): NewRow => ({ firstName: "", lastName: "", parentEmail: "" }
 export default function ClassesCard({
   classes,
   t,
-  betaSlotsLeft = null,
+  trialSlotsLeft = null,
 }: {
   classes: ClassRoster[];
   t: LibraryMessages;
-  betaSlotsLeft?: number | null; // beta: remaining student slots (null = uncapped)
+  trialSlotsLeft?: number | null; // trial: remaining student slots (null = uncapped)
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -198,16 +198,16 @@ export default function ClassesCard({
 
                   <ClassProgress classId={c.id} t={t} />
 
-                  {betaSlotsLeft !== null && betaSlotsLeft <= 0 ? (
+                  {trialSlotsLeft !== null && trialSlotsLeft <= 0 ? (
                     <p className="text-xs text-[#9A6400] bg-[#FFF1D6] rounded-lg px-3 py-2 mt-4">
-                      {t.classes.betaFull}
+                      {t.classes.trialFull}
                     </p>
                   ) : (
                   <>
                   <p className="text-xs font-medium text-[#5B6470] mt-4 mb-1.5">
                     {t.classes.addStudents}
-                    {betaSlotsLeft !== null && (
-                      <span className="ms-2 text-[#9A6400]">{fmt(t.classes.betaSlots, { n: betaSlotsLeft })}</span>
+                    {trialSlotsLeft !== null && (
+                      <span className="ms-2 text-[#9A6400]">{fmt(t.classes.trialSlots, { n: trialSlotsLeft })}</span>
                     )}
                   </p>
                   <div className="space-y-1.5">

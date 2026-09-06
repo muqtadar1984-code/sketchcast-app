@@ -1048,13 +1048,13 @@ export default async function DashboardPage() {
   // remaining student slots, and whether feedback was already submitted (the
   // widget is entirely voluntary — it opens only from its button).
   const betaPinned = trialPin;
-  let betaSlotsLeft: number | null = null;
+  let trialSlotsLeft: number | null = null;
   let feedback: { submitted: boolean } | null = null;
   if (isBeta) {
     const distinctStudents = new Set(
       classRosters.flatMap((c) => c.students.map((s) => s.username || s.full_name || "")),
     ).size;
-    betaSlotsLeft = Math.max(0, 2 - distinctStudents);
+    trialSlotsLeft = Math.max(0, 2 - distinctStudents);
     const { data: fb } = await supabase.from("beta_feedback").select("id").maybeSingle();
     feedback = { submitted: !!fb };
   }
@@ -1216,7 +1216,7 @@ export default async function DashboardPage() {
         )}
 
         <div data-tour="classes">
-          <ClassesCard classes={classRosters} t={t} betaSlotsLeft={betaSlotsLeft} />
+          <ClassesCard classes={classRosters} t={t} trialSlotsLeft={trialSlotsLeft} />
         </div>
 
         {/* Teachers/schools only — parents never see the letterhead card. The

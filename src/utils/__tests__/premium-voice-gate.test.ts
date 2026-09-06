@@ -32,7 +32,15 @@ type Case = {
   unlimited: boolean;
   expect_premium: boolean;
 };
-const raw = readFileSync(FIXTURE);
+// LF-normalised before hashing. The pin proves the two repos run the SAME
+// TABLE; hashing the file as it sits on disk made it fail on every Windows
+// checkout, where git rewrites the fixture to CRLF (measured: blob 403e9119…,
+// working copy 9d1a74aa…, identical content). The worker repo carries the
+// same fix and a .gitattributes entry; this is the other half.
+const raw = Buffer.from(
+  readFileSync(FIXTURE).toString("utf8").replace(/\r\n/g, "\n"),
+  "utf8",
+);
 const table = JSON.parse(raw.toString("utf8")) as {
   threshold: number;
   paid_tiers: string[];
