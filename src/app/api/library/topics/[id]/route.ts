@@ -3,7 +3,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import { libraryAllows, type LibraryAction } from "@/utils/library-routing";
 import { canonicalKey } from "@/utils/catalogue/key";
-import { TEACHER_AVATARS, canTransition, reopenTarget } from "@/utils/catalogue/status";
+import { TEACHER_AVATARS, canTransition, catalogueMissing, reopenTarget } from "@/utils/catalogue/status";
 import type { Topic, TopicStatus } from "@/utils/catalogue/types";
 import { attachAlias, attachMapping, audit, bad, conflict, dbError, isCoverage, notFound, readJson, text, uuid } from "../../lib";
 
@@ -255,7 +255,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   // ── merge ──────────────────────────────────────────────────────────────────
   // Not one transaction (no RPC exists for it yet — see the open question in
   // the report); the steps are ordered so an interruption leaves nothing
-  // dangling: attachments move first, the source retires last.
+  // dangling: attachments move first, the source retires last. Every step is
+  // IDEMPOTENT — each moves "whatever of mine is still here", so a merge that
+  // failed part-way is completed by clicking Merge again with the same target:
+  // the aliases/mappings/candidates already moved are simply not there to move,
+  // the target's prerequisite set is a union, attachAlias is a no-op on an
+  // alias it already has, and retiring is retiring. A failure answers
+  // {error, step, ...detail} — 409 for a unique-violation, else 500 — and is
+  // audited as library_topic_merge_failed with the same step name, so the
+  // trail shows exactly how far the merge got.
   if (action === "merge") {
     const targetId = uuid(body.targetId);
     if (!targetId) return bad("targetId is required.");
@@ -269,6 +277,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const detail: Record<string, unknown> = { into: targetId, into_title: target.title };
 
+    type MergeStep = "aliases" | "mappings" | "candidates" | "prerequisites" | "title_alias" | "retire";
+    const failed = async (step: MergeStep, err: { code?: string; message?: string }, extra: Record<string, unknown> = {}) => {
+      const error = err.message ?? "Database error.";
+      await audit(admin, m.id, "topic_merge_failed", "topic", id, { step, error, code: err.code ?? null, ...detail, ...extra });
+      if (catalogueMissing(err)) return dbError(err);
+      const status = err.code === "23505" ? 409 : 500;
+      return NextResponse.json({ error, step, ...detail, ...extra }, { status });
+    };
+
     // 1. aliases → target (normalized is globally unique, so a move never collides)
     {
       const { data: moved, error } = await admin
@@ -276,7 +293,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         .update({ topic_id: targetId })
         .eq("topic_id", id)
         .select("id");
-      if (error) return dbError(error);
+      if (error) return failed("aliases", error);
       detail.aliases_moved = moved?.length ?? 0;
     }
 
@@ -286,18 +303,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         admin.from("topic_curriculum_map").select("id, node_id").eq("topic_id", id),
         admin.from("topic_curriculum_map").select("node_id").eq("topic_id", targetId),
       ]);
-      if (e1) return dbError(e1);
-      if (e2) return dbError(e2);
+      if (e1) return failed("mappings", e1);
+      if (e2) return failed("mappings", e2);
       const have = new Set((theirs ?? []).map((r) => r.node_id as string));
       const dup = (mine ?? []).filter((r) => have.has(r.node_id as string)).map((r) => r.id as string);
       const move = (mine ?? []).filter((r) => !have.has(r.node_id as string)).map((r) => r.id as string);
       if (dup.length) {
         const { error } = await admin.from("topic_curriculum_map").delete().in("id", dup);
-        if (error) return dbError(error);
+        if (error) return failed("mappings", error, { mappings_to_drop: dup.length });
       }
       if (move.length) {
         const { error } = await admin.from("topic_curriculum_map").update({ topic_id: targetId }).in("id", move);
-        if (error) return dbError(error);
+        if (error) return failed("mappings", error, { mappings_to_move: move.length, mappings_dropped_as_duplicate: dup.length });
       }
       detail.mappings_moved = move.length;
       detail.mappings_dropped_as_duplicate = dup.length;
@@ -311,19 +328,29 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         .eq("suggested_topic_id", id)
         .eq("status", "open")
         .select("id");
-      if (error) return dbError(error);
+      if (error) return failed("candidates", error);
       detail.candidates_repointed = moved?.length ?? 0;
     }
 
     // 4. prerequisite references: topics that required THIS now require the target;
     //    the target inherits this topic's own prerequisites (never itself).
     {
-      const { data: dependants } = await admin.from("topics").select("id, prerequisites").contains("prerequisites", [id]);
+      const { data: dependants, error: dErr } = await admin.from("topics").select("id, prerequisites").contains("prerequisites", [id]);
+      if (dErr) return failed("prerequisites", dErr);
       let repointed = 0;
       for (const d of dependants ?? []) {
         const prev = (d.prerequisites as string[]) ?? [];
         const next = [...new Set(prev.map((p) => (p === id ? targetId : p)))].filter((p) => p !== (d.id as string));
-        await admin.from("topics").update({ prerequisites: next, ...touch }).eq("id", d.id);
+        const { error } = await admin.from("topics").update({ prerequisites: next, ...touch }).eq("id", d.id);
+        if (error) {
+          // Count only the ones done, name the one that failed, and stop: a
+          // retry repoints exactly the dependants that still name this topic.
+          return failed("prerequisites", error, {
+            dependants_repointed: repointed,
+            dependants_remaining: (dependants ?? []).length - repointed,
+            dependant_id: d.id,
+          });
+        }
         repointed++;
       }
       detail.dependants_repointed = repointed;
@@ -334,21 +361,31 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       // 5. depth: the target keeps its own; otherwise inherits ours (now mapped on it)
       if (!target.depth_node_id && topic.depth_node_id) targetPatch.depth_node_id = topic.depth_node_id;
       const { error } = await admin.from("topics").update(targetPatch).eq("id", targetId);
-      if (error) return dbError(error);
+      if (error) return failed("prerequisites", error, { target_prerequisites: merged.length });
     }
 
-    // 6. this title becomes a manual alias of the target (skipped, not failed,
-    //    when the normalized form already belongs elsewhere)
+    // 6. this title becomes a manual alias of the target. A CONFLICT here —
+    //    the normalized title already belongs to a third topic — is recorded,
+    //    not failed: the merge cannot fix that, and a retry would hit it again
+    //    forever, leaving the source un-retired. A database error does fail.
     {
       const normalized = canonicalKey(topic.title) || topic.canonical_key;
-      const r = normalized ? await attachAlias(admin, targetId, topic.title, normalized, "manual") : null;
-      detail.title_alias = r ? (r.ok ? (r.created ? "created" : "existing") : "conflictTopicId" in r ? "conflict" : "error") : "no_key";
+      if (!normalized) {
+        detail.title_alias = "no_key";
+      } else {
+        const r = await attachAlias(admin, targetId, topic.title, normalized, "manual");
+        if (r.ok) detail.title_alias = r.created ? "created" : "existing";
+        else if ("conflictTopicId" in r) {
+          detail.title_alias = "conflict";
+          detail.title_alias_owner = r.conflictTopicId;
+        } else return failed("title_alias", r.error);
+      }
     }
 
     // 7. retire the source
     {
       const { error } = await admin.from("topics").update({ status: "retired", ...touch }).eq("id", id);
-      if (error) return dbError(error);
+      if (error) return failed("retire", error);
     }
 
     await audit(admin, m.id, "topic_merge", "topic", id, detail);

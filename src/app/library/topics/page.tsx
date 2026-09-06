@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { requireLibraryMember } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
@@ -6,6 +7,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import {
   TOPIC_STATUSES,
   catalogueMissing,
+  clampPage,
   hasTopicFilters,
   pageCount,
   pageRange,
@@ -20,12 +22,16 @@ import NewTopicForm from "./new-topic-form";
 // /library/topics — the canonical topics, filterable (subject, curriculum,
 // grade, status, free text), paginated in Postgres. Every filter is a GET with
 // a querystring so the server re-queries; the browser never holds more than
-// one page (the visual-library stance).
+// one page (the visual-library stance). A ?page= past the end lands on the
+// last page (redirect), never on an empty page or PostgREST's 416.
 
 export const dynamic = "force-dynamic";
 
 const TOPIC_COLUMNS =
   "id, canonical_key, title, subject, summary, teacher_avatar, depth_node_id, prerequisites, status, bank_maturity, created_by, created_at, updated_at";
+
+/** PostgREST's "Requested range not satisfiable": the offset is past the end. */
+const RANGE_PAST_END = "PGRST103";
 
 export default async function TopicsPage({
   searchParams,
@@ -36,23 +42,27 @@ export default async function TopicsPage({
   const canCurate = libraryAllows(member.role, "curate");
   const f = parseTopicFilters(await searchParams);
   const admin = createAdminClient();
+  const href = (page: number) => `/library/topics${withTopicFilter(f, { page })}`;
 
   // A curriculum/grade filter needs the mappings: an INNER embed restricts the
   // parent rows to topics with at least one mapping onto a matching node, and
-  // PostgREST resolves it in one query — no id lists in the URL.
+  // PostgREST resolves it in one query — no id lists in the URL. The same
+  // filters build the count-only query used to find the last page.
   const embed = f.curriculum || f.grade ? ", topic_curriculum_map!inner(node_id, curriculum_nodes!inner(curriculum_id, grade))" : "";
-  let query = admin
-    .from("topics")
-    .select(TOPIC_COLUMNS + embed, { count: "exact" })
-    .order("updated_at", { ascending: false });
-  if (f.subject) query = query.eq("subject", f.subject);
-  if (f.status) query = query.eq("status", f.status);
-  if (f.curriculum) query = query.eq("topic_curriculum_map.curriculum_nodes.curriculum_id", f.curriculum);
-  if (f.grade) query = query.eq("topic_curriculum_map.curriculum_nodes.grade", f.grade);
   const search = searchOr(f.q, ["title", "canonical_key", "summary"]);
-  if (search) query = query.or(search);
+  const filtered = (head: boolean) => {
+    let query = head
+      ? admin.from("topics").select("id" + embed, { count: "exact", head: true })
+      : admin.from("topics").select(TOPIC_COLUMNS + embed, { count: "exact" }).order("updated_at", { ascending: false });
+    if (f.subject) query = query.eq("subject", f.subject);
+    if (f.status) query = query.eq("status", f.status);
+    if (f.curriculum) query = query.eq("topic_curriculum_map.curriculum_nodes.curriculum_id", f.curriculum);
+    if (f.grade) query = query.eq("topic_curriculum_map.curriculum_nodes.grade", f.grade);
+    if (search) query = query.or(search);
+    return query;
+  };
   const [from, to] = pageRange(f.page, f.pageSize);
-  const { data, error, count } = await query.range(from, to);
+  const { data, error, count } = await filtered(false).range(from, to);
 
   if (catalogueMissing(error)) {
     return (
@@ -61,6 +71,12 @@ export default async function TopicsPage({
         <MissingTablesBanner table="topics" />
       </main>
     );
+  }
+  if (error?.code === RANGE_PAST_END) {
+    // Past the end: count the same filter and land on its last page.
+    const { count: total } = await filtered(true);
+    const last = clampPage(f.page, pageCount(total ?? 0, f.pageSize));
+    if (last !== f.page) redirect(href(last));
   }
   if (error) {
     return (
@@ -74,6 +90,9 @@ export default async function TopicsPage({
   const rows = (data ?? []) as unknown as Topic[];
   const total = count ?? rows.length;
   const pages = pageCount(total, f.pageSize);
+  // PostgREST may also answer an out-of-range offset with 200 and no rows; the
+  // count says where the last page is either way.
+  if (f.page > pages) redirect(href(pages));
 
   // Mapping counts for THIS page only (≤ pageSize ids), plus the filter facets.
   const ids = rows.map((r) => r.id);
@@ -96,8 +115,7 @@ export default async function TopicsPage({
   const grades = [...new Set(((gradeQ.data ?? []) as { grade: string | null }[]).map((r) => (r.grade ?? "").trim()).filter(Boolean))].sort(
     (a, b) => a.localeCompare(b, undefined, { numeric: true }),
   );
-  const href = (page: number) => `/library/topics${withTopicFilter(f, { page })}`;
-  const filtered = hasTopicFilters(f);
+  const isFiltered = hasTopicFilters(f);
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
@@ -149,7 +167,7 @@ export default async function TopicsPage({
           <button type="submit" className="btn-primary h-9 px-4">
             Filter
           </button>
-          {filtered && (
+          {isFiltered && (
             <Link href="/library/topics" className="btn-ghost h-9 px-3 inline-flex items-center">
               Clear
             </Link>
@@ -168,7 +186,7 @@ export default async function TopicsPage({
 
       {rows.length === 0 ? (
         <div className="card px-6 py-12 text-center text-sm text-[#5B6470]">
-          {filtered ? (
+          {isFiltered ? (
             <p>No topics match these filters.</p>
           ) : (
             <>

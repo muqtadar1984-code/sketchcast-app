@@ -409,23 +409,39 @@ export function MappingPanel({
 
       {mappings.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm pt-1">
-          <label className="text-xs text-[#5B6470]" htmlFor="depth-node">
+          <label className="text-xs text-[#5B6470]" htmlFor={canCurate ? "depth-node" : undefined}>
             Depth node (the curriculum node that sets how deep the article goes):
           </label>
-          <select
-            id="depth-node"
-            value={topic.depth_node_id ?? ""}
-            disabled={!canCurate || !!busy}
-            onChange={(e) => post({ action: "set_depth", nodeId: e.target.value || null }, "depth")}
-            className="field h-9 px-2 disabled:opacity-60"
-          >
-            <option value="">— not set —</option>
-            {mappings.map((m) => (
-              <option key={m.node_id} value={m.node_id}>
-                {m.node?.code ?? m.node_id} · {m.node?.title ?? ""}
-              </option>
-            ))}
-          </select>
+          {canCurate ? (
+            <select
+              id="depth-node"
+              value={topic.depth_node_id ?? ""}
+              disabled={!!busy}
+              onChange={(e) => post({ action: "set_depth", nodeId: e.target.value || null }, "depth")}
+              className="field h-9 px-2 disabled:opacity-60"
+            >
+              <option value="">— not set —</option>
+              {mappings.map((m) => (
+                <option key={m.node_id} value={m.node_id}>
+                  {m.node?.code ?? m.node_id} · {m.node?.title ?? ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            // A reviewer reads the depth; a greyed-out control would only say
+            // "you may not" — the chip says what it is.
+            (() => {
+              const depth = mappings.find((m) => m.node_id === topic.depth_node_id);
+              return depth ? (
+                <span className="chip bg-[#EDE7FB] text-[#5B3FBF]">
+                  <span className="font-mono">{depth.node?.code ?? depth.node_id}</span>
+                  {depth.node?.title && ` · ${depth.node.title}`}
+                </span>
+              ) : (
+                <span className="chip bg-[#EEF0EC] text-[#5B6470]">not set</span>
+              );
+            })()
+          )}
         </div>
       )}
       <Messages error={error} notice={notice} />

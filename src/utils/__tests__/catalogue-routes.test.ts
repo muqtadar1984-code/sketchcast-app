@@ -123,6 +123,55 @@ describe("every /api/library route", () => {
     expect(text).toMatch(/if\s*\(\s*!libraryAllows\(m\.role,\s*NEEDS\[action\]\)\s*\)\s*return\s+notFound\(\)/);
   });
 
+  it("a route that inserts a topic checks who holds the key FIRST, and never answers 200 for an alias conflict", () => {
+    const lib = source.get(files.find((f) => rel(f) === "lib.ts")!)!;
+    // insertTopic: keyOwner( runs before .from("topics").insert(
+    const insertTopic = lib.slice(lib.indexOf("export async function insertTopic"));
+    const check = insertTopic.indexOf("keyOwner(");
+    const insert = insertTopic.search(/\.from\(\s*["']topics["']\s*\)\s*\.insert\(/);
+    expect(check).toBeGreaterThan(-1);
+    expect(insert).toBeGreaterThan(check);
+    // keyOwner reads both holders: topics.canonical_key and topic_aliases.normalized
+    const keyOwner = lib.slice(lib.indexOf("export async function keyOwner"), lib.indexOf("export async function insertTopic"));
+    expect(keyOwner).toMatch(/\.eq\(\s*["']canonical_key["']/);
+    expect(lib).toMatch(/\.from\(\s*["']topic_aliases["']\s*\)[\s\S]{0,120}\.eq\(\s*["']normalized["']/);
+    for (const name of ["topics/route.ts", "curricula/route.ts", "candidates/route.ts"]) {
+      const text = source.get(routes.find((f) => rel(f) === name)!)!;
+      expect(text, `${name} answers a taken key with keyTaken(`).toMatch(/\bkeyTaken\(/);
+      expect(text, `${name} takes a half-made topic back out on a lost race`).toMatch(/\brollbackTopic\(/);
+      // The old shape: the alias conflict recorded in the audit row of a 200.
+      expect(text, `${name} never records alias: "conflict"`).not.toMatch(/alias:\s*[^,\n]*"conflict"/);
+    }
+  });
+
+  it("the merge reports the failed step and audits it, and checks every dependant update", () => {
+    const text = source.get(routes.find((f) => rel(f) === "topics/[id]/route.ts")!)!;
+    const merge = text.slice(text.indexOf('if (action === "merge")'));
+    expect(merge).toMatch(/"topic_merge_failed"/);
+    for (const step of ["aliases", "mappings", "candidates", "prerequisites", "title_alias", "retire"]) {
+      expect(merge, step).toMatch(new RegExp(`failed\\(\\s*"${step}"`));
+    }
+    // the per-dependant prerequisites update reads its error
+    expect(merge).toMatch(/const\s*\{\s*error\s*\}\s*=\s*await\s+admin\.from\(\s*["']topics["']\s*\)\.update\(\s*\{\s*prerequisites:\s*next/);
+    // no bare dbError( left inside the steps: every failure goes through failed(
+    const steps = merge.slice(merge.indexOf("// 1."));
+    expect(steps.match(/\bdbError\(/g) ?? []).toHaveLength(0);
+  });
+
+  it("the harvest route maps a lost race on jobs_one_live_harvest (23505) to its 409", () => {
+    const text = source.get(routes.find((f) => rel(f) === "harvest/route.ts")!)!;
+    expect(text).toMatch(/jErr\.code\s*===\s*["']23505["']/);
+    const branch = text.slice(text.indexOf('jErr.code === "23505"'));
+    expect(branch.indexOf("conflict(")).toBeGreaterThan(-1);
+    expect(branch.indexOf("conflict(")).toBeLessThan(branch.indexOf("dbError("));
+  });
+
+  it("creating a topic from a node audits both sides: the node and the new topic", () => {
+    const text = source.get(routes.find((f) => rel(f) === "curricula/route.ts")!)!;
+    expect(text).toMatch(/audit\(admin,\s*m\.id,\s*"topic_create_from_node",\s*"curriculum_node",\s*nodeId/);
+    expect(text).toMatch(/audit\(admin,\s*m\.id,\s*"topic_create",\s*"topic",\s*created\.id,\s*\{\s*from_node:\s*nodeId/);
+  });
+
   it("the curate-only routes ask the guard for the curate action", () => {
     for (const name of ["candidates/route.ts", "curricula/route.ts", "harvest/route.ts"]) {
       const text = source.get(routes.find((f) => rel(f) === name)!)!;

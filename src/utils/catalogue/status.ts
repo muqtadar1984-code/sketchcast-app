@@ -204,6 +204,9 @@ export function coverageOf(
 export const TOPIC_PAGE_SIZE = 50;
 const PAGE_SIZE_MIN = 10;
 const PAGE_SIZE_MAX = 200;
+/** A hand-typed ?page= beyond this is not a page anyone meant; it becomes the
+ *  cap, and the list page then lands it on the last real page (clampPage). */
+const PAGE_MAX = 100000;
 
 export type TopicFilters = {
   subject: string;
@@ -229,7 +232,7 @@ export function parseTopicFilters(sp: Record<string, string | undefined>): Topic
     grade: asText(sp.grade),
     status: isTopicStatus(sp.status) ? sp.status : "",
     q: asText(sp.q),
-    page: Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1,
+    page: Number.isFinite(rawPage) && rawPage > 0 ? Math.min(PAGE_MAX, rawPage) : 1,
     pageSize: Number.isFinite(rawSize)
       ? Math.min(PAGE_SIZE_MAX, Math.max(PAGE_SIZE_MIN, rawSize))
       : TOPIC_PAGE_SIZE,
@@ -265,14 +268,92 @@ export function pageCount(total: number, size: number = TOPIC_PAGE_SIZE): number
   return pageCountOf(total, size);
 }
 
+/** The page to SHOW for a requested page once the total is known: past the end
+ *  lands on the last page, never on an empty one or a 416 from PostgREST. */
+export function clampPage(page: number, pages: number): number {
+  return Math.min(Math.max(1, page), Math.max(1, pages));
+}
+
+/** Escape the LIKE metacharacters in a user value so `%`, `_` and `\` match
+ *  themselves inside an ilike pattern (Postgres' default escape is `\`). */
+export function escapeLike(v: string): string {
+  return v.replace(/[\\%_]/g, "\\$&");
+}
+
 /** PostgREST `or=` expression for a free-text box over `cols`. Commas and
  *  parentheses are stripped because they are the separators of PostgREST's
- *  own or() grammar (see visual-library.ts searchExpression). Null when the
- *  query is blank. */
+ *  own or() grammar (see visual-library.ts searchExpression); `*` because
+ *  PostgREST reads it as `%`. What is left is LIKE-escaped, so a typed `_` or
+ *  `%` is looked for, not treated as a wildcard. Null when the query is blank. */
 export function searchOr(q: string, cols: readonly string[]): string | null {
   const safe = q.replace(/[(),*]/g, " ").trim();
   if (!safe) return null;
-  return cols.map((c) => `${c}.ilike.%${safe}%`).join(",");
+  const pattern = `%${escapeLike(safe)}%`;
+  return cols.map((c) => `${c}.ilike.${pattern}`).join(",");
+}
+
+// ── Key ownership ────────────────────────────────────────────────────────────
+// Who holds a canonical key: the topic whose canonical_key it is, or the topic
+// one of whose aliases normalizes to it (`topic_aliases.normalized` is unique
+// across the table). The route fetches the rows; this decides.
+
+export type OwnerRow = { id: string; title: string; status: TopicStatus };
+
+export type KeyOwner = {
+  topicId: string;
+  title: string;
+  status: TopicStatus;
+  /** How the key is held: the topic's own canonical_key, or one of its aliases. */
+  via: "canonical_key" | "alias";
+  retired: boolean;
+};
+
+const live = (r: OwnerRow | null | undefined): r is OwnerRow => !!r && r.status !== "retired";
+const own = (r: OwnerRow, via: KeyOwner["via"]): KeyOwner => ({
+  topicId: r.id,
+  title: r.title,
+  status: r.status,
+  via,
+  retired: r.status === "retired",
+});
+
+/**
+ * Pick the owner to name in a 409 from the rows a route fetched for one key:
+ *   byKey        — topics.canonical_key = key
+ *   byAlias      — the topic of topic_aliases.normalized = key
+ *   byTitleAlias — the topic of topic_aliases.normalized = canonicalKey(byKey.title),
+ *                  fetched only when byKey is retired (see below)
+ *
+ * A LIVE owner is always preferred. A topic merged away keeps its canonical_key
+ * (the column is unique, the row stays for history) but is retired, and merge
+ * step 1 moved its aliases — its title alias among them — to the merge target:
+ * following the alias reaches the topic that owns the name today, and that is
+ * the one to merge into. When nothing live holds the key, the alias owner is
+ * reported over the retired key holder; the retired holder itself is the answer
+ * only when it is all there is (the key is still taken — reopen it, or pick
+ * another title). Null when nobody holds the key.
+ */
+export function pickKeyOwner(
+  byKey: OwnerRow | null | undefined,
+  byAlias: OwnerRow | null | undefined,
+  byTitleAlias: OwnerRow | null | undefined = null,
+): KeyOwner | null {
+  if (live(byKey)) return own(byKey, "canonical_key");
+  if (live(byAlias)) return own(byAlias, "alias");
+  if (byKey && live(byTitleAlias)) return own(byTitleAlias, "alias");
+  if (byAlias) return own(byAlias, "alias");
+  if (byKey) return own(byKey, "canonical_key");
+  return null;
+}
+
+/** The 409 text for a taken key. `hint` is the route's own "…instead" clause. */
+export function keyTakenMessage(key: string, owner: KeyOwner, hint: string): string {
+  const head =
+    owner.via === "canonical_key"
+      ? `A topic with the key "${key}" already exists`
+      : `The key "${key}" is already an alias of "${owner.title}"`;
+  const state = owner.retired ? " (that topic is retired — reopen it, or pick another title)" : "";
+  return `${head}${state}${hint ? ` — ${hint}` : "."}`;
 }
 
 // ── Migration-missing detection ──────────────────────────────────────────────

@@ -13,7 +13,10 @@ export const runtime = "nodejs";
 // service role: it is an OBSERVER job (owns no generation, generation_id NULL)
 // so nothing here touches `generations`, no credit moves, and the
 // on_generation_created trigger is not involved. One live harvest per book:
-// a queued or processing one refuses a second with 409.
+// a queued or processing one refuses a second with 409. The read-then-insert
+// below is the friendly answer (it can name the live job); the partial unique
+// index jobs_one_live_harvest (0112) is the rule the database enforces when two
+// clicks race it, and its 23505 is mapped to the same 409.
 
 // Not exported: a route module may only export Next's handler names.
 const HARVEST_JOB_TYPE = "topic_harvest";
@@ -60,7 +63,23 @@ export async function POST(request: Request) {
     .insert({ type: HARVEST_JOB_TYPE, book_id: bookId, generation_id: null, status: "queued" })
     .select("id")
     .single();
-  if (jErr) return dbError(jErr);
+  if (jErr) {
+    if (jErr.code === "23505") {
+      // Lost the race to another click: jobs_one_live_harvest refused the second
+      // row. Answer as the check above would have, naming the job that won.
+      const { data: winner } = await admin
+        .from("jobs")
+        .select("id, status")
+        .eq("type", HARVEST_JOB_TYPE)
+        .eq("book_id", bookId)
+        .in("status", ["queued", "processing"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return conflict(`A harvest is already ${winner?.status ?? "queued"} for this book.`, { jobId: winner?.id ?? null });
+    }
+    return dbError(jErr);
+  }
 
   await audit(admin, m.id, "harvest_enqueue", "book", bookId, { job_id: job.id, title: book.title ?? null });
   return NextResponse.json({ ok: true, jobId: job.id });

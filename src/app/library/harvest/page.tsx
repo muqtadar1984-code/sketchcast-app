@@ -87,13 +87,17 @@ export default async function HarvestPage({ searchParams }: { searchParams: Prom
   const allBooks = (booksQ.data ?? []) as Book[];
 
   // Owner e-mails the way the console Users page gets them: one listUsers
-  // call, never a per-row lookup. Best effort — a failure shows "—".
+  // call, never a per-row lookup. Best effort — a failure shows "—". Editors
+  // and admins only: a reviewer reads the shelf, not who uploaded to it, so
+  // for them the e-mails are never fetched, shown, or searched.
   const emailOf = new Map<string, string>();
-  try {
-    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    for (const u of data?.users ?? []) if (u.email) emailOf.set(u.id, u.email);
-  } catch {
-    // profile-only
+  if (canCurate) {
+    try {
+      const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      for (const u of data?.users ?? []) if (u.email) emailOf.set(u.id, u.email);
+    } catch {
+      // profile-only
+    }
   }
 
   const candCount = new Map<string, { open: number; total: number }>();
@@ -126,7 +130,12 @@ export default async function HarvestPage({ searchParams }: { searchParams: Prom
       {!canCurate && <ReadOnlyNote what="harvesting" />}
 
       <form method="get" className="mb-5">
-        <input name="q" defaultValue={q ?? ""} placeholder="Search title, owner, subject…" className="field w-full sm:w-96 h-10 px-3" />
+        <input
+          name="q"
+          defaultValue={q ?? ""}
+          placeholder={canCurate ? "Search title, owner, subject…" : "Search title, subject…"}
+          className="field w-full sm:w-96 h-10 px-3"
+        />
       </form>
 
       {books.length === 0 ? (
@@ -160,7 +169,7 @@ export default async function HarvestPage({ searchParams }: { searchParams: Prom
                         {b.language && ` · ${b.language}`}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-[#5B6470] truncate max-w-56">{emailOf.get(b.owner_id) ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-[#5B6470] truncate max-w-56">{(canCurate && emailOf.get(b.owner_id)) || "—"}</td>
                     <td className="px-4 py-2.5 text-[#5B6470]">{[b.grade && `Grade ${b.grade}`, b.subject].filter(Boolean).join(" · ") || "—"}</td>
                     <td className="px-4 py-2.5 text-right tabular">{b.pages ?? "—"}</td>
                     <td className="px-4 py-2.5 text-[#5B6470] whitespace-nowrap">{fmtDate(b.created_at)}</td>

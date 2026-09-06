@@ -3,7 +3,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import { resolveCandidate, type ResolveMode, type ResolvePlan } from "@/utils/catalogue/status";
 import type { TopicCandidate } from "@/utils/catalogue/types";
-import { attachAlias, attachMapping, audit, bad, conflict, dbError, insertTopic, notFound, readJson, text, uuid } from "../lib";
+import { attachAlias, attachMapping, audit, bad, conflict, dbError, insertTopic, keyOwner, keyTaken, notFound, readJson, rollbackTopic, text, uuid } from "../lib";
 
 export const runtime = "nodejs";
 
@@ -14,6 +14,13 @@ export const runtime = "nodejs";
 //             or onto the suggested topic when topicId is omitted
 //   create  — a new candidate-status topic keyed canonicalKey(raw_title)
 //   dismiss — nothing but the candidate row
+// Every name the plan would attach is checked for an owner BEFORE anything is
+// written: a key held by another topic — as its canonical_key or its alias — is
+// a 409 naming that topic (existingId / conflictTopicId), which is where the
+// candidate should merge; a topic merged away is followed to the live one. A
+// conflict that still appears after the check is a lost race: in create mode
+// the just-inserted topic is taken back out, and the answer is the same 409 —
+// never a 200 with a half-attached topic.
 // Every outcome is audited as library_candidate_<mode>, target_kind 'candidate'.
 
 type Body = { candidateId?: unknown; mode?: unknown; topicId?: unknown; subject?: unknown };
@@ -59,17 +66,29 @@ export async function POST(request: Request) {
     if (t.status === "retired") return bad("The target topic is retired — reopen it first, or pick another.");
   }
 
+  // Owner check for every alias the plan would attach, before any write. In
+  // create mode insertTopic checks the canonical key itself (the same key as
+  // the title alias), so only the keys it will not see are checked here.
+  const MERGE_HINT = "merge into that one.";
+  const skip = plan.mode === "create" && plan.topic ? plan.topic.canonical_key : null;
+  for (const a of plan.aliases) {
+    if (a.normalized === skip) continue;
+    const held = await keyOwner(admin, a.normalized);
+    if (!held.ok) return dbError(held.error);
+    if (held.owner && held.owner.topicId !== target) {
+      return keyTaken(a.normalized, held.owner, MERGE_HINT);
+    }
+  }
+
+  let createdId: string | null = null;
   if (plan.mode === "create" && plan.topic) {
     const created = await insertTopic(admin, plan.topic);
     if (!created.ok) {
-      if ("existingId" in created) {
-        return conflict(`A topic with the key "${plan.topic.canonical_key}" already exists — merge into it instead.`, {
-          existingId: created.existingId,
-        });
-      }
+      if ("existingId" in created) return keyTaken(plan.topic.canonical_key, created.owner, "merge into it instead.");
       return dbError(created.error);
     }
     target = created.id;
+    createdId = created.id;
   }
 
   const detail: Record<string, unknown> = {
@@ -85,10 +104,14 @@ export async function POST(request: Request) {
     for (const a of plan.aliases) {
       const r = await attachAlias(admin, target, a.alias, a.normalized, a.source);
       if (!r.ok) {
+        // The pre-check passed, so this is a race lost since. A just-created
+        // topic goes back out (its aliases so far cascade with it); the answer
+        // names the topic that owns the name and changes nothing else.
+        if (createdId) await rollbackTopic(admin, createdId);
         if ("conflictTopicId" in r) {
-          // The name already belongs to another topic: that is where this
-          // candidate should merge. Say so and change nothing.
-          return conflict(`"${a.alias}" is already an alias of another topic — merge into that one.`, {
+          const held = await keyOwner(admin, a.normalized);
+          if (held.ok && held.owner) return keyTaken(a.normalized, held.owner, MERGE_HINT);
+          return conflict(`"${a.alias}" is already an alias of another topic — ${MERGE_HINT}`, {
             conflictTopicId: r.conflictTopicId,
           });
         }
