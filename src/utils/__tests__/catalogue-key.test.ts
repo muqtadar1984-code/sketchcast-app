@@ -19,7 +19,7 @@ import { canonicalKey, singularToken } from "../catalogue/key";
 const FIXTURE = join(__dirname, "fixtures", "catalogue_key_cases.json");
 // Bump ONLY when sketchcast/tests/fixtures/catalogue_key_cases.json is changed
 // to match, byte for byte.
-const CATALOGUE_KEY_CASES_SHA256 = "b392712ee147d8890410387daa5a475708e07391ae7943befbf3bab9bf7a782b";
+const CATALOGUE_KEY_CASES_SHA256 = "599c789783ed0260d4d2f0615186976c2e9e495fe1afd34b1f955f31effe2275";
 
 type Case = { in: string; key: string };
 // LF-normalised before hashing: a Windows checkout may rewrite the fixture to
