@@ -1075,7 +1075,9 @@
     },
     "gate": {
       "banner": "Ce fichier importé ne ressemble pas à un manuel scolaire. Les leçons générées à partir de celui-ci seront probablement faibles.",
+      "structureBanner": "Ce livre a été indexé, mais sa liste de chapitres semble peu fiable. Vérifiez les chapitres avant de générer — les leçons suivent ces limites.",
       "title": "Ne ressemble pas à un manuel scolaire",
+      "structureTitle": "Vérifiez d'abord les chapitres de ce livre",
       "body": "La génération utilisera vos crédits, et les résultats seront probablement faibles. Voulez-vous continuer ?",
       "trialLine": "Ceci utilisera votre unique kit d'essai.",
       "confirm": "Générer quand même",
@@ -1083,6 +1085,7 @@
       "docType": {
         "administrative": "Document administratif",
         "form_or_roster": "Formulaire ou liste d'élèves",
+        "textbook": "Manuel scolaire à la structure de chapitres peu claire",
         "other": "Document non reconnu"
       }
     },
@@ -1814,10 +1817,15 @@
     "documents": "Documents",
     "buyTitle": "Acheter des crédits",
     "buyHint": "Packs de crédits ponctuels. Ils n'expirent jamais — votre quota mensuel est utilisé en premier.",
+    "buyNewTab": "Le paiement s'ouvre dans un nouvel onglet. Revenez ici une fois terminé — vos crédits apparaîtront sur cette page.",
+    "buyClose": "Fermer",
     "packLabel": "{credits} crédits — {price} $ ({kits})",
+    "packCredits": "{credits} crédits",
+    "packPrice": "${price}",
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kits",
     "purchased": "{n} crédits achetés disponibles",
+    "availableNow": "{n} générations disponibles dès maintenant — {monthly} ce mois-ci plus {purchased} achetées",
     "upgradeCta": "Besoin de plus ? Voir les offres et les tarifs",
     "schoolTrialTitle": "Essai école — toutes les fonctionnalités incluses",
     "schoolTrialLeft": "{available} sur {cap} générations encore disponibles dans l'essai de votre école. Quand vous serez prêt, demandez-nous d'activer votre école pour un usage illimité.",

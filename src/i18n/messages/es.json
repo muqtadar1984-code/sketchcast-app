@@ -1075,7 +1075,9 @@
     },
     "gate": {
       "banner": "Este archivo subido no parece un libro de texto. Las lecciones generadas a partir de él probablemente serán débiles.",
+      "structureBanner": "Este libro se indexó, pero su lista de capítulos parece poco fiable. Revise los capítulos antes de generar — las lecciones siguen estos límites.",
       "title": "No parece un libro de texto",
+      "structureTitle": "Revise primero los capítulos de este libro",
       "body": "Generar usará sus créditos, y los resultados probablemente serán débiles. ¿Desea continuar?",
       "trialLine": "Esto usará su único kit de prueba.",
       "confirm": "Generar de todos modos",
@@ -1083,6 +1085,7 @@
       "docType": {
         "administrative": "Documento administrativo",
         "form_or_roster": "Formulario o lista de alumnos",
+        "textbook": "Libro de texto con una estructura de capítulos poco clara",
         "other": "Documento no reconocido"
       }
     },
@@ -1814,10 +1817,15 @@
     "documents": "Documentos",
     "buyTitle": "Comprar créditos",
     "buyHint": "Paquetes de créditos de pago único. No caducan — primero se usa su asignación mensual.",
+    "buyNewTab": "El pago se abre en una pestaña nueva. Vuelva aquí cuando termine — sus créditos aparecerán en esta página.",
+    "buyClose": "Cerrar",
     "packLabel": "{credits} créditos — ${price} ({kits})",
+    "packCredits": "{credits} créditos",
+    "packPrice": "${price}",
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kits",
     "purchased": "{n} créditos comprados disponibles",
+    "availableNow": "{n} generaciones disponibles ahora mismo — {monthly} este mes más {purchased} compradas",
     "upgradeCta": "¿Necesita más? Vea los planes y precios",
     "schoolTrialTitle": "Prueba escolar — todas las funciones desbloqueadas",
     "schoolTrialLeft": "Quedan {available} de {cap} generaciones en la prueba de su escuela. Cuando esté listo, pídanos activar su escuela para un uso ilimitado.",

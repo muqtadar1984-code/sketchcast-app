@@ -1075,7 +1075,9 @@
     },
     "gate": {
       "banner": "Muat naik ini tidak kelihatan seperti buku teks. Pelajaran yang dijana daripadanya berkemungkinan lemah.",
+      "structureBanner": "Buku ini telah diindeks, tetapi senarai babnya kelihatan tidak boleh dipercayai. Semak bab sebelum menjana — pelajaran mengikut sempadan ini.",
       "title": "Tidak kelihatan seperti buku teks",
+      "structureTitle": "Semak bab buku ini dahulu",
       "body": "Penjanaan akan menggunakan kredit anda, dan hasilnya berkemungkinan lemah. Mahu teruskan?",
       "trialLine": "Ini akan menggunakan satu-satunya kit percubaan anda.",
       "confirm": "Jana juga",
@@ -1083,6 +1085,7 @@
       "docType": {
         "administrative": "Dokumen pentadbiran",
         "form_or_roster": "Borang atau senarai nama",
+        "textbook": "Buku teks dengan struktur bab yang tidak jelas",
         "other": "Dokumen tidak dikenali"
       }
     },
@@ -1814,10 +1817,15 @@
     "documents": "Dokumen",
     "buyTitle": "Beli kredit",
     "buyHint": "Pek kredit sekali beli. Ia tidak luput — peruntukan bulanan anda digunakan dahulu.",
+    "buyNewTab": "Pembayaran dibuka dalam tab baharu. Kembali ke sini setelah selesai — kredit anda akan muncul di halaman ini.",
+    "buyClose": "Tutup",
     "packLabel": "{credits} kredit — ${price} ({kits})",
+    "packCredits": "{credits} kredit",
+    "packPrice": "${price}",
     "packKitsOne": "{n} kit",
     "packKitsMany": "{n} kit",
     "purchased": "{n} kredit yang dibeli tersedia",
+    "availableNow": "{n} janaan tersedia sekarang — {monthly} bulan ini serta {purchased} yang dibeli",
     "upgradeCta": "Perlukan lebih? Lihat pelan dan harga",
     "schoolTrialTitle": "Percubaan sekolah — semua ciri dibuka",
     "schoolTrialLeft": "Tinggal {available} daripada {cap} janaan dalam percubaan sekolah anda. Apabila anda bersedia, minta kami mengaktifkan sekolah anda untuk penggunaan tanpa had.",

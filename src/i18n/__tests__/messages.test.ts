@@ -128,25 +128,13 @@ const MAX_IDENTICAL_PROSE = 0.06;
  * into a sentence that will fall back to English inside an RTL page.
  */
 const PENDING_TRANSLATION: readonly string[] = [
-  "fairUse.buyNewTab",
-  "fairUse.buyClose",
-  "fairUse.packCredits",
-  "fairUse.packPrice",
-  "fairUse.availableNow",
-  // 2026-08-23 — the chapter-quality gate (Sara Junaidi's scanned book, junk
-  // bookmark chapters gated "confirm"): the worker can now gate a GENUINE
-  // textbook whose chapter MAP is suspect, and the existing gate copy —
-  // "Doesn't look like a textbook" — would call a real Cambridge book junk on
-  // a trust-critical dialog. Three new English strings swap in structure-
-  // problem framing for that case only (docType "textbook"): the row banner,
-  // the dialog title, and the doc-type header line. The dialog is already a
-  // mixed-language surface — the worker's problems[] sentences it quotes are
-  // untranslated-by-design English — so an English fallback here degrades no
-  // further than the surface already does, and every other gated doc type
-  // keeps its fully-translated copy.
-  "library.gate.structureBanner",
-  "library.gate.structureTitle",
-  "library.gate.docType.textbook",
+  // 2026-09-06 — EMPTY, and that is the point. The eight entries that stood
+  // here (the five buy-credits/meter strings and the three chapter-quality
+  // gate strings) are now translated in all ten locales, so the coverage
+  // assertion below guards them like every other key. The test that made this
+  // edit necessary is the one directly beneath: an exemption nobody retires is
+  // an exemption that starts hiding real regressions, so leaving a translated
+  // key on this list is a failure, not a tidy-up job for later.
 ];
 const pending = new Set(PENDING_TRANSLATION);
 

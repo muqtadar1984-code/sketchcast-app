@@ -241,10 +241,10 @@ export default function BuyCreditsModal({
                       side of the row — worse than merely untranslated, because
                       the price sits at the opposite edge and the row becomes two
                       bare numbers at two ends. packCredits and packPrice ship
-                      English-only this round (see PENDING_TRANSLATION), so this
-                      is live today; <bdi> resolves direction from the first
-                      strong character, so it is right both now and after the
-                      Arabic and Jawi strings land. */}
+                      translated in all ten locales since 2026-09-06, so the
+                      English fallback this once described is gone; <bdi> stays,
+                      because it resolves direction from the first strong
+                      character and these strings carry numbers into RTL. */}
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-[#14181F]">
                       <bdi>{fmt(t.packCredits, { credits: p.credits })}</bdi>
