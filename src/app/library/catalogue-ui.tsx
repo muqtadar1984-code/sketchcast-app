@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  ARTICLE_JOBS_MIGRATION,
   CATALOGUE_LAYER_MIGRATION,
   CATALOGUE_MIGRATION,
   MATURITY_TONE,
@@ -7,7 +8,8 @@ import {
   TOPIC_STATUS_TONE,
   stageLabel,
 } from "@/utils/catalogue/status";
-import type { BankMaturity, NodeKind, TopicStatus } from "@/utils/catalogue/types";
+import { ARTICLE_STATUS_TONE, FIGURE_STATUS_TONE, articleStatusLabel } from "@/utils/catalogue/article";
+import type { ArticleStatus, BankMaturity, FigureStatus, NodeKind, TopicStatus } from "@/utils/catalogue/types";
 
 // Small presentational pieces shared by the portal's screens. No "use client"
 // and no server-only imports, so Server Components and client panels can both
@@ -27,6 +29,18 @@ export function MaturityChip({ maturity }: { maturity: BankMaturity | string | n
       bank: {String(m).replace(/_/g, " ")}
     </span>
   );
+}
+
+/** A knowledge-article version's status (0112 topic_articles.status). */
+export function ArticleStatusChip({ status }: { status: ArticleStatus | string }) {
+  const tone = ARTICLE_STATUS_TONE[status as ArticleStatus] ?? "bg-[#EEF0EC] text-[#5B6470]";
+  return <span className={`chip ${tone}`}>{articleStatusLabel(status)}</span>;
+}
+
+/** A figure's render state (article_figures.status). */
+export function FigureStatusChip({ status }: { status: FigureStatus | string }) {
+  const tone = FIGURE_STATUS_TONE[status as FigureStatus] ?? "bg-[#EEF0EC] text-[#5B6470]";
+  return <span className={`chip ${tone}`}>{String(status)}</span>;
 }
 
 export function CoverageChip({ coverage }: { coverage: "full" | "partial" | string }) {
@@ -88,12 +102,19 @@ export function JobSummary({
 
 /** A migration not applied: explain, don't crash (the /console/content
  *  `opsReady` stance). 0112 (the tables) by default; pass
- *  `migration={CATALOGUE_LAYER_MIGRATION}` for the 0113 columns. */
+ *  `migration={CATALOGUE_LAYER_MIGRATION}` for the 0113 columns, or
+ *  `migration={ARTICLE_JOBS_MIGRATION}` for the 0114 ones. */
 export function MissingTablesBanner({ table, migration = CATALOGUE_MIGRATION }: { table?: string; migration?: string }) {
   const layer = migration === CATALOGUE_LAYER_MIGRATION;
+  const articleJobs = migration === ARTICLE_JOBS_MIGRATION;
   return (
     <p className="text-sm text-[#9A6400] bg-[#FFF9EE] rounded-lg px-4 py-3">
-      {layer ? (
+      {articleJobs ? (
+        <>
+          The article-job columns{table ? <> (<span className="font-medium">{table}</span>)</> : null} — figure render errors,
+          one live article job per topic — are not in this database yet.
+        </>
+      ) : layer ? (
         <>
           The catalogue-layer columns{table ? <> (<span className="font-medium">{table}</span>)</> : null} — node kinds,
           grouped candidates, job inputs — are not in this database yet.

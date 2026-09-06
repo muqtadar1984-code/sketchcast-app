@@ -478,10 +478,20 @@ export type TopicFilters = {
    *  node under it (its objectives). Only meaningful with `curriculum`. */
   node: string;
   status: TopicStatus | "";
+  /** Topics whose article (any version) is in this state — the overview's
+   *  review-queue links land here. */
+  article: ArticleFilter;
   q: string;
   page: number;
   pageSize: number;
 };
+
+export const ARTICLE_FILTERS = ["draft", "in_review", "approved", "none"] as const;
+export type ArticleFilter = (typeof ARTICLE_FILTERS)[number] | "";
+
+export function isArticleFilter(s: unknown): s is (typeof ARTICLE_FILTERS)[number] {
+  return typeof s === "string" && (ARTICLE_FILTERS as readonly string[]).includes(s);
+}
 
 const asText = (v: string | undefined): string => (v ?? "").trim();
 
@@ -499,6 +509,7 @@ export function parseTopicFilters(sp: Record<string, string | undefined>): Topic
     // a node filter without its curriculum is a stale querystring: dropped
     node: curriculum ? asText(sp.node) : "",
     status: isTopicStatus(sp.status) ? sp.status : "",
+    article: isArticleFilter(sp.article) ? sp.article : "",
     q: asText(sp.q),
     page: Number.isFinite(rawPage) && rawPage > 0 ? Math.min(PAGE_MAX, rawPage) : 1,
     pageSize: Number.isFinite(rawSize)
@@ -508,7 +519,7 @@ export function parseTopicFilters(sp: Record<string, string | undefined>): Topic
 }
 
 export function hasTopicFilters(f: TopicFilters): boolean {
-  return !!(f.subject || f.curriculum || f.grade || f.node || f.status || f.q);
+  return !!(f.subject || f.curriculum || f.grade || f.node || f.status || f.article || f.q);
 }
 
 /** Querystring for a filter change; resets to page 1 unless the patch sets a
@@ -521,6 +532,7 @@ export function withTopicFilter(f: TopicFilters, patch: Partial<TopicFilters>): 
   if (next.grade) p.set("grade", next.grade);
   if (next.curriculum && next.node) p.set("node", next.node);
   if (next.status) p.set("status", next.status);
+  if (next.article) p.set("article", next.article);
   if (next.q) p.set("q", next.q);
   if (next.pageSize !== TOPIC_PAGE_SIZE) p.set("pageSize", String(next.pageSize));
   const page = patch.page ?? 1;
@@ -630,6 +642,9 @@ export function keyTakenMessage(key: string, owner: KeyOwner, hint: string): str
 export const CATALOGUE_MIGRATION = "supabase/migrations/0112_topic_catalogue.sql";
 /** 0113: curriculum_nodes.kind, topic_candidates.node_ids/rationale, jobs.params. */
 export const CATALOGUE_LAYER_MIGRATION = "supabase/migrations/0113_catalogue_layer.sql";
+/** 0114: article_figures.render_error and the one-live indexes for the
+ *  topic_article / figure_render jobs. */
+export const ARTICLE_JOBS_MIGRATION = "supabase/migrations/0114_article_jobs.sql";
 
 /** Postgres "column does not exist" (42703) and PostgREST's schema-cache
  *  equivalent (PGRST204, "Could not find the 'x' column of 'y'"): the tables
@@ -657,12 +672,18 @@ export function catalogueMissing(err: { code?: string; message?: string } | null
 /** Which migration a database error says is missing, or null when it is some
  *  other error. Routes answer 409 with the hint; pages show the banner. */
 export function missingMigration(err: { code?: string; message?: string } | null | undefined): string | null {
-  if (catalogueColumnMissing(err)) return CATALOGUE_LAYER_MIGRATION;
+  if (catalogueColumnMissing(err)) {
+    // The only column 0114 adds; every other missing column is 0113's.
+    return /render_error/i.test(err?.message ?? "") ? ARTICLE_JOBS_MIGRATION : CATALOGUE_LAYER_MIGRATION;
+  }
   if (catalogueMissing(err)) return CATALOGUE_MIGRATION;
   return null;
 }
 
 export function migrationMissingMessage(migration: string): string {
+  if (migration === ARTICLE_JOBS_MIGRATION) {
+    return `The article-job columns (figure render errors, one live article job per topic) are not in this database yet — apply ${migration}.`;
+  }
   return migration === CATALOGUE_LAYER_MIGRATION
     ? `The catalogue-layer columns (node kinds, grouped candidates, job inputs) are not in this database yet — apply ${migration}.`
     : `The topic-catalogue tables are not in this database yet — apply ${migration}.`;

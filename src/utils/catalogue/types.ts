@@ -114,3 +114,97 @@ export type NodeHit = Pick<CurriculumNode, "id" | "code" | "grade" | "strand" | 
   kind: NodeKind | null;
   children: number;
 };
+
+// ── Knowledge articles (0112 §3; Phase 2b) ───────────────────────────────────
+
+export type ArticleStatus = "draft" | "in_review" | "approved" | "superseded" | "rejected";
+export type ArticleAuthor = "model" | "staff";
+
+export type ArticleObjective = { id: string; text: string };
+
+/** One ordered section. `figure_keys` name article_figures.figure_key rows of
+ *  the same article; `covers` lists the objective ids the section teaches. */
+export type ArticleSection = {
+  id: string;
+  heading: string;
+  body_md: string;
+  figure_keys: string[];
+  covers: string[];
+};
+
+export type GlossaryEntry = { term: string; definition: string };
+export type Misconception = { id: string; misconception: string; correction: string };
+export type WorkedExample = { id: string; problem: string; solution_md: string };
+/** A discrete fact or formula, tied to the section that states it. */
+export type Claim = { id: string; text: string; section_id: string };
+
+export type TopicArticle = {
+  id: string;
+  topic_id: string;
+  version: number;
+  language: string;
+  source_article_id: string | null;
+  title: string;
+  objectives: ArticleObjective[];
+  sections: ArticleSection[];
+  glossary: GlossaryEntry[];
+  misconceptions: Misconception[];
+  worked_examples: WorkedExample[];
+  claims: Claim[];
+  depth_node_id: string | null;
+  depth_rationale: string | null;
+  word_count: number;
+  status: ArticleStatus;
+  author: ArticleAuthor;
+  reviewer_id: string | null;
+  reviewed_at: string | null;
+  approved_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FigureStatus = "draft" | "rendered" | "approved" | "rejected";
+
+/** What to draw: the subject, the parts to label, an optional style and notes
+ *  for the renderer. */
+export type FigureSpec = { subject: string; parts: string[]; style: string | null; notes: string | null };
+
+export type ArticleFigure = {
+  id: string;
+  article_id: string;
+  figure_key: string;
+  caption: string | null;
+  spec: FigureSpec;
+  /** worker-owned visual_assets.id (no FK); set once figure_render succeeded */
+  visual_asset_id: string | null;
+  labels: { group_id: string; label: string }[];
+  sort: number;
+  status: FigureStatus;
+  /** 0114: why the last render failed, so the editor can say so */
+  render_error: string | null;
+  created_at: string;
+};
+
+/** The editable part of an article as the Save action carries it: everything
+ *  a human may change on a draft. Versioning, status, authorship and review
+ *  fields are the routes' business, never the editor's. */
+export type ArticleBody = {
+  title: string;
+  objectives: ArticleObjective[];
+  sections: ArticleSection[];
+  glossary: GlossaryEntry[];
+  misconceptions: Misconception[];
+  worked_examples: WorkedExample[];
+  claims: Claim[];
+  depth_rationale: string | null;
+  figures: ArticleFigureInput[];
+};
+
+/** A figure as the editor sends it (the renderer's fields are not editable). */
+export type ArticleFigureInput = {
+  figure_key: string;
+  caption: string | null;
+  spec: FigureSpec;
+  sort: number;
+};

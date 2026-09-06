@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  ARTICLE_JOBS_MIGRATION,
   CATALOGUE_LAYER_MIGRATION,
   CATALOGUE_MIGRATION,
   NODE_KINDS,
@@ -26,6 +27,7 @@ import {
   escapeLike,
   groupNodes,
   hasTopicFilters,
+  isArticleFilter,
   isGroupKind,
   isLiveJobStatus,
   isNodeKind,
@@ -345,8 +347,23 @@ describe("coverageOf", () => {
 describe("parseTopicFilters", () => {
   it("defaults to an unfiltered first page of the default size", () => {
     const f = parseTopicFilters({});
-    expect(f).toEqual({ subject: "", curriculum: "", grade: "", node: "", status: "", q: "", page: 1, pageSize: TOPIC_PAGE_SIZE });
+    expect(f).toEqual({ subject: "", curriculum: "", grade: "", node: "", status: "", article: "", q: "", page: 1, pageSize: TOPIC_PAGE_SIZE });
     expect(hasTopicFilters(f)).toBe(false);
+  });
+
+  it("the article filter (the overview's review-queue link) accepts only the four states", () => {
+    expect(parseTopicFilters({ article: "in_review" }).article).toBe("in_review");
+    expect(parseTopicFilters({ article: "draft" }).article).toBe("draft");
+    expect(parseTopicFilters({ article: "approved" }).article).toBe("approved");
+    expect(parseTopicFilters({ article: "none" }).article).toBe("none");
+    expect(parseTopicFilters({ article: "superseded" }).article).toBe("");
+    expect(parseTopicFilters({ article: "banana" }).article).toBe("");
+    expect(isArticleFilter("in_review")).toBe(true);
+    expect(isArticleFilter("")).toBe(false);
+    const f = parseTopicFilters({ article: "in_review" });
+    expect(hasTopicFilters(f)).toBe(true);
+    expect(withTopicFilter(f, {})).toBe("?article=in_review");
+    expect(withTopicFilter(f, { article: "" })).toBe("");
   });
 
   it("keeps a sub-strand filter only with its curriculum (a stale ?node= alone is dropped)", () => {
@@ -585,6 +602,17 @@ describe("catalogueColumnMissing / missingMigration — 0113 not applied", () =>
     expect(missingMigration({ code: "23505", message: "duplicate key" })).toBeNull();
     expect(missingMigration(null)).toBeNull();
     expect(catalogueColumnMissing(null)).toBe(false);
+  });
+
+  it("a missing article_figures.render_error column names 0114 (the only column that migration adds)", () => {
+    const pg = { code: "42703", message: "column article_figures.render_error does not exist" };
+    const rest = { code: "PGRST204", message: "Could not find the 'render_error' column of 'article_figures' in the schema cache" };
+    for (const e of [pg, rest]) {
+      expect(catalogueColumnMissing(e)).toBe(true);
+      expect(missingMigration(e)).toBe(ARTICLE_JOBS_MIGRATION);
+    }
+    // any other missing column is still 0113's
+    expect(missingMigration({ code: "42703", message: "column jobs.params does not exist" })).toBe(CATALOGUE_LAYER_MIGRATION);
   });
 });
 
