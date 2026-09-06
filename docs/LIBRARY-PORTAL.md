@@ -160,9 +160,13 @@ Pickers used by the panels (any member): `GET /api/library/topics?q=&limit=&all=
 curriculum; each hit carries its resolved `kind` and its direct-`children` count).
 
 Route shape is guarded by `src/utils/__tests__/catalogue-routes.test.ts`: Node runtime,
-`isLibraryMemberRequest(…)` as the first await of every handler (404 on null), no
-`generations` access anywhere under `/api/library`, `jobs` inserted from exactly the
-harvest, derive and article routes (all observer jobs), an audit row from every POST,
+`isLibraryMemberRequest(…)` as the first await of every handler (404 on null),
+`generations` touched **only** by the kit and compose routes — inserted as catalogue rows
+behind `catalogueGenerateEnabled()` and `CATALOGUE_OWNER_ID`, never in a file that also
+inserts `jobs` (`pipeline-universal.test.ts`) — `jobs` inserted from exactly the harvest,
+derive, article and questions routes plus `kit/questions-job.ts` (all observer jobs), no
+route writing `topic_kits.status` / `topic_articles.status = 'approved'` (kits are
+approved and rejected only through the 0115 RPCs), an audit row from every POST,
 the Phase 2a invariants (grouped candidates map `node_ids`; create-from-node maps the
 ticked children; the bulk create checks every key once — insertTopic's own check —
 skips a taken one and settles the skipped row; both candidate create paths look the
@@ -179,6 +183,87 @@ and deletes only draft figures; render_figures refuses a rejected / superseded v
 before it counts or enqueues; approve refuses while the topic is a candidate, before
 the RPC).
 
-Later phases add to `/library/topics/[id]` the kit review, translate and publish
-panels, and the `/library/topics/[id]/questions` and `/library/blueprints` screens
-(plan §7.2).
+## Phase 3 — the kit (migration 0115)
+
+**What a kit is.** A `topic_kits` row (0112) plus ordinary `generations` rows owned by
+the **catalogue system account** (`catalogue@sketchcast.app`, a platform admin) with
+`book_id` and `chapter_ref` **NULL** and `params.catalogue = true` — the shape 0112's
+guards recognise and exempt from dedup, the caps and the ledger. **Generate kit**
+inserts five kinds at once, presentation first: `presentation`, `activity`,
+`case_study`, `worksheet`, `deck`. The **`lesson_plan` is inserted by the worker**
+after the presentation finishes, because it cites the clips the video produced
+(`params.clips`, `params.lesson_modes = true` → the three lesson modes). Documents are
+one each per topic, never per part. Every generation carries the same params
+(`kitGenerationParams` in `src/utils/catalogue/kit.ts`): `catalogue: true`, `topic_id`,
+`kit_id`, `article_id`, `language: 'en'`, `narration_style: 'dialogue'`,
+`teacher_avatar: 'female' | 'male'`, `tts_voice: 'g-en-f' | 'g-en-m'`, `student_voice:
+'g-en-student-m' | 'g-en-student-f'` (the **other** gender's premium student voice), and
+`curriculum_header` — one line per curriculum the topic is mapped to
+(`curriculumHeaderLines`: `Cambridge Lower Secondary Science 0893 · 7Bs.01, 7Bs.02`;
+`CBSE Science 086 · Class 9 · Cell — the basic unit of life`), rendered under the
+subtitle of every catalogue document. The teacher avatar defaults to the gender used
+**less** across the topic's existing kits, a tie going to female (`nextTeacherAvatar`),
+so a regenerated topic alternates faces and voices.
+
+**Lifecycle.** `generating` → `in_review` → `approved` (or `rejected`); `failed` when a
+piece errors. The worker owns the middle: when the presentation finishes it writes the
+**part plan** (`topic_kits.part_plan`, 0115: `[{part, sections, minutes}]`), the
+**chapter timestamps** (`chapters`: `[{part, t, label, section_id?}]`) and the **clips**
+(`clips`: `[{part, start, end, label, purpose}]`, 120–240 s aligned to chapter
+boundaries) and inserts the lesson plan; when every generation the kit references is
+`done` it moves the kit to `in_review` and the topic `generating → in_review`. A failing
+generation moves the kit to `failed` (the topic stays `generating`); the portal's
+**Retry** re-inserts that one kind and puts the kit back to `generating`. Retry is built
+so two operators cannot double-build and so the pointer write cannot lose the worker's:
+the failed row is taken **exclusively** first (a compare-and-swap flips
+`params.retried` to `true` where it is not set — the loser of two clicks answers 409
+"already retried" and inserts nothing; a presentation retried twice is a whole video's
+worth of Vertex image calls), the new row carries the failed row's **input params only**
+(`retryParamsOf`: decision 1's keys, plus `clips` / `lesson_modes` for a lesson plan —
+never the telemetry the worker merged into the failed run), and the kit is repointed by
+the RPC **`repoint_kit_generation(p_kit, p_kind, p_generation, p_replaces)`** — one
+`jsonb ||` merge on a `generating` kit with a compare-and-swap on the id being replaced,
+so the `lesson_plan` id the worker merges in meanwhile (`insert_lesson_plan`) survives
+and a pointer somebody else moved is reported (audited `library_kit_retry_unpointed`),
+never overwritten. The 0115 trigger `create_job_for_generation()` copies `{catalogue:
+true, topic_id, kit_id, question_set_id}` into `jobs.params`, which is how the worker
+keeps catalogue jobs out of the user lanes and builds them only in its **off-peak
+window** when no teacher's builder is live (never-starve, decision 12).
+
+**Gate 2 = the RPCs.** `approve_topic_kit(p_kit, p_reviewer, p_notes)` (in_review →
+approved; topic in_review → video_approved; audit `library_kit_approve`) and
+`reject_topic_kit(p_kit, p_reviewer, p_reason, p_notes)` (in_review | approved →
+rejected; reason from the 0112 list and notes **required**; topic video_approved →
+in_review so a pulled approval reopens review; audit `library_kit_reject`) — SECURITY
+DEFINER, service role only, `check_violation` (23514) when the kit is not in an accepting
+status, `no_data_found` (P0002) when missing. Both check the **topic** too — approve
+needs it `in_review`, reject `in_review` or `video_approved` — because the kit Regenerate
+leaves behind at `in_review` (the topic already back at `generating`) is history, not a
+candidate: approving it would leave two approved kits on one topic. Approve also checks
+that the kit's **article is still the approved version**: a kit built from v1 is not
+approved after v2 supersedes it; it is regenerated (the article is the kit's source of
+truth). The kit route mirrors the three checks (`kitAcceptsApprove` / `kitAcceptsReject`
+in `kit.ts`) so the panel's disabled button and the 409 say the same sentence. **No route
+writes `topic_kits.status = 'approved'` or `'rejected'`** (asserted by
+`catalogue-routes.test.ts` and `migration-0115-catalogue-kits.test.ts`). Approval is
+enforced twice: the panel hides the buttons and the worker re-checks (a catalogue
+generation whose article is not approved, or whose kit is missing or rejected, fails
+before any model call).
+
+**Env vars.**
+
+| Where | Variable | Meaning |
+|---|---|---|
+| Vercel (app) | `FEATURE_CATALOGUE_GENERATE=true` | `catalogueGenerateEnabled()` — the first lock in front of every catalogue `generations` insert (Generate kit, Retry, Regenerate, Compose). Off ⇒ the routes answer **409** with a plain sentence and the kit panel disables its buttons saying why. Off by default: a kit spends the same Vertex image capacity real lessons do. |
+| Vercel (app) | `CATALOGUE_OWNER_ID` | The system account's profile id (`9d41e12e-e9c9-4b82-b3a9-3421c2c57726`); the owner of every catalogue generation. Read by ONE helper, `catalogueOwnerId()` in `flags.ts` (trim, lower-case, must be a uuid) — the routes and both portal pages — so a malformed value greys the buttons with the same sentence the routes answer. Unset or malformed ⇒ **409** "not configured". An owner that is not a platform admin trips 0112's guard (42501) ⇒ **409** "the catalogue owner is not a platform admin". |
+| Railway (worker) | `CATALOGUE_WINDOW_UTC` | The off-peak window for the catalogue lane, default `20:00-05:00`; `always` disables the window (local testing only). The lane also waits for every user builder to finish. |
+| Railway (worker) | `CATALOGUE_PART_TARGET_MIN` | Target minutes per video part (default 17; × 130 wpm = the words budget); hard ceiling 20 min. Parts close only at article-section boundaries. |
+
+| Screen | What it shows | Actions | Who |
+|---|---|---|---|
+| `/library` | Two more **review queues**: *Kits awaiting review* (`topic_kits.status = in_review`, → `/library/topics?status=in_review`) and *Question items awaiting review* (`topic_questions.status = draft`); a **Blueprints** door | — | any member |
+| `/library/topics/[id]` — **Kit panel** | **Generate kit** (teacher avatar radio, default alternating; disabled with the reason when the flag is off, the owner is unset, a kit is generating, the topic is not `article_approved` or the English article is not approved — `kitAcceptsGenerate`), the **current kit**: status chip (`rejected · <reason>`), teacher and the two voice ids, progress (`kitProgress`: "3/6 done · 1 failed"), reviewer + date, review notes; **one row per piece** in kit order (kind label, generation status, the latest **builder** job's progress / stage / error — an observer job pointing at the generation is not the build), documents as signed download links (`docDownloadName`), the **video parts inline** (`<video controls>`, signed for an hour, ordered by extracted part number — `sortVideoArtifacts`, never by path string), each with its **chapter timestamps**; the **part plan**; the **clip list** (view; **Edit clips** for `generate` roles on an `in_review` / `approved` / `rejected` / `failed` kit — mm:ss inside a known part, 30 s–10 min, label ≤ 80, `validateClips` in the browser first); **Retry** next to a failed piece; **Regenerate kit**; **Approve video / Reject** (reason select + notes) for `approve` roles; **earlier kits** collapsed as history. A missing `part_plan` column (0115 not applied) shows the kits without their plan and says so. The header line gains **Question bank →** (`/library/topics/[id]/questions`) | `POST /api/library/topics/[id]/kit` with `{action}`: **generate** `{teacherAvatar?}` — acceptance, the two locks, one `topic_kits` row, the topic moved `article_approved → generating` by a **guarded UPDATE read back** (the race lock: the loser of two clicks takes its kit row out and answers 409), the five `generations` rows (`kitGenerationRows`), the kit repointed at them, ONE `topic_questions` job (`kit/questions-job.ts`: live pre-check keyed like `jobs_one_live_questions`, a 23505 or a live job = "already runs", not a failure), audited `library_kit_generate`; a failed generations insert marks the kit `failed` with the reason and puts the topic back; once the generations exist a later failure is audited too — the bank job is best-effort (`warning` on the 200, `questions_job_error` in the audit row) and a failed pointer write answers 500 naming the generation ids. **retry** `{kitId, kind}` — the kind's generation must be `error` and not already retried; it is taken exclusively (`params.retried` CAS, 409 when somebody else got there), kit `failed \| generating → generating` guarded and read back, one row with the failed row's whitelisted params (`retryParamsOf`), the pointer through `repoint_kit_generation` (409 + `library_kit_retry_unpointed` when the pointer moved); `library_kit_retry`. **regenerate** `{kitId}` — an `in_review` / `rejected` kit whose article is still the approved one, topic `in_review → generating` guarded, a NEW kit with the old kit's avatar and `source_kit_id`; `library_kit_regenerate`. **save_clips** `{kitId, clips}` — `validateClips` against `part_plan` (400 with every error), guarded write on an editable status; `library_kit_clips_save`. **approve** `{kitId, notes?}` → `kitAcceptsApprove` (kit `in_review`, topic `in_review`, the kit's article still `approved` — else 409 with the reason) then `approve_topic_kit`; **reject** `{kitId, reason, notes}` → `kitAcceptsReject` (kit `in_review \| approved`, topic `in_review \| video_approved`) then `reject_topic_kit` — the RPCs check the same, their refusals are the 409 and they audit themselves. A kit id from another topic is a 404 | read: any member; generate, retry, regenerate, save_clips: **editor, admin** (`generate`); approve, reject: **reviewer, editor, admin** (`approve`) |
+
+The question bank (`/library/topics/[id]/questions`, `/library/blueprints`, the
+`questions`, `compose` and `blueprints` routes) is documented in `docs/QUESTION-BANK.md`.
+Translate and publish panels arrive with their phases (plan §7.2).

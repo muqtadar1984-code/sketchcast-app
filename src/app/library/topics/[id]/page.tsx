@@ -5,15 +5,22 @@ import { requireLibraryMember } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
 import { InkUnderline } from "@/components/ink-mark";
 import { ARTICLE_JOBS_MIGRATION, catalogueColumnMissing, catalogueMissing } from "@/utils/catalogue/status";
-import type { ArticleFigure, Curriculum, Topic, TopicAlias, TopicArticle, TopicHit } from "@/utils/catalogue/types";
+import { CATALOGUE_KITS_MIGRATION, kitGenerationIds, sortKits, sortVideoArtifacts, videoPartOf } from "@/utils/catalogue/kit";
+import { catalogueGenerateEnabled, catalogueOwnerId } from "@/utils/flags";
+import { docDownloadName } from "@/utils/download-name";
+import type { ArticleFigure, Curriculum, KitGenerationRow, Topic, TopicAlias, TopicArticle, TopicHit, TopicKit } from "@/utils/catalogue/types";
 import { ErrorBanner, MaturityChip, MissingTablesBanner, StatusChip, fmtDate } from "../../catalogue-ui";
 import { AliasPanel, MappingPanel, PrereqPanel, TopicActions, TopicHeaderEditor, type MappingRow } from "./topic-panels";
 import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel";
+import { KitPanel, type KitArtifactView, type KitView } from "./kit-panel";
 
 // /library/topics/[id] — one topic: header (editable), status actions, aliases,
 // curriculum mappings with the depth-node selector, prerequisites, the
-// knowledge article (versions, editor, figures, review, diff — Phase 2b) and
-// the audit trail. Kit review and publish panels arrive with their phases.
+// knowledge article (versions, editor, figures, review, diff — Phase 2b), the
+// kit (generate, pieces with their worker jobs, video parts, documents, part
+// plan, chapters, clips, review, retry, regenerate, history — Phase 3) and the
+// audit trail. The question bank has its own page (/questions); the publish
+// panel arrives with its phase.
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +33,15 @@ const ARTICLE_COLUMNS =
   "id, topic_id, version, language, source_article_id, title, objectives, sections, glossary, misconceptions, worked_examples, claims, depth_node_id, depth_rationale, word_count, status, author, reviewer_id, reviewed_at, approved_by, notes, created_at, updated_at";
 const FIGURE_COLUMNS = "id, article_id, figure_key, caption, spec, visual_asset_id, labels, sort, status, created_at";
 const JOB_COLUMNS = "id, status, progress, stage, error, created_at, params";
+
+/** Kit artifacts live in the PRIVATE `artifacts` bucket, signed for an hour
+ *  like the figure previews. */
+const KIT_SIGN_TTL_SECONDS = 3600;
+const KIT_LANGUAGE = "en";
+/** Without part_plan (0115): read separately so a database where 0115 is not
+ *  applied still shows the kit. */
+const KIT_COLUMNS =
+  "id, topic_id, article_id, language, source_kit_id, teacher_avatar, voice_pair, presentation_generation_id, doc_generation_ids, chapters, clips, status, reject_reason, approved_by, reviewer_id, reviewed_at, notes, judge_score, created_at, updated_at";
 
 const TOPIC_COLUMNS =
   "id, canonical_key, title, subject, summary, teacher_avatar, depth_node_id, prerequisites, status, bank_maturity, created_by, created_at, updated_at";
@@ -187,14 +203,99 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
     renderJob: latestRender.get(a.id) ?? null,
   }));
   const articleJob = (artJobQ.data ?? null) as JobRow | null;
-  // Reviewer / approver names for the version list (profiles carries no e-mail).
-  const personIds = [...new Set(articles.flatMap((a) => [a.reviewer_id, a.approved_by]).filter((v): v is string => !!v))];
+
+  // ── The kit (Phase 3): every kit of the topic (newest first), the
+  // generations they reference with the latest BUILDER job per generation
+  // (an observer job — support_diagnose — may also point at a generation; it
+  // is not the build) and their artifacts signed for an hour: videos ordered
+  // by part with a bare URL (a download disposition would break in-tab
+  // playback), documents with docDownloadName's filename baked in.
+  let kitsMigration: string | null = null;
+  let kitsError: { message?: string } | null = null;
+  let kitRows: TopicKit[] = [];
+  {
+    const { data, error } = await admin.from("topic_kits").select(KIT_COLUMNS + ", part_plan").eq("topic_id", id).eq("language", KIT_LANGUAGE).order("created_at", { ascending: false });
+    if (error && catalogueColumnMissing(error) && /part_plan/i.test(error.message ?? "")) {
+      // 0115 not applied: the kits still show, with an empty plan.
+      kitsMigration = CATALOGUE_KITS_MIGRATION;
+      const again = await admin.from("topic_kits").select(KIT_COLUMNS).eq("topic_id", id).eq("language", KIT_LANGUAGE).order("created_at", { ascending: false });
+      if (again.error && !catalogueMissing(again.error)) kitsError = again.error;
+      kitRows = ((again.data ?? []) as unknown as Omit<TopicKit, "part_plan">[]).map((k) => ({ ...k, part_plan: [] }));
+    } else if (error && !catalogueMissing(error)) {
+      kitsError = error;
+    } else {
+      kitRows = (data ?? []) as unknown as TopicKit[];
+    }
+  }
+  kitRows = sortKits(kitRows).map((k) => ({
+    ...k,
+    doc_generation_ids: k.doc_generation_ids ?? {},
+    chapters: Array.isArray(k.chapters) ? k.chapters : [],
+    clips: Array.isArray(k.clips) ? k.clips : [],
+    part_plan: Array.isArray(k.part_plan) ? k.part_plan : [],
+  }));
+  const kitGenIds = [...new Set(kitRows.flatMap((k) => kitGenerationIds(k)))];
+  type GenEmbed = KitGenerationRow & {
+    artifacts: { kind: string; storage_path: string }[] | null;
+    jobs: (JobRow & { type: string })[] | null;
+  };
+  let gensError: { message?: string } | null = null;
+  const gensById = new Map<string, GenEmbed>();
+  if (kitGenIds.length) {
+    const { data, error } = await admin
+      .from("generations")
+      .select("id, kind, status, title, params, created_at, artifacts(kind, storage_path), jobs(id, type, status, progress, stage, error, created_at)")
+      .in("id", kitGenIds);
+    if (error) gensError = error;
+    for (const g of (data ?? []) as unknown as GenEmbed[]) gensById.set(g.id, g);
+  }
+  const signKit = async (path: string, download?: string): Promise<string | null> => {
+    const { data } = await admin.storage.from("artifacts").createSignedUrl(path, KIT_SIGN_TTL_SECONDS, download ? { download } : undefined);
+    return data?.signedUrl ?? null;
+  };
+  const kits: KitView[] = await Promise.all(
+    kitRows.map(async (kit) => ({
+      kit,
+      generations: await Promise.all(
+        kitGenerationIds(kit)
+          .map((gid) => gensById.get(gid))
+          .filter((g): g is GenEmbed => !!g)
+          .map(async (g) => {
+            const jobs = [...(g.jobs ?? [])].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+            const job = jobs.find((j) => j.type === g.kind) ?? jobs[0] ?? null;
+            const videos = sortVideoArtifacts((g.artifacts ?? []).filter((a) => a.kind === "video_mp4"));
+            const docs = (g.artifacts ?? []).filter((a) => a.kind !== "video_mp4" && a.kind !== "script_json");
+            const artifacts: KitArtifactView[] = await Promise.all([
+              ...videos.map(async (a) => ({ kind: a.kind, url: await signKit(a.storage_path), name: null, part: videoPartOf(a.storage_path) })),
+              ...docs.map(async (a) => {
+                const name = docDownloadName(g.kind, a.kind) ?? null;
+                return { kind: a.kind, url: await signKit(a.storage_path, name ?? undefined), name: name ?? a.kind, part: 1 };
+              }),
+            ]);
+            const gen: KitGenerationRow = { id: g.id, kind: g.kind, status: g.status, title: g.title, params: g.params, created_at: g.created_at };
+            return { gen, job: job ? { id: job.id, status: job.status, progress: job.progress, stage: job.stage, error: job.error, created_at: job.created_at } : null, artifacts };
+          }),
+      ),
+    })),
+  );
+  const approvedArticle = articles.find((a) => a.status === "approved") ?? null;
+  // Every version's status by id: the kit panel refuses Approve on a kit whose
+  // own article is no longer the approved version (kitAcceptsApprove).
+  const articleStatuses: Record<string, string> = Object.fromEntries(articles.map((a) => [a.id, a.status]));
+  const kitMigrationNote = kitsMigration
+    ? `The part plan column (topic_kits.part_plan) is not in this database yet — apply ${kitsMigration}; kits show without their plan until then.`
+    : null;
+
+  // Reviewer / approver names for the version list and the kit history
+  // (profiles carries no e-mail).
+  const personIds = [...new Set([...articles.flatMap((a) => [a.reviewer_id, a.approved_by]), ...kitRows.flatMap((k) => [k.reviewer_id, k.approved_by])].filter((v): v is string => !!v))];
   const names: Record<string, string> = {};
   if (personIds.length) {
     const { data: people } = await admin.from("profiles").select("id, full_name").in("id", personIds);
     for (const p of (people ?? []) as { id: string; full_name: string | null }[]) if (p.full_name) names[p.id] = p.full_name;
   }
   const canEditArticle = libraryAllows(member.role, "edit_article");
+  const canGenerate = libraryAllows(member.role, "generate");
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-10">
@@ -210,7 +311,10 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
       </div>
       <InkUnderline className="block h-3 w-40 mb-3" color="#7FD8A8" />
       <p className="text-sm text-[#5B6470] mb-6">
-        Created {fmtDate(topic.created_at)} · updated {fmtDate(topic.updated_at)}
+        Created {fmtDate(topic.created_at)} · updated {fmtDate(topic.updated_at)} ·{" "}
+        <Link href={`/library/topics/${topic.id}/questions`} className="hover:underline text-[#1F5B99]">
+          Question bank →
+        </Link>
         {openCandidates > 0 && (
           <>
             {" "}
@@ -243,6 +347,21 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
                 canEdit={canEditArticle}
                 canApprove={canApprove}
               />
+              {kitsError && <ErrorBanner message={`Could not read the kits: ${kitsError.message ?? "unknown error"}`} />}
+              {gensError && <ErrorBanner message={`Could not read the kit's generations: ${gensError.message ?? "unknown error"}`} />}
+              <KitPanel
+                topicId={topic.id}
+                topicStatus={topic.status}
+                articleStatus={approvedArticle?.status ?? null}
+                articleStatuses={articleStatuses}
+                kits={kits}
+                names={names}
+                canGenerate={canGenerate}
+                canApprove={canApprove}
+                generateEnabled={catalogueGenerateEnabled()}
+                ownerConfigured={catalogueOwnerId() !== null}
+                migrationNote={kitMigrationNote}
+              />
             </>
           )}
           <MappingPanel topic={topic} mappings={mappings} curricula={curricula} canCurate={canCurate} />
@@ -263,7 +382,8 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
               {topic.status === "retired" && <li className="text-[#14181F] font-medium">▸ retired</li>}
             </ol>
             <p className="text-xs text-[#98A0A9] mt-3">
-              Approving an article version moves the topic to article approved. Kit and publish steps arrive with their phases.
+              Approving an article version moves the topic to article approved; Generate kit moves it to generating, the worker to in review once every
+              piece is done, and Approve video (gate 2) to video approved. Publishing arrives with its phase.
             </p>
           </div>
           <div className="card p-5">

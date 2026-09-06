@@ -9,7 +9,8 @@ import {
   stageLabel,
 } from "@/utils/catalogue/status";
 import { ARTICLE_STATUS_TONE, FIGURE_STATUS_TONE, articleStatusLabel } from "@/utils/catalogue/article";
-import type { ArticleStatus, BankMaturity, FigureStatus, NodeKind, TopicStatus } from "@/utils/catalogue/types";
+import { GEN_STATUS_TONE, KIT_STATUS_TONE, kitStatusLabel } from "@/utils/catalogue/kit";
+import type { ArticleStatus, BankMaturity, FigureStatus, KitStatus, NodeKind, TopicStatus } from "@/utils/catalogue/types";
 
 // Small presentational pieces shared by the portal's screens. No "use client"
 // and no server-only imports, so Server Components and client panels can both
@@ -199,4 +200,20 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ── Kits (Phase 3) ───────────────────────────────────────────────────────────
+
+/** A kit's status (0112 topic_kits.status). `label` replaces the bare status
+ *  text (the history list says "rejected · pacing"); the tone follows the status. */
+export function KitStatusChip({ status, label }: { status: KitStatus | string; label?: string }) {
+  const tone = KIT_STATUS_TONE[status as KitStatus] ?? "bg-[#EEF0EC] text-[#5B6470]";
+  return <span className={`chip ${tone}`}>{label ?? kitStatusLabel(status)}</span>;
+}
+
+/** One generation's status (generations.status: queued | processing | done |
+ *  error) — the per-piece chip in the kit panel. */
+export function GenStatusChip({ status }: { status: string }) {
+  const tone = GEN_STATUS_TONE[status] ?? "bg-[#EEF0EC] text-[#5B6470]";
+  return <span className={`chip ${tone}`}>{status === "error" ? "failed" : status}</span>;
 }

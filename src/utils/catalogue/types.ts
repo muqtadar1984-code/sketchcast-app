@@ -208,3 +208,74 @@ export type ArticleFigureInput = {
   spec: FigureSpec;
   sort: number;
 };
+
+// ── Kits (Phase 3) ───────────────────────────────────────────────────────────
+// 0112 topic_kits + 0115 part_plan. A kit is the set of catalogue generations
+// (presentation, deck, activity, case study, worksheet, and the worker's
+// lesson plan) built from ONE approved article version in ONE language.
+
+export type KitStatus = "generating" | "in_review" | "approved" | "rejected" | "failed";
+
+/** Why a reviewer rejected a kit (topic_kits.reject_reason). The regeneration
+ *  reads it: `pronunciation` and `pacing` steer narration, `visuals` the
+ *  scene engine, `factual` / `grade_fit` send the reviewer back to the article. */
+export type KitRejectReason = "factual" | "grade_fit" | "pacing" | "visuals" | "pronunciation" | "translation" | "other";
+
+/** The teacher's gender token, chosen in the portal; the worker casts the
+ *  roster face and the premium voice from it, and the STUDENT voice is the
+ *  other gender (plan §1.6 dialogue). */
+export type TeacherAvatar = "female" | "male";
+
+/** Registry voice ids the kit was made with (topic_kits.voice_pair). */
+export type VoicePair = { teacher: string; student: string };
+
+/** A clip of one video part for the lesson plan's micro-clip mode and the
+ *  YouTube description: seconds from the part's start, 120–240 s when the
+ *  worker cuts them, 30–600 s when a human edits them (validateClips). */
+export type ClipRow = { part: number; start: number; end: number; label: string; purpose: string | null };
+
+/** One video part's plan (0115 part_plan): the article sections it teaches
+ *  and its length in minutes. */
+export type PartPlanRow = { part: number; sections: string[]; minutes: number };
+
+/** A chapter timestamp inside one video part (topic_kits.chapters): `t` is
+ *  seconds from the part's start; the first mark of every part is 0. */
+export type ChapterMark = { part: number; t: number; label: string; section_id: string | null };
+
+export type TopicKit = {
+  id: string;
+  topic_id: string;
+  article_id: string;
+  language: string;
+  /** The kit this one regenerates (kept as history). */
+  source_kit_id: string | null;
+  teacher_avatar: TeacherAvatar | string | null;
+  voice_pair: VoicePair | null;
+  presentation_generation_id: string | null;
+  /** generation id per document kind: {lesson_plan?, activity?, case_study?, worksheet?, deck?} */
+  doc_generation_ids: Record<string, string>;
+  chapters: ChapterMark[];
+  clips: ClipRow[];
+  /** 0115; `[]` until the presentation finishes (and when 0115 is not applied). */
+  part_plan: PartPlanRow[];
+  status: KitStatus;
+  reject_reason: KitRejectReason | null;
+  approved_by: string | null;
+  reviewer_id: string | null;
+  reviewed_at: string | null;
+  notes: string | null;
+  judge_score: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** The columns of a kit's generations row the portal reads (status is the
+ *  0001 job_status enum: queued | processing | done | error). */
+export type KitGenerationRow = {
+  id: string;
+  kind: string;
+  status: string;
+  title: string | null;
+  params: Record<string, unknown> | null;
+  created_at: string;
+};
