@@ -1,6 +1,13 @@
 import Link from "next/link";
-import { CATALOGUE_MIGRATION, MATURITY_TONE, TOPIC_STATUS_TONE } from "@/utils/catalogue/status";
-import type { BankMaturity, TopicStatus } from "@/utils/catalogue/types";
+import {
+  CATALOGUE_LAYER_MIGRATION,
+  CATALOGUE_MIGRATION,
+  MATURITY_TONE,
+  NODE_KIND_LABEL,
+  TOPIC_STATUS_TONE,
+  stageLabel,
+} from "@/utils/catalogue/status";
+import type { BankMaturity, NodeKind, TopicStatus } from "@/utils/catalogue/types";
 
 // Small presentational pieces shared by the portal's screens. No "use client"
 // and no server-only imports, so Server Components and client panels can both
@@ -30,12 +37,74 @@ export function CoverageChip({ coverage }: { coverage: "full" | "partial" | stri
   );
 }
 
-/** 0112 not applied: explain, don't crash (the /console/content `opsReady` stance). */
-export function MissingTablesBanner({ table }: { table?: string }) {
+/** A curriculum node's level (0113 `kind`). `inferred` marks a level the
+ *  column did not carry and nodeKind() read from the code's shape. */
+export function KindChip({ kind, inferred = false }: { kind: NodeKind | null; inferred?: boolean }) {
+  if (!kind) return null;
+  return (
+    <span
+      className={`chip bg-[#F4F6F3] text-[#5B6470] ${inferred ? "border border-dashed border-[#C9CFC8]" : ""}`}
+      title={inferred ? "Level inferred from the code (kind column unset)" : "Level (curriculum_nodes.kind)"}
+    >
+      {NODE_KIND_LABEL[kind]}
+    </span>
+  );
+}
+
+const JOB_TONE: Record<string, string> = {
+  queued: "bg-[#FFF1D6] text-[#9A6400]",
+  processing: "bg-[#EDE7FB] text-[#5B3FBF]",
+  done: "bg-[#E6F6F2] text-[#0F7A68]",
+  error: "bg-[#FFE9E3] text-[#B3401F]",
+};
+
+/** The latest observer job (harvest, derive) on a row: status chip, then
+ *  progress / stage while it runs, the date, and the error when it failed. */
+export function JobSummary({
+  job,
+  never = "never",
+}: {
+  job: { status: string; progress: number | null; stage?: unknown; error: string | null; created_at: string } | null | undefined;
+  never?: string;
+}) {
+  if (!job) return <span className="text-xs text-[#98A0A9]">{never}</span>;
+  const stage = job.status === "processing" || job.status === "queued" ? stageLabel(job.stage) : null;
+  return (
+    <span className="inline-flex flex-col gap-0.5">
+      <span>
+        <span className={`chip ${JOB_TONE[job.status] ?? "bg-[#EEF0EC] text-[#5B6470]"}`}>{job.status}</span>
+        {job.status === "processing" && job.progress != null && <span className="text-xs text-[#5B6470]"> {Math.round(job.progress)}%</span>}
+        {stage && <span className="text-xs text-[#5B6470]"> · {stage}</span>}
+      </span>
+      <span className="text-xs text-[#98A0A9]">{fmtDate(job.created_at)}</span>
+      {job.error && (
+        <span className="text-xs text-[#B3401F] max-w-xs truncate" title={job.error}>
+          {job.error}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** A migration not applied: explain, don't crash (the /console/content
+ *  `opsReady` stance). 0112 (the tables) by default; pass
+ *  `migration={CATALOGUE_LAYER_MIGRATION}` for the 0113 columns. */
+export function MissingTablesBanner({ table, migration = CATALOGUE_MIGRATION }: { table?: string; migration?: string }) {
+  const layer = migration === CATALOGUE_LAYER_MIGRATION;
   return (
     <p className="text-sm text-[#9A6400] bg-[#FFF9EE] rounded-lg px-4 py-3">
-      The topic-catalogue tables{table ? <> (<span className="font-medium">{table}</span>)</> : null} are not in this
-      database yet. Apply <span className="font-medium">{CATALOGUE_MIGRATION}</span>, then reload.
+      {layer ? (
+        <>
+          The catalogue-layer columns{table ? <> (<span className="font-medium">{table}</span>)</> : null} — node kinds,
+          grouped candidates, job inputs — are not in this database yet.
+        </>
+      ) : (
+        <>
+          The topic-catalogue tables{table ? <> (<span className="font-medium">{table}</span>)</> : null} are not in this
+          database yet.
+        </>
+      )}{" "}
+      Apply <span className="font-medium">{migration}</span>, then reload.
     </p>
   );
 }
@@ -52,16 +121,27 @@ export function ReadOnlyNote({ what }: { what: string }) {
   );
 }
 
-/** A coverage bar: covered/total with a whole-percent fill. */
-export function CoverageBar({ covered, total, pct }: { covered: number; total: number; pct: number }) {
+/** A coverage bar: covered/total with a whole-percent fill. `unit` names what
+ *  is counted ("nodes", "objectives"). */
+export function CoverageBar({ covered, total, pct, unit = "nodes" }: { covered: number; total: number; pct: number; unit?: string }) {
   return (
-    <span className="inline-flex items-center gap-2 text-xs text-[#5B6470]" title={`${covered} of ${total} nodes have a topic`}>
+    <span className="inline-flex items-center gap-2 text-xs text-[#5B6470]" title={`${covered} of ${total} ${unit} have a topic`}>
       <span className="inline-block w-24 h-2 rounded-full bg-[#EEF0EC] overflow-hidden" aria-hidden>
         <span className="block h-full bg-[#7FD8A8]" style={{ width: `${pct}%` }} />
       </span>
       <span className="tabular">
         {covered}/{total} · {pct}%
       </span>
+    </span>
+  );
+}
+
+/** "4/5 objectives mapped" for a sub-strand or unit. */
+export function ObjectiveCount({ covered, total }: { covered: number; total: number }) {
+  const done = covered === total;
+  return (
+    <span className={`text-xs tabular ${done ? "text-[#0F7A68]" : "text-[#5B6470]"}`} title={`${covered} of ${total} objectives under this node are mapped`}>
+      {covered}/{total} objective{total === 1 ? "" : "s"} mapped
     </span>
   );
 }

@@ -1,22 +1,43 @@
 /**
- * The topic catalogue's pure logic: the status machine, the candidate
- * resolution planner, coverage arithmetic and the list filters.
+ * The topic catalogue's pure logic: the status machine, node kinds and the
+ * curriculum tree, the candidate resolution planner (grouped candidates map
+ * their node_ids), coverage arithmetic over the tree, the list filters and
+ * the migration-missing detection for 0112 (tables) and 0113 (columns).
  *
  * Run: npx vitest run src/utils/__tests__/catalogue-status.test.ts
  */
 import { describe, expect, it } from "vitest";
 import {
+  CATALOGUE_LAYER_MIGRATION,
+  CATALOGUE_MIGRATION,
+  NODE_KINDS,
   TOPIC_PAGE_SIZE,
   TOPIC_STATUSES,
+  bulkSkipUpdate,
   canTransition,
+  candidateMappingNodes,
+  catalogueColumnMissing,
   catalogueMissing,
+  childrenOf,
   clampPage,
   coverageOf,
+  coveredSet,
+  descendantsOf,
   escapeLike,
+  groupNodes,
   hasTopicFilters,
+  isGroupKind,
+  isLiveJobStatus,
+  isNodeKind,
   isTopicStatus,
   keyTakenMessage,
+  leafDescendants,
+  mappableChildren,
+  missingMigration,
   nextStatuses,
+  nodeKind,
+  nodeTree,
+  objectiveCoverage,
   pageCount,
   pageRange,
   parseTopicFilters,
@@ -24,6 +45,8 @@ import {
   reopenTarget,
   resolveCandidate,
   searchOr,
+  splitMappingNodes,
+  stageLabel,
   withTopicFilter,
   type OwnerRow,
 } from "../catalogue/status";
@@ -190,6 +213,29 @@ describe("resolveCandidate — the writes to make, and nothing else", () => {
     expect(plan.candidate).toEqual({ id: "c2", status: "created", resolved_by: actor, resolved_at: now });
   });
 
+  it("a GROUPED curriculum candidate maps every node in node_ids as full, never its anchor", () => {
+    const grouped = { ...currCand, node_id: "n-7bs", node_ids: ["n-7bs-01", "n-7bs-02", "n-7bs-03"] };
+    const create = resolveCandidate(grouped, { mode: "create", actorId: actor, now });
+    expect(create.mappings).toEqual([
+      { node_id: "n-7bs-01", coverage: "full" },
+      { node_id: "n-7bs-02", coverage: "full" },
+      { node_id: "n-7bs-03", coverage: "full" },
+    ]);
+    const merge = resolveCandidate(grouped, { mode: "merge", topicId: "t-cell", actorId: actor, now });
+    expect(merge.mappings).toEqual(create.mappings);
+    expect(merge.mappings.map((m) => m.node_id)).not.toContain("n-7bs");
+    // dismiss still writes nothing
+    expect(resolveCandidate(grouped, { mode: "dismiss", actorId: actor, now }).mappings).toEqual([]);
+  });
+
+  it("candidateMappingNodes: node_ids when present (deduplicated, blanks dropped), else node_id, nothing for a book", () => {
+    expect(candidateMappingNodes({ source_kind: "curriculum", node_id: "anchor", node_ids: ["a", "b", "a", "", "c"] })).toEqual(["a", "b", "c"]);
+    expect(candidateMappingNodes({ source_kind: "curriculum", node_id: "anchor", node_ids: [] })).toEqual(["anchor"]);
+    expect(candidateMappingNodes({ source_kind: "curriculum", node_id: "anchor" })).toEqual(["anchor"]);
+    expect(candidateMappingNodes({ source_kind: "curriculum", node_id: null, node_ids: [] })).toEqual([]);
+    expect(candidateMappingNodes({ source_kind: "book", node_id: "n", node_ids: ["a"] })).toEqual([]);
+  });
+
   it("create refuses a title with no canonical key (Arabic-only, or blank)", () => {
     expect(() =>
       resolveCandidate({ ...bookCand, raw_title: "الخلية" }, { mode: "create", actorId: actor, now }),
@@ -226,6 +272,54 @@ describe("resolveCandidate — the writes to make, and nothing else", () => {
   });
 });
 
+describe("splitMappingNodes — the objectives the database still has", () => {
+  it("keeps the planned ids found in curriculum_nodes, in plan order, and lists the rest as dropped", () => {
+    const existing = new Set(["n1", "n3"]);
+    expect(splitMappingNodes(["n1", "n2", "n3", "n4"], existing)).toEqual({ keep: ["n1", "n3"], dropped: ["n2", "n4"] });
+  });
+
+  it("drops nothing when every id exists, and everything when none does", () => {
+    expect(splitMappingNodes(["a", "b"], new Set(["a", "b", "c"]))).toEqual({ keep: ["a", "b"], dropped: [] });
+    expect(splitMappingNodes(["a", "b"], new Set())).toEqual({ keep: [], dropped: ["a", "b"] });
+    expect(splitMappingNodes([], new Set(["a"]))).toEqual({ keep: [], dropped: [] });
+  });
+
+  it("composes with candidateMappingNodes: a grouped candidate whose objective was deleted maps the others", () => {
+    const planned = candidateMappingNodes({ source_kind: "curriculum", node_id: "anchor", node_ids: ["o1", "o2", "o3"] });
+    const { keep, dropped } = splitMappingNodes(planned, new Set(["o1", "o3", "anchor"]));
+    expect(keep).toEqual(["o1", "o3"]);
+    expect(dropped).toEqual(["o2"]);
+    // the anchor is not added back in place of the missing objective
+    expect(keep).not.toContain("anchor");
+  });
+});
+
+describe("bulkSkipUpdate — a skipped row is settled, never re-fetched", () => {
+  const actor = "00000000-0000-0000-0000-00000000aaaa";
+  const now = "2026-09-06T10:00:00.000Z";
+
+  it("a key somebody holds makes that topic the row's suggestion (a one-click merge; the row leaves the unmatched set)", () => {
+    expect(bulkSkipUpdate({ existingId: "t-holder" }, actor, now)).toEqual({
+      outcome: "suggest",
+      update: { suggested_topic_id: "t-holder" },
+    });
+  });
+
+  it("no holder to name (no canonical key) dismisses the row by the member, like a single Dismiss", () => {
+    expect(bulkSkipUpdate({ existingId: null }, actor, now)).toEqual({
+      outcome: "dismiss",
+      update: { status: "dismissed", resolved_by: actor, resolved_at: now },
+    });
+  });
+
+  it("a suggestion never changes the row's status, and a dismissal never invents a suggestion", () => {
+    const suggest = bulkSkipUpdate({ existingId: "t" }, actor, now);
+    expect("status" in suggest.update).toBe(false);
+    const dismiss = bulkSkipUpdate({ existingId: null }, actor, now);
+    expect("suggested_topic_id" in dismiss.update).toBe(false);
+  });
+});
+
 describe("coverageOf", () => {
   const nodes = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
 
@@ -251,8 +345,14 @@ describe("coverageOf", () => {
 describe("parseTopicFilters", () => {
   it("defaults to an unfiltered first page of the default size", () => {
     const f = parseTopicFilters({});
-    expect(f).toEqual({ subject: "", curriculum: "", grade: "", status: "", q: "", page: 1, pageSize: TOPIC_PAGE_SIZE });
+    expect(f).toEqual({ subject: "", curriculum: "", grade: "", node: "", status: "", q: "", page: 1, pageSize: TOPIC_PAGE_SIZE });
     expect(hasTopicFilters(f)).toBe(false);
+  });
+
+  it("keeps a sub-strand filter only with its curriculum (a stale ?node= alone is dropped)", () => {
+    expect(parseTopicFilters({ curriculum: "c1", node: "n1" }).node).toBe("n1");
+    expect(parseTopicFilters({ node: "n1" }).node).toBe("");
+    expect(hasTopicFilters(parseTopicFilters({ curriculum: "c1", node: "n1" }))).toBe(true);
   });
 
   it("only accepts statuses the CHECK constraint allows", () => {
@@ -301,6 +401,210 @@ describe("withTopicFilter", () => {
   it("omits defaults and is empty when nothing is set", () => {
     expect(withTopicFilter(parseTopicFilters({}), {})).toBe("");
     expect(withTopicFilter(parseTopicFilters({ pageSize: "25" }), {})).toBe("?pageSize=25");
+  });
+
+  it("carries the node filter with its curriculum, and drops it when the curriculum is cleared", () => {
+    const f = parseTopicFilters({ curriculum: "c1", node: "n1" });
+    expect(withTopicFilter(f, {})).toBe("?curriculum=c1&node=n1");
+    expect(withTopicFilter(f, { curriculum: "" })).toBe("");
+  });
+});
+
+describe("node kinds — the 0113 column, else the code's shape, never depth", () => {
+  it("knows the six kinds", () => {
+    expect([...NODE_KINDS].sort()).toEqual(["chapter", "objective", "strand", "sub_strand", "topic", "unit"]);
+    expect(isNodeKind("unit")).toBe(true);
+    expect(isNodeKind("Unit")).toBe(false);
+    expect(isNodeKind(null)).toBe(false);
+  });
+
+  it("a set kind wins over the code", () => {
+    expect(nodeKind({ kind: "unit", code: "7Bs.01", parent_id: null })).toBe("unit");
+  });
+
+  it("infers the Cambridge shapes the way the backfill does", () => {
+    expect(nodeKind({ kind: null, code: "7Bs.01", parent_id: "p" })).toBe("objective");
+    expect(nodeKind({ kind: null, code: "9TWSa.03", parent_id: "p" })).toBe("objective");
+    expect(nodeKind({ kind: null, code: "7/Biology", parent_id: null })).toBe("strand");
+    expect(nodeKind({ kind: null, code: "7/Bs", parent_id: "strand" })).toBe("sub_strand");
+  });
+
+  it("infers the CBSE shapes", () => {
+    expect(nodeKind({ kind: null, code: "cbse:9:U1", parent_id: null })).toBe("unit");
+    expect(nodeKind({ kind: null, code: "cbse:9:U1:01", parent_id: "u" })).toBe("topic");
+    expect(nodeKind({ kind: null, code: "cbse:6:ch01", parent_id: null })).toBe("chapter");
+  });
+
+  it("is null for a shape it does not know (a new curriculum), leaving the caller to use the children", () => {
+    expect(nodeKind({ kind: null, code: "IB-4.2", parent_id: null })).toBeNull();
+    expect(nodeKind({ code: "" })).toBeNull();
+  });
+
+  it("strand, sub-strand and unit are groups; objective, topic and chapter are leaves", () => {
+    for (const k of ["strand", "sub_strand", "unit"] as const) expect(isGroupKind(k), k).toBe(true);
+    for (const k of ["objective", "topic", "chapter"] as const) expect(isGroupKind(k), k).toBe(false);
+    expect(isGroupKind(null)).toBe(false);
+  });
+});
+
+describe("the curriculum tree", () => {
+  // strand → two sub-strands → objectives; one orphan whose parent is not loaded
+  const nodes = [
+    { id: "s", parent_id: null, code: "7/Biology", kind: "strand" as const },
+    { id: "bs", parent_id: "s", code: "7/Bs", kind: "sub_strand" as const },
+    { id: "bs1", parent_id: "bs", code: "7Bs.01", kind: "objective" as const },
+    { id: "bs2", parent_id: "bs", code: "7Bs.02", kind: "objective" as const },
+    { id: "bp", parent_id: "s", code: "7/Bp", kind: null },
+    { id: "bp1", parent_id: "bp", code: "7Bp.01", kind: null },
+    { id: "orphan", parent_id: "missing", code: "x", kind: null },
+  ];
+  const tree = nodeTree(nodes);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+
+  it("links children to parents that are in the set, and treats the rest as roots", () => {
+    expect(childrenOf(tree, "s")).toEqual(["bs", "bp"]);
+    expect(childrenOf(tree, "bs")).toEqual(["bs1", "bs2"]);
+    expect(childrenOf(tree, "bs1")).toEqual([]);
+    expect(tree.parent.get("orphan")).toBeNull();
+    expect(tree.parent.get("bs1")).toBe("bs");
+  });
+
+  it("ignores a node that names itself as its parent", () => {
+    const t = nodeTree([{ id: "a", parent_id: "a" }]);
+    expect(t.parent.get("a")).toBeNull();
+    expect(childrenOf(t, "a")).toEqual([]);
+  });
+
+  it("walks descendants depth-first in sibling order, and picks out the leaves", () => {
+    expect(descendantsOf(tree, "s")).toEqual(["bs", "bs1", "bs2", "bp", "bp1"]);
+    expect(leafDescendants(tree, "s")).toEqual(["bs1", "bs2", "bp1"]);
+    expect(leafDescendants(tree, "bs")).toEqual(["bs1", "bs2"]);
+    expect(leafDescendants(tree, "bs1")).toEqual([]);
+  });
+
+  it("mappableChildren offers a group's objectives (by kind), else its leaf children, and nothing for a leaf", () => {
+    expect(mappableChildren(tree, "bs", byId).map((n) => n.id)).toEqual(["bs1", "bs2"]);
+    // 7Bp.01 has no kind set but its code shape says objective
+    expect(mappableChildren(tree, "bp", byId).map((n) => n.id)).toEqual(["bp1"]);
+    // a strand's children are sub-strands (groups): not objectives, not leaves → nothing to tick
+    expect(mappableChildren(tree, "s", byId)).toEqual([]);
+    expect(mappableChildren(tree, "bs1", byId)).toEqual([]);
+    // unknown shapes: leaf children are offered
+    const t2 = nodeTree([
+      { id: "g", parent_id: null },
+      { id: "l1", parent_id: "g" },
+      { id: "l2", parent_id: "g" },
+    ]);
+    const b2 = new Map([
+      ["g", { id: "g", code: "G", kind: null, parent_id: null }],
+      ["l1", { id: "l1", code: "L1", kind: null, parent_id: "g" }],
+      ["l2", { id: "l2", code: "L2", kind: null, parent_id: "g" }],
+    ]);
+    expect(mappableChildren(t2, "g", b2).map((n) => n.id)).toEqual(["l1", "l2"]);
+  });
+
+  it("groupNodes picks the sub-strands and units (never the strand, never a leaf), and a kind-less node whose children are all leaves", () => {
+    expect(groupNodes(nodes, tree).map((n) => n.id)).toEqual(["bs", "bp"]);
+    const t2 = [
+      { id: "g", parent_id: null, code: "G", kind: null },
+      { id: "l1", parent_id: "g", code: "L1", kind: null },
+      { id: "solo", parent_id: null, code: "S", kind: null },
+    ];
+    expect(groupNodes(t2).map((n) => n.id)).toEqual(["g"]);
+  });
+});
+
+describe("coverage over the tree", () => {
+  const nodes = [
+    { id: "s", parent_id: null },
+    { id: "bs", parent_id: "s" },
+    { id: "bs1", parent_id: "bs" },
+    { id: "bs2", parent_id: "bs" },
+    { id: "bs3", parent_id: "bs" },
+    { id: "bp", parent_id: "s" },
+    { id: "bp1", parent_id: "bp" },
+  ];
+  const tree = nodeTree(nodes);
+  const leaves = ["bs1", "bs2", "bs3", "bp1"].map((id) => ({ id }));
+
+  it("a group is covered when ALL its objectives are mapped, and not before", () => {
+    const two = coveredSet([{ node_id: "bs1" }, { node_id: "bs2" }], tree);
+    expect(two.has("bs")).toBe(false);
+    const three = coveredSet([{ node_id: "bs1" }, { node_id: "bs2" }, { node_id: "bs3" }], tree);
+    expect(three.has("bs")).toBe(true);
+    expect(three.has("s")).toBe(false); // 7/Bp is still open
+    const all = coveredSet([{ node_id: "bs1" }, { node_id: "bs2" }, { node_id: "bs3" }, { node_id: "bp1" }], tree);
+    expect(all.has("s")).toBe(true);
+  });
+
+  it("a mapping ON the group covers each of its objectives (Phase 1 mapped groups directly)", () => {
+    const c = coveredSet([{ node_id: "bs" }], tree);
+    expect(c.has("bs")).toBe(true);
+    expect(c.has("bs1")).toBe(true);
+    expect(c.has("bs3")).toBe(true);
+    expect(c.has("bp1")).toBe(false);
+    expect(c.has("s")).toBe(false);
+  });
+
+  it("coverageOf with the tree counts objectives covered either way; without it, only direct mappings (Phase 1 behaviour)", () => {
+    const mappings = [{ node_id: "bs" }, { node_id: "bp1" }];
+    expect(coverageOf(leaves, mappings, tree)).toEqual({ covered: 4, total: 4, pct: 100 });
+    expect(coverageOf(leaves, mappings)).toEqual({ covered: 1, total: 4, pct: 25 });
+  });
+
+  it("objectiveCoverage reads 'n/m objectives mapped' for a group, and null for a leaf", () => {
+    expect(objectiveCoverage(tree, "bs", [{ node_id: "bs1" }, { node_id: "bs3" }])).toEqual({ covered: 2, total: 3, pct: 67 });
+    expect(objectiveCoverage(tree, "s", [{ node_id: "bs" }])).toEqual({ covered: 3, total: 4, pct: 75 });
+    expect(objectiveCoverage(tree, "bs1", [{ node_id: "bs1" }])).toBeNull();
+  });
+
+  it("a mapped id outside the loaded tree still counts for itself, and a cycle does not hang", () => {
+    expect(coveredSet([{ node_id: "elsewhere" }], tree).has("elsewhere")).toBe(true);
+    const cyclic = nodeTree([
+      { id: "a", parent_id: "b" },
+      { id: "b", parent_id: "a" },
+    ]);
+    expect(coveredSet([], cyclic).size).toBe(0);
+    expect(coveredSet([{ node_id: "a" }], cyclic).has("b")).toBe(true);
+  });
+});
+
+describe("catalogueColumnMissing / missingMigration — 0113 not applied", () => {
+  it("recognises a missing column (42703, PGRST204) and names 0113", () => {
+    const pg = { code: "42703", message: 'column topic_candidates.node_ids does not exist' };
+    const rest = { code: "PGRST204", message: "Could not find the 'params' column of 'jobs' in the schema cache" };
+    for (const e of [pg, rest]) {
+      expect(catalogueColumnMissing(e)).toBe(true);
+      expect(catalogueMissing(e)).toBe(false); // not mistaken for a missing table
+      expect(missingMigration(e)).toBe(CATALOGUE_LAYER_MIGRATION);
+    }
+  });
+
+  it("a missing table still names 0112, and other errors name nothing", () => {
+    expect(missingMigration({ code: "42P01", message: 'relation "public.topics" does not exist' })).toBe(CATALOGUE_MIGRATION);
+    expect(missingMigration({ code: "23505", message: "duplicate key" })).toBeNull();
+    expect(missingMigration(null)).toBeNull();
+    expect(catalogueColumnMissing(null)).toBe(false);
+  });
+});
+
+describe("observer-job presentation", () => {
+  it("queued and processing are live", () => {
+    expect(isLiveJobStatus("queued")).toBe(true);
+    expect(isLiveJobStatus("processing")).toBe(true);
+    expect(isLiveJobStatus("done")).toBe(false);
+    expect(isLiveJobStatus(undefined)).toBe(false);
+  });
+
+  it("stageLabel reads the 0053 shape, an observer's label, a bare string, and nothing else", () => {
+    expect(stageLabel({ phase: "analysis", part: 2, total: 4, part_pct: 35 })).toBe("analysis · 2/4 · 35%");
+    expect(stageLabel({ label: "grouping 7/Bs", done: 3, total: 12 })).toBe("grouping 7/Bs · 3/12");
+    expect(stageLabel({ message: "reading nodes" })).toBe("reading nodes");
+    expect(stageLabel("finishing")).toBe("finishing");
+    expect(stageLabel("   ")).toBeNull();
+    expect(stageLabel(null)).toBeNull();
+    expect(stageLabel({})).toBeNull();
+    expect(stageLabel(42)).toBeNull();
   });
 });
 

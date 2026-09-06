@@ -1,7 +1,8 @@
-// Pure logic for the topic catalogue (Library portal, Phase 1 — taxonomy):
-// the topic status machine, the candidate-resolution planner, coverage
-// arithmetic and the list-page filters. No I/O anywhere in this module, so the
-// route handlers and the pages share one answer and the rules are unit-tested
+// Pure logic for the topic catalogue (Library portal, Phase 1 — taxonomy;
+// Phase 2a — the catalogue layer): the topic status machine, node kinds and
+// the curriculum tree, the candidate-resolution planner, coverage arithmetic
+// and the list-page filters. No I/O anywhere in this module, so the route
+// handlers and the pages share one answer and the rules are unit-tested
 // without a database (topic-catalogue plan §7.2: "The status machine is one
 // pure function so the same rules can be unit-tested and mirrored in SQL").
 
@@ -12,6 +13,7 @@ import type {
   BankMaturity,
   CandidateSource,
   Coverage,
+  NodeKind,
   TopicCandidate,
   TopicStatus,
 } from "./types";
@@ -76,6 +78,143 @@ export function reopenTarget(from: TopicStatus): TopicStatus | null {
   return REOPEN[from] ?? null;
 }
 
+// ── Node kinds ───────────────────────────────────────────────────────────────
+// 0113 made the level of a curriculum node a column (curriculum_nodes.kind).
+// It is nullable — a seed may leave it unset — so the portal resolves it the
+// way the 0113 backfill did: the column first, then the code's shape. Depth is
+// never used to decide grouping: new curricula (IB, Pearson, ICSE…) will not
+// share the shipped shapes, and a flat seed has no depth at all.
+
+export const NODE_KINDS = ["strand", "sub_strand", "objective", "unit", "chapter", "topic"] as const;
+
+export function isNodeKind(k: unknown): k is NodeKind {
+  return typeof k === "string" && (NODE_KINDS as readonly string[]).includes(k);
+}
+
+/** The code shapes of the two shipped seeds — the same patterns 0113 backfills
+ *  from, so a row the migration filled and a row it did not resolve alike. */
+const CAMBRIDGE_OBJECTIVE = /^[0-9](Bs|Bp|Be|Cm|Cp|Cc|Pf|Pl|Ps|ESp|ESc|ESs|TWSm|TWSp|TWSc|TWSa|SIC)\.[0-9]{2}$/;
+const CAMBRIDGE_GROUP = /^[0-9]\//;
+const CBSE_CHAPTER = /^cbse:[0-9]+:ch[0-9]+$/;
+const CBSE_UNIT = /^cbse:[0-9]+:U[0-9]+$/;
+const CBSE_TOPIC = /^cbse:[0-9]+:U[0-9]+:[0-9]+$/;
+
+/** A node's level: `kind` when set, else inferred from the code's shape (the
+ *  0113 backfill rules), else null — the caller then falls back to "has
+ *  children ⇒ group, otherwise leaf". */
+export function nodeKind(n: { kind?: string | null; code: string; parent_id?: string | null }): NodeKind | null {
+  if (isNodeKind(n.kind)) return n.kind;
+  const code = (n.code ?? "").trim();
+  if (CAMBRIDGE_OBJECTIVE.test(code)) return "objective";
+  if (CAMBRIDGE_GROUP.test(code)) return n.parent_id ? "sub_strand" : "strand";
+  if (CBSE_CHAPTER.test(code)) return "chapter";
+  if (CBSE_UNIT.test(code)) return "unit";
+  if (CBSE_TOPIC.test(code)) return "topic";
+  return null;
+}
+
+/** Groups hold other nodes; leaves are the atoms a topic maps to. */
+export function isGroupKind(k: NodeKind | null | undefined): boolean {
+  return k === "strand" || k === "sub_strand" || k === "unit";
+}
+
+export const NODE_KIND_LABEL: Record<NodeKind, string> = {
+  strand: "strand",
+  sub_strand: "sub-strand",
+  objective: "objective",
+  unit: "unit",
+  chapter: "chapter",
+  topic: "topic",
+};
+
+// ── Curriculum tree ──────────────────────────────────────────────────────────
+// parent_id links the nodes; the tree is built once per page and shared by the
+// coverage arithmetic, the grouping and the create-from-node children list.
+
+export type TreeNode = { id: string; parent_id: string | null };
+
+export type NodeTree = {
+  /** id → parent id (null for a root, or when the parent is not in the set). */
+  parent: ReadonlyMap<string, string | null>;
+  /** id → direct children, in the order the nodes were given. */
+  children: ReadonlyMap<string, readonly string[]>;
+};
+
+export function nodeTree(nodes: readonly TreeNode[]): NodeTree {
+  const ids = new Set(nodes.map((n) => n.id));
+  const parent = new Map<string, string | null>();
+  const children = new Map<string, string[]>();
+  for (const n of nodes) {
+    const p = n.parent_id && ids.has(n.parent_id) && n.parent_id !== n.id ? n.parent_id : null;
+    parent.set(n.id, p);
+    if (p) {
+      const list = children.get(p) ?? [];
+      list.push(n.id);
+      children.set(p, list);
+    }
+  }
+  return { parent, children };
+}
+
+export function childrenOf(tree: NodeTree, id: string): readonly string[] {
+  return tree.children.get(id) ?? [];
+}
+
+/** Every node below `id` (not `id` itself), depth-first in sibling order. */
+export function descendantsOf(tree: NodeTree, id: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>([id]);
+  const stack = [...childrenOf(tree, id)].reverse();
+  while (stack.length) {
+    const cur = stack.pop()!;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    out.push(cur);
+    const kids = childrenOf(tree, cur);
+    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]);
+  }
+  return out;
+}
+
+/** The atoms under a group: its descendants that have no children of their
+ *  own — a sub-strand's objectives, a unit's topics. A leaf's own list is
+ *  empty (it IS the atom). */
+export function leafDescendants(tree: NodeTree, id: string): string[] {
+  return descendantsOf(tree, id).filter((d) => childrenOf(tree, d).length === 0);
+}
+
+/** The children "Create topic from node" offers to map: the node's direct
+ *  children that are objectives (by kind), or, when none is, the direct
+ *  children that are leaves. A leaf node offers nothing (it maps itself). */
+export function mappableChildren<T extends { id: string; kind?: string | null; code: string; parent_id?: string | null }>(
+  tree: NodeTree,
+  id: string,
+  byId: ReadonlyMap<string, T>,
+): T[] {
+  const kids = childrenOf(tree, id)
+    .map((k) => byId.get(k))
+    .filter((k): k is T => !!k);
+  const objectives = kids.filter((k) => nodeKind(k) === "objective");
+  if (objectives.length) return objectives;
+  return kids.filter((k) => childrenOf(tree, k.id).length === 0);
+}
+
+/** The nodes the topics list offers as a "sub-strand / unit" filter: kind
+ *  sub_strand or unit, or — kind unresolvable — a node whose children are all
+ *  leaves. Never a strand (too coarse) or a leaf (that is a mapping, not a filter). */
+export function groupNodes<T extends { id: string; kind?: string | null; code: string; parent_id?: string | null }>(
+  nodes: readonly T[],
+  tree: NodeTree = nodeTree(nodes as readonly TreeNode[]),
+): T[] {
+  return nodes.filter((n) => {
+    const k = nodeKind(n);
+    if (k === "sub_strand" || k === "unit") return true;
+    if (k !== null) return false;
+    const kids = childrenOf(tree, n.id);
+    return kids.length > 0 && kids.every((c) => childrenOf(tree, c).length === 0);
+  });
+}
+
 // ── Candidate resolution ─────────────────────────────────────────────────────
 // The route handler executes this plan; the planner never touches the DB.
 
@@ -98,7 +237,9 @@ export type ResolvePlan = {
   topic: NewTopicWrite | null;
   /** Aliases to attach to the (merged or created) topic. */
   aliases: { alias: string; normalized: string; source: AliasSource }[];
-  /** Curriculum mappings to attach: a curriculum candidate's node, as `full`. */
+  /** Curriculum mappings to attach, all `full`: a curriculum candidate's
+   *  node_ids (the objectives a grouped candidate proposes), or its node_id
+   *  when node_ids is empty. Deduplicated; a book candidate has none. */
   mappings: { node_id: string; coverage: Coverage }[];
   /** The candidate row update. */
   candidate: {
@@ -114,13 +255,30 @@ function aliasSourceFor(kind: CandidateSource): AliasSource {
   return kind === "book" ? "book" : "curriculum";
 }
 
+/** The nodes a curriculum candidate maps when created or merged: node_ids
+ *  (a grouped candidate's objectives) when it has any, else its anchor
+ *  node_id. Order kept, duplicates and blanks dropped; a book candidate maps
+ *  nothing. The anchor is NOT added alongside node_ids: the group is covered
+ *  through its objectives (coverageOf), not by a mapping of its own. */
+export function candidateMappingNodes(
+  candidate: Pick<TopicCandidate, "source_kind" | "node_id"> & { node_ids?: readonly string[] | null },
+): string[] {
+  if (candidate.source_kind !== "curriculum") return [];
+  const ids = (candidate.node_ids ?? []).map((v) => (v ?? "").trim()).filter(Boolean);
+  const unique = [...new Set(ids)];
+  if (unique.length) return unique;
+  return candidate.node_id ? [candidate.node_id] : [];
+}
+
 /**
  * Plan the writes that resolve one candidate. Throws on an impossible request
  * (merge without a target; create from a title with no key), so the route can
  * answer 400 before touching anything.
  */
 export function resolveCandidate(
-  candidate: Pick<TopicCandidate, "id" | "source_kind" | "node_id" | "raw_title" | "suggested_topic_id" | "status">,
+  candidate: Pick<TopicCandidate, "id" | "source_kind" | "node_id" | "raw_title" | "suggested_topic_id" | "status"> & {
+    node_ids?: readonly string[] | null;
+  },
   opts: { mode: ResolveMode; topicId?: string | null; actorId: string; subject?: string | null; now?: string },
 ): ResolvePlan {
   if (candidate.status !== "open") {
@@ -130,10 +288,7 @@ export function resolveCandidate(
   const title = (candidate.raw_title ?? "").trim();
   const normalized = canonicalKey(title);
   const source = aliasSourceFor(candidate.source_kind);
-  const mappings: ResolvePlan["mappings"] =
-    candidate.source_kind === "curriculum" && candidate.node_id
-      ? [{ node_id: candidate.node_id, coverage: "full" }]
-      : [];
+  const mappings: ResolvePlan["mappings"] = candidateMappingNodes(candidate).map((node_id) => ({ node_id, coverage: "full" }));
 
   if (opts.mode === "dismiss") {
     return {
@@ -184,19 +339,126 @@ export function resolveCandidate(
   };
 }
 
-// ── Coverage ─────────────────────────────────────────────────────────────────
+/** The plan's mapping nodes split by whether the database still has them.
+ *  node_ids (0113) is uuid[] with no foreign key, so an objective deleted
+ *  after the derive is still listed by its candidate and mapping it would be a
+ *  23503 — the route looks the ids up first (existingNodeIds) and maps `keep`
+ *  only; `dropped` lands in the audit row and the response so the curator can
+ *  see what the candidate had proposed. Order kept. */
+export function splitMappingNodes(
+  planned: readonly string[],
+  existing: ReadonlySet<string>,
+): { keep: string[]; dropped: string[] } {
+  const keep: string[] = [];
+  const dropped: string[] = [];
+  for (const id of planned) (existing.has(id) ? keep : dropped).push(id);
+  return { keep, dropped };
+}
 
-/** How many of `nodes` have at least one mapping. pct is a whole number. */
+/** What the bulk create writes on a candidate row it could NOT create, so the
+ *  row does not come back as "unmatched" on the next click:
+ *    • a key somebody already holds → that topic becomes the row's SUGGESTION
+ *      (a one-click "Merge into suggested" on /library/candidates; the row
+ *      leaves the unmatched set because suggested_topic_id is no longer null)
+ *    • no holder to name (the title has no canonical key, so it can never be
+ *      created or matched by key) → the row is DISMISSED by the member, like a
+ *      single Dismiss
+ *  Pure; the route executes the update and audits the outcome. */
+export function bulkSkipUpdate(
+  skip: { existingId: string | null },
+  actorId: string,
+  now: string,
+):
+  | { outcome: "suggest"; update: { suggested_topic_id: string } }
+  | { outcome: "dismiss"; update: { status: "dismissed"; resolved_by: string; resolved_at: string } } {
+  if (skip.existingId) return { outcome: "suggest", update: { suggested_topic_id: skip.existingId } };
+  return { outcome: "dismiss", update: { status: "dismissed", resolved_by: actorId, resolved_at: now } };
+}
+
+// ── Coverage ─────────────────────────────────────────────────────────────────
+// Mappings may point at objectives OR at groups (a Phase 1 "create from node"
+// on a sub-strand mapped the sub-strand itself; Phase 2 maps the objectives).
+// With the tree, a node counts as covered when
+//   • it has a mapping of its own, or
+//   • an ancestor has one (a topic that covers the sub-strand covers each of
+//     its objectives), or
+//   • it has children and every one of them is covered (a sub-strand whose
+//     five objectives are all mapped is covered — plan Phase 2a).
+// Without the tree (no third argument) only the first rule applies, which is
+// what the Phase 1 callers and tests expect.
+
+/** Every node id the rules above cover. */
+export function coveredSet(mappings: readonly { node_id: string }[], tree: NodeTree): Set<string> {
+  const direct = new Set(mappings.map((m) => m.node_id));
+  const memo = new Map<string, boolean>();
+  const inheritedFromAbove = (id: string): boolean => {
+    let p = tree.parent.get(id) ?? null;
+    const seen = new Set<string>([id]);
+    while (p && !seen.has(p)) {
+      if (direct.has(p)) return true;
+      seen.add(p);
+      p = tree.parent.get(p) ?? null;
+    }
+    return false;
+  };
+  const covered = (id: string, path: Set<string>): boolean => {
+    const known = memo.get(id);
+    if (known !== undefined) return known;
+    if (direct.has(id) || inheritedFromAbove(id)) {
+      memo.set(id, true);
+      return true;
+    }
+    const kids = childrenOf(tree, id);
+    let result = false;
+    if (kids.length && !path.has(id)) {
+      path.add(id);
+      result = kids.every((k) => covered(k, path));
+      path.delete(id);
+    }
+    memo.set(id, result);
+    return result;
+  };
+  const out = new Set<string>();
+  for (const id of tree.parent.keys()) if (covered(id, new Set())) out.add(id);
+  // Mapped ids outside the tree (a node the page did not load) still count for themselves.
+  for (const id of direct) out.add(id);
+  return out;
+}
+
+/** How many of `nodes` are covered — by a mapping of their own, or (with
+ *  `tree`) through the rules above. pct is a whole number. */
 export function coverageOf(
   nodes: readonly { id: string }[],
   mappings: readonly { node_id: string }[],
+  tree?: NodeTree,
 ): { covered: number; total: number; pct: number } {
   const ids = new Set(nodes.map((n) => n.id));
   const hit = new Set<string>();
-  for (const m of mappings) if (ids.has(m.node_id)) hit.add(m.node_id);
+  if (tree) {
+    const all = coveredSet(mappings, tree);
+    for (const id of ids) if (all.has(id)) hit.add(id);
+  } else {
+    for (const m of mappings) if (ids.has(m.node_id)) hit.add(m.node_id);
+  }
   const total = ids.size;
   const covered = hit.size;
   return { covered, total, pct: total ? Math.round((covered / total) * 100) : 0 };
+}
+
+/** "4/5 objectives mapped" for a group: its leaf descendants, covered by the
+ *  rules above. Null for a leaf (it has no objectives to count). */
+export function objectiveCoverage(
+  tree: NodeTree,
+  groupId: string,
+  mappings: readonly { node_id: string }[],
+): { covered: number; total: number; pct: number } | null {
+  const leaves = leafDescendants(tree, groupId);
+  if (!leaves.length) return null;
+  return coverageOf(
+    leaves.map((id) => ({ id })),
+    mappings,
+    tree,
+  );
 }
 
 // ── List filters ─────────────────────────────────────────────────────────────
@@ -212,6 +474,9 @@ export type TopicFilters = {
   subject: string;
   curriculum: string; // curricula.id
   grade: string;
+  /** curriculum_nodes.id of a sub-strand / unit: topics mapped to it OR to any
+   *  node under it (its objectives). Only meaningful with `curriculum`. */
+  node: string;
   status: TopicStatus | "";
   q: string;
   page: number;
@@ -226,10 +491,13 @@ const asText = (v: string | undefined): string => (v ?? "").trim();
 export function parseTopicFilters(sp: Record<string, string | undefined>): TopicFilters {
   const rawPage = Number.parseInt(sp.page ?? "1", 10);
   const rawSize = Number.parseInt(sp.pageSize ?? String(TOPIC_PAGE_SIZE), 10);
+  const curriculum = asText(sp.curriculum);
   return {
     subject: asText(sp.subject),
-    curriculum: asText(sp.curriculum),
+    curriculum,
     grade: asText(sp.grade),
+    // a node filter without its curriculum is a stale querystring: dropped
+    node: curriculum ? asText(sp.node) : "",
     status: isTopicStatus(sp.status) ? sp.status : "",
     q: asText(sp.q),
     page: Number.isFinite(rawPage) && rawPage > 0 ? Math.min(PAGE_MAX, rawPage) : 1,
@@ -240,7 +508,7 @@ export function parseTopicFilters(sp: Record<string, string | undefined>): Topic
 }
 
 export function hasTopicFilters(f: TopicFilters): boolean {
-  return !!(f.subject || f.curriculum || f.grade || f.status || f.q);
+  return !!(f.subject || f.curriculum || f.grade || f.node || f.status || f.q);
 }
 
 /** Querystring for a filter change; resets to page 1 unless the patch sets a
@@ -251,6 +519,7 @@ export function withTopicFilter(f: TopicFilters, patch: Partial<TopicFilters>): 
   if (next.subject) p.set("subject", next.subject);
   if (next.curriculum) p.set("curriculum", next.curriculum);
   if (next.grade) p.set("grade", next.grade);
+  if (next.curriculum && next.node) p.set("node", next.node);
   if (next.status) p.set("status", next.status);
   if (next.q) p.set("q", next.q);
   if (next.pageSize !== TOPIC_PAGE_SIZE) p.set("pageSize", String(next.pageSize));
@@ -359,18 +628,76 @@ export function keyTakenMessage(key: string, owner: KeyOwner, hint: string): str
 // ── Migration-missing detection ──────────────────────────────────────────────
 
 export const CATALOGUE_MIGRATION = "supabase/migrations/0112_topic_catalogue.sql";
+/** 0113: curriculum_nodes.kind, topic_candidates.node_ids/rationale, jobs.params. */
+export const CATALOGUE_LAYER_MIGRATION = "supabase/migrations/0113_catalogue_layer.sql";
+
+/** Postgres "column does not exist" (42703) and PostgREST's schema-cache
+ *  equivalent (PGRST204, "Could not find the 'x' column of 'y'"): the tables
+ *  are there but 0113 is not applied. Checked BEFORE catalogueMissing, whose
+ *  message test ("does not exist") would otherwise claim a column error. */
+export function catalogueColumnMissing(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === "42703" || err.code === "PGRST204") return true;
+  const m = (err.message ?? "").toLowerCase();
+  return m.includes("column") && (m.includes("does not exist") || m.includes("schema cache") || m.includes("could not find"));
+}
 
 /** Postgres "relation does not exist" (42P01) and PostgREST's schema-cache
  *  equivalents: 0112 is not applied. Pages show a banner, routes answer 409
- *  with a hint, like the ops route does for 0110. */
+ *  with a hint, like the ops route does for 0110. A missing COLUMN is not
+ *  this (see catalogueColumnMissing). */
 export function catalogueMissing(err: { code?: string; message?: string } | null | undefined): boolean {
   if (!err) return false;
+  if (catalogueColumnMissing(err)) return false;
   if (err.code === "42P01" || err.code === "PGRST205" || err.code === "PGRST106") return true;
   const m = (err.message ?? "").toLowerCase();
   return m.includes("does not exist") || m.includes("could not find the table") || m.includes("schema cache");
 }
 
-export const CATALOGUE_MISSING_ERROR = `The topic-catalogue tables are not in this database yet — apply ${CATALOGUE_MIGRATION}.`;
+/** Which migration a database error says is missing, or null when it is some
+ *  other error. Routes answer 409 with the hint; pages show the banner. */
+export function missingMigration(err: { code?: string; message?: string } | null | undefined): string | null {
+  if (catalogueColumnMissing(err)) return CATALOGUE_LAYER_MIGRATION;
+  if (catalogueMissing(err)) return CATALOGUE_MIGRATION;
+  return null;
+}
+
+export function migrationMissingMessage(migration: string): string {
+  return migration === CATALOGUE_LAYER_MIGRATION
+    ? `The catalogue-layer columns (node kinds, grouped candidates, job inputs) are not in this database yet — apply ${migration}.`
+    : `The topic-catalogue tables are not in this database yet — apply ${migration}.`;
+}
+
+export const CATALOGUE_MISSING_ERROR = migrationMissingMessage(CATALOGUE_MIGRATION);
+export const CATALOGUE_LAYER_MISSING_ERROR = migrationMissingMessage(CATALOGUE_LAYER_MIGRATION);
+
+// ── Observer-job presentation ────────────────────────────────────────────────
+
+export function isLiveJobStatus(s: unknown): boolean {
+  return s === "queued" || s === "processing";
+}
+
+/** A one-line reading of jobs.stage for a derive / harvest row. The 0053
+ *  shape ({phase, part, total, part_pct}) reads "phase · k/n · p%"; a worker
+ *  that writes {label} / {message} / {step} (the observer jobs) reads that; a
+ *  bare string reads as itself; anything else is null (progress alone shows). */
+export function stageLabel(stage: unknown): string | null {
+  if (stage === null || stage === undefined) return null;
+  if (typeof stage === "string") return stage.trim() || null;
+  if (typeof stage !== "object") return null;
+  const s = stage as Record<string, unknown>;
+  const str = (k: string) => (typeof s[k] === "string" && (s[k] as string).trim() ? (s[k] as string).trim() : null);
+  const num = (k: string) => (typeof s[k] === "number" && Number.isFinite(s[k] as number) ? (s[k] as number) : null);
+  const label = str("label") ?? str("message") ?? str("step") ?? str("phase");
+  const part = num("part") ?? num("done");
+  const total = num("total");
+  const pct = num("part_pct") ?? num("pct");
+  const parts: string[] = [];
+  if (label) parts.push(label);
+  if (part !== null && total !== null) parts.push(`${part}/${total}`);
+  if (pct !== null) parts.push(`${Math.round(pct)}%`);
+  return parts.length ? parts.join(" · ") : null;
+}
 
 // ── Presentation tones (shared by server and client, so they live here) ─────
 

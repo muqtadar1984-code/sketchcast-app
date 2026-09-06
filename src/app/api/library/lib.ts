@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { canonicalKey } from "@/utils/catalogue/key";
 import {
-  CATALOGUE_MISSING_ERROR,
-  catalogueMissing,
   keyTakenMessage,
+  migrationMissingMessage,
+  missingMigration,
   pickKeyOwner,
   type KeyOwner,
   type OwnerRow,
@@ -34,10 +34,12 @@ export const keyTaken = (key: string, owner: KeyOwner, hint: string) =>
     via: owner.via,
   });
 
-/** A database error → 409 with the migration hint when 0112 is missing
- *  (like the ops route does for 0110), else 500 with the message. */
+/** A database error → 409 with the migration hint when 0112 (a table) or
+ *  0113 (a column: kind, node_ids, rationale, params) is missing — like the
+ *  ops route does for 0110 — else 500 with the message. */
 export function dbError(err: { code?: string; message?: string }) {
-  if (catalogueMissing(err)) return NextResponse.json({ error: CATALOGUE_MISSING_ERROR }, { status: 409 });
+  const migration = missingMigration(err);
+  if (migration) return NextResponse.json({ error: migrationMissingMessage(migration), migration }, { status: 409 });
   return NextResponse.json({ error: err.message ?? "Database error." }, { status: 500 });
 }
 
@@ -55,12 +57,114 @@ export function text(v: unknown, max: number): string {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A uuid from the body, trimmed and LOWER-CASED, or null. Postgres prints a
+ *  uuid in lower case, and some of these ids are compared as TEXT — the
+ *  derive route's live check and the jobs_one_live_derive index both key on
+ *  params->>'curriculum_id' — so a case-variant of an id must be the same id,
+ *  not a way past the check. */
 export function uuid(v: unknown): string | null {
-  return typeof v === "string" && UUID.test(v.trim()) ? v.trim() : null;
+  if (typeof v !== "string") return null;
+  const s = v.trim().toLowerCase();
+  return UUID.test(s) ? s : null;
 }
 
 export function isCoverage(v: unknown): v is Coverage {
   return v === "full" || v === "partial";
+}
+
+/** A body field that should be a list of ids: every entry a uuid, duplicates
+ *  dropped, capped. null when the field is absent (the caller applies its
+ *  default); an empty array or a list with a non-uuid is `invalid`. */
+export function uuidList(v: unknown, max = 500): { ids: string[] } | { invalid: true } | null {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v)) return { invalid: true };
+  const ids: string[] = [];
+  for (const raw of v) {
+    const id = uuid(raw);
+    if (!id) return { invalid: true };
+    if (!ids.includes(id)) ids.push(id);
+    if (ids.length > max) return { invalid: true };
+  }
+  return { ids };
+}
+
+/** Map one topic to each of `nodeIds` (attachMapping per node: an existing
+ *  pair is kept as it is; a node that no longer exists is skipped and listed
+ *  in `missing`). Stops at the first database error. */
+export async function attachMappings(
+  admin: Admin,
+  topicId: string,
+  nodeIds: readonly string[],
+  coverage: Coverage,
+  notes: string | null = null,
+): Promise<{ ok: true; created: number; existing: number; missing: string[] } | { ok: false; error: { code?: string; message: string }; nodeId: string }> {
+  let created = 0;
+  let existing = 0;
+  const missing: string[] = [];
+  for (const nodeId of nodeIds) {
+    const r = await attachMapping(admin, topicId, nodeId, coverage, notes);
+    if (!r.ok) return { ok: false, error: r.error, nodeId };
+    if (r.missing) missing.push(nodeId);
+    else if (r.created) created++;
+    else existing++;
+  }
+  return { ok: true, created, existing, missing };
+}
+
+/** ids per `.in()` — a uuid is 36 chars and the list travels in the URL (the
+ *  candidates page's IN_CHUNK). */
+export const IN_CHUNK = 150;
+
+/** Which of `ids` curriculum_nodes still has. topic_candidates.node_ids
+ *  (0113) is uuid[] with no foreign key, so a candidate may name an objective
+ *  deleted since the derive; mapping that id is a 23503. The routes look the
+ *  planned ids up here first and map only the ones found (splitMappingNodes).
+ *  Chunked at IN_CHUNK. */
+export async function existingNodeIds(
+  admin: Admin,
+  ids: readonly string[],
+): Promise<{ ok: true; ids: Set<string> } | { ok: false; error: { code?: string; message: string } }> {
+  const found = new Set<string>();
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const { data, error } = await admin.from("curriculum_nodes").select("id").in("id", ids.slice(i, i + IN_CHUNK));
+    if (error) return { ok: false, error };
+    for (const r of (data ?? []) as { id: string }[]) found.add(r.id);
+  }
+  return { ok: true, ids: found };
+}
+
+/** Map one topic to every node in `nodeIds` in ONE round trip: an upsert on
+ *  unique(topic_id, node_id) with ignoreDuplicates, so an existing pair is left
+ *  as it is (its coverage is not overwritten) and `created` counts the rows
+ *  RETURNING gave back (the timetable generator's fill mode does the same). A
+ *  node deleted between the caller's existingNodeIds() and this write fails the
+ *  whole statement with 23503; that race falls back to attachMappings, which
+ *  skips the vanished node and maps the rest. */
+export async function upsertMappings(
+  admin: Admin,
+  topicId: string,
+  nodeIds: readonly string[],
+  coverage: Coverage,
+  notes: string | null = null,
+): Promise<{ ok: true; created: number; existing: number; missing: string[] } | { ok: false; error: { code?: string; message: string } }> {
+  const ids = [...new Set(nodeIds)];
+  if (!ids.length) return { ok: true, created: 0, existing: 0, missing: [] };
+  const { data, error } = await admin
+    .from("topic_curriculum_map")
+    .upsert(
+      ids.map((node_id) => ({ topic_id: topicId, node_id, coverage, notes })),
+      { onConflict: "topic_id,node_id", ignoreDuplicates: true },
+    )
+    .select("id");
+  if (error) {
+    if (error.code === "23503") {
+      const r = await attachMappings(admin, topicId, ids, coverage, notes);
+      return r.ok ? r : { ok: false, error: r.error };
+    }
+    return { ok: false, error };
+  }
+  const created = data?.length ?? 0;
+  return { ok: true, created, existing: ids.length - created, missing: [] };
 }
 
 /** Every mutation lands in platform_audit_log as library_<verb>. Audit
@@ -70,7 +174,7 @@ export async function audit(
   admin: Admin,
   actorId: string,
   verb: string,
-  targetKind: "topic" | "candidate" | "book" | "curriculum_node",
+  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum",
   targetId: string,
   detail: Record<string, unknown>,
 ) {
@@ -121,14 +225,19 @@ export async function attachAlias(
 }
 
 /** Map a topic to a curriculum node. unique(topic_id, node_id): an existing
- *  pair is left as it is (its coverage is not overwritten). */
+ *  pair is left as it is (its coverage is not overwritten). A node that no
+ *  longer exists (23503 — deleted since the caller planned the mapping) is
+ *  `missing`, not an error: nothing was written, and the caller must not fail
+ *  a whole create — or orphan a half-made topic — over an objective somebody
+ *  removed. (The table's only other foreign key is topic_id; a topic gone
+ *  under us means there is nothing to map onto either way.) */
 export async function attachMapping(
   admin: Admin,
   topicId: string,
   nodeId: string,
   coverage: Coverage,
   notes: string | null = null,
-): Promise<{ ok: true; created: boolean } | { ok: false; error: { code?: string; message: string } }> {
+): Promise<{ ok: true; created: boolean; missing?: true } | { ok: false; error: { code?: string; message: string } }> {
   const { data: existing, error: eErr } = await admin
     .from("topic_curriculum_map")
     .select("id")
@@ -142,6 +251,7 @@ export async function attachMapping(
     .insert({ topic_id: topicId, node_id: nodeId, coverage, notes });
   if (error) {
     if (error.code === "23505") return { ok: true, created: false };
+    if (error.code === "23503") return { ok: true, created: false, missing: true };
     return { ok: false, error };
   }
   return { ok: true, created: true };
