@@ -58,8 +58,12 @@ describe("0105 — the migration file", () => {
     const numbers = readdirSync(MIGRATIONS)
       .filter((f) => f.endsWith(".sql"))
       .map((f) => Number(f.slice(0, 4)));
-    expect(Math.max(...numbers)).toBe(105);
+    // NOT "105 is the highest": that froze the repo at the moment this test was
+    // written, and 0107/0108 broke it the day they landed — a green suite turning
+    // red for a file that did nothing wrong. The invariant worth keeping is that
+    // 0105 is UNIQUE and sits above the number the worker repo took.
     expect(numbers.filter((n) => n === 105)).toHaveLength(1);
+    expect(Math.max(...numbers)).toBeGreaterThanOrEqual(105);
     expect(numbers).not.toContain(104); // taken by the worker repo, never reused here
   });
 
