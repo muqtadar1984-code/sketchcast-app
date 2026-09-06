@@ -339,6 +339,42 @@ export function resolveCandidate(
   };
 }
 
+/** The plan's mapping nodes split by whether the database still has them.
+ *  node_ids (0113) is uuid[] with no foreign key, so an objective deleted
+ *  after the derive is still listed by its candidate and mapping it would be a
+ *  23503 — the route looks the ids up first (existingNodeIds) and maps `keep`
+ *  only; `dropped` lands in the audit row and the response so the curator can
+ *  see what the candidate had proposed. Order kept. */
+export function splitMappingNodes(
+  planned: readonly string[],
+  existing: ReadonlySet<string>,
+): { keep: string[]; dropped: string[] } {
+  const keep: string[] = [];
+  const dropped: string[] = [];
+  for (const id of planned) (existing.has(id) ? keep : dropped).push(id);
+  return { keep, dropped };
+}
+
+/** What the bulk create writes on a candidate row it could NOT create, so the
+ *  row does not come back as "unmatched" on the next click:
+ *    • a key somebody already holds → that topic becomes the row's SUGGESTION
+ *      (a one-click "Merge into suggested" on /library/candidates; the row
+ *      leaves the unmatched set because suggested_topic_id is no longer null)
+ *    • no holder to name (the title has no canonical key, so it can never be
+ *      created or matched by key) → the row is DISMISSED by the member, like a
+ *      single Dismiss
+ *  Pure; the route executes the update and audits the outcome. */
+export function bulkSkipUpdate(
+  skip: { existingId: string | null },
+  actorId: string,
+  now: string,
+):
+  | { outcome: "suggest"; update: { suggested_topic_id: string } }
+  | { outcome: "dismiss"; update: { status: "dismissed"; resolved_by: string; resolved_at: string } } {
+  if (skip.existingId) return { outcome: "suggest", update: { suggested_topic_id: skip.existingId } };
+  return { outcome: "dismiss", update: { status: "dismissed", resolved_by: actorId, resolved_at: now } };
+}
+
 // ── Coverage ─────────────────────────────────────────────────────────────────
 // Mappings may point at objectives OR at groups (a Phase 1 "create from node"
 // on a sub-strand mapped the sub-strand itself; Phase 2 maps the objectives).

@@ -5,13 +5,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 // "Create all unmatched" for one curriculum's derived candidates — POST
-// /api/library/candidates/bulk {curriculumId}. Every open candidate of the
-// curriculum with no suggested topic is created (topic + alias + node_ids
-// mappings) unless its key is already held, in which case it is SKIPPED and
-// listed here with the topic that holds it, for a merge by hand. The result
-// stays on screen after the refresh so the skips are not lost.
+// /api/library/candidates/bulk {curriculumId}, 25 rows per click. Every open
+// candidate of the curriculum with no suggested topic is created (topic +
+// alias + node_ids mappings) unless its key is already held, in which case it
+// is SKIPPED and listed here with the topic that holds it — and that topic
+// becomes the row's suggestion, so after the refresh the row sits in the queue
+// with "Merge into suggested" instead of coming back as unmatched. A title with
+// no canonical key is dismissed. The result stays on screen after the refresh
+// so the skips are not lost.
 
-type Skipped = { candidateId: string; raw_title: string; key: string; reason: string; existingId: string | null; existingTitle: string | null };
+type Skipped = {
+  candidateId: string;
+  raw_title: string;
+  key: string;
+  reason: string;
+  existingId: string | null;
+  existingTitle: string | null;
+  outcome?: "suggested" | "dismissed" | "open";
+};
 type Result = { created: { raw_title: string; topicId: string; mappings: number }[]; skipped: Skipped[]; remaining: number; error?: string };
 
 export default function BulkCreate({ curriculumId, count, name }: { curriculumId: string; count: number; name: string }) {
@@ -21,7 +32,12 @@ export default function BulkCreate({ curriculumId, count, name }: { curriculumId
   const [error, setError] = useState<string | null>(null);
 
   async function run() {
-    if (!window.confirm(`Create a topic for every unmatched candidate of ${name} (${count})? Keys already held are skipped, not merged.`)) return;
+    if (
+      !window.confirm(
+        `Create a topic for every unmatched candidate of ${name} (${count}), 25 per click? A key already held is skipped — that topic becomes the candidate's suggestion, to merge from the queue — and a title with no canonical key is dismissed.`,
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     const res = await fetch("/api/library/candidates/bulk", {
@@ -46,7 +62,7 @@ export default function BulkCreate({ curriculumId, count, name }: { curriculumId
         onClick={run}
         disabled={busy || count === 0}
         className="btn-primary h-8 px-3 whitespace-nowrap"
-        title="Create a topic (with its alias and objective mappings) for every candidate here that has no suggested topic; taken keys are skipped"
+        title="Create a topic (with its alias and objective mappings) for every candidate here that has no suggested topic, 25 per click; a taken key is skipped and becomes the candidate's suggestion"
       >
         {busy ? "Creating…" : `Create all unmatched (${count})`}
       </button>
@@ -67,6 +83,8 @@ export default function BulkCreate({ curriculumId, count, name }: { curriculumId
                   <span className="font-medium">{s.raw_title}</span> <span className="text-[#98A0A9] font-mono">{s.key}</span>
                   <span className="block text-[#5B6470]">
                     {s.reason}
+                    {s.outcome === "suggested" && <> · now its suggested topic — merge from the queue</>}
+                    {s.outcome === "dismissed" && <> · dismissed</>}
                     {s.existingId && (
                       <>
                         {" · "}

@@ -34,6 +34,11 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** ids per `.in()` — a uuid is 36 chars and the list travels in the URL (the
+ *  candidates page's IN_CHUNK). A group with more nodes under it than this is
+ *  not filtered by: the page says so and asks for a sub-strand instead. */
+const IN_CHUNK = 150;
+
 type FilterNode = { id: string; code: string; title: string; grade: string | null; kind: NodeKind | null; parent_id: string | null };
 
 const TOPIC_COLUMNS =
@@ -65,6 +70,9 @@ export default async function TopicsPage({
   const nodeById = new Map(curriculumNodes.map((n) => [n.id, n]));
   const pickedNode = f.node && UUID.test(f.node) ? nodeById.get(f.node) ?? null : null;
   const nodeIds = pickedNode ? [pickedNode.id, ...descendantsOf(tree, pickedNode.id)] : [];
+  // A strand-sized pick would put hundreds of ids in the querystring; above
+  // IN_CHUNK the topics query is not issued at all and the page says why.
+  const nodeTooLarge = nodeIds.length > IN_CHUNK;
 
   // A curriculum/grade/node filter needs the mappings: an INNER embed restricts
   // the parent rows to topics with at least one mapping onto a matching node,
@@ -86,7 +94,7 @@ export default async function TopicsPage({
     return query;
   };
   const [from, to] = pageRange(f.page, f.pageSize);
-  const { data, error, count } = await filtered(false).range(from, to);
+  const { data, error, count } = nodeTooLarge ? { data: [], error: null, count: 0 } : await filtered(false).range(from, to);
 
   if (catalogueMissing(error)) {
     return (
@@ -213,18 +221,34 @@ export default async function TopicsPage({
             </Link>
           )}
           <span className="text-[#5B6470] ml-auto">
-            {total.toLocaleString()} topic{total === 1 ? "" : "s"}
-            {total > 0 && (
+            {nodeTooLarge ? (
+              "group too large to filter by"
+            ) : (
               <>
-                {" "}
-                · showing {from + 1}–{Math.min(from + rows.length, total)}
+                {total.toLocaleString()} topic{total === 1 ? "" : "s"}
+                {total > 0 && (
+                  <>
+                    {" "}
+                    · showing {from + 1}–{Math.min(from + rows.length, total)}
+                  </>
+                )}
               </>
             )}
           </span>
         </div>
       </form>
 
-      {rows.length === 0 ? (
+      {nodeTooLarge ? (
+        <div className="card px-6 py-12 text-center text-sm text-[#5B6470]">
+          <p>
+            <span className="font-medium">
+              {pickedNode!.code} · {pickedNode!.title}
+            </span>{" "}
+            has {(nodeIds.length - 1).toLocaleString()} nodes under it — this group is too large to filter by; pick a sub-strand or
+            unit within it.
+          </p>
+        </div>
+      ) : rows.length === 0 ? (
         <div className="card px-6 py-12 text-center text-sm text-[#5B6470]">
           {isFiltered ? (
             <p>No topics match these filters.</p>

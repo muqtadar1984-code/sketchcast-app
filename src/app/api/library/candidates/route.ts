@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
-import { resolveCandidate, type ResolveMode, type ResolvePlan } from "@/utils/catalogue/status";
+import { resolveCandidate, splitMappingNodes, type ResolveMode, type ResolvePlan } from "@/utils/catalogue/status";
 import type { TopicCandidate } from "@/utils/catalogue/types";
-import { attachAlias, attachMappings, audit, bad, conflict, dbError, insertTopic, keyOwner, keyTaken, notFound, readJson, rollbackTopic, text, uuid } from "../lib";
+import { attachAlias, attachMappings, audit, bad, conflict, dbError, existingNodeIds, insertTopic, keyOwner, keyTaken, notFound, readJson, rollbackTopic, text, uuid } from "../lib";
 
 export const runtime = "nodejs";
 
@@ -25,6 +25,13 @@ export const runtime = "nodejs";
 // conflict that still appears after the check is a lost race: in create mode
 // the just-inserted topic is taken back out, and the answer is the same 409 —
 // never a 200 with a half-attached topic.
+// node_ids has no foreign key, so the objectives the plan would map are looked
+// up first and the ones deleted since the derive are DROPPED (reported as
+// dropped_missing_nodes in the answer and the audit row) rather than failing
+// the mapping with a 23503 — which in merge mode would have left the alias on
+// the target and made every retry fail the same way. A mapping write that
+// fails all the same answers 500 {error, step: "mappings"}, and in create mode
+// takes the new topic back out first (nothing references it yet).
 // Every outcome is audited as library_candidate_<mode>, target_kind 'candidate'.
 
 type Body = { candidateId?: unknown; mode?: unknown; topicId?: unknown; subject?: unknown };
@@ -69,6 +76,13 @@ export async function POST(request: Request) {
     if (!t) return NextResponse.json({ error: "Target topic not found." }, { status: 404 });
     if (t.status === "retired") return bad("The target topic is retired — reopen it first, or pick another.");
   }
+
+  // The objectives the plan maps, less the ones curriculum_nodes no longer has
+  // (deleted since the derive) — looked up before any write, so a stale
+  // node_ids entry costs a mapping, never the whole resolve.
+  const nodesHeld = await existingNodeIds(admin, plan.mappings.map((mp) => mp.node_id));
+  if (!nodesHeld.ok) return dbError(nodesHeld.error);
+  const nodes = splitMappingNodes(plan.mappings.map((mp) => mp.node_id), nodesHeld.ids);
 
   // Owner check for every alias the plan would attach, before any write. In
   // create mode insertTopic checks the canonical key itself (the same key as
@@ -124,18 +138,26 @@ export async function POST(request: Request) {
       }
       detail.alias = r.created ? "created" : "existing";
     }
-    if (plan.mappings.length) {
-      const r = await attachMappings(
-        admin,
-        target,
-        plan.mappings.map((mp) => mp.node_id),
-        "full",
-      );
-      if (!r.ok) return dbError(r.error);
-      detail.mappings = plan.mappings.length;
+    if (nodes.keep.length) {
+      const r = await attachMappings(admin, target, nodes.keep, "full");
+      if (!r.ok) {
+        // Nothing references a just-created topic yet: it goes back out, so a
+        // refused resolve leaves no half-made topic. In merge mode the alias
+        // is already on the target, which is where it belongs either way.
+        if (createdId) await rollbackTopic(admin, createdId);
+        return NextResponse.json(
+          { error: `Could not map the topic to its curriculum nodes: ${r.error.message}`, step: "mappings", nodeId: r.nodeId },
+          { status: 500 },
+        );
+      }
+      detail.mappings = nodes.keep.length;
       detail.mappings_created = r.created;
       detail.mappings_existing = r.existing;
+      // a node deleted between the lookup above and the write (a race) joins
+      // the ones the lookup already dropped
+      nodes.dropped.push(...r.missing);
     }
+    if (nodes.dropped.length) detail.dropped_missing_nodes = nodes.dropped;
     await admin.from("topics").update({ updated_at: new Date().toISOString() }).eq("id", target);
   }
 
@@ -152,5 +174,5 @@ export async function POST(request: Request) {
   if (uErr) return dbError(uErr);
 
   await audit(admin, m.id, `candidate_${mode}`, "candidate", candidateId, detail);
-  return NextResponse.json({ ok: true, topicId: target, status: plan.candidate.status });
+  return NextResponse.json({ ok: true, topicId: target, status: plan.candidate.status, dropped_missing_nodes: nodes.dropped });
 }

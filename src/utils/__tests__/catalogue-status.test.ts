@@ -13,6 +13,7 @@ import {
   NODE_KINDS,
   TOPIC_PAGE_SIZE,
   TOPIC_STATUSES,
+  bulkSkipUpdate,
   canTransition,
   candidateMappingNodes,
   catalogueColumnMissing,
@@ -44,6 +45,7 @@ import {
   reopenTarget,
   resolveCandidate,
   searchOr,
+  splitMappingNodes,
   stageLabel,
   withTopicFilter,
   type OwnerRow,
@@ -267,6 +269,54 @@ describe("resolveCandidate — the writes to make, and nothing else", () => {
     const long = "x".repeat(200);
     const plan = resolveCandidate({ ...bookCand, raw_title: long }, { mode: "create", actorId: actor, now });
     expect(plan.topic!.title.length).toBe(120);
+  });
+});
+
+describe("splitMappingNodes — the objectives the database still has", () => {
+  it("keeps the planned ids found in curriculum_nodes, in plan order, and lists the rest as dropped", () => {
+    const existing = new Set(["n1", "n3"]);
+    expect(splitMappingNodes(["n1", "n2", "n3", "n4"], existing)).toEqual({ keep: ["n1", "n3"], dropped: ["n2", "n4"] });
+  });
+
+  it("drops nothing when every id exists, and everything when none does", () => {
+    expect(splitMappingNodes(["a", "b"], new Set(["a", "b", "c"]))).toEqual({ keep: ["a", "b"], dropped: [] });
+    expect(splitMappingNodes(["a", "b"], new Set())).toEqual({ keep: [], dropped: ["a", "b"] });
+    expect(splitMappingNodes([], new Set(["a"]))).toEqual({ keep: [], dropped: [] });
+  });
+
+  it("composes with candidateMappingNodes: a grouped candidate whose objective was deleted maps the others", () => {
+    const planned = candidateMappingNodes({ source_kind: "curriculum", node_id: "anchor", node_ids: ["o1", "o2", "o3"] });
+    const { keep, dropped } = splitMappingNodes(planned, new Set(["o1", "o3", "anchor"]));
+    expect(keep).toEqual(["o1", "o3"]);
+    expect(dropped).toEqual(["o2"]);
+    // the anchor is not added back in place of the missing objective
+    expect(keep).not.toContain("anchor");
+  });
+});
+
+describe("bulkSkipUpdate — a skipped row is settled, never re-fetched", () => {
+  const actor = "00000000-0000-0000-0000-00000000aaaa";
+  const now = "2026-09-06T10:00:00.000Z";
+
+  it("a key somebody holds makes that topic the row's suggestion (a one-click merge; the row leaves the unmatched set)", () => {
+    expect(bulkSkipUpdate({ existingId: "t-holder" }, actor, now)).toEqual({
+      outcome: "suggest",
+      update: { suggested_topic_id: "t-holder" },
+    });
+  });
+
+  it("no holder to name (no canonical key) dismisses the row by the member, like a single Dismiss", () => {
+    expect(bulkSkipUpdate({ existingId: null }, actor, now)).toEqual({
+      outcome: "dismiss",
+      update: { status: "dismissed", resolved_by: actor, resolved_at: now },
+    });
+  });
+
+  it("a suggestion never changes the row's status, and a dismissal never invents a suggestion", () => {
+    const suggest = bulkSkipUpdate({ existingId: "t" }, actor, now);
+    expect("status" in suggest.update).toBe(false);
+    const dismiss = bulkSkipUpdate({ existingId: null }, actor, now);
+    expect("suggested_topic_id" in dismiss.update).toBe(false);
   });
 });
 
