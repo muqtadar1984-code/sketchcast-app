@@ -139,8 +139,8 @@ describe("premium voices — plan and provider", () => {
   // The full truth table lives in premium-voice-gate.test.ts, shared with the
   // worker.
   it("with no answer from the database, the paid allow-list decides — and only it", () => {
-    expect([...PAID_VOICE_TIERS].sort()).toEqual(["family", "homeschool", "pro", "pro_plus", "school"]);
-    for (const tier of ["pro", "pro_plus", "family", "homeschool", "school"]) {
+    expect([...PAID_VOICE_TIERS].sort()).toEqual(["family", "homeschool", "pro", "pro_plus", "school", "staff"]);
+    for (const tier of ["pro", "pro_plus", "family", "homeschool", "school", "staff"]) {
       expect(premiumVoicesFor({ tier })).toBe(true);
     }
     for (const tier of ["trial", "promo", "school_trial", "school_expired", "legacy", ""]) {

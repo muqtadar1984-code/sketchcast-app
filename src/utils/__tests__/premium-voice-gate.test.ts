@@ -21,7 +21,7 @@ const FIXTURE = join(__dirname, "fixtures", "premium-voice-cases.json");
 // Bump ONLY when sketchcast/tests/fixtures/premium_voice_cases.json is changed
 // to match, byte for byte.
 const PREMIUM_VOICE_CASES_SHA256 =
-  "403e9119f81e9f67771dc36b7dcf287c24bec2a5c7d4e0efcdad51a69d22cad3";
+  "5edb7d740ce81082c718fb8392b06ba4f1d7094af16eb35217d57b6ac5f2c3e3";
 
 type Case = {
   name: string;

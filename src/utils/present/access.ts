@@ -49,7 +49,9 @@
  * stay out, by the same rule that keeps `trial` out: nothing is paid and the
  * trial is over.
  */
-export const PRESENT_TIERS: ReadonlySet<string> = new Set(["school", "school_trial", "pro", "pro_plus"]);
+// 0109: `staff` (platform_admins members) may drive a board too — staff have
+// every feature of the product they run.
+export const PRESENT_TIERS: ReadonlySet<string> = new Set(["school", "school_trial", "pro", "pro_plus", "staff"]);
 
 /**
  * Who may never drive a board, whatever the plan pays for.
