@@ -1,5 +1,5 @@
-// Row shapes of the topic-catalogue tables (migration 0112), as the Library
-// portal consumes them. Pure types: shared by the Server Components, the
+// Row shapes of the topic-catalogue tables (migrations 0112 + 0113), as the
+// Library portal consumes them. Pure types: shared by the Server Components, the
 // route handlers and the client panels without pulling either side's runtime
 // into the other.
 
@@ -43,6 +43,11 @@ export type TopicAlias = {
 
 export type Coverage = "full" | "partial";
 
+/** The level of a curriculum node (0113: curriculum_nodes.kind). Nullable in
+ *  the table — a seed may leave it unset and nodeKind() infers it from the
+ *  code's shape the way the 0113 backfill did. */
+export type NodeKind = "strand" | "sub_strand" | "objective" | "unit" | "chapter" | "topic";
+
 export type Curriculum = {
   id: string;
   code: string;
@@ -64,6 +69,7 @@ export type CurriculumNode = {
   description: string | null;
   parent_id: string | null;
   sort: number | null;
+  kind: NodeKind | null;
 };
 
 export type TopicMapping = {
@@ -82,6 +88,12 @@ export type TopicCandidate = {
   source_kind: CandidateSource;
   book_id: string | null;
   node_id: string | null;
+  /** 0113: the objectives a GROUPED curriculum candidate proposes to map;
+   *  node_id is then the anchor (the sub-strand or unit). Empty for a book
+   *  candidate and for a one-node curriculum candidate. */
+  node_ids: string[];
+  /** 0113: the model's one-line reason for the grouping. */
+  rationale: string | null;
   raw_title: string;
   normalized: string;
   suggested_topic_id: string | null;
@@ -94,5 +106,11 @@ export type TopicCandidate = {
 /** What the topic-search picker (GET /api/library/topics?q=) returns per hit. */
 export type TopicHit = Pick<Topic, "id" | "title" | "subject" | "status" | "canonical_key">;
 
-/** What the node-search picker (GET /api/library/curricula/[id]/nodes?q=) returns per hit. */
-export type NodeHit = Pick<CurriculumNode, "id" | "code" | "grade" | "strand" | "sub_strand" | "title">;
+/** What the node-search picker (GET /api/library/curricula/[id]/nodes?q=) returns
+ *  per hit. `kind` is the resolved level (column, else inferred from the code);
+ *  `children` counts the node's direct children, so the mapping panel can offer
+ *  "map all N objectives" for a group node. */
+export type NodeHit = Pick<CurriculumNode, "id" | "code" | "grade" | "strand" | "sub_strand" | "title"> & {
+  kind: NodeKind | null;
+  children: number;
+};

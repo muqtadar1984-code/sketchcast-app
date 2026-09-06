@@ -3,17 +3,21 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import { resolveCandidate, type ResolveMode, type ResolvePlan } from "@/utils/catalogue/status";
 import type { TopicCandidate } from "@/utils/catalogue/types";
-import { attachAlias, attachMapping, audit, bad, conflict, dbError, insertTopic, keyOwner, keyTaken, notFound, readJson, rollbackTopic, text, uuid } from "../lib";
+import { attachAlias, attachMappings, audit, bad, conflict, dbError, insertTopic, keyOwner, keyTaken, notFound, readJson, rollbackTopic, text, uuid } from "../lib";
 
 export const runtime = "nodejs";
 
 // POST {candidateId, mode: merge|create|dismiss, topicId?, subject?} — resolve
 // one row of the unmapped queue (curate). The plan comes from the pure
 // resolveCandidate(); this handler only executes it:
-//   merge   — alias (+ node mapping for a curriculum candidate) onto topicId,
+//   merge   — alias (+ node mappings for a curriculum candidate) onto topicId,
 //             or onto the suggested topic when topicId is omitted
 //   create  — a new candidate-status topic keyed canonicalKey(raw_title)
 //   dismiss — nothing but the candidate row
+// A GROUPED curriculum candidate (0113: node_ids lists the objectives, node_id
+// is the anchor sub-strand/unit) maps EVERY node in node_ids as `full`; only a
+// candidate with an empty node_ids maps its node_id. The plan's mapping list
+// is the pure resolveCandidate()'s, and the count lands in the audit row.
 // Every name the plan would attach is checked for an owner BEFORE anything is
 // written: a key held by another topic — as its canonical_key or its alias — is
 // a 409 naming that topic (existingId / conflictTopicId), which is where the
@@ -43,10 +47,10 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: cand, error: cErr } = await admin
     .from("topic_candidates")
-    .select("id, source_kind, book_id, node_id, raw_title, normalized, suggested_topic_id, status")
+    .select("id, source_kind, book_id, node_id, node_ids, rationale, raw_title, normalized, suggested_topic_id, status")
     .eq("id", candidateId)
     .maybeSingle();
-  if (cErr) return dbError(cErr);
+  if (cErr) return dbError(cErr); // 0113 missing (node_ids) → 409 with the hint
   if (!cand) return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
   const candidate = cand as unknown as TopicCandidate;
 
@@ -97,6 +101,7 @@ export async function POST(request: Request) {
     source_kind: candidate.source_kind,
     book_id: candidate.book_id,
     node_id: candidate.node_id,
+    node_ids: candidate.node_ids ?? [],
     topic_id: target,
   };
 
@@ -119,10 +124,17 @@ export async function POST(request: Request) {
       }
       detail.alias = r.created ? "created" : "existing";
     }
-    for (const mp of plan.mappings) {
-      const r = await attachMapping(admin, target, mp.node_id, mp.coverage);
+    if (plan.mappings.length) {
+      const r = await attachMappings(
+        admin,
+        target,
+        plan.mappings.map((mp) => mp.node_id),
+        "full",
+      );
       if (!r.ok) return dbError(r.error);
-      detail.mapping = r.created ? "created" : "existing";
+      detail.mappings = plan.mappings.length;
+      detail.mappings_created = r.created;
+      detail.mappings_existing = r.existing;
     }
     await admin.from("topics").update({ updated_at: new Date().toISOString() }).eq("id", target);
   }

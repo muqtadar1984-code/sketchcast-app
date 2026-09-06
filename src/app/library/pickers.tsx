@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { NODE_KIND_LABEL } from "@/utils/catalogue/status";
 import type { NodeHit, TopicHit } from "@/utils/catalogue/types";
 
 // Two type-ahead pickers used across the portal: a topic (GET
@@ -173,6 +174,8 @@ export function NodeSearch({
                 <span className="text-xs text-[#98A0A9]">
                   {" "}
                   · {[n.grade, n.strand, n.sub_strand].filter(Boolean).join(" · ")}
+                  {n.kind && ` · ${NODE_KIND_LABEL[n.kind]}`}
+                  {n.children > 0 && ` · ${n.children} objective${n.children === 1 ? "" : "s"}`}
                 </span>
               </button>
             </li>

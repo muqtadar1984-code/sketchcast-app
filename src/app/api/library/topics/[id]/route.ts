@@ -5,7 +5,7 @@ import { libraryAllows, type LibraryAction } from "@/utils/library-routing";
 import { canonicalKey } from "@/utils/catalogue/key";
 import { TEACHER_AVATARS, canTransition, catalogueMissing, reopenTarget } from "@/utils/catalogue/status";
 import type { Topic, TopicStatus } from "@/utils/catalogue/types";
-import { attachAlias, attachMapping, audit, bad, conflict, dbError, isCoverage, notFound, readJson, text, uuid } from "../../lib";
+import { attachAlias, attachMapping, attachMappings, audit, bad, conflict, dbError, isCoverage, notFound, readJson, text, uuid } from "../../lib";
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,9 @@ export const runtime = "nodejs";
 //   curate (editor, admin):
 //     update          {title?, subject?, summary?, teacher_avatar?}
 //     alias_add       {alias}            alias_remove   {aliasId}
-//     mapping_add     {nodeId, coverage, notes?}   mapping_remove {mappingId}
+//     mapping_add     {nodeId, coverage, notes?, mapChildren?}   mapping_remove {mappingId}
+//                     mapChildren: true maps every direct child of nodeId (a
+//                     sub-strand's objectives) instead of the node itself
 //     prereq_add      {topicId}          prereq_remove  {topicId}
 //     set_depth       {nodeId | null}    (must be one of the topic's mapped nodes)
 //     retire                             reopen (retired→candidate, in_review→generating,
@@ -71,6 +73,7 @@ type Body = {
   coverage?: unknown;
   notes?: unknown;
   mappingId?: unknown;
+  mapChildren?: unknown;
   topicId?: unknown;
   targetId?: unknown;
 };
@@ -165,12 +168,45 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { data: node, error: nErr } = await admin.from("curriculum_nodes").select("id, code").eq("id", nodeId).maybeSingle();
     if (nErr) return dbError(nErr);
     if (!node) return NextResponse.json({ error: "Curriculum node not found." }, { status: 404 });
+    if (body.mapChildren === true) {
+      // "Map all N objectives": the group's direct children, not the group.
+      const { data: kids, error: kErr } = await admin
+        .from("curriculum_nodes")
+        .select("id, code")
+        .eq("parent_id", nodeId)
+        .order("sort", { ascending: true, nullsFirst: false })
+        .order("code", { ascending: true })
+        .limit(500);
+      if (kErr) return dbError(kErr);
+      const children = (kids ?? []) as { id: string; code: string }[];
+      if (!children.length) return bad("That node has no children to map; map the node itself.");
+      const r = await attachMappings(
+        admin,
+        id,
+        children.map((c) => c.id),
+        body.coverage,
+        notes,
+      );
+      if (!r.ok) return dbError(r.error);
+      if (!r.created) return NextResponse.json({ ok: true, unchanged: true, mapped: 0 });
+      await admin.from("topics").update(touch).eq("id", id);
+      await audit(admin, m.id, "mapping_add", "topic", id, {
+        node_id: nodeId,
+        code: node.code,
+        coverage: body.coverage,
+        children: children.length,
+        mappings_created: r.created,
+        mappings_existing: r.existing,
+        child_codes: children.map((c) => c.code),
+      });
+      return NextResponse.json({ ok: true, mapped: r.created });
+    }
     const r = await attachMapping(admin, id, nodeId, body.coverage, notes);
     if (!r.ok) return dbError(r.error);
     if (!r.created) return NextResponse.json({ ok: true, unchanged: true });
     await admin.from("topics").update(touch).eq("id", id);
-    await audit(admin, m.id, "mapping_add", "topic", id, { node_id: nodeId, code: node.code, coverage: body.coverage });
-    return NextResponse.json({ ok: true });
+    await audit(admin, m.id, "mapping_add", "topic", id, { node_id: nodeId, code: node.code, coverage: body.coverage, mappings: 1 });
+    return NextResponse.json({ ok: true, mapped: 1 });
   }
 
   if (action === "mapping_remove") {

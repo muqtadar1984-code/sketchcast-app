@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { TEACHER_AVATARS, canTransition, reopenTarget } from "@/utils/catalogue/status";
+import { NODE_KIND_LABEL, TEACHER_AVATARS, canTransition, reopenTarget } from "@/utils/catalogue/status";
 import type { Coverage, Curriculum, NodeHit, Topic, TopicAlias, TopicHit } from "@/utils/catalogue/types";
 import { CoverageChip, StatusChip } from "../../catalogue-ui";
 import { NodeSearch, TopicSearch } from "../../pickers";
@@ -305,7 +305,13 @@ export function MappingPanel({
   const [node, setNode] = useState<NodeHit | null>(null);
   const [coverage, setCoverage] = useState<Coverage>("full");
   const [notes, setNotes] = useState("");
+  // A picked GROUP node (it has children) offers "map all N objectives": the
+  // route then maps every direct child, not the group. On by default — a
+  // topic covering a sub-strand is what its objectives need; the group counts
+  // as covered once they are (coverageOf).
+  const [mapChildren, setMapChildren] = useState(true);
   const mappedNodeIds = mappings.map((m) => m.node_id);
+  const pickedIsGroup = !!node && node.children > 0;
 
   return (
     <div className="card p-5 space-y-3">
@@ -372,14 +378,32 @@ export function MappingPanel({
                   <div className="flex items-center gap-2 h-9 px-3 rounded-lg bg-[#F4F6F3] min-w-0">
                     <span className="font-mono text-xs text-[#1F5B99]">{node.code}</span>
                     <span className="truncate">{node.title}</span>
+                    {node.kind && <span className="chip bg-white text-[#5B6470] shrink-0">{NODE_KIND_LABEL[node.kind]}</span>}
                     <button type="button" onClick={() => setNode(null)} className="ml-auto text-xs text-[#5B6470] hover:underline">
                       change
                     </button>
                   </div>
                 ) : (
-                  <NodeSearch key={curriculumId} curriculumId={curriculumId} onPick={setNode} exclude={mappedNodeIds} />
+                  <NodeSearch
+                    key={curriculumId}
+                    curriculumId={curriculumId}
+                    onPick={(n) => {
+                      setNode(n);
+                      setMapChildren(true);
+                    }}
+                    exclude={mappedNodeIds}
+                  />
                 )}
               </div>
+              {pickedIsGroup && (
+                <label className="flex items-start gap-2 text-xs text-[#5B6470] cursor-pointer">
+                  <input type="checkbox" checked={mapChildren} onChange={(e) => setMapChildren(e.target.checked)} className="mt-0.5" />
+                  <span>
+                    Map all <span className="font-medium">{node!.children}</span> objective{node!.children === 1 ? "" : "s"} under this{" "}
+                    {node!.kind ? NODE_KIND_LABEL[node!.kind] : "node"} (rather than the {node!.kind ? NODE_KIND_LABEL[node!.kind] : "node"} itself)
+                  </span>
+                </label>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <select value={coverage} onChange={(e) => setCoverage(e.target.value as Coverage)} className="field h-9 px-2" aria-label="Coverage">
                   <option value="full">full coverage</option>
@@ -391,7 +415,10 @@ export function MappingPanel({
                   disabled={!!busy || !node}
                   onClick={async () => {
                     if (!node) return;
-                    const r = await post({ action: "mapping_add", nodeId: node.id, coverage, notes }, "map-add");
+                    const r = await post(
+                      { action: "mapping_add", nodeId: node.id, coverage, notes, ...(pickedIsGroup && mapChildren ? { mapChildren: true } : {}) },
+                      "map-add",
+                    );
                     if (r) {
                       setNode(null);
                       setNotes("");
@@ -399,7 +426,7 @@ export function MappingPanel({
                   }}
                   className="btn-primary h-9 px-4"
                 >
-                  Add mapping
+                  {pickedIsGroup && mapChildren ? `Map ${node!.children} objectives` : "Add mapping"}
                 </button>
               </div>
             </>

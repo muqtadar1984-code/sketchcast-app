@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { canonicalKey } from "@/utils/catalogue/key";
 import {
-  CATALOGUE_MISSING_ERROR,
-  catalogueMissing,
   keyTakenMessage,
+  migrationMissingMessage,
+  missingMigration,
   pickKeyOwner,
   type KeyOwner,
   type OwnerRow,
@@ -34,10 +34,12 @@ export const keyTaken = (key: string, owner: KeyOwner, hint: string) =>
     via: owner.via,
   });
 
-/** A database error → 409 with the migration hint when 0112 is missing
- *  (like the ops route does for 0110), else 500 with the message. */
+/** A database error → 409 with the migration hint when 0112 (a table) or
+ *  0113 (a column: kind, node_ids, rationale, params) is missing — like the
+ *  ops route does for 0110 — else 500 with the message. */
 export function dbError(err: { code?: string; message?: string }) {
-  if (catalogueMissing(err)) return NextResponse.json({ error: CATALOGUE_MISSING_ERROR }, { status: 409 });
+  const migration = missingMigration(err);
+  if (migration) return NextResponse.json({ error: migrationMissingMessage(migration), migration }, { status: 409 });
   return NextResponse.json({ error: err.message ?? "Database error." }, { status: 500 });
 }
 
@@ -63,6 +65,42 @@ export function isCoverage(v: unknown): v is Coverage {
   return v === "full" || v === "partial";
 }
 
+/** A body field that should be a list of ids: every entry a uuid, duplicates
+ *  dropped, capped. null when the field is absent (the caller applies its
+ *  default); an empty array or a list with a non-uuid is `invalid`. */
+export function uuidList(v: unknown, max = 500): { ids: string[] } | { invalid: true } | null {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v)) return { invalid: true };
+  const ids: string[] = [];
+  for (const raw of v) {
+    const id = uuid(raw);
+    if (!id) return { invalid: true };
+    if (!ids.includes(id)) ids.push(id);
+    if (ids.length > max) return { invalid: true };
+  }
+  return { ids };
+}
+
+/** Map one topic to each of `nodeIds` (attachMapping per node: an existing
+ *  pair is kept as it is). Stops at the first database error. */
+export async function attachMappings(
+  admin: Admin,
+  topicId: string,
+  nodeIds: readonly string[],
+  coverage: Coverage,
+  notes: string | null = null,
+): Promise<{ ok: true; created: number; existing: number } | { ok: false; error: { code?: string; message: string }; nodeId: string }> {
+  let created = 0;
+  let existing = 0;
+  for (const nodeId of nodeIds) {
+    const r = await attachMapping(admin, topicId, nodeId, coverage, notes);
+    if (!r.ok) return { ok: false, error: r.error, nodeId };
+    if (r.created) created++;
+    else existing++;
+  }
+  return { ok: true, created, existing };
+}
+
 /** Every mutation lands in platform_audit_log as library_<verb>. Audit
  *  failures are swallowed: the action already happened, and a missing audit
  *  row must not read back to the member as a failed action. */
@@ -70,7 +108,7 @@ export async function audit(
   admin: Admin,
   actorId: string,
   verb: string,
-  targetKind: "topic" | "candidate" | "book" | "curriculum_node",
+  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum",
   targetId: string,
   detail: Record<string, unknown>,
 ) {

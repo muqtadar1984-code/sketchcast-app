@@ -8,24 +8,33 @@ import {
   TOPIC_STATUSES,
   catalogueMissing,
   clampPage,
+  descendantsOf,
+  groupNodes,
   hasTopicFilters,
+  nodeTree,
   pageCount,
   pageRange,
   parseTopicFilters,
   searchOr,
   withTopicFilter,
 } from "@/utils/catalogue/status";
-import type { Curriculum, Topic } from "@/utils/catalogue/types";
+import type { Curriculum, NodeKind, Topic } from "@/utils/catalogue/types";
 import { ErrorBanner, MaturityChip, MissingTablesBanner, Pager, StatusChip, fmtDate } from "../catalogue-ui";
 import NewTopicForm from "./new-topic-form";
 
 // /library/topics — the canonical topics, filterable (subject, curriculum,
-// grade, status, free text), paginated in Postgres. Every filter is a GET with
-// a querystring so the server re-queries; the browser never holds more than
-// one page (the visual-library stance). A ?page= past the end lands on the
-// last page (redirect), never on an empty page or PostgREST's 416.
+// grade, sub-strand / unit, status, free text), paginated in Postgres. Every
+// filter is a GET with a querystring so the server re-queries; the browser
+// never holds more than one page (the visual-library stance). A ?page= past
+// the end lands on the last page (redirect), never on an empty page or
+// PostgREST's 416. The sub-strand filter matches a topic mapped to the group
+// OR to any node under it (its objectives) — mappings point at either.
 
 export const dynamic = "force-dynamic";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type FilterNode = { id: string; code: string; title: string; grade: string | null; kind: NodeKind | null; parent_id: string | null };
 
 const TOPIC_COLUMNS =
   "id, canonical_key, title, subject, summary, teacher_avatar, depth_node_id, prerequisites, status, bank_maturity, created_by, created_at, updated_at";
@@ -44,10 +53,24 @@ export default async function TopicsPage({
   const admin = createAdminClient();
   const href = (page: number) => `/library/topics${withTopicFilter(f, { page })}`;
 
-  // A curriculum/grade filter needs the mappings: an INNER embed restricts the
-  // parent rows to topics with at least one mapping onto a matching node, and
-  // PostgREST resolves it in one query — no id lists in the URL. The same
-  // filters build the count-only query used to find the last page.
+  // The chosen curriculum's nodes feed two things: the grade and sub-strand /
+  // unit selects, and — when a sub-strand is chosen — the ids under it that
+  // the mapping filter must accept (a topic may be mapped to the group or to
+  // any of its objectives). One query, only when a curriculum is chosen.
+  const curriculumNodes: FilterNode[] = f.curriculum
+    ? (((await admin.from("curriculum_nodes").select("id, code, title, grade, kind, parent_id").eq("curriculum_id", f.curriculum).order("sort", { ascending: true, nullsFirst: false }).order("code", { ascending: true }).limit(5000)).data ??
+        []) as FilterNode[])
+    : [];
+  const tree = nodeTree(curriculumNodes);
+  const nodeById = new Map(curriculumNodes.map((n) => [n.id, n]));
+  const pickedNode = f.node && UUID.test(f.node) ? nodeById.get(f.node) ?? null : null;
+  const nodeIds = pickedNode ? [pickedNode.id, ...descendantsOf(tree, pickedNode.id)] : [];
+
+  // A curriculum/grade/node filter needs the mappings: an INNER embed restricts
+  // the parent rows to topics with at least one mapping onto a matching node,
+  // and PostgREST resolves it in one query — the only id list in the URL is a
+  // sub-strand's own objectives. The same filters build the count-only query
+  // used to find the last page.
   const embed = f.curriculum || f.grade ? ", topic_curriculum_map!inner(node_id, curriculum_nodes!inner(curriculum_id, grade))" : "";
   const search = searchOr(f.q, ["title", "canonical_key", "summary"]);
   const filtered = (head: boolean) => {
@@ -58,6 +81,7 @@ export default async function TopicsPage({
     if (f.status) query = query.eq("status", f.status);
     if (f.curriculum) query = query.eq("topic_curriculum_map.curriculum_nodes.curriculum_id", f.curriculum);
     if (f.grade) query = query.eq("topic_curriculum_map.curriculum_nodes.grade", f.grade);
+    if (nodeIds.length) query = query.in("topic_curriculum_map.node_id", nodeIds);
     if (search) query = query.or(search);
     return query;
   };
@@ -96,15 +120,12 @@ export default async function TopicsPage({
 
   // Mapping counts for THIS page only (≤ pageSize ids), plus the filter facets.
   const ids = rows.map((r) => r.id);
-  const [mapQ, subjQ, currQ, gradeQ] = await Promise.all([
+  const [mapQ, subjQ, currQ] = await Promise.all([
     ids.length
       ? admin.from("topic_curriculum_map").select("topic_id").in("topic_id", ids)
       : Promise.resolve({ data: [] as { topic_id: string }[] }),
     admin.from("topics").select("subject").not("subject", "is", null).limit(2000),
     admin.from("curricula").select("id, code, name, kind, country, edition, source_url").order("name"),
-    f.curriculum
-      ? admin.from("curriculum_nodes").select("grade").eq("curriculum_id", f.curriculum).not("grade", "is", null).limit(5000)
-      : Promise.resolve({ data: [] as { grade: string | null }[] }),
   ]);
   const mappingCount = new Map<string, number>();
   for (const r of (mapQ.data ?? []) as { topic_id: string }[]) {
@@ -112,9 +133,12 @@ export default async function TopicsPage({
   }
   const subjects = [...new Set(((subjQ.data ?? []) as { subject: string | null }[]).map((r) => (r.subject ?? "").trim()).filter(Boolean))].sort();
   const curricula = (currQ.data ?? []) as Curriculum[];
-  const grades = [...new Set(((gradeQ.data ?? []) as { grade: string | null }[]).map((r) => (r.grade ?? "").trim()).filter(Boolean))].sort(
-    (a, b) => a.localeCompare(b, undefined, { numeric: true }),
+  const grades = [...new Set(curriculumNodes.map((n) => (n.grade ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true }),
   );
+  // Sub-strands / units of the curriculum (kind, else code shape, else "a
+  // node whose children are leaves"), narrowed to the grade when one is chosen.
+  const groups = groupNodes(curriculumNodes, tree).filter((n) => !f.grade || n.grade === f.grade);
   const isFiltered = hasTopicFilters(f);
 
   return (
@@ -128,7 +152,7 @@ export default async function TopicsPage({
         book or syllabus uses for it.
       </p>
 
-      <form method="get" className="card p-4 mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6 text-sm">
+      <form method="get" className="card p-4 mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-7 text-sm">
         <input name="q" defaultValue={f.q} placeholder="Search title, key, summary…" className="field h-9 px-3 lg:col-span-2" />
         <select name="subject" defaultValue={f.subject} className="field h-9 px-2">
           <option value="">Any subject</option>
@@ -154,6 +178,22 @@ export default async function TopicsPage({
             </option>
           ))}
         </select>
+        <select
+          name="node"
+          defaultValue={pickedNode?.id ?? ""}
+          className="field h-9 px-2"
+          disabled={!f.curriculum || groups.length === 0}
+          title={f.curriculum ? "Topics mapped to this sub-strand / unit or to any of its objectives" : "Pick a curriculum first"}
+          aria-label="Sub-strand or unit"
+        >
+          <option value="">Any sub-strand / unit</option>
+          {groups.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.code} · {n.title}
+              {!f.grade && n.grade ? ` (Grade ${n.grade})` : ""}
+            </option>
+          ))}
+        </select>
         <select name="status" defaultValue={f.status} className="field h-9 px-2">
           <option value="">Any status</option>
           {TOPIC_STATUSES.map((s) => (
@@ -163,7 +203,7 @@ export default async function TopicsPage({
           ))}
         </select>
         {f.pageSize !== 50 && <input type="hidden" name="pageSize" value={f.pageSize} />}
-        <div className="flex items-center gap-2 lg:col-span-6">
+        <div className="flex items-center gap-2 lg:col-span-7">
           <button type="submit" className="btn-primary h-9 px-4">
             Filter
           </button>
