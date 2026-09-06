@@ -15,6 +15,12 @@
 -- No 'pdf_student' / 'pdf_answer_key' kinds: the founder deferred the
 -- LibreOffice PDF step on 2026-09-06 ("ignore LibreOffice image build").
 --
+-- ONE RULE FOR THE WORKER (Phase 3): upload script.json in the SAME final
+-- artifact block as the mp4, never earlier. credit_ledger_void_unconsumed
+-- (0095) refunds a cancelled generation only when it has NO artifacts; a
+-- script uploaded before the render finished would make a mid-render cancel
+-- look "delivered" and silently undo that refund fix.
+--
 -- ============================================================================
 -- ⚠️  APPLY ORDER: this file is the ONE statement below and nothing else.
 --   ALTER TYPE … ADD VALUE cannot run inside a transaction block alongside

@@ -115,7 +115,42 @@ describe("0112 — tables", () => {
       expect(c, t).toContain(`alter table public.${t} enable row level security;`);
       expect(c, t).toContain(`revoke all on public.${t} from anon, authenticated;`);
     }
-    expect(c.toLowerCase()).not.toContain("create policy");
+    // The only policies are the two RESTRICTIVE ones forbidding the catalogue
+    // flag for authenticated users — nothing grants a client anything.
+    const policies = [...c.matchAll(/create policy (\w+) on public\.(\w+) as restrictive for (\w+)/g)].map((m) => [m[1], m[2], m[3]]);
+    expect(policies).toEqual([
+      ["gen_no_catalogue_insert", "generations", "insert"],
+      ["gen_no_catalogue_update", "generations", "update"],
+    ]);
+    expect((c.match(/create policy/g) ?? []).length).toBe(2);
+    expect(c).toContain("with check (coalesce(params->>'catalogue', '') <> 'true');");
+  });
+
+  it("cascades candidates away with their book or node — SET NULL would collide under the coalesce index", () => {
+    expect(c).toContain("book_id             uuid references public.books(id) on delete cascade,");
+    expect(c).toContain("node_id             uuid references public.curriculum_nodes(id) on delete cascade,");
+  });
+
+  it("approves an article in one transaction through a service-role-only RPC", () => {
+    const body = fn(M0112, "approve_topic_article");
+    expect(body).toContain("for update");
+    expect(body).toContain("set status = 'superseded'");
+    expect(body).toContain("set status = 'approved', approved_by = p_reviewer");
+    expect(body).toContain("set status = 'article_approved'");
+    expect(body).toContain("insert into platform_audit_log");
+    expect(c).toContain("revoke execute on function public.approve_topic_article(uuid, uuid, text) from public, anon, authenticated;");
+    expect(c).toContain("grant execute on function public.approve_topic_article(uuid, uuid, text) to service_role;");
+  });
+
+  it("allows one live topic_harvest job per book", () => {
+    expect(c).toContain("create unique index if not exists jobs_one_live_harvest");
+    expect(c).toContain("where type = 'topic_harvest' and status in ('queued', 'processing');");
+  });
+
+  it("re-binds credit_ledger_write to the qualified function", () => {
+    expect(c).toContain("create or replace function public.credit_ledger_write()");
+    expect(c).toContain("drop trigger if exists credit_ledger_write on public.generations;");
+    expect(c).toContain("for each row execute function public.credit_ledger_write();");
   });
 
   it("carries exactly the plan's value lists in its check constraints", () => {
@@ -163,6 +198,9 @@ describe("0112 — bank maturity", () => {
     }
     expect(body).toContain("q.status = 'approved' and q.language = 'en'");
     expect(c).toContain("create trigger topic_questions_maturity after insert or update or delete on public.topic_questions");
+    const sync = fn(M0112, "topic_questions_maturity_sync");
+    expect(sync).toContain("pg_advisory_xact_lock(hashtext('bank:' || t::text))");
+    expect(sync).toContain("bank_maturity is distinct from m");
     expect(c).toContain("revoke execute on function public.topic_bank_maturity(uuid) from public, anon, authenticated;");
   });
 });
@@ -187,8 +225,9 @@ describe("0112 — trigger exemptions", () => {
     if (lock >= 0) expect(guard).toBeLessThan(lock);
     const guardBlock = body.slice(guard, guard + 400);
     // params is client-writable: the flag alone must never open the door.
-    expect(guardBlock).toContain("if not public.is_platform_admin(new.owner_id) then");
-    expect(guardBlock).toContain("raise exception 'params.catalogue is reserved for the catalogue system account.';");
+    expect(guardBlock).toContain("if auth.uid() is not null or not public.is_platform_admin(new.owner_id) then");
+    expect(guardBlock).toContain("raise exception 'params.catalogue is reserved for the catalogue system account.'");
+    expect(guardBlock).toContain("using errcode = 'insufficient_privilege';");
     expect(guardBlock).toContain("return new;");
   });
 
@@ -200,10 +239,13 @@ describe("0112 — trigger exemptions", () => {
           !l.includes("'catalogue'") &&
           !l.includes("params.catalogue") &&
           !l.includes("is_platform_admin(new.owner_id)") &&
+          !l.includes("using errcode = 'insufficient_privilege';") &&
           l.trim() !== "return new;" &&
           l.trim() !== "end if;",
       )
-      .join("\n");
+      .join("\n")
+      // 0089 declared credit_ledger_write unqualified; 0112 qualifies it.
+      .replace("create or replace function public.credit_ledger_write()", "create or replace function credit_ledger_write()");
     // The prior body loses the same two token kinds so the comparison is fair:
     // the guard contributes `return new;` and `end if;` lines and nothing else
     // that survives the filters above.

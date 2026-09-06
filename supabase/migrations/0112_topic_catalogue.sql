@@ -64,9 +64,15 @@
 --                       only UPDATES ledger rows of the generation; none exist.
 --     credit_ledger_void_unconsumed            BEFORE DELETE  → not needed: same.
 --     beta_generation_cap enforce_beta_generation_cap BEFORE INSERT/UPDATE →
---                       not needed: catalogue rows are inserted by the service
---                       role (auth.uid() IS NULL) and the owner has no explicit
---                       cap, so it returns before any check.
+--                       not needed, but for a narrower reason than "service
+--                       role": 0012 stamps beta_tester = true on every new
+--                       profile, so effective_cap(owner,'chapters') is 1, not
+--                       the sentinel, and the distinct-(book_id, chapter_ref)
+--                       count DOES run. Every catalogue row is (NULL, NULL) —
+--                       one tuple — so it passes. SYSTEM-ACCOUNT CHECKLIST when
+--                       catalogue@sketchcast.app is created: platform_admins
+--                       row; `update profiles set beta_tester = false`; a
+--                       catalogue row must keep book_id and chapter_ref NULL.
 --     generations_lesson_tools enforce_lesson_tools BEFORE INSERT → not needed:
 --                       returns for any writer that is not the row's owner.
 --     on_generation_created                    AFTER INSERT   → WANTED: it
@@ -74,18 +80,30 @@
 --     on_generation_ledger_used                AFTER INSERT   → no-op with
 --                       book_id NULL.
 --   THE FLAG IS NOT TRUSTED ON ITS OWN. generations.params is written by the
---   client on insert (gen_write, 0001/0020), so a user could set
---   params.catalogue = true on their own row. The guard therefore also requires
---   is_platform_admin(new.owner_id) (0014) — the catalogue system account is a
---   platform admin — and REFUSES any other row carrying the flag, so a forgery
---   surfaces as an error instead of a free, uncapped, un-deduplicated kit.
+--   client on insert (gen_write, 0001/0020 — owner_id = auth.uid() and nothing
+--   about params), so a user could set params.catalogue = true on their own
+--   row, or UPDATE it in afterwards (gen_write is FOR ALL), and skip dedup, the
+--   caps — including the 0100 school hard stops — and the ledger. Three layers
+--   close that:
+--     1. the guard fires only when auth.uid() IS NULL (the service role: the
+--        portal's API routes and the worker) AND is_platform_admin(new.owner_id)
+--        (0014; the catalogue system account holds that row). Any other row
+--        carrying the flag is REFUSED with insufficient_privilege, so a forgery
+--        surfaces as an error instead of a free kit;
+--     2. two RESTRICTIVE policies (the 0015 pattern) stop `authenticated` from
+--        inserting or updating a generations row with the flag at all, so the
+--        guard's raise is defence in depth, not the only lock;
+--     3. the worker's catalogue branch (Phase 3) must refuse a flagged row whose
+--        owner is not a platform admin before doing any work.
 --   Each exempted function is re-declared from its LIVE prod body
 --   (pg_get_functiondef, 2026-09-06; equal to its last defining migration:
 --   reject_double_submit and enforce_fair_use → 0103, credit_ledger_write →
 --   0089) with ONLY the guard added as the first statement.
 --
 -- WHAT IT DOES NOT DO
---   No policies for authenticated users (the portal is service-role only).
+--   No policies GRANTING anything to authenticated users (the portal is
+--   service-role only); the only policies added are the two RESTRICTIVE ones on
+--   generations that forbid the catalogue flag.
 --   No change to existing rows. Does not touch plan_tier, fair_use_caps, the
 --   premium-voice helper (0105/0109), fair_use_used, fair_use_used_since,
 --   credit_ledger_sync or the enum types (0111 adds 'script_json' on its own). Does not insert
@@ -93,8 +111,10 @@
 --   scripts/seed_curricula.py; membership from the console.
 --
 -- ROLLBACK: drop the new tables (they hold nothing yet), drop trigger
--- topic_questions_maturity and the two maturity functions, and re-run 0103's
--- reject_double_submit / enforce_fair_use and 0089's credit_ledger_write.
+-- topic_questions_maturity, the two maturity functions, approve_topic_article,
+-- index jobs_one_live_harvest and the two gen_no_catalogue_* policies, and
+-- re-run 0103's reject_double_submit / enforce_fair_use and 0089's
+-- credit_ledger_write (with its trigger).
 --
 -- Applied to prod by the agent on the founder's explicit 2026-09-06 instruction, after a rolled-back dry run.
 
@@ -185,8 +205,14 @@ revoke all on public.topic_curriculum_map from anon, authenticated;
 create table if not exists public.topic_candidates (
   id                  uuid primary key default gen_random_uuid(),
   source_kind         text not null check (source_kind in ('book','curriculum')),
-  book_id             uuid references public.books(id) on delete set null,
-  node_id             uuid references public.curriculum_nodes(id) on delete set null,
+  -- CASCADE, not SET NULL: the unique index below coalesces a NULL book_id to
+  -- one zero uuid, so orphaned rows from two deleted books that shared a
+  -- heading ("Summary", "Cell") would collide and the second `delete from
+  -- books` would FAIL on this index — breaking book deletion (0100) for any
+  -- teacher whose book staff harvested. A candidate is "this name in this
+  -- book"; a merged or created one has already produced its alias and mapping.
+  book_id             uuid references public.books(id) on delete cascade,
+  node_id             uuid references public.curriculum_nodes(id) on delete cascade,
   raw_title           text not null check (char_length(raw_title) <= 120),
   normalized          text not null,
   suggested_topic_id  uuid references public.topics(id) on delete set null,
@@ -403,19 +429,75 @@ grant execute on function public.topic_bank_maturity(uuid) to service_role;
 create or replace function public.topic_questions_maturity_sync() returns trigger
   language plpgsql security definer set search_path = public as
 $$
+declare
+  t uuid;
+  m text;
 begin
-  if tg_op in ('INSERT', 'UPDATE') then
-    update topics set bank_maturity = topic_bank_maturity(new.topic_id) where id = new.topic_id;
-  end if;
-  if tg_op = 'DELETE' or (tg_op = 'UPDATE' and old.topic_id is distinct from new.topic_id) then
-    update topics set bank_maturity = topic_bank_maturity(old.topic_id) where id = old.topic_id;
-  end if;
+  -- One topic at a time (two approvals racing under READ COMMITTED would
+  -- each count their own snapshot and the stored rung could lag by one), and
+  -- write only when the rung changes, so topics.updated_at is not bumped by
+  -- every item edit.
+  for t in select distinct x from unnest(array[
+             case when tg_op in ('INSERT', 'UPDATE') then new.topic_id end,
+             case when tg_op in ('DELETE', 'UPDATE') then old.topic_id end]) as u(x)
+           where x is not null
+  loop
+    perform pg_advisory_xact_lock(hashtext('bank:' || t::text));
+    m := topic_bank_maturity(t);
+    update topics set bank_maturity = m where id = t and bank_maturity is distinct from m;
+  end loop;
   return null;
 end
 $$;
 drop trigger if exists topic_questions_maturity on public.topic_questions;
 create trigger topic_questions_maturity after insert or update or delete on public.topic_questions
   for each row execute function public.topic_questions_maturity_sync();
+
+-- ── 6a. Approving an article is ONE transaction ──────────────────────────────
+-- The partial unique index above allows one approved article per (topic,
+-- language). The portal talks to Postgres through PostgREST, which cannot open
+-- a transaction, so "supersede v1, then approve v2" as two calls could leave a
+-- topic with NO approved article after a failure, or two reviewers racing.
+-- This RPC does it atomically: lock the topic, supersede every other approved
+-- row of that (topic, language), approve the target, move the topic to
+-- article_approved, and audit — plan §1.3 (human approval, recorded).
+create or replace function public.approve_topic_article(p_article uuid, p_reviewer uuid, p_notes text default null)
+returns public.topic_articles
+  language plpgsql security definer set search_path = public as
+$$
+declare
+  a topic_articles%rowtype;
+begin
+  select * into a from topic_articles where id = p_article for update;
+  if not found then
+    raise exception 'article % not found', p_article using errcode = 'no_data_found';
+  end if;
+  if a.status not in ('draft', 'in_review') then
+    raise exception 'article % is %, not reviewable', p_article, a.status using errcode = 'check_violation';
+  end if;
+  perform 1 from topics where id = a.topic_id for update;
+
+  update topic_articles
+     set status = 'superseded'
+   where topic_id = a.topic_id and language = a.language and status = 'approved' and id <> a.id;
+
+  update topic_articles
+     set status = 'approved', approved_by = p_reviewer, reviewer_id = p_reviewer,
+         reviewed_at = now(), notes = coalesce(p_notes, notes)
+   where id = a.id
+   returning * into a;
+
+  update topics set status = 'article_approved'
+   where id = a.topic_id and status in ('candidate', 'approved');
+
+  insert into platform_audit_log (actor_id, action, target_kind, target_id, detail)
+  values (p_reviewer, 'library_article_approve', 'topic', a.topic_id,
+          jsonb_build_object('article_id', a.id, 'version', a.version, 'language', a.language));
+  return a;
+end
+$$;
+revoke execute on function public.approve_topic_article(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.approve_topic_article(uuid, uuid, text) to service_role;
 
 -- ── 6b. One live harvest per book ────────────────────────────────────────────
 -- The portal's Harvest button enqueues a public.jobs row {type: 'topic_harvest',
@@ -427,6 +509,11 @@ create unique index if not exists jobs_one_live_harvest
   where type = 'topic_harvest' and status in ('queued', 'processing');
 
 -- ── 7. Worksheet presets (idempotent) ────────────────────────────────────────
+-- min_maturity is the CHEAP pre-check only: the ladder counts approved English
+-- items of both answer modes, so 'basic' (10) does not by itself guarantee ten
+-- objective items for "all objective", nor anything for another language. The
+-- composer (Phase 3) checks availability per answer_mode and language and
+-- fails loudly rather than padding — plan §1.7.
 insert into public.question_set_blueprints (name, scope, spec, min_maturity)
 select v.name, 'worksheet', v.spec::jsonb, v.min_maturity from (values
   ('Remedial · all objective',  '{"preset":"remedial","objective_ratio":1.0,"difficulty_mix":{"1":0.5,"2":0.4,"3":0.1},"count":10,"total_marks":20}', 'basic'),
@@ -443,6 +530,21 @@ select v.name, 'worksheet', v.spec::jsonb, v.min_maturity from (values
   ('Challenge · 40/60',         '{"preset":"challenge","objective_ratio":0.4,"difficulty_mix":{"3":0.3,"4":0.5,"5":0.2},"count":10,"total_marks":20}', 'good')
 ) as v(name, spec, min_maturity)
 on conflict (name) do nothing;
+
+-- ── 7b. No client may carry the catalogue flag ───────────────────────────────
+-- Defence in depth for the guards below (the 0015 restrictive-policy pattern):
+-- `authenticated` can neither insert nor update a generations row whose params
+-- say catalogue = true. The service role is not subject to RLS, so the portal
+-- and the worker are unaffected.
+drop policy if exists gen_no_catalogue_insert on public.generations;
+create policy gen_no_catalogue_insert on public.generations as restrictive for insert
+  to authenticated
+  with check (coalesce(params->>'catalogue', '') <> 'true');
+drop policy if exists gen_no_catalogue_update on public.generations;
+create policy gen_no_catalogue_update on public.generations as restrictive for update
+  to authenticated
+  using (true)
+  with check (coalesce(params->>'catalogue', '') <> 'true');
 
 -- ── 8. Trigger exemptions for catalogue generations ──────────────────────────
 -- Each body below is its last defining migration's body (0103 / 0089), which
@@ -464,8 +566,9 @@ begin
   -- if the flag were absent, so a forgery is visible, not silently ignored.
   -- See 0112's header for the trigger-by-trigger reasoning.
   if coalesce(new.params->>'catalogue', '') = 'true' then
-    if not public.is_platform_admin(new.owner_id) then
-      raise exception 'params.catalogue is reserved for the catalogue system account.';
+    if auth.uid() is not null or not public.is_platform_admin(new.owner_id) then
+      raise exception 'params.catalogue is reserved for the catalogue system account.'
+        using errcode = 'insufficient_privilege';
     end if;
     return new;
   end if;
@@ -523,8 +626,9 @@ begin
   -- if the flag were absent, so a forgery is visible, not silently ignored.
   -- See 0112's header for the trigger-by-trigger reasoning.
   if coalesce(new.params->>'catalogue', '') = 'true' then
-    if not public.is_platform_admin(new.owner_id) then
-      raise exception 'params.catalogue is reserved for the catalogue system account.';
+    if auth.uid() is not null or not public.is_platform_admin(new.owner_id) then
+      raise exception 'params.catalogue is reserved for the catalogue system account.'
+        using errcode = 'insufficient_privilege';
     end if;
     return new;
   end if;
@@ -739,8 +843,11 @@ begin
 end;
 $$;
 
--- credit_ledger_write — body of 0089 (== prod), plus the guard.
-create or replace function credit_ledger_write() returns trigger
+-- credit_ledger_write — body of 0089 (== prod), plus the guard. Qualified
+-- and re-bound on purpose: if this ever resolved to another schema the
+-- trigger would keep the UNGUARDED body and the system account would
+-- accumulate ledger rows.
+create or replace function public.credit_ledger_write() returns trigger
   language plpgsql security definer set search_path = public as
 $$
 declare
@@ -762,8 +869,9 @@ begin
   -- if the flag were absent, so a forgery is visible, not silently ignored.
   -- See 0112's header for the trigger-by-trigger reasoning.
   if coalesce(new.params->>'catalogue', '') = 'true' then
-    if not public.is_platform_admin(new.owner_id) then
-      raise exception 'params.catalogue is reserved for the catalogue system account.';
+    if auth.uid() is not null or not public.is_platform_admin(new.owner_id) then
+      raise exception 'params.catalogue is reserved for the catalogue system account.'
+        using errcode = 'insufficient_privilege';
     end if;
     return new;
   end if;
@@ -814,5 +922,8 @@ begin
   end if;
   return null;
 end $$;
+drop trigger if exists credit_ledger_write on public.generations;
+create trigger credit_ledger_write after insert on public.generations
+  for each row execute function public.credit_ledger_write();
 
 commit;
