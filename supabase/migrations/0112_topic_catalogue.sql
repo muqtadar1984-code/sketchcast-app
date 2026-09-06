@@ -417,6 +417,15 @@ drop trigger if exists topic_questions_maturity on public.topic_questions;
 create trigger topic_questions_maturity after insert or update or delete on public.topic_questions
   for each row execute function public.topic_questions_maturity_sync();
 
+-- ── 6b. One live harvest per book ────────────────────────────────────────────
+-- The portal's Harvest button enqueues a public.jobs row {type: 'topic_harvest',
+-- book_id, generation_id NULL}. Its check-then-insert ("refuse while one is
+-- queued or processing") is racy on its own; this partial unique index is the
+-- rule the database enforces, and the route maps 23505 to its 409.
+create unique index if not exists jobs_one_live_harvest
+  on public.jobs (book_id)
+  where type = 'topic_harvest' and status in ('queued', 'processing');
+
 -- ── 7. Worksheet presets (idempotent) ────────────────────────────────────────
 insert into public.question_set_blueprints (name, scope, spec, min_maturity)
 select v.name, 'worksheet', v.spec::jsonb, v.min_maturity from (values
