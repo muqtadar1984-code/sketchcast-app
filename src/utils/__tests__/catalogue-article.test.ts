@@ -1,8 +1,9 @@
 /**
  * The knowledge article's pure logic (Phase 2b): the status machine, the Save
- * validator, the word count, the section diff and the latest-version
- * reduction. Nothing here can produce an 'approved' status — approval is the
- * approve_topic_article() RPC (plan §1.3), asserted in catalogue-routes.test.ts.
+ * validator, the word count, the figure-reset rule, the section diff and the
+ * per-topic article summary. Nothing here can produce an 'approved' status —
+ * approval is the approve_topic_article() RPC (plan §1.3), asserted in
+ * catalogue-routes.test.ts.
  *
  * Run: npx vitest run src/utils/__tests__/catalogue-article.test.ts
  */
@@ -13,14 +14,16 @@ import {
   articleBodyOf,
   articleCounts,
   articleStatusLabel,
+  articleSummaries,
   canApproveArticle,
   canEditArticle,
   canRejectArticle,
+  canRenderFigures,
   canSubmitArticle,
   countWords,
   diffSummary,
+  figureNeedsReset,
   isArticleStatus,
-  latestArticles,
   nextId,
   sectionDiff,
   sortVersions,
@@ -77,6 +80,11 @@ describe("the article status machine", () => {
     }
     expect(canSubmitArticle("draft")).toBe(true);
     expect(canSubmitArticle("in_review")).toBe(false);
+  });
+
+  it("figures are rendered for a draft, in-review or approved version — never for history (rejected, superseded)", () => {
+    for (const s of ["draft", "in_review", "approved"]) expect(canRenderFigures(s), s).toBe(true);
+    for (const s of ["rejected", "superseded", "banana"]) expect(canRenderFigures(s), s).toBe(false);
   });
 
   it("an article may be written for any topic status but candidate and retired", () => {
@@ -205,6 +213,59 @@ describe("validateArticle", () => {
     expect(ok.article!.figures[0].caption).toBeNull();
   });
 
+  it("bounds a figure's style (120) and notes (500); blanks become null", () => {
+    expect(ARTICLE_LIMITS.style).toBe(120);
+    expect(ARTICLE_LIMITS.notes).toBe(500);
+    const body = good();
+    body.figures[0].spec = { subject: "s", parts: [], style: "s".repeat(ARTICLE_LIMITS.style + 1), notes: "n".repeat(ARTICLE_LIMITS.notes + 1) };
+    const r = validateArticle(body);
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain(`figures #1: style is longer than ${ARTICLE_LIMITS.style} characters.`);
+    expect(r.errors).toContain(`figures #1: notes is longer than ${ARTICLE_LIMITS.notes} characters.`);
+    const ok = good();
+    ok.figures[0].spec = { subject: "s", parts: [], style: "  ", notes: "x".repeat(ARTICLE_LIMITS.notes) };
+    const v = validateArticle(ok);
+    expect(v.ok).toBe(true);
+    expect(v.article!.figures[0].spec.style).toBeNull();
+    expect(v.article!.figures[0].spec.notes).toHaveLength(ARTICLE_LIMITS.notes);
+  });
+
+  it("refuses raw HTML in the prose fields, naming the field; comparisons and markdown stay welcome", () => {
+    const body = good();
+    body.sections[0].body_md = "Cells are <b>small</b>.";
+    body.worked_examples[0].problem = "<!-- hidden -->Label the cell.";
+    body.worked_examples[0].solution_md = "Nucleus</p>";
+    body.glossary[0].definition = "<script>alert(1)</script>";
+    body.misconceptions[0].correction = "See <a href='x'>this</a>.";
+    const r = validateArticle(body);
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain("sections #1: body_md may not contain HTML tags.");
+    expect(r.errors).toContain("worked_examples #1: problem may not contain HTML tags.");
+    expect(r.errors).toContain("worked_examples #1: solution_md may not contain HTML tags.");
+    expect(r.errors).toContain("glossary #1: definition may not contain HTML tags.");
+    expect(r.errors).toContain("misconceptions #1: correction may not contain HTML tags.");
+    // `<` as a comparison or in maths is not a tag
+    const fine = good();
+    fine.sections[0].body_md = "If a < b and x <= y then **bold** and `code`.\n\n- 3 < 4";
+    fine.worked_examples[0].solution_md = "Since 2 < 3, the answer is 5.";
+    expect(validateArticle(fine).ok).toBe(true);
+  });
+
+  it("a body_md that is present but not a string is an error, not silently an empty section", () => {
+    const body = good();
+    (body.sections[0] as unknown as { body_md: unknown }).body_md = ["not", "a", "string"];
+    const r = validateArticle(body);
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain("sections #1: body_md must be a string.");
+    // absent (undefined / null) is still an empty section
+    const absent = good();
+    (absent.sections[0] as unknown as { body_md: unknown }).body_md = undefined;
+    (absent.sections[1] as unknown as { body_md: unknown }).body_md = null;
+    const ok = validateArticle(absent);
+    expect(ok.ok).toBe(true);
+    expect(ok.article!.sections.map((s) => s.body_md)).toEqual(["", ""]);
+  });
+
   it("the word count is reported even when the body is refused (the editor shows it live)", () => {
     const r = validateArticle({ ...good(), title: "" });
     expect(r.ok).toBe(false);
@@ -216,6 +277,37 @@ describe("validateArticle", () => {
     body.sections[0].body_md = "  a\r\nb  ";
     const r = validateArticle(body);
     expect(r.article!.sections[0].body_md).toBe("a\nb");
+  });
+});
+
+describe("figureNeedsReset — does a spec edit invalidate a rendered figure?", () => {
+  const spec = { subject: "animal cell", parts: ["nucleus", "membrane"], style: "line", notes: null };
+
+  it("a draft figure never needs a reset — there is no asset to lose", () => {
+    expect(figureNeedsReset({ status: "draft", spec }, { ...spec, subject: "something else" })).toBe(false);
+  });
+
+  it("a rendered, approved or rejected figure is reset when the subject, parts, style or notes change", () => {
+    for (const status of ["rendered", "approved", "rejected"]) {
+      expect(figureNeedsReset({ status, spec }, { ...spec, subject: "plant cell" }), `${status} subject`).toBe(true);
+      expect(figureNeedsReset({ status, spec }, { ...spec, parts: ["nucleus"] }), `${status} parts`).toBe(true);
+      expect(figureNeedsReset({ status, spec }, { ...spec, style: null }), `${status} style`).toBe(true);
+      expect(figureNeedsReset({ status, spec }, { ...spec, notes: "shade the nucleus" }), `${status} notes`).toBe(true);
+    }
+  });
+
+  it("an unchanged spec keeps the asset — and so does a reorder of the parts, surrounding whitespace, or a blank for null", () => {
+    expect(figureNeedsReset({ status: "rendered", spec }, { ...spec })).toBe(false);
+    expect(figureNeedsReset({ status: "rendered", spec }, { ...spec, parts: ["membrane", "nucleus"] })).toBe(false);
+    expect(figureNeedsReset({ status: "rendered", spec }, { ...spec, subject: "  animal cell " })).toBe(false);
+    expect(figureNeedsReset({ status: "rendered", spec: { ...spec, notes: "" } }, { ...spec, notes: null })).toBe(false);
+    // a stored spec missing optional keys (an older row) reads as null / []
+    expect(figureNeedsReset({ status: "rendered", spec: { subject: "animal cell", parts: ["nucleus", "membrane"], style: "line" } }, spec)).toBe(false);
+  });
+
+  it("the caption is not part of the picture — the rule only sees the spec", () => {
+    // The route hands it the spec alone; a caption-only edit reaches this with an identical spec.
+    expect(figureNeedsReset({ status: "rendered", spec }, spec)).toBe(false);
   });
 });
 
@@ -317,19 +409,42 @@ describe("sectionDiff — two versions side by side", () => {
   });
 });
 
-describe("latest version per topic", () => {
-  it("reduces a flat list to the highest version of each topic, whatever the order", () => {
+describe("the article summary per topic (the topics list's Article chip)", () => {
+  it("reports the approved version AND the newest pending one, whatever the order of the rows", () => {
     const rows = [
-      { topic_id: "t1", version: 1, status: "approved" },
-      { topic_id: "t1", version: 3, status: "draft" },
-      { topic_id: "t1", version: 2, status: "superseded" },
+      { topic_id: "t1", version: 2, status: "approved" },
+      { topic_id: "t1", version: 4, status: "draft" },
+      { topic_id: "t1", version: 3, status: "in_review" },
+      { topic_id: "t1", version: 1, status: "superseded" },
       { topic_id: "t2", version: 1, status: "in_review" },
     ];
-    const latest = latestArticles(rows);
-    expect(latest.get("t1")).toEqual({ topic_id: "t1", version: 3, status: "draft" });
-    expect(latest.get("t2")?.status).toBe("in_review");
-    expect(latest.has("t3")).toBe(false);
-    expect(sortVersions(rows.filter((r) => r.topic_id === "t1")).map((r) => r.version)).toEqual([3, 2, 1]);
+    const s = articleSummaries(rows);
+    expect(s.get("t1")?.approved).toEqual({ topic_id: "t1", version: 2, status: "approved" });
+    expect(s.get("t1")?.pending).toEqual({ topic_id: "t1", version: 4, status: "draft" });
+    expect(s.get("t1")?.latest?.version).toBe(4);
+    expect(s.get("t2")).toEqual({ approved: null, pending: { topic_id: "t2", version: 1, status: "in_review" }, latest: { topic_id: "t2", version: 1, status: "in_review" } });
+    expect(s.has("t3")).toBe(false);
+    expect(sortVersions(rows.filter((r) => r.topic_id === "t1")).map((r) => r.version)).toEqual([4, 3, 2, 1]);
+  });
+
+  it("a rejected or superseded version never wins over the approved one — even when it is newer", () => {
+    const s = articleSummaries([
+      { topic_id: "t1", version: 1, status: "approved" },
+      { topic_id: "t1", version: 2, status: "rejected" },
+      { topic_id: "t1", version: 3, status: "rejected" },
+    ]);
+    expect(s.get("t1")?.approved?.version).toBe(1);
+    expect(s.get("t1")?.pending).toBeNull();
+    expect(s.get("t1")?.latest?.version).toBe(3);
+  });
+
+  it("a topic whose every version was rejected has neither fact, but is not 'none': latest carries the newest", () => {
+    const s = articleSummaries([
+      { topic_id: "t1", version: 1, status: "rejected" },
+      { topic_id: "t1", version: 2, status: "rejected" },
+    ]);
+    expect(s.get("t1")).toEqual({ approved: null, pending: null, latest: { topic_id: "t1", version: 2, status: "rejected" } });
+    expect(articleSummaries([]).size).toBe(0);
   });
 
   it("articleCounts tallies per status and ignores unknown values", () => {

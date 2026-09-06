@@ -46,6 +46,19 @@ export function ArticleEditor({
   const updateAt = <K extends ListKey>(key: K, i: number, fn: (item: ArticleBody[K][number]) => ArticleBody[K][number]) =>
     patch((b) => ({ ...b, [key]: (b[key] as unknown[]).map((it, j) => (j === i ? fn(it as ArticleBody[K][number]) : it)) }));
   const removeAt = (key: ListKey, i: number) => patch((b) => ({ ...b, [key]: (b[key] as unknown[]).filter((_, j) => j !== i) }));
+  // Removing a figure also unplaces it: its key leaves every section's
+  // figure_keys, so the validator does not refuse the save for a dangling key
+  // the member cannot see. (A key a stored section names with no figure behind
+  // it shows as an orphan chip in the section's list, removable there.)
+  const removeFigure = (i: number) =>
+    patch((b) => {
+      const key = b.figures[i]?.figure_key;
+      return {
+        ...b,
+        figures: b.figures.filter((_, j) => j !== i),
+        sections: key ? b.sections.map((s) => (s.figure_keys.includes(key) ? { ...s, figure_keys: s.figure_keys.filter((k) => k !== key) } : s)) : b.sections,
+      };
+    });
   const move = (key: ListKey, i: number, dir: -1 | 1) =>
     patch((b) => {
       const list = [...(b[key] as unknown[])];
@@ -129,7 +142,7 @@ export function ArticleEditor({
       <Block
         title="Figures"
         count={body.figures.length}
-        hint="What to draw. The renderer files each figure in the visual library under its key and labels the parts as groups; a rendered figure keeps its asset when you edit the caption."
+        hint="What to draw. The renderer files each figure in the visual library under its key and labels the parts as groups. A rendered figure keeps its asset when you edit the caption; changing what to draw (subject, parts, style, notes) puts it back to draft for a re-render."
         onAdd={() => patch((b) => ({ ...b, figures: [...b.figures, { figure_key: "", caption: null, spec: { subject: "", parts: [], style: null, notes: null }, sort: b.figures.length }] }))}
       >
         {body.figures.map((f, i) => {
@@ -154,7 +167,7 @@ export function ArticleEditor({
                   <FigureStatusChip status={existing?.status ?? "new"} />
                   <MoveButtons up={() => move("figures", i, -1)} down={() => move("figures", i, 1)} first={i === 0} last={i === body.figures.length - 1} />
                   <RemoveButton
-                    onClick={() => removeAt("figures", i)}
+                    onClick={() => removeFigure(i)}
                     title={existing && existing.status !== "draft" ? "A rendered figure is kept on the server; removing it here only unplaces it." : "Remove"}
                   />
                 </div>
@@ -168,8 +181,8 @@ export function ArticleEditor({
                 />
                 <TagList label="Parts to label" values={f.spec.parts} max={ARTICLE_LIMITS.parts} onChange={(parts) => updateAt("figures", i, (x) => ({ ...x, spec: { ...x.spec, parts } }))} />
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <input value={f.spec.style ?? ""} onChange={(e) => updateAt("figures", i, (x) => ({ ...x, spec: { ...x.spec, style: e.target.value || null } }))} maxLength={120} placeholder="Style (optional)" className="field h-9 px-3" />
-                  <input value={f.spec.notes ?? ""} onChange={(e) => updateAt("figures", i, (x) => ({ ...x, spec: { ...x.spec, notes: e.target.value || null } }))} maxLength={500} placeholder="Notes for the renderer (optional)" className="field h-9 px-3" />
+                  <input value={f.spec.style ?? ""} onChange={(e) => updateAt("figures", i, (x) => ({ ...x, spec: { ...x.spec, style: e.target.value || null } }))} maxLength={ARTICLE_LIMITS.style} placeholder="Style (optional)" className="field h-9 px-3" />
+                  <input value={f.spec.notes ?? ""} onChange={(e) => updateAt("figures", i, (x) => ({ ...x, spec: { ...x.spec, notes: e.target.value || null } }))} maxLength={ARTICLE_LIMITS.notes} placeholder="Notes for the renderer (optional)" className="field h-9 px-3" />
                 </div>
                 {existing?.render_error && (
                   <p className="text-xs text-[#B3401F]" title={existing.render_error}>
@@ -332,6 +345,10 @@ function MoveButtons({ up, down, first, last }: { up: () => void; down: () => vo
   );
 }
 
+/** Tick boxes over `options`; a value in `values` that no option offers (a
+ *  figure key or objective id the stored row names but the article no longer
+ *  has) is an ORPHAN — shown as a chip with ×, since the validator refuses a
+ *  cross-reference that does not resolve and a hidden one is unfixable. */
 function CheckList({
   label,
   options,
@@ -345,9 +362,23 @@ function CheckList({
   empty: string;
   onChange: (next: string[]) => void;
 }) {
+  const offered = new Set(options.map((o) => o.value));
+  const orphans = values.filter((v) => !offered.has(v));
   return (
     <div className="text-xs">
       <p className="text-[#5B6470] mb-1">{label}</p>
+      {orphans.length > 0 && (
+        <p className="flex flex-wrap items-center gap-1.5 mb-1">
+          {orphans.map((v) => (
+            <span key={v} className="chip bg-[#FFE9E3] text-[#B3401F] inline-flex items-center gap-1 font-mono" title="Named here but no longer part of the article — remove it, or add it back below">
+              {v}
+              <button type="button" onClick={() => onChange(values.filter((x) => x !== v))} aria-label={`Remove ${v}`} className="hover:text-[#14181F]">
+                ×
+              </button>
+            </span>
+          ))}
+        </p>
+      )}
       {options.length === 0 ? (
         <p className="text-[#98A0A9]">{empty}</p>
       ) : (

@@ -1,7 +1,7 @@
 // Pure logic for the knowledge article (Library portal, Phase 2b): the
 // article status machine, the shape validator the Save action runs, the word
-// count, the section-by-section diff between two versions, and the "latest
-// version per topic" reduction the list screens use. No I/O anywhere, so the
+// count, the figure-reset rule, the section-by-section diff between two
+// versions, and the per-topic article summary the list screens use. No I/O anywhere, so the
 // route handler and the panels share one answer and the rules are unit-tested
 // without a database (topic-catalogue plan §7.2).
 //
@@ -58,6 +58,14 @@ export function canRejectArticle(s: ArticleStatus | string): boolean {
 /** Submit for review: draft → in_review, nothing else. */
 export function canSubmitArticle(s: ArticleStatus | string): boolean {
   return s === "draft";
+}
+
+/** A version whose figures may be (re)rendered: one still being written or
+ *  reviewed, or the approved one (a kit is generated from it, so its figures
+ *  must exist). A rejected or superseded version is history — rendering its
+ *  figures would spend image quota on assets nobody reads. */
+export function canRenderFigures(s: ArticleStatus | string): boolean {
+  return s === "draft" || s === "in_review" || s === "approved";
 }
 
 export const ARTICLE_STATUS_TONE: Record<ArticleStatus, string> = {
@@ -132,6 +140,9 @@ export const ARTICLE_LIMITS = {
   caption: 500,
   parts: 40,
   part: 80,
+  /** spec.style / spec.notes: short instructions to the renderer */
+  style: 120,
+  notes: 500,
   depth_rationale: 2000,
   id: 64,
   /** figure_key: a snake_case identifier the renderer files the asset under */
@@ -139,6 +150,12 @@ export const ARTICLE_LIMITS = {
 } as const;
 
 const FIGURE_KEY = /^[a-z][a-z0-9_]*$/;
+
+/** The start of an HTML tag, comment or close tag: `<` followed by a letter,
+ *  `/` or `!`. A body is markdown, rendered as text today and through a
+ *  markdown renderer later — raw HTML in it is refused rather than stored
+ *  (`a < b` and `x <= y` are fine: the `<` is followed by a space or `=`). */
+const RAW_HTML = /<[a-zA-Z/!]/;
 
 export type ArticleValidation =
   | { ok: true; errors: []; wordCount: number; article: ArticleBody }
@@ -192,6 +209,19 @@ function required(entry: Rec, key: string, max: number, name: string, i: number,
   return s.slice(0, max);
 }
 
+/** An optional short string: null when blank, an error past `max`. */
+function optional(entry: Rec, key: string, max: number, name: string, i: number, errors: string[]): string | null {
+  const s = strOrNull(entry[key]);
+  if (s && s.length > max) errors.push(`${name} #${i + 1}: ${key} is longer than ${max} characters.`);
+  return s ? s.slice(0, max) : null;
+}
+
+/** Refuses raw HTML in a text field the reader sees as markdown or prose;
+ *  the error names the field. */
+function noHtml(s: string, name: string, i: number, key: string, errors: string[]): void {
+  if (RAW_HTML.test(s)) errors.push(`${name} #${i + 1}: ${key} may not contain HTML tags.`);
+}
+
 function stringList(v: unknown, max: number, each: number, name: string, i: number, key: string, errors: string[]): string[] {
   if (v === undefined || v === null) return [];
   if (!Array.isArray(v)) {
@@ -216,7 +246,30 @@ export function validateFigureSpec(v: unknown, name: string, i: number, errors: 
   }
   const subject = required(v, "subject", ARTICLE_LIMITS.caption, name, i, errors);
   const parts = stringList(v.parts, ARTICLE_LIMITS.parts, ARTICLE_LIMITS.part, name, i, "spec.parts", errors);
-  return { subject, parts, style: strOrNull(v.style), notes: strOrNull(v.notes) };
+  const style = optional(v, "style", ARTICLE_LIMITS.style, name, i, errors);
+  const notes = optional(v, "notes", ARTICLE_LIMITS.notes, name, i, errors);
+  return { subject, parts, style, notes };
+}
+
+/** What the renderer draws from, normalised for comparison: trimmed subject,
+ *  the parts as a set (their order changes nothing in the picture), blank
+ *  style / notes as null. */
+function specFingerprint(spec: Partial<FigureSpec> | null | undefined): string {
+  const parts = [...new Set((Array.isArray(spec?.parts) ? spec.parts : []).map((p) => str(p)).filter(Boolean))].sort();
+  return JSON.stringify([str(spec?.subject), parts, strOrNull(spec?.style), strOrNull(spec?.notes)]);
+}
+
+/**
+ * Does saving `incoming` over `existing` invalidate the figure's asset? Only
+ * when the figure has been rendered (or reviewed) — a draft has nothing to
+ * lose — AND what to draw changed: subject, parts, style or notes. A caption
+ * is not part of the picture, so a caption-only edit keeps the asset. The
+ * route resets such a row to draft (asset, labels and error cleared) so the
+ * next Render figures redraws it.
+ */
+export function figureNeedsReset(existing: { status: FigureStatus | string; spec: Partial<FigureSpec> | null | undefined }, incoming: FigureSpec): boolean {
+  if (existing.status === "draft") return false;
+  return specFingerprint(existing.spec) !== specFingerprint(incoming);
 }
 
 /**
@@ -278,8 +331,12 @@ export function validateArticle(input: unknown): ArticleValidation {
     }
     const id = idOf(e, "sections", i, errors);
     const heading = required(e, "heading", ARTICLE_LIMITS.heading, "sections", i, errors);
+    // An absent body is an empty section (the editor's "(empty)"); a body that
+    // is present but not a string is a malformed request, not an empty one.
+    if (e.body_md !== undefined && e.body_md !== null && typeof e.body_md !== "string") errors.push(`sections #${i + 1}: body_md must be a string.`);
     const body = typeof e.body_md === "string" ? e.body_md.replace(/\r\n/g, "\n").trim() : "";
     if (body.length > ARTICLE_LIMITS.body_md) errors.push(`sections #${i + 1}: body_md is longer than ${ARTICLE_LIMITS.body_md} characters.`);
+    noHtml(body, "sections", i, "body_md", errors);
     const figure_keys = stringList(e.figure_keys, ARTICLE_LIMITS.figures, ARTICLE_LIMITS.figure_key, "sections", i, "figure_keys", errors);
     for (const k of figure_keys) if (!figureKeys.has(k)) errors.push(`sections #${i + 1}: figure "${k}" is not one of the article's figures.`);
     const covers = stringList(e.covers, ARTICLE_LIMITS.objectives, ARTICLE_LIMITS.id, "sections", i, "covers", errors);
@@ -295,10 +352,9 @@ export function validateArticle(input: unknown): ArticleValidation {
       errors.push(`glossary #${i + 1}: must be {term, definition}.`);
       return null;
     }
-    return {
-      term: required(e, "term", ARTICLE_LIMITS.term, "glossary", i, errors),
-      definition: required(e, "definition", ARTICLE_LIMITS.definition, "glossary", i, errors),
-    };
+    const definition = required(e, "definition", ARTICLE_LIMITS.definition, "glossary", i, errors);
+    noHtml(definition, "glossary", i, "definition", errors);
+    return { term: required(e, "term", ARTICLE_LIMITS.term, "glossary", i, errors), definition };
   });
   {
     const seen = new Set<string>();
@@ -314,10 +370,12 @@ export function validateArticle(input: unknown): ArticleValidation {
       errors.push(`misconceptions #${i + 1}: must be {id, misconception, correction}.`);
       return null;
     }
+    const correction = required(e, "correction", ARTICLE_LIMITS.definition, "misconceptions", i, errors);
+    noHtml(correction, "misconceptions", i, "correction", errors);
     return {
       id: idOf(e, "misconceptions", i, errors),
       misconception: required(e, "misconception", ARTICLE_LIMITS.definition, "misconceptions", i, errors),
-      correction: required(e, "correction", ARTICLE_LIMITS.definition, "misconceptions", i, errors),
+      correction,
     };
   });
   uniqueIds(misconceptions, "misconceptions", errors);
@@ -327,11 +385,11 @@ export function validateArticle(input: unknown): ArticleValidation {
       errors.push(`worked_examples #${i + 1}: must be {id, problem, solution_md}.`);
       return null;
     }
-    return {
-      id: idOf(e, "worked_examples", i, errors),
-      problem: required(e, "problem", ARTICLE_LIMITS.body_md, "worked_examples", i, errors),
-      solution_md: required(e, "solution_md", ARTICLE_LIMITS.body_md, "worked_examples", i, errors),
-    };
+    const problem = required(e, "problem", ARTICLE_LIMITS.body_md, "worked_examples", i, errors);
+    const solution_md = required(e, "solution_md", ARTICLE_LIMITS.body_md, "worked_examples", i, errors);
+    noHtml(problem, "worked_examples", i, "problem", errors);
+    noHtml(solution_md, "worked_examples", i, "solution_md", errors);
+    return { id: idOf(e, "worked_examples", i, errors), problem, solution_md };
   });
   uniqueIds(worked_examples, "worked_examples", errors);
 
@@ -519,16 +577,29 @@ export function diffSummary(rows: readonly SectionDiffRow[]): { changed: number;
   return out;
 }
 
-// ── Latest version per topic ─────────────────────────────────────────────────
+// ── The article summary per topic ────────────────────────────────────────────
 
-/** The highest version per topic from a flat list of rows (any order). The
- *  list screens show its status as the topic's "article" chip: one grouped
- *  query for the page's topic ids, reduced here. */
-export function latestArticles<T extends { topic_id: string; version: number }>(rows: readonly T[]): Map<string, T> {
-  const out = new Map<string, T>();
+/** What a list screen says about one topic's article: the version that is
+ *  live (`approved`, at most one per language), the newest version still in
+ *  flight (`draft` / `in_review`), and — for a topic with versions but neither
+ *  of those (every version rejected) — the newest version at all, so the chip
+ *  can say "v2 rejected" instead of pretending there is no article. */
+export type ArticleSummary<T> = { approved: T | null; pending: T | null; latest: T | null };
+
+const PENDING = new Set<string>(["draft", "in_review"]);
+
+/** One summary per topic from a flat list of version rows (any order): one
+ *  grouped query for the page's topic ids, reduced here. A rejected or
+ *  superseded version never stands in for the approved one, and the newest
+ *  draft does not hide it — the chip shows both facts side by side. */
+export function articleSummaries<T extends { topic_id: string; version: number; status: string }>(rows: readonly T[]): Map<string, ArticleSummary<T>> {
+  const out = new Map<string, ArticleSummary<T>>();
   for (const r of rows) {
-    const cur = out.get(r.topic_id);
-    if (!cur || r.version > cur.version) out.set(r.topic_id, r);
+    const cur = out.get(r.topic_id) ?? { approved: null, pending: null, latest: null };
+    if (r.status === "approved" && (!cur.approved || r.version > cur.approved.version)) cur.approved = r;
+    if (PENDING.has(r.status) && (!cur.pending || r.version > cur.pending.version)) cur.pending = r;
+    if (!cur.latest || r.version > cur.latest.version) cur.latest = r;
+    out.set(r.topic_id, cur);
   }
   return out;
 }

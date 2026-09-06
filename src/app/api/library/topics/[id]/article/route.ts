@@ -6,11 +6,13 @@ import {
   canApproveArticle,
   canEditArticle,
   canRejectArticle,
+  canRenderFigures,
   canSubmitArticle,
+  figureNeedsReset,
   topicAcceptsArticle,
   validateArticle,
 } from "@/utils/catalogue/article";
-import type { ArticleFigureInput, TopicArticle } from "@/utils/catalogue/types";
+import type { ArticleFigureInput, FigureSpec, TopicArticle } from "@/utils/catalogue/types";
 import { audit, bad, conflict, dbError, notFound, readJson, text, uuid } from "../../../lib";
 
 export const runtime = "nodejs";
@@ -24,19 +26,30 @@ export const runtime = "nodejs";
 //                     the worker writes the next version as a draft (from the
 //                     source version when one is named — "New version from this")
 //     save            {articleId, article}        validate (validateArticle) and
-//                     write a draft / in-review version; figures upserted by
-//                     figure_key, removed ones deleted only while still 'draft'
+//                     write a draft / in-review version — the write itself is
+//                     guarded on status, so a Save that lands after an approve
+//                     or reject is a 409, never an overwrite; figures upserted
+//                     by figure_key (a rendered figure whose spec changed goes
+//                     back to draft for a re-render — figureNeedsReset),
+//                     removed ones deleted only while still 'draft'
 //     submit          {articleId}                 draft → in_review
 //     render_figures  {articleId}                 enqueue ONE `figure_render` job
-//                     (the figures are part of the article a member edits, so
-//                     the same edit_article role — not the kit-level `generate`)
+//                     for a draft / in-review / approved version (the figures
+//                     are part of the article a member edits, so the same
+//                     edit_article role — not the kit-level `generate`)
 //   approve (reviewer, editor, admin):
 //     approve         {articleId, notes?}         approve_topic_article() — the RPC
 //                     supersedes the old approved version, approves this one,
 //                     moves the topic to article_approved and audits, in ONE
 //                     transaction. Nothing else in this repo writes 'approved'
-//                     (plan §1.3; catalogue-routes.test.ts asserts it)
+//                     (plan §1.3; catalogue-routes.test.ts asserts it). Refused
+//                     while the TOPIC is still a candidate (approve it first)
 //     reject          {articleId, notes}          draft | in_review → rejected
+//
+// Every status transition here is a guarded UPDATE (…eq/in("status")…select("id"))
+// read back: zero rows means the version moved between the read and the write
+// (two reviewers, or an editor and a reviewer, racing) and answers 409 — the
+// audit row is written only for a change that happened.
 //
 // Both jobs are OBSERVER jobs (generation_id and book_id NULL, input in
 // jobs.params — 0113) like topic_derive; one live job per target is the
@@ -78,6 +91,12 @@ const ARTICLE_COLUMNS =
 /** Postgres SQLSTATEs the approve RPC raises on purpose: check_violation for
  *  a version that is not reviewable, no_data_found for a vanished article. */
 const RPC_REFUSALS = new Set(["23514", "P0002"]);
+
+/** The renderer-owned columns of a figure whose spec changed: back to draft
+ *  with no asset, no labels and no stale error, so Render figures redraws it. */
+const FIGURE_RESET = { status: "draft", visual_asset_id: null, labels: [], render_error: null };
+
+const statusLabel = (s: string) => s.replace(/_/g, " ");
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const m = await isLibraryMemberRequest();
@@ -184,7 +203,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!v.ok) return NextResponse.json({ error: v.errors[0] ?? "The article is not valid.", errors: v.errors }, { status: 400 });
     const next = v.article;
 
-    const { error: uErr } = await admin
+    // The write is guarded on status and read back: canEditArticle() above
+    // looked at a row that approve_topic_article() or a reject may have moved
+    // since. Zero rows written means exactly that — nothing is touched (not
+    // the figures either) and the editor is told to reload. An approved
+    // version is never overwritten by a Save that started before the approval.
+    const { data: written, error: uErr } = await admin
       .from("topic_articles")
       .update({
         title: next.title,
@@ -197,24 +221,50 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         depth_rationale: next.depth_rationale,
         word_count: v.wordCount,
       })
-      .eq("id", article.id);
+      .eq("id", article.id)
+      .in("status", ["draft", "in_review"])
+      .select("id");
     if (uErr) return dbError(uErr);
+    if (!written?.length) {
+      return conflict(`Version ${article.version} was approved or rejected while you were editing — reload to see its current state; nothing was saved.`, {
+        version: article.version,
+      });
+    }
 
-    // Figures: upsert by (article_id, figure_key) — the payload carries only
-    // the editable columns, so an existing row keeps its visual_asset_id,
-    // labels, status and render_error. A figure the editor dropped is deleted
-    // only while it is still 'draft'; a rendered or approved one has an asset
-    // behind it and stays (reported as kept).
-    const { data: existingRows, error: fErr } = await admin.from("article_figures").select("id, figure_key, status").eq("article_id", article.id);
+    // Figures: upsert by (article_id, figure_key) — the payload carries the
+    // editable columns, so an existing row keeps its visual_asset_id, labels,
+    // status and render_error… unless what to DRAW changed on a figure that
+    // was already rendered or reviewed (figureNeedsReset: subject, parts,
+    // style or notes — not the caption): that row goes back to draft with the
+    // asset, labels and error cleared, so the next Render figures redraws it
+    // rather than keeping a picture of the old spec. A figure the editor
+    // dropped is deleted only while it is still 'draft'; a rendered or
+    // approved one has an asset behind it and stays (reported as kept).
+    const { data: existingRows, error: fErr } = await admin.from("article_figures").select("id, figure_key, status, spec").eq("article_id", article.id);
     if (fErr) return dbError(fErr);
-    const existing = (existingRows ?? []) as { id: string; figure_key: string; status: string }[];
+    const existing = (existingRows ?? []) as { id: string; figure_key: string; status: string; spec: Partial<FigureSpec> | null }[];
+    const existingByKey = new Map(existing.map((f) => [f.figure_key, f]));
     const incoming = new Set(next.figures.map((f) => f.figure_key));
     const removed = existing.filter((f) => !incoming.has(f.figure_key));
     const removedDraft = removed.filter((f) => f.status === "draft").map((f) => f.figure_key);
     const kept = removed.filter((f) => f.status !== "draft").map((f) => f.figure_key);
+    const reset = next.figures
+      .filter((f) => {
+        const prior = existingByKey.get(f.figure_key);
+        return !!prior && figureNeedsReset(prior, f.spec);
+      })
+      .map((f) => f.figure_key);
+    const resetKeys = new Set(reset);
     if (next.figures.length) {
       const { error } = await admin.from("article_figures").upsert(
-        next.figures.map((f: ArticleFigureInput) => ({ article_id: article.id, figure_key: f.figure_key, caption: f.caption, spec: f.spec, sort: f.sort })),
+        next.figures.map((f: ArticleFigureInput) => ({
+          article_id: article.id,
+          figure_key: f.figure_key,
+          caption: f.caption,
+          spec: f.spec,
+          sort: f.sort,
+          ...(resetKeys.has(f.figure_key) ? FIGURE_RESET : {}),
+        })),
         { onConflict: "article_id,figure_key" },
       );
       if (error) return dbError(error);
@@ -236,8 +286,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       figures: next.figures.length,
       figures_removed: removedDraft.length,
       figures_kept: kept,
+      figures_reset: reset,
     });
-    return NextResponse.json({ ok: true, wordCount: v.wordCount, figuresKept: kept });
+    return NextResponse.json({ ok: true, wordCount: v.wordCount, figuresKept: kept, figuresReset: reset });
   }
 
   // ── submit ─────────────────────────────────────────────────────────────────
@@ -247,8 +298,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!canSubmitArticle(article.status)) {
       return conflict(`Version ${article.version} is ${article.status.replace(/_/g, " ")}; only a draft can be submitted for review.`, { status: article.status });
     }
-    const { error } = await admin.from("topic_articles").update({ status: "in_review" }).eq("id", article.id).eq("status", "draft");
+    const { data: moved, error } = await admin.from("topic_articles").update({ status: "in_review" }).eq("id", article.id).eq("status", "draft").select("id");
     if (error) return dbError(error);
+    if (!moved?.length) {
+      // The draft moved between the read and the write (submitted, approved or
+      // rejected by someone else): nothing changed here, so nothing to audit.
+      return conflict(`Version ${article.version} is no longer a draft — it changed while you were looking; reload to see its current state.`, {
+        version: article.version,
+      });
+    }
     await audit(admin, m.id, "article_submit", "topic", id, { article_id: article.id, version: article.version, from: "draft", to: "in_review" });
     return NextResponse.json({ ok: true, status: "in_review" });
   }
@@ -257,6 +315,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (action === "render_figures") {
     const { article, response } = await loadArticle(body.articleId);
     if (!article) return response!;
+    if (!canRenderFigures(article.status)) {
+      // A rejected or superseded version is history: rendering its figures
+      // would spend image quota on assets no kit will ever read.
+      return conflict(`Version ${article.version} is ${statusLabel(article.status)} — figures are rendered for a draft, in-review or approved version only.`, {
+        status: article.status,
+      });
+    }
     const { count, error: cErr } = await admin.from("article_figures").select("id", { count: "exact", head: true }).eq("article_id", article.id);
     if (cErr) return dbError(cErr);
     if (!count) return bad("This version has no figures to render — add a figure spec and save first.");
@@ -310,7 +375,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { article, response } = await loadArticle(body.articleId);
     if (!article) return response!;
     if (!canApproveArticle(article.status)) {
-      return conflict(`Version ${article.version} is ${article.status.replace(/_/g, " ")}, not reviewable.`, { status: article.status });
+      return conflict(`Version ${article.version} is ${statusLabel(article.status)}, not reviewable.`, { status: article.status });
+    }
+    if (topic.status === "candidate") {
+      // Plan §1.3: the article comes AFTER the topic. Approving the article
+      // would move a topic nobody has approved straight to article_approved.
+      return conflict("Approve the topic first — an article is approved for an approved topic.", { topicStatus: topic.status });
     }
     const notes = text(body.notes, 2000) || null;
     const { data, error } = await admin.rpc("approve_topic_article", { p_article: article.id, p_reviewer: m.id, p_notes: notes });
@@ -333,12 +403,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
     const notes = text(body.notes, 2000);
     if (!notes) return bad("Say why — notes are required to reject a version.");
-    const { error } = await admin
+    const { data: rejected, error } = await admin
       .from("topic_articles")
       .update({ status: "rejected", reviewer_id: m.id, reviewed_at: new Date().toISOString(), notes })
       .eq("id", article.id)
-      .in("status", ["draft", "in_review"]);
+      .in("status", ["draft", "in_review"])
+      .select("id");
     if (error) return dbError(error);
+    if (!rejected?.length) {
+      // Another reviewer's verdict landed first: the version is approved or
+      // rejected already. Nothing changed here, so nothing to audit.
+      return conflict(`Version ${article.version} was approved or rejected while you were reviewing — reload to see its current state.`, {
+        version: article.version,
+      });
+    }
     await audit(admin, m.id, "article_reject", "topic", id, { article_id: article.id, version: article.version, from: article.status, notes });
     return NextResponse.json({ ok: true, status: "rejected" });
   }

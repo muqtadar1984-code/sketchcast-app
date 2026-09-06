@@ -6,6 +6,7 @@ import {
   canApproveArticle,
   canEditArticle,
   canRejectArticle,
+  canRenderFigures,
   canSubmitArticle,
   diffSummary,
   sectionDiff,
@@ -104,6 +105,8 @@ export function ArticlePanel({
 
   // A version the server no longer lists (deleted elsewhere) falls back to the newest.
   const selected = versions.find((v) => v.article.id === selectedId) ?? versions[0] ?? null;
+  // The live version: at most one is approved per language (0112).
+  const approvedVersion = versions.find((v) => v.article.status === "approved")?.article ?? null;
   const accepts = topicAcceptsArticle(topicStatus);
   const liveJob = !!articleJob && isLiveJobStatus(articleJob.status);
   const writeDisabledWhy = !accepts
@@ -255,6 +258,7 @@ export function ArticlePanel({
               setMode={setMode}
               canEdit={canEdit}
               canApprove={canApprove}
+              topicStatus={topicStatus}
               accepts={accepts}
               liveJob={liveJob}
               busy={busy}
@@ -270,12 +274,19 @@ export function ArticlePanel({
                 const r = await post({ action: "save", articleId: selected.article.id, article: body }, "save");
                 if (r) {
                   setMode("view");
-                  const kept = Array.isArray(r.figuresKept) ? (r.figuresKept as string[]) : [];
-                  setNotice(
-                    kept.length
-                      ? `Saved (${r.wordCount} words). ${kept.length} rendered figure${kept.length === 1 ? " was" : "s were"} kept: ${kept.join(", ")} — a rendered figure is not deleted from the editor.`
-                      : `Saved (${r.wordCount} words).`,
-                  );
+                  const strings = (v: unknown) => (Array.isArray(v) ? v.filter((k): k is string => typeof k === "string") : []);
+                  const kept = strings(r.figuresKept);
+                  const reset = strings(r.figuresReset);
+                  const notes = [`Saved (${r.wordCount} words).`];
+                  if (kept.length) {
+                    notes.push(`${kept.length} rendered figure${kept.length === 1 ? " was" : "s were"} kept: ${kept.join(", ")} — a rendered figure is not deleted from the editor.`);
+                  }
+                  if (reset.length) {
+                    notes.push(
+                      `${reset.length} figure${reset.length === 1 ? "" : "s"} went back to draft because what to draw changed: ${reset.join(", ")} — render the figures again.`,
+                    );
+                  }
+                  setNotice(notes.join(" "));
                 }
               }}
               onSubmit={async () => {
@@ -287,6 +298,11 @@ export function ArticlePanel({
                 if (r) setNotice("Figure render queued.");
               }}
               onApprove={async () => {
+                // Approval is recorded and moves the topic; it is confirmed
+                // like Reject is. The supersession is named when there is one.
+                const v = selected.article.version;
+                const supersedes = approvedVersion && approvedVersion.id !== selected.article.id ? ` This supersedes v${approvedVersion.version} and` : " This";
+                if (!window.confirm(`Approve v${v}?${supersedes} moves the topic to article approved.`)) return;
                 const r = await post({ action: "approve", articleId: selected.article.id, notes: notes.trim() || undefined }, "approve");
                 if (r) {
                   setNotes("");
@@ -324,6 +340,7 @@ function SelectedVersion({
   setMode,
   canEdit,
   canApprove,
+  topicStatus,
   accepts,
   liveJob,
   busy,
@@ -344,6 +361,7 @@ function SelectedVersion({
   setMode: (m: "view" | "edit" | "diff") => void;
   canEdit: boolean;
   canApprove: boolean;
+  topicStatus: string;
   accepts: boolean;
   liveJob: boolean;
   busy: string | null;
@@ -366,8 +384,12 @@ function SelectedVersion({
   const showReview = canApprove && (canApproveArticle(a.status) || canRejectArticle(a.status)) && mode !== "edit";
   const liveRender = !!version.renderJob && isLiveJobStatus(version.renderJob.status);
   // Rendering the figures is part of editing the article (edit_article), not
-  // the kit-level `generate` — the route asks for the same role.
-  const showRender = canEdit && version.figures.length > 0 && mode !== "edit";
+  // the kit-level `generate` — the route asks for the same role. A rejected or
+  // superseded version is history: the route refuses (409), so no button.
+  const showRender = canEdit && canRenderFigures(a.status) && version.figures.length > 0 && mode !== "edit";
+  // The route refuses to approve an article while the topic is a candidate
+  // (plan §1.3: the topic first); the button says so instead of showing a 409.
+  const approveBlockedWhy = topicStatus === "candidate" ? "Approve the topic first — an article is approved for an approved topic." : null;
 
   return (
     <div className="space-y-3">
@@ -445,7 +467,13 @@ function SelectedVersion({
           </p>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={2} placeholder="Review notes (required to reject)…" className="field w-full px-3 py-2" />
           <div className="flex items-center gap-2">
-            <button type="button" disabled={!!busy} onClick={() => void onApprove()} className="btn-primary h-9 px-4">
+            <button
+              type="button"
+              disabled={!!busy || !!approveBlockedWhy}
+              title={approveBlockedWhy ?? undefined}
+              onClick={() => void onApprove()}
+              className="btn-primary h-9 px-4 disabled:opacity-50"
+            >
               {busy === "approve" ? "Approving…" : "Approve"}
             </button>
             <button
@@ -457,6 +485,7 @@ function SelectedVersion({
             >
               {busy === "reject" ? "…" : "Reject"}
             </button>
+            {approveBlockedWhy && <span className="text-xs text-[#9A6400]">{approveBlockedWhy}</span>}
           </div>
         </div>
       )}

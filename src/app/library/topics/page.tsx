@@ -19,7 +19,7 @@ import {
   searchOr,
   withTopicFilter,
 } from "@/utils/catalogue/status";
-import { articleStatusLabel, latestArticles } from "@/utils/catalogue/article";
+import { articleStatusLabel, articleSummaries } from "@/utils/catalogue/article";
 import type { Curriculum, NodeKind, Topic } from "@/utils/catalogue/types";
 import { ArticleStatusChip, ErrorBanner, MaturityChip, MissingTablesBanner, Pager, StatusChip, fmtDate } from "../catalogue-ui";
 import NewTopicForm from "./new-topic-form";
@@ -32,7 +32,12 @@ import NewTopicForm from "./new-topic-form";
 // page or PostgREST's 416. The sub-strand filter matches a topic mapped to the
 // group OR to any node under it (its objectives) — mappings point at either.
 // The article filter (?article=draft|in_review|approved|none) is the overview's
-// review-queue link: topics with a version in that state (any version), or none.
+// review-queue link: `approved` = the topic has an approved version; `draft` /
+// `in_review` = it has a version pending in that state (whatever else it has —
+// a topic with an approved v1 and a draft v2 matches both); `none` = no version
+// at all. The Article column says the same two things per topic: the approved
+// version and the pending one (articleSummaries) — never the newest version's
+// status alone, which would read "rejected" over a live approved article.
 
 export const dynamic = "force-dynamic";
 
@@ -138,9 +143,9 @@ export default async function TopicsPage({
   // count says where the last page is either way.
   if (f.page > pages) redirect(href(pages));
 
-  // Mapping counts and the latest article version for THIS page only (≤
-  // pageSize ids, one grouped query each — never a query per row), plus the
-  // filter facets.
+  // Mapping counts and the article versions for THIS page only (≤ pageSize
+  // ids, one grouped query each — never a query per row), plus the filter
+  // facets.
   const ids = rows.map((r) => r.id);
   const [mapQ, artQ, subjQ, currQ] = await Promise.all([
     ids.length
@@ -156,7 +161,7 @@ export default async function TopicsPage({
   for (const r of (mapQ.data ?? []) as { topic_id: string }[]) {
     mappingCount.set(r.topic_id, (mappingCount.get(r.topic_id) ?? 0) + 1);
   }
-  const latestArticle = latestArticles((artQ.data ?? []) as { topic_id: string; version: number; status: string }[]);
+  const articleSummary = articleSummaries((artQ.data ?? []) as { topic_id: string; version: number; status: string }[]);
   const subjects = [...new Set(((subjQ.data ?? []) as { subject: string | null }[]).map((r) => (r.subject ?? "").trim()).filter(Boolean))].sort();
   const curricula = (currQ.data ?? []) as Curriculum[];
   const grades = [...new Set(curriculumNodes.map((n) => (n.grade ?? "").trim()).filter(Boolean))].sort((a, b) =>
@@ -228,11 +233,17 @@ export default async function TopicsPage({
             </option>
           ))}
         </select>
-        <select name="article" defaultValue={f.article} className="field h-9 px-2" aria-label="Article state" title="Topics with an article version in this state">
+        <select
+          name="article"
+          defaultValue={f.article}
+          className="field h-9 px-2"
+          aria-label="Article state"
+          title="approved: has an approved version · draft / in review: has a version pending in that state · no article: no version at all"
+        >
           <option value="">Any article state</option>
           {ARTICLE_FILTERS.map((s) => (
             <option key={s} value={s}>
-              {s === "none" ? "no article" : `article ${articleStatusLabel(s)}`}
+              {s === "none" ? "no article" : s === "approved" ? "article approved" : `article ${articleStatusLabel(s)} pending`}
             </option>
           ))}
         </select>
@@ -319,13 +330,31 @@ export default async function TopicsPage({
                   </td>
                   <td className="px-4 py-2.5">
                     {(() => {
-                      const latest = latestArticle.get(t.id);
-                      return latest ? (
-                        <span title={`Latest version: v${latest.version}`}>
-                          <ArticleStatusChip status={latest.status} />
+                      // Two facts: the approved (live) version and the newest
+                      // pending one. A rejected or superseded version never
+                      // stands in for either; "none" means no version at all.
+                      const s = articleSummary.get(t.id);
+                      if (!s) return <span className="chip bg-[#F4F6F3] text-[#98A0A9]">none</span>;
+                      if (!s.approved && !s.pending && s.latest) {
+                        return (
+                          <span title={`Newest version: v${s.latest.version} (${articleStatusLabel(s.latest.status)}); no approved or pending version`}>
+                            <ArticleStatusChip status={s.latest.status} label={`v${s.latest.version} ${articleStatusLabel(s.latest.status)}`} />
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="inline-flex flex-wrap items-center gap-1">
+                          {s.approved && (
+                            <span title={`v${s.approved.version} is the approved version — kits are generated from it`}>
+                              <ArticleStatusChip status="approved" label={`approved v${s.approved.version}`} />
+                            </span>
+                          )}
+                          {s.pending && (
+                            <span title={`v${s.pending.version} is ${s.pending.status === "draft" ? "a draft awaiting submission" : "in review"}`}>
+                              <ArticleStatusChip status={s.pending.status} label={`v${s.pending.version} ${s.pending.status === "draft" ? "draft pending" : "in review"}`} />
+                            </span>
+                          )}
                         </span>
-                      ) : (
-                        <span className="chip bg-[#F4F6F3] text-[#98A0A9]">none</span>
                       );
                     })()}
                   </td>

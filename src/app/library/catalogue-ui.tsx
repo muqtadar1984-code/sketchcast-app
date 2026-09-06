@@ -31,10 +31,12 @@ export function MaturityChip({ maturity }: { maturity: BankMaturity | string | n
   );
 }
 
-/** A knowledge-article version's status (0112 topic_articles.status). */
-export function ArticleStatusChip({ status }: { status: ArticleStatus | string }) {
+/** A knowledge-article version's status (0112 topic_articles.status). `label`
+ *  replaces the bare status text (the topics list says "approved v2"); the
+ *  tone still follows the status. */
+export function ArticleStatusChip({ status, label }: { status: ArticleStatus | string; label?: string }) {
   const tone = ARTICLE_STATUS_TONE[status as ArticleStatus] ?? "bg-[#EEF0EC] text-[#5B6470]";
-  return <span className={`chip ${tone}`}>{articleStatusLabel(status)}</span>;
+  return <span className={`chip ${tone}`}>{label ?? articleStatusLabel(status)}</span>;
 }
 
 /** A figure's render state (article_figures.status). */
