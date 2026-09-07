@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
-import { demoSchoolIds } from "@/utils/demo";
+import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
+import { staffUserIds } from "@/utils/platform-admin";
 
 // Platform overview — the founder's one-page answer to "how is SketchCast
 // doing and what is it costing?". Server component, service role only; the
@@ -19,13 +20,14 @@ function pct(n: number, d: number): string {
 export default async function ConsoleOverviewPage() {
   const admin = createAdminClient();
 
-  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ] = await Promise.all([
+  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, staffIds] = await Promise.all([
     admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, created_at"),
     admin.from("schools").select("id"),
     admin.from("books").select("id, owner_id, status, created_at"),
     admin.from("generations").select("id, owner_id, kind, status, created_at"),
     admin.from("beta_feedback").select("teacher_id"),
     admin.from("artifact_views").select("teacher_id"),
+    staffUserIds(admin),
   ]);
 
   // jobs.usage only exists once migration 0013 is applied — degrade to the
@@ -48,13 +50,17 @@ export default async function ConsoleOverviewPage() {
   const allGens = (gensQ.data ?? []) as { id: string; owner_id: string; kind: string | null; status: string; created_at: string }[];
   const allJobs = (jobsQ.data ?? []) as { id: string; generation_id: string | null; book_id: string | null; type: string | null; status: string; error: string | null; usage: { cost_usd?: number } | null; created_at: string }[];
 
-  // Every metric on this page counts REAL usage only: demo tenants
-  // (profiles.is_demo, migration 0081) are seeded sales props, and their
-  // pre-canned books/generations/jobs would drown the actual numbers.
-  const demoIds = new Set(allProfiles.filter((p) => p.is_demo === true).map((p) => p.id));
-  const profiles = allProfiles.filter((p) => !demoIds.has(p.id));
-  const books = allBooks.filter((b) => !demoIds.has(b.owner_id));
-  const gens = allGens.filter((g) => !demoIds.has(g.owner_id));
+  // Every metric on this page counts REAL usage only. Two kinds of account are
+  // not a customer: demo tenants (profiles.is_demo, migration 0081), whose
+  // pre-canned books and generations would drown the actual numbers, and
+  // SketchCast's OWN accounts (platform_admins — the founder, Sara, the
+  // catalogue system account), whose testing and whose catalogue kits are not
+  // usage either (founder, 2026-09-07: "them being in the list of users skews
+  // the results").
+  const excludedIds = metricsExcludedIds(allProfiles, staffIds);
+  const profiles = allProfiles.filter((p) => !excludedIds.has(p.id));
+  const books = allBooks.filter((b) => !excludedIds.has(b.owner_id));
+  const gens = allGens.filter((g) => !excludedIds.has(g.owner_id));
   // Jobs carry no owner — attribute through their generation/book. Rows that
   // resolve to neither are kept (fail open, like the rest of this page).
   const genOwner = new Map(allGens.map((g) => [g.id, g.owner_id]));
@@ -63,7 +69,7 @@ export default async function ConsoleOverviewPage() {
     const owner =
       (j.generation_id ? genOwner.get(j.generation_id) : undefined) ??
       (j.book_id ? bookOwner.get(j.book_id) : undefined);
-    return owner === undefined || !demoIds.has(owner);
+    return owner === undefined || !excludedIds.has(owner);
   });
   // A school whose known members are ALL demo accounts is a seeded demo tenant.
   const demoSchools = demoSchoolIds(allProfiles);
@@ -135,9 +141,9 @@ export default async function ConsoleOverviewPage() {
   const bookOwners = new Set(books.map((b) => b.owner_id));
   const doneOwners = new Set(gens.filter((g) => g.status === "done").map((g) => g.owner_id));
   const viewers = new Set(
-    ((viewsQ.data ?? []) as { teacher_id: string }[]).map((v) => v.teacher_id).filter((id) => !demoIds.has(id)),
+    ((viewsQ.data ?? []) as { teacher_id: string }[]).map((v) => v.teacher_id).filter((id) => !excludedIds.has(id)),
   );
-  const feedbackCount = ((feedbackQ.data ?? []) as { teacher_id: string }[]).filter((f) => !demoIds.has(f.teacher_id)).length;
+  const feedbackCount = ((feedbackQ.data ?? []) as { teacher_id: string }[]).filter((f) => !excludedIds.has(f.teacher_id)).length;
 
   const metrics: Metric[] = [
     { label: "Schools", value: schoolCount },
@@ -173,7 +179,7 @@ export default async function ConsoleOverviewPage() {
     <main className="max-w-7xl mx-auto px-6 py-10">
       <h1 className="text-4xl mb-2">Overview</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
-      <p className="text-xs text-[#98A0A9] mb-7">Excludes demo accounts.</p>
+      <p className="text-xs text-[#98A0A9] mb-7">Excludes demo accounts and SketchCast staff.</p>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
         {metrics.map((m) => (

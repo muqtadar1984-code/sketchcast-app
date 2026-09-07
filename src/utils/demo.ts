@@ -75,6 +75,24 @@ export function partitionRoster<T extends { id: string; is_demo?: boolean | null
 }
 
 /**
+ * The accounts every console metric leaves out: seeded demo tenants
+ * (`profiles.is_demo`) and SketchCast's own staff (`staffIds`, from
+ * `platform_admins` — see `staffUserIds`). Neither is a customer, so neither
+ * one's books, generations, jobs or signups are usage.
+ *
+ * One function so the Overview and the Financials page cannot drift apart on
+ * what "real" means, and so the rule is testable without a database.
+ */
+export function metricsExcludedIds(
+  profiles: { id: string; is_demo?: boolean | null }[],
+  staffIds: Iterable<string> = [],
+): Set<string> {
+  const out = new Set<string>(staffIds);
+  for (const p of profiles) if (p.is_demo === true) out.add(p.id);
+  return out;
+}
+
+/**
  * Schools whose known members are ALL demo accounts (and that have at least one
  * member) — i.e. the seeded demo tenants. A school with no member profiles is
  * treated as real: we cannot tell, and losing a genuinely empty school from the

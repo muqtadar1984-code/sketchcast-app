@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { SHARED_DEMO_PASSWORD, demoAccountPassword, partitionByDemo, partitionRoster, demoSchoolIds } from "../demo";
+import {
+  SHARED_DEMO_PASSWORD,
+  demoAccountPassword,
+  demoSchoolIds,
+  metricsExcludedIds,
+  partitionByDemo,
+  partitionRoster,
+} from "../demo";
 
 describe("demoAccountPassword — what the console's Password column shows", () => {
   it("seed-school.ts tenant adults (@{slug}.sketchcast.app subdomains) get the shared demo password", () => {
@@ -102,6 +109,38 @@ describe("partitionRoster — the Users / Staff / Demo tabs", () => {
 
   it("preserves the incoming order inside every bucket and yields three empty lists for no rows", () => {
     expect(partitionRoster([], isStaff)).toEqual({ real: [], demo: [], staff: [] });
+  });
+});
+
+describe("metricsExcludedIds — who the Overview and Financials pages leave out", () => {
+  const rows = [
+    { id: "teacher", is_demo: false },
+    { id: "parent", is_demo: null },
+    { id: "seeded", is_demo: true },
+    { id: "founder", is_demo: false },
+    { id: "catalogue" },
+  ];
+
+  it("leaves out demo accounts and staff, and nobody else", () => {
+    const out = metricsExcludedIds(rows, ["founder", "catalogue"]);
+    expect([...out].sort()).toEqual(["catalogue", "founder", "seeded"]);
+    expect(out.has("teacher")).toBe(false);
+    expect(out.has("parent")).toBe(false);
+  });
+
+  it("with no staff ids it is exactly the demo rule the pages had before", () => {
+    expect([...metricsExcludedIds(rows)]).toEqual(["seeded"]);
+  });
+
+  it("counts an account that is both only once, and a staff id with no profile still counts", () => {
+    // A staff row whose profile the page's select missed must still be
+    // excluded — the set is the authority, not the profile list.
+    const out = metricsExcludedIds([{ id: "seeded", is_demo: true }], ["seeded", "ghost"]);
+    expect([...out].sort()).toEqual(["ghost", "seeded"]);
+  });
+
+  it("an empty platform (no profiles, no staff) excludes nothing", () => {
+    expect([...metricsExcludedIds([], [])]).toEqual([]);
   });
 });
 

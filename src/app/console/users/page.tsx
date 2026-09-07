@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 import { demoAccountPassword, partitionRoster } from "@/utils/demo";
-import { founderEmails } from "@/utils/platform-admin";
+import { founderEmails, staffUserIds } from "@/utils/platform-admin";
 import { aggregateUserStats, languageSummary, EMPTY_USER_STATS } from "@/utils/console-user-stats";
 import {
   deriveFeedbackState,
@@ -82,8 +82,10 @@ export default async function ConsoleUsersPage({
   }
   // Staff = membership (an unrevoked platform_admins row) or the founder
   // allow-list — the detail page's isStaffTarget rule, applied to the roster.
-  const { data: adminRows } = await admin.from("platform_admins").select("user_id").is("revoked_at", null);
-  const staffIds = new Set((adminRows ?? []).map((r) => r.user_id as string));
+  // staffUserIds is the same call the metric pages make, so the Staff tab and
+  // the numbers on Overview / Financials can only ever name the same accounts;
+  // the allow-list is added HERE alone because only this page loads e-mails.
+  const staffIds = await staffUserIds(admin);
   const founders = new Set(founderEmails().map((e) => e.toLowerCase()));
   const { real, demo, staff } = partitionRoster(
     (profRaw ?? []) as Prof[],
