@@ -428,6 +428,32 @@ export function catalogueGenerateEnabled(): boolean {
   return process.env.FEATURE_CATALOGUE_GENERATE === "true";
 }
 
+/**
+ * Phase 4 of the topic catalogue: publishing an APPROVED kit to YouTube. The
+ * portal's Publish action enqueues one `topic_publish` observer job per kit
+ * (0116's jobs_one_live_publish is the database's rule) and the worker uploads
+ * every video part, writing a topic_publications row each.
+ *
+ * OFF by default and DARK on purpose, not merely unfinished: as of 2026-09-07
+ * the channel does not exist, the API project has not passed the YouTube
+ * compliance audit and the OAuth consent has not been run, so there is nothing
+ * to upload TO. While it is off the publish route answers 409 with that
+ * sentence and the kit panel's Publish block shows the state with the button
+ * disabled and the reason under it — the reviewer can still read exactly what
+ * would be posted (title, description, timestamps). An unaudited project can
+ * only create PRIVATE videos, which is why the route refuses any other privacy
+ * regardless of this flag (utils/catalogue/publish.ts publishPrivacyAccepts):
+ * flipping this variable must not be able to put a video in front of the
+ * public before a human has flipped the privacy deliberately.
+ *
+ * Every credential (YOUTUBE_CLIENT_ID / _SECRET, the per-language refresh
+ * tokens) lives in the WORKER's environment and never in this app or the
+ * database, so this flag is the app's whole share of the lock.
+ */
+export function cataloguePublishEnabled(): boolean {
+  return process.env.FEATURE_CATALOGUE_PUBLISH === "true";
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**

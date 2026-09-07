@@ -77,6 +77,20 @@
  *      the kit route's four writes, compose, and the questions job (model
  *      calls) — while editing items stays edit_article; LibraryAction's
  *      comment and the routes agree.
+ *  12. Phase 4 (the publish): the publish route asks for the `publish` action,
+ *      which libraryAllows grants to ADMINS ONLY (plan §7.1 — an outside
+ *      reviewer may approve a video and must not be able to put it on the
+ *      company's channel), BEFORE it opens a client; a kit id is reachable
+ *      only through its topic; it enqueues ONE `topic_publish` observer job
+ *      and writes nothing else — no `generations` (no model call), no
+ *      `topic_publications` (the worker owns those), and never
+ *      topic_kits.status (gate 2 is the kit's approved status, which 0115's
+ *      RPC owns); the four refusals run before the insert through the pure
+ *      canPublish(); only `private` is queueable while the API project is
+ *      unaudited; FEATURE_CATALOGUE_PUBLISH is the dark lock and is answered
+ *      as a 409; the live-job pre-check is keyed like 0116's index and its
+ *      23505 is the same 409; the enqueue is audited library_publish on the
+ *      topic — only when a job was actually inserted.
  *
  * A2's Phase 3 routes (questions, compose, blueprints) are listed by name and
  * asserted when present: the rules below are exact once the files exist and
@@ -124,11 +138,13 @@ const text = (name: string) => source.get(files.find((f) => rel(f) === name)!)!;
 
 const KIT = "topics/[id]/kit/route.ts";
 const KIT_QUESTIONS_JOB = "topics/[id]/kit/questions-job.ts";
+const KIT_CANCEL_JOB = "topics/[id]/kit/cancel-job.ts";
 const COMPOSE = "topics/[id]/compose/route.ts";
 const QUESTIONS = "topics/[id]/questions/route.ts";
+const PUBLISH = "topics/[id]/publish/route.ts";
 
 describe("the /api/library routes exist and are scanned", () => {
-  it("has the Phase 1 + 2a + 2b + 3 routes", () => {
+  it("has the Phase 1 + 2a + 2b + 3 + 4 routes", () => {
     const names = routes.map(rel).sort();
     expect(names).toEqual(
       [
@@ -140,13 +156,16 @@ describe("the /api/library routes exist and are scanned", () => {
         "harvest/route.ts",
         "topics/[id]/article/route.ts",
         KIT,
+        PUBLISH,
         "topics/[id]/route.ts",
         "topics/route.ts",
         ...present(A2_ROUTES),
       ].sort(),
     );
-    // the kit's bank-job helper is the one non-route, non-lib file
-    expect(files.map(rel).filter((n) => !/[\\/]route\.ts$/.test(n) && n !== "lib.ts")).toEqual([KIT_QUESTIONS_JOB]);
+    // the kit's two `jobs` helpers (enqueue the bank job; cancel an orphaned
+    // retry's job) are the only non-route, non-lib files — the route itself
+    // never touches `jobs`
+    expect(files.map(rel).filter((n) => !/[\\/]route\.ts$/.test(n) && n !== "lib.ts").sort()).toEqual([KIT_CANCEL_JOB, KIT_QUESTIONS_JOB].sort());
   });
 });
 
@@ -222,10 +241,10 @@ describe("every /api/library route", () => {
     }
   });
 
-  it("inserts into `jobs` from exactly the harvest, derive, article and questions routes plus the kit's bank-job helper, and nowhere else", () => {
+  it("inserts into `jobs` from exactly the harvest, derive, article, questions and publish routes plus the kit's bank-job helper, and nowhere else", () => {
     const jobInsert = /\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/;
     const inserters = [...source].filter(([, text]) => jobInsert.test(text)).map(([f]) => rel(f)).sort();
-    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts", "topics/[id]/article/route.ts", KIT_QUESTIONS_JOB, ...present([QUESTIONS])].sort());
+    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts", "topics/[id]/article/route.ts", KIT_QUESTIONS_JOB, PUBLISH, ...present([QUESTIONS])].sort());
     // The kit's bank job (0115 jobs_one_live_questions) is an observer too: no
     // generation, no book, its input in params; the live check is keyed like
     // the index and runs BEFORE the insert; its 23505 is "the bank job already
@@ -811,8 +830,29 @@ describe("the kit route (Phase 3): /api/library/topics/[id]/kit", () => {
     expect(retry).not.toMatch(/docGenerationIdsWith\(/);
     expect(retry).not.toMatch(/doc_generation_ids:/);
     expect(retry).not.toMatch(/presentation_generation_id:/);
-    // a refused repoint is audited with both ids (the new row is queued but unreferenced)
-    expect(retry).toMatch(/audit\(admin,\s*m\.id,\s*"kit_retry_unpointed",\s*"topic",\s*id/);
+    // a refused repoint does not leave an orphan to build: the new row's job
+    // is taken out of the queue (the cancel-job helper — the route itself
+    // never touches `jobs`; guarded on queued, read back), then the
+    // generation marked error, BEFORE the audit row — and the lock on the
+    // failed row is released only when the cancel landed (a claimed job
+    // cannot be recalled; unlocking then would let a second Retry double-build)
+    expect(t()).toMatch(/import\s*\{\s*cancelQueuedJob\s*\}\s*from\s*["']\.\/cancel-job["']/);
+    const helper = text(KIT_CANCEL_JOB);
+    expect(helper).toMatch(/\.from\(\s*["']jobs["']\s*\)\s*\.update\(\s*\{\s*status:\s*["']error["'],\s*error:[\s\S]*?\}\s*\)\s*\.eq\(\s*["']generation_id["']\s*,\s*generationId\s*\)\s*\.eq\(\s*["']status["']\s*,\s*["']queued["']\s*\)\s*\.select\(\s*["']id["']\s*\)/);
+    expect(helper).not.toMatch(/\.insert\(/);
+    expect(helper).not.toMatch(/\.from\(\s*["']generations["']\s*\)/);
+    const afterRepoint = retry.slice(repoint);
+    const cancelJob = afterRepoint.search(/const\s*\{\s*cancelled\s*\}\s*=\s*await\s+cancelQueuedJob\(admin,\s*newId,/);
+    const cancelGen = afterRepoint.search(/\.from\(\s*["']generations["']\s*\)\.update\(\s*\{\s*status:\s*["']error["']\s*\}\s*\)\.eq\(\s*["']id["']\s*,\s*newId\s*\)\.eq\(\s*["']status["']\s*,\s*["']queued["']\s*\)/);
+    const unpointed = afterRepoint.search(/audit\(admin,\s*m\.id,\s*"kit_retry_unpointed",\s*"topic",\s*id/);
+    expect(cancelJob).toBeGreaterThan(-1);
+    expect(cancelGen).toBeGreaterThan(cancelJob);
+    expect(unpointed).toBeGreaterThan(cancelGen);
+    expect(afterRepoint.slice(cancelJob, unpointed)).toMatch(/if\s*\(\s*cancelled\s*\)\s*\{[\s\S]*?await unlock\(\)/);
+    // the audit row and the 409 both say whether the orphan was cancelled
+    expect(afterRepoint.slice(unpointed, afterRepoint.indexOf(";", unpointed))).toMatch(/\bcancelled,/);
+    expect(afterRepoint).toMatch(/generationId:\s*newId,\s*cancelled\s*\}/);
+    // the success path is audited with both ids too
     expect(retry).toMatch(/audit\(admin,\s*m\.id,\s*"kit_retry",\s*"topic",\s*id/);
   });
 
@@ -876,5 +916,116 @@ describe("the kit route (Phase 3): /api/library/topics/[id]/kit", () => {
     // the route itself never inserts a job: the bank job is the helper's
     expect(src).not.toMatch(/\.from\(\s*["']jobs["']\s*\)/);
     expect(src).toMatch(/import\s*\{\s*enqueueQuestionsJob\s*\}\s*from\s*["']\.\/questions-job["']/);
+  });
+});
+
+describe("the publish route (Phase 4): /api/library/topics/[id]/publish", () => {
+  const t = () => text(PUBLISH);
+
+  it("is ADMIN ONLY: both actions ask for `publish`, which libraryAllows grants to admins alone — checked before a client is opened", () => {
+    const src = t();
+    for (const a of ["publish", "retry"]) {
+      expect(src, a).toMatch(new RegExp(`${a}:\\s*"publish"`));
+    }
+    const check = src.search(/if\s*\(\s*!libraryAllows\(m\.role,\s*NEEDS\[action\]\)\s*\)\s*return\s+notFound\(\)/);
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(src.indexOf("createAdminClient()"));
+    // it asks the guard ONCE, and never for a weaker action: a `generate` or
+    // `approve` role must not be able to reach the channel
+    expect((src.match(/libraryAllows\(/g) ?? []).length).toBe(1);
+    expect(src).not.toMatch(/libraryAllows\(m\.role,\s*["'](curate|edit_article|approve|generate)["']\)/);
+    // …and the routing module still grants `publish` to admin only
+    const routing = readFileSync(resolve(__dirname, "..", "library-routing.ts"), "utf8");
+    const allowed = routing.slice(routing.indexOf("const ALLOWED"), routing.indexOf("export function libraryAllows"));
+    expect(allowed.match(/"publish"/g) ?? []).toHaveLength(1);
+    expect(allowed).toMatch(/admin:\s*new Set<LibraryAction>\(\[[^\]]*"publish"/);
+    // a kit id is only reachable through its own topic
+    expect(src).toMatch(/\.from\(\s*["']topic_kits["']\s*\)\s*\.select\(KIT_COLUMNS\)\s*\.eq\(\s*["']id["']\s*,\s*kitId\s*\)\s*\.eq\(\s*["']topic_id["']\s*,\s*id\s*\)/);
+  });
+
+  it("writes ONE row — the job — and nothing else: no generations, no topic_publications, never a kit status", () => {
+    const src = t();
+    // the only insert in the file is the job
+    const inserts = [...src.matchAll(/\.from\(\s*["']([a-z_]+)["']\s*\)\s*\.insert\(/g)].map((m) => m[1]);
+    expect(inserts).toEqual(["jobs"]);
+    // no update / upsert / delete anywhere
+    expect(src).not.toMatch(/\.(update|upsert|delete)\(/);
+    // the tables it touches, all read-only
+    expect(src).not.toMatch(/\.from\(\s*["']generations["']\s*\)/);
+    expect(src).toMatch(/\.from\(\s*["']topic_publications["']\s*\)\s*\.select\(/);
+    // gate 2 is the kit's approved status: this route reads it, never writes it
+    expect(src).not.toMatch(/status:\s*["'](approved|rejected|in_review|generating)["']/);
+  });
+
+  it("the observer job carries its input in params, with no generation and no book", () => {
+    const src = t();
+    expect(src).toMatch(/const\s+PUBLISH_JOB_TYPE\s*=\s*["']topic_publish["']/);
+    const payload = src.slice(src.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/));
+    expect(payload).toMatch(/type:\s*PUBLISH_JOB_TYPE/);
+    expect(payload).toMatch(/params:\s*\{\s*kit_id:\s*kit\.id,\s*topic_id:\s*id,\s*language:\s*LANGUAGE,\s*privacy\s*\}/);
+    expect(payload).toMatch(/generation_id:\s*null/);
+    expect(payload).toMatch(/book_id:\s*null/);
+    expect(payload).toMatch(/status:\s*["']queued["']/);
+  });
+
+  it("runs the four refusals, the privacy rule and the dark flag BEFORE the insert", () => {
+    const src = t();
+    const insert = src.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/);
+    expect(insert).toBeGreaterThan(-1);
+    // the four refusals come from the pure module, so the panel, this 409 and
+    // the worker say one sentence
+    const gate = src.indexOf("canPublish(kit.status, topic.status");
+    expect(gate).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(insert);
+    expect(src.slice(gate, insert)).toMatch(/return\s+conflict\(accepts\.why/);
+    // the kit's own article is read by kit.article_id for the third refusal
+    expect(src).toMatch(/\.from\(\s*["']topic_articles["']\s*\)\s*\.select\([^)]*\)\s*\.eq\(\s*["']id["']\s*,\s*kit\.article_id\s*\)/);
+    // private only, whatever the flag says
+    const priv = src.indexOf("publishPrivacyAccepts(privacy)");
+    expect(priv).toBeGreaterThan(-1);
+    expect(priv).toBeLessThan(insert);
+    expect(src).toMatch(/if\s*\(\s*!isPrivacy\(raw\)\s*\)\s*return\s+bad\(/);
+    // nothing to do is a 409, not a job
+    const queue = src.indexOf("canQueuePublish(action, summary)");
+    expect(queue).toBeGreaterThan(-1);
+    expect(queue).toBeLessThan(insert);
+    // the dark lock is answered as a plain 409 — and AFTER the refusals, so
+    // the operator reads the real blocker rather than the flag
+    const flag = src.indexOf("cataloguePublishEnabled()");
+    expect(flag).toBeGreaterThan(queue);
+    expect(flag).toBeLessThan(insert);
+    expect(src.slice(flag, insert)).toMatch(/return\s+conflict\(/);
+    expect(src).toMatch(/FEATURE_CATALOGUE_PUBLISH/);
+  });
+
+  it("checks for a live publish job BEFORE inserting, keyed like 0116's index, and reads a 23505 back the same way", () => {
+    const src = t();
+    const check = src.indexOf('.in("status", ["queued", "processing"])');
+    const insert = src.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/);
+    expect(check).toBeGreaterThan(-1);
+    expect(insert).toBeGreaterThan(check);
+    // jobs_one_live_publish: (params->>'kit_id')
+    expect(src).toMatch(/\.eq\(\s*["']params->>kit_id["']\s*,\s*kit\.id\s*\)/);
+    expect(src).toMatch(/jErr\.code\s*===\s*["']23505["']/);
+    const race = src.slice(src.indexOf('jErr.code === "23505"'));
+    expect(race.indexOf("conflict(")).toBeGreaterThan(-1);
+    expect(race.indexOf("conflict(")).toBeLessThan(race.indexOf("dbError("));
+  });
+
+  it("audits library_publish on the topic — only after a job was actually inserted", () => {
+    const src = t();
+    expect(src).toMatch(/audit\(admin,\s*m\.id,\s*"publish",\s*"topic",\s*id/);
+    const insert = src.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/);
+    expect(src.indexOf("audit(admin, m.id, \"publish\"")).toBeGreaterThan(insert);
+    // every refusal above returns before it, so nothing is audited for a
+    // publish that did not happen
+    expect((src.match(/\baudit\(/g) ?? []).length).toBe(1);
+    // the audit row carries what the channel already held, so a partial
+    // publish can be read back from the trail
+    const detail = src.slice(src.indexOf("audit(admin, m.id, \"publish\""));
+    expect(detail).toMatch(/kit_id:\s*kit\.id/);
+    expect(detail).toMatch(/job_id:\s*job\.id/);
+    expect(detail).toMatch(/privacy,/);
+    expect(detail).toMatch(/already_published:/);
   });
 });

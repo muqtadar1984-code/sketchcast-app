@@ -31,6 +31,7 @@ import {
 import type { PartPlanRow, TeacherAvatar, TopicKit } from "@/utils/catalogue/types";
 import { audit, bad, conflict, dbError, notFound, readJson, text, uuid } from "../../../lib";
 import { enqueueQuestionsJob } from "./questions-job";
+import { cancelQueuedJob } from "./cancel-job";
 
 export const runtime = "nodejs";
 
@@ -71,7 +72,10 @@ export const runtime = "nodejs";
 //                  replace of doc_generation_ids read at the top of the
 //                  request, so the worker merging its lesson_plan id in
 //                  between cannot be lost; and a compare-and-swap on the id
-//                  being replaced.
+//                  being replaced. A refused repoint does not leave an orphan
+//                  to build: the new row's job is cancelled while still
+//                  queued, the generation marked error, the failed row
+//                  unlocked for another Retry (audited kit_retry_unpointed).
 //     regenerate   {kitId}            a NEW kit (old one kept as history,
 //                  source_kit_id = old) from an in-review or rejected kit,
 //                  with the old kit's teacher avatar; topic in_review →
@@ -441,12 +445,31 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     // both ids so the operator can see what to regenerate.
     const { error: pErr } = await admin.rpc("repoint_kit_generation", { p_kit: kit.id, p_kind: kind, p_generation: newId, p_replaces: old.id });
     if (pErr) {
-      await audit(admin, m.id, "kit_retry_unpointed", "topic", id, { kit_id: kit.id, kind, replaced_generation_id: old.id, generation_id: newId, error: pErr.message ?? pErr.code ?? "unknown" });
+      // The RPC raised, so its transaction rolled back: the new row is queued
+      // and NOTHING points at it. Built, it would be an orphan — for a
+      // presentation a whole video's worth of Vertex image calls no kit ever
+      // shows. Its job is taken out of the queue BEFORE the worker claims it
+      // (guarded on queued, read back — the catalogue lane runs off-peak with
+      // no builder live, so the job normally sits for hours), the generation
+      // is marked error, and the lock on the failed row is released so the
+      // operator can Retry again once the kit is back to generating. A job
+      // the worker already claimed cannot be recalled: then the lock STAYS (a
+      // second Retry would double-build) and the audit row carries both ids
+      // so the operator can see what to regenerate.
+      const why = pErr.message ?? pErr.code ?? "unknown";
+      const { cancelled } = await cancelQueuedJob(admin, newId, `the kit could not be repointed (${why})`);
+      if (cancelled) {
+        await admin.from("generations").update({ status: "error" }).eq("id", newId).eq("status", "queued");
+        await unlock();
+      }
+      await audit(admin, m.id, "kit_retry_unpointed", "topic", id, { kit_id: kit.id, kind, replaced_generation_id: old.id, generation_id: newId, cancelled, error: why });
       if (RPC_REFUSALS.has(pErr.code ?? "")) {
-        return conflict(`The ${statusLabel(kind)} was queued again, but the kit's pointer moved meanwhile and was left alone: ${pErr.message ?? "check_violation"}. Reload; regenerate the kit if the new piece is not listed.`, {
-          code: pErr.code ?? null,
-          generationId: newId,
-        });
+        return conflict(
+          cancelled
+            ? `The kit moved while the ${statusLabel(kind)} was being queued (${why}) — the new piece was cancelled before anything was built. Reload, then retry.`
+            : `The ${statusLabel(kind)} was queued again, but the kit's pointer moved meanwhile and the worker had already claimed the new piece (${why}) — it builds unreferenced. Reload; regenerate the kit if it is not listed.`,
+          { code: pErr.code ?? null, generationId: newId, cancelled },
+        );
       }
       return dbError(pErr);
     }
