@@ -225,7 +225,15 @@ the RPC **`repoint_kit_generation(p_kit, p_kind, p_generation, p_replaces)`** �
 `jsonb ||` merge on a `generating` kit with a compare-and-swap on the id being replaced,
 so the `lesson_plan` id the worker merges in meanwhile (`insert_lesson_plan`) survives
 and a pointer somebody else moved is reported (audited `library_kit_retry_unpointed`),
-never overwritten. The 0115 trigger `create_job_for_generation()` copies `{catalogue:
+never overwritten — and the row queued behind a refused repoint is **cancelled** rather
+than left to build as an orphan: its job is taken out of the queue while still `queued`
+(the catalogue lane runs off-peak with no builder live, so it normally sits for hours),
+the generation is marked `error`, and the failed row's lock is released so Retry can be
+tried again once the kit is back to `generating`; a job the worker had already claimed
+cannot be recalled — it builds unreferenced and the audit row says so (`cancelled:
+false`). The worker's own pointer write in `insert_lesson_plan` is still a
+read-modify-write; the RPC is there for it to call (a follow-up in the worker repo).
+The 0115 trigger `create_job_for_generation()` copies `{catalogue:
 true, topic_id, kit_id, question_set_id}` into `jobs.params`, which is how the worker
 keeps catalogue jobs out of the user lanes and builds them only in its **off-peak
 window** when no teacher's builder is live (never-starve, decision 12).
@@ -262,8 +270,76 @@ before any model call).
 | Screen | What it shows | Actions | Who |
 |---|---|---|---|
 | `/library` | Two more **review queues**: *Kits awaiting review* (`topic_kits.status = in_review`, → `/library/topics?status=in_review`) and *Question items awaiting review* (`topic_questions.status = draft`); a **Blueprints** door | — | any member |
-| `/library/topics/[id]` — **Kit panel** | **Generate kit** (teacher avatar radio, default alternating; disabled with the reason when the flag is off, the owner is unset, a kit is generating, the topic is not `article_approved` or the English article is not approved — `kitAcceptsGenerate`), the **current kit**: status chip (`rejected · <reason>`), teacher and the two voice ids, progress (`kitProgress`: "3/6 done · 1 failed"), reviewer + date, review notes; **one row per piece** in kit order (kind label, generation status, the latest **builder** job's progress / stage / error — an observer job pointing at the generation is not the build), documents as signed download links (`docDownloadName`), the **video parts inline** (`<video controls>`, signed for an hour, ordered by extracted part number — `sortVideoArtifacts`, never by path string), each with its **chapter timestamps**; the **part plan**; the **clip list** (view; **Edit clips** for `generate` roles on an `in_review` / `approved` / `rejected` / `failed` kit — mm:ss inside a known part, 30 s–10 min, label ≤ 80, `validateClips` in the browser first); **Retry** next to a failed piece; **Regenerate kit**; **Approve video / Reject** (reason select + notes) for `approve` roles; **earlier kits** collapsed as history. A missing `part_plan` column (0115 not applied) shows the kits without their plan and says so. The header line gains **Question bank →** (`/library/topics/[id]/questions`) | `POST /api/library/topics/[id]/kit` with `{action}`: **generate** `{teacherAvatar?}` — acceptance, the two locks, one `topic_kits` row, the topic moved `article_approved → generating` by a **guarded UPDATE read back** (the race lock: the loser of two clicks takes its kit row out and answers 409), the five `generations` rows (`kitGenerationRows`), the kit repointed at them, ONE `topic_questions` job (`kit/questions-job.ts`: live pre-check keyed like `jobs_one_live_questions`, a 23505 or a live job = "already runs", not a failure), audited `library_kit_generate`; a failed generations insert marks the kit `failed` with the reason and puts the topic back; once the generations exist a later failure is audited too — the bank job is best-effort (`warning` on the 200, `questions_job_error` in the audit row) and a failed pointer write answers 500 naming the generation ids. **retry** `{kitId, kind}` — the kind's generation must be `error` and not already retried; it is taken exclusively (`params.retried` CAS, 409 when somebody else got there), kit `failed \| generating → generating` guarded and read back, one row with the failed row's whitelisted params (`retryParamsOf`), the pointer through `repoint_kit_generation` (409 + `library_kit_retry_unpointed` when the pointer moved); `library_kit_retry`. **regenerate** `{kitId}` — an `in_review` / `rejected` kit whose article is still the approved one, topic `in_review → generating` guarded, a NEW kit with the old kit's avatar and `source_kit_id`; `library_kit_regenerate`. **save_clips** `{kitId, clips}` — `validateClips` against `part_plan` (400 with every error), guarded write on an editable status; `library_kit_clips_save`. **approve** `{kitId, notes?}` → `kitAcceptsApprove` (kit `in_review`, topic `in_review`, the kit's article still `approved` — else 409 with the reason) then `approve_topic_kit`; **reject** `{kitId, reason, notes}` → `kitAcceptsReject` (kit `in_review \| approved`, topic `in_review \| video_approved`) then `reject_topic_kit` — the RPCs check the same, their refusals are the 409 and they audit themselves. A kit id from another topic is a 404 | read: any member; generate, retry, regenerate, save_clips: **editor, admin** (`generate`); approve, reject: **reviewer, editor, admin** (`approve`) |
+| `/library/topics/[id]` — **Kit panel** | **Generate kit** (teacher avatar radio, default alternating; disabled with the reason when the flag is off, the owner is unset, a kit is generating, the topic is not `article_approved` or the English article is not approved — `kitAcceptsGenerate`), the **current kit**: status chip (`rejected · <reason>`), teacher and the two voice ids, progress (`kitProgress`: "3/6 done · 1 failed"), reviewer + date, review notes; **one row per piece** in kit order (kind label, generation status, the latest **builder** job's progress / stage / error — an observer job pointing at the generation is not the build), documents as signed download links (`docDownloadName`), the **video parts inline** (`<video controls>`, signed for an hour, ordered by extracted part number — `sortVideoArtifacts`, never by path string), each with its **chapter timestamps**; the **part plan**; the **clip list** (view; **Edit clips** for `generate` roles on an `in_review` / `approved` / `rejected` / `failed` kit — mm:ss inside a known part, 30 s–10 min, label ≤ 80, `validateClips` in the browser first); **Retry** next to a failed piece; **Regenerate kit**; **Approve video / Reject** (reason select + notes) for `approve` roles; **earlier kits** collapsed as history. A missing `part_plan` column (0115 not applied) shows the kits without their plan and says so. The header line gains **Question bank →** (`/library/topics/[id]/questions`) | `POST /api/library/topics/[id]/kit` with `{action}`: **generate** `{teacherAvatar?}` — acceptance, the two locks, one `topic_kits` row, the topic moved `article_approved → generating` by a **guarded UPDATE read back** (the race lock: the loser of two clicks takes its kit row out and answers 409), the five `generations` rows (`kitGenerationRows`), the kit repointed at them, ONE `topic_questions` job (`kit/questions-job.ts`: live pre-check keyed like `jobs_one_live_questions`, a 23505 or a live job = "already runs", not a failure), audited `library_kit_generate`; a failed generations insert marks the kit `failed` with the reason and puts the topic back; once the generations exist a later failure is audited too — the bank job is best-effort (`warning` on the 200, `questions_job_error` in the audit row) and a failed pointer write answers 500 naming the generation ids. **retry** `{kitId, kind}` — the kind's generation must be `error` and not already retried; it is taken exclusively (`params.retried` CAS, 409 when somebody else got there), kit `failed \| generating → generating` guarded and read back, one row with the failed row's whitelisted params (`retryParamsOf`), the pointer through `repoint_kit_generation` (409 + `library_kit_retry_unpointed` when the pointer moved — the new row's job is cancelled while still `queued` and the generation marked `error`, so nothing orphaned is built, and the failed row is unlocked for another Retry); `library_kit_retry`. **regenerate** `{kitId}` — an `in_review` / `rejected` kit whose article is still the approved one, topic `in_review → generating` guarded, a NEW kit with the old kit's avatar and `source_kit_id`; `library_kit_regenerate`. **save_clips** `{kitId, clips}` — `validateClips` against `part_plan` (400 with every error), guarded write on an editable status; `library_kit_clips_save`. **approve** `{kitId, notes?}` → `kitAcceptsApprove` (kit `in_review`, topic `in_review`, the kit's article still `approved` — else 409 with the reason) then `approve_topic_kit`; **reject** `{kitId, reason, notes}` → `kitAcceptsReject` (kit `in_review \| approved`, topic `in_review \| video_approved`) then `reject_topic_kit` — the RPCs check the same, their refusals are the 409 and they audit themselves. A kit id from another topic is a 404 | read: any member; generate, retry, regenerate, save_clips: **editor, admin** (`generate`); approve, reject: **reviewer, editor, admin** (`approve`) |
 
 The question bank (`/library/topics/[id]/questions`, `/library/blueprints`, the
 `questions`, `compose` and `blueprints` routes) is documented in `docs/QUESTION-BANK.md`.
-Translate and publish panels arrive with their phases (plan §7.2).
+The translate panel arrives with its phase (plan §7.2).
+
+## Phase 4 — publishing to YouTube (DARK)
+
+**Nothing publishes anything today.** The channel has not been created, the YouTube API
+project has not passed the compliance audit and the OAuth consent has not been run, so
+the whole phase ships behind `FEATURE_CATALOGUE_PUBLISH` (off) — the panel shows the
+state and the description preview with the button disabled and the reason under it. What
+is useful now is exactly that preview: a wrong curriculum code or a broken timestamp list
+is cheap to fix here and public afterwards.
+
+**Publishing is ADMIN ONLY.** `libraryAllows` grants the `publish` action to `admin` and
+to nobody else (plan §7.1): an outside subject reviewer may be trusted to approve a video
+and must not be able to put it on the company's channel. `POST
+/api/library/topics/[id]/publish` asks for that action for BOTH of its actions and
+answers a reviewer or editor with the same 404 a non-member gets.
+
+**The route writes exactly one row: the job.** `{action: 'publish' | 'retry', kitId,
+privacy?}` enqueues ONE `topic_publish` observer job (`generation_id` and `book_id` NULL,
+its input in `jobs.params` — `{kit_id, topic_id, language, privacy}`) and the worker does
+the rest. It inserts no `generations` (the video already exists as the kit's artifact —
+no model call is made), writes no `topic_publications` (only the worker knows what
+YouTube accepted) and never touches `topic_kits.status`: gate 2 is the kit's `approved`
+status, which `approve_topic_kit()` (0115) owns. `publish` and `retry` enqueue the same
+job — the job is idempotent, a part that already holds a `youtube_video_id` is skipped —
+and differ only in what the panel offers: **Publish** before any run has touched a part,
+**Finish publishing** afterwards, so a run stopped by the per-run upload cap
+(`YOUTUBE_MAX_PARTS_PER_RUN`) or a failure is completed rather than restarted.
+
+**Four refusals, enforced twice** (plan §1.3, `utils/catalogue/publish.ts` `canPublish` —
+one function so the panel's disabled button, the route's 409 and the worker's refusal say
+the same sentence): the kit is `approved`; the topic is `video_approved` (or already
+`published`, so a capped run can be finished); the kit's **article is still the approved
+version** (a video built from superseded text is regenerated, not published); and
+`topics.bank_maturity` is not `none` (a published video's description links teachers to
+its worksheet, and a link into an empty bank is worse than no video, plan §1.7). The
+WORKER re-checks all four before its first network call.
+
+**Privacy is `private`, whatever the flag says.** `publishPrivacyAccepts` accepts only
+`private`: an API project that has not passed the compliance audit cannot create an
+unlisted or public video, and the privacy is flipped later by a deliberate step, not by a
+checkbox on the queue form. A non-`private` request is a 409 even with the flag on.
+
+**One live publish per kit.** 0116 adds `jobs_one_live_publish` — a partial unique index
+on `jobs ((params->>'kit_id')) where type = 'topic_publish' and status in ('queued',
+'processing')`. The route pre-checks with the same key and maps the 23505 to the same 409
+naming the live job. This one matters more than its siblings: two concurrent publishes of
+one kit would upload the same part twice to a channel with a ~100 uploads/day quota, and
+a duplicate video cannot be taken back quietly. 0116 adds **nothing else** — no table, no
+RPC, and no credential column: every YouTube credential lives in the worker's
+environment.
+
+The enqueue is audited `library_publish` on the topic, with the kit, the job, the action,
+the privacy and what the channel already held (`already_published`, `already_failed`), so
+a partial publish reads back from the trail. Nothing is audited for a publish that was
+refused.
+
+| Screen | What it shows | Actions | Who |
+|---|---|---|---|
+| `/library/topics/[id]` — **Publish block** (inside the Kit panel, only for an `approved` kit) | The dark note (no channel, no compliance audit, private only); one row per video part — state (`published` / `failed` / `not yet`, decided by the presence of a `youtube_video_id`, so a caption failure never demotes a live video), the YouTube id as a link, the privacy, captions / thumbnail / playlists / date, and the row's error; **what will be posted** — the title (`<Topic>`, or `<Topic> — Part k of N`) and the full description per part: the topic summary, the curriculum header lines the documents carry, the chapter timestamps (posted only when YouTube would read them — three or more marks from `0:00`, else the block is dropped and the panel says why), the next-part pointer and the UTM-tagged sketchcast.app link | `POST /api/library/topics/[id]/publish` `{action: 'publish' \| 'retry', kitId, privacy?}` | read: **any member** (a reviewer who approved the video sees whether it reached the channel); the button: **admin only** (`publish`) |
+
+**Env vars.**
+
+| Where | Variable | Meaning |
+|---|---|---|
+| Vercel (app) | `FEATURE_CATALOGUE_PUBLISH=true` | `cataloguePublishEnabled()` — the app's whole share of the lock. Off ⇒ the publish route answers **409** with the "channel is not created / audit not passed" sentence and the panel disables its button saying the same. Turn it on only after the channel exists, the API project has passed the compliance audit and the worker holds a refresh token. |
+| Railway (worker) | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | The OAuth client of the audited API project. **Never** stored in the database or this repo. |
+| Railway (worker) | `YOUTUBE_REFRESH_TOKEN_<LANG>` | One refresh token per channel / language, minted once by `scripts/youtube_oauth.py` and pasted into Railway by the founder. |
+| Railway (worker) | `YOUTUBE_MAX_PARTS_PER_RUN` | Parts uploaded per publish run (default 5). `captions.insert` costs 400 of the 10,000 daily quota units, so about 7 fully captioned videos fit in a day; what a run left over is reported in its summary and finished by the next **Finish publishing**. |

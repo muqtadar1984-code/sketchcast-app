@@ -269,6 +269,38 @@ export type TopicKit = {
   updated_at: string;
 };
 
+// ── Publications (Phase 4) ───────────────────────────────────────────────────
+// 0112 topic_publications: ONE row per (kit, video part, channel language) —
+// what the worker actually put on YouTube. unique (topic_kit_id, part,
+// channel_language) is the idempotency key: a part that already holds a
+// youtube_video_id is skipped by a re-run, so an interrupted publish is
+// finished rather than double-uploaded.
+
+/** youtube's own status values; only `private` is reachable until the API
+ *  project passes the compliance audit (utils/catalogue/publish.ts). */
+export type PublishPrivacy = "private" | "unlisted" | "public";
+
+export type TopicPublication = {
+  id: string;
+  topic_kit_id: string;
+  /** the video part (lesson.mp4 = 1), matching videoPartOf / part_plan */
+  part: number;
+  channel_language: string;
+  /** null until the upload finished — the presence of an id IS "published" */
+  youtube_video_id: string | null;
+  privacy: PublishPrivacy;
+  playlist_ids: string[];
+  /** the caption tracks uploaded, by language code */
+  captions_uploaded: string[];
+  thumbnail_set: boolean;
+  published_at: string | null;
+  /** why the last attempt failed; a caption failure is recorded here without
+   *  failing the video (the id is still set) */
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** The columns of a kit's generations row the portal reads (status is the
  *  0001 job_status enum: queued | processing | done | error). */
 export type KitGenerationRow = {

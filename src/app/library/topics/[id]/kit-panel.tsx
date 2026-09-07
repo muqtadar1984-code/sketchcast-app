@@ -26,8 +26,22 @@ import {
   validateClips,
   type KitKind,
 } from "@/utils/catalogue/kit";
+import {
+  DEFAULT_PRIVACY,
+  PRIVACY,
+  PRIVACY_LABEL,
+  PUBLISHABLE_PRIVACY,
+  PUBLISH_OFF_NOTE,
+  buildDescriptionPreview,
+  canPublish,
+  canQueuePublish,
+  publicationSummary,
+  publishActionFor,
+  publishPrivacyAccepts,
+  publishTitle,
+} from "@/utils/catalogue/publish";
 import { isLiveJobStatus, stageLabel } from "@/utils/catalogue/status";
-import type { ClipRow, KitGenerationRow, KitRejectReason, TeacherAvatar, TopicKit } from "@/utils/catalogue/types";
+import type { ClipRow, KitGenerationRow, KitRejectReason, PublishPrivacy, TeacherAvatar, TopicKit, TopicPublication } from "@/utils/catalogue/types";
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
 import type { JobRow } from "./article-panel";
 
@@ -41,6 +55,13 @@ import type { JobRow } from "./article-panel";
 // router.refresh() (the article-panel.tsx pattern). `can*` flags and the two
 // env locks come from the server; the route re-checks them, these only decide
 // what renders and what the disabled button says.
+//
+// Phase 4 adds the PUBLISH block, shown only for an approved kit and posting
+// to /api/library/topics/[id]/publish. It is the one block that renders in
+// full for people who cannot use it: publishing is admin-only (plan §7.1), and
+// a reviewer or editor still needs to see what reached the channel. It is also
+// dark — no channel, no compliance audit — so the button is disabled with the
+// reason under it and the description preview is the useful part today.
 
 export type KitArtifactView = {
   kind: string;
@@ -52,9 +73,13 @@ export type KitArtifactView = {
   part: number;
 };
 export type KitGenerationView = { gen: KitGenerationRow; job: JobRow | null; artifacts: KitArtifactView[] };
-export type KitView = { kit: TopicKit; generations: KitGenerationView[] };
+/** `publications` is what reached YouTube for THIS kit (0112
+ *  topic_publications, this language) — empty until Phase 4 runs. */
+export type KitView = { kit: TopicKit; generations: KitGenerationView[]; publications: TopicPublication[] };
 
-type Post = (payload: Record<string, unknown>, label: string) => Promise<Record<string, unknown> | null>;
+/** The kit's actions and the publish action share one busy / error / notice
+ *  surface, so `route` picks which handler the payload goes to. */
+type Post = (payload: Record<string, unknown>, label: string, route?: "kit" | "publish") => Promise<Record<string, unknown> | null>;
 
 function useKitPost(topicId: string) {
   const router = useRouter();
@@ -62,12 +87,12 @@ function useKitPost(topicId: string) {
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const post: Post = async (payload, label) => {
+  const post: Post = async (payload, label, route = "kit") => {
     setBusy(label);
     setError(null);
     setErrors([]);
     setNotice(null);
-    const res = await fetch(`/api/library/topics/${topicId}/kit`, {
+    const res = await fetch(`/api/library/topics/${topicId}/${route}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -110,19 +135,33 @@ const shortId = (id: string | null | undefined) => (id ? id.slice(0, 8) : "—")
 
 export function KitPanel({
   topicId,
+  topicTitle,
+  topicSummary,
   topicStatus,
+  bankMaturity,
+  curriculumHeader,
   articleStatus,
   articleStatuses,
   kits,
   names,
   canGenerate,
   canApprove,
+  canPublish: canPublishRole,
   generateEnabled,
+  publishEnabled,
   ownerConfigured,
   migrationNote,
 }: {
   topicId: string;
+  topicTitle: string;
+  /** topics.summary — the first line of every YouTube description */
+  topicSummary: string | null;
   topicStatus: string;
+  /** topics.bank_maturity — 'none' blocks publishing (canPublish) */
+  bankMaturity: string | null;
+  /** the same header lines the catalogue documents carry, for the description
+   *  preview (curriculumHeaderLines, composed on the server) */
+  curriculumHeader: string[];
   /** the approved English article's status, or null when there is none */
   articleStatus: string | null;
   /** every article version's status by id — a kit whose own article is no
@@ -133,7 +172,10 @@ export function KitPanel({
   names: Record<string, string>;
   canGenerate: boolean;
   canApprove: boolean;
+  /** the `publish` action — admins only (plan §7.1) */
+  canPublish: boolean;
   generateEnabled: boolean;
+  publishEnabled: boolean;
   ownerConfigured: boolean;
   migrationNote: string | null;
 }) {
@@ -206,11 +248,17 @@ export function KitPanel({
         <CurrentKit
           key={current.kit.id}
           view={current}
+          topicTitle={topicTitle}
+          topicSummary={topicSummary}
           topicStatus={topicStatus}
+          bankMaturity={bankMaturity}
+          curriculumHeader={curriculumHeader}
           kitArticleStatus={articleStatuses[current.kit.article_id] ?? null}
           liveKit={liveKit}
           canGenerate={canGenerate}
           canApprove={canApprove}
+          canPublish={canPublishRole}
+          publishEnabled={publishEnabled}
           lockWhy={lockWhy}
           busy={busy}
           post={post}
@@ -259,11 +307,17 @@ export function KitPanel({
 
 function CurrentKit({
   view,
+  topicTitle,
+  topicSummary,
   topicStatus,
+  bankMaturity,
+  curriculumHeader,
   kitArticleStatus,
   liveKit,
   canGenerate,
   canApprove,
+  canPublish: canPublishRole,
+  publishEnabled,
   lockWhy,
   busy,
   post,
@@ -273,12 +327,18 @@ function CurrentKit({
   personName,
 }: {
   view: KitView;
+  topicTitle: string;
+  topicSummary: string | null;
   topicStatus: string;
+  bankMaturity: string | null;
+  curriculumHeader: string[];
   /** the status of THIS kit's article version (null when it is gone) */
   kitArticleStatus: string | null;
   liveKit: boolean;
   canGenerate: boolean;
   canApprove: boolean;
+  canPublish: boolean;
+  publishEnabled: boolean;
   lockWhy: string | null;
   busy: string | null;
   post: Post;
@@ -543,8 +603,245 @@ function CurrentKit({
         </div>
       )}
       {!canApprove && kit.status === "in_review" && <p className="text-xs text-[#9A6400]">Awaiting a reviewer&apos;s approval ({kitStatusLabel(kit.status)}).</p>}
+
+      {/* ── publish (Phase 4) ── */}
+      {kit.status === "approved" && (
+        <PublishBlock
+          kit={kit}
+          publications={view.publications}
+          topicTitle={topicTitle}
+          topicSummary={topicSummary}
+          topicStatus={topicStatus}
+          bankMaturity={bankMaturity}
+          curriculumHeader={curriculumHeader}
+          kitArticleStatus={kitArticleStatus}
+          canPublish={canPublishRole}
+          publishEnabled={publishEnabled}
+          busy={busy}
+          post={post}
+          setNotice={setNotice}
+        />
+      )}
     </div>
   );
+}
+
+// ── Publish (Phase 4) ────────────────────────────────────────────────────────
+// Shown only for an APPROVED kit, and shown to everyone who can see the kit —
+// publishing is admin-only, but a reviewer who approved the video should be
+// able to see whether it reached the channel and read what was posted with it.
+// Reviewers and editors get the state and the preview; only an admin gets the
+// button. Nothing here decides anything the route does not re-decide, and the
+// worker decides a third time (plan §1.3).
+
+function PublishBlock({
+  kit,
+  publications,
+  topicTitle,
+  topicSummary,
+  topicStatus,
+  bankMaturity,
+  curriculumHeader,
+  kitArticleStatus,
+  canPublish: canPublishRole,
+  publishEnabled,
+  busy,
+  post,
+  setNotice,
+}: {
+  kit: TopicKit;
+  publications: TopicPublication[];
+  topicTitle: string;
+  topicSummary: string | null;
+  topicStatus: string;
+  bankMaturity: string | null;
+  curriculumHeader: string[];
+  kitArticleStatus: string | null;
+  canPublish: boolean;
+  publishEnabled: boolean;
+  busy: string | null;
+  post: Post;
+  setNotice: (v: string | null) => void;
+}) {
+  const [privacy, setPrivacy] = useState<PublishPrivacy>(DEFAULT_PRIVACY);
+  const summary = publicationSummary(publications, kit.part_plan.length);
+  const action = publishActionFor(summary);
+  const chapters = chaptersByPart(kit.chapters);
+  // The parts to preview: the plan when the worker has written it, else the
+  // parts that already have a publication row, else one.
+  const partNumbers = summary.parts.length ? summary.parts.map((p) => p.part) : [1];
+
+  // The disabled reason, in the order the route checks it, so the sentence on
+  // the button is the sentence a click would have answered:
+  //   1. the deployment (the flag) — the whole phase is dark
+  //   2. the four refusals (kit, topic, article, bank)
+  //   3. nothing left to do (every part already uploaded / nothing to retry)
+  //   4. the privacy the operator picked
+  const gate = canPublish(kit.status, topicStatus, kitArticleStatus, bankMaturity);
+  const queue = canQueuePublish(action, summary);
+  const priv = publishPrivacyAccepts(privacy);
+  const why = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : !queue.ok ? queue.why : !priv.ok ? priv.why : null;
+
+  const publish = async () => {
+    if (
+      !window.confirm(
+        action === "retry"
+          ? "Finish publishing this kit? Parts already on YouTube are skipped; the rest are uploaded private."
+          : "Publish this kit to YouTube? Every part is uploaded private, with its description, timestamps, captions and thumbnail.",
+      )
+    )
+      return;
+    const r = await post({ action, kitId: kit.id, privacy }, "publish", "publish");
+    if (r) setNotice("Publish queued — the worker uploads the parts in order and records each one.");
+  };
+
+  return (
+    <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-medium">Publish to YouTube</h3>
+        <span className="text-xs text-[#5B6470]">{summary.label}</span>
+      </div>
+      <p className="text-xs text-[#9A6400] bg-[#FFF9EE] rounded-lg px-3 py-2">
+        The channel does not exist yet and the YouTube API project has not passed its compliance audit, so this is switched off. An unaudited project can only create{" "}
+        <span className="font-medium">private</span> videos; the privacy is flipped later, deliberately, once the audit is through.
+      </p>
+
+      {/* what is on the channel */}
+      <div className="overflow-x-auto rounded-lg border border-[#EEF0EC]">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs text-[#5B6470] border-b border-[#EEF0EC]">
+            <tr>
+              <th className="px-3 py-2 font-medium">Part</th>
+              <th className="px-3 py-2 font-medium">State</th>
+              <th className="px-3 py-2 font-medium">Video</th>
+              <th className="px-3 py-2 font-medium">Extras</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#EEF0EC]">
+            {summary.parts.length === 0 ? (
+              <tr>
+                <td className="px-3 py-2 text-xs text-[#98A0A9]" colSpan={4}>
+                  Nothing published yet.{!summary.known && " The part plan is not written, so the number of parts is not known here."}
+                </td>
+              </tr>
+            ) : (
+              summary.parts.map(({ part, row, state }) => (
+                <tr key={part}>
+                  <td className="px-3 py-2">{part}</td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${PUBLICATION_TONE[state]}`}>{PUBLICATION_LABEL[state]}</span>
+                    {row?.error && (
+                      <span className="block text-xs text-[#B3401F] max-w-xs truncate" title={row.error}>
+                        {row.error}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    {row?.youtube_video_id ? (
+                      <a
+                        href={`https://www.youtube.com/watch?v=${row.youtube_video_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs underline text-[#1F5B99] font-mono"
+                      >
+                        {row.youtube_video_id}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-[#98A0A9]">—</span>
+                    )}
+                    {row && <span className="block text-xs text-[#98A0A9]">{row.privacy}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-[#5B6470]">
+                    {row ? (
+                      <>
+                        {row.captions_uploaded?.length ? `captions: ${row.captions_uploaded.join(", ")}` : "no captions"}
+                        {" · "}
+                        {row.thumbnail_set ? "thumbnail set" : "no thumbnail"}
+                        {row.playlist_ids?.length ? ` · ${row.playlist_ids.length} playlist${row.playlist_ids.length === 1 ? "" : "s"}` : ""}
+                        {row.published_at ? ` · ${fmtDate(row.published_at)}` : ""}
+                      </>
+                    ) : (
+                      <span className="text-[#98A0A9]">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* what will be posted */}
+      <details className="rounded-lg border border-[#EEF0EC] p-3">
+        <summary className="text-sm cursor-pointer">
+          What will be posted <span className="text-xs text-[#5B6470]">(title and description per part)</span>
+        </summary>
+        <div className="mt-2 space-y-3">
+          {partNumbers.map((p) => (
+            <div key={p}>
+              <p className="text-sm font-medium">{publishTitle(topicTitle, p, partNumbers.length)}</p>
+              <pre className="mt-1 text-xs text-[#5B6470] whitespace-pre-wrap font-sans">
+                {buildDescriptionPreview({
+                  topicTitle,
+                  summary: topicSummary,
+                  curriculumHeader,
+                  chapters: chapters.get(p) ?? [],
+                  part: p,
+                  parts: partNumbers.length,
+                })}
+              </pre>
+              {(chapters.get(p) ?? []).length > 0 && chapterCountWarning(chapters.get(p)!.length)}
+            </div>
+          ))}
+        </div>
+      </details>
+
+      {canPublishRole ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={privacy}
+            onChange={(e) => setPrivacy(e.target.value as PublishPrivacy)}
+            className="field h-9 px-2 text-sm"
+            aria-label="Privacy"
+            disabled={!!busy}
+          >
+            {PRIVACY.map((p) => (
+              <option key={p} value={p} disabled={!(PUBLISHABLE_PRIVACY as readonly string[]).includes(p)}>
+                {PRIVACY_LABEL[p]}
+                {(PUBLISHABLE_PRIVACY as readonly string[]).includes(p) ? "" : " — needs the compliance audit"}
+              </option>
+            ))}
+          </select>
+          <button type="button" disabled={!!busy || !!why} title={why ?? undefined} onClick={publish} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
+            {busy === "publish" ? "Queuing…" : action === "retry" ? "Finish publishing" : "Publish to YouTube"}
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-[#98A0A9]">Publishing is a platform admin&apos;s action; this is the state and what would be posted.</p>
+      )}
+      {canPublishRole && why && <p className="text-xs text-[#9A6400]">{why}</p>}
+    </div>
+  );
+}
+
+const PUBLICATION_TONE: Record<"published" | "failed" | "waiting", string> = {
+  published: "bg-[#E6F6F2] text-[#0F7A68]",
+  failed: "bg-[#FFE9E3] text-[#B3401F]",
+  waiting: "bg-[#EEF0EC] text-[#5B6470]",
+};
+
+const PUBLICATION_LABEL: Record<"published" | "failed" | "waiting", string> = {
+  published: "published",
+  failed: "failed",
+  waiting: "not yet",
+};
+
+/** YouTube only reads a timestamp list as chapters with three or more marks
+ *  starting at 0:00; below that the block is dropped rather than posted
+ *  broken, and the reviewer should know why the preview has none. */
+function chapterCountWarning(count: number) {
+  if (count >= 3) return null;
+  return <p className="text-xs text-[#9A6400]">Only {count} chapter mark{count === 1 ? "" : "s"} — YouTube needs three from 0:00, so no timestamp block is posted for this part.</p>;
 }
 
 /** One generation's worker job: progress + stage while live, the error when it failed. */

@@ -5,10 +5,10 @@ import { requireLibraryMember } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
 import { InkUnderline } from "@/components/ink-mark";
 import { ARTICLE_JOBS_MIGRATION, catalogueColumnMissing, catalogueMissing } from "@/utils/catalogue/status";
-import { CATALOGUE_KITS_MIGRATION, kitGenerationIds, sortKits, sortVideoArtifacts, videoPartOf } from "@/utils/catalogue/kit";
-import { catalogueGenerateEnabled, catalogueOwnerId } from "@/utils/flags";
+import { CATALOGUE_KITS_MIGRATION, curriculumHeaderLines, kitGenerationIds, sortKits, sortVideoArtifacts, videoPartOf, type HeaderMapping } from "@/utils/catalogue/kit";
+import { catalogueGenerateEnabled, cataloguePublishEnabled, catalogueOwnerId } from "@/utils/flags";
 import { docDownloadName } from "@/utils/download-name";
-import type { ArticleFigure, Curriculum, KitGenerationRow, Topic, TopicAlias, TopicArticle, TopicHit, TopicKit } from "@/utils/catalogue/types";
+import type { ArticleFigure, Curriculum, KitGenerationRow, Topic, TopicAlias, TopicArticle, TopicHit, TopicKit, TopicPublication } from "@/utils/catalogue/types";
 import { ErrorBanner, MaturityChip, MissingTablesBanner, StatusChip, fmtDate } from "../../catalogue-ui";
 import { AliasPanel, MappingPanel, PrereqPanel, TopicActions, TopicHeaderEditor, type MappingRow } from "./topic-panels";
 import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel";
@@ -18,9 +18,10 @@ import { KitPanel, type KitArtifactView, type KitView } from "./kit-panel";
 // curriculum mappings with the depth-node selector, prerequisites, the
 // knowledge article (versions, editor, figures, review, diff — Phase 2b), the
 // kit (generate, pieces with their worker jobs, video parts, documents, part
-// plan, chapters, clips, review, retry, regenerate, history — Phase 3) and the
-// audit trail. The question bank has its own page (/questions); the publish
-// panel arrives with its phase.
+// plan, chapters, clips, review, retry, regenerate, history — Phase 3) with
+// its publish block (what reached YouTube per part, and what would be posted —
+// Phase 4, dark) and the audit trail. The question bank has its own page
+// (/questions).
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,10 @@ const KIT_LANGUAGE = "en";
  *  applied still shows the kit. */
 const KIT_COLUMNS =
   "id, topic_id, article_id, language, source_kit_id, teacher_avatar, voice_pair, presentation_generation_id, doc_generation_ids, chapters, clips, status, reject_reason, approved_by, reviewer_id, reviewed_at, notes, judge_score, created_at, updated_at";
+
+/** 0112 topic_publications — what the Phase 4 worker put on YouTube per part. */
+const PUBLICATION_COLUMNS =
+  "id, topic_kit_id, part, channel_language, youtube_video_id, privacy, playlist_ids, captions_uploaded, thumbnail_set, published_at, error, created_at, updated_at";
 
 const TOPIC_COLUMNS =
   "id, canonical_key, title, subject, summary, teacher_avatar, depth_node_id, prerequisites, status, bank_maturity, created_by, created_at, updated_at";
@@ -249,6 +254,30 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
     if (error) gensError = error;
     for (const g of (data ?? []) as unknown as GenEmbed[]) gensById.set(g.id, g);
   }
+  // What reached YouTube (Phase 4, 0112 topic_publications): one row per (kit,
+  // part, language). Empty everywhere until the publish phase is switched on;
+  // read for every kit of the topic, because a regenerated kit's history
+  // includes what its predecessor published.
+  let publicationsError: { message?: string } | null = null;
+  const publicationsByKit = new Map<string, TopicPublication[]>();
+  if (kitRows.length) {
+    const { data, error } = await admin
+      .from("topic_publications")
+      .select(PUBLICATION_COLUMNS)
+      .in(
+        "topic_kit_id",
+        kitRows.map((k) => k.id),
+      )
+      .eq("channel_language", KIT_LANGUAGE)
+      .order("part", { ascending: true });
+    if (error && !catalogueMissing(error)) publicationsError = error;
+    for (const p of (data ?? []) as unknown as TopicPublication[]) {
+      const list = publicationsByKit.get(p.topic_kit_id) ?? [];
+      list.push(p);
+      publicationsByKit.set(p.topic_kit_id, list);
+    }
+  }
+
   const signKit = async (path: string, download?: string): Promise<string | null> => {
     const { data } = await admin.storage.from("artifacts").createSignedUrl(path, KIT_SIGN_TTL_SECONDS, download ? { download } : undefined);
     return data?.signedUrl ?? null;
@@ -256,6 +285,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   const kits: KitView[] = await Promise.all(
     kitRows.map(async (kit) => ({
       kit,
+      publications: publicationsByKit.get(kit.id) ?? [],
       generations: await Promise.all(
         kitGenerationIds(kit)
           .map((gid) => gensById.get(gid))
@@ -296,6 +326,19 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   }
   const canEditArticle = libraryAllows(member.role, "edit_article");
   const canGenerate = libraryAllows(member.role, "generate");
+  // Publishing to YouTube stays with platform admins (plan §7.1).
+  const canPublish = libraryAllows(member.role, "publish");
+  // The header block every catalogue document carries, composed from the same
+  // mappings this page shows — the YouTube description repeats it verbatim, so
+  // the reviewer reads the codes that will be posted.
+  const curriculumHeader = curriculumHeaderLines(
+    mappings.map(
+      (m): HeaderMapping => ({
+        curriculum: m.curriculum,
+        node: m.node ? { code: m.node.code, title: m.node.title, grade: m.node.grade } : null,
+      }),
+    ),
+  );
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-10">
@@ -349,16 +392,23 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
               />
               {kitsError && <ErrorBanner message={`Could not read the kits: ${kitsError.message ?? "unknown error"}`} />}
               {gensError && <ErrorBanner message={`Could not read the kit's generations: ${gensError.message ?? "unknown error"}`} />}
+              {publicationsError && <ErrorBanner message={`Could not read the publications: ${publicationsError.message ?? "unknown error"}`} />}
               <KitPanel
                 topicId={topic.id}
+                topicTitle={topic.title}
+                topicSummary={topic.summary}
                 topicStatus={topic.status}
+                bankMaturity={topic.bank_maturity}
+                curriculumHeader={curriculumHeader}
                 articleStatus={approvedArticle?.status ?? null}
                 articleStatuses={articleStatuses}
                 kits={kits}
                 names={names}
                 canGenerate={canGenerate}
                 canApprove={canApprove}
+                canPublish={canPublish}
                 generateEnabled={catalogueGenerateEnabled()}
+                publishEnabled={cataloguePublishEnabled()}
                 ownerConfigured={catalogueOwnerId() !== null}
                 migrationNote={kitMigrationNote}
               />
@@ -383,7 +433,8 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
             </ol>
             <p className="text-xs text-[#98A0A9] mt-3">
               Approving an article version moves the topic to article approved; Generate kit moves it to generating, the worker to in review once every
-              piece is done, and Approve video (gate 2) to video approved. Publishing arrives with its phase.
+              piece is done, and Approve video (gate 2) to video approved. Publishing is a platform admin&apos;s action on an approved kit and is switched
+              off until the YouTube channel exists and its API project has passed the compliance audit.
             </p>
           </div>
           <div className="card p-5">
