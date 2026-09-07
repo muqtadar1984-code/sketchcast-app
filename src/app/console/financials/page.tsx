@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
-import { demoSchoolIds } from "@/utils/demo";
+import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
+import { staffUserIds } from "@/utils/platform-admin";
 import {
   activePaidEntitlements,
   collectedUsd,
@@ -77,12 +78,12 @@ export const dynamic = "force-dynamic";
 const DAY = 86400000;
 
 const TABLE1_FOOTER =
-  "Measured from jobs.usage (AI generation cost only — infra excluded). Averages use cost-tracked rows only — some early jobs predate tracking, so AI spend ÷ kit count differs slightly. Demo accounts excluded.";
+  "Measured from jobs.usage (AI generation cost only — infra excluded). Averages use cost-tracked rows only — some early jobs predate tracking, so AI spend ÷ kit count differs slightly. Demo and SketchCast staff accounts excluded (staff includes the catalogue system account, which owns the Library portal's kits).";
 const TABLE2_FOOTER =
   `Prices: Teacher Pro $24/mo, Teacher Pro+ $49/mo, Home Basic (family_*) $9.99/mo, Homeschool $34/mo (annual plans at annual/12); ` +
   `school floor $3,000/yr → $250/mo. Stripe school payments (MYR) converted at RM${MYR_PER_USD.toFixed(2)}/USD. ` +
   `Collected is GROSS of any affiliate commission — that cost is a separate line under Acquisition cost below. ` +
-  `Update alongside pricing. Demo accounts excluded.`;
+  `Update alongside pricing. Demo and SketchCast staff accounts excluded (staff includes the catalogue system account, which owns the Library portal's kits).`;
 // Acquisition. Every "—" on this table is a missing INPUT, not a missing
 // calculation, so the footer names the inputs rather than the formulas.
 const CAC_FOOTER =
@@ -91,14 +92,14 @@ const CAC_FOOTER =
   `"not recorded" and "$0 spent" are different claims and only one of them is true. ` +
   `The affiliate slice IS knowable per sale: Lemon Squeezy's affiliate program went live 2026-08-22 at ` +
   `${(AFFILIATE_COMMISSION_RATE * 100).toFixed(0)}%, and its order and invoice objects carry affiliate_id and referral_amount. ` +
-  `Only paid, non-refunded sales count, on the same basis as Collected to date. Demo accounts excluded.`;
+  `Only paid, non-refunded sales count, on the same basis as Collected to date. Demo and SketchCast staff accounts excluded (staff includes the catalogue system account, which owns the Library portal's kits).`;
 /** One decimal, trailing ".0" dropped — "14" and "4.7", never "14.0". */
 const kitCount = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const COSTED = PLAN_KITS_COSTED_PER_MONTH;
 const ADVERTISED = PLAN_KITS_PER_MONTH;
 const TABLE3_B2C_FOOTER =
   "Prices: Teacher Pro $24 · Teacher Pro+ $49 · Home Basic $9.99 · Homeschool $34 per month; annual = 12×. " +
-  "Teachers = active non-demo teacher accounts; parents = non-demo parent accounts (home educators included). " +
+  "Teachers = active teacher accounts that are neither demo nor staff; parents likewise (home educators included). " +
   "Each column assumes that share of the row's base converts to that plan — rows are ALTERNATIVE scenarios, " +
   "never additive. Gross margin = (price − allowance × measured lifetime avg kit cost) / price, with every " +
   "subscriber spending their FULL generation allowance — the conservative bound; a ratio, so it holds at any " +
@@ -191,7 +192,7 @@ export default async function ConsoleFinancialsPage({
   // select because it is an EXISTING column (0022) and adds no 42703 risk of
   // its own: it is what lets the LTV table measure a CAC per plan instead of
   // dividing one plan's LTV by another plan's commission.
-  const [profilesQ, booksQ, gensQ, entsQ, paymentsQ, jobsQ, referralQ] = await Promise.all([
+  const [profilesQ, booksQ, gensQ, entsQ, paymentsQ, jobsQ, referralQ, staffIds] = await Promise.all([
     admin.from("profiles").select("id, role, school_id, is_demo"),
     admin.from("books").select("id, owner_id"),
     admin
@@ -204,6 +205,7 @@ export default async function ConsoleFinancialsPage({
     admin
       .from("payments")
       .select("user_id, school_id, plan_key, status, currency, affiliate_id, referral_amount_minor"),
+    staffUserIds(admin),
   ]);
 
   type ProfileRow = { id: string; role: string; school_id: string | null; is_demo: boolean | null };
@@ -215,20 +217,24 @@ export default async function ConsoleFinancialsPage({
   const allGens = (gensQ.data ?? []) as GenRow[];
   const allJobs = (jobsQ.data ?? []) as JobRow[];
 
-  // Demo exclusion — same basis as the Overview page: profiles.is_demo marks
-  // seeded sales props; jobs carry no owner, so they attribute through their
-  // generation or book and fail open when neither resolves.
-  const demoIds = new Set(allProfiles.filter((p) => p.is_demo === true).map((p) => p.id));
+  // Demo AND staff exclusion — same rule as the Overview page
+  // (metricsExcludedIds): profiles.is_demo marks seeded sales props, and
+  // platform_admins marks SketchCast's own accounts. Staff matters most here:
+  // the catalogue system account owns every kit the Library portal builds, and
+  // those kits would otherwise be averaged into "what a kit costs us" as if a
+  // teacher had asked for one. Jobs carry no owner, so they attribute through
+  // their generation or book and fail open when neither resolves.
+  const excludedIds = metricsExcludedIds(allProfiles, staffIds);
   const demoSchools = demoSchoolIds(allProfiles);
-  const profiles = allProfiles.filter((p) => !demoIds.has(p.id));
-  const gens = allGens.filter((g) => !demoIds.has(g.owner_id));
+  const profiles = allProfiles.filter((p) => !excludedIds.has(p.id));
+  const gens = allGens.filter((g) => !excludedIds.has(g.owner_id));
   const genOwner = new Map(allGens.map((g) => [g.id, g.owner_id]));
   const bookOwner = new Map(allBooks.map((b) => [b.id, b.owner_id]));
   const jobs = allJobs.filter((j) => {
     const owner =
       (j.generation_id ? genOwner.get(j.generation_id) : undefined) ??
       (j.book_id ? bookOwner.get(j.book_id) : undefined);
-    return owner === undefined || !demoIds.has(owner);
+    return owner === undefined || !excludedIds.has(owner);
   });
 
   // (server component, rendered once per request — Date.now is fine here)
@@ -258,7 +264,7 @@ export default async function ConsoleFinancialsPage({
   const allEnts = (entsQ.data ?? []) as EntitlementRow[];
   const ents = allEnts.filter(
     (e) =>
-      !(e.user_id && demoIds.has(e.user_id)) && !(e.school_id && demoSchools.has(e.school_id)),
+      !(e.user_id && excludedIds.has(e.user_id)) && !(e.school_id && demoSchools.has(e.school_id)),
   );
   const paid = activePaidEntitlements(ents, now);
   const paidB2B = paid.filter((e) => isSchoolPlan(e.plan_key));
@@ -269,7 +275,7 @@ export default async function ConsoleFinancialsPage({
   const allPayments = (paymentsQ.data ?? []) as PayRow[];
   const payments = allPayments.filter(
     (p) =>
-      !(p.user_id && demoIds.has(p.user_id)) && !(p.school_id && demoSchools.has(p.school_id)),
+      !(p.user_id && excludedIds.has(p.user_id)) && !(p.school_id && demoSchools.has(p.school_id)),
   );
   const isB2BPayment = (p: PayRow) => (p.plan_key ? isSchoolPlan(p.plan_key) : p.school_id !== null);
   const collectedB2B = collectedUsd(payments.filter(isB2BPayment));
@@ -320,7 +326,7 @@ export default async function ConsoleFinancialsPage({
   const referralColumnsMissing = referralQ.error?.code === "42703";
   type ReferralPayRow = ReferralRow & { user_id: string | null; school_id: string | null };
   const referralRows = ((referralQ.data ?? []) as ReferralPayRow[]).filter(
-    (p) => !(p.user_id && demoIds.has(p.user_id)) && !(p.school_id && demoSchools.has(p.school_id)),
+    (p) => !(p.user_id && excludedIds.has(p.user_id)) && !(p.school_id && demoSchools.has(p.school_id)),
   );
   const cac = referralOk ? affiliateCac(referralRows) : null;
 
@@ -658,7 +664,7 @@ export default async function ConsoleFinancialsPage({
           <h1 className="text-4xl mb-2">Financials</h1>
           <InkUnderline className="block h-3 w-28 mb-3 print:hidden" />
           <p className="text-xs text-[#98A0A9] mb-7">
-            USD throughout. Excludes demo accounts. Assumptions printed under each table.
+            USD throughout. Excludes demo accounts and SketchCast staff. Assumptions printed under each table.
           </p>
         </div>
         <CsvButton sections={csvSections} />

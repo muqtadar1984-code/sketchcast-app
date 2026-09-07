@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
-import { demoAccountPassword, partitionByDemo } from "@/utils/demo";
+import { demoAccountPassword, partitionRoster } from "@/utils/demo";
+import { founderEmails, staffUserIds } from "@/utils/platform-admin";
 import { aggregateUserStats, languageSummary, EMPTY_USER_STATS } from "@/utils/console-user-stats";
 import {
   deriveFeedbackState,
@@ -11,11 +12,17 @@ import {
 import UserActions from "./user-actions";
 
 // User roster — search across name/username/email; rows open the account's
-// detail page (activity, issues, ops controls). Two tabs: real users (default)
-// and demo accounts (profiles.is_demo, migration 0081) — the seeded sales
-// tenants live in their own tab so the real roster stays honest, and staff can
-// read a demo login + its shared password mid-pitch without digging out the
-// seeder's credentials file.
+// detail page (activity, issues, ops controls). Three tabs: real users
+// (default), SketchCast staff, and demo accounts (profiles.is_demo, migration
+// 0081) — the seeded sales tenants live in their own tab so the real roster
+// stays honest, and staff can read a demo login + its shared password mid-pitch
+// without digging out the seeder's credentials file. Staff (founder, 2026-09-06)
+// = an unrevoked platform_admins row or the founder allow-list, the SAME
+// membership rule as the staff tier and the console guard — never the e-mail
+// domain, so demo tenant adults on @demo.sketchcast.app stay demo. Staff rows
+// carry no lifecycle actions: "Request feedback" and "Remind: upload" are
+// nudges for teachers and parents, not for the founder or the catalogue's
+// system account.
 //
 // Per-user stats (Books/Lessons/Errors/Resolved + Language) come from THREE
 // whole-table selects folded into a Map (src/utils/console-user-stats.ts) —
@@ -27,8 +34,9 @@ export const dynamic = "force-dynamic";
 // The numeric four are deliberately narrow (text-xs, right-aligned) so the
 // roster still fits the max-w-7xl container. Two variants, both FULL literals
 // (Tailwind's scanner can't see interpolated class strings): the real tab
-// carries a 12th Actions track; demo accounts get no actions, so the demo tab
-// keeps the original 11.
+// carries a 12th Actions track; demo and staff accounts get no actions, so
+// those two tabs keep the original 11 (the last track is Password on the demo
+// tab and Joined on the staff tab).
 const GRID_DEMO = "sm:grid-cols-[1.7fr_2fr_0.9fr_1.3fr_0.7fr_1.2fr_repeat(5,0.55fr)_1fr]";
 const GRID_REAL = "sm:grid-cols-[1.6fr_1.9fr_0.8fr_1.2fr_0.6fr_1.1fr_repeat(5,0.5fr)_0.9fr_1.5fr]";
 
@@ -51,7 +59,10 @@ export default async function ConsoleUsersPage({
 }) {
   const { q, tab } = await searchParams;
   const demoTab = tab === "demo";
-  const grid = demoTab ? GRID_DEMO : GRID_REAL;
+  const staffTab = tab === "staff";
+  // Only the real roster carries the Actions track (and the trial chip).
+  const actionsTab = !demoTab && !staffTab;
+  const grid = actionsTab ? GRID_REAL : GRID_DEMO;
   const admin = createAdminClient();
 
   const { data: profRaw } = await admin
@@ -60,21 +71,40 @@ export default async function ConsoleUsersPage({
     .order("created_at", { ascending: false })
     .limit(500);
   type Prof = { id: string; full_name: string | null; username: string | null; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; country: string | null; country_source: string | null; ui_locale: string | null; email_optout_at: string | null; created_at: string };
-  const { real, demo } = partitionByDemo((profRaw ?? []) as Prof[]);
-  let profiles = demoTab ? demo : real;
+  // Emails live in auth.users — fetched via the admin auth API (paged) BEFORE
+  // the split, because the founder allow-list is keyed by e-mail.
+  const emails = new Map<string, string>();
+  try {
+    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    for (const u of data?.users ?? []) emails.set(u.id, u.email ?? "");
+  } catch {
+    // roster still renders without emails
+  }
+  // Staff = membership (an unrevoked platform_admins row) or the founder
+  // allow-list — the detail page's isStaffTarget rule, applied to the roster.
+  // staffUserIds is the same call the metric pages make, so the Staff tab and
+  // the numbers on Overview / Financials can only ever name the same accounts;
+  // the allow-list is added HERE alone because only this page loads e-mails.
+  const staffIds = await staffUserIds(admin);
+  const founders = new Set(founderEmails().map((e) => e.toLowerCase()));
+  const { real, demo, staff } = partitionRoster(
+    (profRaw ?? []) as Prof[],
+    (p) => staffIds.has(p.id) || founders.has((emails.get(p.id) ?? "").toLowerCase()),
+  );
+  let profiles = demoTab ? demo : staffTab ? staff : real;
 
   // Batched selects → Maps; the render loop below does ZERO queries. The three
-  // action tables (0083 + 0080) are only needed on the real tab — demo
-  // accounts get no actions.
+  // action tables (0083 + 0080) are only needed on the real tab — demo and
+  // staff accounts get no actions.
   const none = Promise.resolve({ data: null });
   const [schoolsQ, booksQ, gensQ, issuesQ, fbQ, remQ, lifeQ] = await Promise.all([
     admin.from("schools").select("id, name"),
     admin.from("books").select("owner_id, language, removed_at"),
     admin.from("generations").select("owner_id, kind, status"),
     admin.from("platform_issues").select("reporter_id, status"),
-    demoTab ? none : admin.from("feedback_requests").select("user_id, created_at, snoozed_until, responded_at"),
-    demoTab ? none : admin.from("console_reminders").select("user_id, sent_at"),
-    demoTab ? none : admin.from("lifecycle_emails").select("user_id, sent_at"),
+    actionsTab ? admin.from("feedback_requests").select("user_id, created_at, snoozed_until, responded_at") : none,
+    actionsTab ? admin.from("console_reminders").select("user_id, sent_at") : none,
+    actionsTab ? admin.from("lifecycle_emails").select("user_id, sent_at") : none,
   ]);
   const schoolName = new Map((schoolsQ.data ?? []).map((s) => [s.id as string, (s.name as string) || "School"]));
   const stats = aggregateUserStats(
@@ -106,15 +136,6 @@ export default async function ConsoleUsersPage({
     attempts.set(g.owner_id, (attempts.get(g.owner_id) ?? 0) + 1);
   }
 
-  // Emails live in auth.users — fetch via the admin auth API (paged).
-  const emails = new Map<string, string>();
-  try {
-    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    for (const u of data?.users ?? []) emails.set(u.id, u.email ?? "");
-  } catch {
-    // roster still renders without emails
-  }
-
   const needle = (q ?? "").trim().toLowerCase();
   if (needle) {
     profiles = profiles.filter((p) =>
@@ -124,7 +145,8 @@ export default async function ConsoleUsersPage({
   }
 
   const tabs = [
-    { href: "/console/users", label: `Users (${real.length})`, active: !demoTab },
+    { href: "/console/users", label: `Users (${real.length})`, active: actionsTab },
+    { href: "/console/users?tab=staff", label: `Staff (${staff.length})`, active: staffTab },
     { href: "/console/users?tab=demo", label: `Demo (${demo.length})`, active: demoTab },
   ];
 
@@ -133,7 +155,8 @@ export default async function ConsoleUsersPage({
       <h1 className="text-4xl mb-2">Users</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-[#5B6470] mb-5">
-        {profiles.length}{demoTab ? " demo" : ""} account{profiles.length === 1 ? "" : "s"}{needle ? ` matching “${q}”` : ""}. Click a row for detail + ops.
+        {profiles.length}{demoTab ? " demo" : staffTab ? " SketchCast staff" : ""} account{profiles.length === 1 ? "" : "s"}{needle ? ` matching “${q}”` : ""}. Click a row for detail + ops.
+        {staffTab && " Staff means an unrevoked platform_admins row (or the founder allow-list) — grant or revoke it from the account's page."}
       </p>
 
       <div className="flex flex-wrap gap-2 mb-5">
@@ -151,7 +174,7 @@ export default async function ConsoleUsersPage({
       </div>
 
       <form method="get" className="mb-5">
-        {demoTab && <input type="hidden" name="tab" value="demo" />}
+        {!actionsTab && <input type="hidden" name="tab" value={demoTab ? "demo" : "staff"} />}
         <input
           name="q"
           defaultValue={q ?? ""}
@@ -167,7 +190,7 @@ export default async function ConsoleUsersPage({
           <span className="text-end">Books</span><span className="text-end">Lessons</span><span className="text-end">Artifacts</span>
           <span className="text-end">Errors</span><span className="text-end">Resolved</span>
           {demoTab ? <span>Password</span> : <span className="text-end">Joined</span>}
-          {!demoTab && <span>Actions</span>}
+          {actionsTab && <span>Actions</span>}
         </div>
         {profiles.map((p) => {
           const s = stats.get(p.id) ?? EMPTY_USER_STATS;
@@ -183,7 +206,9 @@ export default async function ConsoleUsersPage({
               {p.full_name || p.username || "—"}
               {/* Every signup is auto-flagged (0012), so on the demo tab the
                   chip would sit on every row and mean nothing — real tab only. */}
-              {!demoTab && p.beta_tester && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ms-2">trial</span>}
+              {actionsTab && p.beta_tester && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ms-2">trial</span>}
+              {/* Same chip the account page shows for a platform admin. */}
+              {staffTab && <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ms-2">staff</span>}
             </span>
             <span className="truncate text-[#5B6470]">
               {/* Students log in by username, adults by email — on the demo tab
@@ -223,7 +248,7 @@ export default async function ConsoleUsersPage({
               <span className="tabular sm:text-end text-xs text-[#5B6470]">{new Date(p.created_at).toLocaleDateString()}</span>
             )}
           </Link>
-          {!demoTab && (
+          {actionsTab && (
             <UserActions
               userId={p.id}
               feedback={deriveFeedbackState(fbByUser.get(p.id) ?? [], now, p.role)}

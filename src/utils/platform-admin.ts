@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { platformConsoleEnabled } from "@/utils/flags";
@@ -19,6 +20,34 @@ export function founderEmails(): string[] {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
+}
+
+/**
+ * The ids of SketchCast's own accounts — every unrevoked `platform_admins` row
+ * (migration 0014). The console's metric pages exclude them the way they
+ * exclude demo tenants: the founder, Sara and the catalogue system account are
+ * not customers, and their books, lessons and jobs are not usage. The
+ * catalogue account makes this urgent rather than tidy — it owns every kit the
+ * Library portal generates, which would otherwise land in "generations" and in
+ * the cost-per-kit average as if a teacher had asked for them.
+ *
+ * MEMBERSHIP, not the e-mail allow-list: `FOUNDER_EMAILS` is a bootstrap for
+ * ACCESS, and the only cheap way to resolve it to ids is a full auth listing,
+ * which these pages do not do. Every real staff account holds a row (the
+ * console's "Make staff" button writes one), so grant the row rather than
+ * relying on the allow-list.
+ *
+ * Fails OPEN — an empty set on any error, so a metrics page renders slightly
+ * inflated numbers instead of not at all.
+ */
+export async function staffUserIds(admin?: SupabaseClient): Promise<Set<string>> {
+  try {
+    const client = admin ?? createAdminClient();
+    const { data } = await client.from("platform_admins").select("user_id").is("revoked_at", null);
+    return new Set(((data ?? []) as { user_id: string }[]).map((r) => r.user_id));
+  } catch {
+    return new Set();
+  }
 }
 
 async function platformAdminUser(): Promise<{ id: string; email: string } | null> {
