@@ -6,13 +6,15 @@ import { LogoMark } from "../dashboard/icons";
 import MobileNav from "../dashboard/mobile-nav";
 
 // Portal tabs. Phase 1 (taxonomy) ships Topics, Curricula, Candidates, Harvest;
-// later phases add Articles queue, Kits queue, Blueprints, Publish.
+// Phase 3 adds Blueprints (the composer's presets — a topic's question bank
+// lives under its topic page, not as a tab); later phases add Publish.
 const TABS = [
   { href: "/library", label: "Overview" },
   { href: "/library/topics", label: "Topics" },
   { href: "/library/curricula", label: "Curricula" },
   { href: "/library/candidates", label: "Candidates" },
   { href: "/library/harvest", label: "Harvest" },
+  { href: "/library/blueprints", label: "Blueprints" },
 ];
 
 function isActive(href: string, path: string): boolean {

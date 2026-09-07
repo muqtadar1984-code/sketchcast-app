@@ -408,3 +408,39 @@ export function presentAllowed(user: PresentGateUser | null | undefined): boolea
   // doubt. `!!e` keeps a blank email from matching a blank list entry.
   return !!e && allow.includes(e);
 }
+
+/**
+ * Phase 3 of the topic catalogue: the portal's Generate kit / Retry /
+ * Regenerate kit and Compose worksheet actions insert `generations` rows owned
+ * by the catalogue system account (params.catalogue = true — 0112 exempts them
+ * from dedup, the caps and the ledger) for the worker's last, off-peak lane to
+ * build. OFF by default, and the routes answer 409 with a plain message while
+ * it is off (the kit panel disables its buttons and says why), because those
+ * rows spend the SAME Vertex image capacity real teachers' lessons do — about
+ * one image a minute per pool — so a kit batch in users' hours is an image
+ * outage for paying customers (2026-09-05). The worker's window
+ * (CATALOGUE_WINDOW_UTC) is the second lock; this flag is the first, and the
+ * one a founder can flip from Vercel without a deploy. CATALOGUE_OWNER_ID (the
+ * system account's profile id) must be set as well: the routes refuse to
+ * insert without an owner to attribute the rows to.
+ */
+export function catalogueGenerateEnabled(): boolean {
+  return process.env.FEATURE_CATALOGUE_GENERATE === "true";
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * The second lock: the catalogue system account's profile id, or null when
+ * CATALOGUE_OWNER_ID is unset or not a uuid. ONE reader for the pages and
+ * the routes on purpose — the kit page used to test the variable for
+ * truthiness and the questions page for the uuid shape while the routes
+ * trimmed and lower-cased it, so a value with a trailing space enabled the
+ * Generate button on one page and had every click answered with 409 "not
+ * configured". Same rule as the routes' `uuid()` (trim, lower-case, must be
+ * a uuid): whatever this returns is what the insert attributes the row to.
+ */
+export function catalogueOwnerId(): string | null {
+  const s = (process.env.CATALOGUE_OWNER_ID ?? "").trim().toLowerCase();
+  return UUID.test(s) ? s : null;
+}

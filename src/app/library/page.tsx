@@ -5,12 +5,12 @@ import { libraryAllows } from "@/utils/library-routing";
 import { InkUnderline } from "@/components/ink-mark";
 import { catalogueMissing } from "@/utils/catalogue/status";
 
-// Portal overview: the review queues that exist so far (Phase 2b: articles
-// awaiting review, drafts in progress) and the doors into the screens. Every
-// screen is readable by every member (the header shows every tab); the doors
-// say where a role can only read, matching the read-only note the screen
-// itself shows. Later phases add kits awaiting review, translations, publish
-// failures and the quota-window indicator.
+// Portal overview: the review queues (Phase 2b: articles awaiting review,
+// drafts in progress; Phase 3: kits awaiting review, question items awaiting
+// review) and the doors into the screens. Every screen is readable by every
+// member (the header shows every tab); the doors say where a role can only
+// read, matching the read-only note the screen itself shows. Later phases add
+// translations, publish failures and the quota-window indicator.
 
 export const dynamic = "force-dynamic";
 
@@ -19,16 +19,22 @@ export default async function LibraryOverviewPage() {
   const can = (a: Parameters<typeof libraryAllows>[1]) => libraryAllows(member.role, a);
   const admin = createAdminClient();
 
-  // Two head counts, not a scan: the queue numbers stay cheap as the knowledge
+  // Four head counts, not a scan: the queue numbers stay cheap as the knowledge
   // base grows. A missing 0112 leaves the queues unshown (the screens explain).
-  const [inReviewQ, draftQ] = await Promise.all([
+  const [inReviewQ, draftQ, kitsQ, itemsQ] = await Promise.all([
     admin.from("topic_articles").select("id", { count: "exact", head: true }).eq("status", "in_review"),
     admin.from("topic_articles").select("id", { count: "exact", head: true }).eq("status", "draft"),
+    admin.from("topic_kits").select("id", { count: "exact", head: true }).eq("status", "in_review"),
+    admin.from("topic_questions").select("id", { count: "exact", head: true }).eq("status", "draft"),
   ]);
-  const queuesReady = !inReviewQ.error && !draftQ.error;
-  const queuesMissing = catalogueMissing(inReviewQ.error) || catalogueMissing(draftQ.error);
+  const queueErrors = [inReviewQ.error, draftQ.error, kitsQ.error, itemsQ.error];
+  const queuesReady = queueErrors.every((e) => !e);
+  const queuesMissing = queueErrors.some((e) => catalogueMissing(e));
+  const queueError = queueErrors.find((e) => !!e) ?? null;
   const awaitingReview = inReviewQ.count ?? 0;
   const drafts = draftQ.count ?? 0;
+  const kitsAwaiting = kitsQ.count ?? 0;
+  const itemsAwaiting = itemsQ.count ?? 0;
 
   const doors: { href: string; title: string; body: string; readOnly: boolean }[] = [
     {
@@ -53,6 +59,12 @@ export default async function LibraryOverviewPage() {
       href: "/library/harvest",
       title: "Harvest",
       body: "Pick a book on the platform and pull out its topic names. Names only — never its text.",
+      readOnly: !can("curate"),
+    },
+    {
+      href: "/library/blueprints",
+      title: "Blueprints",
+      body: "The worksheet presets the composer renders from the question bank: objective / subjective split, difficulty mix, count, marks.",
       readOnly: !can("curate"),
     },
   ];
@@ -84,12 +96,28 @@ export default async function LibraryOverviewPage() {
             </span>
             <span className={`text-3xl font-display tabular ${drafts > 0 ? "text-[#9A6400]" : "text-[#98A0A9]"}`}>{drafts}</span>
           </Link>
+          <Link href="/library/topics?status=in_review" className="card p-5 hover:shadow-md transition-shadow flex items-center justify-between gap-4">
+            <span>
+              <span className="font-medium block">Kits awaiting review</span>
+              <span className="text-sm text-[#5B6470]">
+                Video, deck, plan and documents finished by the worker — gate 2 before anything reaches YouTube. {can("approve") ? "You can approve or reject them." : ""}
+              </span>
+            </span>
+            <span className={`text-3xl font-display tabular ${kitsAwaiting > 0 ? "text-[#5B3FBF]" : "text-[#98A0A9]"}`}>{kitsAwaiting}</span>
+          </Link>
+          <Link href="/library/topics" className="card p-5 hover:shadow-md transition-shadow flex items-center justify-between gap-4">
+            <span>
+              <span className="font-medium block">Question items awaiting review</span>
+              <span className="text-sm text-[#5B6470]">Draft items in the bank across every topic — open a topic&apos;s Question bank to approve or reject them.</span>
+            </span>
+            <span className={`text-3xl font-display tabular ${itemsAwaiting > 0 ? "text-[#9A6400]" : "text-[#98A0A9]"}`}>{itemsAwaiting}</span>
+          </Link>
         </div>
       ) : (
         <p className="text-sm text-[#9A6400] bg-[#FFF9EE] rounded-lg px-4 py-3 mb-8">
           {queuesMissing
             ? "The review queues appear once the topic-catalogue tables (migration 0112) are applied."
-            : `Could not read the review queues: ${inReviewQ.error?.message ?? draftQ.error?.message ?? "unknown error"}`}
+            : `Could not read the review queues: ${queueError?.message ?? "unknown error"}`}
         </p>
       )}
 

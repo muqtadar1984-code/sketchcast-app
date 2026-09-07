@@ -174,7 +174,9 @@ export async function audit(
   admin: Admin,
   actorId: string,
   verb: string,
-  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum",
+  // 'blueprint' (Phase 3): a question_set_blueprints row, audited by the
+  // blueprints route — the only target that is not a topic or taxonomy row.
+  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint",
   targetId: string,
   detail: Record<string, unknown>,
 ) {
