@@ -4,7 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isPossiblyOfficeMimetype } from "@/utils/office-file";
 import UploadBook from "./upload-book";
-import AutoRefresh from "./auto-refresh";
+import AutoRefresh from "@/components/auto-refresh";
 import DeleteLesson from "./delete-lesson";
 import BookTable, { type BookRow } from "./book-table";
 import { kindLabel, statusLabel, type LibraryMessages } from "./labels";
