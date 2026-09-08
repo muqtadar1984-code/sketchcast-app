@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { requireLibraryMember } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
+import AutoRefresh from "@/components/auto-refresh";
 import { InkUnderline } from "@/components/ink-mark";
 import { ARTICLE_JOBS_MIGRATION, catalogueColumnMissing, catalogueMissing } from "@/utils/catalogue/status";
 import { CATALOGUE_KITS_MIGRATION, curriculumHeaderLines, kitGenerationIds, sortKits, sortVideoArtifacts, videoPartOf, type HeaderMapping } from "@/utils/catalogue/kit";
@@ -331,6 +332,25 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   // The header block every catalogue document carries, composed from the same
   // mappings this page shows — the YouTube description repeats it verbatim, so
   // the reviewer reads the codes that will be posted.
+  // Re-fetch while anything is still building, so a reviewer watching a kit
+  // does not have to press refresh to see it move. The page is
+  // force-dynamic, so router.refresh() re-runs this component and every
+  // status, progress bar and freshly signed download link updates in place.
+  //
+  // Read from the JOBS, not only from the statuses: `topics.status` and
+  // `topic_kits.status` say "generating" for the whole build, but a kit whose
+  // worker died leaves them saying that forever, and a page that polls
+  // forever on a dead kit is worse than one that never polls. A job in
+  // queued/processing is the claim that something is actually moving, and the
+  // stale reaper clears it.
+  const kitJobsInFlight = [...gensById.values()].some((g) =>
+    (g.jobs ?? []).some((j) => j.status === "queued" || j.status === "processing"),
+  );
+  const articleJobsInFlight =
+    (articleJob != null && (articleJob.status === "queued" || articleJob.status === "processing")) ||
+    [...latestRender.values()].some((j) => j.status === "queued" || j.status === "processing");
+  const buildInFlight = kitJobsInFlight || articleJobsInFlight;
+
   const curriculumHeader = curriculumHeaderLines(
     mappings.map(
       (m): HeaderMapping => ({
@@ -342,6 +362,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-10">
+      <AutoRefresh active={buildInFlight} />
       <p className="mb-4 text-sm">
         <Link href="/library/topics" className="text-[#5B6470] hover:underline">
           ← Topics

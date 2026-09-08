@@ -21,6 +21,7 @@ import {
 } from "@/utils/catalogue/status";
 import { articleStatusLabel, articleSummaries } from "@/utils/catalogue/article";
 import type { Curriculum, NodeKind, Topic } from "@/utils/catalogue/types";
+import AutoRefresh from "@/components/auto-refresh";
 import { ArticleStatusChip, ErrorBanner, MaturityChip, MissingTablesBanner, Pager, StatusChip, fmtDate } from "../catalogue-ui";
 import NewTopicForm from "./new-topic-form";
 
@@ -147,7 +148,7 @@ export default async function TopicsPage({
   // ids, one grouped query each — never a query per row), plus the filter
   // facets.
   const ids = rows.map((r) => r.id);
-  const [mapQ, artQ, subjQ, currQ] = await Promise.all([
+  const [mapQ, artQ, subjQ, currQ, liveQ] = await Promise.all([
     ids.length
       ? admin.from("topic_curriculum_map").select("topic_id").in("topic_id", ids)
       : Promise.resolve({ data: [] as { topic_id: string }[] }),
@@ -156,7 +157,25 @@ export default async function TopicsPage({
       : Promise.resolve({ data: [] as { topic_id: string; version: number; status: string }[] }),
     admin.from("topics").select("subject").not("subject", "is", null).limit(2000),
     admin.from("curricula").select("id, code, name, kind, country, edition, source_url").order("name"),
+    // Is any CATALOGUE work actually moving? A HEAD count, so it costs a row
+    // count and no rows.
+    //
+    // Keyed on `params.catalogue`, the same flag the worker's lanes filter on
+    // — not on the job TYPE, because a kit's pieces are ordinary presentation
+    // and worksheet jobs and a type filter would poll this page for every
+    // teacher's lesson in the queue.
+    //
+    // And on the JOBS rather than on a topic sitting in "generating": a kit
+    // whose worker died leaves that status set for good, so polling on it
+    // would never stop. A job in queued/processing is the claim that
+    // something is moving, and the stale reaper clears it.
+    admin
+      .from("jobs")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["queued", "processing"])
+      .eq("params->>catalogue", "true"),
   ]);
+  const catalogueWorkInFlight = (liveQ.count ?? 0) > 0;
   const mappingCount = new Map<string, number>();
   for (const r of (mapQ.data ?? []) as { topic_id: string }[]) {
     mappingCount.set(r.topic_id, (mappingCount.get(r.topic_id) ?? 0) + 1);
@@ -174,6 +193,7 @@ export default async function TopicsPage({
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-10">
+      <AutoRefresh active={catalogueWorkInFlight} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <Heading />
         {canCurate && <NewTopicForm />}

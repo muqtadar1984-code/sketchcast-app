@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import UploadBook from "../upload-book";
-import AutoRefresh from "../auto-refresh";
+import AutoRefresh from "@/components/auto-refresh";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled, teacherBetaEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
