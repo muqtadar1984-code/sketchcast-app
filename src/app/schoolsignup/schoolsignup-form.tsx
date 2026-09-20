@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { isDisposableEmail } from "@/utils/disposable-email";
 import type { Dictionary } from "@/i18n/dictionaries";
 
 // The account half of "Set up your school" — create the account here, name the
@@ -10,9 +11,13 @@ import type { Dictionary } from "@/i18n/dictionaries";
 // Server Component and resolve the copy from the request's dictionary.
 export default function SchoolSignupForm({
   t,
+  auth,
   country,
 }: {
   t: Dictionary["app"]["schoolSignup"];
+  /** The shared auth strings — this form only needs the disposable-address
+   * refusal, which /signup and the invite form word identically. */
+  auth: Dictionary["app"]["auth"];
   /** The edge's guess at where this school is, from the page's server render.
    * Null is normal and simply sends nothing. */
   country: string | null;
@@ -31,6 +36,13 @@ export default function SchoolSignupForm({
     setNotice(null);
     setLoading(true);
     const supabase = createClient();
+    // Disposable addresses are refused by the database (0117); asking first is
+    // what turns "Database error saving new user" into a sentence.
+    if (await isDisposableEmail(supabase, email)) {
+      setLoading(false);
+      setError(auth.disposableEmail);
+      return;
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,

@@ -34,7 +34,7 @@ export default async function SchoolSignupPage() {
           <AuthError />
         </Suspense>
 
-        <SchoolSignupForm t={t.app.schoolSignup} country={country} />
+        <SchoolSignupForm t={t.app.schoolSignup} auth={t.app.auth} country={country} />
 
         <div className="flex items-center gap-3 my-5">
           <span className="h-px flex-1 bg-[#E6E8E4]" />
