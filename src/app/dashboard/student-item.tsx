@@ -572,6 +572,14 @@ export default function StudentItem({
                 src={parts[partIdx]!}
                 controls
                 autoPlay
+                playsInline
+                // No download control, no context menu, no PiP/remote handoff:
+                // the lesson streams here and nowhere else (lesson-player.tsx,
+                // the adult player, makes the same choices and says why).
+                controlsList="nodownload"
+                disablePictureInPicture
+                disableRemotePlayback
+                onContextMenu={(e) => e.preventDefault()}
                 onEnded={onPartEnded}
                 className="w-full rounded-lg bg-black"
               />

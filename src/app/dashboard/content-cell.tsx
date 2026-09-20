@@ -8,6 +8,7 @@ import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import ReportFailure from "./report-failure";
 import { recordArtifactView } from "@/utils/views";
+import { WatchLink } from "./lesson-player";
 import { etaLabel, type JobStage } from "@/utils/job-stage";
 import { fmt } from "@/i18n/format";
 import { statusLabel, type LibraryMessages } from "./labels";
@@ -258,9 +259,15 @@ export default function ContentCell({
               <span key={i} className="inline-flex items-center gap-1.5 rounded-full border border-[#DCE6E2] bg-[#FCFCFA] px-2.5 py-1">
                 <span className="text-[#98A0A9] w-8">{fmt(t.partShort, { n: i + 1 })}</span>
                 {videos[i] && (
-                  <a href={videos[i]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>
+                  <WatchLink
+                    src={videos[i]}
+                    title={`${fmt(t.chapter, { n: chapterNum + 1 })} · ${fmt(t.partShort, { n: i + 1 })}`}
+                    closeLabel={t.common.close}
+                    onOpen={() => trackViews && recordArtifactView(lesson.id, "video_mp4")}
+                    className={linkCls}
+                  >
                     <span className="text-[#1FB8A6]"><PlayIcon /></span>{t.watch}
-                  </a>
+                  </WatchLink>
                 )}
                 {/* TEMPORARY founder-only download. No target="_blank" (a
                     disposition download would strand an empty tab) and no
@@ -284,9 +291,15 @@ export default function ContentCell({
         ) : (
           <>
             {videos[0] && (
-              <a href={videos[0]} target="_blank" onClick={() => trackViews && recordArtifactView(lesson.id, "video_mp4")} className={linkCls}>
+              <WatchLink
+                src={videos[0]}
+                title={fmt(t.chapter, { n: chapterNum + 1 })}
+                closeLabel={t.common.close}
+                onOpen={() => trackViews && recordArtifactView(lesson.id, "video_mp4")}
+                className={linkCls}
+              >
                 <span className="text-[#1FB8A6]"><PlayIcon /></span>{t.watch}
-              </a>
+              </WatchLink>
             )}
             {/* TEMPORARY founder-only download — see the multi-part branch. */}
             {videoDownloads[0] && (

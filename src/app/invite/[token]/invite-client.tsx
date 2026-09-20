@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { isDisposableEmail } from "@/utils/disposable-email";
 import OAuthButton from "@/components/oauth-button";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
@@ -67,6 +68,14 @@ export default function InviteClient({
     setError(null);
     setNotice(null);
     const supabase = createClient();
+    // The invited address is fixed by the inviter, but the database still
+    // refuses a disposable one (0117); asking first turns "Database error
+    // saving new user" into a sentence that names the real problem.
+    if (await isDisposableEmail(supabase, email)) {
+      setBusy(false);
+      setError(auth.disposableEmail);
+      return;
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,

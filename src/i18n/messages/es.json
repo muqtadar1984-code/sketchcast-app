@@ -162,6 +162,7 @@
       "signOut": "Cerrar sesión",
       "fullName": "Nombre completo",
       "email": "Correo",
+      "disposableEmail": "No se pueden usar direcciones de correo temporales o desechables. Regístrese con su correo escolar o personal.",
       "password": "Contraseña",
       "alreadyHaveAccount": "¿Ya tiene una cuenta?",
       "schoolPrompt": "¿Va a configurar toda una escuela?",

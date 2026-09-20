@@ -162,6 +162,7 @@
       "signOut": "Se déconnecter",
       "fullName": "Nom complet",
       "email": "E-mail",
+      "disposableEmail": "Les adresses e-mail temporaires ou jetables ne sont pas acceptées. Inscrivez-vous avec votre e-mail scolaire ou personnel.",
       "password": "Mot de passe",
       "alreadyHaveAccount": "Vous avez déjà un compte ?",
       "schoolPrompt": "Vous configurez toute une école ?",

@@ -162,6 +162,7 @@
       "signOut": "Sign out",
       "fullName": "Full name",
       "email": "Email",
+      "disposableEmail": "Temporary or disposable email addresses can't be used here. Please sign up with your school or personal email.",
       "password": "Password",
       "alreadyHaveAccount": "Already have an account?",
       "schoolPrompt": "Setting up a whole school?",

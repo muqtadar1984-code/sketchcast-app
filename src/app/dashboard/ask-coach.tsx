@@ -354,7 +354,16 @@ export default function AskCoach({
         <div key={i} className={m.role === "student" ? "flex justify-end" : "flex justify-start"}>
           {m.videoUrl ? (
             <div className="max-w-[92%] rounded-2xl rounded-es-sm p-1.5 bg-[#F4F6F3]">
-              <video src={m.videoUrl} controls playsInline className="rounded-xl w-full" />
+              <video
+                src={m.videoUrl}
+                controls
+                playsInline
+                controlsList="nodownload"
+                disablePictureInPicture
+                disableRemotePlayback
+                onContextMenu={(e) => e.preventDefault()}
+                className="rounded-xl w-full"
+              />
               <p className="text-[11px] text-[#98A0A9] px-2 py-1">Here&apos;s a quick sketch.</p>
             </div>
           ) : (

@@ -517,7 +517,16 @@ function CurrentKit({
                 )}
               </p>
               {v.url ? (
-                <video controls preload="metadata" src={v.url} className="w-full rounded-lg bg-black aspect-video" />
+                <video
+                  controls
+                  preload="metadata"
+                  src={v.url}
+                  controlsList="nodownload"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="w-full rounded-lg bg-black aspect-video"
+                />
               ) : (
                 <p className="text-xs text-[#98A0A9]">Could not sign the video URL.</p>
               )}

@@ -10,6 +10,7 @@ import { type JunkGateInfo } from "./junk-gate-dialog";
 import DeleteLesson from "./delete-lesson";
 import AskCoachButton from "./ask-coach-button";
 import { recordArtifactView } from "@/utils/views";
+import { WatchLink } from "./lesson-player";
 import { etaLabel } from "@/utils/job-stage";
 import { cleanPartTitles, partAnchor, partHeading, partLabel } from "@/utils/part-label";
 import { fmt } from "@/i18n/format";
@@ -86,9 +87,10 @@ function Ring({ pct, size = 22 }: { pct: number; size?: number }) {
 // A mini "deck slide" drawn in CSS — echoes compose_slide (teal number badge +
 // heading + a figure block). We have no rendered poster yet, so this stands in as
 // the preview; when the video is ready its play button opens it.
-function SlideThumb({ n, title, video, processing, pct, trackId, watchHint }: {
+function SlideThumb({ n, title, video, processing, pct, trackId, watchHint, closeLabel }: {
   n: number; title: string; video?: string | null; processing?: boolean; pct?: number; trackId?: string | null;
   watchHint: string;
+  closeLabel: string;
 }) {
   const slide = (
     <div className="absolute inset-0 rounded-lg bg-white border border-[#DCE6E2] overflow-hidden">
@@ -122,10 +124,19 @@ function SlideThumb({ n, title, video, processing, pct, trackId, watchHint }: {
   // 100px gives the label back ~28px and costs a preview nobody reads at that
   // size; the full breakpoint is unchanged.
   const body = <div className="relative h-[58px] w-[100px] sm:h-[74px] sm:w-[128px] shrink-0">{slide}{overlay}</div>;
+  // The thumbnail IS the play affordance on a single-part card. It opens the
+  // in-app player (lesson-player.tsx) rather than the raw URL in a new tab.
   return video && !processing ? (
-    <a href={video} target="_blank" onClick={() => trackId && recordArtifactView(trackId, "video_mp4")} className="block hover:opacity-95" title={watchHint}>
+    <WatchLink
+      src={video}
+      title={title}
+      closeLabel={closeLabel}
+      onOpen={() => trackId && recordArtifactView(trackId, "video_mp4")}
+      className="block hover:opacity-95"
+      hint={watchHint}
+    >
       {body}
-    </a>
+    </WatchLink>
   ) : body;
 }
 
@@ -312,6 +323,7 @@ export default function LessonCard({
         pct={p.progress}
         trackId={trackViews ? p.id : null}
         watchHint={t.card.watchLesson}
+        closeLabel={t.common.close}
       />
 
       <div className="min-w-0 flex-1">
@@ -364,9 +376,15 @@ export default function LessonCard({
               <Chip key={i}>
                 <span className="text-[#98A0A9] me-1.5">{fmt(t.partShort, { n: i + 1 })}</span>
                 {videos[i] && (
-                  <a href={videos[i]} target="_blank" onClick={() => trackViews && recordArtifactView(p.id, "video_mp4")} className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline">
+                  <WatchLink
+                    src={videos[i]}
+                    title={`${title} · ${fmt(t.partShort, { n: i + 1 })}`}
+                    closeLabel={t.common.close}
+                    onOpen={() => trackViews && recordArtifactView(p.id, "video_mp4")}
+                    className="inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline"
+                  >
                     <span className="text-[#1FB8A6]"><PlayGlyph size={12} /></span>{t.watch}
-                  </a>
+                  </WatchLink>
                 )}
                 {/* TEMPORARY founder-only download — English literal, no view
                     tracking; see the note in content-cell.tsx. */}

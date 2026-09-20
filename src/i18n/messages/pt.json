@@ -162,6 +162,7 @@
       "signOut": "Sair",
       "fullName": "Nome completo",
       "email": "E-mail",
+      "disposableEmail": "Endereços de e-mail temporários ou descartáveis não podem ser usados aqui. Cadastre-se com seu e-mail escolar ou pessoal.",
       "password": "Senha",
       "alreadyHaveAccount": "Já tem uma conta?",
       "schoolPrompt": "Vai configurar a escola inteira?",

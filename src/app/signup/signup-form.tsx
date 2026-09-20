@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { isDisposableEmail } from "@/utils/disposable-email";
 import OAuthButton from "@/components/oauth-button";
 import type { Dictionary } from "@/i18n/dictionaries";
 
@@ -47,6 +48,13 @@ export default function SignupForm({
     setNotice(null);
     setLoading(true);
     const supabase = createClient();
+    // Disposable addresses are refused by the database (0117); asking first is
+    // what turns "Database error saving new user" into a sentence.
+    if (await isDisposableEmail(supabase, email)) {
+      setLoading(false);
+      setError(auth.disposableEmail);
+      return;
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
