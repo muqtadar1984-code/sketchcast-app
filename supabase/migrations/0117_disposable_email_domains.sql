@@ -111,7 +111,7 @@ create trigger refuse_disposable_email
 
 -- ── 4. Seed ──────────────────────────────────────────────────────────────────
 -- github.com/disposable-email-domains/disposable-email-domains,
--- disposable_email_blocklist.conf as fetched 2026-09-20 (8908 domains), lower-cased
+-- disposable_email_blocklist.conf as fetched 2026-09-20 (8915 domains), lower-cased
 -- and de-duplicated. trashmail.ws — the address that prompted this — is in it.
 
 insert into public.disposable_email_domains (domain, source)
@@ -421,6 +421,7 @@ select d, 'disposable-email-domains@2026-09-20'
 681mail.com
 689345.xyz
 6974.click
+69flix.site
 6gdfg.zone.id
 6hjgjhgkilkj.tk
 6ip.us
@@ -2614,6 +2615,7 @@ endingimpunity.com
 endob.com
 enitempmail.xyz
 enotj.com
+enowgntg.site
 enspinner.com
 enterto.com
 envy17.com
@@ -4461,6 +4463,7 @@ kitnastar.com
 kiwkiw.shop
 kjkpc.net
 kjkszpjcompany.com
+kjnbtv.dedyn.io
 kk.io.vn
 kkdty.dynv6.net
 kkkoouy.cyou
@@ -6147,6 +6150,7 @@ passeone.com
 passeone.xyz
 past-line.com
 pastebitch.com
+pastipremium.store
 pastryofistanbul.com
 patientlecadet.online
 patity.com
@@ -7969,6 +7973,7 @@ trustcheck.cc
 trustdomainvn.us
 trustguru.vip
 trusticloud.us
+trustmailold.us
 truthfinderlogin.com
 tryalert.com
 tryninja.io
@@ -8431,6 +8436,7 @@ web-library.net
 web-mail.pp.ua
 web2mailco.com
 webcamness.com
+webcenterfairbanks.dedyn.io
 webclub.infos.st
 webcontact-france.eu
 webemail.me
@@ -8759,6 +8765,7 @@ yc08.cn
 ycare.de
 ycglobalmovement.com
 ycn.ro
+ydhfks.shop
 ydns.eu
 ydscontingencia.com
 ye.vc
