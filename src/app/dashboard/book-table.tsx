@@ -7,6 +7,7 @@ import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
 import { type CellLesson } from "./content-cell";
 import { kindLabel, statusLabel, type LibraryMessages } from "./labels";
+import { WatchLink } from "./lesson-player";
 import LessonCard from "./lesson-card";
 import BookTools from "./book-tools";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
@@ -139,9 +140,14 @@ function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }
           <span key={i} className="flex items-center gap-2 whitespace-nowrap">
             <span className="text-xs text-[#5B6470] w-11">{fmt(t.part, { n: i + 1 })}</span>
             {videos[i] && (
-              <a href={videos[i]} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
+              <WatchLink
+                src={videos[i]}
+                title={fmt(t.part, { n: i + 1 })}
+                closeLabel={t.common.close}
+                className="text-xs font-medium text-[#0C8175] hover:underline"
+              >
                 ▶ {t.watch}
-              </a>
+              </WatchLink>
             )}
             {decks[i] && (
               <a href={decks[i]} className="text-xs font-medium text-[#0C8175] hover:underline">
@@ -167,9 +173,9 @@ function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }
   return (
     <>
       {videos[0] && (
-        <a href={videos[0]} target="_blank" className="text-xs font-medium text-[#0C8175] hover:underline">
+        <WatchLink src={videos[0]} title={t.watch} closeLabel={t.common.close} className="text-xs font-medium text-[#0C8175] hover:underline">
           ▶ {t.watch}
-        </a>
+        </WatchLink>
       )}
       {decks[0] && (
         <a href={decks[0]} className="text-xs font-medium text-[#0C8175] hover:underline">
