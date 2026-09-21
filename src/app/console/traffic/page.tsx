@@ -3,17 +3,25 @@ import { InkUnderline } from "@/components/ink-mark";
 import Sparkline from "@/components/sparkline";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
-  compact, dailySeries, hostLabel, hostTotals, minuteSeries, sumSeries,
+  compact, dailySeries, hostTotals, minuteSeries, sumSeries,
   type DailyRow, type MinuteRow,
 } from "@/utils/traffic";
 
 export const dynamic = "force-dynamic";
 
-// The website-traffic ticker. Reads the visit rows our own beacon writes
-// (/api/public/visit, migration 0118) through three SQL functions, so a
-// month of visits is three round trips. Refreshes itself every 30 seconds;
-// the live strip is the last hour, minute by minute.
+// The website-traffic ticker — sketchcast.app, the marketing site. Reads the
+// visit rows our own beacon writes (/api/public/visit, migration 0118)
+// through three SQL functions, so a month of visits is three round trips.
+// Refreshes itself every 30 seconds; the live strip is the last hour, minute
+// by minute.
+//
+// THE HEADLINE IS THE WEBSITE. Every tile and both sparklines count
+// sketchcast.app (and www) only — "is anyone visiting the site?" is the
+// question. The app's own pages are counted too and listed in the per-site
+// table underneath, so signups can be read against site visits; staff
+// hosts (console, library) sit apart in that table and in nothing else.
 
+const WEBSITE_HOSTS = new Set(["sketchcast.app", "www.sketchcast.app"]);
 const LIVE_MINUTES = 60;
 const WINDOWS = [7, 30, 90] as const;
 type Window = (typeof WINDOWS)[number];
@@ -32,10 +40,10 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
 
   const [dailyQ, liveQ, pathsQ, refsQ, countriesQ] = await Promise.all([
     admin.rpc("site_visits_daily", { p_days: 90 }),
-    admin.rpc("site_visits_live", { p_minutes: LIVE_MINUTES }),
-    admin.rpc("site_visits_breakdown", { p_since: since, p_dimension: "path", p_limit: 12 }),
-    admin.rpc("site_visits_breakdown", { p_since: since, p_dimension: "ref_host", p_limit: 12 }),
-    admin.rpc("site_visits_breakdown", { p_since: since, p_dimension: "country", p_limit: 12 }),
+    admin.rpc("site_visits_live", { p_minutes: LIVE_MINUTES, p_hosts: [...WEBSITE_HOSTS] }),
+    admin.rpc("site_visits_breakdown", { p_since: since, p_dimension: "path", p_limit: 12, p_hosts: [...WEBSITE_HOSTS] }),
+    admin.rpc("site_visits_breakdown", { p_since: since, p_dimension: "ref_host", p_limit: 12, p_hosts: [...WEBSITE_HOSTS] }),
+    admin.rpc("site_visits_breakdown", { p_since: since, p_dimension: "country", p_limit: 12, p_hosts: [...WEBSITE_HOSTS] }),
   ]);
   const missing = [dailyQ, liveQ, pathsQ, refsQ, countriesQ].some((q) => q.error?.code === "42883" || q.error?.code === "42P01");
 
@@ -44,7 +52,7 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
   const last5 = live.slice(-5).reduce((a, p) => a + p.visits, 0);
   const lastHour = live.reduce((a, p) => a + p.visits, 0);
 
-  const series90 = dailySeries(daily, 90, undefined, now);
+  const series90 = dailySeries(daily, 90, WEBSITE_HOSTS, now);
   const today = series90[series90.length - 1] ?? { visits: 0, visitors: 0 };
   const yesterday = series90[series90.length - 2] ?? { visits: 0, visitors: 0 };
   const w7 = sumSeries(series90.slice(-7));
@@ -85,7 +93,7 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
       <h1 className="text-4xl mb-2">Traffic</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-xs text-[#98A0A9] mb-7">
-        Counted by our own cookieless beacon on sketchcast.app and the app. Visitors are unique per day; across sites a person counts once per site. Console and library visits are shown separately. Refreshes every 30 seconds.
+        sketchcast.app, counted by our own cookieless beacon. Visitors are unique per day. The app and the staff hosts are listed under Sites, and nowhere else. Refreshes every 30 seconds.
       </p>
 
       {missing && (
@@ -106,11 +114,11 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
 
       <section className="mb-10 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
-          <div className="text-xs text-[#5B6470]">Last hour, per minute</div>
+          <div className="text-xs text-[#5B6470]">sketchcast.app — last hour, per minute</div>
           <Sparkline values={live.map((p) => p.visits)} width={420} height={48} className="w-full h-12 mt-2" title="Visits per minute, last hour" />
         </div>
         <div className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
-          <div className="text-xs text-[#5B6470]">Visitors per day, last 30 days</div>
+          <div className="text-xs text-[#5B6470]">sketchcast.app — visitors per day, last 30 days</div>
           <Sparkline values={series90.slice(-30).map((p) => p.visitors)} width={420} height={48} className="w-full h-12 mt-2" title="Visitors per day, last 30 days" />
         </div>
       </section>
@@ -126,7 +134,7 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
             ))}
           </form>
         </div>
-        <p className="text-xs text-[#98A0A9] mb-2">{compact(window.visitors)} visitors · {compact(window.visits)} visits in the last {days} days.</p>
+        <p className="text-xs text-[#98A0A9] mb-2">sketchcast.app: {compact(window.visitors)} visitors · {compact(window.visits)} visits in the last {days} days.</p>
 
         <div className="card divide-y divide-[#EEF0EC]">
           <div className={`grid grid-cols-[2fr_1fr_1fr] gap-2 ${th}`}>
@@ -148,7 +156,7 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
           {table("Top countries", (countriesQ.data ?? []) as Breakdown[], "Country")}
         </div>
         <p className="text-[11px] text-[#98A0A9] mt-3">
-          A visitor is a hash of address, browser and a salt that changes every UTC day, so nobody is followed across days. Paths are stored without query strings; referrers as their host only. Crawlers are dropped by user agent. Visitors who block scripts are not counted. Hosts: {Object.entries({ Website: "sketchcast.app", App: "app.sketchcast.app" }).map(([l, h]) => `${l} = ${hostLabel(h) === l ? h : h}`).join(", ")}.
+          Top pages, referrers and countries are sketchcast.app only. A visitor is a hash of address, browser and a salt that changes every UTC day, so nobody is followed across days. Paths are stored without query strings; referrers as their host only. Crawlers are dropped by user agent. Visitors who block scripts are not counted.
         </p>
       </section>
     </main>

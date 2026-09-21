@@ -114,7 +114,10 @@ language sql stable security definer set search_path = public as $$
    order by 1, 2
 $$;
 
-create or replace function public.site_visits_breakdown(p_since timestamptz, p_dimension text, p_limit int default 12)
+-- `p_hosts` narrows a breakdown or the live strip to some hosts (the console
+-- passes the website's); null means every host.
+create or replace function public.site_visits_breakdown(p_since timestamptz, p_dimension text, p_limit int default 12,
+                                                        p_hosts text[] default null)
 returns table (key text, visits bigint, visitors bigint)
 language plpgsql stable security definer set search_path = public as $$
 begin
@@ -124,19 +127,20 @@ begin
   return query execute format(
     'select coalesce(%I, ''(none)'')::text as key, count(*) as visits, count(distinct visitor) as visitors
        from public.site_visits
-      where at >= $1
+      where at >= $1 and ($3::text[] is null or host = any($3))
       group by 1
       order by 2 desc, 1
       limit $2', p_dimension)
-    using p_since, greatest(1, least(p_limit, 100));
+    using p_since, greatest(1, least(p_limit, 100)), p_hosts;
 end $$;
 
-create or replace function public.site_visits_live(p_minutes int default 60)
+create or replace function public.site_visits_live(p_minutes int default 60, p_hosts text[] default null)
 returns table (minute timestamptz, visits bigint, visitors bigint)
 language sql stable security definer set search_path = public as $$
   select date_trunc('minute', at) as minute, count(*) as visits, count(distinct visitor) as visitors
     from public.site_visits
    where at >= now() - make_interval(mins => greatest(1, least(p_minutes, 1440)))
+     and (p_hosts is null or host = any(p_hosts))
    group by 1
    order by 1
 $$;
@@ -152,10 +156,10 @@ begin
 end $$;
 
 revoke execute on function public.site_visits_daily(int)                          from public, anon, authenticated;
-revoke execute on function public.site_visits_breakdown(timestamptz, text, int)  from public, anon, authenticated;
-revoke execute on function public.site_visits_live(int)                           from public, anon, authenticated;
+revoke execute on function public.site_visits_breakdown(timestamptz, text, int, text[])  from public, anon, authenticated;
+revoke execute on function public.site_visits_live(int, text[])                   from public, anon, authenticated;
 revoke execute on function public.prune_site_visits(int)                          from public, anon, authenticated;
 grant  execute on function public.site_visits_daily(int)                          to service_role;
-grant  execute on function public.site_visits_breakdown(timestamptz, text, int)  to service_role;
-grant  execute on function public.site_visits_live(int)                           to service_role;
+grant  execute on function public.site_visits_breakdown(timestamptz, text, int, text[])  to service_role;
+grant  execute on function public.site_visits_live(int, text[])                   to service_role;
 grant  execute on function public.prune_site_visits(int)                          to service_role;
