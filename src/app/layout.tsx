@@ -12,6 +12,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { dirFor, htmlLang } from "@/i18n/locales";
 import { resolveLocale } from "@/i18n/resolve";
 import SourceCapture from "@/components/source-capture";
+import VisitBeacon from "@/components/visit-beacon";
 import "./globals.css";
 
 // Live Ink type system: a geometric grotesk for display, Inter for body,
@@ -147,6 +148,7 @@ export default async function RootLayout({
             switched on in the dashboard before it reports anything. Neither
             can affect what is above it in the tree. */}
         <SourceCapture />
+        <VisitBeacon />
         <Analytics />
       </body>
     </html>

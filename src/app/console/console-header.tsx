@@ -15,6 +15,8 @@ const TABS = [
   { href: "/console/visual-library", label: "Visual Library" },
   { href: "/console/feedback", label: "Feedback" },
   { href: "/console/financials", label: "Financials" },
+  { href: "/console/youtube", label: "YouTube" },
+  { href: "/console/traffic", label: "Traffic" },
 ];
 
 function isActive(href: string, path: string): boolean {
