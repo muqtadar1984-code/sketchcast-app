@@ -27,21 +27,28 @@ import {
   type KitKind,
 } from "@/utils/catalogue/kit";
 import {
-  DEFAULT_PRIVACY,
+  AUDIT_NOTE,
+  INTRO_MAX,
   PRIVACY,
   PRIVACY_LABEL,
-  PUBLISHABLE_PRIVACY,
   PUBLISH_OFF_NOTE,
+  TITLE_MAX,
+  audienceTag,
+  boardsOf,
   buildDescriptionPreview,
   canPublish,
   canQueuePublish,
+  defaultPrivacy,
+  effectiveTerms,
   publicationSummary,
   publishActionFor,
   publishPrivacyAccepts,
   publishTitle,
+  publishablePrivacies,
 } from "@/utils/catalogue/publish";
 import { isLiveJobStatus, stageLabel } from "@/utils/catalogue/status";
-import type { ClipRow, KitGenerationRow, KitRejectReason, PublishPrivacy, TeacherAvatar, TopicKit, TopicPublication } from "@/utils/catalogue/types";
+import type { HeaderMapping } from "@/utils/catalogue/kit";
+import type { ClipRow, KitGenerationRow, KitRejectReason, PublishPrivacy, TeacherAvatar, TopicKit, TopicPublication, YouTubeMeta } from "@/utils/catalogue/types";
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
 import type { JobRow } from "./article-panel";
 
@@ -140,6 +147,9 @@ export function KitPanel({
   topicStatus,
   bankMaturity,
   curriculumHeader,
+  headerMappings,
+  topicSubject,
+  auditPassed,
   articleStatus,
   articleStatuses,
   kits,
@@ -162,6 +172,13 @@ export function KitPanel({
   /** the same header lines the catalogue documents carry, for the description
    *  preview (curriculumHeaderLines, composed on the server) */
   curriculumHeader: string[];
+  /** the curriculum mappings the header was composed from — the title's
+   *  audience block and the hashtags read the boards off them */
+  headerMappings: HeaderMapping[];
+  /** topics.subject — the audience tag's last word */
+  topicSubject: string | null;
+  /** YOUTUBE_COMPLIANCE_AUDIT_PASSED on the app: public/unlisted allowed, public the default */
+  auditPassed: boolean;
   /** the approved English article's status, or null when there is none */
   articleStatus: string | null;
   /** every article version's status by id — a kit whose own article is no
@@ -253,6 +270,9 @@ export function KitPanel({
           topicStatus={topicStatus}
           bankMaturity={bankMaturity}
           curriculumHeader={curriculumHeader}
+          headerMappings={headerMappings}
+          topicSubject={topicSubject}
+          auditPassed={auditPassed}
           kitArticleStatus={articleStatuses[current.kit.article_id] ?? null}
           liveKit={liveKit}
           canGenerate={canGenerate}
@@ -312,6 +332,9 @@ function CurrentKit({
   topicStatus,
   bankMaturity,
   curriculumHeader,
+  headerMappings,
+  topicSubject,
+  auditPassed,
   kitArticleStatus,
   liveKit,
   canGenerate,
@@ -332,6 +355,9 @@ function CurrentKit({
   topicStatus: string;
   bankMaturity: string | null;
   curriculumHeader: string[];
+  headerMappings: HeaderMapping[];
+  topicSubject: string | null;
+  auditPassed: boolean;
   /** the status of THIS kit's article version (null when it is gone) */
   kitArticleStatus: string | null;
   liveKit: boolean;
@@ -623,7 +649,12 @@ function CurrentKit({
           topicStatus={topicStatus}
           bankMaturity={bankMaturity}
           curriculumHeader={curriculumHeader}
+          headerMappings={headerMappings}
+          topicSubject={topicSubject}
+          auditPassed={auditPassed}
+          thumbnails={view.generations.flatMap((g) => g.artifacts.filter((a) => a.kind === "thumbnail_png"))}
           kitArticleStatus={kitArticleStatus}
+          canEditWords={canApprove}
           canPublish={canPublishRole}
           publishEnabled={publishEnabled}
           busy={busy}
@@ -637,11 +668,38 @@ function CurrentKit({
 
 // ── Publish (Phase 4) ────────────────────────────────────────────────────────
 // Shown only for an APPROVED kit, and shown to everyone who can see the kit —
-// publishing is admin-only, but a reviewer who approved the video should be
-// able to see whether it reached the channel and read what was posted with it.
-// Reviewers and editors get the state and the preview; only an admin gets the
-// button. Nothing here decides anything the route does not re-decide, and the
-// worker decides a third time (plan §1.3).
+// posting is admin-only, but a reviewer who approved the video should see
+// whether it reached the channel, read what will be posted, and EDIT the
+// words: the library is where everything that goes to YouTube is reviewed
+// (founder, 2026-09-21) — the video above, and here the title, the
+// description, the thumbnail card and the privacy — so that Post is the
+// release, public directly once the compliance audit is through. The words
+// (topic_kits.youtube_meta, 0121) are written by the worker from the
+// narration when the video finishes and saved here through the kit route's
+// save_youtube action; the title and description are COMPOSED from them by
+// buildDescriptionPreview / publishTitle, which mirror the worker's
+// composers, so the preview is the posting. Nothing here decides anything
+// the route does not re-decide, and the worker decides a third time.
+
+type WordsForm = { title: string; intro: string; terms: string; tags: string };
+
+function wordsFormOf(meta: YouTubeMeta | null): WordsForm {
+  return {
+    title: meta?.title ?? "",
+    intro: meta?.intro ?? "",
+    terms: (meta?.key_terms ?? []).join(", "),
+    tags: (meta?.hashtags ?? []).join(", "),
+  };
+}
+
+function metaOfForm(f: WordsForm): YouTubeMeta {
+  const list = (raw: string) =>
+    raw
+      .split(/[,\n]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+  return { title: f.title.trim() || null, intro: f.intro.trim() || null, key_terms: list(f.terms), hashtags: list(f.tags) };
+}
 
 function PublishBlock({
   kit,
@@ -651,7 +709,12 @@ function PublishBlock({
   topicStatus,
   bankMaturity,
   curriculumHeader,
+  headerMappings,
+  topicSubject,
+  auditPassed,
+  thumbnails,
   kitArticleStatus,
+  canEditWords,
   canPublish: canPublishRole,
   publishEnabled,
   busy,
@@ -665,20 +728,36 @@ function PublishBlock({
   topicStatus: string;
   bankMaturity: string | null;
   curriculumHeader: string[];
+  headerMappings: HeaderMapping[];
+  topicSubject: string | null;
+  auditPassed: boolean;
+  /** the thumbnail cards the worker stored with the video, one per part (signed) */
+  thumbnails: KitArtifactView[];
   kitArticleStatus: string | null;
+  /** may edit the title / intro / terms / tags (the `approve` action) */
+  canEditWords: boolean;
   canPublish: boolean;
   publishEnabled: boolean;
   busy: string | null;
   post: Post;
   setNotice: (v: string | null) => void;
 }) {
-  const [privacy, setPrivacy] = useState<PublishPrivacy>(DEFAULT_PRIVACY);
+  const [privacy, setPrivacy] = useState<PublishPrivacy>(defaultPrivacy(auditPassed));
+  const [form, setForm] = useState<WordsForm>(wordsFormOf(kit.youtube_meta));
+  const [editing, setEditing] = useState(false);
   const summary = publicationSummary(publications, kit.part_plan.length);
   const action = publishActionFor(summary);
   const chapters = chaptersByPart(kit.chapters);
   // The parts to preview: the plan when the worker has written it, else the
   // parts that already have a publication row, else one.
   const partNumbers = summary.parts.length ? summary.parts.map((p) => p.part) : [1];
+  // What the composers read: the saved words, or — while editing — the form.
+  const meta: YouTubeMeta | null = editing ? metaOfForm(form) : kit.youtube_meta;
+  const terms = effectiveTerms(meta, topicSummary);
+  const audience = audienceTag(boardsOf(headerMappings), topicSubject);
+  const titleFor = (p: number) => publishTitle(topicTitle, p, partNumbers.length, { meta, keyTerms: terms, audience });
+  const thumbFor = (p: number) => thumbnails.find((t) => t.part === p) ?? null;
+  const allowed = publishablePrivacies(auditPassed);
 
   // The disabled reason, in the order the route checks it, so the sentence on
   // the button is the sentence a click would have answered:
@@ -688,32 +767,41 @@ function PublishBlock({
   //   4. the privacy the operator picked
   const gate = canPublish(kit.status, topicStatus, kitArticleStatus, bankMaturity);
   const queue = canQueuePublish(action, summary);
-  const priv = publishPrivacyAccepts(privacy);
-  const why = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : !queue.ok ? queue.why : !priv.ok ? priv.why : null;
+  const priv = publishPrivacyAccepts(privacy, auditPassed);
+  const why = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : !queue.ok ? queue.why : !priv.ok ? priv.why : editing ? "Save or discard the words first." : null;
 
   const publish = async () => {
+    const what = privacy === "public" ? "PUBLIC — listed and searchable the moment the upload finishes" : privacy === "unlisted" ? "unlisted" : "private";
     if (
       !window.confirm(
         action === "retry"
-          ? "Finish publishing this kit? Parts already on YouTube are skipped; the rest are uploaded private."
-          : "Publish this kit to YouTube? Every part is uploaded private, with its description, timestamps, captions and thumbnail.",
+          ? `Finish posting this kit? Parts already on YouTube are skipped; the rest go up ${what}, with the title, description, chapters, captions and thumbnail shown here.`
+          : `Post this kit to YouTube ${what}, with the title, description, chapters, captions and thumbnail shown here?`,
       )
     )
       return;
     const r = await post({ action, kitId: kit.id, privacy }, "publish", "publish");
-    if (r) setNotice("Publish queued — the worker uploads the parts in order and records each one.");
+    if (r) setNotice(`Post queued — the worker uploads the parts in order (${privacy}) and records each one.`);
   };
+
+  const saveWords = async () => {
+    const m = metaOfForm(form);
+    const r = await post({ action: "save_youtube", kitId: kit.id, title: m.title ?? "", intro: m.intro ?? "", key_terms: m.key_terms, hashtags: m.hashtags }, "save_youtube", "kit");
+    if (r) {
+      setEditing(false);
+      setNotice("Words saved — the preview below is what will be posted.");
+    }
+  };
+
+  const wordsSource = kit.youtube_meta?.source === "edited" ? "edited in the library" : kit.youtube_meta?.source === "generated" ? "written by the worker from the narration" : "defaults (nothing written yet)";
 
   return (
     <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-medium">Publish to YouTube</h3>
+        <h3 className="text-sm font-medium">Post to YouTube</h3>
         <span className="text-xs text-[#5B6470]">{summary.label}</span>
       </div>
-      <p className="text-xs text-[#9A6400] bg-[#FFF9EE] rounded-lg px-3 py-2">
-        The channel does not exist yet and the YouTube API project has not passed its compliance audit, so this is switched off. An unaudited project can only create{" "}
-        <span className="font-medium">private</span> videos; the privacy is flipped later, deliberately, once the audit is through.
-      </p>
+      {!auditPassed && <p className="text-xs text-[#9A6400] bg-[#FFF9EE] rounded-lg px-3 py-2">{AUDIT_NOTE}</p>}
 
       {/* what is on the channel */}
       <div className="overflow-x-auto rounded-lg border border-[#EEF0EC]">
@@ -730,7 +818,7 @@ function PublishBlock({
             {summary.parts.length === 0 ? (
               <tr>
                 <td className="px-3 py-2 text-xs text-[#98A0A9]" colSpan={4}>
-                  Nothing published yet.{!summary.known && " The part plan is not written, so the number of parts is not known here."}
+                  Nothing posted yet.{!summary.known && " The part plan is not written, so the number of parts is not known here."}
                 </td>
               </tr>
             ) : (
@@ -780,30 +868,96 @@ function PublishBlock({
         </table>
       </div>
 
-      {/* what will be posted */}
-      <details className="rounded-lg border border-[#EEF0EC] p-3">
-        <summary className="text-sm cursor-pointer">
-          What will be posted <span className="text-xs text-[#5B6470]">(title and description per part)</span>
-        </summary>
-        <div className="mt-2 space-y-3">
-          {partNumbers.map((p) => (
-            <div key={p}>
-              <p className="text-sm font-medium">{publishTitle(topicTitle, p, partNumbers.length)}</p>
-              <pre className="mt-1 text-xs text-[#5B6470] whitespace-pre-wrap font-sans">
-                {buildDescriptionPreview({
-                  topicTitle,
-                  summary: topicSummary,
-                  curriculumHeader,
-                  chapters: chapters.get(p) ?? [],
-                  part: p,
-                  parts: partNumbers.length,
-                })}
-              </pre>
-              {(chapters.get(p) ?? []).length > 0 && chapterCountWarning(chapters.get(p)!.length)}
-            </div>
-          ))}
+      {/* the words: title, hook, key terms, hashtags */}
+      <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">
+            The words <span className="text-xs font-normal text-[#5B6470]">({wordsSource})</span>
+          </p>
+          {canEditWords && !editing && (
+            <button type="button" className="btn-ghost h-8 px-3 text-xs" disabled={!!busy} onClick={() => { setForm(wordsFormOf(kit.youtube_meta)); setEditing(true); }}>
+              Edit
+            </button>
+          )}
         </div>
-      </details>
+        {editing ? (
+          <div className="space-y-2">
+            <label className="block text-xs text-[#5B6470]">
+              Title <span className="text-[#98A0A9]">({form.title.trim().length}/{TITLE_MAX}; blank = composed from the topic, the key terms and &ldquo;{audience || "the subject"}&rdquo;)</span>
+              <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={TITLE_MAX} className="field mt-1 w-full h-9 px-2 text-sm" placeholder={titleFor(1)} />
+            </label>
+            <label className="block text-xs text-[#5B6470]">
+              Opening paragraph <span className="text-[#98A0A9]">({form.intro.trim().length}/{INTRO_MAX}; blank = the topic summary)</span>
+              <textarea value={form.intro} onChange={(e) => setForm({ ...form, intro: e.target.value })} maxLength={INTRO_MAX} rows={4} className="field mt-1 w-full px-2 py-1 text-sm" />
+            </label>
+            <label className="block text-xs text-[#5B6470]">
+              Key terms <span className="text-[#98A0A9]">(comma-separated; the first three go into the title)</span>
+              <input value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} className="field mt-1 w-full h-9 px-2 text-sm" />
+            </label>
+            <label className="block text-xs text-[#5B6470]">
+              Hashtags <span className="text-[#98A0A9]">(comma-separated, without #)</span>
+              <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} className="field mt-1 w-full h-9 px-2 text-sm" />
+            </label>
+            <div className="flex items-center gap-2">
+              <button type="button" className="btn-primary h-8 px-3 text-xs disabled:opacity-50" disabled={!!busy} onClick={saveWords}>
+                {busy === "save_youtube" ? "Saving…" : "Save words"}
+              </button>
+              <button type="button" className="btn-ghost h-8 px-3 text-xs" disabled={!!busy} onClick={() => { setEditing(false); setForm(wordsFormOf(kit.youtube_meta)); }}>
+                Discard
+              </button>
+              {summary.published > 0 && <span className="text-xs text-[#9A6400]">Parts already on YouTube keep the words they went up with.</span>}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-[#5B6470]">
+            {kit.youtube_meta ? "Title, opening paragraph, key terms and hashtags as they will be composed below." : "Nothing written for this kit yet — the preview uses the topic summary and the curriculum mapping."}
+          </p>
+        )}
+      </div>
+
+      {/* what will be posted, per part: thumbnail, title, description */}
+      <div className="rounded-lg border border-[#EEF0EC] p-3">
+        <p className="text-sm font-medium mb-2">
+          What will be posted <span className="text-xs font-normal text-[#5B6470]">(thumbnail, title and description per part — exactly as the worker composes them)</span>
+        </p>
+        <div className="space-y-4">
+          {partNumbers.map((p) => {
+            const thumb = thumbFor(p);
+            return (
+              <div key={p} className="grid gap-3 md:grid-cols-[240px_1fr]">
+                <div>
+                  {thumb?.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumb.url} alt={`Thumbnail for part ${p}`} className="w-full rounded-lg border border-[#E6E8E4]" />
+                  ) : (
+                    <div className="w-full aspect-video rounded-lg border border-dashed border-[#E6E8E4] flex items-center justify-center text-xs text-[#98A0A9] text-center px-2">
+                      No stored thumbnail — the worker draws one at post time.
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium break-words">{titleFor(p)}</p>
+                  <p className="text-[11px] text-[#98A0A9]">{titleFor(p).length}/{TITLE_MAX} characters</p>
+                  <pre className="mt-1 text-xs text-[#5B6470] whitespace-pre-wrap font-sans">
+                    {buildDescriptionPreview({
+                      topicTitle,
+                      summary: topicSummary,
+                      subject: topicSubject,
+                      curriculumHeader,
+                      mappings: headerMappings,
+                      meta,
+                      chapters: chapters.get(p) ?? [],
+                      part: p,
+                      parts: partNumbers.length,
+                    })}
+                  </pre>
+                  {(chapters.get(p) ?? []).length > 0 && chapterCountWarning(chapters.get(p)!.length)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {canPublishRole ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -815,18 +969,18 @@ function PublishBlock({
             disabled={!!busy}
           >
             {PRIVACY.map((p) => (
-              <option key={p} value={p} disabled={!(PUBLISHABLE_PRIVACY as readonly string[]).includes(p)}>
+              <option key={p} value={p} disabled={!(allowed as readonly string[]).includes(p)}>
                 {PRIVACY_LABEL[p]}
-                {(PUBLISHABLE_PRIVACY as readonly string[]).includes(p) ? "" : " — needs the compliance audit"}
+                {(allowed as readonly string[]).includes(p) ? "" : " — needs the compliance audit"}
               </option>
             ))}
           </select>
           <button type="button" disabled={!!busy || !!why} title={why ?? undefined} onClick={publish} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-            {busy === "publish" ? "Queuing…" : action === "retry" ? "Finish publishing" : "Publish to YouTube"}
+            {busy === "publish" ? "Queuing…" : action === "retry" ? "Finish posting" : privacy === "public" ? "Post to YouTube (public)" : `Post to YouTube (${privacy})`}
           </button>
         </div>
       ) : (
-        <p className="text-xs text-[#98A0A9]">Publishing is a platform admin&apos;s action; this is the state and what would be posted.</p>
+        <p className="text-xs text-[#98A0A9]">Posting is a platform admin&apos;s action; this is the state and what would be posted.</p>
       )}
       {canPublishRole && why && <p className="text-xs text-[#9A6400]">{why}</p>}
     </div>

@@ -28,7 +28,8 @@ import {
   voicePairFor,
   type HeaderMapping,
 } from "@/utils/catalogue/kit";
-import type { PartPlanRow, TeacherAvatar, TopicKit } from "@/utils/catalogue/types";
+import { YOUTUBE_META_MIGRATION, validateYouTubeMeta } from "@/utils/catalogue/publish";
+import type { PartPlanRow, TeacherAvatar, TopicKit, YouTubeMeta } from "@/utils/catalogue/types";
 import { audit, bad, conflict, dbError, notFound, readJson, text, uuid } from "../../../lib";
 import { enqueueQuestionsJob } from "./questions-job";
 import { cancelQueuedJob } from "./cancel-job";
@@ -113,13 +114,17 @@ export const runtime = "nodejs";
 // re-checks everything this route checks (decision 13): human approval is
 // enforced twice, nothing auto-approves.
 
-type Action = "generate" | "retry" | "regenerate" | "save_clips" | "approve" | "reject";
+type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject";
 
 const NEEDS: Record<Action, LibraryAction> = {
   generate: "generate",
   retry: "generate",
   regenerate: "generate",
   save_clips: "generate",
+  // The YouTube words (title, hook, key terms, hashtags) are part of the
+  // review, so whoever can approve the video can edit them; posting stays
+  // admin-only (the publish route).
+  save_youtube: "approve",
   approve: "approve",
   reject: "approve",
 };
@@ -132,6 +137,11 @@ type Body = {
   clips?: unknown;
   notes?: unknown;
   reason?: unknown;
+  /** save_youtube: the publish block's fields */
+  title?: unknown;
+  intro?: unknown;
+  key_terms?: unknown;
+  hashtags?: unknown;
 };
 
 /** Phase 3 builds English kits; translations arrive with the translate phase. */
@@ -496,6 +506,44 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!written?.length) return conflict("This kit went back to generating while you were editing — the worker will rewrite the clips; nothing was saved.", { status: kit.status });
     await audit(admin, m.id, "kit_clips_save", "topic", id, { kit_id: kit.id, clips: v.clips.length, parts: [...new Set(v.clips.map((c) => c.part))], plan_known: plan.length > 0, migration: plErr ? CATALOGUE_KITS_MIGRATION : null });
     return NextResponse.json({ ok: true, clips: v.clips });
+  }
+
+  // ── save_youtube ───────────────────────────────────────────────────────────
+  // The words of the YouTube listing (0121 topic_kits.youtube_meta), edited in
+  // the publish block. Validated by the pure module (validateYouTubeMeta: a
+  // blank field means "use the default"), written with a status guard like
+  // the clips, audited as kit_youtube_save. The worker's publish reads what
+  // is stored at upload time, so an edit after a publish changes nothing
+  // already on the channel — and the panel says so.
+  if (action === "save_youtube") {
+    const { kit, response } = await loadKit(body.kitId);
+    if (!kit) return response!;
+    if (!canEditClips(kit.status)) return conflict("The YouTube words are edited once the video exists — this kit is still generating.", { status: kit.status });
+    const v = validateYouTubeMeta({ title: body.title, intro: body.intro, key_terms: body.key_terms, hashtags: body.hashtags });
+    if (!v.ok) return NextResponse.json({ error: v.errors[0], errors: v.errors }, { status: 400 });
+    const { data: prior, error: prErr } = await admin.from("topic_kits").select("youtube_meta").eq("id", kit.id).maybeSingle();
+    if (prErr) {
+      if (catalogueColumnMissing(prErr) && /youtube_meta/i.test(prErr.message ?? "")) {
+        return conflict(`The YouTube words column (topic_kits.youtube_meta) is not in this database yet — apply ${YOUTUBE_META_MIGRATION}.`);
+      }
+      return dbError(prErr);
+    }
+    const previous = (prior?.youtube_meta ?? null) as YouTubeMeta | null;
+    const meta: YouTubeMeta = {
+      ...(previous ?? {}),
+      title: v.meta.title || null,
+      intro: v.meta.intro || null,
+      key_terms: v.meta.key_terms,
+      hashtags: v.meta.hashtags,
+      source: "edited",
+      edited_at: new Date().toISOString(),
+      edited_by: m.id,
+    };
+    const { data: written, error: uErr } = await admin.from("topic_kits").update({ youtube_meta: meta }).eq("id", kit.id).in("status", CLIP_EDITABLE).select("id");
+    if (uErr) return dbError(uErr);
+    if (!written?.length) return conflict("This kit went back to generating while you were editing — the worker will rewrite the words; nothing was saved.", { status: kit.status });
+    await audit(admin, m.id, "kit_youtube_save", "topic", id, { kit_id: kit.id, title: meta.title, terms: meta.key_terms?.length ?? 0, hashtags: meta.hashtags?.length ?? 0 });
+    return NextResponse.json({ ok: true, youtube_meta: meta });
   }
 
   // ── approve ────────────────────────────────────────────────────────────────

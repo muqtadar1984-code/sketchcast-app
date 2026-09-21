@@ -7,12 +7,13 @@ import AutoRefresh from "@/components/auto-refresh";
 import { InkUnderline } from "@/components/ink-mark";
 import { ARTICLE_JOBS_MIGRATION, catalogueColumnMissing, catalogueMissing } from "@/utils/catalogue/status";
 import { CATALOGUE_KITS_MIGRATION, curriculumHeaderLines, kitGenerationIds, sortKits, sortVideoArtifacts, videoPartOf, type HeaderMapping } from "@/utils/catalogue/kit";
-import { catalogueGenerateEnabled, cataloguePublishEnabled, catalogueOwnerId } from "@/utils/flags";
+import { catalogueGenerateEnabled, cataloguePublishEnabled, catalogueOwnerId, youtubeAuditPassed } from "@/utils/flags";
 import { docDownloadName } from "@/utils/download-name";
 import type { ArticleFigure, Curriculum, KitGenerationRow, Topic, TopicAlias, TopicArticle, TopicHit, TopicKit, TopicPublication } from "@/utils/catalogue/types";
 import { ErrorBanner, MaturityChip, MissingTablesBanner, StatusChip, fmtDate } from "../../catalogue-ui";
 import { AliasPanel, MappingPanel, PrereqPanel, TopicActions, TopicHeaderEditor, type MappingRow } from "./topic-panels";
 import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel";
+import { YOUTUBE_META_MIGRATION } from "@/utils/catalogue/publish";
 import { KitPanel, type KitArtifactView, type KitView } from "./kit-panel";
 
 // /library/topics/[id] — one topic: header (editable), status actions, aliases,
@@ -220,13 +221,14 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   let kitsError: { message?: string } | null = null;
   let kitRows: TopicKit[] = [];
   {
-    const { data, error } = await admin.from("topic_kits").select(KIT_COLUMNS + ", part_plan").eq("topic_id", id).eq("language", KIT_LANGUAGE).order("created_at", { ascending: false });
-    if (error && catalogueColumnMissing(error) && /part_plan/i.test(error.message ?? "")) {
-      // 0115 not applied: the kits still show, with an empty plan.
-      kitsMigration = CATALOGUE_KITS_MIGRATION;
+    const { data, error } = await admin.from("topic_kits").select(KIT_COLUMNS + ", part_plan, youtube_meta").eq("topic_id", id).eq("language", KIT_LANGUAGE).order("created_at", { ascending: false });
+    if (error && catalogueColumnMissing(error) && /part_plan|youtube_meta/i.test(error.message ?? "")) {
+      // 0115 / 0121 not applied: the kits still show, with an empty plan and
+      // no YouTube words.
+      kitsMigration = /youtube_meta/i.test(error.message ?? "") ? YOUTUBE_META_MIGRATION : CATALOGUE_KITS_MIGRATION;
       const again = await admin.from("topic_kits").select(KIT_COLUMNS).eq("topic_id", id).eq("language", KIT_LANGUAGE).order("created_at", { ascending: false });
       if (again.error && !catalogueMissing(again.error)) kitsError = again.error;
-      kitRows = ((again.data ?? []) as unknown as Omit<TopicKit, "part_plan">[]).map((k) => ({ ...k, part_plan: [] }));
+      kitRows = ((again.data ?? []) as unknown as Omit<TopicKit, "part_plan" | "youtube_meta">[]).map((k) => ({ ...k, part_plan: [], youtube_meta: null }));
     } else if (error && !catalogueMissing(error)) {
       kitsError = error;
     } else {
@@ -236,6 +238,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   kitRows = sortKits(kitRows).map((k) => ({
     ...k,
     doc_generation_ids: k.doc_generation_ids ?? {},
+    youtube_meta: k.youtube_meta && typeof k.youtube_meta === "object" ? k.youtube_meta : null,
     chapters: Array.isArray(k.chapters) ? k.chapters : [],
     clips: Array.isArray(k.clips) ? k.clips : [],
     part_plan: Array.isArray(k.part_plan) ? k.part_plan : [],
@@ -295,9 +298,12 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
             const jobs = [...(g.jobs ?? [])].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
             const job = jobs.find((j) => j.type === g.kind) ?? jobs[0] ?? null;
             const videos = sortVideoArtifacts((g.artifacts ?? []).filter((a) => a.kind === "video_mp4"));
-            const docs = (g.artifacts ?? []).filter((a) => a.kind !== "video_mp4" && a.kind !== "script_json");
+            // the card the worker drew for each part (0121), shown in the publish block
+            const thumbs = (g.artifacts ?? []).filter((a) => a.kind === "thumbnail_png");
+            const docs = (g.artifacts ?? []).filter((a) => a.kind !== "video_mp4" && a.kind !== "script_json" && a.kind !== "thumbnail_png");
             const artifacts: KitArtifactView[] = await Promise.all([
               ...videos.map(async (a) => ({ kind: a.kind, url: await signKit(a.storage_path), name: null, part: videoPartOf(a.storage_path) })),
+              ...thumbs.map(async (a) => ({ kind: a.kind, url: await signKit(a.storage_path), name: null, part: videoPartOf(a.storage_path) })),
               ...docs.map(async (a) => {
                 const name = docDownloadName(g.kind, a.kind) ?? null;
                 return { kind: a.kind, url: await signKit(a.storage_path, name ?? undefined), name: name ?? a.kind, part: 1 };
@@ -314,7 +320,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   // own article is no longer the approved version (kitAcceptsApprove).
   const articleStatuses: Record<string, string> = Object.fromEntries(articles.map((a) => [a.id, a.status]));
   const kitMigrationNote = kitsMigration
-    ? `The part plan column (topic_kits.part_plan) is not in this database yet — apply ${kitsMigration}; kits show without their plan until then.`
+    ? `A kit column (topic_kits.part_plan / youtube_meta) is not in this database yet — apply ${kitsMigration}; kits show without it until then.`
     : null;
 
   // Reviewer / approver names for the version list and the kit history
@@ -351,14 +357,13 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
     [...latestRender.values()].some((j) => j.status === "queued" || j.status === "processing");
   const buildInFlight = kitJobsInFlight || articleJobsInFlight;
 
-  const curriculumHeader = curriculumHeaderLines(
-    mappings.map(
-      (m): HeaderMapping => ({
-        curriculum: m.curriculum,
-        node: m.node ? { code: m.node.code, title: m.node.title, grade: m.node.grade } : null,
-      }),
-    ),
+  const headerMappings: HeaderMapping[] = mappings.map(
+    (m): HeaderMapping => ({
+      curriculum: m.curriculum,
+      node: m.node ? { code: m.node.code, title: m.node.title, grade: m.node.grade } : null,
+    }),
   );
+  const curriculumHeader = curriculumHeaderLines(headerMappings);
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-10">
@@ -421,6 +426,9 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
                 topicStatus={topic.status}
                 bankMaturity={topic.bank_maturity}
                 curriculumHeader={curriculumHeader}
+                headerMappings={headerMappings}
+                topicSubject={topic.subject}
+                auditPassed={youtubeAuditPassed()}
                 articleStatus={approvedArticle?.status ?? null}
                 articleStatuses={articleStatuses}
                 kits={kits}

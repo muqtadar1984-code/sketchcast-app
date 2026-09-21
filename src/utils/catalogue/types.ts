@@ -242,6 +242,22 @@ export type PartPlanRow = { part: number; sections: string[]; minutes: number };
  *  seconds from the part's start; the first mark of every part is 0. */
 export type ChapterMark = { part: number; t: number; label: string; section_id: string | null };
 
+/** The WORDS of the YouTube listing (0121 topic_kits.youtube_meta), written by
+ *  the worker when the video finishes and edited in the library's publish
+ *  block. Every field optional: a missing one takes its deterministic default
+ *  when the title and description are composed (publish.ts mirrors the
+ *  worker's catalogue/youtube_meta.py). */
+export type YouTubeMeta = {
+  title?: string | null;
+  intro?: string | null;
+  key_terms?: string[] | null;
+  hashtags?: string[] | null;
+  source?: "generated" | "edited" | string | null;
+  generated_at?: string | null;
+  edited_at?: string | null;
+  edited_by?: string | null;
+};
+
 export type TopicKit = {
   id: string;
   topic_id: string;
@@ -258,6 +274,8 @@ export type TopicKit = {
   clips: ClipRow[];
   /** 0115; `[]` until the presentation finishes (and when 0115 is not applied). */
   part_plan: PartPlanRow[];
+  /** 0121; null until the worker has written it (and when 0121 is not applied). */
+  youtube_meta: YouTubeMeta | null;
   status: KitStatus;
   reject_reason: KitRejectReason | null;
   approved_by: string | null;

@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import { libraryAllows, type LibraryAction } from "@/utils/library-routing";
-import { cataloguePublishEnabled } from "@/utils/flags";
+import { cataloguePublishEnabled, youtubeAuditPassed } from "@/utils/flags";
 import { catalogueColumnMissing } from "@/utils/catalogue/status";
 import {
-  DEFAULT_PRIVACY,
   canPublish,
   canQueuePublish,
+  defaultPrivacy,
   isPrivacy,
   publicationSummary,
   publishPrivacyAccepts,
@@ -49,9 +49,12 @@ export const runtime = "nodejs";
 // button, this 409 and the worker's refusal say one sentence.
 //
 // TWO MORE LOCKS in front of the insert:
-//   • privacy — only `private` is queueable (publishPrivacyAccepts): an API
-//     project that has not passed YouTube's compliance audit cannot create an
-//     unlisted or public video, and a privacy flip is a later, deliberate step.
+//   • privacy — `private` only until YOUTUBE_COMPLIANCE_AUDIT_PASSED is set
+//     (publishPrivacyAccepts): an API project that has not passed YouTube's
+//     compliance audit cannot create an unlisted or public video. With the
+//     audit passed the default is PUBLIC — the library is the review and
+//     Post is the release (founder, 2026-09-21). The worker holds the same
+//     variable and refuses the same way.
 //   • FEATURE_CATALOGUE_PUBLISH (cataloguePublishEnabled) — the whole phase is
 //     dark until the channel exists and the audit is through. Answered as a
 //     409 with a plain sentence, never a 500, and checked AFTER the four
@@ -139,10 +142,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     });
   }
 
-  const raw = body.privacy === undefined || body.privacy === null || body.privacy === "" ? DEFAULT_PRIVACY : body.privacy;
+  const auditPassed = youtubeAuditPassed();
+  const raw = body.privacy === undefined || body.privacy === null || body.privacy === "" ? defaultPrivacy(auditPassed) : body.privacy;
   if (!isPrivacy(raw)) return bad("privacy must be private, unlisted or public.");
   const privacy: PublishPrivacy = raw;
-  const allowed = publishPrivacyAccepts(privacy);
+  const allowed = publishPrivacyAccepts(privacy, auditPassed);
   if (!allowed.ok) return conflict(allowed.why, { privacy });
 
   // What a previous run already put on the channel, and how many parts the kit

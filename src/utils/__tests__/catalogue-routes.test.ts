@@ -686,7 +686,8 @@ describe("the kit route (Phase 3): /api/library/topics/[id]/kit", () => {
     for (const a of ["generate", "retry", "regenerate", "save_clips"]) {
       expect(src, a).toMatch(new RegExp(`${a}:\\s*"generate"`));
     }
-    for (const a of ["approve", "reject"]) {
+    // the YouTube words are part of the review: whoever approves may edit them
+    for (const a of ["approve", "reject", "save_youtube"]) {
       expect(src, a).toMatch(new RegExp(`${a}:\\s*"approve"`));
     }
     const check = src.search(/if\s*\(\s*!libraryAllows\(m\.role,\s*NEEDS\[action\]\)\s*\)\s*return\s+notFound\(\)/);
@@ -980,8 +981,10 @@ describe("the publish route (Phase 4): /api/library/topics/[id]/publish", () => 
     expect(src.slice(gate, insert)).toMatch(/return\s+conflict\(accepts\.why/);
     // the kit's own article is read by kit.article_id for the third refusal
     expect(src).toMatch(/\.from\(\s*["']topic_articles["']\s*\)\s*\.select\([^)]*\)\s*\.eq\(\s*["']id["']\s*,\s*kit\.article_id\s*\)/);
-    // private only, whatever the flag says
-    const priv = src.indexOf("publishPrivacyAccepts(privacy)");
+    // private only until the audit flag (youtubeAuditPassed) says otherwise
+    const priv = src.indexOf("publishPrivacyAccepts(privacy, auditPassed)");
+    expect(src).toMatch(/const\s+auditPassed\s*=\s*youtubeAuditPassed\(\)/);
+    expect(src).toMatch(/defaultPrivacy\(auditPassed\)/);
     expect(priv).toBeGreaterThan(-1);
     expect(priv).toBeLessThan(insert);
     expect(src).toMatch(/if\s*\(\s*!isPrivacy\(raw\)\s*\)\s*return\s+bad\(/);
