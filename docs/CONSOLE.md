@@ -83,3 +83,9 @@ to `app.sketchcast.app/console` with the legacy allowlist behavior.
 | Staff sign-in page | `src/app/staff-login/page.tsx` |
 | Host-aware sign-out | `src/app/auth/signout/route.ts` |
 | Flag helper | `src/utils/flags.ts` → `consoleSubdomainEnabled()` |
+| YouTube tracker page | `src/app/console/youtube/page.tsx` (arithmetic in `src/utils/youtube-stats.ts`, tested) |
+| YouTube snapshots (written by the worker) | `supabase/migrations/0118_youtube_stats_and_site_visits.sql`; sketchcast-ai `catalogue/youtube_stats.py`, hourly (`YOUTUBE_STATS_POLL_MINUTES`, 0 disables), using the worker's channel credentials |
+| Traffic ticker page | `src/app/console/traffic/page.tsx` (shaping in `src/utils/traffic.ts`, tested; refreshes every 30 s) |
+| Visit beacon endpoint | `src/app/api/public/visit/route.ts` — cookieless, no IP stored; the visitor hash salt is `VISIT_HASH_SECRET` (falls back to `CRON_SECRET`) |
+| Visit beacons | app: `src/components/visit-beacon.tsx` (root layout); marketing site: `assets/visit.js` on every page |
+| Visit read functions | `site_visits_daily`, `site_visits_breakdown`, `site_visits_live`, `prune_site_visits` (0118; service role only) |
