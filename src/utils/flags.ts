@@ -454,6 +454,19 @@ export function cataloguePublishEnabled(): boolean {
   return process.env.FEATURE_CATALOGUE_PUBLISH === "true";
 }
 
+/**
+ * Has the YouTube API project passed Google's compliance audit? Until it has,
+ * every upload from the project is FORCED private by YouTube, whatever the
+ * request says, so the publish route accepts only `private` and the panel
+ * says why. The worker reads the same variable name from ITS environment
+ * (YOUTUBE_COMPLIANCE_AUDIT_PASSED, catalogue/publish.py audit_passed) and
+ * refuses a public or unlisted upload without it — set it in both places, and
+ * the library's Post goes up public directly (founder, 2026-09-21).
+ */
+export function youtubeAuditPassed(): boolean {
+  return ["1", "true", "yes", "on"].includes((process.env.YOUTUBE_COMPLIANCE_AUDIT_PASSED ?? "").trim().toLowerCase());
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**

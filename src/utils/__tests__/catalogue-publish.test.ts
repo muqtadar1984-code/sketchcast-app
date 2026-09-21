@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  AUDIT_NOTE,
   CATALOGUE_PUBLISH_MIGRATION,
   DEFAULT_PRIVACY,
   MIN_CHAPTER_MARKS,
@@ -22,17 +23,32 @@ import {
   PUBLISHABLE_PRIVACY,
   PUBLISH_OFF_NOTE,
   PUBLISH_TOPIC_STATUSES,
+  SKETCHCAST_LINE,
   SKETCHCAST_LINK,
+  TITLE_MAX,
+  YOUTUBE_META_MIGRATION,
+  audienceTag,
+  boardLabel,
+  boardsOf,
   buildDescriptionPreview,
   canPublish,
   canQueuePublish,
   chapterLines,
+  cleanHashtags,
+  composeTitle,
+  defaultHashtags,
+  defaultPrivacy,
+  headline,
   isPrivacy,
   publicationSummary,
   publishActionFor,
   publishPrivacyAccepts,
   publishTitle,
+  publishablePrivacies,
+  termsFromSummary,
+  validateYouTubeMeta,
 } from "@/utils/catalogue/publish";
+import type { HeaderMapping } from "@/utils/catalogue/kit";
 import type { ChapterMark, PublishPrivacy, TopicPublication } from "@/utils/catalogue/types";
 
 const pub = (part: number, over: Partial<TopicPublication> = {}): TopicPublication => ({
@@ -62,18 +78,27 @@ describe("privacy", () => {
     expect(Object.keys(PRIVACY_LABEL).sort()).toEqual([...PRIVACY].sort());
   });
 
-  it("queues PRIVATE only — an unaudited API project cannot make an unlisted or public video", () => {
+  it("queues PRIVATE only until the audit is passed — an unaudited API project cannot make an unlisted or public video", () => {
     expect([...PUBLISHABLE_PRIVACY]).toEqual(["private"]);
     expect(DEFAULT_PRIVACY).toBe("private");
+    expect([...publishablePrivacies(false)]).toEqual(["private"]);
+    expect(defaultPrivacy(false)).toBe("private");
     expect(publishPrivacyAccepts("private")).toEqual({ ok: true });
     for (const p of ["unlisted", "public"] as PublishPrivacy[]) {
-      const r = publishPrivacyAccepts(p);
+      const r = publishPrivacyAccepts(p, false);
       expect(r.ok).toBe(false);
       if (!r.ok) {
         expect(r.why).toContain("compliance audit");
         expect(r.why).toContain(p);
       }
     }
+    expect(AUDIT_NOTE).toContain("YOUTUBE_COMPLIANCE_AUDIT_PASSED");
+  });
+
+  it("with the audit passed every privacy is queueable and PUBLIC is the default — the library is the review, Post is the release", () => {
+    expect([...publishablePrivacies(true)]).toEqual(["private", "unlisted", "public"]);
+    expect(defaultPrivacy(true)).toBe("public");
+    for (const p of PRIVACY) expect(publishPrivacyAccepts(p, true)).toEqual({ ok: true });
   });
 });
 
@@ -216,12 +241,73 @@ describe("which action, and whether it may be queued", () => {
   });
 });
 
+const MAPPINGS: HeaderMapping[] = [
+  { curriculum: { id: "c1", code: "cbse_science_086", name: "CBSE Science (Class 6-10)" }, node: { code: "cbse:9:U2:01", title: "Cell - Basic Unit of life", grade: "9" } },
+  { curriculum: { id: "c2", code: "cambridge_ls_science_0893", name: "Cambridge Lower Secondary Science 0893" }, node: { code: "7Bs.04", title: "Plant and animal cells", grade: "7" } },
+];
+const SUMMARY = "Cell membrane, cytoplasm, nucleus, mitochondria, cell wall, chloroplasts and vacuole — what plant and animal cells share and where they differ.";
+
+describe("the audience, the terms and the tags (mirrors the worker's youtube_meta.py)", () => {
+  it("labels each board in its own idiom and joins them into the audience tag", () => {
+    expect(boardLabel("CBSE Science (Class 6-10)", "9")).toBe("CBSE Class 9");
+    expect(boardLabel("Cambridge Lower Secondary Science 0893", "7")).toBe("Cambridge Stage 7");
+    expect(boardLabel("Ontario Science", "Grade 8")).toBe("Ontario Grade 8");
+    expect(boardLabel("IB Middle Years", null)).toBe("IB");
+    expect(boardsOf(MAPPINGS)).toEqual([
+      ["CBSE Science (Class 6-10)", "9"],
+      ["Cambridge Lower Secondary Science 0893", "7"],
+    ]);
+    expect(audienceTag(boardsOf(MAPPINGS), "Science")).toBe("CBSE Class 9 & Cambridge Stage 7 Science");
+    expect(audienceTag([], "Biology")).toBe("Biology");
+    expect(audienceTag([], null)).toBe("");
+  });
+
+  it("reads the terms off the summary's enumeration, not its clause", () => {
+    expect(termsFromSummary(SUMMARY)).toEqual(["cell membrane", "cytoplasm", "nucleus", "mitochondria", "cell wall", "chloroplasts", "vacuole"]);
+    expect(termsFromSummary("Every living thing is made of cells.")).toEqual([]);
+  });
+
+  it("default hashtags are the terms, the boards, the subject and the channel; tags are CamelCase and distinct", () => {
+    expect(defaultHashtags(["plant cell", "animal cell"], boardsOf(MAPPINGS), "Science")).toEqual([
+      "PlantCell",
+      "AnimalCell",
+      "CBSE",
+      "Class9Science",
+      "Cambridge",
+      "Stage7Science",
+      "Science",
+      "SketchCast",
+    ]);
+    expect(cleanHashtags(["#plant cell", "Plant-Cell", "cbse", "x".repeat(50), "", 7, "42"])).toEqual(["PlantCell", "Cbse"]);
+  });
+});
+
 describe("what will be posted", () => {
-  it("titles a single-part kit with the topic and a multi-part kit with Part k of N", () => {
+  const aud = audienceTag(boardsOf(MAPPINGS), "Science");
+
+  it("titles: topic, key terms, audience — terms dropped before the audience, the part label never cut", () => {
+    expect(headline("Plant and Animal Cells Compared")).toBe("Plant and Animal Cells Compared");
+    expect(headline("Photosynthesis")).toBe("Photosynthesis Explained");
+    expect(composeTitle({ topicTitle: "Photosynthesis", keyTerms: ["chlorophyll", "glucose", "stomata"], audience: "CBSE Class 10 Science", part: 1, parts: 1 })).toBe(
+      "Photosynthesis Explained | Chlorophyll, Glucose, Stomata | CBSE Class 10 Science",
+    );
+    const t = composeTitle({ topicTitle: "Plant and Animal Cells Compared", keyTerms: ["prokaryotes", "eukaryotes", "organelles"], audience: aud, part: 1, parts: 1 });
+    expect(t.length).toBeLessThanOrEqual(TITLE_MAX);
+    expect(t.endsWith(" | " + aud)).toBe(true);
+    expect(t).toContain("Prokaryotes, Eukaryotes");
+    expect(t).not.toContain("Organelles");
+    const long = "The Structure and Function of Eukaryotic and Prokaryotic Cells in Living Organisms Everywhere";
+    const p2 = composeTitle({ topicTitle: long, keyTerms: ["a", "b"], audience: "CBSE Class 9 Science", part: 2, parts: 3 });
+    expect(p2.length).toBeLessThanOrEqual(TITLE_MAX);
+    expect(p2.endsWith(" — Part 2 of 3")).toBe(true);
+    // the stored title wins and still takes the part label
+    expect(composeTitle({ topicTitle: "Cells", meta: { title: "Cells for Beginners | Nucleus | CBSE Class 9 Science" }, keyTerms: ["x"], audience: "ignored", part: 2, parts: 2 })).toBe(
+      "Cells for Beginners | Nucleus | CBSE Class 9 Science — Part 2 of 2",
+    );
+    // no terms and no audience: the bare topic, as before
     expect(publishTitle("Cells", 1, 1)).toBe("Cells");
-    expect(publishTitle("Cells", 1, 0)).toBe("Cells");
     expect(publishTitle("  Cells  ", 2, 3)).toBe("Cells — Part 2 of 3");
-    expect(publishTitle("", 1, 1)).toBe("Untitled topic");
+    expect(publishTitle("", 1, 1)).toBe("Topic");
   });
 
   it("emits a chapter list only when YouTube would read it: three or more marks starting at 0:00", () => {
@@ -233,29 +319,48 @@ describe("what will be posted", () => {
       "1:30 Animal cells",
       "5:05 Plant cells",
     ]);
-    // unsorted input is sorted; an unlabelled mark is dropped, and dropping it
-    // can take the list below the threshold
     expect(chapterLines([mark(90, "B"), mark(0, "A"), mark(45, "  ")])).toEqual([]);
     expect(chapterLines(null)).toEqual([]);
   });
 
-  it("builds the description: summary, curriculum codes, timestamps, the next part, the tagged link", () => {
+  it("builds the description in the fixed order: hook, Aligned to, Chapters, Key terms, the part, the SketchCast line + link, hashtags", () => {
     const text = buildDescriptionPreview({
-      topicTitle: "Cells",
-      summary: "What cells are and how animal and plant cells differ.",
-      curriculumHeader: ["Cambridge Lower Secondary Science 0893 · 7Bs.01, 7Bs.02", " "],
+      topicTitle: "Plant and Animal Cells Compared",
+      summary: SUMMARY,
+      subject: "Science",
+      curriculumHeader: ["CBSE Science (Class 6-10) · Class 9 · Cell - Basic Unit of life", " "],
+      mappings: MAPPINGS,
       chapters: [mark(0, "Intro"), mark(90, "Animal cells"), mark(305, "Plant cells")],
       part: 1,
       parts: 2,
     });
     const blocks = text.split("\n\n");
-    expect(blocks[0]).toBe("What cells are and how animal and plant cells differ.");
-    expect(blocks[1]).toBe("Cambridge Lower Secondary Science 0893 · 7Bs.01, 7Bs.02");
-    expect(blocks[2]).toBe("0:00 Intro\n1:30 Animal cells\n5:05 Plant cells");
-    expect(blocks[3]).toBe("Part 2 of 2 continues this lesson.");
-    expect(blocks[4]).toContain(SKETCHCAST_LINK);
+    expect(blocks[0]).toBe(SUMMARY); // no stored intro: the summary opens
+    expect(blocks[1]).toBe("Aligned to\nCBSE Science (Class 6-10) · Class 9 · Cell - Basic Unit of life");
+    expect(blocks[2]).toBe("Chapters\n0:00 Intro\n1:30 Animal cells\n5:05 Plant cells");
+    expect(blocks[3]).toBe("Key terms: cell membrane, cytoplasm, nucleus, mitochondria, cell wall, chloroplasts, vacuole.");
+    expect(blocks[4]).toMatch(/^Part 1 of 2\. Next: Plant and Animal Cells Compared \| .* — Part 2 of 2$/);
+    expect(blocks[5]).toBe(`${SKETCHCAST_LINE}\n${SKETCHCAST_LINK}`);
+    expect(blocks[6]).toBe("#CellMembrane #Cytoplasm #Nucleus #Mitochondria #CellWall #Chloroplasts #CBSE #Class9Science #Cambridge #Stage7Science #Science #SketchCast");
     expect(SKETCHCAST_LINK).toContain("utm_source=youtube");
-    expect(SKETCHCAST_LINK).toContain("utm_campaign=topic_catalogue");
+  });
+
+  it("the stored words replace the defaults: intro, terms, tags", () => {
+    const text = buildDescriptionPreview({
+      topicTitle: "Cells",
+      summary: SUMMARY,
+      subject: "Science",
+      curriculumHeader: [],
+      mappings: [],
+      meta: { intro: "What do a plant cell and an animal cell share?", key_terms: ["nucleus"], hashtags: ["Cells"] },
+      chapters: [],
+      part: 1,
+      parts: 1,
+    });
+    const blocks = text.split("\n\n");
+    expect(blocks[0]).toBe("What do a plant cell and an animal cell share?");
+    expect(blocks[1]).toBe("Key terms: nucleus.");
+    expect(blocks[3]).toBe("#Cells");
   });
 
   it("omits every block it has nothing for, and never a fabricated one", () => {
@@ -268,23 +373,52 @@ describe("what will be posted", () => {
       parts: 1,
     });
     const blocks = text.split("\n\n");
-    expect(blocks).toHaveLength(2);
+    expect(blocks).toHaveLength(3);
     expect(blocks[0]).toBe("Cells — a SketchCast lesson.");
     expect(blocks[1]).toContain(SKETCHCAST_LINK);
-    // one mark is not a chapter list, so no timestamps are posted at all
+    expect(blocks[2]).toBe("#Science #SketchCast");
     expect(text).not.toContain("0:00");
+    expect(text).not.toContain("Key terms");
     expect(text).not.toContain("Part 2");
   });
 
   it("points at the next part only from a part that has one", () => {
-    const last = buildDescriptionPreview({ topicTitle: "Cells", summary: "s", curriculumHeader: [], chapters: [], part: 2, parts: 2 });
-    expect(last).not.toContain("continues this lesson");
-    const first = buildDescriptionPreview({ topicTitle: "Cells", summary: "s", curriculumHeader: [], chapters: [], part: 1, parts: 2 });
-    expect(first).toContain("Part 2 of 2 continues this lesson.");
+    const summary = "Every living thing is made of cells.";
+    const last = buildDescriptionPreview({ topicTitle: "Cells", summary, curriculumHeader: [], chapters: [], part: 2, parts: 2 });
+    expect(last).toContain("Part 2 of 2.");
+    expect(last).not.toContain("Next:");
+    const first = buildDescriptionPreview({ topicTitle: "Cells", summary, curriculumHeader: [], chapters: [], part: 1, parts: 2 });
+    expect(first).toContain("Part 1 of 2. Next: Cells — Part 2 of 2");
+  });
+});
+
+describe("the editable words (validateYouTubeMeta)", () => {
+  it("accepts blanks as 'use the default', lists or comma-separated strings, and cleans terms and tags", () => {
+    const r = validateYouTubeMeta({ title: "  T ", intro: " a\n b ", key_terms: "Nucleus, cell wall", hashtags: ["#one two", "one-two"] });
+    expect(r).toEqual({ ok: true, meta: { title: "T", intro: "a b", key_terms: ["nucleus", "cell wall"], hashtags: ["OneTwo"] } });
+    expect(validateYouTubeMeta({})).toEqual({ ok: true, meta: { title: "", intro: "", key_terms: [], hashtags: [] } });
+  });
+
+  it("refuses a title over 100, an intro over 700, and a term or tag that is not one — with a sentence each", () => {
+    const r = validateYouTubeMeta({ title: "x".repeat(101), intro: "y".repeat(701), key_terms: ["a sentence that is far too long to be a term"], hashtags: ["42"] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors).toHaveLength(4);
+      expect(r.errors[0]).toContain("100");
+      expect(r.errors[1]).toContain("700");
+      expect(r.errors[2]).toContain("a sentence that is far too long");
+      expect(r.errors[3]).toContain("42");
+    }
+    // a duplicate is folded, not refused
+    expect(validateYouTubeMeta({ hashtags: ["Cells", "cells"] })).toEqual({ ok: true, meta: { title: "", intro: "", key_terms: [], hashtags: ["Cells"] } });
   });
 });
 
 describe("the dark note and the migration", () => {
+  it("names the 0121 migration", () => {
+    expect(YOUTUBE_META_MIGRATION).toBe("supabase/migrations/0121_youtube_meta_and_thumbnails.sql");
+  });
+
   it("names the flag and the two things that are missing", () => {
     expect(PUBLISH_OFF_NOTE).toContain("FEATURE_CATALOGUE_PUBLISH");
     expect(PUBLISH_OFF_NOTE).toContain("channel");

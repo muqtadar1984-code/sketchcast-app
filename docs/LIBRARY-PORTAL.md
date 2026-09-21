@@ -312,10 +312,28 @@ version** (a video built from superseded text is regenerated, not published); an
 its worksheet, and a link into an empty bank is worse than no video, plan §1.7). The
 WORKER re-checks all four before its first network call.
 
-**Privacy is `private`, whatever the flag says.** `publishPrivacyAccepts` accepts only
-`private`: an API project that has not passed the compliance audit cannot create an
-unlisted or public video, and the privacy is flipped later by a deliberate step, not by a
-checkbox on the queue form. A non-`private` request is a 409 even with the flag on.
+**Privacy is `private` until the audit is passed, and PUBLIC by default after it.**
+`publishPrivacyAccepts(privacy, auditPassed)` accepts only `private` while
+`YOUTUBE_COMPLIANCE_AUDIT_PASSED` is unset (`youtubeAuditPassed()`): an API project that
+has not passed the compliance audit cannot create an unlisted or public video — YouTube
+forces the upload private — so the panel says so and the founder flips it in Studio. Once
+Google confirms the audit and the variable is set on the app AND the worker, every
+privacy is queueable, `defaultPrivacy(true)` is `public`, and Post goes up public
+directly: the library is the review, Post is the release (founder, 2026-09-21).
+
+**The words, reviewed in the library.** The title and description follow ONE structure
+for every video (`publishTitle` / `buildDescriptionPreview`, mirrored by the worker's
+`catalogue/youtube_meta.py`): `<Topic> Explained | <key terms> | <audience>` (the audience
+is the boards and grades off the curriculum mapping — "CBSE Class 9 & Cambridge Stage 7
+Science"), then the hook paragraph, "Aligned to" + the curriculum lines, "Chapters" +
+the timestamps, the key terms, the part pointer, the SketchCast line and link, the
+hashtags. The WORDS — title, hook, key terms, hashtags — are written by the worker from
+the narration when the video finishes into `topic_kits.youtube_meta` (0121) and edited in
+the publish block (the kit route's `save_youtube` action, the `approve` role, audited
+`kit_youtube_save`); a blank field means "use the default", so a video is never held up
+by a paragraph. The thumbnail card the worker draws when each part finishes is stored
+beside the video (artifact kind `thumbnail_png`, 0121) and shown in the block; the
+publish uploads that same file.
 
 **One live publish per kit.** 0116 adds `jobs_one_live_publish` — a partial unique index
 on `jobs ((params->>'kit_id')) where type = 'topic_publish' and status in ('queued',
@@ -333,13 +351,14 @@ refused.
 
 | Screen | What it shows | Actions | Who |
 |---|---|---|---|
-| `/library/topics/[id]` — **Publish block** (inside the Kit panel, only for an `approved` kit) | The dark note (no channel, no compliance audit, private only); one row per video part — state (`published` / `failed` / `not yet`, decided by the presence of a `youtube_video_id`, so a caption failure never demotes a live video), the YouTube id as a link, the privacy, captions / thumbnail / playlists / date, and the row's error; **what will be posted** — the title (`<Topic>`, or `<Topic> — Part k of N`) and the full description per part: the topic summary, the curriculum header lines the documents carry, the chapter timestamps (posted only when YouTube would read them — three or more marks from `0:00`, else the block is dropped and the panel says why), the next-part pointer and the UTM-tagged sketchcast.app link | `POST /api/library/topics/[id]/publish` `{action: 'publish' \| 'retry', kitId, privacy?}` | read: **any member** (a reviewer who approved the video sees whether it reached the channel); the button: **admin only** (`publish`) |
+| `/library/topics/[id]` — **Post to YouTube block** (inside the Kit panel, only for an `approved` kit) | The audit note while `YOUTUBE_COMPLIANCE_AUDIT_PASSED` is unset; one row per video part — state (`published` / `failed` / `not yet`, decided by the presence of a `youtube_video_id`, so a caption failure never demotes a live video), the YouTube id as a link, the privacy, captions / thumbnail / playlists / date, and the row's error; **the words** — title, opening paragraph, key terms and hashtags (`topic_kits.youtube_meta`, written by the worker, editable with a counter against YouTube's 100 / 700 characters, blank = default); **what will be posted**, per part — the stored thumbnail card, the composed title with its character count, and the full description (hook, Aligned to, Chapters when YouTube would read them, Key terms, the part pointer, the SketchCast line and UTM link, hashtags) | `POST /api/library/topics/[id]/kit` `{action: 'save_youtube', kitId, title, intro, key_terms, hashtags}`; `POST /api/library/topics/[id]/publish` `{action: 'publish' \| 'retry', kitId, privacy?}` (default `public` once the audit is passed, else `private`) | read: **any member**; the words: **`approve`** (admin, editor, reviewer); the Post button: **admin only** (`publish`) |
 
 **Env vars.**
 
 | Where | Variable | Meaning |
 |---|---|---|
-| Vercel (app) | `FEATURE_CATALOGUE_PUBLISH=true` | `cataloguePublishEnabled()` — the app's whole share of the lock. Off ⇒ the publish route answers **409** with the "channel is not created / audit not passed" sentence and the panel disables its button saying the same. Turn it on only after the channel exists, the API project has passed the compliance audit and the worker holds a refresh token. |
+| Vercel (app) | `FEATURE_CATALOGUE_PUBLISH=true` | `cataloguePublishEnabled()` — the app's share of the lock. Off ⇒ the publish route answers **409** with the "channel is not created / audit not passed" sentence and the panel disables its button saying the same. Turn it on once the channel exists and the worker holds a refresh token. |
+| Vercel (app) AND Railway (worker) | `YOUTUBE_COMPLIANCE_AUDIT_PASSED=1` | Set in BOTH places once Google confirms the YouTube API Services compliance audit. App: `youtubeAuditPassed()` — public/unlisted become queueable and public is the default. Worker: `catalogue/publish.py audit_passed()` — the same refusal lifted. Until then every upload from the project is forced private by YouTube. |
 | Railway (worker) | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | The OAuth client of the audited API project. **Never** stored in the database or this repo. |
 | Railway (worker) | `YOUTUBE_REFRESH_TOKEN_<LANG>` | One refresh token per channel / language, minted once by `scripts/youtube_oauth.py` and pasted into Railway by the founder. |
 | Railway (worker) | `YOUTUBE_MAX_PARTS_PER_RUN` | Parts uploaded per publish run (default 5). `captions.insert` costs 400 of the 10,000 daily quota units, so about 7 fully captioned videos fit in a day; what a run left over is reported in its summary and finished by the next **Finish publishing**. |
