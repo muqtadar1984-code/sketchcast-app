@@ -1,7 +1,7 @@
 import { InkUnderline } from "@/components/ink-mark";
 import Sparkline from "@/components/sparkline";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { compact } from "@/utils/traffic";
+import { compact } from "@/utils/cloudflare-stats";
 import {
   channelDelta, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl,
   type ChannelSnap, type VideoSnap,
