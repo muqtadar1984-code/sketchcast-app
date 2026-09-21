@@ -3,8 +3,8 @@
 // from here so what is COUNTED and what is SHOWN can never disagree, and
 // the vitest suite pins both without a browser or a database.
 //
-// WHAT A VISIT IS. One page view sent by our own tiny beacon from either
-// site (the marketing site's assets/visit.js, the app's VisitBeacon).
+// WHAT A VISIT IS. One page view sent by our own tiny beacon on the
+// marketing site (sketchcast.app, assets/visit.js) — and only from there.
 // Cookieless: nothing is set in the browser. No IP is stored: `visitor` is
 // sha256(daily salt | address | user agent), which lets a day's unique
 // visitors be counted and lets nobody follow one person across days.

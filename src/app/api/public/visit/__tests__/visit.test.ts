@@ -32,10 +32,13 @@ describe("the visit beacon", () => {
     expect(JSON.stringify(row)).not.toContain("203.0.113.9");
   });
 
-  it("records the app's own pages", async () => {
-    await POST(post(JSON.stringify({ p: "/dashboard" }), { origin: "https://app.sketchcast.app", "user-agent": UA }));
-    expect(inserted).toHaveLength(1);
-    expect(inserted[0]).toMatchObject({ host: "app.sketchcast.app", path: "/dashboard", ref_host: null });
+  it("counts the website only — the app, console and library are not visits", async () => {
+    for (const origin of ["https://app.sketchcast.app", "https://console.sketchcast.app", "https://library.sketchcast.app"]) {
+      const res = await POST(post(JSON.stringify({ p: "/dashboard" }), { origin, "user-agent": UA }));
+      expect(res.status).toBe(204);
+      expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    }
+    expect(inserted).toHaveLength(0);
   });
 
   it("drops a crawler and an unknown origin, both silently", async () => {

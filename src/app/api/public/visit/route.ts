@@ -9,11 +9,17 @@ export const dynamic = "force-dynamic";
 
 // The visit beacon — the one write behind /console/traffic (migration 0118).
 //
-// Both sites post here: the marketing site cross-origin from assets/visit.js,
-// the app same-origin from components/visit-beacon.tsx. The body is a small
-// JSON document sent with navigator.sendBeacon as text/plain, which is a
-// CORS "simple request" — no preflight, so a page that is closing can still
-// get it out. The response is 204 with nothing in it.
+// ONE SITE: sketchcast.app, the public website. The marketing pages post
+// here cross-origin from assets/visit.js; the app, the console and the
+// library are not counted — they are customers' and staff's working tools,
+// not the shop window, and the number this feeds is "how many people come
+// to the website", the one an advertiser asks for (founder, 2026-09-21).
+// So the allow-list is exactly the marketing origins, and a post from any
+// other origin — our own app included — is dropped.
+//
+// The body is a small JSON document sent with navigator.sendBeacon as
+// text/plain, which is a CORS "simple request" — no preflight, so a page
+// that is closing can still get it out. The response is 204, empty.
 //
 // WHAT IS STORED, AND WHAT IS NOT. The host (from the Origin header, which
 // the browser sets and a page cannot forge), the path without its query
@@ -24,29 +30,14 @@ export const dynamic = "force-dynamic";
 //
 // WHAT THIS IS NOT. Not authentication and not a secret: a curl can post a
 // visit, exactly as it could load the page. The Origin gate keeps a third-
-// party page from posting under our hosts; the bot filter and the daily
+// party page from posting under our host; the bot filter and the daily
 // hash keep the numbers honest enough to read, not tamper-proof.
 
-const OWN_HOSTS = new Set(["sketchcast.app", "www.sketchcast.app", "app.sketchcast.app", "school.sketchcast.app",
-  "console.sketchcast.app", "library.sketchcast.app", "student.sketchcast.app", "teacher.sketchcast.app",
-  "principal.sketchcast.app"]);
-
-/** The allow-listed origins: the marketing origins plus the app's own hosts
- *  (a same-origin post still carries an Origin header on a cross-site-style
- *  fetch, and sendBeacon always sends one). Localhost is allowed outside
- *  production, as the marketing list already does. */
+/** The allow-listed origins: the marketing site's, and nothing else
+ *  (utils/marketing/cors.ts adds localhost outside production). */
 function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null;
-  let host: string;
-  try {
-    host = new URL(origin).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
-  if (marketingOrigins().includes(origin)) return origin;
-  if (OWN_HOSTS.has(host)) return origin;
-  if (process.env.NODE_ENV !== "production" && (host === "localhost" || host === "127.0.0.1")) return origin;
-  return null;
+  return marketingOrigins().includes(origin) ? origin : null;
 }
 
 function cors(origin: string | null): Record<string, string> {
