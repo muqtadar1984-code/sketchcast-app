@@ -85,8 +85,5 @@ to `app.sketchcast.app/console` with the legacy allowlist behavior.
 | Flag helper | `src/utils/flags.ts` → `consoleSubdomainEnabled()` |
 | YouTube tracker page | `src/app/console/youtube/page.tsx` (arithmetic in `src/utils/youtube-stats.ts`, tested) |
 | YouTube snapshots (written by the worker) | `supabase/migrations/0118_youtube_stats_and_site_visits.sql`; sketchcast-ai `catalogue/youtube_stats.py`, hourly (`YOUTUBE_STATS_POLL_MINUTES`, 0 disables), using the worker's channel credentials |
-| Traffic ticker page | `src/app/console/traffic/page.tsx` (shaping in `src/utils/traffic.ts`, tested; refreshes every 30 s) |
-| Visit beacon endpoint | `src/app/api/public/visit/route.ts` — cookieless, no IP stored; the visitor hash salt is `VISIT_HASH_SECRET` (falls back to `CRON_SECRET`) |
-| Visit beacon | marketing site only: `assets/visit.js` on every page of sketchcast.app; the endpoint refuses every other origin (the app, console and library are not counted) |
-| Visit read functions | `site_visits_daily`, `site_visits_breakdown`, `site_visits_live` (0118), `site_visits_lifetime` (0119); service role only |
-| Visit retention | `prune_site_visits(p_days)` (0118, replaced in 0119) folds each pruned UTC day into `site_visits_archive` before deleting, so the all-time tile never drops. Not scheduled; call from the SQL editor |
+| Traffic tracker page | `src/app/console/traffic/page.tsx` (shaping in `src/utils/cloudflare-stats.ts`, tested) |
+| Traffic rows (written by the worker) | `supabase/migrations/0120_cloudflare_daily_stats.sql`; sketchcast-ai `catalogue/cloudflare_stats.py` polls Cloudflare's zone analytics hourly (`CLOUDFLARE_STATS_POLL_MINUTES`, 0 disables) with `CLOUDFLARE_API_TOKEN` (Zone → Analytics → Read) and `CLOUDFLARE_ZONE_ID`; the first poll backfills as far as Cloudflare keeps. sketchcast.app only: the app, console and library are other hosts and are not counted |
