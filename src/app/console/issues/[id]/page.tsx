@@ -19,7 +19,23 @@ type Issue = {
   status: string;
   title: string;
   description: string | null;
-  context: { url?: string; user_agent?: string; recent_job_errors?: string[]; error?: string } | null;
+  context: {
+    url?: string;
+    user_agent?: string;
+    recent_job_errors?: string[];
+    error?: string;
+    // The worker's snapshot of what failed (auto-filed issues): kept here
+    // because the row's generation_id / book_id are nulled when the reporter
+    // deletes the book or the lesson (0020 on delete set null).
+    generation_id?: string;
+    book_id?: string;
+    book_title?: string;
+    chapter?: string;
+    kind?: string;
+    language?: string;
+    job_id?: string;
+    job_type?: string;
+  } | null;
   // Screenshot paths in the 'issue-attachments' bucket (0065; absent pre-migration).
   attachment_paths?: string[] | null;
   created_at: string;
@@ -132,6 +148,25 @@ export default async function ConsoleIssueDetailPage({
         )}
         <div className="card p-5 text-sm space-y-1.5">
           <h2 className="font-display font-medium text-lg mb-2">Captured context</h2>
+          {(ctx.generation_id || ctx.book_id || ctx.kind) && (
+            <div className="mb-2 space-y-1">
+              <p>
+                <span className="text-[#5B6470]">What failed:</span> {ctx.kind || "generation"}
+                {ctx.chapter ? ` · chapter ${ctx.chapter}` : ""}
+                {ctx.language ? ` · ${ctx.language}` : ""}
+              </p>
+              <p className="break-words">
+                <span className="text-[#5B6470]">Book:</span> {ctx.book_title || "—"}
+                {ctx.book_id && <span className="font-mono text-xs text-[#98A0A9]"> {ctx.book_id}</span>}
+                {ctx.book_id && !issue.book_id && <span className="text-xs text-[#9A6400]"> (deleted since the report)</span>}
+              </p>
+              <p className="break-words">
+                <span className="text-[#5B6470]">Generation:</span> <span className="font-mono text-xs">{ctx.generation_id || "—"}</span>
+                {ctx.generation_id && !issue.generation_id && <span className="text-xs text-[#9A6400]"> (deleted since the report)</span>}
+                {ctx.job_id && <span className="font-mono text-xs text-[#98A0A9]"> · job {ctx.job_id}</span>}
+              </p>
+            </div>
+          )}
           <p><span className="text-[#5B6470]">Page:</span> {ctx.url || "—"}</p>
           <p className="break-words"><span className="text-[#5B6470]">Browser:</span> {ctx.user_agent || "—"}</p>
           {(ctx.recent_job_errors ?? []).length > 0 && (
