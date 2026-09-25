@@ -257,6 +257,11 @@ export const MAX_KEY_TERMS = 12;
 export const MAX_HASHTAGS = 12;
 const TITLE_TERMS = 3;
 
+/** The end screen's ask, in the description too (founder direction 2026-09-25).
+ *  Mirrors shared/outro.py DESCRIPTION_CTA in the worker, word for word. */
+export const DESCRIPTION_CTA =
+  "If this lesson helped, please like, share and comment, and subscribe — we publish new lessons regularly.";
+
 export const SKETCHCAST_LINE =
   "This lesson was generated with SketchCast. Upload a textbook chapter and get a whiteboard video, slide deck, lesson plan, activities, worksheet, test paper and case study in one click.";
 
@@ -473,8 +478,9 @@ export function effectiveHashtags(meta: YouTubeMeta | null | undefined, keyTerms
  *   3. "Chapters" + the timestamps for THIS part (all-or-nothing, see chapterLines)
  *   4. "Key terms:" the vocabulary
  *   5. the part pointer, for a multi-part kit
- *   6. the SketchCast line and the UTM-tagged link
- *   7. the hashtag line
+ *   6. the end screen's ask (like, share, comment, subscribe)
+ *   7. the SketchCast line and the UTM-tagged link
+ *   8. the hashtag line
  */
 export function buildDescriptionPreview(input: DescriptionInput): string {
   const blocks: string[] = [];
@@ -501,6 +507,7 @@ export function buildDescriptionPreview(input: DescriptionInput): string {
     blocks.push(next ? `${line} Next: ${next}` : line);
   }
 
+  blocks.push(DESCRIPTION_CTA);
   blocks.push(`${SKETCHCAST_LINE}\n${SKETCHCAST_LINK}`);
 
   const tags = effectiveHashtags(input.meta, terms, boards, input.subject);
