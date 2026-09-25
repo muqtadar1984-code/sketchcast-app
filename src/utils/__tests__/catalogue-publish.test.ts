@@ -23,6 +23,7 @@ import {
   PUBLISHABLE_PRIVACY,
   PUBLISH_OFF_NOTE,
   PUBLISH_TOPIC_STATUSES,
+  DESCRIPTION_CTA,
   SKETCHCAST_LINE,
   SKETCHCAST_LINK,
   TITLE_MAX,
@@ -323,7 +324,7 @@ describe("what will be posted", () => {
     expect(chapterLines(null)).toEqual([]);
   });
 
-  it("builds the description in the fixed order: hook, Aligned to, Chapters, Key terms, the part, the SketchCast line + link, hashtags", () => {
+  it("builds the description in the fixed order: hook, Aligned to, Chapters, Key terms, the part, the ask, the SketchCast line + link, hashtags", () => {
     const text = buildDescriptionPreview({
       topicTitle: "Plant and Animal Cells Compared",
       summary: SUMMARY,
@@ -340,8 +341,9 @@ describe("what will be posted", () => {
     expect(blocks[2]).toBe("Chapters\n0:00 Intro\n1:30 Animal cells\n5:05 Plant cells");
     expect(blocks[3]).toBe("Key terms: cell membrane, cytoplasm, nucleus, mitochondria, cell wall, chloroplasts, vacuole.");
     expect(blocks[4]).toMatch(/^Part 1 of 2\. Next: Plant and Animal Cells Compared \| .* — Part 2 of 2$/);
-    expect(blocks[5]).toBe(`${SKETCHCAST_LINE}\n${SKETCHCAST_LINK}`);
-    expect(blocks[6]).toBe("#CellMembrane #Cytoplasm #Nucleus #Mitochondria #CellWall #Chloroplasts #CBSE #Class9Science #Cambridge #Stage7Science #Science #SketchCast");
+    expect(blocks[5]).toBe(DESCRIPTION_CTA);
+    expect(blocks[6]).toBe(`${SKETCHCAST_LINE}\n${SKETCHCAST_LINK}`);
+    expect(blocks[7]).toBe("#CellMembrane #Cytoplasm #Nucleus #Mitochondria #CellWall #Chloroplasts #CBSE #Class9Science #Cambridge #Stage7Science #Science #SketchCast");
     expect(SKETCHCAST_LINK).toContain("utm_source=youtube");
   });
 
@@ -360,7 +362,7 @@ describe("what will be posted", () => {
     const blocks = text.split("\n\n");
     expect(blocks[0]).toBe("What do a plant cell and an animal cell share?");
     expect(blocks[1]).toBe("Key terms: nucleus.");
-    expect(blocks[3]).toBe("#Cells");
+    expect(blocks[4]).toBe("#Cells");
   });
 
   it("omits every block it has nothing for, and never a fabricated one", () => {
@@ -373,10 +375,11 @@ describe("what will be posted", () => {
       parts: 1,
     });
     const blocks = text.split("\n\n");
-    expect(blocks).toHaveLength(3);
+    expect(blocks).toHaveLength(4);
     expect(blocks[0]).toBe("Cells — a SketchCast lesson.");
-    expect(blocks[1]).toContain(SKETCHCAST_LINK);
-    expect(blocks[2]).toBe("#Science #SketchCast");
+    expect(blocks[1]).toBe(DESCRIPTION_CTA);
+    expect(blocks[2]).toContain(SKETCHCAST_LINK);
+    expect(blocks[3]).toBe("#Science #SketchCast");
     expect(text).not.toContain("0:00");
     expect(text).not.toContain("Key terms");
     expect(text).not.toContain("Part 2");
