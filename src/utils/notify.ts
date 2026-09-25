@@ -146,3 +146,83 @@ export async function notifyActivationRequest(input: {
     console.error("activation request notification error:", e);
   }
 }
+
+
+// ── "your issue is resolved" — every resolution reaches the client ─────────
+//
+// Founder direction (2026-09-25): whenever an issue is resolved, from the
+// console or by the worker's support agent, the owner hears about it, in
+// plain words, with an invitation to reply. The worker composes the same
+// shape (support_agent/actions.py resolution_text); this is the console's
+// half. Replies go to the support mailbox, never to noreply.
+
+const REPLY_TO = process.env.SUPPORT_STAFF_EMAIL || "muqtadar.quraishi@sketchcast.app";
+
+const KIND_WORDS: Record<string, string> = {
+  presentation: "lesson video",
+  exam_paper: "test paper",
+  lesson_plan: "lesson plan",
+  case_study: "case study",
+  deck: "slide deck",
+  worksheet: "worksheet",
+  activity: "activities",
+  index_book: "book",
+};
+
+/** "worksheet", "lesson video", … — the thing the owner asked for, in their words. */
+export function issueThing(kind: string | null | undefined, category: string | null | undefined): string {
+  const k = (kind ?? "").trim();
+  if (k && KIND_WORDS[k]) return KIND_WORDS[k];
+  if (k) return k.replace(/_/g, " ");
+  return (category ?? "request").replace(/_/g, " ");
+}
+
+/** The subject and body, pure, so the words can be tested without a mailer. */
+export function issueResolvedEmail(input: {
+  kind?: string | null;
+  category?: string | null;
+  bookTitle?: string | null;
+  note?: string | null;
+}): { subject: string; text: string } {
+  const what = issueThing(input.kind, input.category);
+  const where = input.bookTitle ? ` for "${input.bookTitle}"` : "";
+  const note = (input.note ?? "").trim();
+  const lines = ["Hi,", "", `The problem with your ${what}${where} on SketchCast has been addressed.`];
+  if (note) lines.push("", note);
+  lines.push(
+    "",
+    "If you face any issue with it, or anything else, just reply to this email and we will take it up again.",
+    "",
+    "Thanks for using SketchCast.",
+    "",
+    "SketchCast AI",
+  );
+  return { subject: `Your ${what}${where} on SketchCast is sorted`, text: lines.join("\n") };
+}
+
+/** Send it. Never throws; returns whether a send was attempted. Student
+ *  accounts (@students.sketchcast.app) have no mailbox and are skipped. */
+export async function notifyIssueResolved(
+  toEmail: string | null | undefined,
+  input: Parameters<typeof issueResolvedEmail>[0],
+): Promise<boolean> {
+  try {
+    const key = process.env.RESEND_API_KEY;
+    const to = (toEmail ?? "").trim();
+    if (!key || !to || to.endsWith("@students.sketchcast.app")) return false;
+    const { subject, text } = issueResolvedEmail(input);
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject, text }),
+    });
+    if (!res.ok) {
+      console.error("issue resolved notification failed:", res.status, await res.text().catch(() => ""));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("issue resolved notification error:", e);
+    return false;
+  }
+}
