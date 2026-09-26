@@ -48,7 +48,8 @@ import {
 } from "@/utils/catalogue/publish";
 import { isLiveJobStatus, stageLabel } from "@/utils/catalogue/status";
 import type { HeaderMapping } from "@/utils/catalogue/kit";
-import type { ClipRow, KitGenerationRow, KitRejectReason, PublishPrivacy, TeacherAvatar, TopicKit, TopicPublication, YouTubeMeta } from "@/utils/catalogue/types";
+import type { ClipRow, KitGenerationRow, KitRejectReason, PublishPrivacy, TeacherAvatar, TopicKit, TopicPublication, VideoFormatSetting, YouTubeMeta } from "@/utils/catalogue/types";
+import { canQueueSupersede, changesSince, formatLabel, formatVersionOf, supersedeCandidates } from "@/utils/catalogue/format";
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
 import type { JobRow } from "./article-panel";
 
@@ -82,11 +83,19 @@ export type KitArtifactView = {
 export type KitGenerationView = { gen: KitGenerationRow; job: JobRow | null; artifacts: KitArtifactView[] };
 /** `publications` is what reached YouTube for THIS kit (0112
  *  topic_publications, this language) — empty until Phase 4 runs. */
-export type KitView = { kit: TopicKit; generations: KitGenerationView[]; publications: TopicPublication[] };
+export type KitView = {
+  kit: TopicKit;
+  generations: KitGenerationView[];
+  publications: TopicPublication[];
+  /** the topic's OTHER kits' publications — the older videos this kit's may supersede (0122) */
+  otherPublications: TopicPublication[];
+  /** the format the worker renders now, or null when it has not recorded one */
+  videoFormat: VideoFormatSetting | null;
+};
 
 /** The kit's actions and the publish action share one busy / error / notice
  *  surface, so `route` picks which handler the payload goes to. */
-type Post = (payload: Record<string, unknown>, label: string, route?: "kit" | "publish") => Promise<Record<string, unknown> | null>;
+type Post = (payload: Record<string, unknown>, label: string, route?: "kit" | "publish" | "supersede") => Promise<Record<string, unknown> | null>;
 
 function useKitPost(topicId: string) {
   const router = useRouter();
@@ -644,6 +653,8 @@ function CurrentKit({
         <PublishBlock
           kit={kit}
           publications={view.publications}
+          otherPublications={view.otherPublications}
+          videoFormat={view.videoFormat}
           topicTitle={topicTitle}
           topicSummary={topicSummary}
           topicStatus={topicStatus}
@@ -704,6 +715,8 @@ function metaOfForm(f: WordsForm): YouTubeMeta {
 function PublishBlock({
   kit,
   publications,
+  otherPublications,
+  videoFormat,
   topicTitle,
   topicSummary,
   topicStatus,
@@ -723,6 +736,8 @@ function PublishBlock({
 }: {
   kit: TopicKit;
   publications: TopicPublication[];
+  otherPublications: TopicPublication[];
+  videoFormat: VideoFormatSetting | null;
   topicTitle: string;
   topicSummary: string | null;
   topicStatus: string;
@@ -795,6 +810,29 @@ function PublishBlock({
 
   const wordsSource = kit.youtube_meta?.source === "edited" ? "edited in the library" : kit.youtube_meta?.source === "generated" ? "written by the worker from the narration" : "defaults (nothing written yet)";
 
+  // The video format (0122): which of this kit's posted parts predate the
+  // format the worker renders now, and which older videos of the same part
+  // (the topic's earlier kits) this kit's video may supersede. Both are facts
+  // for the founder to act on by hand; nothing here is automatic.
+  const currentFormat = videoFormat?.version ?? null;
+  const candidates = supersedeCandidates(publications, otherPublications, kit.id);
+  const supersede = async (c: (typeof candidates)[number]) => {
+    const ok = canQueueSupersede(c.old, c.replacement);
+    if (!ok.ok) {
+      setNotice(ok.why);
+      return;
+    }
+    if (
+      !confirm(
+        `Supersede the older part ${c.part} video (${c.old.youtube_video_id}) with this kit's (${c.replacement.youtube_video_id})?\n\n` +
+          "The older video's description gets a first line pointing at the new one, and if it is public it becomes unlisted. Its views, likes and comments stay with it. Nothing is deleted.",
+      )
+    )
+      return;
+    const r = await post({ kitId: kit.id, oldPublicationId: c.old.id }, `supersede-${c.old.id}`, "supersede");
+    if (r) setNotice("Supersede queued — the worker points the older video at this one and records it.");
+  };
+
   return (
     <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -847,6 +885,27 @@ function PublishBlock({
                       <span className="text-xs text-[#98A0A9]">—</span>
                     )}
                     {row && <span className="block text-xs text-[#98A0A9]">{row.privacy}</span>}
+                    {row?.youtube_video_id && (() => {
+                      const label = formatLabel(row, currentFormat);
+                      const outdated = currentFormat !== null && formatVersionOf(row) < currentFormat && !row.superseded_by;
+                      return (
+                        <span className="block text-xs mt-0.5">
+                          {row.superseded_by ? (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 bg-[#EEF0EC] text-[#5B6470]" title={`Superseded ${row.superseded_at ? fmtDate(row.superseded_at) : ""}: the description points at the newer video`}>
+                              superseded
+                            </span>
+                          ) : label ? (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 ${outdated ? "bg-[#FFF3D6] text-[#9A6400]" : "bg-[#EEF0EC] text-[#5B6470]"}`}
+                              title={outdated && videoFormat ? `Rendered before: ${changesSince(videoFormat, formatVersionOf(row)).join(" · ")}` : "Rendered with the current video format"}
+                            >
+                              {label}
+                              {outdated ? " · update available" : ""}
+                            </span>
+                          ) : null}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2 text-xs text-[#5B6470]">
                     {row ? (
@@ -867,6 +926,33 @@ function PublishBlock({
           </tbody>
         </table>
       </div>
+
+      {/* supersede (0122): this kit's posted parts against the topic's older videos */}
+      {candidates.length > 0 && (
+        <div className="rounded-lg border border-[#F5E3B8] bg-[#FFF9EE] p-3 space-y-2">
+          <p className="text-sm font-medium">Older videos of this lesson are still on the channel</p>
+          <p className="text-xs text-[#5B6470]">
+            A YouTube video&apos;s file cannot be replaced, so this kit&apos;s video is a new upload. Supersede points an older video at it (a first line in its description) and makes a public one unlisted; its views and likes stay with it, nothing is deleted. Your call, video by video.
+          </p>
+          <ul className="space-y-1">
+            {candidates.map((c) => (
+              <li key={c.old.id} className="flex flex-wrap items-center gap-2 text-xs">
+                <span>
+                  Part {c.part}: <span className="font-mono">{c.old.youtube_video_id}</span> ({c.old.privacy}
+                  {c.old.published_at ? `, posted ${fmtDate(c.old.published_at)}` : ""}, {formatLabel(c.old, currentFormat) ?? "format unknown"})
+                </span>
+                {canPublishRole ? (
+                  <button type="button" className="btn-ghost h-7 px-2 text-xs" disabled={!!busy} onClick={() => supersede(c)}>
+                    Supersede with this kit&apos;s part {c.part}
+                  </button>
+                ) : (
+                  <span className="text-[#98A0A9]">admins supersede</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* the words: title, hook, key terms, hashtags */}
       <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-2">

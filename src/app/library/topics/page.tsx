@@ -20,6 +20,7 @@ import {
   withTopicFilter,
 } from "@/utils/catalogue/status";
 import { articleStatusLabel, articleSummaries } from "@/utils/catalogue/article";
+import { loadVideoFormat, outdatedTopicIds } from "@/utils/catalogue/format-server";
 import type { Curriculum, NodeKind, Topic } from "@/utils/catalogue/types";
 import AutoRefresh from "@/components/auto-refresh";
 import { ArticleStatusChip, ErrorBanner, MaturityChip, MissingTablesBanner, Pager, StatusChip, fmtDate } from "../catalogue-ui";
@@ -176,6 +177,11 @@ export default async function TopicsPage({
       .eq("params->>catalogue", "true"),
   ]);
   const catalogueWorkInFlight = (liveQ.count ?? 0) > 0;
+  // Which of these topics still have a published video on an older video
+  // format than the worker renders now (0122) — the founder's cue to decide
+  // whether that lesson is worth re-rendering and superseding.
+  const videoFormat = await loadVideoFormat(admin);
+  const outdatedTopics = await outdatedTopicIds(admin, ids, videoFormat?.version ?? null);
   const mappingCount = new Map<string, number>();
   for (const r of (mapQ.data ?? []) as { topic_id: string }[]) {
     mappingCount.set(r.topic_id, (mappingCount.get(r.topic_id) ?? 0) + 1);
@@ -347,6 +353,14 @@ export default async function TopicsPage({
                   <td className="px-4 py-2.5 text-[#5B6470]">{t.subject ?? "—"}</td>
                   <td className="px-4 py-2.5">
                     <StatusChip status={t.status} />
+                    {outdatedTopics.has(t.id) && (
+                      <span
+                        className="chip bg-[#FFF3D6] text-[#9A6400] ml-1"
+                        title={`A published video of this topic predates the current video format (v${videoFormat?.version ?? "?"}) — open the topic to decide whether to re-render and supersede it`}
+                      >
+                        video update available
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     {(() => {

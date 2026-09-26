@@ -13,6 +13,7 @@ import {
   publishPrivacyAccepts,
 } from "@/utils/catalogue/publish";
 import type { PartPlanRow, PublishPrivacy, TopicPublication } from "@/utils/catalogue/types";
+import { PUBLICATION_COLUMNS_0122 } from "@/utils/catalogue/format-server";
 import { audit, bad, conflict, dbError, notFound, readJson, uuid } from "../../../lib";
 
 export const runtime = "nodejs";
@@ -93,7 +94,8 @@ const LANGUAGE = "en";
 const KIT_COLUMNS = "id, topic_id, article_id, language, status";
 
 const PUBLICATION_COLUMNS =
-  "id, topic_kit_id, part, channel_language, youtube_video_id, privacy, playlist_ids, captions_uploaded, thumbnail_set, published_at, error, created_at, updated_at";
+  "id, topic_kit_id, part, channel_language, youtube_video_id, privacy, playlist_ids, captions_uploaded, thumbnail_set, published_at, error, created_at, updated_at" +
+  PUBLICATION_COLUMNS_0122;
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const m = await isLibraryMemberRequest();

@@ -315,8 +315,24 @@ export type TopicPublication = {
   /** why the last attempt failed; a caption failure is recorded here without
    *  failing the video (the id is still set) */
   error: string | null;
+  /** the video format version the posted video was rendered with (0122);
+   *  null = posted before the stamp existed, read as 1 */
+  format_version?: number | null;
+  /** the newer publication this video now points at (0122, the worker's
+   *  topic_supersede job); a superseded row is no longer the live video */
+  superseded_by?: string | null;
+  superseded_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** platform_settings.video_format, written by the worker on boot
+ *  (sketchcast-ai shared/video_format.py): the current format version and
+ *  one line per version saying what changed. */
+export type VideoFormatSetting = {
+  version: number;
+  changes: Record<string, string>;
+  recorded_at?: string | null;
 };
 
 /** The columns of a kit's generations row the portal reads (status is the

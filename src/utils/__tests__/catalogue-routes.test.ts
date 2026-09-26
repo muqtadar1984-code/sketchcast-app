@@ -157,6 +157,7 @@ describe("the /api/library routes exist and are scanned", () => {
         "topics/[id]/article/route.ts",
         KIT,
         PUBLISH,
+        "topics/[id]/supersede/route.ts",
         "topics/[id]/route.ts",
         "topics/route.ts",
         ...present(A2_ROUTES),
@@ -241,10 +242,10 @@ describe("every /api/library route", () => {
     }
   });
 
-  it("inserts into `jobs` from exactly the harvest, derive, article, questions and publish routes plus the kit's bank-job helper, and nowhere else", () => {
+  it("inserts into `jobs` from exactly the harvest, derive, article, questions, publish and supersede routes plus the kit's bank-job helper, and nowhere else", () => {
     const jobInsert = /\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/;
     const inserters = [...source].filter(([, text]) => jobInsert.test(text)).map(([f]) => rel(f)).sort();
-    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts", "topics/[id]/article/route.ts", KIT_QUESTIONS_JOB, PUBLISH, ...present([QUESTIONS])].sort());
+    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts", "topics/[id]/article/route.ts", KIT_QUESTIONS_JOB, PUBLISH, "topics/[id]/supersede/route.ts", ...present([QUESTIONS])].sort());
     // The kit's bank job (0115 jobs_one_live_questions) is an observer too: no
     // generation, no book, its input in params; the live check is keyed like
     // the index and runs BEFORE the insert; its 23505 is "the bank job already
@@ -917,6 +918,36 @@ describe("the kit route (Phase 3): /api/library/topics/[id]/kit", () => {
     // the route itself never inserts a job: the bank job is the helper's
     expect(src).not.toMatch(/\.from\(\s*["']jobs["']\s*\)/);
     expect(src).toMatch(/import\s*\{\s*enqueueQuestionsJob\s*\}\s*from\s*["']\.\/questions-job["']/);
+  });
+});
+
+describe("the supersede route (0122): /api/library/topics/[id]/supersede", () => {
+  const SUPERSEDE = "topics/[id]/supersede/route.ts";
+  const t = () => text(SUPERSEDE);
+
+  it("is ADMIN ONLY (the `publish` action) and reachable only through the topic", () => {
+    const src = t();
+    expect(src).toMatch(/libraryAllows\(m\.role,\s*["']publish["']\)/);
+    expect((src.match(/libraryAllows\(/g) ?? []).length).toBe(1);
+    expect(src).toMatch(/\.from\(\s*["']topic_kits["']\s*\)\s*\.select\([^)]*\)\s*\.eq\(\s*["']id["']\s*,\s*kitId\s*\)\s*\.eq\(\s*["']topic_id["']\s*,\s*id\s*\)/);
+  });
+
+  it("writes ONE row — a topic_supersede job — and never touches YouTube or the publications itself", () => {
+    const src = t();
+    const inserts = [...src.matchAll(/\.from\(\s*["']([a-z_]+)["']\s*\)\s*\.insert\(/g)].map((m) => m[1]);
+    expect(inserts).toEqual(["jobs"]);
+    expect(src).not.toMatch(/\.(update|upsert|delete)\(/);
+    expect(src).toMatch(/const\s+SUPERSEDE_JOB_TYPE\s*=\s*["']topic_supersede["']/);
+    expect(src).toMatch(/old_publication_id:\s*old\.id/);
+    expect(src).toMatch(/new_publication_id:\s*replacement!\.id/);
+    expect(src).not.toMatch(/googleapis|youtube\.com\/watch/);
+  });
+
+  it("checks the pair with the shared rule before the insert, and audits only after it", () => {
+    const src = t();
+    expect(src.indexOf("canQueueSupersede(old, replacement)")).toBeLessThan(src.indexOf(".insert("));
+    expect((src.match(/await audit\(/g) ?? []).length).toBe(1);
+    expect(src.indexOf("await audit(")).toBeGreaterThan(src.indexOf(".insert("));
   });
 });
 

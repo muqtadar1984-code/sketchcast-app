@@ -4,6 +4,8 @@ import { requireLibraryMember } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
 import { InkUnderline } from "@/components/ink-mark";
 import { catalogueMissing } from "@/utils/catalogue/status";
+import { loadOutdatedVideos, loadVideoFormat } from "@/utils/catalogue/format-server";
+import { changesSince, formatVersionOf } from "@/utils/catalogue/format";
 
 // Portal overview: the review queues (Phase 2b: articles awaiting review,
 // drafts in progress; Phase 3: kits awaiting review, question items awaiting
@@ -31,6 +33,19 @@ export default async function LibraryOverviewPage() {
   const queuesReady = queueErrors.every((e) => !e);
   const queuesMissing = queueErrors.some((e) => catalogueMissing(e));
   const queueError = queueErrors.find((e) => !!e) ?? null;
+  // Videos on the channel that predate the format the worker renders now
+  // (0122). A file on YouTube cannot be replaced, so each is the founder's
+  // own decision to re-render and supersede — this card only makes sure the
+  // list is never missed.
+  const videoFormat = await loadVideoFormat(admin);
+  const outdated = await loadOutdatedVideos(admin, videoFormat?.version ?? null);
+  const outdatedTopics = new Map<string, { title: string; parts: number; oldest: number }>();
+  for (const o of outdated.rows) {
+    const cur = outdatedTopics.get(o.topicId) ?? { title: o.topicTitle, parts: 0, oldest: Number.MAX_SAFE_INTEGER };
+    cur.parts += 1;
+    cur.oldest = Math.min(cur.oldest, formatVersionOf(o.publication));
+    outdatedTopics.set(o.topicId, cur);
+  }
   const awaitingReview = inReviewQ.count ?? 0;
   const drafts = draftQ.count ?? 0;
   const kitsAwaiting = kitsQ.count ?? 0;
@@ -119,6 +134,50 @@ export default async function LibraryOverviewPage() {
             ? "The review queues appear once the topic-catalogue tables (migration 0112) are applied."
             : `Could not read the review queues: ${queueError?.message ?? "unknown error"}`}
         </p>
+      )}
+
+      {videoFormat && (
+        <>
+          <h2 className="text-xs font-medium text-[#5B6470] uppercase tracking-wide mb-2">Videos on the channel</h2>
+          <div className={`card p-5 mb-8 ${outdated.rows.length > 0 ? "border-[#F5E3B8] bg-[#FFF9EE]" : ""}`}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-medium">
+                  {outdated.rows.length > 0
+                    ? `${outdated.rows.length} published video${outdated.rows.length === 1 ? "" : "s"} predate the current video format (v${videoFormat.version})`
+                    : `Every published video is on the current video format (v${videoFormat.version})`}
+                </p>
+                <p className="text-sm text-[#5B6470] mt-1">
+                  A video&apos;s file on YouTube cannot be replaced, so an upgrade only reaches new uploads. Whether an older video is worth re-rendering and superseding is your call, video by video — open the topic, regenerate the kit, post it, then Supersede the older one from its publish block.
+                </p>
+                {outdated.error && <p className="text-xs text-[#B3401F] mt-1">Could not read the list: {outdated.error}</p>}
+              </div>
+              <span className={`text-3xl font-display tabular ${outdated.rows.length > 0 ? "text-[#9A6400]" : "text-[#98A0A9]"}`}>{outdated.rows.length}</span>
+            </div>
+            {outdatedTopics.size > 0 && (
+              <ul className="mt-3 grid gap-1 sm:grid-cols-2 text-sm">
+                {[...outdatedTopics.entries()].slice(0, 12).map(([tid, t]) => (
+                  <li key={tid}>
+                    <Link href={`/library/topics/${tid}`} className="hover:underline">
+                      {t.title}
+                    </Link>
+                    <span className="text-xs text-[#5B6470]">
+                      {" "}
+                      · {t.parts} video{t.parts === 1 ? "" : "s"} · format v{t.oldest}
+                    </span>
+                  </li>
+                ))}
+                {outdatedTopics.size > 12 && <li className="text-xs text-[#5B6470]">…and {outdatedTopics.size - 12} more topics.</li>}
+              </ul>
+            )}
+            {outdated.rows.length > 0 && (
+              <p className="text-xs text-[#5B6470] mt-3">
+                What changed since the oldest ({`v${Math.min(...outdated.rows.map((o) => formatVersionOf(o.publication)))}`}):{" "}
+                {changesSince(videoFormat, Math.min(...outdated.rows.map((o) => formatVersionOf(o.publication)))).join(" · ") || "no changelog recorded"}
+              </p>
+            )}
+          </div>
+        </>
       )}
 
       <h2 className="text-xs font-medium text-[#5B6470] uppercase tracking-wide mb-2">Screens</h2>
