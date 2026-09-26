@@ -15,6 +15,7 @@ import { AliasPanel, MappingPanel, PrereqPanel, TopicActions, TopicHeaderEditor,
 import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel";
 import { YOUTUBE_META_MIGRATION } from "@/utils/catalogue/publish";
 import { KitPanel, type KitArtifactView, type KitView } from "./kit-panel";
+import { PUBLICATION_COLUMNS_0122, loadVideoFormat } from "@/utils/catalogue/format-server";
 
 // /library/topics/[id] — one topic: header (editable), status actions, aliases,
 // curriculum mappings with the depth-node selector, prerequisites, the
@@ -48,7 +49,8 @@ const KIT_COLUMNS =
 
 /** 0112 topic_publications — what the Phase 4 worker put on YouTube per part. */
 const PUBLICATION_COLUMNS =
-  "id, topic_kit_id, part, channel_language, youtube_video_id, privacy, playlist_ids, captions_uploaded, thumbnail_set, published_at, error, created_at, updated_at";
+  "id, topic_kit_id, part, channel_language, youtube_video_id, privacy, playlist_ids, captions_uploaded, thumbnail_set, published_at, error, created_at, updated_at" +
+  PUBLICATION_COLUMNS_0122;
 
 const TOPIC_COLUMNS =
   "id, canonical_key, title, subject, summary, teacher_avatar, depth_node_id, prerequisites, status, bank_maturity, created_by, created_at, updated_at";
@@ -286,10 +288,17 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
     const { data } = await admin.storage.from("artifacts").createSignedUrl(path, KIT_SIGN_TTL_SECONDS, download ? { download } : undefined);
     return data?.signedUrl ?? null;
   };
+  // The format the worker renders now (0122 platform_settings): the publish
+  // block says which posted videos predate it, and which older video a
+  // re-rendered kit may supersede.
+  const videoFormat = await loadVideoFormat(admin);
+  const allPublications = [...publicationsByKit.values()].flat();
   const kits: KitView[] = await Promise.all(
     kitRows.map(async (kit) => ({
       kit,
       publications: publicationsByKit.get(kit.id) ?? [],
+      otherPublications: allPublications.filter((p) => p.topic_kit_id !== kit.id),
+      videoFormat,
       generations: await Promise.all(
         kitGenerationIds(kit)
           .map((gid) => gensById.get(gid))
