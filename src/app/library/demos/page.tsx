@@ -39,7 +39,9 @@ function fmtMinutes(secs: unknown): string | null {
 
 function factsOf(params: Record<string, unknown>): DemoFact[] {
   const facts: DemoFact[] = [];
-  const pins = Object.entries(params).filter(([k]) => k === "board_colour" || k === "subject_profile");
+  // every pin the worker honours: the board-colour switches (phase 1 marks,
+  // phase 2 pictures) and the subject profile
+  const pins = Object.entries(params).filter(([k]) => k.startsWith("board_colour") || k === "subject_profile");
   for (const [k, v] of pins) facts.push({ label: `Pinned ${k}`, value: String(v) });
   if (params.format_version !== undefined) facts.push({ label: "Format version", value: String(params.format_version) });
   const len = params.lesson_length as { audio_secs?: unknown } | undefined;
