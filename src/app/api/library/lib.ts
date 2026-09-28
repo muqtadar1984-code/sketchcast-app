@@ -176,7 +176,9 @@ export async function audit(
   verb: string,
   // 'blueprint' (Phase 3): a question_set_blueprints row, audited by the
   // blueprints route — the only target that is not a topic or taxonomy row.
-  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint",
+  // 'generation': a demo video (the Demos page), audited on the row itself
+  // because a demo belongs to no topic's kit.
+  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint" | "generation",
   targetId: string,
   detail: Record<string, unknown>,
 ) {
