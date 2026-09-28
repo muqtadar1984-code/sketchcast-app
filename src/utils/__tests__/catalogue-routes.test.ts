@@ -142,6 +142,9 @@ const KIT_CANCEL_JOB = "topics/[id]/kit/cancel-job.ts";
 const COMPOSE = "topics/[id]/compose/route.ts";
 const QUESTIONS = "topics/[id]/questions/route.ts";
 const PUBLISH = "topics/[id]/publish/route.ts";
+// Demos (2026-09-28): the one route that DELETES a generation — a demo row
+// only (params.demo), never a kit's video.
+const DEMOS = "demos/route.ts";
 
 describe("the /api/library routes exist and are scanned", () => {
   it("has the Phase 1 + 2a + 2b + 3 + 4 routes", () => {
@@ -152,6 +155,7 @@ describe("the /api/library routes exist and are scanned", () => {
         "candidates/route.ts",
         "curricula/[id]/nodes/route.ts",
         "curricula/route.ts",
+        DEMOS,
         "derive/route.ts",
         "harvest/route.ts",
         "topics/[id]/article/route.ts",
@@ -192,7 +196,7 @@ describe("every /api/library route", () => {
 
   it("touches `generations` ONLY from the kit and compose routes, as catalogue rows, behind the two locks, and never next to a `jobs` insert", () => {
     const touches = [...source].filter(([, t]) => /\.from\(\s*["']generations["']\s*\)/.test(t)).map(([f]) => rel(f)).sort();
-    expect(touches).toEqual([KIT, ...present([COMPOSE])].sort());
+    expect(touches).toEqual([KIT, DEMOS, ...present([COMPOSE])].sort());
     const genInsert = /\.from\(\s*["']generations["']\s*\)\s*\.insert\(/;
     const jobInsert = /\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/;
     for (const name of [KIT, ...present([COMPOSE])]) {
@@ -1061,5 +1065,38 @@ describe("the publish route (Phase 4): /api/library/topics/[id]/publish", () => 
     expect(detail).toMatch(/job_id:\s*job\.id/);
     expect(detail).toMatch(/privacy,/);
     expect(detail).toMatch(/already_published:/);
+  });
+});
+
+describe("the demos route (2026-09-28): the only generation deleter, demo rows only", () => {
+  const src = () => text(DEMOS);
+
+  it("asks the guard for `generate` as its first await, and only knows one action", () => {
+    expect(src()).toMatch(/const m = await isLibraryMemberRequest\("generate"\)/);
+    expect(src()).toMatch(/body\.action !== "delete"/);
+  });
+
+  it("never inserts or updates a generation, and reads AND deletes only a row with params.demo", () => {
+    const t = src();
+    expect(t).not.toMatch(/\.from\(\s*["']generations["']\s*\)\s*\.(insert|update|upsert)\(/);
+    const reads = [...t.matchAll(/\.from\(\s*["']generations["']\s*\)[\s\S]*?\.not\("params->>demo", "is", null\)/g)];
+    expect(reads.length, "the demo filter on the select and on the delete").toBe(2);
+    const del = t.search(/\.from\(\s*["']generations["']\s*\)\s*\.delete\(\)/);
+    expect(del).toBeGreaterThan(-1);
+    expect(t.slice(del, del + 200)).toMatch(/\.not\("params->>demo", "is", null\)\.select\("id"\)/);
+  });
+
+  it("refuses a row a kit points at, removes the files before the row, and audits the delete on the generation", () => {
+    const t = src();
+    const kitCheck = t.indexOf('.eq("presentation_generation_id", id)');
+    const remove = t.search(/\.storage\.from\(BUCKET\)\.remove\(paths\)/);
+    const del = t.search(/\.from\(\s*["']generations["']\s*\)\s*\.delete\(\)/);
+    const auditAt = t.indexOf('audit(admin, m.id, "demo_delete", "generation", id');
+    expect(kitCheck).toBeGreaterThan(-1);
+    expect(kitCheck).toBeLessThan(remove);
+    expect(remove).toBeLessThan(del);
+    expect(del).toBeLessThan(auditAt);
+    // a jobs row is never written here (they cascade with the generation)
+    expect(t).not.toMatch(/\.from\(\s*["']jobs["']\s*\)/);
   });
 });

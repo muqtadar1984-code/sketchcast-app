@@ -15,6 +15,7 @@ const TABS = [
   { href: "/library/candidates", label: "Candidates" },
   { href: "/library/harvest", label: "Harvest" },
   { href: "/library/blueprints", label: "Blueprints" },
+  { href: "/library/demos", label: "Demos" },
 ];
 
 function isActive(href: string, path: string): boolean {
