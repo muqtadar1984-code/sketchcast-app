@@ -120,7 +120,10 @@ when no user builder is live and the quota window is open (spec decision 12).
 | **retire** `{questionIds[]}` | edit_article | draft \| approved \| rejected → retired | out of the bank; never composed |
 | **save** `{questionId, item}` | edit_article | draft stays draft; **approved → draft** | validator first; hash recomputed; a 23505 = "duplicate of another item" |
 
-Bulk actions take up to 200 ids of the topic. Every transition is a
+Bulk actions take any number of ids of the topic (a 10 000 sanity ceiling,
+not a review limit); the UPDATE runs 100 ids at a time so the `in("id")`
+list never outgrows the PostgREST URL, and a database error part-way audits
+the rows already moved (`partial: true`) before answering. Every transition is a
 **status-guarded UPDATE read back** (`…eq/in("status")…select("id")`): zero
 rows means every id moved between the read and the write (another reviewer)
 and answers 409 with nothing written or audited; a partial result reports
