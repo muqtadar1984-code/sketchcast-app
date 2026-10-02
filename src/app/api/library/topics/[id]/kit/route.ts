@@ -21,6 +21,7 @@ import {
   kitGenerationIdFor,
   kitGenerationParams,
   kitGenerationRows,
+  kitRegenerateSource,
   nextTeacherAvatar,
   partDurationsOf,
   retryParamsOf,
@@ -80,7 +81,12 @@ export const runtime = "nodejs";
 //     regenerate   {kitId}            a NEW kit (old one kept as history,
 //                  source_kit_id = old) from an in-review or rejected kit,
 //                  with the old kit's teacher avatar; topic in_review →
-//                  generating (the status machine's reopening).
+//                  generating (the status machine's reopening). Built from
+//                  the APPROVED article: the old kit's own while it still is
+//                  the approved version, else the topic's currently approved
+//                  one (a kit built from v1 after v2 was approved moves onto
+//                  v2 — kitRegenerateSource; the audit row carries both
+//                  article ids). 409 only when no version is approved.
 //     save_clips   {kitId, clips}     validateClips (mm:ss, 30–600 s, inside a
 //                  known part) → topic_kits.clips, guarded on an editable
 //                  kit status.
@@ -237,7 +243,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   // One insert path for both: the difference is where the topic comes FROM
   // (article_approved, or in_review when regenerating), the avatar (chosen,
   // or the old kit's) and the source kit recorded on the new row.
-  const createKit = async (opts: { owner: string; articleId: string; teacherAvatar: TeacherAvatar; sourceKitId: string | null; fromTopicStatus: "article_approved" | "in_review"; verb: "kit_generate" | "kit_regenerate" }) => {
+  // `sourceArticleId` is the article the SOURCE kit was built from (null on a
+  // first Generate): it differs from `articleId` when a Regenerate moved the
+  // kit onto a newly approved version, and the audit row records both.
+  const createKit = async (opts: {
+    owner: string;
+    articleId: string;
+    sourceArticleId: string | null;
+    teacherAvatar: TeacherAvatar;
+    sourceKitId: string | null;
+    fromTopicStatus: "article_approved" | "in_review";
+    verb: "kit_generate" | "kit_regenerate";
+  }) => {
     // The curriculum header every catalogue document carries (decision 10),
     // composed here from the same mappings the topic page shows.
     const { data: mapRows, error: mErr } = await admin
@@ -307,6 +324,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     await audit(admin, m.id, opts.verb, "topic", id, {
       kit_id: kitId,
       article_id: opts.articleId,
+      source_article_id: opts.sourceArticleId,
+      article_changed: opts.sourceArticleId !== null && opts.sourceArticleId !== opts.articleId,
       language: LANGUAGE,
       teacher_avatar: opts.teacherAvatar,
       source_kit_id: opts.sourceKitId,
@@ -360,7 +379,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     else return bad("teacherAvatar must be 'female' or 'male'.");
     const gate = generationGate();
     if (gate.response) return gate.response;
-    return createKit({ owner: gate.owner, articleId: article!.id as string, teacherAvatar, sourceKitId: null, fromTopicStatus: "article_approved", verb: "kit_generate" });
+    return createKit({ owner: gate.owner, articleId: article!.id as string, sourceArticleId: null, teacherAvatar, sourceKitId: null, fromTopicStatus: "article_approved", verb: "kit_generate" });
   }
 
   if (action === "regenerate") {
@@ -370,23 +389,39 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (ksErr) return dbError(ksErr);
     const accepts = kitAcceptsRegenerate(topic.status, kit.status, hasLiveKit(kits, LANGUAGE));
     if (!accepts.ok) return conflict(accepts.why, { topicStatus: topic.status, kitStatus: kit.status });
-    // The article the old kit was built from must still be the approved one:
-    // a kit is never regenerated from a superseded version (decision 13 — the
-    // worker would refuse it anyway; say so here).
-    const { data: article, error: aErr } = await admin.from("topic_articles").select("id, version, status").eq("id", kit.article_id).eq("topic_id", id).maybeSingle();
+    // The new kit is built from the APPROVED article — never from a superseded
+    // version (decision 13; the worker would refuse it anyway). While the old
+    // kit's own article is still the approved one, that is it. Once a newer
+    // version was approved (the kit was built from v1, the reviewer approved
+    // v2), the new kit moves onto THAT version: Generate is closed to a topic
+    // that already has a kit and the old kit cannot be approved, so refusing
+    // here would leave the topic with no way to a kit. Only a topic with no
+    // approved article at all is the 409 (kitRegenerateSource — the panel's
+    // button says the same sentence).
+    const { data: kitArticle, error: aErr } = await admin.from("topic_articles").select("id, version, status").eq("id", kit.article_id).eq("topic_id", id).maybeSingle();
     if (aErr) return dbError(aErr);
-    if (!article || article.status !== "approved") {
-      return conflict(
-        article
-          ? `The article this kit was built from (v${article.version}) is ${statusLabel(article.status as string)}, not approved — generate a new kit from the approved version instead.`
-          : "The article this kit was built from no longer exists.",
-        { articleStatus: article?.status ?? null },
-      );
+    let approved: { id: string; version: number | null } | null = null;
+    if (kitArticle?.status !== "approved") {
+      // the same read the generate branch does
+      const { data: current, error: cErr } = await admin
+        .from("topic_articles")
+        .select("id, version, status")
+        .eq("topic_id", id)
+        .eq("language", LANGUAGE)
+        .eq("status", "approved")
+        .maybeSingle();
+      if (cErr) return dbError(cErr);
+      approved = current ? { id: current.id as string, version: (current.version as number | null) ?? null } : null;
     }
+    const source = kitRegenerateSource(
+      kitArticle ? { id: kitArticle.id as string, version: (kitArticle.version as number | null) ?? null, status: kitArticle.status as string } : null,
+      approved,
+    );
+    if (!source.ok) return conflict(source.why, { articleStatus: kitArticle?.status ?? null });
     const teacherAvatar: TeacherAvatar = isTeacherAvatar(kit.teacher_avatar) ? kit.teacher_avatar : nextTeacherAvatar(kits);
     const gate = generationGate();
     if (gate.response) return gate.response;
-    return createKit({ owner: gate.owner, articleId: article.id as string, teacherAvatar, sourceKitId: kit.id, fromTopicStatus: "in_review", verb: "kit_regenerate" });
+    return createKit({ owner: gate.owner, articleId: source.articleId, sourceArticleId: kit.article_id, teacherAvatar, sourceKitId: kit.id, fromTopicStatus: "in_review", verb: "kit_regenerate" });
   }
 
   // ── retry ──────────────────────────────────────────────────────────────────

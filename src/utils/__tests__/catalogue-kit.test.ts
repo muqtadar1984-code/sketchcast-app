@@ -47,6 +47,7 @@ import {
   kitGenerationParams,
   kitGenerationRows,
   kitProgress,
+  kitRegenerateSource,
   kitStatusLabel,
   nextTeacherAvatar,
   parseTimestamp,
@@ -150,6 +151,57 @@ describe("kitAcceptsGenerate / kitAcceptsRegenerate", () => {
     expect(why(kitAcceptsRegenerate("in_review", "rejected", true))).toMatch(/already generating/);
     expect(why(kitAcceptsRegenerate("video_approved", "rejected", false))).toMatch(/video approved.*reopen/);
     expect(why(kitAcceptsRegenerate("generating", "rejected", false))).toMatch(/reopen/);
+  });
+
+  it("kitRegenerateSource: the kit's own article while it is the approved one — nothing changes", () => {
+    expect(kitRegenerateSource({ id: "a1", version: 1, status: "approved" }, null)).toEqual({ ok: true, articleId: "a1", switched: false, version: 1, note: null });
+    // the approved lookup is not even needed; given, it is the same row
+    expect(kitRegenerateSource({ id: "a1", version: 1, status: "approved" }, { id: "a1", version: 1 })).toMatchObject({ ok: true, articleId: "a1", switched: false, note: null });
+  });
+
+  it("kitRegenerateSource: a superseded (or rejected, or vanished) kit article moves the new kit onto the APPROVED version, and says so", () => {
+    expect(kitRegenerateSource({ id: "a1", version: 1, status: "superseded" }, { id: "a2", version: 2 })).toEqual({
+      ok: true,
+      articleId: "a2",
+      switched: true,
+      version: 2,
+      note: "The article this kit was built from (v1) is superseded — Regenerate builds the new kit from the approved version (v2).",
+    });
+    expect(kitRegenerateSource({ id: "a1", version: 3, status: "in_review" }, { id: "a2", version: 2 })).toMatchObject({
+      ok: true,
+      articleId: "a2",
+      switched: true,
+      note: expect.stringMatching(/\(v3\) is in review — Regenerate builds the new kit from the approved version \(v2\)/),
+    });
+    for (const gone of [null, undefined]) {
+      expect(kitRegenerateSource(gone, { id: "a2", version: 2 })).toMatchObject({
+        ok: true,
+        articleId: "a2",
+        switched: true,
+        note: "The article this kit was built from no longer exists — Regenerate builds the new kit from the approved version (v2).",
+      });
+    }
+    // a version the caller does not know is simply not named
+    expect(kitRegenerateSource({ id: "a1", status: "superseded" }, { id: "a2" })).toMatchObject({
+      ok: true,
+      version: null,
+      note: "The article this kit was built from is superseded — Regenerate builds the new kit from the approved version.",
+    });
+  });
+
+  it("kitRegenerateSource: refuses only when the topic has NO approved article — never a kit from an unapproved version", () => {
+    const why = (r: ReturnType<typeof kitRegenerateSource>) => (r.ok ? null : r.why);
+    expect(why(kitRegenerateSource({ id: "a1", version: 1, status: "superseded" }, null))).toBe(
+      "The article this kit was built from (v1) is superseded, and the topic has no approved article — approve an article version first; a kit is built from an approved article.",
+    );
+    expect(why(kitRegenerateSource({ id: "a1", version: 2, status: "rejected" }, undefined))).toMatch(/\(v2\) is rejected, and the topic has no approved article/);
+    expect(why(kitRegenerateSource(null, null))).toMatch(/no longer exists, and the topic has no approved article/);
+    // the answer's article is ALWAYS an approved one (decision 13): the
+    // kit's own only when its status is approved, else the approved argument
+    for (const status of ["draft", "in_review", "rejected", "superseded"]) {
+      const r = kitRegenerateSource({ id: "a1", version: 1, status }, { id: "a2", version: 2 });
+      expect(r.ok && r.articleId, status).toBe("a2");
+    }
   });
 });
 

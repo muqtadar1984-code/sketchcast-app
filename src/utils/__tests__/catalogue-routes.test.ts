@@ -799,11 +799,60 @@ describe("the kit route (Phase 3): /api/library/topics/[id]/kit", () => {
     const regen = section("regenerate");
     expect(regen).toMatch(/kitAcceptsRegenerate\(topic\.status,\s*kit\.status,\s*hasLiveKit\(kits,\s*LANGUAGE\)\)/);
     expect(regen).toMatch(/isTeacherAvatar\(kit\.teacher_avatar\)\s*\?\s*kit\.teacher_avatar\s*:\s*nextTeacherAvatar\(kits\)/);
-    expect(regen).toMatch(/article\.status\s*!==\s*["']approved["']/);
     expect(regen).toMatch(/sourceKitId:\s*kit\.id/);
     expect(regen).toMatch(/fromTopicStatus:\s*["']in_review["']/);
     expect(regen).toMatch(/verb:\s*["']kit_regenerate["']/);
     expect(regen.indexOf("generationGate()")).toBeLessThan(regen.indexOf("createKit("));
+  });
+
+  it("regenerate: built from the APPROVED article — the kit's own, else the topic's current one; 409 only when none is approved (run in catalogue-kit-regenerate.test.ts)", () => {
+    const regen = section("regenerate");
+    // (c) the kit's own article is read by kit.article_id, on this topic
+    const own = regen.search(/\.from\(\s*["']topic_articles["']\s*\)\.select\([^)]*\)\.eq\(\s*["']id["']\s*,\s*kit\.article_id\s*\)\.eq\(\s*["']topic_id["']\s*,\s*id\s*\)/);
+    expect(own).toBeGreaterThan(-1);
+    // (a) only when that one is not approved, the topic's approved article is
+    // looked up — the generate branch's read: topic, LANGUAGE, status approved
+    const fallbackGuard = regen.search(/if\s*\(\s*kitArticle\?\.status\s*!==\s*["']approved["']\s*\)/);
+    expect(fallbackGuard).toBeGreaterThan(own);
+    const approvedRead = /\.from\(\s*["']topic_articles["']\s*\)\s*\.select\([^)]*\)\s*\.eq\(\s*["']topic_id["']\s*,\s*id\s*\)\s*\.eq\(\s*["']language["']\s*,\s*LANGUAGE\s*\)\s*\.eq\(\s*["']status["']\s*,\s*["']approved["']\s*\)\s*\.maybeSingle\(\)/;
+    expect(regen.slice(fallbackGuard)).toMatch(approvedRead);
+    expect(section("generate")).toMatch(approvedRead);
+    // (b) the pure rule decides, and its refusal is the 409 — before the locks
+    // and before anything is inserted
+    const rule = regen.indexOf("kitRegenerateSource(");
+    const refusal = regen.search(/if\s*\(\s*!source\.ok\s*\)\s*return\s+conflict\(source\.why/);
+    expect(rule).toBeGreaterThan(fallbackGuard);
+    expect(refusal).toBeGreaterThan(rule);
+    expect(refusal).toBeLessThan(regen.indexOf("generationGate()"));
+    // the new kit carries the rule's article, never kit.article_id directly;
+    // the old kit's article travels only as the audit's source_article_id
+    expect(regen).toMatch(/createKit\(\{[^}]*articleId:\s*source\.articleId,\s*sourceArticleId:\s*kit\.article_id,/);
+    expect(regen).not.toMatch(/articleId:\s*kit\.article_id/);
+    // the old sentence that sent the member to a Generate that refuses too
+    expect(t()).not.toMatch(/generate a new kit from the approved version instead/);
+    // the trail shows the article changed
+    const src = t();
+    const create = src.slice(src.indexOf("const createKit = async"), src.indexOf('if (action === "generate")'));
+    const auditRow = create.slice(create.indexOf("await audit(admin, m.id, opts.verb"));
+    expect(auditRow).toMatch(/article_id:\s*opts\.articleId,/);
+    expect(auditRow).toMatch(/source_article_id:\s*opts\.sourceArticleId,/);
+    expect(auditRow).toMatch(/article_changed:\s*opts\.sourceArticleId\s*!==\s*null\s*&&\s*opts\.sourceArticleId\s*!==\s*opts\.articleId/);
+    // a first Generate has no source article
+    expect(section("generate")).toMatch(/sourceArticleId:\s*null/);
+  });
+
+  it("the kit panel's Regenerate button reads the route's rule: enabled on a superseded article, and it says which version it builds from", () => {
+    const panel = readFileSync(resolve(__dirname, "..", "..", "app", "library", "topics", "[id]", "kit-panel.tsx"), "utf8");
+    expect(panel).toMatch(/kitRegenerateSource\(/);
+    // disabled by the kit/topic rule first, then by the article rule's refusal
+    expect(panel).toMatch(/const\s+regenWhy\s*=\s*lockWhy\s*\?\?\s*\(!regen\.ok\s*\?\s*regen\.why\s*:\s*!regenSource\.ok\s*\?\s*regenSource\.why\s*:\s*null\)/);
+    // the label and the visible line under the header
+    expect(panel).toMatch(/regenSwitched\s*\?\s*`Regenerate from \$\{regenFrom\}`\s*:\s*"Regenerate kit"/);
+    expect(panel).toMatch(/\{regenHelp\s*&&\s*<p[^>]*>\{regenHelp\}<\/p>\}/);
+    // the page hands the panel the approved version and every version's number
+    const page = readFileSync(resolve(__dirname, "..", "..", "app", "library", "topics", "[id]", "page.tsx"), "utf8");
+    expect(page).toMatch(/approvedArticle=\{approvedArticle\s*\?\s*\{\s*id:\s*approvedArticle\.id,\s*version:\s*approvedArticle\.version\s*\}\s*:\s*null\}/);
+    expect(page).toMatch(/articleVersions=\{articleVersions\}/);
   });
 
   it("retry: only a failed piece, taken exclusively (params.retried CAS), after a guarded kit update read back, with the row's whitelisted params, repointed through the RPC", () => {

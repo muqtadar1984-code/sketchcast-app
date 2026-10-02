@@ -234,7 +234,8 @@ export function kitAcceptsReject(topicStatus: string, kitStatus: string): KitAcc
 
 /** May an existing kit be regenerated? The kit must be reviewable history
  *  (canRegenerateKit) and the topic back in review — Regenerate is the
- *  in_review → generating reopening of the topic status machine. */
+ *  in_review → generating reopening of the topic status machine. Which
+ *  article the new kit is built from is kitRegenerateSource's answer. */
 export function kitAcceptsRegenerate(topicStatus: string, kitStatus: string, liveKit: boolean): KitAcceptance {
   if (!canRegenerateKit(kitStatus)) {
     return { ok: false, why: `A ${kitStatusLabel(kitStatus)} kit is not regenerated — ${kitStatus === "approved" ? "reject it first to pull the approval" : "retry its failed pieces instead"}.` };
@@ -244,6 +245,58 @@ export function kitAcceptsRegenerate(topicStatus: string, kitStatus: string, liv
     return { ok: false, why: `The topic is ${topicStatus.replace(/_/g, " ")} — reopen it to in review before regenerating the kit.` };
   }
   return { ok: true };
+}
+
+/** An article version as the regenerate rule reads it. */
+export type RegenerateArticle = { id: string; version?: number | null; status: string };
+
+export type KitRegenerateSource =
+  | {
+      ok: true;
+      articleId: string;
+      /** true when the new kit is built from a DIFFERENT article version than
+       *  the kit being regenerated */
+      switched: boolean;
+      /** the approved version the new kit is built from, when known */
+      version: number | null;
+      /** what changed, for the panel's help text and the confirm; null when
+       *  nothing did */
+      note: string | null;
+    }
+  | { ok: false; why: string };
+
+const versionTag = (v: number | null | undefined) => (typeof v === "number" ? ` (v${v})` : "");
+
+/** Which article does a Regenerate build FROM? Always the APPROVED version
+ *  (decision 13: a kit is never regenerated from a superseded version):
+ *    • the kit's own article, while it is still the approved one;
+ *    • otherwise the topic's currently approved article — a kit built from v1
+ *      and reviewed after v2 was approved cannot be approved
+ *      (kitAcceptsApprove) and Generate is closed to a topic that already has
+ *      a kit (kitAcceptsGenerate), so Regenerate is the one way forward and
+ *      moves the kit onto the new version;
+ *    • refused only when the topic has no approved article at all.
+ *  `kitArticle` is the version the old kit was built from (null when it is
+ *  gone), `approved` the topic's approved version in the kit's language (null
+ *  when there is none). The wording is shared by the route's 409 and the
+ *  panel's disabled button. */
+export function kitRegenerateSource(kitArticle: RegenerateArticle | null | undefined, approved: Pick<RegenerateArticle, "id" | "version"> | null | undefined): KitRegenerateSource {
+  if (kitArticle && kitArticle.status === "approved") {
+    return { ok: true, articleId: kitArticle.id, switched: false, version: kitArticle.version ?? null, note: null };
+  }
+  const was = kitArticle
+    ? `The article this kit was built from${versionTag(kitArticle.version)} is ${kitArticle.status.replace(/_/g, " ")}`
+    : "The article this kit was built from no longer exists";
+  if (!approved) {
+    return { ok: false, why: `${was}, and the topic has no approved article — approve an article version first; a kit is built from an approved article.` };
+  }
+  return {
+    ok: true,
+    articleId: approved.id,
+    switched: true,
+    version: approved.version ?? null,
+    note: `${was} — Regenerate builds the new kit from the approved version${versionTag(approved.version)}.`,
+  };
 }
 
 // ── Teacher avatar + voices ──────────────────────────────────────────────────
