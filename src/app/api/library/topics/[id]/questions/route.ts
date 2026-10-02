@@ -56,7 +56,9 @@ export const runtime = "nodejs";
 //     reject              {questionIds[], notes}  draft | approved → rejected;
 //                         notes are required (they feed regenerate_rejected)
 //
-// Bulk actions take up to 200 ids of THIS topic; the guarded UPDATE only
+// Bulk actions take any number of ids of THIS topic (BULK_MAX is a sanity
+// ceiling on the body, not a review limit); the guarded UPDATE runs in
+// BULK_CHUNK slices so the id list never outgrows PostgREST's URL, only
 // touches rows still in an accepting status and reports how many moved —
 // zero means every id had already moved (another reviewer) and answers 409,
 // nothing audited. The job is an OBSERVER job (generation_id and book_id NULL,
@@ -89,8 +91,11 @@ type Body = {
 const QUESTIONS_JOB_TYPE = "topic_questions";
 /** Phase 3 authors in English; translations arrive with the translate phase. */
 const LANGUAGE = "en";
-/** ids per bulk approve / reject / retire */
-const BULK_MAX = 200;
+/** Sanity ceiling on ids per bulk approve / reject / retire — far above any
+ *  bank (the questions page loads at most 1000 items), so not a review limit. */
+const BULK_MAX = 10000;
+/** ids per guarded UPDATE: `.in("id", …)` travels in the URL (~37 chars an id). */
+const BULK_CHUNK = 100;
 
 const QUESTION_COLUMNS =
   "id, topic_id, article_id, objective_ref, claim_ref, language, source_question_id, item_type, answer_mode, difficulty, cognitive_level, marks, est_seconds, stem, options, distractor_rationale, answer, marking_scheme, explanation, tags, content_hash, status, reviewer_id, reviewed_at, notes, created_at, updated_at";
@@ -314,18 +319,38 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const ids = list.ids;
   const now = new Date().toISOString();
 
+  /** The guarded UPDATE over every id, BULK_CHUNK at a time. Each slice keeps
+   *  its own status guard, so a row moved by another reviewer is skipped, not
+   *  overwritten. On an error the rows already moved are returned with it so
+   *  the caller audits them before answering. */
+  const updateChunked = async (
+    patch: Record<string, unknown>,
+    fromStatuses: string[],
+  ): Promise<{ moved: { id: string }[]; error: { code?: string; message: string } | null }> => {
+    const moved: { id: string }[] = [];
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const { data, error } = await admin
+        .from("topic_questions")
+        .update(patch)
+        .eq("topic_id", id)
+        .in("id", ids.slice(i, i + BULK_CHUNK))
+        .in("status", fromStatuses)
+        .select("id");
+      if (error) return { moved, error };
+      moved.push(...((data ?? []) as { id: string }[]));
+    }
+    return { moved, error: null };
+  };
+
   if (action === "approve") {
     // Approve only from draft: a rejected item is regenerated, not resurrected;
     // an approved one is already counted. The trigger recomputes the ladder.
-    const { data: moved, error } = await admin
-      .from("topic_questions")
-      .update({ status: "approved", reviewer_id: m.id, reviewed_at: now })
-      .eq("topic_id", id)
-      .in("id", ids)
-      .eq("status", "draft")
-      .select("id");
-    if (error) return dbError(error);
-    if (!moved?.length) {
+    const { moved, error } = await updateChunked({ status: "approved", reviewer_id: m.id, reviewed_at: now }, ["draft"]);
+    if (error) {
+      if (moved.length) await audit(admin, m.id, "questions_approve", "topic", id, { requested: ids.length, approved: moved.length, question_ids: moved.map((r) => r.id), partial: true });
+      return dbError(error);
+    }
+    if (!moved.length) {
       return conflict(ids.length === 1 ? "This item is no longer a draft — it changed while you were reviewing; reload." : "None of the selected items is still a draft — reload to see their current state.", {
         requested: ids.length,
       });
@@ -337,15 +362,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (action === "reject") {
     const notes = text(body.notes, 2000);
     if (!notes) return bad("Say why — notes are required to reject items (they steer Regenerate rejected).");
-    const { data: moved, error } = await admin
-      .from("topic_questions")
-      .update({ status: "rejected", reviewer_id: m.id, reviewed_at: now, notes })
-      .eq("topic_id", id)
-      .in("id", ids)
-      .in("status", ["draft", "approved"])
-      .select("id");
-    if (error) return dbError(error);
-    if (!moved?.length) {
+    const { moved, error } = await updateChunked({ status: "rejected", reviewer_id: m.id, reviewed_at: now, notes }, ["draft", "approved"]);
+    if (error) {
+      if (moved.length) await audit(admin, m.id, "questions_reject", "topic", id, { requested: ids.length, rejected: moved.length, question_ids: moved.map((r) => r.id), notes, partial: true });
+      return dbError(error);
+    }
+    if (!moved.length) {
       return conflict("None of the selected items can be rejected any more (already rejected or retired) — reload to see their current state.", { requested: ids.length });
     }
     await audit(admin, m.id, "questions_reject", "topic", id, { requested: ids.length, rejected: moved.length, question_ids: moved.map((r) => r.id), notes });
@@ -353,15 +375,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   if (action === "retire") {
-    const { data: moved, error } = await admin
-      .from("topic_questions")
-      .update({ status: "retired" })
-      .eq("topic_id", id)
-      .in("id", ids)
-      .in("status", ["draft", "approved", "rejected"])
-      .select("id");
-    if (error) return dbError(error);
-    if (!moved?.length) return conflict("Every selected item is already retired.", { requested: ids.length });
+    const { moved, error } = await updateChunked({ status: "retired" }, ["draft", "approved", "rejected"]);
+    if (error) {
+      if (moved.length) await audit(admin, m.id, "questions_retire", "topic", id, { requested: ids.length, retired: moved.length, question_ids: moved.map((r) => r.id), partial: true });
+      return dbError(error);
+    }
+    if (!moved.length) return conflict("Every selected item is already retired.", { requested: ids.length });
     await audit(admin, m.id, "questions_retire", "topic", id, { requested: ids.length, retired: moved.length, question_ids: moved.map((r) => r.id) });
     return NextResponse.json({ ok: true, retired: moved.length, skipped: ids.length - moved.length });
   }
