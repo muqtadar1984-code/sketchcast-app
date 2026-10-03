@@ -911,6 +911,16 @@ describe("the kit route (Phase 3): /api/library/topics/[id]/kit", () => {
     expect(routing).toMatch(/"generate"\s*\/\/[^\n]*compose worksheets/);
   });
 
+  it("question bulk actions have no review cap: the guarded UPDATE runs in slices, never one unbounded in(id) list", () => {
+    if (!has(QUESTIONS)) return;
+    const q = text(QUESTIONS);
+    const max = Number(q.match(/const\s+BULK_MAX\s*=\s*(\d+)/)?.[1]);
+    expect(max).toBeGreaterThanOrEqual(1000); // the questions page loads up to 1000 items
+    expect(q).toMatch(/const\s+BULK_CHUNK\s*=\s*\d+/);
+    expect(q).toMatch(/\.in\("id",\s*ids\.slice\(i,\s*i\s*\+\s*BULK_CHUNK\)\)/);
+    expect(q).not.toMatch(/\.in\("id",\s*ids\)/);
+  });
+
   it("audits every action on the topic (approve and reject are audited by the RPCs)", () => {
     const src = t();
     expect(src).toMatch(/audit\(admin,\s*m\.id,\s*opts\.verb,\s*"topic",\s*id/);
