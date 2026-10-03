@@ -1,6 +1,6 @@
 # SketchCast AI — Technical Document
 
-_Last updated: 12 July 2026. The single, current source of truth for the SketchCast platform — architecture, data model, the generation pipeline, every feature area, config/flags/secrets, security, and operations. Generated from the live codebase._
+_Last updated: 30 September 2026. The single, current source of truth for the SketchCast platform — architecture, data model, the generation pipeline, every feature area, config/flags/secrets, security, and operations. Sections 1–12 describe the platform as of July 2026; section 13 records everything that changed between July and 30 September 2026 (the topic catalogue and library portal, the YouTube channel, maths lessons, board colour and the image-reliability work)._
 
 > Supersedes the earlier `sketchcast/TECHNICAL_DOCUMENT.md` stub in the worker repo.
 
@@ -18,6 +18,7 @@ _Last updated: 12 July 2026. The single, current source of truth for the SketchC
 10. [Support agent, issues & autofix](#10-support-agent-issues-autofix)
 11. [Platform console (admin)](#11-platform-console-admin)
 12. [Config, security, QA & operations](#12-config-security-qa-operations)
+13. [September 2026 update — catalogue, YouTube, maths, board colour](#13-september-2026-update)
 
 ---
 ## 1. Overview & architecture
@@ -1061,3 +1062,73 @@ A fully offline copy of the portal runs against a **local Supabase Docker stack*
 - **Autofix is built and wired end-to-end but dormant.** Flag off; needs `GITHUB_AUTOFIX_TOKEN` + the token/callback secrets + migration 0039, and is awaiting a first live customer issue for its smoke test. Every safety layer (PR-only, green-CI gate, HMAC single-use email approval, least-privilege token, sensitive-diff flag, PII scrub, `FEATURE_AUTOFIX` kill switch) is already in place. Phase 2: auto-trigger on classified code bugs, extend to the worker (`master`) + landing (`main`), and have the agent write the failing test first.
 - **Phase-2 board is not built.** The standalone canvas app (`board.sketchcast.app`) and its repo are pending (`FEATURE_AI_TUTOR_CANVAS` off; the scoped board-token auth path exists but is unused). The portal falls back Phase-2 → Phase-1 in-app board → text. Post-Assistant-pivot the TAL board is preserved behind `FEATURE_AI_TUTOR_TAL` (off), and the **AI Teaching Assistant is the active tutor path**.
 - **Env drift caveat.** The app `.env.example` omits the Assistant/tutor LLM provider key even though the runtime needs one (per `LOCAL-DEV.md`); worth adding so a fresh Vercel deploy of the Assistant isn't missing a credential.
+
+---
+
+## 13. September 2026 update — catalogue, YouTube, maths, board colour
+
+_What changed between the July baseline above and 30 September 2026. Each part names the module that owns it; the detailed design notes live in `sketchcast-app/docs/LIBRARY-PORTAL.md`, `docs/QUESTION-BANK.md`, `sketchcast-ai/docs/MATHS-LESSONS.md` and `sketchcast-ai/docs/VISUAL_KNOWLEDGE_LIBRARY.md`._
+
+### 13.1 The topic catalogue and the library portal
+
+A third host on the same Next.js deployment, **`library.sketchcast.app`** (`NEXT_PUBLIC_LIBRARY_HOST`, own sign-in at `/library-login`, `library_members` with the roles viewer / reviewer / editor / admin), carries a **canonical topic catalogue** that is independent of any teacher's book:
+
+| Layer | Tables | What it is |
+|---|---|---|
+| Taxonomy | `curricula`, `curriculum_nodes`, `topic_curriculum_map` | Seeded curricula (Cambridge Lower Secondary Science 0893, CBSE Science 6–10, Cambridge Lower Secondary Mathematics 0862, CBSE Mathematics) with objective- or content-coded nodes; a topic maps to one or more nodes with a coverage |
+| Topics | `topics`, `topic_candidates`, `topic_aliases` | Harvested from the curricula and from indexed books (`topic_harvest`, `topic_derive` jobs), de-duplicated by canonical key, with a subject, summary and a lifecycle `candidate → approved → article_approved → generating → in_review → video_approved` (or `retired`) |
+| Article | `topic_articles`, `article_figures` | The **knowledge article** the worker drafts per topic (`topic_article` job, a 1,000-word floor), versioned, approved by a reviewer; it is the single source every kit is built from |
+| Question bank | `topic_questions`, `question_set_blueprints` | Items drafted from the approved article (`topic_questions` job), reviewed one at a time, composed into worksheets by blueprint; a topic's `bank_maturity` gates publishing |
+| Kit | `topic_kits` | One set of generations per topic: presentation (the video), lesson plan, activity, case study, worksheet, deck. Owned by the catalogue system account, `params.catalogue = true`, exempt from the teacher caps and dedup. `approve_topic_kit()` / `reject_topic_kit()` are the only writers of the approved status; a **Regenerate** creates a new kit with `source_kit_id` pointing at the one it replaces, so an approved kit and its publication stay in the history |
+| Publication | `topic_publications` | One row per posted part: the YouTube video id, privacy, playlists, captions, thumbnail, `format_version`, `superseded_by` |
+
+The worker runs the catalogue jobs on a last-priority lane (`CATALOGUE_JOB_TYPES` in `worker/run.py`, claimed only when nothing else waits): `topic_harvest`, `topic_derive`, `topic_article`, `figure_render`, `topic_questions`, `topic_publish`, `topic_supersede`, `youtube_playlists`, `youtube_enrich`. They are **observer jobs** (`OBSERVER_JOB_TYPES`): they carry no generation of their own and never relabel one.
+
+Every video and publication records the **video format version** (`shared/video_format.py`, currently 3; the current value is written to `platform_settings` on worker boot). The library shows which published videos predate the current format so the founder can decide what to re-render.
+
+### 13.2 The YouTube channel
+
+Publishing (`catalogue/publish.py`) is **live**. `FEATURE_CATALOGUE_PUBLISH=1` on the worker; the credentials are `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` and one `YOUTUBE_REFRESH_TOKEN_<LANG>` per channel language, read at the moment of use and never stored. The API project has **not** passed Google's compliance audit (`YOUTUBE_COMPLIANCE_AUDIT_PASSED` unset), so every upload lands **private** and the founder flips it to public in Studio; the hourly statistics poll (`catalogue/youtube_stats.py`) copies each video's current privacy back onto its row.
+
+What a publish does, per part: resumable upload with the composed title and description; the caption track from the script; a locally drawn thumbnail; playlists. The description is composed by `catalogue/youtube_meta.py` (intro, "Aligned to" curriculum codes, chapters, key terms, the end-screen ask, the SketchCast line with a UTM link, hashtags) from the reviewer-edited `topic_kits.youtube_meta`, and the portal previews it before posting.
+
+Additions this month:
+
+- **Discipline playlists** (`catalogue/playlists.py`, the `youtube_playlists` job). A topic's **discipline** is read from the strand letters of its curriculum codes (`7Bs` biology, `8Cm` chemistry, `9Pf` physics, `9Ae` / `cbse:8:ALG` algebra; Earth and space codes file under physics by the founder's decision), majority vote with a tie to the first mapped code. The job finds or creates the Biology, Chemistry, Physics and Algebra playlists, records key → id in `platform_settings` (`youtube_playlists_<lang>`, read by `configured_playlists` beneath the `YOUTUBE_PLAYLISTS_<LANG>` env override), and places every live video once. Every later publish lands in its playlist by itself.
+- **Richer words on every video** (`catalogue/youtube_enrich.py`, the `youtube_enrich` job, and the same helpers in `publish_part`): a "More Biology lessons" playlist line above the SketchCast line; hashtags for the discipline, board and class (`#CBSE #CBSEClass9 #Class9Science`, `#Cambridge #CambridgeStage7`), NCERT for CBSE topics and the lesson form, the topic's own hashtags kept first and the line capped at 15 (past which YouTube ignores them all); and the **tags field** (title, key terms, discipline, board and class phrasings, within 500 characters). Idempotent over the whole channel; the reviewer's own paragraphs are never touched.
+- **Supersede** (`catalogue/supersede.py`, the `topic_supersede` job, queued from the library). A re-rendered lesson is always a new upload; the job puts an "updated version" pointer at the top of the old description, records `superseded_by` on the old row, and turns a public old video unlisted unless `params.keep_privacy` is set (the founder's current practice: the old videos stay public and are flipped by hand).
+- **CTA backfill** (`catalogue/youtube_backfill.py`): once per worker boot, the end-screen ask is inserted into the description of any video that lacks it.
+
+State on 30 September: 34 videos on the channel (25 original science lessons, one algebra lesson, and the first eight colour re-renders posted alongside their predecessors); four playlists; every video carries the enriched description and tags.
+
+### 13.3 Maths lessons
+
+Mathematics topics run through the same pipeline under a **subject profile** (`shared/subject_profile.py`, `FEATURE_MATHS_LESSONS=1`, or `params.subject_profile` to pin one generation). Three things switch on the profile: the lesson shape (a concept plus a ladder of worked examples, `maths/lesson.py`), the board grammar (the **algebra board**, working written line by line, `maths/board.py`, with a typeset `math` scene element), and speech (notation spoken as words, `maths/speech.py`, in every lesson language via `maths/i18n.py`).
+
+Every worked example is a **structured object** whose steps are verified with SymPy (`maths/verify.py`: equivalence, rounding, systems of unknowns, data-set tasks); a failed step is regenerated, an unverifiable try-it is dropped. Worksheets and test papers are composed from a **verified question ladder**, every rejected question logged with its reason. The **length floor** (`shared/lesson_length.py`, five minutes for a catalogue lesson) is stated to the model, measured after generation and, when short, extended by up to `MAX_LENGTH_RETRIES` rounds of additional examples before the worker refuses the lesson.
+
+### 13.4 Board colour
+
+Videos are drawn in colour as of 29 September (`FEATURE_BOARD_COLOUR=1`, `FEATURE_BOARD_COLOUR_PICTURES=1` on the worker; `params.board_colour` / `board_colour_pictures` pin one generation either way). Four phases, all in `spike/scene_engine/`:
+
+1. **Marks** — a second accent the engine assigns to board marks (`colour.py`), behind its own flag.
+2. **Pictures** — the image model is asked for restrained flat colour; a coloured picture is fetched under the key `<key>__colour` and never hydrates from, or publishes to, the ink visual library.
+3. **Outline first, wash after** — `split_colour_layers` separates the line work from the fill; the render draws the outline and the colour washes in under it over `WASH_SECS`.
+4. **The director's one colour sentence** — the semantic prompt carries a single sentence about colour, under the pictures switch.
+
+A colour picture that fills its page (no white paper) is asked once more with the page spelled out and then drawn in ink under the colour key. Cost: a colour picture and an ink picture cost the same per image (`gemini-3-pro-image` at 2K, about $0.13 each); what colour loses is the ink library's reuse, so a colour lesson pays for every picture it plans.
+
+### 13.5 Scene engine, gates and reliability
+
+- **The image gate** (`asset_warm.py`, `IMAGE_GATE=strict` by default): every planned picture is warmed before a frame is rasterised or a TTS character bought; a missing picture fails the lesson with a named, counted reason rather than shipping a blank board. `warn` measures without refusing; `off` restores the old behaviour.
+- **Rate limits are waits, not failures.** A 429 defers the picture for the lesson (`defer_asset`), the warm pass waits it out, and a job that still cannot finish is put back in the queue with a wake-up time (`worker.client.rate_limit_deferral`, up to `RATE_LIMIT_MAX_WAIT_SECONDS`). On 30 September the deferral bookkeeping was fixed to key by the picture rather than its colour variant (`defer_key`): before that, a colour picture's rate limit was invisible to the gate and eleven catalogue re-runs failed as "generation_failed".
+- **Labels.** A placed text keeps a gutter from its neighbours and touching counts as overlap; a text-only chapter is laid out in rows; a zoom keeps a picture's labels in frame; a process label points at the arrow between its ends; the annotator is told what the picture is and a total miss is not latched; an overlapping-text frame **refuses the lesson**. The founder's standing ask (in `sketchcast-ai/CLAUDE.md`) is a label design that holds by construction, not by accumulated rules.
+- **Renderer.** Each generation renders in its own working directory; the final video is read back before it ships; deploys no longer kill renders (shutdown grace); a video lane cap and a rate-limit deferral keep one hung render from holding the gate; script JSON is repaired and re-asked; the Gemini client retries a transient 5xx.
+- **End screen.** Every video ends with the channel's ask, and its line goes into every description; Indic text is drawn with a face that has its glyphs.
+- **Demos.** The library's Demos page lists the videos drawn under a pinned setting (`params.demo`), with Delete.
+
+### 13.6 Operating notes for this period
+
+- The Railway worker runs `WORKER_CONCURRENCY` jobs in one process; four colour renders in parallel exhausted the image model's per-minute quota on 29 September. The fix in 13.5 makes that a slower batch rather than a failed one.
+- Approving, publishing and superseding from outside the portal follow the portal's own writes exactly: `approve_topic_kit()`, one `topic_publish` job per kit, one `topic_supersede` job per old publication, each with a `platform_audit_log` row.
+- Open problems carried forward: the label design (above); a colour visual library (the automatic colouriser was rolled back on 29 September for quality; the founder is trialling hand-rendered colour assets); the compliance audit that would allow public uploads directly.
