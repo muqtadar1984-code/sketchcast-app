@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isPlatformAdminRequest } from "@/utils/platform-admin";
-import { notifyIssueResolved } from "@/utils/notify";
+import { issueThing } from "@/utils/notify";
 
 export const runtime = "nodejs";
 
@@ -61,12 +61,15 @@ export async function PATCH(request: Request) {
   const { error: uErr } = await admin.from("platform_issues").update(patch).eq("id", id);
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
 
-  // Every resolution reaches the client (founder direction 2026-09-25): the
-  // first move INTO resolved emails the owner what was done, with an
-  // invitation to reply. Re-saving a resolved issue does not mail again.
-  let notified = false;
+  // Every resolution reaches the client (founder direction 2026-09-25), but
+  // as ONE email per owner (2026-10-03): the first move INTO resolved queues
+  // the owner's sentence in issue_notices, and the worker sends each owner a
+  // single digest once everything of theirs is resolved. Four emails about
+  // one deck went out inside three minutes before this. Re-saving a resolved
+  // issue queues nothing.
+  let queued = false;
   if (patch.status === "resolved" && row.status !== "resolved") {
-    notified = await notifyOwner(admin, row, (patch.resolution_note as string | null | undefined) ?? row.resolution_note);
+    queued = await queueOwnerNotice(admin, id, row, (patch.resolution_note as string | null | undefined) ?? row.resolution_note);
   }
 
   await admin.from("platform_audit_log").insert({
@@ -74,16 +77,19 @@ export async function PATCH(request: Request) {
     action: "issue_status",
     target_kind: "issue",
     target_id: id,
-    detail: { before, after: patch, notified },
+    detail: { before, after: patch, notified: false, queued },
   });
 
-  return NextResponse.json({ ok: true, notified });
+  return NextResponse.json({ ok: true, queued });
 }
 
 /** The issue's owner — the generation's owner first (an auto-filed issue
- *  names the reporter as the owner too), else the reporter — and their book. */
-async function notifyOwner(
+ *  names the reporter as the owner too), else the reporter — and their book,
+ *  queued for the owner's digest (one notice per issue; a second save is a
+ *  no-op). */
+async function queueOwnerNotice(
   admin: ReturnType<typeof createAdminClient>,
+  issueId: string,
   row: { category: string | null; resolution_note: string | null; reporter_id: string | null; generation_id: string | null; book_id: string | null },
   note: string | null,
 ): Promise<boolean> {
@@ -105,8 +111,18 @@ async function notifyOwner(
       const { data: book } = await admin.from("books").select("title").eq("id", bookId).maybeSingle();
       bookTitle = (book?.title as string) ?? null;
     }
-    const { data: u } = await admin.auth.admin.getUserById(ownerId);
-    return await notifyIssueResolved(u?.user?.email ?? null, { kind, category: row.category, bookTitle, note });
+    const what = `${issueThing(kind, row.category)}${bookTitle ? ` for "${bookTitle.slice(0, 80)}"` : ""}`;
+    const { error } = await admin
+      .from("issue_notices")
+      .upsert(
+        { owner_id: ownerId, issue_id: issueId, what, note: (note ?? "").trim().slice(0, 2000) },
+        { onConflict: "issue_id", ignoreDuplicates: true },
+      );
+    if (error) {
+      console.error("issue notice not queued:", error.message);
+      return false;
+    }
+    return true;
   } catch (e) {
     console.error("issue owner lookup failed:", e);
     return false;
