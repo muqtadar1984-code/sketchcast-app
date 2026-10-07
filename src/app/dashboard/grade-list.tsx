@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { type Question, type QuizData } from "./quiz-player";
+import { buildGradeUpdate, needsOutOf } from "./grade-update";
 
 export type PendingSub = {
   id: string;
@@ -42,10 +43,13 @@ function objectiveCorrect(q: Question, val: unknown): boolean | null {
 // Teacher grading of submitted worksheets/exams that still need a mark. For a file
 // submission it opens the student's uploaded file; for an in-app (interactive) quiz it
 // shows each question with the student's written answer so short/subjective responses can
-// be marked instead of scored blind. Saves a score + optional feedback (RLS sub_teacher_grade).
+// be marked instead of scored blind. Saves a score + optional feedback (RLS sub_teacher_grade);
+// a file row also asks what the work is out of and writes it as max_score, because every
+// reader of a mark needs a max and a file upload arrives without one.
 export default function GradeList({ pending }: { pending: PendingSub[] }) {
   const [rows, setRows] = useState(pending);
   const [score, setScore] = useState<Record<string, string>>({});
+  const [outOf, setOutOf] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,10 +82,12 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
     }
   }
 
-  async function save(id: string) {
-    const raw = score[id];
-    if (raw === undefined || raw === "") {
-      setError("Enter a score first.");
+  async function save(r: PendingSub) {
+    const id = r.id;
+    // Validate before the auth round-trip; the grader id is filled in below.
+    const check = buildGradeUpdate(r, { score: score[id], outOf: outOf[id], feedback: feedback[id] }, null);
+    if (!check.ok) {
+      setError(check.error);
       return;
     }
     setBusy(id);
@@ -92,13 +98,7 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
     } = await supabase.auth.getUser();
     const { error: uErr } = await supabase
       .from("submissions")
-      .update({
-        teacher_score: Number(raw),
-        feedback: feedback[id]?.trim() || null,
-        grade_status: "graded",
-        graded_by: user?.id ?? null,
-        graded_at: new Date().toISOString(),
-      })
+      .update({ ...check.update, graded_by: user?.id ?? null })
       .eq("id", id);
     setBusy(null);
     if (uErr) {
@@ -145,13 +145,27 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
                   onChange={(e) => setScore((s) => ({ ...s, [r.id]: e.target.value }))}
                   className="field h-8 w-20 px-2 text-sm text-end"
                 />
+                {needsOutOf(r) && (
+                  <>
+                    <span className="text-xs text-[#5B6470]">out of</span>
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="Max"
+                      aria-label="Out of"
+                      value={outOf[r.id] ?? ""}
+                      onChange={(e) => setOutOf((s) => ({ ...s, [r.id]: e.target.value }))}
+                      className="field h-8 w-16 px-2 text-sm text-end"
+                    />
+                  </>
+                )}
                 <input
                   placeholder="Feedback (optional)"
                   value={feedback[r.id] ?? ""}
                   onChange={(e) => setFeedback((s) => ({ ...s, [r.id]: e.target.value }))}
                   className="field h-8 w-44 px-2 text-sm"
                 />
-                <button onClick={() => save(r.id)} disabled={busy === r.id} className="btn-primary h-8 px-3 text-xs">
+                <button onClick={() => save(r)} disabled={busy === r.id} className="btn-primary h-8 px-3 text-xs">
                   {busy === r.id ? "Saving…" : "Save"}
                 </button>
               </span>
