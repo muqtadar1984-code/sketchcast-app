@@ -1642,6 +1642,8 @@
       "noSchoolWork": "Rien d'attribué par l'école pour l'instant.",
       "yourWork": "De vous ({n})",
       "noTestPapers": "Aucun contrôle attribué — créez-en un dans Contrôles.",
+      "awaitingMarking": "en attente de correction",
+      "teacherNote": "Mot de l'enseignant : {text}",
       "kind": {
         "presentation": "Leçon vidéo",
         "deck": "Diapos",

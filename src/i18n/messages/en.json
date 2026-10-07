@@ -1642,6 +1642,8 @@
       "noSchoolWork": "Nothing assigned by school yet.",
       "yourWork": "From you ({n})",
       "noTestPapers": "No test papers assigned yet — create one under Test Papers.",
+      "awaitingMarking": "awaiting teacher's mark",
+      "teacherNote": "Teacher's note: {text}",
       "kind": {
         "presentation": "Video lesson",
         "deck": "Deck",

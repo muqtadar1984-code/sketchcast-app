@@ -1642,6 +1642,8 @@
       "noSchoolWork": "Nada atribuído pela escola ainda.",
       "yourWork": "De você ({n})",
       "noTestPapers": "Nenhuma prova atribuída ainda — crie uma em Provas.",
+      "awaitingMarking": "aguardando correção do professor",
+      "teacherNote": "Nota do professor: {text}",
       "kind": {
         "presentation": "Videoaula",
         "deck": "Slides",
