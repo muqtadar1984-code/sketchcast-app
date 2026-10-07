@@ -58,3 +58,17 @@ export function buildGradeUpdate(
   if (askOutOf) update.max_score = max;
   return { ok: true, update };
 }
+
+// Quizzes the auto-scorer fully marked (grade_status 'auto'): they never enter
+// the To-grade queue, so the teacher's only way to review, give feedback or
+// override is this list. Newest first, capped. 'pending' and 'graded' rows are
+// excluded — the first is already in To grade, the second has a teacher mark.
+export function autoMarkedForReview<T extends { grade_status: string; submitted_at: string }>(
+  subs: T[],
+  limit: number,
+): T[] {
+  return subs
+    .filter((s) => s.grade_status === "auto")
+    .sort((a, b) => Date.parse(b.submitted_at) - Date.parse(a.submitted_at))
+    .slice(0, limit);
+}

@@ -46,7 +46,20 @@ function objectiveCorrect(q: Question, val: unknown): boolean | null {
 // be marked instead of scored blind. Saves a score + optional feedback (RLS sub_teacher_grade);
 // a file row also asks what the work is out of and writes it as max_score, because every
 // reader of a mark needs a max and a file upload arrives without one.
-export default function GradeList({ pending }: { pending: PendingSub[] }) {
+//
+// variant="autoMarked" lists quizzes the auto-scorer fully marked (grade_status
+// 'auto', every question objective). They need no action, so they never join the
+// To-grade queue — but the teacher must still be able to read the answers, leave
+// feedback and override the score. Saving writes teacher_score, which every
+// reader prefers over auto_score, and flips the row to 'graded'.
+export default function GradeList({
+  pending,
+  variant = "toGrade",
+}: {
+  pending: PendingSub[];
+  variant?: "toGrade" | "autoMarked";
+}) {
+  const auto = variant === "autoMarked";
   const [rows, setRows] = useState(pending);
   const [score, setScore] = useState<Record<string, string>>({});
   const [outOf, setOutOf] = useState<Record<string, string>>({});
@@ -109,7 +122,7 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-[#5B6470]">Nothing to grade right now.</p>;
+    return <p className="text-sm text-[#5B6470]">{auto ? "No auto-marked quizzes left to review." : "Nothing to grade right now."}</p>;
   }
 
   return (
@@ -140,7 +153,7 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
               <span className="flex items-center gap-2 ms-auto">
                 <input
                   type="number"
-                  placeholder="Score"
+                  placeholder={auto ? "New score" : "Score"}
                   value={score[r.id] ?? ""}
                   onChange={(e) => setScore((s) => ({ ...s, [r.id]: e.target.value }))}
                   className="field h-8 w-20 px-2 text-sm text-end"
@@ -166,7 +179,7 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
                   className="field h-8 w-44 px-2 text-sm"
                 />
                 <button onClick={() => save(r)} disabled={busy === r.id} className="btn-primary h-8 px-3 text-xs">
-                  {busy === r.id ? "Saving…" : "Save"}
+                  {busy === r.id ? "Saving…" : auto ? "Override" : "Save"}
                 </button>
               </span>
             </div>
@@ -200,7 +213,9 @@ export default function GradeList({ pending }: { pending: PendingSub[] }) {
                       );
                     })}
                     <p className="text-[11px] text-[#98A0A9]">
-                      Objective questions are auto-scored ({r.auto ?? 0}/{r.max ?? 0}); add marks for the written answers above, then enter the total and Save.
+                      {auto
+                        ? `Every question was auto-scored (${r.auto ?? 0}/${r.max ?? 0}). To change the mark, enter the new total and Override.`
+                        : `Objective questions are auto-scored (${r.auto ?? 0}/${r.max ?? 0}); add marks for the written answers above, then enter the total and Save.`}
                     </p>
                   </>
                 )}

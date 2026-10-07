@@ -105,8 +105,11 @@ describe("a graded file submission reaches its readers", () => {
   });
 
   it("the reader expression is still the one the readers use", () => {
-    const src = (p: string) => readFileSync(path.resolve(__dirname, "..", p), "utf-8");
-    const expr = "sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? \"—\"}/${sub.max_score}` : null";
+    // Whitespace-collapsed: a reader may wrap the ternary (children/page.tsx
+    // nests it under a 'pending' branch since #57) — the rule is what matters.
+    const flat = (s: string) => s.replace(/\s+/g, " ");
+    const src = (p: string) => flat(readFileSync(path.resolve(__dirname, "..", p), "utf-8"));
+    const expr = "sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? \"—\"}/${sub.max_score}`";
     for (const f of ["children/page.tsx", "diary/parent-view.tsx", "diary/student-view.tsx", "diary/teacher-view.tsx"]) {
       expect(src(f), f).toContain(expr);
     }

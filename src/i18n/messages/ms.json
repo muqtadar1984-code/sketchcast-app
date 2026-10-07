@@ -1616,6 +1616,8 @@
       "mostRevisedHint": "Topik yang paling kerap dibuka semula pelajar — selalunya yang paling mencabar.",
       "toGradeTitle": "Perlu markah",
       "toGradeHint": "Lembaran kerja & peperiksaan yang dihantar dan menunggu markah.",
+      "autoMarkedTitle": "Kuiz bertanda automatik",
+      "autoMarkedHint": "Kuiz yang ditanda secara automatik. Semak jawapan, beri maklum balas atau ubah markah.",
       "chapterLabel": "{kind} · Bab {n}",
       "kind": {
         "presentation": "Pelajaran",

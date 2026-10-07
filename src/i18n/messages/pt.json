@@ -1616,6 +1616,8 @@
       "mostRevisedHint": "Assuntos que os alunos mais reabrem — em geral, os mais difíceis.",
       "toGradeTitle": "A corrigir",
       "toGradeHint": "Exercícios e exames enviados esperando nota.",
+      "autoMarkedTitle": "Questionários corrigidos automaticamente",
+      "autoMarkedHint": "Questionários pontuados automaticamente. Reveja as respostas, deixe um comentário ou altere a nota.",
       "chapterLabel": "{kind} · Cap. {n}",
       "kind": {
         "presentation": "Aula",
