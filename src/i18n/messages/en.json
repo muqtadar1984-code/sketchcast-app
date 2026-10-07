@@ -1616,6 +1616,8 @@
       "mostRevisedHint": "Topics students re-open most — often the trickiest ones.",
       "toGradeTitle": "To grade",
       "toGradeHint": "Submitted worksheets & exams awaiting a mark.",
+      "autoMarkedTitle": "Auto-marked quizzes",
+      "autoMarkedHint": "Quizzes scored automatically. Review the answers, add feedback, or override the mark.",
       "chapterLabel": "{kind} · Ch {n}",
       "kind": {
         "presentation": "Lesson",

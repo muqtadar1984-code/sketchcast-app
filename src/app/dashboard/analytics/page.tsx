@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import AppHeader from "../app-header";
 import GradeList, { type PendingSub } from "../grade-list";
+import { autoMarkedForReview } from "../grade-update";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
@@ -22,6 +23,9 @@ const KIND_KEY: Record<string, keyof Dictionary["school"]["myAnalytics"]["kind"]
   activity: "activity",
   case_study: "caseStudy",
 };
+
+// Most recent fully auto-marked quizzes offered for review / override.
+const AUTO_MARKED_LIMIT = 30;
 
 // Teaching analytics — everything in one place: headline metrics, completion,
 // revision hotspots (topics students re-open most), and a grading queue.
@@ -98,10 +102,10 @@ export default async function AnalyticsPage() {
     .select("generation_id, student_id, status");
   const prog = ((progRaw ?? []) as ProgRow[]).filter((p) => myGenIds.has(p.generation_id));
 
-  type SubRow = { id: string; generation_id: string; student_id: string; mode: string; grade_status: string; auto_score: number | null; max_score: number | null; answers: Record<string, unknown> | null };
+  type SubRow = { id: string; generation_id: string; student_id: string; mode: string; grade_status: string; auto_score: number | null; max_score: number | null; answers: Record<string, unknown> | null; submitted_at: string };
   const { data: subsRaw } = await supabase
     .from("submissions")
-    .select("id, generation_id, student_id, mode, grade_status, auto_score, max_score, answers");
+    .select("id, generation_id, student_id, mode, grade_status, auto_score, max_score, answers, submitted_at");
   const subs = ((subsRaw ?? []) as SubRow[]).filter((s) => myGenIds.has(s.generation_id));
 
   // ── Index the raw rows ──────────────────────────────────────────────────
@@ -187,10 +191,17 @@ export default async function AnalyticsPage() {
   for (const p of prog) if (p.status === "revised") revByGen.set(p.generation_id, (revByGen.get(p.generation_id) ?? 0) + 1);
   const hotspots = [...revByGen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([gid, n]) => ({ label: genLabel(gid), n }));
 
-  // For interactive submissions still needing a mark, sign the quiz questions so the
-  // teacher can READ each written answer (short/subjective) instead of scoring blind.
+  // Fully auto-marked quizzes: no action needed, so not in To grade — but the teacher
+  // can still review, give feedback and override. Newest first, capped so a busy term
+  // doesn't turn the page into a ledger; an overridden row becomes 'graded' and leaves.
+  const autoMarkedSubs = autoMarkedForReview(subs, AUTO_MARKED_LIMIT);
+
+  // For interactive submissions a teacher may mark (pending) or re-mark (auto), sign the
+  // quiz questions so the teacher can READ each answer instead of scoring blind.
   const pendingInteractiveGenIds = [
-    ...new Set(subs.filter((s) => s.grade_status === "pending" && s.mode !== "file").map((s) => s.generation_id)),
+    ...new Set(
+      [...subs.filter((s) => s.grade_status === "pending" && s.mode !== "file"), ...autoMarkedSubs].map((s) => s.generation_id),
+    ),
   ];
   const quizUrlByGen = new Map<string, string>();
   if (pendingInteractiveGenIds.length) {
@@ -210,18 +221,18 @@ export default async function AnalyticsPage() {
     }
   }
 
-  const pending: PendingSub[] = subs
-    .filter((s) => s.grade_status === "pending")
-    .map((s) => ({
-      id: s.id,
-      studentName: studentName.get(s.student_id) || dict.school.fallback.student,
-      label: genLabel(s.generation_id),
-      mode: s.mode,
-      auto: s.auto_score,
-      max: s.max_score,
-      answers: s.answers ?? null,
-      quizUrl: s.mode !== "file" ? quizUrlByGen.get(s.generation_id) ?? null : null,
-    }));
+  const toPendingSub = (s: SubRow): PendingSub => ({
+    id: s.id,
+    studentName: studentName.get(s.student_id) || dict.school.fallback.student,
+    label: genLabel(s.generation_id),
+    mode: s.mode,
+    auto: s.auto_score,
+    max: s.max_score,
+    answers: s.answers ?? null,
+    quizUrl: s.mode !== "file" ? quizUrlByGen.get(s.generation_id) ?? null : null,
+  });
+  const pending: PendingSub[] = subs.filter((s) => s.grade_status === "pending").map(toPendingSub);
+  const autoMarked: PendingSub[] = autoMarkedSubs.map(toPendingSub);
 
   const completionPct = total ? Math.round((completed / total) * 100) : 0;
   const metrics: { label: string; value: string | number }[] = parentMode
@@ -364,6 +375,16 @@ export default async function AnalyticsPage() {
         <h2 className="text-xl mb-2">{t.toGradeTitle}</h2>
         <p className="text-sm text-[#5B6470] mb-3">{t.toGradeHint}</p>
         <GradeList pending={pending} />
+
+        {autoMarked.length > 0 && (
+          <details className="mt-10">
+            <summary className="text-xl mb-2 cursor-pointer">
+              {t.autoMarkedTitle} <span className="tabular text-base text-[#5B6470]">({autoMarked.length})</span>
+            </summary>
+            <p className="text-sm text-[#5B6470] mb-3">{t.autoMarkedHint}</p>
+            <GradeList pending={autoMarked} variant="autoMarked" />
+          </details>
+        )}
       </main>
     </div>
   );

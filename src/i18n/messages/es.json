@@ -1616,6 +1616,8 @@
       "mostRevisedHint": "Los temas que los alumnos vuelven a abrir más — suelen ser los más difíciles.",
       "toGradeTitle": "Por calificar",
       "toGradeHint": "Hojas de trabajo y exámenes entregados a la espera de nota.",
+      "autoMarkedTitle": "Cuestionarios corregidos automáticamente",
+      "autoMarkedHint": "Cuestionarios puntuados automáticamente. Revisa las respuestas, añade comentarios o cambia la nota.",
       "chapterLabel": "{kind} · Cap. {n}",
       "kind": {
         "presentation": "Lección",
