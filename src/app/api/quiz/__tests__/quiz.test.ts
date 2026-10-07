@@ -180,12 +180,33 @@ describe("the student payload", () => {
     for (const q of res.quiz.questions) {
       // The match question is the only one allowed the two extra arrays, and
       // `options` is the ONLY field in the whole payload derived from the key.
+      // `image` (a figure, admitted only as an inline data URL) is the one
+      // optional extra; the fixture carries none.
       expect(Object.keys(q).sort()).toEqual(
         q.type === "match"
           ? ["id", "left", "marks", "options", "prompt", "type"]
           : ["id", "marks", "prompt", "type"],
       );
     }
+  });
+
+  it("forwards a figure only as an inline data URL, never a remote URL, and never the answer", async () => {
+    const png = "data:image/png;base64,iVBORw0KGgo=";
+    const raw: RawQuiz = {
+      title: "t",
+      instructions: "",
+      questions: [
+        { id: "q1", type: "fill_blank", prompt: "Find x (number only)", answer: "110", marks: 3, image: png },
+        { id: "q2", type: "true_false", prompt: "Which are scalene? — A", answer: true, marks: 1, image: "https://evil.example/x.png" },
+        { id: "q3", type: "match", prompt: "Classify each", pairs: [{ left: "A", right: "scalene" }, { left: "B", right: "isosceles" }], marks: 2, image: png },
+      ],
+    };
+    const out = await stripQuiz(raw, KEY, "scope");
+    expect(out.questions[0]).toEqual({ id: "q1", type: "fill_blank", prompt: "Find x (number only)", marks: 3, image: png });
+    expect(Object.keys(out.questions[1]).sort()).toEqual(["id", "marks", "prompt", "type"]);
+    expect(out.questions[2].image).toBe(png);
+    expect(JSON.stringify(out)).not.toContain("110");
+    expect(JSON.stringify(out)).not.toContain("evil.example");
   });
 });
 
