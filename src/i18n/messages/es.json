@@ -1642,6 +1642,8 @@
       "noSchoolWork": "La escuela todavía no ha asignado nada.",
       "yourWork": "De usted ({n})",
       "noTestPapers": "Todavía no hay pruebas asignadas — cree una en Exámenes.",
+      "awaitingMarking": "pendiente de corrección",
+      "teacherNote": "Nota del docente: {text}",
       "kind": {
         "presentation": "Videolección",
         "deck": "Diapositivas",

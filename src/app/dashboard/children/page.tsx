@@ -57,6 +57,9 @@ type ChildItem = {
   overdue: boolean;
   status: string;
   score: string | null;
+  // The teacher's written note from GradeList — until this page read it, the
+  // Feedback box was saved and shown to nobody.
+  feedback: string | null;
 };
 
 export default async function ChildrenPage() {
@@ -119,7 +122,7 @@ export default async function ChildrenPage() {
     supabase.from("generation_shares").select("generation_id, class_id, student_id, due_at, shared_by"),
     supabase.from("generations").select("id, title, kind, chapter_ref"),
     supabase.from("student_progress").select("generation_id, student_id, status"),
-    supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status"),
+    supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status, feedback"),
   ]);
 
   const enr = (enrQ.data ?? []) as { class_id: string; student_id: string }[];
@@ -127,7 +130,15 @@ export default async function ChildrenPage() {
   const shares = (sharesQ.data ?? []) as { generation_id: string; class_id: string | null; student_id: string | null; due_at: string | null; shared_by: string | null }[];
   const genOf = new Map(((gensQ.data ?? []) as { id: string; title: string | null; kind: string | null; chapter_ref: string | null }[]).map((g) => [g.id, g]));
   const progOf = new Map(((progQ.data ?? []) as { generation_id: string; student_id: string; status: string }[]).map((p) => [`${p.generation_id}|${p.student_id}`, p.status]));
-  type Sub = { generation_id: string; student_id: string; auto_score: number | null; teacher_score: number | null; max_score: number | null };
+  type Sub = {
+    generation_id: string;
+    student_id: string;
+    auto_score: number | null;
+    teacher_score: number | null;
+    max_score: number | null;
+    grade_status: string | null;
+    feedback: string | null;
+  };
   const subOf = new Map(((subsQ.data ?? []) as Sub[]).map((s) => [`${s.generation_id}|${s.student_id}`, s]));
 
   const classesOfChild = new Map<string, string[]>();
@@ -153,8 +164,15 @@ export default async function ChildrenPage() {
       const key = `${s.generation_id}|${childId}`;
       const status = progOf.get(key) ?? "not started";
       const sub = subOf.get(key);
+      // A 'pending' quiz holds only the auto-marked part of the paper — the
+      // written answers wait for the teacher. Showing that partial auto_score
+      // as "8/10" told a parent it was the final mark; say what it is instead.
       const score =
-        sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}` : null;
+        sub?.grade_status === "pending"
+          ? t.awaitingMarking
+          : sub && sub.max_score
+            ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}`
+            : null;
       const kindKey = KIND_KEY[g.kind ?? ""];
       const item: ChildItem = {
         genId: s.generation_id,
@@ -165,6 +183,7 @@ export default async function ChildrenPage() {
         overdue: !!s.due_at && new Date(s.due_at).getTime() < now && status !== "completed" && !sub,
         status: sub ? "submitted" : status,
         score,
+        feedback: sub?.feedback?.trim() || null,
       };
       (direct && s.shared_by === user!.id ? mine : school).push(item);
     }
@@ -227,6 +246,11 @@ export default async function ChildrenPage() {
                       </span>
                     </span>
                   </div>
+                  {it.feedback && (
+                    <p className="mt-1 text-xs text-[#5B6470] italic break-words">
+                      {fmt(t.teacherNote, { text: it.feedback })}
+                    </p>
+                  )}
                   {coachOn && it.kind === "presentation" && (
                     <div className="mt-1.5 flex items-center gap-3 text-xs">
                       <CoachRecap studentId={l.child_id} generationId={it.genId} />

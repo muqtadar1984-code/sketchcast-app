@@ -1642,6 +1642,8 @@
       "noSchoolWork": "بلوم اد توݢسن درڤد سکوله.",
       "yourWork": "درڤد اندا ({n})",
       "noTestPapers": "بلوم اد کرتس اوجين دتوݢسکن — چيڤتا ساتو د باوه کرتس اوجين.",
+      "awaitingMarking": "منوڠݢو مرکه ݢورو",
+      "teacherNote": "چاتتن ݢورو: {text}",
       "kind": {
         "presentation": "ڤلاجرن ۏيديو",
         "deck": "سلايد",

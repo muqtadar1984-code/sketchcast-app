@@ -1642,6 +1642,8 @@
       "noSchoolWork": "Belum ada tugasan daripada sekolah.",
       "yourWork": "Daripada anda ({n})",
       "noTestPapers": "Belum ada kertas ujian ditugaskan — cipta satu di bawah Kertas Ujian.",
+      "awaitingMarking": "menunggu markah guru",
+      "teacherNote": "Catatan guru: {text}",
       "kind": {
         "presentation": "Pelajaran video",
         "deck": "Slaid",
