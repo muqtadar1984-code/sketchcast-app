@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countryName, sharedBooks, topCountries, topTeachersByKits } from "../console-insights";
+import { countryName, sharedBooks, stalledAccounts, topCountries, topTeachersByKits } from "../console-insights";
 
 const prof = (id: string, role = "teacher", extra: Partial<{ full_name: string | null; username: string | null; country: string | null; country_source: string | null; school_id: string | null }> = {}) => ({
   id,
@@ -147,5 +147,51 @@ describe("sharedBooks — books more than one user uploaded", () => {
       2,
     );
     expect(rows.map((r) => `${r.title}:${r.owners}/${r.uploads}`)).toEqual(["A:3/3", "C:2/3"]);
+  });
+});
+
+describe("stalledAccounts — where adults stop after signing up", () => {
+  const people = [
+    { id: "t-nobook", role: "teacher" },
+    { id: "c-nobook", role: "coordinator" },
+    { id: "p-nobook", role: "parent" },
+    { id: "t-book-nogen", role: "teacher" },
+    { id: "p-book-nogen", role: "parent" },
+    { id: "t-book-failed", role: "teacher" },
+    { id: "t-active", role: "teacher" },
+    { id: "s-nobook", role: "student" },
+    { id: "a-nobook", role: "school_admin" },
+  ];
+  const books = [
+    { owner_id: "t-book-nogen" },
+    { owner_id: "p-book-nogen" },
+    { owner_id: "t-book-failed" },
+    { owner_id: "t-active" },
+    { owner_id: "t-active" },
+  ];
+  const gens = [
+    { owner_id: "t-book-failed", status: "error" },
+    { owner_id: "t-active", status: "done" },
+    { owner_id: "t-active", status: "error" },
+  ];
+
+  it("counts teachers, coordinators and parents with no upload, by role", () => {
+    const s = stalledAccounts(people, books, gens);
+    expect(s.noBook).toEqual({ total: 3, teachers: 2, parents: 1 });
+  });
+
+  it("counts uploaders who never started a generation, and reports the tried-but-nothing-finished beside them", () => {
+    const s = stalledAccounts(people, books, gens);
+    expect(s.bookNoGeneration).toEqual({ total: 2, teachers: 1, parents: 1, triedNothingFinished: 1 });
+  });
+
+  it("ignores students and school admins, and treats a deleted upload as an upload", () => {
+    const s = stalledAccounts(
+      [{ id: "t", role: "teacher" }, { id: "s", role: "student" }],
+      [{ owner_id: "t" }], // the Overview passes every book row, removed ones included
+      [],
+    );
+    expect(s.noBook.total).toBe(0);
+    expect(s.bookNoGeneration.total).toBe(1);
   });
 });
