@@ -79,10 +79,10 @@ export default async function AppHeader() {
   let analyticsOn = false;
   let calendarOn = false;
   let timetableOn = false;
-  // The classroom board is carried by the plan (Pro, Pro+, school). Resolving it
-  // needs plan_tier(), which carries EXECUTE for the service role alone — so a
-  // deployment with no service key simply shows no tab, which is the same answer
-  // /present itself would give.
+  // The classroom board is for every teaching role (founder, 2026-10-08) — the
+  // plan only names how (utils/present/access.ts). Resolving the role and the
+  // plan needs the service role, so a deployment with no service key simply
+  // shows no tab, which is the same answer /present itself would give.
   let boardOn = false;
   // Which school decides the NOTICES gate for this viewer — their own for a
   // member, a child's for a parent (resolved by the calendar walk below).

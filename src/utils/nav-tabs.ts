@@ -28,10 +28,10 @@ export function tabsForHat(
    * person who does not teach (founder, 2026-08-29). Consumer parents — Home
    * Basic and homeschool alike — are the mirror image on both counts. */
   testPapersOn: boolean,
-  /** Does this account's plan carry the classroom board? Pro, Pro+ and every
-   * school plan do (utils/present/access.ts). Passed in rather than derived
-   * here because the answer needs plan_tier(), which only the service role may
-   * call — and because this module is pure and stays that way. */
+  /** May this account drive the classroom board? Every teaching role may
+   * (founder, 2026-10-08; utils/present/access.ts) — never a student or a
+   * parent. Passed in rather than derived here because resolving it needs the
+   * service role — and because this module is pure and stays that way. */
   boardOn: boolean,
 ): NavTab[] {
   const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: t.calendar }] : [];
@@ -112,10 +112,10 @@ export function tabsFor(
    * lives outside nav.tabs because the page owns it, so it is passed in rather
    * than duplicated into the tab dictionary. */
   myLessons: string,
-  /** Does this account's plan carry the classroom board? Pro, Pro+ and every
-   * school plan do (utils/present/access.ts). Passed in rather than derived
-   * here because the answer needs plan_tier(), which only the service role may
-   * call — and because this module is pure and stays that way. */
+  /** May this account drive the classroom board? Every teaching role may
+   * (founder, 2026-10-08; utils/present/access.ts) — never a student or a
+   * parent. Passed in rather than derived here because resolving it needs the
+   * service role — and because this module is pure and stays that way. */
   boardOn: boolean,
 ): NavTab[] {
   if (!role || role === "student") {
