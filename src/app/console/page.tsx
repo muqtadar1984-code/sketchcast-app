@@ -5,6 +5,9 @@ import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
 import { staffUserIds } from "@/utils/platform-admin";
 import Link from "next/link";
 import { sharedBooks, topCountries, topTeachersByKits } from "@/utils/console-insights";
+import { overviewAudience } from "@/utils/console-audience";
+import type { ChannelSnap } from "@/utils/youtube-stats";
+import type { DailyRow } from "@/utils/cloudflare-stats";
 
 // Platform overview — the founder's one-page answer to "how is SketchCast
 // doing and what is it costing?". Server component, service role only; the
@@ -23,7 +26,7 @@ function pct(n: number, d: number): string {
 export default async function ConsoleOverviewPage() {
   const admin = createAdminClient();
 
-  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, staffIds] = await Promise.all([
+  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, staffIds] = await Promise.all([
     admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, metrics_excluded, created_at, full_name, username, country, country_source"),
     admin.from("schools").select("id, name"),
     admin.from("books").select("id, owner_id, status, created_at, title, pages, content_hash, language, removed_at"),
@@ -32,6 +35,14 @@ export default async function ConsoleOverviewPage() {
     selectAll(() => admin.from("generations").select("id, owner_id, kind, status, created_at")),
     admin.from("beta_feedback").select("teacher_id"),
     admin.from("artifact_views").select("teacher_id"),
+    // Audience cards — the YouTube tab's latest channel snapshot (0118) and
+    // the Traffic tab's daily rows for the marketing site (0120). Either table
+    // may be absent on a database behind those migrations; the cards then
+    // show a dash instead of failing the page.
+    admin.from("youtube_channel_stats").select("channel_id, captured_at, title, subscribers, views, videos")
+      .order("captured_at", { ascending: false }).limit(1),
+    admin.from("cloudflare_daily_stats").select("day, zone, requests, page_views, uniques, bytes, threats, countries, captured_at")
+      .eq("zone", "sketchcast.app").order("day", { ascending: true }).limit(2_000),
     staffUserIds(admin),
   ]);
 
@@ -170,6 +181,8 @@ export default async function ConsoleOverviewPage() {
   const countries = topCountries(profiles);
   const shared = sharedBooks(books);
 
+  const audience = overviewAudience((ytQ.data ?? []) as ChannelSnap[], (cfQ.data ?? []) as DailyRow[], nowDate);
+
   const metrics: Metric[] = [
     { label: "Schools", value: schoolCount },
     { label: "Teachers", value: (roleCount.get("teacher") ?? 0) + (roleCount.get("coordinator") ?? 0) },
@@ -230,6 +243,39 @@ export default async function ConsoleOverviewPage() {
             ))}
           </div>
         </div>
+        {/* Audience — the YouTube tab's headline pair and the Traffic tab's
+            visitor counts, on the one page the founder reads first. Numbers
+            come from the same snapshots those tabs read (console-audience.ts). */}
+        {[
+          {
+            title: "YouTube",
+            rows: [
+              ["Subscribers", audience.subscribers],
+              ["Channel views, life to date", audience.channelViews],
+            ] as const,
+          },
+          {
+            title: "Website traffic",
+            rows: [
+              ["Visitors, last 30 days", audience.visitors30],
+              ["Visitors, life to date", audience.visitorsAll],
+            ] as const,
+          },
+        ].map((card) => (
+          <div key={card.title} className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
+            <div className="text-xs text-[#5B6470]">{card.title}</div>
+            <div className="mt-1 space-y-1">
+              {card.rows.map(([label, n]) => (
+                <div key={label} className="flex items-baseline justify-between gap-2">
+                  <span className="text-[11px] text-[#98A0A9]">{label}</span>
+                  <span className={`tabular text-base ${n === null ? "text-[#98A0A9]" : ""}`}>
+                    {n === null ? "—" : n.toLocaleString("en")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8 mb-10">
