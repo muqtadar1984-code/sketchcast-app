@@ -14,6 +14,7 @@ export default function OpsControls({
   isStaffTarget,
   canGrantStaff,
   opsReady,
+  metricsExcluded = false,
   libraryRole = null,
   libraryReady = true,
   canGrantLibrary = false,
@@ -25,6 +26,8 @@ export default function OpsControls({
   isStaffTarget: boolean;
   canGrantStaff: boolean;
   opsReady: boolean;
+  /** 0124: profiles.metrics_excluded — the console's numbers skip this account. */
+  metricsExcluded?: boolean;
   /** 0110: current Library portal role ('editor' | 'reviewer'), or null. */
   libraryRole?: string | null;
   /** false when migration 0110 is not applied — the lever explains instead of failing. */
@@ -100,6 +103,30 @@ export default function OpsControls({
             }`}
           >
             {busy === "suspend" ? "…" : suspended ? "Unsuspend" : "Suspend"}
+          </button>
+        )}
+      </div>
+
+      {/* 0124: out of the metrics, still a user. Staff are already out via
+          platform_admins, so the lever only shows for non-staff targets. */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-medium text-sm">{metricsExcluded ? "Excluded from metrics" : "Exclude from metrics"}</p>
+          <p className="text-xs text-[#5B6470]">
+            {metricsExcluded
+              ? "Overview, Financials and the roster stats skip this account. It stays a normal user."
+              : "For a real user's account staff also test with. Nothing changes for the user; the console's numbers stop counting them."}
+          </p>
+        </div>
+        {isStaffTarget ? (
+          <span className="chip font-sans bg-[#EEF0EC] text-[#5B6470]">staff — already excluded</span>
+        ) : (
+          <button
+            onClick={() => call({ action: metricsExcluded ? "metrics_include" : "metrics_exclude" }, "metrics")}
+            disabled={!!busy}
+            className="h-9 px-4 text-sm rounded-lg font-medium bg-[#EEF0EC] text-[#14181F] hover:bg-[#E6E8E4]"
+          >
+            {busy === "metrics" ? "…" : metricsExcluded ? "Include in metrics" : "Exclude from metrics"}
           </button>
         )}
       </div>

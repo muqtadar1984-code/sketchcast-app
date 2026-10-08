@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { selectAll } from "@/utils/supabase/select-all";
 import { InkUnderline } from "@/components/ink-mark";
 import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
 import { staffUserIds } from "@/utils/platform-admin";
@@ -193,22 +194,20 @@ export default async function ConsoleFinancialsPage({
   // its own: it is what lets the LTV table measure a CAC per plan instead of
   // dividing one plan's LTV by another plan's commission.
   const [profilesQ, booksQ, gensQ, entsQ, paymentsQ, jobsQ, referralQ, staffIds] = await Promise.all([
-    admin.from("profiles").select("id, role, school_id, is_demo"),
+    admin.from("profiles").select("id, role, school_id, is_demo, metrics_excluded"),
     admin.from("books").select("id, owner_id"),
-    admin
-      .from("generations")
-      .select("id, owner_id, book_id, chapter_ref, params, created_at")
-      .limit(5000),
+    // In pages: a bare .limit(5000) still came back capped at 1000 rows.
+    selectAll(() => admin.from("generations").select("id, owner_id, book_id, chapter_ref, params, created_at"), { max: 5000 }),
     admin.from("entitlements").select("user_id, school_id, plan_key, active, status, current_period_end"),
     admin.from("payments").select("user_id, school_id, plan_key, amount, currency, status, created_at"),
-    admin.from("jobs").select("generation_id, book_id, usage, created_at").limit(5000),
+    selectAll(() => admin.from("jobs").select("generation_id, book_id, usage, created_at"), { max: 5000 }),
     admin
       .from("payments")
       .select("user_id, school_id, plan_key, status, currency, affiliate_id, referral_amount_minor"),
     staffUserIds(admin),
   ]);
 
-  type ProfileRow = { id: string; role: string; school_id: string | null; is_demo: boolean | null };
+  type ProfileRow = { id: string; role: string; school_id: string | null; is_demo: boolean | null; metrics_excluded?: boolean | null };
   type GenRow = FinGenRow & { owner_id: string; created_at: string };
   type JobRow = FinJobRow & { book_id: string | null; created_at: string };
 

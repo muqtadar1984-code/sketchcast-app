@@ -15,6 +15,9 @@ export const runtime = "nodejs";
 //                          + Supabase auth ban (blocks new logins)
 //   set_caps             — per-teacher overrides of the 0011/0016 caps
 //   set_country          — profiles.country (0085), stamped country_source='staff'
+//   metrics_exclude / metrics_include — profiles.metrics_excluded (0124): a
+//                          real user's account staff also test with, out of
+//                          every console number; still a user, never staff
 //   takedown / restore   — soft-delete a book or generation (recoverable)
 //   admin_grant / admin_revoke — platform_admins membership (FOUNDERS only)
 //   library_grant / library_revoke — library_members (0110): who may enter the
@@ -35,7 +38,8 @@ export const runtime = "nodejs";
 
 type Body = {
   action?:
-    | "suspend" | "unsuspend" | "set_caps" | "set_country" | "takedown" | "restore" | "admin_grant" | "admin_revoke"
+    | "suspend" | "unsuspend" | "set_caps" | "set_country" | "metrics_exclude" | "metrics_include"
+    | "takedown" | "restore" | "admin_grant" | "admin_revoke"
     | "library_grant" | "library_revoke"
     | "school_suspend" | "school_restore" | "school_extend_trial" | "school_activate" | "school_set_sales"
     | "school_issue_invoice";
@@ -107,7 +111,9 @@ export async function POST(request: Request) {
     body.action === "suspend" ||
     body.action === "unsuspend" ||
     body.action === "set_caps" ||
-    body.action === "set_country"
+    body.action === "set_country" ||
+    body.action === "metrics_exclude" ||
+    body.action === "metrics_include"
   ) {
     const { data: target } = await admin
       .from("profiles")
@@ -188,6 +194,25 @@ export async function POST(request: Request) {
         after: clearing
           ? { country: null, country_source: null }
           : { country: body.country, country_source: "staff" },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    // metrics_exclude / metrics_include (0124). No footgun guard needed: the
+    // flag hides nothing from the user and grants nothing; it only moves the
+    // account out of (or back into) the console's numbers.
+    if (body.action === "metrics_exclude" || body.action === "metrics_include") {
+      const excluded = body.action === "metrics_exclude";
+      const { error: mErr } = await admin.from("profiles").update({ metrics_excluded: excluded }).eq("id", targetId);
+      if (mErr) {
+        const msg = mErr.message.includes("metrics_excluded") || mErr.message.includes("column")
+          ? "metrics_excluded column missing — run migration 0124 first."
+          : mErr.message;
+        return NextResponse.json({ error: msg }, { status: 500 });
+      }
+      await audit(body.action, "profile", {
+        before: { metrics_excluded: target.metrics_excluded === true },
+        after: { metrics_excluded: excluded },
       });
       return NextResponse.json({ ok: true });
     }
