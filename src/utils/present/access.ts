@@ -31,6 +31,16 @@
 //    not belt-and-braces here; it is the only thing standing between a paid
 //    school and its own pupils opening the teacher's whiteboard.
 //
+// THE GATE CHANGED AGAIN ON 2026-10-08. The demo school's teachers — every one
+// of them on `trial`, because the sales-demo tenant has nothing paid behind it
+// — had no Board tab, and the founder's rule, verbatim: "ensure all users
+// (except students and parents) have access to the board." So the ROLE is the
+// gate and the plan no longer refuses anyone: a teacher on a trial, a promo, a
+// homeschool plan or an expired school all drive the board. Points 1 and 2
+// above still describe how `via` is REPORTED when a plan does carry it (the
+// recap and the logs say "school" or "plan"); point 3 is unchanged and is the
+// only refusal left: a student or a parent never drives a board.
+//
 // PURE. Facts in, verdict out. The fetching is entitlement.ts, and the split is
 // what lets every branch of this be a test rather than a hope.
 
@@ -75,7 +85,11 @@ export type PresentFacts = {
 };
 
 export type PresentVerdict =
-  | { ok: true; via: "override" | "school" | "plan" }
+  // `via: "role"` — admitted by the role alone (2026-10-08), no plan behind it.
+  | { ok: true; via: "override" | "school" | "plan" | "role" }
+  // `why: "plan"` survives for the one path that cannot read a role at all —
+  // a deployment without a service key (entitlement.ts); the rule itself
+  // never refuses on the plan any more.
   | { ok: false; why: "not-teaching" | "plan" };
 
 /**
@@ -94,7 +108,8 @@ export function presentAccess(f: PresentFacts): PresentVerdict {
   // the teacher's own, and that is what `via` reports.
   if (f.tier === "school" || f.tier === "school_trial") return { ok: true, via: "school" };
   if (f.tier && PRESENT_TIERS.has(f.tier)) return { ok: true, via: "plan" };
-  return { ok: false, why: "plan" };
+  // Every other teaching account: the role is the gate (founder, 2026-10-08).
+  return { ok: true, via: "role" };
 }
 
 // The sentence for a refusal lives in `present.gate.<why>`, not here — the page
