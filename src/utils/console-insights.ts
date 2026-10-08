@@ -220,49 +220,74 @@ export function stalledAccounts(
   return { noBook, bookNoGeneration };
 }
 
-export type WeeklyFailure = {
-  /** Monday of the ISO week, YYYY-MM-DD (UTC). */
-  weekStart: string;
-  /** Jobs that reached done or error in the week. */
+/**
+ * The worker's own job types — the lanes it polls beside customer kits
+ * (sketchcast-ai worker/run.py): support, catalogue, YouTube, mailings.
+ * None of them is a customer asking for a kit, so none of their outcomes is
+ * a customer-facing failure (founder, 2026-10-08: demo and staff failures
+ * are development, not product). Kept here, not derived, because a new lane
+ * should be added deliberately.
+ */
+export const SYSTEM_JOB_TYPES: ReadonlySet<string> = new Set([
+  "support_diagnose", "issue_resolve",
+  "topic_harvest", "topic_derive", "topic_article", "figure_render", "topic_questions",
+  "topic_publish", "topic_supersede",
+  "youtube_playlists", "youtube_enrich", "announcement_email",
+]);
+
+/**
+ * Is this a CUSTOMER job — one whose outcome a teacher or parent waited for?
+ * False for the worker's own lanes (above) and for catalogue kits
+ * (params.catalogue, the Library portal's generations: their owner is the
+ * catalogue system account, which the owner rule already excludes — this is
+ * the belt to that brace). The owner rule (demo / staff / metrics-excluded)
+ * is applied by the caller, which holds the owner maps.
+ */
+export function isCustomerJob(job: { type: string | null; params?: unknown }): boolean {
+  if (job.type && SYSTEM_JOB_TYPES.has(job.type)) return false;
+  const params = job.params;
+  if (params && typeof params === "object" && (params as { catalogue?: unknown }).catalogue === true) return false;
+  return true;
+}
+
+export type MonthlyFailure = {
+  /** Calendar month, YYYY-MM (UTC). */
+  month: string;
+  /** Jobs that reached done or error in the month. */
   finished: number;
   failed: number;
-  /** failed / finished, or null for a week with nothing finished. */
+  /** failed / finished, or null for a month with nothing finished. */
   rate: number | null;
 };
 
-const WEEK = 7 * 86_400_000;
-
-/** 00:00 UTC on the Monday of the ISO week containing `at`. */
-export function weekStartUtc(at: Date): number {
-  const day = Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate());
-  const sinceMonday = (new Date(day).getUTCDay() + 6) % 7; // Monday → 0 … Sunday → 6
-  return day - sinceMonday * 86_400_000;
+/** 00:00 UTC on the first of the month `monthsBack` months before `at`'s month. */
+export function monthStartUtc(at: Date, monthsBack = 0): number {
+  return Date.UTC(at.getUTCFullYear(), at.getUTCMonth() - monthsBack, 1);
 }
 
 /**
- * Failure rate per ISO week for the last `weeks` weeks ending with the
- * current one, oldest first, every week present (a quiet week is a row,
- * not a gap). Only finished jobs count — done or error — exactly as the
- * Overview's "Job failure rate" tile counts them; queued and running jobs
- * have no outcome yet.
+ * Failure rate per calendar month for the last `months` months ending with
+ * the current one (to date), oldest first, every month present. Only
+ * finished jobs count — done or error — the same rule as the Overview's
+ * "Job failure rate" tile, which is this fold's total.
  */
-export function weeklyFailureRate(
+export function monthlyFailureRate(
   jobs: { status: string; created_at: string }[],
-  weeks: number,
+  months: number,
   now: Date = new Date(),
-): WeeklyFailure[] {
-  const start = weekStartUtc(now) - (weeks - 1) * WEEK;
-  const buckets = Array.from({ length: weeks }, (_, i) => ({
-    weekStart: new Date(start + i * WEEK).toISOString().slice(0, 10),
+): MonthlyFailure[] {
+  const buckets = Array.from({ length: months }, (_, i) => ({
+    month: new Date(monthStartUtc(now, months - 1 - i)).toISOString().slice(0, 7),
     finished: 0,
     failed: 0,
   }));
+  const index = new Map(buckets.map((b, i) => [b.month, i]));
   for (const j of jobs) {
     if (j.status !== "done" && j.status !== "error") continue;
     const t = Date.parse(j.created_at);
     if (Number.isNaN(t)) continue;
-    const i = Math.floor((t - start) / WEEK);
-    if (i < 0 || i >= weeks) continue;
+    const i = index.get(new Date(t).toISOString().slice(0, 7));
+    if (i === undefined) continue;
     buckets[i].finished++;
     if (j.status === "error") buckets[i].failed++;
   }

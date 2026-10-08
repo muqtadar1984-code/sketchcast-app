@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  countryName, sharedBooks, stalledAccounts, topCountries, topTeachersByKits, weeklyFailureRate, weekStartUtc,
+  countryName, isCustomerJob, monthlyFailureRate, monthStartUtc, sharedBooks, stalledAccounts, topCountries, topTeachersByKits,
 } from "../console-insights";
 
 const prof = (id: string, role = "teacher", extra: Partial<{ full_name: string | null; username: string | null; country: string | null; country_source: string | null; school_id: string | null }> = {}) => ({
@@ -198,47 +198,62 @@ describe("stalledAccounts — where adults stop after signing up", () => {
   });
 });
 
-describe("weeklyFailureRate — the Overview's weekly failure chart", () => {
-  // Thursday 2026-10-08 → this ISO week starts Monday 2026-10-05; 18 weeks
-  // back the first bucket starts Monday 2026-06-08.
+describe("isCustomerJob — whose failures the Overview counts", () => {
+  it("keeps kit and indexing jobs, drops the worker's own lanes", () => {
+    for (const type of ["presentation", "worksheet", "lesson_plan", "activity", "case_study", "deck", "exam_paper", "index_book"]) {
+      expect(isCustomerJob({ type })).toBe(true);
+    }
+    for (const type of ["support_diagnose", "issue_resolve", "topic_article", "topic_questions", "topic_publish", "figure_render", "youtube_playlists", "announcement_email"]) {
+      expect(isCustomerJob({ type })).toBe(false);
+    }
+  });
+
+  it("drops catalogue kits by their params flag, and tolerates a null or odd params", () => {
+    expect(isCustomerJob({ type: "presentation", params: { catalogue: true } })).toBe(false);
+    expect(isCustomerJob({ type: "presentation", params: { catalogue: "true" } })).toBe(true); // only the boolean the worker writes
+    expect(isCustomerJob({ type: "presentation", params: null })).toBe(true);
+    expect(isCustomerJob({ type: null })).toBe(true); // a legacy row with no type is a customer generation
+  });
+});
+
+describe("monthlyFailureRate — the Overview's monthly failure chart", () => {
+  // 2026-10-08 → six months are May … October 2026, October to date.
   const NOW = new Date("2026-10-08T12:00:00Z");
   const job = (status: string, created_at: string) => ({ status, created_at });
 
-  it("finds the Monday of the ISO week, in UTC", () => {
+  it("finds the first of the month, in UTC, any number of months back", () => {
     const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-    expect(iso(weekStartUtc(NOW))).toBe("2026-10-05");
-    expect(iso(weekStartUtc(new Date("2026-10-05T00:00:00Z")))).toBe("2026-10-05"); // a Monday is its own start
-    expect(iso(weekStartUtc(new Date("2026-10-11T23:59:59Z")))).toBe("2026-10-05"); // Sunday night still belongs to it
+    expect(iso(monthStartUtc(NOW))).toBe("2026-10-01");
+    expect(iso(monthStartUtc(NOW, 5))).toBe("2026-05-01");
+    expect(iso(monthStartUtc(new Date("2026-01-15T00:00:00Z"), 2))).toBe("2025-11-01"); // crosses the year
   });
 
-  it("returns every week oldest first, with nothing-finished weeks as null, not 0%", () => {
-    const rows = weeklyFailureRate([], 18, NOW);
-    expect(rows).toHaveLength(18);
-    expect(rows[0].weekStart).toBe("2026-06-08");
-    expect(rows[17].weekStart).toBe("2026-10-05");
+  it("returns every month oldest first, with nothing-finished months as null, not 0%", () => {
+    const rows = monthlyFailureRate([], 6, NOW);
+    expect(rows.map((r) => r.month)).toEqual(["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]);
     expect(rows.every((r) => r.finished === 0 && r.rate === null)).toBe(true);
   });
 
-  it("buckets finished jobs by week and ignores queued, running and out-of-window jobs", () => {
-    const rows = weeklyFailureRate(
+  it("buckets finished jobs by month and ignores queued, running and out-of-window jobs", () => {
+    const rows = monthlyFailureRate(
       [
-        job("done", "2026-10-05T01:00:00Z"), // this week
-        job("error", "2026-10-07T09:00:00Z"), // this week
-        job("done", "2026-10-07T10:00:00Z"), // this week
-        job("done", "2026-10-07T11:00:00Z"), // this week → 1/4 = 25%
-        job("error", "2026-09-28T00:00:00Z"), // last week → 1/1
+        job("done", "2026-10-01T00:00:00Z"), // first second of this month
+        job("error", "2026-10-07T09:00:00Z"),
+        job("done", "2026-10-07T10:00:00Z"),
+        job("done", "2026-10-07T11:00:00Z"), // this month → 1/4 = 25%
+        job("error", "2026-09-30T23:59:59Z"), // last second of September → 1/1
         job("queued", "2026-10-06T00:00:00Z"), // no outcome yet
         job("processing", "2026-10-06T00:00:00Z"),
-        job("done", "2026-06-07T23:59:59Z"), // the Sunday before the window
-        job("done", "2026-06-08T00:00:00Z"), // first second of the window
+        job("done", "2026-04-30T23:59:59Z"), // the month before the window
+        job("done", "2026-05-01T00:00:00Z"), // first second of the window
       ],
-      18,
+      6,
       NOW,
     );
-    const by = Object.fromEntries(rows.map((r) => [r.weekStart, r]));
-    expect(by["2026-10-05"]).toMatchObject({ finished: 4, failed: 1, rate: 0.25 });
-    expect(by["2026-09-28"]).toMatchObject({ finished: 1, failed: 1, rate: 1 });
-    expect(by["2026-06-08"]).toMatchObject({ finished: 1, failed: 0, rate: 0 });
+    const by = Object.fromEntries(rows.map((r) => [r.month, r]));
+    expect(by["2026-10"]).toMatchObject({ finished: 4, failed: 1, rate: 0.25 });
+    expect(by["2026-09"]).toMatchObject({ finished: 1, failed: 1, rate: 1 });
+    expect(by["2026-05"]).toMatchObject({ finished: 1, failed: 0, rate: 0 });
     expect(rows.reduce((a, r) => a + r.finished, 0)).toBe(6);
   });
 });
