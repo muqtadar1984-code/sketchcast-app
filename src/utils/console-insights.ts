@@ -1,0 +1,170 @@
+// Overview "who is using it" panels (staff console, English-only surface).
+// Pure folds over the whole-table selects src/app/console/page.tsx already
+// makes once — profiles, generations, books — so nothing here queries. The
+// caller passes rows ALREADY stripped of demo and staff accounts
+// (metricsExcludedIds); these functions do not know what a demo account is.
+
+export type InsightProfile = {
+  id: string;
+  role: string;
+  full_name: string | null;
+  username: string | null;
+  country: string | null;
+  country_source: string | null;
+  school_id: string | null;
+};
+
+export type InsightGeneration = {
+  owner_id: string;
+  kind: string | null;
+  status: string;
+  created_at: string;
+};
+
+export type InsightBook = {
+  owner_id: string;
+  title: string | null;
+  pages: number | null;
+  content_hash: string | null;
+  language: string | null;
+  removed_at: string | null;
+};
+
+export type TopTeacher = {
+  id: string;
+  /** full_name, else username, else a dash — the roster's own fallback order. */
+  name: string;
+  schoolId: string | null;
+  /** Finished lessons: generations with kind='presentation' AND status='done'
+   * — the same number the Users page shows under "Lessons", so the two pages
+   * can never disagree about who generated what. */
+  kits: number;
+  /** ISO timestamp of the most recent finished lesson. */
+  lastAt: string;
+};
+
+/** The adult roles that teach — the Overview's "Teachers" card counts the same two. */
+const TEACHING_ROLES = new Set(["teacher", "coordinator"]);
+
+export function topTeachersByKits(
+  profiles: InsightProfile[],
+  generations: InsightGeneration[],
+  limit = 5,
+): TopTeacher[] {
+  const byId = new Map(profiles.filter((p) => TEACHING_ROLES.has(p.role)).map((p) => [p.id, p]));
+  const tally = new Map<string, { kits: number; lastAt: string }>();
+  for (const g of generations) {
+    if (g.status !== "done") continue;
+    // kind NULL is the legacy presentation row (the Overview's byKind fold
+    // reads it the same way).
+    if ((g.kind ?? "presentation") !== "presentation") continue;
+    if (!byId.has(g.owner_id)) continue;
+    const t = tally.get(g.owner_id) ?? { kits: 0, lastAt: g.created_at };
+    t.kits++;
+    if (g.created_at > t.lastAt) t.lastAt = g.created_at;
+    tally.set(g.owner_id, t);
+  }
+  return [...tally.entries()]
+    .map(([id, t]) => {
+      const p = byId.get(id)!;
+      return { id, name: p.full_name || p.username || "—", schoolId: p.school_id, kits: t.kits, lastAt: t.lastAt };
+    })
+    // most kits first; ties go to the more recent teacher, then by name so the
+    // order is stable across renders
+    .sort((a, b) => b.kits - a.kits || b.lastAt.localeCompare(a.lastAt) || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
+export type TopCountry = {
+  /** ISO 3166-1 alpha-2 as stored in profiles.country. */
+  code: string;
+  /** English display name, or the code itself when the runtime cannot name it. */
+  name: string;
+  users: number;
+  /** How many of those were ASSUMED (profiles.country_source) rather than
+   * stated by the user — the roster's "≈" rule, carried into the count. */
+  assumed: number;
+};
+
+export type CountryBreakdown = { top: TopCountry[]; unknown: number; total: number };
+
+export function topCountries(profiles: InsightProfile[], limit = 5): CountryBreakdown {
+  const tally = new Map<string, { users: number; assumed: number }>();
+  let unknown = 0;
+  for (const p of profiles) {
+    const code = (p.country ?? "").trim().toUpperCase();
+    if (!code) {
+      unknown++;
+      continue;
+    }
+    const t = tally.get(code) ?? { users: 0, assumed: 0 };
+    t.users++;
+    if (p.country_source === "assumed") t.assumed++;
+    tally.set(code, t);
+  }
+  const top = [...tally.entries()]
+    .map(([code, t]) => ({ code, name: countryName(code), ...t }))
+    .sort((a, b) => b.users - a.users || a.code.localeCompare(b.code))
+    .slice(0, limit);
+  return { top, unknown, total: profiles.length };
+}
+
+let displayNames: Intl.DisplayNames | null | undefined;
+
+/** "SA" → "Saudi Arabia". Falls back to the code when ICU is unavailable or the code is unknown. */
+export function countryName(code: string): string {
+  if (displayNames === undefined) {
+    try {
+      displayNames = new Intl.DisplayNames(["en"], { type: "region" });
+    } catch {
+      displayNames = null;
+    }
+  }
+  if (!displayNames) return code;
+  try {
+    const name = displayNames.of(code);
+    // ICU names the reserved code ZZ "Unknown Region"; a stored ZZ should
+    // read as the code it is, not as a country called Unknown Region.
+    return name && name !== "Unknown Region" ? name : code;
+  } catch {
+    return code; // not a valid region subtag (e.g. "Q9")
+  }
+}
+
+export type SharedBook = {
+  /** The title of the first upload in the group. */
+  title: string;
+  /** Live uploads of this book, across everyone. */
+  uploads: number;
+  /** DISTINCT users who uploaded it — the number that makes it "shared". */
+  owners: number;
+  /** Distinct book languages seen across the uploads, sorted. */
+  languages: string[];
+};
+
+/**
+ * Books that MORE THAN ONE user uploaded, most widely shared first. Identity
+ * is books.content_hash when the upload carries one (the school repository's
+ * dedup key); older rows without a hash fall back to title + page count, the
+ * same fallback the catalogue harvest uses. Soft-deleted books (removed_at)
+ * are not on anyone's shelf and are skipped.
+ */
+export function sharedBooks(books: InsightBook[], limit = 5): SharedBook[] {
+  const groups = new Map<string, { title: string; uploads: number; owners: Set<string>; languages: Set<string> }>();
+  for (const b of books) {
+    if (b.removed_at !== null) continue;
+    const title = (b.title ?? "").trim();
+    const key = b.content_hash ? `h:${b.content_hash}` : `t:${title.toLowerCase()}|${b.pages ?? ""}`;
+    if (key === "t:|") continue; // no hash, no title: nothing to group on
+    const g = groups.get(key) ?? { title: title || "Untitled", uploads: 0, owners: new Set(), languages: new Set() };
+    g.uploads++;
+    g.owners.add(b.owner_id);
+    if (b.language) g.languages.add(b.language);
+    groups.set(key, g);
+  }
+  return [...groups.values()]
+    .filter((g) => g.owners.size >= 2)
+    .map((g) => ({ title: g.title, uploads: g.uploads, owners: g.owners.size, languages: [...g.languages].sort() }))
+    .sort((a, b) => b.owners - a.owners || b.uploads - a.uploads || a.title.localeCompare(b.title))
+    .slice(0, limit);
+}

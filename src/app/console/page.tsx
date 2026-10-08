@@ -2,6 +2,8 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
 import { staffUserIds } from "@/utils/platform-admin";
+import Link from "next/link";
+import { sharedBooks, topCountries, topTeachersByKits } from "@/utils/console-insights";
 
 // Platform overview — the founder's one-page answer to "how is SketchCast
 // doing and what is it costing?". Server component, service role only; the
@@ -21,9 +23,9 @@ export default async function ConsoleOverviewPage() {
   const admin = createAdminClient();
 
   const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, staffIds] = await Promise.all([
-    admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, created_at"),
-    admin.from("schools").select("id"),
-    admin.from("books").select("id, owner_id, status, created_at"),
+    admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, created_at, full_name, username, country, country_source"),
+    admin.from("schools").select("id, name"),
+    admin.from("books").select("id, owner_id, status, created_at, title, pages, content_hash, language, removed_at"),
     admin.from("generations").select("id, owner_id, kind, status, created_at"),
     admin.from("beta_feedback").select("teacher_id"),
     admin.from("artifact_views").select("teacher_id"),
@@ -45,8 +47,8 @@ export default async function ConsoleOverviewPage() {
       .limit(2000)) as typeof jobsQ;
   }
 
-  const allProfiles = (profilesQ.data ?? []) as { id: string; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; created_at: string }[];
-  const allBooks = (booksQ.data ?? []) as { id: string; owner_id: string; status: string; created_at: string }[];
+  const allProfiles = (profilesQ.data ?? []) as { id: string; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; created_at: string; full_name: string | null; username: string | null; country: string | null; country_source: string | null }[];
+  const allBooks = (booksQ.data ?? []) as { id: string; owner_id: string; status: string; created_at: string; title: string | null; pages: number | null; content_hash: string | null; language: string | null; removed_at: string | null }[];
   const allGens = (gensQ.data ?? []) as { id: string; owner_id: string; kind: string | null; status: string; created_at: string }[];
   const allJobs = (jobsQ.data ?? []) as { id: string; generation_id: string | null; book_id: string | null; type: string | null; status: string; error: string | null; usage: { cost_usd?: number } | null; created_at: string }[];
 
@@ -73,7 +75,9 @@ export default async function ConsoleOverviewPage() {
   });
   // A school whose known members are ALL demo accounts is a seeded demo tenant.
   const demoSchools = demoSchoolIds(allProfiles);
-  const schoolCount = ((schoolsQ.data ?? []) as { id: string }[]).filter((s) => !demoSchools.has(s.id)).length;
+  const schoolRows = (schoolsQ.data ?? []) as { id: string; name: string | null }[];
+  const schoolCount = schoolRows.filter((s) => !demoSchools.has(s.id)).length;
+  const schoolName = new Map(schoolRows.map((s) => [s.id, s.name || "School"]));
 
   // (server component, rendered once per request — Date.now is fine here)
   // eslint-disable-next-line react-hooks/purity
@@ -145,6 +149,15 @@ export default async function ConsoleOverviewPage() {
   );
   const feedbackCount = ((feedbackQ.data ?? []) as { teacher_id: string }[]).filter((f) => !excludedIds.has(f.teacher_id)).length;
 
+  // Who is using it — three top-5 panels folded from the same demo/staff-
+  // filtered rows (src/utils/console-insights.ts): the teachers with the most
+  // finished lessons (the roster's "Lessons" number, so the two pages agree),
+  // where the accounts come from, and the books more than one person uploaded
+  // (content_hash identity, the school repository's dedup key).
+  const topTeachers = topTeachersByKits(profiles, gens);
+  const countries = topCountries(profiles);
+  const shared = sharedBooks(books);
+
   const metrics: Metric[] = [
     { label: "Schools", value: schoolCount },
     { label: "Teachers", value: (roleCount.get("teacher") ?? 0) + (roleCount.get("coordinator") ?? 0) },
@@ -205,6 +218,89 @@ export default async function ConsoleOverviewPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-8 mb-10">
+        <section>
+          <h2 className="text-xl mb-3">Top teachers by kits</h2>
+          <div className="card divide-y divide-[#EEF0EC]">
+            <div className="grid grid-cols-[2fr_0.6fr_1fr] gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium">
+              <span>Teacher</span><span className="text-end">Kits</span><span className="text-end">Last kit</span>
+            </div>
+            {topTeachers.map((t) => (
+              <Link
+                key={t.id}
+                href={`/console/users/${t.id}`}
+                className="grid grid-cols-[2fr_0.6fr_1fr] gap-2 px-5 py-2.5 text-sm items-center hover:bg-[#FAFBF9]"
+              >
+                <span className="min-w-0">
+                  <span className="block font-medium truncate">{t.name}</span>
+                  {t.schoolId && (
+                    <span className="block text-[11px] text-[#98A0A9] truncate">{schoolName.get(t.schoolId) ?? "School"}</span>
+                  )}
+                </span>
+                <span className="tabular text-end">{t.kits}</span>
+                <span className="tabular text-end text-xs text-[#5B6470]">{new Date(t.lastAt).toLocaleDateString()}</span>
+              </Link>
+            ))}
+            {topTeachers.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No finished lessons yet.</div>}
+          </div>
+          <p className="text-xs text-[#98A0A9] mt-2">
+            A kit is a finished lesson — the roster&apos;s Lessons column. Teachers and coordinators only.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl mb-3">Top countries</h2>
+          <div className="card divide-y divide-[#EEF0EC]">
+            <div className="grid grid-cols-[2fr_0.6fr] gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium">
+              <span>Country</span><span className="text-end">Users</span>
+            </div>
+            {countries.top.map((c) => (
+              <div key={c.code} className="grid grid-cols-[2fr_0.6fr] gap-2 px-5 py-2.5 text-sm items-center">
+                <span className="min-w-0 truncate">
+                  <span className="font-medium">{c.name}</span>
+                  <span className="text-xs text-[#98A0A9] ms-2">{c.code}</span>
+                  {c.assumed > 0 && (
+                    <span className="text-xs text-[#98A0A9] ms-2" title="Assumed at signup, not stated by the user">
+                      ≈ {c.assumed}
+                    </span>
+                  )}
+                </span>
+                <span className="tabular text-end">{c.users}</span>
+              </div>
+            ))}
+            {countries.top.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No country on any account yet.</div>}
+          </div>
+          <p className="text-xs text-[#98A0A9] mt-2">
+            {countries.unknown} of {countries.total} accounts carry no country. ≈ n = assumed at signup, not stated.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl mb-3">Books uploaded by several users</h2>
+          <div className="card divide-y divide-[#EEF0EC]">
+            <div className="grid grid-cols-[2fr_0.6fr_0.7fr] gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium">
+              <span>Book</span><span className="text-end">Users</span><span className="text-end">Uploads</span>
+            </div>
+            {shared.map((b, i) => (
+              <div key={`${i}-${b.title}`} className="grid grid-cols-[2fr_0.6fr_0.7fr] gap-2 px-5 py-2.5 text-sm items-center">
+                <span className="min-w-0">
+                  <span className="block font-medium truncate" title={b.title}>{b.title}</span>
+                  {b.languages.length > 0 && (
+                    <span className="block text-[11px] text-[#98A0A9]">{b.languages.join(", ")}</span>
+                  )}
+                </span>
+                <span className="tabular text-end">{b.owners}</span>
+                <span className="tabular text-end text-[#5B6470]">{b.uploads}</span>
+              </div>
+            ))}
+            {shared.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No book has been uploaded by more than one user yet.</div>}
+          </div>
+          <p className="text-xs text-[#98A0A9] mt-2">
+            Same book = same file (content hash), or the same title and page count for older uploads. Deleted books excluded.
+          </p>
+        </section>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8">
