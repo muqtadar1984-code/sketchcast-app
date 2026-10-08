@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
+import { selectAll } from "@/utils/supabase/select-all";
 import { InkUnderline } from "@/components/ink-mark";
 import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
 import { staffUserIds } from "@/utils/platform-admin";
@@ -23,10 +24,12 @@ export default async function ConsoleOverviewPage() {
   const admin = createAdminClient();
 
   const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, staffIds] = await Promise.all([
-    admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, created_at, full_name, username, country, country_source"),
+    admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, metrics_excluded, created_at, full_name, username, country, country_source"),
     admin.from("schools").select("id, name"),
     admin.from("books").select("id, owner_id, status, created_at, title, pages, content_hash, language, removed_at"),
-    admin.from("generations").select("id, owner_id, kind, status, created_at"),
+    // Whole tables, not the first 1000 rows: generations passed the PostgREST
+    // cap on 2026-10-08 and every number below was built on a partial set.
+    selectAll(() => admin.from("generations").select("id, owner_id, kind, status, created_at")),
     admin.from("beta_feedback").select("teacher_id"),
     admin.from("artifact_views").select("teacher_id"),
     staffUserIds(admin),
@@ -34,31 +37,40 @@ export default async function ConsoleOverviewPage() {
 
   // jobs.usage only exists once migration 0013 is applied — degrade to the
   // usage-less select rather than losing the whole jobs panel.
-  let jobsQ = await admin
-    .from("jobs")
-    .select("id, generation_id, book_id, type, status, error, usage, created_at")
-    .order("created_at", { ascending: false })
-    .limit(2000);
+  // Newest 2000 — in pages, because .limit(2000) alone still returned 1000.
+  let jobsQ = await selectAll(
+    () =>
+      admin
+        .from("jobs")
+        .select("id, generation_id, book_id, type, status, error, usage, created_at")
+        .order("created_at", { ascending: false }),
+    { max: 2000 },
+  );
   if (jobsQ.error) {
-    jobsQ = (await admin
-      .from("jobs")
-      .select("id, generation_id, book_id, type, status, error, created_at")
-      .order("created_at", { ascending: false })
-      .limit(2000)) as typeof jobsQ;
+    jobsQ = (await selectAll(
+      () =>
+        admin
+          .from("jobs")
+          .select("id, generation_id, book_id, type, status, error, created_at")
+          .order("created_at", { ascending: false }),
+      { max: 2000 },
+    )) as typeof jobsQ;
   }
 
-  const allProfiles = (profilesQ.data ?? []) as { id: string; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; created_at: string; full_name: string | null; username: string | null; country: string | null; country_source: string | null }[];
+  const allProfiles = (profilesQ.data ?? []) as { id: string; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; metrics_excluded: boolean | null; created_at: string; full_name: string | null; username: string | null; country: string | null; country_source: string | null }[];
   const allBooks = (booksQ.data ?? []) as { id: string; owner_id: string; status: string; created_at: string; title: string | null; pages: number | null; content_hash: string | null; language: string | null; removed_at: string | null }[];
   const allGens = (gensQ.data ?? []) as { id: string; owner_id: string; kind: string | null; status: string; created_at: string }[];
   const allJobs = (jobsQ.data ?? []) as { id: string; generation_id: string | null; book_id: string | null; type: string | null; status: string; error: string | null; usage: { cost_usd?: number } | null; created_at: string }[];
 
-  // Every metric on this page counts REAL usage only. Two kinds of account are
-  // not a customer: demo tenants (profiles.is_demo, migration 0081), whose
-  // pre-canned books and generations would drown the actual numbers, and
+  // Every metric on this page counts REAL usage only. Three kinds of account
+  // are not a customer: demo tenants (profiles.is_demo, migration 0081), whose
+  // pre-canned books and generations would drown the actual numbers;
   // SketchCast's OWN accounts (platform_admins — the founder, Sara, the
   // catalogue system account), whose testing and whose catalogue kits are not
   // usage either (founder, 2026-09-07: "them being in the list of users skews
-  // the results").
+  // the results"); and real users' accounts a staff member has flagged
+  // metrics_excluded (0124) — the personal logins staff also test with, which
+  // stay users on the roster but out of these numbers (founder, 2026-10-08).
   const excludedIds = metricsExcludedIds(allProfiles, staffIds);
   const profiles = allProfiles.filter((p) => !excludedIds.has(p.id));
   const books = allBooks.filter((b) => !excludedIds.has(b.owner_id));

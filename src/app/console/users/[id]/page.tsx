@@ -159,6 +159,7 @@ export default async function ConsoleUserDetailPage({
           isStaffTarget={isStaffTarget}
           canGrantStaff={founderEmails().includes(staff.email) && role !== "student"}
           opsReady={opsReady}
+          metricsExcluded={p.metrics_excluded === true}
           libraryRole={libraryRole}
           libraryReady={libraryReady}
           canGrantLibrary={role !== "student"}

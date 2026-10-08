@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { selectAll } from "@/utils/supabase/select-all";
 import { InkUnderline } from "@/components/ink-mark";
 import { demoAccountPassword, partitionRoster } from "@/utils/demo";
 import { founderEmails, staffUserIds } from "@/utils/platform-admin";
@@ -130,10 +131,10 @@ export default async function ConsoleUsersPage({
 
   const { data: profRaw } = await admin
     .from("profiles")
-    .select("id, full_name, username, role, school_id, beta_tester, is_demo, country, country_source, ui_locale, email_optout_at, created_at")
+    .select("id, full_name, username, role, school_id, beta_tester, is_demo, metrics_excluded, country, country_source, ui_locale, email_optout_at, created_at")
     .order("created_at", { ascending: false })
     .limit(500);
-  type Prof = { id: string; full_name: string | null; username: string | null; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; country: string | null; country_source: string | null; ui_locale: string | null; email_optout_at: string | null; created_at: string };
+  type Prof = { id: string; full_name: string | null; username: string | null; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; metrics_excluded?: boolean | null; country: string | null; country_source: string | null; ui_locale: string | null; email_optout_at: string | null; created_at: string };
   // Emails live in auth.users — fetched via the admin auth API (paged) BEFORE
   // the split, because the founder allow-list is keyed by e-mail.
   const emails = new Map<string, string>();
@@ -163,7 +164,7 @@ export default async function ConsoleUsersPage({
   const [schoolsQ, booksQ, gensQ, issuesQ, fbQ, remQ, lifeQ] = await Promise.all([
     admin.from("schools").select("id, name"),
     admin.from("books").select("owner_id, language, removed_at"),
-    admin.from("generations").select("owner_id, kind, status"),
+    selectAll(() => admin.from("generations").select("owner_id, kind, status")), // past the 1000-row cap
     admin.from("platform_issues").select("reporter_id, status"),
     actionsTab ? admin.from("feedback_requests").select("user_id, created_at, snoozed_until, responded_at") : none,
     actionsTab ? admin.from("console_reminders").select("user_id, sent_at") : none,
@@ -328,6 +329,10 @@ export default async function ConsoleUsersPage({
               {/* Every signup is auto-flagged (0012), so on the demo tab the
                   chip would sit on every row and mean nothing — real tab only. */}
               {actionsTab && p.beta_tester && <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400] ms-2">trial</span>}
+              {/* 0124: a real user the metric pages skip (toggle on the account page). */}
+              {p.metrics_excluded && (
+                <span className="chip font-sans bg-[#EEF0EC] text-[#5B6470] ms-2" title="Excluded from console metrics">no metrics</span>
+              )}
               {/* Same chip the account page shows for a platform admin. */}
               {staffTab && <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ms-2">staff</span>}
             </span>

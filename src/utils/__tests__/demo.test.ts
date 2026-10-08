@@ -172,3 +172,24 @@ describe("demoSchoolIds — which schools the Overview excludes", () => {
     expect(ids.size).toBe(0);
   });
 });
+
+describe("metricsExcludedIds — profiles.metrics_excluded (0124)", () => {
+  it("leaves out a flagged real user exactly like a demo account, and never a false/null flag", () => {
+    const out = metricsExcludedIds(
+      [
+        { id: "founder-gmail", is_demo: false, metrics_excluded: true },
+        { id: "customer", is_demo: false, metrics_excluded: false },
+        { id: "legacy-row", is_demo: null, metrics_excluded: null },
+        { id: "demo", is_demo: true },
+      ],
+      ["catalogue"],
+    );
+    expect([...out].sort()).toEqual(["catalogue", "demo", "founder-gmail"]);
+  });
+
+  it("a flagged account is still not staff — the flag only reaches the metrics", () => {
+    // the roster partitions on is_demo + staff membership; the flag is not a third tab
+    const { real } = partitionRoster([{ id: "u", is_demo: false, metrics_excluded: true }], () => false);
+    expect(real.map((r) => r.id)).toEqual(["u"]);
+  });
+});
