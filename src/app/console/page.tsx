@@ -4,7 +4,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
 import { staffUserIds } from "@/utils/platform-admin";
 import Link from "next/link";
-import { sharedBooks, stalledAccounts, topCountries, topTeachersByKits } from "@/utils/console-insights";
+import { sharedBooks, stalledAccounts, topCountries, topTeachersByKits, weeklyFailureRate } from "@/utils/console-insights";
 import { overviewAudience } from "@/utils/console-audience";
 import type { ChannelSnap } from "@/utils/youtube-stats";
 import type { DailyRow } from "@/utils/cloudflare-stats";
@@ -16,6 +16,13 @@ import type { DailyRow } from "@/utils/cloudflare-stats";
 export const dynamic = "force-dynamic";
 
 const DAY = 86400000;
+// The weekly failure chart's window: 18 ISO weeks ≈ four months.
+const FAILURE_WEEKS = 18;
+
+/** "15 Sep" for a YYYY-MM-DD week start — the chart's row label. */
+function weekLabel(isoDay: string): string {
+  return new Date(`${isoDay}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+}
 
 type Metric = { label: string; value: string | number; hint?: string };
 
@@ -25,8 +32,11 @@ function pct(n: number, d: number): string {
 
 export default async function ConsoleOverviewPage() {
   const admin = createAdminClient();
+  // (server component, rendered once per request — Date.now is fine here)
+  // eslint-disable-next-line react-hooks/purity
+  const failureWindowStart = new Date(Date.now() - FAILURE_WEEKS * 7 * DAY).toISOString();
 
-  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, staffIds] = await Promise.all([
+  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, weeklyJobsQ, staffIds] = await Promise.all([
     admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, metrics_excluded, created_at, full_name, username, country, country_source"),
     admin.from("schools").select("id, name"),
     admin.from("books").select("id, owner_id, status, created_at, title, pages, content_hash, language, removed_at"),
@@ -43,6 +53,13 @@ export default async function ConsoleOverviewPage() {
       .order("captured_at", { ascending: false }).limit(1),
     admin.from("cloudflare_daily_stats").select("day, zone, requests, page_views, uniques, bytes, threats, countries, captured_at")
       .eq("zone", "sketchcast.app").order("day", { ascending: true }).limit(2_000),
+    // Finished jobs of the last FAILURE_WEEKS weeks, for the weekly chart —
+    // its own select, because the jobs panel below reads only the newest
+    // 2000 rows and four months can hold more.
+    selectAll(() =>
+      admin.from("jobs").select("status, created_at, generation_id, book_id")
+        .in("status", ["done", "error"]).gte("created_at", failureWindowStart),
+    ),
     staffUserIds(admin),
   ]);
 
@@ -90,12 +107,15 @@ export default async function ConsoleOverviewPage() {
   // resolve to neither are kept (fail open, like the rest of this page).
   const genOwner = new Map(allGens.map((g) => [g.id, g.owner_id]));
   const bookOwner = new Map(allBooks.map((b) => [b.id, b.owner_id]));
-  const jobs = allJobs.filter((j) => {
+  const jobIsReal = (j: { generation_id: string | null; book_id: string | null }) => {
     const owner =
       (j.generation_id ? genOwner.get(j.generation_id) : undefined) ??
       (j.book_id ? bookOwner.get(j.book_id) : undefined);
     return owner === undefined || !excludedIds.has(owner);
-  });
+  };
+  const jobs = allJobs.filter(jobIsReal);
+  const weeklyJobs = ((weeklyJobsQ.data ?? []) as { status: string; created_at: string; generation_id: string | null; book_id: string | null }[])
+    .filter(jobIsReal);
   // A school whose known members are ALL demo accounts is a seeded demo tenant.
   const demoSchools = demoSchoolIds(allProfiles);
   const schoolRows = (schoolsQ.data ?? []) as { id: string; name: string | null }[];
@@ -183,6 +203,10 @@ export default async function ConsoleOverviewPage() {
   // ...and where the adults who signed up stopped: no upload yet, or an
   // upload that never became a kit (founder, 2026-10-08).
   const stalled = stalledAccounts(profiles, books, gens);
+  // Failure rate per ISO week over the last four months, same job rule as the
+  // "Job failure rate" tile (finished = done or error), same owner exclusions.
+  const weekly = weeklyFailureRate(weeklyJobs, FAILURE_WEEKS, nowDate);
+  const weeklyMaxPct = Math.max(1, ...weekly.map((w) => (w.rate === null ? 0 : Math.round(w.rate * 100))));
 
   const audience = overviewAudience((ytQ.data ?? []) as ChannelSnap[], (cfQ.data ?? []) as DailyRow[], nowDate);
 
@@ -430,6 +454,32 @@ export default async function ConsoleOverviewPage() {
               </div>
             ))}
           </div>
+
+          <h2 className="text-xl mt-8 mb-3">Job failure rate, weekly</h2>
+          <div className="card px-5 py-4 space-y-1.5">
+            {weekly.map((w) => {
+              const pct = w.rate === null ? null : Math.round(w.rate * 100);
+              return (
+                <div key={w.weekStart} className="flex items-center gap-3">
+                  <span className="w-14 text-xs text-[#5B6470] tabular whitespace-nowrap">{weekLabel(w.weekStart)}</span>
+                  <div className="flex-1 h-3 rounded bg-[#EEF0EC] overflow-hidden">
+                    {pct !== null && pct > 0 && (
+                      <div className="h-full bg-[#9A6400]" style={{ width: `${Math.max(2, (pct / weeklyMaxPct) * 100)}%` }} />
+                    )}
+                  </div>
+                  <span className={`tabular text-sm w-10 text-end ${pct === null ? "text-[#98A0A9]" : ""}`}>
+                    {pct === null ? "—" : `${pct}%`}
+                  </span>
+                  <span className="tabular text-[11px] text-[#98A0A9] w-14 text-end whitespace-nowrap">
+                    {w.finished ? `${w.failed}/${w.finished}` : "no jobs"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-[#98A0A9] mt-2">
+            Failed ÷ finished jobs per ISO week (Mondays, UTC), last {FAILURE_WEEKS} weeks. Bars scale to the worst week; the tile above is the same rule over the newest 2000 jobs.
+          </p>
         </section>
 
         <section>

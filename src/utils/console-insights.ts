@@ -219,3 +219,52 @@ export function stalledAccounts(
   }
   return { noBook, bookNoGeneration };
 }
+
+export type WeeklyFailure = {
+  /** Monday of the ISO week, YYYY-MM-DD (UTC). */
+  weekStart: string;
+  /** Jobs that reached done or error in the week. */
+  finished: number;
+  failed: number;
+  /** failed / finished, or null for a week with nothing finished. */
+  rate: number | null;
+};
+
+const WEEK = 7 * 86_400_000;
+
+/** 00:00 UTC on the Monday of the ISO week containing `at`. */
+export function weekStartUtc(at: Date): number {
+  const day = Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate());
+  const sinceMonday = (new Date(day).getUTCDay() + 6) % 7; // Monday → 0 … Sunday → 6
+  return day - sinceMonday * 86_400_000;
+}
+
+/**
+ * Failure rate per ISO week for the last `weeks` weeks ending with the
+ * current one, oldest first, every week present (a quiet week is a row,
+ * not a gap). Only finished jobs count — done or error — exactly as the
+ * Overview's "Job failure rate" tile counts them; queued and running jobs
+ * have no outcome yet.
+ */
+export function weeklyFailureRate(
+  jobs: { status: string; created_at: string }[],
+  weeks: number,
+  now: Date = new Date(),
+): WeeklyFailure[] {
+  const start = weekStartUtc(now) - (weeks - 1) * WEEK;
+  const buckets = Array.from({ length: weeks }, (_, i) => ({
+    weekStart: new Date(start + i * WEEK).toISOString().slice(0, 10),
+    finished: 0,
+    failed: 0,
+  }));
+  for (const j of jobs) {
+    if (j.status !== "done" && j.status !== "error") continue;
+    const t = Date.parse(j.created_at);
+    if (Number.isNaN(t)) continue;
+    const i = Math.floor((t - start) / WEEK);
+    if (i < 0 || i >= weeks) continue;
+    buckets[i].finished++;
+    if (j.status === "error") buckets[i].failed++;
+  }
+  return buckets.map((b) => ({ ...b, rate: b.finished ? b.failed / b.finished : null }));
+}
