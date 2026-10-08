@@ -10,6 +10,13 @@ import {
   type FeedbackRequestFacts,
 } from "@/utils/console-actions";
 import UserActions from "./user-actions";
+import {
+  applyRosterFilters,
+  hasRosterFilters,
+  joinedDate,
+  parseRosterFilters,
+  type RosterRow,
+} from "@/utils/console-roster-filter";
 
 // User roster — search across name/username/email; rows open the account's
 // detail page (activity, issues, ops controls). Three tabs: real users
@@ -27,6 +34,13 @@ import UserActions from "./user-actions";
 // Per-user stats (Books/Lessons/Errors/Resolved + Language) come from THREE
 // whole-table selects folded into a Map (src/utils/console-user-stats.ts) —
 // never per-row queries; same pattern as the Overview page.
+//
+// Filtering: the search box matches across the identity columns; the row of
+// boxes under the table header filters ONE column each (text = contains,
+// role/school/country = pick one, numbers = at least, Joined = date prefix).
+// Every filter is a query-string key, so a filtered roster is a URL staff can
+// share, and the page stays a server component (src/utils/console-roster-
+// filter.ts holds the pure matching logic).
 
 export const dynamic = "force-dynamic";
 
@@ -52,12 +66,61 @@ function Num({ label, n }: { label: string; n: number }) {
   );
 }
 
+// The column-filter boxes live INSIDE the table (under the header, one per
+// column) while the <form> sits above it: the roster rows carry action
+// buttons, and a form cannot wrap other forms' buttons, so each box names the
+// form by id (form="roster-filters") instead. Enter in any box submits.
+const FILTER_FORM = "roster-filters";
+const FILTER_FIELD = "field h-7 w-full min-w-0 px-1.5 text-xs";
+
+function FilterText({ name, value, placeholder }: { name: string; value?: string; placeholder: string }) {
+  return (
+    <input
+      form={FILTER_FORM}
+      name={name}
+      defaultValue={value ?? ""}
+      placeholder={placeholder}
+      aria-label={`Filter by ${name}`}
+      className={FILTER_FIELD}
+    />
+  );
+}
+
+function FilterMin({ name, value }: { name: string; value?: number }) {
+  return (
+    <input
+      form={FILTER_FORM}
+      name={name}
+      type="number"
+      min={0}
+      defaultValue={value ?? ""}
+      placeholder="≥"
+      aria-label={`Minimum ${name}`}
+      className={`${FILTER_FIELD} text-end`}
+    />
+  );
+}
+
+function FilterSelect({ name, value, options }: { name: string; value?: string; options: string[] }) {
+  return (
+    <select form={FILTER_FORM} name={name} defaultValue={value ?? ""} aria-label={`Filter by ${name}`} className={FILTER_FIELD}>
+      <option value="">any</option>
+      {options.map((o) => (
+        <option key={o} value={o}>{o}</option>
+      ))}
+    </select>
+  );
+}
+
 export default async function ConsoleUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tab?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { q, tab } = await searchParams;
+  const params = await searchParams;
+  const q = typeof params.q === "string" ? params.q : undefined;
+  const tab = typeof params.tab === "string" ? params.tab : undefined;
+  const filters = parseRosterFilters(params);
   const demoTab = tab === "demo";
   const staffTab = tab === "staff";
   // Only the real roster carries the Actions track (and the trial chip).
@@ -136,6 +199,9 @@ export default async function ConsoleUsersPage({
     attempts.set(g.owner_id, (attempts.get(g.owner_id) ?? 0) + 1);
   }
 
+  // The whole roster of the tab, kept for the <select> options below:
+  // narrowing must never hide the way back out.
+  const tabRoster = profiles;
   const needle = (q ?? "").trim().toLowerCase();
   if (needle) {
     profiles = profiles.filter((p) =>
@@ -143,6 +209,34 @@ export default async function ConsoleUsersPage({
         .some((v) => (v ?? "").toLowerCase().includes(needle)),
     );
   }
+
+  // Per-column filters read the SAME values the cells render — the resolved
+  // school name, the Language summary, the stats Map, the identifier the tab
+  // shows — so a filter can only ever match what the staff member can see.
+  const toRow = (p: Prof): RosterRow => {
+    const s = stats.get(p.id) ?? EMPTY_USER_STATS;
+    return {
+      name: p.full_name || p.username || "",
+      identifier: demoTab ? p.username || emails.get(p.id) || "" : emails.get(p.id) || p.username || "",
+      role: p.role,
+      school: p.school_id ? schoolName.get(p.school_id) ?? "" : "",
+      country: p.country ?? "",
+      language: languageSummary(p.ui_locale, s.bookLanguages),
+      books: s.books,
+      lessons: s.lessons,
+      artifacts: s.artifacts,
+      errors: s.errors,
+      resolved: s.resolved,
+      joined: joinedDate(p.created_at),
+    };
+  };
+  profiles = applyRosterFilters(profiles, toRow, filters);
+  const filtering = hasRosterFilters(filters);
+  const uniq = (vals: string[]) => [...new Set(vals.filter(Boolean))].sort();
+  const roleOptions = uniq(tabRoster.map((p) => p.role));
+  const schoolOptions = uniq(tabRoster.map((p) => (p.school_id ? schoolName.get(p.school_id) ?? "" : "")));
+  const countryOptions = uniq(tabRoster.map((p) => (p.country ?? "").toUpperCase()));
+  const clearHref = actionsTab ? "/console/users" : `/console/users?tab=${demoTab ? "demo" : "staff"}`;
 
   const tabs = [
     { href: "/console/users", label: `Users (${real.length})`, active: actionsTab },
@@ -155,7 +249,7 @@ export default async function ConsoleUsersPage({
       <h1 className="text-4xl mb-2">Users</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-[#5B6470] mb-5">
-        {profiles.length}{demoTab ? " demo" : staffTab ? " SketchCast staff" : ""} account{profiles.length === 1 ? "" : "s"}{needle ? ` matching “${q}”` : ""}. Click a row for detail + ops.
+        {profiles.length}{demoTab ? " demo" : staffTab ? " SketchCast staff" : ""} account{profiles.length === 1 ? "" : "s"}{needle ? ` matching “${q}”` : ""}{filtering ? " after column filters" : ""}. Click a row for detail + ops.
         {staffTab && " Staff means an unrevoked platform_admins row (or the founder allow-list) — grant or revoke it from the account's page."}
       </p>
 
@@ -173,7 +267,7 @@ export default async function ConsoleUsersPage({
         ))}
       </div>
 
-      <form method="get" className="mb-5">
+      <form id={FILTER_FORM} method="get" className="mb-5 flex flex-wrap items-center gap-2">
         {!actionsTab && <input type="hidden" name="tab" value={demoTab ? "demo" : "staff"} />}
         <input
           name="q"
@@ -181,6 +275,18 @@ export default async function ConsoleUsersPage({
           placeholder="Search name, email, username, role, school…"
           className="field w-full sm:w-96 h-10 px-3"
         />
+        <button
+          type="submit"
+          className="h-10 px-4 rounded-lg border border-[#E6E8E4] bg-white text-sm hover:bg-[#F5F6F3]"
+        >
+          Filter
+        </button>
+        {(needle || filtering) && (
+          <Link href={clearHref} className="text-sm text-[#5B6470] underline underline-offset-2">
+            Clear
+          </Link>
+        )}
+        <span className="text-xs text-[#98A0A9]">The boxes under the headings filter one column each. Enter applies.</span>
       </form>
 
       <div className="card divide-y divide-[#EEF0EC]">
@@ -191,6 +297,21 @@ export default async function ConsoleUsersPage({
           <span className="text-end">Errors</span><span className="text-end">Resolved</span>
           {demoTab ? <span>Password</span> : <span className="text-end">Joined</span>}
           {actionsTab && <span>Actions</span>}
+        </div>
+        <div className={`hidden sm:grid ${grid} gap-2 px-5 py-2 bg-[#FAFBF9]`}>
+          <FilterText name="name" value={filters.name} placeholder="name" />
+          <FilterText name="email" value={filters.email} placeholder={demoTab ? "username" : "email"} />
+          <FilterSelect name="role" value={filters.role} options={roleOptions} />
+          <FilterSelect name="school" value={filters.school} options={schoolOptions} />
+          <FilterSelect name="country" value={filters.country} options={countryOptions} />
+          <FilterText name="language" value={filters.language} placeholder="lang" />
+          <FilterMin name="books" value={filters.books} />
+          <FilterMin name="lessons" value={filters.lessons} />
+          <FilterMin name="artifacts" value={filters.artifacts} />
+          <FilterMin name="errors" value={filters.errors} />
+          <FilterMin name="resolved" value={filters.resolved} />
+          {demoTab ? <span /> : <FilterText name="joined" value={filters.joined} placeholder="2026-10" />}
+          {actionsTab && <span />}
         </div>
         {profiles.map((p) => {
           const s = stats.get(p.id) ?? EMPTY_USER_STATS;
