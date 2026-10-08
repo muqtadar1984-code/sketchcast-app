@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { countryName, sharedBooks, stalledAccounts, topCountries, topTeachersByKits } from "../console-insights";
+import {
+  countryName, sharedBooks, stalledAccounts, topCountries, topTeachersByKits, weeklyFailureRate, weekStartUtc,
+} from "../console-insights";
 
 const prof = (id: string, role = "teacher", extra: Partial<{ full_name: string | null; username: string | null; country: string | null; country_source: string | null; school_id: string | null }> = {}) => ({
   id,
@@ -193,5 +195,50 @@ describe("stalledAccounts — where adults stop after signing up", () => {
     );
     expect(s.noBook.total).toBe(0);
     expect(s.bookNoGeneration.total).toBe(1);
+  });
+});
+
+describe("weeklyFailureRate — the Overview's weekly failure chart", () => {
+  // Thursday 2026-10-08 → this ISO week starts Monday 2026-10-05; 18 weeks
+  // back the first bucket starts Monday 2026-06-08.
+  const NOW = new Date("2026-10-08T12:00:00Z");
+  const job = (status: string, created_at: string) => ({ status, created_at });
+
+  it("finds the Monday of the ISO week, in UTC", () => {
+    const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    expect(iso(weekStartUtc(NOW))).toBe("2026-10-05");
+    expect(iso(weekStartUtc(new Date("2026-10-05T00:00:00Z")))).toBe("2026-10-05"); // a Monday is its own start
+    expect(iso(weekStartUtc(new Date("2026-10-11T23:59:59Z")))).toBe("2026-10-05"); // Sunday night still belongs to it
+  });
+
+  it("returns every week oldest first, with nothing-finished weeks as null, not 0%", () => {
+    const rows = weeklyFailureRate([], 18, NOW);
+    expect(rows).toHaveLength(18);
+    expect(rows[0].weekStart).toBe("2026-06-08");
+    expect(rows[17].weekStart).toBe("2026-10-05");
+    expect(rows.every((r) => r.finished === 0 && r.rate === null)).toBe(true);
+  });
+
+  it("buckets finished jobs by week and ignores queued, running and out-of-window jobs", () => {
+    const rows = weeklyFailureRate(
+      [
+        job("done", "2026-10-05T01:00:00Z"), // this week
+        job("error", "2026-10-07T09:00:00Z"), // this week
+        job("done", "2026-10-07T10:00:00Z"), // this week
+        job("done", "2026-10-07T11:00:00Z"), // this week → 1/4 = 25%
+        job("error", "2026-09-28T00:00:00Z"), // last week → 1/1
+        job("queued", "2026-10-06T00:00:00Z"), // no outcome yet
+        job("processing", "2026-10-06T00:00:00Z"),
+        job("done", "2026-06-07T23:59:59Z"), // the Sunday before the window
+        job("done", "2026-06-08T00:00:00Z"), // first second of the window
+      ],
+      18,
+      NOW,
+    );
+    const by = Object.fromEntries(rows.map((r) => [r.weekStart, r]));
+    expect(by["2026-10-05"]).toMatchObject({ finished: 4, failed: 1, rate: 0.25 });
+    expect(by["2026-09-28"]).toMatchObject({ finished: 1, failed: 1, rate: 1 });
+    expect(by["2026-06-08"]).toMatchObject({ finished: 1, failed: 0, rate: 0 });
+    expect(rows.reduce((a, r) => a + r.finished, 0)).toBe(6);
   });
 });
