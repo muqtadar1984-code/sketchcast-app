@@ -4,7 +4,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
 import { staffUserIds } from "@/utils/platform-admin";
 import Link from "next/link";
-import { sharedBooks, stalledAccounts, topCountries, topTeachersByKits, weeklyFailureRate } from "@/utils/console-insights";
+import { isCustomerJob, monthlyFailureRate, monthStartUtc, sharedBooks, stalledAccounts, topCountries, topTeachersByKits } from "@/utils/console-insights";
 import { overviewAudience } from "@/utils/console-audience";
 import type { ChannelSnap } from "@/utils/youtube-stats";
 import type { DailyRow } from "@/utils/cloudflare-stats";
@@ -16,12 +16,12 @@ import type { DailyRow } from "@/utils/cloudflare-stats";
 export const dynamic = "force-dynamic";
 
 const DAY = 86400000;
-// The weekly failure chart's window: 18 ISO weeks ≈ four months.
-const FAILURE_WEEKS = 18;
+// The failure chart's window: the current calendar month and the five before it.
+const FAILURE_MONTHS = 6;
 
-/** "15 Sep" for a YYYY-MM-DD week start — the chart's row label. */
-function weekLabel(isoDay: string): string {
-  return new Date(`${isoDay}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+/** "Jun 2026" for a YYYY-MM month — the chart's row label. */
+function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 type Metric = { label: string; value: string | number; hint?: string };
@@ -34,9 +34,9 @@ export default async function ConsoleOverviewPage() {
   const admin = createAdminClient();
   // (server component, rendered once per request — Date.now is fine here)
   // eslint-disable-next-line react-hooks/purity
-  const failureWindowStart = new Date(Date.now() - FAILURE_WEEKS * 7 * DAY).toISOString();
+  const failureWindowStart = new Date(monthStartUtc(new Date(Date.now()), FAILURE_MONTHS - 1)).toISOString();
 
-  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, weeklyJobsQ, staffIds] = await Promise.all([
+  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, windowJobsQ, staffIds] = await Promise.all([
     admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, metrics_excluded, created_at, full_name, username, country, country_source"),
     admin.from("schools").select("id, name"),
     admin.from("books").select("id, owner_id, status, created_at, title, pages, content_hash, language, removed_at"),
@@ -53,11 +53,12 @@ export default async function ConsoleOverviewPage() {
       .order("captured_at", { ascending: false }).limit(1),
     admin.from("cloudflare_daily_stats").select("day, zone, requests, page_views, uniques, bytes, threats, countries, captured_at")
       .eq("zone", "sketchcast.app").order("day", { ascending: true }).limit(2_000),
-    // Finished jobs of the last FAILURE_WEEKS weeks, for the weekly chart —
-    // its own select, because the jobs panel below reads only the newest
-    // 2000 rows and four months can hold more.
+    // Finished jobs of the last FAILURE_MONTHS months: the failure-rate tile
+    // AND the monthly chart read this one set, so they agree by construction.
+    // Its own select, because the spend panel below reads only the newest
+    // 2000 rows and six months can hold more.
     selectAll(() =>
-      admin.from("jobs").select("status, created_at, generation_id, book_id")
+      admin.from("jobs").select("status, created_at, generation_id, book_id, type, params")
         .in("status", ["done", "error"]).gte("created_at", failureWindowStart),
     ),
     staffUserIds(admin),
@@ -70,7 +71,7 @@ export default async function ConsoleOverviewPage() {
     () =>
       admin
         .from("jobs")
-        .select("id, generation_id, book_id, type, status, error, usage, created_at")
+        .select("id, generation_id, book_id, type, params, status, error, usage, created_at")
         .order("created_at", { ascending: false }),
     { max: 2000 },
   );
@@ -79,7 +80,7 @@ export default async function ConsoleOverviewPage() {
       () =>
         admin
           .from("jobs")
-          .select("id, generation_id, book_id, type, status, error, created_at")
+          .select("id, generation_id, book_id, type, params, status, error, created_at")
           .order("created_at", { ascending: false }),
       { max: 2000 },
     )) as typeof jobsQ;
@@ -88,7 +89,7 @@ export default async function ConsoleOverviewPage() {
   const allProfiles = (profilesQ.data ?? []) as { id: string; role: string; school_id: string | null; beta_tester: boolean | null; is_demo: boolean | null; metrics_excluded: boolean | null; created_at: string; full_name: string | null; username: string | null; country: string | null; country_source: string | null }[];
   const allBooks = (booksQ.data ?? []) as { id: string; owner_id: string; status: string; created_at: string; title: string | null; pages: number | null; content_hash: string | null; language: string | null; removed_at: string | null }[];
   const allGens = (gensQ.data ?? []) as { id: string; owner_id: string; kind: string | null; status: string; created_at: string }[];
-  const allJobs = (jobsQ.data ?? []) as { id: string; generation_id: string | null; book_id: string | null; type: string | null; status: string; error: string | null; usage: { cost_usd?: number } | null; created_at: string }[];
+  const allJobs = (jobsQ.data ?? []) as { id: string; generation_id: string | null; book_id: string | null; type: string | null; params: unknown; status: string; error: string | null; usage: { cost_usd?: number } | null; created_at: string }[];
 
   // Every metric on this page counts REAL usage only. Three kinds of account
   // are not a customer: demo tenants (profiles.is_demo, migration 0081), whose
@@ -103,18 +104,23 @@ export default async function ConsoleOverviewPage() {
   const profiles = allProfiles.filter((p) => !excludedIds.has(p.id));
   const books = allBooks.filter((b) => !excludedIds.has(b.owner_id));
   const gens = allGens.filter((g) => !excludedIds.has(g.owner_id));
-  // Jobs carry no owner — attribute through their generation/book. Rows that
-  // resolve to neither are kept (fail open, like the rest of this page).
+  // Jobs carry no owner — attribute through their generation/book. A CUSTOMER
+  // job (isCustomerJob: not one of the worker's own lanes, not a catalogue
+  // kit) whose row resolves to neither is kept (fail open, like the rest of
+  // this page); the worker's own jobs never resolve to an owner, which is
+  // exactly how catalogue, support and YouTube failures used to leak into the
+  // failure rate (founder, 2026-10-08: development failures, not product).
   const genOwner = new Map(allGens.map((g) => [g.id, g.owner_id]));
   const bookOwner = new Map(allBooks.map((b) => [b.id, b.owner_id]));
-  const jobIsReal = (j: { generation_id: string | null; book_id: string | null }) => {
+  const jobIsReal = (j: { generation_id: string | null; book_id: string | null; type: string | null; params?: unknown }) => {
+    if (!isCustomerJob(j)) return false;
     const owner =
       (j.generation_id ? genOwner.get(j.generation_id) : undefined) ??
       (j.book_id ? bookOwner.get(j.book_id) : undefined);
     return owner === undefined || !excludedIds.has(owner);
   };
   const jobs = allJobs.filter(jobIsReal);
-  const weeklyJobs = ((weeklyJobsQ.data ?? []) as { status: string; created_at: string; generation_id: string | null; book_id: string | null }[])
+  const windowJobs = ((windowJobsQ.data ?? []) as { status: string; created_at: string; generation_id: string | null; book_id: string | null; type: string | null; params: unknown }[])
     .filter(jobIsReal);
   // A school whose known members are ALL demo accounts is a seeded demo tenant.
   const demoSchools = demoSchoolIds(allProfiles);
@@ -157,22 +163,10 @@ export default async function ConsoleOverviewPage() {
     byKind.set(k, row);
   }
 
-  // Jobs: failure rate + recent errors + spend (jobs.usage from migration 0013)
-  const finished = jobs.filter((j) => j.status === "done" || j.status === "error");
+  // Jobs: failure rate (the window set, shared with the monthly chart below)
+  // + spend (jobs.usage from migration 0013, newest 2000)
+  const finished = windowJobs.filter((j) => j.status === "done" || j.status === "error");
   const failed = finished.filter((j) => j.status === "error");
-  const recentErrors: { when: string; type: string; error: string }[] = [];
-  const seenErr = new Set<string>();
-  for (const j of failed) {
-    const key = (j.error || "").slice(0, 60);
-    if (!key || seenErr.has(key)) continue;
-    seenErr.add(key);
-    recentErrors.push({
-      when: new Date(j.created_at).toLocaleString(),
-      type: j.type || "generation",
-      error: (j.error || "").slice(0, 160),
-    });
-    if (recentErrors.length >= 6) break;
-  }
   let spendAll = 0;
   let spend30 = 0;
   let trackedJobs = 0;
@@ -203,10 +197,10 @@ export default async function ConsoleOverviewPage() {
   // ...and where the adults who signed up stopped: no upload yet, or an
   // upload that never became a kit (founder, 2026-10-08).
   const stalled = stalledAccounts(profiles, books, gens);
-  // Failure rate per ISO week over the last four months, same job rule as the
-  // "Job failure rate" tile (finished = done or error), same owner exclusions.
-  const weekly = weeklyFailureRate(weeklyJobs, FAILURE_WEEKS, nowDate);
-  const weeklyMaxPct = Math.max(1, ...weekly.map((w) => (w.rate === null ? 0 : Math.round(w.rate * 100))));
+  // Failure rate per calendar month over the window — the same rows the
+  // "Job failure rate" tile totals, so the tile is this chart's sum.
+  const monthly = monthlyFailureRate(windowJobs, FAILURE_MONTHS, nowDate);
+  const monthlyMaxPct = Math.max(1, ...monthly.map((m) => (m.rate === null ? 0 : Math.round(m.rate * 100))));
 
   const audience = overviewAudience((ytQ.data ?? []) as ChannelSnap[], (cfQ.data ?? []) as DailyRow[], nowDate);
 
@@ -223,7 +217,7 @@ export default async function ConsoleOverviewPage() {
     {
       label: "Job failure rate",
       value: pct(failed.length, finished.length),
-      hint: `${failed.length}/${finished.length} of last ${finished.length}`,
+      hint: `${failed.length}/${finished.length} since ${monthLabel(monthly[0].month)} · customer jobs`,
     },
     {
       label: "Claude spend (30d)",
@@ -455,52 +449,35 @@ export default async function ConsoleOverviewPage() {
             ))}
           </div>
 
-          <h2 className="text-xl mt-8 mb-3">Job failure rate, weekly</h2>
-          <div className="card px-5 py-4 space-y-1.5">
-            {weekly.map((w) => {
-              const pct = w.rate === null ? null : Math.round(w.rate * 100);
+        </section>
+
+        <section>
+          <h2 className="text-xl mb-3">Job failure rate, monthly</h2>
+          <div className="card px-5 py-4 space-y-2">
+            {monthly.map((m) => {
+              const p = m.rate === null ? null : Math.round(m.rate * 100);
               return (
-                <div key={w.weekStart} className="flex items-center gap-3">
-                  <span className="w-14 text-xs text-[#5B6470] tabular whitespace-nowrap">{weekLabel(w.weekStart)}</span>
-                  <div className="flex-1 h-3 rounded bg-[#EEF0EC] overflow-hidden">
-                    {pct !== null && pct > 0 && (
-                      <div className="h-full bg-[#9A6400]" style={{ width: `${Math.max(2, (pct / weeklyMaxPct) * 100)}%` }} />
+                <div key={m.month} className="flex items-center gap-3">
+                  <span className="w-20 text-sm text-[#5B6470] whitespace-nowrap">{monthLabel(m.month)}</span>
+                  <div className="flex-1 h-4 rounded bg-[#EEF0EC] overflow-hidden">
+                    {p !== null && p > 0 && (
+                      <div className="h-full bg-[#9A6400]" style={{ width: `${Math.max(2, (p / monthlyMaxPct) * 100)}%` }} />
                     )}
                   </div>
-                  <span className={`tabular text-sm w-10 text-end ${pct === null ? "text-[#98A0A9]" : ""}`}>
-                    {pct === null ? "—" : `${pct}%`}
+                  <span className={`tabular text-sm w-10 text-end ${p === null ? "text-[#98A0A9]" : ""}`}>
+                    {p === null ? "—" : `${p}%`}
                   </span>
-                  <span className="tabular text-[11px] text-[#98A0A9] w-14 text-end whitespace-nowrap">
-                    {w.finished ? `${w.failed}/${w.finished}` : "no jobs"}
+                  <span className="tabular text-[11px] text-[#98A0A9] w-16 text-end whitespace-nowrap">
+                    {m.finished ? `${m.failed}/${m.finished}` : "no jobs"}
                   </span>
                 </div>
               );
             })}
           </div>
           <p className="text-xs text-[#98A0A9] mt-2">
-            Failed ÷ finished jobs per ISO week (Mondays, UTC), last {FAILURE_WEEKS} weeks. Bars scale to the worst week; the tile above is the same rule over the newest 2000 jobs.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="text-xl mb-3">Recent job errors</h2>
-          {recentErrors.length === 0 ? (
-            <div className="card px-5 py-6 text-sm text-[#5B6470]">No failed jobs. 🎉</div>
-          ) : (
-            <div className="card divide-y divide-[#EEF0EC]">
-              {recentErrors.map((e, i) => (
-                <div key={i} className="px-5 py-3">
-                  <div className="flex items-center justify-between gap-3 text-xs text-[#5B6470] mb-1">
-                    <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal">{e.type}</span>
-                    <span className="tabular">{e.when}</span>
-                  </div>
-                  <p className="text-sm text-[#9A6400] break-words">{e.error}</p>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-[#98A0A9] mt-2">
-            Deduplicated by message — the Issues tab tracks what users report; this is what the pipeline reports.
+            Failed ÷ finished jobs per calendar month (UTC), last {FAILURE_MONTHS} months; the current month is to date. Customer jobs only — demo, staff and
+            metrics-excluded owners, catalogue kits and the worker&apos;s own support, catalogue and YouTube jobs are left out. The Job failure rate tile
+            is this same set in total. Bars scale to the worst month.
           </p>
         </section>
       </div>
