@@ -4,7 +4,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { demoSchoolIds, metricsExcludedIds } from "@/utils/demo";
 import { staffUserIds } from "@/utils/platform-admin";
 import Link from "next/link";
-import { sharedBooks, topCountries, topTeachersByKits } from "@/utils/console-insights";
+import { sharedBooks, stalledAccounts, topCountries, topTeachersByKits } from "@/utils/console-insights";
 import { overviewAudience } from "@/utils/console-audience";
 import type { ChannelSnap } from "@/utils/youtube-stats";
 import type { DailyRow } from "@/utils/cloudflare-stats";
@@ -180,6 +180,9 @@ export default async function ConsoleOverviewPage() {
   const topTeachers = topTeachersByKits(profiles, gens);
   const countries = topCountries(profiles);
   const shared = sharedBooks(books);
+  // ...and where the adults who signed up stopped: no upload yet, or an
+  // upload that never became a kit (founder, 2026-10-08).
+  const stalled = stalledAccounts(profiles, books, gens);
 
   const audience = overviewAudience((ytQ.data ?? []) as ChannelSnap[], (cfQ.data ?? []) as DailyRow[], nowDate);
 
@@ -278,7 +281,7 @@ export default async function ConsoleOverviewPage() {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8 mb-10">
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-8 mb-10">
         <section>
           <h2 className="text-xl mb-3">Top teachers by kits</h2>
           <div className="card divide-y divide-[#EEF0EC]">
@@ -357,6 +360,38 @@ export default async function ConsoleOverviewPage() {
           </div>
           <p className="text-xs text-[#98A0A9] mt-2">
             Same book = same file (content hash), or the same title and page count for older uploads. Deleted books excluded.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl mb-3">Stalled after signup</h2>
+          <div className="card divide-y divide-[#EEF0EC]">
+            <div className="grid grid-cols-[2fr_0.6fr] gap-2 px-5 py-2 text-xs text-[#5B6470] font-medium">
+              <span>Teachers and parents who…</span><span className="text-end">Accounts</span>
+            </div>
+            <div className="grid grid-cols-[2fr_0.6fr] gap-2 px-5 py-2.5 text-sm items-center">
+              <span className="min-w-0">
+                <span className="block font-medium">Registered, uploaded no textbook</span>
+                <span className="block text-[11px] text-[#98A0A9]">
+                  {stalled.noBook.teachers} teachers · {stalled.noBook.parents} parents
+                </span>
+              </span>
+              <span className="tabular text-end">{stalled.noBook.total}</span>
+            </div>
+            <div className="grid grid-cols-[2fr_0.6fr] gap-2 px-5 py-2.5 text-sm items-center">
+              <span className="min-w-0">
+                <span className="block font-medium">Uploaded a textbook, generated nothing</span>
+                <span className="block text-[11px] text-[#98A0A9]">
+                  {stalled.bookNoGeneration.teachers} teachers · {stalled.bookNoGeneration.parents} parents
+                  {stalled.bookNoGeneration.triedNothingFinished > 0 &&
+                    ` · ${stalled.bookNoGeneration.triedNothingFinished} more tried, nothing finished`}
+                </span>
+              </span>
+              <span className="tabular text-end">{stalled.bookNoGeneration.total}</span>
+            </div>
+          </div>
+          <p className="text-xs text-[#98A0A9] mt-2">
+            Teachers, coordinators and parents. Any upload counts, even one since deleted; &quot;generated nothing&quot; means no generation was ever started.
           </p>
         </section>
       </div>

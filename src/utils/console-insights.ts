@@ -168,3 +168,54 @@ export function sharedBooks(books: InsightBook[], limit = 5): SharedBook[] {
     .sort((a, b) => b.owners - a.owners || b.uploads - a.uploads || a.title.localeCompare(b.title))
     .slice(0, limit);
 }
+
+export type StalledAccounts = {
+  /** Teachers, coordinators and parents who never uploaded a book. */
+  noBook: { total: number; teachers: number; parents: number };
+  /** ...who uploaded at least one book and never started a generation. */
+  bookNoGeneration: {
+    total: number;
+    teachers: number;
+    parents: number;
+    /** Uploaded AND started a generation, but nothing has ever finished —
+     * not in `total`, reported beside it: a different kind of stuck. */
+    triedNothingFinished: number;
+  };
+};
+
+const PARENT_ROLES = new Set(["parent"]);
+
+/**
+ * Where adults stop after signing up. Any upload counts, even one since
+ * deleted (the person DID upload); "never started" means no generations row
+ * of any kind or status. Rows arrive demo/staff/metrics-excluded-filtered,
+ * like everything on the Overview.
+ */
+export function stalledAccounts(
+  profiles: { id: string; role: string }[],
+  books: { owner_id: string }[],
+  generations: { owner_id: string; status: string }[],
+): StalledAccounts {
+  const uploaded = new Set(books.map((b) => b.owner_id));
+  const started = new Set(generations.map((g) => g.owner_id));
+  const finished = new Set(generations.filter((g) => g.status === "done").map((g) => g.owner_id));
+  const noBook = { total: 0, teachers: 0, parents: 0 };
+  const bookNoGeneration = { total: 0, teachers: 0, parents: 0, triedNothingFinished: 0 };
+  for (const p of profiles) {
+    const teacher = TEACHING_ROLES.has(p.role);
+    const parent = PARENT_ROLES.has(p.role);
+    if (!teacher && !parent) continue;
+    if (!uploaded.has(p.id)) {
+      noBook.total++;
+      if (teacher) noBook.teachers++;
+      else noBook.parents++;
+    } else if (!started.has(p.id)) {
+      bookNoGeneration.total++;
+      if (teacher) bookNoGeneration.teachers++;
+      else bookNoGeneration.parents++;
+    } else if (!finished.has(p.id)) {
+      bookNoGeneration.triedNothingFinished++;
+    }
+  }
+  return { noBook, bookNoGeneration };
+}
