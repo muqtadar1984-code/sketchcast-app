@@ -48,6 +48,7 @@ import {
   publishablePrivacies,
   termsFromSummary,
   validateYouTubeMeta,
+  youtubeSafe,
 } from "@/utils/catalogue/publish";
 import type { HeaderMapping } from "@/utils/catalogue/kit";
 import type { ChapterMark, PublishPrivacy, TopicPublication } from "@/utils/catalogue/types";
@@ -429,5 +430,30 @@ describe("the dark note and the migration", () => {
   });
   it("names 0116", () => {
     expect(CATALOGUE_PUBLISH_MIGRATION).toBe("supabase/migrations/0116_catalogue_publish.sql");
+  });
+});
+
+describe("the signs YouTube refuses", () => {
+  // Linear Inequalities (2026-10-13): YouTube rejected the description
+  // ("invalidDescription") over chapters like "x > 7 on the number line".
+  // Every UTF-8 character is allowed in a title or description except < and >.
+  it("replaces < and > in what the preview shows, so the preview is what posts", () => {
+    expect(youtubeSafe("x > 7 and 3x - 4 <= 8, y >= -2, a < b")).toBe("x ＞ 7 and 3x - 4 ≤ 8, y ≥ -2, a ＜ b");
+    const text = buildDescriptionPreview({
+      topicTitle: "Linear Inequalities and Their Solutions on a Number Line",
+      summary: SUMMARY,
+      subject: "Mathematics",
+      curriculumHeader: ["Cambridge Lower Secondary Mathematics 0862 · 7Ae.07"],
+      mappings: MAPPINGS,
+      meta: { intro: "Solve x + 5 > 12 and show it on a number line." },
+      chapters: [mark(0, "Linear Inequalities"), mark(67, "Example 1: x + 5 > 12"), mark(108, "x > 7 on the number line"), mark(116, "Example 2: 3x - 4 <= 8")],
+      part: 1,
+      parts: 1,
+    });
+    expect(text).not.toMatch(/[<>]/);
+    expect(text).toContain("1:07 Example 1: x + 5 ＞ 12");
+    expect(text).toContain("1:56 Example 2: 3x - 4 ≤ 8");
+    expect(text).toContain("Solve x + 5 ＞ 12 and show it");
+    expect(composeTitle({ topicTitle: "Solving x > 3", meta: { title: "When is x > 3? | Inequalities" }, part: 1, parts: 1 })).toBe("When is x ＞ 3? | Inequalities");
   });
 });
