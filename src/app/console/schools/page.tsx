@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { selectAll } from "@/utils/supabase/select-all";
 import { InkUnderline } from "@/components/ink-mark";
 import {
   schoolLifecycle,
@@ -57,7 +58,7 @@ export default async function ConsoleSchoolsPage() {
     admin.from("school_registrations").select("school_id, registrant_role, reg_ip, sales_stage, activation_requested_at"),
     admin.from("entitlements").select("school_id, active, plan_key, current_period_end").not("school_id", "is", null),
     admin.from("profiles").select("id, role, school_id"),
-    admin.from("generations").select("owner_id, status"),
+    selectAll(() => admin.from("generations").select("owner_id, status")), // past the 1000-row cap
     admin.from("books").select("owner_id"),
   ]);
 

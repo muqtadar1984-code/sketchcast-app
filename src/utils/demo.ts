@@ -76,19 +76,23 @@ export function partitionRoster<T extends { id: string; is_demo?: boolean | null
 
 /**
  * The accounts every console metric leaves out: seeded demo tenants
- * (`profiles.is_demo`) and SketchCast's own staff (`staffIds`, from
- * `platform_admins` — see `staffUserIds`). Neither is a customer, so neither
- * one's books, generations, jobs or signups are usage.
+ * (`profiles.is_demo`), SketchCast's own staff (`staffIds`, from
+ * `platform_admins` — see `staffUserIds`), and accounts a staff member has
+ * flagged `profiles.metrics_excluded` (0124) — real users' logins that staff
+ * also test with (the founder's and the reviewer's personal Gmail accounts),
+ * which are neither staff nor demo but whose kits are not customer usage.
+ * None of the three is a customer, so none of their books, generations,
+ * jobs or signups are usage.
  *
  * One function so the Overview and the Financials page cannot drift apart on
  * what "real" means, and so the rule is testable without a database.
  */
 export function metricsExcludedIds(
-  profiles: { id: string; is_demo?: boolean | null }[],
+  profiles: { id: string; is_demo?: boolean | null; metrics_excluded?: boolean | null }[],
   staffIds: Iterable<string> = [],
 ): Set<string> {
   const out = new Set<string>(staffIds);
-  for (const p of profiles) if (p.is_demo === true) out.add(p.id);
+  for (const p of profiles) if (p.is_demo === true || p.metrics_excluded === true) out.add(p.id);
   return out;
 }
 

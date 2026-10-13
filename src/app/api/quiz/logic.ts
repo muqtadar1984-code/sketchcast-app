@@ -37,11 +37,14 @@
 
 // ── the raw artifact (answer key included) ──────────────────────────────────
 
+// `image`: a picture the question is asked ABOUT — a maths figure ("find x",
+// "which of these triangles are scalene?") — as a data URL the worker wrote
+// into questions.json. It is not derived from the answer and carries no key.
 export type RawQuestion =
-  | { id: string; type: "fill_blank" | "short"; prompt: string; answer?: string; marks: number }
-  | { id: string; type: "true_false"; prompt: string; answer?: boolean; marks: number }
-  | { id: string; type: "match"; prompt: string; pairs: { left: string; right: string }[]; marks: number }
-  | { id: string; type: "subjective"; prompt: string; answer_outline?: string; marks: number };
+  | { id: string; type: "fill_blank" | "short"; prompt: string; answer?: string; marks: number; image?: string }
+  | { id: string; type: "true_false"; prompt: string; answer?: boolean; marks: number; image?: string }
+  | { id: string; type: "match"; prompt: string; pairs: { left: string; right: string }[]; marks: number; image?: string }
+  | { id: string; type: "subjective"; prompt: string; answer_outline?: string; marks: number; image?: string };
 
 export type RawQuiz = { title: string; instructions: string; questions: RawQuestion[] };
 
@@ -52,8 +55,18 @@ export type RawQuiz = { title: string; instructions: string; questions: RawQuest
  * and a SHUFFLED bag of right-hand options with the pairing never expressed:
  * no `pairs`, no parallel array, no index that lines the two sides up. */
 export type StudentQuestion =
-  | { id: string; type: "fill_blank" | "short" | "true_false" | "subjective"; prompt: string; marks: number }
-  | { id: string; type: "match"; prompt: string; marks: number; left: string[]; options: string[] };
+  | { id: string; type: "fill_blank" | "short" | "true_false" | "subjective"; prompt: string; marks: number; image?: string }
+  | { id: string; type: "match"; prompt: string; marks: number; left: string[]; options: string[]; image?: string };
+
+/** Only an inline PNG/JPEG/SVG data URL reaches the student: a figure the
+ * worker drew. A plain URL would let questions.json point the browser
+ * anywhere; it is dropped, not forwarded. */
+function studentImage(q: { image?: unknown }): { image: string } | Record<string, never> {
+  const v = q.image;
+  if (typeof v !== "string") return {};
+  if (!/^data:image\/(png|jpeg|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(v)) return {};
+  return { image: v };
+}
 
 export type StudentQuizData = { title: string; instructions: string; questions: StudentQuestion[] };
 
@@ -226,9 +239,10 @@ export async function stripQuiz(raw: RawQuiz, key: string, scope: string): Promi
         marks,
         left: pairs.map((p) => String(p?.left ?? "")),
         options: seededShuffle(rights, await optionOrderSeed(key, scope, String(q.id), rights.length)),
+        ...studentImage(q),
       });
     } else {
-      questions.push({ id: String(q.id), type: q.type, prompt: String(q.prompt ?? ""), marks });
+      questions.push({ id: String(q.id), type: q.type, prompt: String(q.prompt ?? ""), marks, ...studentImage(q) });
     }
   }
   return {

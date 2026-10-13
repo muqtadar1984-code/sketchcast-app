@@ -1616,6 +1616,8 @@
       "mostRevisedHint": "Les sujets que les élèves rouvrent le plus — souvent les plus difficiles.",
       "toGradeTitle": "À corriger",
       "toGradeHint": "Fiches d'exercices et examens rendus, en attente de note.",
+      "autoMarkedTitle": "Quiz corrigés automatiquement",
+      "autoMarkedHint": "Quiz notés automatiquement. Consultez les réponses, ajoutez un commentaire ou modifiez la note.",
       "chapterLabel": "{kind} · ch. {n}",
       "kind": {
         "presentation": "Leçon",
@@ -1642,6 +1644,8 @@
       "noSchoolWork": "Rien d'attribué par l'école pour l'instant.",
       "yourWork": "De vous ({n})",
       "noTestPapers": "Aucun contrôle attribué — créez-en un dans Contrôles.",
+      "awaitingMarking": "en attente de correction",
+      "teacherNote": "Mot de l'enseignant : {text}",
       "kind": {
         "presentation": "Leçon vidéo",
         "deck": "Diapos",

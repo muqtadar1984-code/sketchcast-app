@@ -1616,6 +1616,8 @@
       "mostRevisedHint": "Los temas que los alumnos vuelven a abrir más — suelen ser los más difíciles.",
       "toGradeTitle": "Por calificar",
       "toGradeHint": "Hojas de trabajo y exámenes entregados a la espera de nota.",
+      "autoMarkedTitle": "Cuestionarios corregidos automáticamente",
+      "autoMarkedHint": "Cuestionarios puntuados automáticamente. Revisa las respuestas, añade comentarios o cambia la nota.",
       "chapterLabel": "{kind} · Cap. {n}",
       "kind": {
         "presentation": "Lección",
@@ -1642,6 +1644,8 @@
       "noSchoolWork": "La escuela todavía no ha asignado nada.",
       "yourWork": "De usted ({n})",
       "noTestPapers": "Todavía no hay pruebas asignadas — cree una en Exámenes.",
+      "awaitingMarking": "pendiente de corrección",
+      "teacherNote": "Nota del docente: {text}",
       "kind": {
         "presentation": "Videolección",
         "deck": "Diapositivas",

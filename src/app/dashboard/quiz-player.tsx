@@ -65,6 +65,12 @@ export default function QuizPlayer({
                 <span className="text-[#98A0A9]">{qi + 1}.</span> {q.prompt}
                 {q.marks ? <span className="text-[#98A0A9] font-normal"> [{q.marks}]</span> : null}
               </p>
+              {q.image ? (
+                // the figure the question is about (a maths diagram); an
+                // inline data URL the server admitted, never a remote URL
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={q.image} alt="" className="mb-2 max-w-full rounded-md border border-[#E5E7EB] bg-white" />
+              ) : null}
 
               {(q.type === "fill_blank" || q.type === "short") && (
                 <input

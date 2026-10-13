@@ -1616,6 +1616,8 @@
       "mostRevisedHint": "Topics students re-open most — often the trickiest ones.",
       "toGradeTitle": "To grade",
       "toGradeHint": "Submitted worksheets & exams awaiting a mark.",
+      "autoMarkedTitle": "Auto-marked quizzes",
+      "autoMarkedHint": "Quizzes scored automatically. Review the answers, add feedback, or override the mark.",
       "chapterLabel": "{kind} · Ch {n}",
       "kind": {
         "presentation": "Lesson",
@@ -1642,6 +1644,8 @@
       "noSchoolWork": "Nothing assigned by school yet.",
       "yourWork": "From you ({n})",
       "noTestPapers": "No test papers assigned yet — create one under Test Papers.",
+      "awaitingMarking": "awaiting teacher's mark",
+      "teacherNote": "Teacher's note: {text}",
       "kind": {
         "presentation": "Video lesson",
         "deck": "Deck",

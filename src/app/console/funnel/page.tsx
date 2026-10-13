@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { selectAll } from "@/utils/supabase/select-all";
 import { InkUnderline } from "@/components/ink-mark";
 import { buildFunnel, pct, STEPS, type FunnelSchool, type Step } from "@/utils/school-funnel";
 import { schoolLifecycle } from "@/utils/school-lifecycle";
@@ -59,11 +60,13 @@ export default async function ConsoleFunnelPage() {
   for (const s of schools) for (const m of membersOf.get(s.id) ?? []) ownerSchool.set(m, s.id);
   const usage = new Map<string, { first: string | null; lessons: number; docs: number }>();
   if (memberIds.length) {
-    const { data: gens } = await admin
-      .from("generations")
-      .select("owner_id, kind, status, created_at")
-      .in("owner_id", memberIds)
-      .neq("status", "error");
+    const { data: gens } = await selectAll(() =>
+      admin
+        .from("generations")
+        .select("owner_id, kind, status, created_at")
+        .in("owner_id", memberIds)
+        .neq("status", "error"),
+    );
     for (const g of (gens ?? []) as { owner_id: string; kind: string; status: string; created_at: string }[]) {
       const sid = ownerSchool.get(g.owner_id);
       if (!sid) continue;

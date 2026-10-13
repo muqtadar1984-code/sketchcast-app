@@ -34,19 +34,20 @@ describe("who the board is for", () => {
     });
   });
 
-  it("REFUSES A TRIAL TEACHER, with a reason that is about the plan", () => {
-    expect(presentAccess(facts({ tier: "trial" }))).toEqual({ ok: false, why: "plan" });
+  it("ADMITS A TRIAL TEACHER BY ROLE — the founder's rule of 2026-10-08", () => {
+    // The demo school's eleven teachers and its principal all resolve to
+    // `trial` (nothing is paid behind the sales-demo tenant) and had no Board
+    // tab. "Ensure all users (except students and parents) have access to the
+    // board": the role is the gate, the plan only names how.
+    expect(presentAccess(facts({ tier: "trial" }))).toEqual({ ok: true, via: "role" });
   });
 
-  it("refuses the launch-promo tier — a promo is not a subscription", () => {
-    expect(presentAccess(facts({ tier: "promo" }))).toEqual({ ok: false, why: "plan" });
+  it("admits the launch-promo tier, by role", () => {
+    expect(presentAccess(facts({ tier: "promo" }))).toEqual({ ok: true, via: "role" });
   });
 
-  it("refuses homeschool and family, which were not in the founder's rule", () => {
-    // Recorded rather than assumed: "the only gate for individual teachers should
-    // be pro or pro+". Both are paying customers who teach, so this is the line
-    // most likely to move — and when it does, it moves in PRESENT_TIERS alone.
-    expect(presentAccess(facts({ tier: "homeschool" }))).toEqual({ ok: false, why: "plan" });
+  it("admits homeschool by role; a family-plan PARENT is still not teaching", () => {
+    expect(presentAccess(facts({ tier: "homeschool" }))).toEqual({ ok: true, via: "role" });
     expect(presentAccess(facts({ tier: "family", role: "parent" }))).toEqual({
       ok: false,
       why: "not-teaching",
@@ -123,18 +124,27 @@ describe("the self-serve school states (0101)", () => {
   it("a trial school's students still never drive it — a plan is not a role", () => {
     expect(presentAccess(facts({ role: "student", tier: "school_trial" }))).toEqual({ ok: false, why: "not-teaching" });
   });
-  it("the two locked states are out, like the individual trial", () => {
-    expect(presentAccess(facts({ tier: "school_expired" }))).toEqual({ ok: false, why: "plan" });
-    expect(presentAccess(facts({ tier: "school_suspended" }))).toEqual({ ok: false, why: "plan" });
+  it("the two locked states admit a TEACHER by role — and never a student", () => {
+    // Since 2026-10-08 the plan refuses nobody who teaches; the school's state
+    // decides what `via` says, not whether the board opens.
+    expect(presentAccess(facts({ tier: "school_expired" }))).toEqual({ ok: true, via: "role" });
+    expect(presentAccess(facts({ tier: "school_suspended" }))).toEqual({ ok: true, via: "role" });
+    expect(presentAccess(facts({ role: "student", tier: "school_expired" }))).toEqual({
+      ok: false,
+      why: "not-teaching",
+    });
   });
 });
 
 describe("a tier this build has never heard of", () => {
-  it("FAILS CLOSED, and that is the hazard worth naming", () => {
-    // Failing closed is the right default, and it is also the silent one: a
-    // tier plan_tier() gains tomorrow will not get the board and nothing will
-    // explain it. Pinned so the set is revisited rather than left alone.
-    expect(presentAccess(facts({ tier: "something_new" }))).toEqual({ ok: false, why: "plan" });
+  it("admits a teacher by role — the hazard of failing closed is gone with the plan gate", () => {
+    // A tier plan_tier() gains tomorrow no longer locks a teacher out; it
+    // only fails to be NAMED in `via`. A student on it is still refused.
+    expect(presentAccess(facts({ tier: "something_new" }))).toEqual({ ok: true, via: "role" });
+    expect(presentAccess(facts({ role: "student", tier: "something_new" }))).toEqual({
+      ok: false,
+      why: "not-teaching",
+    });
   });
 });
 
