@@ -381,6 +381,22 @@ export type TitleInput = {
  * terms go first (three, two, one, none), then the audience, and the part
  * label is never cut. The worker titles the uploads with exactly this.
  */
+// YouTube's videos.insert rejects a title or description holding "<" or ">"
+// (every other UTF-8 character is fine). A maths video names its chapters by
+// its examples — "x > 7 on the number line", "3x - 4 <= 8" — and Linear
+// Inequalities (2026-10-13) could not be posted at all. The relation is kept,
+// in the characters YouTube allows: ≤ ≥ and the full-width ＜ ＞. Mirrors the
+// worker's catalogue/youtube_meta.youtube_safe, so the preview is what posts.
+const YOUTUBE_SIGNS: ReadonlyArray<readonly [string, string]> = [
+  ["<=", "≤"], [">=", "≥"], ["=<", "≤"], ["=>", "≥"], ["<", "＜"], [">", "＞"],
+];
+
+export function youtubeSafe(text: string): string {
+  let out = text;
+  for (const [raw, safe] of YOUTUBE_SIGNS) out = out.split(raw).join(safe);
+  return out;
+}
+
 export function composeTitle(input: TitleInput): string {
   const topic = squash(input.topicTitle) || "Topic";
   const stored = squash(input.meta?.title);
@@ -410,7 +426,7 @@ export function composeTitle(input: TitleInput): string {
     }
   }
   if (base.length > room) base = base.slice(0, room).trimEnd();
-  return (base + suffix).trim();
+  return youtubeSafe((base + suffix).trim());
 }
 
 /** The title as the worker posts it; `parts <= 1` is a single video. */
@@ -513,7 +529,7 @@ export function buildDescriptionPreview(input: DescriptionInput): string {
   const tags = effectiveHashtags(input.meta, terms, boards, input.subject);
   if (tags.length) blocks.push(tags.map((t) => `#${t}`).join(" "));
 
-  const text = blocks.join("\n\n");
+  const text = youtubeSafe(blocks.join("\n\n"));
   if (text.length <= DESCRIPTION_MAX) return text;
   const cut = text.slice(0, DESCRIPTION_MAX);
   return cut.includes("\n") ? cut.slice(0, cut.lastIndexOf("\n")).trimEnd() : cut.trimEnd();
