@@ -120,6 +120,23 @@ export default function QuizPlayer({
                 </div>
               )}
 
+              {q.type === "mcq" && (
+                <div className="space-y-1.5">
+                  {q.options.map((opt, oi) => (
+                    <label key={oi} className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`mcq-${q.id}`}
+                        checked={answers[q.id] === opt}
+                        onChange={() => set(q.id, opt)}
+                        className="mt-1"
+                      />
+                      <span>{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
               {q.type === "subjective" && (
                 <textarea
                   value={(answers[q.id] as string) ?? ""}

@@ -14,6 +14,7 @@ import {
   ANSWER_MODES,
   BLANK_RE,
   BLUEPRINT_PRESETS,
+  QUIZ_BLUEPRINT_SPEC,
   COGNITIVE_LEVELS,
   DEFAULT_TARGET,
   DIAGRAM_LABELS,
@@ -591,7 +592,19 @@ describe("blueprint validation", () => {
     const v = validateBlueprintSpec(spec());
     expect(v.ok, v.errors.join(" | ")).toBe(true);
     if (v.ok) expect(v.spec).toEqual({ preset: "standard", objective_ratio: 0.5, difficulty_mix: { "2": 0.3, "3": 0.5, "4": 0.2 }, count: 10, total_marks: 20 });
-    expect([...BLUEPRINT_PRESETS]).toEqual(["remedial", "standard", "challenge", "custom"]);
+    expect([...BLUEPRINT_PRESETS]).toEqual(["remedial", "standard", "challenge", "quiz", "custom"]);
+  });
+
+  it("accepts fill = nearest (kept) or exact / absent (dropped), and refuses anything else", () => {
+    const near = validateBlueprintSpec({ ...spec(), fill: "nearest" });
+    expect(near.ok && near.spec.fill).toBe("nearest");
+    const exact = validateBlueprintSpec({ ...spec(), fill: "exact" });
+    expect(exact.ok && "fill" in exact.spec).toBe(false);
+    expect(validateBlueprintSpec({ ...spec(), fill: "padded" }).errors.join()).toMatch(/fill must be one of/);
+    // the seeded Online quiz spec (migration 0136) validates as given
+    const quiz = validateBlueprintSpec(QUIZ_BLUEPRINT_SPEC);
+    expect(quiz.ok, quiz.errors.join(" | ")).toBe(true);
+    if (quiz.ok) expect(quiz.spec).toEqual({ preset: "quiz", objective_ratio: 1, difficulty_mix: { "1": 0.3, "2": 0.4, "3": 0.3 }, count: 10, total_marks: 10, fill: "nearest" });
   });
 
   it("refuses a bad preset, a ratio outside 0..1, a mix that does not sum to 1 (±0.01), unknown difficulty keys, and out-of-range count / total_marks", () => {
@@ -668,6 +681,22 @@ describe("the composer arithmetic (mirror of catalogue/composer.py)", () => {
         row({ answer_mode: "subjective", difficulty: 9, status: "approved" }),
       ]),
     ).toEqual({ objective: { "2": 2 }, subjective: { "3": 1 } });
+  });
+
+  it("canCompose with fill = nearest checks the MODE totals only (mirror of the worker's nearest fill)", () => {
+    const v = validateBlueprintSpec(QUIZ_BLUEPRINT_SPEC);
+    if (!v.ok) throw new Error(v.errors.join());
+    // plan: 3 × d1, 4 × d2, 3 × d3 — a bank of 2/7/3 + 1 × d4 is short on d1 exactly but has 13 ≥ 10
+    const skewed = { objective: { "1": 2, "2": 7, "3": 3, "4": 1 }, subjective: { "2": 5 } };
+    expect(canCompose(v.spec, skewed, { have: "basic", need: "basic" })).toEqual({ ok: true, reasons: [], plan: { objective: { "1": 3, "2": 4, "3": 3 }, subjective: {} } });
+    const exact = canCompose({ ...v.spec, fill: undefined }, skewed);
+    expect(exact.ok).toBe(false);
+    expect(exact.reasons).toEqual(["objective difficulty 1: need 3, have 2"]);
+    // nine objective items, however spread, refuse
+    const thin = canCompose(v.spec, { objective: { "1": 3, "2": 3, "3": 3 }, subjective: {} });
+    expect(thin).toMatchObject({ ok: false, reasons: ["objective: need 10, have 9"] });
+    // maturity still gates
+    expect(canCompose(v.spec, skewed, { have: "none", need: "basic" }).reasons[0]).toMatch(/bank maturity is none/);
   });
 
   it("canCompose passes when every bucket is covered and lists every short bucket otherwise — never pads", () => {

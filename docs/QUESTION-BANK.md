@@ -201,6 +201,55 @@ need: blueprint.min_maturity})` for every active blueprint and greys the
 option with the reasons (`"bank maturity is basic; this blueprint needs
 good"`, `"objective difficulty 3: need 2, have 1"`).
 
+## The online quiz (catalogue Phase D part 2, plan §5.4)
+
+Every approved kit gets **one composed set it can be assessed on online**:
+the **"Online quiz"** blueprint (migration 0136; `QUIZ_BLUEPRINT_NAME` /
+`QUIZ_BLUEPRINT_SPEC` in `questions.ts`) — ten objective items, difficulty
+30/40/30 over 1/2/3 as a **preference** (`"fill": "nearest"`, below), bank
+maturity `basic`.
+
+- **Where it is made.** The kit route (`POST /api/library/topics/[id]/kit`,
+  action `quiz`, and best-effort on `approve`) records one `question_sets`
+  row and one `worksheet` generation with `params.question_set_id` — the
+  composer's kind, **no `kit_id`** (the worker's `prepare()` refuses the two
+  together; a composed set has no kit lifecycle) — and points
+  `topic_kits.doc_generation_ids.quiz` at it. The kit finds the quiz through
+  that pointer, which is also how the Kits tab, `/api/catalogue/file` and
+  `adopt_catalogue_piece` recognise it as a piece of the kit. A recompose
+  ("Recompose online quiz" on the kit panel) draws a fresh set and seed; the
+  old generation stays as history. Retry does not apply (409 → use the quiz
+  action). The 51 kits current on 2026-10-16 were backfilled by one DO block
+  that does exactly what the route does (see the PR).
+- **What the worker writes** (`catalogue/composer.py render_question_set`):
+  the student DOCX and the answer key as before, then
+  `{owner}/{gen}/worksheet_questions.json` (artifact kind `questions_json`)
+  — the quiz engine's marking scheme, built by `docgen/questions.py
+  bank_item_to_question` from the set's **objective** items only: `mcq`
+  (options in the bank's order, the correct option's text as the answer;
+  assertion–reason items are mcq too), `true_false`, `fill_blank` (+ `accept`
+  alternatives), `match` (one mark per pair). Subjective items stay on the
+  printed sheet. A set with no objective item writes no quiz; a storage
+  failure degrades to print-only, never a failed set.
+- **How it is taken.** The teacher unlocks the kit, adds the quiz to the
+  Library (`adopt_catalogue_piece` copies the artifact rows, `questions_json`
+  included) and assigns the copy. The student sees `stripQuiz()` output
+  (`/api/quiz/[id]`: mcq options in order, no answer, no accept list) and
+  submits to `/api/quiz/submit`, which grades server-side (`scoreQuiz`: an
+  mcq by the chosen option's text; a fill-blank by the answer or any accept
+  alternative), three attempts, the mark on `submissions.auto_score`. An
+  objective-only paper needs no teacher review.
+- **`fill: nearest`.** Every blueprint before 2026-10-16 fills each
+  (mode, difficulty) bucket exactly and never pads. The quiz is composed
+  unattended on approval, and the banks are small and skewed to difficulty
+  1–3 (8–123 approved objective items per current kit, median 15), so its
+  spec says `"fill": "nearest"`: a short bucket is topped up from the same
+  mode's leftover items nearest in difficulty (worker `compose()`), and only a
+  short **mode total** refuses. The portal's `canCompose` mirrors that: with
+  `nearest` it checks the mode totals only. Ten items, not twenty: twenty
+  would have refused two kits in three on the day; raise `count` on the
+  blueprint as the banks grow and recompose.
+
 ## How Compose renders
 
 `POST /api/library/topics/[id]/compose {blueprintId, seed?}` (**`generate`** —

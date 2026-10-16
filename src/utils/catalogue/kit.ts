@@ -105,8 +105,12 @@ export const GEN_STATUS_TONE: Record<string, string> = {
  *  cites the clips the video produced (plan §1.7, decision 1). */
 export const KIT_CREATION_KINDS = ["presentation", "activity", "case_study", "worksheet", "deck"] as const;
 
-/** Every kind a kit references, in display order. */
-export const KIT_KINDS = ["presentation", "deck", "lesson_plan", "activity", "case_study", "worksheet", "question_bank"] as const;
+/** Every kind a kit references, in display order. `quiz` is a KEY of
+ *  doc_generation_ids rather than a generation kind: the online quiz is a
+ *  `worksheet` generation carrying params.question_set_id (the composer's
+ *  one kind), listed under its own key so the Kits tab, the file route and
+ *  adopt_catalogue_piece find it as a piece of the kit. */
+export const KIT_KINDS = ["presentation", "deck", "lesson_plan", "activity", "case_study", "worksheet", "quiz", "question_bank"] as const;
 export type KitKind = (typeof KIT_KINDS)[number];
 
 export function isKitKind(s: unknown): s is KitKind {
@@ -120,6 +124,7 @@ export const KIT_KIND_LABEL: Record<KitKind, string> = {
   activity: "Activities",
   case_study: "Case study",
   worksheet: "Worksheet",
+  quiz: "Online quiz",
   question_bank: "Question bank",
 };
 
@@ -128,6 +133,53 @@ export const KIT_KIND_LABEL: Record<KitKind, string> = {
  *  creation (nothing is approved yet) — the kit route queues it when a kit is
  *  approved with a bank, and on the console's "Generate question bank". */
 export const QUESTION_BANK_KIND = "question_bank" as const;
+
+/** The kit's ONLINE QUIZ (Phase D, plan §5.4): one composed question set
+ *  (question_sets + the "Online quiz" blueprint, QUIZ_BLUEPRINT_NAME) rendered
+ *  by the worker as a `worksheet` generation — student DOCX, answer key and
+ *  `questions_json`, the quiz engine's marking scheme — with no model call.
+ *  Queued when a kit is approved with a bank that can fill the blueprint, and
+ *  on the console's "Compose online quiz" (a recompose draws a fresh set with
+ *  a fresh seed; the pointer moves, the old row stays). A teacher adopts and
+ *  assigns it like the worksheet; the student's attempt is graded server-side. */
+export const QUIZ_KIND = "quiz" as const;
+
+/** The keys a quiz generation's params carry: the composer's own inputs
+ *  (compose/route.ts writes the same shape) plus the kit's lineage. NO kit_id:
+ *  the worker's prepare() refuses question_set_id together with kit_id — a
+ *  composed set has no kit lifecycle (its items were approved one by one) —
+ *  and the kit finds the quiz through doc_generation_ids, not the other way. */
+export type QuizGenerationParams = {
+  catalogue: true;
+  topic_id: string;
+  article_id: string | null;
+  language: string;
+  question_set_id: string;
+  blueprint_id: string;
+  seed: number;
+  curriculum_header: string[];
+};
+
+export function quizGenerationParams(
+  kitParams: Record<string, unknown>,
+  set: { questionSetId: string; blueprintId: string; seed: number },
+): QuizGenerationParams {
+  const header = Array.isArray(kitParams.curriculum_header) ? kitParams.curriculum_header.filter((l): l is string => typeof l === "string") : [];
+  return {
+    catalogue: true,
+    topic_id: String(kitParams.topic_id ?? ""),
+    article_id: typeof kitParams.article_id === "string" && kitParams.article_id ? kitParams.article_id : null,
+    language: typeof kitParams.language === "string" && kitParams.language ? kitParams.language : "en",
+    question_set_id: set.questionSetId,
+    blueprint_id: set.blueprintId,
+    seed: set.seed,
+    curriculum_header: header,
+  };
+}
+
+/** A fresh composer seed: a whole number in [0, 2^31). The compose route's
+ *  seedOf() draws the same range for a blank seed. */
+export const freshSeed = (): number => Math.floor(Math.random() * 2147483647);
 
 /** Kinds a student may be ASSIGNED. The plan is the teacher's own document;
  *  the question bank is a teacher's reference (its key is a separate file,

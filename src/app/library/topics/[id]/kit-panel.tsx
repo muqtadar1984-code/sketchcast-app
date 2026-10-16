@@ -503,6 +503,20 @@ function CurrentKit({
                 {busy === "question_bank" ? "Queuing…" : kit.doc_generation_ids?.question_bank ? "Re-render question bank" : "Generate question bank"}
               </button>
             )}
+            {(kit.status === "approved" || kit.status === "in_review") && (
+              <button
+                type="button"
+                disabled={!!busy}
+                title="Compose the kit's online quiz from the topic's approved objective questions (the 'Online quiz' blueprint; a recompose draws a fresh set)"
+                onClick={async () => {
+                  const r = await post({ action: "quiz", kitId: kit.id }, "quiz");
+                  if (r) setNotice(kit.doc_generation_ids?.quiz ? "Online quiz recompose queued — a fresh set; the pointer moves when it is rendered." : "Online quiz queued.");
+                }}
+                className="btn-ghost h-8 px-3 text-xs disabled:opacity-50"
+              >
+                {busy === "quiz" ? "Queuing…" : kit.doc_generation_ids?.quiz ? "Recompose online quiz" : "Compose online quiz"}
+              </button>
+            )}
             <button type="button" disabled={!!busy || !!regenWhy} title={regenWhy ?? undefined} onClick={regenerate} className="btn-ghost h-8 px-3 text-xs disabled:opacity-50">
               {busy === "regenerate" ? "Queuing…" : regenSwitched ? `Regenerate from ${regenFrom}` : "Regenerate kit"}
             </button>

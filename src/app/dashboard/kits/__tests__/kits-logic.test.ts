@@ -108,6 +108,11 @@ describe("pieces", () => {
     expect(withBank.map((p) => p.kind).at(-1)).toBe("question_bank");
     expect(assignablePieces(withBank).map((p) => p.kind)).not.toContain("question_bank");
   });
+  it("the online quiz (Phase D) sorts after the worksheet and IS assignable", () => {
+    const withQuiz = piecesOf({ ...kitRow, doc_generation_ids: { ...kitRow.doc_generation_ids, quiz: "g-quiz", question_bank: "g-qb" } });
+    expect(withQuiz.map((p) => p.kind)).toEqual(["presentation", "deck", "lesson_plan", "worksheet", "quiz", "case_study", "question_bank"]);
+    expect(assignablePieces(withQuiz).map((p) => p.generationId)).toContain("g-quiz");
+  });
   it("an unknown future kind sorts last rather than vanishing", () => {
     const p = piecesOf({ id: "k", presentation_generation_id: null, doc_generation_ids: { glossary: "g-x", worksheet: "g-ws" } });
     expect(p.map((x) => x.kind)).toEqual(["worksheet", "glossary"]);

@@ -795,8 +795,33 @@ export function rejectedHints(rejected: readonly Pick<TopicQuestion, "stem" | "n
 
 // ── Blueprints (0112 question_set_blueprints) ────────────────────────────────
 
-export const BLUEPRINT_PRESETS = ["remedial", "standard", "challenge", "custom"] as const;
+export const BLUEPRINT_PRESETS = ["remedial", "standard", "challenge", "quiz", "custom"] as const;
 export type BlueprintPreset = (typeof BLUEPRINT_PRESETS)[number];
+/** How a blueprint's difficulty mix is honoured (worker composer `fill_mode`):
+ *  `exact` — every bucket filled exactly, never padded (the default, every
+ *  blueprint before 2026-10-16); `nearest` — the mix is a PREFERENCE: a short
+ *  bucket is topped up from the same mode's leftover items nearest in
+ *  difficulty, and only a short MODE total refuses. The catalogue's standard
+ *  online quiz (Phase D) uses `nearest`, because it is composed unattended on
+ *  kit approval and the banks are small and skewed to difficulty 1–3. */
+export const BLUEPRINT_FILLS = ["exact", "nearest"] as const;
+export type BlueprintFill = (typeof BLUEPRINT_FILLS)[number];
+
+/** The standard online quiz every approved kit gets (Phase D, plan §5.4):
+ *  ten objective items, the mix a preference. Seeded by migration 0136 under
+ *  this name; the kit route composes one per kit from it (`QUIZ_KIND`). Ten,
+ *  not twenty: on 2026-10-16 the 51 current kits held 8–123 approved
+ *  objective items (median 15), so twenty would refuse two kits in three.
+ *  Raise `count` on the blueprint as the banks grow; a recompose follows. */
+export const QUIZ_BLUEPRINT_NAME = "Online quiz";
+export const QUIZ_BLUEPRINT_SPEC = {
+  preset: "quiz",
+  objective_ratio: 1,
+  difficulty_mix: { "1": 0.3, "2": 0.4, "3": 0.3 },
+  count: 10,
+  total_marks: 10,
+  fill: "nearest",
+} as const;
 export const BLUEPRINT_SCOPES = ["worksheet", "paper", "mock_exam"] as const;
 export type BlueprintScope = (typeof BLUEPRINT_SCOPES)[number];
 export const MIN_MATURITIES = ["basic", "good", "strong", "assessment", "exam_ready"] as const;
@@ -812,6 +837,8 @@ export type BlueprintSpec = {
   difficulty_mix: Partial<Record<Difficulty, number>>;
   count: number;
   total_marks: number;
+  /** absent = `exact` */
+  fill?: BlueprintFill;
 };
 
 export type Blueprint = {
@@ -879,8 +906,12 @@ export function validateBlueprintSpec(input: unknown): BlueprintSpecValidation {
   if (total_marks === null || total_marks < 1 || total_marks > BLUEPRINT_LIMITS.total_marks_max) {
     errors.push(`total_marks must be a whole number from 1 to ${BLUEPRINT_LIMITS.total_marks_max}.`);
   }
+  const fill = input.fill === undefined || input.fill === null || input.fill === "" ? undefined : input.fill;
+  if (fill !== undefined && !(BLUEPRINT_FILLS as readonly string[]).includes(fill as string)) errors.push(`fill must be one of ${BLUEPRINT_FILLS.join(", ")} (or absent).`);
   if (errors.length) return { ok: false, errors, spec: null };
-  return { ok: true, errors: [], spec: { preset: preset as BlueprintPreset, objective_ratio: ratio!, difficulty_mix: mix, count: count!, total_marks: total_marks! } };
+  const spec: BlueprintSpec = { preset: preset as BlueprintPreset, objective_ratio: ratio!, difficulty_mix: mix, count: count!, total_marks: total_marks! };
+  if (fill === "nearest") spec.fill = "nearest";
+  return { ok: true, errors: [], spec };
 }
 
 export type BlueprintInput = { name: string; scope: BlueprintScope; min_maturity: MinMaturity; spec: BlueprintSpec };
@@ -992,6 +1023,17 @@ export function canCompose(spec: BlueprintSpec, counts: ModeCounts, maturity?: {
     reasons.push(`bank maturity is ${String(maturity.have ?? "none").replace(/_/g, " ")}; this blueprint needs ${String(maturity.need).replace(/_/g, " ")}`);
   }
   const plan = composePlan(spec);
+  if (spec.fill === "nearest") {
+    // The mix is a preference (worker compose(): a short bucket is topped up
+    // from the mode's other difficulties), so only the MODE totals can refuse.
+    for (const mode of ANSWER_MODES) {
+      const need = DIFFICULTIES.reduce((n, d) => n + (plan[mode][d] ?? 0), 0);
+      if (!need) continue;
+      const have = DIFFICULTIES.reduce((n, d) => n + (counts[mode]?.[d] ?? 0), 0);
+      if (have < need) reasons.push(`${mode}: need ${need}, have ${have}`);
+    }
+    return { ok: reasons.length === 0, reasons, plan };
+  }
   for (const mode of ANSWER_MODES) {
     for (const d of DIFFICULTIES) {
       const need = plan[mode][d] ?? 0;

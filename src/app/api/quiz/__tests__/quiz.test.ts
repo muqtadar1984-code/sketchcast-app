@@ -80,6 +80,16 @@ const QUIZ: RawQuiz = {
   ],
 };
 
+/** A composed question-bank set (catalogue Phase D): mcq + an accept list. */
+const BANK_QUIZ: RawQuiz = {
+  title: "Cells · Online quiz",
+  instructions: "Answer every question.",
+  questions: [
+    { id: "q1", type: "mcq", prompt: "Which organelle makes ATP?", options: ["Nucleus", "Mitochondrion", "Ribosome", "Vacuole"], answer: "Mitochondrion", marks: 1 },
+    { id: "q2", type: "fill_blank", prompt: "Energy carrier: ____", answer: "adenosine triphosphate", accept: ["ATP"], marks: 1 },
+  ],
+};
+
 /** Objective-only paper: nothing a teacher must read. */
 const AUTO_QUIZ: RawQuiz = {
   title: "Quick check",
@@ -212,6 +222,18 @@ describe("the student payload", () => {
 
 // ── 2. match options are unpaired ───────────────────────────────────────────
 
+describe("mcq questions (a composed bank set)", () => {
+  it("send the options in the artifact's order and never the answer or accept list", async () => {
+    const paper = await stripQuiz(BANK_QUIZ, KEY, "scope");
+    expect(paper.questions[0]).toEqual({ id: "q1", type: "mcq", prompt: "Which organelle makes ATP?", marks: 1, options: ["Nucleus", "Mitochondrion", "Ribosome", "Vacuole"] });
+    expect(paper.questions[1]).toEqual({ id: "q2", type: "fill_blank", prompt: "Energy carrier: ____", marks: 1 });
+    const out = JSON.stringify(paper);
+    expect(out).not.toMatch(/"answer"/);
+    expect(out).not.toMatch(/accept/);
+    expect(out).not.toMatch(/adenosine/);
+  });
+});
+
 describe("match questions", () => {
   it("send the left prompts in order and the right options shuffled, with no pairing", async () => {
     const db = directStore();
@@ -297,6 +319,23 @@ describe("scoreQuiz", () => {
 
   it("needs no review when the paper is objective only", () => {
     expect(scoreQuiz(AUTO_QUIZ.questions, { a1: "Paris", a2: true })).toEqual({ auto: 2, max: 2, needsReview: false });
+  });
+
+  it("marks an mcq by the chosen option's text, case-insensitively, never for a blank, and needs no review", () => {
+    const [mcq] = BANK_QUIZ.questions;
+    expect(scoreQuiz([mcq], { q1: "Mitochondrion" })).toEqual({ auto: 1, max: 1, needsReview: false });
+    expect(scoreQuiz([mcq], { q1: " mitochondrion " }).auto).toBe(1);
+    expect(scoreQuiz([mcq], { q1: "Nucleus" }).auto).toBe(0);
+    expect(scoreQuiz([mcq], { q1: "" }).auto).toBe(0);
+    expect(scoreQuiz([mcq], { q1: 1 }).auto).toBe(0); // an index is not an option
+  });
+
+  it("marks a fill_blank by its answer OR any accept alternative", () => {
+    const fb = BANK_QUIZ.questions[1];
+    expect(scoreQuiz([fb], { q2: "ATP" }).auto).toBe(1);
+    expect(scoreQuiz([fb], { q2: "atp" }).auto).toBe(1);
+    expect(scoreQuiz([fb], { q2: "Adenosine Triphosphate" }).auto).toBe(1);
+    expect(scoreQuiz([fb], { q2: "ADP" }).auto).toBe(0);
   });
 });
 

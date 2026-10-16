@@ -815,7 +815,8 @@
       "exam_paper": "Prova",
       "case_study": "Estudo de caso",
       "exam": "Exame",
-      "question_bank": "Banco de questões"
+      "question_bank": "Banco de questões",
+      "quiz": "Questionário online"
     },
     "status": {
       "queued": "Na fila",
