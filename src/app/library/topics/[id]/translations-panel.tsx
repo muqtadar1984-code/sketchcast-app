@@ -2,9 +2,19 @@
 
 import { useState } from "react";
 import { LANGUAGES, languageLabel } from "@/utils/narration";
-import { KIT_KIND_LABEL, kitGenerationIdFor } from "@/utils/catalogue/kit";
+import {
+  KIT_KINDS,
+  KIT_KIND_LABEL,
+  KIT_REJECT_REASONS,
+  KIT_REJECT_REASON_LABEL,
+  canApproveKit,
+  canRejectKit,
+  kitGenerationIdFor,
+  translationAcceptsApprove,
+  translationAcceptsReject,
+} from "@/utils/catalogue/kit";
 import { isLiveJobStatus } from "@/utils/catalogue/status";
-import type { PrecheckReport, TopicKit } from "@/utils/catalogue/types";
+import type { KitRejectReason, PrecheckReport, TopicKit } from "@/utils/catalogue/types";
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
 import { JobLine, useKitPost, type KitView } from "./kit-panel";
 import type { JobRow } from "./article-panel";
@@ -17,8 +27,11 @@ import type { JobRow } from "./article-panel";
 // post-render check once the video exists), the worker's job line per piece,
 // the video parts and the deck. "Translate into …" queues ONE kit_translate
 // job for the topic's approved English kit (the route refuses a second live
-// one). Approval of a translation is T1's review screen; until then the
-// reviewer watches the video here.
+// one). T1 (2026-10-16): every piece of the kit is listed — the bank, the
+// quiz and the documents the translate job rebuilt — and the reviewer
+// approves or rejects the translation HERE: approve_topic_kit's translation
+// branch promotes the staged article and items and marks the previous
+// translation stale; reject retires them. The topic is never moved.
 
 export type TranslateJobRow = JobRow & { params: Record<string, unknown> };
 
@@ -79,8 +92,68 @@ function Findings({ report }: { report: PrecheckReport | null | undefined }) {
   );
 }
 
+function ReviewBox({ kit, topicStatus, post, busy, setNotice }: {
+  kit: TopicKit;
+  topicStatus: string;
+  post: ReturnType<typeof useKitPost>["post"];
+  busy: string | null;
+  setNotice: (s: string | null) => void;
+}) {
+  const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState<KitRejectReason | "">("translation");
+  // The article's own status is verified by the route and the RPC (it must
+  // be the staged translated version); here the kit and the topic decide
+  // whether the buttons are offered.
+  const approveOk = translationAcceptsApprove(kit.status, kit.translation_status, "staged", topicStatus);
+  const rejectOk = translationAcceptsReject(kit.status);
+  const label = languageLabel(kit.language) ?? kit.language;
+
+  const approve = async () => {
+    if (!window.confirm(`Approve the ${label} translation? Its article and question items are promoted with it, it becomes the ${label} kit teachers see in the app, and any earlier ${label} translation steps aside. The English kit and the topic are not touched.`)) return;
+    const r = await post({ action: "approve", kitId: kit.id, notes: notes.trim() || undefined }, `approve:${kit.id}`);
+    if (r) setNotice(`${label} translation approved.`);
+  };
+  const reject = async () => {
+    if (!reason) return;
+    if (!window.confirm(kit.status === "approved" ? `Pull the ${label} approval? The translation becomes rejected and its items are retired; the app stops showing it.` : `Reject the ${label} translation? Its staged article and items are retired; translate again after the fix.`)) return;
+    const r = await post({ action: "reject", kitId: kit.id, reason, notes: notes.trim() }, `reject:${kit.id}`);
+    if (r) setNotice(`${label} translation rejected.`);
+  };
+
+  return (
+    <div className="rounded-lg bg-[#F7F8F6] p-3 space-y-2">
+      <p className="text-xs font-medium">Review this translation</p>
+      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Notes — what you checked, or what is wrong (required to reject)" className="input w-full text-xs" />
+      <div className="flex flex-wrap items-center gap-2">
+        {canApproveKit(kit.status) && (
+          <button type="button" onClick={approve} disabled={!!busy || !approveOk.ok} title={approveOk.ok ? undefined : approveOk.why} className="btn-primary h-8 px-3 text-xs disabled:opacity-50">
+            {busy === `approve:${kit.id}` ? "Approving…" : "Approve translation"}
+          </button>
+        )}
+        {canRejectKit(kit.status) && (
+          <>
+            <select value={reason} onChange={(e) => setReason(e.target.value as KitRejectReason)} className="input h-8 text-xs" aria-label="Reject reason" disabled={!!busy}>
+              {KIT_REJECT_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {KIT_REJECT_REASON_LABEL[r]}
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={reject} disabled={!!busy || !rejectOk.ok || !reason || !notes.trim()} title={rejectOk.ok ? (!notes.trim() ? "Notes are required to reject." : undefined) : rejectOk.why} className="btn-ghost h-8 px-3 text-xs text-[#B3401F] disabled:opacity-50">
+              {busy === `reject:${kit.id}` ? "Rejecting…" : kit.status === "approved" ? "Pull approval" : "Reject"}
+            </button>
+          </>
+        )}
+      </div>
+      {!approveOk.ok && canApproveKit(kit.status) && <p className="text-xs text-[#8A5A00]">{approveOk.why}</p>}
+    </div>
+  );
+}
+
 export function TranslationsPanel({
   topicId,
+  topicStatus,
+  canApprove,
   sourceKit,
   translations,
   jobs,
@@ -90,6 +163,9 @@ export function TranslationsPanel({
   migrationNote,
 }: {
   topicId: string;
+  topicStatus: string;
+  /** may this member approve or reject (libraryAllows(role, "approve")) */
+  canApprove: boolean;
   /** the topic's approved English kit — what a translation starts from */
   sourceKit: TopicKit | null;
   /** every kit of the topic in a language other than English, newest first */
@@ -190,10 +266,12 @@ export function TranslationsPanel({
                   <div className="flex-1 min-w-[16rem]">
                     <table className="w-full text-xs">
                       <tbody className="divide-y divide-[#EEF0EC]">
-                        {(["presentation", "deck", "lesson_plan"] as const).map((kind) => {
+                        {KIT_KINDS.map((kind) => {
                           const gid = kitGenerationIdFor(kit, kind);
                           const g = gid ? (byId.get(gid) ?? null) : null;
-                          const docs = g ? g.artifacts.filter((a) => a.kind !== "video_mp4" && a.kind !== "script_json" && a.kind !== "thumbnail_png") : [];
+                          const docs = g ? g.artifacts.filter((a) => a.kind !== "video_mp4" && a.kind !== "script_json" && a.kind !== "thumbnail_png" && a.kind !== "questions_json") : [];
+                          // a piece the source kit does not have is not missing here
+                          if (!gid && kind !== "presentation" && kind !== "deck" && kind !== "lesson_plan") return null;
                           return (
                             <tr key={kind}>
                               <td className="py-1 pr-2">{KIT_KIND_LABEL[kind]}</td>
@@ -217,6 +295,9 @@ export function TranslationsPanel({
                     </table>
                   </div>
                 </div>
+                {canApprove && (canApproveKit(kit.status) || canRejectKit(kit.status)) && (
+                  <ReviewBox kit={kit} topicStatus={topicStatus} post={post} busy={busy} setNotice={setNotice} />
+                )}
                 {videos.length > 0 && (
                   <div className="grid gap-3 md:grid-cols-2">
                     {videos.map((v) => (

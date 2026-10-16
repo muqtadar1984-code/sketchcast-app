@@ -297,6 +297,41 @@ export function kitAcceptsReject(topicStatus: string, kitStatus: string): KitAcc
   return { ok: true };
 }
 
+/** May THIS translation kit be approved? The 0134 RPC's checks, one sentence
+ *  each: the kit in review, its translation in review (a stale, blocked or
+ *  failed one is not), the topic still alive, and the kit's STAGED article
+ *  still staged (or approved already, by a resumed run). The topic's own
+ *  review status is not consulted: approving a translation never moves the
+ *  topic (plan revision 3, D4/D5). */
+export function translationAcceptsApprove(
+  kitStatus: string,
+  translationStatus: string | null | undefined,
+  articleStatus: string | null | undefined,
+  topicStatus: string,
+): KitAcceptance {
+  if (!canApproveKit(kitStatus)) return { ok: false, why: `This translation is ${kitStatusLabel(kitStatus)}, not reviewable.` };
+  if (translationStatus !== "in_review") {
+    return { ok: false, why: `This translation is ${(translationStatus ?? "not a translation").replace(/_/g, " ")}, not in review.` };
+  }
+  if (topicStatus === "retired") return { ok: false, why: "The topic is retired — a translation of a retired topic is not approved." };
+  if (articleStatus !== "staged" && articleStatus !== "approved") {
+    return {
+      ok: false,
+      why: articleStatus
+        ? `The translated article is ${articleStatus.replace(/_/g, " ")}, not staged — retranslate the kit.`
+        : "The translated article no longer exists — retranslate the kit.",
+    };
+  }
+  return { ok: true };
+}
+
+/** May THIS translation be rejected, or its approval pulled? A reviewable
+ *  kit; the topic is not consulted, because the RPC never touches it. */
+export function translationAcceptsReject(kitStatus: string): KitAcceptance {
+  if (!canRejectKit(kitStatus)) return { ok: false, why: `This translation is ${kitStatusLabel(kitStatus)}, not reviewable.` };
+  return { ok: true };
+}
+
 /** May an existing kit be regenerated? The kit must be reviewable history
  *  (canRegenerateKit) and the topic back in review — Regenerate is the
  *  in_review → generating reopening of the topic status machine. Which

@@ -38,23 +38,33 @@ export type CatalogueStore = {
   };
 };
 
-/** The artifact kinds this route serves — the DOCUMENTS of a kit. Never
- * video_mp4 (watched on YouTube or, once assigned, through the Library's own
- * signed flow), never questions_json (the marking scheme; the online quiz
- * route owns it), never script_json or thumbnails. Filtering FOR a list, so a
- * kind the worker adds tomorrow is refused by construction. */
+/** The artifact kinds this route serves as DOWNLOADS — the documents of a
+ * kit, behind the viewer's unlock. Never questions_json (the marking scheme;
+ * the online quiz route owns it), never script_json. Filtering FOR a list, so
+ * a kind the worker adds tomorrow is refused by construction. */
 export const SERVED_KINDS: ReadonlySet<string> = new Set(["docx", "answer_key_docx", "deck_pptx"]);
+
+/** The kinds served for WATCHING (Kit Translator, plan revision 3 §5.7 —
+ * 2026-10-16): the video of a current kit and its thumbnail. The English
+ * video is public on YouTube; a translated video has no channel yet (D5) and
+ * plays from storage, so these need NO unlock — the lesson is free to watch,
+ * as it is on YouTube, and the unlock still gates the documents. */
+export const WATCH_KINDS: ReadonlySet<string> = new Set(["video_mp4", "thumbnail_png"]);
 
 /** Ten minutes: minted on the click and followed at once, then it must carry
  * the transfer itself on a school connection. Twice the deck route's five,
  * because a case study with figures is the largest document we write. */
 export const CATALOGUE_URL_TTL_SECONDS = 600;
 
+/** Four hours for a video: the player seeks against the SAME signed URL for
+ * as long as the tab is open, and a lesson paused over a break must resume. */
+export const WATCH_URL_TTL_SECONDS = 4 * 3600;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type FileFailure = { ok: false; status: number; error: string };
 export type FileResult =
-  | { ok: true; path: string; filename: string | undefined; topicId: string; genKind: string }
+  | { ok: true; path: string; filename: string | undefined; topicId: string; genKind: string; watch: boolean }
   | FileFailure;
 
 const partNum = (path: string): number => {
@@ -86,7 +96,8 @@ export async function resolveCatalogueFileWith(
   generationId: string,
   artifactKind: string,
 ): Promise<FileResult> {
-  if (!UUID.test(generationId) || !SERVED_KINDS.has(artifactKind)) return { ok: false, status: 404, error: "No such file." };
+  const watch = WATCH_KINDS.has(artifactKind);
+  if (!UUID.test(generationId) || !(SERVED_KINDS.has(artifactKind) || watch)) return { ok: false, status: 404, error: "No such file." };
 
   const { data: reason, error: reasonError } = await store.rpc("catalogue_ineligible_reason", { uid: userId });
   if (reasonError) return { ok: false, status: 503, error: "Downloads are unavailable right now." };
@@ -110,8 +121,13 @@ export async function resolveCatalogueFileWith(
   }
   if (!topicId || !genKind) return { ok: false, status: 404, error: "No such file." };
 
-  const { data: unlocks } = await store.from("catalogue_unlocks").select("id").eq("user_id", userId).eq("topic_id", topicId);
-  if (!unlocks || unlocks.length === 0) return { ok: false, status: 403, error: "Unlock this kit first." };
+  // The video and its frame are watched, not downloaded: no unlock (above);
+  // they are only ever the PRESENTATION's, never a document's.
+  if (watch && genKind !== "presentation") return { ok: false, status: 404, error: "No such file." };
+  if (!watch) {
+    const { data: unlocks } = await store.from("catalogue_unlocks").select("id").eq("user_id", userId).eq("topic_id", topicId);
+    if (!unlocks || unlocks.length === 0) return { ok: false, status: 403, error: "Unlock this kit first." };
+  }
 
   const { data: arts } = await store.from("artifacts").select("kind, storage_path").eq("generation_id", generationId);
   const paths = (arts ?? [])
@@ -122,5 +138,5 @@ export async function resolveCatalogueFileWith(
   const path = paths[0];
   if (!path) return { ok: false, status: 404, error: "No such file." };
 
-  return { ok: true, path, filename: docDownloadName(genKind, artifactKind), topicId, genKind };
+  return { ok: true, path, filename: watch ? undefined : docDownloadName(genKind, artifactKind), topicId, genKind, watch };
 }

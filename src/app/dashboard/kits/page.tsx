@@ -177,6 +177,10 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
     subject: k.subject,
     language: k.language,
     youtubeId: k.youtubeId,
+    // a kit with no public video (a translation) plays from storage: the
+    // same route as the documents, without the unlock (logic.ts WATCH_KINDS)
+    videoHref: k.youtubeId || !k.videoGenerationId ? null : fileHref(k.videoGenerationId, "video_mp4"),
+    posterHref: k.youtubeId || !k.videoGenerationId ? null : fileHref(k.videoGenerationId, "thumbnail_png"),
     questionCount: k.questionCount,
     unlocked: k.unlocked,
     pieces: k.pieces.map(

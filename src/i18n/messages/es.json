@@ -2047,6 +2047,8 @@
     "ineligibleSuspended": "La cuenta de tu centro está suspendida. Pide a tu centro que se ponga en contacto con nosotros.",
     "ineligibleOther": "Los kits listos para usar no están disponibles en esta cuenta ahora mismo.",
     "filterAll": "Todo",
+    "filterLanguage": "Idioma",
+    "close": "Cerrar",
     "filterUnlocked": "Desbloqueados",
     "find": "Buscar una lección",
     "downloads": "Archivos",

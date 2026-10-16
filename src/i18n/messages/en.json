@@ -2047,6 +2047,8 @@
     "ineligibleSuspended": "Your school account is suspended. Ask your school to contact us.",
     "ineligibleOther": "Ready-made kits are not available on this account right now.",
     "filterAll": "All",
+    "filterLanguage": "Language",
+    "close": "Close",
     "filterUnlocked": "Unlocked",
     "find": "Find a lesson",
     "downloads": "Files",

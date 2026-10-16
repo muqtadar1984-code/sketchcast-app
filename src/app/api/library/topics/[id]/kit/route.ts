@@ -19,6 +19,8 @@ import {
   kitAcceptsGenerate,
   kitAcceptsRegenerate,
   kitAcceptsReject,
+  translationAcceptsApprove,
+  translationAcceptsReject,
   docGenerationIdsWith,
   kitGenerationIdFor,
   kitGenerationParams,
@@ -257,6 +259,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   };
 
   /** Every kit of the topic (avatar alternation + the live-kit pre-check). */
+  /** 0134: the kit's translation_status — null for an English kit, and null
+   *  on a database without the translator columns (every other action still
+   *  works there). Read apart from KIT_COLUMNS for that reason. */
+  const translationStatusOf = async (kitId: string): Promise<{ status: string | null; response?: NextResponse }> => {
+    const { data, error } = await admin.from("topic_kits").select("translation_status").eq("id", kitId).maybeSingle();
+    if (error) return catalogueColumnMissing(error) ? { status: null } : { status: null, response: dbError(error) };
+    const status = (data as { translation_status?: string | null } | null)?.translation_status ?? null;
+    return { status: typeof status === "string" && status ? status : null };
+  };
+
   const loadKits = async () => {
     const { data, error } = await admin.from("topic_kits").select("id, status, teacher_avatar, language").eq("topic_id", id);
     return { kits: (data ?? []) as { id: string; status: string; teacher_avatar: string | null; language: string }[], error };
@@ -796,10 +808,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     // The kit's own article — it must still be the approved version (the
     // article is the kit's source of truth; a superseded one is regenerated,
     // not approved). The RPC checks the same; this is the friendly sentence.
+    // A TRANSLATION (0134) is judged by its own rule: its article is the
+    // STAGED translated version, and the topic's review status is not
+    // involved — approving a translation never moves the topic.
     const { data: article, error: aErr } = await admin.from("topic_articles").select("id, status").eq("id", kit.article_id).maybeSingle();
     if (aErr) return dbError(aErr);
-    const accepts = kitAcceptsApprove(topic.status, kit.status, (article?.status as string | undefined) ?? null);
-    if (!accepts.ok) return conflict(accepts.why, { status: kit.status, topicStatus: topic.status, articleStatus: article?.status ?? null });
+    const translation = await translationStatusOf(kit.id);
+    if (translation.response) return translation.response;
+    const articleStatus = (article?.status as string | undefined) ?? null;
+    const accepts = translation.status ? translationAcceptsApprove(kit.status, translation.status, articleStatus, topic.status) : kitAcceptsApprove(topic.status, kit.status, articleStatus);
+    if (!accepts.ok) return conflict(accepts.why, { status: kit.status, topicStatus: topic.status, articleStatus: article?.status ?? null, translationStatus: translation.status });
     const notes = text(body.notes, 2000) || null;
     const { data, error } = await admin.rpc("approve_topic_kit", { p_kit: kit.id, p_reviewer: m.id, p_notes: notes });
     if (error) {
@@ -815,10 +833,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     await requestLandingRebuild("kit_approve");
     // Phase D: an approved kit with a bank gets its printable question bank
     // queued now (best effort — a refusal is reported, never a failed approve).
-    const bank = kit.doc_generation_ids?.[QUESTION_BANK_KIND] ? { queued: false, why: "already has one" } : await queueQuestionBank(kit);
+    // A translation's bank and quiz were made by the translate job from the
+    // English kit's (staged items; the same quiz by id) — nothing is queued.
+    const bank = translation.status
+      ? { queued: false, why: "a translation's question bank comes from the translate job" }
+      : kit.doc_generation_ids?.[QUESTION_BANK_KIND]
+        ? { queued: false, why: "already has one" }
+        : await queueQuestionBank(kit);
     // …and its online quiz (Phase D part 2), the same way: a bank that cannot
     // fill the blueprint yet is a reason on the 200, not a failed approve.
-    const quiz = kit.doc_generation_ids?.[QUIZ_KIND] ? { queued: false, why: "already has one" } : await queueQuiz(kit);
+    const quiz = translation.status
+      ? { queued: false, why: "a translation's quiz comes from the translate job" }
+      : kit.doc_generation_ids?.[QUIZ_KIND]
+        ? { queued: false, why: "already has one" }
+        : await queueQuiz(kit);
     return NextResponse.json({ ok: true, kit: data, questionBank: bank, quiz });
   }
 
@@ -826,8 +854,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (action === "reject") {
     const { kit, response } = await loadKit(body.kitId);
     if (!kit) return response!;
-    const accepts = kitAcceptsReject(topic.status, kit.status);
-    if (!accepts.ok) return conflict(accepts.why, { status: kit.status, topicStatus: topic.status });
+    const translation = await translationStatusOf(kit.id);
+    if (translation.response) return translation.response;
+    const accepts = translation.status ? translationAcceptsReject(kit.status) : kitAcceptsReject(topic.status, kit.status);
+    if (!accepts.ok) return conflict(accepts.why, { status: kit.status, topicStatus: topic.status, translationStatus: translation.status });
     const reason = body.reason;
     if (!isKitRejectReason(reason)) return bad("Pick a reject reason — it steers the regeneration.");
     const notes = text(body.notes, 2000);

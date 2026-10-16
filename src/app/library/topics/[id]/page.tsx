@@ -492,6 +492,8 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
               />
               <TranslationsPanel
                 topicId={topic.id}
+                topicStatus={topic.status}
+                canApprove={canApprove}
                 sourceKit={kits.find((k) => k.kit.status === "approved")?.kit ?? null}
                 translations={translationKits}
                 jobs={translateJobs}

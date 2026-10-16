@@ -2047,6 +2047,8 @@
     "ineligibleSuspended": "Le compte de votre école est suspendu. Demandez à votre école de nous contacter.",
     "ineligibleOther": "Les kits prêts à l'emploi ne sont pas disponibles sur ce compte pour le moment.",
     "filterAll": "Tout",
+    "filterLanguage": "Langue",
+    "close": "Fermer",
     "filterUnlocked": "Débloqués",
     "find": "Trouver une leçon",
     "downloads": "Fichiers",

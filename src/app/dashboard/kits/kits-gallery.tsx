@@ -7,7 +7,8 @@ import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 import AssignModal, { type ChildRow, type ClassRow } from "../assign-modal";
 import { type LibraryMessages } from "../labels";
-import { lessonPageUrl, youtubeUrl } from "./logic";
+import { languageLabel } from "@/utils/narration";
+import { languagesOf, lessonPageUrl, youtubeUrl } from "./logic";
 
 export type KitsMessages = Dictionary["kits"];
 
@@ -21,6 +22,10 @@ export type KitView = {
   subject: string | null;
   language: string;
   youtubeId: string | null;
+  /** the in-app player's source when there is no YouTube video (a translated
+   * kit, D5): /api/catalogue/file?kind=video_mp4, and its frame */
+  videoHref: string | null;
+  posterHref: string | null;
   questionCount: number;
   unlocked: boolean;
   pieces: PieceView[];
@@ -77,7 +82,9 @@ export default function KitsGallery({
   tLib: LibraryMessages;
 }) {
   const [subject, setSubject] = useState<string>("all");
+  const [language, setLanguage] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const languages = useMemo(() => languagesOf(kits), [kits]);
 
   const subjects = useMemo(() => {
     const seen = new Map<string, number>();
@@ -90,6 +97,7 @@ export default function KitsGallery({
   const shown = kits.filter(
     (k) =>
       (subject === "all" || (subject === "unlocked" ? k.unlocked : k.subject === subject)) &&
+      (language === "all" || k.language === language) &&
       (!q || k.title.toLowerCase().includes(q) || (k.subject ?? "").toLowerCase().includes(q)),
   );
 
@@ -108,6 +116,15 @@ export default function KitsGallery({
           <button type="button" onClick={() => setSubject("unlocked")} className={subject === "unlocked" ? CHIP_ON : CHIP_OFF}>
             {t.filterUnlocked} · {unlockedCount}
           </button>
+        )}
+        {languages.length > 1 && (
+          <span className="flex flex-wrap items-center gap-2 sm:ml-2 sm:pl-2 sm:border-l sm:border-[#E6E8E4]" role="group" aria-label={t.filterLanguage}>
+            {["all", ...languages].map((l) => (
+              <button key={l} type="button" onClick={() => setLanguage(l)} className={language === l ? CHIP_ON : CHIP_OFF} lang={l === "all" ? undefined : l}>
+                {l === "all" ? t.filterAll : (languageLabel(l) ?? l.toUpperCase())}
+              </button>
+            ))}
+          </span>
         )}
         <input
           type="search"
@@ -171,6 +188,8 @@ function KitCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  /** the in-app player (a kit with no YouTube video — a translation) */
+  const [playing, setPlaying] = useState(false);
   /** source generation id → the viewer's copy id, once adopted. */
   const [copies, setCopies] = useState<Record<string, string> | null>(null);
 
@@ -212,7 +231,7 @@ function KitCard({
 
   const copyIds = copies ? kit.assignableIds.map((id) => copies[id]).filter((id): id is string => !!id) : [];
   const adopted = !!copies && copyIds.length === kit.assignableIds.length;
-  const thumb = kit.youtubeId ? `https://i.ytimg.com/vi/${encodeURIComponent(kit.youtubeId)}/mqdefault.jpg` : null;
+  const thumb = kit.youtubeId ? `https://i.ytimg.com/vi/${encodeURIComponent(kit.youtubeId)}/mqdefault.jpg` : kit.posterHref;
   const facts = [kit.subject, fmt(t.pieces, { n: kit.pieces.length }), kit.questionCount > 0 ? fmt(t.questions, { n: kit.questionCount }) : null]
     .filter(Boolean)
     .join(" · ");
@@ -224,30 +243,84 @@ function KitCard({
       data-unlocked={kit.unlocked ? "true" : "false"}
       className={`card p-3 flex flex-col ${highlighted ? "ring-2 ring-[#0C8175]" : ""}`}
     >
-      <a
-        href={kit.youtubeId ? youtubeUrl(kit.youtubeId) : lessonPageUrl(kit.slug)}
-        target="_blank"
-        rel="noreferrer"
-        className="relative block aspect-video overflow-hidden rounded-lg bg-[#0A0E0D]"
-        aria-label={t.watch}
-        title={t.watch}
-      >
-        {thumb && (
-          // eslint-disable-next-line @next/next/no-img-element -- a remote YouTube frame; next/image would need a remotePatterns entry for one host
-          <img src={thumb} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-        )}
-        <span className="absolute inset-0 m-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 translate-x-px" fill="currentColor" aria-hidden="true">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </span>
-        {kit.unlocked && (
-          <span className="absolute top-2 left-2 rounded-full bg-[#E6F6F3] px-2 py-0.5 text-[11px] font-medium text-[#0C8175]">{t.unlocked}</span>
-        )}
-        {kit.language !== "en" && (
-          <span className="absolute top-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">{kit.language.toUpperCase()}</span>
-        )}
-      </a>
+      {kit.videoHref ? (
+        <button
+          type="button"
+          onClick={() => setPlaying(true)}
+          className="relative block w-full aspect-video overflow-hidden rounded-lg bg-[#0A0E0D] text-left"
+          aria-label={t.watch}
+          title={t.watch}
+        >
+          {thumb && (
+            // eslint-disable-next-line @next/next/no-img-element -- a remote YouTube frame; next/image would need a remotePatterns entry for one host
+            <img src={thumb} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+          )}
+          <span className="absolute inset-0 m-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 translate-x-px" fill="currentColor" aria-hidden="true">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
+          {kit.unlocked && (
+            <span className="absolute top-2 left-2 rounded-full bg-[#E6F6F3] px-2 py-0.5 text-[11px] font-medium text-[#0C8175]">{t.unlocked}</span>
+          )}
+          {kit.language !== "en" && (
+            <span className="absolute top-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">{kit.language.toUpperCase()}</span>
+          )}
+        </button>
+        ) : (
+          <a
+            href={kit.youtubeId ? youtubeUrl(kit.youtubeId) : lessonPageUrl(kit.slug)}
+            target="_blank"
+            rel="noreferrer"
+            className="relative block aspect-video overflow-hidden rounded-lg bg-[#0A0E0D]"
+            aria-label={t.watch}
+            title={t.watch}
+          >
+          {thumb && (
+            // eslint-disable-next-line @next/next/no-img-element -- a remote YouTube frame; next/image would need a remotePatterns entry for one host
+            <img src={thumb} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+          )}
+          <span className="absolute inset-0 m-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 translate-x-px" fill="currentColor" aria-hidden="true">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
+          {kit.unlocked && (
+            <span className="absolute top-2 left-2 rounded-full bg-[#E6F6F3] px-2 py-0.5 text-[11px] font-medium text-[#0C8175]">{t.unlocked}</span>
+          )}
+          {kit.language !== "en" && (
+            <span className="absolute top-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">{kit.language.toUpperCase()}</span>
+          )}
+        </a>
+      )}
+      {playing && kit.videoHref && (
+        // The translated lesson, from storage (Kit Translator §5.7): the <video>
+        // follows the route's 302 to a signed URL and seeks against it. Nothing
+        // signed is rendered into the page.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label={kit.title} onClick={() => setPlaying(false)}>
+          <div className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between gap-3 text-white">
+              <span className="truncate text-sm font-medium" lang={kit.language}>
+                {kit.title}
+              </span>
+              <button type="button" onClick={() => setPlaying(false)} className="rounded-md px-2 py-1 text-sm hover:bg-white/10">
+                {t.close}
+              </button>
+            </div>
+            <video
+              controls
+              autoPlay
+              playsInline
+              preload="metadata"
+              src={kit.videoHref}
+              poster={kit.posterHref ?? undefined}
+              controlsList="nodownload"
+              disablePictureInPicture
+              className="aspect-video w-full rounded-lg bg-black"
+            />
+          </div>
+        </div>
+      )}
 
       <h2 className="font-display text-[15px] leading-snug mt-3 line-clamp-2" title={kit.title}>
         {kit.title}
