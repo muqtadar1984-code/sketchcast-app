@@ -123,6 +123,14 @@ export function firstTouchSource(referrer: string, search: string): string {
   const utm = params.get("utm_source")?.trim();
   if (utm) return `utm:${utm.slice(0, 60).toLowerCase()}`;
 
+  // `topic` is the public catalogue's hand-off (sketchcast.app/topics/<slug>
+  // → /signup?topic=<slug>, plan §5.5): the visitor came for ONE lesson, and
+  // that is the most specific first touch there is — more than the host the
+  // lesson page itself was reached from. Only a slug shape is accepted, so a
+  // hand-edited URL cannot put free text on a profile.
+  const topic = params.get("topic")?.trim().toLowerCase();
+  if (topic && /^[a-z0-9][a-z0-9-]{0,59}$/.test(topic)) return `topic:${topic}`;
+
   // `ref` is NOT a free-text tag — it is reserved for the landing site's
   // hand-off and carries a referrer HOST (or an `android-app` package), never a
   // full URL. Host-only is deliberate: a whole referring URL can carry someone
