@@ -33,7 +33,14 @@ export function tabsForHat(
    * parent. Passed in rather than derived here because resolving it needs the
    * service role — and because this module is pure and stays that way. */
   boardOn: boolean,
+  /** Ready-made kits (catalogue Phase C, FEATURE_CATALOGUE_TAB). Teacher hat
+   * and consumer-parent hat only: it is an AUTHORING surface — you unlock a kit
+   * to assign it — so it sits where the Library sits and is absent wherever
+   * the Library is (school parents, leadership). Trailing and defaulted so the
+   * existing positional call sites and tests read unchanged. */
+  kitsOn = false,
 ): NavTab[] {
+  const kits: NavTab[] = kitsOn ? [{ href: "/dashboard/kits", label: t.kits }] : [];
   const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: t.calendar }] : [];
   const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : [];
   // The classroom board. Teacher hat only: it is a surface you STAND at, and a
@@ -43,6 +50,7 @@ export function tabsForHat(
     return [
       { href: "/dashboard", label: t.library },
       { href: "/dashboard/analytics", label: t.myAnalytics },
+      ...kits,
       ...board,
       ...diary,
       // School-linked teachers get THEIR schedule (read-only, plus cover duties).
@@ -71,6 +79,7 @@ export function tabsForHat(
         : [
             { href: "/dashboard", label: t.library },
             { href: "/dashboard/analytics", label: t.myAnalytics },
+            ...kits,
           ]),
       { href: "/dashboard/children", label: t.myChildren },
       ...diary,
@@ -117,6 +126,9 @@ export function tabsFor(
    * parent. Passed in rather than derived here because resolving it needs the
    * service role — and because this module is pure and stays that way. */
   boardOn: boolean,
+  /** Ready-made kits — see tabsForHat. Every adult role here: the union view
+   * is the Library's world, and the page itself refuses students. */
+  kitsOn = false,
 ): NavTab[] {
   if (!role || role === "student") {
     // A student's home IS /dashboard — "My lessons" — and it had NO tab. Every
@@ -134,6 +146,7 @@ export function tabsFor(
     { href: "/dashboard", label: t.library },
     { href: "/dashboard/analytics", label: t.myAnalytics },
   ];
+  if (kitsOn) tabs.push({ href: "/dashboard/kits", label: t.kits });
   // Right after the authoring surfaces and before the school ones: the board is
   // something she opens to teach, not something she administers.
   if (boardOn) tabs.push({ href: "/present", label: t.board });

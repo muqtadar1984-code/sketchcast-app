@@ -304,6 +304,19 @@ export function examGenerationEnabled(): boolean {
 }
 
 /**
+ * Ready-made kits (catalogue Phase C, 2026-10-16): the "Kits" tab on the
+ * dashboard — browse the approved catalogue lessons, unlock one within the
+ * weekly allowance (migration 0128), download its documents, and assign a
+ * piece through a library copy (0132). OFF by default; the founder reviews it
+ * on prod before it shows to anyone. Independent of the kits' RELEASE switch
+ * (platform_settings.catalogue_release, 0130): with the tab on and the kits
+ * unreleased, everyone but the preview list sees the "coming soon" card.
+ */
+export function catalogueTabEnabled(): boolean {
+  return process.env.FEATURE_CATALOGUE_TAB === "true";
+}
+
+/**
  * Getting-started stepper — the inline, progress-tracking onboarding checklist
  * on the Library (Upload → Generate → Assign) for new joiners. OFF by default;
  * needs migration 0064 (the getting_started_dismissed_at column + backfill). The

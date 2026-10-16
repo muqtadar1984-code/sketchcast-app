@@ -9,6 +9,7 @@ import LanguageSwitcher from "./language-switcher";
 import NotificationsBell, { type IssueNotification, type NoticeNotification } from "./notifications-bell";
 import {
   calendarEnabledFor,
+  catalogueTabEnabled,
   diaryEnabled,
   i18nEnabled,
   noticesEnabledFor,
@@ -238,9 +239,13 @@ export default async function AppHeader() {
     hats = hatsFor({ role, hasScope, hasChildren, analyticsOn, timetableOn, diaryOn });
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
+  // Ready-made kits (catalogue Phase C): flag-gated, adults only. The page
+  // decides the rest (release gate, role, allowance) — this is a door, not a
+  // guard.
+  const kitsOn = catalogueTabEnabled() && !!user && !!role && role !== "student";
   const tabs = activeHat
-    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn)
-    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn);
+    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn)
+    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn, kitsOn);
   // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
   // it is lower-cased — a no-op in the scripts that have no case at all.
   const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);

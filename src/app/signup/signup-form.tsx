@@ -73,8 +73,13 @@ export default function SignupForm({
       return;
     }
     // If email confirmation is OFF, a session is returned and we go straight in.
+    // A `?topic=<slug>` on the signup URL is the public lesson page's "Unlock
+    // the kit" carry-through (catalogue Phase C): land on that kit rather than
+    // the empty Library. Only a slug shape is honoured; anything else is
+    // ignored, never redirected to.
     if (data.session) {
-      router.push("/dashboard");
+      const topic = new URLSearchParams(window.location.search).get("topic");
+      router.push(topic && /^[a-z0-9][a-z0-9-]{0,79}$/.test(topic) ? `/dashboard/kits?topic=${topic}` : "/dashboard");
       router.refresh();
       return;
     }
