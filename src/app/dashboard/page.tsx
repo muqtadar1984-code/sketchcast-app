@@ -5,7 +5,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isPossiblyOfficeMimetype } from "@/utils/office-file";
 import UploadBook from "./upload-book";
 import AutoRefresh from "@/components/auto-refresh";
-import BooklessKits from "./bookless-kits";
+import BooklessKits, { isCatalogueCopy } from "./bookless-kits";
 import BookTable, { type BookRow } from "./book-table";
 import { kindLabel, type LibraryMessages } from "./labels";
 import { assignedDeckUnits, studentDeckLinks } from "./kit";
@@ -758,16 +758,31 @@ export default async function DashboardPage() {
   // per request, not per artifact — see @/utils/video-download to revoke.
   const mayDownloadVideo = canDownloadVideo(user.email);
 
+  // Catalogue COPIES (0132) point at the catalogue account's files, and the
+  // storage policy (artifacts_owner_rw) lets a session sign only its own
+  // prefix — so a teacher's session signs nothing for them and the card showed
+  // bare labels (founder, 2026-10-16). Those sign with the service role: the
+  // teacher OWNS the generation row (RLS already filtered this list to
+  // owner_id = auth.uid()), which is the access decision; the master file is
+  // read-only to them either way. Everything else keeps signing as the user.
+  let copySigner: ReturnType<typeof createAdminClient> | null = null;
+  try {
+    copySigner = createAdminClient();
+  } catch {
+    copySigner = null; // no service role locally: copies simply show no links
+  }
+
   // Build signed download URLs for finished artifacts.
   const lessons = await Promise.all(
     ((gensRaw ?? []) as unknown as LessonRow[]).map(async (g) => {
+      const store = copySigner && isCatalogueCopy({ params: g.params }) ? copySigner : supabase;
       const arts = await Promise.all(
         (g.artifacts ?? []).map(async (a) => {
           // Documents get a human download filename ("Test Paper.docx", not
           // the storage basename); everything else signs untouched — a
           // download disposition on a video URL would break in-tab playback.
           const dl = docDownloadName(g.kind, a.kind);
-          const { data } = await supabase.storage
+          const { data } = await store.storage
             .from("artifacts")
             .createSignedUrl(a.storage_path, 3600, dl ? { download: dl } : undefined);
           return { kind: a.kind as string, path: a.storage_path, url: data?.signedUrl ?? null };
@@ -788,7 +803,7 @@ export default async function DashboardPage() {
       const videoDownloads: (string | null)[] = mayDownloadVideo
         ? await Promise.all(
             videoArts.map(async (a, i) => {
-              const { data } = await supabase.storage
+              const { data } = await store.storage
                 .from("artifacts")
                 .createSignedUrl(a.path, 3600, { download: videoDownloadName(i, videoArts.length) });
               return data?.signedUrl ?? null;
