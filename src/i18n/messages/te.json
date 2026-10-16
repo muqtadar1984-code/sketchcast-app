@@ -814,7 +814,8 @@
       "worksheet": "వర్క్‌షీట్",
       "exam_paper": "పరీక్షా పత్రం",
       "case_study": "కేస్ స్టడీ",
-      "exam": "పరీక్ష"
+      "exam": "పరీక్ష",
+      "question_bank": "ప్రశ్నల బ్యాంకు"
     },
     "status": {
       "queued": "క్యూలో",

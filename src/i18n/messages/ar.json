@@ -814,7 +814,8 @@
       "worksheet": "ورقة عمل",
       "exam_paper": "ورقة اختبار",
       "case_study": "دراسة حالة",
-      "exam": "امتحان"
+      "exam": "امتحان",
+      "question_bank": "بنك الأسئلة"
     },
     "status": {
       "queued": "في الطابور",

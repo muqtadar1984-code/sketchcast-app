@@ -1,0 +1,21 @@
+-- 0135: the printable QUESTION BANK (numbered 0135: 0134 is the Kit Translator, merged the same hour)
+-- the printable QUESTION BANK becomes its own generation kind
+-- ('question_bank'). Catalogue Phase D (plan §5.4).
+--
+-- One generation per kit, owned by the catalogue system account, rendered by
+-- the worker from the topic's APPROVED topic_questions with no model call
+-- (catalogue/question_bank.py): a student DOCX grouped by item type then
+-- difficulty, plus a separate answer key. Listed in topic_kits.doc_generation_ids
+-- under the key 'question_bank', downloaded through /api/catalogue/file, never
+-- assigned to students.
+--
+-- Nothing else changes. The job trigger copies kind::text as the job type;
+-- the metering and fair-use triggers skip every catalogue row at their top
+-- (0112: params.catalogue = 'true'); reject_double_submit lists kinds
+-- explicitly and lets any other kind through. So, unlike 0103 (deck), no
+-- trigger body needs a new branch.
+--
+-- ⚠️ APPLY ON ITS OWN: Postgres refuses to USE a new enum value in the same
+-- transaction that adds it, so this file is one statement and nothing after
+-- it may reference 'question_bank' until it has committed.
+alter type generation_kind add value if not exists 'question_bank';

@@ -814,7 +814,8 @@
       "worksheet": "Lembaran kerja",
       "exam_paper": "Kertas ujian",
       "case_study": "Kajian kes",
-      "exam": "Peperiksaan"
+      "exam": "Peperiksaan",
+      "question_bank": "Bank soalan"
     },
     "status": {
       "queued": "Menunggu",

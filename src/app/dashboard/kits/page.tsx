@@ -164,7 +164,8 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
     if (kind === "presentation") return [];
     if (kind === "deck") return [{ label: t.download, href: fileHref(gen, "deck_pptx") }];
     const out = [{ label: t.download, href: fileHref(gen, "docx") }];
-    if (kind === "worksheet" || kind === "activity" || kind === "case_study") out.push({ label: t.answerKey, href: fileHref(gen, "answer_key_docx") });
+    if (kind === "worksheet" || kind === "activity" || kind === "case_study" || kind === "question_bank")
+      out.push({ label: t.answerKey, href: fileHref(gen, "answer_key_docx") });
     return out;
   };
 

@@ -814,7 +814,8 @@
       "worksheet": "Exercícios",
       "exam_paper": "Prova",
       "case_study": "Estudo de caso",
-      "exam": "Exame"
+      "exam": "Exame",
+      "question_bank": "Banco de questões"
     },
     "status": {
       "queued": "Na fila",

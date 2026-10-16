@@ -106,7 +106,7 @@ export const GEN_STATUS_TONE: Record<string, string> = {
 export const KIT_CREATION_KINDS = ["presentation", "activity", "case_study", "worksheet", "deck"] as const;
 
 /** Every kind a kit references, in display order. */
-export const KIT_KINDS = ["presentation", "deck", "lesson_plan", "activity", "case_study", "worksheet"] as const;
+export const KIT_KINDS = ["presentation", "deck", "lesson_plan", "activity", "case_study", "worksheet", "question_bank"] as const;
 export type KitKind = (typeof KIT_KINDS)[number];
 
 export function isKitKind(s: unknown): s is KitKind {
@@ -120,7 +120,20 @@ export const KIT_KIND_LABEL: Record<KitKind, string> = {
   activity: "Activities",
   case_study: "Case study",
   worksheet: "Worksheet",
+  question_bank: "Question bank",
 };
+
+/** The printable question bank (Phase D, 0135): rendered by the worker from
+ *  the topic's APPROVED items with no model call, so it is never part of kit
+ *  creation (nothing is approved yet) — the kit route queues it when a kit is
+ *  approved with a bank, and on the console's "Generate question bank". */
+export const QUESTION_BANK_KIND = "question_bank" as const;
+
+/** Kinds a student may be ASSIGNED. The plan is the teacher's own document;
+ *  the question bank is a teacher's reference (its key is a separate file,
+ *  but the online assessment is the worksheet's questions_json and, later, a
+ *  composed quiz set — not a 300-item bank). */
+export const STUDENT_FACING_KINDS: ReadonlySet<string> = new Set(["presentation", "deck", "activity", "case_study", "worksheet", "exam_paper", "exam"]);
 
 /** Document kinds (everything but the video) — the keys of doc_generation_ids. */
 export const KIT_DOC_KINDS = KIT_KINDS.filter((k) => k !== "presentation") as readonly Exclude<KitKind, "presentation">[];

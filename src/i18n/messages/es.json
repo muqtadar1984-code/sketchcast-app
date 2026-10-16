@@ -814,7 +814,8 @@
       "worksheet": "Hoja de trabajo",
       "exam_paper": "Prueba",
       "case_study": "Caso práctico",
-      "exam": "Examen"
+      "exam": "Examen",
+      "question_bank": "Banco de preguntas"
     },
     "status": {
       "queued": "En cola",

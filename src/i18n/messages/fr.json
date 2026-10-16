@@ -814,7 +814,8 @@
       "worksheet": "Fiche d'exercices",
       "exam_paper": "Contrôle",
       "case_study": "Étude de cas",
-      "exam": "Examen"
+      "exam": "Examen",
+      "question_bank": "Banque de questions"
     },
     "status": {
       "queued": "En attente",
