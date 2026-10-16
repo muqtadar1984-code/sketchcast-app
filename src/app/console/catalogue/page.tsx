@@ -3,6 +3,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { selectAll } from "@/utils/supabase/select-all";
 import { InkUnderline } from "@/components/ink-mark";
 import { buildCatalogueFunnel, type EventRow, type UnlockRow } from "@/utils/catalogue-funnel";
+import { lessonPageTotals, lessonPageViews, type PathRow } from "@/utils/cloudflare-paths";
 
 // The catalogue funnel (plan §5.5, Phase E): unlock → download → copy to
 // Library → assign, for the Ready-made kits. Read from catalogue_unlocks and
@@ -28,6 +29,13 @@ export default async function ConsoleCataloguePage() {
     admin.from("profiles").select("id", { count: "exact", head: true }).like("signup_source", "topic:%"),
   ]);
   const signupsFromPages = fromPagesQ.count ?? 0;
+  // The funnel's first step (0139): lesson-page visits from Cloudflare, last 7 days.
+  const now = new Date();
+  const since7 = new Date(now.getTime() - 6 * 86_400_000).toISOString().slice(0, 10);
+  const pathsQ = await admin.from("cloudflare_path_stats").select("day, path, requests, visits").eq("zone", "sketchcast.app").gte("day", since7).limit(20_000);
+  const lessonPages = lessonPageViews((pathsQ.data ?? []) as PathRow[], 7, now);
+  const lessonVisits = lessonPageTotals(lessonPages).visits;
+  const visitsBySlug = new Map(lessonPages.map((p) => [p.slug, p.visits]));
 
   const release = (releaseQ.data?.value ?? null) as { public?: boolean; preview_emails?: string[] } | null;
   const copies = (copiesQ.data ?? []).map((c) => c.id);
@@ -42,6 +50,7 @@ export default async function ConsoleCataloguePage() {
   const topicName = new Map(((topicsQ.data ?? []) as { id: string; title: string; subject: string | null; slug: string | null }[]).map((t) => [t.id, t]));
 
   const cards: [string, number, string?][] = [
+    ["Lesson page visits · 7d", lessonVisits, "Cloudflare, off-site referrers"],
     ["Signups from lesson pages", signupsFromPages, "signup_source topic:<slug>"],
     ["Unlockers", f.totals.unlockers, "people who unlocked ≥1 kit"],
     ["Unlocks", f.totals.unlocks, "permanent, one per topic per person"],
@@ -79,7 +88,7 @@ export default async function ConsoleCataloguePage() {
 
       <div className="card px-5 py-4 mb-6">
         <p className="text-xs font-medium text-[#5B6470] mb-3">All time</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {cards.map(([label, n, hint]) => (
             <div key={label}>
               <p className="text-2xl tabular">{n}</p>
@@ -115,8 +124,9 @@ export default async function ConsoleCataloguePage() {
 
         <div className="space-y-6">
           <div className="card divide-y divide-[#EEF0EC]">
-            <div className="grid grid-cols-[1.6fr_repeat(3,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium">
+            <div className="grid grid-cols-[1.6fr_repeat(4,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium">
               <span>Topic</span>
+              <span className="text-end">Visits 7d</span>
               <span className="text-end">Unlocks</span>
               <span className="text-end">Downloads</span>
               <span className="text-end">Copied</span>
@@ -124,7 +134,7 @@ export default async function ConsoleCataloguePage() {
             {f.topics.map((t) => {
               const meta = topicName.get(t.topic_id);
               return (
-                <div key={t.topic_id} className="grid grid-cols-[1.6fr_repeat(3,1fr)] gap-3 px-5 py-2.5 text-sm items-center">
+                <div key={t.topic_id} className="grid grid-cols-[1.6fr_repeat(4,1fr)] gap-3 px-5 py-2.5 text-sm items-center">
                   <span className="truncate" title={meta?.title ?? t.topic_id}>
                     {meta?.slug ? (
                       <a href={`https://sketchcast.app/topics/${meta.slug}`} target="_blank" rel="noreferrer" className="hover:underline">
@@ -134,6 +144,7 @@ export default async function ConsoleCataloguePage() {
                       (meta?.title ?? t.topic_id)
                     )}
                   </span>
+                  <span className="tabular text-end">{meta?.slug ? (visitsBySlug.get(meta.slug) ?? 0) : "—"}</span>
                   <span className="tabular text-end">{t.unlocks}</span>
                   <span className="tabular text-end">{t.downloads}</span>
                   <span className="tabular text-end">{t.adopts}</span>
