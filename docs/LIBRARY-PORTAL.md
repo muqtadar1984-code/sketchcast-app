@@ -362,3 +362,36 @@ refused.
 | Railway (worker) | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | The OAuth client of the audited API project. **Never** stored in the database or this repo. |
 | Railway (worker) | `YOUTUBE_REFRESH_TOKEN_<LANG>` | One refresh token per channel / language, minted once by `scripts/youtube_oauth.py` and pasted into Railway by the founder. |
 | Railway (worker) | `YOUTUBE_MAX_PARTS_PER_RUN` | Parts uploaded per publish run (default 5). `captions.insert` costs 400 of the 10,000 daily quota units, so about 7 fully captioned videos fit in a day; what a run left over is reported in its summary and finished by the next **Finish publishing**. |
+| Vercel (app) | `GITHUB_LANDING_TOKEN` | Optional. A fine-grained PAT scoped to the **sketchcast-landing** repository only, permission *Contents: read & write*, nothing else. With it set, the library routes send the landing site a `repository_dispatch` after an action that changes the public catalogue, so sketchcast.app/topics rebuilds within minutes instead of at the nightly run (next section). Unset ⇒ nothing is sent and nothing breaks. |
+
+## The public pages follow the catalogue
+
+[sketchcast.app/topics](https://sketchcast.app/topics) is a static site (repo
+`sketchcast-landing`) generated from `public_catalogue()` (0128) — the same
+anon-safe projection any visitor's browser may read. Its own GitHub Actions
+workflow (`.github/workflows/topics.yml` there) rebuilds the pages and pushes
+them **nightly at 02:40 UTC**, and whenever this app sends it a
+`repository_dispatch` with event `catalogue-changed`. Nothing in the app
+depends on that site, and nothing on that site can write to this database.
+
+**What sends the nudge** — `requestLandingRebuild()` in
+`src/utils/catalogue/landing.ts`, awaited (≤ 3 s), never throwing, **dormant
+until `GITHUB_LANDING_TOKEN` is set**:
+
+| Route | After | Why the public page changes |
+|---|---|---|
+| `topics/[id]` | `retire`, `reopen`, `merge` | a retired topic leaves `catalogue_current_kits()` at once; a reopened one may return; a merge retires the source and re-maps the target |
+| `topics/[id]` | `update` of title / subject / summary (not the avatar) | shown on the page |
+| `topics/[id]/kit` | `approve` | the most recently approved kit whose video is public is the topic's current kit |
+| `topics/[id]/questions` | `approve`, `reject`, `retire` | `bank_maturity` is trigger-derived from approved items and gates visibility; the page shows the counts |
+
+**What does not send it** — `publish` and `supersede`: those routes only queue
+a job, and the **worker** makes the video public (or unlisted) minutes later.
+A newly published lesson therefore appears at the nightly run; sending the
+same dispatch from the worker when a `topic_publish` / `topic_supersede` job
+finishes is the follow-up that closes that gap.
+
+The payload is the reason word and a timestamp, nothing else: the landing
+repo is public and so are its workflow runs. The autofix token is not reused
+— it is scoped to `sketchcast-app`, and a token that can write to the public
+marketing repo should be one that can do nothing else.

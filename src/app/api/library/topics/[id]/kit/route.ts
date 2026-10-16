@@ -4,6 +4,7 @@ import { isLibraryMemberRequest } from "@/utils/library-access";
 import { libraryAllows, type LibraryAction } from "@/utils/library-routing";
 import { catalogueGenerateEnabled, catalogueOwnerId } from "@/utils/flags";
 import { catalogueColumnMissing } from "@/utils/catalogue/status";
+import { requestLandingRebuild } from "@/utils/catalogue/landing";
 import {
   CATALOGUE_KITS_MIGRATION,
   RETRIED_KEY,
@@ -605,6 +606,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       return dbError(error);
     }
     // Audited by the RPC (library_kit_approve on the topic).
+    // An approved kit whose video is already public becomes the catalogue's
+    // current kit for this topic (0128 catalogue_current_kits) — tell the
+    // public pages (utils/catalogue/landing.ts; dormant without a token).
+    await requestLandingRebuild("kit_approve");
     return NextResponse.json({ ok: true, kit: data });
   }
 
