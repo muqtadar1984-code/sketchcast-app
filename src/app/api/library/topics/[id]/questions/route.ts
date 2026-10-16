@@ -4,6 +4,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import { libraryAllows, type LibraryAction } from "@/utils/library-routing";
 import { catalogueGenerateEnabled } from "@/utils/flags";
+import { requestLandingRebuild } from "@/utils/catalogue/landing";
 import {
   HINTS_MAX,
   TARGET_MAX,
@@ -356,6 +357,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       });
     }
     await audit(admin, m.id, "questions_approve", "topic", id, { requested: ids.length, approved: moved.length, question_ids: moved.map((r) => r.id) });
+    // The bank's maturity (trigger-derived) gates the public catalogue and
+    // its counts sit on the public page (utils/catalogue/landing.ts).
+    await requestLandingRebuild("questions_approve");
     return NextResponse.json({ ok: true, approved: moved.length, skipped: ids.length - moved.length });
   }
 
@@ -371,6 +375,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       return conflict("None of the selected items can be rejected any more (already rejected or retired) — reload to see their current state.", { requested: ids.length });
     }
     await audit(admin, m.id, "questions_reject", "topic", id, { requested: ids.length, rejected: moved.length, question_ids: moved.map((r) => r.id), notes });
+    await requestLandingRebuild("questions_reject");
     return NextResponse.json({ ok: true, rejected: moved.length, skipped: ids.length - moved.length });
   }
 
@@ -382,6 +387,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
     if (!moved.length) return conflict("Every selected item is already retired.", { requested: ids.length });
     await audit(admin, m.id, "questions_retire", "topic", id, { requested: ids.length, retired: moved.length, question_ids: moved.map((r) => r.id) });
+    await requestLandingRebuild("questions_retire");
     return NextResponse.json({ ok: true, retired: moved.length, skipped: ids.length - moved.length });
   }
 

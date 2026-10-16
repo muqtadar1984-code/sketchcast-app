@@ -3,6 +3,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import { libraryAllows, type LibraryAction } from "@/utils/library-routing";
 import { canonicalKey } from "@/utils/catalogue/key";
+import { requestLandingRebuild } from "@/utils/catalogue/landing";
 import { TEACHER_AVATARS, canTransition, catalogueMissing, reopenTarget } from "@/utils/catalogue/status";
 import type { Topic, TopicStatus } from "@/utils/catalogue/types";
 import { attachAlias, attachMapping, attachMappings, audit, bad, conflict, dbError, isCoverage, notFound, readJson, text, uuid } from "../../lib";
@@ -125,6 +126,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const before: Record<string, unknown> = {};
     for (const k of Object.keys(patch)) before[k] = (topic as unknown as Record<string, unknown>)[k] ?? null;
     await audit(admin, m.id, "topic_update", "topic", id, { before, after: patch });
+    // Title, subject and summary are on the public topic page; the avatar is
+    // not (utils/catalogue/landing.ts — dormant without a token).
+    if ("title" in patch || "subject" in patch || "summary" in patch) await requestLandingRebuild("topic_update");
     return NextResponse.json({ ok: true });
   }
 
@@ -285,6 +289,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { error } = await admin.from("topics").update({ status: to, ...touch }).eq("id", id);
     if (error) return dbError(error);
     await audit(admin, m.id, `topic_${action}`, "topic", id, { from: topic.status, to });
+    // A retired topic leaves the public catalogue at once (0128
+    // catalogue_current_kits), a reopened one may return; `approve` is the
+    // candidate → approved step and shows nothing public yet.
+    if (action !== "approve") await requestLandingRebuild(`topic_${action}`);
     return NextResponse.json({ ok: true, status: to });
   }
 
@@ -425,6 +433,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
 
     await audit(admin, m.id, "topic_merge", "topic", id, detail);
+    // The source retired and the target gained its mappings: both public.
+    await requestLandingRebuild("topic_merge");
     await audit(admin, m.id, "topic_merge_target", "topic", targetId, { from: id, from_title: topic.title });
     return NextResponse.json({ ok: true, targetId, ...detail });
   }
