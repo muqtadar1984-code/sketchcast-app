@@ -11,6 +11,7 @@ const TABS = [
   { href: "/console/users", label: "Users" },
   { href: "/console/schools", label: "Schools" },
   { href: "/console/funnel", label: "Funnel" },
+  { href: "/console/catalogue", label: "Catalogue" },
   { href: "/console/content", label: "Content" },
   { href: "/console/visual-library", label: "Visual Library" },
   { href: "/console/feedback", label: "Feedback" },
