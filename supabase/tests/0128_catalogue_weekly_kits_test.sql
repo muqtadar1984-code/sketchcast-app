@@ -127,6 +127,10 @@ begin
     (H,  null,     true, 'homeschool_monthly',       'active'),
     (SA, sch_paid, true, 'school_annual',            'active');
   insert into platform_admins (user_id) values (ADM);
+  -- 0130 gates the kits to a preview list until release; this file tests the
+  -- RELEASED behaviour, so open the switch for its own (rolled-back) transaction.
+  insert into platform_settings (key, value) values ('catalogue_release', '{"public": true, "preview_emails": []}')
+  on conflict (key) do update set value = jsonb_set(platform_settings.value, '{public}', 'true');
 
   -- ── 1. caps and the week ────────────────────────────────────────────────
   perform _expect_eq(plan_tier(T),   'trial',            'fixture tier: trial');
