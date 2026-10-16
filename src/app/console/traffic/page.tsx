@@ -4,6 +4,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import {
   ago, compact, dailySeries, lifetime, sumPoints, topCountries, type DailyRow,
 } from "@/utils/cloudflare-stats";
+import { lessonPageTotals, lessonPageViews, type PathRow } from "@/utils/cloudflare-paths";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,10 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
     .eq("zone", ZONE).order("day", { ascending: true }).limit(2_000);
   const missing = q.error?.code === "42P01";
   const rows = (q.data ?? []) as DailyRow[];
+  // Per-path rows (0139): the last 90 days, lesson pages only on this page.
+  const sinceDay = new Date(now.getTime() - 89 * 86_400_000).toISOString().slice(0, 10);
+  const pq = await admin.from("cloudflare_path_stats").select("day, path, requests, visits").eq("zone", ZONE).gte("day", sinceDay).limit(20_000);
+  const pathRows = (pq.data ?? []) as PathRow[];
   const lastPolled = rows.reduce<string | null>((a, r) => (r.captured_at && (!a || r.captured_at > a) ? r.captured_at : a), null);
 
   const series90 = dailySeries(rows, 90, now);
@@ -48,6 +53,8 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
   const windowDays = new Set(series90.slice(-days).map((p) => p.day));
   const countries = topCountries(rows.filter((r) => windowDays.has(r.day)), 12);
   const threats = rows.filter((r) => windowDays.has(r.day)).reduce((a, r) => a + (r.threats ?? 0), 0);
+  const lessonPages = lessonPageViews(pathRows, days, now);
+  const lessonTotals = lessonPageTotals(lessonPages);
 
   // Days loaded from a dashboard export carry no page views; until the
   // poll has refreshed them the hints speak of requests instead.
@@ -153,6 +160,41 @@ export default async function ConsoleTrafficPage({ searchParams }: { searchParam
         <p className="text-[11px] text-[#98A0A9] mt-3">
           These are Cloudflare&apos;s own figures for the zone. Page views are HTML responses; requests include assets and crawlers, which Cloudflare does not separate out on this plan. Countries are by request. History reaches as far back as Cloudflare keeps for the plan.
         </p>
+      </section>
+
+      <section className="mb-10">
+        <h2 className="text-xl mb-1">Lesson pages</h2>
+        <p className="text-xs text-[#98A0A9] mb-3">
+          {lessonTotals.pages} lesson pages viewed in the last {days} days · {compact(lessonTotals.visits)} visits · {compact(lessonTotals.requests)} page requests. A visit is
+          Cloudflare&apos;s count of a page view that began off-site (search, YouTube, a forward); requests add every locale and reload. The catalogue
+          funnel continues on{" "}
+          <a href="/console/catalogue" className="text-[#0C8175] hover:underline">
+            Catalogue
+          </a>
+          .
+        </p>
+        <div className="card divide-y divide-[#EEF0EC] max-h-[520px] overflow-y-auto">
+          <div className={`grid grid-cols-[2.2fr_1fr_1fr_1fr] gap-2 ${th}`}>
+            <span>Lesson</span><span className="text-end">Visits</span><span className="text-end">Requests</span><span className="text-end">Locales</span>
+          </div>
+          {lessonPages.length === 0 && (
+            <div className="px-5 py-4 text-sm text-[#5B6470]">
+              {pq.error?.code === "42P01" ? "Migration 0139 is not applied yet." : "No lesson-page rows yet — the worker's next hourly poll fills this in."}
+            </div>
+          )}
+          {lessonPages.map((p) => (
+            <div key={p.slug} className="grid grid-cols-[2.2fr_1fr_1fr_1fr] gap-2">
+              <span className={`${td} truncate`}>
+                <a href={`https://sketchcast.app/topics/${p.slug}`} target="_blank" rel="noreferrer" className="hover:underline">
+                  {p.slug}
+                </a>
+              </span>
+              <span className={`${td} tabular text-end`}>{compact(p.visits)}</span>
+              <span className={`${td} tabular text-end`}>{compact(p.requests)}</span>
+              <span className={`${td} tabular text-end`}>{p.locales.length}</span>
+            </div>
+          ))}
+        </div>
       </section>
     </main>
   );
