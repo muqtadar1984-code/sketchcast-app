@@ -330,6 +330,38 @@ describe("scoreQuiz", () => {
     expect(scoreQuiz([mcq], { q1: 1 }).auto).toBe(0); // an index is not an option
   });
 
+  it("marks a numeric fill_blank as a number: π/pi, units, trailing zeros, fractions — and never a prose near-miss", () => {
+    const q = (answer: string, accept?: string[]) => [{ id: "n", type: "fill_blank" as const, prompt: "?", answer, accept, marks: 1 }];
+    const score = (answer: string, given: unknown, accept?: string[]) => scoreQuiz(q(answer, accept), { n: given }).auto;
+    // the Circle worksheet of 2026-10-16: every one of these was right and scored 0
+    expect(score("9π", "9pi")).toBe(1);
+    expect(score("10π", "10 pi")).toBe(1);
+    expect(score("28π", "28π")).toBe(1);
+    expect(score("44", "44 cm")).toBe(1);
+    expect(score("44 cm", "44")).toBe(1);
+    expect(score("56.52", "56.520")).toBe(1);
+    expect(score("22/7", "3.142857142857143")).toBe(1);
+    expect(score("9π/2", "4.5pi")).toBe(1);
+    expect(score("−3", "-3")).toBe(1);
+    expect(score("x = 3", "3")).toBe(1);
+    expect(score("45°", "45")).toBe(1);
+    expect(score("3,5", "3.5")).toBe(1);
+    // wrong stays wrong
+    expect(score("9π", "9")).toBe(0); // π-ness differs
+    expect(score("9π", "28.27")).toBe(0);
+    expect(score("44 cm", "44 m")).toBe(0); // both name a unit, differently
+    expect(score("44", "45")).toBe(0);
+    expect(score("44", "")).toBe(0);
+    expect(score("44", "forty-four")).toBe(0);
+    // prose keys behave exactly as before: exact match only
+    expect(score("chlorophyll", "chlorophyll ")).toBe(1);
+    expect(score("chlorophyll", "chlorophyl")).toBe(0);
+    expect(score("3 cats and a dog", "3")).toBe(0);
+    expect(score("two", "2")).toBe(0);
+    // accept alternatives still count, numerically too
+    expect(score("adenosine triphosphate", "9 pi", ["9π"])).toBe(1);
+  });
+
   it("marks a fill_blank by its answer OR any accept alternative", () => {
     const fb = BANK_QUIZ.questions[1];
     expect(scoreQuiz([fb], { q2: "ATP" }).auto).toBe(1);

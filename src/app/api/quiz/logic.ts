@@ -29,7 +29,9 @@
 //      values. The seed is now an HMAC-SHA-256 under a SERVER-ONLY key; see
 //      `optionOrderKey` for why it is a key and not a digest of the answers.
 //
-// No imports: this module is shared by a Route Handler and (types only) by a
+// One import, ./numeric — a pure module with no ambient state (the numeric
+// reading of a fill_blank answer, shared with the teacher's grade list so
+// both agree). Otherwise this module is shared by a Route Handler and (types only) by a
 // Client Component, so it must stay free of server-only dependencies. The HMAC
 // uses Web Crypto off `globalThis`, which is a platform global in Node, in the
 // Edge runtime and in browsers — a global, not a `node:crypto` import, so the
@@ -45,6 +47,8 @@
 // order (the same order the printed sheet shows; it carries no information
 // about which is right) and `answer` is the correct option's TEXT. `accept`
 // on a fill_blank lists alternative spellings the bank's key also takes.
+import { fillBlankCorrect } from "./numeric";
+
 export type RawQuestion =
   | { id: string; type: "fill_blank" | "short"; prompt: string; answer?: string; accept?: string[]; marks: number; image?: string }
   | { id: string; type: "true_false"; prompt: string; answer?: boolean; marks: number; image?: string }
@@ -271,7 +275,10 @@ export type Score = { auto: number; max: number; needsReview: boolean };
 /** The authoritative grader. Deliberately identical to what quiz-player.tsx
  * used to do in the browser, so no student's mark changes because of this fix:
  *   * fill_blank  — case/whitespace-insensitive exact match against the answer
- *                   or any `accept` alternative, blank never scores
+ *                   or any `accept` alternative, blank never scores; when both
+ *                   sides read as NUMBERS they are compared as numbers
+ *                   (π/pi folded, a unit forgiven when one side has none —
+ *                   ./numeric, 2026-10-16)
  *   * mcq         — the chosen option's text equals the key's (Phase D)
  *   * true_false  — a real boolean equal to the key
  *   * match       — ONE mark per correctly matched pair (not q.marks)
@@ -284,9 +291,9 @@ export function scoreQuiz(questions: readonly RawQuestion[], answers: Record<str
   for (const q of questions) {
     max += q.marks || 0;
     if (q.type === "fill_blank") {
-      const given = norm(answers[q.id]);
-      const accepted = [q.answer, ...(Array.isArray(q.accept) ? q.accept : [])].map(norm).filter(Boolean);
-      if (given && accepted.includes(given)) auto += q.marks || 1;
+      // exact match for prose; a numeric reading (π/pi, units, 56.520) when
+      // both sides are numbers — ./numeric
+      if (fillBlankCorrect(q.answer, q.accept, answers[q.id])) auto += q.marks || 1;
     } else if (q.type === "mcq") {
       // the submitted option's text against the key's; a blank never scores
       if (norm(answers[q.id]) && norm(answers[q.id]) === norm(q.answer)) auto += q.marks || 1;
