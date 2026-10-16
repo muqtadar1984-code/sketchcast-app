@@ -40,10 +40,16 @@
 // `image`: a picture the question is asked ABOUT — a maths figure ("find x",
 // "which of these triangles are scalene?") — as a data URL the worker wrote
 // into questions.json. It is not derived from the answer and carries no key.
+// `mcq` (catalogue Phase D, 2026-10-16): a composed question-bank set's
+// multiple-choice and assertion–reason items. `options` is the bank's own
+// order (the same order the printed sheet shows; it carries no information
+// about which is right) and `answer` is the correct option's TEXT. `accept`
+// on a fill_blank lists alternative spellings the bank's key also takes.
 export type RawQuestion =
-  | { id: string; type: "fill_blank" | "short"; prompt: string; answer?: string; marks: number; image?: string }
+  | { id: string; type: "fill_blank" | "short"; prompt: string; answer?: string; accept?: string[]; marks: number; image?: string }
   | { id: string; type: "true_false"; prompt: string; answer?: boolean; marks: number; image?: string }
   | { id: string; type: "match"; prompt: string; pairs: { left: string; right: string }[]; marks: number; image?: string }
+  | { id: string; type: "mcq"; prompt: string; options: string[]; answer?: string; marks: number; image?: string }
   | { id: string; type: "subjective"; prompt: string; answer_outline?: string; marks: number; image?: string };
 
 export type RawQuiz = { title: string; instructions: string; questions: RawQuestion[] };
@@ -56,7 +62,8 @@ export type RawQuiz = { title: string; instructions: string; questions: RawQuest
  * no `pairs`, no parallel array, no index that lines the two sides up. */
 export type StudentQuestion =
   | { id: string; type: "fill_blank" | "short" | "true_false" | "subjective"; prompt: string; marks: number; image?: string }
-  | { id: string; type: "match"; prompt: string; marks: number; left: string[]; options: string[]; image?: string };
+  | { id: string; type: "match"; prompt: string; marks: number; left: string[]; options: string[]; image?: string }
+  | { id: string; type: "mcq"; prompt: string; marks: number; options: string[]; image?: string };
 
 /** Only an inline PNG/JPEG/SVG data URL reaches the student: a figure the
  * worker drew. A plain URL would let questions.json point the browser
@@ -241,6 +248,13 @@ export async function stripQuiz(raw: RawQuiz, key: string, scope: string): Promi
         options: seededShuffle(rights, await optionOrderSeed(key, scope, String(q.id), rights.length)),
         ...studentImage(q),
       });
+    } else if (q.type === "mcq") {
+      // The options in the artifact's order and nothing else: the answer is
+      // WHICH option, and that never leaves. (No shuffle is needed — the
+      // order is the bank's, printed on every worksheet of the set — and
+      // none is done, so a reload shows the same paper.)
+      const options = Array.isArray(q.options) ? q.options.map((o) => String(o ?? "")) : [];
+      questions.push({ id: String(q.id), type: "mcq", prompt: String(q.prompt ?? ""), marks, options, ...studentImage(q) });
     } else {
       questions.push({ id: String(q.id), type: q.type, prompt: String(q.prompt ?? ""), marks, ...studentImage(q) });
     }
@@ -256,7 +270,9 @@ export type Score = { auto: number; max: number; needsReview: boolean };
 
 /** The authoritative grader. Deliberately identical to what quiz-player.tsx
  * used to do in the browser, so no student's mark changes because of this fix:
- *   * fill_blank  — case/whitespace-insensitive exact match, blank never scores
+ *   * fill_blank  — case/whitespace-insensitive exact match against the answer
+ *                   or any `accept` alternative, blank never scores
+ *   * mcq         — the chosen option's text equals the key's (Phase D)
  *   * true_false  — a real boolean equal to the key
  *   * match       — ONE mark per correctly matched pair (not q.marks)
  *   * short/subjective — never auto-scored; the whole paper goes to the teacher
@@ -268,6 +284,11 @@ export function scoreQuiz(questions: readonly RawQuestion[], answers: Record<str
   for (const q of questions) {
     max += q.marks || 0;
     if (q.type === "fill_blank") {
+      const given = norm(answers[q.id]);
+      const accepted = [q.answer, ...(Array.isArray(q.accept) ? q.accept : [])].map(norm).filter(Boolean);
+      if (given && accepted.includes(given)) auto += q.marks || 1;
+    } else if (q.type === "mcq") {
+      // the submitted option's text against the key's; a blank never scores
       if (norm(answers[q.id]) && norm(answers[q.id]) === norm(q.answer)) auto += q.marks || 1;
     } else if (q.type === "true_false") {
       if (typeof answers[q.id] === "boolean" && answers[q.id] === q.answer) auto += q.marks || 1;

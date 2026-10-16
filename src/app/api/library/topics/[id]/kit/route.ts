@@ -26,6 +26,9 @@ import {
   kitRegenerateSource,
   nextTeacherAvatar,
   QUESTION_BANK_KIND,
+  QUIZ_KIND,
+  freshSeed,
+  quizGenerationParams,
   partDurationsOf,
   retryParamsOf,
   validateClips,
@@ -33,6 +36,7 @@ import {
   type HeaderMapping,
 } from "@/utils/catalogue/kit";
 import { YOUTUBE_META_MIGRATION, validateYouTubeMeta } from "@/utils/catalogue/publish";
+import { QUIZ_BLUEPRINT_NAME, canCompose, modeCounts, validateBlueprintSpec, type Blueprint, type TopicQuestion } from "@/utils/catalogue/questions";
 import type { PartPlanRow, TeacherAvatar, TopicKit, YouTubeMeta } from "@/utils/catalogue/types";
 import { LANGUAGES, languageLabel as languageLabelOf } from "@/utils/narration";
 import { audit, bad, conflict, dbError, notFound, readJson, text, uuid } from "../../../lib";
@@ -140,9 +144,18 @@ export const runtime = "nodejs";
 //   question_bank (editor, admin) — catalogue Phase D: queue the kit's printable
 //     question bank (one `question_bank` generation from the kit's own params)
 //     for an in-review or approved kit whose topic has approved items; approve
+//   quiz (editor, admin) — catalogue Phase D part 2: compose the kit's ONLINE
+//     QUIZ — one question_sets row from the "Online quiz" blueprint and one
+//     `worksheet` generation carrying params.question_set_id (the composer's
+//     kind, no kit_id), pointed at by doc_generation_ids.quiz. The worker
+//     renders the student DOCX, the key and questions_json (the quiz engine's
+//     marking scheme). Refused (409) when the approved bank cannot fill the
+//     blueprint (canCompose, the same arithmetic the worker runs). A kit that
+//     already has a quiz gets a NEW set with a fresh seed; the pointer moves.
+//     Approve queues it too, best effort, like the question bank.
 //     does the same on its own.
 
-type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject" | "translate" | "question_bank";
+type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject" | "translate" | "question_bank" | "quiz";
 
 const NEEDS: Record<Action, LibraryAction> = {
   generate: "generate",
@@ -155,6 +168,7 @@ const NEEDS: Record<Action, LibraryAction> = {
   // admin-only (the publish route).
   save_youtube: "approve",
   question_bank: "generate",
+  quiz: "generate",
   approve: "approve",
   reject: "approve",
 };
@@ -492,6 +506,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!canRetryKit(kit.status)) return conflict(`This kit is ${statusLabel(kit.status)} — only a failed or still-generating kit has a piece to retry.`, { status: kit.status });
     const kind = body.kind;
     if (!isKitKind(kind)) return bad("kind must be one of the kit's kinds.");
+    // The online quiz is not a kit-lifecycle piece (no kit_id, no kit
+    // reopen): a failed one is recomposed by the quiz action, which draws a
+    // fresh set — a retry of the same set would fail the same way.
+    if (kind === QUIZ_KIND) return conflict("The online quiz is recomposed, not retried — use Compose online quiz.", { kind });
     const genId = kitGenerationIdFor(kit, kind);
     if (!genId) return bad(`This kit has no ${statusLabel(kind)} to retry.`);
     const { data: old, error: oErr } = await admin.from("generations").select("id, kind, status, params").eq("id", genId).maybeSingle();
@@ -681,6 +699,86 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return { queued: true, generationId: newId };
   };
 
+  /** Compose the kit's ONLINE QUIZ (Phase D part 2): one question set from
+   *  the "Online quiz" blueprint + one `worksheet` generation with
+   *  params.question_set_id, pointed at by doc_generation_ids.quiz. The same
+   *  pre-check as the compose route (canCompose against the live approved
+   *  counts), so a bank that cannot fill the blueprint is a quiet refusal
+   *  here and a 409 on the button, never a failed generation an hour later.
+   *  The set row is taken back out when the generation insert fails, so no
+   *  orphan set points at nothing. A recompose draws a NEW set and seed —
+   *  the old generation stays as history, only the pointer moves. */
+  const queueQuiz = async (k: KitRow): Promise<{ queued: boolean; why?: string; generationId?: string; questionSetId?: string }> => {
+    const gate = generationGate();
+    if (gate.response) return { queued: false, why: "Catalogue generation is switched off." };
+    const { data: bpRow } = await admin.from("question_set_blueprints").select("id, name, scope, curriculum_id, spec, min_maturity, status, created_by, created_at").eq("name", QUIZ_BLUEPRINT_NAME).maybeSingle();
+    if (!bpRow) return { queued: false, why: `The "${QUIZ_BLUEPRINT_NAME}" blueprint is missing — apply migration 0136.` };
+    const blueprint = bpRow as unknown as Blueprint;
+    if (blueprint.status !== "active") return { queued: false, why: `The "${QUIZ_BLUEPRINT_NAME}" blueprint is retired — reactivate it on /library/blueprints.` };
+    const spec = validateBlueprintSpec(blueprint.spec);
+    if (!spec.ok) return { queued: false, why: `The "${QUIZ_BLUEPRINT_NAME}" blueprint has an invalid spec: ${spec.errors[0]}` };
+    const { data: trow } = await admin.from("topics").select("bank_maturity").eq("id", id).maybeSingle();
+    const { data: approved, error: qErr } = await admin
+      .from("topic_questions")
+      .select("answer_mode, difficulty, status")
+      .eq("topic_id", id)
+      .eq("language", k.language)
+      .eq("status", "approved");
+    if (qErr) return { queued: false, why: qErr.message ?? "the bank could not be read" };
+    const check = canCompose(spec.spec, modeCounts((approved ?? []) as Pick<TopicQuestion, "answer_mode" | "difficulty" | "status">[]), {
+      have: (trow as { bank_maturity?: string } | null)?.bank_maturity ?? "none",
+      need: blueprint.min_maturity,
+    });
+    if (!check.ok) return { queued: false, why: `The bank cannot fill "${blueprint.name}" yet: ${check.reasons.join("; ")}.` };
+    const srcId = k.presentation_generation_id ?? kitGenerationIdFor(k, "worksheet");
+    if (!srcId) return { queued: false, why: "The kit has no generation to copy its settings from." };
+    const { data: src } = await admin.from("generations").select("params").eq("id", srcId).maybeSingle();
+    const params = ((src as { params?: Record<string, unknown> | null } | null)?.params ?? null) as Record<string, unknown> | null;
+    if (!params || params.catalogue !== true) return { queued: false, why: "The kit's generation is not a catalogue generation." };
+    const seed = freshSeed();
+    const { data: set, error: sErr } = await admin
+      .from("question_sets")
+      .insert({ blueprint_id: blueprint.id, topic_ids: [id], language: k.language, question_ids: [], seed, requested_by: m.id })
+      .select("id")
+      .single();
+    if (sErr || !set) return { queued: false, why: sErr?.message ?? "the question set could not be recorded" };
+    const setId = (set as { id: string }).id;
+    const { data: gens, error: gErr } = await admin
+      .from("generations")
+      .insert({
+        ...kitGenerationRows(gate.owner, quizGenerationParams(params, { questionSetId: setId, blueprintId: blueprint.id, seed }), ["worksheet"])[0],
+        title: `${topic.title} · ${blueprint.name}`,
+      })
+      .select("id");
+    if (gErr) {
+      await admin.from("question_sets").delete().eq("id", setId).is("rendered_generation_id", null);
+      return { queued: false, why: gErr.code === OWNER_NOT_ADMIN ? "The catalogue owner is not a platform admin." : (gErr.message ?? "insert failed") };
+    }
+    const newId = ((gens ?? []) as { id: string }[])[0]?.id ?? null;
+    if (!newId) {
+      await admin.from("question_sets").delete().eq("id", setId).is("rendered_generation_id", null);
+      return { queued: false, why: "No row was inserted." };
+    }
+    await admin.from("question_sets").update({ rendered_generation_id: newId }).eq("id", setId);
+    const { data: fresh } = await admin.from("topic_kits").select("doc_generation_ids").eq("id", k.id).maybeSingle();
+    const ids = ((fresh as { doc_generation_ids?: Record<string, string> | null } | null)?.doc_generation_ids ?? k.doc_generation_ids ?? {}) as Record<string, string>;
+    const { error: uErr } = await admin.from("topic_kits").update({ doc_generation_ids: docGenerationIdsWith(ids, QUIZ_KIND, newId) }).eq("id", k.id);
+    if (uErr) return { queued: false, why: uErr.message ?? "pointer update failed", generationId: newId, questionSetId: setId };
+    await audit(admin, m.id, "kit_quiz", "topic", id, { kit_id: k.id, question_set_id: setId, generation_id: newId, blueprint_id: blueprint.id, seed, plan: check.plan });
+    return { queued: true, generationId: newId, questionSetId: setId };
+  };
+
+  // ── quiz ────────────────────────────────────────────────────────────────────
+  // The console's "Compose online quiz": for an approved or in-review kit.
+  if (action === "quiz") {
+    const { kit, response } = await loadKit(body.kitId);
+    if (!kit) return response!;
+    if (!["approved", "in_review"].includes(kit.status)) return conflict(`This kit is ${statusLabel(kit.status)} — the online quiz is composed for an in-review or approved kit.`, { status: kit.status });
+    const r = await queueQuiz(kit);
+    if (!r.queued) return conflict(r.why ?? "The online quiz could not be queued.", { generationId: r.generationId ?? null });
+    return NextResponse.json({ ok: true, generationId: r.generationId, questionSetId: r.questionSetId });
+  }
+
   // ── question_bank ───────────────────────────────────────────────────────────
   // The console's "Generate question bank": for an approved or in-review kit.
   if (action === "question_bank") {
@@ -718,7 +816,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     // Phase D: an approved kit with a bank gets its printable question bank
     // queued now (best effort — a refusal is reported, never a failed approve).
     const bank = kit.doc_generation_ids?.[QUESTION_BANK_KIND] ? { queued: false, why: "already has one" } : await queueQuestionBank(kit);
-    return NextResponse.json({ ok: true, kit: data, questionBank: bank });
+    // …and its online quiz (Phase D part 2), the same way: a bank that cannot
+    // fill the blueprint yet is a reason on the 200, not a failed approve.
+    const quiz = kit.doc_generation_ids?.[QUIZ_KIND] ? { queued: false, why: "already has one" } : await queueQuiz(kit);
+    return NextResponse.json({ ok: true, kit: data, questionBank: bank, quiz });
   }
 
   // ── reject ─────────────────────────────────────────────────────────────────

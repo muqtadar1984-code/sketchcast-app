@@ -815,7 +815,8 @@
       "exam_paper": "प्रश्नपत्र",
       "case_study": "केस स्टडी",
       "exam": "परीक्षा",
-      "question_bank": "प्रश्न बैंक"
+      "question_bank": "प्रश्न बैंक",
+      "quiz": "ऑनलाइन प्रश्नोत्तरी"
     },
     "status": {
       "queued": "कतार में",

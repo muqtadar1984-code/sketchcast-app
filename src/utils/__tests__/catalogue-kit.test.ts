@@ -53,6 +53,9 @@ import {
   parseTimestamp,
   partDurationsOf,
   retryParamsOf,
+  quizGenerationParams,
+  freshSeed,
+  QUIZ_KIND,
   sortKits,
   sortVideoArtifacts,
   validateClips,
@@ -304,6 +307,24 @@ describe("kitGenerationParams / kitGenerationRows", () => {
     expect(retryParamsOf(noHeader as unknown as Record<string, unknown>, "deck")).toEqual(noHeader);
     // the input is not mutated
     expect(failed[RETRIED_KEY]).toBe(true);
+  });
+
+  it("quizGenerationParams carries the composer's inputs and the kit's lineage, and NO kit_id (the worker refuses question_set_id + kit_id)", () => {
+    const kitParams = {
+      catalogue: true, topic_id: "t1", kit_id: "k1", article_id: "a1", language: "en", narration_style: "dialogue",
+      teacher_avatar: "female", tts_voice: "v", student_voice: "s", curriculum_header: ["Cambridge 0893 · 7Bs.01", 42],
+      retried: true, coverage: { x: 1 },
+    };
+    const p = quizGenerationParams(kitParams, { questionSetId: "qs1", blueprintId: "bp1", seed: 17 });
+    expect(p).toEqual({ catalogue: true, topic_id: "t1", article_id: "a1", language: "en", question_set_id: "qs1", blueprint_id: "bp1", seed: 17, curriculum_header: ["Cambridge 0893 · 7Bs.01"] });
+    expect("kit_id" in p).toBe(false);
+    expect(quizGenerationParams({ topic_id: "t1" }, { questionSetId: "qs", blueprintId: "bp", seed: 0 })).toMatchObject({ article_id: null, language: "en", curriculum_header: [] });
+    expect(QUIZ_KIND).toBe("quiz");
+    expect(KIT_KINDS).toContain("quiz");
+    for (let i = 0; i < 50; i++) {
+      const s = freshSeed();
+      expect(Number.isInteger(s) && s >= 0 && s < 2147483647).toBe(true);
+    }
   });
 
   it("reads and repoints a kit's generation ids", () => {

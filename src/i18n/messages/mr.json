@@ -815,7 +815,8 @@
       "exam_paper": "प्रश्नपत्रिका",
       "case_study": "केस स्टडी",
       "exam": "परीक्षा",
-      "question_bank": "प्रश्नसंच"
+      "question_bank": "प्रश्नसंच",
+      "quiz": "ऑनलाइन प्रश्नमंजुषा"
     },
     "status": {
       "queued": "रांगेत",

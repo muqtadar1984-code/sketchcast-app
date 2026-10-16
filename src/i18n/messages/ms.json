@@ -815,7 +815,8 @@
       "exam_paper": "Kertas ujian",
       "case_study": "Kajian kes",
       "exam": "Peperiksaan",
-      "question_bank": "Bank soalan"
+      "question_bank": "Bank soalan",
+      "quiz": "Kuiz dalam talian"
     },
     "status": {
       "queued": "Menunggu",

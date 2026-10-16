@@ -815,7 +815,8 @@
       "exam_paper": "Test paper",
       "case_study": "Case study",
       "exam": "Exam",
-      "question_bank": "Question bank"
+      "question_bank": "Question bank",
+      "quiz": "Online quiz"
     },
     "status": {
       "queued": "Queued",

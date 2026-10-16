@@ -41,6 +41,8 @@ export type BooklessLesson = {
   answerKey: string | null;
 };
 
+// A copied online quiz is a `worksheet` GENERATION (its kind), so it sorts
+// with the worksheet; its title ("<topic> · Online quiz") tells them apart.
 const PIECE_ORDER: readonly string[] = ["presentation", "deck", "lesson_plan", "activity", "worksheet", "exam_paper", "case_study", "exam", "question_bank"];
 const rank = (kind: string): number => {
   const i = PIECE_ORDER.indexOf(kind);
