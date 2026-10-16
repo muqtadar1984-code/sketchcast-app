@@ -2035,6 +2035,12 @@
     "highlighted": "Voici le kit que vous cherchiez",
     "ineligibleRole": "Les kits prêts à l'emploi sont réservés aux enseignants et aux parents.",
     "ineligibleSuspended": "Le compte de votre école est suspendu. Demandez à votre école de nous contacter.",
-    "ineligibleOther": "Les kits prêts à l'emploi ne sont pas disponibles sur ce compte pour le moment."
+    "ineligibleOther": "Les kits prêts à l'emploi ne sont pas disponibles sur ce compte pour le moment.",
+    "filterAll": "Tout",
+    "filterUnlocked": "Débloqués",
+    "find": "Trouver une leçon",
+    "downloads": "Fichiers",
+    "noMatches": "Aucune leçon ne correspond.",
+    "allowanceLine": "{used} kits sur {cap} cette semaine · réinitialisation le {date}"
   }
 }

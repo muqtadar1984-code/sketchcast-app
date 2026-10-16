@@ -2035,6 +2035,12 @@
     "highlighted": "Inilah kit yang anda cari",
     "ineligibleRole": "Kit sedia guna adalah untuk guru dan ibu bapa.",
     "ineligibleSuspended": "Akaun sekolah anda digantung. Minta sekolah anda menghubungi kami.",
-    "ineligibleOther": "Kit sedia guna tidak tersedia pada akaun ini buat masa ini."
+    "ineligibleOther": "Kit sedia guna tidak tersedia pada akaun ini buat masa ini.",
+    "filterAll": "Semua",
+    "filterUnlocked": "Dibuka",
+    "find": "Cari pelajaran",
+    "downloads": "Fail",
+    "noMatches": "Tiada pelajaran yang sepadan.",
+    "allowanceLine": "{used} daripada {cap} kit minggu ini · diset semula {date}"
   }
 }

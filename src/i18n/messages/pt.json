@@ -2035,6 +2035,12 @@
     "highlighted": "Aqui está o kit que procurava",
     "ineligibleRole": "Os kits prontos a usar destinam-se a professores e encarregados de educação.",
     "ineligibleSuspended": "A conta da sua escola está suspensa. Peça à sua escola que nos contacte.",
-    "ineligibleOther": "Os kits prontos a usar não estão disponíveis nesta conta neste momento."
+    "ineligibleOther": "Os kits prontos a usar não estão disponíveis nesta conta neste momento.",
+    "filterAll": "Tudo",
+    "filterUnlocked": "Desbloqueados",
+    "find": "Procurar uma aula",
+    "downloads": "Ficheiros",
+    "noMatches": "Nenhuma aula corresponde.",
+    "allowanceLine": "{used} de {cap} kits esta semana · renova a {date}"
   }
 }

@@ -11,15 +11,13 @@ import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 import { kindLabel, type LibraryMessages } from "../labels";
 import type { ChildRow, ClassRow } from "../assign-modal";
-import KitActions, { type PieceView } from "./kit-actions";
+import KitsGallery, { type KitView, type PieceView } from "./kits-gallery";
 import {
   buildKits,
   assignablePieces,
   canUnlockMore,
-  lessonPageUrl,
   showsUpgrade,
   topicParam,
-  youtubeUrl,
   type Allowance,
   type CurrentKitRow,
   type PublicRow,
@@ -170,87 +168,43 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
     return out;
   };
 
+  const views: KitView[] = kits.map((k) => ({
+    topicId: k.topicId,
+    kitId: k.kitId,
+    slug: k.slug,
+    title: k.title,
+    subject: k.subject,
+    language: k.language,
+    youtubeId: k.youtubeId,
+    questionCount: k.questionCount,
+    unlocked: k.unlocked,
+    pieces: k.pieces.map(
+      (p): PieceView => ({ kind: p.kind, generationId: p.generationId, label: kindLabel(tLib, p.kind), downloads: downloadsFor(p.kind, p.generationId) }),
+    ),
+    assignableIds: assignablePieces(k.pieces).map((p) => p.generationId),
+  }));
+
+  // One line, not a card: "3 of 5 this week · resets Mon 20 Oct", or the
+  // unlimited sentence. The pricing link rides beside it for personal tiers.
+  const allowanceLine =
+    allowance.cap === null
+      ? t.allowanceUnlimited
+      : canUnlock
+        ? fmt(t.allowanceLine, { used: allowance.used, cap: allowance.cap, date: resetsLabel })
+        : fmt(t.allowanceSpent, { date: resetsLabel });
+
   return shell(
-    <>
-      <section className="card px-5 py-3.5 mb-8 max-w-2xl border-[#BDE8E2] bg-[#F1FBF9]" data-tour="kits-allowance">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-medium text-[#0C8175]">{t.allowanceTitle}</span>
-          {allowance.cap !== null && <span className="text-[10px] text-[#98A0A9]">{fmt(t.allowanceResets, { date: resetsLabel })}</span>}
-        </div>
-        {allowance.cap === null ? (
-          <p className="text-sm mt-1">{t.allowanceUnlimited}</p>
-        ) : (
-          <>
-            <p className="text-sm mt-1 tabular">{fmt(t.allowanceUsage, { used: allowance.used, cap: allowance.cap })}</p>
-            {!canUnlock && <p className="text-xs text-[#5B6470] mt-1">{fmt(t.allowanceSpent, { date: resetsLabel })}</p>}
-            {showsUpgrade(allowance) && (
-              <a href={PRICING_URL} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs font-medium text-[#0C8175] hover:underline">
-                {t.upgradeCta}
-              </a>
-            )}
-          </>
-        )}
-      </section>
-
-      {kits.length === 0 && <p className="text-sm text-[#5B6470]">{t.empty}</p>}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {kits.map((k) => {
-          const pieces: PieceView[] = k.pieces.map((p) => ({
-            kind: p.kind,
-            generationId: p.generationId,
-            label: kindLabel(tLib, p.kind),
-            downloads: downloadsFor(p.kind, p.generationId),
-          }));
-          const isHighlighted = highlight !== null && k.slug === highlight;
-          return (
-            <article
-              key={k.kitId}
-              id={`kit-${k.slug}`}
-              className={`card p-5 ${isHighlighted ? "ring-2 ring-[#0C8175]" : ""}`}
-              data-topic={k.slug}
-              data-unlocked={k.unlocked ? "true" : "false"}
-            >
-              {isHighlighted && <p className="text-xs font-medium text-[#0C8175] mb-2">{t.highlighted}</p>}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs text-[#5B6470]">
-                    {k.subject}
-                    {k.language !== "en" ? ` · ${k.language.toUpperCase()}` : ""}
-                  </p>
-                  <h2 className="font-display text-xl leading-snug">{k.title}</h2>
-                </div>
-                {k.unlocked && <span className="shrink-0 text-xs font-medium rounded-full bg-[#E6F6F3] text-[#0C8175] px-2 py-0.5">{t.unlocked}</span>}
-              </div>
-              {k.summary && <p className="text-sm text-[#5B6470] mt-2 line-clamp-3">{k.summary}</p>}
-              <p className="text-xs text-[#5B6470] mt-3 flex flex-wrap gap-x-3 gap-y-1">
-                <span>{fmt(t.pieces, { n: k.pieces.length })}</span>
-                {k.questionCount > 0 && <span>{fmt(t.questions, { n: k.questionCount })}</span>}
-                {k.youtubeId && (
-                  <a href={youtubeUrl(k.youtubeId)} target="_blank" rel="noreferrer" className="font-medium text-[#0C8175] hover:underline">
-                    ▶ {t.watch}
-                  </a>
-                )}
-                <a href={lessonPageUrl(k.slug)} target="_blank" rel="noreferrer" className="font-medium text-[#0C8175] hover:underline">
-                  {t.lessonPage}
-                </a>
-              </p>
-              <KitActions
-                topicId={k.topicId}
-                unlocked={k.unlocked}
-                canUnlock={canUnlock}
-                resetsLabel={resetsLabel}
-                pieces={pieces}
-                assignableIds={assignablePieces(k.pieces).map((p) => p.generationId)}
-                classes={classes}
-                childTargets={childTargets}
-                t={t}
-                tLib={tLib}
-              />
-            </article>
-          );
-        })}
-      </div>
-    </>,
+    <KitsGallery
+      kits={views}
+      canUnlock={canUnlock}
+      allowanceLine={allowanceLine}
+      upgradeHref={showsUpgrade(allowance) ? PRICING_URL : null}
+      resetsLabel={resetsLabel}
+      highlight={highlight}
+      classes={classes}
+      childTargets={childTargets}
+      t={t}
+      tLib={tLib}
+    />,
   );
 }
