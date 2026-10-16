@@ -17,13 +17,17 @@ export const dynamic = "force-dynamic";
 export default async function ConsoleCataloguePage() {
   const admin = createAdminClient();
 
-  const [releaseQ, unlocksQ, eventsQ, copiesQ, topicsQ] = await Promise.all([
+  const [releaseQ, unlocksQ, eventsQ, copiesQ, topicsQ, fromPagesQ] = await Promise.all([
     admin.from("platform_settings").select("value").eq("key", "catalogue_release").maybeSingle(),
     selectAll<UnlockRow>(() => admin.from("catalogue_unlocks").select("user_id, topic_id, source, week_start, unlocked_at")),
     selectAll<EventRow>(() => admin.from("catalogue_events").select("user_id, topic_id, event, meta, created_at")),
     selectAll<{ id: string }>(() => admin.from("generations").select("id").not("params->catalogue_ref", "is", null).is("removed_at", null)),
     admin.from("topics").select("id, title, subject, slug"),
+    // Signups the public lesson pages brought: /signup?topic=<slug> is
+    // recorded as signup_source "topic:<slug>" (utils/attribution.ts).
+    admin.from("profiles").select("id", { count: "exact", head: true }).like("signup_source", "topic:%"),
   ]);
+  const signupsFromPages = fromPagesQ.count ?? 0;
 
   const release = (releaseQ.data?.value ?? null) as { public?: boolean; preview_emails?: string[] } | null;
   const copies = (copiesQ.data ?? []).map((c) => c.id);
@@ -38,6 +42,7 @@ export default async function ConsoleCataloguePage() {
   const topicName = new Map(((topicsQ.data ?? []) as { id: string; title: string; subject: string | null; slug: string | null }[]).map((t) => [t.id, t]));
 
   const cards: [string, number, string?][] = [
+    ["Signups from lesson pages", signupsFromPages, "signup_source topic:<slug>"],
     ["Unlockers", f.totals.unlockers, "people who unlocked ≥1 kit"],
     ["Unlocks", f.totals.unlocks, "permanent, one per topic per person"],
     ["Downloads", f.totals.downloads, "document files served"],
@@ -74,7 +79,7 @@ export default async function ConsoleCataloguePage() {
 
       <div className="card px-5 py-4 mb-6">
         <p className="text-xs font-medium text-[#5B6470] mb-3">All time</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           {cards.map(([label, n, hint]) => (
             <div key={label}>
               <p className="text-2xl tabular">{n}</p>

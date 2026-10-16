@@ -8,6 +8,17 @@ describe("firstTouchSource", () => {
     expect(firstTouchSource("https://www.google.com/", "?utm_source=li_bio")).toBe("utm:li_bio");
   });
 
+  it("records the catalogue lesson a signup came for, below only an explicit utm", () => {
+    // sketchcast.app/topics/<slug> links to /signup?topic=<slug>. Before this
+    // the hop from our own landing host read as "direct", so the funnel could
+    // not tie a signup to the lesson that brought it.
+    expect(firstTouchSource("https://sketchcast.app/topics/cells", "?topic=cells")).toBe("topic:cells");
+    expect(firstTouchSource("", "?topic=Types-Of-Angles&ref=youtube.com")).toBe("topic:types-of-angles");
+    expect(firstTouchSource("", "?utm_source=yt&topic=cells")).toBe("utm:yt");
+    expect(firstTouchSource("", "?topic=../etc")).toBe("direct");
+    expect(isPlausibleSource("topic:cells")).toBe(true);
+  });
+
   it("takes ?ref as the cross-domain hand-off from the landing site", () => {
     // THE CASE THAT MOTIVATES THE PARAMETER AT ALL: the landing site is on a
     // different origin, so without this the referrer would read as our own
