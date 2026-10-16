@@ -328,6 +328,9 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   // Every version's status by id: the kit panel refuses Approve on a kit whose
   // own article is no longer the approved version (kitAcceptsApprove).
   const articleStatuses: Record<string, string> = Object.fromEntries(articles.map((a) => [a.id, a.status]));
+  // …and every version's number: Regenerate on such a kit builds from the
+  // approved version, and the panel names both (kitRegenerateSource).
+  const articleVersions: Record<string, number> = Object.fromEntries(articles.map((a) => [a.id, a.version]));
   const kitMigrationNote = kitsMigration
     ? `A kit column (topic_kits.part_plan / youtube_meta) is not in this database yet — apply ${kitsMigration}; kits show without it until then.`
     : null;
@@ -439,7 +442,9 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
                 topicSubject={topic.subject}
                 auditPassed={youtubeAuditPassed()}
                 articleStatus={approvedArticle?.status ?? null}
+                approvedArticle={approvedArticle ? { id: approvedArticle.id, version: approvedArticle.version } : null}
                 articleStatuses={articleStatuses}
+                articleVersions={articleVersions}
                 kits={kits}
                 names={names}
                 canGenerate={canGenerate}

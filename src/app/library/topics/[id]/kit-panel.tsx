@@ -20,11 +20,13 @@ import {
   kitAcceptsReject,
   kitGenerationIdFor,
   kitProgress,
+  kitRegenerateSource,
   kitStatusLabel,
   nextTeacherAvatar,
   partDurationsOf,
   validateClips,
   type KitKind,
+  type KitRegenerateSource,
 } from "@/utils/catalogue/kit";
 import {
   AUDIT_NOTE,
@@ -58,7 +60,10 @@ import type { JobRow } from "./article-panel";
 // job progress and error, the video parts inline, the documents as downloads,
 // the part plan, the chapter timestamps, the editable clip list — the review
 // box (Approve video / Reject with a reason), Retry for a failed piece,
-// Regenerate kit, and the older kits as collapsed history. Every control
+// Regenerate kit (always from the APPROVED article: when a newer version was
+// approved after this kit was built, the button says which version the new
+// kit is built from — kitRegenerateSource, the route's own answer), and the
+// older kits as collapsed history. Every control
 // POSTs /api/library/topics/[id]/kit with {action, …} and then
 // router.refresh() (the article-panel.tsx pattern). `can*` flags and the two
 // env locks come from the server; the route re-checks them, these only decide
@@ -160,7 +165,9 @@ export function KitPanel({
   topicSubject,
   auditPassed,
   articleStatus,
+  approvedArticle,
   articleStatuses,
+  articleVersions,
   kits,
   names,
   canGenerate,
@@ -190,9 +197,15 @@ export function KitPanel({
   auditPassed: boolean;
   /** the approved English article's status, or null when there is none */
   articleStatus: string | null;
+  /** the approved English article (id + version), or null when there is none
+   *  — what a Regenerate builds from once the kit's own article was
+   *  superseded (kitRegenerateSource) */
+  approvedArticle: { id: string; version: number } | null;
   /** every article version's status by id — a kit whose own article is no
    *  longer the approved version is not approved (kitAcceptsApprove) */
   articleStatuses: Record<string, string>;
+  /** every article version's number by id, for the regenerate sentence */
+  articleVersions: Record<string, number>;
   /** newest first */
   kits: KitView[];
   names: Record<string, string>;
@@ -224,6 +237,15 @@ export function KitPanel({
   // Generate belongs to a topic that has no kit yet (or is back at
   // article_approved); a topic with a kit regenerates it from the kit.
   const showGenerate = canGenerate && (!current || topicStatus === "article_approved");
+  // Which article a Regenerate of the current kit builds from — the route's
+  // own rule, fed from the versions the page already loaded.
+  const currentArticleId = current?.kit.article_id ?? null;
+  const regenSource = kitRegenerateSource(
+    currentArticleId && currentArticleId in articleStatuses
+      ? { id: currentArticleId, version: articleVersions[currentArticleId] ?? null, status: articleStatuses[currentArticleId] }
+      : null,
+    approvedArticle,
+  );
 
   const generate = async () => {
     if (!window.confirm(`Generate the kit with a ${avatar} teacher? Five pieces are queued for the worker's off-peak lane; the lesson plan follows the video.`)) return;
@@ -283,6 +305,7 @@ export function KitPanel({
           topicSubject={topicSubject}
           auditPassed={auditPassed}
           kitArticleStatus={articleStatuses[current.kit.article_id] ?? null}
+          regenSource={regenSource}
           liveKit={liveKit}
           canGenerate={canGenerate}
           canApprove={canApprove}
@@ -345,6 +368,7 @@ function CurrentKit({
   topicSubject,
   auditPassed,
   kitArticleStatus,
+  regenSource,
   liveKit,
   canGenerate,
   canApprove,
@@ -369,6 +393,8 @@ function CurrentKit({
   auditPassed: boolean;
   /** the status of THIS kit's article version (null when it is gone) */
   kitArticleStatus: string | null;
+  /** the article a Regenerate of this kit builds from (kitRegenerateSource) */
+  regenSource: KitRegenerateSource;
   liveKit: boolean;
   canGenerate: boolean;
   canApprove: boolean;
@@ -393,7 +419,15 @@ function CurrentKit({
     .sort((a, b) => a.part - b.part);
   const chapters = chaptersByPart(kit.chapters);
   const regen = kitAcceptsRegenerate(topicStatus, kit.status, liveKit);
-  const regenWhy = lockWhy ?? (regen.ok ? null : regen.why);
+  // The route's order: the kit and topic first, then the article the new kit
+  // is built from. A superseded article does NOT disable the button — the new
+  // kit moves onto the approved version, and the label and the line under the
+  // header say so; only a topic with no approved article is refused.
+  const regenWhy = lockWhy ?? (!regen.ok ? regen.why : !regenSource.ok ? regenSource.why : null);
+  const regenSwitched = regen.ok && regenSource.ok && regenSource.switched;
+  const regenFrom = regenSource.ok && regenSource.version !== null ? `v${regenSource.version}` : "the approved article";
+  // Shown as text, not only as the button's title (a title is invisible on touch).
+  const regenHelp = canGenerate && regen.ok ? (regenSource.ok ? regenSource.note : regenSource.why) : null;
   // The review box shows for a reviewable KIT status; the buttons themselves
   // follow the three-way agreement the RPCs enforce (kit, topic, article), so
   // a reviewer reads the reason here instead of the RPC's 409.
@@ -408,9 +442,10 @@ function CurrentKit({
     if (r) setNotice(`${KIT_KIND_LABEL[kind]} queued again.`);
   };
   const regenerate = async () => {
-    if (!window.confirm("Regenerate the kit? A new kit is queued with this kit's teacher; this one stays in the history and the topic goes back to generating.")) return;
+    const what = "A new kit is queued with this kit's teacher; this one stays in the history and the topic goes back to generating.";
+    if (!window.confirm(regenSwitched && regenSource.ok && regenSource.note ? `${regenSource.note}\n\n${what}` : `Regenerate the kit? ${what}`)) return;
     const r = await post({ action: "regenerate", kitId: kit.id }, "regenerate");
-    if (r) setNotice("New kit queued — this one is kept as history.");
+    if (r) setNotice(regenSwitched ? `New kit queued from the approved article (${regenFrom}) — this one is kept as history.` : "New kit queued — this one is kept as history.");
   };
   const approve = async () => {
     if (!window.confirm("Approve the video? This records your approval and moves the topic to video approved — the publish step comes next.")) return;
@@ -455,11 +490,12 @@ function CurrentKit({
         {canGenerate && (
           <span className="ml-auto flex items-center gap-2">
             <button type="button" disabled={!!busy || !!regenWhy} title={regenWhy ?? undefined} onClick={regenerate} className="btn-ghost h-8 px-3 text-xs disabled:opacity-50">
-              {busy === "regenerate" ? "Queuing…" : "Regenerate kit"}
+              {busy === "regenerate" ? "Queuing…" : regenSwitched ? `Regenerate from ${regenFrom}` : "Regenerate kit"}
             </button>
           </span>
         )}
       </div>
+      {regenHelp && <p className="text-xs text-[#9A6400]">{regenHelp}</p>}
       {kit.notes && (
         <p className="text-xs text-[#5B6470] whitespace-pre-wrap">
           <span className="font-medium">Review notes:</span> {kit.notes}
