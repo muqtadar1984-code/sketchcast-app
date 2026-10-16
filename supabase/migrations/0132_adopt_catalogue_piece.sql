@@ -152,6 +152,8 @@ revoke all on function public.adopt_catalogue_piece(uuid) from public, anon;
 grant execute on function public.adopt_catalogue_piece(uuid) to authenticated;
 
 -- Only this function may write params.catalogue_ref.
+-- ⚠️ As applied, these two were PERMISSIVE and refused nothing (Postgres ORs
+-- permissive policies). 0133 recreates them AS RESTRICTIVE; kept here as applied.
 drop policy if exists gen_no_catalogue_ref_insert on public.generations;
 create policy gen_no_catalogue_ref_insert on public.generations
   for insert to authenticated
