@@ -19,11 +19,13 @@ import {
   kitAcceptsGenerate,
   kitAcceptsRegenerate,
   kitAcceptsReject,
+  docGenerationIdsWith,
   kitGenerationIdFor,
   kitGenerationParams,
   kitGenerationRows,
   kitRegenerateSource,
   nextTeacherAvatar,
+  QUESTION_BANK_KIND,
   partDurationsOf,
   retryParamsOf,
   validateClips,
@@ -121,7 +123,7 @@ export const runtime = "nodejs";
 // re-checks everything this route checks (decision 13): human approval is
 // enforced twice, nothing auto-approves.
 
-type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject";
+type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject" | "question_bank";
 
 const NEEDS: Record<Action, LibraryAction> = {
   generate: "generate",
@@ -132,6 +134,7 @@ const NEEDS: Record<Action, LibraryAction> = {
   // review, so whoever can approve the video can edit them; posting stays
   // admin-only (the publish route).
   save_youtube: "approve",
+  question_bank: "generate",
   approve: "approve",
   reject: "approve",
 };
@@ -587,6 +590,51 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   // it locks the kit and the topic, records the reviewer and time, moves the
   // topic to video_approved and writes the audit row, atomically. This
   // handler never touches topic_kits.status itself.
+  /** Queue the kit's printable question bank (Phase D): one 'question_bank'
+   *  generation from the kit's own params, pointed at by doc_generation_ids.
+   *  Refuses quietly when the topic's bank has no approved items (nothing to
+   *  print — the worker would fail the kit on an empty bank) or when
+   *  generation is switched off. A kit that already has a bank gets a NEW
+   *  render (the bank grows as reviewers approve); the pointer moves, the
+   *  old row stays. The pointer is written by read-merge-write rather than
+   *  repoint_kit_generation(), which only serves a GENERATING kit — this
+   *  runs on approved kits, where no worker merges lesson_plan in. */
+  const queueQuestionBank = async (k: KitRow): Promise<{ queued: boolean; why?: string; generationId?: string }> => {
+    const { data: trow } = await admin.from("topics").select("bank_maturity").eq("id", id).maybeSingle();
+    const maturity = (trow as { bank_maturity?: string } | null)?.bank_maturity ?? "none";
+    if (maturity === "none") return { queued: false, why: "The topic has no approved questions yet — approve at least ten and try again." };
+    const gate = generationGate();
+    if (gate.response) return { queued: false, why: "Catalogue generation is switched off." };
+    const srcId = k.presentation_generation_id ?? kitGenerationIdFor(k, "worksheet");
+    if (!srcId) return { queued: false, why: "The kit has no generation to copy its settings from." };
+    const { data: src } = await admin.from("generations").select("params").eq("id", srcId).maybeSingle();
+    const params = ((src as { params?: Record<string, unknown> | null } | null)?.params ?? null) as Record<string, unknown> | null;
+    if (!params || params.catalogue !== true) return { queued: false, why: "The kit's generation is not a catalogue generation." };
+    const { data: gens, error: gErr } = await admin
+      .from("generations")
+      .insert(kitGenerationRows(gate.owner, retryParamsOf(params, QUESTION_BANK_KIND), [QUESTION_BANK_KIND]))
+      .select("id");
+    if (gErr) return { queued: false, why: gErr.code === OWNER_NOT_ADMIN ? "The catalogue owner is not a platform admin." : (gErr.message ?? "insert failed") };
+    const newId = ((gens ?? []) as { id: string }[])[0]?.id ?? null;
+    if (!newId) return { queued: false, why: "No row was inserted." };
+    const { data: fresh } = await admin.from("topic_kits").select("doc_generation_ids").eq("id", k.id).maybeSingle();
+    const ids = ((fresh as { doc_generation_ids?: Record<string, string> | null } | null)?.doc_generation_ids ?? k.doc_generation_ids ?? {}) as Record<string, string>;
+    const { error: uErr } = await admin.from("topic_kits").update({ doc_generation_ids: docGenerationIdsWith(ids, QUESTION_BANK_KIND, newId) }).eq("id", k.id);
+    if (uErr) return { queued: false, why: uErr.message ?? "pointer update failed", generationId: newId };
+    return { queued: true, generationId: newId };
+  };
+
+  // ── question_bank ───────────────────────────────────────────────────────────
+  // The console's "Generate question bank": for an approved or in-review kit.
+  if (action === "question_bank") {
+    const { kit, response } = await loadKit(body.kitId);
+    if (!kit) return response!;
+    if (!["approved", "in_review"].includes(kit.status)) return conflict(`This kit is ${statusLabel(kit.status)} — the question bank is made for an in-review or approved kit.`, { status: kit.status });
+    const r = await queueQuestionBank(kit);
+    if (!r.queued) return conflict(r.why ?? "The question bank could not be queued.", { generationId: r.generationId ?? null });
+    return NextResponse.json({ ok: true, generationId: r.generationId });
+  }
+
   if (action === "approve") {
     const { kit, response } = await loadKit(body.kitId);
     if (!kit) return response!;
@@ -610,7 +658,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     // current kit for this topic (0128 catalogue_current_kits) — tell the
     // public pages (utils/catalogue/landing.ts; dormant without a token).
     await requestLandingRebuild("kit_approve");
-    return NextResponse.json({ ok: true, kit: data });
+    // Phase D: an approved kit with a bank gets its printable question bank
+    // queued now (best effort — a refusal is reported, never a failed approve).
+    const bank = kit.doc_generation_ids?.[QUESTION_BANK_KIND] ? { queued: false, why: "already has one" } : await queueQuestionBank(kit);
+    return NextResponse.json({ ok: true, kit: data, questionBank: bank });
   }
 
   // ── reject ─────────────────────────────────────────────────────────────────

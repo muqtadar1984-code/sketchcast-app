@@ -814,7 +814,8 @@
       "worksheet": "वर्कशीट",
       "exam_paper": "प्रश्नपत्र",
       "case_study": "केस स्टडी",
-      "exam": "परीक्षा"
+      "exam": "परीक्षा",
+      "question_bank": "प्रश्न बैंक"
     },
     "status": {
       "queued": "कतार में",

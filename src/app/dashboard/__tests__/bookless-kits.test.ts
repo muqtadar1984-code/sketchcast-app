@@ -55,11 +55,12 @@ describe("groupBookless", () => {
     ]);
   });
 
-  it("assignable = finished pieces except the plan", () => {
+  it("assignable = finished pieces except the plan and the question bank", () => {
     const pieces = [
       L({ id: "pr", kind: "presentation" }),
       L({ id: "pl", kind: "lesson_plan" }),
       L({ id: "ws", kind: "worksheet" }),
+      L({ id: "qb", kind: "question_bank" }),
       L({ id: "cs", kind: "case_study", status: "processing" }),
     ];
     expect(assignableIds(pieces)).toEqual(["pr", "ws"]);

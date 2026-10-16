@@ -41,7 +41,7 @@ export type BooklessLesson = {
   answerKey: string | null;
 };
 
-const PIECE_ORDER: readonly string[] = ["presentation", "deck", "lesson_plan", "activity", "worksheet", "exam_paper", "case_study", "exam"];
+const PIECE_ORDER: readonly string[] = ["presentation", "deck", "lesson_plan", "activity", "worksheet", "exam_paper", "case_study", "exam", "question_bank"];
 const rank = (kind: string): number => {
   const i = PIECE_ORDER.indexOf(kind);
   return i === -1 ? PIECE_ORDER.length : i;
@@ -83,9 +83,10 @@ export function groupBookless(lessons: readonly BooklessLesson[]): { catalogue: 
   return { catalogue: finish(catalogue), stranded: finish(stranded) };
 }
 
-/** What a student may receive: every finished piece but the teacher's plan. */
+/** What a student may receive: every finished piece but the teacher's plan
+ * and the printable question bank (a teacher's reference, Phase D). */
 export const assignableIds = (pieces: readonly BooklessLesson[]): string[] =>
-  pieces.filter((p) => p.status === "done" && p.kind !== "lesson_plan").map((p) => p.id);
+  pieces.filter((p) => p.status === "done" && p.kind !== "lesson_plan" && p.kind !== "question_bank").map((p) => p.id);
 
 // The Library's own status colours (they lived in page.tsx until this section
 // became the only place that showed a bookless status).

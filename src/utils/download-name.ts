@@ -19,6 +19,7 @@ const DOC_NAME: Record<string, string> = {
   activity: "Activities",
   case_study: "Case Study",
   exam: "Exam",
+  question_bank: "Question Bank",
 };
 
 /**

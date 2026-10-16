@@ -102,8 +102,11 @@ describe("pieces", () => {
   it("orders the lesson first, then deck, plan, activity, worksheet, case study — and drops blanks", () => {
     expect(piecesOf(kitRow).map((p) => p.kind)).toEqual(["presentation", "deck", "lesson_plan", "worksheet", "case_study"]);
   });
-  it("assignable pieces exclude the teacher's plan", () => {
+  it("assignable pieces exclude the teacher's plan and the printable question bank", () => {
     expect(assignablePieces(piecesOf(kitRow)).map((p) => p.kind)).toEqual(["presentation", "deck", "worksheet", "case_study"]);
+    const withBank = piecesOf({ ...kitRow, doc_generation_ids: { ...kitRow.doc_generation_ids, question_bank: "g-qb" } });
+    expect(withBank.map((p) => p.kind).at(-1)).toBe("question_bank");
+    expect(assignablePieces(withBank).map((p) => p.kind)).not.toContain("question_bank");
   });
   it("an unknown future kind sorts last rather than vanishing", () => {
     const p = piecesOf({ id: "k", presentation_generation_id: null, doc_generation_ids: { glossary: "g-x", worksheet: "g-ws" } });

@@ -67,7 +67,7 @@ export type Kit = {
 /** Piece order on the card: how a teacher reads a kit — the lesson first,
  * then what they project, then what they hand out. A kind this list does not
  * know (a future document type) goes last rather than vanishing. */
-export const PIECE_ORDER: readonly string[] = ["presentation", "deck", "lesson_plan", "activity", "worksheet", "case_study"];
+export const PIECE_ORDER: readonly string[] = ["presentation", "deck", "lesson_plan", "activity", "worksheet", "case_study", "question_bank"];
 
 const pieceRank = (kind: string): number => {
   const i = PIECE_ORDER.indexOf(kind);
@@ -88,8 +88,10 @@ export function piecesOf(kit: TopicKitRow): KitPiece[] {
 
 /** The pieces a teacher can ASSIGN once copied: everything a student may
  * receive. The plan is the teacher's own document and never goes to a
- * student (the Library makes the same exclusion). */
-export const assignablePieces = (pieces: readonly KitPiece[]): KitPiece[] => pieces.filter((p) => p.kind !== "lesson_plan");
+ * student (the Library makes the same exclusion); the printable question
+ * bank is a teacher's reference too (Phase D). */
+export const assignablePieces = (pieces: readonly KitPiece[]): KitPiece[] =>
+  pieces.filter((p) => p.kind !== "lesson_plan" && p.kind !== "question_bank");
 
 /** The first public video of a kit — Part 1 when the lesson has parts. */
 const firstVideo = (videos: PublicRow["videos"]): string | null => {

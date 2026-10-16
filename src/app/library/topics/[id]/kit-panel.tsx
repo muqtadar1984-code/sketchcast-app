@@ -489,6 +489,20 @@ function CurrentKit({
         </span>
         {canGenerate && (
           <span className="ml-auto flex items-center gap-2">
+            {(kit.status === "approved" || kit.status === "in_review") && (
+              <button
+                type="button"
+                disabled={!!busy}
+                title="Render the printable question bank from the topic's approved questions (re-render after more are approved)"
+                onClick={async () => {
+                  const r = await post({ action: "question_bank", kitId: kit.id }, "question_bank");
+                  if (r) setNotice(kit.doc_generation_ids?.question_bank ? "Question bank re-render queued — the pointer moves when it is made." : "Question bank queued.");
+                }}
+                className="btn-ghost h-8 px-3 text-xs disabled:opacity-50"
+              >
+                {busy === "question_bank" ? "Queuing…" : kit.doc_generation_ids?.question_bank ? "Re-render question bank" : "Generate question bank"}
+              </button>
+            )}
             <button type="button" disabled={!!busy || !!regenWhy} title={regenWhy ?? undefined} onClick={regenerate} className="btn-ghost h-8 px-3 text-xs disabled:opacity-50">
               {busy === "regenerate" ? "Queuing…" : regenSwitched ? `Regenerate from ${regenFrom}` : "Regenerate kit"}
             </button>
