@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { type Question, type QuizData } from "./quiz-player";
 import { buildGradeUpdate, needsOutOf } from "./grade-update";
+import { fillBlankCorrect } from "@/app/api/quiz/numeric";
 
 export type PendingSub = {
   id: string;
@@ -31,10 +32,7 @@ function formatAnswer(q: Question, val: unknown): string {
 
 // Is an objective question correct? (null for short/subjective — those need a human.)
 function objectiveCorrect(q: Question, val: unknown): boolean | null {
-  if (q.type === "fill_blank") {
-    const accepted = [q.answer, ...(q.accept ?? [])].map(norm).filter(Boolean);
-    return norm(val) !== "" && accepted.includes(norm(val));
-  }
+  if (q.type === "fill_blank") return fillBlankCorrect(q.answer, q.accept, val); // the route's rule, numbers included
   if (q.type === "mcq") return norm(val) !== "" && norm(val) === norm(q.answer);
   if (q.type === "true_false") return typeof val === "boolean" && val === q.answer;
   if (q.type === "match") {
