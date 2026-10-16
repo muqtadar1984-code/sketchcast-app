@@ -59,6 +59,9 @@ export type Kit = {
   language: string;
   approvedAt: string;
   youtubeId: string | null;
+  /** the presentation's generation — the video a kit without a YouTube id
+   * (a translation, D5) plays from storage through /api/catalogue/file */
+  videoGenerationId: string | null;
   questionCount: number;
   pieces: KitPiece[];
   unlocked: boolean;
@@ -136,6 +139,7 @@ export function buildKits(
       language: p.language,
       approvedAt: p.approved_at,
       youtubeId: firstVideo(p.videos),
+      videoGenerationId: hit.kit.presentation_generation_id ?? null,
       questionCount: p.question_count ?? 0,
       pieces: piecesOf(hit.kit),
       unlocked: unlocked.has(hit.topicId),
@@ -143,6 +147,11 @@ export function buildKits(
   }
   return out.sort((a, b) => (a.approvedAt < b.approvedAt ? 1 : a.approvedAt > b.approvedAt ? -1 : a.title.localeCompare(b.title)));
 }
+
+/** The languages the gallery holds, English first, then by code — the
+ * language chips (Kit Translator T1). One language means no chips. */
+export const languagesOf = (kits: readonly { language: string }[]): string[] =>
+  [...new Set(kits.map((k) => k.language))].sort((a, b) => (a === "en" ? -1 : b === "en" ? 1 : a.localeCompare(b)));
 
 /** my_catalogue_allowance() as the page reads it. `cap` null = unlimited. */
 export type Allowance = {

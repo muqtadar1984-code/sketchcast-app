@@ -2047,6 +2047,8 @@
     "ineligibleSuspended": "حساب مدرستك موقوف. اطلب من مدرستك التواصل معنا.",
     "ineligibleOther": "الحقائب الجاهزة غير متاحة على هذا الحساب حاليًا.",
     "filterAll": "الكل",
+    "filterLanguage": "اللغة",
+    "close": "إغلاق",
     "filterUnlocked": "مفتوحة",
     "find": "ابحث عن درس",
     "downloads": "الملفات",

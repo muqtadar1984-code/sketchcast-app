@@ -4,7 +4,9 @@
  *   * the ORDER of refusals: a malformed request before any read; the account's
  *     eligibility (release switch, suspension, role) before the kit lookup; a
  *     non-catalogue id and a locked topic both before any storage path is read;
- *   * only document kinds are served — never the video, never questions_json;
+ *   * documents are served behind the unlock; the presentation's video and
+ *     frame are served for WATCHING without one (Kit Translator §5.7 — a
+ *     translated lesson plays from storage); never questions_json;
  *   * the filename is the Library's own (docDownloadName), so a worksheet saves
  *     as Worksheet.docx, its key as the answer-key name, the deck as Deck.pptx;
  *   * the handler: 401 before the service role is built, a short signed URL,
@@ -20,7 +22,7 @@ vi.mock("@/utils/supabase/server", () => ({ createClient: mocks.createClient }))
 vi.mock("@/utils/supabase/admin", () => ({ createAdminClient: mocks.createAdminClient }));
 
 import { GET } from "@/app/api/catalogue/file/route";
-import { CATALOGUE_URL_TTL_SECONDS, pieceKindIn, resolveCatalogueFileWith, SERVED_KINDS, type CatalogueStore } from "@/app/api/catalogue/logic";
+import { CATALOGUE_URL_TTL_SECONDS, WATCH_KINDS, WATCH_URL_TTL_SECONDS, pieceKindIn, resolveCatalogueFileWith, SERVED_KINDS, type CatalogueStore } from "@/app/api/catalogue/logic";
 import { docDownloadName } from "@/utils/download-name";
 
 const USER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -95,7 +97,7 @@ const unlockedStore = (over: Partial<ConstructorParameters<typeof Store>[0]> = {
 describe("resolveCatalogueFileWith", () => {
   it("serves a worksheet's docx with the Library's download name", async () => {
     const r = await resolveCatalogueFileWith(cs(unlockedStore()), USER, WORKSHEET, "docx");
-    expect(r).toEqual({ ok: true, path: "sys/w/worksheet.docx", filename: docDownloadName("worksheet", "docx"), topicId: TOPIC, genKind: "worksheet" });
+    expect(r).toEqual({ ok: true, path: "sys/w/worksheet.docx", filename: docDownloadName("worksheet", "docx"), topicId: TOPIC, genKind: "worksheet", watch: false });
     expect((r as { filename: string }).filename).toBe("Worksheet.docx");
   });
 
@@ -107,18 +109,26 @@ describe("resolveCatalogueFileWith", () => {
     expect(deck.ok && deck.filename).toBe("Deck.pptx");
   });
 
-  it("never serves the video or the marking scheme, even when the file exists", async () => {
+  it("serves the presentation's video and frame for WATCHING — no unlock, no download name — and never the marking scheme or the script", async () => {
+    const s = unlockedStore();
+    s.tables.catalogue_unlocks = []; // nobody has unlocked this topic: the lesson is still free to watch
+    const v = await resolveCatalogueFileWith(cs(s), USER, LESSON, "video_mp4");
+    expect(v).toEqual({ ok: true, path: "sys/l/video.mp4", filename: undefined, topicId: TOPIC, genKind: "presentation", watch: true });
+    expect(s.reads).not.toContain("catalogue_unlocks");
+    // the watch kinds open the PRESENTATION's files only — a document's
+    // generation has no video, whatever is asked for
+    expect(await resolveCatalogueFileWith(cs(unlockedStore()), USER, WORKSHEET, "video_mp4")).toEqual({ ok: false, status: 404, error: "No such file." });
     for (const [gen, kind] of [
-      [LESSON, "video_mp4"],
       [WORKSHEET, "questions_json"],
       [WORKSHEET, "script_json"],
     ] as const) {
-      const s = unlockedStore();
-      const r = await resolveCatalogueFileWith(cs(s), USER, gen, kind);
+      const t = unlockedStore();
+      const r = await resolveCatalogueFileWith(cs(t), USER, gen, kind);
       expect(r).toEqual({ ok: false, status: 404, error: "No such file." });
-      expect(s.reads).toEqual([]); // refused before any read
+      expect(t.reads).toEqual([]); // refused before any read
     }
     expect([...SERVED_KINDS].sort()).toEqual(["answer_key_docx", "deck_pptx", "docx"]);
+    expect([...WATCH_KINDS].sort()).toEqual(["thumbnail_png", "video_mp4"]);
   });
 
   it("refuses a malformed id before reading anything", async () => {
@@ -203,6 +213,26 @@ describe("GET /api/catalogue/file", () => {
     expect(signed).toHaveBeenCalledWith("sys/w/worksheet.docx", CATALOGUE_URL_TTL_SECONDS, { download: "Worksheet.docx" });
     expect(CATALOGUE_URL_TTL_SECONDS).toBeLessThanOrEqual(600);
     expect(inserted).toEqual([{ user_id: USER, topic_id: TOPIC, event: "download", meta: { generation_id: WORKSHEET, kind: "worksheet", artifact: "docx" } }]);
+  });
+
+  it("a video play 302s to a signed URL that lives long enough to seek through a lesson, with no download name, and records a watch", async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: USER } } }) } });
+    const store = unlockedStore();
+    store.tables.catalogue_unlocks = [];
+    const inserted: Row[] = [];
+    const signed = vi.fn(async () => ({ data: { signedUrl: "https://storage.test/video" } }));
+    mocks.createAdminClient.mockReturnValue({
+      rpc: store.rpc.bind(store),
+      from: (table: string) =>
+        table === "catalogue_events" ? { insert: async (row: Row) => (inserted.push(row), { error: null }) } : store.from(table),
+      storage: { from: () => ({ createSignedUrl: signed }) },
+    });
+    const res = await GET(req(LESSON, "video_mp4"));
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("https://storage.test/video");
+    expect(signed).toHaveBeenCalledWith("sys/l/video.mp4", WATCH_URL_TTL_SECONDS, undefined);
+    expect(WATCH_URL_TTL_SECONDS).toBeGreaterThanOrEqual(3600);
+    expect(inserted).toEqual([{ user_id: USER, topic_id: TOPIC, event: "watch", meta: { generation_id: LESSON, kind: "presentation", artifact: "video_mp4" } }]);
   });
 
   it("relays the resolver's refusal and never signs", async () => {
