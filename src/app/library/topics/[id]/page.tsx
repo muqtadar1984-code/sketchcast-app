@@ -15,7 +15,11 @@ import { AliasPanel, MappingPanel, PrereqPanel, TopicActions, TopicHeaderEditor,
 import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel";
 import { YOUTUBE_META_MIGRATION } from "@/utils/catalogue/publish";
 import { KitPanel, type KitArtifactView, type KitView } from "./kit-panel";
+import { TranslationsPanel, type TranslateJobRow } from "./translations-panel";
 import { PUBLICATION_COLUMNS_0122, loadVideoFormat } from "@/utils/catalogue/format-server";
+
+/** 0134 — the Kit Translator's columns on topic_kits. */
+const KIT_TRANSLATOR_MIGRATION = "0134_kit_translator.sql";
 
 // /library/topics/[id] — one topic: header (editable), status actions, aliases,
 // curriculum mappings with the depth-node selector, prerequisites, the
@@ -237,15 +241,33 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
       kitRows = (data ?? []) as unknown as TopicKit[];
     }
   }
-  kitRows = sortKits(kitRows).map((k) => ({
+  const normaliseKit = (k: TopicKit): TopicKit => ({
     ...k,
     doc_generation_ids: k.doc_generation_ids ?? {},
     youtube_meta: k.youtube_meta && typeof k.youtube_meta === "object" ? k.youtube_meta : null,
     chapters: Array.isArray(k.chapters) ? k.chapters : [],
     clips: Array.isArray(k.clips) ? k.clips : [],
     part_plan: Array.isArray(k.part_plan) ? k.part_plan : [],
-  }));
-  const kitGenIds = [...new Set(kitRows.flatMap((k) => kitGenerationIds(k)))];
+  });
+  kitRows = sortKits(kitRows).map(normaliseKit);
+  // The Kit Translator's kits (0134): every kit of this topic in a language
+  // other than English, with the three translation columns. Read separately
+  // so a database without 0134 still shows the English kit; the panel then
+  // says which migration is missing.
+  let translationRows: TopicKit[] = [];
+  let translationsMigration: string | null = null;
+  {
+    const { data, error } = await admin
+      .from("topic_kits")
+      .select(KIT_COLUMNS + ", part_plan, youtube_meta, translation_status, translation, precheck")
+      .eq("topic_id", id)
+      .neq("language", KIT_LANGUAGE)
+      .order("created_at", { ascending: false });
+    if (error && catalogueColumnMissing(error)) translationsMigration = KIT_TRANSLATOR_MIGRATION;
+    else if (error && !catalogueMissing(error)) kitsError = kitsError ?? error;
+    else translationRows = sortKits((data ?? []) as unknown as TopicKit[]).map(normaliseKit);
+  }
+  const kitGenIds = [...new Set([...kitRows, ...translationRows].flatMap((k) => kitGenerationIds(k)))];
   type GenEmbed = KitGenerationRow & {
     artifacts: { kind: string; storage_path: string }[] | null;
     jobs: (JobRow & { type: string })[] | null;
@@ -293,8 +315,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   // re-rendered kit may supersede.
   const videoFormat = await loadVideoFormat(admin);
   const allPublications = [...publicationsByKit.values()].flat();
-  const kits: KitView[] = await Promise.all(
-    kitRows.map(async (kit) => ({
+  const viewOf = async (kit: TopicKit): Promise<KitView> => ({
       kit,
       publications: publicationsByKit.get(kit.id) ?? [],
       otherPublications: allPublications.filter((p) => p.topic_kit_id !== kit.id),
@@ -322,8 +343,22 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
             return { gen, job: job ? { id: job.id, status: job.status, progress: job.progress, stage: job.stage, error: job.error, created_at: job.created_at } : null, artifacts };
           }),
       ),
-    })),
-  );
+  });
+  const kits: KitView[] = await Promise.all(kitRows.map(viewOf));
+  const translationKits: KitView[] = await Promise.all(translationRows.map(viewOf));
+  // The translate jobs of this topic's kits (0134): a queued or failed job
+  // has no kit row yet, so the panel reads the jobs themselves.
+  let translateJobs: TranslateJobRow[] = [];
+  if (kitRows.length) {
+    const { data } = await admin
+      .from("jobs")
+      .select("id, status, progress, stage, error, created_at, params")
+      .eq("type", "kit_translate")
+      .in("params->>source_kit_id", kitRows.map((k) => k.id))
+      .order("created_at", { ascending: false })
+      .limit(50);
+    translateJobs = ((data ?? []) as unknown as TranslateJobRow[]).map((j) => ({ ...j, params: j.params ?? {} }));
+  }
   const approvedArticle = articles.find((a) => a.status === "approved") ?? null;
   // Every version's status by id: the kit panel refuses Approve on a kit whose
   // own article is no longer the approved version (kitAcceptsApprove).
@@ -449,6 +484,16 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
                 publishEnabled={cataloguePublishEnabled()}
                 ownerConfigured={catalogueOwnerId() !== null}
                 migrationNote={kitMigrationNote}
+              />
+              <TranslationsPanel
+                topicId={topic.id}
+                sourceKit={kits.find((k) => k.kit.status === "approved")?.kit ?? null}
+                translations={translationKits}
+                jobs={translateJobs}
+                names={names}
+                canGenerate={canGenerate}
+                generateEnabled={catalogueGenerateEnabled()}
+                migrationNote={translationsMigration ? `The translation columns (topic_kits.translation_status) are not in this database yet — apply ${translationsMigration}.` : null}
               />
             </>
           )}
