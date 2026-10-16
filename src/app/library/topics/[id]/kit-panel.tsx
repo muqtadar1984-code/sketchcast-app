@@ -102,7 +102,7 @@ export type KitView = {
  *  surface, so `route` picks which handler the payload goes to. */
 type Post = (payload: Record<string, unknown>, label: string, route?: "kit" | "publish" | "supersede") => Promise<Record<string, unknown> | null>;
 
-function useKitPost(topicId: string) {
+export function useKitPost(topicId: string) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1144,7 +1144,7 @@ function chapterCountWarning(count: number) {
 }
 
 /** One generation's worker job: progress + stage while live, the error when it failed. */
-function JobLine({ job }: { job: JobRow | null }) {
+export function JobLine({ job }: { job: JobRow | null }) {
   if (!job) return <span className="text-xs text-[#98A0A9]">—</span>;
   const live = isLiveJobStatus(job.status);
   const stage = live ? stageLabel(job.stage) : null;

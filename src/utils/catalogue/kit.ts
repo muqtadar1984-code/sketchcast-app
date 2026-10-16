@@ -123,7 +123,7 @@ export const KIT_KIND_LABEL: Record<KitKind, string> = {
   question_bank: "Question bank",
 };
 
-/** The printable question bank (Phase D, 0134): rendered by the worker from
+/** The printable question bank (Phase D, 0135): rendered by the worker from
  *  the topic's APPROVED items with no model call, so it is never part of kit
  *  creation (nothing is approved yet) — the kit route queues it when a kit is
  *  approved with a bank, and on the console's "Generate question bank". */

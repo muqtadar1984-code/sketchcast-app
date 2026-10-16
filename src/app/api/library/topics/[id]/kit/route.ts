@@ -34,9 +34,13 @@ import {
 } from "@/utils/catalogue/kit";
 import { YOUTUBE_META_MIGRATION, validateYouTubeMeta } from "@/utils/catalogue/publish";
 import type { PartPlanRow, TeacherAvatar, TopicKit, YouTubeMeta } from "@/utils/catalogue/types";
+import { LANGUAGES, languageLabel as languageLabelOf } from "@/utils/narration";
 import { audit, bad, conflict, dbError, notFound, readJson, text, uuid } from "../../../lib";
 import { enqueueQuestionsJob } from "./questions-job";
+import { enqueueTranslateJob } from "./translate-job";
 import { cancelQueuedJob } from "./cancel-job";
+
+const languageLabel = (code: string) => languageLabelOf(code) ?? code;
 
 export const runtime = "nodejs";
 
@@ -123,13 +127,29 @@ export const runtime = "nodejs";
 // re-checks everything this route checks (decision 13): human approval is
 // enforced twice, nothing auto-approves.
 
-type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject" | "question_bank";
+//   translate (editor, admin) — the Kit Translator (0134, plan revision 3, T0):
+//     translate    {kitId, language}  ONE `kit_translate` observer job
+//                  (translate-job.ts; a live one for the same source kit and
+//                  language is reused) for an APPROVED English kit of this
+//                  topic into a lesson language that is not English and has
+//                  no live translation yet. The WORKER creates the translated
+//                  topic_kits row and its generations; this route queues and
+//                  audits. Behind the same FEATURE_CATALOGUE_GENERATE lock
+//                  (the render spends the kit lane's hours).
+
+//   question_bank (editor, admin) — catalogue Phase D: queue the kit's printable
+//     question bank (one `question_bank` generation from the kit's own params)
+//     for an in-review or approved kit whose topic has approved items; approve
+//     does the same on its own.
+
+type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject" | "translate" | "question_bank";
 
 const NEEDS: Record<Action, LibraryAction> = {
   generate: "generate",
   retry: "generate",
   regenerate: "generate",
   save_clips: "generate",
+  translate: "generate",
   // The YouTube words (title, hook, key terms, hashtags) are part of the
   // review, so whoever can approve the video can edit them; posting stays
   // admin-only (the publish route).
@@ -152,6 +172,8 @@ type Body = {
   intro?: unknown;
   key_terms?: unknown;
   hashtags?: unknown;
+  /** translate: the target lesson language */
+  language?: unknown;
 };
 
 /** Phase 3 builds English kits; translations arrive with the translate phase. */
@@ -384,6 +406,41 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const gate = generationGate();
     if (gate.response) return gate.response;
     return createKit({ owner: gate.owner, articleId: article!.id as string, sourceArticleId: null, teacherAvatar, sourceKitId: null, fromTopicStatus: "article_approved", verb: "kit_generate" });
+  }
+
+  // ── translate (0134) ───────────────────────────────────────────────────────
+  if (action === "translate") {
+    const { kit, response } = await loadKit(body.kitId);
+    if (!kit) return response!;
+    const language = typeof body.language === "string" ? body.language.trim().toLowerCase() : "";
+    if (!language || !LANGUAGES.some((l) => l.value === language)) return bad("language must be one of the lesson languages.");
+    if (language === LANGUAGE) return bad("The kit is already in English.");
+    if (kit.language !== LANGUAGE) return conflict("Only an English kit is translated; translations start from the English original.", { kitLanguage: kit.language });
+    if (kit.status !== "approved") return conflict(`This kit is ${statusLabel(kit.status)}, not approved — only an approved kit is translated.`, { status: kit.status });
+    if (!kit.presentation_generation_id) return conflict("This kit has no video to translate.", {});
+    // A live translation of this source in this language (the worker's row
+    // reads generating, or an approved one that is not stale) is not queued
+    // twice. Read separately: the columns are 0134's.
+    const { data: live, error: lvErr } = await admin
+      .from("topic_kits")
+      .select("id, status, translation_status")
+      .eq("source_kit_id", kit.id)
+      .eq("language", language)
+      .in("status", ["generating", "in_review"]);
+    if (lvErr && !catalogueColumnMissing(lvErr)) return dbError(lvErr);
+    if (lvErr) return conflict("The translation columns are not in this database yet — apply migration 0134.", { migration: "0134_kit_translator.sql" });
+    if (live?.length) return conflict(`A ${languageLabel(language)} translation of this kit is already ${statusLabel((live[0] as { status: string }).status)}.`, { translationKitId: (live[0] as { id: string }).id });
+    const gate = generationGate();
+    if (gate.response) return gate.response;
+    const q = await enqueueTranslateJob(admin, { sourceKitId: kit.id, topicId: id, language });
+    if (!q.ok) return dbError(q.error);
+    await audit(admin, m.id, "kit_translate", "topic", id, {
+      kit_id: kit.id,
+      language,
+      job_id: q.jobId,
+      job_existing: q.existing,
+    });
+    return NextResponse.json({ ok: true, jobId: q.jobId, existing: q.existing, language });
   }
 
   if (action === "regenerate") {

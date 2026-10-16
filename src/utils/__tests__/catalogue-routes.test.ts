@@ -138,6 +138,7 @@ const text = (name: string) => source.get(files.find((f) => rel(f) === name)!)!;
 
 const KIT = "topics/[id]/kit/route.ts";
 const KIT_QUESTIONS_JOB = "topics/[id]/kit/questions-job.ts";
+const KIT_TRANSLATE_JOB = "topics/[id]/kit/translate-job.ts";
 const KIT_CANCEL_JOB = "topics/[id]/kit/cancel-job.ts";
 const COMPOSE = "topics/[id]/compose/route.ts";
 const QUESTIONS = "topics/[id]/questions/route.ts";
@@ -167,10 +168,10 @@ describe("the /api/library routes exist and are scanned", () => {
         ...present(A2_ROUTES),
       ].sort(),
     );
-    // the kit's two `jobs` helpers (enqueue the bank job; cancel an orphaned
-    // retry's job) are the only non-route, non-lib files — the route itself
-    // never touches `jobs`
-    expect(files.map(rel).filter((n) => !/[\\/]route\.ts$/.test(n) && n !== "lib.ts").sort()).toEqual([KIT_CANCEL_JOB, KIT_QUESTIONS_JOB].sort());
+    // the kit's three `jobs` helpers (enqueue the bank job; enqueue the
+    // translate job; cancel an orphaned retry's job) are the only non-route,
+    // non-lib files — the route itself never touches `jobs`
+    expect(files.map(rel).filter((n) => !/[\\/]route\.ts$/.test(n) && n !== "lib.ts").sort()).toEqual([KIT_CANCEL_JOB, KIT_QUESTIONS_JOB, KIT_TRANSLATE_JOB].sort());
   });
 });
 
@@ -249,7 +250,24 @@ describe("every /api/library route", () => {
   it("inserts into `jobs` from exactly the harvest, derive, article, questions, publish and supersede routes plus the kit's bank-job helper, and nowhere else", () => {
     const jobInsert = /\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/;
     const inserters = [...source].filter(([, text]) => jobInsert.test(text)).map(([f]) => rel(f)).sort();
-    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts", "topics/[id]/article/route.ts", KIT_QUESTIONS_JOB, PUBLISH, "topics/[id]/supersede/route.ts", ...present([QUESTIONS])].sort());
+    expect(inserters).toEqual(["derive/route.ts", "harvest/route.ts", "topics/[id]/article/route.ts", KIT_QUESTIONS_JOB, KIT_TRANSLATE_JOB, PUBLISH, "topics/[id]/supersede/route.ts", ...present([QUESTIONS])].sort());
+    // The kit's translate job (0134 jobs_one_live_translate) is the same
+    // shape: an observer with no generation and no book, the live check
+    // keyed like the index and run BEFORE the insert, a 23505 read back as
+    // "already queued" (existing: true).
+    const tj = text(KIT_TRANSLATE_JOB);
+    expect(tj).toMatch(/const\s+TRANSLATE_JOB_TYPE\s*=\s*["']kit_translate["']/);
+    expect(tj).toMatch(/type:\s*TRANSLATE_JOB_TYPE/);
+    expect(tj).toMatch(/params:\s*\{\s*source_kit_id:\s*opts\.sourceKitId,\s*topic_id:\s*opts\.topicId,\s*language:\s*opts\.language\s*\}/);
+    expect(tj).toMatch(/generation_id:\s*null/);
+    expect(tj).toMatch(/book_id:\s*null/);
+    const tCheck = tj.indexOf('.in("status", ["queued", "processing"])');
+    const tInsert = tj.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/);
+    expect(tCheck).toBeGreaterThan(-1);
+    expect(tInsert).toBeGreaterThan(tCheck);
+    expect(tj).toMatch(/\.eq\(\s*["']params->>source_kit_id["']\s*,\s*opts\.sourceKitId\s*\)/);
+    expect(tj).toMatch(/\.eq\(\s*["']params->>language["']\s*,\s*opts\.language\s*\)/);
+    expect(tj.slice(tj.indexOf('jErr.code === "23505"'))).toMatch(/existing:\s*true/);
     // The kit's bank job (0115 jobs_one_live_questions) is an observer too: no
     // generation, no book, its input in params; the live check is keyed like
     // the index and runs BEFORE the insert; its 23505 is "the bank job already

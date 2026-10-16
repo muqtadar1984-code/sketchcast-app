@@ -1,4 +1,5 @@
--- 0134: the printable QUESTION BANK becomes its own generation kind
+-- 0135: the printable QUESTION BANK (numbered 0135: 0134 is the Kit Translator, merged the same hour)
+-- the printable QUESTION BANK becomes its own generation kind
 -- ('question_bank'). Catalogue Phase D (plan §5.4).
 --
 -- One generation per kit, owned by the catalogue system account, rendered by

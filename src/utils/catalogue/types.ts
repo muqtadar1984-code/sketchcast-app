@@ -285,6 +285,36 @@ export type TopicKit = {
   judge_score: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  /** 0134 Kit Translator: null for an English kit. Optional until 0134 is
+   *  applied — the page reads the three columns separately. */
+  translation_status?: TranslationStatus | string | null;
+  /** 0134: the translation's provenance (source kit, staged scripts, assets, costs). */
+  translation?: Record<string, unknown> | null;
+  /** 0134: the pre-check report (catalogue.translate_check). */
+  precheck?: PrecheckReport | null;
+};
+
+// ── Translations (0134) ──────────────────────────────────────────────────────
+
+/** topic_kits.translation_status — the translation's own lifecycle beside the
+ *  kit's status: staged while the worker builds it, in_review when every piece
+ *  is done, approved by approve_topic_kit's translation branch, stale when the
+ *  English source was superseded cosmetically (still served), blocked after a
+ *  correction (hidden until retranslated), failed. */
+export type TranslationStatus = "staged" | "in_review" | "approved" | "stale" | "blocked" | "failed";
+
+export type PrecheckFinding = { where: string; what: string; [k: string]: unknown };
+
+/** topic_kits.precheck — written by the worker's translate job (check A) and
+ *  the translated presentation's render (check C). A finding blocks or flags;
+ *  nothing here approves (decision D3). */
+export type PrecheckReport = {
+  ok: boolean;
+  blocking: PrecheckFinding[];
+  flags: PrecheckFinding[];
+  checks?: Record<string, unknown>[];
+  parts?: { part: number; ok: boolean; blocking: number; flags: number }[];
+  post_render?: { ok: boolean; blocking: PrecheckFinding[]; flags: PrecheckFinding[] } | null;
 };
 
 // ── Publications (Phase 4) ───────────────────────────────────────────────────
