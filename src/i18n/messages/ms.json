@@ -1212,6 +1212,14 @@
       "useIt": "Gunakannya",
       "adding": "Menambah…",
       "makeMyOwn": "Jana sendiri"
+    },
+    "bookless": {
+      "catalogueTitle": "Kit sedia guna",
+      "catalogueHint": "Disalin daripada katalog. Tugaskan seperti pelajaran lain; yang asal kekal dalam Kit.",
+      "browseKits": "Lihat kit",
+      "strandedTitle": "Pelajaran daripada buku yang dibuang",
+      "strandedHint": "Bukunya telah dipadam, jadi ia dikumpulkan di sini mengikut bab. Semuanya masih boleh dimainkan, dimuat turun dan ditugaskan.",
+      "answerKey": "Skema jawapan"
     }
   },
   "school": {
