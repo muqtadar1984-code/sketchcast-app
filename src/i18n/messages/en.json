@@ -2035,6 +2035,12 @@
     "highlighted": "Here is the kit you came for",
     "ineligibleRole": "Ready-made kits are for teachers and parents.",
     "ineligibleSuspended": "Your school account is suspended. Ask your school to contact us.",
-    "ineligibleOther": "Ready-made kits are not available on this account right now."
+    "ineligibleOther": "Ready-made kits are not available on this account right now.",
+    "filterAll": "All",
+    "filterUnlocked": "Unlocked",
+    "find": "Find a lesson",
+    "downloads": "Files",
+    "noMatches": "No lessons match.",
+    "allowanceLine": "{used} of {cap} kits this week · resets {date}"
   }
 }

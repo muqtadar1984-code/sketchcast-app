@@ -2035,6 +2035,12 @@
     "highlighted": "Aquí está el kit que buscabas",
     "ineligibleRole": "Los kits listos para usar son para docentes y familias.",
     "ineligibleSuspended": "La cuenta de tu centro está suspendida. Pide a tu centro que se ponga en contacto con nosotros.",
-    "ineligibleOther": "Los kits listos para usar no están disponibles en esta cuenta ahora mismo."
+    "ineligibleOther": "Los kits listos para usar no están disponibles en esta cuenta ahora mismo.",
+    "filterAll": "Todo",
+    "filterUnlocked": "Desbloqueados",
+    "find": "Buscar una lección",
+    "downloads": "Archivos",
+    "noMatches": "Ninguna lección coincide.",
+    "allowanceLine": "{used} de {cap} kits esta semana · se reinicia el {date}"
   }
 }
