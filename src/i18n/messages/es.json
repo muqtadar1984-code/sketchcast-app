@@ -1212,6 +1212,14 @@
       "useIt": "Usarla",
       "adding": "Agregando…",
       "makeMyOwn": "Generar la mía"
+    },
+    "bookless": {
+      "catalogueTitle": "Kits listos para usar",
+      "catalogueHint": "Copiados del catálogo. Asígnalos como cualquier lección; los originales siguen en Kits.",
+      "browseKits": "Explorar kits",
+      "strandedTitle": "Lecciones de libros eliminados",
+      "strandedHint": "Su libro se eliminó, así que se agrupan aquí por capítulo. Todo sigue funcionando: ver, descargar y asignar.",
+      "answerKey": "Clave de respuestas"
     }
   },
   "school": {

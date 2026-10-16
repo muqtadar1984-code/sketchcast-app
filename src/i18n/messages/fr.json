@@ -1212,6 +1212,14 @@
       "useIt": "Utiliser ce kit",
       "adding": "Ajout…",
       "makeMyOwn": "Générer le mien"
+    },
+    "bookless": {
+      "catalogueTitle": "Kits prêts à l'emploi",
+      "catalogueHint": "Copiés depuis le catalogue. Attribuez-les comme n'importe quelle leçon ; les originaux restent dans Kits.",
+      "browseKits": "Parcourir les kits",
+      "strandedTitle": "Leçons de livres supprimés",
+      "strandedHint": "Leur livre a été supprimé, elles sont donc regroupées ici par chapitre. Tout fonctionne encore : lecture, téléchargement et attribution.",
+      "answerKey": "Corrigé"
     }
   },
   "school": {

@@ -1212,6 +1212,14 @@
       "useIt": "Usar esta",
       "adding": "Adicionando…",
       "makeMyOwn": "Gerar a minha"
+    },
+    "bookless": {
+      "catalogueTitle": "Kits prontos a usar",
+      "catalogueHint": "Copiados do catálogo. Atribua-os como qualquer aula; os originais ficam em Kits.",
+      "browseKits": "Explorar kits",
+      "strandedTitle": "Aulas de livros removidos",
+      "strandedHint": "O livro foi eliminado, por isso estão agrupadas aqui por capítulo. Tudo continua a funcionar: ver, transferir e atribuir.",
+      "answerKey": "Chave de respostas"
     }
   },
   "school": {

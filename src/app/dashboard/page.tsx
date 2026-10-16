@@ -5,9 +5,9 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isPossiblyOfficeMimetype } from "@/utils/office-file";
 import UploadBook from "./upload-book";
 import AutoRefresh from "@/components/auto-refresh";
-import DeleteLesson from "./delete-lesson";
+import BooklessKits from "./bookless-kits";
 import BookTable, { type BookRow } from "./book-table";
-import { kindLabel, statusLabel, type LibraryMessages } from "./labels";
+import { kindLabel, type LibraryMessages } from "./labels";
 import { assignedDeckUnits, studentDeckLinks } from "./kit";
 import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
@@ -28,7 +28,7 @@ import GettingStarted from "./getting-started";
 import NoticeBanner from "./notice-banner";
 import NoticesCard from "./notices-card";
 import { noticesFor } from "@/utils/notices";
-import { diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import { catalogueTabEnabled, diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { builderJob } from "@/utils/builder-job";
@@ -61,13 +61,6 @@ type Book = {
   cover_path: string | null;
   created_at: string;
   health: BookHealth | null;
-};
-
-const STATUS_STYLE: Record<string, string> = {
-  queued: "bg-[#EEF0EC] text-[#5B6470]",
-  processing: "bg-[#FFF1D6] text-[#9A6400]",
-  done: "bg-[#E2F4F1] text-[#0C8175]",
-  error: "bg-[#FCEBEA] text-[#B42318]",
 };
 
 // Multi-part artifact ordering. NOT a path sort: ICU collation puts "." AFTER
@@ -1321,43 +1314,13 @@ export default async function DashboardPage() {
           </details>
         )}
 
-        {lessons.filter((l) => l.bookId === null).length > 0 && (
-          <>
-            <h2 className="text-2xl mt-12 mb-4">{t.otherLessons}</h2>
-            <div className="space-y-3">
-              {lessons
-                .filter((l) => l.bookId === null)
-                .map((l) => (
-                  <div key={l.id} className="card card-hover p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="font-display font-medium truncate">{l.title}</span>
-                      <div className="flex items-center gap-3 shrink-0">
-                        {l.status === "done" &&
-                          l.videos.map((url, i, all) => (
-                            <a key={`v${i}`} href={url} target="_blank" className="text-sm font-medium text-[#0C8175] hover:underline">
-                              ▶ {all.length > 1 ? fmt(t.watchPart, { n: i + 1 }) : t.watch}
-                            </a>
-                          ))}
-                        {l.status === "done" &&
-                          l.decks.map((url, i, all) => (
-                            <a key={`d${i}`} href={url} className="text-sm font-medium text-[#0C8175] hover:underline">
-                              ⬇ {all.length > 1 ? fmt(t.deckPart, { n: i + 1 }) : t.deck}
-                            </a>
-                          ))}
-                        {l.status !== "done" && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
-                            {statusLabel(t, l.status)}
-                            {l.status === "processing" ? ` · ${l.progress}%` : ""}
-                          </span>
-                        )}
-                        <DeleteLesson genId={l.id} status={l.status} t={t} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </>
-        )}
+        <BooklessKits
+          lessons={lessons.filter((l) => l.bookId === null)}
+          classes={classes}
+          childTargets={childTargets}
+          kitsHref={catalogueTabEnabled() && role !== "student" ? "/dashboard/kits" : null}
+          t={t}
+        />
         {/* Contact SketchCast staff for admin help beyond self-serve (password
             resets + adding students). Teachers/coordinators here; parents run
             their own family world, so it's hidden for them. */}

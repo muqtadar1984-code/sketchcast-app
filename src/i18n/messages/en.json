@@ -1212,6 +1212,14 @@
       "useIt": "Use it",
       "adding": "Adding…",
       "makeMyOwn": "Make my own"
+    },
+    "bookless": {
+      "catalogueTitle": "Ready-made kits",
+      "catalogueHint": "Copied from the catalogue. Assign them like any lesson; the originals stay in Kits.",
+      "browseKits": "Browse kits",
+      "strandedTitle": "Lessons from removed books",
+      "strandedHint": "Their book was deleted, so they are grouped here by chapter. Everything still plays, downloads and assigns.",
+      "answerKey": "Answer key"
     }
   },
   "school": {
