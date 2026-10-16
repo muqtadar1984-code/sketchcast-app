@@ -50,7 +50,8 @@
       "myChildren": "Anak Saya",
       "testPapers": "Kertas Ujian",
       "books": "Buku",
-      "board": "Papan"
+      "board": "Papan",
+      "kits": "Kit"
     },
     "openMenu": "Buka menu",
     "closeMenu": "Tutup menu",
@@ -1999,5 +2000,41 @@
       "plan": "Papan bilik darjah disertakan dengan Pro, Pro+ dan setiap pelan sekolah.",
       "back": "Kembali ke perpustakaan anda"
     }
+  },
+  "kits": {
+    "title": "Kit sedia guna",
+    "subtitle": "Pelajaran yang diluluskan daripada katalog SketchCast: video, slaid, rancangan, aktiviti, lembaran kerja dan kajian kes, sedia untuk dimuat turun dan ditugaskan.",
+    "comingSoonTitle": "Kit sedia guna akan datang tidak lama lagi",
+    "comingSoonBody": "Kami sedang menyiapkan sentuhan akhir katalog. Pelajaran video percuma sudah terbuka kepada semua; kit penuh akan tiba di sini tidak lama lagi.",
+    "browsePublic": "Lihat pelajaran percuma",
+    "allowanceTitle": "Kit mingguan anda",
+    "allowanceUsage": "{used} daripada {cap} dibuka minggu ini",
+    "allowanceResets": "diset semula {date}",
+    "allowanceUnlimited": "Tanpa had: pelan sekolah anda merangkumi semua kit",
+    "allowanceSpent": "Anda telah membuka kit minggu ini. Pembukaan adalah kekal, jadi kembali pada {date}, atau naik taraf untuk lebih banyak setiap minggu.",
+    "upgradeCta": "Lihat pelan dan harga",
+    "unlock": "Buka kit ini",
+    "unlocking": "Membuka…",
+    "unlocked": "Dibuka",
+    "weeklyLimit": "Had mingguan dicapai. Diset semula {date}.",
+    "notAvailable": "Kit ini tidak lagi tersedia.",
+    "watch": "Tonton pelajaran",
+    "lessonPage": "Halaman pelajaran",
+    "pieces": "{n} bahagian",
+    "questions": "{n} soalan latihan",
+    "download": "Muat turun",
+    "answerKey": "Skema jawapan",
+    "addToLibrary": "Tambah ke Pustaka saya",
+    "adding": "Menambah…",
+    "added": "Dalam Pustaka anda",
+    "openLibrary": "Buka Pustaka",
+    "assign": "Tugaskan",
+    "empty": "Belum ada kit. Pelajaran pertama yang diluluskan akan muncul di sini sebaik sahaja diterbitkan.",
+    "unavailable": "Katalog tidak tersedia buat masa ini. Cuba lagi sebentar nanti.",
+    "failed": "Itu tidak berjaya. Cuba lagi sebentar nanti.",
+    "highlighted": "Inilah kit yang anda cari",
+    "ineligibleRole": "Kit sedia guna adalah untuk guru dan ibu bapa.",
+    "ineligibleSuspended": "Akaun sekolah anda digantung. Minta sekolah anda menghubungi kami.",
+    "ineligibleOther": "Kit sedia guna tidak tersedia pada akaun ini buat masa ini."
   }
 }

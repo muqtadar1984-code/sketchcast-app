@@ -50,7 +50,8 @@
       "myChildren": "Mis hijos",
       "testPapers": "Exámenes",
       "books": "Libros",
-      "board": "Pizarra"
+      "board": "Pizarra",
+      "kits": "Kits"
     },
     "openMenu": "Abrir menú",
     "closeMenu": "Cerrar menú",
@@ -1999,5 +2000,41 @@
       "plan": "La pizarra del aula viene con Pro, Pro+ y todos los planes escolares.",
       "back": "Volver a tu biblioteca"
     }
+  },
+  "kits": {
+    "title": "Kits listos para usar",
+    "subtitle": "Lecciones aprobadas del catálogo de SketchCast: el vídeo, la presentación, el plan, las actividades, la hoja de ejercicios y el estudio de caso, listos para descargar y asignar.",
+    "comingSoonTitle": "Los kits listos para usar llegan pronto",
+    "comingSoonBody": "Estamos dando los últimos retoques al catálogo. Las lecciones en vídeo gratuitas ya están abiertas a todos; los kits completos llegarán aquí en breve.",
+    "browsePublic": "Explorar las lecciones gratuitas",
+    "allowanceTitle": "Tus kits de la semana",
+    "allowanceUsage": "{used} de {cap} desbloqueados esta semana",
+    "allowanceResets": "se reinicia el {date}",
+    "allowanceUnlimited": "Ilimitado: tu plan escolar incluye todos los kits",
+    "allowanceSpent": "Ya has desbloqueado los kits de esta semana. Los desbloqueos son permanentes: vuelve el {date} o mejora tu plan para tener más cada semana.",
+    "upgradeCta": "Ver planes y precios",
+    "unlock": "Desbloquear este kit",
+    "unlocking": "Desbloqueando…",
+    "unlocked": "Desbloqueado",
+    "weeklyLimit": "Límite semanal alcanzado. Se reinicia el {date}.",
+    "notAvailable": "Este kit ya no está disponible.",
+    "watch": "Ver la lección",
+    "lessonPage": "Página de la lección",
+    "pieces": "{n} piezas",
+    "questions": "{n} preguntas de práctica",
+    "download": "Descargar",
+    "answerKey": "Clave de respuestas",
+    "addToLibrary": "Añadir a mi biblioteca",
+    "adding": "Añadiendo…",
+    "added": "En tu biblioteca",
+    "openLibrary": "Abrir la biblioteca",
+    "assign": "Asignar",
+    "empty": "Aún no hay kits. Las primeras lecciones aprobadas aparecerán aquí en cuanto se publiquen.",
+    "unavailable": "El catálogo no está disponible ahora mismo. Inténtalo de nuevo en un momento.",
+    "failed": "Eso no ha funcionado. Inténtalo de nuevo en un momento.",
+    "highlighted": "Aquí está el kit que buscabas",
+    "ineligibleRole": "Los kits listos para usar son para docentes y familias.",
+    "ineligibleSuspended": "La cuenta de tu centro está suspendida. Pide a tu centro que se ponga en contacto con nosotros.",
+    "ineligibleOther": "Los kits listos para usar no están disponibles en esta cuenta ahora mismo."
   }
 }

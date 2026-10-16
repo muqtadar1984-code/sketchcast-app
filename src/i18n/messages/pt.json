@@ -50,7 +50,8 @@
       "myChildren": "Meus filhos",
       "testPapers": "Provas",
       "books": "Livros",
-      "board": "Lousa"
+      "board": "Lousa",
+      "kits": "Kits"
     },
     "openMenu": "Abrir menu",
     "closeMenu": "Fechar menu",
@@ -1999,5 +2000,41 @@
       "plan": "A lousa da sala de aula está inclusa nos planos Pro, Pro+ e em todos os planos escolares.",
       "back": "Voltar para sua biblioteca"
     }
+  },
+  "kits": {
+    "title": "Kits prontos a usar",
+    "subtitle": "Aulas aprovadas do catálogo SketchCast: o vídeo, os slides, o plano, as atividades, a ficha de exercícios e o estudo de caso, prontos para transferir e atribuir.",
+    "comingSoonTitle": "Os kits prontos a usar chegam em breve",
+    "comingSoonBody": "Estamos a dar os últimos retoques ao catálogo. As videoaulas gratuitas já estão abertas a todos; os kits completos chegam aqui em breve.",
+    "browsePublic": "Explorar as aulas gratuitas",
+    "allowanceTitle": "Os seus kits da semana",
+    "allowanceUsage": "{used} de {cap} desbloqueados esta semana",
+    "allowanceResets": "renova a {date}",
+    "allowanceUnlimited": "Ilimitado: o plano da sua escola inclui todos os kits",
+    "allowanceSpent": "Já desbloqueou os kits desta semana. Os desbloqueios são permanentes: volte a {date} ou faça upgrade para ter mais todas as semanas.",
+    "upgradeCta": "Ver planos e preços",
+    "unlock": "Desbloquear este kit",
+    "unlocking": "A desbloquear…",
+    "unlocked": "Desbloqueado",
+    "weeklyLimit": "Limite semanal atingido. Renova a {date}.",
+    "notAvailable": "Este kit já não está disponível.",
+    "watch": "Ver a aula",
+    "lessonPage": "Página da aula",
+    "pieces": "{n} peças",
+    "questions": "{n} questões de prática",
+    "download": "Transferir",
+    "answerKey": "Chave de respostas",
+    "addToLibrary": "Adicionar à minha Biblioteca",
+    "adding": "A adicionar…",
+    "added": "Na sua Biblioteca",
+    "openLibrary": "Abrir a Biblioteca",
+    "assign": "Atribuir",
+    "empty": "Ainda não há kits. As primeiras aulas aprovadas aparecem aqui assim que forem publicadas.",
+    "unavailable": "O catálogo não está disponível neste momento. Tente novamente daqui a pouco.",
+    "failed": "Isso não resultou. Tente novamente daqui a pouco.",
+    "highlighted": "Aqui está o kit que procurava",
+    "ineligibleRole": "Os kits prontos a usar destinam-se a professores e encarregados de educação.",
+    "ineligibleSuspended": "A conta da sua escola está suspensa. Peça à sua escola que nos contacte.",
+    "ineligibleOther": "Os kits prontos a usar não estão disponíveis nesta conta neste momento."
   }
 }

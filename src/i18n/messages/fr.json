@@ -50,7 +50,8 @@
       "myChildren": "Mes enfants",
       "testPapers": "Contrôles",
       "books": "Livres",
-      "board": "Tableau"
+      "board": "Tableau",
+      "kits": "Kits"
     },
     "openMenu": "Ouvrir le menu",
     "closeMenu": "Fermer le menu",
@@ -1999,5 +2000,41 @@
       "plan": "Le tableau de la classe est inclus avec Pro, Pro+ et toutes les formules établissement.",
       "back": "Retour à votre bibliothèque"
     }
+  },
+  "kits": {
+    "title": "Kits prêts à l'emploi",
+    "subtitle": "Des leçons approuvées du catalogue SketchCast : la vidéo, le diaporama, le plan, les activités, la fiche d'exercices et l'étude de cas, prêts à télécharger et à attribuer.",
+    "comingSoonTitle": "Les kits prêts à l'emploi arrivent bientôt",
+    "comingSoonBody": "Nous mettons la dernière main au catalogue. Les leçons vidéo gratuites sont déjà ouvertes à tous ; les kits complets arrivent ici sous peu.",
+    "browsePublic": "Parcourir les leçons gratuites",
+    "allowanceTitle": "Vos kits de la semaine",
+    "allowanceUsage": "{used} sur {cap} débloqués cette semaine",
+    "allowanceResets": "réinitialisation le {date}",
+    "allowanceUnlimited": "Illimité : votre forfait école inclut tous les kits",
+    "allowanceSpent": "Vous avez débloqué les kits de cette semaine. Les déblocages sont permanents : revenez le {date}, ou passez à un forfait supérieur pour en avoir plus chaque semaine.",
+    "upgradeCta": "Voir les forfaits et les tarifs",
+    "unlock": "Débloquer ce kit",
+    "unlocking": "Déblocage…",
+    "unlocked": "Débloqué",
+    "weeklyLimit": "Limite hebdomadaire atteinte. Réinitialisation le {date}.",
+    "notAvailable": "Ce kit n'est plus disponible.",
+    "watch": "Regarder la leçon",
+    "lessonPage": "Page de la leçon",
+    "pieces": "{n} éléments",
+    "questions": "{n} questions d'entraînement",
+    "download": "Télécharger",
+    "answerKey": "Corrigé",
+    "addToLibrary": "Ajouter à ma bibliothèque",
+    "adding": "Ajout…",
+    "added": "Dans votre bibliothèque",
+    "openLibrary": "Ouvrir la bibliothèque",
+    "assign": "Attribuer",
+    "empty": "Pas encore de kits. Les premières leçons approuvées apparaîtront ici dès leur publication.",
+    "unavailable": "Le catalogue est indisponible pour le moment. Réessayez dans un instant.",
+    "failed": "Cela n'a pas fonctionné. Réessayez dans un instant.",
+    "highlighted": "Voici le kit que vous cherchiez",
+    "ineligibleRole": "Les kits prêts à l'emploi sont réservés aux enseignants et aux parents.",
+    "ineligibleSuspended": "Le compte de votre école est suspendu. Demandez à votre école de nous contacter.",
+    "ineligibleOther": "Les kits prêts à l'emploi ne sont pas disponibles sur ce compte pour le moment."
   }
 }

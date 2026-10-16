@@ -50,7 +50,8 @@
       "myChildren": "My Children",
       "testPapers": "Test Papers",
       "books": "Books",
-      "board": "Board"
+      "board": "Board",
+      "kits": "Kits"
     },
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
@@ -1999,5 +2000,41 @@
       "plan": "The classroom board comes with Pro, Pro+ and every school plan.",
       "back": "Back to your library"
     }
+  },
+  "kits": {
+    "title": "Ready-made kits",
+    "subtitle": "Approved lessons from the SketchCast catalogue: the video, slide deck, plan, activities, worksheet and case study, ready to download and assign.",
+    "comingSoonTitle": "Ready-made kits are coming soon",
+    "comingSoonBody": "We are putting the finishing touches on the catalogue. The free video lessons are already open to everyone; the full kits arrive here shortly.",
+    "browsePublic": "Browse the free lessons",
+    "allowanceTitle": "Your weekly kits",
+    "allowanceUsage": "{used} of {cap} unlocked this week",
+    "allowanceResets": "resets {date}",
+    "allowanceUnlimited": "Unlimited: your school plan includes every kit",
+    "allowanceSpent": "You have unlocked this week's kits. Unlocks are permanent, so come back on {date}, or upgrade for more each week.",
+    "upgradeCta": "See plans and pricing",
+    "unlock": "Unlock this kit",
+    "unlocking": "Unlocking…",
+    "unlocked": "Unlocked",
+    "weeklyLimit": "Weekly limit reached. Resets {date}.",
+    "notAvailable": "This kit is no longer available.",
+    "watch": "Watch the lesson",
+    "lessonPage": "Lesson page",
+    "pieces": "{n} pieces",
+    "questions": "{n} practice questions",
+    "download": "Download",
+    "answerKey": "Answer key",
+    "addToLibrary": "Add to my Library",
+    "adding": "Adding…",
+    "added": "In your Library",
+    "openLibrary": "Open Library",
+    "assign": "Assign",
+    "empty": "No kits yet. The first approved lessons appear here as soon as they are published.",
+    "unavailable": "The catalogue is unavailable right now. Try again shortly.",
+    "failed": "That didn't work. Try again shortly.",
+    "highlighted": "Here is the kit you came for",
+    "ineligibleRole": "Ready-made kits are for teachers and parents.",
+    "ineligibleSuspended": "Your school account is suspended. Ask your school to contact us.",
+    "ineligibleOther": "Ready-made kits are not available on this account right now."
   }
 }
