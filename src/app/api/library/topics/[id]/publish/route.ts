@@ -5,12 +5,17 @@ import { libraryAllows, type LibraryAction } from "@/utils/library-routing";
 import { cataloguePublishEnabled, youtubeAuditPassed } from "@/utils/flags";
 import { catalogueColumnMissing } from "@/utils/catalogue/status";
 import {
+  REWORDS_ACTION,
   canPublish,
   canQueuePublish,
+  canQueueRewords,
   defaultPrivacy,
   isPrivacy,
+  privacyForAction,
   publicationSummary,
+  publishJobParams,
   publishPrivacyAccepts,
+  type PublishJobAction,
 } from "@/utils/catalogue/publish";
 import type { PartPlanRow, PublishPrivacy, TopicPublication } from "@/utils/catalogue/types";
 import { PUBLICATION_COLUMNS_0122 } from "@/utils/catalogue/format-server";
@@ -33,6 +38,17 @@ export const runtime = "nodejs";
 //              (YOUTUBE_MAX_PARTS_PER_RUN) or a failure left behind. The job
 //              is idempotent — a part that already holds a youtube_video_id is
 //              skipped — so a retry never double-uploads.
+//     rewords  {kitId}            the same job with params.action "rewords"
+//              (worker PR #261, 2026-10-17): the worker composes the title,
+//              description and tags of the parts ALREADY on the channel
+//              again, in the kit's language, and writes them back
+//              (videos.update). No upload, no privacy change — the job is
+//              queued `private` because the worker's gate validates the
+//              privacy and `private` always passes. Refused when no part
+//              of the kit holds a video id (nothing to re-word). Offered
+//              from a translation's review card so a video posted with
+//              English words before the language stamp existed is mended
+//              without SQL.
 //
 // THIS ROUTE WRITES ONE ROW: the job. It does NOT write topic_kits.status
 // (gate 2 is the kit's `approved` status, which 0115's RPC owns and this route
@@ -67,11 +83,12 @@ export const runtime = "nodejs";
 // a channel with a ~100 uploads/day quota, and a duplicate public video cannot
 // be taken back quietly. A kit id from another topic is a 404.
 
-type Action = "publish" | "retry";
+type Action = PublishJobAction;
 
 const NEEDS: Record<Action, LibraryAction> = {
   publish: "publish",
   retry: "publish",
+  rewords: "publish",
 };
 
 type Body = {
@@ -166,7 +183,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const auditPassed = youtubeAuditPassed();
   const raw = body.privacy === undefined || body.privacy === null || body.privacy === "" ? defaultPrivacy(auditPassed) : body.privacy;
   if (!isPrivacy(raw)) return bad("privacy must be private, unlisted or public.");
-  const privacy: PublishPrivacy = raw;
+  // A re-word changes no privacy: it is queued private whatever was sent.
+  const privacy: PublishPrivacy = privacyForAction(action, raw);
   const allowed = publishPrivacyAccepts(privacy, auditPassed);
   if (!allowed.ok) return conflict(allowed.why, { privacy });
 
@@ -186,7 +204,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (plErr && !(catalogueColumnMissing(plErr) && /part_plan/i.test(plErr.message ?? ""))) return dbError(plErr);
   if (!plErr && Array.isArray(planRow?.part_plan)) plan = planRow.part_plan as PartPlanRow[];
   const summary = publicationSummary((pubRows ?? []) as unknown as TopicPublication[], plan.length);
-  const queue = canQueuePublish(action, summary);
+  // An upload is pointless once every part is up; a re-word is pointless
+  // until at least one is.
+  const queue = action === REWORDS_ACTION ? canQueueRewords(summary) : canQueuePublish(action, summary);
   if (!queue.ok) return conflict(queue.why, { parts: summary.total, published: summary.published, failed: summary.failed });
 
   // The dark lock, last: everything above is a fact about this kit, this is a
@@ -210,13 +230,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const { data: running, error: lErr } = await live();
   if (lErr) return dbError(lErr);
-  if (running) return conflict(`A publish is already ${running.status} for this kit.`, { jobId: running.id });
+  if (running) return conflict(`A publish or re-word is already ${running.status} for this kit.`, { jobId: running.id });
 
   const { data: job, error: jErr } = await admin
     .from("jobs")
     .insert({
       type: PUBLISH_JOB_TYPE,
-      params: { kit_id: kit.id, topic_id: id, language: LANGUAGE, privacy },
+      params: publishJobParams({ kitId: kit.id, topicId: id, language: LANGUAGE, privacy, action }),
       book_id: null,
       generation_id: null,
       status: "queued",
@@ -228,7 +248,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       // Lost the race to another click: jobs_one_live_publish (0116) refused
       // the second row. Answer as the check above would have.
       const { data: winner } = await live();
-      return conflict(`A publish is already ${winner?.status ?? "queued"} for this kit.`, { jobId: winner?.id ?? null });
+      return conflict(`A publish or re-word is already ${winner?.status ?? "queued"} for this kit.`, { jobId: winner?.id ?? null });
     }
     return dbError(jErr);
   }

@@ -1035,9 +1035,9 @@ describe("the supersede route (0122): /api/library/topics/[id]/supersede", () =>
 describe("the publish route (Phase 4): /api/library/topics/[id]/publish", () => {
   const t = () => text(PUBLISH);
 
-  it("is ADMIN ONLY: both actions ask for `publish`, which libraryAllows grants to admins alone — checked before a client is opened", () => {
+  it("is ADMIN ONLY: all three actions ask for `publish`, which libraryAllows grants to admins alone — checked before a client is opened", () => {
     const src = t();
-    for (const a of ["publish", "retry"]) {
+    for (const a of ["publish", "retry", "rewords"]) {
       expect(src, a).toMatch(new RegExp(`${a}:\\s*"publish"`));
     }
     const check = src.search(/if\s*\(\s*!libraryAllows\(m\.role,\s*NEEDS\[action\]\)\s*\)\s*return\s+notFound\(\)/);
@@ -1075,7 +1075,10 @@ describe("the publish route (Phase 4): /api/library/topics/[id]/publish", () => 
     expect(src).toMatch(/const\s+PUBLISH_JOB_TYPE\s*=\s*["']topic_publish["']/);
     const payload = src.slice(src.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/));
     expect(payload).toMatch(/type:\s*PUBLISH_JOB_TYPE/);
-    expect(payload).toMatch(/params:\s*\{\s*kit_id:\s*kit\.id,\s*topic_id:\s*id,\s*language:\s*LANGUAGE,\s*privacy\s*\}/);
+    // the params come from the tested helper (catalogue-publish.test.ts): an
+    // upload's are {kit_id, topic_id, language, privacy}, a re-word's add
+    // action: "rewords" — exactly what the worker reads
+    expect(payload).toMatch(/params:\s*publishJobParams\(\{\s*kitId:\s*kit\.id,\s*topicId:\s*id,\s*language:\s*LANGUAGE,\s*privacy,\s*action\s*\}\)/);
     expect(payload).toMatch(/generation_id:\s*null/);
     expect(payload).toMatch(/book_id:\s*null/);
     expect(payload).toMatch(/status:\s*["']queued["']/);
@@ -1100,10 +1103,16 @@ describe("the publish route (Phase 4): /api/library/topics/[id]/publish", () => 
     expect(priv).toBeGreaterThan(-1);
     expect(priv).toBeLessThan(insert);
     expect(src).toMatch(/if\s*\(\s*!isPrivacy\(raw\)\s*\)\s*return\s+bad\(/);
-    // nothing to do is a 409, not a job
+    // nothing to do is a 409, not a job — an upload once every part is up, a
+    // re-word with nothing on the channel (worker PR #261)
     const queue = src.indexOf("canQueuePublish(action, summary)");
     expect(queue).toBeGreaterThan(-1);
     expect(queue).toBeLessThan(insert);
+    expect(src).toMatch(/action === REWORDS_ACTION \? canQueueRewords\(summary\) : canQueuePublish\(action, summary\)/);
+    // a re-word is queued private whatever was sent: it changes no privacy
+    const forced = src.indexOf("privacyForAction(action, raw)");
+    expect(forced).toBeGreaterThan(-1);
+    expect(forced).toBeLessThan(priv);
     // the dark lock is answered as a plain 409 — and AFTER the refusals, so
     // the operator reads the real blocker rather than the flag
     const flag = src.indexOf("cataloguePublishEnabled()");

@@ -169,11 +169,40 @@ const malayKit: KitView = {
     presentation_generation_id: "g-pres-ms",
     doc_generation_ids: { deck: "g-deck-ms" },
     precheck: { ok: true, blocking: [], flags: [], post_render: { ok: true, blocking: [], flags: [] } },
+    // the worker wrote the listing's words in Malay (worker PR #261 stamps
+    // the language), so the review card shows them and offers a re-word
+    youtube_meta: {
+      title: "Luas Bulatan Dijelaskan | Jejari, Diameter, Pi | Cambridge Tahap 8 Matematik",
+      intro: "Mengapa luas bulatan ialah πr², dari mana formula itu datang, dan cara menggunakannya dengan dan tanpa kalkulator.",
+      key_terms: ["jejari", "diameter", "pi", "luas"],
+      hashtags: ["LuasBulatan", "Jejari", "Matematik", "SketchCast"],
+      source: "generated",
+      language: "ms",
+      generated_at: hoursAgo(19),
+    },
     created_at: hoursAgo(30),
     updated_at: hoursAgo(20),
   },
   generations: [gen("g-pres-ms", "presentation", "Luas bulatan"), gen("g-deck-ms", "deck", "Slaid")],
-  publications: [],
+  // posted (one part, the whole plan) — "Re-word on YouTube" is offered
+  publications: [
+    {
+      id: "pub-ms-1",
+      topic_kit_id: "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2",
+      part: 1,
+      channel_language: "ms",
+      youtube_video_id: "dQw4w9WgXcQ",
+      privacy: "public",
+      playlist_ids: [],
+      captions_uploaded: ["ms"],
+      thumbnail_set: true,
+      published_at: hoursAgo(18),
+      error: null,
+      format_version: 2,
+      created_at: hoursAgo(18),
+      updated_at: hoursAgo(18),
+    },
+  ],
   otherPublications: [],
   videoFormat: null,
 };

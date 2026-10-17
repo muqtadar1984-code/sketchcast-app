@@ -256,6 +256,10 @@ export type YouTubeMeta = {
   generated_at?: string | null;
   edited_at?: string | null;
   edited_by?: string | null;
+  /** The language the words were WRITTEN in (worker PR #261, 2026-10-17): a
+   *  translated kit's listing is composed in its own language. Words without
+   *  a stamp predate it and were written in English. */
+  language?: string | null;
 };
 
 export type TopicKit = {

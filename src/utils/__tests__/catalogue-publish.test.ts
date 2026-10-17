@@ -32,8 +32,10 @@ import {
   boardLabel,
   boardsOf,
   buildDescriptionPreview,
+  REWORDS_ACTION,
   canPublish,
   canQueuePublish,
+  canQueueRewords,
   chapterLines,
   cleanHashtags,
   composeTitle,
@@ -41,11 +43,15 @@ import {
   defaultPrivacy,
   headline,
   isPrivacy,
+  metaInLanguage,
+  privacyForAction,
   publicationSummary,
   publishActionFor,
+  publishJobParams,
   publishPrivacyAccepts,
   publishTitle,
   publishablePrivacies,
+  rewordsOffered,
   termsFromSummary,
   validateYouTubeMeta,
   youtubeSafe,
@@ -240,6 +246,61 @@ describe("which action, and whether it may be queued", () => {
     expect(canQueuePublish("retry", partial)).toEqual({ ok: true });
     // and a plain Publish is still allowed: the job is idempotent
     expect(canQueuePublish("publish", partial)).toEqual({ ok: true });
+  });
+});
+
+describe("re-wording what is on the channel (worker PR #261)", () => {
+  const posted = (n: number, parts = n) => publicationSummary(Array.from({ length: n }, (_, i) => pub(i + 1, { youtube_video_id: `v${i + 1}` })), parts);
+
+  it("is OFFERED only once every known part of the kit holds a video id", () => {
+    expect(rewordsOffered(posted(1))).toBe(true);
+    expect(rewordsOffered(posted(3))).toBe(true);
+    // one part still waiting, or failed: the next step is Finish posting
+    expect(rewordsOffered(posted(2, 3))).toBe(false);
+    expect(rewordsOffered(publicationSummary([pub(1, { youtube_video_id: "a" }), pub(2, { error: "boom" })], 2))).toBe(false);
+    // nothing up, or the plan unknown (0115 not written): never offered
+    expect(rewordsOffered(publicationSummary([], 2))).toBe(false);
+    expect(rewordsOffered(publicationSummary([pub(1, { youtube_video_id: "a" })], 0))).toBe(false);
+  });
+
+  it("may be QUEUED whenever at least one part is on the channel, and is refused with nothing posted", () => {
+    expect(canQueueRewords(posted(1))).toEqual({ ok: true });
+    expect(canQueueRewords(posted(2, 3))).toEqual({ ok: true });
+    for (const s of [publicationSummary([], 2), publicationSummary([pub(1, { error: "boom" })], 2), publicationSummary([], 0)]) {
+      const r = canQueueRewords(s);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.why).toMatch(/nothing to re-word/);
+    }
+  });
+
+  it("the job's params: an upload carries no action, a re-word carries `rewords` — exactly what the worker reads", () => {
+    const base = { kitId: "kit", topicId: "topic", language: "ar", privacy: "private" as PublishPrivacy };
+    expect(publishJobParams({ ...base, action: "publish" })).toEqual({ kit_id: "kit", topic_id: "topic", language: "ar", privacy: "private" });
+    expect(publishJobParams({ ...base, action: "retry" })).toEqual({ kit_id: "kit", topic_id: "topic", language: "ar", privacy: "private" });
+    expect(publishJobParams({ ...base, action: "rewords" })).toEqual({ kit_id: "kit", topic_id: "topic", language: "ar", privacy: "private", action: "rewords" });
+    expect(REWORDS_ACTION).toBe("rewords");
+    // the params of an upload are byte-for-byte what they were before the re-word existed
+    expect(Object.keys(publishJobParams({ ...base, action: "publish" }))).toEqual(["kit_id", "topic_id", "language", "privacy"]);
+  });
+
+  it("a re-word is queued private whatever the operator picked — it changes no privacy and the worker's gate accepts private without the audit", () => {
+    for (const p of PRIVACY) expect(privacyForAction("rewords", p)).toBe("private");
+    for (const p of PRIVACY) expect(privacyForAction("publish", p)).toBe(p);
+    for (const p of PRIVACY) expect(privacyForAction("retry", p)).toBe(p);
+    expect(publishPrivacyAccepts(privacyForAction("rewords", "public"), false)).toEqual({ ok: true });
+  });
+
+  it("knows whether the stored words were written in the kit's language, exactly as the worker's meta_in_language", () => {
+    expect(metaInLanguage({ title: "x", language: "ar" }, "ar")).toBe(true);
+    expect(metaInLanguage({ title: "x", language: "AR " }, "ar")).toBe(true);
+    expect(metaInLanguage({ title: "x", language: "ar" }, "ms")).toBe(false);
+    // unstamped words predate the stamp and were written in English
+    expect(metaInLanguage({ title: "x" }, "en")).toBe(true);
+    expect(metaInLanguage({ title: "x" }, "ar")).toBe(false);
+    expect(metaInLanguage({ title: "x", language: null }, "en")).toBe(true);
+    // no words at all: not in any language
+    expect(metaInLanguage(null, "ar")).toBe(false);
+    expect(metaInLanguage(undefined, "en")).toBe(false);
   });
 });
 
