@@ -69,6 +69,12 @@ import type { JobRow } from "./article-panel";
 // env locks come from the server; the route re-checks them, these only decide
 // what renders and what the disabled button says.
 //
+// Review inbox (layout D, 2026-10-17): the page shows the kit under review's
+// video parts (VideoParts) and its Approve / Reject box (KitReviewBox) at the
+// top of its right pane and folds this panel under "Pieces" with
+// hideVideos / hideReview, so nothing is shown twice. Both are exported from
+// here so the folded panel and the inbox render the same thing.
+//
 // Phase 4 adds the PUBLISH block, shown only for an approved kit and posting
 // to /api/library/topics/[id]/publish. It is the one block that renders in
 // full for people who cannot use it: publishing is admin-only (plan §7.1), and
@@ -100,7 +106,7 @@ export type KitView = {
 
 /** The kit's actions and the publish action share one busy / error / notice
  *  surface, so `route` picks which handler the payload goes to. */
-type Post = (payload: Record<string, unknown>, label: string, route?: "kit" | "publish" | "supersede") => Promise<Record<string, unknown> | null>;
+export type Post = (payload: Record<string, unknown>, label: string, route?: "kit" | "publish" | "supersede") => Promise<Record<string, unknown> | null>;
 
 export function useKitPost(topicId: string) {
   const router = useRouter();
@@ -177,6 +183,8 @@ export function KitPanel({
   publishEnabled,
   ownerConfigured,
   migrationNote,
+  hideVideos = false,
+  hideReview = false,
 }: {
   topicId: string;
   topicTitle: string;
@@ -217,6 +225,11 @@ export function KitPanel({
   publishEnabled: boolean;
   ownerConfigured: boolean;
   migrationNote: string | null;
+  /** the review inbox shows the current kit's video parts at the top of the
+   *  page (VideoParts), so the folded panel leaves them out */
+  hideVideos?: boolean;
+  /** …and its Approve / Reject box (KitReviewBox) under the video */
+  hideReview?: boolean;
 }) {
   const { post, busy, error, errors, notice, setNotice, setErrors, clear } = useKitPost(topicId);
   const current = kits[0] ?? null;
@@ -254,17 +267,14 @@ export function KitPanel({
   };
 
   return (
-    <div className="card p-5 space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-medium">
-            Kit <span className="text-sm text-[#5B6470] font-normal">({kits.length} {kits.length === 1 ? "build" : "builds"})</span>
-          </h2>
-          <p className="text-xs text-[#5B6470] mt-1">
-            The video lesson, slide deck, lesson plan, activities, case study and worksheet generated from the <span className="font-medium">approved</span> article.
-            Approving the video is a named reviewer&apos;s act (gate 2) and is recorded; nothing reaches YouTube before it.
-          </p>
-        </div>
+        <h2
+          className="font-medium"
+          title="The video lesson, slide deck, lesson plan, activities, case study and worksheet generated from the approved article. Approving the video is a named reviewer's act (gate 2) and is recorded; nothing reaches YouTube before it."
+        >
+          Kit <span className="text-sm text-[#5B6470] font-normal">({kits.length} {kits.length === 1 ? "build" : "builds"})</span>
+        </h2>
         {showGenerate && (
           <div className="flex flex-col items-end gap-1 shrink-0">
             <div className="flex items-center gap-3 text-sm">
@@ -318,6 +328,8 @@ export function KitPanel({
           setErrors={setErrors}
           clear={clear}
           personName={personName}
+          hideVideos={hideVideos}
+          hideReview={hideReview}
         />
       )}
 
@@ -381,6 +393,8 @@ function CurrentKit({
   setErrors,
   clear,
   personName,
+  hideVideos,
+  hideReview,
 }: {
   view: KitView;
   topicTitle: string;
@@ -407,17 +421,16 @@ function CurrentKit({
   setErrors: (v: string[]) => void;
   clear: () => void;
   personName: (id: string | null) => string;
+  hideVideos: boolean;
+  hideReview: boolean;
 }) {
   const { kit, generations } = view;
-  const [reason, setReason] = useState<KitRejectReason | "">("");
-  const [notes, setNotes] = useState("");
   const byId = new Map(generations.map((g) => [g.gen.id, g]));
   const progress = kitProgress(generations.map((g) => g.gen));
   const videos = generations
     .filter((g) => g.gen.kind === "presentation")
     .flatMap((g) => g.artifacts.filter((a) => a.kind === "video_mp4"))
     .sort((a, b) => a.part - b.part);
-  const chapters = chaptersByPart(kit.chapters);
   const regen = kitAcceptsRegenerate(topicStatus, kit.status, liveKit);
   // The route's order: the kit and topic first, then the article the new kit
   // is built from. A superseded article does NOT disable the button — the new
@@ -428,15 +441,6 @@ function CurrentKit({
   const regenFrom = regenSource.ok && regenSource.version !== null ? `v${regenSource.version}` : "the approved article";
   // Shown as text, not only as the button's title (a title is invisible on touch).
   const regenHelp = canGenerate && regen.ok ? (regenSource.ok ? regenSource.note : regenSource.why) : null;
-  // The review box shows for a reviewable KIT status; the buttons themselves
-  // follow the three-way agreement the RPCs enforce (kit, topic, article), so
-  // a reviewer reads the reason here instead of the RPC's 409.
-  const showReview = canApprove && (canApproveKit(kit.status) || canRejectKit(kit.status));
-  const approveOk = kitAcceptsApprove(topicStatus, kit.status, kitArticleStatus);
-  const rejectOk = kitAcceptsReject(topicStatus, kit.status);
-  const approveWhy = approveOk.ok ? null : approveOk.why;
-  const rejectWhy = rejectOk.ok ? null : rejectOk.why;
-
   const retry = async (kind: KitKind) => {
     const r = await post({ action: "retry", kitId: kit.id, kind }, `retry:${kind}`);
     if (r) setNotice(`${KIT_KIND_LABEL[kind]} queued again.`);
@@ -446,24 +450,6 @@ function CurrentKit({
     if (!window.confirm(regenSwitched && regenSource.ok && regenSource.note ? `${regenSource.note}\n\n${what}` : `Regenerate the kit? ${what}`)) return;
     const r = await post({ action: "regenerate", kitId: kit.id }, "regenerate");
     if (r) setNotice(regenSwitched ? `New kit queued from the approved article (${regenFrom}) — this one is kept as history.` : "New kit queued — this one is kept as history.");
-  };
-  const approve = async () => {
-    if (!window.confirm("Approve the video? This records your approval and moves the topic to video approved — the publish step comes next.")) return;
-    const r = await post({ action: "approve", kitId: kit.id, notes: notes.trim() || undefined }, "approve");
-    if (r) {
-      setNotes("");
-      setNotice("Video approved — the topic is now video approved.");
-    }
-  };
-  const reject = async () => {
-    if (!reason || !notes.trim()) return;
-    if (!window.confirm(kit.status === "approved" ? "Pull this approval? The kit becomes rejected and the topic goes back to in review." : "Reject this kit? It stays in the history as rejected.")) return;
-    const r = await post({ action: "reject", kitId: kit.id, reason, notes: notes.trim() }, "reject");
-    if (r) {
-      setNotes("");
-      setReason("");
-      setNotice("Kit rejected — regenerate it once the cause is fixed.");
-    }
   };
 
   return (
@@ -605,43 +591,7 @@ function CurrentKit({
       </div>
 
       {/* ── video parts + chapters ── */}
-      {videos.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {videos.map((v) => (
-            <div key={`${v.part}-${v.url ?? ""}`} className="space-y-2">
-              <p className="text-sm font-medium">
-                Part {v.part}
-                {kit.part_plan.find((p) => p.part === v.part) && (
-                  <span className="text-xs text-[#5B6470] font-normal"> · {kit.part_plan.find((p) => p.part === v.part)!.minutes} min</span>
-                )}
-              </p>
-              {v.url ? (
-                <video
-                  controls
-                  preload="metadata"
-                  src={v.url}
-                  controlsList="nodownload"
-                  disablePictureInPicture
-                  disableRemotePlayback
-                  onContextMenu={(e) => e.preventDefault()}
-                  className="w-full rounded-lg bg-black aspect-video"
-                />
-              ) : (
-                <p className="text-xs text-[#98A0A9]">Could not sign the video URL.</p>
-              )}
-              {(chapters.get(v.part) ?? []).length > 0 && (
-                <ol className="text-xs text-[#5B6470] space-y-0.5">
-                  {chapters.get(v.part)!.map((c, i) => (
-                    <li key={i}>
-                      <span className="font-mono tabular">{fmtTimestamp(c.t)}</span> {c.label}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {!hideVideos && <VideoParts kit={kit} videos={videos} />}
 
       {/* ── part plan ── */}
       {kit.part_plan.length > 0 && (
@@ -672,45 +622,7 @@ function CurrentKit({
       />
 
       {/* ── review ── */}
-      {showReview && (
-        <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-2">
-          <p className="text-sm font-medium">Review</p>
-          <p className="text-xs text-[#5B6470]">
-            Watch every part and open every document. Approving records your name and moves the topic to video approved; rejecting needs a reason (it steers the regeneration) and notes.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={reason} onChange={(e) => setReason(e.target.value as KitRejectReason | "")} className="field h-9 px-2 text-sm" aria-label="Reject reason">
-              <option value="">Reject reason…</option>
-              {KIT_REJECT_REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {KIT_REJECT_REASON_LABEL[r]}
-                </option>
-              ))}
-            </select>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={2} placeholder="Notes (required to reject; optional to approve)…" className="field flex-1 min-w-[16rem] px-3 py-2 text-sm" />
-          </div>
-          <div className="flex items-center gap-2">
-            {canApproveKit(kit.status) && (
-              <button type="button" disabled={!!busy || !!approveWhy} title={approveWhy ?? undefined} onClick={approve} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-                {busy === "approve" ? "Approving…" : "Approve video"}
-              </button>
-            )}
-            {canRejectKit(kit.status) && (
-              <button
-                type="button"
-                disabled={!!busy || !!rejectWhy || !reason || !notes.trim()}
-                title={rejectWhy ?? (!reason ? "Pick a reason" : !notes.trim() ? "Notes are required" : undefined)}
-                onClick={reject}
-                className="btn-ghost h-9 px-4 text-sm disabled:opacity-50"
-              >
-                {busy === "reject" ? "Rejecting…" : kit.status === "approved" ? "Pull approval" : "Reject"}
-              </button>
-            )}
-          </div>
-          {(approveWhy || rejectWhy) && <p className="text-xs text-[#9A6400]">{approveWhy ?? rejectWhy}</p>}
-        </div>
-      )}
-      {!canApprove && kit.status === "in_review" && <p className="text-xs text-[#9A6400]">Awaiting a reviewer&apos;s approval ({kitStatusLabel(kit.status)}).</p>}
+      {!hideReview && <KitReviewBox kit={kit} topicStatus={topicStatus} kitArticleStatus={kitArticleStatus} canApprove={canApprove} busy={busy} post={post} setNotice={setNotice} />}
 
       {/* ── publish (Phase 4) ── */}
       {kit.status === "approved" && (
@@ -737,6 +649,155 @@ function CurrentKit({
           setNotice={setNotice}
         />
       )}
+    </div>
+  );
+}
+
+// ── Video parts + chapters ──────────────────────────────────────────────────
+// The kit's rendered parts, each with its chapter marks. The review inbox
+// renders this at the top of the page for the kit under review; the folded
+// kit panel renders it only when the page did not (hideVideos).
+
+export function VideoParts({ kit, videos }: { kit: TopicKit; videos: KitArtifactView[] }) {
+  if (videos.length === 0) return null;
+  const chapters = chaptersByPart(kit.chapters);
+  // One part: the player keeps a readable width and its chapters sit beside
+  // it, so the status line, the video and the verdict fit one screen. Two or
+  // more: a two-column grid, chapters under each part.
+  const single = videos.length === 1;
+  return (
+    <div className={single ? "" : "grid gap-4 md:grid-cols-2"}>
+      {videos.map((v) => (
+        <div key={`${v.part}-${v.url ?? ""}`} className={single ? "md:flex md:items-start md:gap-5" : "space-y-2"}>
+          <div className={single ? "space-y-2 md:w-[40rem] md:max-w-full md:shrink-0" : "space-y-2"}>
+            <p className="text-sm font-medium">
+              Part {v.part}
+              {kit.part_plan.find((p) => p.part === v.part) && (
+                <span className="text-xs text-[#5B6470] font-normal"> · {kit.part_plan.find((p) => p.part === v.part)!.minutes} min</span>
+              )}
+            </p>
+            {v.url ? (
+              <video
+                controls
+                preload="metadata"
+                src={v.url}
+                controlsList="nodownload"
+                disablePictureInPicture
+                disableRemotePlayback
+                onContextMenu={(e) => e.preventDefault()}
+                className="w-full rounded-lg bg-black aspect-video"
+              />
+            ) : (
+              <p className="text-xs text-[#98A0A9]">Could not sign the video URL.</p>
+            )}
+          </div>
+          {(chapters.get(v.part) ?? []).length > 0 && (
+            <ol className={`text-xs text-[#5B6470] space-y-0.5 ${single ? "mt-2 md:mt-7" : "mt-2"}`}>
+              {chapters.get(v.part)!.map((c, i) => (
+                <li key={i}>
+                  <span className="font-mono tabular">{fmtTimestamp(c.t)}</span> {c.label}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Review: Approve video / Reject ──────────────────────────────────────────
+// The reviewer's verdict on an English kit, posting the kit route's `approve`
+// and `reject` actions exactly as it accepts them (reject needs a listed
+// reason and notes). The box shows for a reviewable KIT status; the buttons
+// themselves follow the three-way agreement the RPCs enforce (kit, topic,
+// article), so a reviewer reads the reason here instead of the RPC's 409.
+// Rendered under the video by the review inbox, or inside the folded kit
+// panel when the page did not (hideReview).
+
+export function KitReviewBox({
+  kit,
+  topicStatus,
+  kitArticleStatus,
+  canApprove,
+  busy,
+  post,
+  setNotice,
+}: {
+  kit: TopicKit;
+  topicStatus: string;
+  /** the status of THIS kit's article version (null when it is gone) */
+  kitArticleStatus: string | null;
+  canApprove: boolean;
+  busy: string | null;
+  post: Post;
+  setNotice: (v: string | null) => void;
+}) {
+  const [reason, setReason] = useState<KitRejectReason | "">("");
+  const [notes, setNotes] = useState("");
+  const showReview = canApprove && (canApproveKit(kit.status) || canRejectKit(kit.status));
+  const approveOk = kitAcceptsApprove(topicStatus, kit.status, kitArticleStatus);
+  const rejectOk = kitAcceptsReject(topicStatus, kit.status);
+  const approveWhy = approveOk.ok ? null : approveOk.why;
+  const rejectWhy = rejectOk.ok ? null : rejectOk.why;
+
+  const approve = async () => {
+    if (!window.confirm("Approve the video? This records your approval and moves the topic to video approved — the publish step comes next.")) return;
+    const r = await post({ action: "approve", kitId: kit.id, notes: notes.trim() || undefined }, "approve");
+    if (r) {
+      setNotes("");
+      setNotice("Video approved — the topic is now video approved.");
+    }
+  };
+  const reject = async () => {
+    if (!reason || !notes.trim()) return;
+    if (!window.confirm(kit.status === "approved" ? "Pull this approval? The kit becomes rejected and the topic goes back to in review." : "Reject this kit? It stays in the history as rejected.")) return;
+    const r = await post({ action: "reject", kitId: kit.id, reason, notes: notes.trim() }, "reject");
+    if (r) {
+      setNotes("");
+      setReason("");
+      setNotice("Kit rejected — regenerate it once the cause is fixed.");
+    }
+  };
+
+  if (!showReview) {
+    return !canApprove && kit.status === "in_review" ? <p className="text-xs text-[#9A6400]">Awaiting a reviewer&apos;s approval ({kitStatusLabel(kit.status)}).</p> : null;
+  }
+  return (
+    <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-2">
+      <p className="text-sm font-medium" title="Watch every part and open every document. Approving records your name and moves the topic to video approved; rejecting needs a reason (it steers the regeneration) and notes.">
+        Review
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={reason} onChange={(e) => setReason(e.target.value as KitRejectReason | "")} className="field h-9 px-2 text-sm" aria-label="Reject reason">
+          <option value="">Reject reason…</option>
+          {KIT_REJECT_REASONS.map((r) => (
+            <option key={r} value={r}>
+              {KIT_REJECT_REASON_LABEL[r]}
+            </option>
+          ))}
+        </select>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} rows={2} placeholder="Notes (required to reject; optional to approve)…" className="field flex-1 min-w-[16rem] px-3 py-2 text-sm" />
+      </div>
+      <div className="flex items-center gap-2">
+        {canApproveKit(kit.status) && (
+          <button type="button" disabled={!!busy || !!approveWhy} title={approveWhy ?? undefined} onClick={approve} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
+            {busy === "approve" ? "Approving…" : "Approve video"}
+          </button>
+        )}
+        {canRejectKit(kit.status) && (
+          <button
+            type="button"
+            disabled={!!busy || !!rejectWhy || !reason || !notes.trim()}
+            title={rejectWhy ?? (!reason ? "Pick a reason" : !notes.trim() ? "Notes are required" : undefined)}
+            onClick={reject}
+            className="btn-ghost h-9 px-4 text-sm disabled:opacity-50"
+          >
+            {busy === "reject" ? "Rejecting…" : kit.status === "approved" ? "Pull approval" : "Reject"}
+          </button>
+        )}
+      </div>
+      {(approveWhy || rejectWhy) && <p className="text-xs text-[#9A6400]">{approveWhy ?? rejectWhy}</p>}
     </div>
   );
 }

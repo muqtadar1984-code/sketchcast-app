@@ -139,15 +139,9 @@ export function ArticlePanel({
   return (
     <div className="card p-5 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-medium">
-            Article <span className="text-sm text-[#5B6470] font-normal">({versions.length} version{versions.length === 1 ? "" : "s"})</span>
-          </h2>
-          <p className="text-xs text-[#5B6470] mt-1">
-            The knowledge article is the single source of truth: every kit is generated from an <span className="font-medium">approved</span> version.
-            Approval is a named reviewer&apos;s act and is recorded.
-          </p>
-        </div>
+        <h2 className="font-medium" title="The knowledge article is the single source of truth: every kit is generated from an approved version. Approval is a named reviewer's act and is recorded.">
+          Article <span className="text-sm text-[#5B6470] font-normal">({versions.length} version{versions.length === 1 ? "" : "s"})</span>
+        </h2>
         {canEdit && (
           <div className="flex flex-col items-end gap-1 shrink-0">
             <button

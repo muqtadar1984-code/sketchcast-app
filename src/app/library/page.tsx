@@ -111,7 +111,7 @@ export default async function LibraryOverviewPage() {
             </span>
             <span className={`text-3xl font-display tabular ${drafts > 0 ? "text-[#9A6400]" : "text-[#98A0A9]"}`}>{drafts}</span>
           </Link>
-          <Link href="/library/topics?status=in_review" className="card p-5 hover:shadow-md transition-shadow flex items-center justify-between gap-4">
+          <Link href="/library/review" className="card p-5 hover:shadow-md transition-shadow flex items-center justify-between gap-4">
             <span>
               <span className="font-medium block">Kits awaiting review</span>
               <span className="text-sm text-[#5B6470]">
