@@ -16,7 +16,7 @@ import {
 } from "@/utils/catalogue/kit";
 import { isLiveJobStatus } from "@/utils/catalogue/status";
 import { blockingCount, flagCount } from "@/utils/catalogue/review-queue";
-import { AUDIT_NOTE, PRIVACY, PRIVACY_LABEL, PUBLISH_OFF_NOTE, canPublish as publishGate, canQueuePublish, defaultPrivacy, publicationSummary, publishActionFor, publishPrivacyAccepts, publishablePrivacies } from "@/utils/catalogue/publish";
+import { AUDIT_NOTE, PRIVACY, PRIVACY_LABEL, PUBLISH_OFF_NOTE, REWORDS_ACTION, canPublish as publishGate, canQueuePublish, canQueueRewords, defaultPrivacy, metaInLanguage, publicationSummary, publishActionFor, publishPrivacyAccepts, publishablePrivacies, rewordsOffered } from "@/utils/catalogue/publish";
 import type { KitRejectReason, PrecheckReport, PublishPrivacy, TopicKit, TopicPublication } from "@/utils/catalogue/types";
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
 import { JobLine, VideoParts, useKitPost, type KitView, type Post } from "./kit-panel";
@@ -227,6 +227,68 @@ export function translationVideos({ kit, generations }: KitView) {
   return pres ? pres.artifacts.filter((a) => a.kind === "video_mp4").sort((a, b) => a.part - b.part) : [];
 }
 
+/** The words the listing goes up with (topic_kits.youtube_meta), for a
+ *  translation: shown read-only when the worker wrote them in the kit's
+ *  language (worker PR #261 stamps `language`); otherwise one line saying the
+ *  worker writes them in the language when it posts or re-words. The
+ *  description itself is composed by the worker's localised composer and is
+ *  not mirrored here — the reviewer sees the stored words, not a paraphrase. */
+export function TranslationWords({ kit }: { kit: TopicKit }) {
+  const label = languageLabel(kit.language) ?? kit.language;
+  const meta = kit.youtube_meta;
+  const inLanguage = metaInLanguage(meta, kit.language);
+  const stampedOther = !!meta && !inLanguage;
+  const source = meta?.source === "edited" ? "edited in the library" : "written by the worker from the narration";
+  return (
+    <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-1.5">
+      <p className="text-sm font-medium">
+        The words{" "}
+        {inLanguage ? (
+          <span className="text-xs font-normal text-[#5B6470]">
+            (in {label}, {source})
+          </span>
+        ) : null}
+      </p>
+      {inLanguage && meta ? (
+        <dl className="text-sm space-y-1">
+          <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+            <dt className="text-xs text-[#5B6470]">Title</dt>
+            <dd dir="auto">{meta.title?.trim() ? meta.title : <span className="text-xs text-[#98A0A9]">composed from the topic title, the key terms and the audience</span>}</dd>
+          </div>
+          <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+            <dt className="text-xs text-[#5B6470]">Opening paragraph</dt>
+            <dd dir="auto" className="whitespace-pre-wrap">
+              {meta.intro?.trim() ? meta.intro : <span className="text-xs text-[#98A0A9]">the topic summary</span>}
+            </dd>
+          </div>
+          {!!meta.key_terms?.length && (
+            <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+              <dt className="text-xs text-[#5B6470]">Key terms</dt>
+              <dd dir="auto" className="text-xs">
+                {meta.key_terms.join(", ")}
+              </dd>
+            </div>
+          )}
+          {!!meta.hashtags?.length && (
+            <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+              <dt className="text-xs text-[#5B6470]">Hashtags</dt>
+              <dd dir="auto" className="text-xs">
+                {meta.hashtags.map((t) => `#${t}`).join(" ")}
+              </dd>
+            </div>
+          )}
+        </dl>
+      ) : (
+        <p className="text-xs text-[#9A6400]">
+          {stampedOther
+            ? `The stored words are in ${languageLabel(String(meta?.language || "en")) ?? String(meta?.language || "en")}, not ${label} — the worker writes the ${label} words when it posts or re-words this kit.`
+            : `No ${label} words yet — the worker writes the title, opening paragraph, key terms and hashtags in ${label} when it posts or re-words this kit.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** "Post to YouTube" for ONE approved translation kit: what is on the channel
  *  per part, the privacy, and the button — posting the publish route's
  *  `publish` / `retry` with this kit's id. Rendered by the review inbox in
@@ -234,7 +296,11 @@ export function translationVideos({ kit, generations }: KitView) {
  *  2026-10-17) and inside each language's folded row when that language is
  *  not the one under review. The disabled reason reads in the
  *  route's order: the flag, the kit and the translation, the topic and the
- *  bank, nothing left to do, the privacy. */
+ *  bank, nothing left to do, the privacy. Above the controls, the words the
+ *  listing goes up with (TranslationWords); once every part is on the
+ *  channel, "Re-word on YouTube" queues the route's `rewords` — the worker
+ *  rewrites the title, description and tags of the posted parts in the kit's
+ *  language and changes nothing else. */
 export function TranslationPublish({ kit, publications, topicStatus, bankMaturity, canPublish, publishEnabled, auditPassed, post, busy, setNotice }: {
   kit: TopicKit;
   publications: TopicPublication[];
@@ -259,6 +325,12 @@ export function TranslationPublish({ kit, publications, topicStatus, bankMaturit
   const priv = publishPrivacyAccepts(privacy, auditPassed);
   const why = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : translationWhy ? translationWhy : !queue.ok ? queue.why : !priv.ok ? priv.why : null;
   const allowed = publishablePrivacies(auditPassed);
+  // The re-word: offered once every part is up; its disabled reason reads in
+  // the route's order too (the flag, the kit and the translation, nothing
+  // to re-word) — the privacy is not one of them, a re-word changes none.
+  const rewords = rewordsOffered(summary);
+  const rewordsQueue = canQueueRewords(summary);
+  const rewordsWhy = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : translationWhy ? translationWhy : !rewordsQueue.ok ? rewordsQueue.why : null;
 
   const publish = async () => {
     const what = privacy === "public" ? "PUBLIC — listed and searchable the moment the upload finishes" : privacy;
@@ -267,12 +339,20 @@ export function TranslationPublish({ kit, publications, topicStatus, bankMaturit
     if (r) setNotice(`${label} post queued — the worker uploads the parts in order (${privacy}) and records each one.`);
   };
 
+  const reword = async () => {
+    const n = summary.published;
+    if (!window.confirm(`Re-word the ${label} kit on YouTube? The worker rewrites the title, description and tags of the ${n} posted part${n === 1 ? "" : "s"} in ${label} and changes nothing else — the videos, their privacy, captions and thumbnails stay as they are.`)) return;
+    const r = await post({ action: REWORDS_ACTION, kitId: kit.id }, `rewords:${kit.id}`, "publish");
+    if (r) setNotice(`${label} re-word queued — the worker rewrites the words of the posted parts in ${label} and records it.`);
+  };
+
   return (
     <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium">Post to YouTube</p>
         <span className="text-xs text-[#5B6470]">{summary.label}</span>
       </div>
+      <TranslationWords kit={kit} />
       {summary.parts.some((p) => p.row) && (
         <ul className="text-xs text-[#5B6470] space-y-0.5">
           {summary.parts.map(({ part, row, state }) => (
@@ -312,11 +392,23 @@ export function TranslationPublish({ kit, publications, topicStatus, bankMaturit
           <button type="button" disabled={!!busy || !!why} title={why ?? undefined} onClick={publish} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
             {busy === `publish:${kit.id}` ? "Queuing…" : action === "retry" ? "Finish posting" : privacy === "public" ? "Post to YouTube (public)" : `Post to YouTube (${privacy})`}
           </button>
+          {rewords && (
+            <button
+              type="button"
+              disabled={!!busy || !!rewordsWhy}
+              title={rewordsWhy ?? `Rewrites the title, description and tags of the posted parts in ${label}; nothing else changes.`}
+              onClick={reword}
+              className="btn-ghost h-9 px-4 text-sm disabled:opacity-50"
+            >
+              {busy === `rewords:${kit.id}` ? "Queuing…" : "Re-word on YouTube"}
+            </button>
+          )}
         </div>
       ) : (
         <p className="text-xs text-[#98A0A9]">Posting is a platform admin&apos;s action; this is the state of the channel.</p>
       )}
-      {canPublish && why && <p className="text-xs text-[#9A6400]">{why}</p>}
+      {canPublish && why && !rewords && <p className="text-xs text-[#9A6400]">{why}</p>}
+      {canPublish && rewords && rewordsWhy && <p className="text-xs text-[#9A6400]">{rewordsWhy}</p>}
     </div>
   );
 }

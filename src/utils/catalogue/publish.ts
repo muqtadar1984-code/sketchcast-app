@@ -245,6 +245,69 @@ export function canQueuePublish(action: PublishAction, summary: PublicationSumma
   return { ok: true };
 }
 
+// ── Re-wording what is already on the channel ────────────────────────────────
+// Worker PR #261 (2026-10-17): a translated kit's listing is written in its
+// OWN language (youtube_meta.language stamps the words), and a `topic_publish`
+// job with params.action "rewords" composes the title, description and tags
+// of the parts already on the channel again and writes them back
+// (videos.update) — no upload, no privacy change. The library offers it from
+// the translation's review card so a video posted with English words before
+// the stamp existed is mended without SQL.
+
+/** Every action a `topic_publish` job may carry: the two uploads, and the re-word. */
+export type PublishJobAction = PublishAction | "rewords";
+
+export const REWORDS_ACTION = "rewords" as const;
+
+const langKey = (l: unknown) => String(l ?? "en").trim().toLowerCase() || "en";
+
+/** Were the stored words WRITTEN in `language`? Mirrors the worker's
+ *  youtube_meta.meta_in_language: words without a stamp predate it and were
+ *  written in English (the prompt's only language until 2026-10-17), so an
+ *  unstamped meta counts as English and nothing else. */
+export function metaInLanguage(meta: YouTubeMeta | null | undefined, language: string | null | undefined): boolean {
+  if (!meta || typeof meta !== "object") return false;
+  return langKey(meta.language || "en") === langKey(language);
+}
+
+/** The review card OFFERS a re-word only once every known part of the kit is
+ *  on the channel: before that the next step is Post / Finish posting, which
+ *  writes the words with the upload. */
+export function rewordsOffered(summary: PublicationSummary): boolean {
+  return summary.complete;
+}
+
+/** May a re-word be queued? The worker re-words the parts that hold a video
+ *  id and skips the rest, so the only pointless run is one with nothing on
+ *  the channel at all. */
+export function canQueueRewords(summary: PublicationSummary): PublishAcceptance {
+  if (summary.published === 0) {
+    return { ok: false, why: "No part of this kit is on YouTube yet — there is nothing to re-word; post it first." };
+  }
+  return { ok: true };
+}
+
+export type PublishJobParams = { kit_id: string; topic_id: string; language: string; privacy: PublishPrivacy; action?: typeof REWORDS_ACTION };
+
+/**
+ * The `topic_publish` job's params, exactly as the worker reads them
+ * (catalogue/publish.py load_target + run_publish_job): an upload carries no
+ * `action` (the worker's default), a re-word carries `action: "rewords"`. The
+ * privacy of a re-word is irrelevant — nothing is uploaded — but the worker's
+ * gate validates it, and `private` always passes.
+ */
+export function publishJobParams(input: { kitId: string; topicId: string; language: string; privacy: PublishPrivacy; action: PublishJobAction }): PublishJobParams {
+  const base: PublishJobParams = { kit_id: input.kitId, topic_id: input.topicId, language: input.language, privacy: input.privacy };
+  return input.action === REWORDS_ACTION ? { ...base, action: REWORDS_ACTION } : base;
+}
+
+/** The privacy a job is queued with: a re-word is always `private` (it
+ *  changes no privacy and the worker's gate accepts `private` without the
+ *  compliance audit); an upload takes what the operator picked. */
+export function privacyForAction(action: PublishJobAction, picked: PublishPrivacy): PublishPrivacy {
+  return action === REWORDS_ACTION ? "private" : picked;
+}
+
 // ── What will be posted ──────────────────────────────────────────────────────
 // Mirrors sketchcast-ai catalogue/youtube_meta.py line for line: the same
 // inputs compose the same title and description on both sides, so the
