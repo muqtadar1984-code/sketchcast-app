@@ -488,7 +488,19 @@ export function ReviewInboxView({
               </p>
             )}
             <div id="review" className="scroll-mt-20">
-              <ReviewVerdict topicId={topic.id} topicStatus={topic.status} kit={subjectKit} translation={subject.translation} kitArticleStatus={articleStatuses[subjectKit.article_id] ?? null} canApprove={canApprove} />
+              <ReviewVerdict
+                topicId={topic.id}
+                topicStatus={topic.status}
+                kit={subjectKit}
+                translation={subject.translation}
+                kitArticleStatus={articleStatuses[subjectKit.article_id] ?? null}
+                canApprove={canApprove}
+                publications={subject.view.publications}
+                bankMaturity={topic.bank_maturity}
+                canPublish={canPublish}
+                publishEnabled={publishEnabled}
+                auditPassed={auditPassed}
+              />
             </div>
           </div>
         ) : (

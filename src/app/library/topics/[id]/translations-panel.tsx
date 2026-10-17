@@ -229,10 +229,13 @@ export function translationVideos({ kit, generations }: KitView) {
 
 /** "Post to YouTube" for ONE approved translation kit: what is on the channel
  *  per part, the privacy, and the button — posting the publish route's
- *  `publish` / `retry` with this kit's id. The disabled reason reads in the
+ *  `publish` / `retry` with this kit's id. Rendered by the review inbox in
+ *  the top card under the verdict (the founder looked for it there,
+ *  2026-10-17) and inside each language's folded row when that language is
+ *  not the one under review. The disabled reason reads in the
  *  route's order: the flag, the kit and the translation, the topic and the
  *  bank, nothing left to do, the privacy. */
-function TranslationPublish({ kit, publications, topicStatus, bankMaturity, canPublish, publishEnabled, auditPassed, post, busy, setNotice }: {
+export function TranslationPublish({ kit, publications, topicStatus, bankMaturity, canPublish, publishEnabled, auditPassed, post, busy, setNotice }: {
   kit: TopicKit;
   publications: TopicPublication[];
   topicStatus: string;
@@ -465,7 +468,7 @@ export function TranslationsPanel({
                   <TranslationPieces {...view} />
                   <Findings report={kit.precheck} />
                   {!selected && <TranslationReviewBox kit={kit} topicStatus={topicStatus} canApprove={canApprove} post={post} busy={busy} setNotice={setNotice} />}
-                  {kit.status === "approved" && (
+                  {!selected && kit.status === "approved" && (
                     <TranslationPublish
                       kit={kit}
                       publications={view.publications}
