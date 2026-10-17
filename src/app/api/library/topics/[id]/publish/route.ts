@@ -84,13 +84,20 @@ type Body = {
 // module may only export Next's handler names.
 const PUBLISH_JOB_TYPE = "topic_publish";
 
-/** Phase 4 publishes the English channel; a language gets its own channel,
- *  its own refresh token and its own kit with the translate phase. */
-const LANGUAGE = "en";
+/** Phase 4 published the English channel only. Kit Translator T1 (2026-10-17):
+ *  a TRANSLATED kit publishes too — in its own language, which the worker
+ *  reads from the kit (title from the translated article, captions and
+ *  defaultAudioLanguage in the language) — on the language's channel when
+ *  one is configured, else on the English channel (the worker's
+ *  channel_for). `LANGUAGE` is therefore the KIT's language, bound per
+ *  request inside the handler (never module state shared across requests). */
+const DEFAULT_LANGUAGE = "en";
 
 /** Without part_plan (0115): read separately, so a database where 0115 is not
  *  applied still publishes — the part count is then unknown and the summary
- *  describes only the parts that already have a publication row. */
+ *  describes only the parts that already have a publication row. The
+ *  translation column is read apart, so a database without 0134 still
+ *  publishes its English kits. */
 const KIT_COLUMNS = "id, topic_id, article_id, language, status";
 
 const PUBLICATION_COLUMNS =
@@ -129,6 +136,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (kErr) return dbError(kErr);
   if (!kitRow) return NextResponse.json({ error: "Kit not found on this topic." }, { status: 404 });
   const kit = kitRow as { id: string; article_id: string; language: string; status: string };
+  const LANGUAGE = kit.language || DEFAULT_LANGUAGE;
+
+  // A translation (0134) publishes only once its translation is approved —
+  // the English original's approval does not carry over, the reviewer's does.
+  const { data: trRow, error: trErr } = await admin.from("topic_kits").select("translation_status").eq("id", kit.id).maybeSingle();
+  if (trErr && !catalogueColumnMissing(trErr)) return dbError(trErr);
+  const translationStatus = ((trRow as { translation_status?: string | null } | null)?.translation_status ?? null) || null;
+  if (translationStatus && translationStatus !== "approved") {
+    return conflict(`This translation is ${translationStatus.replace(/_/g, " ")}, not approved — a reviewer approves the translation before it reaches YouTube.`, {
+      translationStatus,
+    });
+  }
 
   // The kit's own article version — it must still be the approved one.
   const { data: article, error: aErr } = await admin.from("topic_articles").select("id, status").eq("id", kit.article_id).maybeSingle();
@@ -154,11 +173,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   // What a previous run already put on the channel, and how many parts the kit
   // has. The publish job is idempotent, so this decides only whether the run
   // would have anything to do — and gives the audit row its before-picture.
+  // Every row of THIS kit, whatever channel carried it (a translated video
+  // may sit on the English channel until its language has one): a kit has
+  // one language, so the kit id alone names its publications.
   const { data: pubRows, error: pErr } = await admin
     .from("topic_publications")
     .select(PUBLICATION_COLUMNS)
-    .eq("topic_kit_id", kit.id)
-    .eq("channel_language", LANGUAGE);
+    .eq("topic_kit_id", kit.id);
   if (pErr) return dbError(pErr);
   let plan: PartPlanRow[] = [];
   const { data: planRow, error: plErr } = await admin.from("topic_kits").select("part_plan").eq("id", kit.id).maybeSingle();
