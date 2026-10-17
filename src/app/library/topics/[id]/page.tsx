@@ -1,34 +1,50 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { requireLibraryMember } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
-import AutoRefresh from "@/components/auto-refresh";
-import { InkUnderline } from "@/components/ink-mark";
 import { ARTICLE_JOBS_MIGRATION, catalogueColumnMissing, catalogueMissing } from "@/utils/catalogue/status";
 import { CATALOGUE_KITS_MIGRATION, curriculumHeaderLines, kitGenerationIds, sortKits, sortVideoArtifacts, videoPartOf, type HeaderMapping } from "@/utils/catalogue/kit";
 import { catalogueGenerateEnabled, cataloguePublishEnabled, catalogueOwnerId, youtubeAuditPassed } from "@/utils/flags";
 import { docDownloadName } from "@/utils/download-name";
 import type { ArticleFigure, Curriculum, KitGenerationRow, Topic, TopicAlias, TopicArticle, TopicHit, TopicKit, TopicPublication } from "@/utils/catalogue/types";
-import { ErrorBanner, MaturityChip, MissingTablesBanner, StatusChip, fmtDate } from "../../catalogue-ui";
-import { AliasPanel, MappingPanel, PrereqPanel, TopicActions, TopicHeaderEditor, type MappingRow } from "./topic-panels";
-import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel";
+import { ErrorBanner, MissingTablesBanner } from "../../catalogue-ui";
+import type { MappingRow } from "./topic-panels";
+import type { ArticleVersion, JobRow } from "./article-panel";
 import { YOUTUBE_META_MIGRATION } from "@/utils/catalogue/publish";
-import { KitPanel, type KitArtifactView, type KitView } from "./kit-panel";
-import { TranslationsPanel, type TranslateJobRow } from "./translations-panel";
+import type { KitArtifactView, KitView } from "./kit-panel";
+import type { TranslateJobRow } from "./translations-panel";
+import { ReviewInboxView, type AllTopicRow, type AuditRow } from "./review-inbox-view";
 import { PUBLICATION_COLUMNS_0122, loadVideoFormat } from "@/utils/catalogue/format-server";
+import { loadReviewQueue } from "@/utils/catalogue/review-queue-server";
+import { KIT_TRANSLATOR_MIGRATION, parseInboxParams } from "@/utils/catalogue/review-queue";
+import { searchOr } from "@/utils/catalogue/status";
 
-/** 0134 — the Kit Translator's columns on topic_kits. */
-const KIT_TRANSLATOR_MIGRATION = "0134_kit_translator.sql";
-
-// /library/topics/[id] — one topic: header (editable), status actions, aliases,
-// curriculum mappings with the depth-node selector, prerequisites, the
-// knowledge article (versions, editor, figures, review, diff — Phase 2b), the
-// kit (generate, pieces with their worker jobs, video parts, documents, part
-// plan, chapters, clips, review, retry, regenerate, history — Phase 3) with
-// its publish block (what reached YouTube per part, and what would be posted —
-// Phase 4, dark) and the audit trail. The question bank has its own page
-// (/questions).
+// /library/topics/[id] — the REVIEW INBOX (layout D, the founder's choice of
+// 2026-10-16: "looks very clumsy … feels more like a newspaper"). Two panes:
+//
+//   LEFT  the review queue — every kit awaiting a reviewer (English kits in
+//         in_review, translation kits whose translation_status is in_review),
+//         newest first, with the language, the time in review and the flag
+//         count; or, with ?queue=all, every topic with a search, so the page
+//         still reaches a topic that is not under review.
+//   RIGHT the selected topic — the kit under review's video at the top, ONE
+//         status line (kit status, bank maturity, pre-check A/C verdict and
+//         flag count), the Approve / Reject box, then everything else folded:
+//         the article in a drawer (versions, editor, figures, review, diff —
+//         Phase 2b), the pieces (the kit panel — generate, retry, regenerate,
+//         documents, part plan, clips, question bank, quiz, publish — Phase 3
+//         and 4), the pre-check findings, the translations (one row per
+//         language with the same controls), the history (jobs and the audit
+//         trail) and the topic's own details (header, actions, mappings,
+//         aliases, prerequisites).
+//
+// The selection travels in the URL: the path is the topic (so every existing
+// link still opens its page), ?lang= names a translation kit to review in
+// place of the English one, ?queue=all&q= switches the left pane. The
+// explanatory paragraphs the panels used to carry live in "How this works"
+// and in hover help (title attributes). The question bank has its own page
+// (/questions). Every write still goes through the three routes
+// (/api/library/topics/[id], /article, /kit); this page only reads.
 
 export const dynamic = "force-dynamic";
 
@@ -80,10 +96,11 @@ type RawMapping = {
     | null;
 };
 
-export default async function TopicDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TopicDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const member = await requireLibraryMember();
   const { id } = await params;
   if (!UUID.test(id)) notFound();
+  const view = parseInboxParams(await searchParams);
   const canCurate = libraryAllows(member.role, "curate");
   const canApprove = libraryAllows(member.role, "approve");
   const admin = createAdminClient();
@@ -153,7 +170,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   const prerequisites = prereqIds.map((p) => byId.get(p)).filter((t): t is TopicHit => !!t);
   const dependants = (depQ.data ?? []) as TopicHit[];
   const openCandidates = candQ.count ?? 0;
-  const trail = (auditQ.data ?? []) as { action: string; detail: Record<string, unknown> | null; created_at: string; actor_id: string | null }[];
+  const trail = (auditQ.data ?? []) as AuditRow[];
 
   // ── The article: every version (en), its figures with signed previews, the
   // latest render job per version, and the latest article job for the topic.
@@ -283,20 +300,23 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
     for (const g of (data ?? []) as unknown as GenEmbed[]) gensById.set(g.id, g);
   }
   // What reached YouTube (Phase 4, 0112 topic_publications): one row per (kit,
-  // part, language). Empty everywhere until the publish phase is switched on;
-  // read for every kit of the topic, because a regenerated kit's history
-  // includes what its predecessor published.
+  // part, channel). Empty everywhere until the publish phase is switched on;
+  // read for every kit of the topic — the English ones, because a regenerated
+  // kit's history includes what its predecessor published, and the
+  // translations (app PR #88), whose video may sit on the English channel
+  // until the language has one: a kit has one language, so the kit id alone
+  // names its publications (never the channel_language).
   let publicationsError: { message?: string } | null = null;
   const publicationsByKit = new Map<string, TopicPublication[]>();
-  if (kitRows.length) {
+  const allKitRows = [...kitRows, ...translationRows];
+  if (allKitRows.length) {
     const { data, error } = await admin
       .from("topic_publications")
       .select(PUBLICATION_COLUMNS)
       .in(
         "topic_kit_id",
-        kitRows.map((k) => k.id),
+        allKitRows.map((k) => k.id),
       )
-      .eq("channel_language", KIT_LANGUAGE)
       .order("part", { ascending: true });
     if (error && !catalogueMissing(error)) publicationsError = error;
     for (const p of (data ?? []) as unknown as TopicPublication[]) {
@@ -315,10 +335,14 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   // re-rendered kit may supersede.
   const videoFormat = await loadVideoFormat(admin);
   const allPublications = [...publicationsByKit.values()].flat();
+  // The older videos a kit's may supersede are the topic's OTHER kits' in the
+  // SAME language — an Arabic video on the English channel is not an older
+  // English part.
+  const languageOfKit = new Map(allKitRows.map((k) => [k.id, k.language]));
   const viewOf = async (kit: TopicKit): Promise<KitView> => ({
       kit,
       publications: publicationsByKit.get(kit.id) ?? [],
-      otherPublications: allPublications.filter((p) => p.topic_kit_id !== kit.id),
+      otherPublications: allPublications.filter((p) => p.topic_kit_id !== kit.id && languageOfKit.get(p.topic_kit_id) === kit.language),
       videoFormat,
       generations: await Promise.all(
         kitGenerationIds(kit)
@@ -412,142 +436,63 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
   );
   const curriculumHeader = curriculumHeaderLines(headerMappings);
 
+  // ── The review inbox's two panes (layout D). The queue is every kit awaiting
+  // a reviewer across the catalogue; "all topics" is the newest sixty (or a
+  // search) so the page reaches any topic. The kit under review on the right
+  // is the English kit, or — with ?lang= — that translation kit.
+  const queue = await loadReviewQueue(admin);
+  let allTopics: AllTopicRow[] = [];
+  if (view.queue === "all") {
+    let q = admin.from("topics").select("id, title, subject, status, updated_at").order("updated_at", { ascending: false }).limit(60);
+    const search = searchOr(view.q, ["title", "canonical_key", "summary"]);
+    if (search) q = q.or(search);
+    allTopics = ((await q).data ?? []) as typeof allTopics;
+  }
   return (
-    <main className="max-w-6xl mx-auto px-6 py-10">
-      <AutoRefresh active={buildInFlight} />
-      <p className="mb-4 text-sm">
-        <Link href="/library/topics" className="text-[#5B6470] hover:underline">
-          ← Topics
-        </Link>
-      </p>
-      <div className="flex flex-wrap items-center gap-3 mb-1">
-        <h1 className="text-3xl font-display">{topic.title}</h1>
-        <StatusChip status={topic.status} />
-        <MaturityChip maturity={topic.bank_maturity} />
-      </div>
-      <InkUnderline className="block h-3 w-40 mb-3" color="#7FD8A8" />
-      <p className="text-sm text-[#5B6470] mb-6">
-        Created {fmtDate(topic.created_at)} · updated {fmtDate(topic.updated_at)} ·{" "}
-        <Link href={`/library/topics/${topic.id}/questions`} className="hover:underline text-[#1F5B99]">
-          Question bank →
-        </Link>
-        {openCandidates > 0 && (
-          <>
-            {" "}
-            ·{" "}
-            <Link href="/library/candidates" className="hover:underline">
-              {openCandidates} open candidate{openCandidates === 1 ? "" : "s"} suggest this topic
-            </Link>
-          </>
-        )}
-      </p>
-
-      <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
-        <div className="space-y-5">
-          <TopicHeaderEditor topic={topic} canCurate={canCurate} />
-          {catalogueMissing(artQ.error) ? (
-            <MissingTablesBanner table="topic_articles" />
-          ) : artQ.error ? (
-            <ErrorBanner message={`Could not read the article: ${artQ.error.message}`} />
-          ) : (
-            <>
-              {articleMigration && <MissingTablesBanner table="article_figures.render_error" migration={articleMigration} />}
-              {figuresError && <ErrorBanner message={`Could not read the figures: ${figuresError.message}`} />}
-              {jobsError && <ErrorBanner message={`Could not read the article jobs: ${jobsError.message}`} />}
-              <ArticlePanel
-                topicId={topic.id}
-                topicStatus={topic.status}
-                versions={versions}
-                articleJob={articleJob}
-                names={names}
-                canEdit={canEditArticle}
-                canApprove={canApprove}
-              />
-              {kitsError && <ErrorBanner message={`Could not read the kits: ${kitsError.message ?? "unknown error"}`} />}
-              {gensError && <ErrorBanner message={`Could not read the kit's generations: ${gensError.message ?? "unknown error"}`} />}
-              {publicationsError && <ErrorBanner message={`Could not read the publications: ${publicationsError.message ?? "unknown error"}`} />}
-              <KitPanel
-                topicId={topic.id}
-                topicTitle={topic.title}
-                topicSummary={topic.summary}
-                topicStatus={topic.status}
-                bankMaturity={topic.bank_maturity}
-                curriculumHeader={curriculumHeader}
-                headerMappings={headerMappings}
-                topicSubject={topic.subject}
-                auditPassed={youtubeAuditPassed()}
-                articleStatus={approvedArticle?.status ?? null}
-                approvedArticle={approvedArticle ? { id: approvedArticle.id, version: approvedArticle.version } : null}
-                articleStatuses={articleStatuses}
-                articleVersions={articleVersions}
-                kits={kits}
-                names={names}
-                canGenerate={canGenerate}
-                canApprove={canApprove}
-                canPublish={canPublish}
-                generateEnabled={catalogueGenerateEnabled()}
-                publishEnabled={cataloguePublishEnabled()}
-                ownerConfigured={catalogueOwnerId() !== null}
-                migrationNote={kitMigrationNote}
-              />
-              <TranslationsPanel
-                topicId={topic.id}
-                topicStatus={topic.status}
-                canApprove={canApprove}
-                sourceKit={kits.find((k) => k.kit.status === "approved")?.kit ?? null}
-                translations={translationKits}
-                jobs={translateJobs}
-                names={names}
-                canGenerate={canGenerate}
-                generateEnabled={catalogueGenerateEnabled()}
-                migrationNote={translationsMigration ? `The translation columns (topic_kits.translation_status) are not in this database yet — apply ${translationsMigration}.` : null}
-              />
-            </>
-          )}
-          <MappingPanel topic={topic} mappings={mappings} curricula={curricula} canCurate={canCurate} />
-          <AliasPanel topicId={topic.id} aliases={aliases} canCurate={canCurate} />
-          <PrereqPanel topicId={topic.id} prerequisites={prerequisites} dependants={dependants} canCurate={canCurate} />
-        </div>
-        <div className="space-y-5">
-          <TopicActions topic={topic} canCurate={canCurate} canApprove={canApprove} />
-          <div className="card p-5">
-            <h2 className="font-medium mb-2">Pipeline</h2>
-            <ol className="text-xs text-[#5B6470] space-y-1">
-              {["candidate", "approved", "article_approved", "generating", "in_review", "video_approved", "published"].map((s) => (
-                <li key={s} className={s === topic.status ? "text-[#14181F] font-medium" : ""}>
-                  {s === topic.status ? "▸ " : "· "}
-                  {s.replace(/_/g, " ")}
-                </li>
-              ))}
-              {topic.status === "retired" && <li className="text-[#14181F] font-medium">▸ retired</li>}
-            </ol>
-            <p className="text-xs text-[#98A0A9] mt-3">
-              Approving an article version moves the topic to article approved; Generate kit moves it to generating, the worker to in review once every
-              piece is done, and Approve video (gate 2) to video approved. Publishing is a platform admin&apos;s action on an approved kit and is switched
-              off until the YouTube channel exists and its API project has passed the compliance audit.
-            </p>
-          </div>
-          <div className="card p-5">
-            <h2 className="font-medium mb-2">Audit trail</h2>
-            {trail.length === 0 ? (
-              <p className="text-sm text-[#98A0A9]">Nothing yet.</p>
-            ) : (
-              <ul className="text-xs text-[#5B6470] space-y-1.5">
-                {trail.map((a, i) => (
-                  <li key={i}>
-                    <span className="font-mono">{a.action.replace(/^library_/, "")}</span> · {fmtDate(a.created_at)}
-                    {a.detail && Object.keys(a.detail).length > 0 && (
-                      <span className="block text-[#98A0A9] truncate" title={JSON.stringify(a.detail)}>
-                        {JSON.stringify(a.detail).slice(0, 120)}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </div>
-    </main>
+    <ReviewInboxView
+      topic={topic}
+      view={view}
+      queue={queue}
+      allTopics={allTopics}
+      buildInFlight={buildInFlight}
+      openCandidates={openCandidates}
+      versions={versions}
+      approvedArticle={approvedArticle ? { id: approvedArticle.id, version: approvedArticle.version } : null}
+      approvedArticleStatus={approvedArticle?.status ?? null}
+      articleJob={articleJob}
+      articleTablesMissing={catalogueMissing(artQ.error)}
+      articleError={artQ.error && !catalogueMissing(artQ.error) ? artQ.error.message : null}
+      articleMigration={articleMigration}
+      figuresError={figuresError?.message ?? null}
+      jobsError={jobsError?.message ?? null}
+      articleStatuses={articleStatuses}
+      articleVersions={articleVersions}
+      kits={kits}
+      translationKits={translationKits}
+      translateJobs={translateJobs}
+      kitsError={kitsError ? (kitsError.message ?? "unknown error") : null}
+      gensError={gensError ? (gensError.message ?? "unknown error") : null}
+      publicationsError={publicationsError ? (publicationsError.message ?? "unknown error") : null}
+      kitMigrationNote={kitMigrationNote}
+      translationsMigration={translationsMigration}
+      curriculumHeader={curriculumHeader}
+      headerMappings={headerMappings}
+      mappings={mappings}
+      aliases={aliases}
+      prerequisites={prerequisites}
+      dependants={dependants}
+      curricula={curricula}
+      trail={trail}
+      names={names}
+      canCurate={canCurate}
+      canApprove={canApprove}
+      canEditArticle={canEditArticle}
+      canGenerate={canGenerate}
+      canPublish={canPublish}
+      auditPassed={youtubeAuditPassed()}
+      generateEnabled={catalogueGenerateEnabled()}
+      publishEnabled={cataloguePublishEnabled()}
+      ownerConfigured={catalogueOwnerId() !== null}
+    />
   );
 }

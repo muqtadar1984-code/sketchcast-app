@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { LANGUAGES, languageLabel } from "@/utils/narration";
 import {
   KIT_KINDS,
@@ -14,24 +15,34 @@ import {
   translationAcceptsReject,
 } from "@/utils/catalogue/kit";
 import { isLiveJobStatus } from "@/utils/catalogue/status";
-import type { KitRejectReason, PrecheckReport, TopicKit } from "@/utils/catalogue/types";
+import { blockingCount, flagCount } from "@/utils/catalogue/review-queue";
+import { AUDIT_NOTE, PRIVACY, PRIVACY_LABEL, PUBLISH_OFF_NOTE, canPublish as publishGate, canQueuePublish, defaultPrivacy, publicationSummary, publishActionFor, publishPrivacyAccepts, publishablePrivacies } from "@/utils/catalogue/publish";
+import type { KitRejectReason, PrecheckReport, PublishPrivacy, TopicKit, TopicPublication } from "@/utils/catalogue/types";
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
-import { JobLine, useKitPost, type KitView } from "./kit-panel";
+import { JobLine, VideoParts, useKitPost, type KitView, type Post } from "./kit-panel";
 import type { JobRow } from "./article-panel";
 
-// The topic page's Translations panel (Kit Translator, plan revision 3, T0 —
-// 2026-10-16). Every kit of this topic in a language other than English,
-// newest first: its language, the kit's status and the translation's own
-// (staged → in review → approved | stale | blocked | failed), the source
-// English kit, the pre-check verdict (blocking findings and flags, the
-// post-render check once the video exists), the worker's job line per piece,
-// the video parts and the deck. "Translate into …" queues ONE kit_translate
-// job for the topic's approved English kit (the route refuses a second live
-// one). T1 (2026-10-16): every piece of the kit is listed — the bank, the
-// quiz and the documents the translate job rebuilt — and the reviewer
-// approves or rejects the translation HERE: approve_topic_kit's translation
-// branch promotes the staged article and items and marks the previous
-// translation stale; reject retires them. The topic is never moved.
+// The topic page's Translations section (Kit Translator, plan revision 3, T0
+// — 2026-10-16). Every kit of this topic in a language other than English,
+// newest first — ONE ROW PER LANGUAGE in the same shape as the English kit
+// (layout D, 2026-10-17): the row says the language, the kit's status and the
+// translation's own (staged → in review → approved | stale | blocked |
+// failed), the pre-check verdict (check A before the render, check C after)
+// with its flag count, and the date; it unfolds to the pieces the translate
+// job rebuilt with the worker's job line per piece, the documents, the review
+// box and the video parts. "Review at the top" selects the translation for
+// the page's own review header (?lang=). "Translate into …" queues ONE
+// kit_translate job for the topic's approved English kit (the route refuses
+// a second live one). Approve / Reject post the kit route's actions:
+// approve_topic_kit's translation branch promotes the staged article and
+// items and marks the previous translation stale; reject retires them. The
+// topic is never moved. An APPROVED translation carries "Post to YouTube"
+// (app PR #88): the publish route accepts a kit whose translation_status is
+// approved and the worker posts the video in the kit's language, on the
+// language's channel when one is configured, else on the English channel —
+// so a translation's publications are read by kit id, whatever channel
+// carried them. Posting stays a platform admin's action (libraryAllows
+// "publish"), the same gate as the English kit's publish block.
 
 export type TranslateJobRow = JobRow & { params: Record<string, unknown> };
 
@@ -46,12 +57,14 @@ const TRANSLATION_TONE: Record<string, string> = {
   failed: "bg-[#FDECEA] text-[#B3401F]",
 };
 
-function TranslationChip({ status }: { status: string | null | undefined }) {
+export function TranslationChip({ status }: { status: string | null | undefined }) {
   if (!status) return null;
   return <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] ${TRANSLATION_TONE[status] ?? "bg-[#EEF0EC] text-[#5B6470]"}`}>{status.replace(/_/g, " ")}</span>;
 }
 
-function PrecheckLine({ report }: { report: PrecheckReport | null | undefined }) {
+/** The pre-check verdict in one or two short lines: check A (the translation
+ *  against the English, before the render) and check C (the rendered timing). */
+export function PrecheckLine({ report }: { report: PrecheckReport | null | undefined }) {
   if (!report) return <span className="text-xs text-[#98A0A9]">not checked yet</span>;
   const blocking = report.blocking?.length ?? 0;
   const flags = report.flags?.length ?? 0;
@@ -72,41 +85,49 @@ function PrecheckLine({ report }: { report: PrecheckReport | null | undefined })
   );
 }
 
-function Findings({ report }: { report: PrecheckReport | null | undefined }) {
+/** Every finding of both checks, blocking first. */
+export function Findings({ report, open = false }: { report: PrecheckReport | null | undefined; open?: boolean }) {
   if (!report) return null;
-  const items = [...(report.blocking ?? []).map((f) => ({ ...f, level: "blocks" })), ...(report.flags ?? []).map((f) => ({ ...f, level: "flag" })),
-    ...((report.post_render?.blocking ?? []).map((f) => ({ ...f, level: "blocks" }))), ...((report.post_render?.flags ?? []).map((f) => ({ ...f, level: "flag" })))];
+  const items = [
+    ...(report.blocking ?? []).map((f) => ({ ...f, level: "blocks" })),
+    ...(report.flags ?? []).map((f) => ({ ...f, level: "flag" })),
+    ...(report.post_render?.blocking ?? []).map((f) => ({ ...f, level: "blocks" })),
+    ...(report.post_render?.flags ?? []).map((f) => ({ ...f, level: "flag" })),
+  ];
   if (!items.length) return null;
+  const list = (
+    <ul className="mt-1 space-y-0.5 max-h-64 overflow-y-auto text-xs text-[#5B6470]">
+      {items.slice(0, 60).map((f, i) => (
+        <li key={i}>
+          <span className={f.level === "blocks" ? "text-[#B3401F]" : "text-[#8A5A00]"}>{f.level}</span> · <span className="font-mono">{String(f.where)}</span> · {String(f.what)}
+          {"detail" in f && f.detail ? <span className="text-[#98A0A9]"> — {typeof f.detail === "string" ? f.detail : JSON.stringify(f.detail).slice(0, 80)}</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+  if (open) return list;
   return (
     <details className="text-xs text-[#5B6470]">
-      <summary className="cursor-pointer">{items.length} finding{items.length === 1 ? "" : "s"}</summary>
-      <ul className="mt-1 space-y-0.5 max-h-48 overflow-y-auto">
-        {items.slice(0, 60).map((f, i) => (
-          <li key={i}>
-            <span className={f.level === "blocks" ? "text-[#B3401F]" : "text-[#8A5A00]"}>{f.level}</span> · <span className="font-mono">{String(f.where)}</span> · {String(f.what)}
-            {"detail" in f && f.detail ? <span className="text-[#98A0A9]"> — {typeof f.detail === "string" ? f.detail : JSON.stringify(f.detail).slice(0, 80)}</span> : null}
-          </li>
-        ))}
-      </ul>
+      <summary className="cursor-pointer">
+        {items.length} finding{items.length === 1 ? "" : "s"}
+      </summary>
+      {list}
     </details>
   );
 }
 
-function ReviewBox({ kit, topicStatus, post, busy, setNotice }: {
-  kit: TopicKit;
-  topicStatus: string;
-  post: ReturnType<typeof useKitPost>["post"];
-  busy: string | null;
-  setNotice: (s: string | null) => void;
-}) {
+/** Approve / Reject (reason + notes) for ONE translation kit, posting the kit
+ *  route's actions. The article's own status is verified by the route and
+ *  the RPC (it must be the staged translated version); here the kit and the
+ *  topic decide whether the buttons are offered. Rendered by the review inbox
+ *  under the video, and inside each language's folded row. */
+export function TranslationReviewBox({ kit, topicStatus, canApprove, post, busy, setNotice }: { kit: TopicKit; topicStatus: string; canApprove: boolean; post: Post; busy: string | null; setNotice: (s: string | null) => void }) {
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState<KitRejectReason | "">("translation");
-  // The article's own status is verified by the route and the RPC (it must
-  // be the staged translated version); here the kit and the topic decide
-  // whether the buttons are offered.
   const approveOk = translationAcceptsApprove(kit.status, kit.translation_status, "staged", topicStatus);
   const rejectOk = translationAcceptsReject(kit.status);
   const label = languageLabel(kit.language) ?? kit.language;
+  if (!canApprove || !(canApproveKit(kit.status) || canRejectKit(kit.status))) return null;
 
   const approve = async () => {
     if (!window.confirm(`Approve the ${label} translation? Its article and question items are promoted with it, it becomes the ${label} kit teachers see in the app, and any earlier ${label} translation steps aside. The English kit and the topic are not touched.`)) return;
@@ -121,31 +142,178 @@ function ReviewBox({ kit, topicStatus, post, busy, setNotice }: {
   };
 
   return (
-    <div className="rounded-lg bg-[#F7F8F6] p-3 space-y-2">
-      <p className="text-xs font-medium">Review this translation</p>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Notes — what you checked, or what is wrong (required to reject)" className="input w-full text-xs" />
+    <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-2">
+      <p className="text-sm font-medium" title="Approving promotes the staged article and question items with the kit; rejecting retires them so the language can be translated again after the fix. The English kit and the topic are never touched.">
+        Review the {label} translation
+      </p>
       <div className="flex flex-wrap items-center gap-2">
+        {canRejectKit(kit.status) && (
+          <select value={reason} onChange={(e) => setReason(e.target.value as KitRejectReason)} className="field h-9 px-2 text-sm" aria-label="Reject reason" disabled={!!busy}>
+            {KIT_REJECT_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {KIT_REJECT_REASON_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        )}
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Notes — what you checked, or what is wrong (required to reject)" className="field flex-1 min-w-[16rem] px-3 py-2 text-sm" />
+      </div>
+      <div className="flex items-center gap-2">
         {canApproveKit(kit.status) && (
-          <button type="button" onClick={approve} disabled={!!busy || !approveOk.ok} title={approveOk.ok ? undefined : approveOk.why} className="btn-primary h-8 px-3 text-xs disabled:opacity-50">
+          <button type="button" onClick={approve} disabled={!!busy || !approveOk.ok} title={approveOk.ok ? undefined : approveOk.why} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
             {busy === `approve:${kit.id}` ? "Approving…" : "Approve translation"}
           </button>
         )}
         {canRejectKit(kit.status) && (
-          <>
-            <select value={reason} onChange={(e) => setReason(e.target.value as KitRejectReason)} className="input h-8 text-xs" aria-label="Reject reason" disabled={!!busy}>
-              {KIT_REJECT_REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {KIT_REJECT_REASON_LABEL[r]}
-                </option>
-              ))}
-            </select>
-            <button type="button" onClick={reject} disabled={!!busy || !rejectOk.ok || !reason || !notes.trim()} title={rejectOk.ok ? (!notes.trim() ? "Notes are required to reject." : undefined) : rejectOk.why} className="btn-ghost h-8 px-3 text-xs text-[#B3401F] disabled:opacity-50">
-              {busy === `reject:${kit.id}` ? "Rejecting…" : kit.status === "approved" ? "Pull approval" : "Reject"}
-            </button>
-          </>
+          <button type="button" onClick={reject} disabled={!!busy || !rejectOk.ok || !reason || !notes.trim()} title={rejectOk.ok ? (!notes.trim() ? "Notes are required to reject." : undefined) : rejectOk.why} className="btn-ghost h-9 px-4 text-sm text-[#B3401F] disabled:opacity-50">
+            {busy === `reject:${kit.id}` ? "Rejecting…" : kit.status === "approved" ? "Pull approval" : "Reject"}
+          </button>
         )}
       </div>
       {!approveOk.ok && canApproveKit(kit.status) && <p className="text-xs text-[#8A5A00]">{approveOk.why}</p>}
+    </div>
+  );
+}
+
+/** The language's pieces, as the English kit's table: piece, status, worker
+ *  job, files. A piece the source kit does not have is not missing here. */
+export function TranslationPieces({ kit, generations }: KitView) {
+  const byId = new Map(generations.map((g) => [g.gen.id, g]));
+  return (
+    <div className="overflow-x-auto rounded-lg border border-[#EEF0EC]">
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs text-[#5B6470] border-b border-[#EEF0EC]">
+          <tr>
+            <th className="px-3 py-2 font-medium">Piece</th>
+            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">Worker</th>
+            <th className="px-3 py-2 font-medium">Files</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#EEF0EC]">
+          {KIT_KINDS.map((kind) => {
+            const gid = kitGenerationIdFor(kit, kind);
+            const g = gid ? (byId.get(gid) ?? null) : null;
+            const docs = g ? g.artifacts.filter((a) => a.kind !== "video_mp4" && a.kind !== "script_json" && a.kind !== "thumbnail_png" && a.kind !== "questions_json") : [];
+            if (!gid && kind !== "presentation" && kind !== "deck" && kind !== "lesson_plan") return null;
+            return (
+              <tr key={kind}>
+                <td className="px-3 py-2">{KIT_KIND_LABEL[kind]}</td>
+                <td className="px-3 py-2">{g ? <GenStatusChip status={g.gen.status} /> : <span className="text-xs text-[#98A0A9]">{kind === "lesson_plan" ? "after the video" : "—"}</span>}</td>
+                <td className="px-3 py-2">
+                  <JobLine job={g?.job ?? null} />
+                </td>
+                <td className="px-3 py-2">
+                  {docs.map((a) =>
+                    a.url ? (
+                      <a key={a.kind} href={a.url} className="text-xs underline text-[#1F5B99] mr-2" download={a.name ?? undefined}>
+                        {a.name ?? a.kind}
+                      </a>
+                    ) : null,
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The video parts of a translation kit (its presentation's video_mp4 artifacts). */
+export function translationVideos({ kit, generations }: KitView) {
+  const pres = kit.presentation_generation_id ? generations.find((g) => g.gen.id === kit.presentation_generation_id) : null;
+  return pres ? pres.artifacts.filter((a) => a.kind === "video_mp4").sort((a, b) => a.part - b.part) : [];
+}
+
+/** "Post to YouTube" for ONE approved translation kit: what is on the channel
+ *  per part, the privacy, and the button — posting the publish route's
+ *  `publish` / `retry` with this kit's id. The disabled reason reads in the
+ *  route's order: the flag, the kit and the translation, the topic and the
+ *  bank, nothing left to do, the privacy. */
+function TranslationPublish({ kit, publications, topicStatus, bankMaturity, canPublish, publishEnabled, auditPassed, post, busy, setNotice }: {
+  kit: TopicKit;
+  publications: TopicPublication[];
+  topicStatus: string;
+  bankMaturity: string | null;
+  canPublish: boolean;
+  publishEnabled: boolean;
+  auditPassed: boolean;
+  post: Post;
+  busy: string | null;
+  setNotice: (s: string | null) => void;
+}) {
+  const [privacy, setPrivacy] = useState<PublishPrivacy>(defaultPrivacy(auditPassed));
+  const summary = publicationSummary(publications, kit.part_plan.length);
+  const action = publishActionFor(summary);
+  const label = languageLabel(kit.language) ?? kit.language;
+  // The route checks the translated article itself; here the kit, the
+  // translation, the topic and the bank decide what the button says.
+  const gate = publishGate(kit.status, topicStatus, "approved", bankMaturity);
+  const translationWhy = kit.translation_status && kit.translation_status !== "approved" ? `This translation is ${String(kit.translation_status).replace(/_/g, " ")}, not approved — a reviewer approves the translation before it reaches YouTube.` : null;
+  const queue = canQueuePublish(action, summary);
+  const priv = publishPrivacyAccepts(privacy, auditPassed);
+  const why = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : translationWhy ? translationWhy : !queue.ok ? queue.why : !priv.ok ? priv.why : null;
+  const allowed = publishablePrivacies(auditPassed);
+
+  const publish = async () => {
+    const what = privacy === "public" ? "PUBLIC — listed and searchable the moment the upload finishes" : privacy;
+    if (!window.confirm(action === "retry" ? `Finish posting the ${label} kit? Parts already on YouTube are skipped; the rest go up ${what}.` : `Post the ${label} kit to YouTube ${what}? The worker posts it in ${label}, on the ${label} channel when one is configured, else on the English channel.`)) return;
+    const r = await post({ action, kitId: kit.id, privacy }, `publish:${kit.id}`, "publish");
+    if (r) setNotice(`${label} post queued — the worker uploads the parts in order (${privacy}) and records each one.`);
+  };
+
+  return (
+    <div className="rounded-lg border border-[#EEF0EC] p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-medium">Post to YouTube</p>
+        <span className="text-xs text-[#5B6470]">{summary.label}</span>
+      </div>
+      {summary.parts.some((p) => p.row) && (
+        <ul className="text-xs text-[#5B6470] space-y-0.5">
+          {summary.parts.map(({ part, row, state }) => (
+            <li key={part}>
+              Part {part}: {state === "published" ? "published" : state === "failed" ? "failed" : "not yet"}
+              {row?.youtube_video_id && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <a href={`https://www.youtube.com/watch?v=${row.youtube_video_id}`} target="_blank" rel="noreferrer" className="underline text-[#1F5B99] font-mono">
+                    {row.youtube_video_id}
+                  </a>{" "}
+                  · {row.privacy} · {row.channel_language} channel
+                </>
+              )}
+              {row?.error && (
+                <span className="text-[#B3401F]" title={row.error}>
+                  {" "}
+                  — {row.error.slice(0, 80)}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!auditPassed && canPublish && <p className="text-xs text-[#9A6400]">{AUDIT_NOTE}</p>}
+      {canPublish ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={privacy} onChange={(e) => setPrivacy(e.target.value as PublishPrivacy)} className="field h-9 px-2 text-sm" aria-label="Privacy" disabled={!!busy}>
+            {PRIVACY.map((p) => (
+              <option key={p} value={p} disabled={!(allowed as readonly string[]).includes(p)}>
+                {PRIVACY_LABEL[p]}
+                {(allowed as readonly string[]).includes(p) ? "" : " — needs the compliance audit"}
+              </option>
+            ))}
+          </select>
+          <button type="button" disabled={!!busy || !!why} title={why ?? undefined} onClick={publish} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
+            {busy === `publish:${kit.id}` ? "Queuing…" : action === "retry" ? "Finish posting" : privacy === "public" ? "Post to YouTube (public)" : `Post to YouTube (${privacy})`}
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-[#98A0A9]">Posting is a platform admin&apos;s action; this is the state of the channel.</p>
+      )}
+      {canPublish && why && <p className="text-xs text-[#9A6400]">{why}</p>}
     </div>
   );
 }
@@ -161,6 +329,12 @@ export function TranslationsPanel({
   canGenerate,
   generateEnabled,
   migrationNote,
+  selectedLanguage = null,
+  reviewHrefs = {},
+  canPublish = false,
+  publishEnabled = false,
+  auditPassed = false,
+  bankMaturity = null,
 }: {
   topicId: string;
   topicStatus: string;
@@ -176,6 +350,17 @@ export function TranslationsPanel({
   canGenerate: boolean;
   generateEnabled: boolean;
   migrationNote: string | null;
+  /** the language the page's review header shows (?lang=), or null for the English kit */
+  selectedLanguage?: string | null;
+  /** per language, the inbox URL that selects it for the review header */
+  reviewHrefs?: Record<string, string>;
+  /** the `publish` action — admins only (plan §7.1); the English kit's gate */
+  canPublish?: boolean;
+  publishEnabled?: boolean;
+  /** YOUTUBE_COMPLIANCE_AUDIT_PASSED on the app: public/unlisted allowed */
+  auditPassed?: boolean;
+  /** topics.bank_maturity — 'none' blocks publishing (canPublish) */
+  bankMaturity?: string | null;
 }) {
   const { post, busy, error, notice, setNotice } = useKitPost(topicId);
   const taken = new Set(translations.filter((t) => ["generating", "in_review", "approved"].includes(t.kit.status) && t.kit.translation_status !== "stale").map((t) => t.kit.language));
@@ -193,21 +378,20 @@ export function TranslationsPanel({
     if (r) setNotice(r.existing ? `A ${label} translation is already queued.` : `${label} translation queued.`);
   };
 
-  const jobsWithoutKit = jobs.filter((j) => !translations.some((t) => (t.kit.translation as { job_id?: string } | null)?.job_id === j.id || t.kit.language === j.params.language && t.kit.status !== "failed"));
+  const jobsWithoutKit = jobs.filter((j) => !translations.some((t) => (t.kit.translation as { job_id?: string } | null)?.job_id === j.id || (t.kit.language === j.params.language && t.kit.status !== "failed")));
 
   return (
-    <div className="card p-5 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-medium">Translations</h2>
-          <p className="text-xs text-[#5B6470] mt-1">
-            The same lesson in another language: the English kit&apos;s words are translated and its scene plan re-rendered with new voices — the pictures, the figures and the maths stay as they are.
-            Pre-check A compares the translation with the English before the render; check C looks at the rendered timing. A reviewer approves each translation.
-          </p>
-        </div>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2
+          className="font-medium"
+          title="The same lesson in another language: the English kit's words are translated and its scene plan re-rendered with new voices — the pictures, the figures and the maths stay as they are. Pre-check A compares the translation with the English before the render; check C looks at the rendered timing. A reviewer approves each translation."
+        >
+          Translations <span className="text-sm text-[#5B6470] font-normal">({translations.length})</span>
+        </h2>
         {canGenerate && (
           <div className="flex items-center gap-2">
-            <select value={language} onChange={(e) => setLanguage(e.target.value)} className="input h-8 text-xs" disabled={!!busy || !choices.length} aria-label="Language to translate into">
+            <select value={language} onChange={(e) => setLanguage(e.target.value)} className="field h-8 px-2 text-xs" disabled={!!busy || !choices.length} aria-label="Language to translate into">
               {(choices.length ? choices : TARGETS).map((l) => (
                 <option key={l.value} value={l.value}>
                   {l.label}
@@ -240,75 +424,64 @@ export function TranslationsPanel({
       {translations.length === 0 ? (
         <p className="text-sm text-[#98A0A9]">No translation yet.</p>
       ) : (
-        <div className="space-y-4">
-          {translations.map(({ kit, generations }) => {
-            const byId = new Map(generations.map((g) => [g.gen.id, g]));
-            const pres = kit.presentation_generation_id ? byId.get(kit.presentation_generation_id) : null;
-            const videos = pres ? pres.artifacts.filter((a) => a.kind === "video_mp4").sort((a, b) => a.part - b.part) : [];
+        <div className="rounded-lg border border-[#EEF0EC] divide-y divide-[#EEF0EC]">
+          {translations.map((view) => {
+            const { kit } = view;
+            const videos = translationVideos(view);
+            const selected = selectedLanguage === kit.language;
+            const flags = flagCount(kit.precheck);
+            const blocking = blockingCount(kit.precheck);
+            const href = reviewHrefs[kit.language];
             return (
-              <div key={kit.id} className="rounded-lg border border-[#EEF0EC] p-3 space-y-3">
-                <div className="flex flex-wrap items-center gap-2 text-sm">
+              <details key={kit.id} className={selected ? "bg-[#F4F6F3]" : ""} open={selected || undefined}>
+                <summary className="cursor-pointer px-3 py-2 flex flex-wrap items-center gap-2 text-sm list-none [&::-webkit-details-marker]:hidden">
+                  <span className="text-[#98A0A9] text-xs w-3">▸</span>
                   <span className="font-medium">{languageLabel(kit.language) ?? kit.language}</span>
                   <KitStatusChip status={kit.status} />
                   <TranslationChip status={kit.translation_status} />
-                  <span className="text-xs text-[#98A0A9]">
+                  <span className="text-xs">
+                    <PrecheckLine report={kit.precheck} />
+                  </span>
+                  {(flags > 0 || blocking > 0) && (
+                    <span className={`chip ${blocking ? "bg-[#FFE9E3] text-[#B3401F]" : "bg-[#FFF1D6] text-[#9A6400]"}`} title="Pre-check findings (both checks)">
+                      {blocking ? `${blocking} blocking · ` : ""}
+                      {flags} flag{flags === 1 ? "" : "s"}
+                    </span>
+                  )}
+                  <span className="text-xs text-[#98A0A9] ml-auto">
                     from kit {kit.source_kit_id ? kit.source_kit_id.slice(0, 8) : "—"} · {fmtDate(kit.created_at)}
                     {kit.reviewer_id && <> · {names[kit.reviewer_id] ?? kit.reviewer_id.slice(0, 8)}</>}
                   </span>
+                  {selected ? (
+                    <span className="chip bg-[#EDE7FB] text-[#5B3FBF]">reviewing above</span>
+                  ) : href ? (
+                    <Link href={href} className="text-xs text-[#1F5B99] hover:underline" onClick={(e) => e.stopPropagation()}>
+                      Review at the top ↑
+                    </Link>
+                  ) : null}
+                </summary>
+                <div className="px-3 pb-3 space-y-3">
+                  {kit.notes && <p className="text-xs text-[#B3401F] whitespace-pre-wrap">{kit.notes}</p>}
+                  <TranslationPieces {...view} />
+                  <Findings report={kit.precheck} />
+                  {!selected && <TranslationReviewBox kit={kit} topicStatus={topicStatus} canApprove={canApprove} post={post} busy={busy} setNotice={setNotice} />}
+                  {kit.status === "approved" && (
+                    <TranslationPublish
+                      kit={kit}
+                      publications={view.publications}
+                      topicStatus={topicStatus}
+                      bankMaturity={bankMaturity}
+                      canPublish={canPublish}
+                      publishEnabled={publishEnabled}
+                      auditPassed={auditPassed}
+                      post={post}
+                      busy={busy}
+                      setNotice={setNotice}
+                    />
+                  )}
+                  {!selected && <VideoParts kit={kit} videos={videos} />}
                 </div>
-                {kit.notes && <p className="text-xs text-[#B3401F]">{kit.notes}</p>}
-                <div className="flex flex-wrap gap-6">
-                  <div>
-                    <p className="text-xs text-[#5B6470] mb-1">Pre-checks</p>
-                    <PrecheckLine report={kit.precheck} />
-                    <Findings report={kit.precheck} />
-                  </div>
-                  <div className="flex-1 min-w-[16rem]">
-                    <table className="w-full text-xs">
-                      <tbody className="divide-y divide-[#EEF0EC]">
-                        {KIT_KINDS.map((kind) => {
-                          const gid = kitGenerationIdFor(kit, kind);
-                          const g = gid ? (byId.get(gid) ?? null) : null;
-                          const docs = g ? g.artifacts.filter((a) => a.kind !== "video_mp4" && a.kind !== "script_json" && a.kind !== "thumbnail_png" && a.kind !== "questions_json") : [];
-                          // a piece the source kit does not have is not missing here
-                          if (!gid && kind !== "presentation" && kind !== "deck" && kind !== "lesson_plan") return null;
-                          return (
-                            <tr key={kind}>
-                              <td className="py-1 pr-2">{KIT_KIND_LABEL[kind]}</td>
-                              <td className="py-1 pr-2">{g ? <GenStatusChip status={g.gen.status} /> : <span className="text-[#98A0A9]">{kind === "lesson_plan" ? "after the video" : "—"}</span>}</td>
-                              <td className="py-1 pr-2">
-                                <JobLine job={g?.job ?? null} />
-                              </td>
-                              <td className="py-1">
-                                {docs.map((a) =>
-                                  a.url ? (
-                                    <a key={a.kind} href={a.url} className="underline text-[#1F5B99] mr-2" download={a.name ?? undefined}>
-                                      {a.name ?? a.kind}
-                                    </a>
-                                  ) : null,
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                {canApprove && (canApproveKit(kit.status) || canRejectKit(kit.status)) && (
-                  <ReviewBox kit={kit} topicStatus={topicStatus} post={post} busy={busy} setNotice={setNotice} />
-                )}
-                {videos.length > 0 && (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {videos.map((v) => (
-                      <div key={`${v.part}-${v.url ?? ""}`}>
-                        <p className="text-xs font-medium mb-1">Part {v.part}</p>
-                        {v.url ? <video controls preload="metadata" src={v.url} controlsList="nodownload" disablePictureInPicture className="w-full rounded-lg bg-black" /> : <span className="text-xs text-[#98A0A9]">not signed</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              </details>
             );
           })}
         </div>
