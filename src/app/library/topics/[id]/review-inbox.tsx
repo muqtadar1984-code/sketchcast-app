@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { TopicKit } from "@/utils/catalogue/types";
+import type { TopicKit, TopicPublication } from "@/utils/catalogue/types";
 import { inboxHref, type InboxParams } from "@/utils/catalogue/review-queue";
 import { KitReviewBox, useKitPost } from "./kit-panel";
-import { TranslationReviewBox } from "./translations-panel";
+import { TranslationPublish, TranslationReviewBox } from "./translations-panel";
 
 // The review inbox's interactive bits (layout D, 2026-10-17). The page
 // (review-inbox-view.tsx, a Server Component) lays the two panes out and
@@ -68,6 +68,11 @@ export function ReviewVerdict({
   translation,
   kitArticleStatus,
   canApprove,
+  publications = [],
+  bankMaturity = null,
+  canPublish = false,
+  publishEnabled = false,
+  auditPassed = false,
 }: {
   topicId: string;
   topicStatus: string;
@@ -77,6 +82,14 @@ export function ReviewVerdict({
   /** the status of the English kit's article version (null when it is gone) */
   kitArticleStatus: string | null;
   canApprove: boolean;
+  /** what reached YouTube for THIS kit (0112) — the translation's publish block */
+  publications?: TopicPublication[];
+  /** topics.bank_maturity — 'none' blocks publishing */
+  bankMaturity?: string | null;
+  /** the `publish` action — platform admins (plan §7.1) */
+  canPublish?: boolean;
+  publishEnabled?: boolean;
+  auditPassed?: boolean;
 }) {
   const { post, busy, error, errors, notice, setNotice } = useKitPost(topicId);
   return (
@@ -85,6 +98,23 @@ export function ReviewVerdict({
         <TranslationReviewBox kit={kit} topicStatus={topicStatus} canApprove={canApprove} post={post} busy={busy} setNotice={setNotice} />
       ) : (
         <KitReviewBox kit={kit} topicStatus={topicStatus} kitArticleStatus={kitArticleStatus} canApprove={canApprove} busy={busy} post={post} setNotice={setNotice} />
+      )}
+      {translation && kit.status === "approved" && (
+        // An APPROVED translation's next step is the channel (app PR #88): the
+        // block sits here, under the verdict, where the English kit's Post to
+        // YouTube is looked for too — not only in the folded Translations row.
+        <TranslationPublish
+          kit={kit}
+          publications={publications}
+          topicStatus={topicStatus}
+          bankMaturity={bankMaturity}
+          canPublish={canPublish}
+          publishEnabled={publishEnabled}
+          auditPassed={auditPassed}
+          post={post}
+          busy={busy}
+          setNotice={setNotice}
+        />
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {errors.length > 1 && (
