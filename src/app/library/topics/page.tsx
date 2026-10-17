@@ -20,6 +20,7 @@ import {
   withTopicFilter,
 } from "@/utils/catalogue/status";
 import { articleStatusLabel, articleSummaries } from "@/utils/catalogue/article";
+import { inboxDoorHref } from "@/utils/catalogue/review-queue-server";
 import { loadVideoFormat, outdatedTopicIds } from "@/utils/catalogue/format-server";
 import type { Curriculum, NodeKind, Topic } from "@/utils/catalogue/types";
 import AutoRefresh from "@/components/auto-refresh";
@@ -40,6 +41,12 @@ import NewTopicForm from "./new-topic-form";
 // at all. The Article column says the same two things per topic: the approved
 // version and the pending one (articleSummaries) — never the newest version's
 // status alone, which would read "rejected" over a live approved article.
+//
+// Since 2026-10-17 a BARE /library/topics (the Topics tab, no querystring)
+// opens the review inbox instead (inboxDoorHref: the newest kit awaiting
+// review, else the newest topic in all-topics mode) — the founder's default
+// view. Any querystring, ?view=list included, shows this list as before, so
+// the overview's queue cards and the inbox's "All topics" link still land here.
 
 export const dynamic = "force-dynamic";
 
@@ -65,8 +72,10 @@ export default async function TopicsPage({
 }) {
   const member = await requireLibraryMember();
   const canCurate = libraryAllows(member.role, "curate");
-  const f = parseTopicFilters(await searchParams);
+  const raw = await searchParams;
   const admin = createAdminClient();
+  if (Object.keys(raw).length === 0) redirect(await inboxDoorHref(admin));
+  const f = parseTopicFilters(raw);
   const href = (page: number) => `/library/topics${withTopicFilter(f, { page })}`;
 
   // The chosen curriculum's nodes feed two things: the grade and sub-strand /
@@ -279,7 +288,7 @@ export default async function TopicsPage({
             Filter
           </button>
           {isFiltered && (
-            <Link href="/library/topics" className="btn-ghost h-9 px-3 inline-flex items-center">
+            <Link href="/library/topics?view=list" className="btn-ghost h-9 px-3 inline-flex items-center">
               Clear
             </Link>
           )}

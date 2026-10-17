@@ -7,12 +7,11 @@ import MobileNav from "../dashboard/mobile-nav";
 
 // Portal tabs. Phase 1 (taxonomy) ships Topics, Curricula, Candidates, Harvest;
 // Phase 3 adds Blueprints (the composer's presets — a topic's question bank
-// lives under its topic page, not as a tab); later phases add Publish. Review
-// (2026-10-17) opens the review inbox on the newest kit awaiting a reviewer
-// (the topic page, layout D).
+// lives under its topic page, not as a tab); later phases add Publish. Since
+// 2026-10-17 Topics opens the review inbox (the topic page, layout D) on the
+// newest kit awaiting a reviewer; the list is one click away inside it.
 const TABS = [
   { href: "/library", label: "Overview" },
-  { href: "/library/review", label: "Review" },
   { href: "/library/topics", label: "Topics" },
   { href: "/library/curricula", label: "Curricula" },
   { href: "/library/candidates", label: "Candidates" },

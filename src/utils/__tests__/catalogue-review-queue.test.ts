@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   awaitsReview,
   blockingCount,
+  filterQueueRows,
   flagCount,
   inboxHref,
+  neighboursOf,
   parseInboxParams,
   precheckVerdict,
   queueRowFor,
@@ -37,12 +39,45 @@ describe("the inbox URL", () => {
   });
 
   it("parses the view back, dropping an English or malformed lang", () => {
-    expect(parseInboxParams({ lang: "ar", queue: "all", q: "  area " })).toEqual({ lang: "ar", queue: "all", q: "area" });
-    expect(parseInboxParams({ lang: "en" })).toEqual({ lang: null, queue: "review", q: "" });
-    expect(parseInboxParams({ lang: "<script>" })).toEqual({ lang: null, queue: "review", q: "" });
+    const none = { lang: null, queue: "review", q: "", subject: "", status: "", language: "" };
+    expect(parseInboxParams({ lang: "ar", queue: "all", q: "  area " })).toEqual({ ...none, lang: "ar", queue: "all", q: "area" });
+    expect(parseInboxParams({ lang: "en" })).toEqual(none);
+    expect(parseInboxParams({ lang: "<script>" })).toEqual(none);
     expect(parseInboxParams({ queue: "nonsense" }).queue).toBe("review");
-    expect(parseInboxParams(undefined)).toEqual({ lang: null, queue: "review", q: "" });
+    expect(parseInboxParams(undefined)).toEqual(none);
     expect(parseInboxParams({ lang: ["ms", "ar"] }).lang).toBe("ms");
+  });
+
+  it("carries the pane's filters, each only where it applies", () => {
+    expect(parseInboxParams({ subject: " Science ", status: "video_approved", language: "ar" })).toMatchObject({ subject: "Science", status: "video_approved", language: "ar" });
+    expect(parseInboxParams({ status: "drop table", language: "<x>" })).toMatchObject({ status: "", language: "" });
+    // the queue keeps subject + language; all-topics keeps subject + status + q
+    expect(inboxHref("t1", { subject: "Science", language: "ar", status: "ignored" })).toBe("/library/topics/t1?language=ar&subject=Science");
+    expect(inboxHref("t1", { queue: "all", subject: "Science", status: "in_review", language: "ignored", q: "cell" })).toBe("/library/topics/t1?queue=all&q=cell&status=in_review&subject=Science");
+    expect(parseInboxParams(new URL("http://x" + inboxHref("t1", { queue: "all", subject: "Science", status: "in_review", q: "cell" })).searchParams.entries().reduce((o, [k, v]) => ({ ...o, [k]: v }), {}))).toMatchObject({ queue: "all", subject: "Science", status: "in_review", q: "cell" });
+  });
+});
+
+describe("moving through the pane", () => {
+  const rows = queueRowsOf([
+    row({ id: "k3", topic_id: "t1", language: "ar", translation_status: "in_review", updated_at: "2026-10-16T12:00:00Z" }),
+    row({ id: "k2", topic_id: "t2", topics: { id: "t2", title: "Angles", subject: "Science", status: "in_review" }, updated_at: "2026-10-16T10:00:00Z" }),
+    row({ id: "k1", updated_at: "2026-10-15T10:00:00Z" }),
+  ]);
+
+  it("filters the queue by subject and kit language", () => {
+    expect(filterQueueRows(rows, { subject: "", language: "" }).map((r) => r.kitId)).toEqual(["k3", "k2", "k1"]);
+    expect(filterQueueRows(rows, { subject: "Maths", language: "" }).map((r) => r.kitId)).toEqual(["k3", "k1"]);
+    expect(filterQueueRows(rows, { subject: "", language: "ar" }).map((r) => r.kitId)).toEqual(["k3"]);
+    expect(filterQueueRows(rows, { subject: "Science", language: "ar" })).toEqual([]);
+  });
+
+  it("finds the previous and next row, and the first when the topic is off the list", () => {
+    expect(neighboursOf(rows, (r) => r.kitId === "k2")).toMatchObject({ index: 1, prev: { kitId: "k3" }, next: { kitId: "k1" } });
+    expect(neighboursOf(rows, (r) => r.kitId === "k3")).toMatchObject({ index: 0, prev: null, next: { kitId: "k2" } });
+    expect(neighboursOf(rows, (r) => r.kitId === "k1")).toMatchObject({ index: 2, prev: { kitId: "k2" }, next: null });
+    expect(neighboursOf(rows, () => false)).toMatchObject({ index: -1, prev: null, next: { kitId: "k3" } });
+    expect(neighboursOf([], () => false)).toEqual({ index: -1, prev: null, next: null });
   });
 });
 

@@ -25,27 +25,62 @@ export type InboxParams = {
   queue: QueueMode;
   /** the all-topics search text (trimmed) */
   q: string;
+  /** the left pane's filters: a subject (both modes), a topic status (all
+   *  topics) and a kit language (the queue) — "" for any */
+  subject: string;
+  status: string;
+  language: string;
 };
 
 const LANG = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
+const WORD = /^[a-z_]{1,32}$/;
 
 export function parseInboxParams(sp: Record<string, string | string[] | undefined> | null | undefined): InboxParams {
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   const lang = one(sp?.lang).trim();
   const queue = one(sp?.queue) === "all" ? "all" : "review";
-  return { lang: lang && lang !== "en" && LANG.test(lang) ? lang : null, queue, q: one(sp?.q).trim().slice(0, 120) };
+  const status = one(sp?.status).trim();
+  const language = one(sp?.language).trim();
+  return {
+    lang: lang && lang !== "en" && LANG.test(lang) ? lang : null,
+    queue,
+    q: one(sp?.q).trim().slice(0, 120),
+    subject: one(sp?.subject).trim().slice(0, 60),
+    status: WORD.test(status) ? status : "",
+    language: LANG.test(language) ? language : "",
+  };
 }
 
-/** The inbox URL for a topic: the path is the topic, the rest is the view. */
-export function inboxHref(topicId: string, opts: { lang?: string | null; queue?: QueueMode; q?: string } = {}): string {
+export type InboxView = Partial<Omit<InboxParams, "lang">> & { lang?: string | null };
+
+/** The inbox URL for a topic: the path is the topic, the rest is the view.
+ *  The filters travel with every link so moving between topics keeps them. */
+export function inboxHref(topicId: string, opts: InboxView = {}): string {
   const p = new URLSearchParams();
   if (opts.lang && opts.lang !== "en") p.set("lang", opts.lang);
   if (opts.queue === "all") {
     p.set("queue", "all");
     if (opts.q?.trim()) p.set("q", opts.q.trim());
+    if (opts.status) p.set("status", opts.status);
+  } else if (opts.language) {
+    p.set("language", opts.language);
   }
+  if (opts.subject?.trim()) p.set("subject", opts.subject.trim());
   const qs = p.toString();
   return `/library/topics/${topicId}${qs ? `?${qs}` : ""}`;
+}
+
+/** The queue rows the left pane shows under its filters. */
+export function filterQueueRows(rows: readonly QueueRow[], view: Pick<InboxParams, "subject" | "language">): QueueRow[] {
+  return rows.filter((r) => (!view.subject || (r.subject ?? "") === view.subject) && (!view.language || r.language === view.language));
+}
+
+/** The neighbours of the selected row in the pane's list: what Prev / Next
+ *  (and the j / k keys) move to. Off the list: no previous, the first as next. */
+export function neighboursOf<T>(items: readonly T[], isSelected: (t: T) => boolean): { prev: T | null; next: T | null; index: number } {
+  const index = items.findIndex(isSelected);
+  if (index < 0) return { prev: null, next: items[0] ?? null, index: -1 };
+  return { prev: items[index - 1] ?? null, next: items[index + 1] ?? null, index };
 }
 
 /** Flags across check A and check C (post_render). */
