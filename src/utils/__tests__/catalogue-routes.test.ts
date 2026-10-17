@@ -146,6 +146,10 @@ const PUBLISH = "topics/[id]/publish/route.ts";
 // Demos (2026-09-28): the one route that DELETES a generation — a demo row
 // only (params.demo), never a kit's video.
 const DEMOS = "demos/route.ts";
+// The Kit Translator's sweep (T2, 2026-10-17): the bulk button per language.
+// It enqueues ONLY through the kit's translate-job.ts (so it is not a `jobs`
+// inserter itself) and decides nothing: readyForTranslation() does.
+const TRANSLATE_SWEEP = "translate/route.ts";
 
 describe("the /api/library routes exist and are scanned", () => {
   it("has the Phase 1 + 2a + 2b + 3 + 4 routes", () => {
@@ -165,6 +169,7 @@ describe("the /api/library routes exist and are scanned", () => {
         "topics/[id]/supersede/route.ts",
         "topics/[id]/route.ts",
         "topics/route.ts",
+        TRANSLATE_SWEEP,
         ...present(A2_ROUTES),
       ].sort(),
     );
@@ -1029,6 +1034,78 @@ describe("the supersede route (0122): /api/library/topics/[id]/supersede", () =>
     expect(src.indexOf("canQueueSupersede(old, replacement)")).toBeLessThan(src.indexOf(".insert("));
     expect((src.match(/await audit\(/g) ?? []).length).toBe(1);
     expect(src.indexOf("await audit(")).toBeGreaterThan(src.indexOf(".insert("));
+  });
+
+  it("carries the REASON (cosmetic | correction, 0134) into the job's params for the worker's cascade — validated before the reads, default cosmetic", () => {
+    const src = t();
+    // the shared list from format.ts, never spelt by hand here
+    expect(src).toMatch(/import \{[^}]*\bisSupersedeReason\b[^}]*\} from "@\/utils\/catalogue\/format"/);
+    expect(src).toMatch(/import \{[^}]*\bDEFAULT_SUPERSEDE_REASON\b[^}]*\} from "@\/utils\/catalogue\/format"/);
+    expect(src).not.toMatch(/["']correction["']/);
+    const validate = src.search(/const reason = body\.reason === undefined \|\| body\.reason === null \? DEFAULT_SUPERSEDE_REASON : isSupersedeReason\(body\.reason\) \? body\.reason : null/);
+    expect(validate).toBeGreaterThan(-1);
+    expect(src.slice(validate, validate + 300)).toMatch(/if\s*\(\s*!reason\s*\)\s*return\s+bad\(/);
+    expect(validate).toBeLessThan(src.indexOf("createAdminClient()"));
+    // …and lands in the job's params and the audit row
+    const payload = src.slice(src.search(/\.from\(\s*["']jobs["']\s*\)\s*\.insert\(/));
+    expect(payload).toMatch(/params:\s*\{[^}]*\breason,/);
+    expect(src.slice(src.indexOf("await audit("))).toMatch(/\breason,/);
+  });
+});
+
+describe("the translate sweep (T2, D7): /api/library/translate", () => {
+  const t = () => text(TRANSLATE_SWEEP);
+
+  it("asks for `generate` in both handlers, before a client is opened, and never for a weaker action", () => {
+    const src = t();
+    for (const h of handlers(src)) {
+      const check = h.body.search(/if\s*\(\s*!libraryAllows\(m\.role,\s*["']generate["']\)\s*\)\s*return\s+notFound\(\)/);
+      expect(check, h.method).toBeGreaterThan(-1);
+      expect(check, h.method).toBeLessThan(h.body.indexOf("createAdminClient()"));
+    }
+    expect((src.match(/libraryAllows\(/g) ?? []).length).toBe(2);
+    expect(src).not.toMatch(/libraryAllows\(m\.role,\s*["'](curate|edit_article|approve|publish)["']\)/);
+  });
+
+  it("decides nothing itself: the ready list comes from readyForTranslation() over the five reads", () => {
+    const src = t();
+    expect(src).toMatch(/\breadyForTranslation\(input,\s*language\)/);
+    expect(src).toMatch(/admin\.rpc\(\s*["']catalogue_current_kits["']\s*\)/);
+    for (const table of ["topics", "topic_kits", "topic_publications"]) {
+      expect(src, table).toMatch(new RegExp(`\\.from\\(\\s*["']${table}["']\\s*\\)\\s*\\.select\\(`));
+    }
+    expect(src).toMatch(/\.from\(\s*["']jobs["']\s*\)\s*\.select\([^)]*\)\s*\.eq\(\s*["']type["']\s*,\s*["']kit_translate["']\s*\)\s*\.in\(\s*["']status["']\s*,\s*\[\s*["']queued["']\s*,\s*["']processing["']\s*\]\s*\)/);
+    // the translation columns are 0134's: a database without them is a 409
+    expect(src).toMatch(/catalogueColumnMissing\(kitsRead\.error\)/);
+    expect(src).toMatch(/0134_kit_translator\.sql/);
+    // English kits only are sources; the language is one of the lesson languages, never English
+    expect(src).toMatch(/\.filter\(\(r\) => r\.language === LANGUAGE\)/);
+    expect(src).toMatch(/language === LANGUAGE\)\s*return null/);
+  });
+
+  it("writes nothing but the jobs — through translate-job.ts, never a hand-rolled insert — and the audit rows", () => {
+    const src = t();
+    expect(src).toMatch(/import \{ enqueueTranslateJob \} from "\.\.\/topics\/\[id\]\/kit\/translate-job"/);
+    expect(src).toMatch(/await enqueueTranslateJob\(admin,\s*\{\s*sourceKitId:\s*c\.kitId,\s*topicId:\s*c\.topicId,\s*language\s*\}\)/);
+    expect(src).not.toMatch(/\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/);
+    expect(src).not.toMatch(/\.(insert|update|upsert|delete)\(/);
+    // a live job for the pair is "already queued", never a new one
+    expect(src).toMatch(/\(q\.existing \? alreadyQueued : queued\)\.push\(c\.kitId\)/);
+    // the lock, after the reads (a dry run answers with generation off) and before any enqueue
+    const flag = src.indexOf("catalogueGenerateEnabled()");
+    expect(flag).toBeGreaterThan(src.indexOf("loadSweep(admin, language)"));
+    expect(flag).toBeLessThan(src.indexOf("enqueueTranslateJob(admin"));
+    expect(src.slice(flag, src.indexOf("enqueueTranslateJob(admin"))).toMatch(/return\s+conflict\(/);
+    // the limit: default 5, capped, a whole number
+    expect(src).toMatch(/return SWEEP_DEFAULT_LIMIT/);
+    expect(src).toMatch(/n > SWEEP_MAX_LIMIT\)\s*return null/);
+    expect(src).toMatch(/ready\.slice\(0,\s*limit\)/);
+    // audited on each queued kit's topic, with the whole sweep in the row
+    expect(src).toMatch(/audit\(admin,\s*m\.id,\s*"kit_translate_sweep",\s*"topic",\s*c\.topicId,\s*\{\s*kit_id:\s*kitId,\s*language,\s*job_id:/);
+    expect(src.indexOf('"kit_translate_sweep"')).toBeGreaterThan(src.indexOf("enqueueTranslateJob(admin"));
+    // the dry run shape is shared by GET and POST {dryRun: true}
+    expect(src).toMatch(/body\.dryRun === true\)\s*return dryRun\(language,\s*input\)/);
+    expect(src).toMatch(/notReady:\s*r\.notReady/);
   });
 });
 

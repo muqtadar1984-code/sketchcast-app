@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { TopicKit, TopicPublication } from "@/utils/catalogue/types";
 import { inboxHref, type InboxParams } from "@/utils/catalogue/review-queue";
@@ -18,7 +19,10 @@ import { TranslationPublish, TranslationReviewBox } from "./translations-panel";
  *  the article, the pre-check findings, the history, the topic's details:
  *  things that are read, not scanned. The drawer is a sheet over the page:
  *  Escape or the backdrop closes it; the page's state (and the panels
- *  inside, which keep their own) survives a router.refresh. */
+ *  inside, which keep their own) survives a router.refresh. The sheet is
+ *  portalled to the body: a button inside the sticky queue pane (position:
+ *  sticky makes a stacking context) would otherwise open a sheet the page's
+ *  own sticky shortcut bar paints through. */
 export function Drawer({ label, title, children, wide = true }: { label: ReactNode; title: string; children: ReactNode; wide?: boolean }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -39,20 +43,22 @@ export function Drawer({ label, title, children, wide = true }: { label: ReactNo
       <button type="button" onClick={() => setOpen(true)} className="btn-ghost h-9 px-3 text-sm inline-flex items-center gap-2" aria-haspopup="dialog" aria-expanded={open}>
         {label}
       </button>
-      {open && (
-        <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={title}>
-          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="absolute inset-0 bg-[#14181F]/40" />
-          <div className={`absolute inset-y-0 right-0 w-full ${wide ? "max-w-4xl" : "max-w-2xl"} bg-[#FBFCFA] shadow-2xl flex flex-col`}>
-            <div className="flex items-center justify-between gap-3 px-5 h-14 border-b border-[#EEF0EC] bg-white shrink-0">
-              <p className="font-medium">{title}</p>
-              <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-8 px-3 text-xs">
-                Close
-              </button>
+      {open &&
+        createPortal(
+          <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={title}>
+            <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="absolute inset-0 bg-[#14181F]/40" />
+            <div className={`absolute inset-y-0 right-0 w-full ${wide ? "max-w-4xl" : "max-w-2xl"} bg-[#FBFCFA] shadow-2xl flex flex-col`}>
+              <div className="flex items-center justify-between gap-3 px-5 h-14 border-b border-[#EEF0EC] bg-white shrink-0">
+                <p className="font-medium">{title}</p>
+                <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-8 px-3 text-xs">
+                  Close
+                </button>
+              </div>
+              <div className="overflow-y-auto p-5 grow">{children}</div>
             </div>
-            <div className="overflow-y-auto p-5 grow">{children}</div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
