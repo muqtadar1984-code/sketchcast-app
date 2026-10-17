@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import { libraryAllows } from "@/utils/library-routing";
-import { canQueueSupersede } from "@/utils/catalogue/format";
+import { DEFAULT_SUPERSEDE_REASON, SUPERSEDE_REASONS, canQueueSupersede, isSupersedeReason } from "@/utils/catalogue/format";
 import { PUBLICATION_COLUMNS_0122 } from "@/utils/catalogue/format-server";
 import type { TopicPublication } from "@/utils/catalogue/types";
 import { audit, bad, conflict, dbError, notFound, readJson, uuid } from "../../../lib";
@@ -26,6 +26,13 @@ export const runtime = "nodejs";
 // THIS ROUTE WRITES ONE ROW: the job. The pair is checked here
 // (canQueueSupersede) and again by the worker (check_pair) with the same
 // sentences, so a refusal reads the same in the portal and on the job.
+//
+// `reason` (Kit Translator plan §5.1, 0134 supersede_reason; T2, 2026-10-17):
+// why the newer video replaces the older one — cosmetic (the older kit's
+// translations stay visible as stale) or correction (they are blocked until
+// retranslated). The publish block asks before the confirm; the WORKER's
+// topic_supersede job reads params.reason and cascades it. Absent = cosmetic;
+// anything else is a 400.
 
 const SUPERSEDE_JOB_TYPE = "topic_supersede";
 
@@ -33,7 +40,7 @@ const PUBLICATION_COLUMNS =
   "id, topic_kit_id, part, channel_language, youtube_video_id, privacy, playlist_ids, captions_uploaded, thumbnail_set, published_at, error, created_at, updated_at" +
   PUBLICATION_COLUMNS_0122;
 
-type Body = { kitId?: unknown; oldPublicationId?: unknown };
+type Body = { kitId?: unknown; oldPublicationId?: unknown; reason?: unknown };
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const m = await isLibraryMemberRequest();
@@ -49,6 +56,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const oldId = uuid(body.oldPublicationId);
   if (!kitId) return bad("kitId is required.");
   if (!oldId) return bad("oldPublicationId is required.");
+  const reason = body.reason === undefined || body.reason === null ? DEFAULT_SUPERSEDE_REASON : isSupersedeReason(body.reason) ? body.reason : null;
+  if (!reason) return bad(`reason must be one of ${SUPERSEDE_REASONS.join(", ")}.`);
 
   const admin = createAdminClient();
   const { data: kitRow, error: kErr } = await admin.from("topic_kits").select("id, topic_id").eq("id", kitId).eq("topic_id", id).maybeSingle();
@@ -102,6 +111,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         topic_id: id,
         language: old.channel_language,
         part: old.part,
+        reason,
       },
       book_id: null,
       generation_id: null,
@@ -119,7 +129,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     old_video_id: old.youtube_video_id,
     new_video_id: replacement!.youtube_video_id,
     part: old.part,
+    reason,
     job_id: job.id,
   });
-  return NextResponse.json({ ok: true, jobId: job.id, part: old.part, oldVideoId: old.youtube_video_id, newVideoId: replacement!.youtube_video_id });
+  return NextResponse.json({ ok: true, jobId: job.id, part: old.part, reason, oldVideoId: old.youtube_video_id, newVideoId: replacement!.youtube_video_id });
 }

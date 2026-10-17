@@ -15,6 +15,10 @@ import {
   outdatedPublications,
   parseVideoFormat,
   supersedeCandidates,
+  DEFAULT_SUPERSEDE_REASON,
+  SUPERSEDE_REASONS,
+  SUPERSEDE_REASON_HINT,
+  isSupersedeReason,
 } from "@/utils/catalogue/format";
 import type { TopicPublication } from "@/utils/catalogue/types";
 
@@ -70,6 +74,21 @@ describe("outdated", () => {
   it("lists what changed since", () => {
     expect(changesSince(SETTING, 1)).toEqual(["v2: Labels anchored to parts."]);
     expect(changesSince(SETTING, 2)).toEqual([]);
+  });
+});
+
+describe("the supersede reason (0134 supersede_reason)", () => {
+  it("is exactly cosmetic or correction, cosmetic by default, each with a sentence on what it does to the translations", () => {
+    expect(SUPERSEDE_REASONS).toEqual(["cosmetic", "correction"]);
+    expect(DEFAULT_SUPERSEDE_REASON).toBe("cosmetic");
+    expect(isSupersedeReason("cosmetic")).toBe(true);
+    expect(isSupersedeReason("correction")).toBe(true);
+    expect(isSupersedeReason("Cosmetic")).toBe(false);
+    expect(isSupersedeReason("")).toBe(false);
+    expect(isSupersedeReason(null)).toBe(false);
+    expect(isSupersedeReason(undefined)).toBe(false);
+    expect(SUPERSEDE_REASON_HINT.cosmetic).toMatch(/stale/);
+    expect(SUPERSEDE_REASON_HINT.correction).toMatch(/blocked/);
   });
 });
 

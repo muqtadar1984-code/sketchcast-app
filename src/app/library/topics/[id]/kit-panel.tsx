@@ -51,7 +51,7 @@ import {
 import { isLiveJobStatus, stageLabel } from "@/utils/catalogue/status";
 import type { HeaderMapping } from "@/utils/catalogue/kit";
 import type { ClipRow, KitGenerationRow, KitRejectReason, PublishPrivacy, TeacherAvatar, TopicKit, TopicPublication, VideoFormatSetting, YouTubeMeta } from "@/utils/catalogue/types";
-import { canQueueSupersede, changesSince, formatLabel, formatVersionOf, supersedeCandidates } from "@/utils/catalogue/format";
+import { DEFAULT_SUPERSEDE_REASON, SUPERSEDE_REASONS, SUPERSEDE_REASON_HINT, canQueueSupersede, changesSince, formatLabel, formatVersionOf, supersedeCandidates, type SupersedeReason } from "@/utils/catalogue/format";
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
 import type { JobRow } from "./article-panel";
 
@@ -885,6 +885,9 @@ function PublishBlock({
   const [privacy, setPrivacy] = useState<PublishPrivacy>(defaultPrivacy(auditPassed));
   const [form, setForm] = useState<WordsForm>(wordsFormOf(kit.youtube_meta));
   const [editing, setEditing] = useState(false);
+  // why the newer video replaces the older one (0134 supersede_reason): the
+  // worker cascades it to the old kit's translations — stale or blocked
+  const [supersedeReason, setSupersedeReason] = useState<SupersedeReason>(DEFAULT_SUPERSEDE_REASON);
   const summary = publicationSummary(publications, kit.part_plan.length);
   const action = publishActionFor(summary);
   const chapters = chaptersByPart(kit.chapters);
@@ -950,12 +953,13 @@ function PublishBlock({
     if (
       !confirm(
         `Supersede the older part ${c.part} video (${c.old.youtube_video_id}) with this kit's (${c.replacement.youtube_video_id})?\n\n` +
-          "The older video's description gets a first line pointing at the new one, and if it is public it becomes unlisted. Its views, likes and comments stay with it. Nothing is deleted.",
+          "The older video's description gets a first line pointing at the new one, and if it is public it becomes unlisted. Its views, likes and comments stay with it. Nothing is deleted.\n\n" +
+          `${SUPERSEDE_REASON_HINT[supersedeReason]}.`,
       )
     )
       return;
-    const r = await post({ kitId: kit.id, oldPublicationId: c.old.id }, `supersede-${c.old.id}`, "supersede");
-    if (r) setNotice("Supersede queued — the worker points the older video at this one and records it.");
+    const r = await post({ kitId: kit.id, oldPublicationId: c.old.id, reason: supersedeReason }, `supersede-${c.old.id}`, "supersede");
+    if (r) setNotice(`Supersede queued (${supersedeReason}) — the worker points the older video at this one and records it.`);
   };
 
   return (
@@ -1059,6 +1063,18 @@ function PublishBlock({
           <p className="text-xs text-[#5B6470]">
             A YouTube video&apos;s file cannot be replaced, so this kit&apos;s video is a new upload. Supersede points an older video at it (a first line in its description) and makes a public one unlisted; its views and likes stay with it, nothing is deleted. Your call, video by video.
           </p>
+          {canPublishRole && (
+            <label className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-[#5B6470]">Why the replacement</span>
+              <select value={supersedeReason} onChange={(e) => setSupersedeReason(e.target.value as SupersedeReason)} className="field h-7 px-2 text-xs" disabled={!!busy} aria-label="Why the newer video replaces the older one" title="The worker passes this on to the older kit's translations: cosmetic keeps them visible as stale; a correction blocks them until they are retranslated.">
+                {SUPERSEDE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {SUPERSEDE_REASON_HINT[r]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <ul className="space-y-1">
             {candidates.map((c) => (
               <li key={c.old.id} className="flex flex-wrap items-center gap-2 text-xs">

@@ -94,6 +94,28 @@ export function supersedeCandidates(mine: readonly TopicPublication[], others: r
 
 export type SupersedeAcceptance = { ok: true } | { ok: false; why: string };
 
+// ── Why the replacement (0134 topic_kits.supersede_reason) ──────────────────
+// A supersede carries the reason the newer video replaces the older one, and
+// the WORKER's topic_supersede job cascades it to the old kit's translations
+// (Kit Translator plan §5.1): cosmetic — the translations stay visible as
+// stale; correction — they are blocked until retranslated. The portal asks
+// before queueing; the route validates to exactly these two values.
+
+export const SUPERSEDE_REASONS = ["cosmetic", "correction"] as const;
+export type SupersedeReason = (typeof SUPERSEDE_REASONS)[number];
+export const DEFAULT_SUPERSEDE_REASON: SupersedeReason = "cosmetic";
+
+export function isSupersedeReason(v: unknown): v is SupersedeReason {
+  return typeof v === "string" && (SUPERSEDE_REASONS as readonly string[]).includes(v);
+}
+
+/** What each reason does to the older kit's translations — the select's
+ *  labels and the confirm's sentence. */
+export const SUPERSEDE_REASON_HINT: Record<SupersedeReason, string> = {
+  cosmetic: "Cosmetic — the words are the same; its translations stay visible, marked stale",
+  correction: "Correction — the content changed; its translations are blocked until retranslated",
+};
+
 /** The pair the route accepts — the same sentences the worker's check_pair
  *  answers with, so a refusal reads the same on both sides. */
 export function canQueueSupersede(old: TopicPublication | null, replacement: TopicPublication | null): SupersedeAcceptance {

@@ -11,6 +11,7 @@ import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel"
 import { KitPanel, VideoParts, type KitView } from "./kit-panel";
 import { Findings, PrecheckLine, TranslationChip, TranslationsPanel, type TranslateJobRow } from "./translations-panel";
 import { Drawer, InboxFilters, InboxPanes, QueueKeys, ReviewVerdict } from "./review-inbox";
+import { TranslateSweepButton } from "./translate-sweep";
 
 // The review inbox's layout (layout D, 2026-10-17) — a Server Component with
 // no reads of its own: page.tsx loads the topic and hands everything over as
@@ -192,9 +193,13 @@ export function ReviewInboxView({
               ({view.queue === "review" ? queueRows.length : allTopics.length})
             </span>
           </h2>
-          <Link href="/library/topics?view=list" className="text-xs text-[#1F5B99] hover:underline" title="The full topics list, with curriculum and article filters">
-            Full list ↗
-          </Link>
+          <span className="flex items-center gap-1 shrink-0">
+            {/* the Kit Translator's sweep (D7): one language, the ready kits first */}
+            {canGenerate && <TranslateSweepButton generateEnabled={generateEnabled} />}
+            <Link href="/library/topics?view=list" className="text-xs text-[#1F5B99] hover:underline" title="The full topics list, with curriculum and article filters">
+              Full list ↗
+            </Link>
+          </span>
         </div>
         <div className="mt-2 flex items-center gap-1 text-xs">
           <Link href={href({ queue: "review" })} className={`rounded-md px-2 py-1 ${view.queue === "review" ? "bg-[#14241E] text-white" : "text-[#3F4752] hover:bg-[#F4F6F3]"}`} aria-current={view.queue === "review" ? "page" : undefined}>
