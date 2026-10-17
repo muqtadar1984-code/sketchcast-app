@@ -446,14 +446,21 @@ export default async function TopicDetailPage({ params, searchParams }: { params
     let q = admin.from("topics").select("id, title, subject, status, updated_at").order("updated_at", { ascending: false }).limit(60);
     const search = searchOr(view.q, ["title", "canonical_key", "summary"]);
     if (search) q = q.or(search);
+    if (view.subject) q = q.eq("subject", view.subject);
+    if (view.status) q = q.eq("status", view.status);
     allTopics = ((await q).data ?? []) as typeof allTopics;
   }
+  // The subjects for the left pane's filter (the topics list's facet, one
+  // cheap column read).
+  const { data: subjRows } = await admin.from("topics").select("subject").not("subject", "is", null).limit(2000);
+  const subjects = [...new Set(((subjRows ?? []) as { subject: string | null }[]).map((r) => (r.subject ?? "").trim()).filter(Boolean))].sort();
   return (
     <ReviewInboxView
       topic={topic}
       view={view}
       queue={queue}
       allTopics={allTopics}
+      subjects={subjects}
       buildInFlight={buildInFlight}
       openCandidates={openCandidates}
       versions={versions}

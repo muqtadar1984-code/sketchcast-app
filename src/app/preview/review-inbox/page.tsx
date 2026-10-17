@@ -203,6 +203,7 @@ export default async function ReviewInboxPreview({ searchParams }: { searchParam
             { id: "44444444-4444-4444-8444-444444444444", title: "Photosynthesis", subject: "Science", status: "article_approved", updated_at: hoursAgo(90) },
           ]
         : [],
+    subjects: ["Mathematics", "Science"],
     buildInFlight: false,
     openCandidates: 2,
     versions,
