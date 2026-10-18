@@ -3,7 +3,7 @@
 // Selected with ASSISTANT_PROVIDER=anthropic (model via ASSISTANT_ANTHROPIC_MODEL).
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "@/utils/tutor/service";
+import { anthropic, claudeModel } from "@/utils/tutor/service";
 import type { GenerateOpts, LLMProvider, StreamEvent, Turn } from "../provider";
 
 type MsgParam = Anthropic.MessageParam;
@@ -30,7 +30,7 @@ export class AnthropicProvider implements LLMProvider {
   readonly id = "anthropic";
   // Sonnet 5 is the quality tier for the student-facing assistant (same model the
   // tutor uses). Override per deploy with ASSISTANT_ANTHROPIC_MODEL.
-  readonly model = process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-sonnet-5";
+  readonly model = claudeModel(process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-sonnet-5");
 
   async *stream(opts: GenerateOpts): AsyncGenerator<StreamEvent, void, void> {
     let stream: AsyncIterable<Anthropic.RawMessageStreamEvent>;

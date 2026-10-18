@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "@/utils/tutor/service";
+import { anthropic, claudeConfigured, claudeModel } from "@/utils/tutor/service";
 import { TUTOR_MODELS } from "@/utils/tutor/models";
 import { caller, ownedSession, jsonBody, NOT_FOUND, type Caller } from "@/utils/present/server";
 import { checkPublish, MAX_BODY } from "@/utils/present/audience";
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
   // handing a Malay teacher an English sentence about her own lesson.
   const language = languageOf(locale);
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!claudeConfigured()) {
     draft = fallbackRecap(ground, words);
     note = "not-configured";
   } else if (!ground.chapters.length && !ground.revision) {
@@ -293,7 +293,7 @@ ${RECAP_USER_TURN}`,
     let text = "";
     try {
       const resp = await anthropic().messages.create({
-        model: TUTOR_MODELS.cheap,
+        model: claudeModel(TUTOR_MODELS.cheap),
         max_tokens: MAX_TOKENS,
         system: instructions,
         messages,

@@ -6,7 +6,7 @@
 import crypto from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CompleteFn, SceneGraphSnapshot } from "@/ere";
-import { anthropic } from "./service";
+import { anthropic, claudeModel } from "./service";
 import { TUTOR_MODELS, type TutorTier } from "./models";
 
 // ── Phase 2: student events (shared board) ──────────────────────────────────
@@ -230,7 +230,7 @@ export async function talCachePut(
 export function anthropicComplete(tier: TutorTier): CompleteFn {
   return async ({ system, user }) => {
     const resp = await anthropic().messages.create({
-      model: TUTOR_MODELS[tier],
+      model: claudeModel(TUTOR_MODELS[tier]),
       max_tokens: 1500,
       // The grammar/rules in `system` are stable across a chapter's turns → cache.
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
