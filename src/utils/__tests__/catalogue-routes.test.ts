@@ -1263,3 +1263,17 @@ describe("the demos route (2026-09-28): the only generation deleter, demo rows o
     expect(t).not.toMatch(/\.from\(\s*["']jobs["']\s*\)/);
   });
 });
+
+
+describe("the kit route's delete_translation action (0143)", () => {
+  const kit = readFileSync(resolve(__dirname, "..", "..", "app", "api", "library", "topics", "[id]", "kit", "route.ts"), "utf8");
+  it("needs the approve right, calls the 0143 function and removes storage after it", () => {
+    expect(kit).toMatch(/delete_translation:\s*"approve"/);
+    const at = kit.indexOf('action === "delete_translation"');
+    expect(at).toBeGreaterThan(-1);
+    const body = kit.slice(at);
+    expect(body).toMatch(/rpc\("delete_translation_kit",\s*\{\s*p_kit:\s*kit\.id,\s*p_actor:\s*m\.id\s*\}\)/);
+    expect(body.indexOf("delete_translation_kit")).toBeLessThan(body.indexOf('.remove('));
+    expect(body).toMatch(/kit\.status !== "rejected" && kit\.status !== "failed"/);
+  });
+});

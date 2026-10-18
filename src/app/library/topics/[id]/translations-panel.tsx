@@ -554,6 +554,26 @@ export function TranslationsPanel({
                       Review at the top ↑
                     </Link>
                   ) : null}
+                  {canApprove && (kit.status === "rejected" || kit.status === "failed") && (
+                    <button
+                      type="button"
+                      aria-label={`Delete this ${kit.status} ${languageLabel(kit.language) ?? kit.language} translation`}
+                      title={`Delete this ${kit.status} translation — its video, documents, bank items and files`}
+                      disabled={!!busy}
+                      onClick={async (e) => {
+                        // inside a <summary>: a click would toggle the row
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const label = languageLabel(kit.language) ?? kit.language;
+                        if (!window.confirm(`Delete this ${kit.status} ${label} translation (from ${fmtDate(kit.created_at)})? Its video, deck, documents, bank items and files are removed for good. Approved translations and the English kit are not touched.`)) return;
+                        const r = await post({ action: "delete_translation", kitId: kit.id }, `delete:${kit.id}`);
+                        if (r) setNotice(`${label} ${kit.status} translation deleted.`);
+                      }}
+                      className="h-6 w-6 shrink-0 rounded-md text-[#98A0A9] hover:bg-[#FFE9E3] hover:text-[#B3401F] disabled:opacity-40 flex items-center justify-center text-base leading-none"
+                    >
+                      {busy === `delete:${kit.id}` ? "…" : "×"}
+                    </button>
+                  )}
                 </summary>
                 <div className="px-3 pb-3 space-y-3">
                   {kit.notes && <p className="text-xs text-[#B3401F] whitespace-pre-wrap">{kit.notes}</p>}
