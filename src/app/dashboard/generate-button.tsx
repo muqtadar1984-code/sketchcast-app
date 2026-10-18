@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 export default function GenerateButton({
   bookId,
@@ -29,6 +30,8 @@ export default function GenerateButton({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { StudentQuestion, StudentQuizData } from "@/app/api/quiz/logic";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 /** The RAW quiz shape — answer key included. Only the TEACHER's surfaces
  * (grade-list) ever hold one of these; it is re-exported from here purely
@@ -34,6 +35,8 @@ export default function QuizPlayer({
 }) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [error, setError] = useState<string | null>(null);
   const set = (id: string, v: unknown) => setAnswers((a) => ({ ...a, [id]: v }));
 

@@ -8,6 +8,7 @@ import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { type LibraryMessages } from "./labels";
 import { fmt } from "@/i18n/format";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 // Exam generation (0062). A teacher builds ONE cumulative exam over everything
 // covered so far — any mix of chapters and parts. It produces TWO documents:
@@ -69,6 +70,8 @@ export default function ExamGenerate({
   const knownBookLang = LANGUAGES.some((l) => l.value === language) ? language! : "en";
   const [lang, setLang] = useState(knownBookLang);
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 

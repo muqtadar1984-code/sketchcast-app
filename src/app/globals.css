@@ -72,6 +72,45 @@ h1, h2, h3 {
   }
 }
 
+/* ── The app-wide loading indicator (components/loading) ───────────────────
+   Both pieces start INVISIBLE and fade in after a delay, so a wait that ends
+   inside the delay paints nothing: a fast, prefetched navigation never
+   flashes. The bar shows first (a hairline, ~150 ms) and the centred ring
+   second (~300 ms) — a slow screen earns the bigger signal.
+   The bar's fill creeps toward the right edge and never reaches it; it is a
+   "still working" signal, not a measurement. Reduced motion: no creep, a
+   still full-width hairline; the ring stops turning (Spinner uses
+   motion-safe:animate-spin) but still appears. */
+@keyframes loading-appear {
+  to { opacity: 1; }
+}
+@keyframes loading-creep {
+  from { transform: scaleX(0.05); }
+  to   { transform: scaleX(0.9); }
+}
+.loading-bar,
+.loading-veil {
+  opacity: 0;
+  animation: loading-appear 160ms ease-out forwards;
+}
+.loading-bar { animation-delay: 150ms; }
+.loading-veil { animation-delay: 300ms; }
+.loading-bar-fill {
+  transform-origin: left;
+  animation: loading-creep 8s cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+[dir="rtl"] .loading-bar-fill { transform-origin: right; }
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar,
+  .loading-veil {
+    animation-duration: 1ms;
+  }
+  .loading-bar-fill {
+    animation: none;
+    transform: none;
+  }
+}
+
 /* ── Right-to-left (Arabic, Jawi) ──────────────────────────────────────────
    The LAYOUT mirrors on its own: every directional utility in src/ is a
    logical one (ps-/pe-, ms-/me-, text-start/end, border-s/e, rounded-ss…ee,

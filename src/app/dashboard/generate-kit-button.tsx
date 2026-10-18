@@ -9,6 +9,7 @@ import { kitSignature } from "@/utils/kit-match";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { type LibraryMessages } from "./labels";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 // One-click full kit for a chapter part (0059): queues the video lesson plus
 // its deck and five documents together. SEVEN pieces, SIX credits — since 0075
@@ -64,6 +65,10 @@ export default function GenerateKitButton({
   const [offer, setOffer] = useState<{ ids: string[] } | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
+  // The app-wide spinner follows the button's own busy state — including the
+  // deliberate wait for router.refresh() below, which ends when the refreshed
+  // row replaces this control (unmount releases the wait).
+  useBusyWhile(busy || adopting);
 
   const chapterRef = String(chapterNum);
   // This click sends `auto`; the comparison needs what that will render as.

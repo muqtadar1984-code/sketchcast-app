@@ -8,6 +8,7 @@ import { fingerprintFile, titlesLookSame } from "@/utils/book-fingerprint";
 import PageScanner from "./page-scanner";
 import { fmt } from "@/i18n/format";
 import { type LibraryMessages } from "./labels";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 export default function UploadBook({
   schoolId,
@@ -27,6 +28,8 @@ export default function UploadBook({
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [pct, setPct] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);

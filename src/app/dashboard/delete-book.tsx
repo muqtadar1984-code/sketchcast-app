@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBusy } from "@/components/loading/loading-indicator";
 import { createClient } from "@/utils/supabase/client";
 import {
   blockedReasonFromError,
@@ -41,13 +42,17 @@ export default function DeleteBook({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner covers the two network calls only — NOT the whole of
+  // `busy`, which is also held while the native confirm() is open, and a ring
+  // behind a question the teacher is answering would say the wrong thing.
+  const { track } = useBusy();
   const m = t.deleteBook;
 
   async function onDelete() {
     setBusy(true);
     const supabase = createClient();
 
-    const { data, error } = await supabase.rpc("my_book_impact", { p_book: bookId });
+    const { data, error } = await track(supabase.rpc("my_book_impact", { p_book: bookId }));
     if (error) {
       alert(error.message || t.common.somethingWentWrong);
       setBusy(false);
@@ -70,7 +75,7 @@ export default function DeleteBook({
     // returning a non-ok response — without it the button stayed disabled
     // until a reload, with nothing said.
     try {
-      const res = await fetch(`/api/books/${encodeURIComponent(bookId)}`, { method: "DELETE" });
+      const res = await track(fetch(`/api/books/${encodeURIComponent(bookId)}`, { method: "DELETE" }));
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         // The race the impact check cannot close: a kit that started building

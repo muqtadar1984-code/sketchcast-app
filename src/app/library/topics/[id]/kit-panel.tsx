@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useBusy, useBusyWhile } from "@/components/loading/loading-indicator";
 import {
   KIT_KINDS,
   KIT_KIND_LABEL,
@@ -110,6 +111,14 @@ export type Post = (payload: Record<string, unknown>, label: string, route?: "ki
 
 export function useKitPost(topicId: string) {
   const router = useRouter();
+  // The app-wide spinner (components/loading) follows every post: the request
+  // itself through track(), then the router.refresh() that re-renders the
+  // page with the result — run in a transition, so the ring stays until the
+  // new server tree has landed rather than vanishing a beat before it does.
+  // The per-button `busy` label below is unchanged.
+  const { track } = useBusy();
+  const [refreshing, startRefresh] = useTransition();
+  useBusyWhile(refreshing);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -119,19 +128,26 @@ export function useKitPost(topicId: string) {
     setError(null);
     setErrors([]);
     setNotice(null);
-    const res = await fetch(`/api/library/topics/${topicId}/${route}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    // One tracked block for the request AND its body, so the ring does not
+    // drop and re-appear between the two awaits.
+    const { res, json } = await track(
+      (async () => {
+        const res = await fetch(`/api/library/topics/${topicId}/${route}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        return { res, json };
+      })(),
+    );
     setBusy(null);
     if (!res.ok) {
       setError((json.error as string) ?? "Something went wrong.");
       if (Array.isArray(json.errors)) setErrors(json.errors.filter((e): e is string => typeof e === "string"));
       return null;
     }
-    router.refresh();
+    startRefresh(() => router.refresh());
     return json;
   };
   const clear = () => {

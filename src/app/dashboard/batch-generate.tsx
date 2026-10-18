@@ -9,6 +9,7 @@ import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { kindLabel, type LibraryMessages } from "./labels";
 import { fmt } from "@/i18n/format";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 // Revision papers (0061). A teacher picks a GROUP of chapters at term /
 // mid-term / exam time and generates ONLY worksheets and/or exam papers — no
@@ -44,6 +45,8 @@ export default function BatchGenerate({
   const [kindSel, setKindSel] = useState<Set<string>>(new Set(["worksheet"]));
   const [combine, setCombine] = useState(true);
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);

@@ -12,6 +12,8 @@ import { Analytics } from "@vercel/analytics/next";
 import { dirFor, htmlLang } from "@/i18n/locales";
 import { resolveLocale } from "@/i18n/resolve";
 import SourceCapture from "@/components/source-capture";
+import LoadingProvider from "@/components/loading/loading-indicator";
+import { getDictionary } from "@/i18n/dictionaries";
 import "./globals.css";
 
 // Live Ink type system: a geometric grotesk for display, Inter for body,
@@ -133,6 +135,11 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const locale = await resolveLocale();
+  // The one string the app-wide loading indicator announces ("Loading…"), in
+  // this request's language. Every surface shares the root layout, so the
+  // English-only portals (Library, console) read it too — on those the
+  // locale resolves to English for an English reader as everywhere else.
+  const loadingLabel = (await getDictionary(locale)).common.loading;
   return (
     <html
       lang={htmlLang(locale)}
@@ -140,7 +147,11 @@ export default async function RootLayout({
       className={`${fontVars} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
+        {/* The spinner every wait shows: link clicks, router pushes, back /
+            forward, and client actions that mark themselves busy. Renders
+            nothing until something is waiting. See
+            components/loading/loading-indicator.tsx. */}
+        <LoadingProvider label={loadingLabel}>{children}</LoadingProvider>
         {/* Both render nothing. SourceCapture parks a first-touch origin in a
             cookie and stamps it onto the profile once; Analytics is Vercel's
             pageview beacon, which needs the project's Web Analytics toggle

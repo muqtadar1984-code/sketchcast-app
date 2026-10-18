@@ -20,6 +20,7 @@ import { TypeIcon } from "./icons";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
 import { fmt } from "@/i18n/format";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 // All content types a chapter can produce, in display order. Wording comes from
 // the dictionary (kindLabel), keyed by the kind itself.
@@ -122,6 +123,8 @@ export default function ChapterGenerate({
     : KINDS.filter((k) => k !== "presentation" && !lessons[k] && !(k === "deck" && legacyDeck));
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Age-appropriate default from the book's grade (overridable in the picker).
