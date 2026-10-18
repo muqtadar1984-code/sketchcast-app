@@ -1,9 +1,12 @@
 // Which door every Claude call goes through. Server-only.
 //
 // CLAUDE_BACKEND=anthropic (the default) → the first-party API on ANTHROPIC_API_KEY.
-// CLAUDE_BACKEND=bedrock → Amazon Bedrock (AWS Activate credits pay), on the AWS
-// credentials in the environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, or a
-// role), region BEDROCK_REGION (default us-east-1).
+// CLAUDE_BACKEND=bedrock → Amazon Bedrock (AWS Activate credits pay), region
+// BEDROCK_REGION (default us-east-1). Credentials: with AWS_ROLE_ARN set, the
+// deployment's Vercel OIDC token is exchanged for short-lived role credentials
+// (no long-lived keys); without it, the AWS SDK's default chain reads
+// AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY. Static keys left in place also
+// catch a failed role exchange, so the cut-over can't take Claude down.
 //
 // Both clients expose the same .messages.create / .messages.stream surface, so
 // callers never branch: they take a client from claudeClient() and route every
@@ -12,6 +15,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { AnthropicBedrock } from "@anthropic-ai/bedrock-sdk";
+import { awsCredentialsProvider } from "@vercel/oidc-aws-credentials-provider";
 
 export type ClaudeBackend = "anthropic" | "bedrock";
 
@@ -69,12 +73,79 @@ export function claudeConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+type AwsCredentialProvider = ReturnType<typeof awsCredentialsProvider>;
+type AwsCredentials = Awaited<ReturnType<AwsCredentialProvider>>;
+
+/** Refresh role credentials this long before STS says they expire. */
+const CREDENTIAL_REFRESH_MS = 5 * 60_000;
+
+// One set of role credentials per warm function instance. The Bedrock SDK asks
+// for credentials on EVERY request; without this each Claude call would pay an
+// STS AssumeRoleWithWebIdentity round trip first.
+let roleCache: { roleArn: string; creds: AwsCredentials } | null = null;
+let roleInflight: { roleArn: string; promise: Promise<AwsCredentials> } | null = null;
+
+/** Test hook: forget cached role credentials. */
+export function resetBedrockCredentialCache(): void {
+  roleCache = null;
+  roleInflight = null;
+}
+
+function stillFresh(creds: AwsCredentials): boolean {
+  if (!creds.expiration) return true;
+  return creds.expiration.getTime() - Date.now() > CREDENTIAL_REFRESH_MS;
+}
+
+/** AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (+ AWS_SESSION_TOKEN), if both set. */
+function staticEnvCredentials(): AwsCredentials | null {
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+  if (!accessKeyId || !secretAccessKey) return null;
+  const sessionToken = process.env.AWS_SESSION_TOKEN;
+  return { accessKeyId, secretAccessKey, ...(sessionToken ? { sessionToken } : {}) };
+}
+
+/** Credentials for AWS_ROLE_ARN via the Vercel OIDC token, cached until near
+ * expiry and shared by concurrent requests. If the exchange fails (no OIDC token
+ * — e.g. local dev — or a trust-policy mistake) and static keys are present,
+ * those answer instead, logged; with no static keys the failure stands. */
+export function bedrockRoleCredentials(roleArn: string, region: string): AwsCredentialProvider {
+  const assume = awsCredentialsProvider({
+    roleArn,
+    roleSessionName: "sketchcast-app",
+    clientConfig: { region },
+  });
+  return async () => {
+    if (roleCache?.roleArn === roleArn && stillFresh(roleCache.creds)) return roleCache.creds;
+    if (roleInflight?.roleArn !== roleArn) {
+      const promise = assume().finally(() => {
+        if (roleInflight?.promise === promise) roleInflight = null;
+      });
+      roleInflight = { roleArn, promise };
+    }
+    try {
+      const creds = await roleInflight.promise;
+      roleCache = { roleArn, creds };
+      return creds;
+    } catch (e) {
+      const fallback = staticEnvCredentials();
+      if (!fallback) throw e;
+      console.error("[claude] Vercel OIDC role exchange failed — using static AWS keys:", e);
+      return fallback;
+    }
+  };
+}
+
 /** A client for the selected backend. Throws when the first-party key is
- * missing; on Bedrock the AWS SDK's default credential chain resolves (and, if
- * absent, rejects) at request time. */
+ * missing; on Bedrock, credentials resolve (and, if absent, reject) at request
+ * time — from AWS_ROLE_ARN via Vercel OIDC when set, else the default chain. */
 export function claudeClient(): ClaudeClient {
   if (claudeBackend() === "bedrock") {
-    return new AnthropicBedrock({ awsRegion: process.env.BEDROCK_REGION || "us-east-1" });
+    const awsRegion = process.env.BEDROCK_REGION || "us-east-1";
+    const roleArn = (process.env.AWS_ROLE_ARN || "").trim();
+    if (!roleArn) return new AnthropicBedrock({ awsRegion });
+    const provider = bedrockRoleCredentials(roleArn, awsRegion);
+    return new AnthropicBedrock({ awsRegion, providerChainResolver: async () => provider });
   }
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY is not set.");
