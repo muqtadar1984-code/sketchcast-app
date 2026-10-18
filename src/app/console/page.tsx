@@ -50,7 +50,7 @@ export default async function ConsoleOverviewPage() {
     // may be absent on a database behind those migrations; the cards then
     // show a dash instead of failing the page.
     admin.from("youtube_channel_stats").select("channel_id, captured_at, title, subscribers, views, videos")
-      .order("captured_at", { ascending: false }).limit(1),
+      .eq("channel_language", "en").order("captured_at", { ascending: false }).limit(1),
     admin.from("cloudflare_daily_stats").select("day, zone, requests, page_views, uniques, bytes, threats, countries, captured_at")
       .eq("zone", "sketchcast.app").order("day", { ascending: true }).limit(2_000),
     // Finished jobs of the last FAILURE_MONTHS months: the failure-rate tile

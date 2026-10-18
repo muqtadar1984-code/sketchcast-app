@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { channelDelta, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl, type VideoSnap } from "../youtube-stats";
+import { channelDelta, channelSnaps, channelsByLanguage, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl, type VideoSnap } from "../youtube-stats";
 
 const snap = (video_id: string, captured_at: string, views: number, likes = 0, comments = 0): VideoSnap => ({
   video_id, captured_at, title: "T", privacy: "public", published_at: null, views, likes, comments,
@@ -58,5 +58,22 @@ describe("snapshots into readings", () => {
     expect(channelDelta(ch, new Date("2026-09-15T00:00:00Z"))).toEqual({ subscribers: 4, views: 400, partial: false });
     expect(channelDelta(ch.slice(1), new Date())).toBeNull();
     expect(youtubeUrl("IJgImFsWrME")).toBe("https://www.youtube.com/watch?v=IJgImFsWrME");
+  });
+
+  it("keeps each channel's snapshots apart (the Arabic channel is polled since 2026-10-19)", () => {
+    const ch = [
+      { channel_id: "UC-en", channel_language: "en", captured_at: "2026-10-12T19:00:00Z", title: "SketchCast", subscribers: 100, views: 9000, videos: 76 },
+      { channel_id: "UC-en", channel_language: "en", captured_at: "2026-10-19T19:00:00Z", title: "SketchCast", subscribers: 120, views: 9900, videos: 77 },
+      { channel_id: "UC-ar", channel_language: "ar", captured_at: "2026-10-19T19:00:05Z", title: "SketchCast بالعربية", subscribers: 3, views: 40, videos: 9 },
+      { channel_id: "UC-old", captured_at: "2026-10-11T19:00:00Z", title: "SketchCast", subscribers: 90, views: 8000, videos: 70 },
+    ];
+    // The Arabic row is the newest, but the headline is the default channel's.
+    expect(latestChannel(channelSnaps(ch))?.subscribers).toBe(120);
+    expect(channelSnaps(ch).length).toBe(3); // a row with no language is the default channel's
+    const by = channelsByLanguage(ch, new Date("2026-10-12T20:00:00Z"));
+    expect(by.map((c) => c.language)).toEqual(["en", "ar"]);
+    expect(by[0].delta?.subscribers).toBe(20);
+    expect(by[1].latest.subscribers).toBe(3);
+    expect(by[1].delta).toBeNull();
   });
 });
