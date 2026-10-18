@@ -107,6 +107,8 @@ export const VOICES: { value: VoiceId; tier: "free" | "premium"; lang: string }[
   { value: "edge-manohar", tier: "free", lang: "mr" },
   { value: "edge-swara", tier: "free", lang: "hi" },
   { value: "edge-madhur", tier: "free", lang: "hi" },
+  { value: "edge-uzma", tier: "free", lang: "ur" },
+  { value: "edge-asad", tier: "free", lang: "ur" },
   // Premium ElevenLabs voices are multilingual — offered for every language.
   { value: "el-rachel", tier: "premium", lang: "*" },
   { value: "el-adam", tier: "premium", lang: "*" },
@@ -136,6 +138,8 @@ export const VOICES: { value: VoiceId; tier: "free" | "premium"; lang: string }[
   { value: "g-mr-m", tier: "premium", lang: "mr" },
   { value: "g-hi-f", tier: "premium", lang: "hi" },
   { value: "g-hi-m", tier: "premium", lang: "hi" },
+  { value: "g-ur-f", tier: "premium", lang: "ur" },
+  { value: "g-ur-m", tier: "premium", lang: "ur" },
 ];
 export const DEFAULT_VOICE = "edge-aria"; // free — reproduces today's behaviour
 
@@ -162,6 +166,9 @@ export const LANGUAGES: LanguageOpt[] = [
   { value: "te", label: "తెలుగు (Telugu)" },
   { value: "mr", label: "मराठी (Marathi)" },
   { value: "hi", label: "हिन्दी (Hindi)" },
+  // Urdu (Kit Translator §5.10, 2026-10-19) — Arabic script, RTL; free voices
+  // ur-PK (Edge), premium ur-IN Chirp 3 HD, as the worker's registry.
+  { value: "ur", label: "اردو (Urdu)" },
   // Jawi — Malay in the Arabic script (RTL). Documents only for now; a video
   // lesson generated in Jawi narrates in Malay with Rumi slides (worker
   // downgrades the presentation kind until the Jawi video phase).

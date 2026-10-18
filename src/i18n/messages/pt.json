@@ -1789,6 +1789,8 @@
         "edge-manohar": "Manohar — marati",
         "edge-swara": "Swara — hindi",
         "edge-madhur": "Madhur — hindi",
+        "edge-uzma": "Uzma — urdu",
+        "edge-asad": "Asad — urdu",
         "el-rachel": "Rachel — natural",
         "el-adam": "Adam — grave",
         "auto": "Automática — recomendada",
@@ -1813,7 +1815,9 @@
         "g-mr-f": "Achernar — feminina, marati",
         "g-mr-m": "Achird — masculina, marati",
         "g-hi-f": "Achernar — feminina, hindi",
-        "g-hi-m": "Achird — masculina, hindi"
+        "g-hi-m": "Achird — masculina, hindi",
+        "g-ur-f": "Achernar — feminina, urdu",
+        "g-ur-m": "Achird — masculina, urdu"
       }
     }
   },
