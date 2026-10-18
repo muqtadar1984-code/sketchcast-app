@@ -115,6 +115,25 @@ export async function attachMappings(
  *  candidates page's IN_CHUNK). */
 export const IN_CHUNK = 150;
 
+type ChunkErr = { code?: string; message?: string };
+
+/** `ids` in IN_CHUNK slices (they travel in the URL), `read` per slice, the
+ *  rows joined. The first error stops the read. Shared by the translate sweep
+ *  (/api/library/translate) and the Translations tab (/library/translations),
+ *  so both read the same rows the same way. */
+export async function readChunks<T>(
+  ids: readonly string[],
+  read: (chunk: string[]) => PromiseLike<{ data: unknown; error: ChunkErr | null }>,
+): Promise<{ rows: T[]; error: ChunkErr | null }> {
+  const rows: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const { data, error } = await read(ids.slice(i, i + IN_CHUNK));
+    if (error) return { rows, error };
+    rows.push(...((data ?? []) as T[]));
+  }
+  return { rows, error: null };
+}
+
 /** Which of `ids` curriculum_nodes still has. topic_candidates.node_ids
  *  (0113) is uuid[] with no foreign key, so a candidate may name an objective
  *  deleted since the derive; mapping that id is a 23503. The routes look the

@@ -17,7 +17,7 @@ import {
   type SweepPublication,
   type SweepTopic,
 } from "@/utils/catalogue/translate-sweep";
-import { IN_CHUNK, audit, bad, conflict, dbError, notFound, readJson, type Admin } from "../lib";
+import { audit, bad, conflict, dbError, notFound, readChunks, readJson, type Admin } from "../lib";
 import { enqueueTranslateJob } from "../topics/[id]/kit/translate-job";
 
 export const runtime = "nodejs";
@@ -71,22 +71,6 @@ function limitOf(v: unknown): number | null {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : Number.NaN;
   if (!Number.isInteger(n) || n < 1 || n > SWEEP_MAX_LIMIT) return null;
   return n;
-}
-
-type DbErr = { code?: string; message?: string };
-
-type Chunk<T> = { rows: T[]; error: DbErr | null };
-
-/** `ids` in IN_CHUNK slices (they travel in the URL), `read` per slice, the
- *  rows joined. The first error stops the read. */
-async function readChunks<T>(ids: readonly string[], read: (chunk: string[]) => PromiseLike<{ data: unknown; error: DbErr | null }>): Promise<Chunk<T>> {
-  const rows: T[] = [];
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const { data, error } = await read(ids.slice(i, i + IN_CHUNK));
-    if (error) return { rows, error };
-    rows.push(...((data ?? []) as T[]));
-  }
-  return { rows, error: null };
 }
 
 /** The five reads, or the response that stops the sweep. */
