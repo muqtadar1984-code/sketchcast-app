@@ -4,6 +4,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const built = vi.hoisted(() => ({ anthropic: [] as unknown[], bedrock: [] as unknown[] }));
+// The Vercel OIDC → STS exchange: each awsCredentialsProvider() init is recorded,
+// and every provider it hands out calls `oidc.assume` (one STS round trip).
+const oidc = vi.hoisted(() => ({ inits: [] as unknown[], assume: vi.fn() }));
 
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class FakeAnthropic {
@@ -22,7 +25,21 @@ vi.mock("@anthropic-ai/bedrock-sdk", () => ({
   },
 }));
 
-import { BEDROCK_MODEL_IDS, claudeBackend, claudeClient, claudeConfigured, claudeModel } from "../claude-backend";
+vi.mock("@vercel/oidc-aws-credentials-provider", () => ({
+  awsCredentialsProvider: (init: unknown) => {
+    oidc.inits.push(init);
+    return () => oidc.assume();
+  },
+}));
+
+import {
+  BEDROCK_MODEL_IDS,
+  claudeBackend,
+  claudeClient,
+  claudeConfigured,
+  claudeModel,
+  resetBedrockCredentialCache,
+} from "../claude-backend";
 
 const VARS = [
   "CLAUDE_BACKEND",
@@ -30,6 +47,8 @@ const VARS = [
   "BEDROCK_REGION",
   "BEDROCK_MODEL_MAP",
   "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
   "AWS_ROLE_ARN",
 ] as const;
 
@@ -37,6 +56,9 @@ beforeEach(() => {
   for (const v of VARS) vi.stubEnv(v, "");
   built.anthropic.length = 0;
   built.bedrock.length = 0;
+  oidc.inits.length = 0;
+  oidc.assume.mockReset();
+  resetBedrockCredentialCache();
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -151,5 +173,106 @@ describe("claudeConfigured", () => {
     vi.stubEnv("CLAUDE_BACKEND", "bedrock");
     vi.stubEnv("AWS_ROLE_ARN", "arn:aws:iam::000000000000:role/test");
     expect(claudeConfigured()).toBe(true);
+  });
+});
+
+describe("claudeClient on Bedrock with AWS_ROLE_ARN (Vercel OIDC)", () => {
+  const ROLE = "arn:aws:iam::172042957848:role/sketchcast-vercel-bedrock";
+  type Opts = { awsRegion: string; providerChainResolver?: () => Promise<() => Promise<unknown>> };
+  const lastOpts = () => built.bedrock.at(-1) as Opts;
+  const resolveCreds = async () => (await lastOpts().providerChainResolver!())();
+  const inMinutes = (m: number) => new Date(Date.now() + m * 60_000);
+  const roleCreds = (expiration: Date) => ({ accessKeyId: "ASIAROLE", secretAccessKey: "s", sessionToken: "t", expiration });
+
+  beforeEach(() => {
+    vi.stubEnv("CLAUDE_BACKEND", "bedrock");
+  });
+
+  it("without a role, passes no resolver — the SDK's default chain reads static keys", () => {
+    vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIASTATIC");
+    claudeClient();
+    expect(built.bedrock).toEqual([{ awsRegion: "us-east-1" }]);
+    expect(oidc.inits).toHaveLength(0);
+  });
+
+  it("with a role, hands Bedrock a resolver that assumes it via OIDC in the Bedrock region", async () => {
+    vi.stubEnv("AWS_ROLE_ARN", `  ${ROLE} `);
+    vi.stubEnv("BEDROCK_REGION", "us-west-2");
+    oidc.assume.mockResolvedValue(roleCreds(inMinutes(60)));
+    claudeClient();
+    expect(lastOpts().awsRegion).toBe("us-west-2");
+    expect(typeof lastOpts().providerChainResolver).toBe("function");
+    await expect(resolveCreds()).resolves.toMatchObject({ accessKeyId: "ASIAROLE", sessionToken: "t" });
+    expect(oidc.inits).toEqual([{ roleArn: ROLE, roleSessionName: "sketchcast-app", clientConfig: { region: "us-west-2" } }]);
+  });
+
+  it("caches role credentials across requests and clients until near expiry", async () => {
+    vi.stubEnv("AWS_ROLE_ARN", ROLE);
+    oidc.assume.mockResolvedValueOnce(roleCreds(inMinutes(60)));
+    claudeClient();
+    await resolveCreds();
+    claudeClient(); // a new client (a new request) shares the instance's cache
+    await resolveCreds();
+    expect(oidc.assume).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-assumes when cached credentials are within five minutes of expiry", async () => {
+    vi.stubEnv("AWS_ROLE_ARN", ROLE);
+    oidc.assume.mockResolvedValueOnce(roleCreds(inMinutes(4))).mockResolvedValueOnce({
+      ...roleCreds(inMinutes(60)),
+      accessKeyId: "ASIAFRESH",
+    });
+    claudeClient();
+    await resolveCreds();
+    await expect(resolveCreds()).resolves.toMatchObject({ accessKeyId: "ASIAFRESH" });
+    expect(oidc.assume).toHaveBeenCalledTimes(2);
+  });
+
+  it("shares one STS exchange between concurrent requests", async () => {
+    vi.stubEnv("AWS_ROLE_ARN", ROLE);
+    let release!: (v: unknown) => void;
+    oidc.assume.mockReturnValueOnce(new Promise((r) => (release = r)));
+    claudeClient();
+    const both = Promise.all([resolveCreds(), resolveCreds()]);
+    release(roleCreds(inMinutes(60)));
+    const [a, b] = await both;
+    expect(a).toBe(b);
+    expect(oidc.assume).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to static keys (logged) when the role exchange fails", async () => {
+    vi.stubEnv("AWS_ROLE_ARN", ROLE);
+    vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIASTATIC");
+    vi.stubEnv("AWS_SECRET_ACCESS_KEY", "static-secret");
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    oidc.assume.mockRejectedValue(new Error("The 'x-vercel-oidc-token' header is missing"));
+    claudeClient();
+    await expect(resolveCreds()).resolves.toEqual({ accessKeyId: "AKIASTATIC", secretAccessKey: "static-secret" });
+    expect(err).toHaveBeenCalledWith(expect.stringMatching(/OIDC/), expect.any(Error));
+    err.mockRestore();
+  });
+
+  it("carries AWS_SESSION_TOKEN on the static fallback", async () => {
+    vi.stubEnv("AWS_ROLE_ARN", ROLE);
+    vi.stubEnv("AWS_ACCESS_KEY_ID", "ASIATEMP");
+    vi.stubEnv("AWS_SECRET_ACCESS_KEY", "temp-secret");
+    vi.stubEnv("AWS_SESSION_TOKEN", "temp-token");
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    oidc.assume.mockRejectedValue(new Error("AccessDenied"));
+    claudeClient();
+    await expect(resolveCreds()).resolves.toEqual({
+      accessKeyId: "ASIATEMP",
+      secretAccessKey: "temp-secret",
+      sessionToken: "temp-token",
+    });
+    err.mockRestore();
+  });
+
+  it("surfaces the failure when there are no static keys to fall back on, and retries next time", async () => {
+    vi.stubEnv("AWS_ROLE_ARN", ROLE);
+    oidc.assume.mockRejectedValueOnce(new Error("AccessDenied")).mockResolvedValueOnce(roleCreds(inMinutes(60)));
+    claudeClient();
+    await expect(resolveCreds()).rejects.toThrow(/AccessDenied/);
+    await expect(resolveCreds()).resolves.toMatchObject({ accessKeyId: "ASIAROLE" }); // a failure is never cached
   });
 });
