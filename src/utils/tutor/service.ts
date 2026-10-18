@@ -1,8 +1,8 @@
 // AI Tutor service layer — the I/O the pure core (models.ts) can't do: Anthropic
 // calls, grounding + access reads, and the shared answer cache. Server-only.
 
-import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { claudeClient, claudeModel, type ClaudeClient } from "@/utils/claude-backend";
 import { getEntitlement, getSchoolEntitlement } from "@/utils/stripe/entitlements";
 import {
   TUTOR_MODELS,
@@ -21,10 +21,12 @@ import {
   type Mastery,
 } from "./models";
 
-export function anthropic(): Anthropic {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY is not set.");
-  return new Anthropic({ apiKey: key });
+export { claudeConfigured, claudeModel } from "@/utils/claude-backend";
+
+/** The single Claude client factory every route uses — the first-party API, or
+ * Amazon Bedrock when CLAUDE_BACKEND=bedrock (see utils/claude-backend.ts). */
+export function anthropic(): ClaudeClient {
+  return claudeClient();
 }
 
 export type TutorContext = { bookId: string; chapterNum: number };
@@ -353,7 +355,7 @@ export async function* streamAnswer(
     ...(studentContext ? [{ type: "text" as const, text: studentContext }] : []),
   ];
   const stream = anthropic().messages.stream({
-    model: TUTOR_MODELS[tier],
+    model: claudeModel(TUTOR_MODELS[tier]),
     max_tokens: 300,
     system,
     // Prior turns give the coach memory of the thread; the new question is last.

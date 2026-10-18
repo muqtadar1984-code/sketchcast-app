@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { diaryEnabled } from "@/utils/flags";
 import { TUTOR_MODELS } from "@/utils/tutor/models";
-import { anthropic } from "@/utils/tutor/service";
+import { anthropic, claudeModel } from "@/utils/tutor/service";
 import { LANGUAGES, languageLabel } from "@/utils/narration";
 
 export const runtime = "nodejs";
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
   let truncated = false;
   try {
     const resp = await anthropic().messages.create({
-      model: TUTOR_MODELS.cheap,
+      model: claudeModel(TUTOR_MODELS.cheap),
       max_tokens: outputTokensFor(source.length),
       system:
         `You are a professional translator for school communications (teacher↔parent diary ` +

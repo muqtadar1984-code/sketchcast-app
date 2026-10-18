@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { aiTutorEnabled, aiTutorRequireProPlus, aiTutorSketchEnabled } from "@/utils/flags";
 import { TUTOR_MODELS, toClaudeHistory } from "@/utils/tutor/models";
-import { resolveTutorContext, loadGrounding, hasLessonGrounding, tutorEntitled, logMessage, anthropic } from "@/utils/tutor/service";
+import { resolveTutorContext, loadGrounding, hasLessonGrounding, tutorEntitled, logMessage, anthropic, claudeModel } from "@/utils/tutor/service";
 import { buildSketchPrompt, parseSketchSpec, canonicalSpecHash, SKETCH_MONTHLY_CAP } from "@/utils/tutor/sketch";
 
 export const runtime = "nodejs";
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   try {
     const { instructions, context } = buildSketchPrompt(grounding, concept);
     const resp = await anthropic().messages.create({
-      model: TUTOR_MODELS.cheap,
+      model: claudeModel(TUTOR_MODELS.cheap),
       max_tokens: 600,
       system: [
         { type: "text", text: instructions },
