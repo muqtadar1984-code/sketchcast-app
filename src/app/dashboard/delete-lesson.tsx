@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { type LibraryMessages } from "./labels";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 /**
  * Remove a generation — and, since 0078, say honestly what that costs.
@@ -50,6 +51,8 @@ export default function DeleteLesson({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [showWhy, setShowWhy] = useState(false);
   const whyId = useId();
 

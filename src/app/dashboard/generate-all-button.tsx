@@ -7,6 +7,7 @@ import { kitRows, kitUnitsFor } from "./kit";
 import { defaultNarrationForGrade } from "@/utils/narration";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
+import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 type Chapter = { num: number; title: string; partCount: number };
 
@@ -50,6 +51,8 @@ export default function GenerateAllButton({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // The app-wide spinner follows this control's own busy state.
+  useBusyWhile(busy);
   const [gateOpen, setGateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
