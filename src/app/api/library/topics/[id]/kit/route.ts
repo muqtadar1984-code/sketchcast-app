@@ -133,6 +133,16 @@ export const runtime = "nodejs";
 // re-checks everything this route checks (decision 13): human approval is
 // enforced twice, nothing auto-approves.
 
+//   delete_translation {kitId} (reviewer, admin; 0143) — remove ONE rejected
+//                or failed translation, completely: delete_translation_kit
+//                deletes its generations (jobs, artifacts), bank items, quiz
+//                set, unused article version and the kit row in one
+//                transaction and returns the storage paths, which this route
+//                then removes with the kit's staged translated/ folder. The
+//                function refuses an English kit, any other status, a live
+//                job or a posted video. Founder, 2026-10-18: "add an x mark to
+//                the rejected and failed generation to be able to delete
+//                manually".
 //   translate (editor, admin) — the Kit Translator (0134, plan revision 3, T0):
 //     translate    {kitId, language}  ONE `kit_translate` observer job
 //                  (translate-job.ts; a live one for the same source kit and
@@ -157,7 +167,7 @@ export const runtime = "nodejs";
 //     Approve queues it too, best effort, like the question bank.
 //     does the same on its own.
 
-type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject" | "translate" | "question_bank" | "quiz";
+type Action = "generate" | "retry" | "regenerate" | "save_clips" | "save_youtube" | "approve" | "reject" | "translate" | "question_bank" | "quiz" | "delete_translation";
 
 const NEEDS: Record<Action, LibraryAction> = {
   generate: "generate",
@@ -173,6 +183,8 @@ const NEEDS: Record<Action, LibraryAction> = {
   quiz: "generate",
   approve: "approve",
   reject: "approve",
+  // whoever can reject a translation can clear it away afterwards
+  delete_translation: "approve",
 };
 
 type Body = {
@@ -871,6 +883,49 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
     // Audited by the RPC (library_kit_reject on the topic, with the reason).
     return NextResponse.json({ ok: true, kit: data });
+  }
+
+  // ── delete_translation (0143) ──────────────────────────────────────────────
+  if (action === "delete_translation") {
+    const { kit, response } = await loadKit(body.kitId);
+    if (!kit) return response!;
+    // The function is the rule (translation, rejected or failed, nothing
+    // live, nothing posted); this read only gives a clear sentence early.
+    if (kit.language === LANGUAGE) return conflict("Only a translation can be deleted here.", { language: kit.language });
+    if (kit.status !== "rejected" && kit.status !== "failed") {
+      return conflict(`This translation is ${statusLabel(kit.status)} — only a rejected or failed translation is deleted.`, { status: kit.status });
+    }
+    const { data, error } = await admin.rpc("delete_translation_kit", { p_kit: kit.id, p_actor: m.id });
+    if (error) {
+      if (RPC_REFUSALS.has(error.code ?? "") || /not found|only a translation|not rejected|derived|YouTube|still has a job/i.test(error.message ?? "")) {
+        return conflict(error.message ?? "The translation could not be deleted.", { code: error.code ?? null });
+      }
+      if (/function .*delete_translation_kit|does not exist/i.test(error.message ?? "")) {
+        return conflict("Deleting a translation needs migration 0143 — apply it first.", { migration: "0143_delete_translation_kit.sql" });
+      }
+      return dbError(error);
+    }
+    // Storage last: the rows are gone in one transaction, so a storage hiccup
+    // leaves only unreferenced files behind, never a half-deleted kit.
+    const result = (data ?? {}) as { storage_paths?: string[] };
+    const paths = new Set<string>((result.storage_paths ?? []).filter((p) => typeof p === "string" && p.length > 0));
+    const owner = catalogueOwnerId() ?? [...paths][0]?.split("/")[0] ?? null;
+    if (owner) {
+      const prefix = `${owner}/${kit.id}/translated`;
+      const { data: listed } = await admin.storage.from("artifacts").list(prefix, { limit: 1000 });
+      for (const o of listed ?? []) if (o?.name) paths.add(`${prefix}/${o.name}`);
+    }
+    const all = [...paths];
+    let removed = 0;
+    const failed: string[] = [];
+    for (let i = 0; i < all.length; i += 100) {
+      const chunk = all.slice(i, i + 100);
+      const { data: gone, error: rmErr } = await admin.storage.from("artifacts").remove(chunk);
+      if (rmErr) failed.push(...chunk);
+      else removed += gone?.length ?? chunk.length;
+    }
+    // Audited by the function (library_kit_translation_delete on the topic).
+    return NextResponse.json({ ok: true, deleted: data, filesRemoved: removed, filesLeft: failed.length });
   }
 
   return bad("Unknown action.");
