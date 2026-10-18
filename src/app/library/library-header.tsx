@@ -10,9 +10,12 @@ import MobileNav from "../dashboard/mobile-nav";
 // lives under its topic page, not as a tab); later phases add Publish. Since
 // 2026-10-17 Topics opens the review inbox (the topic page, layout D) on the
 // newest kit awaiting a reviewer; the list is one click away inside it.
+// Since 2026-10-18 Translations (every topic x every lesson language) sits
+// beside it, for every member.
 const TABS = [
   { href: "/library", label: "Overview" },
   { href: "/library/topics", label: "Topics" },
+  { href: "/library/translations", label: "Translations" },
   { href: "/library/curricula", label: "Curricula" },
   { href: "/library/candidates", label: "Candidates" },
   { href: "/library/harvest", label: "Harvest" },
