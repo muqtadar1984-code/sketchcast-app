@@ -10,6 +10,7 @@ import {
   KIT_REJECT_REASON_LABEL,
   canApproveKit,
   canRejectKit,
+  canRetryKit,
   kitGenerationIdFor,
   translationAcceptsApprove,
   translationAcceptsReject,
@@ -176,9 +177,17 @@ export function TranslationReviewBox({ kit, topicStatus, canApprove, post, busy,
 }
 
 /** The language's pieces, as the English kit's table: piece, status, worker
- *  job, files. A piece the source kit does not have is not missing here. */
-export function TranslationPieces({ kit, generations }: KitView) {
+ *  job, files. A piece the source kit does not have is not missing here.
+ *  `onRetry` (2026-10-18) puts a Retry on a FAILED piece of a failed or
+ *  still-generating translation — the kit route's own `retry` action, which
+ *  keeps the piece's `translation` input, so the retried video is rendered
+ *  from the same translated script (the Arabic trig video, overlap 8/13). */
+export function TranslationPieces({ kit, generations, onRetry, busy }: KitView & {
+  onRetry?: (kind: (typeof KIT_KINDS)[number]) => void;
+  busy?: string | null;
+}) {
   const byId = new Map(generations.map((g) => [g.gen.id, g]));
+  const retryable = !!onRetry && canRetryKit(kit.status);
   return (
     <div className="overflow-x-auto rounded-lg border border-[#EEF0EC]">
       <table className="w-full text-sm">
@@ -199,7 +208,19 @@ export function TranslationPieces({ kit, generations }: KitView) {
             return (
               <tr key={kind}>
                 <td className="px-3 py-2">{KIT_KIND_LABEL[kind]}</td>
-                <td className="px-3 py-2">{g ? <GenStatusChip status={g.gen.status} /> : <span className="text-xs text-[#98A0A9]">{kind === "lesson_plan" ? "after the video" : "—"}</span>}</td>
+                <td className="px-3 py-2">
+                  {g ? <GenStatusChip status={g.gen.status} /> : <span className="text-xs text-[#98A0A9]">{kind === "lesson_plan" ? "after the video" : "—"}</span>}
+                  {retryable && g && g.gen.status === "error" && kind !== "quiz" && (
+                    <button
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => onRetry!(kind)}
+                      className="btn-ghost h-7 px-2 ml-2 text-xs disabled:opacity-50"
+                    >
+                      {busy === `retry:${kit.id}:${kind}` ? "Queuing…" : "Retry"}
+                    </button>
+                  )}
+                </td>
                 <td className="px-3 py-2">
                   <JobLine job={g?.job ?? null} />
                 </td>
@@ -577,7 +598,15 @@ export function TranslationsPanel({
                 </summary>
                 <div className="px-3 pb-3 space-y-3">
                   {kit.notes && <p className="text-xs text-[#B3401F] whitespace-pre-wrap">{kit.notes}</p>}
-                  <TranslationPieces {...view} />
+                  <TranslationPieces
+                    {...view}
+                    busy={busy}
+                    onRetry={canGenerate ? async (kind) => {
+                      const label = languageLabel(kit.language) ?? kit.language;
+                      const r = await post({ action: "retry", kitId: kit.id, kind }, `retry:${kit.id}:${kind}`);
+                      if (r) setNotice(`${label} ${KIT_KIND_LABEL[kind].toLowerCase()} queued again — the worker renders the same translation.`);
+                    } : undefined}
+                  />
                   <Findings report={kit.precheck} />
                   {!selected && <TranslationReviewBox kit={kit} topicStatus={topicStatus} canApprove={canApprove} post={post} busy={busy} setNotice={setNotice} />}
                   {!selected && kit.status === "approved" && (

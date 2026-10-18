@@ -24,6 +24,7 @@ import {
   KIT_STATUSES,
   KIT_STATUS_TONE,
   LESSON_PLAN_PARAM_KEYS,
+  TRANSLATION_PARAM_KEYS,
   RETRIED_KEY,
   canApproveKit,
   canEditClips,
@@ -307,6 +308,18 @@ describe("kitGenerationParams / kitGenerationRows", () => {
     expect(retryParamsOf(noHeader as unknown as Record<string, unknown>, "deck")).toEqual(noHeader);
     // the input is not mutated
     expect(failed[RETRIED_KEY]).toBe(true);
+  });
+
+  it("retryParamsOf keeps a translated piece's `translation` input (every kind), still dropping telemetry and the retried flag", () => {
+    expect([...TRANSLATION_PARAM_KEYS]).toEqual(["translation"]);
+    const translation = { source_kit_id: "k-en", source_generation_id: "g-en", script_path: "t/ar/script.json", redraw: ["s3"] };
+    const failed = { ...params, language: "ar", translation, timings: { render_s: 40 }, acceptance_part1: { overlapping_text: 8 }, [RETRIED_KEY]: true };
+    for (const kind of ["presentation", "deck", "activity", "case_study", "worksheet", "question_bank"] as const) {
+      expect(retryParamsOf(failed, kind)).toEqual({ ...params, language: "ar", translation });
+    }
+    expect(retryParamsOf({ ...failed, clips: [{ n: 1 }], lesson_modes: true }, "lesson_plan")).toEqual({ ...params, language: "ar", translation, clips: [{ n: 1 }], lesson_modes: true });
+    // the same object, not a copy: the worker reads it as written
+    expect(retryParamsOf(failed, "presentation").translation).toBe(translation);
   });
 
   it("quizGenerationParams carries the composer's inputs and the kit's lineage, and NO kit_id (the worker refuses question_set_id + kit_id)", () => {

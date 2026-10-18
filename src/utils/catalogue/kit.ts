@@ -484,6 +484,13 @@ export const KIT_PARAM_KEYS = ["catalogue", "topic_id", "kit_id", "article_id", 
  *  three-mode flag. A retried lesson plan needs both. */
 export const LESSON_PLAN_PARAM_KEYS = ["clips", "lesson_modes"] as const;
 
+/** A TRANSLATION kit's pieces (Kit Translator, 0134) carry `translation`:
+ *  the translated scripts' paths, the source kit and generation, the redraw
+ *  allow-list. It IS an input — without it the worker builds the piece as a
+ *  fresh catalogue piece instead of rendering the translation — so a retry
+ *  keeps it. Every translated kind carries it (prod, 2026-10-18). */
+export const TRANSLATION_PARAM_KEYS = ["translation"] as const;
+
 /** Marks a failed generation the portal has ALREADY retried (params.retried
  *  = true): the retry route takes the failed row exclusively by flipping
  *  this flag in a compare-and-swap before it inserts, so two operators
@@ -500,7 +507,11 @@ export const RETRIED_KEY = "retried";
  *  and the retried flag. The worker's own lesson_plan insert whitelists the
  *  same way (_INHERITED_PARAMS); a lesson_plan keeps its clips and modes. */
 export function retryParamsOf(params: Record<string, unknown>, kind: string): Record<string, unknown> {
-  const keys: readonly string[] = kind === "lesson_plan" ? [...KIT_PARAM_KEYS, ...LESSON_PLAN_PARAM_KEYS] : KIT_PARAM_KEYS;
+  const keys: readonly string[] = [
+    ...KIT_PARAM_KEYS,
+    ...TRANSLATION_PARAM_KEYS,
+    ...(kind === "lesson_plan" ? LESSON_PLAN_PARAM_KEYS : []),
+  ];
   const out: Record<string, unknown> = {};
   for (const k of keys) if (k in params && params[k] !== undefined) out[k] = params[k];
   return out;
