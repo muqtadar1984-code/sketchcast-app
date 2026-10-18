@@ -5,7 +5,10 @@ name: autofix
 # back the app so it emails the founder the signed Approve/Reject links.
 #
 # ── One-time setup (see docs/AUTOFIX.md) ──
-# Repo secrets: ANTHROPIC_API_KEY, AUTOFIX_CALLBACK_SECRET, AUTOFIX_APP_URL
+# Repo secrets: AUTOFIX_CALLBACK_SECRET, AUTOFIX_APP_URL (+ ANTHROPIC_API_KEY until Bedrock)
+# Repo variable: AUTOFIX_AWS_ROLE_ARN — when set, Claude Code runs on Amazon Bedrock
+#   (AWS Activate credits) through GitHub OIDC: no AWS key is stored anywhere. Unset,
+#   the run falls back to ANTHROPIC_API_KEY exactly as before. Setup: docs/AUTOFIX.md.
 # Enable Actions on the repo. The default GITHUB_TOKEN below opens the PR; the app's
 # own GITHUB_AUTOFIX_TOKEN (in Vercel) is what later merges it on your approval.
 
@@ -16,6 +19,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write   # GitHub OIDC → sts:AssumeRoleWithWebIdentity for Bedrock
 
 concurrency:
   group: autofix-${{ github.event.client_payload.run_key }}
@@ -46,16 +50,32 @@ jobs:
 
       - run: npm ci
 
+      # Bedrock credentials: GitHub's OIDC token is exchanged for 1-hour role
+      # credentials (role trusts only this repo). Skipped while the variable is
+      # unset, so a dispatch before the AWS setup still runs on the API key.
+      - name: AWS credentials for Bedrock (OIDC)
+        if: vars.AUTOFIX_AWS_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AUTOFIX_AWS_ROLE_ARN }}
+          role-session-name: sketchcast-autofix
+          aws-region: us-east-1
+
       # Claude Code writes the fix. `model` is pinned explicitly: the action's own
       # default was a RETIRED id (claude-sonnet-4-20250514 → 404, first smoke test),
       # so never rely on it. claude-sonnet-5 is the same model the app's assistant
-      # already runs in prod on this API key. `allowed_tools` is this action's real
-      # input name — `claude_args` is not an input and was silently ignored.
+      # runs in prod. On Bedrock the id is the cross-region inference profile — the
+      # bare first-party id is refused there — and Claude Code's background (Haiku)
+      # model is pinned to a profile the role may invoke. `allowed_tools` is this
+      # action's real input name — `claude_args` is not an input and was silently ignored.
       - name: Claude Code — write the fix
         uses: anthropics/claude-code-base-action@beta
+        env:
+          ANTHROPIC_SMALL_FAST_MODEL: ${{ vars.AUTOFIX_AWS_ROLE_ARN != '' && 'us.anthropic.claude-haiku-4-5-20251001-v1:0' || '' }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: claude-sonnet-5
+          use_bedrock: ${{ vars.AUTOFIX_AWS_ROLE_ARN != '' && 'true' || 'false' }}
+          anthropic_api_key: ${{ vars.AUTOFIX_AWS_ROLE_ARN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+          model: ${{ vars.AUTOFIX_AWS_ROLE_ARN != '' && 'us.anthropic.claude-sonnet-5' || 'claude-sonnet-5' }}
           allowed_tools: "Edit,Write,Read,Bash,Grep,Glob"
           prompt: |
             You are fixing a real customer-reported bug in this Next.js 16 / React 19 app.

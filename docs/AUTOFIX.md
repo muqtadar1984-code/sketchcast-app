@@ -63,6 +63,33 @@ to `main` → Vercel deploys. **Nothing reaches production without your tap.**
 6. **Confirm the Claude Code Action version** in `.github/workflows/autofix.yml`
    (`anthropics/claude-code-base-action@beta`) against its current README — pin a tag.
 
+7. **Claude on Amazon Bedrock (AWS Activate credits, no stored keys).** The workflow
+   runs Claude Code on Bedrock whenever the repo **variable** `AUTOFIX_AWS_ROLE_ARN` is
+   set; unset, it uses `ANTHROPIC_API_KEY` as before. One-time, in account `172042957848`:
+   1. **IAM → Identity providers → Add provider → OpenID Connect**:
+      URL `https://token.actions.githubusercontent.com`, audience `sts.amazonaws.com`.
+   2. **IAM → Roles → Create role → Custom trust policy**, name `sketchcast-autofix-bedrock`:
+      ```json
+      {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Principal": { "Federated": "arn:aws:iam::172042957848:oidc-provider/token.actions.githubusercontent.com" },
+          "Action": "sts:AssumeRoleWithWebIdentity",
+          "Condition": {
+            "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
+            "StringLike": { "token.actions.githubusercontent.com:sub": "repo:muqtadar1984-code/sketchcast-app:*" }
+          }
+        }]
+      }
+      ```
+      Permissions: attach **`SketchCastBedrockInvoke`** (invoke Claude only).
+   3. **GitHub → Settings → Secrets and variables → Actions → Variables → New**:
+      `AUTOFIX_AWS_ROLE_ARN` = `arn:aws:iam::172042957848:role/sketchcast-autofix-bedrock`.
+   4. After one green run on Bedrock, delete the `ANTHROPIC_API_KEY` repo secret.
+   Models: `us.anthropic.claude-sonnet-5` for the fix, `us.anthropic.claude-haiku-4-5-20251001-v1:0`
+   for Claude Code's background calls — both inside the role's policy.
+
 Until step 4's `GITHUB_AUTOFIX_TOKEN` is set, "Attempt auto-fix" records a run but the
 workflow won't start (the button tells you so). The whole pipeline is dormant with the flag off.
 
