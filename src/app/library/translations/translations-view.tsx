@@ -12,6 +12,8 @@ import {
   type MatrixFilters,
 } from "@/utils/catalogue/translation-matrix";
 import { ErrorBanner } from "../catalogue-ui";
+import { TranslationClock } from "../translation-clock";
+import { queuePosition, typicalFor, type TranslationClockData } from "@/utils/catalogue/translation-eta";
 import type { MatrixLoad } from "./load";
 
 // The Translations tab's screen (/library/translations): totals per language,
@@ -47,7 +49,7 @@ const TONE: Record<CellState, string> = {
 
 const LEGEND: CellState[] = ["posted", "approved", "in_review", "translating", "queued", "failed", "stale", "blocked", "none", "not_ready"];
 
-function Cell({ c }: { c: MatrixCell }) {
+function Cell({ c, clocks, subject }: { c: MatrixCell; clocks?: TranslationClockData; subject?: string | null }) {
   return (
     <Link
       href={c.href}
@@ -55,6 +57,18 @@ function Cell({ c }: { c: MatrixCell }) {
       className={`block rounded px-1.5 py-1 text-center text-[0.7rem] font-medium whitespace-nowrap hover:ring-2 hover:ring-[#7FD8A8] ${TONE[c.state]}`}
     >
       {c.label}
+      {c.clock && clocks && (
+        <TranslationClock
+          compact
+          className="block text-[0.65rem] font-normal opacity-80"
+          phase={c.clock.phase}
+          since={c.clock.since}
+          typicalMin={typicalFor(clocks.timing, subject)}
+          nowMs={clocks.nowMs}
+          ahead={c.clock.jobId ? queuePosition(clocks.lane, c.clock.jobId) : clocks.lane.queued.length}
+          runningSince={clocks.lane.runningSince}
+        />
+      )}
     </Link>
   );
 }
@@ -72,6 +86,12 @@ export function TranslationsView({ load, filters: f, languages }: { load: Extrac
   return (
     <main className="px-6 py-10 max-w-[96rem] mx-auto">
       <AutoRefresh active={live} seconds={30} />
+      {live && (
+        <p className="text-xs text-[#5B6470] mb-3">
+          Times are estimates: a typical translation takes about {load.clocks.timing.typicalMin} min (the median of the last {load.clocks.timing.samples || "few"} runs
+          {Object.keys(load.clocks.timing.bySubject).length ? ", per subject where a subject has enough" : ""}). Hover a cell for the detail.
+        </p>
+      )}
       <Heading />
       <p className="text-[#5B6470] mb-5 max-w-3xl">
         Every topic against every lesson language. Each cell says where that translation stands and opens the review
@@ -185,7 +205,7 @@ export function TranslationsView({ load, filters: f, languages }: { load: Extrac
                 </td>
                 {r.cells.map((c) => (
                   <td key={c.language} className="px-1 py-1.5">
-                    <Cell c={c} />
+                    <Cell c={c} clocks={load.clocks} subject={r.subject} />
                   </td>
                 ))}
               </tr>

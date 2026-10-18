@@ -207,6 +207,41 @@ const malayKit: KitView = {
   videoFormat: null,
 };
 
+// Translations in flight, for the clocks (translation-eta.ts): a Hindi kit
+// building its pieces, a Telugu translate job running, a French one queued
+// behind it.
+const serverNow = () => Date.now();
+const minutesAgo = (m: number) => new Date(serverNow() - m * 60_000).toISOString();
+const hindiBuilding = (): KitView => ({
+  kit: {
+    ...kitBase,
+    id: "c3c3c3c3-c3c3-4c3c-8c3c-c3c3c3c3c3c3",
+    language: "hi",
+    source_kit_id: KIT_EN,
+    status: "generating",
+    translation_status: "staged",
+    presentation_generation_id: null,
+    doc_generation_ids: {},
+    precheck: { ok: true, blocking: [], flags: [] },
+    created_at: minutesAgo(6),
+    updated_at: minutesAgo(6),
+  },
+  generations: [],
+  publications: [],
+  otherPublications: [],
+  videoFormat: null,
+});
+const translateJob = (id: string, language: string, status: string, createdMin: number, claimedMin: number | null) => ({
+  id,
+  status,
+  progress: status === "processing" ? 30 : 0,
+  stage: null,
+  error: null,
+  created_at: minutesAgo(createdMin),
+  claimed_at: claimedMin == null ? null : minutesAgo(claimedMin),
+  params: { language, source_kit_id: KIT_EN, topic_id: T1 },
+});
+
 export default async function ReviewInboxPreview({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   if (process.env.NODE_ENV === "production") notFound();
   const view = parseInboxParams(await searchParams);
@@ -247,8 +282,13 @@ export default async function ReviewInboxPreview({ searchParams }: { searchParam
     articleStatuses: { [ART]: "approved" },
     articleVersions: { [ART]: 2 },
     kits: [englishKit],
-    translationKits: [arabicKit, malayKit],
-    translateJobs: [],
+    translationKits: [hindiBuilding(), arabicKit, malayKit],
+    translateJobs: [translateJob("j-te", "te", "processing", 4, 3), translateJob("j-fr", "fr", "queued", 2, null)],
+    translationClocks: {
+      timing: { typicalMin: 15, bySubject: { mathematics: 12 }, samples: 8 },
+      lane: { runningSince: minutesAgo(3), queued: [{ id: "j-fr", created_at: minutesAgo(2) }] },
+      nowMs: serverNow(),
+    },
     kitsError: null,
     gensError: null,
     publicationsError: null,

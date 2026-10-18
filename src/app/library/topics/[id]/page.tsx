@@ -16,6 +16,7 @@ import type { TranslateJobRow } from "./translations-panel";
 import { ReviewInboxView, type AllTopicRow, type AuditRow } from "./review-inbox-view";
 import { PUBLICATION_COLUMNS_0122, loadVideoFormat } from "@/utils/catalogue/format-server";
 import { loadReviewQueue } from "@/utils/catalogue/review-queue-server";
+import { loadTranslationTiming } from "@/utils/catalogue/translation-timing-server";
 import { KIT_TRANSLATOR_MIGRATION, parseInboxParams } from "@/utils/catalogue/review-queue";
 import { searchOr } from "@/utils/catalogue/status";
 
@@ -376,13 +377,17 @@ export default async function TopicDetailPage({ params, searchParams }: { params
   if (kitRows.length) {
     const { data } = await admin
       .from("jobs")
-      .select("id, status, progress, stage, error, created_at, params")
+      .select("id, status, progress, stage, error, created_at, claimed_at, params")
       .eq("type", "kit_translate")
       .in("params->>source_kit_id", kitRows.map((k) => k.id))
       .order("created_at", { ascending: false })
       .limit(50);
     translateJobs = ((data ?? []) as unknown as TranslateJobRow[]).map((j) => ({ ...j, params: j.params ?? {} }));
   }
+  // The clocks on a translation in flight (translation-eta.ts): read only
+  // when this topic has a translation building or a translate job live.
+  const translationLive = translationRows.some((k) => k.status === "generating") || translateJobs.some((j) => j.status === "queued" || j.status === "processing");
+  const translationClocks = translationLive ? await loadTranslationTiming(admin) : null;
   const approvedArticle = articles.find((a) => a.status === "approved") ?? null;
   // Every version's status by id: the kit panel refuses Approve on a kit whose
   // own article is no longer the approved version (kitAcceptsApprove).
@@ -426,7 +431,9 @@ export default async function TopicDetailPage({ params, searchParams }: { params
   const articleJobsInFlight =
     (articleJob != null && (articleJob.status === "queued" || articleJob.status === "processing")) ||
     [...latestRender.values()].some((j) => j.status === "queued" || j.status === "processing");
-  const buildInFlight = kitJobsInFlight || articleJobsInFlight;
+  // a translate job runs before its kit's pieces exist — poll through it too
+  const translateJobsInFlight = translateJobs.some((j) => j.status === "queued" || j.status === "processing");
+  const buildInFlight = kitJobsInFlight || articleJobsInFlight || translateJobsInFlight;
 
   const headerMappings: HeaderMapping[] = mappings.map(
     (m): HeaderMapping => ({
@@ -477,6 +484,7 @@ export default async function TopicDetailPage({ params, searchParams }: { params
       kits={kits}
       translationKits={translationKits}
       translateJobs={translateJobs}
+      translationClocks={translationClocks}
       kitsError={kitsError ? (kitsError.message ?? "unknown error") : null}
       gensError={gensError ? (gensError.message ?? "unknown error") : null}
       publicationsError={publicationsError ? (publicationsError.message ?? "unknown error") : null}

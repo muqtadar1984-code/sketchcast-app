@@ -10,6 +10,7 @@ import { AliasPanel, MappingPanel, PrereqPanel, TopicActions, TopicHeaderEditor,
 import { ArticlePanel, type ArticleVersion, type JobRow } from "./article-panel";
 import { KitPanel, VideoParts, type KitView } from "./kit-panel";
 import { Findings, PrecheckLine, TranslationChip, TranslationsPanel, type TranslateJobRow } from "./translations-panel";
+import type { TranslationClockData } from "@/utils/catalogue/translation-eta";
 import { Drawer, InboxFilters, InboxPanes, QueueKeys, ReviewVerdict } from "./review-inbox";
 import { TranslateSweepButton } from "./translate-sweep";
 
@@ -62,6 +63,8 @@ export type ReviewInboxProps = {
   kits: KitView[];
   translationKits: KitView[];
   translateJobs: TranslateJobRow[];
+  /** timing + lane for the clocks on a translation in flight; null when none is */
+  translationClocks?: TranslationClockData | null;
   kitsError: string | null;
   gensError: string | null;
   publicationsError: string | null;
@@ -111,6 +114,7 @@ export function ReviewInboxView({
   kits,
   translationKits,
   translateJobs,
+  translationClocks = null,
   kitsError,
   gensError,
   publicationsError,
@@ -553,6 +557,8 @@ export function ReviewInboxView({
             sourceKit={kits.find((k) => k.kit.status === "approved")?.kit ?? null}
             translations={translationKits}
             jobs={translateJobs}
+            clocks={translationClocks}
+            topicSubject={topic.subject}
             names={names}
             canGenerate={canGenerate}
             generateEnabled={generateEnabled}

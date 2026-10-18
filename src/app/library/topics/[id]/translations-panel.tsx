@@ -21,6 +21,8 @@ import type { KitRejectReason, PrecheckReport, PublishPrivacy, TopicKit, TopicPu
 import { GenStatusChip, KitStatusChip, fmtDate } from "../../catalogue-ui";
 import { JobLine, VideoParts, useKitPost, type KitView, type Post } from "./kit-panel";
 import type { JobRow } from "./article-panel";
+import { TranslationClock } from "../../translation-clock";
+import { queuePosition, typicalFor, type TranslationClockData } from "@/utils/catalogue/translation-eta";
 
 // The topic page's Translations section (Kit Translator, plan revision 3, T0
 // — 2026-10-16). Every kit of this topic in a language other than English,
@@ -44,7 +46,22 @@ import type { JobRow } from "./article-panel";
 // carried them. Posting stays a platform admin's action (libraryAllows
 // "publish"), the same gate as the English kit's publish block.
 
-export type TranslateJobRow = JobRow & { params: Record<string, unknown> };
+export type TranslateJobRow = JobRow & { params: Record<string, unknown>; claimed_at?: string | null };
+
+/** The clock for one translate job (queued or running) or one building kit:
+ *  a queued job waits its turn on the lane; a running job is translating; a
+ *  kit whose translate job is done is building its pieces. */
+function ClockFor({ clocks, subject, job, kit }: { clocks: TranslationClockData | null; subject: string | null; job: TranslateJobRow | null; kit: TopicKit | null }) {
+  if (!clocks) return null;
+  const typicalMin = typicalFor(clocks.timing, subject);
+  const common = { typicalMin, nowMs: clocks.nowMs, className: "text-xs text-[#5B3FBF]" };
+  if (job?.status === "queued") {
+    return <TranslationClock {...common} phase="queued" since={job.created_at} ahead={queuePosition(clocks.lane, job.id)} runningSince={clocks.lane.runningSince} />;
+  }
+  if (job?.status === "processing") return <TranslationClock {...common} phase="translating" since={job.claimed_at ?? job.created_at} />;
+  if (kit?.status === "generating") return <TranslationClock {...common} phase="building" since={kit.created_at} />;
+  return null;
+}
 
 const TARGETS = LANGUAGES.filter((l) => l.value !== "en");
 
@@ -420,6 +437,8 @@ export function TranslationsPanel({
   sourceKit,
   translations,
   jobs,
+  clocks = null,
+  topicSubject = null,
   names,
   canGenerate,
   generateEnabled,
@@ -441,6 +460,10 @@ export function TranslationsPanel({
   translations: KitView[];
   /** the kit_translate jobs of this topic's kits, newest first */
   jobs: TranslateJobRow[];
+  /** timing + lane for the clocks; null when nothing is in flight */
+  clocks?: TranslationClockData | null;
+  /** topics.subject — the typical run is per subject once it has enough runs */
+  topicSubject?: string | null;
   names: Record<string, string>;
   canGenerate: boolean;
   generateEnabled: boolean;
@@ -510,6 +533,7 @@ export function TranslationsPanel({
               <span className="font-medium">{languageLabel(String(j.params.language ?? "")) ?? String(j.params.language ?? "?")}</span>
               <span>· translate job</span>
               <JobLine job={j} />
+              {isLiveJobStatus(j.status) && <ClockFor clocks={clocks} subject={topicSubject} job={j} kit={null} />}
               <span className="text-[#98A0A9]">{fmtDate(j.created_at)}</span>
             </li>
           ))}
@@ -534,6 +558,9 @@ export function TranslationsPanel({
                   <span className="font-medium">{languageLabel(kit.language) ?? kit.language}</span>
                   <KitStatusChip status={kit.status} />
                   <TranslationChip status={kit.translation_status} />
+                  {kit.status === "generating" && (
+                    <ClockFor clocks={clocks} subject={topicSubject} job={liveJobs.find((j) => j.params.language === kit.language) ?? null} kit={kit} />
+                  )}
                   <span className="text-xs">
                     <PrecheckLine report={kit.precheck} />
                   </span>
