@@ -234,3 +234,30 @@ describe("rows, totals and filters", () => {
     expect(cols.every((c, i) => i === 0 || TRANSLATION_ORDER.indexOf(c) > TRANSLATION_ORDER.indexOf(cols[i - 1]))).toBe(true);
   });
 });
+
+describe("the clock a translation cell carries (translation-eta.ts)", () => {
+  it("a queued job counts from its creation and names itself for its place on the lane", () => {
+    const c = arCell(input({ jobs: [job("queued", "2026-10-12T00:00:00Z", { id: "j-q" })] }));
+    expect(c.clock).toEqual({ phase: "queued", since: "2026-10-12T00:00:00Z", jobId: "j-q" });
+  });
+
+  it("a running job counts from its claim, else its creation", () => {
+    const claimed = arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z", { id: "j-p", claimed_at: "2026-10-12T00:05:00Z" })] }));
+    expect(claimed.clock).toEqual({ phase: "translating", since: "2026-10-12T00:05:00Z", jobId: "j-p" });
+    expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z")] })).clock?.since).toBe("2026-10-12T00:00:00Z");
+  });
+
+  it("a generating kit counts from its kit row; a staged kit already in review has no clock", () => {
+    expect(arCell(input({ kits: [ar("k-ar", { status: "generating", translation_status: "staged", created_at: "2026-10-12T01:00:00Z" })] })).clock).toEqual({
+      phase: "building",
+      since: "2026-10-12T01:00:00Z",
+      jobId: null,
+    });
+    expect(arCell(input({ kits: [ar("k-ar", { status: "in_review", translation_status: "staged" })] })).clock).toBeNull();
+  });
+
+  it("nothing in flight carries no clock", () => {
+    expect(arCell(input({ kits: [ar("k-ar", { status: "in_review", translation_status: "in_review" })] })).clock).toBeNull();
+    expect(arCell(input()).clock).toBeNull();
+  });
+});

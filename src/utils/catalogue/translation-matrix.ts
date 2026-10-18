@@ -25,12 +25,17 @@
 import { LANGUAGES } from "@/utils/narration";
 import { inboxHref } from "./review-queue";
 import { readyForTranslation, translationIsLive, type SweepInput, type SweepKit, type SweepNotReady } from "./translate-sweep";
+import type { ClockPhase } from "./translation-eta";
 
 export type MatrixJob = {
+  /** the job's id — a queued job's place on the lane (translation-eta.ts) */
+  id?: string;
   status: string;
   params: Record<string, unknown> | null;
   error?: string | null;
   created_at?: string | null;
+  /** when the worker claimed it — a running translation's clock starts here */
+  claimed_at?: string | null;
 };
 
 /** The sweep's input, widened: every topic, every kit of every topic in every
@@ -48,6 +53,10 @@ export type MatrixCell = {
   detail: string | null;
   kitId: string | null;
   href: string;
+  /** a translation in flight: what its clock counts from (translation-eta.ts)
+   *  — a queued job from its creation, a running job from its claim, a
+   *  building kit from its kit row; null for everything else */
+  clock: { phase: ClockPhase; since: string | null; jobId: string | null } | null;
 };
 
 export type MatrixRow = {
@@ -139,13 +148,14 @@ export function buildTranslationMatrix(input: MatrixInput, languages: readonly s
     readiness.set(language, { ready: new Set(r.ready.map((c) => c.topicId)), notReady: new Map(r.notReady.map((n) => [n.topicId, n])) });
   }
 
-  const cell = (topicId: string, language: string, state: CellState, detail: string | null, kitId: string | null, label?: string): MatrixCell => ({
+  const cell = (topicId: string, language: string, state: CellState, detail: string | null, kitId: string | null, label?: string, clock: MatrixCell["clock"] = null): MatrixCell => ({
     language,
     state,
     label: label ?? CELL_LABEL[state],
     detail,
     kitId,
     href: inboxHref(topicId, { lang: language }),
+    clock,
   });
 
   const englishCell = (topicId: string): MatrixCell => {
@@ -168,15 +178,18 @@ export function buildTranslationMatrix(input: MatrixInput, languages: readonly s
     const liveJob = jobs.find((j) => LIVE_JOB.has(j.status));
     if (liveJob) {
       return liveJob.status === "processing"
-        ? cell(topicId, language, "translating", "A translate job is running.", kits[0]?.id ?? null)
-        : cell(topicId, language, "queued", "A translate job is queued — the worker takes one kit at a time.", kits[0]?.id ?? null);
+        ? cell(topicId, language, "translating", "A translate job is running.", kits[0]?.id ?? null, undefined, { phase: "translating", since: liveJob.claimed_at ?? liveJob.created_at ?? null, jobId: liveJob.id ?? null })
+        : cell(topicId, language, "queued", "A translate job is queued — the worker takes one kit at a time.", kits[0]?.id ?? null, undefined, { phase: "queued", since: liveJob.created_at ?? null, jobId: liveJob.id ?? null });
     }
 
     // 2. a live translation kit
     const live = kits.find((k) => translationIsLive(k));
     if (live) {
       const older = live.source_kit_id && currentEnglish.get(topicId) && live.source_kit_id !== currentEnglish.get(topicId) ? " It translates an older English kit." : "";
-      if (live.status === "generating" || live.translation_status === "staged") return cell(topicId, language, "translating", `The translation kit is being built.${older}`, live.id);
+      if (live.status === "generating" || live.translation_status === "staged") {
+        const clock = live.status === "generating" ? { phase: "building" as const, since: live.created_at ?? null, jobId: null } : null;
+        return cell(topicId, language, "translating", `The translation kit is being built.${older}`, live.id, undefined, clock);
+      }
       if (live.translation_status === "in_review" || (live.translation_status == null && live.status === "in_review")) {
         return cell(topicId, language, "in_review", `The translation awaits review.${older}`, live.id);
       }

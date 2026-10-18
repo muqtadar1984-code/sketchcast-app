@@ -3,6 +3,8 @@ import { readChunks, type Admin } from "@/app/api/library/lib";
 import { catalogueColumnMissing } from "@/utils/catalogue/status";
 import type { SweepCurrentKit, SweepKit, SweepPublication, SweepTopic } from "@/utils/catalogue/translate-sweep";
 import type { MatrixInput, MatrixJob } from "@/utils/catalogue/translation-matrix";
+import type { TranslationClockData } from "@/utils/catalogue/translation-eta";
+import { loadTranslationTiming } from "@/utils/catalogue/translation-timing-server";
 
 // The Translations tab's reads — the translate sweep's five reads
 // (/api/library/translate), widened from "the current English kits and one
@@ -25,16 +27,17 @@ const PUBLICATION_COLUMNS_0122 = `${PUBLICATION_COLUMNS}, superseded_by`;
 const JOB_LIMIT = 2000;
 
 export type MatrixLoad =
-  | { ok: true; input: MatrixInput; retired: number; translationsMissing: boolean }
+  | { ok: true; input: MatrixInput; retired: number; translationsMissing: boolean; clocks: TranslationClockData }
   | { ok: false; error: string };
 
 export async function loadTranslationMatrix(admin: Admin): Promise<MatrixLoad> {
   const fail = (e: { message?: string } | null) => ({ ok: false as const, error: e?.message ?? "unknown database error" });
 
-  const [currentQ, topicsQ, jobsQ] = await Promise.all([
+  const [currentQ, topicsQ, jobsQ, clocks] = await Promise.all([
     admin.rpc("catalogue_current_kits"),
     admin.from("topics").select("id, title, subject, status, bank_maturity"),
-    admin.from("jobs").select("status, params, error, created_at").eq("type", "kit_translate").order("created_at", { ascending: false }).limit(JOB_LIMIT),
+    admin.from("jobs").select("id, status, params, error, created_at, claimed_at").eq("type", "kit_translate").order("created_at", { ascending: false }).limit(JOB_LIMIT),
+    loadTranslationTiming(admin),
   ]);
   if (currentQ.error) return fail(currentQ.error);
   if (topicsQ.error) return fail(topicsQ.error);
@@ -72,5 +75,6 @@ export async function loadTranslationMatrix(admin: Admin): Promise<MatrixLoad> {
     },
     retired: allTopics.length - topics.length,
     translationsMissing,
+    clocks,
   };
 }
