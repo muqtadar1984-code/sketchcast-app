@@ -3,7 +3,7 @@ import Sparkline from "@/components/sparkline";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { compact } from "@/utils/cloudflare-stats";
 import {
-  channelDelta, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl,
+  channelDelta, channelSnaps, channelsByLanguage, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl,
   type ChannelSnap, type VideoSnap,
 } from "@/utils/youtube-stats";
 
@@ -43,14 +43,17 @@ export default async function ConsoleYouTubePage() {
   const [snapsQ, chanQ, pubsQ] = await Promise.all([
     admin.from("youtube_video_stats").select("video_id, captured_at, title, privacy, published_at, views, likes, comments")
       .gte("captured_at", since).order("captured_at", { ascending: true }).limit(20_000),
-    admin.from("youtube_channel_stats").select("channel_id, captured_at, title, subscribers, views, videos")
+    admin.from("youtube_channel_stats").select("channel_id, channel_language, captured_at, title, subscribers, views, videos")
       .gte("captured_at", since).order("captured_at", { ascending: true }).limit(2_000),
     admin.from("topic_publications").select("topic_kit_id, part, youtube_video_id, privacy, published_at, topic_kits(topic_id, topics(title))")
       .not("youtube_video_id", "is", null).order("published_at", { ascending: false }).limit(500),
   ]);
 
   const snaps = (snapsQ.data ?? []) as VideoSnap[];
-  const chans = (chanQ.data ?? []) as ChannelSnap[];
+  // Every channel's rows; the headline tiles are the default (English)
+  // channel's, the per-channel table below lists each one.
+  const allChans = (chanQ.data ?? []) as ChannelSnap[];
+  const chans = channelSnaps(allChans);
   const pubs = (pubsQ.data ?? []) as unknown as PubRow[];
   const tablesMissing = snapsQ.error?.code === "42P01" || chanQ.error?.code === "42P01";
 
@@ -63,7 +66,8 @@ export default async function ConsoleYouTubePage() {
   const views7 = perDay.slice(-7).reduce((a, p) => a + p.views, 0);
   const views30 = perDay.reduce((a, p) => a + p.views, 0);
   const subs7 = channelDelta(chans, week);
-  const lastPoll = [...snaps, ...chans].reduce<string | null>((b, s) => (!b || s.captured_at > b ? s.captured_at : b), null);
+  const channels = channelsByLanguage(allChans, week);
+  const lastPoll = [...snaps, ...allChans].reduce<string | null>((b, s) => (!b || s.captured_at > b ? s.captured_at : b), null);
   const live = pubs.filter((p) => (latest.get(p.youtube_video_id ?? "")?.privacy ?? p.privacy) === "public").length;
 
   const tiles: Array<{ label: string; value: string; hint?: string }> = [
@@ -122,6 +126,26 @@ export default async function ConsoleYouTubePage() {
           </div>
         ))}
       </div>
+
+      {channels.length > 1 && (
+        <section className="mb-6">
+          <div className="card divide-y divide-[#EEF0EC]">
+            <div className={`grid grid-cols-[0.6fr_2fr_1fr_1fr_1fr_1fr] gap-2 ${th}`}>
+              <span>Channel</span><span>Title</span><span className="text-end">Subscribers</span><span className="text-end">7 days</span><span className="text-end">Views</span><span className="text-end">Videos</span>
+            </div>
+            {channels.map((c) => (
+              <div key={c.language} className="grid grid-cols-[0.6fr_2fr_1fr_1fr_1fr_1fr] gap-2 items-center">
+                <span className={`${td} font-mono text-xs`}>{c.language}</span>
+                <span className={`${td} truncate`}>{c.latest.title ?? c.latest.channel_id}</span>
+                <span className={`${td} tabular text-end`}>{compact(c.latest.subscribers ?? 0)}</span>
+                <span className={`${td} tabular text-end`}>{c.delta ? `${c.delta.subscribers >= 0 ? "+" : ""}${c.delta.subscribers}` : "—"}</span>
+                <span className={`${td} tabular text-end`}>{compact(c.latest.views ?? 0)}</span>
+                <span className={`${td} tabular text-end`}>{c.latest.videos ?? "—"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mb-10">
         <div className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3 flex items-center gap-5">

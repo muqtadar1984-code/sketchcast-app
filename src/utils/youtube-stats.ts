@@ -18,6 +18,9 @@ export type VideoSnap = {
 
 export type ChannelSnap = {
   channel_id: string;
+  /** The channel's language (0118): "en" is the default channel; a language
+   * with its own refresh token (the Arabic channel, "ar") has its own rows. */
+  channel_language?: string | null;
   captured_at: string;
   title: string | null;
   subscribers: number | null;
@@ -110,6 +113,26 @@ export function viewsPerDay(snaps: VideoSnap[], days: number, now: Date = new Da
 /** The newest channel snapshot, else null. */
 export function latestChannel(snaps: ChannelSnap[]): ChannelSnap | null {
   return snaps.reduce<ChannelSnap | null>((best, s) => (!best || ms(s.captured_at) > ms(best.captured_at) ? s : best), null);
+}
+
+/** The default channel's language — the console's headline tiles read it alone. */
+export const DEFAULT_CHANNEL = "en";
+
+/** Snapshots of one channel language (a row with no language is the default channel's). */
+export function channelSnaps(snaps: ChannelSnap[], language: string = DEFAULT_CHANNEL): ChannelSnap[] {
+  return snaps.filter((s) => (s.channel_language || DEFAULT_CHANNEL) === language);
+}
+
+/** Every channel's newest snapshot and 7-day subscriber change, the default
+ * channel first, then by language. */
+export function channelsByLanguage(snaps: ChannelSnap[], since: Date): { language: string; latest: ChannelSnap; delta: ReturnType<typeof channelDelta> }[] {
+  const langs = [...new Set(snaps.map((s) => s.channel_language || DEFAULT_CHANNEL))]
+    .sort((a, b) => (a === DEFAULT_CHANNEL ? -1 : b === DEFAULT_CHANNEL ? 1 : a.localeCompare(b)));
+  return langs.flatMap((language) => {
+    const own = channelSnaps(snaps, language);
+    const latest = latestChannel(own);
+    return latest ? [{ language, latest, delta: channelDelta(own, since) }] : [];
+  });
 }
 
 /** Subscribers gained since `since` (earliest snapshot stands in, flagged). */
