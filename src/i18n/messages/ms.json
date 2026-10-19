@@ -1789,6 +1789,8 @@
         "edge-manohar": "Manohar — Marathi",
         "edge-swara": "Swara — Hindi",
         "edge-madhur": "Madhur — Hindi",
+        "edge-uzma": "Uzma — Urdu",
+        "edge-asad": "Asad — Urdu",
         "el-rachel": "Rachel — semula jadi",
         "el-adam": "Adam — dalam",
         "auto": "Automatik — disyorkan",
@@ -1813,7 +1815,9 @@
         "g-mr-f": "Achernar — wanita, Marathi",
         "g-mr-m": "Achird — lelaki, Marathi",
         "g-hi-f": "Achernar — wanita, Hindi",
-        "g-hi-m": "Achird — lelaki, Hindi"
+        "g-hi-m": "Achird — lelaki, Hindi",
+        "g-ur-f": "Achernar — wanita, Urdu",
+        "g-ur-m": "Achird — lelaki, Urdu"
       }
     }
   },

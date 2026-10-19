@@ -1789,6 +1789,8 @@
         "edge-manohar": "Manohar — marathi",
         "edge-swara": "Swara — hindi",
         "edge-madhur": "Madhur — hindi",
+        "edge-uzma": "Uzma — ourdou",
+        "edge-asad": "Asad — ourdou",
         "el-rachel": "Rachel — naturelle",
         "el-adam": "Adam — grave",
         "auto": "Automatique — recommandée",
@@ -1813,7 +1815,9 @@
         "g-mr-f": "Achernar — féminine, marathi",
         "g-mr-m": "Achird — masculine, marathi",
         "g-hi-f": "Achernar — féminine, hindi",
-        "g-hi-m": "Achird — masculine, hindi"
+        "g-hi-m": "Achird — masculine, hindi",
+        "g-ur-f": "Achernar — féminine, ourdou",
+        "g-ur-m": "Achird — masculine, ourdou"
       }
     }
   },

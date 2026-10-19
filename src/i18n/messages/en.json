@@ -1789,6 +1789,8 @@
         "edge-manohar": "Manohar — मराठी",
         "edge-swara": "Swara — हिन्दी",
         "edge-madhur": "Madhur — हिन्दी",
+        "edge-uzma": "Uzma — اردو",
+        "edge-asad": "Asad — اردو",
         "el-rachel": "Rachel — natural",
         "el-adam": "Adam — deep",
         "auto": "Automatic — recommended",
@@ -1813,7 +1815,9 @@
         "g-mr-f": "Achernar — female, मराठी",
         "g-mr-m": "Achird — male, मराठी",
         "g-hi-f": "Achernar — female, हिन्दी",
-        "g-hi-m": "Achird — male, हिन्दी"
+        "g-hi-m": "Achird — male, हिन्दी",
+        "g-ur-f": "Achernar — female, اردو",
+        "g-ur-m": "Achird — male, اردو"
       }
     }
   },

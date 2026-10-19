@@ -250,3 +250,33 @@ describe("expectedVoiceFor — what `auto` will render as", () => {
     expect(expectedVoiceFor("hi", true)).toBe("el-rachel");
   });
 });
+
+describe("Urdu as a lesson language (Kit Translator §5.10, 2026-10-19)", () => {
+  const T = en.utils.narration;
+  const paidUr = { premium: true };
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is in the lesson languages with its free pair and its premium Chirp pair, mirroring the worker", async () => {
+    const { LANGUAGES, languageLabel } = await import("../narration");
+    expect(LANGUAGES.map((l) => l.value)).toContain("ur");
+    expect(languageLabel("ur")).toBe("اردو (Urdu)");
+    expect(VOICES.filter((v) => v.lang === "ur").map((v) => v.value)).toEqual(["edge-uzma", "edge-asad", "g-ur-f", "g-ur-m"]);
+    expect(defaultVoiceFor("ur")).toBe("edge-uzma");
+  });
+
+  it("a free account sees the Edge pair; a paid Google account the Chirp pair too", () => {
+    expect(availableVoices(T, "ur").map((v) => v.value)).toEqual(["auto", "edge-uzma", "edge-asad"]);
+    vi.stubEnv("NEXT_PUBLIC_TTS_PREMIUM_PROVIDER", "google");
+    expect(availableVoices(T, "ur", paidUr).map((v) => v.value)).toEqual(["auto", "edge-uzma", "edge-asad", "g-ur-f", "g-ur-m"]);
+    expect(expectedVoiceFor("ur", true)).toBe("g-ur-f");
+  });
+
+  it("every Urdu voice has a label in every interface language", async () => {
+    for (const loc of ["en", "ar", "es", "fr", "hi", "mr", "ms", "ms-arab", "pt", "te"]) {
+      const msgs = (await import(`@/i18n/messages/${loc}.json`)).default;
+      for (const id of ["edge-uzma", "edge-asad", "g-ur-f", "g-ur-m"]) {
+        expect(voiceLabel(msgs.utils.narration, id), `${loc} ${id}`).not.toBe(id);
+      }
+    }
+  });
+});
