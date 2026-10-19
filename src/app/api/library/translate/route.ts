@@ -6,8 +6,10 @@ import { catalogueGenerateEnabled } from "@/utils/flags";
 import { catalogueColumnMissing } from "@/utils/catalogue/status";
 import { LANGUAGES } from "@/utils/narration";
 import {
+  JAWI_SOURCE_LANGUAGE,
   SWEEP_DEFAULT_LIMIT,
   SWEEP_MAX_LIMIT,
+  isDerivedLanguage,
   readyForTranslation,
   type SweepCandidate,
   type SweepCurrentKit,
@@ -87,7 +89,10 @@ async function loadSweep(admin: Admin, language: string): Promise<{ input: Sweep
   // the current English kits and the topics' kits in the target language —
   // with 0134's columns, which the readiness rule needs (a database without
   // them cannot run the Kit Translator at all, so that is a 409, not a fallback)
-  const kitsRead = await readChunks<SweepKit>(topicIds, (chunk) => admin.from("topic_kits").select(KIT_COLUMNS_0134).in("topic_id", chunk).in("language", [LANGUAGE, language]));
+  // Jawi is derived from the Malay translation (plan §5.11): its readiness
+  // needs the topics' Malay kits too
+  const languages = isDerivedLanguage(language) ? [LANGUAGE, language, JAWI_SOURCE_LANGUAGE] : [LANGUAGE, language];
+  const kitsRead = await readChunks<SweepKit>(topicIds, (chunk) => admin.from("topic_kits").select(KIT_COLUMNS_0134).in("topic_id", chunk).in("language", languages));
   if (kitsRead.error && catalogueColumnMissing(kitsRead.error)) {
     return { input: null, response: conflict("The translation columns are not in this database yet — apply migration 0134.", { migration: "0134_kit_translator.sql" }) };
   }
@@ -161,7 +166,9 @@ export async function POST(request: Request) {
   const skipped: { kitId: string; why: string }[] = [];
   const jobs: Record<string, string | null> = {};
   for (const c of batch) {
-    const q = await enqueueTranslateJob(admin, { sourceKitId: c.kitId, topicId: c.topicId, language });
+    // the job names the kit it translates FROM: the English kit, or for Jawi
+    // the approved Malay kit (c.sourceKitId)
+    const q = await enqueueTranslateJob(admin, { sourceKitId: c.sourceKitId ?? c.kitId, topicId: c.topicId, language });
     if (!q.ok) {
       skipped.push({ kitId: c.kitId, why: q.error.message ?? "database error" });
       continue;
@@ -175,7 +182,7 @@ export async function POST(request: Request) {
   const byKit = new Map<string, SweepCandidate>(batch.map((c) => [c.kitId, c]));
   for (const kitId of [...queued, ...alreadyQueued]) {
     const c = byKit.get(kitId)!;
-    await audit(admin, m.id, "kit_translate_sweep", "topic", c.topicId, { kit_id: kitId, language, job_id: jobs[kitId], job_existing: alreadyQueued.includes(kitId), sweep });
+    await audit(admin, m.id, "kit_translate_sweep", "topic", c.topicId, { kit_id: kitId, language, job_id: jobs[kitId], job_existing: alreadyQueued.includes(kitId), ...(c.sourceKitId ? { source_kit_id: c.sourceKitId } : {}), sweep });
   }
 
   return NextResponse.json({

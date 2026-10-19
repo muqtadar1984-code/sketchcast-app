@@ -22,6 +22,12 @@
 //   • no kit_translate job for (this kit, the language) is queued or
 //     processing (reported as `queued`, so the drawer can say so).
 //
+// Jawi (ms-arab, plan §5.11) is the one language NOT translated from English:
+// it is derived from the topic's APPROVED MALAY translation — the Malay voice
+// reads the Malay kit's Rumi and the screen shows the same words in Jawi — so
+// a topic is ready for Jawi only once its Malay kit is approved, and the job
+// names that Malay kit (`sourceKitId`), not the English one.
+//
 // The ready list alternates subjects (Mathematics, Science, …) and takes the
 // oldest kit of each first, so a "five kits first" sweep mixes kit types
 // rather than running five maths kits in a row.
@@ -76,6 +82,9 @@ export type SweepCandidate = {
   bankMaturity: string | null;
   /** when the English kit was created (the sweep's "oldest first") */
   createdAt: string | null;
+  /** the kit the translate job names when it is not the English kit itself:
+   *  the approved Malay kit for a Jawi translation */
+  sourceKitId?: string;
 };
 
 export type NotReadyCode =
@@ -90,6 +99,7 @@ export type NotReadyCode =
   | "video_superseded"
   | "judge_below_threshold"
   | "translation_live"
+  | "malay_missing"
   | "queued";
 
 export type SweepNotReady = SweepCandidate & { code: NotReadyCode; reason: string };
@@ -111,6 +121,24 @@ export const SWEEP_MAX_LIMIT = 100;
 export const SWEEP_DEFAULT_LIMIT = 5;
 
 const LIVE_JOB = new Set(["queued", "processing"]);
+
+/** Jawi — Malay in the Arabic script; derived from the Malay translation. */
+export const JAWI = "ms-arab";
+/** The language a Jawi kit is derived from. */
+export const JAWI_SOURCE_LANGUAGE = "ms";
+export const JAWI_NEEDS_MALAY =
+  "Jawi is derived from the topic's approved Malay translation (the Malay voice keeps reading its Rumi; the screen shows Jawi) — approve a Malay kit of this topic first.";
+
+/** Is `language` translated from another translation (Jawi from Malay)? */
+export const isDerivedLanguage = (language: string | null | undefined): boolean => (language ?? "").trim().toLowerCase() === JAWI;
+
+/** The kit a Jawi translation starts from among a topic's kits: the newest
+ *  APPROVED Malay translation that is current (translation_status approved —
+ *  a stale or blocked one waits for its own retranslation), or null. */
+export function jawiSourceKit<K extends Pick<SweepKit, "language" | "status" | "translation_status" | "created_at">>(kits: readonly K[]): K | null {
+  const ok = kits.filter((k) => k.language === JAWI_SOURCE_LANGUAGE && k.status === "approved" && k.translation_status === "approved");
+  return [...ok].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0] ?? null;
+}
 
 /** The number inside judge_score, or null when there is none. The judge's
  *  row shape is not fixed yet: a bare number, or an object with `score`,
@@ -177,6 +205,9 @@ export function orderForSweep(ready: readonly SweepCandidate[]): SweepCandidate[
 export function readyForTranslation(input: SweepInput, language: string): SweepResult {
   const topics = new Map(input.topics.map((t) => [t.id, t]));
   const kits = new Map(input.kits.map((k) => [k.id, k]));
+  const derived = isDerivedLanguage(language);
+  const malayByTopic = new Map<string, SweepKit[]>();
+  if (derived) for (const k of input.kits) if (k.language === JAWI_SOURCE_LANGUAGE) (malayByTopic.get(k.topic_id) ?? malayByTopic.set(k.topic_id, []).get(k.topic_id)!).push(k);
   const translationsByTopic = new Map<string, SweepKit[]>();
   for (const k of input.kits) {
     if (k.language !== language) continue;
@@ -251,18 +282,25 @@ export function readyForTranslation(input: SweepInput, language: string): SweepR
       hold("judge_below_threshold", `The judge scored the English kit ${score}, below the review threshold of ${JUDGE_REVIEW_THRESHOLD}.`);
       continue;
     }
+    // Jawi starts from the approved Malay kit, not from this English one
+    const malay = derived ? jawiSourceKit(malayByTopic.get(topic.id) ?? []) : null;
+    const sourceId = malay?.id ?? kit.id;
     const existing = (translationsByTopic.get(topic.id) ?? []).find(translationIsLive);
     if (existing) {
       const state = existing.status === "generating" || existing.translation_status === "staged" ? "being built" : existing.translation_status === "in_review" || (existing.translation_status == null && existing.status === "in_review") ? "in review" : "approved";
-      const older = existing.source_kit_id && existing.source_kit_id !== kit.id ? " (of an older English kit — supersede it to mark the translation stale)" : "";
+      const older = existing.source_kit_id && existing.source_kit_id !== sourceId ? (derived ? " (of an older Malay kit)" : " (of an older English kit — supersede it to mark the translation stale)") : "";
       hold("translation_live", `A translation is already ${state}${older}.`);
       continue;
     }
-    if (queuedFor.has(kit.id)) {
+    if (derived && !malay) {
+      hold("malay_missing", JAWI_NEEDS_MALAY);
+      continue;
+    }
+    if (queuedFor.has(sourceId)) {
       hold("queued", "A translate job is already queued or running.");
       continue;
     }
-    ready.push(candidate);
+    ready.push(malay ? { ...candidate, sourceKitId: malay.id } : candidate);
   }
   return { ready: orderForSweep(ready), notReady: notReady.sort(bySubjectThenTitle) };
 }
