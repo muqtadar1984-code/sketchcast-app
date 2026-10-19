@@ -1086,7 +1086,8 @@ describe("the translate sweep (T2, D7): /api/library/translate", () => {
   it("writes nothing but the jobs — through translate-job.ts, never a hand-rolled insert — and the audit rows", () => {
     const src = t();
     expect(src).toMatch(/import \{ enqueueTranslateJob \} from "\.\.\/topics\/\[id\]\/kit\/translate-job"/);
-    expect(src).toMatch(/await enqueueTranslateJob\(admin,\s*\{\s*sourceKitId:\s*c\.kitId,\s*topicId:\s*c\.topicId,\s*language\s*\}\)/);
+    // the job names the kit it translates FROM: the English kit, or the Malay one for Jawi
+    expect(src).toMatch(/await enqueueTranslateJob\(admin,\s*\{\s*sourceKitId:\s*c\.sourceKitId \?\? c\.kitId,\s*topicId:\s*c\.topicId,\s*language\s*\}\)/);
     expect(src).not.toMatch(/\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/);
     expect(src).not.toMatch(/\.(insert|update|upsert|delete)\(/);
     // a live job for the pair is "already queued", never a new one
@@ -1275,5 +1276,38 @@ describe("the kit route's delete_translation action (0143)", () => {
     expect(body).toMatch(/rpc\("delete_translation_kit",\s*\{\s*p_kit:\s*kit\.id,\s*p_actor:\s*m\.id\s*\}\)/);
     expect(body.indexOf("delete_translation_kit")).toBeLessThan(body.indexOf('.remove('));
     expect(body).toMatch(/kit\.status !== "rejected" && kit\.status !== "failed"/);
+  });
+});
+
+describe("Jawi is derived from the approved Malay kit (plan §5.11)", () => {
+  const KIT_ROUTE = "topics/[id]/kit/route.ts";
+
+  it("the sweep reads the topics' Malay kits for a Jawi sweep", () => {
+    const src = text(TRANSLATE_SWEEP);
+    expect(src).toMatch(/isDerivedLanguage\(language\)\s*\?\s*\[LANGUAGE,\s*language,\s*JAWI_SOURCE_LANGUAGE\]\s*:\s*\[LANGUAGE,\s*language\]/);
+    expect(src).toMatch(/\.in\(\s*["']language["']\s*,\s*languages\s*\)/);
+  });
+
+  it("the translate action resolves the approved Malay kit, refuses Jawi without one, and queues the job on it", () => {
+    const src = text(KIT_ROUTE);
+    const body = src.slice(src.indexOf('if (action === "translate")'), src.indexOf('if (action === "regenerate")'));
+    // Jawi: the topic's Malay kits, the newest approved + current one, or a 409 naming why
+    expect(body).toMatch(/if \(isDerivedLanguage\(language\)\)/);
+    expect(body).toMatch(/\.eq\(\s*["']topic_id["']\s*,\s*id\s*\)\s*\.eq\(\s*["']language["']\s*,\s*JAWI_SOURCE_LANGUAGE\s*\)/);
+    expect(body).toMatch(/jawiSourceKit\(/);
+    expect(body).toMatch(/if \(!malay\) return conflict\(JAWI_NEEDS_MALAY/);
+    // every other language still starts from the English original only
+    expect(body).toMatch(/else if \(kit\.language !== LANGUAGE\)\s*\{\s*return conflict\("Only an English kit is translated/);
+    // the live check and the job both key on the SOURCE kit (the Malay one for Jawi)
+    expect(body).toMatch(/\.eq\(\s*["']source_kit_id["']\s*,\s*source\.id\s*\)/);
+    expect(body).toMatch(/enqueueTranslateJob\(admin,\s*\{\s*sourceKitId:\s*source\.id,\s*topicId:\s*id,\s*language\s*\}\)/);
+    expect(body.indexOf("isDerivedLanguage(language)")).toBeLessThan(body.indexOf("generationGate()"));
+  });
+
+  it("the Translations panel disables Jawi until the topic has an approved Malay kit", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/library/topics/[id]/translations-panel.tsx"), "utf8");
+    expect(src).toMatch(/const malayReady = !!jawiSourceKit\(translations\.map\(\(t\) => t\.kit\)\)/);
+    expect(src).toMatch(/disabled=\{needsMalay\(l\.value\)\}/);
+    expect(src).toMatch(/needsMalay\(language\) \? JAWI_NEEDS_MALAY/);
   });
 });

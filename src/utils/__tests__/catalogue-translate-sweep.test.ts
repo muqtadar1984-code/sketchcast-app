@@ -8,9 +8,14 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  JAWI,
+  JAWI_NEEDS_MALAY,
+  JAWI_SOURCE_LANGUAGE,
   JUDGE_REVIEW_THRESHOLD,
   SWEEP_DEFAULT_LIMIT,
   SWEEP_MAX_LIMIT,
+  isDerivedLanguage,
+  jawiSourceKit,
   judgeScoreOf,
   orderForSweep,
   readyForTranslation,
@@ -221,5 +226,62 @@ describe("orderForSweep", () => {
   it("exposes the sweep's limits", () => {
     expect(SWEEP_DEFAULT_LIMIT).toBe(5);
     expect(SWEEP_MAX_LIMIT).toBeGreaterThanOrEqual(48);
+  });
+});
+
+describe("Jawi is derived from the approved Malay kit (plan §5.11)", () => {
+  const malay = (id: string, topic_id: string, over: Partial<SweepKit> = {}): SweepKit =>
+    kit(id, topic_id, { language: "ms", source_kit_id: `k-${topic_id.slice(2)}`, translation_status: "approved", ...over });
+
+  it("knows which language is derived and from what", () => {
+    expect(JAWI).toBe("ms-arab");
+    expect(JAWI_SOURCE_LANGUAGE).toBe("ms");
+    expect(isDerivedLanguage("ms-arab")).toBe(true);
+    expect(isDerivedLanguage(" MS-ARAB ")).toBe(true);
+    expect(isDerivedLanguage("ms")).toBe(false);
+    expect(isDerivedLanguage(null)).toBe(false);
+  });
+
+  it("picks the newest approved, current Malay kit — never a stale, blocked, in-review or English one", () => {
+    expect(jawiSourceKit([])).toBeNull();
+    expect(
+      jawiSourceKit([
+        malay("m-old", "t-cells", { created_at: "2026-10-10T00:00:00Z" }),
+        malay("m-new", "t-cells", { created_at: "2026-10-18T00:00:00Z" }),
+        malay("m-stale", "t-cells", { translation_status: "stale", created_at: "2026-10-19T00:00:00Z" }),
+        malay("m-review", "t-cells", { status: "in_review", translation_status: "in_review", created_at: "2026-10-19T01:00:00Z" }),
+        kit("k-cells", "t-cells", { created_at: "2026-10-20T00:00:00Z" }),
+      ])?.id,
+    ).toBe("m-new");
+    expect(jawiSourceKit([malay("m-blocked", "t-cells", { translation_status: "blocked" })])).toBeNull();
+  });
+
+  it("is ready only where the topic has an approved Malay kit, and names that kit as the job's source", () => {
+    const f = fixture();
+    f.kits.push(malay("m-cells", "t-cells"), malay("m-circle", "t-circle", { translation_status: "stale" }));
+    const r = readyForTranslation(f, "ms-arab");
+    expect(ids(r.ready)).toEqual(["k-cells"]);
+    expect(r.ready[0].sourceKitId).toBe("m-cells");
+    expect(r.notReady.map((n) => [n.kitId, n.code])).toEqual([
+      ["k-angles", "malay_missing"],
+      ["k-circle", "malay_missing"],
+    ]);
+    expect(r.notReady[0].reason).toBe(JAWI_NEEDS_MALAY);
+    // every other language still starts from the English kit
+    expect(readyForTranslation(f, "ar").ready.every((c) => c.sourceKitId === undefined)).toBe(true);
+  });
+
+  it("sees a queued Jawi job by the MALAY kit it names, and a live Jawi kit", () => {
+    const f = fixture();
+    f.kits.push(malay("m-cells", "t-cells"), malay("m-angles", "t-angles"));
+    f.jobs = [{ status: "queued", params: { source_kit_id: "m-cells", language: "ms-arab" } }];
+    f.kits.push(kit("j-angles", "t-angles", { language: "ms-arab", status: "in_review", translation_status: "in_review", source_kit_id: "m-angles" }));
+    const r = readyForTranslation(f, "ms-arab");
+    expect(r.ready).toEqual([]);
+    const byKit = Object.fromEntries(r.notReady.map((n) => [n.kitId, n]));
+    expect(byKit["k-cells"].code).toBe("queued");
+    expect(byKit["k-angles"].code).toBe("translation_live");
+    expect(byKit["k-angles"].reason).toBe("A translation is already in review.");
+    expect(byKit["k-circle"].code).toBe("malay_missing");
   });
 });

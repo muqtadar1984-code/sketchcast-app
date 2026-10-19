@@ -16,6 +16,7 @@ import {
   translationAcceptsReject,
 } from "@/utils/catalogue/kit";
 import { isLiveJobStatus } from "@/utils/catalogue/status";
+import { JAWI_NEEDS_MALAY, isDerivedLanguage, jawiSourceKit } from "@/utils/catalogue/translate-sweep";
 import { blockingCount, flagCount } from "@/utils/catalogue/review-queue";
 import { AUDIT_NOTE, PRIVACY, PRIVACY_LABEL, PUBLISH_OFF_NOTE, REWORDS_ACTION, canPublish as publishGate, canQueuePublish, canQueueRewords, defaultPrivacy, metaInLanguage, publicationSummary, publishActionFor, publishPrivacyAccepts, publishablePrivacies, rewordsOffered } from "@/utils/catalogue/publish";
 import type { KitRejectReason, PrecheckReport, PublishPrivacy, TopicKit, TopicPublication } from "@/utils/catalogue/types";
@@ -506,13 +507,20 @@ export function TranslationsPanel({
   const liveJobs = jobs.filter((j) => isLiveJobStatus(j.status));
   for (const j of liveJobs) if (typeof j.params.language === "string") taken.add(j.params.language);
   const choices = TARGETS.filter((l) => !taken.has(l.value));
-  const [language, setLanguage] = useState<string>(choices[0]?.value ?? TARGETS[0].value);
-  const lockWhy = !generateEnabled ? "Catalogue generation is switched off (FEATURE_CATALOGUE_GENERATE)." : !sourceKit ? "The topic has no approved English kit to translate." : migrationNote;
+  // Jawi (plan §5.11) is derived from the topic's APPROVED Malay kit — the
+  // route resolves it and refuses Jawi without one; the menu says so first
+  const malayReady = !!jawiSourceKit(translations.map((t) => t.kit));
+  const needsMalay = (value: string) => isDerivedLanguage(value) && !malayReady;
+  const [language, setLanguage] = useState<string>((choices.find((l) => !needsMalay(l.value)) ?? choices[0])?.value ?? TARGETS[0].value);
+  const lockWhy = !generateEnabled ? "Catalogue generation is switched off (FEATURE_CATALOGUE_GENERATE)." : !sourceKit ? "The topic has no approved English kit to translate." : needsMalay(language) ? JAWI_NEEDS_MALAY : migrationNote;
 
   const translate = async () => {
     if (!sourceKit) return;
     const label = languageLabel(language) ?? language;
-    if (!window.confirm(`Translate the approved English kit into ${label}? The worker translates the glossary, the article and the script, checks them, and queues the video and deck on its off-peak lane. Nothing is published until a reviewer approves the translation.`)) return;
+    const ask = isDerivedLanguage(language)
+      ? `Make the ${label} kit from the approved Malay kit? The narration stays the Malay voice's Rumi; the worker writes every on-screen word, the article, the bank and the documents in Jawi, checks them, and queues the video and deck on its off-peak lane. Nothing is published until a reviewer approves it.`
+      : `Translate the approved English kit into ${label}? The worker translates the glossary, the article and the script, checks them, and queues the video and deck on its off-peak lane. Nothing is published until a reviewer approves the translation.`;
+    if (!window.confirm(ask)) return;
     const r = await post({ action: "translate", kitId: sourceKit.id, language }, `translate:${language}`);
     if (r) setNotice(r.existing ? `A ${label} translation is already queued.` : `${label} translation queued.`);
   };
@@ -532,8 +540,9 @@ export function TranslationsPanel({
           <div className="flex items-center gap-2">
             <select value={language} onChange={(e) => setLanguage(e.target.value)} className="field h-8 px-2 text-xs" disabled={!!busy || !choices.length} aria-label="Language to translate into">
               {(choices.length ? choices : TARGETS).map((l) => (
-                <option key={l.value} value={l.value}>
+                <option key={l.value} value={l.value} disabled={needsMalay(l.value)} title={needsMalay(l.value) ? JAWI_NEEDS_MALAY : undefined}>
                   {l.label}
+                  {needsMalay(l.value) ? " — needs an approved Malay kit" : ""}
                 </option>
               ))}
             </select>

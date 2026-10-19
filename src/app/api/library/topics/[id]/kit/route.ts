@@ -41,6 +41,7 @@ import { YOUTUBE_META_MIGRATION, validateYouTubeMeta } from "@/utils/catalogue/p
 import { QUIZ_BLUEPRINT_NAME, canCompose, modeCounts, validateBlueprintSpec, type Blueprint, type TopicQuestion } from "@/utils/catalogue/questions";
 import type { PartPlanRow, TeacherAvatar, TopicKit, YouTubeMeta } from "@/utils/catalogue/types";
 import { LANGUAGES, languageLabel as languageLabelOf } from "@/utils/narration";
+import { JAWI_NEEDS_MALAY, JAWI_SOURCE_LANGUAGE, isDerivedLanguage, jawiSourceKit } from "@/utils/catalogue/translate-sweep";
 import { audit, bad, conflict, dbError, notFound, readJson, text, uuid } from "../../../lib";
 import { enqueueQuestionsJob } from "./questions-job";
 import { enqueueTranslateJob } from "./translate-job";
@@ -151,7 +152,10 @@ export const runtime = "nodejs";
 //                  no live translation yet. The WORKER creates the translated
 //                  topic_kits row and its generations; this route queues and
 //                  audits. Behind the same FEATURE_CATALOGUE_GENERATE lock
-//                  (the render spends the kit lane's hours).
+//                  (the render spends the kit lane's hours). Jawi (ms-arab,
+//                  plan §5.11) is derived from the topic's APPROVED MALAY
+//                  kit instead: the job names the Malay kit, and the route
+//                  refuses Jawi while the topic has none.
 
 //   question_bank (editor, admin) — catalogue Phase D: queue the kit's printable
 //     question bank (one `question_bank` generation from the kit's own params)
@@ -453,16 +457,39 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const language = typeof body.language === "string" ? body.language.trim().toLowerCase() : "";
     if (!language || !LANGUAGES.some((l) => l.value === language)) return bad("language must be one of the lesson languages.");
     if (language === LANGUAGE) return bad("The kit is already in English.");
-    if (kit.language !== LANGUAGE) return conflict("Only an English kit is translated; translations start from the English original.", { kitLanguage: kit.language });
     if (kit.status !== "approved") return conflict(`This kit is ${statusLabel(kit.status)}, not approved — only an approved kit is translated.`, { status: kit.status });
-    if (!kit.presentation_generation_id) return conflict("This kit has no video to translate.", {});
+    // The kit the job translates FROM. Every language starts from the English
+    // original — except Jawi (plan §5.11), which is derived from the topic's
+    // APPROVED MALAY translation: the Malay voice keeps reading the Malay
+    // kit's Rumi and the screen shows the same words in Jawi, so the job (and
+    // the Jawi kit's source_kit_id) names the Malay kit. The panel sends the
+    // English kit; a Malay kit is accepted as the source directly.
+    let source: { id: string; presentation_generation_id: string | null } = kit;
+    if (isDerivedLanguage(language)) {
+      if (kit.language !== LANGUAGE && kit.language !== JAWI_SOURCE_LANGUAGE) return conflict(JAWI_NEEDS_MALAY, { kitLanguage: kit.language });
+      const { data: malayRows, error: mErr } = await admin
+        .from("topic_kits")
+        .select("id, language, status, translation_status, presentation_generation_id, created_at")
+        .eq("topic_id", id)
+        .eq("language", JAWI_SOURCE_LANGUAGE);
+      if (mErr && !catalogueColumnMissing(mErr)) return dbError(mErr);
+      if (mErr) return conflict("The translation columns are not in this database yet — apply migration 0134.", { migration: "0134_kit_translator.sql" });
+      type MalayRow = { id: string; language: string; status: string; translation_status: string | null; presentation_generation_id: string | null; created_at: string };
+      const rows = (malayRows ?? []) as MalayRow[];
+      const malay = kit.language === JAWI_SOURCE_LANGUAGE ? jawiSourceKit(rows.filter((r) => r.id === kit.id)) : jawiSourceKit(rows);
+      if (!malay) return conflict(JAWI_NEEDS_MALAY, { code: "malay_missing" });
+      source = malay;
+    } else if (kit.language !== LANGUAGE) {
+      return conflict("Only an English kit is translated; translations start from the English original.", { kitLanguage: kit.language });
+    }
+    if (!source.presentation_generation_id) return conflict("This kit has no video to translate.", {});
     // A live translation of this source in this language (the worker's row
     // reads generating, or an approved one that is not stale) is not queued
     // twice. Read separately: the columns are 0134's.
     const { data: live, error: lvErr } = await admin
       .from("topic_kits")
       .select("id, status, translation_status")
-      .eq("source_kit_id", kit.id)
+      .eq("source_kit_id", source.id)
       .eq("language", language)
       .in("status", ["generating", "in_review"]);
     if (lvErr && !catalogueColumnMissing(lvErr)) return dbError(lvErr);
@@ -470,15 +497,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (live?.length) return conflict(`A ${languageLabel(language)} translation of this kit is already ${statusLabel((live[0] as { status: string }).status)}.`, { translationKitId: (live[0] as { id: string }).id });
     const gate = generationGate();
     if (gate.response) return gate.response;
-    const q = await enqueueTranslateJob(admin, { sourceKitId: kit.id, topicId: id, language });
+    const q = await enqueueTranslateJob(admin, { sourceKitId: source.id, topicId: id, language });
     if (!q.ok) return dbError(q.error);
     await audit(admin, m.id, "kit_translate", "topic", id, {
       kit_id: kit.id,
+      ...(source.id !== kit.id ? { source_kit_id: source.id } : {}),
       language,
       job_id: q.jobId,
       job_existing: q.existing,
     });
-    return NextResponse.json({ ok: true, jobId: q.jobId, existing: q.existing, language });
+    return NextResponse.json({ ok: true, jobId: q.jobId, existing: q.existing, language, sourceKitId: source.id });
   }
 
   if (action === "regenerate") {
