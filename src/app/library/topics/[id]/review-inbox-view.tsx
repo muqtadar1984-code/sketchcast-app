@@ -87,6 +87,8 @@ export type ReviewInboxProps = {
   canGenerate: boolean;
   canPublish: boolean;
   auditPassed: boolean;
+  /** the languages with a YouTube channel of their own; null = unknown */
+  youtubeChannels?: string[] | null;
   generateEnabled: boolean;
   publishEnabled: boolean;
   ownerConfigured: boolean;
@@ -135,6 +137,7 @@ export function ReviewInboxView({
   canGenerate,
   canPublish,
   auditPassed,
+  youtubeChannels = null,
   generateEnabled,
   publishEnabled,
   ownerConfigured,
@@ -509,6 +512,7 @@ export function ReviewInboxView({
                 canPublish={canPublish}
                 publishEnabled={publishEnabled}
                 auditPassed={auditPassed}
+                youtubeChannels={youtubeChannels}
               />
             </div>
           </div>
@@ -568,6 +572,7 @@ export function ReviewInboxView({
             canPublish={canPublish}
             publishEnabled={publishEnabled}
             auditPassed={auditPassed}
+            youtubeChannels={youtubeChannels}
             bankMaturity={topic.bank_maturity}
           />
         </Fold>

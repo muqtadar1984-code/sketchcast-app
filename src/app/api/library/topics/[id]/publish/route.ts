@@ -19,6 +19,8 @@ import {
 } from "@/utils/catalogue/publish";
 import type { PartPlanRow, PublishPrivacy, TopicPublication } from "@/utils/catalogue/types";
 import { PUBLICATION_COLUMNS_0122 } from "@/utils/catalogue/format-server";
+import { channelAccepts, liveChannelLanguages, shortLanguageName } from "@/utils/catalogue/youtube-channels";
+import { loadYouTubeChannels } from "@/utils/catalogue/youtube-channels-server";
 import { audit, bad, conflict, dbError, notFound, readJson, uuid } from "../../../lib";
 
 export const runtime = "nodejs";
@@ -104,9 +106,10 @@ const PUBLISH_JOB_TYPE = "topic_publish";
 /** Phase 4 published the English channel only. Kit Translator T1 (2026-10-17):
  *  a TRANSLATED kit publishes too — in its own language, which the worker
  *  reads from the kit (title from the translated article, captions and
- *  defaultAudioLanguage in the language) — on the language's channel when
- *  one is configured, else on the English channel (the worker's
- *  channel_for). `LANGUAGE` is therefore the KIT's language, bound per
+ *  defaultAudioLanguage in the language) — on the language's OWN channel
+ *  only (2026-10-20: a translation whose language has no channel is refused
+ *  below, never sent to the English channel by the worker's channel_for
+ *  fallback). `LANGUAGE` is therefore the KIT's language, bound per
  *  request inside the handler (never module state shared across requests). */
 const DEFAULT_LANGUAGE = "en";
 
@@ -187,6 +190,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const privacy: PublishPrivacy = privacyForAction(action, raw);
   const allowed = publishPrivacyAccepts(privacy, auditPassed);
   if (!allowed.ok) return conflict(allowed.why, { privacy });
+
+  // A translation is uploaded only to its OWN language's channel (founder,
+  // 2026-10-20 — Translated Videos YouTube Tab plan §10 decision 4): the
+  // worker's channel_for would otherwise put it on the English channel. A
+  // channel exists when the worker's stats poll has seen it within a day
+  // (youtube-channels.ts). A re-word uploads nothing and is not refused.
+  if (action !== REWORDS_ACTION && LANGUAGE !== DEFAULT_LANGUAGE) {
+    const channels = await loadYouTubeChannels(admin);
+    if (!channels.ok) return dbError({ message: channels.error });
+    const own = channelAccepts(LANGUAGE, shortLanguageName(LANGUAGE), liveChannelLanguages(channels.channels));
+    if (!own.ok) return conflict(own.why, { language: LANGUAGE, channels: liveChannelLanguages(channels.channels) });
+  }
 
   // What a previous run already put on the channel, and how many parts the kit
   // has. The publish job is idempotent, so this decides only whether the run
