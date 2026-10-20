@@ -6,6 +6,7 @@ import { parseMatrixFilters, translationLanguages } from "@/utils/catalogue/tran
 import { ErrorBanner } from "../catalogue-ui";
 import { loadTranslationMatrix } from "./load";
 import { Heading, TranslationsView } from "./translations-view";
+import { TranslationsNav } from "./sub-nav";
 
 // /library/translations — the Translations tab (2026-10-18): every topic
 // against every lesson language, so "which one was done, which was not and
@@ -38,6 +39,7 @@ export default async function TranslationsPage({ searchParams }: { searchParams:
     return (
       <main className="max-w-7xl mx-auto px-6 py-10">
         <Heading />
+        <TranslationsNav active="matrix" />
         <ErrorBanner message={load.error} />
       </main>
     );

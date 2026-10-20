@@ -79,6 +79,7 @@ export function ReviewVerdict({
   canPublish = false,
   publishEnabled = false,
   auditPassed = false,
+  youtubeChannels = null,
 }: {
   topicId: string;
   topicStatus: string;
@@ -96,6 +97,8 @@ export function ReviewVerdict({
   canPublish?: boolean;
   publishEnabled?: boolean;
   auditPassed?: boolean;
+  /** the languages with a YouTube channel of their own; null = unknown */
+  youtubeChannels?: string[] | null;
 }) {
   const { post, busy, error, errors, notice, setNotice } = useKitPost(topicId);
   return (
@@ -117,6 +120,7 @@ export function ReviewVerdict({
           canPublish={canPublish}
           publishEnabled={publishEnabled}
           auditPassed={auditPassed}
+          youtubeChannels={youtubeChannels}
           post={post}
           busy={busy}
           setNotice={setNotice}

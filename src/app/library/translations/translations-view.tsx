@@ -17,6 +17,7 @@ import { queuePosition, typicalFor, type TranslationClockData } from "@/utils/ca
 import type { MatrixLoad } from "./load";
 import type { AgentView } from "@/utils/catalogue/auto-translate";
 import { AgentControls, ApproveCleanButton } from "./agent-panel";
+import { TranslationsNav } from "./sub-nav";
 
 // The Translations tab's screen (/library/translations): totals per language,
 // the filters, and the matrix. A Server Component with no reads of its own —
@@ -109,6 +110,7 @@ export function TranslationsView({
         </p>
       )}
       <Heading />
+      <TranslationsNav active="matrix" />
       <p className="text-[#5B6470] mb-5 max-w-3xl">
         Every topic against every lesson language. Each cell says where that translation stands and opens the review
         inbox on it; hover a cell for the reason or the error. Queue translations from the inbox&apos;s{" "}

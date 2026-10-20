@@ -19,6 +19,8 @@ import { loadReviewQueue } from "@/utils/catalogue/review-queue-server";
 import { loadTranslationTiming } from "@/utils/catalogue/translation-timing-server";
 import { KIT_TRANSLATOR_MIGRATION, parseInboxParams } from "@/utils/catalogue/review-queue";
 import { searchOr } from "@/utils/catalogue/status";
+import { liveChannelLanguages } from "@/utils/catalogue/youtube-channels";
+import { loadYouTubeChannels } from "@/utils/catalogue/youtube-channels-server";
 
 // /library/topics/[id] — the REVIEW INBOX (layout D, the founder's choice of
 // 2026-10-16: "looks very clumsy … feels more like a newspaper"). Two panes:
@@ -371,6 +373,11 @@ export default async function TopicDetailPage({ params, searchParams }: { params
   });
   const kits: KitView[] = await Promise.all(kitRows.map(viewOf));
   const translationKits: KitView[] = await Promise.all(translationRows.map(viewOf));
+  // The languages with a YouTube channel of their own — a translation is
+  // posted only there (youtube-channels.ts); null when the read failed (the
+  // publish route still refuses on its own read).
+  const ytChannels = translationKits.length ? await loadYouTubeChannels(admin) : null;
+  const youtubeChannels = ytChannels?.ok ? liveChannelLanguages(ytChannels.channels) : null;
   // The translate jobs of this topic's kits (0134): a queued or failed job
   // has no kit row yet, so the panel reads the jobs themselves.
   let translateJobs: TranslateJobRow[] = [];
@@ -505,6 +512,7 @@ export default async function TopicDetailPage({ params, searchParams }: { params
       canGenerate={canGenerate}
       canPublish={canPublish}
       auditPassed={youtubeAuditPassed()}
+      youtubeChannels={youtubeChannels}
       generateEnabled={catalogueGenerateEnabled()}
       publishEnabled={cataloguePublishEnabled()}
       ownerConfigured={catalogueOwnerId() !== null}

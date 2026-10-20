@@ -25,6 +25,7 @@ import { JobLine, VideoParts, useKitPost, type KitView, type Post } from "./kit-
 import type { JobRow } from "./article-panel";
 import { TranslationClock } from "../../translation-clock";
 import { queuePosition, typicalFor, type TranslationClockData } from "@/utils/catalogue/translation-eta";
+import { channelAccepts, shortLanguageName } from "@/utils/catalogue/youtube-channels";
 
 // The topic page's Translations section (Kit Translator, plan revision 3, T0
 // — 2026-10-16). Every kit of this topic in a language other than English,
@@ -43,9 +44,9 @@ import { queuePosition, typicalFor, type TranslationClockData } from "@/utils/ca
 // topic is never moved. An APPROVED translation carries "Post to YouTube"
 // (app PR #88): the publish route accepts a kit whose translation_status is
 // approved and the worker posts the video in the kit's language, on the
-// language's channel when one is configured, else on the English channel —
-// so a translation's publications are read by kit id, whatever channel
-// carried them. Posting stays a platform admin's action (libraryAllows
+// language's channel when one is configured. Since 2026-10-20 a language
+// with no channel of its own is refused (never posted to the English one);
+// older publications are still read by kit id, whatever channel carried them. Posting stays a platform admin's action (libraryAllows
 // "publish"), the same gate as the English kit's publish block.
 
 export type TranslateJobRow = JobRow & { params: Record<string, unknown>; claimed_at?: string | null };
@@ -340,7 +341,7 @@ export function TranslationWords({ kit }: { kit: TopicKit }) {
  *  channel, "Re-word on YouTube" queues the route's `rewords` — the worker
  *  rewrites the title, description and tags of the posted parts in the kit's
  *  language and changes nothing else. */
-export function TranslationPublish({ kit, publications, topicStatus, bankMaturity, canPublish, publishEnabled, auditPassed, post, busy, setNotice }: {
+export function TranslationPublish({ kit, publications, topicStatus, bankMaturity, canPublish, publishEnabled, auditPassed, youtubeChannels = null, post, busy, setNotice }: {
   kit: TopicKit;
   publications: TopicPublication[];
   topicStatus: string;
@@ -348,6 +349,9 @@ export function TranslationPublish({ kit, publications, topicStatus, bankMaturit
   canPublish: boolean;
   publishEnabled: boolean;
   auditPassed: boolean;
+  /** the languages with a YouTube channel of their own (youtube-channels.ts);
+   *  null = unknown — the publish route still refuses a missing channel */
+  youtubeChannels?: string[] | null;
   post: Post;
   busy: string | null;
   setNotice: (s: string | null) => void;
@@ -362,7 +366,11 @@ export function TranslationPublish({ kit, publications, topicStatus, bankMaturit
   const translationWhy = kit.translation_status && kit.translation_status !== "approved" ? `This translation is ${String(kit.translation_status).replace(/_/g, " ")}, not approved — a reviewer approves the translation before it reaches YouTube.` : null;
   const queue = canQueuePublish(action, summary);
   const priv = publishPrivacyAccepts(privacy, auditPassed);
-  const why = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : translationWhy ? translationWhy : !queue.ok ? queue.why : !priv.ok ? priv.why : null;
+  // A translation goes only to its own language's channel (2026-10-20); the
+  // route answers the same sentence. A re-word uploads nothing — not refused.
+  const channel = youtubeChannels ? channelAccepts(kit.language, shortLanguageName(kit.language), youtubeChannels) : null;
+  const channelWhy = channel && !channel.ok ? channel.why : null;
+  const why = !publishEnabled ? PUBLISH_OFF_NOTE : !gate.ok ? gate.why : translationWhy ? translationWhy : channelWhy ? channelWhy : !queue.ok ? queue.why : !priv.ok ? priv.why : null;
   const allowed = publishablePrivacies(auditPassed);
   // The re-word: offered once every part is up; its disabled reason reads in
   // the route's order too (the flag, the kit and the translation, nothing
@@ -373,7 +381,7 @@ export function TranslationPublish({ kit, publications, topicStatus, bankMaturit
 
   const publish = async () => {
     const what = privacy === "public" ? "PUBLIC — listed and searchable the moment the upload finishes" : privacy;
-    if (!window.confirm(action === "retry" ? `Finish posting the ${label} kit? Parts already on YouTube are skipped; the rest go up ${what}.` : `Post the ${label} kit to YouTube ${what}? The worker posts it in ${label}, on the ${label} channel when one is configured, else on the English channel.`)) return;
+    if (!window.confirm(action === "retry" ? `Finish posting the ${label} kit? Parts already on YouTube are skipped; the rest go up ${what}.` : `Post the ${label} kit to YouTube ${what}? The worker posts it in ${label}, on the ${label} channel.`)) return;
     const r = await post({ action, kitId: kit.id, privacy }, `publish:${kit.id}`, "publish");
     if (r) setNotice(`${label} post queued — the worker uploads the parts in order (${privacy}) and records each one.`);
   };
@@ -470,6 +478,7 @@ export function TranslationsPanel({
   canPublish = false,
   publishEnabled = false,
   auditPassed = false,
+  youtubeChannels = null,
   bankMaturity = null,
 }: {
   topicId: string;
@@ -499,6 +508,8 @@ export function TranslationsPanel({
   publishEnabled?: boolean;
   /** YOUTUBE_COMPLIANCE_AUDIT_PASSED on the app: public/unlisted allowed */
   auditPassed?: boolean;
+  /** the languages with a YouTube channel of their own; null = unknown */
+  youtubeChannels?: string[] | null;
   /** topics.bank_maturity — 'none' blocks publishing (canPublish) */
   bankMaturity?: string | null;
 }) {
@@ -654,6 +665,7 @@ export function TranslationsPanel({
                       canPublish={canPublish}
                       publishEnabled={publishEnabled}
                       auditPassed={auditPassed}
+                      youtubeChannels={youtubeChannels}
                       post={post}
                       busy={busy}
                       setNotice={setNotice}
