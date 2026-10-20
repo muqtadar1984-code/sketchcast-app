@@ -27,9 +27,9 @@ describe("creditPacks — the founder-approved catalogue", () => {
   it("carries exactly the three approved packs, in ascending size", () => {
     const packs = creditPacks();
     expect(packs.map((p) => [p.key, p.credits, p.priceUsd, p.kits])).toEqual([
-      ["pack_6", 6, 8, 1],
-      ["pack_18", 18, 20, 3],
-      ["pack_36", 36, 36, 6],
+      ["pack_6", 6, 2.5, 1], // price reset 2026-10-20 (was $8 / $20 / $36)
+      ["pack_18", 18, 7.5, 3],
+      ["pack_36", 36, 15, 6],
     ]);
   });
 

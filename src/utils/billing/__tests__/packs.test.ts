@@ -16,9 +16,9 @@ import { CREDIT_PACKS, CREDIT_PACK_PRODUCT_PREFIX, packForOrderItem, packForProd
 describe("credit pack catalogue", () => {
   it("carries exactly the founder-approved sizes and prices", () => {
     expect(CREDIT_PACKS.map((p) => [p.key, p.credits, p.usd])).toEqual([
-      ["pack_6", 6, 8],
-      ["pack_18", 18, 20],
-      ["pack_36", 36, 36],
+      ["pack_6", 6, 2.5], // price reset 2026-10-20 (was $8 / $20 / $36)
+      ["pack_18", 18, 7.5],
+      ["pack_36", 36, 15],
     ]);
   });
 

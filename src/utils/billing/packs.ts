@@ -68,7 +68,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
   {
     key: "pack_6",
     credits: 6,
-    usd: 8,
+    usd: 2.5, // price reset 2026-10-20 (LS variant 2037954): $2.50 a kit, as the plans
     label: "1 kit",
     productName: "SketchCast Credits — 1 kit (6)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_6",
@@ -77,7 +77,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
   {
     key: "pack_18",
     credits: 18,
-    usd: 20,
+    usd: 7.5, // 2026-10-20 (LS 2037955)
     label: "3 kits",
     productName: "SketchCast Credits — 3 kits (18)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_18",
@@ -86,7 +86,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
   {
     key: "pack_36",
     credits: 36,
-    usd: 36,
+    usd: 15, // 2026-10-20 (LS 2037956)
     label: "6 kits",
     productName: "SketchCast Credits — 6 kits (36)",
     urlEnv: "LEMONSQUEEZY_CHECKOUT_PACK_36",

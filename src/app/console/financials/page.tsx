@@ -81,7 +81,7 @@ const DAY = 86400000;
 const TABLE1_FOOTER =
   "Measured from jobs.usage (AI generation cost only — infra excluded). Averages use cost-tracked rows only — some early jobs predate tracking, so AI spend ÷ kit count differs slightly. Demo and SketchCast staff accounts excluded (staff includes the catalogue system account, which owns the Library portal's kits).";
 const TABLE2_FOOTER =
-  `Prices: Teacher Pro $24/mo, Teacher Pro+ $49/mo, Home Basic (family_*) $9.99/mo, Homeschool $34/mo (annual plans at annual/12); ` +
+  `Prices (reset 2026-10-20): Teacher Pro $10/mo, Teacher Pro+ $20/mo, Home Basic (family_*) $10/mo, Homeschool $20/mo (annual plans at annual/12); ` +
   `school floor $3,000/yr → $250/mo. Stripe school payments (MYR) converted at RM${MYR_PER_USD.toFixed(2)}/USD. ` +
   `Collected is GROSS of any affiliate commission — that cost is a separate line under Acquisition cost below. ` +
   `Update alongside pricing. Demo and SketchCast staff accounts excluded (staff includes the catalogue system account, which owns the Library portal's kits).`;
@@ -99,7 +99,7 @@ const kitCount = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 const COSTED = PLAN_KITS_COSTED_PER_MONTH;
 const ADVERTISED = PLAN_KITS_PER_MONTH;
 const TABLE3_B2C_FOOTER =
-  "Prices: Teacher Pro $24 · Teacher Pro+ $49 · Home Basic $9.99 · Homeschool $34 per month; annual = 12×. " +
+  "Prices (reset 2026-10-20): Teacher Pro $10 · Teacher Pro+ $20 · Home Basic $10 · Homeschool $20 per month; annual = 12×. " +
   "Teachers = active teacher accounts that are neither demo nor staff; parents likewise (home educators included). " +
   "Each column assumes that share of the row's base converts to that plan — rows are ALTERNATIVE scenarios, " +
   "never additive. Gross margin = (price − allowance × measured lifetime avg kit cost) / price, with every " +
