@@ -3,7 +3,7 @@ import Sparkline from "@/components/sparkline";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { compact } from "@/utils/cloudflare-stats";
 import {
-  channelDelta, channelSnaps, channelsByLanguage, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl,
+  channelsById, channelTotals, deltaSince, latestPerVideo, viewsPerDay, youtubeUrl,
   type ChannelSnap, type VideoSnap,
 } from "@/utils/youtube-stats";
 
@@ -50,31 +50,31 @@ export default async function ConsoleYouTubePage() {
   ]);
 
   const snaps = (snapsQ.data ?? []) as VideoSnap[];
-  // Every channel's rows; the headline tiles are the default (English)
-  // channel's, the per-channel table below lists each one.
+  // Every channel's rows. The headline tiles total EVERY channel, one count
+  // per channel_id (Malay and Jawi share one); the table below lists each.
+  // A channel added later is counted from its first poll.
   const allChans = (chanQ.data ?? []) as ChannelSnap[];
-  const chans = channelSnaps(allChans);
   const pubs = (pubsQ.data ?? []) as unknown as PubRow[];
   const tablesMissing = snapsQ.error?.code === "42P01" || chanQ.error?.code === "42P01";
 
   const latest = latestPerVideo(snaps);
-  const channel = latestChannel(chans);
   const day = new Date(now.getTime() - 86_400_000);
   const week = new Date(now.getTime() - 7 * 86_400_000);
   const month = new Date(now.getTime() - 30 * 86_400_000);
   const perDay = viewsPerDay(snaps, 30, now);
   const views7 = perDay.slice(-7).reduce((a, p) => a + p.views, 0);
   const views30 = perDay.reduce((a, p) => a + p.views, 0);
-  const subs7 = channelDelta(chans, week);
-  const channels = channelsByLanguage(allChans, week);
+  const totals = channelTotals(allChans, week);
+  const subs7 = totals?.subscribersGained ?? null;
+  const channels = channelsById(allChans, week);
   const lastPoll = [...snaps, ...allChans].reduce<string | null>((b, s) => (!b || s.captured_at > b ? s.captured_at : b), null);
   const live = pubs.filter((p) => (latest.get(p.youtube_video_id ?? "")?.privacy ?? p.privacy) === "public").length;
 
   const tiles: Array<{ label: string; value: string; hint?: string }> = [
-    { label: "Subscribers", value: channel ? compact(channel.subscribers ?? 0) : "—",
+    { label: "Subscribers", value: totals ? compact(totals.subscribers) : "—",
       hint: subs7 ? `${subs7.subscribers >= 0 ? "+" : ""}${subs7.subscribers} in 7 days${subs7.partial ? " (partial)" : ""}` : undefined },
-    { label: "Channel views, lifetime", value: channel ? compact(channel.views ?? 0) : "—",
-      hint: channel?.title ? channel.title : undefined },
+    { label: "Channel views, lifetime", value: totals ? compact(totals.views) : "—",
+      hint: totals ? (totals.channels === 1 ? channels[0].latest.title ?? undefined : `All ${totals.channels} channels`) : undefined },
     { label: "Views, last 7 days", value: snaps.length ? compact(views7) : "—", hint: `${compact(views30)} in 30 days` },
     { label: "Videos published", value: String(pubs.length), hint: `${live} public · ${pubs.length - live} private or unlisted` },
   ];
@@ -134,8 +134,8 @@ export default async function ConsoleYouTubePage() {
               <span>Channel</span><span>Title</span><span className="text-end">Subscribers</span><span className="text-end">7 days</span><span className="text-end">Views</span><span className="text-end">Videos</span>
             </div>
             {channels.map((c) => (
-              <div key={c.language} className="grid grid-cols-[0.6fr_2fr_1fr_1fr_1fr_1fr] gap-2 items-center">
-                <span className={`${td} font-mono text-xs`}>{c.language}</span>
+              <div key={c.channel_id} className="grid grid-cols-[0.6fr_2fr_1fr_1fr_1fr_1fr] gap-2 items-center">
+                <span className={`${td} font-mono text-xs`}>{c.languages.join(" · ")}</span>
                 <span className={`${td} truncate`}>{c.latest.title ?? c.latest.channel_id}</span>
                 <span className={`${td} tabular text-end`}>{compact(c.latest.subscribers ?? 0)}</span>
                 <span className={`${td} tabular text-end`}>{c.delta ? `${c.delta.subscribers >= 0 ? "+" : ""}${c.delta.subscribers}` : "—"}</span>

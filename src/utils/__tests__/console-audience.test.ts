@@ -53,4 +53,20 @@ describe("overviewAudience — the Overview's YouTube and traffic cards", () => 
     expect(a.visitors30).toBeNull();
     expect(a.visitorsAll).toBeNull();
   });
+
+  it("totals every channel, counting a channel two languages share once (the YouTube tab's headline)", () => {
+    const at = "2026-10-08T06:00:00Z";
+    const a = overviewAudience(
+      [
+        { channel_id: "UC-en", channel_language: "en", captured_at: at, title: "en", subscribers: 53, views: 2300, videos: 77 },
+        { channel_id: "UC-ar", channel_language: "ar", captured_at: at, title: "ar", subscribers: 5, views: 40, videos: 9 },
+        { channel_id: "UC-ms", channel_language: "ms", captured_at: at, title: "ms", subscribers: 1, views: 3, videos: 0 },
+        { channel_id: "UC-ms", channel_language: "ms-arab", captured_at: at, title: "ms", subscribers: 1, views: 3, videos: 0 },
+      ],
+      [],
+      NOW,
+    );
+    expect(a.subscribers).toBe(59);
+    expect(a.channelViews).toBe(2343);
+  });
 });

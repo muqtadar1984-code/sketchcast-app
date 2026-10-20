@@ -48,6 +48,9 @@ export default async function ConsoleOverviewPage({
   // eslint-disable-next-line react-hooks/purity
   const costWindow = parseCostWindow(await searchParams, new Date(Date.now()));
   const costFrom = new Date(costWindow.startMs - 7 * DAY).toISOString();
+  // The Audience card's channel snapshots: every channel's last two days.
+  // eslint-disable-next-line react-hooks/purity
+  const channelsFrom = new Date(Date.now() - 2 * DAY).toISOString();
 
   const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, windowJobsQ, staffIds, costGensQ, costJobsQ, topicKitsQ] = await Promise.all([
     admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, metrics_excluded, created_at, full_name, username, country, country_source"),
@@ -58,12 +61,14 @@ export default async function ConsoleOverviewPage({
     selectAll(() => admin.from("generations").select("id, owner_id, kind, status, created_at")),
     admin.from("beta_feedback").select("teacher_id"),
     admin.from("artifact_views").select("teacher_id"),
-    // Audience cards — the YouTube tab's latest channel snapshot (0118) and
-    // the Traffic tab's daily rows for the marketing site (0120). Either table
-    // may be absent on a database behind those migrations; the cards then
-    // show a dash instead of failing the page.
-    admin.from("youtube_channel_stats").select("channel_id, captured_at, title, subscribers, views, videos")
-      .eq("channel_language", "en").order("captured_at", { ascending: false }).limit(1),
+    // Audience cards — the YouTube tab's channel snapshots (0118), every
+    // channel's of the last two days so each channel's latest is in the set
+    // and the card totals them as the tab does, and the Traffic tab's daily
+    // rows for the marketing site (0120). Either table may be absent on a
+    // database behind those migrations; the cards then show a dash instead
+    // of failing the page.
+    admin.from("youtube_channel_stats").select("channel_id, channel_language, captured_at, title, subscribers, views, videos")
+      .gte("captured_at", channelsFrom).order("captured_at", { ascending: false }).limit(1_000),
     admin.from("cloudflare_daily_stats").select("day, zone, requests, page_views, uniques, bytes, threats, countries, captured_at")
       .eq("zone", "sketchcast.app").order("day", { ascending: true }).limit(2_000),
     // Finished jobs of the last FAILURE_MONTHS months: the failure-rate tile

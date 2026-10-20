@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { channelDelta, channelSnaps, channelsByLanguage, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl, type VideoSnap } from "../youtube-stats";
+import { channelDelta, channelSnaps, channelsById, channelsByLanguage, channelTotals, deltaSince, latestChannel, latestPerVideo, viewsPerDay, youtubeUrl, type VideoSnap } from "../youtube-stats";
 
 const snap = (video_id: string, captured_at: string, views: number, likes = 0, comments = 0): VideoSnap => ({
   video_id, captured_at, title: "T", privacy: "public", published_at: null, views, likes, comments,
@@ -75,5 +75,35 @@ describe("snapshots into readings", () => {
     expect(by[0].delta?.subscribers).toBe(20);
     expect(by[1].latest.subscribers).toBe(3);
     expect(by[1].delta).toBeNull();
+  });
+
+  it("totals every channel once per channel_id — Malay and Jawi share one channel (2026-10-20)", () => {
+    const row = (channel_id: string, channel_language: string, captured_at: string, subscribers: number, views: number, videos: number) =>
+      ({ channel_id, channel_language, captured_at, title: channel_id, subscribers, views, videos });
+    const ch = [
+      row("UC-en", "en", "2026-10-12T19:00:00Z", 46, 2000, 76),
+      row("UC-en", "en", "2026-10-19T19:00:00Z", 53, 2300, 77),
+      row("UC-ar", "ar", "2026-10-19T06:00:00Z", 2, 30, 9),
+      row("UC-ar", "ar", "2026-10-19T19:00:00Z", 5, 40, 9),
+      // the shared Malay channel, polled once per language
+      row("UC-ms", "ms", "2026-10-19T19:00:01Z", 1, 3, 0),
+      row("UC-ms", "ms-arab", "2026-10-19T19:00:02Z", 1, 3, 0),
+    ];
+    const week = new Date("2026-10-12T20:00:00Z");
+    const by = channelsById(ch, week);
+    expect(by.map((c) => c.languages)).toEqual([["en"], ["ar"], ["ms", "ms-arab"]]);
+    const t = channelTotals(ch, week)!;
+    expect(t).toMatchObject({ channels: 3, subscribers: 59, views: 2343, videos: 86 });
+    // en +7 (exact), ar +3 (younger than the week), ms has one poll: partial
+    expect(t.subscribersGained).toEqual({ subscribers: 10, partial: true });
+    expect(channelTotals([], week)).toBeNull();
+  });
+
+  it("picks up a channel added later from its first poll, with no code change", () => {
+    const ch = [
+      { channel_id: "UC-en", channel_language: "en", captured_at: "2026-10-19T19:00:00Z", title: "en", subscribers: 53, views: 2300, videos: 77 },
+      { channel_id: "UC-hi", channel_language: "hi", captured_at: "2026-11-02T19:00:00Z", title: "hi", subscribers: 4, views: 10, videos: 2 },
+    ];
+    expect(channelTotals(ch, new Date("2026-10-26T00:00:00Z"))?.subscribers).toBe(57);
   });
 });
