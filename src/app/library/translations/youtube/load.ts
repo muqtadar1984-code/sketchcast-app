@@ -23,6 +23,7 @@ import type { VideoInput, VideoJob, VideoKit, VideoPublication, VideoStat, Video
 
 const KIT_COLUMNS = "id, topic_id, language, status, translation_status, created_at";
 const PUBLICATION_COLUMNS = "topic_kit_id, part, channel_language, youtube_video_id, privacy, thumbnail_set, published_at, error";
+const STATUS_COLUMNS_0148 = "youtube_publish_at, youtube_upload_status, youtube_missing_since";
 
 export type VideosLoad = { ok: true; input: VideoInput } | { ok: false; error: string };
 
@@ -54,10 +55,17 @@ export async function loadTranslatedVideos(admin: Admin, nowMs: number = Date.no
   if (jobsQ.error) return fail(jobsQ.error);
 
   const kits = (kitsQ.data ?? []) as VideoKit[];
-  const publications = await readChunks<VideoPublication>(
-    kits.map((k) => k.id),
-    (chunk) => admin.from("topic_publications").select(`${PUBLICATION_COLUMNS}, superseded_by`).in("topic_kit_id", chunk),
-  );
+  const readPublications = (columns: string) =>
+    readChunks<VideoPublication>(
+      kits.map((k) => k.id),
+      (chunk) => admin.from("topic_publications").select(columns).in("topic_kit_id", chunk),
+    );
+  // 0148's status columns (scheduled / rejected / removed, written by the
+  // worker's poll); without them removal is inferred from the newest poll
+  let publications = await readPublications(`${PUBLICATION_COLUMNS}, superseded_by, ${STATUS_COLUMNS_0148}`);
+  if (publications.error && catalogueColumnMissing(publications.error)) {
+    publications = await readPublications(`${PUBLICATION_COLUMNS}, superseded_by`);
+  }
   if (publications.error) return fail(publications.error);
 
   // Each channel's newest poll writes every row with the same captured_at, so

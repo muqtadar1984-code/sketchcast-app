@@ -12,6 +12,7 @@ import {
   VIEW_LABEL,
   buildVideoRows,
   inView,
+  scheduledFor,
   scopeRows,
   shortLanguageName,
   videoFiltersHref,
@@ -38,6 +39,8 @@ const TONE: Record<VideoState, string> = {
   unlisted: "bg-[#E6F6F2] text-[#0F7A68]",
   private: "bg-[#EEF0EC] text-[#3D4652]",
   removed: "bg-[#FFE9E3] text-[#B3401F]",
+  rejected: "bg-[#FFE9E3] text-[#B3401F]",
+  scheduled: "bg-[#E3EEFB] text-[#1F5FA8]",
   partial: "bg-[#FFF1D6] text-[#9A6400]",
   posting: "bg-[#EDE7FB] text-[#5B3FBF]",
   post_failed: "bg-[#FFE9E3] text-[#B3401F]",
@@ -49,8 +52,10 @@ const TONE: Record<VideoState, string> = {
 const STATE_HELP: Record<VideoState, string> = {
   public: "On YouTube, public — as of the last check.",
   unlisted: "On YouTube, unlisted — anyone with the link can watch.",
-  private: "On YouTube, private. A video scheduled to go public also reads private until it goes out.",
-  removed: "Posted, but YouTube did not list it at the last check — it was deleted or removed on YouTube.",
+  private: "On YouTube, private.",
+  scheduled: "On YouTube, private until its scheduled time, then public.",
+  removed: "Posted, but YouTube no longer lists it — it was deleted or removed on YouTube.",
+  rejected: "YouTube rejected the upload or could not process it — the reason is on hover; fix it in YouTube Studio.",
   partial: "Some parts are on YouTube, some are not — Finish posting from the review inbox.",
   posting: "A post is queued or uploading now.",
   post_failed: "The last upload failed — the error is on the part; Retry from the review inbox.",
@@ -59,7 +64,7 @@ const STATE_HELP: Record<VideoState, string> = {
   ready: "Approved and not on YouTube yet — post it from the review inbox.",
 };
 
-const POSTED_SUB: VideoView[] = ["public", "unlisted", "private"];
+const POSTED_SUB: VideoView[] = ["public", "unlisted", "private", "scheduled"];
 const NOT_POSTED_SUB: VideoView[] = ["ready", "posting", "failed", "awaiting"];
 
 function Chip({ view, f, count, sub = false }: { view: VideoView; f: VideoFilters; count: number; sub?: boolean }) {
@@ -261,6 +266,7 @@ export function YouTubeVideosView({
               const views = posted.reduce((n, p) => n + (p.views ?? 0), 0);
               const postedAt = posted.map((p) => p.publishedAt).filter((x): x is string => !!x).sort()[0] ?? null;
               const failed = r.parts.find((p) => p.error && !p.videoId);
+              const rejected = r.state === "rejected" ? (posted.find((p) => p.uploadStatus)?.uploadStatus ?? null) : null;
               return (
                 <tr key={r.kitId} className="border-t border-[#EEF0EC] align-top hover:bg-[#FBFCFA]">
                   {selection && <td className="px-3 py-2">{selection.cell(r)}</td>}
@@ -274,8 +280,12 @@ export function YouTubeVideosView({
                     {r.languageName} <span className="text-[#8A929C]">{r.language}</span>
                   </td>
                   <td className="px-3 py-2">
-                    <span title={failed?.error ?? (r.postable.ok ? STATE_HELP[r.state] : `${STATE_HELP[r.state]} ${r.postable.why}`)} className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${TONE[r.state]}`}>
-                      {r.state === "no_channel" ? `No ${r.languageName} channel yet` : STATE_LABEL[r.state]}
+                    <span title={rejected ?? failed?.error ?? (r.postable.ok ? STATE_HELP[r.state] : `${STATE_HELP[r.state]} ${r.postable.why}`)} className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${TONE[r.state]}`}>
+                      {r.state === "no_channel"
+                        ? `No ${r.languageName} channel yet`
+                        : r.state === "scheduled"
+                          ? `Scheduled · ${fmtDate(scheduledFor(r, input.nowMs))}`
+                          : STATE_LABEL[r.state]}
                     </span>
                     {r.flags.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">

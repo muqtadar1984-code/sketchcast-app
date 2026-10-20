@@ -19,20 +19,23 @@
 //
 // A row's state, first rule that applies wins:
 //   1. posting      a topic_publish job for the kit is queued or processing;
-//   2. removed      a posted part's video was missing from its channel's
-//                   newest poll, while that poll is on time and ran after the
-//                   upload — YouTube no longer lists it;
-//   3. partial      some parts are on YouTube, some not;
-//   4. public / unlisted / private — every part is up; the LEAST public part
+//   2. removed      a posted part is gone from YouTube: the worker marked it
+//                   (youtube_missing_since, 0148), or — before 0148 — it was
+//                   missing from its channel's newest on-time poll that ran
+//                   after the upload;
+//   3. rejected     YouTube rejected or failed to process a posted part
+//                   (youtube_upload_status rejected:… / failed:…, 0148);
+//   4. partial      some parts are on YouTube, some not;
+//   5. scheduled    every part is up and private, and one goes public at a
+//                   future youtube_publish_at (0148);
+//   6. public / unlisted / private — every part is up; the LEAST public part
 //                   names the row (topic_publications.privacy is the live
 //                   privacy: the hourly poll copies YouTube's back onto it);
-//   5. post_failed  a part's last upload failed (error, no video id);
-//   6. awaiting_approval  the translation is in review;
-//   7. no_channel   approved, nothing posted, and the language has no channel
+//   7. post_failed  a part's last upload failed (error, no video id);
+//   8. awaiting_approval  the translation is in review;
+//   9. no_channel   approved, nothing posted, and the language has no channel
 //                   of its own — posting is blocked (decision 4);
-//   8. ready        approved, nothing posted, its channel exists.
-// A scheduled video reads "private" (YouTube says private until it goes
-// out) until Y2 stores publishAt.
+//  10. ready        approved, nothing posted, its channel exists.
 //
 // selectableForPost() is the ONE rule bulk posting (plan-yt-bulk-post) uses
 // to decide which rows get a checkbox. It must not be copied.
@@ -63,6 +66,10 @@ export type VideoKit = {
 
 export type VideoPublication = Pick<TopicPublication, "topic_kit_id" | "part" | "channel_language" | "youtube_video_id" | "privacy" | "thumbnail_set" | "published_at" | "error"> & {
   superseded_by?: string | null;
+  /** 0148 (the worker's poll); absent before the migration */
+  youtube_publish_at?: string | null;
+  youtube_upload_status?: string | null;
+  youtube_missing_since?: string | null;
 };
 
 /** One youtube_video_stats row — the loader passes only each channel's
@@ -86,7 +93,7 @@ export type VideoInput = {
 
 // ── output ───────────────────────────────────────────────────────────────────
 
-export type VideoState = "posting" | "removed" | "partial" | "public" | "unlisted" | "private" | "post_failed" | "awaiting_approval" | "no_channel" | "ready";
+export type VideoState = "posting" | "removed" | "rejected" | "partial" | "scheduled" | "public" | "unlisted" | "private" | "post_failed" | "awaiting_approval" | "no_channel" | "ready";
 export type VideoCategory = "posted" | "not_posted";
 
 export type VideoPart = {
@@ -102,6 +109,10 @@ export type VideoPart = {
   error: string | null;
   thumbnailSet: boolean | null;
   publishedAt: string | null;
+  /** when a scheduled (private) part goes public (0148) */
+  publishAt: string | null;
+  /** YouTube's upload status, ":reason" for a rejected / failed one (0148) */
+  uploadStatus: string | null;
 };
 
 export type VideoFlag = "thumbnail_missing" | "status_stale" | "superseded" | "posted_with_notes";
@@ -131,8 +142,10 @@ export type VideoRow = {
 
 export const STATE_LABEL: Record<VideoState, string> = {
   posting: "Posting…",
-  removed: "Removed on YouTube?",
+  removed: "Removed on YouTube",
+  rejected: "Rejected by YouTube",
   partial: "Partly posted",
+  scheduled: "Scheduled",
   public: "Public",
   unlisted: "Unlisted",
   private: "Private",
@@ -149,16 +162,24 @@ export const FLAG_LABEL: Record<VideoFlag, string> = {
   posted_with_notes: "posted with notes",
 };
 
-const POSTED: ReadonlySet<VideoState> = new Set(["removed", "partial", "public", "unlisted", "private"]);
+const POSTED: ReadonlySet<VideoState> = new Set(["removed", "rejected", "partial", "scheduled", "public", "unlisted", "private"]);
 export const categoryOf = (state: VideoState): VideoCategory => (POSTED.has(state) ? "posted" : "not_posted");
 
 /** The states the Attention chip collects: something a person should look at. */
-export const ATTENTION: ReadonlySet<VideoState> = new Set(["removed", "partial", "post_failed", "no_channel"]);
+export const ATTENTION: ReadonlySet<VideoState> = new Set(["removed", "rejected", "partial", "post_failed", "no_channel"]);
 export const needsAttention = (r: Pick<VideoRow, "state" | "flags">): boolean => ATTENTION.has(r.state) || r.flags.includes("thumbnail_missing") || r.flags.includes("status_stale");
 
 const PRIVACY_RANK: Record<string, number> = { private: 0, unlisted: 1, public: 2 };
 
 const LIVE_JOB = new Set(["queued", "processing"]);
+
+/** A scheduled part's release time still ahead of `nowMs`. */
+export const isFuture = (iso: string | null | undefined, nowMs: number): boolean => !!iso && Date.parse(iso) > nowMs;
+
+/** When the row's scheduled parts go public — the earliest future release. */
+export function scheduledFor(row: Pick<VideoRow, "parts">, nowMs: number): string | null {
+  return row.parts.map((p) => p.publishAt).filter((t): t is string => isFuture(t, nowMs)).sort()[0] ?? null;
+}
 const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
 
 
@@ -242,7 +263,9 @@ export function buildVideoRows(input: VideoInput): VideoRow[] {
       const onTime = !pollIsLate(lastPoll, input.nowMs, minutes);
       // missing = the channel's newest poll ran on time, AFTER the upload, and did not list it
       const uploadedBeforePoll = !!lastPoll && (!pub?.published_at || pub.published_at < lastPoll);
-      const missing = !!vid && onTime && uploadedBeforePoll && (!stat || stat.captured_at < lastPoll!);
+      // the worker's mark (0148) is the fact; without it, infer from the newest poll
+      const marked = !!vid && !!pub?.youtube_missing_since;
+      const missing = marked || (!!vid && pub?.youtube_missing_since === undefined && onTime && uploadedBeforePoll && (!stat || stat.captured_at < lastPoll!));
       return {
         part,
         videoId: vid,
@@ -254,6 +277,8 @@ export function buildVideoRows(input: VideoInput): VideoRow[] {
         error: pub?.error ?? null,
         thumbnailSet: pub ? pub.thumbnail_set : null,
         publishedAt: pub?.published_at ?? null,
+        publishAt: pub?.youtube_publish_at ?? null,
+        uploadStatus: pub?.youtube_upload_status ?? null,
       };
     });
 
@@ -264,7 +289,9 @@ export function buildVideoRows(input: VideoInput): VideoRow[] {
     let state: VideoState;
     if (liveJob) state = "posting";
     else if (posted.some((p) => p.missing)) state = "removed";
+    else if (posted.some((p) => /^(rejected|failed)\b/.test(p.uploadStatus ?? ""))) state = "rejected";
     else if (posted.length > 0 && posted.length < parts.length) state = "partial";
+    else if (posted.length > 0 && posted.every((p) => norm(p.privacy) === "private") && posted.some((p) => isFuture(p.publishAt, input.nowMs))) state = "scheduled";
     else if (posted.length > 0) {
       const least = posted.reduce((m, p) => Math.min(m, PRIVACY_RANK[norm(p.privacy)] ?? 0), 2);
       state = least === 2 ? "public" : least === 1 ? "unlisted" : "private";
@@ -317,7 +344,7 @@ export function buildVideoRows(input: VideoInput): VideoRow[] {
 
 // ── filters and totals ───────────────────────────────────────────────────────
 
-export const VIEWS = ["all", "posted", "public", "unlisted", "private", "not_posted", "ready", "posting", "failed", "awaiting", "attention"] as const;
+export const VIEWS = ["all", "posted", "public", "unlisted", "private", "scheduled", "not_posted", "ready", "posting", "failed", "awaiting", "attention"] as const;
 export type VideoView = (typeof VIEWS)[number];
 
 export const VIEW_LABEL: Record<VideoView, string> = {
@@ -326,6 +353,7 @@ export const VIEW_LABEL: Record<VideoView, string> = {
   public: "Public",
   unlisted: "Unlisted",
   private: "Private",
+  scheduled: "Scheduled",
   not_posted: "Not posted",
   ready: "Ready",
   posting: "Posting",
@@ -369,6 +397,7 @@ export function inView(r: VideoRow, view: VideoView): boolean {
     case "public":
     case "unlisted":
     case "private":
+    case "scheduled":
     case "ready":
     case "posting":
       return r.state === view;
