@@ -167,21 +167,22 @@ export function modelRouteBreakdown(gens: FinGenRow[], jobs: FinJobRow[]): Model
 // Monthly-equivalent USD per plan_key — update alongside pricing (the landing
 // repo's pricing.config.js is the price source of truth; plan keys live in
 // src/utils/stripe/plans.ts). Annual plans count at annual/12 so MRR means
-// what it says. NOTE: Teacher Pro+ is $49/mo on the pricing page — 72 is its
-// generations-per-month CAP, not a price. School = floor $3,000/yr → $250/mo.
+// what it says. PRICE RESET 2026-10-20 (founder): Teacher Pro and Home Basic
+// $10/mo, Teacher Pro+ and Homeschool $20/mo, annual = 10× (migration 0146
+// carries the matching allowances). School = floor $3,000/yr → $250/mo.
 // family_* is SOLD as "Home Basic" (display rename, homeschool release) — the
 // plan_key stays 'family_*' here because billing identifiers never rename.
 // One-time credit packs are deliberately absent: they are not recurring
 // revenue, so they show up in "Collected to date" (payments) but never in MRR.
 export const PLAN_PRICES_USD_MONTHLY: Record<string, number> = {
-  teacher_pro_monthly: 24,
-  teacher_pro_annual: 240 / 12,
-  teacher_pro_plus_monthly: 49,
-  teacher_pro_plus_annual: 490 / 12,
-  family_monthly: 9.99,
-  family_annual: 99 / 12,
-  homeschool_monthly: 34,
-  homeschool_annual: 340 / 12,
+  teacher_pro_monthly: 10,
+  teacher_pro_annual: 100 / 12,
+  teacher_pro_plus_monthly: 20,
+  teacher_pro_plus_annual: 200 / 12,
+  family_monthly: 10,
+  family_annual: 100 / 12,
+  homeschool_monthly: 20,
+  homeschool_annual: 200 / 12,
   school_annual: 3000 / 12,
   school_onetime: 3000 / 12,
 };
@@ -245,7 +246,7 @@ export function collectedUsd(payments: PaymentRow[]): number {
 
 // ── estimated revenue ───────────────────────────────────────────────────────
 
-export const TEACHER_PRO_USD_PER_MONTH = 24;
+export const TEACHER_PRO_USD_PER_MONTH = 10;
 
 /** The school rate card (founder, 2026-08-17): the India-card enrolment bands
  * (A ≤350, B 351–700, C 701–1,200) at USD $3k/$5k/$7k per school per year —
@@ -276,12 +277,13 @@ export function bandForStudents(students: number): SchoolBand | null {
 export const KIT_PIECES = 7;
 export const KIT_CREDITS = 6;
 
-/** The 0107 monthly generation caps for the four consumer plans — the numbers
- * public.fair_use_caps returns and the pricing page prints. */
+/** The monthly generation caps for the four consumer plans — the numbers
+ * public.fair_use_caps returns (0146: Pro+ 84 → 56, Home Basic 14 → 28) and the
+ * pricing page prints. */
 export const PLAN_GENERATION_CAPS = {
   teacher_pro: 28,
-  teacher_pro_plus: 84,
-  family: 14,
+  teacher_pro_plus: 56,
+  family: 28,
   homeschool: 56,
 } as const;
 

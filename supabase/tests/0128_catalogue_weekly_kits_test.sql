@@ -147,10 +147,10 @@ begin
   perform _expect_eq(catalogue_weekly_cap('trial'),            1,     'cap trial = 1');
   perform _expect_eq(catalogue_weekly_cap('promo'),            1,     'cap promo (ended) = 1');
   perform _expect_eq(catalogue_weekly_cap('school_expired'),   1,     'cap school_expired = the free 1 (F1 refinement)');
-  perform _expect_eq(catalogue_weekly_cap('pro'),              5,     'cap Teacher Pro = 5');
-  perform _expect_eq(catalogue_weekly_cap('family'),           5,     'cap Home Basic = 5');
-  perform _expect_eq(catalogue_weekly_cap('pro_plus'),         10,    'cap Teacher Pro+ = 10');
-  perform _expect_eq(catalogue_weekly_cap('homeschool'),       10,    'cap Homeschool = 10');
+  perform _expect_eq(catalogue_weekly_cap('pro'),              4,     'cap Teacher Pro = 4 (0146)');
+  perform _expect_eq(catalogue_weekly_cap('family'),           4,     'cap Home Basic = 4 (0146)');
+  perform _expect_eq(catalogue_weekly_cap('pro_plus'),         8,     'cap Teacher Pro+ = 8 (0146)');
+  perform _expect_eq(catalogue_weekly_cap('homeschool'),       8,     'cap Homeschool = 8 (0146)');
   perform _expect_eq(catalogue_weekly_cap('school'),           null::int, 'cap school = unlimited');
   perform _expect_eq(catalogue_weekly_cap('school_trial'),     null::int, 'cap school_trial = unlimited (F1)');
   perform _expect_eq(catalogue_weekly_cap('staff'),            null::int, 'cap staff = unlimited');
@@ -210,21 +210,21 @@ begin
   perform _expect_eq(_status(PAR, v[3]), 'unlocked',     'free parent: 1 a week');
   perform _expect_eq(_status(PAR, v[4]), 'weekly_limit', 'free parent: second refused');
 
-  -- Teacher Pro: 5. Home Basic: 5.
-  for i in 1..5 loop
-    perform _expect_eq(_status(P, v[i]), 'unlocked', format('pro: unlock %s of 5', i));
+  -- Teacher Pro: 4. Home Basic: 4 (0146).
+  for i in 1..4 loop
+    perform _expect_eq(_status(P, v[i]), 'unlocked', format('pro: unlock %s of 4', i));
   end loop;
-  perform _expect_eq(_status(P, v[6]), 'weekly_limit', 'pro: 6th refused');
-  for i in 1..5 loop perform _status(F, v[i]); end loop;
-  perform _expect_eq(_status(F, v[6]), 'weekly_limit', 'Home Basic: 6th refused');
+  perform _expect_eq(_status(P, v[5]), 'weekly_limit', 'pro: 5th refused');
+  for i in 1..4 loop perform _status(F, v[i]); end loop;
+  perform _expect_eq(_status(F, v[5]), 'weekly_limit', 'Home Basic: 5th refused');
 
-  -- Pro+: 10. Homeschool: 10.
-  for i in 1..10 loop
-    perform _expect_eq(_status(PP, v[i]), 'unlocked', format('pro+: unlock %s of 10', i));
+  -- Pro+: 8. Homeschool: 8 (0146).
+  for i in 1..8 loop
+    perform _expect_eq(_status(PP, v[i]), 'unlocked', format('pro+: unlock %s of 8', i));
   end loop;
-  perform _expect_eq(_status(PP, v[11]), 'weekly_limit', 'pro+: 11th refused');
-  for i in 1..10 loop perform _status(H, v[i]); end loop;
-  perform _expect_eq(_status(H, v[11]), 'weekly_limit', 'homeschool: 11th refused');
+  perform _expect_eq(_status(PP, v[9]), 'weekly_limit', 'pro+: 9th refused');
+  for i in 1..8 loop perform _status(H, v[i]); end loop;
+  perform _expect_eq(_status(H, v[9]), 'weekly_limit', 'homeschool: 9th refused');
 
   -- Unlimited: school coordinator, school admin, school trial, staff.
   for i in 1..12 loop
@@ -258,12 +258,12 @@ begin
   perform _expect_eq(_status(ST, (select id from _ids where name = 'x14')), 'weekly_limit',
                      'expired school: and only 1');
 
-  -- Downgrade: Pro loses the plan; the 5 unlocks stay; this week is spent.
+  -- Downgrade: Pro loses the plan; the 4 unlocks stay; this week is spent.
   update entitlements set active = false where user_id = P;
   perform _expect_eq(plan_tier(P), 'trial', 'pro downgraded to trial');
   perform _as(P);
   perform _expect_eq(catalogue_has_access(v[1]), true, 'downgrade: earlier unlocks remain');
-  perform _expect_eq(_status(P, v[7]), 'weekly_limit', 'downgrade: 5 used >= free cap 1 this week');
+  perform _expect_eq(_status(P, v[7]), 'weekly_limit', 'downgrade: 4 used >= free cap 1 this week');
 
   -- Weekly reset: last week's unlocks stay; the cap frees up.
   update catalogue_unlocks set week_start = week_start - 7 where user_id in (T, P);
@@ -276,8 +276,8 @@ begin
   -- my_catalogue_allowance
   perform _as(PP);
   r := my_catalogue_allowance();
-  perform _expect_eq((r ->> 'used')::int, 10, 'allowance: pro+ used 10');
-  perform _expect_eq((r ->> 'cap')::int, 10,  'allowance: pro+ cap 10');
+  perform _expect_eq((r ->> 'used')::int, 8, 'allowance: pro+ used 8');
+  perform _expect_eq((r ->> 'cap')::int, 8,  'allowance: pro+ cap 8');
   perform _expect_eq((r ->> 'eligible')::boolean, true, 'allowance: pro+ eligible');
   perform _as(S);
   perform _expect_eq(my_catalogue_allowance() -> 'cap', 'null'::jsonb, 'allowance: school cap null (unlimited)');

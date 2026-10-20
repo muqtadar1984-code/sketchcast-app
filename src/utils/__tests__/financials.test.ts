@@ -173,16 +173,16 @@ describe("entitlement revenue", () => {
   });
 
   it("prices annual plans at annual/12 so MRR means monthly", () => {
-    expect(mrrUsd([ent("teacher_pro_monthly")])).toBe(24);
-    expect(mrrUsd([ent("teacher_pro_annual")])).toBeCloseTo(20, 10);
-    expect(mrrUsd([ent("teacher_pro_plus_monthly")])).toBe(49);
-    expect(mrrUsd([ent("family_monthly")])).toBeCloseTo(9.99, 10);
+    expect(mrrUsd([ent("teacher_pro_monthly")])).toBe(10);
+    expect(mrrUsd([ent("teacher_pro_annual")])).toBeCloseTo(100 / 12, 10);
+    expect(mrrUsd([ent("teacher_pro_plus_monthly")])).toBe(20);
+    expect(mrrUsd([ent("family_monthly")])).toBe(10);
     expect(mrrUsd([ent("school_annual")])).toBeCloseTo(250, 10);
   });
 
-  it("prices the homeschool plans ($34/mo, $340/yr at annual/12)", () => {
-    expect(mrrUsd([ent("homeschool_monthly")])).toBe(34);
-    expect(mrrUsd([ent("homeschool_annual")])).toBeCloseTo(340 / 12, 10);
+  it("prices the homeschool plans ($20/mo, $200/yr at annual/12)", () => {
+    expect(mrrUsd([ent("homeschool_monthly")])).toBe(20);
+    expect(mrrUsd([ent("homeschool_annual")])).toBeCloseTo(200 / 12, 10);
   });
 
   it("credit packs are NOT MRR — their keys price at 0 here", () => {
@@ -235,10 +235,10 @@ describe("bandForStudents — the founder's $3/5/7k rate card", () => {
 
 describe("conversionScenario", () => {
   it("rounds to whole teachers so the printed maths reproduces the figure", () => {
-    // 36 teachers (today's live count) × 10% = 3.6 → 4 paying → 4 × $24 × 12
-    expect(conversionScenario(36, 0.1)).toEqual({ paying: 4, annualUsd: 4 * 24 * 12 });
-    expect(conversionScenario(36, 0.25)).toEqual({ paying: 9, annualUsd: 9 * 24 * 12 });
-    expect(conversionScenario(36, 0.5)).toEqual({ paying: 18, annualUsd: 18 * 24 * 12 });
+    // 36 teachers × 10% = 3.6 → 4 paying → 4 × $10 × 12 (Teacher Pro, 0146 reset)
+    expect(conversionScenario(36, 0.1)).toEqual({ paying: 4, annualUsd: 4 * 10 * 12 });
+    expect(conversionScenario(36, 0.25)).toEqual({ paying: 9, annualUsd: 9 * 10 * 12 });
+    expect(conversionScenario(36, 0.5)).toEqual({ paying: 18, annualUsd: 18 * 10 * 12 });
   });
 
   it("handles zero teachers", () => {
@@ -247,18 +247,18 @@ describe("conversionScenario", () => {
 });
 
 describe("gross estimates (2026-08-18: revenue minus measured serving cost)", () => {
-  it("pins the ADVERTISED kit counts (0107 caps ÷ 7, the seven pieces)", () => {
-    expect(PLAN_KITS_PER_MONTH).toEqual({ teacher_pro: 4, teacher_pro_plus: 12, family: 2, homeschool: 8 });
+  it("pins the ADVERTISED kit counts (0146 caps ÷ 7, the seven pieces)", () => {
+    expect(PLAN_KITS_PER_MONTH).toEqual({ teacher_pro: 4, teacher_pro_plus: 8, family: 4, homeschool: 8 });
   });
 
   it("pins the caps and the two divisors a kit has", () => {
-    expect(PLAN_GENERATION_CAPS).toEqual({ teacher_pro: 28, teacher_pro_plus: 84, family: 14, homeschool: 56 });
+    expect(PLAN_GENERATION_CAPS).toEqual({ teacher_pro: 28, teacher_pro_plus: 56, family: 28, homeschool: 56 });
     expect(KIT_PIECES).toBe(7); // artefacts delivered
     expect(KIT_CREDITS).toBe(6); // artefacts CHARGED — the deck rides free (0103)
   });
 
   it("costs the allowance at caps ÷ 6, not the advertised ÷ 7", () => {
-    // The bug this pins: 84 Pro+ credits fund 14 kits, and costing 12 of them
+    // The bug this pins: 56 Pro+ credits fund 9⅓ kits, and costing 8 of them
     // understates the allowance by exactly a sixth while the footer calls the
     // result "the conservative bound".
     for (const plan of ["teacher_pro", "teacher_pro_plus", "family", "homeschool"] as const) {
@@ -268,7 +268,7 @@ describe("gross estimates (2026-08-18: revenue minus measured serving cost)", ()
       // would be modelling a cheaper subscriber than the page promises.
       expect(PLAN_KITS_COSTED_PER_MONTH[plan]).toBeGreaterThan(PLAN_KITS_PER_MONTH[plan]);
     }
-    expect(PLAN_KITS_COSTED_PER_MONTH.teacher_pro_plus).toBe(14);
+    expect(PLAN_KITS_COSTED_PER_MONTH.teacher_pro_plus).toBeCloseTo(56 / 6, 10);
     expect(PLAN_KITS_COSTED_PER_MONTH.homeschool).toBeCloseTo(56 / 6, 10);
   });
 
