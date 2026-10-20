@@ -237,6 +237,14 @@ export default async function ConsoleOverviewPage({
     excludedOwners: excludedIds,
     windowStartMs: costWindow.startMs,
   });
+  // Auto Translate Agent §4: the titles of the translated kits over the
+  // cost warning (a handful at most) — one small read, only when there are any.
+  const overWarnTopicIds = [...new Set(kitCost.translatedOverWarn.map((k) => k.topicId))];
+  const overWarnTitles: Record<string, string> = {};
+  if (overWarnTopicIds.length) {
+    const { data } = await admin.from("topics").select("id, title").in("id", overWarnTopicIds.slice(0, 100));
+    for (const t of (data ?? []) as { id: string; title: string }[]) overWarnTitles[t.id] = t.title;
+  }
 
   const audience = overviewAudience((ytQ.data ?? []) as ChannelSnap[], (cfQ.data ?? []) as DailyRow[], nowDate);
 
@@ -335,7 +343,7 @@ export default async function ConsoleOverviewPage({
         ))}
       </div>
 
-      <KitCostSection report={kitCost} window={costWindow} />
+      <KitCostSection report={kitCost} window={costWindow} topicTitles={overWarnTitles} />
 
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-8 mb-10">
         <section>

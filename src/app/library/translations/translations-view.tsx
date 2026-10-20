@@ -15,6 +15,8 @@ import { ErrorBanner } from "../catalogue-ui";
 import { TranslationClock } from "../translation-clock";
 import { queuePosition, typicalFor, type TranslationClockData } from "@/utils/catalogue/translation-eta";
 import type { MatrixLoad } from "./load";
+import type { AgentView } from "@/utils/catalogue/auto-translate";
+import { AgentControls, ApproveCleanButton } from "./agent-panel";
 
 // The Translations tab's screen (/library/translations): totals per language,
 // the filters, and the matrix. A Server Component with no reads of its own —
@@ -74,7 +76,21 @@ function Cell({ c, clocks, subject }: { c: MatrixCell; clocks?: TranslationClock
 }
 
 /** The matrix, from the loaded rows: no reads, no auth — the page does both. */
-export function TranslationsView({ load, filters: f, languages }: { load: Extract<MatrixLoad, { ok: true }>; filters: MatrixFilters; languages: readonly string[] }) {
+export function TranslationsView({
+  load,
+  filters: f,
+  languages,
+  agent = null,
+  canApprove = false,
+  canControl = false,
+}: {
+  load: Extract<MatrixLoad, { ok: true }>;
+  filters: MatrixFilters;
+  languages: readonly string[];
+  agent?: AgentView | null;
+  canApprove?: boolean;
+  canControl?: boolean;
+}) {
   const all = buildTranslationMatrix(load.input, languages);
   const subjects = [...new Set(all.map((r) => (r.subject ?? "").trim()).filter(Boolean))].sort();
   const inSubject = filterMatrixRows(all, { subject: f.subject, missing: "" });
@@ -99,6 +115,8 @@ export function TranslationsView({ load, filters: f, languages }: { load: Extrac
         <span className="font-medium">Translate…</span> drawer.
       </p>
 
+      {agent && <AgentStrip agent={agent} canControl={canControl} />}
+
       {load.translationsMissing && (
         <ErrorBanner message="The translation columns are not in this database yet (migration 0134) — cells read each kit's own status." />
       )}
@@ -117,6 +135,7 @@ export function TranslationsView({ load, filters: f, languages }: { load: Extrac
               <th className="px-3 py-1 font-normal">Failed</th>
               <th className="px-3 py-1 font-normal">Stale / blocked</th>
               <th className="px-3 py-1 font-normal">Not started</th>
+              {canApprove && <th className="px-3 py-1 font-normal" />}
             </tr>
           </thead>
           <tbody>
@@ -131,6 +150,11 @@ export function TranslationsView({ load, filters: f, languages }: { load: Extrac
                 <td className={`px-3 py-1 ${t.failed ? "text-[#B3401F] font-medium" : "text-[#8A929C]"}`}>{t.failed}</td>
                 <td className={`px-3 py-1 ${t.attention ? "text-[#9A6400]" : "text-[#8A929C]"}`}>{t.attention}</td>
                 <td className="px-3 py-1 text-[#5B6470]">{t.notStarted}</td>
+                {canApprove && (
+                  <td className="px-3 py-1">
+                    {t.inReview > 0 && <ApproveCleanButton language={t.language} name={SHORT_NAME[t.language] ?? t.language} inReview={t.inReview} />}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -231,5 +255,62 @@ export function Heading() {
       <h1 className="text-3xl font-display mb-1">Translations</h1>
       <InkUnderline className="block h-3 w-24 mb-3" color="#7FD8A8" />
     </div>
+  );
+}
+
+const MODE_TONE: Record<AgentView["mode"], string> = {
+  off: "bg-[#F4F5F2] text-[#5B6470]",
+  dry_run: "bg-[#FFF1D6] text-[#9A6400]",
+  running: "bg-[#E6F6F2] text-[#0F7A68]",
+  paused: "bg-[#FFF1D6] text-[#9A6400]",
+  breaker: "bg-[#FFE9E3] text-[#B3401F]",
+  throttled: "bg-[#FFF1D6] text-[#9A6400]",
+  silent: "bg-[#FFE9E3] text-[#B3401F]",
+};
+
+const MODE_LABEL: Record<AgentView["mode"], string> = {
+  off: "Off",
+  dry_run: "Dry run",
+  running: "Running",
+  paused: "Paused",
+  breaker: "Breaker",
+  throttled: "Backing off",
+  silent: "Not ticking",
+};
+
+/** The Auto Translate Agent's status strip (plan §6.1): what it is doing or
+ *  why it waits, what is left per language, the cost warnings, and — for
+ *  admins — its buttons. */
+function AgentStrip({ agent, canControl }: { agent: AgentView; canControl: boolean }) {
+  return (
+    <section className="card p-4 mb-5">
+      <div className="flex flex-wrap items-center gap-3 mb-2">
+        <h2 className="text-sm font-medium">Auto-translate</h2>
+        <span className={`rounded px-2 py-0.5 text-xs font-medium ${MODE_TONE[agent.mode]}`}>{MODE_LABEL[agent.mode]}</span>
+        <span className="text-sm">{agent.headline}</span>
+        {agent.enabled && agent.why && agent.mode !== "dry_run" && agent.mode !== "running" && (
+          <span className="text-xs text-[#5B6470]">Last check: {agent.why}</span>
+        )}
+        <span className="ml-auto">{canControl && <AgentControls mode={agent.mode} enabled={agent.enabled} dryRun={agent.dryRun} paused={agent.paused} />}</span>
+      </div>
+      <p className="text-xs text-[#5B6470]">
+        Left to translate: {agent.remainingTotal}
+        {agent.remaining.filter((r) => r.n > 0).length > 0 && " — " + agent.remaining.filter((r) => r.n > 0).map((r) => `${SHORT_NAME[r.language] ?? r.language} ${r.n}`).join(" · ")}
+        {agent.jawiWaiting > 0 && ` · Jawi waiting for Malay approval: ${agent.jawiWaiting}`}
+        {agent.lastTickMinutes !== null && ` · checked ${agent.lastTickMinutes === 0 ? "just now" : `${agent.lastTickMinutes} min ago`}`}
+      </p>
+      {agent.warnings.length > 0 && (
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer text-[#9A6400]">{agent.warnings.length} translated kit{agent.warnings.length === 1 ? "" : "s"} over the cost warning</summary>
+          <ul className="mt-1 list-disc pl-5 text-[#5B6470]">
+            {agent.warnings.slice(0, 20).map((w) => (
+              <li key={`${w.kit_id}-${w.at}`}>
+                {SHORT_NAME[w.language ?? ""] ?? w.language} · ${w.total_usd.toFixed(2)} ({w.basis ?? "measured"}) — {w.at.slice(0, 10)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
   );
 }

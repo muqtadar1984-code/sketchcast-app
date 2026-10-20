@@ -197,8 +197,11 @@ export async function audit(
   // blueprints route — the only target that is not a topic or taxonomy row.
   // 'generation': a demo video (the Demos page), audited on the row itself
   // because a demo belongs to no topic's kit.
-  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint" | "generation",
-  targetId: string,
+  // 'platform_setting' (Auto Translate Agent, 0147): the agent's controls —
+  // no row id, so targetId is null. 'translations': one "Approve all clean"
+  // click over a language (each kit is also audited by the approve RPC).
+  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint" | "generation" | "platform_setting" | "translations",
+  targetId: string | null,
   detail: Record<string, unknown>,
 ) {
   try {
