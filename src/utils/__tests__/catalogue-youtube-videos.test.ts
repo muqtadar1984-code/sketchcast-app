@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVideoRows,
+  scheduledFor,
   filterVideoRows,
   needsAttention,
   parseVideoFilters,
@@ -272,5 +273,38 @@ describe("filters, counts and totals", () => {
       { language: "ar", name: "Arabic", total: 1, posted: 1, public: 1, unlisted: 0, private: 0, notPosted: 0, ready: 0, awaiting: 0, attention: 0, channel: true },
       { language: "ms", name: "Malay", total: 1, posted: 0, public: 0, unlisted: 0, private: 0, notPosted: 1, ready: 0, awaiting: 0, attention: 1, channel: false },
     ]);
+  });
+});
+
+describe("Y2: what the worker's poll stores (0148)", () => {
+  it("removed: the worker's missing mark is the fact, whatever the newest poll says", () => {
+    const r = rowOf(input({ publications: [pub(AR, { youtube_missing_since: "2026-10-20T00:54:00Z" })] }), AR)!;
+    expect(r.state).toBe("removed");
+    expect(r.parts[0].missing).toBe(true);
+  });
+
+  it("with the 0148 columns present and no mark, a video absent from the poll is NOT inferred removed", () => {
+    const r = rowOf(input({ stats: [], publications: [pub(AR, { youtube_missing_since: null })] }), AR)!;
+    expect(r.state).toBe("public");
+  });
+
+  it("rejected: YouTube rejected or failed to process the upload", () => {
+    const r = rowOf(input({ publications: [pub(AR, { youtube_upload_status: "rejected:duplicate", youtube_missing_since: null })] }), AR)!;
+    expect(r.state).toBe("rejected");
+    expect(r.category).toBe("posted");
+    expect(r.parts[0].uploadStatus).toBe("rejected:duplicate");
+    expect(needsAttention(r)).toBe(true);
+    expect(rowOf(input({ publications: [pub(AR, { youtube_upload_status: "failed:codec", youtube_missing_since: null })] }), AR)!.state).toBe("rejected");
+    expect(rowOf(input({ publications: [pub(AR, { youtube_upload_status: "processed", youtube_missing_since: null })] }), AR)!.state).toBe("public");
+  });
+
+  it("scheduled: private with a future release time; a past one is plain private", () => {
+    const sched = rowOf(input({ publications: [pub(AR, { privacy: "private", youtube_publish_at: "2026-10-21T09:00:00Z", youtube_missing_since: null })] }), AR)!;
+    expect(sched.state).toBe("scheduled");
+    expect(sched.category).toBe("posted");
+    expect(scheduledFor(sched, NOW)).toBe("2026-10-21T09:00:00Z");
+    const past = rowOf(input({ publications: [pub(AR, { privacy: "private", youtube_publish_at: "2026-10-19T09:00:00Z", youtube_missing_since: null })] }), AR)!;
+    expect(past.state).toBe("private");
+    expect(viewCounts(buildVideoRows(input({ publications: [pub(AR, { privacy: "private", youtube_publish_at: "2026-10-21T09:00:00Z" })] }))).scheduled).toBe(1);
   });
 });
