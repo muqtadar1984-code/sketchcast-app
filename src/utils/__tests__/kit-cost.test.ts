@@ -203,6 +203,26 @@ describe("kitCostReport — catalogue kits", () => {
     expect(r.extras.orphanTranslate).toEqual({ jobs: 2, costed: 1, totalUsd: 0.35, avgUsd: 0.35 });
   });
 
+  it("flags translated kits over $2 — measured plus a labelled TTS estimate while usage is text-only", () => {
+    const p1 = G({ catalogue: "true", language: "hi" });
+    const p2 = G({ catalogue: "true", language: "fr" });
+    const p3 = G({ catalogue: "true", language: "es" });
+    const dear = K({ language: "hi", topic_id: "tA", source_kit_id: "src", presentation_generation_id: p1.id });
+    const near = K({ language: "fr", topic_id: "tB", source_kit_id: "src", presentation_generation_id: p2.id });
+    const allIn = K({ language: "es", topic_id: "tC", source_kit_id: "src", presentation_generation_id: p3.id });
+    const r = report([p1, p2, p3], [
+      J(p1.id, 0.6), J(null, 1.3, { type: "kit_translate", stage_kit_id: dear.id }),        // 1.9 + 0.21 est.
+      J(p2.id, 0.5), J(null, 1.25, { type: "kit_translate", stage_kit_id: near.id }),       // 1.75 + 0.21 est. = 1.96
+      J(p3.id, null, { usage: { cost_usd: 1, tts_usd: 0.6, images_usd: 0.5, total_usd: 2.1 } }),
+      J(null, 0, { type: "kit_translate", stage_kit_id: allIn.id, usage: { cost_usd: 0, tts_usd: 0, images_usd: 0 } }),
+    ], [dear, near, allIn]);
+    expect(r.translatedOverWarn.map((k) => [k.language, Number(k.totalUsd.toFixed(2)), k.ttsEstimateUsd])).toEqual([
+      ["hi", 2.11, 0.21],
+      ["es", 2.1, 0],
+    ]);
+    expect(r.translatedOverWarn[0].pieces).toEqual([{ kind: "presentation", usd: 0.6 }, { kind: "translation", usd: 1.3 }]);
+  });
+
   it("reports topic articles and question sets per job and per topic", () => {
     const r = report([], [
       J(null, 0.02, { type: "topic_article", topic_id: "t1" }),

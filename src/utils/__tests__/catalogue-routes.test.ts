@@ -150,6 +150,12 @@ const DEMOS = "demos/route.ts";
 // It enqueues ONLY through the kit's translate-job.ts (so it is not a `jobs`
 // inserter itself) and decides nothing: readyForTranslation() does.
 const TRANSLATE_SWEEP = "translate/route.ts";
+// The Auto Translate Agent (0147, 2026-10-20): the agent's controls (a
+// platform_settings merge, admin-only) and "Approve all clean" — the one
+// other route that approves, through the SAME RPC with the reviewer's id,
+// after translationAcceptsApprove; it only READS generations (their status).
+const TRANSLATIONS_AGENT = "translations/agent/route.ts";
+const APPROVE_CLEAN = "translations/approve-clean/route.ts";
 
 describe("the /api/library routes exist and are scanned", () => {
   it("has the Phase 1 + 2a + 2b + 3 + 4 routes", () => {
@@ -170,6 +176,8 @@ describe("the /api/library routes exist and are scanned", () => {
         "topics/[id]/route.ts",
         "topics/route.ts",
         TRANSLATE_SWEEP,
+        TRANSLATIONS_AGENT,
+        APPROVE_CLEAN,
         ...present(A2_ROUTES),
       ].sort(),
     );
@@ -202,7 +210,10 @@ describe("every /api/library route", () => {
 
   it("touches `generations` ONLY from the kit and compose routes, as catalogue rows, behind the two locks, and never next to a `jobs` insert", () => {
     const touches = [...source].filter(([, t]) => /\.from\(\s*["']generations["']\s*\)/.test(t)).map(([f]) => rel(f)).sort();
-    expect(touches).toEqual([KIT, DEMOS, ...present([COMPOSE])].sort());
+    expect(touches).toEqual([KIT, DEMOS, APPROVE_CLEAN, ...present([COMPOSE])].sort());
+    // Approve all clean reads generation STATUS only — never a write
+    expect(text(APPROVE_CLEAN)).not.toMatch(/\.from\(\s*["']generations["']\s*\)\s*\.(insert|update|upsert|delete)\(/);
+    expect(text(APPROVE_CLEAN)).toMatch(/\.from\(\s*["']generations["']\s*\)\.select\(\s*["']id, status["']\s*\)/);
     const genInsert = /\.from\(\s*["']generations["']\s*\)\s*\.insert\(/;
     const jobInsert = /\.from\(\s*["']jobs["']\s*\)[\s\S]{0,200}?\.insert\(/;
     for (const name of [KIT, ...present([COMPOSE])]) {
@@ -768,11 +779,19 @@ describe("the kit route (Phase 3): /api/library/topics/[id]/kit", () => {
         }
       }
     }
-    // the only rpc calls to the kit RPCs live here
+    // the only rpc calls to the kit RPCs live here — and in Approve all
+    // clean, which approves through the same RPC with the reviewer's id,
+    // after the same translation gate, and never rejects
     for (const [f, src] of source) {
-      if (rel(f) === KIT) continue;
+      if (rel(f) === KIT || rel(f) === APPROVE_CLEAN) continue;
       expect(src, rel(f)).not.toMatch(/approve_topic_kit|reject_topic_kit/);
     }
+    const bulk = text(APPROVE_CLEAN);
+    expect(bulk).toMatch(/admin\.rpc\(\s*["']approve_topic_kit["']\s*,\s*\{\s*p_kit:\s*c\.kitId,\s*p_reviewer:\s*m\.id,\s*p_notes:\s*NOTES\s*\}\s*\)/);
+    expect(bulk.indexOf("translationAcceptsApprove(")).toBeGreaterThan(-1);
+    expect(bulk.indexOf("translationAcceptsApprove(")).toBeLessThan(bulk.indexOf('admin.rpc("approve_topic_kit"'));
+    expect(bulk).not.toMatch(/reject_topic_kit/);
+    expect(bulk).toMatch(/isLibraryMemberRequest\(\s*["']approve["']\s*\)/);
   });
 
   it("generate: acceptance, then the locks, then the guarded topic move (the race lock) and the rows from kitGenerationRows; the bank job after", () => {

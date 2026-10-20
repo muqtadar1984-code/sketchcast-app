@@ -104,6 +104,17 @@ export const CATALOGUE_CLAUDE_FROM = "2026-10-18T08:33:00Z";
 export const CLAUDE_LANGUAGES: ReadonlySet<string> = new Set(["ar", "ur", "ms-arab"]);
 
 const FINISHED = new Set(["done", "error"]);
+
+/** Auto Translate Agent plan §4 (founder, 2026-10-20): a translated kit over
+ *  this is flagged here and in the agent's daily email — a warning, never a
+ *  pause. */
+export const TRANSLATED_COST_WARN_USD = 2;
+
+/** Narration for a translated kit while jobs.usage is text-only (before the
+ *  worker's real-cost change): about 7,000 characters at $30 per million —
+ *  the same estimate the worker's agent adds (catalogue/auto_translate.py),
+ *  always labelled as an estimate. */
+export const TTS_ESTIMATE_USD = 0.21;
 const TRACKING_REASON = "before usage tracking (15 Oct)";
 const beforeTracking = (iso: string) => Date.parse(iso) < Date.parse(USAGE_TRACKED_FROM);
 
@@ -229,6 +240,20 @@ export type KitCostReport = {
     /** kit_translate runs whose kit no longer exists (re-run or failed). */
     orphanTranslate: ExtraStat;
   };
+  /** Costed translated kits over TRANSLATED_COST_WARN_USD, dearest first. */
+  translatedOverWarn: OverWarnKit[];
+};
+
+export type OverWarnKit = {
+  kitId: string;
+  topicId: string;
+  language: string;
+  createdAt: string;
+  /** measured spend, plus the TTS estimate when the rows were text-only */
+  totalUsd: number;
+  measuredUsd: number;
+  ttsEstimateUsd: number;
+  pieces: { kind: string; usd: number }[];
 };
 
 type Piece = { kind: string; usd: number | null; allIn: boolean; running: boolean; finishedWithoutUsage: boolean; anyDone: boolean };
@@ -397,6 +422,7 @@ export function kitCostReport(input: {
   }
   const english: Kit[] = [];
   const translated: Kit[] = [];
+  const translatedOverWarn: OverWarnKit[] = [];
   for (const tk of topicKits) {
     if (!inWindow(tk.created_at)) continue;
     const kit: Kit = { pieces: [], split: new Map(), inferred: false, exclude: null };
@@ -424,6 +450,23 @@ export function kitCostReport(input: {
     else if (kit.pieces.some((p) => p.running)) kit.exclude = "still generating";
     else if (!anchored) kit.exclude = tk.source_kit_id ? "no translation spend recorded" : "video recorded no usage";
     (tk.source_kit_id ? translated : english).push(kit);
+    if (tk.source_kit_id && !kit.exclude) {
+      const measured = kit.pieces.reduce((a, p) => a + (p.usd ?? 0), 0);
+      const allIn = kit.pieces.every((p) => p.usd === null || p.allIn);
+      const estimate = allIn ? 0 : TTS_ESTIMATE_USD;
+      if (measured + estimate > TRANSLATED_COST_WARN_USD) {
+        translatedOverWarn.push({
+          kitId: tk.id,
+          topicId: tk.topic_id,
+          language: tk.language,
+          createdAt: tk.created_at,
+          totalUsd: measured + estimate,
+          measuredUsd: measured,
+          ttsEstimateUsd: estimate,
+          pieces: kit.pieces.filter((p) => p.usd !== null).map((p) => ({ kind: p.kind, usd: p.usd as number })),
+        });
+      }
+    }
   }
 
   // ── per-topic extras ──
@@ -447,5 +490,6 @@ export function kitCostReport(input: {
       perTopicUsd: topics.size ? (a.totalUsd + q.totalUsd) / topics.size : null,
       orphanTranslate: extraStat(orphanTranslate),
     },
+    translatedOverWarn: translatedOverWarn.sort((a, b) => b.totalUsd - a.totalUsd),
   };
 }

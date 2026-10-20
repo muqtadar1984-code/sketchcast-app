@@ -1,5 +1,5 @@
 import { fmtUsd } from "@/utils/financials";
-import { COST_WINDOWS, type CostWindow, type GroupStats, type KitCostReport } from "@/utils/kit-cost";
+import { COST_WINDOWS, TRANSLATED_COST_WARN_USD, type CostWindow, type GroupStats, type KitCostReport } from "@/utils/kit-cost";
 
 // "Average cost per kit" on the Overview — a render of utils/kit-cost.ts.
 // Server component; the window is a plain GET form like the Traffic tab's.
@@ -76,7 +76,7 @@ function GroupCard({ title, sub, g }: { title: string; sub: string; g: GroupStat
   );
 }
 
-export default function KitCostSection({ report, window }: { report: KitCostReport; window: CostWindow }) {
+export default function KitCostSection({ report, window, topicTitles }: { report: KitCostReport; window: CostWindow; topicTitles?: Record<string, string> }) {
   const { extras } = report;
   const allIn = report.client.allIn + report.english.allIn + report.translated.allIn;
   const costed = report.client.costed + report.english.costed + report.translated.costed;
@@ -121,6 +121,24 @@ export default function KitCostSection({ report, window }: { report: KitCostRepo
           </span>
         )}
       </div>
+
+      {report.translatedOverWarn.length > 0 && (
+        <details className="rounded-xl bg-white border border-[#F2D6A2] px-4 py-3 mt-3 text-sm text-[#5B6470]">
+          <summary className="cursor-pointer text-[#9A6400]">
+            Translated kits over ${TRANSLATED_COST_WARN_USD.toFixed(2)}: {report.translatedOverWarn.length}
+            {report.translatedOverWarn.length >= 3 && " — repeated breaches, investigate"}
+          </summary>
+          <ul className="mt-2 space-y-1 text-xs">
+            {report.translatedOverWarn.slice(0, 30).map((k) => (
+              <li key={k.kitId}>
+                <span className="font-medium">{k.language}</span> · {topicTitles?.[k.topicId] ?? k.topicId.slice(0, 8)} · {usd(k.totalUsd)}
+                {k.ttsEstimateUsd > 0 && <span className="text-[#98A0A9]"> (measured {usd(k.measuredUsd)} + TTS ≈ {usd(k.ttsEstimateUsd)} est.)</span>}
+                <span className="text-[#98A0A9]"> — {k.pieces.map((p) => `${p.kind} ${usd(p.usd)}`).join(", ")}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       <p className="text-xs text-[#98A0A9] mt-2">
         {allIn > 0 ? `${allIn} of ${costed} costed kits include images and narration; the rest are` : "Text model spend only:"} images and

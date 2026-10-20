@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { requireLibraryMember } from "@/utils/library-access";
+import { libraryAllows } from "@/utils/library-routing";
+import { agentView, type AutoTranslateSettings, type AutoTranslateState } from "@/utils/catalogue/auto-translate";
 import { parseMatrixFilters, translationLanguages } from "@/utils/catalogue/translation-matrix";
 import { ErrorBanner } from "../catalogue-ui";
 import { loadTranslationMatrix } from "./load";
@@ -20,10 +22,18 @@ import { Heading, TranslationsView } from "./translations-view";
 export const dynamic = "force-dynamic";
 
 export default async function TranslationsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await requireLibraryMember();
+  const m = await requireLibraryMember();
   const languages = translationLanguages();
   const filters = parseMatrixFilters(await searchParams, languages);
-  const load = await loadTranslationMatrix(createAdminClient());
+  const admin = createAdminClient();
+  const [load, agentRows] = await Promise.all([
+    loadTranslationMatrix(admin),
+    // the Auto Translate Agent's two settings rows (0147); none before it
+    admin.from("platform_settings").select("key, value").in("key", ["auto_translate", "auto_translate_state"]),
+  ]);
+  const rowOf = (key: string) => (agentRows.data ?? []).find((r) => r.key === key)?.value;
+  const settings = rowOf("auto_translate") as AutoTranslateSettings | undefined;
+  const agent = settings ? agentView(settings, rowOf("auto_translate_state") as AutoTranslateState | undefined, load.ok ? load.clocks.nowMs : 0) : null;
   if (!load.ok) {
     return (
       <main className="max-w-7xl mx-auto px-6 py-10">
@@ -32,5 +42,14 @@ export default async function TranslationsPage({ searchParams }: { searchParams:
       </main>
     );
   }
-  return <TranslationsView load={load} filters={filters} languages={languages} />;
+  return (
+    <TranslationsView
+      load={load}
+      filters={filters}
+      languages={languages}
+      agent={agent}
+      canApprove={libraryAllows(m.role, "approve")}
+      canControl={libraryAllows(m.role, "publish")}
+    />
+  );
 }
