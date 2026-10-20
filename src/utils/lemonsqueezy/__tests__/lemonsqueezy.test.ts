@@ -570,7 +570,7 @@ describe("LS order → credit pack", () => {
     await run(db, orderEvent({ custom: { user_id: "user-A" }, total: null, currency: "EUR", totalUsd: null }));
     const pay = db.pay()!;
     expect(pay.row.currency).toBe("usd");
-    expect(pay.row.amount).toBe(800); // pack_6 list price, in minor units
+    expect(pay.row.amount).toBe(250); // pack_6 list price ($2.50 since 2026-10-20), in minor units
   });
 
   it("ignores a non-pack order (a subscription's own order_created)", async () => {

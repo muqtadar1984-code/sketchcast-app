@@ -1,5 +1,6 @@
 // One-time credit packs (homeschool release, founder-approved 2026-08):
-// 6 credits $8 ("1 kit"), 18 credits $20 ("3 kits"), 36 credits $36 ("6 kits").
+// 6 credits $2.50 ("1 kit"), 18 credits $7.50 ("3 kits"), 36 credits $15 ("6 kits")
+// since the price reset of 2026-10-20 (was $8 / $20 / $36).
 // Purchased credits do not expire monthly; the DB consumes the monthly quota
 // FIRST, then the purchased balance. Purchasable on ANY paid tier — never on
 // trial/free/promo (those see an upgrade prompt instead).
