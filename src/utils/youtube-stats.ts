@@ -115,7 +115,7 @@ export function latestChannel(snaps: ChannelSnap[]): ChannelSnap | null {
   return snaps.reduce<ChannelSnap | null>((best, s) => (!best || ms(s.captured_at) > ms(best.captured_at) ? s : best), null);
 }
 
-/** The default channel's language — the console's headline tiles read it alone. */
+/** The default channel's language — listed first wherever channels are. */
 export const DEFAULT_CHANNEL = "en";
 
 /** Snapshots of one channel language (a row with no language is the default channel's). */
@@ -133,6 +133,64 @@ export function channelsByLanguage(snaps: ChannelSnap[], since: Date): { languag
     const latest = latestChannel(own);
     return latest ? [{ language, latest, delta: channelDelta(own, since) }] : [];
   });
+}
+
+export type ChannelReading = {
+  channel_id: string;
+  /** Every language that polls this channel, the default first: two
+   * languages may share one channel (Malay and Jawi, 2026-10-20). */
+  languages: string[];
+  latest: ChannelSnap;
+  delta: ReturnType<typeof channelDelta>;
+};
+
+const byDefaultFirst = (a: string, b: string) => (a === DEFAULT_CHANNEL ? -1 : b === DEFAULT_CHANNEL ? 1 : a.localeCompare(b));
+
+/** One reading per YouTube CHANNEL, keyed on channel_id — not per language,
+ * because a channel two languages share is polled once per language and its
+ * subscribers must count once. The default channel first, then by language.
+ * A channel added later appears here on its first poll with no code change. */
+export function channelsById(snaps: ChannelSnap[], since: Date): ChannelReading[] {
+  const groups = new Map<string, ChannelSnap[]>();
+  for (const s of snaps) {
+    const list = groups.get(s.channel_id) ?? [];
+    list.push(s);
+    groups.set(s.channel_id, list);
+  }
+  const out: ChannelReading[] = [];
+  for (const [channel_id, own] of groups) {
+    const latest = latestChannel(own);
+    if (!latest) continue;
+    const languages = [...new Set(own.map((s) => s.channel_language || DEFAULT_CHANNEL))].sort(byDefaultFirst);
+    // A shared channel's rows are the same numbers polled twice; one
+    // language's rows give its delta without the duplicates.
+    out.push({ channel_id, languages, latest, delta: channelDelta(channelSnaps(own, languages[0]), since) });
+  }
+  return out.sort((a, b) => byDefaultFirst(a.languages[0], b.languages[0]));
+}
+
+/** The headline tiles: every channel's latest snapshot summed, one count per
+ * channel. `subscribersGained` sums each channel's change since `since`; it
+ * is `partial` when any channel's earliest poll is younger than the window
+ * (or it has been polled only once), so the figure is a lower bound. */
+export function channelTotals(snaps: ChannelSnap[], since: Date): {
+  channels: number; subscribers: number; views: number; videos: number;
+  subscribersGained: { subscribers: number; partial: boolean } | null;
+} | null {
+  const all = channelsById(snaps, since);
+  if (!all.length) return null;
+  const sum = (f: (c: ChannelReading) => number) => all.reduce((a, c) => a + f(c), 0);
+  const withDelta = all.filter((c) => c.delta);
+  return {
+    channels: all.length,
+    subscribers: sum((c) => c.latest.subscribers ?? 0),
+    views: sum((c) => c.latest.views ?? 0),
+    videos: sum((c) => c.latest.videos ?? 0),
+    subscribersGained: withDelta.length
+      ? { subscribers: withDelta.reduce((a, c) => a + c.delta!.subscribers, 0),
+          partial: withDelta.length < all.length || withDelta.some((c) => c.delta!.partial) }
+      : null,
+  };
 }
 
 /** Subscribers gained since `since` (earliest snapshot stands in, flagged). */
