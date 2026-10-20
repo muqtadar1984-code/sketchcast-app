@@ -8,6 +8,8 @@ import { isCustomerJob, monthlyFailureRate, monthStartUtc, sharedBooks, stalledA
 import { overviewAudience } from "@/utils/console-audience";
 import type { ChannelSnap } from "@/utils/youtube-stats";
 import type { DailyRow } from "@/utils/cloudflare-stats";
+import { kitCostReport, parseCostWindow, type CostGen, type CostJob, type TopicKitRow } from "@/utils/kit-cost";
+import KitCostSection from "./kit-cost-section";
 
 // Platform overview — the founder's one-page answer to "how is SketchCast
 // doing and what is it costing?". Server component, service role only; the
@@ -30,13 +32,24 @@ function pct(n: number, d: number): string {
   return d ? `${Math.round((n / d) * 100)}%` : "—";
 }
 
-export default async function ConsoleOverviewPage() {
+export default async function ConsoleOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ costdays?: string; costsince?: string }>;
+}) {
   const admin = createAdminClient();
   // (server component, rendered once per request — Date.now is fine here)
   // eslint-disable-next-line react-hooks/purity
   const failureWindowStart = new Date(monthStartUtc(new Date(Date.now()), FAILURE_MONTHS - 1)).toISOString();
+  // Average cost per kit — its own window (?costdays / ?costsince). Rows are
+  // read from a week before it: a client kit is dated by its FIRST piece, so
+  // the helper needs the pieces that began just before the window to leave
+  // those kits out instead of counting their later pieces as new kits.
+  // eslint-disable-next-line react-hooks/purity
+  const costWindow = parseCostWindow(await searchParams, new Date(Date.now()));
+  const costFrom = new Date(costWindow.startMs - 7 * DAY).toISOString();
 
-  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, windowJobsQ, staffIds] = await Promise.all([
+  const [profilesQ, schoolsQ, booksQ, gensQ, feedbackQ, viewsQ, ytQ, cfQ, windowJobsQ, staffIds, costGensQ, costJobsQ, topicKitsQ] = await Promise.all([
     admin.from("profiles").select("id, role, school_id, beta_tester, is_demo, metrics_excluded, created_at, full_name, username, country, country_source"),
     admin.from("schools").select("id, name"),
     admin.from("books").select("id, owner_id, status, created_at, title, pages, content_hash, language, removed_at"),
@@ -62,6 +75,21 @@ export default async function ConsoleOverviewPage() {
         .in("status", ["done", "error"]).gte("created_at", failureWindowStart),
     ),
     staffUserIds(admin),
+    // Cost per kit (utils/kit-cost.ts): the few params the grouping needs,
+    // not whole params blobs (a catalogue presentation's runs to kilobytes).
+    selectAll(() =>
+      admin.from("generations")
+        .select("id, owner_id, kind, book_id, chapter_ref, created_at, part:params->>part, language:params->>language, catalogue:params->>catalogue, catalogue_ref:params->>catalogue_ref, coverage_model:params->>coverage_model")
+        .gte("created_at", costFrom),
+    ),
+    selectAll(() =>
+      admin.from("jobs")
+        .select("id, generation_id, type, status, usage, created_at, topic_id:params->>topic_id, stage_kit_id:stage->>kit_id")
+        .gte("created_at", costFrom),
+    ),
+    admin.from("topic_kits")
+      .select("id, topic_id, language, source_kit_id, status, created_at, presentation_generation_id, doc_generation_ids")
+      .gte("created_at", new Date(costWindow.startMs).toISOString()),
   ]);
 
   // jobs.usage only exists once migration 0013 is applied — degrade to the
@@ -202,6 +230,14 @@ export default async function ConsoleOverviewPage() {
   const monthly = monthlyFailureRate(windowJobs, FAILURE_MONTHS, nowDate);
   const monthlyMaxPct = Math.max(1, ...monthly.map((m) => (m.rate === null ? 0 : Math.round(m.rate * 100))));
 
+  const kitCost = kitCostReport({
+    gens: (costGensQ.data ?? []) as CostGen[],
+    jobs: (costJobsQ.data ?? []) as CostJob[],
+    topicKits: (topicKitsQ.data ?? []) as TopicKitRow[],
+    excludedOwners: excludedIds,
+    windowStartMs: costWindow.startMs,
+  });
+
   const audience = overviewAudience((ytQ.data ?? []) as ChannelSnap[], (cfQ.data ?? []) as DailyRow[], nowDate);
 
   const metrics: Metric[] = [
@@ -298,6 +334,8 @@ export default async function ConsoleOverviewPage() {
           </div>
         ))}
       </div>
+
+      <KitCostSection report={kitCost} window={costWindow} />
 
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-8 mb-10">
         <section>
