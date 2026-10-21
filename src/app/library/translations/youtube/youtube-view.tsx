@@ -108,11 +108,16 @@ export function YouTubeVideosView({
   input,
   filters: f,
   selection,
+  top,
 }: {
   input: VideoInput;
   filters: VideoFilters;
-  /** bulk posting's checkbox column — absent until that feature passes it */
-  selection?: { header: ReactNode; cell: (row: VideoRow) => ReactNode };
+  /** bulk posting's checkbox column — absent until that feature passes it.
+   *  `header` receives the rows listed under the current filters, so "select
+   *  all" can only ever select what is on screen. */
+  selection?: { header: (listed: VideoRow[]) => ReactNode; cell: (row: VideoRow) => ReactNode };
+  /** the YouTube Publishing Agent's panel, drawn above the totals */
+  top?: ReactNode;
 }) {
   const now = new Date(input.nowMs);
   const minutes = input.pollMinutes ?? POLL_DEFAULT_MINUTES;
@@ -132,8 +137,9 @@ export function YouTubeVideosView({
       <Heading />
       <TranslationsNav active="youtube" />
       <p className="text-[#5B6470] mb-4 max-w-3xl">
-        Every translated video and where it stands on YouTube. Posting happens in the review inbox (platform admins); open a row&apos;s topic to post,
-        retry or re-word it. A translation is posted only on its own language&apos;s channel.
+        Every translated video and where it stands on YouTube. Platform admins tick ready translations to queue them for the posting agent (one video
+        per language per day), or open a row&apos;s topic to post, retry or re-word it in the review inbox. A translation is posted only on its own
+        language&apos;s channel.
       </p>
 
       <p className="text-xs text-[#5B6470] mb-4 flex flex-wrap gap-x-4 gap-y-1">
@@ -149,6 +155,8 @@ export function YouTubeVideosView({
           );
         })}
       </p>
+
+      {top}
 
       <section className="card p-4 mb-5 overflow-x-auto">
         <h2 className="text-sm font-medium mb-2">By language{f.subject ? ` · ${f.subject}` : ""}</h2>
@@ -247,7 +255,7 @@ export function YouTubeVideosView({
         <table className="w-full text-sm border-collapse">
           <thead className="bg-[#F4F5F2] text-[#5B6470]">
             <tr className="text-left">
-              {selection && <th className="px-3 py-2 w-8">{selection.header}</th>}
+              {selection && <th className="px-3 py-2 w-8">{selection.header(rows)}</th>}
               <th className="font-normal px-3 py-2 min-w-[16rem]">Topic</th>
               <th className="font-normal px-3 py-2">Language</th>
               <th className="font-normal px-3 py-2">YouTube status</th>
