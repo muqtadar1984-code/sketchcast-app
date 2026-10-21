@@ -200,7 +200,8 @@ export async function audit(
   // 'platform_setting' (Auto Translate Agent, 0147): the agent's controls —
   // no row id, so targetId is null. 'translations': one "Approve all clean"
   // click over a language (each kit is also audited by the approve RPC).
-  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint" | "generation" | "platform_setting" | "translations",
+  // 'fix_case' (Fix Agent, 0151): the founder's approve / reject of a case.
+  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint" | "generation" | "platform_setting" | "translations" | "fix_case",
   targetId: string | null,
   detail: Record<string, unknown>,
 ) {
