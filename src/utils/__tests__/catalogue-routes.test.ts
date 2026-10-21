@@ -159,6 +159,10 @@ const APPROVE_CLEAN = "translations/approve-clean/route.ts";
 // The YouTube Publishing Agent (0150, 2026-10-21): queue / run once more /
 // pause. It writes the queue and the rounds; the WORKER inserts the jobs.
 const YOUTUBE_AGENT = "youtube/agent/route.ts";
+// The Fix Agent (0151, 2026-10-21): the founder's approve / reject of a case
+// (a guarded fix_cases update) and the agent's on/off switch. Admin-only; the
+// WORKER queues the retry, so this route never touches `jobs`.
+const FIXES = "fixes/route.ts";
 
 describe("the /api/library routes exist and are scanned", () => {
   it("has the Phase 1 + 2a + 2b + 3 + 4 routes", () => {
@@ -182,6 +186,7 @@ describe("the /api/library routes exist and are scanned", () => {
         TRANSLATIONS_AGENT,
         APPROVE_CLEAN,
         YOUTUBE_AGENT,
+        FIXES,
         ...present(A2_ROUTES),
       ].sort(),
     );
