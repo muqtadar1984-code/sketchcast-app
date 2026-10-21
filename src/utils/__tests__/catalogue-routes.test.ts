@@ -156,6 +156,9 @@ const TRANSLATE_SWEEP = "translate/route.ts";
 // after translationAcceptsApprove; it only READS generations (their status).
 const TRANSLATIONS_AGENT = "translations/agent/route.ts";
 const APPROVE_CLEAN = "translations/approve-clean/route.ts";
+// The YouTube Publishing Agent (0150, 2026-10-21): queue / run once more /
+// pause. It writes the queue and the rounds; the WORKER inserts the jobs.
+const YOUTUBE_AGENT = "youtube/agent/route.ts";
 
 describe("the /api/library routes exist and are scanned", () => {
   it("has the Phase 1 + 2a + 2b + 3 + 4 routes", () => {
@@ -178,6 +181,7 @@ describe("the /api/library routes exist and are scanned", () => {
         TRANSLATE_SWEEP,
         TRANSLATIONS_AGENT,
         APPROVE_CLEAN,
+        YOUTUBE_AGENT,
         ...present(A2_ROUTES),
       ].sort(),
     );
