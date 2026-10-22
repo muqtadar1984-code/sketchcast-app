@@ -1748,7 +1748,12 @@
       "readingPart": "भाग {n}/{total} वाचत आहे",
       "partProgress": "भाग {n}/{total} · {pct}%",
       "percent": "{pct}%",
-      "minutesLeft": "~{n} मि शिल्लक"
+      "minutesLeft": "~{n} मि शिल्लक",
+      "queuedAhead": "{n} पुढे · {eta} मध्ये सुरू",
+      "queuedNext": "रांगेत पुढचे",
+      "etaMinutes": "~{n} मि",
+      "etaHours": "~{h} तास",
+      "etaHoursMinutes": "~{h} तास {m} मि"
     },
     "book": {
       "untitled": "शीर्षक नसलेले पुस्तक"

@@ -9,7 +9,7 @@ import AskCoachButton from "./ask-coach-button";
 import ReportFailure from "./report-failure";
 import { recordArtifactView } from "@/utils/views";
 import { WatchLink } from "./lesson-player";
-import { etaLabel, type JobStage } from "@/utils/job-stage";
+import { etaLabel, queuedLabel, type JobStage } from "@/utils/job-stage";
 import { fmt } from "@/i18n/format";
 import { statusLabel, type LibraryMessages } from "./labels";
 import { deckParams } from "./kit";
@@ -20,6 +20,8 @@ export type CellLesson = {
   progress: number;
   /** Part-major generation stage (0053) — "part 2/4 · 35%" narration. */
   stage?: JobStage;
+  /** Queued rows only: place in line + estimated start (utils/queue-position). */
+  queue?: { ahead: number; etaMin: number } | null;
   video: string | null;
   /** All video parts in order — a long chapter renders as Part 1..N (~15 min each). */
   videos?: string[];
@@ -187,7 +189,9 @@ export default function ContentCell({
 
   if (lesson.status === "queued" || lesson.status === "processing") {
     const eta =
-      lesson.status === "processing" ? etaLabel(kind, lesson.progress, lesson.stage, t.utils.job) : "";
+      lesson.status === "processing"
+        ? etaLabel(kind, lesson.progress, lesson.stage, t.utils.job)
+        : queuedLabel(lesson.queue, t.utils.job);
     return (
       <span
         className="inline-flex items-center gap-1.5 text-[13px] text-[#98A0A9] whitespace-nowrap"
@@ -209,6 +213,9 @@ export default function ContentCell({
             {fmt(t.utils.job.percent, { pct: lesson.progress })}
             {eta ? ` · ${eta}` : ""}
           </span>
+        )}
+        {isPres && lesson.status === "queued" && eta && (
+          <span className="text-[#98A0A9] tabular-nums">{eta}</span>
         )}
       </span>
     );

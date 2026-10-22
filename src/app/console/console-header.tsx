@@ -8,6 +8,7 @@ import MobileNav from "../dashboard/mobile-nav";
 const TABS = [
   { href: "/console", label: "Overview" },
   { href: "/console/issues", label: "Issues" },
+  { href: "/console/queue", label: "Queue" },
   { href: "/console/users", label: "Users" },
   { href: "/console/schools", label: "Schools" },
   { href: "/console/funnel", label: "Funnel" },

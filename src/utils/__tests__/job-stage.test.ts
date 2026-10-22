@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { jobStageLabel, etaLabel } from "../job-stage";
+import { jobStageLabel, etaLabel, queuedLabel } from "../job-stage";
 import en from "@/i18n/messages/en.json";
 
 describe("jobStageLabel", () => {
@@ -54,6 +54,11 @@ const AR = {
   partProgress: "الجزء {n}/{total} · {pct}٪",
   percent: "{pct}٪",
   minutesLeft: "~{n} دقيقة متبقية",
+  queuedAhead: "{n} قبلك · يبدأ خلال {eta}",
+  queuedNext: "التالي في الدور",
+  etaMinutes: "~{n} د",
+  etaHours: "~{h} س",
+  etaHoursMinutes: "~{h} س {m} د",
 };
 
 describe("both labels render the reader's language when given one", () => {
@@ -63,6 +68,11 @@ describe("both labels render the reader's language when given one", () => {
     );
     expect(jobStageLabel(26, { phase: "analysis", part: 1, total: 4 }, AR)).toBe("قراءة الجزء 1/4");
     expect(jobStageLabel(45, null, AR)).toBe("45٪");
+  });
+  it("translates the queued line", () => {
+    expect(queuedLabel({ ahead: 37, etaMin: 40 }, AR)).toBe("37 قبلك · يبدأ خلال ~40 د");
+    expect(queuedLabel({ ahead: 0, etaMin: 1 }, AR)).toBe("التالي في الدور");
+    expect(queuedLabel(null, AR)).toBe(""); // no measured spot: say nothing
   });
   it("translates the ETA", () => {
     expect(etaLabel("presentation", 20, null, AR)).toBe("~5 دقيقة متبقية");
@@ -78,5 +88,7 @@ describe("both labels render the reader's language when given one", () => {
     );
     expect(jobStageLabel(45)).toBe(jobStageLabel(45, null, en.utils.job));
     expect(etaLabel("presentation", 20, null)).toBe(etaLabel("presentation", 20, null, en.utils.job));
+    expect(queuedLabel({ ahead: 200, etaMin: 118 })).toBe(queuedLabel({ ahead: 200, etaMin: 118 }, en.utils.job));
+    expect(queuedLabel({ ahead: 0, etaMin: 1 })).toBe(queuedLabel({ ahead: 0, etaMin: 1 }, en.utils.job));
   });
 });

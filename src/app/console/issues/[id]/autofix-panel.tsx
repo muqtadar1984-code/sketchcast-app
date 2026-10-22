@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { workerScopeRefusal } from "@/utils/autofix/scope";
 
 export type AutofixRun = {
   status: string;
@@ -27,14 +28,19 @@ const LABEL: Record<string, { text: string; tone: string }> = {
 // PR; the founder approves the release by email). Only rendered when
 // NEXT_PUBLIC_FEATURE_AUTOFIX is on. An in-progress run hides the button. When the
 // environment isn't provisioned (migration 0039 not run) a setup note replaces it.
+// A worker-side category gets the refusal reason INSTEAD of the button — the same
+// helper /api/autofix/dispatch refuses with, so the panel and the route can never
+// disagree (they did: the button was offered on generation_failed and always 400'd).
 export default function AutofixPanel({
   issueId,
   run,
   provisioned,
+  category,
 }: {
   issueId: string;
   run: AutofixRun;
   provisioned: boolean;
+  category?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -44,7 +50,8 @@ export default function AutofixPanel({
   if (process.env.NEXT_PUBLIC_FEATURE_AUTOFIX !== "true") return null;
 
   const active = run && ["dispatched", "pr_open", "approved"].includes(run.status);
-  const canAttempt = !active; // merged/rejected/ci_failed/error/none → can (re)attempt
+  const refusal = workerScopeRefusal(category);
+  const canAttempt = !active && !refusal; // merged/rejected/ci_failed/error/none → can (re)attempt
 
   async function attempt() {
     setBusy(true);
@@ -102,6 +109,10 @@ export default function AutofixPanel({
           Auto-fix isn&apos;t set up on this environment yet — run migration 0039 and configure the
           GitHub secrets (docs/AUTOFIX.md).
         </p>
+      )}
+
+      {provisioned && refusal && !active && (
+        <p className="text-sm text-[#5B6470]">{refusal}</p>
       )}
 
       {provisioned && canAttempt && (
