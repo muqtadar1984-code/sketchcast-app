@@ -45,6 +45,34 @@ export function AgentSwitch({ enabled }: { enabled: boolean }) {
   );
 }
 
+const RETRY_ALL_CONFIRM = (n: number) =>
+  `Retry all ${n} case(s) that need you? Each goes back to the agent with its last proposal and is translated again, one at a time, never while a user's job is running.`;
+
+/** Retry one case the agent gave up on, or every such case ("all"). */
+export function RetryButton({ id, count }: { id?: string; count?: number }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const all = !id;
+  const press = async () => {
+    if (all && !window.confirm(RETRY_ALL_CONFIRM(count ?? 0))) return;
+    setBusy(true);
+    setError(null);
+    const err = await post(all ? { action: "retry_all" } : { action: "retry", id });
+    setBusy(false);
+    if (err) setError(err);
+    else router.refresh();
+  };
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button type="button" disabled={busy} onClick={press} className={all ? "btn-ghost h-8 px-3 text-sm" : "btn-primary h-9 px-4 text-sm"}>
+        {busy ? "Retrying…" : all ? `Retry all that need you (${count ?? 0})` : "Retry"}
+      </button>
+      {error && <span className="text-xs text-[#B3401F]">{error}</span>}
+    </span>
+  );
+}
+
 export function DecisionButtons({ id }: { id: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);

@@ -189,3 +189,23 @@ describe("highlightSegments", () => {
     expect(highlightSegments("", ["a"])).toEqual([]);
   });
 });
+
+describe("retry after it needed you", () => {
+  it("only a case that needs the founder is retryable", async () => {
+    const { isRetryable } = await import("@/utils/fixes/fix-cases");
+    expect(isRetryable({ status: "needs_founder" })).toBe(true);
+    for (const st of ["proposed", "approved", "applied", "resolved", "rejected", "new"]) expect(isRetryable({ status: st })).toBe(false);
+    expect(isRetryable(null)).toBe(false);
+  });
+
+  it("the patch clears the old retry, keeps the proposal and appends the ended round", async () => {
+    const { retryPatch } = await import("@/utils/fixes/fix-cases");
+    const p = retryPatch({ round: 2, applied_job_id: "j", history: [{ round: 1 }], proposal: { note: "x" }, outcome: { error: "e" } }, "me", "2026-10-23T00:00:00Z");
+    expect(p.status).toBe("approved");
+    expect(p.applied_job_id).toBeNull();
+    expect(p.decided_by).toBe("me");
+    expect(p).not.toHaveProperty("proposal");
+    expect(p.history).toEqual([{ round: 1 }, expect.objectContaining({ round: 2, applied_job_id: "j", outcome: { error: "e" } })]);
+    expect(retryPatch({ history: null }, "me", "t").history).toHaveLength(1);
+  });
+});

@@ -12,6 +12,7 @@ import {
   historyOf,
   isDecidable,
   isOpen,
+  isRetryable,
   outcomeInReview,
   statusLabel,
   usd,
@@ -24,7 +25,7 @@ import {
   type Outcome,
   type Proposal,
 } from "@/utils/fixes/fix-cases";
-import { AgentSwitch, DecisionButtons } from "./fix-actions";
+import { AgentSwitch, DecisionButtons, RetryButton } from "./fix-actions";
 
 // Library → Fixes' screen: the agent's switch, then one card per case. A
 // Server Component with no reads of its own — page.tsx authenticates and
@@ -62,7 +63,7 @@ export function Heading() {
   );
 }
 
-export function AgentHeader({ enabled, available }: { enabled: boolean; available: boolean }) {
+export function AgentHeader({ enabled, available, needsYou = 0 }: { enabled: boolean; available: boolean; needsYou?: number }) {
   return (
     <section className="card p-4 mb-5 flex flex-wrap items-center gap-3">
       <div className="flex-1 min-w-[16rem]">
@@ -75,6 +76,7 @@ export function AgentHeader({ enabled, available }: { enabled: boolean; availabl
           Nothing is retried until you approve it; an approved fix waits for the translation lane, then the retried kit lands in review.
         </p>
       </div>
+      {available && needsYou > 0 && <RetryButton count={needsYou} />}
       {available && <AgentSwitch enabled={enabled} />}
     </section>
   );
@@ -339,6 +341,7 @@ function CaseCard({ c, topics, people, canDecide }: { c: FixCase; topics: Record
       {cost && <p className="text-xs text-[#5B6470]">Measured cost so far: {cost}</p>}
 
       {canDecide && isDecidable(c) && <DecisionButtons id={c.id} />}
+      {canDecide && isRetryable(c) && <RetryButton id={c.id} />}
 
       <HistoryRounds history={historyOf(c.history)} people={people} topicId={c.topic_id} rtl={rtl} />
     </article>
@@ -365,7 +368,7 @@ export function FixesView({
     <main className="max-w-6xl mx-auto px-6 py-10">
       <AutoRefresh active={live} seconds={30} />
       <Heading />
-      <AgentHeader enabled={enabled} available={canDecide} />
+      <AgentHeader enabled={enabled} available={canDecide} needsYou={cases.filter(isRetryable).length} />
       {cases.length === 0 ? (
         <p className="card p-8 text-center text-[#5B6470]">No failures to fix.</p>
       ) : (

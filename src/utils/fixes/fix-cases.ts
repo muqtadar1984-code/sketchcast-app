@@ -180,6 +180,59 @@ export function decisionPatch(action: Decision, actorId: string, note: unknown, 
   };
 }
 
+// ── retry after "needs you" ─────────────────────────────────────────────────
+// A case the agent gave up on (two rounds, or a diagnosis it could not make)
+// is retried by the founder once the cause is fixed — usually a check or
+// translator change shipped in the worker. The case goes back to 'approved'
+// with its last proposal; the worker queues it through fix_case_enqueue (one
+// translation at a time, never while a user's job is live). The round it
+// ended in is kept in `history`.
+
+export function isRetryable(row: { status?: unknown } | null | undefined): boolean {
+  return row?.status === "needs_founder";
+}
+
+export type RetryPatch = {
+  status: "approved";
+  applied_job_id: null;
+  applied_at: null;
+  decided_by: string;
+  decided_at: string;
+  decision_note: string;
+  history: unknown[];
+  updated_at: string;
+};
+
+export function retryPatch(
+  row: Pick<FixCase, "round" | "source_job_id" | "evidence" | "diagnosis" | "proposal" | "decided_by" | "decided_at" | "decision_note" | "applied_job_id" | "applied_at" | "outcome" | "history">,
+  actorId: string,
+  nowIso: string,
+): RetryPatch {
+  const done = {
+    round: row.round ?? null,
+    source_job_id: row.source_job_id ?? null,
+    evidence: row.evidence ?? null,
+    diagnosis: row.diagnosis ?? null,
+    proposal: row.proposal ?? null,
+    decided_by: row.decided_by ?? null,
+    decided_at: row.decided_at ?? null,
+    decision_note: row.decision_note ?? null,
+    applied_job_id: row.applied_job_id ?? null,
+    applied_at: row.applied_at ?? null,
+    outcome: row.outcome ?? null,
+  };
+  return {
+    status: "approved",
+    applied_job_id: null,
+    applied_at: null,
+    decided_by: actorId,
+    decided_at: nowIso,
+    decision_note: "retried by the founder after it needed attention",
+    history: [...(Array.isArray(row.history) ? row.history : []), done],
+    updated_at: nowIso,
+  };
+}
+
 // ── ordering and the page's window ──────────────────────────────────────────
 
 export function isOpen(row: { status?: unknown }): boolean {
