@@ -780,6 +780,16 @@
     }
   },
   "library": {
+    "queueBar": {
+      "summary": "{queued} dalam giliran · {building} sedang dibina",
+      "paused": "Dijeda — tiada yang baharu akan bermula pada buku ini sehingga anda menyambung.",
+      "pause": "Jeda",
+      "resume": "Sambung",
+      "cancel": "Batal giliran",
+      "confirmCancel": "Batalkan {n} item yang masih menunggu pada buku ini? Yang sedang dibina akan siap. Kredit untuk item yang dibatalkan dikembalikan.",
+      "cancelled": "{n} dibatalkan",
+      "failed": "Itu tidak berjaya — sila cuba lagi."
+    },
     "title": "Pustaka anda",
     "subtitle": "Muat naik buku teks, kemudian jana pelajaran bernarasi daripadanya.",
     "noBookTools": "Akaun anda disediakan untuk pengajaran tanpa alat buku (PJ, muzik, seni dan subjek seumpamanya) — jadual waktu dan kelas anda ada di bawah. Jika itu tidak tepat, minta sekolah anda menghubungi sokongan SketchCast.",

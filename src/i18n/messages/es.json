@@ -780,6 +780,16 @@
     }
   },
   "library": {
+    "queueBar": {
+      "summary": "{queued} en cola · {building} en preparación",
+      "paused": "En pausa: no empezará nada nuevo en este libro hasta que lo reanudes.",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "cancel": "Cancelar en cola",
+      "confirmCancel": "¿Cancelar los {n} elementos que siguen esperando en este libro? Lo que ya se está preparando terminará. Se te devolverán los créditos de lo cancelado.",
+      "cancelled": "{n} cancelados",
+      "failed": "No ha funcionado. Inténtalo de nuevo."
+    },
     "title": "Su biblioteca",
     "subtitle": "Suba un libro de texto y genere a partir de él una lección narrada.",
     "noBookTools": "Su cuenta está configurada para enseñar sin herramientas de libros (educación física, música, artes y materias similares) — su horario y sus clases están abajo. Si esto es un error, pida a su escuela que contacte al soporte de SketchCast.",

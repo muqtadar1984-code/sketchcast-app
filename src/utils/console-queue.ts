@@ -144,3 +144,22 @@ export function bookGrid(gens: readonly GenRow[], partCounts: ReadonlyMap<string
     (a, b) => num(a.chapterRef) - num(b.chapterRef) || (a.part ?? 0) - (b.part ?? 0),
   );
 }
+
+/** The generations "Cancel duplicates" removes: in every duplicate cell, keep
+ *  the MOST ADVANCED kit (done, then building, then queued; oldest on a tie)
+ *  and take the rest that are still QUEUED. A duplicate already building or
+ *  built is left alone — cancelling it would waste the work, and the cancel
+ *  RPC refunds only what never started. */
+export function duplicatesToCancel(gens: readonly GenRow[]): string[] {
+  const out: string[] = [];
+  for (const u of bookGrid(gens, new Map()))
+    for (const c of u.cells) {
+      if (!c.duplicate) continue;
+      const rank = (st: string) => (st === "done" ? 0 : st === "processing" ? 1 : 2);
+      const live = c.rows
+        .filter((r) => r.status !== "error")
+        .sort((a, b) => rank(a.status) - rank(b.status) || a.created_at.localeCompare(b.created_at));
+      for (const r of live.slice(1)) if (r.status === "queued") out.push(r.id);
+    }
+  return out;
+}

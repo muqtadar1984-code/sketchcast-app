@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookGrid, byOwner, summarise, type GenRow, type LiveJob } from "../console-queue";
+import { bookGrid, byOwner, duplicatesToCancel, summarise, type GenRow, type LiveJob } from "../console-queue";
 
 const job = (o: Partial<LiveJob>): LiveJob => ({
   id: Math.random().toString(36),
@@ -68,5 +68,26 @@ describe("book grid", () => {
       ["2", 7, true],
       ["9", 3, false], // no stored map → nothing to judge against
     ]);
+  });
+});
+
+describe("cancel duplicates", () => {
+  const g = (id: string, o: Partial<GenRow>): GenRow => ({
+    id, kind: "worksheet", status: "queued", chapter_ref: "2", part: 1, created_at: "2026-10-22T06:48:57Z", ...o,
+  });
+
+  it("keeps the most advanced kit and cancels only queued copies (Sara's ch2 part 1 ×4)", () => {
+    const ids = duplicatesToCancel([
+      g("first", { status: "queued", created_at: "2026-10-22T06:48:57Z" }),
+      g("built", { status: "done", created_at: "2026-10-22T06:51:39Z" }),
+      g("building", { status: "processing", created_at: "2026-10-22T06:51:59Z" }),
+      g("last", { status: "queued", created_at: "2026-10-22T06:52:53Z" }),
+      g("failed", { status: "error", created_at: "2026-10-22T06:50:00Z" }),
+    ]);
+    expect(ids.sort()).toEqual(["first", "last"]);
+  });
+
+  it("leaves single kits and different parts alone", () => {
+    expect(duplicatesToCancel([g("a", {}), g("b", { part: 2 }), g("c", { kind: "deck" })])).toEqual([]);
   });
 });
