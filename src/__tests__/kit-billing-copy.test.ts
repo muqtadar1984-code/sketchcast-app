@@ -91,11 +91,15 @@ describe("kit billing copy", () => {
   });
 
   it("the whole-book confirm says the deck is the free one", () => {
-    // generate-all-button.tsx queues a kit per chapter part behind a confirm();
-    // it is the single largest spend in the product.
-    const file = src("app/dashboard/generate-all-button.tsx");
-    expect(file).toContain("The deck is free; every other item costs one credit");
-    expect(file).not.toContain("documents are free");
+    // generate-all-button.tsx queues a kit per chapter part behind its confirm
+    // dialog (generate-all-dialog.tsx); it is the single largest spend in the
+    // product. The copy lives in the dictionary since the dialog replaced the
+    // native confirm().
+    const dialog = src("app/dashboard/generate-all-dialog.tsx");
+    expect(dialog).toContain("g.body");
+    expect(src("app/dashboard/generate-all-button.tsx")).toContain("<GenerateAllDialog");
+    const en = LOCALES.en as { library: { generateAll: { body: string } } };
+    expect(en.library.generateAll.body).toContain("The deck is free; every other item costs one credit");
   });
 
   it("no user-facing string anywhere claims documents are free", () => {

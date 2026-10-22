@@ -1077,6 +1077,30 @@
         "poor": "Lemah"
       }
     },
+    "generateAll": {
+      "button": "Jana semua ({n})",
+      "title": "Jana semua kit yang belum ada",
+      "checking": "Menyemak buku ini dan baris gilir…",
+      "loadFailed": "Tidak dapat menyemak kit buku ini. Cuba lagi.",
+      "summary": "{kits} kit · {credits} kredit",
+      "summaryUnmetered": "{kits} kit · tidak dicaj dalam pelan anda",
+      "etaMin": "Kira-kira {low}–{high} minit untuk siap ({ahead} tugasan di hadapan anda)",
+      "etaHours": "Kira-kira {low}–{high} jam untuk siap ({ahead} tugasan di hadapan anda)",
+      "etaNote": "Anggaran, berdasarkan kelajuan baris gilir dalam 7 hari lepas.",
+      "etaUnknown": "Masa siap tidak dapat dianggarkan buat masa ini.",
+      "body": "Bab yang mempunyai beberapa bahagian mendapat satu kit bagi setiap bahagian, dibina satu demi satu. Setiap kit mengandungi pelajaran, dek slaid dan lima dokumen. Dek adalah percuma; setiap item lain menggunakan satu kredit.",
+      "skipLabel": "Langkau bahagian yang sudah ada kit",
+      "skippedList": "Sudah ada kit ({n}):",
+      "unitPart": "{title} · Bahagian {part}",
+      "nothingLeft": "Setiap bahagian buku ini sudah ada kit. Nyahtanda “Langkau” untuk membina versi baharu.",
+      "dailyWarn": "Ini akan menjadikan jumlah hari ini {total} kit. Kelompok sebesar ini melambatkan baris gilir untuk semua orang, jadi pertimbangkan beberapa bab pada satu masa.",
+      "indexing": "Bab-bab buku ini sedang dibaca semula. Jana semua boleh digunakan semula apabila selesai.",
+      "confirm": "Jana {n} kit",
+      "cancel": "Batal",
+      "stoppedAt": "{queued} kit dibaris gilir, kemudian berhenti di {where}: {error}",
+      "whereChapter": "bab {n}",
+      "wherePart": "bab {n} bahagian {part}"
+    },
     "gate": {
       "banner": "Muat naik ini tidak kelihatan seperti buku teks. Pelajaran yang dijana daripadanya berkemungkinan lemah.",
       "structureBanner": "Buku ini telah diindeks, tetapi senarai babnya kelihatan tidak boleh dipercayai. Semak bab sebelum menjana — pelajaran mengikut sempadan ini.",

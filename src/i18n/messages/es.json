@@ -1077,6 +1077,30 @@
         "poor": "Mala"
       }
     },
+    "generateAll": {
+      "button": "Generar todo ({n})",
+      "title": "Generar todos los kits que faltan",
+      "checking": "Revisando este libro y la cola…",
+      "loadFailed": "No se pudieron revisar los kits de este libro. Inténtalo de nuevo.",
+      "summary": "{kits} kits · {credits} créditos",
+      "summaryUnmetered": "{kits} kits · sin cargo en tu plan",
+      "etaMin": "Unos {low}–{high} min para terminar ({ahead} tareas por delante)",
+      "etaHours": "Unas {low}–{high} h para terminar ({ahead} tareas por delante)",
+      "etaNote": "Una estimación, según la velocidad de la cola en los últimos 7 días.",
+      "etaUnknown": "Ahora mismo no se puede estimar la hora de finalización.",
+      "body": "Un capítulo con varias partes recibe un kit por parte, creados uno tras otro. Cada kit incluye una lección, una presentación de diapositivas y cinco documentos. La presentación es gratis; cada uno de los demás elementos cuesta un crédito.",
+      "skipLabel": "Omitir las partes que ya tienen un kit",
+      "skippedList": "Ya tienen un kit ({n}):",
+      "unitPart": "{title} · Parte {part}",
+      "nothingLeft": "Todas las partes de este libro ya tienen un kit. Desmarca «Omitir» para crear versiones nuevas.",
+      "dailyWarn": "Con esto, tu total de hoy llegaría a {total} kits. Lotes tan grandes ralentizan la cola para todos, así que considera generar unos pocos capítulos cada vez.",
+      "indexing": "Los capítulos de este libro se están volviendo a leer. «Generar todo» volverá a estar disponible cuando termine.",
+      "confirm": "Generar {n} kits",
+      "cancel": "Cancelar",
+      "stoppedAt": "Se pusieron en cola {queued} kits y luego se detuvo en {where}: {error}",
+      "whereChapter": "capítulo {n}",
+      "wherePart": "capítulo {n} parte {part}"
+    },
     "gate": {
       "banner": "Este archivo subido no parece un libro de texto. Las lecciones generadas a partir de él probablemente serán débiles.",
       "structureBanner": "Este libro se indexó, pero su lista de capítulos parece poco fiable. Revise los capítulos antes de generar — las lecciones siguen estos límites.",
