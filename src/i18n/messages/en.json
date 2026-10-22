@@ -780,6 +780,16 @@
     }
   },
   "library": {
+    "queueBar": {
+      "summary": "{queued} queued · {building} building",
+      "paused": "Paused — nothing new will start on this book until you resume.",
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancel": "Cancel queued",
+      "confirmCancel": "Cancel the {n} items still waiting on this book? Anything already building will finish. Your credits for the cancelled items are returned.",
+      "cancelled": "{n} cancelled",
+      "failed": "That didn't work — please try again."
+    },
     "title": "Your library",
     "subtitle": "Upload a textbook, then generate a narrated lesson from it.",
     "noBookTools": "Your account is set up for teaching without book tools (PE, music, arts and similar subjects) — your timetable and classes are below. If that's wrong, ask your school to contact SketchCast support.",

@@ -3,11 +3,13 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 import { finishRate, isoMinutesAgo } from "@/utils/queue-position";
 import { bookGrid, byOwner, GRID_KINDS, summarise, type GenRow, type LiveJob } from "@/utils/console-queue";
+import QueueActions from "./queue-actions";
 
-// Live generation queue (surge plan §4.1, Phase 1 — READ-ONLY). Who is waiting,
-// how long their queue takes to drain at the measured rate, what is failing,
-// and — per book — which kits are duplicates or ask for parts the book no
-// longer has. Actions (cancel / stop / hold) arrive in Phase 2.
+// Live generation queue (surge plan §4.1). Who is waiting, how long their queue
+// takes to drain at the measured rate, what is failing, and — per book — which
+// kits are duplicates or ask for parts the book no longer has. Phase 2 adds the
+// controls (queue-actions.tsx → /api/console/queue): pause/resume, cancel
+// queued, stop running, cancel duplicates. They need migration 0153.
 
 export const dynamic = "force-dynamic";
 
@@ -82,12 +84,32 @@ export default async function ConsoleQueuePage({
     for (const k of Object.keys(pressure) as (keyof typeof pressure)[]) pressure[k] += Number(ph[k] ?? 0) || 0;
   }
 
+  // Live holds (0153). Before the migration the table is absent: no holds.
+  type Hold = { id: string; owner_id: string | null; book_id: string | null; reason: string | null; until: string; created_at: string };
+  const { data: holdsRaw } = await admin
+    .from("queue_holds")
+    .select("id, owner_id, book_id, reason, until, created_at")
+    .is("released_at", null)
+    .gt("until", isoMinutesAgo(0))
+    .limit(200);
+  const holds = (holdsRaw ?? []) as Hold[];
+  const ownerHeld = (id: string) => holds.some((h) => h.owner_id === id && !h.book_id);
+  const bookHeld = (id: string) => holds.some((h) => h.book_id === id && !h.owner_id);
+
   const strip = summarise(live);
   let owners = byOwner(live, errors2h, rate);
   if (owner) owners = owners.filter((o) => o.ownerId === owner);
 
-  const ownerIds = owners.map((o) => o.ownerId).filter((id) => id !== "system");
-  const bookIds = [...new Set([...owners.flatMap((o) => o.books), ...(book ? [book] : [])])];
+  const ownerIds = [
+    ...new Set([...owners.map((o) => o.ownerId), ...holds.map((h) => h.owner_id ?? "system")]),
+  ].filter((id) => id !== "system");
+  const bookIds = [
+    ...new Set([
+      ...owners.flatMap((o) => o.books),
+      ...(book ? [book] : []),
+      ...holds.flatMap((h) => (h.book_id ? [h.book_id] : [])),
+    ]),
+  ];
   const [{ data: profs }, { data: books }] = await Promise.all([
     ownerIds.length
       ? admin.from("profiles").select("id, full_name, username").in("id", ownerIds)
@@ -144,7 +166,8 @@ export default async function ConsoleQueuePage({
       <h1 className="text-4xl mb-2">Queue</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-[#5B6470] mb-5">
-        Live generation jobs. Read-only for now — cancel, stop and hold arrive with fair-share claiming.
+        Live generation jobs. Cancels refund like the teacher&apos;s own ✕; Stop aborts running builds at their next
+        stage; Pause holds a queue until you resume it (24 h at most).
       </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
@@ -172,6 +195,20 @@ export default async function ConsoleQueuePage({
         )}
       </p>
 
+      {holds.length > 0 && (
+        <div className="card px-5 py-3 mb-6 text-sm">
+          <div className="font-medium mb-1">Paused queues ({holds.length})</div>
+          {holds.map((h) => (
+            <div key={h.id} className="text-[#5B6470]">
+              {h.owner_id ? (nameOf.get(h.owner_id) ?? h.owner_id.slice(0, 8)) : "Any owner"}
+              {h.book_id ? ` · ${bookOf.get(h.book_id)?.title ?? h.book_id.slice(0, 8)}` : ""} · until{" "}
+              <span className="tabular">{new Date(h.until).toLocaleString()}</span>
+              {h.reason ? ` · ${h.reason}` : ""}
+            </div>
+          ))}
+        </div>
+      )}
+
       {owner && (
         <p className="mb-3 text-sm">
           Filtered to one owner · <Link href="/console/queue" className="text-[#0C8175] hover:underline">show all</Link>
@@ -189,12 +226,13 @@ export default async function ConsoleQueuePage({
               <th className="px-4 py-2">Oldest queued</th>
               <th className="px-4 py-2">Est. drain</th>
               <th className="px-4 py-2">Books</th>
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#EEF0EC]">
             {owners.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-[#5B6470]">Nothing queued or failing. 🎉</td>
+                <td colSpan={8} className="px-4 py-6 text-[#5B6470]">Nothing queued or failing. 🎉</td>
               </tr>
             )}
             {owners.map((o) => (
@@ -220,6 +258,11 @@ export default async function ConsoleQueuePage({
                     </Link>
                   ))}
                 </td>
+                <td className="px-4 py-2">
+                  {o.ownerId !== "system" && (
+                    <QueueActions ownerId={o.ownerId} held={ownerHeld(o.ownerId)} queued={o.queued} processing={o.processing} />
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -228,7 +271,17 @@ export default async function ConsoleQueuePage({
 
       {grid && (
         <section>
-          <h2 className="font-display text-2xl mb-1">{focus?.title ?? "Book"}</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+            <h2 className="font-display text-2xl">{focus?.title ?? "Book"}</h2>
+            {book && (
+              <QueueActions
+                bookId={book}
+                held={bookHeld(book)}
+                queued={live.filter((j) => j.book_id === book && j.status === "queued").length}
+                processing={live.filter((j) => j.book_id === book && j.status === "processing").length}
+              />
+            )}
+          </div>
           <p className="text-sm text-[#5B6470] mb-3">
             Every kit on this book by chapter part. <span className="chip font-sans bg-[#FFF1D6] text-[#9A6400]">dup</span>{" "}
             = more than one non-failed kit for the same part and kind (a re-click).{" "}

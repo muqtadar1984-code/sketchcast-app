@@ -925,6 +925,24 @@ export default async function DashboardPage() {
     bookList.some((b) => b.status === "indexing");
 
   // Shape the data for the (client) collapsible book/chapter table.
+  // The teacher's own paused books (queue_holds, 0153). The table is
+  // service-role only, so this reads with copySigner — and only this user's
+  // rows. Absent before the migration: nothing is paused.
+  const pausedBooks = new Set<string>();
+  if (copySigner && lessons.some((l) => l.status === "queued")) {
+    try {
+      const { data: hs } = await copySigner
+        .from("queue_holds")
+        .select("book_id")
+        .eq("owner_id", user.id)
+        .is("released_at", null)
+        .gt("until", isoMinutesAgo(0));
+      for (const h of (hs ?? []) as { book_id: string | null }[]) if (h.book_id) pausedBooks.add(h.book_id);
+    } catch {
+      // no holds table yet — nothing to show
+    }
+  }
+
   const bookRows: BookRow[] = bookList.map((b) => {
     const chs = b.chapters ?? [];
     return {
@@ -1077,6 +1095,11 @@ export default async function DashboardPage() {
         }),
       otherLessons: otherLessonsForBook(b),
       batchLessons: batchLessonsForBook(b),
+      queueState: {
+        queued: lessons.filter((l) => l.bookId === b.id && l.status === "queued").length,
+        processing: lessons.filter((l) => l.bookId === b.id && l.status === "processing").length,
+        paused: pausedBooks.has(b.id),
+      },
     };
   });
 

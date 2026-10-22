@@ -3,6 +3,7 @@
 import { useState } from "react";
 import GenerateButton from "./generate-button";
 import GenerateAllButton from "./generate-all-button";
+import BookQueueBar from "./book-queue-bar";
 import DeleteBook from "./delete-book";
 import DeleteLesson from "./delete-lesson";
 import { type CellLesson } from "./content-cell";
@@ -78,6 +79,9 @@ export type BookRow = {
    *  "Generate all" queues one kit PER PART, so it needs the count. */
   pendingChapters: { num: number; title: string; partCount: number }[];
   otherLessons: (CellLesson & { title: string })[];
+  /** This teacher's own queue on the book (surge plan D3): counts + whether
+   *  they paused it. Drives BookQueueBar's Pause / Resume / Cancel queued. */
+  queueState?: { queued: number; processing: number; paused: boolean };
   /** Lessons queued via "Generate selected" (params.batch) — own section at the book's end. */
   batchLessons: (CellLesson & { title: string; kind: string; chapterRef: string | null })[];
   /** Revision papers (0061): standalone worksheets/exams over a group of chapters. */
@@ -368,6 +372,9 @@ export default function BookTable({
                       <strong>{t.book.scannedLead}</strong> {t.book.scannedWarning} {t.book.scannedAdvice}
                     </span>
                   </div>
+                )}
+                {b.queueState && (b.queueState.queued > 0 || b.queueState.paused) && (
+                  <BookQueueBar bookId={b.id} state={b.queueState} t={t.queueBar} />
                 )}
                 {!beta && (
                   // One primary action (generate what's missing); the occasional

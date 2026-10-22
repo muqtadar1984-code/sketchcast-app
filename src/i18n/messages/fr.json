@@ -780,6 +780,16 @@
     }
   },
   "library": {
+    "queueBar": {
+      "summary": "{queued} en attente · {building} en cours",
+      "paused": "En pause — rien de nouveau ne démarrera sur ce livre tant que vous ne reprenez pas.",
+      "pause": "Mettre en pause",
+      "resume": "Reprendre",
+      "cancel": "Annuler l'attente",
+      "confirmCancel": "Annuler les {n} éléments encore en attente sur ce livre ? Ce qui est déjà en cours se terminera. Vos crédits pour les éléments annulés vous sont rendus.",
+      "cancelled": "{n} annulés",
+      "failed": "Cela n'a pas fonctionné — réessayez."
+    },
     "title": "Votre bibliothèque",
     "subtitle": "Importez un manuel, puis générez-en une leçon narrée.",
     "noBookTools": "Votre compte est configuré pour enseigner sans les outils liés aux livres (EPS, musique, arts et matières similaires) — votre emploi du temps et vos classes sont ci-dessous. Si c'est une erreur, demandez à votre école de contacter l'assistance SketchCast.",

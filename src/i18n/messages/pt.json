@@ -780,6 +780,16 @@
     }
   },
   "library": {
+    "queueBar": {
+      "summary": "{queued} na fila · {building} em preparação",
+      "paused": "Em pausa — nada de novo começará neste livro até retomar.",
+      "pause": "Pausar",
+      "resume": "Retomar",
+      "cancel": "Cancelar fila",
+      "confirmCancel": "Cancelar os {n} itens ainda à espera neste livro? O que já está em preparação será concluído. Os créditos dos itens cancelados são devolvidos.",
+      "cancelled": "{n} cancelados",
+      "failed": "Não funcionou — tente novamente."
+    },
     "title": "Sua biblioteca",
     "subtitle": "Envie um livro didático e gere uma aula narrada a partir dele.",
     "noBookTools": "Sua conta está configurada para ensino sem as ferramentas de livro (Educação Física, música, artes e matérias parecidas) — seu horário e suas turmas estão abaixo. Se isso estiver errado, peça à sua escola para falar com o suporte do SketchCast.",
