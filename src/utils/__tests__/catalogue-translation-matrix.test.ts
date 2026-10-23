@@ -11,6 +11,7 @@ import {
   buildTranslationMatrix,
   filterMatrixRows,
   matrixHref,
+  shownLanguages,
   statusCounts,
   isMissing,
   parseMatrixFilters,
@@ -395,5 +396,27 @@ describe("status and language filters (founder, 2026-10-23)", () => {
     expect(matrixHref({ subject: "Mathematics", missing: "", lang: "ms", status: "" }, { status: "failed" }))
       .toBe("/library/translations?subject=Mathematics&lang=ms&status=failed");
     expect(matrixHref({ subject: "", missing: "", status: "failed" }, { status: "" })).toBe("/library/translations");
+  });
+});
+
+describe("the columns follow the filters (founder, 2026-10-23)", () => {
+  const row = (title: string, states: Record<string, CellState>) =>
+    ({ topicId: title, title, subject: "Mathematics", english: { language: "en", state: "posted" },
+       cells: Object.entries(states).map(([language, state]) => ({ language, state })) }) as unknown as MatrixRow;
+  const langs = ["ar", "ms", "mr"];
+  const rows = [row("A", { ar: "approved", ms: "approved", mr: "in_review" }), row("B", { ar: "approved", ms: "failed", mr: "none" })];
+  const base = { subject: "", missing: "" };
+
+  it("a status shows only the languages with a cell in that state", () => {
+    expect(shownLanguages(rows, { ...base, status: "in_review" }, langs)).toEqual(["mr"]);
+    expect(shownLanguages(rows, { ...base, status: "approved" }, langs)).toEqual(["ar", "ms"]);
+    expect(shownLanguages([], { ...base, status: "failed" }, langs)).toEqual([]);
+  });
+
+  it("the chosen language wins; missing narrows too; no filter shows all, in order", () => {
+    expect(shownLanguages(rows, { ...base, status: "approved", lang: "ms" }, langs)).toEqual(["ms"]);
+    expect(shownLanguages(rows, { ...base, missing: "any" }, langs)).toEqual(["ms", "mr"]);
+    expect(shownLanguages(rows, { ...base, missing: "ar" }, langs)).toEqual(["ar"]);
+    expect(shownLanguages(rows, base, langs)).toEqual(langs);
   });
 });
