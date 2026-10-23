@@ -21,7 +21,12 @@ export type Classification = "check_false_positive" | "translation_error" | "inf
 export type Decision = "approve" | "reject";
 
 export type Finding = { where?: string; what?: string; missing?: string[]; extra?: string[]; source?: string; target?: string };
-export type Evidence = { part?: number; reproduced?: boolean; findings?: Finding[] };
+/** The worker's re-check of a case against the CURRENT code (absent on old
+ *  rows): `passes` — the current check accepts every saved English /
+ *  translation pair of the case; `fixed_by` — a known fixed error pattern
+ *  (e.g. "#316") matched the case's error. Read through recheckBadge(). */
+export type Recheck = { at?: string; commit?: string; passes?: boolean | null; fixed_by?: string | null; checked?: number; passing?: number };
+export type Evidence = { part?: number; reproduced?: boolean; findings?: Finding[]; recheck?: Recheck | null };
 export type Verdict = { where?: string; verdict?: "faithful" | "wrong" | string; why?: string };
 export type Diagnosis = { classification?: Classification | string; explanation?: string; verdicts?: Verdict[]; model?: string };
 export type Waiver = { where?: string; what?: string; extra?: string[]; missing?: string[]; justification?: string };

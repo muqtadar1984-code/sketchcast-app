@@ -3,7 +3,10 @@
  * scanned): admins only; approve / reject is ONE update guarded on
  * status = 'proposed' and read back (no row → 409, no audit); on / off merges
  * {enabled} into platform_settings 'fix_agent'; a database without 0151 is a
- * 409 naming the migration. Nothing else is written — never `jobs`.
+ * 409 naming the migration; the bulk actions (approve_many / reject_many /
+ * retry_many) are the single action's guarded update per id, answering
+ * {done, skipped} with ONE audit row, and a 400 (nothing written) for any bad
+ * id. Nothing else is written — never `jobs`.
  *
  * It lives here, not under /api/library: catalogue-routes.test.ts scans every
  * .ts file there as a route.
@@ -255,5 +258,121 @@ describe("retry after it needed you", () => {
     const r = await post(db, { action: "retry", id: "33333333-3333-4333-8333-333333333333" });
     expect(r.status).toBe(409);
     expect(db.writes.filter((w) => w.op === "update")).toEqual([]);
+  });
+});
+
+describe("bulk actions (the board's Approve all / selection bar)", () => {
+  const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const D = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  function board() {
+    return new FakeDb({
+      fix_cases: [
+        { id: A, status: "proposed", round: 1 },
+        { id: B, status: "proposed", round: 1 },
+        { id: C, status: "needs_founder", round: 2, applied_job_id: "job-c", proposal: { note: "n" }, history: [], outcome: { error: "again" } },
+        { id: D, status: "approved", round: 1 },
+      ],
+      platform_settings: [],
+      platform_audit_log: [],
+    });
+  }
+  const caseUpdates = (db: FakeDb) => db.writes.filter((w) => w.table === "fix_cases" && w.op === "update");
+
+  it("approves each id in its own guarded update, skips the ones that moved on, and audits ONE row", async () => {
+    const db = board();
+    const { status, json } = await post(db, { action: "approve_many", ids: [A, B.toUpperCase(), C, D, A] });
+    expect(status).toBe(200);
+    // duplicates dropped: A, B, C, D — C needs you and D is approved already
+    expect(json).toEqual({ ok: true, action: "approve_many", done: 2, skipped: 2 });
+    expect(db.tables.fix_cases.map((r) => r.status)).toEqual(["approved", "approved", "needs_founder", "approved"]);
+    const ups = caseUpdates(db);
+    expect(ups).toHaveLength(4);
+    for (const [i, id] of [A, B, C, D].entries()) {
+      expect(ups[i].filters).toEqual([
+        ["id", id],
+        ["status", "proposed"],
+      ]);
+      expect(Object.keys(ups[i].row).sort()).toEqual(["decided_at", "decided_by", "decision_note", "status", "updated_at"]);
+    }
+    expect(audits(db)).toEqual([
+      { actor_id: ADMIN, action: "library_fix_case_approve_many", target_kind: "fix_case", target_id: null, detail: { ids: [A, B], count: 2 } },
+    ]);
+    expect(db.writes.some((w) => w.table === "jobs")).toBe(false);
+  });
+
+  it("rejects with the trimmed note on every row, and puts it in the audit", async () => {
+    const db = board();
+    const { status, json } = await post(db, { action: "reject_many", ids: [A, B], note: "  not like this  " });
+    expect(status).toBe(200);
+    expect(json).toMatchObject({ done: 2, skipped: 0 });
+    expect(db.tables.fix_cases.slice(0, 2).map((r) => [r.status, r.decision_note])).toEqual([
+      ["rejected", "not like this"],
+      ["rejected", "not like this"],
+    ]);
+    expect(audits(db)).toEqual([expect.objectContaining({ action: "library_fix_case_reject_many", detail: { ids: [A, B], count: 2, note: "not like this" } })]);
+  });
+
+  it("retries only the cases that need you, read then guarded update, history kept", async () => {
+    const db = board();
+    const { status, json } = await post(db, { action: "retry_many", ids: [C, A] });
+    expect(status).toBe(200);
+    expect(json).toEqual({ ok: true, action: "retry_many", done: 1, skipped: 1 });
+    const row = db.tables.fix_cases[2];
+    expect(row).toMatchObject({ status: "approved", applied_job_id: null, decided_by: ADMIN, proposal: { note: "n" } });
+    expect(row.history).toEqual([expect.objectContaining({ round: 2, applied_job_id: "job-c", outcome: { error: "again" } })]);
+    expect(db.tables.fix_cases[0].status).toBe("proposed");
+    const ups = caseUpdates(db);
+    // A was never read in needs_founder, so it was never updated
+    expect(ups).toHaveLength(1);
+    expect(ups[0].filters).toEqual([
+      ["id", C],
+      ["status", "needs_founder"],
+    ]);
+    expect(audits(db)).toEqual([expect.objectContaining({ action: "library_fix_case_retry_many", target_id: null, detail: { ids: [C], count: 1 } })]);
+    expect(db.writes.some((w) => w.table === "jobs")).toBe(false);
+  });
+
+  it("audits the press even when every id was skipped", async () => {
+    const db = board();
+    const { json } = await post(db, { action: "approve_many", ids: [D] });
+    expect(json).toMatchObject({ done: 0, skipped: 1 });
+    expect(audits(db)).toEqual([expect.objectContaining({ action: "library_fix_case_approve_many", detail: { ids: [], count: 0 } })]);
+  });
+
+  it("answers 400 and writes nothing for a bad id, no ids, an empty list or more than 100", async () => {
+    const many = Array.from({ length: 101 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    for (const body of [
+      { action: "approve_many", ids: [A, "not-a-uuid"] },
+      { action: "reject_many", ids: [A, 7] },
+      { action: "retry_many" },
+      { action: "approve_many", ids: [] },
+      { action: "approve_many", ids: A },
+      { action: "approve_many", ids: many },
+    ]) {
+      const db = board();
+      const r = await post(db, body);
+      expect(r.status, JSON.stringify(body).slice(0, 80)).toBe(400);
+      expect(db.writes).toEqual([]);
+    }
+    // exactly 100 is fine
+    const db = board();
+    expect((await post(db, { action: "approve_many", ids: many.slice(0, 100) })).status).toBe(200);
+  });
+
+  it("names migration 0151 when fix_cases is missing, and audits nothing", async () => {
+    const db = new FakeDb({ fix_cases: [], platform_audit_log: [] }, { fix_cases: { code: "42P01", message: 'relation "fix_cases" does not exist' } });
+    const { status, json } = await post(db, { action: "retry_many", ids: [A] });
+    expect(status).toBe(409);
+    expect(json.migration).toBe("0151_fix_agent.sql");
+    expect(audits(db)).toEqual([]);
+  });
+
+  it("answers 404 to a non-admin before reading anything", async () => {
+    mocks.isLibraryMemberRequest.mockResolvedValue(null);
+    const db = board();
+    expect((await post(db, { action: "approve_many", ids: [A] })).status).toBe(404);
+    expect(db.writes).toEqual([]);
   });
 });
