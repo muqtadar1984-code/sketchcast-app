@@ -12,8 +12,8 @@ import {
   type MatrixFilters,
 } from "@/utils/catalogue/translation-matrix";
 import { ErrorBanner } from "../catalogue-ui";
-import { TranslationClock } from "../translation-clock";
-import { queuePosition, typicalFor, type TranslationClockData } from "@/utils/catalogue/translation-eta";
+import { TranslationClock, TranslationProgressBar } from "../translation-clock";
+import { leadProgress, queuePosition, typicalFor, type TranslationClockData } from "@/utils/catalogue/translation-eta";
 import type { MatrixLoad } from "./load";
 import type { AgentView } from "@/utils/catalogue/auto-translate";
 import { AgentControls, ApproveCleanButton } from "./agent-panel";
@@ -48,9 +48,17 @@ const TONE: Record<CellState, string> = {
   stale: "bg-[#FFF1D6] text-[#9A6400]",
   blocked: "bg-[#FFE9E3] text-[#B3401F]",
   failed: "bg-[#FFE9E3] text-[#B3401F]",
+  // calm, not Failed's red: an approved fix is waiting for its retry
+  fix_queued: "bg-[#EAF0F6] text-[#3F6587]",
 };
 
-const LEGEND: CellState[] = ["posted", "approved", "in_review", "translating", "queued", "failed", "stale", "blocked", "none", "not_ready"];
+const LEGEND: CellState[] = ["posted", "approved", "in_review", "translating", "queued", "failed", "fix_queued", "stale", "blocked", "none", "not_ready"];
+
+/** Library → Fixes on a language's approved fixes — or its retrying ones when
+ *  every queued fix is already retrying (fix-board.ts parseBoardParams:
+ *  ?status=approved|retrying&lang=). */
+const fixesHref = (language: string, fixQueued: number, fixRetrying: number) =>
+  `/library/fixes?${new URLSearchParams({ status: fixRetrying >= fixQueued ? "retrying" : "approved", lang: language }).toString()}`;
 
 function Cell({ c, clocks, subject }: { c: MatrixCell; clocks?: TranslationClockData; subject?: string | null }) {
   return (
@@ -99,6 +107,14 @@ export function TranslationsView({
   const totals = totalsByLanguage(inSubject, languages);
   const englishPosted = inSubject.filter((r) => r.english.state === "posted").length;
   const live = all.some((r) => r.cells.some((c) => c.state === "queued" || c.state === "translating"));
+  // the runs under each language's Translating count, for its progress bar
+  const runsOf = (i: number) =>
+    inSubject.flatMap((r) => {
+      const c = r.cells[i];
+      return c?.state === "translating" && c.clock && c.clock.phase !== "queued"
+        ? [{ phase: c.clock.phase, since: c.clock.since, typicalMin: typicalFor(load.clocks.timing, r.subject), jobProgress: c.clock.progress ?? null }]
+        : [];
+    });
 
   return (
     <main className="px-6 py-10 max-w-[96rem] mx-auto">
@@ -135,30 +151,64 @@ export function TranslationsView({
               <th className="px-3 py-1 font-normal">In review</th>
               <th className="px-3 py-1 font-normal">Translating</th>
               <th className="px-3 py-1 font-normal">Failed</th>
+              <th className="px-3 py-1 font-normal" title="Failed, with a fix the founder approved — its retry waits for the translation lane or is running">
+                Fix queued
+              </th>
               <th className="px-3 py-1 font-normal">Stale / blocked</th>
               <th className="px-3 py-1 font-normal">Not started</th>
               {canApprove && <th className="px-3 py-1 font-normal" />}
             </tr>
           </thead>
           <tbody>
-            {totals.map((t) => (
-              <tr key={t.language} className="border-t border-[#EEF0EC]">
-                <td className="pr-4 py-1" title={languageLabel(t.language) ?? t.language}>
-                  {SHORT_NAME[t.language] ?? t.language} <span className="text-[#8A929C]">{t.language}</span>
-                </td>
-                <td className="px-3 py-1 text-[#0F7A68] font-medium">{t.approved}</td>
-                <td className="px-3 py-1 text-[#1F5FA8]">{t.inReview}</td>
-                <td className="px-3 py-1 text-[#5B3FBF]">{t.translating}</td>
-                <td className={`px-3 py-1 ${t.failed ? "text-[#B3401F] font-medium" : "text-[#8A929C]"}`}>{t.failed}</td>
-                <td className={`px-3 py-1 ${t.attention ? "text-[#9A6400]" : "text-[#8A929C]"}`}>{t.attention}</td>
-                <td className="px-3 py-1 text-[#5B6470]">{t.notStarted}</td>
-                {canApprove && (
-                  <td className="px-3 py-1">
-                    {t.inReview > 0 && <ApproveCleanButton language={t.language} name={SHORT_NAME[t.language] ?? t.language} inReview={t.inReview} />}
+            {totals.map((t, i) => {
+              const run = t.translating > 0 ? leadProgress(runsOf(i), load.clocks.nowMs) : null;
+              const running = run ? run.others + 1 : 0;
+              return (
+                <tr key={t.language} className="border-t border-[#EEF0EC] align-top">
+                  <td className="pr-4 py-1" title={languageLabel(t.language) ?? t.language}>
+                    {SHORT_NAME[t.language] ?? t.language} <span className="text-[#8A929C]">{t.language}</span>
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className="px-3 py-1 text-[#0F7A68] font-medium">{t.approved}</td>
+                  <td className="px-3 py-1 text-[#1F5FA8]">{t.inReview}</td>
+                  <td className="px-3 py-1 text-[#5B3FBF]">
+                    {t.translating}
+                    {run && (
+                      <TranslationProgressBar
+                        className="mt-1"
+                        phase={run.lead.phase}
+                        since={run.lead.since}
+                        typicalMin={run.lead.typicalMin}
+                        jobProgress={run.lead.jobProgress}
+                        nowMs={load.clocks.nowMs}
+                        others={t.translating - 1}
+                        othersTitle={`${t.translating - 1} more in this column: ${running - 1} running, ${t.translating - running} queued or waiting`}
+                      />
+                    )}
+                  </td>
+                  <td className={`px-3 py-1 ${t.failed ? "text-[#B3401F] font-medium" : "text-[#8A929C]"}`}>{t.failed}</td>
+                  <td className={`px-3 py-1 ${t.fixQueued ? "text-[#3F6587]" : "text-[#8A929C]"}`}>
+                    {t.fixQueued > 0 && canControl ? (
+                      <Link
+                        href={fixesHref(t.language, t.fixQueued, t.fixRetrying)}
+                        className="underline decoration-dotted underline-offset-2 hover:text-[#14181F]"
+                        title={`${t.fixQueued} approved fix${t.fixQueued === 1 ? "" : "es"}${t.fixRetrying ? ` (${t.fixRetrying} retrying)` : ""} — open them in Fixes`}
+                      >
+                        {t.fixQueued}
+                      </Link>
+                    ) : (
+                      t.fixQueued
+                    )}
+                  </td>
+                  <td className={`px-3 py-1 ${t.attention ? "text-[#9A6400]" : "text-[#8A929C]"}`}>{t.attention}</td>
+                  <td className="px-3 py-1 text-[#5B6470]">{t.notStarted}</td>
+                  {canApprove && (
+                    <td className="px-3 py-1">
+                      {t.inReview > 0 && <ApproveCleanButton language={t.language} name={SHORT_NAME[t.language] ?? t.language} inReview={t.inReview} />}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>

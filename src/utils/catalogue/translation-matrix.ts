@@ -21,6 +21,13 @@
 //      says, a failed or rejected kit → failed;
 //   5. nothing at all — "not started" when the sweep would take it, else
 //      "not ready" with the sweep's reason.
+// Then, over rules 3–4: a FAILED cell whose pair has a Fix Agent case the
+// founder approved (0151: 'approved' — the retry waits for the translation
+// lane; 'applied' — its retry job is queued or running) reads "fix queued"
+// instead (founder, 2026-10-23: "leaving them in failed just makes it look
+// like it needs to be actioned more"). A case still 'proposed' or
+// 'needs_founder', or no case, leaves the cell failed — that one IS waiting.
+// A newer live kit or a live job still wins first, as above.
 
 import { LANGUAGES } from "@/utils/narration";
 import { inboxHref } from "./review-queue";
@@ -36,14 +43,37 @@ export type MatrixJob = {
   created_at?: string | null;
   /** when the worker claimed it — a running translation's clock starts here */
   claimed_at?: string | null;
+  /** the worker's 0–100 while it stages the text (the Totals progress bar) */
+  progress?: number | string | null;
 };
+
+/** A Fix Agent case (0151) as the matrix reads it: which pair, which status. */
+export type MatrixFixCase = { topic_id: string | null; language: string | null; status: string };
+
+/** The fix statuses that move a failed cell to "fix queued". */
+export const FIX_QUEUED_STATUSES: readonly string[] = ["approved", "applied"];
 
 /** The sweep's input, widened: every topic, every kit of every topic in every
  *  language, the publications of all those kits, and every kit_translate job
  *  (live and finished — a finished error is what a failed cell shows). */
-export type MatrixInput = Omit<SweepInput, "jobs"> & { jobs: readonly MatrixJob[] };
+export type MatrixInput = Omit<SweepInput, "jobs"> & {
+  jobs: readonly MatrixJob[];
+  /** the approved / applied fix cases (0151); absent or empty before it */
+  fixCases?: readonly MatrixFixCase[];
+};
 
-export type CellState = "none" | "not_ready" | "queued" | "translating" | "in_review" | "approved" | "posted" | "stale" | "blocked" | "failed";
+export type CellState =
+  | "none"
+  | "not_ready"
+  | "queued"
+  | "translating"
+  | "in_review"
+  | "approved"
+  | "posted"
+  | "stale"
+  | "blocked"
+  | "failed"
+  | "fix_queued";
 
 export type MatrixCell = {
   language: string;
@@ -56,7 +86,10 @@ export type MatrixCell = {
   /** a translation in flight: what its clock counts from (translation-eta.ts)
    *  — a queued job from its creation, a running job from its claim, a
    *  building kit from its kit row; null for everything else */
-  clock: { phase: ClockPhase; since: string | null; jobId: string | null } | null;
+  clock: { phase: ClockPhase; since: string | null; jobId: string | null; progress?: number } | null;
+  /** a "fix queued" cell: the fix case's status (approved = waiting for the
+   *  lane, applied = its retry job is in flight) */
+  fixStatus?: "approved" | "applied";
 };
 
 export type MatrixRow = {
@@ -72,7 +105,12 @@ export type LanguageTotals = {
   approved: number;
   inReview: number;
   translating: number;
+  /** failed and still needing action (no approved fix) */
   failed: number;
+  /** failed, with an approved fix waiting or retrying */
+  fixQueued: number;
+  /** of fixQueued: the ones whose fix case is 'applied' (retrying) */
+  fixRetrying: number;
   notStarted: number;
   /** stale + blocked */
   attention: number;
@@ -97,9 +135,11 @@ export const CELL_LABEL: Record<CellState, string> = {
   stale: "Stale",
   blocked: "Blocked",
   failed: "Failed",
+  fix_queued: "Fix queued",
 };
 
-/** Nothing done and nothing in flight — what "missing a language" means. */
+/** Nothing done and nothing in flight — what "missing a language" means. A
+ *  "fix queued" cell is in flight (an approved retry), so it is not missing. */
 export const isMissing = (state: CellState): boolean => state === "none" || state === "not_ready" || state === "failed" || state === "stale" || state === "blocked";
 
 const LIVE_JOB = new Set(["queued", "processing"]);
@@ -118,6 +158,13 @@ function group<T>(rows: readonly T[], key: (r: T) => string | null): Map<string,
 
 const pairKey = (topicId: string, language: string) => `${topicId}|${language}`;
 
+/** The number in a job's progress column, clamped to 0–100; undefined when
+ *  there is none (a string from PostgREST's numeric reads as its number). */
+function jobProgress(v: MatrixJob["progress"]): number | undefined {
+  const n = typeof v === "string" && v.trim() ? Number(v) : v;
+  return typeof n === "number" && Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : undefined;
+}
+
 /** Every topic × every language in `languages`, sorted by subject then title. */
 export function buildTranslationMatrix(input: MatrixInput, languages: readonly string[] = translationLanguages()): MatrixRow[] {
   const kitsById = new Map(input.kits.map((k) => [k.id, k]));
@@ -125,6 +172,13 @@ export function buildTranslationMatrix(input: MatrixInput, languages: readonly s
   for (const list of kitsByPair.values()) list.sort(newestFirst);
   const postedKits = new Set(input.publications.filter((p) => p.youtube_video_id && !p.superseded_by).map((p) => p.topic_kit_id));
   const currentEnglish = new Map(input.current.filter((c) => c.language === "en").map((c) => [c.topic_id, c.topic_kit_id]));
+  // the approved fixes per pair; 'applied' (a retry in flight) wins the detail
+  const fixByPair = new Map<string, "approved" | "applied">();
+  for (const f of input.fixCases ?? []) {
+    if (!f.topic_id || !f.language || !FIX_QUEUED_STATUSES.includes(f.status)) continue;
+    const k = pairKey(f.topic_id, f.language);
+    if (fixByPair.get(k) !== "applied") fixByPair.set(k, f.status as "approved" | "applied");
+  }
 
   // a job names its topic; an older job may only name its source kit
   const jobTopic = (j: MatrixJob): string | null => {
@@ -170,15 +224,29 @@ export function buildTranslationMatrix(input: MatrixInput, languages: readonly s
     return cell(topicId, "en", "failed", k.status === "rejected" ? "The newest English kit was rejected." : "The newest English kit failed.", k.id, k.status === "rejected" ? "Rejected" : "Failed");
   };
 
-  const translationCell = (topicId: string, language: string): MatrixCell => {
+  // a failed cell with an approved fix: out of Failed, into Fix queued
+  const withFix = (c: MatrixCell, topicId: string): MatrixCell => {
+    const fix = c.state === "failed" ? fixByPair.get(pairKey(topicId, c.language)) : undefined;
+    if (!fix) return c;
+    const what = fix === "applied" ? "The Fix Agent's retry is queued or running." : "The fix is approved — its retry waits for the translation lane.";
+    return { ...c, state: "fix_queued", label: CELL_LABEL.fix_queued, detail: `${what} The failure: ${c.detail ?? "the translation failed."}`, fixStatus: fix };
+  };
+
+  const translationCellRaw = (topicId: string, language: string): MatrixCell => {
     const jobs = jobsByPair.get(pairKey(topicId, language)) ?? [];
     const kits = kitsByPair.get(pairKey(topicId, language)) ?? [];
 
     // 1. a live job beats every kit
     const liveJob = jobs.find((j) => LIVE_JOB.has(j.status));
     if (liveJob) {
+      const progress = jobProgress(liveJob.progress);
       return liveJob.status === "processing"
-        ? cell(topicId, language, "translating", "A translate job is running.", kits[0]?.id ?? null, undefined, { phase: "translating", since: liveJob.claimed_at ?? liveJob.created_at ?? null, jobId: liveJob.id ?? null })
+        ? cell(topicId, language, "translating", "A translate job is running.", kits[0]?.id ?? null, undefined, {
+            phase: "translating",
+            since: liveJob.claimed_at ?? liveJob.created_at ?? null,
+            jobId: liveJob.id ?? null,
+            ...(progress === undefined ? {} : { progress }),
+          })
         : cell(topicId, language, "queued", "A translate job is queued — the worker takes one kit at a time.", kits[0]?.id ?? null, undefined, { phase: "queued", since: liveJob.created_at ?? null, jobId: liveJob.id ?? null });
     }
 
@@ -222,6 +290,8 @@ export function buildTranslationMatrix(input: MatrixInput, languages: readonly s
     return cell(topicId, language, "not_ready", "No current English kit — the topic needs an approved English kit with part 1 public on YouTube.", null);
   };
 
+  const translationCell = (topicId: string, language: string): MatrixCell => withFix(translationCellRaw(topicId, language), topicId);
+
   const rows: MatrixRow[] = input.topics.map((t) => ({
     topicId: t.id,
     title: t.title,
@@ -237,14 +307,17 @@ export function buildTranslationMatrix(input: MatrixInput, languages: readonly s
 /** The counts above the matrix, one per language column, over `rows`. */
 export function totalsByLanguage(rows: readonly MatrixRow[], languages: readonly string[]): LanguageTotals[] {
   return languages.map((language, i) => {
-    const t: LanguageTotals = { language, approved: 0, inReview: 0, translating: 0, failed: 0, notStarted: 0, attention: 0 };
+    const t: LanguageTotals = { language, approved: 0, inReview: 0, translating: 0, failed: 0, fixQueued: 0, fixRetrying: 0, notStarted: 0, attention: 0 };
     for (const r of rows) {
       const s = r.cells[i]?.state;
       if (s === "approved" || s === "posted") t.approved++;
       else if (s === "in_review") t.inReview++;
       else if (s === "translating" || s === "queued") t.translating++;
       else if (s === "failed") t.failed++;
-      else if (s === "none" || s === "not_ready") t.notStarted++;
+      else if (s === "fix_queued") {
+        t.fixQueued++;
+        if (r.cells[i]?.fixStatus === "applied") t.fixRetrying++;
+      } else if (s === "none" || s === "not_ready") t.notStarted++;
       else if (s === "stale" || s === "blocked") t.attention++;
     }
     return t;
