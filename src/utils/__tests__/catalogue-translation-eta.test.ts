@@ -10,12 +10,16 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TRANSLATION_MINUTES,
+  MAX_RUNNING_PCT,
   MAX_SAMPLES,
+  STAGING_SHARE,
   clockText,
   fmtMinutes,
+  leadProgress,
   median,
   queuePosition,
   translationClock,
+  translationProgress,
   typicalFor,
   typicalTranslation,
 } from "@/utils/catalogue/translation-eta";
@@ -112,5 +116,79 @@ describe("minutes on the screen", () => {
     expect(fmtMinutes(8.9)).toBe("8 min");
     expect(fmtMinutes(8.1, "up")).toBe("9 min");
     expect(fmtMinutes(65)).toBe("1 h 05 min");
+  });
+});
+
+describe("the progress bar (Totals → Translating)", () => {
+  it("staging maps the job's own progress into the first part of the bar; minutes left are the clock's", () => {
+    const p = translationProgress({ phase: "translating", since: ago(3), typicalMin: 15, nowMs: NOW, jobProgress: 50 })!;
+    expect(p.pct).toBe(Math.round(STAGING_SHARE / 2));
+    expect(p.leftMin).toBeCloseTo(12, 5);
+    expect(p.finishing).toBe(false);
+    expect(p.text).toBe(`${Math.round(STAGING_SHARE / 2)}% · ~12 min left`);
+    expect(translationProgress({ phase: "translating", since: ago(3), typicalMin: 15, nowMs: NOW, jobProgress: 100 })!.pct).toBe(STAGING_SHARE);
+    // not reported yet reads 0, not NaN
+    expect(translationProgress({ phase: "translating", since: ago(1), typicalMin: 15, nowMs: NOW })!.pct).toBe(0);
+  });
+
+  it("building fills the rest from the typical run spent, never below the staging share", () => {
+    // 9 of 15 min spent → 60 %
+    const p = translationProgress({ phase: "building", since: ago(9), typicalMin: 15, nowMs: NOW })!;
+    expect(p.pct).toBe(60);
+    expect(p.text).toBe("60% · ~6 min left");
+    // just started building: the staging part is already full
+    expect(translationProgress({ phase: "building", since: ago(1), typicalMin: 15, nowMs: NOW })!.pct).toBe(STAGING_SHARE);
+  });
+
+  it("clamps: never above the cap or below zero, whatever the job reports", () => {
+    expect(translationProgress({ phase: "translating", since: ago(1), typicalMin: 15, nowMs: NOW, jobProgress: 250 })!.pct).toBe(STAGING_SHARE);
+    expect(translationProgress({ phase: "translating", since: ago(1), typicalMin: 15, nowMs: NOW, jobProgress: -20 })!.pct).toBe(0);
+    expect(translationProgress({ phase: "translating", since: ago(1), typicalMin: 15, nowMs: NOW, jobProgress: Number.NaN })!.pct).toBe(0);
+    expect(translationProgress({ phase: "building", since: ago(14.9), typicalMin: 15, nowMs: NOW })!.pct).toBeLessThanOrEqual(MAX_RUNNING_PCT);
+    // a start in the future reads zero elapsed, not negative
+    const future = translationProgress({ phase: "building", since: ago(-10), typicalMin: 15, nowMs: NOW })!;
+    expect(future.pct).toBe(STAGING_SHARE);
+    expect(future.leftMin).toBe(15);
+  });
+
+  it("past the typical run: finishing…, no minutes, never over 100 %", () => {
+    const p = translationProgress({ phase: "building", since: ago(40), typicalMin: 15, nowMs: NOW })!;
+    expect(p.finishing).toBe(true);
+    expect(p.leftMin).toBeNull();
+    expect(p.pct).toBe(MAX_RUNNING_PCT);
+    expect(p.text).toBe(`${MAX_RUNNING_PCT}% · finishing…`);
+    const staging = translationProgress({ phase: "translating", since: ago(20), typicalMin: 15, nowMs: NOW, jobProgress: 80 })!;
+    expect(staging.finishing).toBe(true);
+    expect(staging.text).toBe(`${Math.round(STAGING_SHARE * 0.8)}% · finishing…`);
+  });
+
+  it("minutes left round up, against the subject's typical run", () => {
+    expect(translationProgress({ phase: "building", since: ago(10.5), typicalMin: 33, nowMs: NOW })!.text).toBe(
+      `${Math.round(Math.max(STAGING_SHARE, (100 * 10.5) / 33))}% · ~23 min left`,
+    );
+  });
+
+  it("a queued run has no bar", () => {
+    expect(translationProgress({ phase: "queued", since: ago(1), typicalMin: 15, nowMs: NOW })).toBeNull();
+  });
+
+  it("several runs: the one furthest along leads, the rest are +N; queued ones are not runs", () => {
+    const runs = [
+      { phase: "translating" as const, since: ago(2), typicalMin: 15, jobProgress: 30 },
+      { phase: "building" as const, since: ago(12), typicalMin: 15 },
+      { phase: "queued" as const, since: ago(1), typicalMin: 15 },
+    ];
+    const r = leadProgress(runs, NOW)!;
+    expect(r.lead).toBe(runs[1]);
+    expect(r.progress.pct).toBe(80);
+    expect(r.others).toBe(1);
+    expect(leadProgress([runs[2]], NOW)).toBeNull();
+    expect(leadProgress([], NOW)).toBeNull();
+  });
+
+  it("a tie on percent goes to the one with less time left", () => {
+    const a = { phase: "building" as const, since: ago(1), typicalMin: 30 };
+    const b = { phase: "building" as const, since: ago(1), typicalMin: 10 };
+    expect(leadProgress([a, b], NOW)!.lead).toBe(b);
   });
 });

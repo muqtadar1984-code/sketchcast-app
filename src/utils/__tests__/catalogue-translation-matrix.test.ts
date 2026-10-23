@@ -14,6 +14,7 @@ import {
   parseMatrixFilters,
   totalsByLanguage,
   translationLanguages,
+  type MatrixFixCase,
   type MatrixInput,
   type MatrixJob,
 } from "@/utils/catalogue/translation-matrix";
@@ -53,6 +54,7 @@ const input = (over: Partial<MatrixInput> = {}): MatrixInput => ({
   kits: [kit(EN1, T1), ...(over.kits ?? [])],
   publications: [pub(EN1), ...(over.publications ?? [])],
   jobs: over.jobs ?? [],
+  fixCases: over.fixCases ?? [],
 });
 
 const arCell = (i: MatrixInput) => {
@@ -259,5 +261,96 @@ describe("the clock a translation cell carries (translation-eta.ts)", () => {
   it("nothing in flight carries no clock", () => {
     expect(arCell(input({ kits: [ar("k-ar", { status: "in_review", translation_status: "in_review" })] })).clock).toBeNull();
     expect(arCell(input()).clock).toBeNull();
+  });
+});
+
+describe("fix queued: a failure with an approved fix (Fix Agent, 0151)", () => {
+  const fix = (status: string, over: Partial<MatrixFixCase> = {}): MatrixFixCase => ({ topic_id: T1, language: "ar", status, ...over });
+  const failedJob = () => job("error", "2026-10-12T00:00:00Z", { error: "numbers differ" });
+  const failedKit = () => ar("k-ar", { status: "failed", translation_status: "staged", created_at: "2026-10-12T00:00:00Z" });
+
+  it("a failed job with an approved fix reads fix queued, keeping the failure in the hover", () => {
+    const c = arCell(input({ jobs: [failedJob()], fixCases: [fix("approved")] }));
+    expect(c.state).toBe("fix_queued");
+    expect(c.label).toBe("Fix queued");
+    expect(c.fixStatus).toBe("approved");
+    expect(c.detail).toMatch(/waits for the translation lane/);
+    expect(c.detail).toMatch(/numbers differ/);
+  });
+
+  it("a failed or rejected kit with an applied fix reads fix queued (retrying)", () => {
+    expect(arCell(input({ kits: [failedKit()], fixCases: [fix("applied")] }))).toMatchObject({ state: "fix_queued", fixStatus: "applied" });
+    const rejected = ar("k-ar", { status: "rejected", translation_status: "failed" });
+    expect(arCell(input({ kits: [rejected], fixCases: [fix("approved")] })).state).toBe("fix_queued");
+  });
+
+  it("a fix still proposed, needing the founder, closed, or absent leaves the cell failed", () => {
+    for (const status of ["new", "diagnosing", "proposed", "needs_founder", "resolved", "rejected"]) {
+      expect(arCell(input({ jobs: [failedJob()], fixCases: [fix(status)] })).state).toBe("failed");
+    }
+    expect(arCell(input({ jobs: [failedJob()] })).state).toBe("failed");
+    expect(arCell({ ...input({ jobs: [failedJob()] }), fixCases: undefined }).state).toBe("failed");
+  });
+
+  it("a fix of another language or topic does not move the cell", () => {
+    expect(arCell(input({ jobs: [failedJob()], fixCases: [fix("approved", { language: "ms" })] })).state).toBe("failed");
+    expect(arCell(input({ jobs: [failedJob()], fixCases: [fix("approved", { topic_id: T2 })] })).state).toBe("failed");
+    expect(arCell(input({ jobs: [failedJob()], fixCases: [fix("approved", { topic_id: null })] })).state).toBe("failed");
+  });
+
+  it("a newer successful translation still wins over the old failure; a live retry job reads queued / translating", () => {
+    const c = arCell(
+      input({
+        kits: [
+          ar("k-old", { status: "failed", translation_status: "failed", created_at: "2026-10-05T00:00:00Z" }),
+          ar("k-new", { status: "in_review", translation_status: "in_review", created_at: "2026-10-14T00:00:00Z" }),
+        ],
+        jobs: [job("error", "2026-10-15T00:00:00Z", { error: "late failure" })],
+        fixCases: [fix("approved")],
+      }),
+    );
+    expect(c.state).toBe("in_review");
+    expect(arCell(input({ jobs: [job("queued", "2026-10-13T00:00:00Z"), failedJob()], fixCases: [fix("applied")] })).state).toBe("queued");
+    expect(arCell(input({ jobs: [job("processing", "2026-10-13T00:00:00Z"), failedJob()], fixCases: [fix("applied")] })).state).toBe("translating");
+  });
+
+  it("stale and blocked cells are not failures, so a fix does not move them", () => {
+    expect(arCell(input({ kits: [ar("k-ar", { translation_status: "stale" })], fixCases: [fix("approved")] })).state).toBe("stale");
+  });
+
+  it("is in flight, not missing", () => {
+    expect(isMissing("fix_queued")).toBe(false);
+  });
+
+  it("totals: Failed counts only the failures still needing action; Fix queued the rest, retrying among them", () => {
+    const T3 = "33333333-3333-4333-8333-333333333333";
+    const T4 = "44444444-4444-4444-8444-444444444444";
+    const i: MatrixInput = {
+      ...input({
+        jobs: [
+          job("error", "2026-10-12T00:00:00Z", { params: { topic_id: T1, language: "ar" } }),
+          job("error", "2026-10-12T00:00:00Z", { params: { topic_id: T2, language: "ar" } }),
+          job("error", "2026-10-12T00:00:00Z", { params: { topic_id: T3, language: "ar" } }),
+          job("error", "2026-10-12T00:00:00Z", { params: { topic_id: T4, language: "ar" } }),
+        ],
+        fixCases: [fix("approved"), fix("applied", { topic_id: T2 }), fix("proposed", { topic_id: T3 })],
+      }),
+      topics: [topic(T1, "Fractions"), topic(T2, "Cells", "Science"), topic(T3, "Algebra"), topic(T4, "Misc")],
+    };
+    const [t] = totalsByLanguage(buildTranslationMatrix(i, ["ar"]), ["ar"]);
+    expect(t).toMatchObject({ failed: 2, fixQueued: 2, fixRetrying: 1 });
+  });
+});
+
+describe("the job progress a running cell carries (the Totals bar)", () => {
+  it("a running job's progress rides on its clock, clamped; a number string reads as its number", () => {
+    expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z", { progress: 62 })] })).clock?.progress).toBe(62);
+    expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z", { progress: "40" })] })).clock?.progress).toBe(40);
+    expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z", { progress: 140 })] })).clock?.progress).toBe(100);
+  });
+
+  it("no progress reported leaves it out", () => {
+    expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z")] })).clock).not.toHaveProperty("progress");
+    expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z", { progress: null })] })).clock).not.toHaveProperty("progress");
   });
 });

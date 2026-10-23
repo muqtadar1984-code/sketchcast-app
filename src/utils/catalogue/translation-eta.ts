@@ -171,3 +171,80 @@ export function clockText(c: Clock): { short: string; tiny: string; long: string
     long: `${PHASE_WORD[c.phase]} for ${fmtMinutes(c.elapsedMin)} (${what}); about ${fmtMinutes(c.leftMin!, "up")} left before it reaches review. ${basis}`,
   };
 }
+
+// ── the progress bar (Totals → Translating, founder 2026-10-23: "a status
+// bar for translating column (with percent complete and minutes left)") ──
+//
+// One bar per translation run, in two parts:
+//   staging   the translate job is running — its own progress (the worker
+//             reports 3 … 100 through glossary, article, scripts, checks)
+//             fills the first STAGING_SHARE of the bar;
+//   building  the job is done and the kit renders — no progress figure of its
+//             own, so the share of the typical run already spent stands in,
+//             never below STAGING_SHARE (staging is over) and never full.
+// Minutes left are the clock's (translationClock above) — the same estimate
+// the matrix cells show, not a second model. The typical run is measured from
+// the kit row, which the worker writes when the job starts staging, so
+// "elapsed / typical" in the building phase is the share of the WHOLE run.
+
+/** The part of the bar the staging fills, in percent. */
+export const STAGING_SHARE = 40;
+/** A running translation never reads done: 100 % is "in review". */
+export const MAX_RUNNING_PCT = 99;
+
+export type ProgressInput = {
+  phase: ClockPhase;
+  since: string | null;
+  typicalMin: number;
+  nowMs: number;
+  /** staging: the translate job's own progress, 0–100 (null = not reported yet) */
+  jobProgress?: number | null;
+};
+
+export type TranslationProgress = {
+  phase: "translating" | "building";
+  /** 0 … MAX_RUNNING_PCT, whole */
+  pct: number;
+  /** the clock's minutes left; null once past the typical run */
+  leftMin: number | null;
+  /** past the typical run: "finishing…" instead of minutes */
+  finishing: boolean;
+  /** "62% · ~6 min left", "99% · finishing…" */
+  text: string;
+};
+
+const clampPct = (v: number): number => (Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0);
+
+/** The bar of one running translation at `nowMs`; null for a queued one (it
+ *  has not started — its wait is the clock's "in ~20 min"). */
+export function translationProgress(a: ProgressInput): TranslationProgress | null {
+  if (a.phase === "queued") return null;
+  const clock = translationClock({ phase: a.phase, since: a.since, typicalMin: a.typicalMin, nowMs: a.nowMs });
+  const raw =
+    a.phase === "translating"
+      ? (STAGING_SHARE * clampPct(a.jobProgress ?? 0)) / 100
+      : Math.max(STAGING_SHARE, (100 * clock.elapsedMin) / clock.typicalMin);
+  const pct = Math.round(Math.min(MAX_RUNNING_PCT, clampPct(raw)));
+  const finishing = clock.overdue;
+  const leftMin = finishing ? null : clock.leftMin;
+  return { phase: a.phase, pct, leftMin, finishing, text: finishing ? `${pct}% · finishing…` : `${pct}% · ~${fmtMinutes(leftMin ?? 0, "up")} left` };
+}
+
+/** One language's runs: the one furthest along leads the bar (ties: the one
+ *  with the least time left); `others` = the rest still running. Queued runs
+ *  are not runs yet and are left out. Null when nothing is running. */
+export function leadProgress(
+  runs: readonly Omit<ProgressInput, "nowMs">[],
+  nowMs: number,
+): { lead: Omit<ProgressInput, "nowMs">; progress: TranslationProgress; others: number } | null {
+  let best: { lead: Omit<ProgressInput, "nowMs">; progress: TranslationProgress } | null = null;
+  let running = 0;
+  for (const run of runs) {
+    const p = translationProgress({ ...run, nowMs });
+    if (!p) continue;
+    running++;
+    const left = (x: TranslationProgress) => x.leftMin ?? 0;
+    if (!best || p.pct > best.progress.pct || (p.pct === best.progress.pct && left(p) < left(best.progress))) best = { lead: run, progress: p };
+  }
+  return best ? { ...best, others: running - 1 } : null;
+}
