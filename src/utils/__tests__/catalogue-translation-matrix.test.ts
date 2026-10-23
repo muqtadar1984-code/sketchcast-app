@@ -10,11 +10,15 @@ import {
   TRANSLATION_ORDER,
   buildTranslationMatrix,
   filterMatrixRows,
+  matrixHref,
+  statusCounts,
   isMissing,
   parseMatrixFilters,
   totalsByLanguage,
   translationLanguages,
+  type CellState,
   type MatrixFixCase,
+  type MatrixRow,
   type MatrixInput,
   type MatrixJob,
 } from "@/utils/catalogue/translation-matrix";
@@ -224,7 +228,7 @@ describe("rows, totals and filters", () => {
   });
 
   it("parses the filters, dropping an unknown language", () => {
-    expect(parseMatrixFilters({ subject: " Science ", missing: "ar" }, ["ar"])).toEqual({ subject: "Science", missing: "ar" });
+    expect(parseMatrixFilters({ subject: " Science ", missing: "ar" }, ["ar"])).toEqual({ subject: "Science", missing: "ar", status: "", lang: "" });
     expect(parseMatrixFilters({ missing: "xx" }, ["ar"]).missing).toBe("");
     expect(parseMatrixFilters({ missing: "any" }, ["ar"]).missing).toBe("any");
   });
@@ -352,5 +356,44 @@ describe("the job progress a running cell carries (the Totals bar)", () => {
   it("no progress reported leaves it out", () => {
     expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z")] })).clock).not.toHaveProperty("progress");
     expect(arCell(input({ jobs: [job("processing", "2026-10-12T00:00:00Z", { progress: null })] })).clock).not.toHaveProperty("progress");
+  });
+});
+
+describe("status and language filters (founder, 2026-10-23)", () => {
+  const row = (title: string, states: Record<string, CellState>) =>
+    ({ topicId: title, title, subject: "Mathematics", english: { language: "en", state: "posted" },
+       cells: Object.entries(states).map(([language, state]) => ({ language, state })) }) as unknown as MatrixRow;
+  const rows = [
+    row("A", { ar: "approved", ms: "failed" }),
+    row("B", { ar: "failed", ms: "approved" }),
+    row("C", { ar: "approved", ms: "approved" }),
+  ];
+  const base = { subject: "", missing: "" };
+
+  it("parses status and lang, dropping unknown values", () => {
+    expect(parseMatrixFilters({ status: "failed", lang: "ms" }, ["ar", "ms"])).toMatchObject({ status: "failed", lang: "ms" });
+    expect(parseMatrixFilters({ status: "nonsense", lang: "xx" }, ["ar", "ms"])).toMatchObject({ status: "", lang: "" });
+  });
+
+  it("a status keeps topics with a cell in that state, in any language or the chosen one", () => {
+    expect(filterMatrixRows(rows, { ...base, status: "failed" }).map((r) => r.title)).toEqual(["A", "B"]);
+    expect(filterMatrixRows(rows, { ...base, status: "failed", lang: "ms" }).map((r) => r.title)).toEqual(["A"]);
+    expect(filterMatrixRows(rows, { ...base, status: "approved", lang: "ar" }).map((r) => r.title)).toEqual(["A", "C"]);
+  });
+
+  it("'missing any' reads the chosen language when one is set", () => {
+    expect(filterMatrixRows(rows, { ...base, missing: "any", lang: "ar" }).map((r) => r.title)).toEqual(["B"]);
+  });
+
+  it("the legend counts topics per state, once each, in the same scope", () => {
+    expect(statusCounts(rows).failed).toBe(2);
+    expect(statusCounts(rows).approved).toBe(3);
+    expect(statusCounts(rows, "ms").failed).toBe(1);
+  });
+
+  it("links keep the other filters and drop empty ones", () => {
+    expect(matrixHref({ subject: "Mathematics", missing: "", lang: "ms", status: "" }, { status: "failed" }))
+      .toBe("/library/translations?subject=Mathematics&lang=ms&status=failed");
+    expect(matrixHref({ subject: "", missing: "", status: "failed" }, { status: "" })).toBe("/library/translations");
   });
 });

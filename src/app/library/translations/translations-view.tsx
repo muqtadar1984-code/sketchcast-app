@@ -6,6 +6,8 @@ import {
   CELL_LABEL,
   buildTranslationMatrix,
   filterMatrixRows,
+  matrixHref,
+  statusCounts,
   totalsByLanguage,
   type CellState,
   type MatrixCell,
@@ -104,6 +106,10 @@ export function TranslationsView({
   const subjects = [...new Set(all.map((r) => (r.subject ?? "").trim()).filter(Boolean))].sort();
   const inSubject = filterMatrixRows(all, { subject: f.subject, missing: "" });
   const rows = filterMatrixRows(inSubject, f);
+  // the legend's counts: topics in this subject (and missing filter), per state
+  const counts = statusCounts(filterMatrixRows(inSubject, { ...f, status: "" }), f.lang);
+  // one language narrows the table to English + that column
+  const shown = f.lang ? languages.filter((l) => l === f.lang) : languages;
   const totals = totalsByLanguage(inSubject, languages);
   const englishPosted = inSubject.filter((r) => r.english.state === "posted").length;
   const live = all.some((r) => r.cells.some((c) => c.state === "queued" || c.state === "translating"));
@@ -224,6 +230,15 @@ export function TranslationsView({
             </option>
           ))}
         </select>
+        <select name="lang" defaultValue={f.lang ?? ""} className="field h-9 px-2" aria-label="Language">
+          <option value="">Every language</option>
+          {languages.map((l) => (
+            <option key={l} value={l}>
+              {SHORT_NAME[l] ?? l}
+            </option>
+          ))}
+        </select>
+        {f.status && <input type="hidden" name="status" value={f.status} />}
         <select name="missing" defaultValue={f.missing} className="field h-9 px-2" aria-label="Missing a language">
           <option value="">Every topic</option>
           <option value="any">Only topics missing a language</option>
@@ -234,7 +249,7 @@ export function TranslationsView({
           ))}
         </select>
         <button className="btn-primary h-9 px-4">Show</button>
-        {(f.subject || f.missing) && (
+        {(f.subject || f.missing || f.status || f.lang) && (
           <Link href="/library/translations" className="text-[#5B6470] hover:text-[#14181F] underline">
             Clear
           </Link>
@@ -246,12 +261,24 @@ export function TranslationsView({
       </form>
 
       <div className="flex flex-wrap gap-1.5 mb-3 text-[0.7rem]" aria-label="Legend">
-        {LEGEND.map((s) => (
-          <span key={s} className={`rounded px-1.5 py-0.5 font-medium ${TONE[s]}`}>
-            {CELL_LABEL[s]}
-          </span>
-        ))}
-        <span className="text-[#5B6470] self-center ml-1">“Missing” = not started, not ready, failed, stale or blocked.</span>
+        {LEGEND.map((s) => {
+          const on = f.status === s;
+          return (
+            <Link
+              key={s}
+              href={matrixHref(f, { status: on ? "" : s })}
+              scroll={false}
+              aria-pressed={on}
+              title={on ? "Show every status" : `Only topics with a ${CELL_LABEL[s].toLowerCase()} cell${f.lang ? ` in ${SHORT_NAME[f.lang] ?? f.lang}` : ""}`}
+              className={`rounded px-1.5 py-0.5 font-medium ${TONE[s]} ${on ? "ring-2 ring-offset-1 ring-[#14181F]" : "hover:ring-1 hover:ring-[#8A929C]"}`}
+            >
+              {CELL_LABEL[s]} <span className="opacity-70 tabular-nums">{counts[s] ?? 0}</span>
+            </Link>
+          );
+        })}
+        <span className="text-[#5B6470] self-center ml-1">
+          Click a status to filter{f.lang ? ` (${SHORT_NAME[f.lang] ?? f.lang})` : ""}. “Missing” = not started, not ready, failed, stale or blocked.
+        </span>
       </div>
 
       <div className="card overflow-x-auto">
@@ -262,7 +289,7 @@ export function TranslationsView({
               <th className="font-normal px-1.5 py-2 border-r border-[#E3E6E0]" title="The source: the current English kit">
                 English
               </th>
-              {languages.map((l) => (
+              {shown.map((l) => (
                 <th key={l} className="font-normal px-1.5 py-2" title={languageLabel(l) ?? l}>
                   {SHORT_NAME[l] ?? l}
                 </th>
@@ -281,7 +308,7 @@ export function TranslationsView({
                 <td className="px-1 py-1.5 border-r border-[#EEF0EC]">
                   <Cell c={r.english} />
                 </td>
-                {r.cells.map((c) => (
+                {r.cells.filter((c) => shown.includes(c.language)).map((c) => (
                   <td key={c.language} className="px-1 py-1.5">
                     <Cell c={c} clocks={load.clocks} subject={r.subject} />
                   </td>
@@ -290,7 +317,7 @@ export function TranslationsView({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={languages.length + 2} className="px-3 py-8 text-center text-[#5B6470]">
+                <td colSpan={shown.length + 2} className="px-3 py-8 text-center text-[#5B6470]">
                   No topics match these filters.
                 </td>
               </tr>
