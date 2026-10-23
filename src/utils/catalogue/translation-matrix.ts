@@ -324,21 +324,67 @@ export function totalsByLanguage(rows: readonly MatrixRow[], languages: readonly
   });
 }
 
-export type MatrixFilters = { subject: string; missing: string };
+/** The topic table's filters, all from the URL (a GET form and the legend's
+ *  links): `subject`; `missing` ("any" or a language); `status` — a cell
+ *  state, the legend chip that was clicked; `lang` — one language, which
+ *  narrows the table to English + that column and is the language
+ *  `status` is read in (founder, 2026-10-23: "make these status options
+ *  clickable to apply filters … a drop down filter … to select a specific
+ *  language"). */
+export type MatrixFilters = { subject: string; missing: string; status?: CellState | ""; lang?: string };
+
+const FILTER_STATES: readonly CellState[] = ["posted", "approved", "in_review", "translating", "queued", "failed", "fix_queued", "stale", "blocked", "none", "not_ready"];
 
 export function parseMatrixFilters(sp: Record<string, string | string[] | undefined> | null | undefined, languages: readonly string[]): MatrixFilters {
   const one = (v: string | string[] | undefined) => ((Array.isArray(v) ? v[0] : v) ?? "").trim();
   const missing = one(sp?.missing);
-  return { subject: one(sp?.subject).slice(0, 60), missing: missing === "any" || languages.includes(missing) ? missing : "" };
+  const status = one(sp?.status) as CellState;
+  const lang = one(sp?.lang);
+  return {
+    subject: one(sp?.subject).slice(0, 60),
+    missing: missing === "any" || languages.includes(missing) ? missing : "",
+    status: FILTER_STATES.includes(status) ? status : "",
+    lang: languages.includes(lang) ? lang : "",
+  };
+}
+
+/** The cells a filter reads: the chosen language's, else every language's. */
+function cellsIn(r: MatrixRow, lang: string | undefined): MatrixCell[] {
+  return lang ? r.cells.filter((c) => c.language === lang) : r.cells;
 }
 
 /** The subject filter, then "missing": `any` keeps a topic missing at least
- *  one language, a language code keeps the topics missing that one. */
+ *  one language (the chosen one, when `lang` is set), a language code keeps
+ *  the topics missing that one; then `status`: a topic with a cell in that
+ *  state, in the chosen language or in any. */
 export function filterMatrixRows(rows: readonly MatrixRow[], f: MatrixFilters): MatrixRow[] {
   return rows.filter((r) => {
     if (f.subject && (r.subject ?? "") !== f.subject) return false;
-    if (f.missing === "any") return r.cells.some((c) => isMissing(c.state));
-    if (f.missing) return r.cells.some((c) => c.language === f.missing && isMissing(c.state));
+    if (f.missing === "any" && !cellsIn(r, f.lang).some((c) => isMissing(c.state))) return false;
+    if (f.missing && f.missing !== "any" && !r.cells.some((c) => c.language === f.missing && isMissing(c.state))) return false;
+    if (f.status && !cellsIn(r, f.lang).some((c) => c.state === f.status)) return false;
     return true;
   });
+}
+
+/** How many topics have a cell in each state — the legend's counts, in the
+ *  same scope the status filter reads (the chosen language, else any). */
+export function statusCounts(rows: readonly MatrixRow[], lang?: string): Record<CellState, number> {
+  const out = Object.fromEntries(FILTER_STATES.map((s) => [s, 0])) as Record<CellState, number>;
+  for (const r of rows) {
+    for (const s of new Set(cellsIn(r, lang).map((c) => c.state))) if (s in out) out[s] += 1;
+  }
+  return out;
+}
+
+/** The page URL for these filters with `patch` applied; empty values drop out. */
+export function matrixHref(f: MatrixFilters, patch: Partial<MatrixFilters> = {}): string {
+  const next = { ...f, ...patch };
+  const q = new URLSearchParams();
+  for (const k of ["subject", "missing", "lang", "status"] as const) {
+    const v = next[k];
+    if (v) q.set(k, v);
+  }
+  const s = q.toString();
+  return s ? `/library/translations?${s}` : "/library/translations";
 }
