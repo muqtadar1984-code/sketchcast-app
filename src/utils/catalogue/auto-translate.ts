@@ -249,3 +249,14 @@ export function generationIdsOf(kits: readonly (CleanKit | CleanSource)[]): stri
   }
   return [...ids];
 }
+
+/** Whether the Translations page keeps refreshing itself. Not only while a
+ *  cell is queued or translating: between two runs nothing is, for up to a
+ *  minute, until the agent's next tick queues the next kit — a page that
+ *  stopped there never showed the next run until a manual refresh (founder,
+ *  2026-10-23). So it also stays live while the agent will queue more
+ *  (running, or throttled and waiting to resume) and while an approved fix
+ *  waits for the lane. Paused, off, the breaker and dry run stay quiet. */
+export function translationsPageLive(cellsLive: boolean, mode: AgentMode | null | undefined, fixQueued: number): boolean {
+  return cellsLive || mode === "running" || mode === "throttled" || fixQueued > 0;
+}
