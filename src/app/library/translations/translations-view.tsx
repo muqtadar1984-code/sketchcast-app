@@ -7,6 +7,7 @@ import {
   buildTranslationMatrix,
   filterMatrixRows,
   matrixHref,
+  shownLanguages,
   statusCounts,
   totalsByLanguage,
   type CellState,
@@ -108,8 +109,8 @@ export function TranslationsView({
   const rows = filterMatrixRows(inSubject, f);
   // the legend's counts: topics in this subject (and missing filter), per state
   const counts = statusCounts(filterMatrixRows(inSubject, { ...f, status: "" }), f.lang);
-  // one language narrows the table to English + that column
-  const shown = f.lang ? languages.filter((l) => l === f.lang) : languages;
+  // English + only the languages the filters are about (shownLanguages)
+  const shown = shownLanguages(rows, f, languages);
   const totals = totalsByLanguage(inSubject, languages);
   const englishPosted = inSubject.filter((r) => r.english.state === "posted").length;
   const live = all.some((r) => r.cells.some((c) => c.state === "queued" || c.state === "translating"));

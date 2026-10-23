@@ -377,6 +377,23 @@ export function statusCounts(rows: readonly MatrixRow[], lang?: string): Record<
   return out;
 }
 
+/** The language columns the table shows (English is always shown beside
+ *  them): the chosen language; else, under a status filter, only the
+ *  languages with a cell in that state among the topics shown; else, under
+ *  "missing", the language asked about or the languages that are missing;
+ *  else every language. A filter for "in review" that matches only Marathi
+ *  shows English + Marathi (founder, 2026-10-23: "hide the language column
+ *  as well if they are not part of the filter"). Order is kept. */
+export function shownLanguages(rows: readonly MatrixRow[], f: MatrixFilters, languages: readonly string[]): string[] {
+  if (f.lang) return languages.filter((l) => l === f.lang);
+  const has = (pred: (c: MatrixCell) => boolean) =>
+    languages.filter((l) => rows.some((r) => r.cells.some((c) => c.language === l && pred(c))));
+  if (f.status) return has((c) => c.state === f.status);
+  if (f.missing === "any") return has((c) => isMissing(c.state));
+  if (f.missing) return languages.filter((l) => l === f.missing);
+  return [...languages];
+}
+
 /** The page URL for these filters with `patch` applied; empty values drop out. */
 export function matrixHref(f: MatrixFilters, patch: Partial<MatrixFilters> = {}): string {
   const next = { ...f, ...patch };
