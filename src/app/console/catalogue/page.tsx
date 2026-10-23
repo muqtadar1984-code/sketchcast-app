@@ -5,8 +5,8 @@ import { InkUnderline } from "@/components/ink-mark";
 import { buildCatalogueFunnel, type EventRow, type UnlockRow } from "@/utils/catalogue-funnel";
 import { lessonPageTotals, lessonPageViews, type PathRow } from "@/utils/cloudflare-paths";
 
-// The catalogue funnel (plan §5.5, Phase E): unlock → download → copy to
-// Library → assign, for the Ready-made kits. Read from catalogue_unlocks and
+// The catalogue funnel (plan §5.5, Phase E): open the Kits page → unlock →
+// download → copy to Library → assign, for the Ready-made kits. Read from catalogue_unlocks and
 // catalogue_events (both written only by the database and server routes), plus
 // the shares on Library copies. The step BEFORE this page — public lesson page
 // → signup — is Cloudflare Web Analytics on sketchcast.app and
@@ -52,6 +52,7 @@ export default async function ConsoleCataloguePage() {
   const cards: [string, number, string?][] = [
     ["Lesson page visits · 7d", lessonVisits, "Cloudflare, off-site referrers"],
     ["Signups from lesson pages", signupsFromPages, "signup_source topic:<slug>"],
+    ["Opened Kits page", f.totals.viewers, `${f.totals.views} page loads`],
     ["Unlockers", f.totals.unlockers, "people who unlocked ≥1 kit"],
     ["Unlocks", f.totals.unlocks, "permanent, one per topic per person"],
     ["Downloads", f.totals.downloads, "document files served"],
@@ -65,7 +66,7 @@ export default async function ConsoleCataloguePage() {
       <h1 className="text-4xl mb-2">Catalogue</h1>
       <InkUnderline className="block h-3 w-28 mb-3" />
       <p className="text-[#5B6470] mb-6">
-        Ready-made kits: unlock → download → copy to Library → assign. The step before this — public lesson page → signup — is in
+        Ready-made kits: open the Kits page → unlock → download → copy to Library → assign. The step before this — public lesson page → signup — is in
         Cloudflare Web Analytics and <code className="text-xs">profiles.signup_source</code>.{" "}
         <Link href="/console/content" className="text-[#0C8175] hover:underline">
           Open the content desk
@@ -88,7 +89,7 @@ export default async function ConsoleCataloguePage() {
 
       <div className="card px-5 py-4 mb-6">
         <p className="text-xs font-medium text-[#5B6470] mb-3">All time</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-3">
           {cards.map(([label, n, hint]) => (
             <div key={label}>
               <p className="text-2xl tabular">{n}</p>
@@ -101,8 +102,9 @@ export default async function ConsoleCataloguePage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="card divide-y divide-[#EEF0EC] overflow-x-auto">
-          <div className="grid grid-cols-[1.2fr_repeat(5,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium min-w-[36rem]">
+          <div className="grid grid-cols-[1.2fr_repeat(6,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium min-w-[40rem]">
             <span>Week of (Mon UTC)</span>
+            <span className="text-end">Viewers</span>
             <span className="text-end">Unlockers</span>
             <span className="text-end">Unlocks</span>
             <span className="text-end">Downloads</span>
@@ -110,8 +112,9 @@ export default async function ConsoleCataloguePage() {
             <span className="text-end">Limit hit</span>
           </div>
           {f.weeks.map((w) => (
-            <div key={w.week} className="grid grid-cols-[1.2fr_repeat(5,1fr)] gap-3 px-5 py-2.5 text-sm items-center min-w-[36rem]">
+            <div key={w.week} className="grid grid-cols-[1.2fr_repeat(6,1fr)] gap-3 px-5 py-2.5 text-sm items-center min-w-[40rem]">
               <span className="font-mono text-xs">{w.week}</span>
+              <span className="tabular text-end">{w.viewers}</span>
               <span className="tabular text-end">{w.unlockers}</span>
               <span className="tabular text-end">{w.unlocks}</span>
               <span className="tabular text-end">{w.downloads}</span>
@@ -119,7 +122,7 @@ export default async function ConsoleCataloguePage() {
               <span className="tabular text-end">{w.weeklyLimitHits}</span>
             </div>
           ))}
-          {f.weeks.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No unlocks yet — the table fills in from the first one.</div>}
+          {f.weeks.length === 0 && <div className="px-5 py-6 text-sm text-[#5B6470]">No activity yet — the table fills in from the first Kits page visit.</div>}
         </div>
 
         <div className="space-y-6">

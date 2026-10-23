@@ -18,6 +18,8 @@ export type RosterFilters = {
   artifacts?: number;
   errors?: number;
   resolved?: number;
+  kitviews?: number;
+  kits?: number;
   joined?: string;
 };
 
@@ -40,13 +42,17 @@ export type RosterRow = {
   artifacts: number;
   errors: number;
   resolved: number;
+  /** Kits page loads (console-kit-activity.ts). */
+  kitviews: number;
+  /** Ready-made kits unlocked. */
+  kits: number;
   /** ISO date (YYYY-MM-DD) of profiles.created_at, in UTC. */
   joined: string;
 };
 
 export const TEXT_KEYS = ["name", "email", "language", "joined"] as const;
 export const EXACT_KEYS = ["role", "school", "country"] as const;
-export const MIN_KEYS = ["books", "lessons", "artifacts", "errors", "resolved"] as const;
+export const MIN_KEYS = ["books", "lessons", "artifacts", "errors", "resolved", "kitviews", "kits"] as const;
 
 type Params = Record<string, string | string[] | undefined>;
 

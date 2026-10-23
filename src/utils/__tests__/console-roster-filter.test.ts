@@ -20,6 +20,8 @@ const row = (extra: Partial<RosterRow> = {}): RosterRow => ({
   artifacts: 12,
   errors: 1,
   resolved: 1,
+  kitviews: 4,
+  kits: 2,
   joined: "2026-10-07",
   ...extra,
 });
