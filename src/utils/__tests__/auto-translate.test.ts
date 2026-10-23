@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  translationsPageLive,
   SILENT_AFTER_MINUTES,
   agentView,
   cleanVerdict,
@@ -115,5 +116,19 @@ describe("cleanVerdict", () => {
 
   it("collects every generation id once", () => {
     expect(generationIdsOf([kit(), source]).sort()).toEqual(["d", "p", "sd", "sp", "sw", "w"]);
+  });
+});
+
+describe("translationsPageLive", () => {
+  it("stays live across the gap between two runs while the agent will queue more", () => {
+    expect(translationsPageLive(true, "paused", 0)).toBe(true);
+    expect(translationsPageLive(false, "running", 0)).toBe(true);
+    expect(translationsPageLive(false, "throttled", 0)).toBe(true);
+    expect(translationsPageLive(false, "paused", 2)).toBe(true);
+  });
+  it("goes quiet when nothing is in flight and nothing will be queued", () => {
+    for (const mode of ["off", "dry_run", "paused", "breaker", "silent", null, undefined] as const) {
+      expect(translationsPageLive(false, mode, 0)).toBe(false);
+    }
   });
 });

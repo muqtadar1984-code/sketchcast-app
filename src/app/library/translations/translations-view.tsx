@@ -15,7 +15,7 @@ import { ErrorBanner } from "../catalogue-ui";
 import { TranslationClock, TranslationProgressBar } from "../translation-clock";
 import { leadProgress, queuePosition, typicalFor, type TranslationClockData } from "@/utils/catalogue/translation-eta";
 import type { MatrixLoad } from "./load";
-import type { AgentView } from "@/utils/catalogue/auto-translate";
+import { translationsPageLive, type AgentView } from "@/utils/catalogue/auto-translate";
 import { AgentControls, ApproveCleanButton } from "./agent-panel";
 import { TranslationsNav } from "./sub-nav";
 
@@ -107,6 +107,8 @@ export function TranslationsView({
   const totals = totalsByLanguage(inSubject, languages);
   const englishPosted = inSubject.filter((r) => r.english.state === "posted").length;
   const live = all.some((r) => r.cells.some((c) => c.state === "queued" || c.state === "translating"));
+  // keep refreshing across the gap between two runs (translationsPageLive)
+  const refreshing = translationsPageLive(live, agent?.mode, all.reduce((n, r) => n + r.cells.filter((c) => c.state === "fix_queued").length, 0));
   // the runs under each language's Translating count, for its progress bar
   const runsOf = (i: number) =>
     inSubject.flatMap((r) => {
@@ -118,7 +120,7 @@ export function TranslationsView({
 
   return (
     <main className="px-6 py-10 max-w-[96rem] mx-auto">
-      <AutoRefresh active={live} seconds={30} />
+      <AutoRefresh active={refreshing} seconds={30} />
       {live && (
         <p className="text-xs text-[#5B6470] mb-3">
           Times are estimates: a typical translation takes about {load.clocks.timing.typicalMin} min (the median of the last {load.clocks.timing.samples || "few"} runs
