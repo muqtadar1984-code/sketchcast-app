@@ -64,6 +64,9 @@ class Query {
     this.single = true;
     return this;
   }
+  limit() {
+    return this;
+  }
   private run(): { data: unknown; error: Err } {
     const error = this.db.errors[this.table] ?? null;
     if (error) return { data: null, error };
@@ -206,5 +209,51 @@ describe("on / off", () => {
     expect(status).toBe(409);
     expect(json.migration).toBe("0151_fix_agent.sql");
     expect(db.writes).toEqual([]);
+  });
+});
+
+describe("retry after it needed you", () => {
+  const CASE2 = "22222222-2222-4222-8222-222222222222";
+  function stuck() {
+    return new FakeDb({
+      fix_cases: [
+        { id: CASE, status: "needs_founder", round: 2, applied_job_id: "job-1", proposal: { note: "n" }, history: [{ round: 1 }], outcome: { error: "again" } },
+        { id: CASE2, status: "needs_founder", round: 1, applied_job_id: null, proposal: {}, history: [] },
+        { id: "33333333-3333-4333-8333-333333333333", status: "proposed", round: 1 },
+      ],
+      platform_settings: [],
+      platform_audit_log: [],
+    });
+  }
+
+  it("sends one case back to 'approved' with its last proposal, the ended round in history", async () => {
+    const db = stuck();
+    const { status, json } = await post(db, { action: "retry", id: CASE });
+    expect(status).toBe(200);
+    expect(json.retried).toBe(1);
+    const row = db.tables.fix_cases[0];
+    expect(row.status).toBe("approved");
+    expect(row.applied_job_id).toBeNull();
+    expect(row.proposal).toEqual({ note: "n" });
+    expect(row.decided_by).toBe(ADMIN);
+    expect(row.history).toEqual([{ round: 1 }, expect.objectContaining({ round: 2, applied_job_id: "job-1", outcome: { error: "again" } })]);
+    const upd = db.writes.find((w) => w.table === "fix_cases" && w.op === "update")!;
+    expect(upd.filters).toEqual([["id", CASE], ["status", "needs_founder"]]);
+    expect(audits(db)).toEqual([expect.objectContaining({ action: "library_fix_case_retry", target_id: CASE })]);
+    expect(db.writes.some((w) => w.table === "jobs")).toBe(false);
+  });
+
+  it("retries every case that needs you, and nothing else", async () => {
+    const db = stuck();
+    const { json } = await post(db, { action: "retry_all" });
+    expect(json.retried).toBe(2);
+    expect(db.tables.fix_cases.map((r) => r.status)).toEqual(["approved", "approved", "proposed"]);
+  });
+
+  it("answers 409 for a case that is not waiting for you", async () => {
+    const db = stuck();
+    const r = await post(db, { action: "retry", id: "33333333-3333-4333-8333-333333333333" });
+    expect(r.status).toBe(409);
+    expect(db.writes.filter((w) => w.op === "update")).toEqual([]);
   });
 });

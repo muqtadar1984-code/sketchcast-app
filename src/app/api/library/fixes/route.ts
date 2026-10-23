@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
-import { decisionPatch, isDecision, type FixAgentSettings } from "@/utils/fixes/fix-cases";
+import { decisionPatch, isDecision, retryPatch, type FixAgentSettings, type FixCase } from "@/utils/fixes/fix-cases";
 import { audit, bad, conflict, dbError, notFound, readJson, uuid } from "../lib";
 
 export const runtime = "nodejs";
@@ -16,6 +16,10 @@ export const runtime = "nodejs";
 //       the worker moved the case on — is a 409, never an overwrite. The
 //       WORKER queues the retry from 'approved' (fix_case_enqueue); this route
 //       never touches `jobs`.
+//   {action: 'retry', id} | {action: 'retry_all'}  a case the agent gave up
+//       on (needs_founder) goes back to 'approved' with its last proposal,
+//       once its cause is fixed; the round it ended in is kept in history.
+//       The worker queues each one, one translation at a time.
 //   {action: 'on' | 'off'}  merges {enabled} into platform_settings
 //       'fix_agent' (read-merge-update, like the Auto Translate Agent's
 //       controls); the worker reads it every tick.
@@ -56,6 +60,38 @@ export async function POST(request: Request) {
     if (!row) return conflict("This case is no longer waiting for a decision.");
     await audit(admin, m.id, `fix_case_${action}`, "fix_case", id, { note: patch.decision_note, round: row.round ?? null });
     return NextResponse.json({ ok: true, action, id, status: patch.status });
+  }
+
+  if (action === "retry" || action === "retry_all") {
+    const admin = createAdminClient();
+    let q = admin.from("fix_cases").select("*").eq("status", "needs_founder");
+    if (action === "retry") {
+      const id = uuid(body.id);
+      if (!id) return bad("A case id is needed.");
+      q = q.eq("id", id);
+    }
+    const { data, error } = await q.limit(200);
+    if (error) return fixCasesMissing(error) ? conflict(NEEDS_MIGRATION, { migration: MIGRATION }) : dbError(error);
+    const rows = (data ?? []) as FixCase[];
+    if (action === "retry" && rows.length === 0) return conflict("This case is not waiting for you any more.");
+    const retried: string[] = [];
+    for (const row of rows) {
+      // guarded on the status the row was read in: a case the worker or a
+      // second click moved since is left alone
+      const up = await admin
+        .from("fix_cases")
+        .update(retryPatch(row, m.id, now))
+        .eq("id", row.id)
+        .eq("status", "needs_founder")
+        .select("id");
+      if (up.error) return dbError(up.error);
+      if ((up.data ?? []).length) retried.push(row.id);
+    }
+    await audit(admin, m.id, "fix_case_retry", "fix_case", action === "retry" ? retried[0] ?? null : null, {
+      count: retried.length,
+      ids: retried,
+    });
+    return NextResponse.json({ ok: true, action, retried: retried.length });
   }
 
   if (action === "on" || action === "off") {
