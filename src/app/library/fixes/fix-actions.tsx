@@ -4,22 +4,32 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DECISION_NOTE_MAX } from "@/utils/fixes/fix-cases";
 
-// The Fix Agent's buttons on Library → Fixes: the agent's on/off switch and
-// the founder's Approve / Reject on one case. The route decides everything
+// The Fix Agent's buttons on Library → Fixes: the agent's on/off switch, the
+// founder's Approve / Reject on one case, and Retry (one case, or all). The route decides everything
 // (/api/library/fixes); these post and refresh the server page.
 
 const TURN_ON_CONFIRM =
   "Turn on the Fix Agent? It diagnoses failed translations and proposes fixes; nothing is retried until you approve.";
 
+/** POST to the route: the error to show (null when it went through) and the
+ *  reply's JSON. Shared with the board (fixes-board.tsx). */
+export async function postFixes(body: Record<string, unknown>): Promise<{ error: string | null; data: Record<string, unknown> }> {
+  try {
+    const res = await fetch("/api/library/fixes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (res.ok) return { error: null, data };
+    return { error: typeof data.error === "string" ? data.error : "That did not go through.", data };
+  } catch {
+    return { error: "That did not go through — check the connection.", data: {} };
+  }
+}
+
 async function post(body: Record<string, unknown>): Promise<string | null> {
-  const res = await fetch("/api/library/fixes", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (res.ok) return null;
-  const json = (await res.json().catch(() => ({}))) as { error?: unknown };
-  return typeof json.error === "string" ? json.error : "That did not go through.";
+  return (await postFixes(body)).error;
 }
 
 export function AgentSwitch({ enabled }: { enabled: boolean }) {
@@ -90,7 +100,7 @@ export function DecisionButtons({ id }: { id: string }) {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-fix-decision="">
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="btn-primary h-9 px-4 text-sm" disabled={busy !== null} onClick={() => decide("approve")}>
           {busy === "approve" ? "Approving…" : "Approve"}

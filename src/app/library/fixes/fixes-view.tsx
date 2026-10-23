@@ -11,7 +11,6 @@ import {
   highlightSegments,
   historyOf,
   isDecidable,
-  isOpen,
   isRetryable,
   outcomeInReview,
   statusLabel,
@@ -25,25 +24,18 @@ import {
   type Outcome,
   type Proposal,
 } from "@/utils/fixes/fix-cases";
+import { boardRows, LIVE_STATUSES, statusTone, type BoardParams, type JobLite, type WeekStats } from "@/utils/fixes/fix-board";
 import { AgentSwitch, DecisionButtons, RetryButton } from "./fix-actions";
+import { FixesBoard, type BoardItem } from "./fixes-board";
 
-// Library → Fixes' screen: the agent's switch, then one card per case. A
-// Server Component with no reads of its own — page.tsx authenticates and
-// loads. Every JSON field is the worker's and read through the defensive
-// helpers in utils/fixes/fix-cases.ts.
-
-const STATUS_TONE: Record<string, string> = {
-  new: "bg-[#EDE7FB] text-[#5B3FBF]",
-  diagnosing: "bg-[#EDE7FB] text-[#5B3FBF]",
-  proposed: "bg-[#FFF1D6] text-[#9A6400]",
-  approved: "bg-[#E3EEFB] text-[#1F5FA8]",
-  applied: "bg-[#E3EEFB] text-[#1F5FA8]",
-  resolved: "bg-[#E6F6F2] text-[#0F7A68]",
-  rejected: "bg-[#F4F5F2] text-[#5B6470]",
-  needs_founder: "bg-[#FFE9E3] text-[#B3401F]",
-};
-
-const LIVE = new Set(["new", "diagnosing", "approved", "applied"]);
+// Library → Fixes' screen: the agent's switch, the trend strip, then the
+// board (fixes-board.tsx, a Client Component: filters, cause groups,
+// selection, the drawer, review mode). A Server Component with no reads of
+// its own — page.tsx authenticates and loads. Each case's full detail
+// (CaseDetail) is rendered HERE, on the server, and handed to the board as
+// a ReactNode, so none of this module's helpers enter the client bundle.
+// Every JSON field is the worker's and read through the defensive helpers
+// in utils/fixes/fix-cases.ts; the board's rules are utils/fixes/fix-board.ts.
 
 function when(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -298,13 +290,44 @@ function HistoryRounds({ history, people, topicId, rtl }: { history: HistoryRoun
 
 const RTL = new Set(["ar", "ur", "ms-arab"]);
 
-function CaseCard({ c, topics, people, canDecide }: { c: FixCase; topics: Record<string, string>; people: Record<string, string>; canDecide: boolean }) {
+function RecheckLine({ evidence, badge }: { evidence: Evidence | null | undefined; badge: string | null }) {
+  const r = evidence?.recheck;
+  if (!r || typeof r !== "object") return null;
+  const counts = typeof r.checked === "number" && typeof r.passing === "number" ? `${r.passing} of ${r.checked} pairs pass` : null;
+  const verdict = badge ? null : r.passes === false ? "still fails the current check" : "not settled by the current check";
+  const parts = [verdict, counts, r.commit ? `at ${r.commit}` : null].filter(Boolean);
+  return (
+    <p className="text-sm">
+      <span className="font-medium">Re-check:</span> {badge && <span className="chip bg-[#E6F6F2] text-[#0F7A68] mr-1">{badge}</span>}
+      {parts.join(" · ")}
+      {r.at && <span className="text-[#8A929C]"> · {when(r.at)}</span>}
+    </p>
+  );
+}
+
+/** One case in full — what failed, the worker's re-check, the diagnosis,
+ *  the evidence, the proposal, the decision, the retry, the earlier rounds —
+ *  and, while it waits for the founder, Approve / Reject (or Retry when it
+ *  needs them). Rendered on the server; the board shows it in its drawer. */
+export function CaseDetail({
+  c,
+  topics,
+  people,
+  canDecide,
+  badge = null,
+}: {
+  c: FixCase;
+  topics: Record<string, string>;
+  people: Record<string, string>;
+  canDecide: boolean;
+  badge?: string | null;
+}) {
   const status = String(c.status ?? "");
   const rtl = RTL.has(c.language ?? "");
   const topicTitle = c.topic_id ? topics[c.topic_id] : undefined;
   const cost = usd(c.cost_usd);
   return (
-    <article className={`card p-5 space-y-4 ${isOpen(c) ? "" : "opacity-80"}`}>
+    <article className="space-y-4">
       <header className="flex flex-wrap items-start gap-2">
         <h2 className="text-lg font-medium flex-1 min-w-[14rem]">{c.title || "Untitled case"}</h2>
         {c.language && (
@@ -312,7 +335,7 @@ function CaseCard({ c, topics, people, canDecide }: { c: FixCase; topics: Record
             {c.language}
           </span>
         )}
-        <span className={`chip ${STATUS_TONE[status] ?? "bg-[#F4F5F2] text-[#5B6470]"}`}>{statusLabel(status)}</span>
+        <span className={`chip ${statusTone(status)}`}>{statusLabel(status)}</span>
         {typeof c.round === "number" && <span className="chip bg-[#F4F5F2] text-[#5B6470]">Round {c.round} of 2</span>}
       </header>
 
@@ -332,6 +355,7 @@ function CaseCard({ c, topics, people, canDecide }: { c: FixCase; topics: Record
         {c.resolved_at && <> · closed {when(c.resolved_at)}</>}
       </p>
 
+      <RecheckLine evidence={c.evidence} badge={badge} />
       <DiagnosisBlock diagnosis={c.diagnosis} />
       <EvidenceTable evidence={c.evidence} rtl={rtl} />
       <ProposalBlock proposal={c.proposal} risk={c.risk} />
@@ -348,42 +372,92 @@ function CaseCard({ c, topics, people, canDecide }: { c: FixCase; topics: Record
   );
 }
 
+/** The last 7 days in four tiles: failures, fixed (and the share), what a
+ *  fixed kit cost, and the top causes as mini bars. */
+export function TrendStrip({ week }: { week: WeekStats }) {
+  const top = Math.max(1, ...week.byCause.map((c) => c.count));
+  const cost = week.avgCostUsd === null ? null : usd(week.avgCostUsd);
+  const tile = "card p-4 min-w-0";
+  const label = "text-xs text-[#5B6470]";
+  const value = "text-2xl font-display tabular mt-1";
+  return (
+    <section className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-5" aria-label="The last 7 days">
+      <div className={tile}>
+        <p className={label}>Failures · last 7 days</p>
+        <p className={value}>{week.failures}</p>
+      </div>
+      <div className={tile}>
+        <p className={label}>Fixed</p>
+        <p className={value}>
+          {week.fixed}
+          {week.rate !== null && <span className="text-sm text-[#0F7A68] ml-2">{week.rate}%</span>}
+        </p>
+      </div>
+      <div className={tile}>
+        <p className={label}>Cost per fixed kit</p>
+        <p className={value}>{cost ?? "—"}</p>
+      </div>
+      <div className={tile}>
+        <p className={label}>By cause</p>
+        {week.byCause.length === 0 ? (
+          <p className="text-sm text-[#8A929C] mt-2">No failures this week.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {week.byCause.map((c) => (
+              <li key={c.key} className="text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="truncate">{c.label}</span>
+                  <span className="tabular text-[#5B6470]">{c.count}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-[#EEF0EC] mt-0.5">
+                  <div className="h-1.5 rounded-full bg-[#7FD8A8]" style={{ width: `${Math.round((c.count / top) * 100)}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function FixesView({
   cases,
   topics,
   people,
+  jobs,
+  week,
   enabled,
   canDecide,
+  params,
 }: {
   cases: FixCase[];
   topics: Record<string, string>;
   people: Record<string, string>;
+  jobs: Record<string, JobLite>;
+  week: WeekStats;
   enabled: boolean;
   canDecide: boolean;
+  params: BoardParams;
 }) {
-  const live = cases.some((c) => LIVE.has(String(c.status)));
-  const open = cases.filter(isOpen);
-  const closed = cases.filter((c) => !isOpen(c));
+  const live = cases.some((c) => LIVE_STATUSES.has(String(c.status)));
+  const byId = new Map(cases.map((c) => [c.id, c]));
+  const items: BoardItem[] = boardRows(cases, topics, jobs).map((r) => ({
+    ...r,
+    detail: <CaseDetail c={byId.get(r.id)!} topics={topics} people={people} canDecide={canDecide} badge={r.badge} />,
+  }));
   return (
     <main className="max-w-6xl mx-auto px-6 py-10">
       <AutoRefresh active={live} seconds={30} />
       <Heading />
       <AgentHeader enabled={enabled} available={canDecide} needsYou={cases.filter(isRetryable).length} />
+      <TrendStrip week={week} />
       {cases.length === 0 ? (
         <p className="card p-8 text-center text-[#5B6470]">No failures to fix.</p>
       ) : (
-        <div className="space-y-4">
-          {open.map((c) => (
-            <CaseCard key={c.id} c={c} topics={topics} people={people} canDecide={canDecide} />
-          ))}
-          {closed.length > 0 && (
-            <h2 className="text-sm font-medium text-[#5B6470] pt-4">Closed in the last 30 days ({closed.length})</h2>
-          )}
-          {closed.map((c) => (
-            <CaseCard key={c.id} c={c} topics={topics} people={people} canDecide={canDecide} />
-          ))}
-        </div>
+        <FixesBoard items={items} initial={params} canDecide={canDecide} />
       )}
+      <p className="text-xs text-[#8A929C] mt-4">Closed cases stay here for 30 days.</p>
     </main>
   );
 }
