@@ -14,12 +14,15 @@ import { libraryAllows, type LibraryRole } from "@/utils/library-routing";
 // Since 2026-10-18 Translations (every topic x every lesson language) sits
 // beside it, for every member. Since 2026-10-21 Fixes (the Fix Agent's cases,
 // 0151) sits beside Translations for platform admins only — the page and its
-// route are admin-only too.
+// route are admin-only too. Since the Pinterest Pin Engine (0154) Pinterest
+// sits beside them for every member: anyone can look at the pins; approving
+// one is for platform admins (the routes enforce it).
 const TABS: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "/library", label: "Overview" },
   { href: "/library/topics", label: "Topics" },
   { href: "/library/translations", label: "Translations" },
   { href: "/library/fixes", label: "Fixes", adminOnly: true },
+  { href: "/library/pinterest", label: "Pinterest" },
   { href: "/library/curricula", label: "Curricula" },
   { href: "/library/candidates", label: "Candidates" },
   { href: "/library/harvest", label: "Harvest" },

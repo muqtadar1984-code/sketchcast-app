@@ -26,6 +26,17 @@ describe("firstTouchSource", () => {
     expect(firstTouchSource("https://sketchcast.app/", "?ref=chatgpt.com")).toBe("chatgpt");
   });
 
+  it("names Pinterest whichever way a pin's visitor arrives", () => {
+    // The pin engine's links carry utm_source=pinterest; without them (a pin
+    // someone saved and re-shared, a link Pinterest rewrote) the referrer or
+    // the landing hand-off still names Pinterest, not a bare domain.
+    expect(firstTouchSource("", "?utm_source=pinterest&utm_medium=organic")).toBe("utm:pinterest");
+    for (const host of ["www.pinterest.com", "pinterest.co.uk", "in.pinterest.com", "pin.it", "pkg:com.pinterest"]) {
+      expect(firstTouchSource("", `?ref=${encodeURIComponent(host)}`)).toBe("pinterest");
+    }
+    expect(firstTouchSource("https://www.pinterest.ca/", "")).toBe("pinterest");
+  });
+
   it("normalises a forwarded ref exactly like a first-hand referrer", () => {
     // The landing script forwards a bare HOST and does no naming of its own, so
     // these two routes to the same visitor must agree. If they ever diverge,

@@ -37,6 +37,10 @@ const KNOWN: Array<[RegExp, string]> = [
   [/(^|\.)lnkd\.in$/, "linkedin"],
   [/(^|\.)facebook\.com$/, "facebook"],
   [/(^|\.)youtube\.com$/, "youtube"],
+  // Pinterest (Pinterest Pin Engine, 0154): pinterest.com and its country
+  // domains (pinterest.co.uk, pinterest.ca, …) and the pin.it short links.
+  [/(^|\.)pinterest\.[a-z.]+$/, "pinterest"],
+  [/(^|\.)pin\.it$/, "pinterest"],
   [/(^|\.)t\.co$/, "x"],
   [/(^|\.)x\.com$/, "x"],
   [/(^|\.)whatsapp\.com$/, "whatsapp"],
@@ -59,6 +63,7 @@ const ANDROID_PACKAGES: Record<string, string> = {
   "com.google.android.googlequicksearchbox": "google",
   "com.openai.chatgpt": "chatgpt",
   "com.instagram.android": "instagram",
+  "com.pinterest": "pinterest",
 };
 
 /** Our own hosts — a hop between them is not a new first touch. */
