@@ -1,6 +1,6 @@
 /**
  * The catalogue funnel arithmetic (console /catalogue). Pinned: Monday-UTC
- * weeks (the allowance's week), unique unlockers per week and overall, the
+ * weeks (the allowance's week), unique viewers and unlockers per week and overall, the
  * event split, tiers from the unlock event's meta, and assigned copies
  * counted once each.
  *
@@ -28,6 +28,10 @@ describe("buildCatalogueFunnel", () => {
       E("unlock", "2026-10-13T09:00:00Z", { meta: { tier: "trial" } }),
       E("unlock", "2026-10-14T09:00:00Z", { meta: { tier: "trial" } }),
       E("unlock", "2026-10-20T09:00:00Z", { user_id: "u2", meta: { tier: "pro" } }),
+      E("view", "2026-10-13T08:55:00Z"),
+      E("view", "2026-10-13T08:58:00Z"),
+      E("view", "2026-10-20T08:00:00Z", { user_id: "u2", topic_id: null }),
+      E("view", "2026-10-20T08:30:00Z", { user_id: "u3", topic_id: null, meta: { reason: "coming_soon" } }),
       E("download", "2026-10-13T10:00:00Z"),
       E("download", "2026-10-13T10:05:00Z"),
       E("adopt", "2026-10-13T10:10:00Z"),
@@ -36,10 +40,10 @@ describe("buildCatalogueFunnel", () => {
       E("question_bank_backfill", "2026-10-16T12:00:00Z", { user_id: null, topic_id: null }),
     ];
     const f = buildCatalogueFunnel(unlocks, events, ["c1", "c1", "c2"]);
-    expect(f.totals).toEqual({ unlockers: 2, unlocks: 3, downloads: 2, adopts: 2, adopters: 2, weeklyLimitHits: 1, assignedCopies: 2 });
+    expect(f.totals).toEqual({ viewers: 3, views: 4, unlockers: 2, unlocks: 3, downloads: 2, adopts: 2, adopters: 2, weeklyLimitHits: 1, assignedCopies: 2 });
     expect(f.weeks).toEqual([
-      { week: "2026-10-19", unlockers: 1, unlocks: 1, downloads: 0, adopts: 1, weeklyLimitHits: 0 },
-      { week: "2026-10-12", unlockers: 1, unlocks: 2, downloads: 2, adopts: 1, weeklyLimitHits: 1 },
+      { week: "2026-10-19", viewers: 2, unlockers: 1, unlocks: 1, downloads: 0, adopts: 1, weeklyLimitHits: 0 },
+      { week: "2026-10-12", viewers: 1, unlockers: 1, unlocks: 2, downloads: 2, adopts: 1, weeklyLimitHits: 1 },
     ]);
     expect(f.topics).toEqual([
       { topic_id: "t1", unlocks: 2, downloads: 2, adopts: 2 },
@@ -54,6 +58,7 @@ describe("buildCatalogueFunnel", () => {
   it("is empty on no data", () => {
     const f = buildCatalogueFunnel([], [], []);
     expect(f.totals.unlocks).toBe(0);
+    expect(f.totals.viewers).toBe(0);
     expect(f.weeks).toEqual([]);
     expect(f.topics).toEqual([]);
     expect(f.tiers).toEqual([]);

@@ -4,8 +4,11 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 import { founderEmails, requirePlatformAdmin } from "@/utils/platform-admin";
 import OpsControls from "./ops-controls";
+import { aggregateKitActivity, kitTopicsFor, EMPTY_KIT_ACTIVITY } from "@/utils/console-kit-activity";
 
-// One account: profile, activity counts, their issue reports, their staff
+// One account: profile, activity counts, their books, their Ready-made kits
+// activity (Kits page opens, unlocks, downloads, Library copies — from
+// catalogue_unlocks + catalogue_events), their issue reports, their staff
 // audit trail, and the ops panel (suspend / caps / staff).
 
 export const dynamic = "force-dynamic";
@@ -38,13 +41,15 @@ export default async function ConsoleUserDetailPage({
     schoolName = (s?.name as string) ?? null;
   }
 
-  const [classesQ, booksQ, gensQ, issuesQ, auditQ, staffQ] = await Promise.all([
+  const [classesQ, booksQ, gensQ, issuesQ, auditQ, staffQ, kitUnlocksQ, kitEventsQ] = await Promise.all([
     admin.from("classes").select("id", { count: "exact", head: true }).eq("teacher_id", id),
     admin.from("books").select("id, title, status, created_at").eq("owner_id", id),
     admin.from("generations").select("id, kind, status", { count: "exact" }).eq("owner_id", id),
     admin.from("platform_issues").select("id, title, status, created_at").eq("reporter_id", id).order("created_at", { ascending: false }).limit(5),
     admin.from("platform_audit_log").select("action, detail, created_at").eq("target_id", id).order("created_at", { ascending: false }).limit(10),
     admin.from("platform_admins").select("user_id").eq("user_id", id).is("revoked_at", null).maybeSingle(),
+    admin.from("catalogue_unlocks").select("user_id, topic_id, unlocked_at").eq("user_id", id),
+    admin.from("catalogue_events").select("user_id, topic_id, event, created_at").eq("user_id", id),
   ]);
   // 0110: Library portal membership. Read separately so a database without the
   // migration degrades to "no membership" instead of failing the whole page.
@@ -59,6 +64,25 @@ export default async function ConsoleUserDetailPage({
   const gens = (gensQ.data ?? []) as { kind: string | null; status: string }[];
   const gensDone = gens.filter((g) => g.status === "done").length;
   const books = (booksQ.data ?? []) as { id: string; title: string | null; status: string; created_at: string }[];
+
+  const kitUnlocks = (kitUnlocksQ.data ?? []) as { user_id: string; topic_id: string; unlocked_at: string }[];
+  const kitEvents = (kitEventsQ.data ?? []) as { user_id: string | null; topic_id: string | null; event: string; created_at: string }[];
+  const kit = aggregateKitActivity(kitUnlocks, kitEvents).get(id) ?? EMPTY_KIT_ACTIVITY;
+  const kitTopics = kitTopicsFor(kitUnlocks, kitEvents);
+  const topicTitle = new Map<string, string>();
+  if (kitTopics.length) {
+    const { data: t } = await admin.from("topics").select("id, title").in("id", kitTopics.map((k) => k.topic_id));
+    for (const row of (t ?? []) as { id: string; title: string | null }[]) topicTitle.set(row.id, row.title || "Untitled topic");
+  }
+  const kitFacts: { label: string; value: string }[] = [
+    { label: "Kits page opens", value: String(kit.views) },
+    { label: "Last opened", value: kit.lastViewedAt ? new Date(kit.lastViewedAt).toLocaleString() : "never" },
+    { label: "Kits unlocked", value: String(kit.unlocks) },
+    { label: "Files downloaded", value: String(kit.downloads) },
+    { label: "Videos played", value: String(kit.watches) },
+    { label: "Copied to Library", value: String(kit.adopts) },
+    { label: "Weekly limit hit", value: String(kit.weeklyLimitHits) },
+  ];
 
   const opsReady = "suspended_at" in p && "max_books" in p;
   const isStaffTarget = !!staffQ.data || founderEmails().includes(email.toLowerCase());
@@ -116,6 +140,32 @@ export default async function ConsoleUserDetailPage({
                 <div key={b.id} className="px-5 py-2.5 flex items-center justify-between text-sm">
                   <span className="truncate font-medium">{b.title || "Untitled"}</span>
                   <span className="text-xs text-[#5B6470]">{b.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {role !== "student" && (
+            <div className="card divide-y divide-[#EEF0EC]">
+              <p className="px-5 py-2 text-xs font-medium text-[#5B6470]">
+                Ready-made kits{" "}
+                <span className="font-normal text-[#98A0A9]">· page opens counted from 2026-10-23</span>
+              </p>
+              <div className="px-5 py-3 grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                {kitFacts.map((f) => (
+                  <p key={f.label}>
+                    <span className="text-[#5B6470]">{f.label}: </span>
+                    <span className="font-medium tabular">{f.value}</span>
+                  </p>
+                ))}
+              </div>
+              {kitTopics.map((k) => (
+                <div key={k.topic_id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate font-medium">{topicTitle.get(k.topic_id) ?? k.topic_id}</span>
+                  <span className="shrink-0 text-xs text-[#5B6470] tabular">
+                    {k.unlocked_at ? `unlocked ${new Date(k.unlocked_at).toLocaleDateString()}` : "not unlocked"} · {k.downloads} downloads ·{" "}
+                    {k.watches} plays · {k.adopts} copied
+                  </span>
                 </div>
               ))}
             </div>

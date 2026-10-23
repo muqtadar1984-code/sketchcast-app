@@ -1,7 +1,7 @@
 // The catalogue funnel (plan §5.5, Phase E): what the Ready-made kits did,
 // from the tables that already record it — catalogue_unlocks (one row per
-// permanent unlock) and catalogue_events (unlock, weekly_limit, download,
-// adopt, written only by server routes and the database). No event pipeline,
+// permanent unlock) and catalogue_events (view, unlock, weekly_limit,
+// download, adopt, written only by server routes and the database). No event pipeline,
 // no new table. Pure: rows in, numbers out, so the console page is a thin
 // render and the arithmetic is tested.
 
@@ -9,6 +9,9 @@ export type UnlockRow = { user_id: string; topic_id: string; source: string; wee
 export type EventRow = { user_id: string | null; topic_id: string | null; event: string; meta: Record<string, unknown> | null; created_at: string };
 
 export type Totals = {
+  /** People who opened the Kits page at least once ('view', one per page load). */
+  viewers: number;
+  views: number;
   unlockers: number;
   unlocks: number;
   downloads: number;
@@ -20,7 +23,7 @@ export type Totals = {
   assignedCopies: number;
 };
 
-export type WeekRow = { week: string; unlockers: number; unlocks: number; downloads: number; adopts: number; weeklyLimitHits: number };
+export type WeekRow = { week: string; viewers: number; unlockers: number; unlocks: number; downloads: number; adopts: number; weeklyLimitHits: number };
 export type TopicRow = { topic_id: string; unlocks: number; downloads: number; adopts: number };
 export type TierRow = { tier: string; unlocks: number; weeklyLimitHits: number };
 
@@ -52,12 +55,15 @@ export function buildCatalogueFunnel(
     const w = weekOf(iso);
     let row = weeks.get(w);
     if (!row) {
-      row = { week: w, unlockers: 0, unlocks: 0, downloads: 0, adopts: 0, weeklyLimitHits: 0 };
+      row = { week: w, viewers: 0, unlockers: 0, unlocks: 0, downloads: 0, adopts: 0, weeklyLimitHits: 0 };
       weeks.set(w, row);
     }
     return row;
   };
   const weekUnlockers = new Map<string, Set<string>>();
+  const viewers = new Set<string>();
+  const weekViewers = new Map<string, Set<string>>();
+  let views = 0;
   const topics = new Map<string, TopicRow>();
   const topic = (id: string): TopicRow => {
     let row = topics.get(id);
@@ -78,7 +84,14 @@ export function buildCatalogueFunnel(
   }
   for (const e of events) {
     const tier = typeof e.meta?.tier === "string" ? (e.meta.tier as string) : "unknown";
-    if (e.event === "download") {
+    if (e.event === "view") {
+      views++;
+      const w = week(e.created_at);
+      if (e.user_id) {
+        viewers.add(e.user_id);
+        (weekViewers.get(w.week) ?? weekViewers.set(w.week, new Set()).get(w.week)!).add(e.user_id);
+      }
+    } else if (e.event === "download") {
       downloads++;
       week(e.created_at).downloads++;
       if (e.topic_id) topic(e.topic_id).downloads++;
@@ -96,6 +109,7 @@ export function buildCatalogueFunnel(
     }
   }
   for (const [w, set] of weekUnlockers) week(w + "T00:00:00Z").unlockers = set.size;
+  for (const [w, set] of weekViewers) week(w + "T00:00:00Z").viewers = set.size;
 
   const tiers = [...new Set([...tierUnlocks.keys(), ...tierLimits.keys()])]
     .map((t) => ({ tier: t, unlocks: tierUnlocks.get(t) ?? 0, weeklyLimitHits: tierLimits.get(t) ?? 0 }))
@@ -103,6 +117,8 @@ export function buildCatalogueFunnel(
 
   return {
     totals: {
+      viewers: viewers.size,
+      views,
       unlockers: unlockers.size,
       unlocks: unlocks.length,
       downloads,

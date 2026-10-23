@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import AppHeader from "../app-header";
@@ -45,6 +46,12 @@ const PUBLIC_TOPICS_URL = "https://sketchcast.app/topics";
 // then the database's own eligibility, which includes the RELEASE switch
 // (0130): until the founder flips it, everyone outside the preview list sees
 // the "coming soon" card here while the public lesson pages stay public.
+//
+// EVERY LOAD PAST THE ROLE GATES IS A 'view' in catalogue_events — the
+// funnel's first in-app step (Console → Catalogue, and the account page).
+// Recorded whatever the database answers, with that answer in meta, so a
+// "coming soon" visit still counts as someone who came looking. Written after
+// the response, best-effort: a failed log never slows or fails the page.
 export default async function KitsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   if (!catalogueTabEnabled()) redirect("/dashboard");
 
@@ -69,6 +76,23 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
 
   const { data: allowanceRaw, error: allowanceError } = await supabase.rpc("my_catalogue_allowance");
   const allowance = (allowanceRaw as Allowance | null) ?? null;
+
+  after(async () => {
+    try {
+      await createAdminClient().from("catalogue_events").insert({
+        user_id: user.id,
+        topic_id: null,
+        event: "view",
+        meta: {
+          eligible: allowance?.eligible === true,
+          reason: allowanceError ? "error" : (allowance?.reason ?? null),
+          ...(highlight ? { topic: highlight } : {}),
+        },
+      });
+    } catch {
+      // the funnel misses one view; the page is unaffected
+    }
+  });
 
   const shell = (body: React.ReactNode) => (
     <>

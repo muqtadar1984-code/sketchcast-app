@@ -5,6 +5,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { demoAccountPassword, partitionRoster } from "@/utils/demo";
 import { founderEmails, staffUserIds } from "@/utils/platform-admin";
 import { aggregateUserStats, languageSummary, EMPTY_USER_STATS } from "@/utils/console-user-stats";
+import { aggregateKitActivity, EMPTY_KIT_ACTIVITY, type KitEventRow, type KitUnlockRow } from "@/utils/console-kit-activity";
 import {
   deriveFeedbackState,
   deriveRemindState,
@@ -34,7 +35,9 @@ import {
 //
 // Per-user stats (Books/Lessons/Errors/Resolved + Language) come from THREE
 // whole-table selects folded into a Map (src/utils/console-user-stats.ts) —
-// never per-row queries; same pattern as the Overview page.
+// never per-row queries; same pattern as the Overview page. Ready-made kits
+// (Kit views = Kits page loads, Kits = kits unlocked) fold the same way from
+// catalogue_events and catalogue_unlocks (src/utils/console-kit-activity.ts).
 //
 // Filtering: the search box matches across the identity columns; the row of
 // boxes under the table header filters ONE column each (text = contains,
@@ -46,14 +49,14 @@ import {
 export const dynamic = "force-dynamic";
 
 // One template shared by header + rows so the columns can never drift apart.
-// The numeric four are deliberately narrow (text-xs, right-aligned) so the
+// The numeric seven are deliberately narrow (text-xs, right-aligned) so the
 // roster still fits the max-w-7xl container. Two variants, both FULL literals
 // (Tailwind's scanner can't see interpolated class strings): the real tab
-// carries a 12th Actions track; demo and staff accounts get no actions, so
-// those two tabs keep the original 11 (the last track is Password on the demo
+// carries a 14th Actions track; demo and staff accounts get no actions, so
+// those two tabs keep 13 (the last track is Password on the demo
 // tab and Joined on the staff tab).
-const GRID_DEMO = "sm:grid-cols-[1.7fr_2fr_0.9fr_1.3fr_0.7fr_1.2fr_repeat(5,0.55fr)_1fr]";
-const GRID_REAL = "sm:grid-cols-[1.6fr_1.9fr_0.8fr_1.2fr_0.6fr_1.1fr_repeat(5,0.5fr)_0.9fr_1.5fr]";
+const GRID_DEMO = "sm:grid-cols-[1.6fr_1.9fr_0.8fr_1.2fr_0.6fr_1.1fr_repeat(7,0.5fr)_1fr]";
+const GRID_REAL = "sm:grid-cols-[1.4fr_1.7fr_0.7fr_1.1fr_0.55fr_1fr_repeat(7,0.5fr)_0.85fr_1.5fr]";
 
 // Numeric roster cell — right-aligned on desktop; a real zero stays visible but
 // muted, so "0 lessons" reads as a fact rather than missing data. The label
@@ -161,11 +164,13 @@ export default async function ConsoleUsersPage({
   // action tables (0083 + 0080) are only needed on the real tab — demo and
   // staff accounts get no actions.
   const none = Promise.resolve({ data: null });
-  const [schoolsQ, booksQ, gensQ, issuesQ, fbQ, remQ, lifeQ] = await Promise.all([
+  const [schoolsQ, booksQ, gensQ, issuesQ, kitUnlocksQ, kitEventsQ, fbQ, remQ, lifeQ] = await Promise.all([
     admin.from("schools").select("id, name"),
     admin.from("books").select("owner_id, language, removed_at"),
     selectAll(() => admin.from("generations").select("owner_id, kind, status")), // past the 1000-row cap
     admin.from("platform_issues").select("reporter_id, status"),
+    selectAll<KitUnlockRow>(() => admin.from("catalogue_unlocks").select("user_id")),
+    selectAll<KitEventRow>(() => admin.from("catalogue_events").select("user_id, event, created_at")),
     actionsTab ? admin.from("feedback_requests").select("user_id, created_at, snoozed_until, responded_at") : none,
     actionsTab ? admin.from("console_reminders").select("user_id, sent_at") : none,
     actionsTab ? admin.from("lifecycle_emails").select("user_id, sent_at") : none,
@@ -176,6 +181,7 @@ export default async function ConsoleUsersPage({
     (gensQ.data ?? []) as { owner_id: string; kind: string | null; status: string }[],
     (issuesQ.data ?? []) as { reporter_id: string | null; status: string }[],
   );
+  const kitActivity = aggregateKitActivity(kitUnlocksQ.data ?? [], kitEventsQ.data ?? []);
 
   // Actions state, folded per user (same Map doctrine as the stats).
   const now = new Date();
@@ -216,6 +222,7 @@ export default async function ConsoleUsersPage({
   // shows — so a filter can only ever match what the staff member can see.
   const toRow = (p: Prof): RosterRow => {
     const s = stats.get(p.id) ?? EMPTY_USER_STATS;
+    const k = kitActivity.get(p.id) ?? EMPTY_KIT_ACTIVITY;
     return {
       name: p.full_name || p.username || "",
       identifier: demoTab ? p.username || emails.get(p.id) || "" : emails.get(p.id) || p.username || "",
@@ -228,6 +235,8 @@ export default async function ConsoleUsersPage({
       artifacts: s.artifacts,
       errors: s.errors,
       resolved: s.resolved,
+      kitviews: k.views,
+      kits: k.unlocks,
       joined: joinedDate(p.created_at),
     };
   };
@@ -296,6 +305,7 @@ export default async function ConsoleUsersPage({
           <span>Country</span><span>Language</span>
           <span className="text-end">Books</span><span className="text-end">Lessons</span><span className="text-end">Artifacts</span>
           <span className="text-end">Errors</span><span className="text-end">Resolved</span>
+          <span className="text-end" title="Kits page loads">Kit views</span><span className="text-end" title="Ready-made kits unlocked">Kits</span>
           {demoTab ? <span>Password</span> : <span className="text-end">Joined</span>}
           {actionsTab && <span>Actions</span>}
         </div>
@@ -311,11 +321,14 @@ export default async function ConsoleUsersPage({
           <FilterMin name="artifacts" value={filters.artifacts} />
           <FilterMin name="errors" value={filters.errors} />
           <FilterMin name="resolved" value={filters.resolved} />
+          <FilterMin name="kitviews" value={filters.kitviews} />
+          <FilterMin name="kits" value={filters.kits} />
           {demoTab ? <span /> : <FilterText name="joined" value={filters.joined} placeholder="2026-10" />}
           {actionsTab && <span />}
         </div>
         {profiles.map((p) => {
           const s = stats.get(p.id) ?? EMPTY_USER_STATS;
+          const k = kitActivity.get(p.id) ?? EMPTY_KIT_ACTIVITY;
           const lang = languageSummary(p.ui_locale, s.bookLanguages);
           // The row is a grid DIV, not a Link: buttons can't nest inside an
           // anchor. The Link wraps the data cells with display:contents (they
@@ -368,6 +381,8 @@ export default async function ConsoleUsersPage({
             <Num label="Artifacts" n={s.artifacts} />
             <Num label="Errors" n={s.errors} />
             <Num label="Resolved" n={s.resolved} />
+            <Num label="Kit views" n={k.views} />
+            <Num label="Kits" n={k.unlocks} />
             {demoTab ? (
               <span className="font-mono text-xs text-[#5B6470]">{demoAccountPassword(emails.get(p.id), p.school_id, p.is_demo) ?? "—"}</span>
             ) : (
