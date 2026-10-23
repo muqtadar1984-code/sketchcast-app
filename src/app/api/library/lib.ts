@@ -201,7 +201,9 @@ export async function audit(
   // no row id, so targetId is null. 'translations': one "Approve all clean"
   // click over a language (each kit is also audited by the approve RPC).
   // 'fix_case' (Fix Agent, 0151): the founder's approve / reject of a case.
-  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint" | "generation" | "platform_setting" | "translations" | "fix_case",
+  // 'pinterest_pin' / 'pinterest_board' (Pinterest Pin Engine, 0154): one
+  // approve, reject or edit of one pin; a board's edit or approval.
+  targetKind: "topic" | "candidate" | "book" | "curriculum_node" | "curriculum" | "blueprint" | "generation" | "platform_setting" | "translations" | "fix_case" | "pinterest_pin" | "pinterest_board",
   targetId: string | null,
   detail: Record<string, unknown>,
 ) {

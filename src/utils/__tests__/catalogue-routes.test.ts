@@ -163,6 +163,13 @@ const YOUTUBE_AGENT = "youtube/agent/route.ts";
 // (a guarded fix_cases update) and the agent's on/off switch. Admin-only; the
 // WORKER queues the retry, so this route never touches `jobs`.
 const FIXES = "fixes/route.ts";
+// The Pinterest Pin Engine (0154, 2026-10-23): one pin's approve / reject /
+// edit / re-render / retry, the agent's controls and the boards. Admin-only;
+// the WORKER drafts, creates boards and posts, so none of these touch `jobs`.
+const PINTEREST_PINS = "pinterest/pins/route.ts";
+const PINTEREST_AGENT = "pinterest/agent/route.ts";
+const PINTEREST_BOARDS = "pinterest/boards/route.ts";
+const PINTEREST = [PINTEREST_PINS, PINTEREST_AGENT, PINTEREST_BOARDS];
 
 describe("the /api/library routes exist and are scanned", () => {
   it("has the Phase 1 + 2a + 2b + 3 + 4 routes", () => {
@@ -187,6 +194,7 @@ describe("the /api/library routes exist and are scanned", () => {
         APPROVE_CLEAN,
         YOUTUBE_AGENT,
         FIXES,
+        ...PINTEREST,
         ...present(A2_ROUTES),
       ].sort(),
     );
@@ -1337,5 +1345,41 @@ describe("Jawi is derived from the approved Malay kit (plan §5.11)", () => {
     expect(src).toMatch(/const malayReady = !!jawiSourceKit\(translations\.map\(\(t\) => t\.kit\)\)/);
     expect(src).toMatch(/disabled=\{needsMalay\(l\.value\)\}/);
     expect(src).toMatch(/needsMalay\(language\) \? JAWI_NEEDS_MALAY/);
+  });
+});
+
+describe("the Pinterest routes (0154): one pin at a time, admin-only, never `jobs`", () => {
+  const src = (r: string) => source.get(routes.find((f) => rel(f) === r)!)!;
+
+  it("every Pinterest route asks for `publish` (admins only) before anything else", () => {
+    for (const r of PINTEREST) {
+      expect(src(r), r).toMatch(/const m = await isLibraryMemberRequest\("publish"\);\s*\n\s*if \(!m\) return notFound\(\);/);
+    }
+  });
+
+  it("acts on exactly ONE pin per request — no list form, no approve-all (Pinterest: choose each Pin; decision D1)", () => {
+    const pins = src(PINTEREST_PINS);
+    expect(pins).toMatch(/const pinId = uuid\(body\.pinId\);/);
+    expect(pins).not.toMatch(/pinIds|uuidList|\.in\(\s*["']id["']/);
+    expect(pins).not.toMatch(/approve_all|approveAll/);
+    // approval goes through the tested rule, and the write is conditional on
+    // the status the rule saw (two admins cannot both win)
+    expect(pins).toMatch(/const can = canApprove\(pin\);/);
+    expect(pins).toMatch(/\.eq\("status", pin\.status\)/);
+    // …and on the row being unchanged since: an edit keeps the status but
+    // moves updated_at, so an approve decided on the old copy cannot land
+    expect(pins).toMatch(/\.eq\("updated_at", pin\.updated_at\)/);
+  });
+
+  it("never inserts jobs or posts: the worker drafts, creates boards and posts", () => {
+    for (const r of PINTEREST) {
+      expect(src(r), r).not.toMatch(/\.from\(\s*["']jobs["']\s*\)/);
+      expect(src(r), r).not.toMatch(/api\.pinterest\.com|pinterest_oauth/);
+    }
+  });
+
+  it("does not switch the agent on or dry run off from a button (a go-live step)", () => {
+    const agent = src(PINTEREST_AGENT);
+    expect(agent).not.toMatch(/enabled:\s*true|dry_run:\s*false/);
   });
 });
