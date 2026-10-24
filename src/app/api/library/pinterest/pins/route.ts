@@ -3,6 +3,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isLibraryMemberRequest } from "@/utils/library-access";
 import {
   canApprove,
+  canUnapprove,
   canReject,
   canRerender,
   canRetry,
@@ -23,6 +24,7 @@ export const runtime = "nodejs";
 // and re-checks every gate first.
 //
 //   approve   {pinId}                          in_review → approved
+//   unapprove {pinId}                          approved (not yet scheduled) → in_review
 //   reject    {pinId, reason}                  → rejected (reason kept for the drafts)
 //   edit      {pinId, title?, description?, alt_text?}
 //                                              → back to in_review, prechecks cleared
@@ -82,6 +84,15 @@ export async function POST(request: Request) {
     const r = await write({ status: "approved", approved_by: m.id, approved_at: now });
     if (r.error) return r.error;
     await audit(admin, m.id, "pin_approve", "pinterest_pin", pinId, { ...ctx, title: pin.title, link: pin.link });
+    return NextResponse.json({ ok: true, action, pin: r.row });
+  }
+
+  if (action === "unapprove") {
+    const can = canUnapprove(pin);
+    if (!can.ok) return conflict(can.why);
+    const r = await write({ status: "in_review", approved_by: null, approved_at: null });
+    if (r.error) return r.error;
+    await audit(admin, m.id, "pin_unapprove", "pinterest_pin", pinId, ctx);
     return NextResponse.json({ ok: true, action, pin: r.row });
   }
 

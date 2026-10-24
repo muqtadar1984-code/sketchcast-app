@@ -96,8 +96,8 @@ export type AgentSettings = {
 
 // ── actions ──────────────────────────────────────────────────────────────────
 
-export type PinAction = "approve" | "reject" | "edit" | "rerender" | "retry";
-export const PIN_ACTIONS: readonly PinAction[] = ["approve", "reject", "edit", "rerender", "retry"];
+export type PinAction = "approve" | "unapprove" | "reject" | "edit" | "rerender" | "retry";
+export const PIN_ACTIONS: readonly PinAction[] = ["approve", "unapprove", "reject", "edit", "rerender", "retry"];
 export const isPinAction = (v: unknown): v is PinAction => typeof v === "string" && (PIN_ACTIONS as readonly string[]).includes(v);
 
 export type AgentAction = "run_once" | "pause" | "resume" | "clear_breaker";
@@ -156,6 +156,11 @@ export function canApprove(pin: Pick<Pin, "status" | "precheck" | "images" | "bo
   if (!filled(pin.link)) return no("The pin has no link.");
   return OK;
 }
+
+/** Undo an approval: only while the pin waits for a round. Once a round has
+ *  scheduled it, the worker owns it (Reject still works until it posts). */
+export const canUnapprove = (pin: Pick<Pin, "status">): Ok =>
+  pin.status === "approved" ? OK : no("Only an approved pin that is not yet scheduled can go back to review.");
 
 export function canReject(pin: Pick<Pin, "status">, reason: string): Ok {
   if (!["in_review", "approved", "failed"].includes(pin.status)) return no("Only a pin in review, approved (not yet scheduled) or failed can be rejected.");

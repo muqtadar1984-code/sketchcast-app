@@ -4,14 +4,17 @@ import { libraryAllows } from "@/utils/library-routing";
 import { ErrorBanner } from "../catalogue-ui";
 import { MissingPinterestBanner, PinterestHeading, PinterestNav } from "./chrome";
 import { loadPinterest } from "./load";
-import { ReviewStack } from "./review-stack";
+import { ReviewTable } from "./review-table";
 
 // /library/pinterest — the Pinterest Pin Engine's review (feature guide §8,
 // build plan §4.1, migration 0154). The worker drafts pins from approved
 // catalogue content; here a platform admin looks at each one — image, the
 // title as a feed cuts it, description, alt text, board, link, the worker's
 // prechecks and, for other languages, the English back-translation — and
-// approves, edits or rejects it. ONE PIN AT A TIME, by design: Pinterest's
+// approves, edits or rejects it. Since 2026-10-24 (founder, "option B") the
+// pins are a table — waiting ones first, the ones already acted on still
+// listed with their status — beside a full view of the selected pin. Still
+// ONE PIN AT A TIME, by design: Pinterest's
 // Developer Guidelines require the user to "choose each Pin to be published"
 // (decision D1), so there is no select-all and no bulk approve.
 //
@@ -47,10 +50,10 @@ export default async function PinterestReviewPage() {
 
   const canAct = libraryAllows(member.role, "publish");
   return (
-    <main className="max-w-6xl mx-auto px-6 py-10">
+    <main className="max-w-7xl mx-auto px-6 py-10">
       <PinterestHeading settings={load.settings} />
       <PinterestNav active="review" counts={load.counts} />
-      {load.review.length === 0 ? (
+      {load.review.length === 0 && load.approved.length === 0 && load.rejected.length === 0 && load.failed.length === 0 ? (
         <div className="rounded-xl border border-[#E3E6E0] bg-white px-6 py-10 text-center">
           <p className="font-medium">No pins waiting for review.</p>
           <p className="text-sm text-[#5B6470] mt-1">
@@ -60,7 +63,7 @@ export default async function PinterestReviewPage() {
           </p>
         </div>
       ) : (
-        <ReviewStack pins={load.review} canAct={canAct} />
+        <ReviewTable pins={[...load.review, ...load.approved, ...load.rejected, ...load.failed]} canAct={canAct} />
       )}
     </main>
   );
