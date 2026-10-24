@@ -156,6 +156,10 @@ const TRANSLATE_SWEEP = "translate/route.ts";
 // after translationAcceptsApprove; it only READS generations (their status).
 const TRANSLATIONS_AGENT = "translations/agent/route.ts";
 const APPROVE_CLEAN = "translations/approve-clean/route.ts";
+// The matrix's popup (2026-10-24): one translated kit's details for any
+// Library member. READ-ONLY — it signs file URLs and reports the YouTube row;
+// posting goes through the YouTube agent's route.
+const TRANSLATION_KIT = "translations/kit/route.ts";
 // The YouTube Publishing Agent (0150, 2026-10-21): queue / run once more /
 // pause. It writes the queue and the rounds; the WORKER inserts the jobs.
 const YOUTUBE_AGENT = "youtube/agent/route.ts";
@@ -192,6 +196,7 @@ describe("the /api/library routes exist and are scanned", () => {
         TRANSLATE_SWEEP,
         TRANSLATIONS_AGENT,
         APPROVE_CLEAN,
+        TRANSLATION_KIT,
         YOUTUBE_AGENT,
         FIXES,
         ...PINTEREST,

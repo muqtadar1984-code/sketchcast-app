@@ -21,6 +21,7 @@ import type { MatrixLoad } from "./load";
 import { translationsPageLive, type AgentView } from "@/utils/catalogue/auto-translate";
 import { AgentControls, ApproveCleanButton } from "./agent-panel";
 import { TranslationsNav } from "./sub-nav";
+import { KitCell } from "./kit-popup";
 
 // The Translations tab's screen (/library/translations): totals per language,
 // the filters, and the matrix. A Server Component with no reads of its own —
@@ -63,7 +64,24 @@ const LEGEND: CellState[] = ["posted", "approved", "in_review", "translating", "
 const fixesHref = (language: string, fixQueued: number, fixRetrying: number) =>
   `/library/fixes?${new URLSearchParams({ status: fixRetrying >= fixQueued ? "retrying" : "approved", lang: language }).toString()}`;
 
-function Cell({ c, clocks, subject }: { c: MatrixCell; clocks?: TranslationClockData; subject?: string | null }) {
+function Cell({ c, clocks, subject, topicTitle }: { c: MatrixCell; clocks?: TranslationClockData; subject?: string | null; topicTitle?: string }) {
+  // an Approved or Posted translation opens its popup (kit-popup.tsx): the
+  // kit's details and, at the end, Post to YouTube; every other cell still
+  // links to the review inbox
+  if (topicTitle && c.kitId && c.language !== "en" && (c.state === "approved" || c.state === "posted")) {
+    return (
+      <KitCell
+        kitId={c.kitId}
+        title={`${c.detail ?? c.label} — click for the details${c.state === "approved" ? " and Post to YouTube" : ""}`}
+        className={`block rounded px-1.5 py-1 text-center text-[0.7rem] font-medium whitespace-nowrap hover:ring-2 hover:ring-[#7FD8A8] ${TONE[c.state]}`}
+        languageName={SHORT_NAME[c.language] ?? c.language}
+        topicTitle={topicTitle}
+        inboxHref={c.href}
+      >
+        {c.label}
+      </KitCell>
+    );
+  }
   return (
     <Link
       href={c.href}
@@ -311,7 +329,7 @@ export function TranslationsView({
                 </td>
                 {r.cells.filter((c) => shown.includes(c.language)).map((c) => (
                   <td key={c.language} className="px-1 py-1.5">
-                    <Cell c={c} clocks={load.clocks} subject={r.subject} />
+                    <Cell c={c} clocks={load.clocks} subject={r.subject} topicTitle={r.title} />
                   </td>
                 ))}
               </tr>
