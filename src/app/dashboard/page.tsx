@@ -9,6 +9,7 @@ import BooklessKits, { isCatalogueCopy } from "./bookless-kits";
 import BookTable, { type BookRow } from "./book-table";
 import { kindLabel, type LibraryMessages } from "./labels";
 import { assignedDeckUnits, studentDeckLinks } from "./kit";
+import { skipExistingUnits } from "./kit";
 import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
@@ -956,22 +957,19 @@ export default async function DashboardPage() {
               }))
             : [],
       })),
-      // "Pending" = no chapter-level lesson AND no part-level one either — a
-      // chapter whose parts already have kits must not get a chapter-level
-      // kit on top (it would duplicate the part videos and charge one credit
-      // per rendered part, 0059).
-      pendingChapters: chs
-        .filter(
-          (c) =>
-            !lessonForChapter(b.id, c.num) &&
-            !(c.parts ?? []).some((_, i) => lessonFor(b.id, c.num, "presentation", i + 1)),
-        )
-        // partCount travels with the chapter because "Generate all" now queues a
-        // kit PER PART (founder decision 2026-08-27) rather than one
-        // chapter-level kit. Without it the button cannot know how many rows a
-        // chapter is worth, and Sara's Magnetism produced a chapter-level block
-        // ABOVE four still-empty part rows — the same chapter offered twice.
-        .map((c) => ({ num: c.num, title: c.title, partCount: c.parts?.length ?? 0 })),
+      // Generate all works per UNIT (surge plan §3.2): it gets every chapter
+      // and its dialog skips the units that already have a kit — a chapter
+      // whose parts have kits never gets a chapter-level kit on top (that
+      // would duplicate the part videos, 0059), and a chapter-level kit covers
+      // every part under it. partCount travels with the chapter because a
+      // chapter with a part map gets a kit PER PART (founder 2026-08-27).
+      kitChapters: chs.map((c) => ({ num: c.num, title: c.title, partCount: c.parts?.length ?? 0 })),
+      missingKits: skipExistingUnits(
+        chs.map((c) => ({ num: c.num, partCount: c.parts?.length ?? 0 })),
+        lessons
+          .filter((l) => l.bookId === b.id)
+          .map((l) => ({ kind: l.kind, chapter_ref: l.chapterRef, status: l.status, params: l.params as { part?: unknown } | null })),
+      ).toQueue.length,
       // Revision papers (0061): standalone worksheets/exams over a group of
       // chapters, in their own section. Cumulative ones carry params.chapters.
       revisionPapers: lessons
