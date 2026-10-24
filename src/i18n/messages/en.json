@@ -1748,7 +1748,12 @@
       "readingPart": "reading part {n}/{total}",
       "partProgress": "part {n}/{total} · {pct}%",
       "percent": "{pct}%",
-      "minutesLeft": "~{n} min left"
+      "minutesLeft": "~{n} min left",
+      "queuedAhead": "{n} ahead · starts in {eta}",
+      "queuedNext": "next in line",
+      "etaMinutes": "~{n} min",
+      "etaHours": "~{h} h",
+      "etaHoursMinutes": "~{h} h {m} min"
     },
     "book": {
       "untitled": "Untitled book"

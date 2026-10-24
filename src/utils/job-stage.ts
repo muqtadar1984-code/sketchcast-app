@@ -7,6 +7,7 @@
 // percentage. jobs.progress stays the source of truth; stage is narration.
 
 import { fmt } from "@/i18n/format";
+import { etaText } from "@/utils/queue-position";
 import type { Dictionary } from "@/i18n/dictionaries";
 
 export type JobStage = {
@@ -32,6 +33,11 @@ const EN: JobMessages = {
   partProgress: "part {n}/{total} · {pct}%",
   percent: "{pct}%",
   minutesLeft: "~{n} min left",
+  queuedAhead: "{n} ahead · starts in {eta}",
+  queuedNext: "next in line",
+  etaMinutes: "~{n} min",
+  etaHours: "~{h} h",
+  etaHoursMinutes: "~{h} h {m} min",
 };
 
 /** "part 2/4 · 35%" · "reading part 1/4" · fallback "45%". */
@@ -80,4 +86,17 @@ export function etaLabel(
   }
   const remaining = total * (1 - Math.max(p, 1) / 100);
   return fmt(t.minutesLeft, { n: Math.max(1, Math.ceil(remaining)) });
+}
+
+/** A queued job's line: "37 ahead · starts in ~40 min" / "next in line".
+ *  "" when there is no measured spot (the job isn't queued, or the server
+ *  couldn't read the queue) — say nothing rather than guess. */
+export function queuedLabel(
+  queue: { ahead: number; etaMin: number } | null | undefined,
+  t: JobMessages = EN,
+): string {
+  if (!queue) return "";
+  if (queue.ahead <= 0) return t.queuedNext;
+  const eta = etaText(queue.etaMin, { minutes: t.etaMinutes, hours: t.etaHours, hoursMinutes: t.etaHoursMinutes });
+  return fmt(t.queuedAhead, { n: queue.ahead, eta });
 }
