@@ -36,6 +36,16 @@ const PIECE_LABEL: Record<string, string> = {
 };
 
 type Artifact = { generation_id: string; kind: string; storage_path: string };
+type OpenItem = { id: string; kit_id: string; status: string; added_at: string | null };
+
+/** This kit's open queue item and how many of its language's items wait
+ *  ahead of it (the agent posts the oldest first, one per language per day). */
+function queuedOf(items: OpenItem[], kitId: string): { id: string; status: string; ahead: number } | null {
+  const own = items.find((i) => i.kit_id === kitId);
+  if (!own) return null;
+  const ahead = items.filter((i) => i.kit_id !== kitId && (i.added_at ?? "") < (own.added_at ?? "")).length;
+  return { id: own.id, status: own.status, ahead };
+}
 
 export async function GET(request: Request) {
   const m = await isLibraryMemberRequest();
@@ -60,7 +70,8 @@ export async function GET(request: Request) {
       ? admin.from("artifacts").select("generation_id, kind, storage_path").in("generation_id", genIds)
       : Promise.resolve({ data: [] as Artifact[], error: null }),
     kit.reviewer_id ? admin.from("profiles").select("full_name").eq("id", kit.reviewer_id as string).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    admin.from("youtube_publish_queue").select("id, status").eq("kit_id", kitId).in("status", [...OPEN_STATUSES]).limit(1),
+    // every open item of this language: this kit's own row, and how many wait ahead of it
+    admin.from("youtube_publish_queue").select("id, kit_id, status, added_at").eq("language", kit.language as string).in("status", [...OPEN_STATUSES]),
     loadTranslatedVideos(admin),
   ]);
   if (topicQ.error) return dbError(topicQ.error);
@@ -121,7 +132,7 @@ export async function GET(request: Request) {
         }
       : null,
     youtubeError: videos.ok ? null : videos.error,
-    queued: !queueQ.error && (queueQ.data ?? []).length > 0 ? (queueQ.data ?? [])[0] : null,
+    queued: queuedOf(queueQ.error ? [] : ((queueQ.data ?? []) as OpenItem[]), kitId),
     canPost: libraryAllows(m.role, "publish"),
   });
 }

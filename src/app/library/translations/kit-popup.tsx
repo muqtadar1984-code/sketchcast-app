@@ -42,7 +42,7 @@ type KitDetail = {
     inboxHref: string;
   } | null;
   youtubeError: string | null;
-  queued: { id: string; status: string } | null;
+  queued: { id: string; status: string; ahead: number } | null;
   canPost: boolean;
 };
 
@@ -204,6 +204,10 @@ function KitBody({ d, languageName, inboxHref, onChanged }: { d: KitDetail; lang
                       <a href={`https://www.youtube.com/watch?v=${p.videoId}`} target="_blank" rel="noreferrer" className="underline">
                         {yt.parts.length > 1 ? `Part ${p.part}` : "Watch on YouTube"}
                       </a>
+                      {" · "}
+                      <a href={`https://studio.youtube.com/video/${p.videoId}/edit`} target="_blank" rel="noreferrer" className="underline text-[#5B6470]">
+                        Studio
+                      </a>
                       <span className="text-[#5B6470]">
                         {" "}
                         · {p.privacy ?? "privacy unknown"}
@@ -231,7 +235,9 @@ function PostBlock({ d, languageName, onChanged }: { d: KitDetail; languageName:
   if (d.queued) {
     return (
       <p className="rounded bg-[#E6F6F2] text-[#0F7A68] px-3 py-2">
-        In the posting queue ({d.queued.status}). The YouTube Publishing Agent posts one video per language per day, privately.{" "}
+        In the posting queue ({d.queued.status}
+        {d.queued.ahead > 0 ? `, ${d.queued.ahead} ahead of it in ${languageName}` : ", next in line"}). The YouTube Publishing Agent posts one video
+        per language per day, privately.{" "}
         <Link href="/library/translations/youtube" className="underline">
           See the queue
         </Link>
