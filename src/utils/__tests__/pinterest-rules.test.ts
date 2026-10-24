@@ -11,6 +11,7 @@ import {
   canApproveBoard,
   canEdit,
   canReject,
+  canUnapprove,
   canRerender,
   canRetry,
   copyProblems,
@@ -106,6 +107,16 @@ describe("edits", () => {
   it("refuses edits once a pin is scheduled or posted", () => {
     expect(canEdit({ status: "scheduled" }).ok).toBe(false);
     expect(canEdit({ status: "posted" }).ok).toBe(false);
+  });
+});
+
+describe("undo an approval", () => {
+  it("only while the pin waits for a round", () => {
+    expect(canUnapprove({ status: "approved" }).ok).toBe(true);
+    expect(canUnapprove({ status: "scheduled" }).ok).toBe(false);
+    expect(canUnapprove({ status: "posted" }).ok).toBe(false);
+    expect(canUnapprove({ status: "in_review" }).ok).toBe(false);
+    expect(isPinAction("unapprove")).toBe(true);
   });
 });
 

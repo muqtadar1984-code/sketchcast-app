@@ -14,7 +14,7 @@ const BOARD_COLUMNS = "id, language, board_key, name, description, status, pinte
 const ROUND_COLUMNS = "id, trigger, day, status, created_at, started_at, finished_at, summary";
 const SIGN_TTL_SECONDS = 60 * 60;
 const REVIEW_LIMIT = 60;
-const COUNTED = ["in_review", "approved", "scheduled", "posting", "posted", "failed"] as const;
+const COUNTED = ["in_review", "approved", "scheduled", "posting", "posted", "failed", "rejected"] as const;
 const POSTED_LIMIT = 60;
 
 export type PinterestLoad =
@@ -28,6 +28,7 @@ export type PinterestLoad =
       approved: PinView[];
       scheduled: PinView[];
       failed: PinView[];
+      rejected: PinView[];
       posted: PinView[];
       stats: Record<string, PinStats>;
       openRound: Round | null;
@@ -42,7 +43,7 @@ const missing = (e: { code?: string; message?: string } | null) =>
 export async function loadPinterest(admin: Admin, nowMs: number = Date.now()): Promise<PinterestLoad> {
   // per-status counts as head queries: exact past PostgREST's 1000-row page
   const countQs = COUNTED.map((s) => admin.from("pinterest_pins").select("id", { count: "exact", head: true }).eq("status", s));
-  const [settingsQ, boardsQ, reviewQ, approvedQ, scheduledQ, failedQ, postedQ, roundsQ, dailyQ] = await Promise.all([
+  const [settingsQ, boardsQ, reviewQ, approvedQ, scheduledQ, failedQ, postedQ, roundsQ, dailyQ, rejectedQ] = await Promise.all([
     admin.from("platform_settings").select("value").eq("key", "pinterest_agent").maybeSingle(),
     admin.from("pinterest_boards").select(BOARD_COLUMNS).order("language").order("board_key"),
     admin.from("pinterest_pins").select(PIN_COLUMNS).eq("status", "in_review").order("created_at").limit(REVIEW_LIMIT),
@@ -52,9 +53,10 @@ export async function loadPinterest(admin: Admin, nowMs: number = Date.now()): P
     admin.from("pinterest_pins").select(PIN_COLUMNS).eq("status", "posted").order("posted_at", { ascending: false }).limit(POSTED_LIMIT),
     admin.from("pinterest_publish_rounds").select(ROUND_COLUMNS).order("created_at", { ascending: false }).limit(5),
     admin.from("pinterest_publish_rounds").select("id").eq("trigger", "daily").eq("day", utcDay(nowMs)).limit(1),
+    admin.from("pinterest_pins").select(PIN_COLUMNS).eq("status", "rejected").order("updated_at", { ascending: false }).limit(40),
   ]);
   const countRs = await Promise.all(countQs);
-  const all = [boardsQ, reviewQ, approvedQ, scheduledQ, failedQ, postedQ, roundsQ, dailyQ, ...countRs];
+  const all = [boardsQ, reviewQ, approvedQ, scheduledQ, failedQ, postedQ, roundsQ, dailyQ, rejectedQ, ...countRs];
   if (all.some((q) => missing(q.error))) return { available: false };
   const failedQuery = settingsQ.error ?? all.find((q) => q.error)?.error;
   if (failedQuery) throw new Error(failedQuery.message);
@@ -64,7 +66,7 @@ export async function loadPinterest(admin: Admin, nowMs: number = Date.now()): P
   const counts: Record<string, number> = {};
   COUNTED.forEach((s, i) => (counts[s] = countRs[i].count ?? 0));
 
-  const lists = [reviewQ, approvedQ, scheduledQ, failedQ, postedQ].map((q) => (q.data ?? []) as unknown as Pin[]);
+  const lists = [reviewQ, approvedQ, scheduledQ, failedQ, postedQ, rejectedQ].map((q) => (q.data ?? []) as unknown as Pin[]);
   const everyPin = lists.flat();
 
   // topic titles, one read
@@ -89,7 +91,7 @@ export async function loadPinterest(admin: Admin, nowMs: number = Date.now()): P
     topicTitle: p.topic_id ? titles.get(p.topic_id) ?? null : null,
     boardName: p.board_id ? boardName.get(p.board_id) ?? null : null,
   });
-  const [review, approved, scheduled, failed, posted] = lists.map((l) => l.map(view));
+  const [review, approved, scheduled, failed, posted, rejected] = lists.map((l) => l.map(view));
 
   // the topic gap: when each topic last posted in each language
   const lastPostedByTopicLang: Record<string, string> = {};
@@ -133,6 +135,7 @@ export async function loadPinterest(admin: Admin, nowMs: number = Date.now()): P
     boards,
     counts,
     review,
+    rejected,
     approved,
     scheduled,
     failed,
