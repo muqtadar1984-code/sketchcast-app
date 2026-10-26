@@ -1,0 +1,343 @@
+{
+ "segment": "s2-explain-main",
+ "option": "S",
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Claude/3.6556.2 Chrome/152.0.7977.167 Safari/537.36 MSIX",
+ "fps": {
+  "min": 0,
+  "avg": 0,
+  "n": 0
+ },
+ "driftMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "liveDriftMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "pauseLatencyMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "resume": {
+  "ok": 0,
+  "n": 0
+ },
+ "reload": {
+  "ok": 1,
+  "n": 1
+ },
+ "gestures": {
+  "point": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "write": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "writeHandPx": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "writeReachPx": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "listenMs": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  }
+ },
+ "duplicatesIgnored": 0,
+ "raw": {
+  "pauseLatencyMs": [],
+  "resumeTrials": [],
+  "reloadRecovery": [
+   {
+    "saved": 32242.565,
+    "resumed": 27600,
+    "drawnSaved": [
+     "ill",
+     "a1",
+     "l1",
+     "a2",
+     "l2",
+     "a3",
+     "l3",
+     "a4",
+     "l4",
+     "w1"
+    ],
+    "drawnRestored": [
+     "ill",
+     "a1",
+     "l1",
+     "a2",
+     "l2",
+     "a3",
+     "l3",
+     "a4",
+     "l4",
+     "w1"
+    ],
+    "boardMatch": true,
+    "seekExact": true
+   }
+  ],
+  "gestureHits": [],
+  "listenLatencyMs": [],
+  "actionFirstFrame": [],
+  "liveFirstFrame": [],
+  "fps": [],
+  "writeSamples": 0
+ },
+ "at": "2026-10-26T21:29:36.616Z",
+ "trials": 10,
+ "reloadResults": [
+  {
+   "saved": 4169.39,
+   "resumed": 100,
+   "drawnSaved": [
+    "ill"
+   ],
+   "drawnRestored": [
+    "ill"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 6053.0109999999995,
+   "resumed": 100,
+   "drawnSaved": [
+    "ill"
+   ],
+   "drawnRestored": [
+    "ill"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 4473.977,
+   "resumed": 100,
+   "drawnSaved": [
+    "ill"
+   ],
+   "drawnRestored": [
+    "ill"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 3388.886,
+   "resumed": 100,
+   "drawnSaved": [
+    "ill"
+   ],
+   "drawnRestored": [
+    "ill"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 28578.966,
+   "resumed": 27600,
+   "drawnSaved": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "drawnRestored": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 32619.017,
+   "resumed": 27600,
+   "drawnSaved": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "drawnRestored": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 30862.301,
+   "resumed": 27600,
+   "drawnSaved": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "drawnRestored": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 32242.041999999998,
+   "resumed": 27600,
+   "drawnSaved": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "drawnRestored": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 31390.517,
+   "resumed": 27600,
+   "drawnSaved": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "drawnRestored": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 32242.565,
+   "resumed": 27600,
+   "drawnSaved": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "drawnRestored": [
+    "ill",
+    "a1",
+    "l1",
+    "a2",
+    "l2",
+    "a3",
+    "l3",
+    "a4",
+    "l4",
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  }
+ ]
+}

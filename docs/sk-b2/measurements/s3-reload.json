@@ -1,0 +1,221 @@
+{
+ "segment": "s3-explain-main",
+ "option": "S",
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Claude/3.6556.2 Chrome/152.0.7977.167 Safari/537.36 MSIX",
+ "fps": {
+  "min": 0,
+  "avg": 0,
+  "n": 0
+ },
+ "driftMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "liveDriftMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "pauseLatencyMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "resume": {
+  "ok": 0,
+  "n": 0
+ },
+ "reload": {
+  "ok": 1,
+  "n": 1
+ },
+ "gestures": {
+  "point": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "write": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "writeHandPx": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "writeReachPx": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "listenMs": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  }
+ },
+ "duplicatesIgnored": 0,
+ "raw": {
+  "pauseLatencyMs": [],
+  "resumeTrials": [],
+  "reloadRecovery": [
+   {
+    "saved": 8122.505999999999,
+    "resumed": 7006,
+    "drawnSaved": [
+     "w1",
+     "w2"
+    ],
+    "drawnRestored": [
+     "w1",
+     "w2"
+    ],
+    "boardMatch": true,
+    "seekExact": true
+   }
+  ],
+  "gestureHits": [],
+  "listenLatencyMs": [],
+  "actionFirstFrame": [],
+  "liveFirstFrame": [],
+  "fps": [],
+  "writeSamples": 0
+ },
+ "at": "2026-10-26T21:36:25.382Z",
+ "trials": 10,
+ "reloadResults": [
+  {
+   "saved": 3882.721,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 6114.891,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 4220.396,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 5237.091,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 5667.757,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 4240.606,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 4991.8820000000005,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 4934.526,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 4531.404,
+   "resumed": 98,
+   "drawnSaved": [
+    "w1"
+   ],
+   "drawnRestored": [
+    "w1"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 8122.505999999999,
+   "resumed": 7006,
+   "drawnSaved": [
+    "w1",
+    "w2"
+   ],
+   "drawnRestored": [
+    "w1",
+    "w2"
+   ],
+   "boardMatch": true,
+   "seekExact": true
+  }
+ ]
+}
