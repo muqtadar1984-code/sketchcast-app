@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import CoachRecap from "./coach-recap";
 import TutorBoard, { type TutorBoardHandle } from "./tutor-board";
 import { speakableText } from "@/utils/speakable";
+import { pageSpeechLang } from "@/utils/assistant/voice-client";
 import RichText from "@/components/rich-text";
 
 type Msg = { role: "student" | "coach"; content: string; videoUrl?: string };
@@ -136,7 +137,7 @@ export default function AskCoach({
     if (!Ctor) return;
     try {
       const rec = new Ctor();
-      rec.lang = "en-US";
+      rec.lang = pageSpeechLang(); // the page's locale, not en-US (SK B0)
       rec.interimResults = true;
       rec.continuous = false;
       rec.onresult = (e) => {

@@ -34,6 +34,11 @@ export type GenerateOpts = {
   tools?: ToolDef[];
   maxTokens?: number;
   temperature?: number;
+  /** Cancellation (SK B0). When it fires the adapter stops the upstream call
+   * (the SDK/fetch request is aborted, so no more tokens are billed) and ends
+   * its stream QUIETLY — no `error` event: the orchestrator reports the
+   * cancellation itself, so callers see one `cancelled`, never a fake failure. */
+  signal?: AbortSignal;
 };
 
 export interface LLMProvider {
@@ -41,6 +46,13 @@ export interface LLMProvider {
   readonly id: string;
   readonly model: string;
   stream(opts: GenerateOpts): AsyncGenerator<StreamEvent, void, void>;
+}
+
+/** True for the error a fetch / the Anthropic SDK throws when its signal fires —
+ * the one failure an adapter swallows instead of surfacing. */
+export function isAbortError(e: unknown): boolean {
+  const err = e as { name?: string; message?: string } | null;
+  return err?.name === "AbortError" || err?.name === "APIUserAbortError" || /aborted/i.test(err?.message ?? "");
 }
 
 /** The active provider, chosen by env (default anthropic → Sonnet 5, the quality

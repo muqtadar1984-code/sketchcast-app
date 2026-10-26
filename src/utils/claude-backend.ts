@@ -35,6 +35,10 @@ export const BEDROCK_MODEL_IDS: Readonly<Record<string, string>> = {
   "claude-haiku-4-5-20251001": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
   "claude-sonnet-4-6": "global.anthropic.claude-sonnet-4-6",
   "claude-sonnet-5": "global.anthropic.claude-sonnet-5",
+  // The two the worker has run since 2026-10-18/20 (shared/claude_client.py
+  // _BEDROCK_MODEL_IDS); added here for SK (B0) so the app and worker agree.
+  "claude-sonnet-5-5": "global.anthropic.claude-sonnet-5-5",
+  "claude-haiku-5-5": "global.anthropic.claude-haiku-5-5",
 };
 
 /** BEDROCK_MODEL_MAP — a JSON object overlaid on the table above, so a new model

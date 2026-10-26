@@ -90,16 +90,54 @@ export function micSupported(): boolean {
   return !!recognitionCtor();
 }
 
+// The recognition language per UI/lesson locale (the same ten codes as
+// src/i18n/locales.ts). Before SK B0 this was hard-coded to en-US, so a Malay
+// or Hindi learner's speech was transcribed as English. Jawi is spoken Malay.
+// Regional picks: es-ES / pt-BR / ar-SA are the variants with the widest
+// Web Speech support; a lesson's own voice region can override later.
+const SPEECH_LANG: Readonly<Record<string, string>> = {
+  en: "en-US",
+  ms: "ms-MY",
+  "ms-arab": "ms-MY",
+  ar: "ar-SA",
+  fr: "fr-FR",
+  es: "es-ES",
+  pt: "pt-BR",
+  te: "te-IN",
+  mr: "mr-IN",
+  hi: "hi-IN",
+};
+
+/** BCP-47 tag for speech recognition from a locale code OR an <html lang>
+ * value ("ms-arab", "ms-Arab", "EN", "hi-IN" all resolve). Unknown → en-US,
+ * the pre-B0 behaviour, so nothing regresses for a locale we haven't mapped. */
+export function speechLangFor(locale: string | null | undefined): string {
+  const key = (locale ?? "").trim().toLowerCase();
+  if (!key) return SPEECH_LANG.en!;
+  return SPEECH_LANG[key] ?? SPEECH_LANG[key.split("-")[0]!] ?? SPEECH_LANG.en!;
+}
+
+/** The page's resolved locale — the server writes it to <html lang>. */
+export function pageSpeechLang(): string {
+  if (typeof document === "undefined") return SPEECH_LANG.en!;
+  return speechLangFor(document.documentElement.lang);
+}
+
 /** Start dictation; onText gets the (interim + final) transcript, onEnd fires
  * when recognition stops. Returns a stop() handle, or null if unsupported.
+ * `lang` is the recognition language (default: the page's locale).
  * (Note: browser STT is weaker on some accents — acceptable for now; this
  * adapter is the swap point for a hosted STT later.) */
-export function startDictation(onText: (t: string) => void, onEnd: () => void): (() => void) | null {
+export function startDictation(
+  onText: (t: string) => void,
+  onEnd: () => void,
+  opts: { lang?: string } = {},
+): (() => void) | null {
   const Ctor = recognitionCtor();
   if (!Ctor) return null;
   try {
     const rec = new Ctor();
-    rec.lang = "en-US";
+    rec.lang = opts.lang ?? pageSpeechLang();
     rec.interimResults = true;
     rec.continuous = false;
     rec.onresult = (e) => {
