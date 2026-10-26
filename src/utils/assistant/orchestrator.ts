@@ -10,7 +10,11 @@ export type TurnEvent =
   | { type: "text"; text: string }
   | { type: "tool"; name: string } // surfaced so the UI can show "checking the math…"
   | { type: "done"; fullText: string; usage: { inputTokens: number; outputTokens: number }; toolCalls: number }
-  | { type: "error"; message: string; retryable?: boolean };
+  | { type: "error"; message: string; retryable?: boolean }
+  /** The caller's signal fired (student pressed Stop, tab closed, SK barge-in).
+   * Carries what was streamed so far and the usage billed to that point; the
+   * turn is NOT a failure and MUST NOT be banked as a finished answer. */
+  | { type: "cancelled"; fullText: string; usage: { inputTokens: number; outputTokens: number }; toolCalls: number };
 
 export type TurnConfig = {
   provider: LLMProvider;
@@ -21,6 +25,9 @@ export type TurnConfig = {
   runTool?: (call: ToolCall) => Promise<string>;
   maxToolRounds?: number;
   maxTokens?: number;
+  /** Cancels the turn: the in-flight model call is aborted, no further tool
+   * round starts, and the generator ends with one `cancelled` event. */
+  signal?: AbortSignal;
 };
 
 export async function* runAssistantTurn(cfg: TurnConfig): AsyncGenerator<TurnEvent, void, void> {
@@ -29,14 +36,20 @@ export async function* runAssistantTurn(cfg: TurnConfig): AsyncGenerator<TurnEve
   let fullText = "";
   const usage = { inputTokens: 0, outputTokens: 0 };
   let toolCallCount = 0;
+  const cancelled = (): TurnEvent => ({ type: "cancelled", fullText, usage, toolCalls: toolCallCount });
 
   for (let round = 0; ; round++) {
+    if (cfg.signal?.aborted) {
+      yield cancelled();
+      return;
+    }
     const opts: GenerateOpts = {
       system: cfg.system,
       messages,
       // Only offer tools while rounds remain, so the final pass must narrate.
       tools: round < maxRounds ? cfg.tools : undefined,
       maxTokens: cfg.maxTokens ?? 1024,
+      signal: cfg.signal,
     };
 
     let roundText = "";
@@ -58,6 +71,12 @@ export async function* runAssistantTurn(cfg: TurnConfig): AsyncGenerator<TurnEve
       }
     }
     if (errored) return;
+    // An adapter ends quietly on abort; the signal says whether this was a
+    // finished stream or a cut one (a cut stream never sees the model's `done`).
+    if (cfg.signal?.aborted) {
+      yield cancelled();
+      return;
+    }
 
     if (!calls.length || !cfg.runTool || round >= maxRounds) {
       yield { type: "done", fullText, usage, toolCalls: toolCallCount };
@@ -68,6 +87,10 @@ export async function* runAssistantTurn(cfg: TurnConfig): AsyncGenerator<TurnEve
     toolCallCount += calls.length;
     messages.push({ role: "assistant", text: roundText, toolCalls: calls });
     for (const call of calls) {
+      if (cfg.signal?.aborted) {
+        yield cancelled();
+        return;
+      }
       yield { type: "tool", name: call.name };
       const result = await cfg.runTool(call);
       messages.push({ role: "tool", toolCallId: call.id, name: call.name, result });

@@ -7,7 +7,7 @@
 // free tier's data-handling/training terms must be verified acceptable. This
 // adapter exists precisely so we can move providers if they aren't.
 
-import type { GenerateOpts, LLMProvider, StreamEvent, ToolCall, Turn } from "../provider";
+import { isAbortError, type GenerateOpts, type LLMProvider, type StreamEvent, type ToolCall, type Turn } from "../provider";
 
 type GeminiPart =
   | { text: string }
@@ -77,16 +77,24 @@ export class GeminiProvider implements LLMProvider {
     const body = JSON.stringify(toGeminiBody(opts));
 
     let res: Response | null = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": key },
-        body,
-      });
-      if (res.status !== 429 && res.status !== 503) break;
-      // Free-tier rate limit: one polite retry, honouring Retry-After up to 8s.
-      const wait = Math.min(8000, (parseFloat(res.headers.get("retry-after") ?? "2") || 2) * 1000);
-      await new Promise((r) => setTimeout(r, wait));
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          body,
+          signal: opts.signal,
+        });
+        if (res.status !== 429 && res.status !== 503) break;
+        // Free-tier rate limit: one polite retry, honouring Retry-After up to 8s.
+        const wait = Math.min(8000, (parseFloat(res.headers.get("retry-after") ?? "2") || 2) * 1000);
+        await new Promise((r) => setTimeout(r, wait));
+        if (opts.signal?.aborted) return;
+      }
+    } catch (e) {
+      if (opts.signal?.aborted && isAbortError(e)) return; // cancelled → quiet end
+      yield { type: "error", message: `Gemini request failed (network).`, retryable: true };
+      return;
     }
     if (!res || !res.ok || !res.body) {
       const retryable = !!res && (res.status === 429 || res.status >= 500);
@@ -103,7 +111,15 @@ export class GeminiProvider implements LLMProvider {
     let outputTokens = 0;
     const mkId = () => `g${++seq}`;
     for (;;) {
-      const { done, value } = await reader.read();
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (e) {
+        if (opts.signal?.aborted && isAbortError(e)) return; // cancelled mid-stream → quiet end
+        yield { type: "error", message: "Gemini stream dropped.", retryable: true };
+        return;
+      }
+      const { done, value } = chunk;
       if (done) break;
       buf += decoder.decode(value, { stream: true });
       const lines = buf.split("\n");
@@ -126,6 +142,7 @@ export class GeminiProvider implements LLMProvider {
         }
       }
     }
+    if (opts.signal?.aborted) return;
     yield { type: "done", usage: { inputTokens, outputTokens } };
   }
 }

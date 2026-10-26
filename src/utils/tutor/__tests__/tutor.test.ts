@@ -223,10 +223,12 @@ describe("voice cache key + paid cost guard", () => {
 });
 
 describe("Pro+ entitlement gate", () => {
-  it("only Pro+ / family / school tiers grant the tutor — plain Pro does not", () => {
+  it("only Pro+ / family / homeschool / school tiers grant the tutor — plain Pro does not", () => {
     expect(planGrantsTutor("teacher_pro_plus_monthly")).toBe(true);
     expect(planGrantsTutor("teacher_pro_plus_annual")).toBe(true);
     expect(planGrantsTutor("family_monthly")).toBe(true);
+    expect(planGrantsTutor("homeschool_monthly")).toBe(true); // sold with the tutor (0086); was refused before SK B0
+    expect(planGrantsTutor("homeschool_annual")).toBe(true);
     expect(planGrantsTutor("school_annual")).toBe(true);
     expect(planGrantsTutor("teacher_pro_monthly")).toBe(false);
     expect(planGrantsTutor(null)).toBe(false);

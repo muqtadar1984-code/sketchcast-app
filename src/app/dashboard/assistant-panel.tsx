@@ -30,6 +30,9 @@ export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; o
   const inputRef = useRef<HTMLInputElement>(null);
   const speakerRef = useRef<StreamSpeaker | null>(null);
   const stopMicRef = useRef<(() => void) | null>(null);
+  // The in-flight turn's request. Stop, close and the next question abort it,
+  // which ends the server's model call too (SK B0) — not just the voice.
+  const turnRef = useRef<AbortController | null>(null);
 
   // Deferred (post-mount) so client-only feature detection can't cause an
   // SSR/hydration mismatch on the conditionally-rendered mic button.
@@ -72,6 +75,7 @@ export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; o
     () => () => {
       speakerRef.current?.stop();
       stopMicRef.current?.();
+      turnRef.current?.abort();
     },
     [],
   );
@@ -91,6 +95,12 @@ export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; o
   function stopSpeaking() {
     speakerRef.current?.stop();
     setSpeaking(false);
+  }
+
+  /** Stop = the voice AND the answer still being written. */
+  function stopTurn() {
+    turnRef.current?.abort();
+    stopSpeaking();
   }
 
   function toggleMic() {
@@ -126,7 +136,9 @@ export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; o
     setInput("");
     setError(null);
     setBusy(true);
-    stopSpeaking();
+    stopTurn();
+    const turn = new AbortController();
+    turnRef.current = turn;
     const speaker = new StreamSpeaker();
     speakerRef.current = speaker;
     const willSpeak = readAloud && speaker.supported;
@@ -139,6 +151,7 @@ export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; o
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question: q }),
+        signal: turn.signal,
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({}));
@@ -183,9 +196,11 @@ export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; o
       }
       if (!full) setMessages((m) => (m[m.length - 1]?.content === "" ? m.slice(0, -1) : m));
     } catch (e) {
-      setError((e as Error).message);
+      // A stopped turn is not an error: keep whatever was written, say nothing.
+      if (!turn.signal.aborted) setError((e as Error).message);
       setMessages((m) => (m[m.length - 1]?.content === "" ? m.slice(0, -1) : m));
     } finally {
+      if (turnRef.current === turn) turnRef.current = null;
       setBusy(false);
       // Speaking continues until the queue drains; reflect that in the UI.
       if (willSpeak) window.setTimeout(() => setSpeaking(!!window.speechSynthesis?.speaking), 400);
@@ -204,8 +219,10 @@ export default function AssistantPanel({ t, onClose }: { t: AssistantMessages; o
             <div className="text-xs text-[#98A0A9]">{t.subtitle}</div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {speaking ? (
-              <button onClick={stopSpeaking} className="text-xs font-medium text-[#B42318] hover:underline" title={t.stopReading}>
+            {speaking || busy ? (
+              /* Stop while the answer is being written OR read aloud (read-aloud
+                 off used to leave no way to stop a long answer). */
+              <button onClick={stopTurn} className="text-xs font-medium text-[#B42318] hover:underline" title={t.stopReading}>
                 ■ {t.stop}
               </button>
             ) : (

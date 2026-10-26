@@ -4,7 +4,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, claudeModel } from "@/utils/tutor/service";
-import type { GenerateOpts, LLMProvider, StreamEvent, Turn } from "../provider";
+import { isAbortError, type GenerateOpts, type LLMProvider, type StreamEvent, type Turn } from "../provider";
 
 type MsgParam = Anthropic.MessageParam;
 
@@ -49,8 +49,9 @@ export class AnthropicProvider implements LLMProvider {
           ? { tools: opts.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters as Anthropic.Tool.InputSchema })) }
           : {}),
         stream: true,
-      });
+      }, opts.signal ? { signal: opts.signal } : undefined);
     } catch (e) {
+      if (opts.signal?.aborted && isAbortError(e)) return; // cancelled → quiet end
       const status = (e as { status?: number }).status;
       yield { type: "error", message: (e as Error).message, retryable: status === 429 || (status ?? 0) >= 500 };
       return;
@@ -88,9 +89,11 @@ export class AnthropicProvider implements LLMProvider {
         }
       }
     } catch (e) {
+      if (opts.signal?.aborted && isAbortError(e)) return; // cancelled mid-stream → quiet end
       yield { type: "error", message: (e as Error).message, retryable: true };
       return;
     }
+    if (opts.signal?.aborted) return;
     yield { type: "done", usage: { inputTokens, outputTokens } };
   }
 }

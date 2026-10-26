@@ -98,13 +98,36 @@ export async function POST(request: Request) {
     : null;
   const decision = decideScope(question, topics, { activeTopic });
 
+  // Cancellation (SK B0): the student's Stop, a closed tab, or the next question
+  // aborts THIS turn's model call so no more tokens are billed. Two sources feed
+  // one controller — the request's own signal (client disconnected) and the
+  // response stream's cancel() (the reader let go).
+  const abort = new AbortController();
+  const onRequestAbort = () => abort.abort();
+  if (request.signal.aborted) abort.abort();
+  else request.signal.addEventListener("abort", onRequestAbort, { once: true });
+
   const stream = new ReadableStream({
+    cancel() {
+      abort.abort();
+    },
     async start(controller) {
       const finish = () => {
+        request.signal.removeEventListener("abort", onRequestAbort);
         try {
           controller.close();
         } catch {
           /* already closed */
+        }
+      };
+      // After the client is gone every enqueue throws; make them no-ops so the
+      // bookkeeping below (logTurn) still runs and the error log stays clean.
+      const send = (event: string, data: string) => {
+        if (abort.signal.aborted) return;
+        try {
+          sse(controller, event, data);
+        } catch {
+          /* client gone */
         }
       };
 
@@ -199,6 +222,7 @@ export async function POST(request: Request) {
         let toolMs = 0;
         let full = "";
         let usage: { inputTokens: number; outputTokens: number } | null = null;
+        let cancelled = false;
 
         for await (const ev of runAssistantTurn({
           provider,
@@ -212,27 +236,32 @@ export async function POST(request: Request) {
             toolMs += Date.now() - tt;
             return out;
           },
+          signal: abort.signal,
         })) {
           if (ev.type === "text") {
             if (!firstTokenMs) firstTokenMs = Date.now() - t0;
             full += ev.text;
-            sse(controller, "text", ev.text);
+            send("text", ev.text);
           } else if (ev.type === "tool") {
-            sse(controller, "tool", ev.name);
+            send("tool", ev.name);
           } else if (ev.type === "done") {
+            usage = ev.usage;
+          } else if (ev.type === "cancelled") {
+            cancelled = true;
             usage = ev.usage;
           } else {
             // Friendly, retryable-aware error — never a raw failure to a child.
-            sse(controller, "error", ev.retryable ? "One moment — I'm thinking hard. Try that again in a few seconds!" : "I couldn't answer that one. Try asking a different way?");
+            send("error", ev.retryable ? "One moment — I'm thinking hard. Try that again in a few seconds!" : "I couldn't answer that one. Try asking a different way?");
           }
         }
 
-        const latency = { retrievalMs, firstTokenMs, toolMs, totalMs: Date.now() - t0 };
-        sse(controller, "done", JSON.stringify({ latency }));
+        const latency = { retrievalMs, firstTokenMs, toolMs, totalMs: Date.now() - t0, ...(cancelled ? { cancelled: 1 } : {}) };
+        send("done", JSON.stringify({ latency }));
 
         if (full) {
-          // Bank the answer for classmates (same chapter, same question → $0).
-          void saveCache(admin, best.bookId, best.chapterNum, question, qNorm, full).catch(() => {});
+          // Bank the answer for classmates (same chapter, same question → $0) —
+          // never a cut-off one: a half answer must not replay as a finished one.
+          if (!cancelled) void saveCache(admin, best.bookId, best.chapterNum, question, qNorm, full).catch(() => {});
           await logTurn(admin, session.id, user.id, {
             question,
             answer: full,
@@ -244,8 +273,10 @@ export async function POST(request: Request) {
         }
         finish();
       } catch (e) {
-        console.error("assistant.turn", (e as Error).message);
-        sse(controller, "error", "Something went wrong — try again in a moment.");
+        if (!abort.signal.aborted) {
+          console.error("assistant.turn", (e as Error).message);
+          send("error", "Something went wrong — try again in a moment.");
+        }
         finish();
       }
     },

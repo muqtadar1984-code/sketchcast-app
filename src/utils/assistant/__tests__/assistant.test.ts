@@ -19,6 +19,8 @@ import { toMathRequestBody } from "@/utils/assistant/math-tool";
 import { StubProvider } from "@/utils/assistant/providers/stub";
 import { toGeminiContents, toGeminiBody } from "@/utils/assistant/providers/gemini";
 import { buildHistorySummary } from "@/utils/assistant/store";
+import { speechLangFor } from "@/utils/assistant/voice-client";
+import { LOCALES } from "@/i18n/locales";
 
 const TOPICS: Topic[] = [
   { bookId: "b1", bookTitle: "Science 7", chapterNum: 1, title: "Cells and their structure" },
@@ -139,6 +141,83 @@ describe("orchestrator (provider-agnostic)", () => {
     const events = [];
     for await (const ev of runAssistantTurn({ provider, system: "s", history: [], question: "q" })) events.push(ev);
     expect(events).toEqual([{ type: "error", message: "rate limited", retryable: true }]);
+  });
+});
+
+describe("orchestrator cancellation (SK B0)", () => {
+  it("passes the signal to the provider and ends with ONE cancelled event carrying the partial text", async () => {
+    const provider = new StubProvider([{ text: ["Photo", "synthesis ", "is…"] }]);
+    const ctl = new AbortController();
+    const events: import("@/utils/assistant/orchestrator").TurnEvent[] = [];
+    for await (const ev of runAssistantTurn({ provider, system: "s", history: [], question: "explain", signal: ctl.signal })) {
+      events.push(ev);
+      if (ev.type === "text" && ev.text === "Photo") ctl.abort(); // Stop pressed after the first token
+    }
+    expect(provider.calls[0]!.signal).toBe(ctl.signal);
+    expect(events.map((e) => e.type)).toEqual(["text", "cancelled"]);
+    const last = events.at(-1)!;
+    expect(last.type).toBe("cancelled");
+    if (last.type === "cancelled") expect(last.fullText).toBe("Photo");
+    // Never a `done` and never an `error` — a stopped turn is neither.
+    expect(events.some((e) => e.type === "done" || e.type === "error")).toBe(false);
+  });
+
+  it("does not start a tool round once cancelled", async () => {
+    const provider = new StubProvider([
+      { toolCalls: [{ id: "t1", name: "solve", args: { expr: "1+1" } }] },
+      { text: ["two"] },
+    ]);
+    const ctl = new AbortController();
+    let toolRan = false;
+    const types: string[] = [];
+    for await (const ev of runAssistantTurn({
+      provider,
+      system: "s",
+      history: [],
+      question: "q",
+      tools: [{ name: "solve", description: "d", parameters: {} }],
+      runTool: async () => {
+        toolRan = true;
+        return "2";
+      },
+      signal: ctl.signal,
+    })) {
+      types.push(ev.type);
+      // The tool_call is collected inside the stub's turn; abort as soon as the
+      // orchestrator reports it, i.e. before runTool is awaited.
+      if (ev.type === "tool") ctl.abort();
+    }
+    expect(toolRan).toBe(true); // the first call was already in flight when Stop arrived…
+    expect(types.at(-1)).toBe("cancelled"); // …but the continuation round never starts
+    expect(provider.calls.length).toBe(1);
+  });
+
+  it("an already-aborted signal yields cancelled without calling the provider", async () => {
+    const provider = new StubProvider([{ text: ["never"] }]);
+    const ctl = new AbortController();
+    ctl.abort();
+    const events = [];
+    for await (const ev of runAssistantTurn({ provider, system: "s", history: [], question: "q", signal: ctl.signal })) events.push(ev);
+    expect(events.map((e) => e.type)).toEqual(["cancelled"]);
+    expect(provider.calls.length).toBe(0);
+  });
+});
+
+describe("speech recognition language (SK B0)", () => {
+  it("maps every UI locale to a recognition tag, Jawi to spoken Malay", () => {
+    for (const l of LOCALES) expect(speechLangFor(l.value)).toMatch(/^[a-z]{2}-[A-Z]{2}$/);
+    expect(speechLangFor("en")).toBe("en-US");
+    expect(speechLangFor("ms")).toBe("ms-MY");
+    expect(speechLangFor("ms-arab")).toBe("ms-MY");
+    expect(speechLangFor("hi")).toBe("hi-IN");
+  });
+  it("accepts <html lang> spellings and falls back to en-US", () => {
+    expect(speechLangFor("ms-Arab")).toBe("ms-MY");
+    expect(speechLangFor("EN")).toBe("en-US");
+    expect(speechLangFor("hi-IN")).toBe("hi-IN");
+    expect(speechLangFor("")).toBe("en-US");
+    expect(speechLangFor(undefined)).toBe("en-US");
+    expect(speechLangFor("xx")).toBe("en-US");
   });
 });
 

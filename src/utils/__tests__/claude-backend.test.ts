@@ -118,6 +118,9 @@ describe("claudeModel (id mapping)", () => {
     expect(claudeModel("claude-haiku-4-5-20251001")).toBe("global.anthropic.claude-haiku-4-5-20251001-v1:0");
     expect(claudeModel("claude-sonnet-4-6")).toBe("global.anthropic.claude-sonnet-4-6");
     expect(claudeModel("claude-sonnet-5")).toBe("global.anthropic.claude-sonnet-5");
+    // The worker's two current models (SK B0) — same profiles as shared/claude_client.py.
+    expect(claudeModel("claude-sonnet-5-5")).toBe("global.anthropic.claude-sonnet-5-5");
+    expect(claudeModel("claude-haiku-5-5")).toBe("global.anthropic.claude-haiku-5-5");
   });
 
   it("passes an unmapped or already-Bedrock id through", () => {

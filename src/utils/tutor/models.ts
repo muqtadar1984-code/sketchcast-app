@@ -339,7 +339,9 @@ export function ttsCacheKey(provider: string, ref: string, text: string): string
  * stays correct without importing the billing plan table. */
 export function planGrantsTutor(planKey: string | null | undefined): boolean {
   const k = planKey ?? "";
-  return k.startsWith("teacher_pro_plus") || k.startsWith("family") || k.startsWith("school");
+  // homeschool_* (0086) was sold with the tutor but missed here — a Homeschool
+  // learner was refused once FEATURE_AI_TUTOR_REQUIRE_PROPLUS came on (SK B0).
+  return k.startsWith("teacher_pro_plus") || k.startsWith("family") || k.startsWith("homeschool") || k.startsWith("school");
 }
 
 /** The final access decision. Off unless the feature flag is on; when Pro+ is
