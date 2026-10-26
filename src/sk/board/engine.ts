@@ -1,9 +1,12 @@
-// SK S1 spike — Option E engine (pure, no DOM): the segment manifest types,
-// coordinate mapping, trace sampling, handwriting path building and the
-// checkpoint rule. Everything the player needs that can be unit-tested.
+// SK board engine (pure, no DOM): the segment manifest types, the hit-map
+// types, coordinate mapping, trace sampling, handwriting path building and
+// the checkpoint rule. Everything the player needs that can be unit-tested.
+// Started as the S1 spike's engine; B4 moved it here; B2 added the hit-map
+// gate and the helpers the live overlay and the avatar share.
 //
-// Board space is ERE's logical 0–100 square. Assets carry their own pixel
-// space (regions, trace); `assetBox` maps between the two.
+// Board space is ERE's logical 0–100 square for authored (live) actions; a
+// hit map is in the clip's world pixels (1280×720). Assets carry their own
+// pixel space (regions, trace); `toBoard` maps between the two.
 
 export type WordMark = { i: number; t0: number; t1: number; text: string };
 export type Marks = { words: WordMark[]; visemes: { t: number; v: string }[] };
@@ -21,7 +24,9 @@ export type Action =
   | { op: "label"; id: string; target: string; text: string; side: "right" | "left"; t: number; dur: number }
   | { op: "write"; id: string; text: string; at: { x: number; y: number }; size: number; style?: "muted"; t: number; dur: number }
   | { op: "highlight"; id: string; target: string; style: "circle" | "strike"; t: number; dur: number };
-export type Gesture = { t: number; kind: "point" | "write" | "listen" | "idle"; target?: string; until?: number };
+export type GestureKind = "point" | "write" | "listen" | "think" | "idle";
+export const GESTURE_KINDS: ReadonlySet<string> = new Set<GestureKind>(["point", "write", "listen", "think", "idle"]);
+export type Gesture = { t: number; kind: GestureKind; target?: string; until?: number };
 export type Aside = { question: string; audio: { uri: string; duration_ms: number }; marks: Marks; actions: Action[]; gestures: Gesture[] };
 export type Segment = {
   segment_id: string;
@@ -61,9 +66,13 @@ export function normaliseSegment(raw: Segment): Segment {
 // inside the world, asset sources are local filenames, ops are from the
 // allow-list, and counts are bounded. The runtime refuses the whole segment
 // on the first violation — never a partial render (the ERE rule).
-export const LIMITS = { actions: 500, text: 200, trace: 5000, words: 5000, coord: 10_000 } as const;
+export const LIMITS = { actions: 500, text: 200, trace: 5000, words: 5000, coord: 10_000, elements: 2000, regions: 200, timeline: 2000, checkpoints: 1000, world: 8192 } as const;
 const ID_RE = /^[a-z][a-z0-9_.-]{0,63}$/i;
 const SRC_RE = /^[a-z0-9_-]+\.(png|jpg|jpeg|svg)$/i;
+/** A local media/json path (relative to the manifest or site-absolute): no scheme, no `..`. */
+const URI_RE = /^\/?(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.(mp3|mp4|ogg|webm|json)$/i;
+/** Timeline verbs the scene engine exports (`spike/scene_engine`). */
+export const HIT_VERBS: ReadonlySet<string> = new Set(["draw", "write", "circle", "underline", "strike", "arrow", "erase", "fade", "move", "highlight", "point"]);
 const OPS = new Set(["place", "reveal", "label", "write", "highlight"]);
 // Bidi/format controls and C0/C1 controls: these can disguise what a label says.
 const BAD_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩﻿]/;
@@ -87,12 +96,31 @@ function box(v: unknown, what: string): Box {
   const b = v as Box;
   return { x: num(b?.x, what + ".x"), y: num(b?.y, what + ".y"), w: num(b?.w, what + ".w", 0), h: num(b?.h, what + ".h", 0) };
 }
+/** True for a site-local media path (what `uri()` accepts). */
+export const isLocalMediaUri = (v: unknown): v is string => typeof v === "string" && v.length <= 256 && URI_RE.test(v) && !v.includes("..");
+function uri(v: unknown, what: string): string {
+  if (typeof v !== "string" || v.length > 256 || !URI_RE.test(v) || v.includes("..")) throw new SegmentError(`${what}: must be a local media path`);
+  return v;
+}
 
 /** Throws SegmentError on the first violation; returns the segment otherwise. */
 export function validateSegment(input: Segment): Segment {
   const seg = normaliseSegment(input);
   if (!Array.isArray(seg.actions) || seg.actions.length > LIMITS.actions) throw new SegmentError("too many actions");
   if (!Array.isArray(seg.marks?.words) || seg.marks.words.length > LIMITS.words) throw new SegmentError("too many words");
+  // Media and companion files: local paths only (a manifest from a model or a
+  // bucket must never point the player at another origin).
+  uri(seg.audio?.uri, "audio.uri");
+  num(seg.audio.duration_ms, "audio.duration_ms", 0, MAX_T);
+  if (seg.clip != null) {
+    uri(seg.clip.uri, "clip.uri");
+    num(seg.clip.duration_ms, "clip.duration_ms", 0, MAX_T);
+  }
+  if (seg.hitmap != null) uri(seg.hitmap, "hitmap");
+  if (seg.aside?.audio?.uri) uri(seg.aside.audio.uri, "aside.audio.uri");
+  if (seg.voice_gender != null && seg.voice_gender !== "female" && seg.voice_gender !== "male") throw new SegmentError("bad voice_gender");
+  if (!Array.isArray(seg.checkpoints) || seg.checkpoints.length > LIMITS.checkpoints) throw new SegmentError("too many checkpoints");
+  for (const c of seg.checkpoints) num(c, "checkpoint", 0, MAX_T);
   for (const [key, a] of Object.entries(seg.assets ?? {})) {
     id(key, "asset key");
     if (typeof a.src !== "string" || !SRC_RE.test(a.src)) throw new SegmentError(`asset ${key}: src must be a local image filename`);
@@ -143,12 +171,119 @@ export function validateSegment(input: Segment): Segment {
   };
   check(seg.actions, "actions");
   check(seg.aside?.actions ?? [], "aside");
-  for (const g of [...(seg.gestures ?? []), ...(seg.aside?.gestures ?? [])]) {
+  const gs = [...(seg.gestures ?? []), ...(seg.aside?.gestures ?? [])];
+  if (gs.length > LIMITS.actions) throw new SegmentError("too many gestures");
+  for (const g of gs) {
+    if (!GESTURE_KINDS.has(g?.kind)) throw new SegmentError(`gesture: bad gesture kind ${String(g?.kind)}`);
     num(g.t, "gesture.t", 0, MAX_T);
     if (g.until != null) num(g.until, "gesture.until", 0, MAX_T);
     if (g.target != null) text(g.target, "gesture.target");
   }
   return seg;
+}
+
+// ── Hit map (the renderer's export; the scene graph of a prepared segment) ──
+export type Box4 = [number, number, number, number]; // x0,y0,x1,y1 in world pixels
+export type HitElement = { box: Box4 };
+export type HitAsset = { box: Box4; regions: Record<string, Box4> };
+export type HitTimed = { target: string; verb: string; start_ms: number; end_ms: number };
+export type HitMap = {
+  world: { w: number; h: number };
+  fps?: number;
+  duration_ms: number;
+  /** Every element the clip drew, keyed as the renderer named it ("w1", "l1", "ill"). */
+  elements: Record<string, HitElement>;
+  /** The clip's illustration(s) ("mic", "ill") with their labelled regions, world pixels. */
+  asset: Record<string, HitAsset>;
+  timeline: HitTimed[];
+};
+
+const clampBox4 = (v: unknown, what: string, W: number, H: number): Box4 => {
+  if (!Array.isArray(v) || v.length !== 4) throw new SegmentError(`${what}: box must be [x0,y0,x1,y1]`);
+  const n = v.map((x, i) => num(x, `${what}[${i}]`)) as Box4;
+  const cl = (x: number, hi: number) => Math.min(hi, Math.max(0, x));
+  return [cl(Math.min(n[0], n[2]), W), cl(Math.min(n[1], n[3]), H), cl(Math.max(n[0], n[2]), W), cl(Math.max(n[1], n[3]), H)];
+};
+
+/** Validates a hit map and returns a NORMALISED copy: every box numeric,
+ * ordered and clamped into the world; ids allow-listed tokens; verbs from the
+ * renderer's set; every timeline target an element the map declares; counts
+ * bounded. Throws SegmentError on the first violation. */
+export function validateHitMap(hm: HitMap): HitMap {
+  const W = num(hm?.world?.w, "world.w", 1, LIMITS.world);
+  const H = num(hm?.world?.h, "world.h", 1, LIMITS.world);
+  const duration_ms = num(hm.duration_ms, "duration_ms", 0, MAX_T);
+  if (hm.fps != null) num(hm.fps, "fps", 1, 240);
+  const elements: Record<string, HitElement> = {};
+  const entries = Object.entries(hm.elements ?? {});
+  if (entries.length > LIMITS.elements) throw new SegmentError("too many elements");
+  for (const [k, e] of entries) elements[id(k, "element id")] = { box: clampBox4(e?.box, `element ${k}.box`, W, H) };
+  const asset: Record<string, HitAsset> = {};
+  const assets = Object.entries(hm.asset ?? {});
+  if (assets.length > LIMITS.elements) throw new SegmentError("too many assets");
+  for (const [k, a] of assets) {
+    id(k, "asset id");
+    const regions: Record<string, Box4> = {};
+    const rs = Object.entries(a?.regions ?? {});
+    if (rs.length > LIMITS.regions) throw new SegmentError(`asset ${k}: too many regions`);
+    for (const [name, b] of rs) {
+      if (name.length > 64 || name.includes(".")) throw new SegmentError(`asset ${k}: bad region name`);
+      regions[text(name, `asset ${k} region name`)] = clampBox4(b, `asset ${k}.${name}`, W, H);
+    }
+    asset[k] = { box: clampBox4(a?.box, `asset ${k}.box`, W, H), regions };
+  }
+  if (!Array.isArray(hm.timeline) || hm.timeline.length > LIMITS.timeline) throw new SegmentError("too many timeline entries");
+  const timeline: HitTimed[] = hm.timeline.map((t, i) => {
+    if (!HIT_VERBS.has(t?.verb)) throw new SegmentError(`timeline[${i}]: bad verb ${String(t?.verb)}`);
+    const target = id(t.target, `timeline[${i}].target`);
+    if (!elements[target]) throw new SegmentError(`timeline[${i}]: target ${target} is not an element`);
+    const start_ms = num(t.start_ms, `timeline[${i}].start_ms`, 0, MAX_T);
+    const end_ms = num(t.end_ms, `timeline[${i}].end_ms`, start_ms, MAX_T);
+    return { target, verb: t.verb, start_ms, end_ms };
+  });
+  return { world: { w: W, h: H }, fps: hm.fps, duration_ms, elements, asset, timeline };
+}
+
+export const box4 = (b: Box4): Box => ({ x: b[0], y: b[1], w: b[2] - b[0], h: b[3] - b[1] });
+
+/** World box of a hit-map target: "ill" → the element or asset; "ill.eyepiece
+ * lens" → that asset region; null when the map has neither. */
+export function hitBox(hm: HitMap, target: string): Box | null {
+  const dot = target.indexOf(".");
+  if (dot > 0) {
+    const r = hm.asset[target.slice(0, dot)]?.regions[target.slice(dot + 1)];
+    return r ? box4(r) : null;
+  }
+  const e = hm.elements[target] ?? hm.asset[target];
+  return e ? box4(e.box) : null;
+}
+
+/** Every id the hit map can resolve — what a live aside may target. */
+export function hitTargets(hm: HitMap): string[] {
+  const out = Object.keys(hm.elements);
+  for (const [k, a] of Object.entries(hm.asset)) {
+    if (!out.includes(k)) out.push(k);
+    for (const r of Object.keys(a.regions)) out.push(`${k}.${r}`);
+  }
+  return out;
+}
+
+/** Element ids whose first timeline entry has started by t — what is on the
+ * board at that moment, in drawing order. */
+export function drawnAt(hm: HitMap, t: number): string[] {
+  const out: string[] = [];
+  for (const e of [...hm.timeline].sort((a, b) => a.start_ms - b.start_ms)) if (e.start_ms <= t && !out.includes(e.target)) out.push(e.target);
+  return out;
+}
+
+/** The element most recently started at t, or null before the first. */
+export function lastDrawnAt(hm: HitMap, t: number): string | null {
+  return drawnAt(hm, t).at(-1) ?? null;
+}
+
+/** The gesture in force at t: the latest one started, for 2.5 s unless `until` says otherwise. */
+export function activeGesture(gestures: Gesture[], t: number): Gesture | undefined {
+  return [...gestures].reverse().find((ge) => t >= ge.t && (ge.until == null ? t < ge.t + 2500 : t < ge.until));
 }
 
 /** The region's union box in asset pixels. "mic.eyepiece lens" → the asset's
