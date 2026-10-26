@@ -81,6 +81,42 @@ aside layer by `playLiveAside`. Space pauses the clip and focuses the box
    in the worker). This is the graph that exercises grading end to end.
    → `/sk/sk-poc-biology/2`
 
+### Checks from the item bank (B4.1, `feat/sk-b4-items`)
+
+The packager's graph carries no `check`/`practice` assets, so until B4.1 the
+real chapter taught but never checked. Now, when a unit's graph assets list
+no item ids, the loop asks the `ItemBank` for the unit's items **at the moment
+the route is planned** (`resolveBankItems` → `listForUnit(product, chapter,
+unit_key)`, one call per unit the request can open a check on: the cursor's
+unit and the one the request names) and `src/sk/items-select.ts` picks them
+**deterministically**: approved before draft, then ascending difficulty
+(unknown last), then id. The 2-item skip check is the first two of the unit
+check; the unit check asks `DEFAULT_UNIT_CHECK_ITEMS = 3` (the graph's own
+check size when it has one); a check asks only items that are deterministic
+to grade **and** map to a teaching objective (plan §14 — an unmapped item is
+never evidence); a unit with fewer than 2 such items has **no check** (the
+planner's existing path: skip "records NO mastery", `check_me` refuses, never
+an empty check); practice is every remaining gradeable item, mapped or not.
+Ids the graph carries are **authoritative** — the bank is read only for an
+asset kind the unit lacks — so the stand-in graph (`graph-ch2.json`) behaves
+exactly as before, and the `StaticItemBank` lists its five U4 items only for
+`sk-poc-biology/2/u4`, so without `SK_STORE=supabase` the real chapter still
+teaches without checking. A bank-sourced check runs under the cursor asset id
+`bank:<unit>:check` / `bank:<unit>:practice` (not in the graph; the page keeps
+the clip it has, as it does for the stand-in's segment-less check asset); the
+chosen ids live in `openCheck.itemIds`, so `putAttempt`'s check context and a
+replayed `command`/`answer` event (the store's event key) see the same items,
+and a second server computing the same list picks the same ids.
+`SupabaseItemBank.listForUnit` now returns `BankItem`s (`RawQuestion` +
+`status`, `difficulty`, `teachingObjectiveId`). Numerical tolerance is still
+**not** honoured (the quiz grader is exact and a tolerance cannot be spelled
+as `accept` alternatives — not a one-line change; left as B5 noted). Tests:
+`items-select.test.ts` (order, gate, minimum, graph-first) and
+`loop-bank.test.ts` (stand-in unchanged with the bank never asked; a fake
+bank in scrambled order → the documented ids; a one-item unit skips with
+"records NO mastery" and opens nothing; replay reuses the ids and asks the
+bank once).
+
 ## 2. What is stubbed or deferred
 
 - **Generation (ladder rungs 1–3) is a decision, not a segment.** The planner
@@ -89,9 +125,10 @@ aside layer by `playLiveAside`. Space pauses the clip and focuses the box
   an existing demo, rung 2 TAL from validated parts, rung 3 grounded text with
   source refs need the retrieval provider (B4's FTS adapter, not in this PR).
 - **Items.** Five stand-in U4 items in `src/sk/items.ts` (+ hints). B1 wires
-  `topic_questions` → `teaching_objective_id`; the packager then emits
-  `check`/`practice` assets with real ids and `ItemBank` gets a Supabase
-  implementation. Match items are graded but the student page has no match UI.
+  `topic_questions` → `teaching_objective_id`; B5 added the Supabase
+  `ItemBank`; B4.1 reads a unit's items from it when the graph carries none
+  (above). The packager emitting `check`/`practice` ids itself remains the
+  cleaner end state. Match items are graded but the student page has no match UI.
 - **Short answers** return `needs_review` (no LLM partial credit yet).
 - **Speech.** Browser speechSynthesis only; no Polly, no viseme marks, no STT.
   Spoken modality is modelled (CONFIRM_TRANSCRIPT) but the page types.

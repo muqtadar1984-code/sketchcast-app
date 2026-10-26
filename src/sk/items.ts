@@ -9,8 +9,26 @@
 
 import type { RawQuestion } from "@/app/api/quiz/logic";
 
+/** B4.1: what a bank knows about an item beyond its marking scheme — the
+ * fields the deterministic selector (./items-select) orders and filters on.
+ * Every one is optional: an item without them still grades; it just sorts
+ * after its peers (status unknown = after draft, difficulty unknown = last)
+ * and, with no objective, is never asked in a check (plan §14). */
+export type BankItemMeta = {
+  status?: "approved" | "draft";
+  /** 1 (easiest) … 5. */
+  difficulty?: number;
+  /** The item's teaching objective; null or absent = unmapped = no mastery evidence. */
+  teachingObjectiveId?: string | null;
+};
+export type BankItem = RawQuestion & BankItemMeta;
+
 export interface ItemBank {
   get(itemId: string): Promise<RawQuestion | null>;
+  /** Every gradeable item of a unit (product by slug or id). The loop asks
+   * for these only when the graph's check/practice assets carry no ids; the
+   * order the bank returns is NOT the asking order — `selectUnitItems` sorts. */
+  listForUnit(productId: string, chapter: number, unitKey: string): Promise<BankItem[]>;
 }
 
 export type StudentItem =
@@ -79,13 +97,38 @@ export const POC_ITEMS: readonly RawQuestion[] = [
   },
 ];
 
+/** Which stand-in items belong to which unit, keyed "product/chapter/unit_key",
+ * with the unit's objective (the five U4 items all map to it). Only the
+ * stand-in graph's product is listed, so on the packager's real chapter this
+ * bank lists nothing and the loop behaves as B4 did (skip records no mastery). */
+export const POC_UNIT_ITEMS: Readonly<Record<string, { teachingObjectiveId: string | null; itemIds: readonly string[] }>> = {
+  "sk-poc-biology/2/u4": { teachingObjectiveId: "to-ch2-u4-total-magnification", itemIds: POC_ITEMS.map((q) => q.id) },
+};
+
+export const unitItemsKey = (productId: string, chapter: number, unitKey: string) => `${productId}/${chapter}/${unitKey}`;
+
 export class StaticItemBank implements ItemBank {
   private readonly byId: Map<string, RawQuestion>;
-  constructor(items: readonly RawQuestion[] = POC_ITEMS) {
+  constructor(
+    items: readonly RawQuestion[] = POC_ITEMS,
+    private readonly byUnit: Readonly<Record<string, { teachingObjectiveId: string | null; itemIds: readonly string[] }>> = POC_UNIT_ITEMS,
+  ) {
     this.byId = new Map(items.map((q) => [q.id, q]));
   }
   async get(itemId: string): Promise<RawQuestion | null> {
     return this.byId.get(itemId) ?? null;
+  }
+  /** The unit's stand-in items in their listed order, all `approved` (they
+   * were written from the approved draft) with no difficulty. */
+  async listForUnit(productId: string, chapter: number, unitKey: string): Promise<BankItem[]> {
+    const u = this.byUnit[unitItemsKey(productId, chapter, unitKey)];
+    if (!u) return [];
+    const out: BankItem[] = [];
+    for (const id of u.itemIds) {
+      const q = this.byId.get(id);
+      if (q) out.push({ ...q, status: "approved", teachingObjectiveId: u.teachingObjectiveId });
+    }
+    return out;
   }
 }
 

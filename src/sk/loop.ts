@@ -18,12 +18,13 @@ import { checkpointFor, type Segment } from "./board/engine";
 import { GRADE_RULE_VERSION, gradeItem, type GradeResult } from "./grade";
 import { assetOf, cursorFor, mainAsset, startCursor, unitOf } from "./graph";
 import { hintFor, stripItem, type ItemBank, type StudentItem } from "./items";
-import { applyCheckToMastery, plan, type Decision, type PlannerContext, type RouteRequest } from "./planner";
+import { selectUnitItems, type UnitItems } from "./items-select";
+import { applyCheckToMastery, checkAsset, isBankAssetId, plan, practiceAsset, type Decision, type PlannerContext, type RouteRequest } from "./planner";
 import { classify } from "./router";
 import { checkComplete, checkPassed, initialMachine, phaseOf, RATE_MIN, RATE_STEP, transition, transitionAll, type MachineState, type OpenCheck, type SkEvent, type SkPhase, type SkState } from "./state";
 import { DuplicateAttemptError, type Attempt, type SessionStore, type SkSession } from "./store";
 import { answerQuestion, MAX_HISTORY_TURNS, NO_TEACHER_TEXT } from "./teacher";
-import type { Bookmark, Command, Cursor, GradeOutcome, Intent, MasteryMap, SseEvent, TeachingGraph, Utterance } from "./types";
+import type { Bookmark, Command, Cursor, GradeOutcome, GraphAsset, Intent, MasteryMap, SseEvent, TeachingGraph, Utterance } from "./types";
 
 export type LoopDeps = {
   store: SessionStore;
@@ -67,7 +68,10 @@ export async function sessionView(deps: LoopDeps, s: SkSession): Promise<Session
   const m = s.machine;
   const unit = unitOf(deps.graph, m.cursor.unitKey) ?? null;
   const found = assetOf(deps.graph, m.cursor.assetId);
-  const a = found?.asset;
+  // A bank-sourced check runs under an asset id the graph does not carry
+  // (B4.1); the view still names it, segment-less, like the stand-in's check.
+  const bankAsset: GraphAsset | undefined = isBankAssetId(m.cursor.assetId) ? { asset_id: m.cursor.assetId, kind: m.cursor.assetId.endsWith(":practice") ? "practice" : "check" } : undefined;
+  const a = found?.asset ?? bankAsset;
   let openCheck: SessionView["openCheck"] = null;
   if (m.openCheck) {
     const oc = m.openCheck;
@@ -143,6 +147,31 @@ function plannerContext(deps: LoopDeps, s: SkSession, m: MachineState, extra: Pa
   return { graph: deps.graph, cursor: m.cursor, mastery: s.mastery, bookmarks: m.bookmarks, ...extra };
 }
 
+/** B4.1: the units a route request may open a check or practice on — the
+ * cursor's unit and the one the request names. (A prerequisite's suggested
+ * check is read from the graph only; it is a warning, never opened here.) */
+export function unitsToResolve(deps: LoopDeps, m: MachineState, req: RouteRequest): string[] {
+  const keys = new Set<string>();
+  if (req.name === "next" || req.name === "skip" || req.name === "practise" || req.name === "check_me") keys.add(m.cursor.unitKey);
+  if ("unitKey" in req && req.unitKey && req.name !== "goto" && req.name !== "explain_again") keys.add(req.unitKey);
+  return [...keys].filter((k) => !!unitOf(deps.graph, k));
+}
+
+/** Ask the bank for the items of each unit whose graph check OR practice
+ * asset carries no ids, at the moment the route is planned, and pick them
+ * deterministically (./items-select). The graph's own ids are never replaced:
+ * `checkFor`/`practiceFor` in the planner read those first. */
+export async function resolveBankItems(deps: LoopDeps, m: MachineState, req: RouteRequest): Promise<Record<string, UnitItems>> {
+  const out: Record<string, UnitItems> = {};
+  for (const key of unitsToResolve(deps, m, req)) {
+    const unit = unitOf(deps.graph, key)!;
+    if (checkAsset(unit) && practiceAsset(unit)) continue;
+    const items = await deps.items.listForUnit(deps.graph.product_id, deps.graph.chapter, unit.unit_key);
+    out[key] = selectUnitItems(items);
+  }
+  return out;
+}
+
 export function toRouteRequest(c: Command): RouteRequest | null {
   const a = c.args;
   switch (c.name) {
@@ -185,9 +214,12 @@ export function speechFor(g: TeachingGraph, d: Decision): string {
 export type Applied = { m: MachineState; speech: string; decision?: Decision; board?: "erase_aside" | "seek" | "play" | "pause"; refused?: string };
 
 /** Run a route request through the planner and apply its decision. `m` may be
- * in PLANNING already (a spoken route) or in a state route_requested accepts. */
-export function executeRoute(deps: LoopDeps, s: SkSession, m: MachineState, req: RouteRequest, extra: Partial<PlannerContext> = {}): Applied {
-  const decision = plan(plannerContext(deps, s, m, extra), req);
+ * in PLANNING already (a spoken route) or in a state route_requested accepts.
+ * Async since B4.1: the bank is asked for a unit's items when the graph has
+ * none, before the planner runs. */
+export async function executeRoute(deps: LoopDeps, s: SkSession, m: MachineState, req: RouteRequest, extra: Partial<PlannerContext> = {}): Promise<Applied> {
+  const bankItems = await resolveBankItems(deps, m, req);
+  const decision = plan(plannerContext(deps, s, m, { bankItems, ...extra }), req);
   if (decision.kind === "none") {
     // Nothing to do: leave the machine where it is, except a spoken route that already moved to PLANNING.
     const back = m.state === "PLANNING" ? transition(m, { kind: "planned", cursor: m.cursor }) : null;
@@ -248,7 +280,7 @@ export async function executeCommand(deps: LoopDeps, s: SkSession, m: MachineSta
     case "explain_again": {
       const req = toRouteRequest(c);
       if (!req) return refuse(`${c.name} needs a unit`, "Which unit do you mean?");
-      const applied = executeRoute(deps, s, m, req);
+      const applied = await executeRoute(deps, s, m, req);
       return c.name === "skip" && c.args.scope === "segment" && applied.decision?.kind !== "none" ? { ...applied, speech: `Skipping ahead. ${applied.speech}` } : applied;
     }
   }
@@ -290,17 +322,17 @@ function attemptToResult(a: Attempt): Omit<Extract<AnswerResult, { kind: "graded
 }
 
 /** After a check closes: where SK goes next, by the check's purpose. */
-function afterCheck(deps: LoopDeps, s: SkSession, m: MachineState, oc: OpenCheck): Applied {
+async function afterCheck(deps: LoopDeps, s: SkSession, m: MachineState, oc: OpenCheck): Promise<Applied> {
   const passed = checkPassed(oc);
   s.mastery = applyCheckToMastery(s.mastery, oc.unitKey, oc.purpose, oc.results, oc.independent);
   const unit = unitOf(deps.graph, oc.unitKey);
   const intro = passed ? (oc.purpose === "practise" ? "Nice work. " : oc.independent ? "You've got this — that counts. " : "Got there. ") : oc.purpose === "practise" ? "Good effort — practice is how it sticks. " : "Not all the way yet — let's go through it together. ";
   if (oc.purpose === "practise") {
-    const back = m.bookmarks.length ? executeRoute(deps, s, m, { name: "return" }) : { m, speech: "" };
+    const back = m.bookmarks.length ? await executeRoute(deps, s, m, { name: "return" }) : { m, speech: "" };
     return { ...back, speech: intro + back.speech };
   }
   if (passed) {
-    const next = executeRoute(deps, s, m, { name: "next" });
+    const next = await executeRoute(deps, s, m, { name: "next" });
     return { ...next, speech: intro + next.speech };
   }
   // Failed a skip/unit check: teach the unit — a visual alternative first (plan §3).
@@ -309,7 +341,7 @@ function afterCheck(deps: LoopDeps, s: SkSession, m: MachineState, oc: OpenCheck
     const r = transitionAll(m, [{ kind: "route_requested" }, { kind: "planned", cursor: cursorFor(deps.graph, unit, main) }]);
     return r.ok ? { m: r.state, speech: intro + `Let's start ${unit.title} from the top.`, board: "play" } : { m, speech: intro, refused: r.reason };
   }
-  const again = executeRoute(deps, s, m, { name: "explain_again", unitKey: oc.unitKey }, { lastCheckFailed: true });
+  const again = await executeRoute(deps, s, m, { name: "explain_again", unitKey: oc.unitKey }, { lastCheckFailed: true });
   return { ...again, speech: intro + again.speech };
 }
 
@@ -394,7 +426,7 @@ export async function submitAnswer(deps: LoopDeps, s: SkSession, input: AnswerIn
       r = transition(m, { kind: "check_closed" });
       if (!r.ok) throw new LoopError(409, r.reason);
       m = r.state;
-      const applied = afterCheck(deps, s, m, after);
+      const applied = await afterCheck(deps, s, m, after);
       m = applied.m;
       check = { passed: checkPassed(after), independent: after.independent, purpose: after.purpose };
       speech = `${grade.feedback} ${applied.speech}`.trim();
@@ -442,7 +474,7 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
         yield { event: "text", data: applied.speech };
       } else if (kind === "route" && intent.command) {
         const req = toRouteRequest(intent.command);
-        const applied = req ? executeRoute(deps, s, m, req) : { m, speech: "Which unit do you mean?" };
+        const applied = req ? await executeRoute(deps, s, m, req) : { m, speech: "Which unit do you mean?" };
         if (!req) {
           const back = transition(m, { kind: "planned", cursor: m.cursor });
           if (back.ok) m = back.state;
@@ -510,7 +542,7 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
       yield { event: "text", data: applied.speech };
     } else if (intent.kind === "route" && intent.command) {
       const req = toRouteRequest(intent.command);
-      const applied = req ? executeRoute(deps, s, m, req) : { m, speech: "Which unit do you mean?" };
+      const applied = req ? await executeRoute(deps, s, m, req) : { m, speech: "Which unit do you mean?" };
       m = applied.m;
       decision = applied.decision;
       board = applied.board;
