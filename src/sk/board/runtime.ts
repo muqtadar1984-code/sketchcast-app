@@ -26,6 +26,7 @@ import {
   tracePath,
   wordAt,
   type Action,
+  type Aside,
   type AssetFixture,
   type Box,
   type Gesture,
@@ -48,7 +49,8 @@ export type HitMap = {
   world: { w: number; h: number };
   duration_ms: number;
   elements: Record<string, { box: [number, number, number, number] }>;
-  asset: { mic: { box: [number, number, number, number]; regions: Record<string, [number, number, number, number]> } };
+  /** The clip's illustration(s), keyed as the renderer named them ("mic", "ill"); boxes in world pixels. */
+  asset: Record<string, { box: [number, number, number, number]; regions: Record<string, [number, number, number, number]> }>;
   timeline: { target: string; verb: string; start_ms: number; end_ms: number }[];
 };
 /** The SK character rig (tools/sk-s1/make_rig.py): cut-out layers of one
@@ -105,6 +107,10 @@ export class SpikeRuntime {
   state: PlayerState = "ready";
   private timed: Timed[] = [];
   private asideTimed: Timed[] = [];
+  private asideLayer!: SVGGElement;
+  private defs!: SVGDefsElement;
+  /** A live aside (B4): actions scrubbed from a wall clock while the main clock is paused. */
+  private live: { timed: Timed[]; gestures: Gesture[]; start: number; duration: number; resolve: () => void } | null = null;
   private seen = new Set<string>();
   private pauseReq: number | null = null;
   private strokes = 0; // stroke elements created — a resume must not add any
@@ -127,7 +133,7 @@ export class SpikeRuntime {
     private readonly font: OpentypeLike,
     private readonly base: string,
     private readonly cb: { state: (s: PlayerState) => void; log: (s: string) => void; clock: (ms: number) => void },
-    private readonly opts: { mode: Mode; hitmap?: HitMap; rig?: { data: Rig; base: string } } = { mode: "E" },
+    private readonly opts: { mode: Mode; hitmap?: HitMap; rig?: { data: Rig; base: string }; /** null → no localStorage checkpoint (B4 keeps the cursor server-side) */ checkpointKey?: string | null } = { mode: "E" },
   ) {
     if (opts.mode === "S" && opts.hitmap) {
       this.W = opts.hitmap.world.w;
@@ -152,6 +158,8 @@ export class SpikeRuntime {
     const penLayer = el("g", { "data-layer": "pen" });
     svg.append(defs, baseLayer, asideLayer, avatarLayer, penLayer);
     host.appendChild(svg);
+    this.asideLayer = asideLayer;
+    this.defs = defs;
 
     this.pen = el("g", { opacity: 0 });
     this.pen.appendChild(el("path", { d: `M0 0 l${-1.4 * this.u} ${-4.2 * this.u} l${0.9 * this.u} ${-0.4 * this.u} l${1.9 * this.u} ${4.1 * this.u} z`, fill: ACCENT }));
@@ -161,22 +169,30 @@ export class SpikeRuntime {
       // The clip carries the board. Placed boxes come from the renderer's hit
       // map so the aside and the avatar target the SAME pixels the video drew.
       const hm = this.opts.hitmap;
-      const asset = this.seg.assets.light_microscope!;
-      this.placed.mic = { box: box4(hm.asset.mic.box), asset };
+      for (const [key, a] of Object.entries(hm.asset ?? {})) {
+        // An Option-E asset of the same name (the U4 fixture) maps regions from
+        // asset pixels; a B3 clip has none, so its regions come straight from the
+        // hit map in world pixels as "key.region" hit boxes.
+        const placeOp = this.seg.actions.find((x) => x.op === "place" && x.as === key);
+        const fixture = placeOp && placeOp.op === "place" ? this.seg.assets[placeOp.ref.replace(/^asset:/, "")] : Object.values(this.seg.assets)[0];
+        if (fixture) this.placed[key] = { box: box4(a.box), asset: fixture };
+        this.hitBoxes[key] = box4(a.box);
+        for (const [part, b] of Object.entries(a.regions ?? {})) this.hitBoxes[`${key}.${part}`] = box4(b);
+      }
       for (const [id, e] of Object.entries(hm.elements)) this.hitBoxes[id] = box4(e.box);
       // Drift for S is measured against the hit-map timeline (no DOM actions).
       this.timed = hm.timeline.map((t) => ({ id: `${t.verb}:${t.target}`, start: t.start_ms, end: t.end_ms, anims: [] }));
     } else {
       this.timed = this.compile(this.seg.actions, baseLayer, defs, "b");
     }
-    this.asideTimed = this.compile(this.seg.aside.actions, asideLayer, defs, "a");
+    this.asideTimed = this.seg.aside ? this.compile(this.seg.aside.actions, asideLayer, defs, "a") : [];
     this.avatar = this.opts.rig
       ? new RigAvatar(avatarLayer, this.W, this.H, this.opts.rig.data, this.opts.rig.base, this.opts.mode === "S" ? 0.26 : 0.24)
       : new Avatar(avatarLayer, this.W, this.H, this.opts.mode === "S" ? 0.7 : 1);
 
     // Reload recovery: resume from the last checkpoint ≤ the saved cursor.
     try {
-      const raw = localStorage.getItem(CKPT_KEY + ":" + this.opts.mode);
+      const raw = this.ckptKey() ? localStorage.getItem(this.ckptKey()!) : null;
       if (raw) {
         const saved = JSON.parse(raw) as { t: number };
         const at = checkpointFor(this.checkpoints(), saved.t);
@@ -184,12 +200,81 @@ export class SpikeRuntime {
         this.scrub(at);
         this.measure.reloadRecovery.push({ saved: saved.t, resumed: at });
         this.cb.log(`reload: saved cursor ${saved.t} ms → resumed at checkpoint ${at} ms`);
-        localStorage.removeItem(CKPT_KEY + ":" + this.opts.mode);
+        localStorage.removeItem(this.ckptKey()!);
       }
     } catch {
       /* no storage */
     }
     this.raf = requestAnimationFrame(this.loop);
+  }
+
+  /** The dev harness's localStorage key; null when the caller keeps the cursor itself. */
+  private ckptKey(): string | null {
+    if (this.opts.checkpointKey === null) return null;
+    return this.opts.checkpointKey ?? CKPT_KEY + ":" + this.opts.mode;
+  }
+
+  // ── B4 teacher-loop surface ─────────────────────────────────────────────
+  /** Current main-clock position, ms. */
+  get t(): number {
+    return this.main.currentTime * 1000;
+  }
+  seek(ms: number): void {
+    const at = Math.max(0, ms) / 1000;
+    this.main.currentTime = at;
+    this.scrub(at * 1000);
+  }
+  setRate(rate: number): void {
+    this.main.playbackRate = Math.min(2, Math.max(0.5, rate));
+  }
+  /** Pause for a turn: freeze the clock, SK leans in to listen. */
+  pauseForTurn(): void {
+    if (!this.main.paused) {
+      this.pauseReq = performance.now();
+      this.main.pause();
+    }
+    this.avatar.listen(true);
+    this.setState("listening");
+  }
+  /** The server is answering: SK stops listening and talks. */
+  answering(): void {
+    this.avatar.listen(false);
+    this.setState("answering");
+  }
+  /** Resume after a turn, `rewindMs` back (plan §4 RESUMING), or seek to `at` when given. */
+  async resumeAfterTurn(rewindMs = 1500, at?: number): Promise<void> {
+    this.avatar.listen(false);
+    this.clearLiveAside();
+    const to = at ?? Math.max(0, this.main.currentTime * 1000 - rewindMs);
+    this.seek(to);
+    await this.main.play();
+    this.setState("playing");
+  }
+  /** Stay paused after a turn (a check opened, or the student paused). */
+  holdAfterTurn(): void {
+    this.avatar.listen(false);
+    this.setState("paused");
+  }
+  /** Remove everything on the aside layer (the "erase" command). */
+  clearLiveAside(): void {
+    if (this.live) {
+      this.live.resolve();
+      this.live = null;
+    }
+    while (this.asideLayer.firstChild) this.asideLayer.removeChild(this.asideLayer.firstChild);
+    // Re-compile the scripted aside (dev harness) so interrupt() still works.
+    this.asideTimed = this.seg.aside ? this.compile(this.seg.aside.actions, this.asideLayer, this.defs, "a") : [];
+    this.pen.setAttribute("opacity", "0");
+  }
+  /** Draw a VALIDATED live aside program on the aside layer. The program has
+   * already passed the server's gate; the clock is wall time from now. Resolves
+   * when the program's duration has elapsed (or it is cleared). */
+  playLiveAside(program: Pick<Aside, "actions" | "gestures"> & { duration_ms: number }): Promise<void> {
+    this.clearLiveAside();
+    const timed = this.compile(program.actions, this.asideLayer, this.defs, "g");
+    return new Promise<void>((resolve) => {
+      this.live = { timed, gestures: program.gestures, start: performance.now(), duration: program.duration_ms, resolve };
+    });
   }
 
   private checkpoints(): number[] {
@@ -221,7 +306,7 @@ export class SpikeRuntime {
   /** Barge-in: pause → listen (300 ms) → answer on the aside layer → resume 1.5 s back. */
   async interrupt(): Promise<void> {
     const { main, asideAudio: aside, seg } = this;
-    if (main.paused) return;
+    if (main.paused || !seg.aside) return;
     const strokesBefore = this.strokes;
     this.pauseReq = performance.now();
     main.pause();
@@ -291,7 +376,7 @@ export class SpikeRuntime {
       this.scrub(t);
       this.cb.clock(t);
       try {
-        localStorage.setItem(CKPT_KEY + ":" + this.opts.mode, JSON.stringify({ t }));
+        if (this.ckptKey()) localStorage.setItem(this.ckptKey()!, JSON.stringify({ t }));
       } catch {
         /* ignore */
       }
@@ -306,15 +391,28 @@ export class SpikeRuntime {
       // A finished segment leaves no cursor behind — the next open starts fresh
       // (found when a completed Option S run "resumed" at its last second).
       try {
-        localStorage.removeItem(CKPT_KEY + ":" + this.opts.mode);
+        if (this.ckptKey()) localStorage.removeItem(this.ckptKey()!);
       } catch {
         /* ignore */
       }
     }
-    if (!aside.paused) {
+    if (!aside.paused && seg.aside) {
       const ta = aside.currentTime * 1000;
       this.scrub(ta, "aside");
       this.avatar.frame(ta, seg.aside.marks, seg.aside.gestures, this.placed, this.hitBoxes, this.measure);
+    }
+    if (this.live) {
+      const tl = performance.now() - this.live.start;
+      for (const tm of this.live.timed) {
+        for (const a of tm.anims) a.currentTime = tl;
+        tm.onFrame?.(tl);
+      }
+      this.avatar.frame(tl, { words: [], visemes: [] }, this.live.gestures, this.placed, this.hitBoxes, this.measure);
+      if (tl >= this.live.duration) {
+        this.live.resolve();
+        this.live = null;
+        this.pen.setAttribute("opacity", "0");
+      }
     }
     this.frames++;
     const now = performance.now();

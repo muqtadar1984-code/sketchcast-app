@@ -1,0 +1,963 @@
+{
+ "segment_id": "s2-explain-main",
+ "asset_kind": "explain",
+ "style": "main",
+ "unit_key": "s2",
+ "language": "en",
+ "voice": "edge-aria",
+ "voice_gender": "female",
+ "audio": {
+  "uri": "audio.mp3",
+  "duration_ms": 46562
+ },
+ "clip": {
+  "uri": "clip.mp4",
+  "duration_ms": 46583
+ },
+ "hitmap": "hitmap.json",
+ "marks": {
+  "words": [
+   {
+    "i": 0,
+    "t0": 100,
+    "t1": 425,
+    "text": "Let's"
+   },
+   {
+    "i": 1,
+    "t0": 438,
+    "t1": 650,
+    "text": "look"
+   },
+   {
+    "i": 2,
+    "t0": 662,
+    "t1": 725,
+    "text": "at"
+   },
+   {
+    "i": 3,
+    "t0": 738,
+    "t1": 788,
+    "text": "a"
+   },
+   {
+    "i": 4,
+    "t0": 800,
+    "t1": 1050,
+    "text": "light"
+   },
+   {
+    "i": 5,
+    "t0": 1062,
+    "t1": 1750,
+    "text": "microscope"
+   },
+   {
+    "i": 6,
+    "t0": 2000,
+    "t1": 2188,
+    "text": "which"
+   },
+   {
+    "i": 7,
+    "t0": 2200,
+    "t1": 2575,
+    "text": "uses"
+   },
+   {
+    "i": 8,
+    "t0": 2588,
+    "t1": 2862,
+    "text": "light"
+   },
+   {
+    "i": 9,
+    "t0": 2875,
+    "t1": 2962,
+    "text": "and"
+   },
+   {
+    "i": 10,
+    "t0": 2975,
+    "t1": 3325,
+    "text": "glass"
+   },
+   {
+    "i": 11,
+    "t0": 3338,
+    "t1": 3762,
+    "text": "lenses"
+   },
+   {
+    "i": 12,
+    "t0": 3775,
+    "t1": 3875,
+    "text": "to"
+   },
+   {
+    "i": 13,
+    "t0": 3888,
+    "t1": 4138,
+    "text": "show"
+   },
+   {
+    "i": 14,
+    "t0": 4150,
+    "t1": 4488,
+    "text": "cells"
+   },
+   {
+    "i": 15,
+    "t0": 4500,
+    "t1": 4712,
+    "text": "too"
+   },
+   {
+    "i": 16,
+    "t0": 4725,
+    "t1": 5125,
+    "text": "small"
+   },
+   {
+    "i": 17,
+    "t0": 5138,
+    "t1": 5238,
+    "text": "to"
+   },
+   {
+    "i": 18,
+    "t0": 5250,
+    "t1": 5462,
+    "text": "see"
+   },
+   {
+    "i": 19,
+    "t0": 5475,
+    "t1": 5588,
+    "text": "with"
+   },
+   {
+    "i": 20,
+    "t0": 5600,
+    "t1": 5700,
+    "text": "the"
+   },
+   {
+    "i": 21,
+    "t0": 5712,
+    "t1": 5875,
+    "text": "eye"
+   },
+   {
+    "i": 22,
+    "t0": 5888,
+    "t1": 6400,
+    "text": "alone"
+   },
+   {
+    "i": 23,
+    "t0": 7262,
+    "t1": 7438,
+    "text": "The"
+   },
+   {
+    "i": 24,
+    "t0": 7450,
+    "t1": 7800,
+    "text": "slide"
+   },
+   {
+    "i": 25,
+    "t0": 7812,
+    "t1": 8175,
+    "text": "rests"
+   },
+   {
+    "i": 26,
+    "t0": 8188,
+    "t1": 8312,
+    "text": "on"
+   },
+   {
+    "i": 27,
+    "t0": 8325,
+    "t1": 8388,
+    "text": "the"
+   },
+   {
+    "i": 28,
+    "t0": 8400,
+    "t1": 8925,
+    "text": "stage"
+   },
+   {
+    "i": 29,
+    "t0": 9088,
+    "t1": 9200,
+    "text": "the"
+   },
+   {
+    "i": 30,
+    "t0": 9212,
+    "t1": 9538,
+    "text": "flat"
+   },
+   {
+    "i": 31,
+    "t0": 9550,
+    "t1": 10112,
+    "text": "platform"
+   },
+   {
+    "i": 32,
+    "t0": 10300,
+    "t1": 10388,
+    "text": "and"
+   },
+   {
+    "i": 33,
+    "t0": 10400,
+    "t1": 10488,
+    "text": "the"
+   },
+   {
+    "i": 34,
+    "t0": 10500,
+    "t1": 10888,
+    "text": "stage"
+   },
+   {
+    "i": 35,
+    "t0": 10900,
+    "t1": 11238,
+    "text": "clips"
+   },
+   {
+    "i": 36,
+    "t0": 11250,
+    "t1": 11488,
+    "text": "hold"
+   },
+   {
+    "i": 37,
+    "t0": 11500,
+    "t1": 11600,
+    "text": "it"
+   },
+   {
+    "i": 38,
+    "t0": 11612,
+    "t1": 11712,
+    "text": "in"
+   },
+   {
+    "i": 39,
+    "t0": 11725,
+    "t1": 12250,
+    "text": "place"
+   },
+   {
+    "i": 40,
+    "t0": 13112,
+    "t1": 13288,
+    "text": "The"
+   },
+   {
+    "i": 41,
+    "t0": 13300,
+    "t1": 13550,
+    "text": "light"
+   },
+   {
+    "i": 42,
+    "t0": 13562,
+    "t1": 13862,
+    "text": "source"
+   },
+   {
+    "i": 43,
+    "t0": 13875,
+    "t1": 14175,
+    "text": "sends"
+   },
+   {
+    "i": 44,
+    "t0": 14188,
+    "t1": 14412,
+    "text": "light"
+   },
+   {
+    "i": 45,
+    "t0": 14425,
+    "t1": 14562,
+    "text": "up"
+   },
+   {
+    "i": 46,
+    "t0": 14575,
+    "t1": 14738,
+    "text": "through"
+   },
+   {
+    "i": 47,
+    "t0": 14750,
+    "t1": 14800,
+    "text": "a"
+   },
+   {
+    "i": 48,
+    "t0": 14812,
+    "t1": 15088,
+    "text": "hole"
+   },
+   {
+    "i": 49,
+    "t0": 15100,
+    "t1": 15175,
+    "text": "in"
+   },
+   {
+    "i": 50,
+    "t0": 15188,
+    "t1": 15262,
+    "text": "the"
+   },
+   {
+    "i": 51,
+    "t0": 15275,
+    "t1": 15862,
+    "text": "stage"
+   },
+   {
+    "i": 52,
+    "t0": 16725,
+    "t1": 17062,
+    "text": "Light"
+   },
+   {
+    "i": 53,
+    "t0": 17075,
+    "t1": 17262,
+    "text": "then"
+   },
+   {
+    "i": 54,
+    "t0": 17275,
+    "t1": 17712,
+    "text": "passes"
+   },
+   {
+    "i": 55,
+    "t0": 17725,
+    "t1": 17875,
+    "text": "through"
+   },
+   {
+    "i": 56,
+    "t0": 17888,
+    "t1": 17988,
+    "text": "the"
+   },
+   {
+    "i": 57,
+    "t0": 18000,
+    "t1": 18275,
+    "text": "thin"
+   },
+   {
+    "i": 58,
+    "t0": 18288,
+    "t1": 18838,
+    "text": "specimen"
+   },
+   {
+    "i": 59,
+    "t0": 19088,
+    "t1": 19288,
+    "text": "then"
+   },
+   {
+    "i": 60,
+    "t0": 19300,
+    "t1": 19450,
+    "text": "through"
+   },
+   {
+    "i": 61,
+    "t0": 19462,
+    "t1": 19550,
+    "text": "the"
+   },
+   {
+    "i": 62,
+    "t0": 19562,
+    "t1": 20038,
+    "text": "objective"
+   },
+   {
+    "i": 63,
+    "t0": 20050,
+    "t1": 20475,
+    "text": "lens"
+   },
+   {
+    "i": 64,
+    "t0": 20738,
+    "t1": 20962,
+    "text": "then"
+   },
+   {
+    "i": 65,
+    "t0": 20975,
+    "t1": 21125,
+    "text": "through"
+   },
+   {
+    "i": 66,
+    "t0": 21138,
+    "t1": 21250,
+    "text": "the"
+   },
+   {
+    "i": 67,
+    "t0": 21262,
+    "t1": 21700,
+    "text": "eyepiece"
+   },
+   {
+    "i": 68,
+    "t0": 21712,
+    "t1": 22138,
+    "text": "lens"
+   },
+   {
+    "i": 69,
+    "t0": 22300,
+    "t1": 22462,
+    "text": "and"
+   },
+   {
+    "i": 70,
+    "t0": 22475,
+    "t1": 22712,
+    "text": "into"
+   },
+   {
+    "i": 71,
+    "t0": 22725,
+    "t1": 22900,
+    "text": "your"
+   },
+   {
+    "i": 72,
+    "t0": 22912,
+    "t1": 23262,
+    "text": "eye"
+   },
+   {
+    "i": 73,
+    "t0": 24138,
+    "t1": 24475,
+    "text": "Light"
+   },
+   {
+    "i": 74,
+    "t0": 24488,
+    "t1": 24762,
+    "text": "must"
+   },
+   {
+    "i": 75,
+    "t0": 24775,
+    "t1": 25075,
+    "text": "pass"
+   },
+   {
+    "i": 76,
+    "t0": 25088,
+    "t1": 25225,
+    "text": "through"
+   },
+   {
+    "i": 77,
+    "t0": 25238,
+    "t1": 25338,
+    "text": "the"
+   },
+   {
+    "i": 78,
+    "t0": 25350,
+    "t1": 25938,
+    "text": "specimen"
+   },
+   {
+    "i": 79,
+    "t0": 26275,
+    "t1": 26400,
+    "text": "so"
+   },
+   {
+    "i": 80,
+    "t0": 26412,
+    "t1": 26538,
+    "text": "the"
+   },
+   {
+    "i": 81,
+    "t0": 26550,
+    "t1": 27088,
+    "text": "specimen"
+   },
+   {
+    "i": 82,
+    "t0": 27100,
+    "t1": 27350,
+    "text": "has"
+   },
+   {
+    "i": 83,
+    "t0": 27362,
+    "t1": 27450,
+    "text": "to"
+   },
+   {
+    "i": 84,
+    "t0": 27462,
+    "t1": 27588,
+    "text": "be"
+   },
+   {
+    "i": 85,
+    "t0": 27600,
+    "t1": 28038,
+    "text": "thin"
+   },
+   {
+    "i": 86,
+    "t0": 28050,
+    "t1": 28175,
+    "text": "and"
+   },
+   {
+    "i": 87,
+    "t0": 28188,
+    "t1": 28300,
+    "text": "at"
+   },
+   {
+    "i": 88,
+    "t0": 28312,
+    "t1": 28588,
+    "text": "least"
+   },
+   {
+    "i": 89,
+    "t0": 28600,
+    "t1": 28938,
+    "text": "partly"
+   },
+   {
+    "i": 90,
+    "t0": 28950,
+    "t1": 29775,
+    "text": "transparent"
+   },
+   {
+    "i": 91,
+    "t0": 30650,
+    "t1": 31062,
+    "text": "First"
+   },
+   {
+    "i": 92,
+    "t0": 31075,
+    "t1": 31162,
+    "text": "the"
+   },
+   {
+    "i": 93,
+    "t0": 31175,
+    "t1": 31488,
+    "text": "coarse"
+   },
+   {
+    "i": 94,
+    "t0": 31500,
+    "t1": 31862,
+    "text": "focus"
+   },
+   {
+    "i": 95,
+    "t0": 31875,
+    "t1": 32188,
+    "text": "knob"
+   },
+   {
+    "i": 96,
+    "t0": 32200,
+    "t1": 32413,
+    "text": "makes"
+   },
+   {
+    "i": 97,
+    "t0": 32425,
+    "t1": 32487,
+    "text": "a"
+   },
+   {
+    "i": 98,
+    "t0": 32500,
+    "t1": 32838,
+    "text": "large"
+   },
+   {
+    "i": 99,
+    "t0": 32850,
+    "t1": 33312,
+    "text": "movement"
+   },
+   {
+    "i": 100,
+    "t0": 33650,
+    "t1": 33775,
+    "text": "so"
+   },
+   {
+    "i": 101,
+    "t0": 33788,
+    "t1": 33925,
+    "text": "the"
+   },
+   {
+    "i": 102,
+    "t0": 33938,
+    "t1": 34300,
+    "text": "image"
+   },
+   {
+    "i": 103,
+    "t0": 34312,
+    "t1": 34425,
+    "text": "is"
+   },
+   {
+    "i": 104,
+    "t0": 34438,
+    "t1": 34788,
+    "text": "roughly"
+   },
+   {
+    "i": 105,
+    "t0": 34800,
+    "t1": 34912,
+    "text": "in"
+   },
+   {
+    "i": 106,
+    "t0": 34925,
+    "t1": 35550,
+    "text": "focus"
+   },
+   {
+    "i": 107,
+    "t0": 36412,
+    "t1": 36650,
+    "text": "Then"
+   },
+   {
+    "i": 108,
+    "t0": 36662,
+    "t1": 36750,
+    "text": "the"
+   },
+   {
+    "i": 109,
+    "t0": 36762,
+    "t1": 37075,
+    "text": "fine"
+   },
+   {
+    "i": 110,
+    "t0": 37088,
+    "t1": 37500,
+    "text": "focus"
+   },
+   {
+    "i": 111,
+    "t0": 37512,
+    "t1": 37838,
+    "text": "knob"
+   },
+   {
+    "i": 112,
+    "t0": 37850,
+    "t1": 38100,
+    "text": "makes"
+   },
+   {
+    "i": 113,
+    "t0": 38112,
+    "t1": 38175,
+    "text": "a"
+   },
+   {
+    "i": 114,
+    "t0": 38188,
+    "t1": 38512,
+    "text": "tiny"
+   },
+   {
+    "i": 115,
+    "t0": 38525,
+    "t1": 39000,
+    "text": "movement"
+   },
+   {
+    "i": 116,
+    "t0": 39312,
+    "t1": 39438,
+    "text": "so"
+   },
+   {
+    "i": 117,
+    "t0": 39450,
+    "t1": 39575,
+    "text": "the"
+   },
+   {
+    "i": 118,
+    "t0": 39588,
+    "t1": 39962,
+    "text": "image"
+   },
+   {
+    "i": 119,
+    "t0": 39975,
+    "t1": 40362,
+    "text": "becomes"
+   },
+   {
+    "i": 120,
+    "t0": 40375,
+    "t1": 40875,
+    "text": "sharp"
+   },
+   {
+    "i": 121,
+    "t0": 41738,
+    "t1": 41925,
+    "text": "The"
+   },
+   {
+    "i": 122,
+    "t0": 41938,
+    "t1": 42212,
+    "text": "arm"
+   },
+   {
+    "i": 123,
+    "t0": 42225,
+    "t1": 42312,
+    "text": "and"
+   },
+   {
+    "i": 124,
+    "t0": 42325,
+    "t1": 42400,
+    "text": "the"
+   },
+   {
+    "i": 125,
+    "t0": 42412,
+    "t1": 42712,
+    "text": "heavy"
+   },
+   {
+    "i": 126,
+    "t0": 42725,
+    "t1": 43062,
+    "text": "base"
+   },
+   {
+    "i": 127,
+    "t0": 43075,
+    "t1": 43325,
+    "text": "hold"
+   },
+   {
+    "i": 128,
+    "t0": 43338,
+    "t1": 43762,
+    "text": "everything"
+   },
+   {
+    "i": 129,
+    "t0": 43775,
+    "t1": 44350,
+    "text": "together"
+   },
+   {
+    "i": 130,
+    "t0": 44362,
+    "t1": 44488,
+    "text": "and"
+   },
+   {
+    "i": 131,
+    "t0": 44500,
+    "t1": 44750,
+    "text": "keep"
+   },
+   {
+    "i": 132,
+    "t0": 44762,
+    "t1": 44838,
+    "text": "the"
+   },
+   {
+    "i": 133,
+    "t0": 44850,
+    "t1": 45475,
+    "text": "microscope"
+   },
+   {
+    "i": 134,
+    "t0": 45488,
+    "t1": 45962,
+    "text": "steady"
+   }
+  ],
+  "visemes": []
+ },
+ "narration": "Let's look at a light microscope, which uses light and glass lenses to show cells too small to see with the eye alone. The slide rests on the stage, the flat platform, and the stage clips hold it in place. The light source sends light up through a hole in the stage. Light then passes through the thin specimen, then through the objective lens, then through the eyepiece lens, and into your eye. Light must pass through the specimen, so the specimen has to be thin and at least partly transparent. First the coarse focus knob makes a large movement, so the image is roughly in focus. Then the fine focus knob makes a tiny movement, so the image becomes sharp. The arm and the heavy base hold everything together and keep the microscope steady.",
+ "narration_sentences": [
+  "Let's look at a light microscope, which uses light and glass lenses to show cells too small to see with the eye alone.",
+  "The slide rests on the stage, the flat platform, and the stage clips hold it in place.",
+  "The light source sends light up through a hole in the stage.",
+  "Light then passes through the thin specimen, then through the objective lens, then through the eyepiece lens, and into your eye.",
+  "Light must pass through the specimen, so the specimen has to be thin and at least partly transparent.",
+  "First the coarse focus knob makes a large movement, so the image is roughly in focus.",
+  "Then the fine focus knob makes a tiny movement, so the image becomes sharp.",
+  "The arm and the heavy base hold everything together and keep the microscope steady."
+ ],
+ "board_plan": [
+  {
+   "kind": "illustration",
+   "asset_key": "light_microscope",
+   "cue": "Let's look at a light microscope"
+  },
+  {
+   "kind": "label",
+   "asset_key": "light_microscope",
+   "part": "stage",
+   "text": "Stage",
+   "cue": "the flat platform"
+  },
+  {
+   "kind": "label",
+   "asset_key": "light_microscope",
+   "part": "light source",
+   "text": "Light source",
+   "cue": "The light source sends light up"
+  },
+  {
+   "kind": "label",
+   "asset_key": "light_microscope",
+   "part": "objective lens",
+   "text": "Objective lens",
+   "cue": "then through the objective lens"
+  },
+  {
+   "kind": "label",
+   "asset_key": "light_microscope",
+   "part": "eyepiece lens",
+   "text": "Eyepiece lens",
+   "cue": "then through the eyepiece lens"
+  },
+  {
+   "kind": "write",
+   "id": "w1",
+   "text": "Specimen: thin, partly transparent",
+   "role": "caption",
+   "cue": "thin and at least partly transparent"
+  },
+  {
+   "kind": "write",
+   "id": "w2",
+   "text": "Coarse first, then fine",
+   "role": "term",
+   "cue": "First the coarse focus knob"
+  }
+ ],
+ "problems": [
+  "ungrounded sentence (0.50): Now let's focus the image."
+ ],
+ "figures": [
+  {
+   "ref": "fig:4f060a41-0a6a-43e9-9d2f-871adc86857e",
+   "asset_key": "light_microscope"
+  }
+ ],
+ "gestures": [
+  {
+   "t": 100,
+   "kind": "point",
+   "target": "ill"
+  },
+  {
+   "t": 21138,
+   "kind": "point",
+   "target": "l1"
+  },
+  {
+   "t": 21138,
+   "kind": "point",
+   "target": "l2"
+  },
+  {
+   "t": 21138,
+   "kind": "point",
+   "target": "l3"
+  },
+  {
+   "t": 21138,
+   "kind": "point",
+   "target": "l4"
+  },
+  {
+   "t": 27600,
+   "kind": "write",
+   "target": "w1",
+   "until": 29775
+  }
+ ],
+ "origin": "prepared",
+ "checkpoints": [
+  0,
+  100,
+  20738,
+  21138,
+  21138,
+  21138,
+  21138,
+  21138,
+  21138,
+  21138,
+  27600
+ ],
+ "tts": {
+  "requested": "edge-aria",
+  "used": "edge-aria",
+  "provider": "edge",
+  "downgraded": false,
+  "reason": null,
+  "chars": 743,
+  "stats": {}
+ },
+ "build": {
+  "wall_s": 88.0,
+  "dry": false
+ },
+ "draft_hash": "dc8b3c7aae01"
+}

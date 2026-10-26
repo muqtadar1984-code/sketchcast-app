@@ -5,8 +5,8 @@
 // hit map for Option S), mounts the runtime once, and renders controls + log.
 
 import { useEffect, useRef, useState } from "react";
-import { validateSegment, type OpentypeLike, type Segment } from "./engine";
-import { SpikeRuntime, type HitMap, type Mode, type PlayerState, type Rig } from "./runtime";
+import { validateSegment, type OpentypeLike, type Segment } from "@/sk/board/engine";
+import { SpikeRuntime, type HitMap, type Mode, type PlayerState, type Rig } from "@/sk/board/runtime";
 
 // The SK characters (cut into layers by tools/sk-s1/make_rig.py): A (Malay
 // woman, tudung) speaks with female voices, B (Indian man, glasses) with male
@@ -129,7 +129,7 @@ export default function SpikePlayer({ base, mode = "E" }: { base: string; mode?:
             ⏸ Pause
           </button>
           <button className="h-9 px-3 border rounded" onClick={() => void runtimeRef.current?.interrupt()} disabled={state !== "playing"} title="Space">
-            ✋ Interrupt: “{seg?.aside.question ?? "…"}”
+            ✋ Interrupt: “{seg?.aside?.question ?? "…"}”
           </button>
           <button className="h-9 px-3 border rounded" onClick={() => location.reload()} disabled={state === "loading"}>
             ⟳ Reload mid-segment

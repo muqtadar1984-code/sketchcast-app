@@ -1,0 +1,968 @@
+{
+ "segment_id": "s4-explain-main",
+ "asset_kind": "explain",
+ "style": "main",
+ "unit_key": "s4",
+ "language": "en",
+ "voice": "edge-aria",
+ "voice_gender": "female",
+ "audio": {
+  "uri": "audio.mp3",
+  "duration_ms": 49700
+ },
+ "clip": {
+  "uri": "clip.mp4",
+  "duration_ms": 49708
+ },
+ "hitmap": "hitmap.json",
+ "marks": {
+  "words": [
+   {
+    "i": 0,
+    "t0": 100,
+    "t1": 250,
+    "text": "To"
+   },
+   {
+    "i": 1,
+    "t0": 262,
+    "t1": 475,
+    "text": "see"
+   },
+   {
+    "i": 2,
+    "t0": 488,
+    "t1": 938,
+    "text": "cells"
+   },
+   {
+    "i": 3,
+    "t0": 1088,
+    "t1": 1225,
+    "text": "you"
+   },
+   {
+    "i": 4,
+    "t0": 1238,
+    "t1": 1550,
+    "text": "first"
+   },
+   {
+    "i": 5,
+    "t0": 1562,
+    "t1": 1762,
+    "text": "have"
+   },
+   {
+    "i": 6,
+    "t0": 1775,
+    "t1": 1862,
+    "text": "to"
+   },
+   {
+    "i": 7,
+    "t0": 1875,
+    "t1": 2238,
+    "text": "prepare"
+   },
+   {
+    "i": 8,
+    "t0": 2250,
+    "t1": 2562,
+    "text": "them"
+   },
+   {
+    "i": 9,
+    "t0": 3425,
+    "t1": 3562,
+    "text": "A"
+   },
+   {
+    "i": 10,
+    "t0": 3575,
+    "t1": 4125,
+    "text": "temporary"
+   },
+   {
+    "i": 11,
+    "t0": 4138,
+    "t1": 4600,
+    "text": "slide"
+   },
+   {
+    "i": 12,
+    "t0": 4788,
+    "t1": 5112,
+    "text": "also"
+   },
+   {
+    "i": 13,
+    "t0": 5125,
+    "t1": 5412,
+    "text": "called"
+   },
+   {
+    "i": 14,
+    "t0": 5425,
+    "t1": 5475,
+    "text": "a"
+   },
+   {
+    "i": 15,
+    "t0": 5488,
+    "t1": 5700,
+    "text": "wet"
+   },
+   {
+    "i": 16,
+    "t0": 5712,
+    "t1": 6050,
+    "text": "mount"
+   },
+   {
+    "i": 17,
+    "t0": 6325,
+    "t1": 6412,
+    "text": "is"
+   },
+   {
+    "i": 18,
+    "t0": 6425,
+    "t1": 6488,
+    "text": "a"
+   },
+   {
+    "i": 19,
+    "t0": 6500,
+    "t1": 6800,
+    "text": "quick"
+   },
+   {
+    "i": 20,
+    "t0": 6812,
+    "t1": 7488,
+    "text": "preparation"
+   },
+   {
+    "i": 21,
+    "t0": 7500,
+    "t1": 7638,
+    "text": "that"
+   },
+   {
+    "i": 22,
+    "t0": 7650,
+    "t1": 8050,
+    "text": "lasts"
+   },
+   {
+    "i": 23,
+    "t0": 8062,
+    "t1": 8338,
+    "text": "only"
+   },
+   {
+    "i": 24,
+    "t0": 8350,
+    "t1": 8525,
+    "text": "while"
+   },
+   {
+    "i": 25,
+    "t0": 8538,
+    "t1": 8675,
+    "text": "you"
+   },
+   {
+    "i": 26,
+    "t0": 8688,
+    "t1": 8900,
+    "text": "make"
+   },
+   {
+    "i": 27,
+    "t0": 8912,
+    "t1": 9062,
+    "text": "your"
+   },
+   {
+    "i": 28,
+    "t0": 9075,
+    "t1": 9862,
+    "text": "observation"
+   },
+   {
+    "i": 29,
+    "t0": 10725,
+    "t1": 10912,
+    "text": "The"
+   },
+   {
+    "i": 30,
+    "t0": 10925,
+    "t1": 11450,
+    "text": "specimen"
+   },
+   {
+    "i": 31,
+    "t0": 11462,
+    "t1": 11700,
+    "text": "must"
+   },
+   {
+    "i": 32,
+    "t0": 11712,
+    "t1": 11825,
+    "text": "be"
+   },
+   {
+    "i": 33,
+    "t0": 11838,
+    "t1": 12062,
+    "text": "thin"
+   },
+   {
+    "i": 34,
+    "t0": 12075,
+    "t1": 12325,
+    "text": "enough"
+   },
+   {
+    "i": 35,
+    "t0": 12338,
+    "t1": 12475,
+    "text": "for"
+   },
+   {
+    "i": 36,
+    "t0": 12488,
+    "t1": 12725,
+    "text": "light"
+   },
+   {
+    "i": 37,
+    "t0": 12738,
+    "t1": 12825,
+    "text": "to"
+   },
+   {
+    "i": 38,
+    "t0": 12838,
+    "t1": 13150,
+    "text": "pass"
+   },
+   {
+    "i": 39,
+    "t0": 13162,
+    "t1": 13462,
+    "text": "through"
+   },
+   {
+    "i": 40,
+    "t0": 13825,
+    "t1": 13988,
+    "text": "so"
+   },
+   {
+    "i": 41,
+    "t0": 14000,
+    "t1": 14075,
+    "text": "a"
+   },
+   {
+    "i": 42,
+    "t0": 14088,
+    "t1": 14438,
+    "text": "single"
+   },
+   {
+    "i": 43,
+    "t0": 14450,
+    "t1": 14750,
+    "text": "layer"
+   },
+   {
+    "i": 44,
+    "t0": 14762,
+    "t1": 14850,
+    "text": "of"
+   },
+   {
+    "i": 45,
+    "t0": 14862,
+    "t1": 15212,
+    "text": "cells"
+   },
+   {
+    "i": 46,
+    "t0": 15225,
+    "t1": 15325,
+    "text": "is"
+   },
+   {
+    "i": 47,
+    "t0": 15338,
+    "t1": 15912,
+    "text": "ideal"
+   },
+   {
+    "i": 48,
+    "t0": 16775,
+    "t1": 17000,
+    "text": "Cut"
+   },
+   {
+    "i": 49,
+    "t0": 17012,
+    "t1": 17138,
+    "text": "an"
+   },
+   {
+    "i": 50,
+    "t0": 17150,
+    "t1": 17575,
+    "text": "onion"
+   },
+   {
+    "i": 51,
+    "t0": 17588,
+    "t1": 17712,
+    "text": "and"
+   },
+   {
+    "i": 52,
+    "t0": 17725,
+    "t1": 18012,
+    "text": "peel"
+   },
+   {
+    "i": 53,
+    "t0": 18025,
+    "t1": 18188,
+    "text": "off"
+   },
+   {
+    "i": 54,
+    "t0": 18200,
+    "t1": 18262,
+    "text": "a"
+   },
+   {
+    "i": 55,
+    "t0": 18275,
+    "t1": 18675,
+    "text": "thin"
+   },
+   {
+    "i": 56,
+    "t0": 18900,
+    "t1": 19562,
+    "text": "transparent"
+   },
+   {
+    "i": 57,
+    "t0": 19575,
+    "t1": 19862,
+    "text": "layer"
+   },
+   {
+    "i": 58,
+    "t0": 19875,
+    "t1": 19962,
+    "text": "of"
+   },
+   {
+    "i": 59,
+    "t0": 19975,
+    "t1": 20362,
+    "text": "skin"
+   },
+   {
+    "i": 60,
+    "t0": 20375,
+    "t1": 20538,
+    "text": "from"
+   },
+   {
+    "i": 61,
+    "t0": 20550,
+    "t1": 20638,
+    "text": "the"
+   },
+   {
+    "i": 62,
+    "t0": 20650,
+    "t1": 21125,
+    "text": "inside"
+   },
+   {
+    "i": 63,
+    "t0": 21138,
+    "t1": 21188,
+    "text": "of"
+   },
+   {
+    "i": 64,
+    "t0": 21200,
+    "t1": 21275,
+    "text": "a"
+   },
+   {
+    "i": 65,
+    "t0": 21288,
+    "t1": 21638,
+    "text": "fleshy"
+   },
+   {
+    "i": 66,
+    "t0": 21650,
+    "t1": 22088,
+    "text": "leaf"
+   },
+   {
+    "i": 67,
+    "t0": 22950,
+    "t1": 23212,
+    "text": "Lay"
+   },
+   {
+    "i": 68,
+    "t0": 23225,
+    "t1": 23338,
+    "text": "the"
+   },
+   {
+    "i": 69,
+    "t0": 23350,
+    "t1": 23638,
+    "text": "piece"
+   },
+   {
+    "i": 70,
+    "t0": 23650,
+    "t1": 23988,
+    "text": "flat"
+   },
+   {
+    "i": 71,
+    "t0": 24000,
+    "t1": 24100,
+    "text": "on"
+   },
+   {
+    "i": 72,
+    "t0": 24112,
+    "t1": 24175,
+    "text": "a"
+   },
+   {
+    "i": 73,
+    "t0": 24188,
+    "t1": 24500,
+    "text": "clean"
+   },
+   {
+    "i": 74,
+    "t0": 24512,
+    "t1": 24875,
+    "text": "slide"
+   },
+   {
+    "i": 75,
+    "t0": 24888,
+    "t1": 25188,
+    "text": "using"
+   },
+   {
+    "i": 76,
+    "t0": 25200,
+    "t1": 25900,
+    "text": "forceps"
+   },
+   {
+    "i": 77,
+    "t0": 26762,
+    "t1": 27025,
+    "text": "Add"
+   },
+   {
+    "i": 78,
+    "t0": 27038,
+    "t1": 27288,
+    "text": "one"
+   },
+   {
+    "i": 79,
+    "t0": 27300,
+    "t1": 27600,
+    "text": "drop"
+   },
+   {
+    "i": 80,
+    "t0": 27612,
+    "t1": 27712,
+    "text": "of"
+   },
+   {
+    "i": 81,
+    "t0": 27725,
+    "t1": 28212,
+    "text": "iodine"
+   },
+   {
+    "i": 82,
+    "t0": 28225,
+    "t1": 28838,
+    "text": "solution"
+   },
+   {
+    "i": 83,
+    "t0": 29700,
+    "t1": 29975,
+    "text": "This"
+   },
+   {
+    "i": 84,
+    "t0": 29988,
+    "t1": 30112,
+    "text": "is"
+   },
+   {
+    "i": 85,
+    "t0": 30125,
+    "t1": 30238,
+    "text": "the"
+   },
+   {
+    "i": 86,
+    "t0": 30250,
+    "t1": 30675,
+    "text": "stain"
+   },
+   {
+    "i": 87,
+    "t0": 30912,
+    "t1": 31025,
+    "text": "and"
+   },
+   {
+    "i": 88,
+    "t0": 31038,
+    "t1": 31112,
+    "text": "it"
+   },
+   {
+    "i": 89,
+    "t0": 31125,
+    "t1": 31250,
+    "text": "will"
+   },
+   {
+    "i": 90,
+    "t0": 31262,
+    "t1": 31475,
+    "text": "make"
+   },
+   {
+    "i": 91,
+    "t0": 31488,
+    "t1": 31575,
+    "text": "the"
+   },
+   {
+    "i": 92,
+    "t0": 31588,
+    "t1": 32050,
+    "text": "nucleus"
+   },
+   {
+    "i": 93,
+    "t0": 32062,
+    "t1": 32325,
+    "text": "show"
+   },
+   {
+    "i": 94,
+    "t0": 32338,
+    "t1": 32675,
+    "text": "up"
+   },
+   {
+    "i": 95,
+    "t0": 33538,
+    "t1": 33975,
+    "text": "Lower"
+   },
+   {
+    "i": 96,
+    "t0": 33988,
+    "t1": 34038,
+    "text": "a"
+   },
+   {
+    "i": 97,
+    "t0": 34050,
+    "t1": 34688,
+    "text": "coverslip"
+   },
+   {
+    "i": 98,
+    "t0": 34700,
+    "t1": 34788,
+    "text": "at"
+   },
+   {
+    "i": 99,
+    "t0": 34800,
+    "t1": 34988,
+    "text": "an"
+   },
+   {
+    "i": 100,
+    "t0": 35000,
+    "t1": 35375,
+    "text": "angle"
+   },
+   {
+    "i": 101,
+    "t0": 35388,
+    "t1": 35725,
+    "text": "using"
+   },
+   {
+    "i": 102,
+    "t0": 35738,
+    "t1": 35788,
+    "text": "a"
+   },
+   {
+    "i": 103,
+    "t0": 35800,
+    "t1": 36200,
+    "text": "mounted"
+   },
+   {
+    "i": 104,
+    "t0": 36212,
+    "t1": 36638,
+    "text": "needle"
+   },
+   {
+    "i": 105,
+    "t0": 37500,
+    "t1": 37775,
+    "text": "This"
+   },
+   {
+    "i": 106,
+    "t0": 37788,
+    "t1": 38250,
+    "text": "pushes"
+   },
+   {
+    "i": 107,
+    "t0": 38262,
+    "t1": 38475,
+    "text": "air"
+   },
+   {
+    "i": 108,
+    "t0": 38488,
+    "t1": 38738,
+    "text": "out"
+   },
+   {
+    "i": 109,
+    "t0": 38750,
+    "t1": 39138,
+    "text": "instead"
+   },
+   {
+    "i": 110,
+    "t0": 39150,
+    "t1": 39238,
+    "text": "of"
+   },
+   {
+    "i": 111,
+    "t0": 39250,
+    "t1": 39625,
+    "text": "sealing"
+   },
+   {
+    "i": 112,
+    "t0": 39638,
+    "t1": 39712,
+    "text": "it"
+   },
+   {
+    "i": 113,
+    "t0": 39725,
+    "t1": 40050,
+    "text": "in"
+   },
+   {
+    "i": 114,
+    "t0": 40912,
+    "t1": 41325,
+    "text": "Cells"
+   },
+   {
+    "i": 115,
+    "t0": 41338,
+    "t1": 41425,
+    "text": "are"
+   },
+   {
+    "i": 116,
+    "t0": 41438,
+    "t1": 41850,
+    "text": "mostly"
+   },
+   {
+    "i": 117,
+    "t0": 41862,
+    "t1": 42388,
+    "text": "colourless"
+   },
+   {
+    "i": 118,
+    "t0": 42400,
+    "t1": 42500,
+    "text": "and"
+   },
+   {
+    "i": 119,
+    "t0": 42512,
+    "t1": 43225,
+    "text": "transparent"
+   },
+   {
+    "i": 120,
+    "t0": 43562,
+    "t1": 43688,
+    "text": "so"
+   },
+   {
+    "i": 121,
+    "t0": 43700,
+    "t1": 43850,
+    "text": "their"
+   },
+   {
+    "i": 122,
+    "t0": 43862,
+    "t1": 44188,
+    "text": "parts"
+   },
+   {
+    "i": 123,
+    "t0": 44200,
+    "t1": 44300,
+    "text": "are"
+   },
+   {
+    "i": 124,
+    "t0": 44312,
+    "t1": 44562,
+    "text": "hard"
+   },
+   {
+    "i": 125,
+    "t0": 44575,
+    "t1": 44638,
+    "text": "to"
+   },
+   {
+    "i": 126,
+    "t0": 44650,
+    "t1": 45062,
+    "text": "see"
+   },
+   {
+    "i": 127,
+    "t0": 45938,
+    "t1": 46538,
+    "text": "Iodine"
+   },
+   {
+    "i": 128,
+    "t0": 46550,
+    "t1": 46925,
+    "text": "stains"
+   },
+   {
+    "i": 129,
+    "t0": 46938,
+    "t1": 47025,
+    "text": "the"
+   },
+   {
+    "i": 130,
+    "t0": 47038,
+    "t1": 47562,
+    "text": "nucleus"
+   },
+   {
+    "i": 131,
+    "t0": 47575,
+    "t1": 47675,
+    "text": "of"
+   },
+   {
+    "i": 132,
+    "t0": 47688,
+    "t1": 48050,
+    "text": "onion"
+   },
+   {
+    "i": 133,
+    "t0": 48062,
+    "t1": 48388,
+    "text": "cells"
+   },
+   {
+    "i": 134,
+    "t0": 48400,
+    "t1": 49100,
+    "text": "yellow-brown"
+   }
+  ],
+  "visemes": []
+ },
+ "narration": "To see cells, you first have to prepare them. A temporary slide, also called a wet mount, is a quick preparation that lasts only while you make your observation. The specimen must be thin enough for light to pass through, so a single layer of cells is ideal. Cut an onion and peel off a thin, transparent layer of skin from the inside of a fleshy leaf. Lay the piece flat on a clean slide using forceps. Add one drop of iodine solution. This is the stain, and it will make the nucleus show up. Lower a coverslip at an angle using a mounted needle. This pushes air out instead of sealing it in. Cells are mostly colourless and transparent, so their parts are hard to see. Iodine stains the nucleus of onion cells yellow-brown.",
+ "narration_sentences": [
+  "To see cells, you first have to prepare them.",
+  "A temporary slide, also called a wet mount, is a quick preparation that lasts only while you make your observation.",
+  "The specimen must be thin enough for light to pass through, so a single layer of cells is ideal.",
+  "Cut an onion and peel off a thin, transparent layer of skin from the inside of a fleshy leaf.",
+  "Lay the piece flat on a clean slide using forceps.",
+  "Add one drop of iodine solution.",
+  "This is the stain, and it will make the nucleus show up.",
+  "Lower a coverslip at an angle using a mounted needle.",
+  "This pushes air out instead of sealing it in.",
+  "Cells are mostly colourless and transparent, so their parts are hard to see.",
+  "Iodine stains the nucleus of onion cells yellow-brown."
+ ],
+ "board_plan": [
+  {
+   "kind": "write",
+   "id": "w1",
+   "text": "Temporary slide (wet mount)",
+   "role": "term",
+   "cue": "A temporary slide, also called a wet mount"
+  },
+  {
+   "kind": "write",
+   "id": "w2",
+   "text": "single layer of cells",
+   "role": "caption",
+   "cue": "a single layer of cells is ideal"
+  },
+  {
+   "kind": "illustration",
+   "asset_key": "onion_cell_slide",
+   "cue": "Cut an onion and peel off a thin, transparent layer of skin"
+  },
+  {
+   "kind": "label",
+   "asset_key": "onion_cell_slide",
+   "part": "iodine drop",
+   "text": "iodine drop (stain)",
+   "cue": "Add one drop of iodine solution."
+  },
+  {
+   "kind": "label",
+   "asset_key": "onion_cell_slide",
+   "part": "coverslip",
+   "text": "coverslip",
+   "cue": "Lower a coverslip at an angle"
+  },
+  {
+   "kind": "label",
+   "asset_key": "onion_cell_slide",
+   "part": "nucleus",
+   "text": "nucleus",
+   "cue": "it will make the nucleus show up"
+  },
+  {
+   "kind": "circle",
+   "target": "w2",
+   "cue": "so a single layer of cells is ideal"
+  }
+ ],
+ "problems": [],
+ "figures": [
+  {
+   "ref": "fig:5bb8d9e4-af13-40a3-97f7-8bbb1368f02e",
+   "asset_key": "onion_cell_slide"
+  }
+ ],
+ "gestures": [
+  {
+   "t": 16775,
+   "kind": "point",
+   "target": "ill"
+  },
+  {
+   "t": 31438,
+   "kind": "point",
+   "target": "l1"
+  },
+  {
+   "t": 33938,
+   "kind": "point",
+   "target": "l2"
+  },
+  {
+   "t": 33938,
+   "kind": "point",
+   "target": "l3"
+  },
+  {
+   "t": 33938,
+   "kind": "write",
+   "target": "w1",
+   "until": 36563
+  },
+  {
+   "t": 33938,
+   "kind": "write",
+   "target": "w2",
+   "until": 35850
+  },
+  {
+   "t": 36000,
+   "kind": "point",
+   "target": "w2"
+  }
+ ],
+ "origin": "prepared",
+ "checkpoints": [
+  0,
+  16775,
+  31038,
+  31438,
+  33538,
+  33938,
+  33938,
+  33938,
+  33938,
+  33938,
+  36000
+ ],
+ "tts": {
+  "requested": "edge-aria",
+  "used": "edge-aria",
+  "provider": "edge",
+  "downgraded": false,
+  "reason": null,
+  "chars": 725,
+  "stats": {}
+ },
+ "build": {
+  "wall_s": 74.0,
+  "dry": false
+ },
+ "draft_hash": "dc8b3c7aae01"
+}
