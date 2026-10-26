@@ -498,8 +498,11 @@ export function catalogueOwnerId(): string | null {
 }
 
 /**
- * SK, the AI tutor (plan 2026-10-26). Gates every /api/sk/* route; the client
- * pages additionally read NEXT_PUBLIC_FEATURE_SK. OFF by default.
+ * SK, the animated AI tutor (plan 2026-10-26; B4 teacher loop). Gates every
+ * /api/sk/* route (404 when off — authoritative). The student page under /sk
+ * additionally reads NEXT_PUBLIC_FEATURE_SK so the surface stays dark while
+ * the routes are off. OFF by default: production is unchanged until a founder
+ * flips both variables.
  */
 export function skEnabled(): boolean {
   return process.env.FEATURE_SK === "true";

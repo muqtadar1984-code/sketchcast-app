@@ -1,0 +1,182 @@
+// SK B4 — server-side wiring for the /api/sk routes: the graphs on disk, the
+// segment/hit-map loaders (local files under public/ for the POC; S3 +
+// CloudFront later), the two model providers, the in-memory session store, and
+// the auth + feature gate every route runs. Everything a test needs to replace
+// goes through `__setSkDepsForTests`.
+//
+// Never imported by client code (it reads the filesystem and env).
+
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { NextResponse } from "next/server";
+import { claudeConfigured } from "@/utils/claude-backend";
+import { skEnabled } from "@/utils/flags";
+import type { LLMProvider } from "@/utils/assistant/provider";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
+import { normaliseSegment, validateSegment, type Segment } from "./board/engine";
+import { parseGraph } from "./graph";
+import { StaticItemBank, type ItemBank } from "./items";
+import { SupabaseItemBank } from "./items-supabase";
+import type { LoopDeps } from "./loop";
+import { InMemorySessionStore, type SessionStore } from "./store";
+import { SupabaseSessionStore, skDbFrom } from "./store-supabase";
+import type { TeachingGraph } from "./types";
+
+/** Graph manifests served from public/, as "<url path>" entries. The one-unit
+ * stand-in stays alongside the B3 packager's Chapter 2 output so the check /
+ * grading flow (which needs items the packager does not yet emit) can be tried. */
+export const DEFAULT_GRAPH_URIS = ["/sk-s1/graph-ch2.json", "/sk-s1/ch02/graph.json"];
+
+export type SkDeps = {
+  store: SessionStore;
+  items: ItemBank;
+  graphs: TeachingGraph[];
+  routerProvider?: LLMProvider;
+  teacherProvider?: LLMProvider;
+  loadSegment: LoopDeps["loadSegment"];
+  loadHitmapElementIds: LoopDeps["loadHitmapElementIds"];
+};
+
+const PUBLIC_DIR = () => path.join(process.cwd(), "public");
+
+/** Only files under public/sk-s1/ may be read, by a clean absolute URL path. */
+export function publicPathFor(uri: string): string {
+  if (!/^\/sk-s1\/[a-z0-9_\-./]+$/i.test(uri) || uri.includes("..")) throw new Error(`refusing to read ${uri}`);
+  return path.join(PUBLIC_DIR(), ...uri.split("/").filter(Boolean));
+}
+
+async function readJson(uri: string): Promise<unknown> {
+  return JSON.parse(await readFile(publicPathFor(uri), "utf-8")) as unknown;
+}
+
+const segmentCache = new Map<string, Promise<Segment>>();
+export function loadSegmentFromPublic(uri: string): Promise<Segment> {
+  let p = segmentCache.get(uri);
+  if (!p) {
+    p = readJson(uri).then((raw) => validateSegment(normaliseSegment(raw as Segment)));
+    p.catch(() => segmentCache.delete(uri));
+    segmentCache.set(uri, p);
+  }
+  return p;
+}
+
+/** Hit-map target ids: element ids, each illustration key and "key.region". */
+export async function loadHitmapTargetsFromPublic(uri: string): Promise<string[]> {
+  const hm = (await readJson(uri)) as { elements?: Record<string, unknown>; asset?: Record<string, { regions?: Record<string, unknown> }> };
+  const out = new Set<string>(Object.keys(hm.elements ?? {}));
+  for (const [key, a] of Object.entries(hm.asset ?? {})) {
+    out.add(key);
+    for (const r of Object.keys(a.regions ?? {})) out.add(`${key}.${r}`);
+  }
+  return [...out];
+}
+
+async function loadGraphs(uris: string[]): Promise<TeachingGraph[]> {
+  const out: TeachingGraph[] = [];
+  for (const uri of uris) {
+    try {
+      out.push(parseGraph(await readJson(uri), uri.slice(0, uri.lastIndexOf("/") + 1)));
+    } catch (e) {
+      console.error(`[sk] graph ${uri} skipped:`, (e as Error).message);
+    }
+  }
+  return out;
+}
+
+function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> {
+  if (!claudeConfigured()) return {};
+  // Lazy so a missing SDK key never breaks the regex-only path.
+  return {
+    get routerProvider() {
+      return lazyProvider(process.env.SK_ROUTER_MODEL || "claude-haiku-5-5");
+    },
+    get teacherProvider() {
+      return lazyProvider(process.env.SK_TEACHER_MODEL || "claude-sonnet-5-5");
+    },
+  };
+}
+
+const providerCache = new Map<string, LLMProvider>();
+function lazyProvider(model: string): LLMProvider {
+  let p = providerCache.get(model);
+  if (!p) {
+    p = {
+      id: "anthropic",
+      model,
+      async *stream(opts) {
+        const { AnthropicProvider } = await import("@/utils/assistant/providers/anthropic");
+        yield* new AnthropicProvider(model).stream(opts);
+      },
+    };
+    providerCache.set(model, p);
+  }
+  return p;
+}
+
+let deps: Promise<SkDeps> | null = null;
+let override: Partial<SkDeps> | null = null;
+
+/** B5: `SK_STORE=supabase` keeps sessions, events, attempts and mastery in
+ * the 0157 tables through the admin client, and serves items from
+ * `topic_questions`. Unset (the default) is the B4 in-memory store and the
+ * U4 stand-in items — nothing changes until the flag is set. */
+export function persistence(): Pick<SkDeps, "store" | "items"> {
+  if (process.env.SK_STORE === "supabase") {
+    const db = skDbFrom(createAdminClient());
+    return { store: new SupabaseSessionStore(db), items: new SupabaseItemBank(db) };
+  }
+  return { store: new InMemorySessionStore(), items: new StaticItemBank() };
+}
+
+export function skDeps(): Promise<SkDeps> {
+  if (!deps) {
+    deps = (async () => {
+      const uris = (process.env.SK_GRAPHS || "").split(",").map((s) => s.trim()).filter(Boolean);
+      const base: SkDeps = {
+        ...persistence(),
+        graphs: await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS),
+        loadSegment: loadSegmentFromPublic,
+        loadHitmapElementIds: loadHitmapTargetsFromPublic,
+        ...providers(),
+      };
+      return { ...base, ...(override ?? {}) };
+    })();
+  }
+  return deps;
+}
+
+/** Tests: replace any part of the wiring; `null` resets to the real thing. */
+export function __setSkDepsForTests(d: Partial<SkDeps> | null): void {
+  override = d;
+  deps = null;
+}
+
+/** The LoopDeps for one graph (the loop is single-graph; the session names it). */
+export function loopDepsFor(d: SkDeps, productId: string, chapter: number): LoopDeps | null {
+  const graph = d.graphs.find((g) => g.product_id === productId && g.chapter === chapter);
+  if (!graph) return null;
+  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds };
+}
+
+// ── Gate + auth, shared by every route ──────────────────────────────────────
+export type Gate = { ok: true; userId: string } | { ok: false; response: NextResponse };
+
+export async function gate(): Promise<Gate> {
+  if (!skEnabled()) return { ok: false, response: NextResponse.json({ error: "Not available." }, { status: 404 }) };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, response: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
+  return { ok: true, userId: user.id };
+}
+
+export async function readBody<T extends Record<string, unknown>>(request: Request): Promise<T | null> {
+  try {
+    const b = (await request.json()) as unknown;
+    return b && typeof b === "object" && !Array.isArray(b) ? (b as T) : null;
+  } catch {
+    return null;
+  }
+}

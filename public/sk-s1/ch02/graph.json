@@ -1,0 +1,206 @@
+{
+ "graph_id": "cells-structure-function-organisation-ch02-v1",
+ "product": "cells-structure-function-organisation",
+ "chapter": 2,
+ "version": 1,
+ "language": "en",
+ "status": "draft",
+ "draft_hash": "dc8b3c7aae01",
+ "built_from": {
+  "draft": "ch02-draft.json",
+  "author_model": "claude-sonnet-5-5",
+  "voice": "edge-aria"
+ },
+ "units": [
+  {
+   "unit_key": "s1",
+   "title": "Too small to see: why we need a microscope",
+   "order": 0,
+   "node_codes": [
+    "7Bs.01"
+   ],
+   "prereqs": [],
+   "assets": [
+    {
+     "asset_id": "s1-explain-main",
+     "kind": "explain",
+     "style": "main",
+     "segment": "s1/explain-main/segment.json",
+     "origin": "prepared"
+    }
+   ],
+   "checks": {
+    "item_indexes": [
+     0,
+     10
+    ],
+    "assignment": "heuristic (stem↔unit text overlap)",
+    "auto_markable": 1
+   },
+   "figures": []
+  },
+  {
+   "unit_key": "s2",
+   "title": "Parts of a light microscope",
+   "order": 1,
+   "node_codes": [
+    "7Bs.01"
+   ],
+   "prereqs": [
+    "s1"
+   ],
+   "assets": [
+    {
+     "asset_id": "s2-explain-main",
+     "kind": "explain",
+     "style": "main",
+     "segment": "s2/explain-main/segment.json",
+     "origin": "prepared"
+    }
+   ],
+   "checks": {
+    "item_indexes": [
+     2,
+     5
+    ],
+    "assignment": "heuristic (stem↔unit text overlap)",
+    "auto_markable": 1
+   },
+   "figures": [
+    {
+     "ref": "fig:4f060a41-0a6a-43e9-9d2f-871adc86857e",
+     "asset_key": "light_microscope"
+    }
+   ]
+  },
+  {
+   "unit_key": "s3",
+   "title": "Using the microscope safely and focusing",
+   "order": 2,
+   "node_codes": [
+    "7Bs.01"
+   ],
+   "prereqs": [
+    "s2"
+   ],
+   "assets": [
+    {
+     "asset_id": "s3-explain-main",
+     "kind": "explain",
+     "style": "main",
+     "segment": "s3/explain-main/segment.json",
+     "origin": "prepared"
+    }
+   ],
+   "checks": {
+    "item_indexes": [
+     6,
+     7,
+     14
+    ],
+    "assignment": "heuristic (stem↔unit text overlap)",
+    "auto_markable": 0
+   },
+   "figures": []
+  },
+  {
+   "unit_key": "s4",
+   "title": "Making a temporary slide",
+   "order": 3,
+   "node_codes": [
+    "7Bs.01"
+   ],
+   "prereqs": [
+    "s3"
+   ],
+   "assets": [
+    {
+     "asset_id": "s4-explain-main",
+     "kind": "explain",
+     "style": "main",
+     "segment": "s4/explain-main/segment.json",
+     "origin": "prepared"
+    }
+   ],
+   "checks": {
+    "item_indexes": [
+     1,
+     3
+    ],
+    "assignment": "heuristic (stem↔unit text overlap)",
+    "auto_markable": 2
+   },
+   "figures": [
+    {
+     "ref": "fig:5bb8d9e4-af13-40a3-97f7-8bbb1368f02e",
+     "asset_key": "onion_cell_slide"
+    }
+   ]
+  },
+  {
+   "unit_key": "s5",
+   "title": "Magnification and actual size",
+   "order": 4,
+   "node_codes": [
+    "7Bs.01"
+   ],
+   "prereqs": [
+    "s4"
+   ],
+   "assets": [
+    {
+     "asset_id": "s5-explain-main",
+     "kind": "explain",
+     "style": "main",
+     "segment": "s5/explain-main/segment.json",
+     "origin": "prepared"
+    }
+   ],
+   "checks": {
+    "item_indexes": [
+     4,
+     8,
+     11,
+     12,
+     13
+    ],
+    "assignment": "heuristic (stem↔unit text overlap)",
+    "auto_markable": 2
+   },
+   "figures": []
+  },
+  {
+   "unit_key": "s6",
+   "title": "Drawing what you see",
+   "order": 5,
+   "node_codes": [
+    "7Bs.01"
+   ],
+   "prereqs": [
+    "s5"
+   ],
+   "assets": [
+    {
+     "asset_id": "s6-explain-main",
+     "kind": "explain",
+     "style": "main",
+     "segment": "s6/explain-main/segment.json",
+     "origin": "prepared"
+    }
+   ],
+   "checks": {
+    "item_indexes": [
+     9
+    ],
+    "assignment": "heuristic (stem↔unit text overlap)",
+    "auto_markable": 0
+   },
+   "figures": []
+  }
+ ],
+ "failures": [],
+ "validation": {
+  "narration_grounding": ">= 0.72 token overlap per sentence, else dropped",
+  "science_review": "pending"
+ }
+}

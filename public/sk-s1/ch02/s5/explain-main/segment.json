@@ -1,0 +1,765 @@
+{
+ "segment_id": "s5-explain-main",
+ "asset_kind": "explain",
+ "style": "main",
+ "unit_key": "s5",
+ "language": "en",
+ "voice": "edge-aria",
+ "voice_gender": "female",
+ "audio": {
+  "uri": "audio.mp3",
+  "duration_ms": 52138
+ },
+ "clip": {
+  "uri": "clip.mp4",
+  "duration_ms": 52167
+ },
+ "hitmap": "hitmap.json",
+ "marks": {
+  "words": [
+   {
+    "i": 0,
+    "t0": 100,
+    "t1": 262,
+    "text": "The"
+   },
+   {
+    "i": 1,
+    "t0": 275,
+    "t1": 1138,
+    "text": "magnification"
+   },
+   {
+    "i": 2,
+    "t0": 1150,
+    "t1": 1238,
+    "text": "of"
+   },
+   {
+    "i": 3,
+    "t0": 1250,
+    "t1": 1338,
+    "text": "the"
+   },
+   {
+    "i": 4,
+    "t0": 1350,
+    "t1": 1800,
+    "text": "eyepiece"
+   },
+   {
+    "i": 5,
+    "t0": 1812,
+    "t1": 2225,
+    "text": "lens"
+   },
+   {
+    "i": 6,
+    "t0": 2238,
+    "t1": 2900,
+    "text": "multiplied"
+   },
+   {
+    "i": 7,
+    "t0": 2912,
+    "t1": 3038,
+    "text": "by"
+   },
+   {
+    "i": 8,
+    "t0": 3050,
+    "t1": 3138,
+    "text": "the"
+   },
+   {
+    "i": 9,
+    "t0": 3150,
+    "t1": 4025,
+    "text": "magnification"
+   },
+   {
+    "i": 10,
+    "t0": 4037,
+    "t1": 4125,
+    "text": "of"
+   },
+   {
+    "i": 11,
+    "t0": 4138,
+    "t1": 4225,
+    "text": "the"
+   },
+   {
+    "i": 12,
+    "t0": 4238,
+    "t1": 4712,
+    "text": "objective"
+   },
+   {
+    "i": 13,
+    "t0": 4725,
+    "t1": 5275,
+    "text": "lens"
+   },
+   {
+    "i": 14,
+    "t0": 6150,
+    "t1": 6262,
+    "text": "A"
+   },
+   {
+    "i": 15,
+    "t0": 6275,
+    "t1": 6700,
+    "text": "×"
+   },
+   {
+    "i": 16,
+    "t0": 6712,
+    "t1": 6988,
+    "text": "10"
+   },
+   {
+    "i": 17,
+    "t0": 7000,
+    "t1": 7462,
+    "text": "eyepiece"
+   },
+   {
+    "i": 18,
+    "t0": 7475,
+    "t1": 7612,
+    "text": "with"
+   },
+   {
+    "i": 19,
+    "t0": 7625,
+    "t1": 7662,
+    "text": "a"
+   },
+   {
+    "i": 20,
+    "t0": 7675,
+    "t1": 8088,
+    "text": "×"
+   },
+   {
+    "i": 21,
+    "t0": 8100,
+    "t1": 8412,
+    "text": "40"
+   },
+   {
+    "i": 22,
+    "t0": 8425,
+    "t1": 8975,
+    "text": "objective"
+   },
+   {
+    "i": 23,
+    "t0": 8988,
+    "t1": 9262,
+    "text": "gives"
+   },
+   {
+    "i": 24,
+    "t0": 9275,
+    "t1": 9675,
+    "text": "×"
+   },
+   {
+    "i": 25,
+    "t0": 9688,
+    "t1": 10388,
+    "text": "400"
+   },
+   {
+    "i": 26,
+    "t0": 11262,
+    "t1": 11488,
+    "text": "An"
+   },
+   {
+    "i": 27,
+    "t0": 11500,
+    "t1": 11925,
+    "text": "eyepiece"
+   },
+   {
+    "i": 28,
+    "t0": 11938,
+    "t1": 12025,
+    "text": "of"
+   },
+   {
+    "i": 29,
+    "t0": 12038,
+    "t1": 12438,
+    "text": "×"
+   },
+   {
+    "i": 30,
+    "t0": 12450,
+    "t1": 12750,
+    "text": "10"
+   },
+   {
+    "i": 31,
+    "t0": 12762,
+    "t1": 12850,
+    "text": "and"
+   },
+   {
+    "i": 32,
+    "t0": 12862,
+    "t1": 12962,
+    "text": "an"
+   },
+   {
+    "i": 33,
+    "t0": 12975,
+    "t1": 13462,
+    "text": "objective"
+   },
+   {
+    "i": 34,
+    "t0": 13475,
+    "t1": 13575,
+    "text": "of"
+   },
+   {
+    "i": 35,
+    "t0": 13588,
+    "t1": 13962,
+    "text": "×"
+   },
+   {
+    "i": 36,
+    "t0": 13975,
+    "t1": 14312,
+    "text": "40"
+   },
+   {
+    "i": 37,
+    "t0": 14325,
+    "t1": 14538,
+    "text": "give"
+   },
+   {
+    "i": 38,
+    "t0": 14550,
+    "t1": 14938,
+    "text": "×"
+   },
+   {
+    "i": 39,
+    "t0": 14950,
+    "t1": 15550,
+    "text": "400"
+   },
+   {
+    "i": 40,
+    "t0": 15838,
+    "t1": 16125,
+    "text": "not"
+   },
+   {
+    "i": 41,
+    "t0": 16138,
+    "t1": 16512,
+    "text": "×"
+   },
+   {
+    "i": 42,
+    "t0": 16525,
+    "t1": 17025,
+    "text": "50"
+   },
+   {
+    "i": 43,
+    "t0": 17900,
+    "t1": 18075,
+    "text": "You"
+   },
+   {
+    "i": 44,
+    "t0": 18088,
+    "t1": 18250,
+    "text": "can"
+   },
+   {
+    "i": 45,
+    "t0": 18262,
+    "t1": 18600,
+    "text": "also"
+   },
+   {
+    "i": 46,
+    "t0": 18612,
+    "t1": 18875,
+    "text": "work"
+   },
+   {
+    "i": 47,
+    "t0": 18888,
+    "t1": 19075,
+    "text": "out"
+   },
+   {
+    "i": 48,
+    "t0": 19088,
+    "t1": 19162,
+    "text": "the"
+   },
+   {
+    "i": 49,
+    "t0": 19175,
+    "t1": 20062,
+    "text": "magnification"
+   },
+   {
+    "i": 50,
+    "t0": 20075,
+    "t1": 20150,
+    "text": "of"
+   },
+   {
+    "i": 51,
+    "t0": 20162,
+    "t1": 20238,
+    "text": "a"
+   },
+   {
+    "i": 52,
+    "t0": 20250,
+    "t1": 20700,
+    "text": "drawing"
+   },
+   {
+    "i": 53,
+    "t0": 20712,
+    "t1": 20825,
+    "text": "or"
+   },
+   {
+    "i": 54,
+    "t0": 20838,
+    "t1": 21550,
+    "text": "photograph"
+   },
+   {
+    "i": 55,
+    "t0": 22412,
+    "t1": 23388,
+    "text": "Magnification"
+   },
+   {
+    "i": 56,
+    "t0": 23400,
+    "t1": 23762,
+    "text": "="
+   },
+   {
+    "i": 57,
+    "t0": 23775,
+    "t1": 24162,
+    "text": "image"
+   },
+   {
+    "i": 58,
+    "t0": 24175,
+    "t1": 24538,
+    "text": "size"
+   },
+   {
+    "i": 59,
+    "t0": 24550,
+    "t1": 25150,
+    "text": "÷"
+   },
+   {
+    "i": 60,
+    "t0": 25162,
+    "t1": 25638,
+    "text": "actual"
+   },
+   {
+    "i": 61,
+    "t0": 25650,
+    "t1": 26138,
+    "text": "size"
+   },
+   {
+    "i": 62,
+    "t0": 26475,
+    "t1": 26650,
+    "text": "which"
+   },
+   {
+    "i": 63,
+    "t0": 26662,
+    "t1": 26800,
+    "text": "can"
+   },
+   {
+    "i": 64,
+    "t0": 26812,
+    "t1": 26962,
+    "text": "be"
+   },
+   {
+    "i": 65,
+    "t0": 26975,
+    "t1": 27650,
+    "text": "rearranged"
+   },
+   {
+    "i": 66,
+    "t0": 27662,
+    "t1": 27750,
+    "text": "to"
+   },
+   {
+    "i": 67,
+    "t0": 27762,
+    "t1": 28212,
+    "text": "actual"
+   },
+   {
+    "i": 68,
+    "t0": 28225,
+    "t1": 28575,
+    "text": "size"
+   },
+   {
+    "i": 69,
+    "t0": 28588,
+    "t1": 28950,
+    "text": "="
+   },
+   {
+    "i": 70,
+    "t0": 28962,
+    "t1": 29338,
+    "text": "image"
+   },
+   {
+    "i": 71,
+    "t0": 29350,
+    "t1": 29738,
+    "text": "size"
+   },
+   {
+    "i": 72,
+    "t0": 29750,
+    "t1": 30362,
+    "text": "÷"
+   },
+   {
+    "i": 73,
+    "t0": 30375,
+    "t1": 31338,
+    "text": "magnification"
+   },
+   {
+    "i": 74,
+    "t0": 32212,
+    "t1": 32350,
+    "text": "A"
+   },
+   {
+    "i": 75,
+    "t0": 32362,
+    "t1": 32838,
+    "text": "student's"
+   },
+   {
+    "i": 76,
+    "t0": 32850,
+    "t1": 33238,
+    "text": "drawing"
+   },
+   {
+    "i": 77,
+    "t0": 33250,
+    "t1": 33312,
+    "text": "of"
+   },
+   {
+    "i": 78,
+    "t0": 33325,
+    "t1": 33400,
+    "text": "a"
+   },
+   {
+    "i": 79,
+    "t0": 33412,
+    "t1": 33712,
+    "text": "cheek"
+   },
+   {
+    "i": 80,
+    "t0": 33725,
+    "t1": 34062,
+    "text": "cell"
+   },
+   {
+    "i": 81,
+    "t0": 34075,
+    "t1": 34250,
+    "text": "is"
+   },
+   {
+    "i": 82,
+    "t0": 34262,
+    "t1": 35738,
+    "text": "48 mm wide"
+   },
+   {
+    "i": 83,
+    "t0": 36100,
+    "t1": 36238,
+    "text": "and"
+   },
+   {
+    "i": 84,
+    "t0": 36250,
+    "t1": 36312,
+    "text": "the"
+   },
+   {
+    "i": 85,
+    "t0": 36325,
+    "t1": 37175,
+    "text": "magnification"
+   },
+   {
+    "i": 86,
+    "t0": 37188,
+    "t1": 37262,
+    "text": "of"
+   },
+   {
+    "i": 87,
+    "t0": 37275,
+    "t1": 37375,
+    "text": "the"
+   },
+   {
+    "i": 88,
+    "t0": 37388,
+    "t1": 37812,
+    "text": "drawing"
+   },
+   {
+    "i": 89,
+    "t0": 37825,
+    "t1": 37950,
+    "text": "is"
+   },
+   {
+    "i": 90,
+    "t0": 37962,
+    "t1": 38388,
+    "text": "×"
+   },
+   {
+    "i": 91,
+    "t0": 38400,
+    "t1": 39038,
+    "text": "800"
+   },
+   {
+    "i": 92,
+    "t0": 39900,
+    "t1": 43825,
+    "text": "48 ÷ 800 = 0.06"
+   },
+   {
+    "i": 93,
+    "t0": 43838,
+    "t1": 44225,
+    "text": "mm."
+   },
+   {
+    "i": 94,
+    "t0": 44238,
+    "t1": 44688,
+    "text": "Convert"
+   },
+   {
+    "i": 95,
+    "t0": 44700,
+    "t1": 44775,
+    "text": "to"
+   },
+   {
+    "i": 96,
+    "t0": 44788,
+    "t1": 45538,
+    "text": "micrometres"
+   },
+   {
+    "i": 97,
+    "t0": 45550,
+    "t1": 45688,
+    "text": "by"
+   },
+   {
+    "i": 98,
+    "t0": 45700,
+    "t1": 46362,
+    "text": "multiplying"
+   },
+   {
+    "i": 99,
+    "t0": 46375,
+    "t1": 47338,
+    "text": "by 1000"
+   },
+   {
+    "i": 100,
+    "t0": 47725,
+    "t1": 51200,
+    "text": "0.06 × 1000 = 60"
+   },
+   {
+    "i": 101,
+    "t0": 51212,
+    "t1": 51538,
+    "text": "m"
+   }
+  ],
+  "visemes": []
+ },
+ "narration": "The magnification of the eyepiece lens multiplied by the magnification of the objective lens. A ×10 eyepiece with a ×40 objective gives ×400. An eyepiece of ×10 and an objective of ×40 give ×400, not ×50. You can also work out the magnification of a drawing or photograph. Magnification = image size ÷ actual size, which can be rearranged to actual size = image size ÷ magnification. A student's drawing of a cheek cell is 48 mm wide, and the magnification of the drawing is ×800. 48 ÷ 800 = 0.06 mm. Convert to micrometres by multiplying by 1000: 0.06 × 1000 = 60 µm.",
+ "narration_sentences": [
+  "The magnification of the eyepiece lens multiplied by the magnification of the objective lens.",
+  "A ×10 eyepiece with a ×40 objective gives ×400.",
+  "An eyepiece of ×10 and an objective of ×40 give ×400, not ×50.",
+  "You can also work out the magnification of a drawing or photograph.",
+  "Magnification = image size ÷ actual size, which can be rearranged to actual size = image size ÷ magnification.",
+  "A student's drawing of a cheek cell is 48 mm wide, and the magnification of the drawing is ×800.",
+  "48 ÷ 800 = 0.06 mm.",
+  "Convert to micrometres by multiplying by 1000: 0.06 × 1000 = 60 µm."
+ ],
+ "board_plan": [
+  {
+   "kind": "write",
+   "id": "w1",
+   "text": "total = eyepiece × objective",
+   "role": "term",
+   "cue": "The magnification of the eyepiece lens multiplied by the magnification of the objective lens."
+  },
+  {
+   "kind": "write",
+   "id": "w2",
+   "text": "10 × 40 = ×400",
+   "role": "caption",
+   "cue": "A ×10 eyepiece with a ×40 objective gives ×400."
+  },
+  {
+   "kind": "write",
+   "id": "w3",
+   "text": "not 10 + 40 = ×50",
+   "role": "caption",
+   "cue": "not ×50"
+  },
+  {
+   "kind": "write",
+   "id": "w4",
+   "text": "actual = image ÷ magnification",
+   "role": "term",
+   "cue": "actual size = image size ÷ magnification"
+  },
+  {
+   "kind": "write",
+   "id": "w5",
+   "text": "48 ÷ 800 = 0.06 mm",
+   "role": "caption",
+   "cue": "48 ÷ 800 = 0.06 mm."
+  },
+  {
+   "kind": "write",
+   "id": "w6",
+   "text": "0.06 × 1000 = 60 µm",
+   "role": "caption",
+   "cue": "0.06 × 1000 = 60 µm"
+  },
+  {
+   "kind": "circle",
+   "target": "w6",
+   "cue": "multiplying by 1000"
+  }
+ ],
+ "problems": [],
+ "figures": [],
+ "gestures": [
+  {
+   "t": 100,
+   "kind": "write",
+   "target": "w1",
+   "until": 5275
+  },
+  {
+   "t": 6150,
+   "kind": "write",
+   "target": "w2",
+   "until": 10388
+  },
+  {
+   "t": 15838,
+   "kind": "write",
+   "target": "w3",
+   "until": 17038
+  },
+  {
+   "t": 27762,
+   "kind": "write",
+   "target": "w4",
+   "until": 31338
+  },
+  {
+   "t": 39900,
+   "kind": "write",
+   "target": "w5",
+   "until": 44225
+  },
+  {
+   "t": 39900,
+   "kind": "write",
+   "target": "w6",
+   "until": 41400
+  },
+  {
+   "t": 45700,
+   "kind": "point",
+   "target": "w6"
+  }
+ ],
+ "origin": "prepared",
+ "checkpoints": [
+  0,
+  100,
+  6150,
+  15838,
+  27762,
+  39900,
+  39900,
+  45700
+ ],
+ "tts": {
+  "requested": "edge-aria",
+  "used": "edge-aria",
+  "provider": "edge",
+  "downgraded": false,
+  "reason": null,
+  "chars": 568,
+  "stats": {}
+ },
+ "build": {
+  "wall_s": 74.1,
+  "dry": false
+ },
+ "draft_hash": "dc8b3c7aae01"
+}
