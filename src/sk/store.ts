@@ -51,6 +51,10 @@ export type Attempt = {
   grader: "deterministic" | "llm" | "teacher";
   ruleVersion: string;
   gradedAt: number;
+  /** B5: the item's teaching objective (`topic_questions.teaching_objective_id`).
+   * Optional — the Supabase store resolves it from the item when absent;
+   * `null` means the item is unmapped and gives no mastery evidence (plan §14). */
+  teachingObjectiveId?: string | null;
 };
 
 export type Claim<T> = { status: "new" } | { status: "stored"; event: StoredEvent<T> } | { status: "inflight"; done: Promise<StoredEvent<T>> };

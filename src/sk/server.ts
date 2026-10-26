@@ -12,12 +12,15 @@ import { NextResponse } from "next/server";
 import { claudeConfigured } from "@/utils/claude-backend";
 import { skEnabled } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 import { normaliseSegment, validateSegment, type Segment } from "./board/engine";
 import { parseGraph } from "./graph";
 import { StaticItemBank, type ItemBank } from "./items";
+import { SupabaseItemBank } from "./items-supabase";
 import type { LoopDeps } from "./loop";
 import { InMemorySessionStore, type SessionStore } from "./store";
+import { SupabaseSessionStore, skDbFrom } from "./store-supabase";
 import type { TeachingGraph } from "./types";
 
 /** Graph manifests served from public/, as "<url path>" entries. The one-unit
@@ -114,13 +117,24 @@ function lazyProvider(model: string): LLMProvider {
 let deps: Promise<SkDeps> | null = null;
 let override: Partial<SkDeps> | null = null;
 
+/** B5: `SK_STORE=supabase` keeps sessions, events, attempts and mastery in
+ * the 0157 tables through the admin client, and serves items from
+ * `topic_questions`. Unset (the default) is the B4 in-memory store and the
+ * U4 stand-in items — nothing changes until the flag is set. */
+export function persistence(): Pick<SkDeps, "store" | "items"> {
+  if (process.env.SK_STORE === "supabase") {
+    const db = skDbFrom(createAdminClient());
+    return { store: new SupabaseSessionStore(db), items: new SupabaseItemBank(db) };
+  }
+  return { store: new InMemorySessionStore(), items: new StaticItemBank() };
+}
+
 export function skDeps(): Promise<SkDeps> {
   if (!deps) {
     deps = (async () => {
       const uris = (process.env.SK_GRAPHS || "").split(",").map((s) => s.trim()).filter(Boolean);
       const base: SkDeps = {
-        store: new InMemorySessionStore(),
-        items: new StaticItemBank(),
+        ...persistence(),
         graphs: await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS),
         loadSegment: loadSegmentFromPublic,
         loadHitmapElementIds: loadHitmapTargetsFromPublic,
