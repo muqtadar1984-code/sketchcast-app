@@ -12,7 +12,8 @@
 --      book_code_attempts (a raised exception would have rolled that row
 --      back: the first draft did exactly that, and this test caught it);
 --   4. a redeemed code produces exactly one 30-day grant and cannot be
---      redeemed twice.
+--      redeemed twice;
+--   5. sk_retention_sweep() removes week-old attempts only.
 -- Runs on an existing profile or, on an empty branch, a throwaway one.
 -- Every check RAISEs on failure; a clean run prints PASS lines and
 -- "ALL 0158 CHECKS PASSED", then ROLLS BACK (nothing persists).
@@ -122,6 +123,17 @@ begin
   v_res := public.redeem_book_code(repeat('d', 64), v_user, null, 30);
   if v_res->>'outcome' <> 'rate_limited' then raise exception 'FAIL: expected rate_limited, got %', v_res; end if;
   raise notice 'PASS: rate limited after five failures';
+
+  -- retention: an 8-day-old attempt goes, today's stay
+  insert into public.book_code_attempts (user_id, outcome, at) values (v_user, 'invalid', now() - interval '8 days');
+  v_res := public.sk_retention_sweep();
+  if (v_res->>'book_code_attempts')::int < 1 then raise exception 'FAIL: sweep removed nothing: %', v_res; end if;
+  select count(*) into n from public.book_code_attempts where user_id = v_user;
+  if n <> 7 then raise exception 'FAIL: expected 7 recent attempts kept, found %', n; end if;
+  if has_function_privilege('authenticated', 'public.sk_retention_sweep()', 'execute') then
+    raise exception 'FAIL: sk_retention_sweep callable by authenticated';
+  end if;
+  raise notice 'PASS: retention sweep trims only old attempts';
 
   raise notice 'ALL 0158 CHECKS PASSED';
 end $$;

@@ -168,6 +168,27 @@ end;
 $$;
 revoke all on function public.redeem_book_code(text, uuid, uuid, integer) from public, anon, authenticated;
 
+-- ── Retention (plan §14) ─────────────────────────────────────────────────────
+-- One sweep the service role (or a pg_cron job, scheduled separately with the
+-- founder's approval) calls daily. Today it only trims the redemption-attempt
+-- log, which the rate limit needs for an hour; B4/B5 add their transcript
+-- tables here (30-day retention) rather than scheduling sweeps of their own.
+create or replace function public.sk_retention_sweep()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_attempts bigint;
+begin
+  delete from public.book_code_attempts where at < now() - interval '7 days';
+  get diagnostics v_attempts = row_count;
+  return jsonb_build_object('book_code_attempts', v_attempts);
+end;
+$$;
+revoke all on function public.sk_retention_sweep() from public, anon, authenticated;
+
 -- ── RLS: service role writes; people read their own ──────────────────────────
 alter table public.publishers         enable row level security;
 alter table public.print_batches      enable row level security;

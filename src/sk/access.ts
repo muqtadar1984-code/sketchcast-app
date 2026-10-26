@@ -167,3 +167,17 @@ export function redeemMessage(reason: string): string {
       return "Something went wrong activating this code. Please try again.";
   }
 }
+
+// ── Consent ──────────────────────────────────────────────────────────────────
+export type Consent = { scope: "voice" | "transcripts" | "analytics"; revoked_at: string | null };
+
+/**
+ * Plan §14: a STUDENT may use voice (and keep transcripts) only with a live
+ * guardian consent for that scope. Adults — teachers, parents, home educators,
+ * the adult POC testers — need none. Consent rows come from `consents`
+ * (child_id = the student); a revoked row no longer counts.
+ */
+export function consentAllows(scope: Consent["scope"], role: string | null | undefined, consents: Consent[]): boolean {
+  if (role !== "student") return true;
+  return consents.some((c) => c.scope === scope && !c.revoked_at);
+}

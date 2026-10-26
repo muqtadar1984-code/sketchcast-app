@@ -2,6 +2,7 @@
 -- them (additive migration), so the drops cascade only within this set.
 begin;
 drop function if exists public.redeem_book_code(text, uuid, uuid, integer);
+drop function if exists public.sk_retention_sweep();
 drop table if exists public.consents;
 drop table if exists public.book_code_attempts;
 drop table if exists public.sk_usage;

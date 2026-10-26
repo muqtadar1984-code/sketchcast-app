@@ -3,7 +3,7 @@
 // respects expiry/revocation, and keeps prepared teaching when the live
 // allowance is spent (R3 refinement 4).
 import { describe, expect, it } from "vitest";
-import { allowanceWarning, checkChar, formatCode, generateCode, hmacCode, isWellFormedCode, normalizeCode, planGrantsSk, redeemMessage, skAccess } from "../access";
+import { allowanceWarning, checkChar, consentAllows, formatCode, generateCode, hmacCode, isWellFormedCode, normalizeCode, planGrantsSk, redeemMessage, skAccess } from "../access";
 
 const fixedRandom = (n: number) => new Uint8Array(Array.from({ length: n }, (_, i) => (i * 37 + 11) & 0xff));
 
@@ -88,5 +88,15 @@ describe("skAccess", () => {
   });
   it("maps every redemption failure to a friendly message, never the raw reason", () => {
     for (const r of ["invalid", "used", "revoked", "rate_limited", "not_your_child", "boom"]) expect(redeemMessage(r)).not.toMatch(/P0001|exception|_/);
+  });
+});
+
+describe("consent", () => {
+  it("requires a live guardian consent for a student's voice, none for adults", () => {
+    expect(consentAllows("voice", "student", [])).toBe(false);
+    expect(consentAllows("voice", "student", [{ scope: "voice", revoked_at: "2026-10-01T00:00:00Z" }])).toBe(false);
+    expect(consentAllows("voice", "student", [{ scope: "analytics", revoked_at: null }])).toBe(false);
+    expect(consentAllows("voice", "student", [{ scope: "voice", revoked_at: null }])).toBe(true);
+    for (const role of ["teacher", "parent", "school_admin", "coordinator", null]) expect(consentAllows("voice", role, [])).toBe(true);
   });
 });
