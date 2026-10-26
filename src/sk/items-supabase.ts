@@ -18,13 +18,13 @@
 
 import type { RawQuestion } from "@/app/api/quiz/logic";
 import { UUID_RE } from "./ids";
-import type { ItemBank } from "./items";
+import type { BankItem, ItemBank } from "./items";
 import type { SkDb } from "./store-supabase";
 
 /** Which statuses the bank serves (plan B1b: approved + the book's draft items until review). */
 export const SK_ITEM_STATUSES: readonly string[] = ["approved", "draft"];
 
-export const ITEM_COLUMNS = "id, item_type, answer_mode, marks, stem, options, answer, status, teaching_objective_id, created_at";
+export const ITEM_COLUMNS = "id, item_type, answer_mode, marks, stem, options, answer, status, difficulty, teaching_objective_id, created_at";
 
 export type TopicQuestionRow = {
   id: string;
@@ -35,9 +35,20 @@ export type TopicQuestionRow = {
   options: unknown;
   answer: unknown;
   status: string;
+  /** 1–5 (0112); absent on older fixtures → sorts last. */
+  difficulty?: number | null;
   teaching_objective_id: string | null;
   created_at?: string;
 };
+
+/** B4.1: the row's bank metadata beside its marking scheme, for `selectUnitItems`. */
+export function toBankItem(row: TopicQuestionRow): BankItem | null {
+  const q = toRawQuestion(row);
+  if (!q) return null;
+  const status = row.status === "approved" || row.status === "draft" ? row.status : undefined;
+  const difficulty = typeof row.difficulty === "number" && Number.isFinite(row.difficulty) ? row.difficulty : undefined;
+  return { ...q, ...(status ? { status } : {}), ...(difficulty !== undefined ? { difficulty } : {}), teachingObjectiveId: typeof row.teaching_objective_id === "string" ? row.teaching_objective_id : null };
+}
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
@@ -153,21 +164,22 @@ export class SupabaseItemBank implements ItemBank {
     return data ? { id: String(data.id), status: String(data.status) } : null;
   }
 
-  /** Every gradeable item of a unit, oldest first (the packager's check /
-   * practice assets pick from these ids). */
-  async listForUnit(product: string, chapter: number, unitKey: string): Promise<RawQuestion[]> {
+  /** Every gradeable item of a unit, oldest first, with its status, difficulty
+   * and objective (B4.1: the loop's `selectUnitItems` orders and picks from
+   * these when the graph's check/practice assets carry no ids). */
+  async listForUnit(product: string, chapter: number, unitKey: string): Promise<BankItem[]> {
     const objective = await this.objectiveForUnit(product, chapter, unitKey);
     if (!objective) return [];
     return this.listForObjective(objective.id);
   }
 
-  async listForObjective(teachingObjectiveId: string): Promise<RawQuestion[]> {
+  async listForObjective(teachingObjectiveId: string): Promise<BankItem[]> {
     const { data, error } = await this.db.from("topic_questions").select(ITEM_COLUMNS).eq("teaching_objective_id", teachingObjectiveId).order("created_at", { ascending: true });
     if (error) throw new Error(`[sk items] list: ${error.message}`);
-    const out: RawQuestion[] = [];
+    const out: BankItem[] = [];
     for (const row of data ?? []) {
       if (!this.statuses.includes(String(row.status))) continue;
-      const q = toRawQuestion(row as TopicQuestionRow);
+      const q = toBankItem(row as TopicQuestionRow);
       if (q) out.push(q);
     }
     return out;

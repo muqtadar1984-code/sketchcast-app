@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { scoreQuiz, type RawQuestion } from "@/app/api/quiz/logic";
 import { gradeItem } from "../grade";
 import { stripItem } from "../items";
+import { selectUnitItems } from "../items-select";
 import { SupabaseItemBank, toRawQuestion, type TopicQuestionRow } from "../items-supabase";
 import { skFakeDb } from "./fake-supabase";
 
@@ -278,6 +279,23 @@ describe("SupabaseItemBank", () => {
     expect(await b.listForUnit(SLUG, 2, "u9")).toEqual([]);
     expect(await b.listForUnit("no-such-book", 2, "u1")).toEqual([]);
     expect(await b.objectiveForUnit(SLUG, 2, "u3")).toEqual({ id: O.u3, status: "draft" });
+  });
+  it("B4.1: listForUnit carries status, difficulty and objective; selectUnitItems picks from the real rows", async () => {
+    const { db, bank: b } = bank();
+    db.seed("topic_questions", [{ ...byId("a48f35f1-5a12-44e2-851b-a27d7b7163ff"), id: "0afd1b8e-6f3c-4b3e-9f1a-1234567890ab", difficulty: 2, status: "draft" }]);
+    const u1 = await b.listForUnit(SLUG, 2, "u1");
+    expect(u1.map((q) => [q.id.slice(0, 8), q.status, q.difficulty, q.teachingObjectiveId])).toEqual([
+      ["a48f35f1", "approved", undefined, O.u1],
+      ["5788dd4a", "approved", undefined, O.u1],
+      ["0afd1b8e", "draft", 2, O.u1],
+    ]);
+    expect(JSON.stringify(stripItem(u1[0]!))).not.toContain("teachingObjectiveId"); // metadata never leaves the server either
+    // u5: an mcq and two numericals (→ fill_blank) — all three checkable, nothing left for practice.
+    expect(selectUnitItems(await b.listForUnit(SLUG, 2, "u5"))).toMatchObject({ check: ["1c37dd99-abb1-40f7-ac11-5d1c57f35e9a", "71acf08b-bb44-4f23-a34c-018764526476", "906d5688-43c9-4b68-9c0a-7e9100a0dc2f"], practice: [] });
+    // u4: one fill_blank + one short answer → no check (fewer than 2 checkable), the fill_blank practises.
+    expect(selectUnitItems(await b.listForUnit(SLUG, 2, "u4"))).toMatchObject({ check: [], practice: ["a5c8ebbe-d00e-4951-81d0-b6fd3d1a55aa"] });
+    // u1 with the draft row: approved first, then the draft.
+    expect(selectUnitItems(u1).check).toEqual(["5788dd4a-a674-49fa-ab1d-e71d8d888c46", "a48f35f1-5a12-44e2-851b-a27d7b7163ff", "0afd1b8e-6f3c-4b3e-9f1a-1234567890ab"]);
   });
   it("objectiveFor: the item's teaching objective, null when unmapped", async () => {
     const { db, bank: b } = bank();

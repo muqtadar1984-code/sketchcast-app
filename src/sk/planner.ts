@@ -15,6 +15,7 @@
 //     A visual that would need unverified science or maths stops at rung 3.
 
 import { cursorFor, mainAsset, unitOf } from "./graph";
+import type { UnitItems } from "./items-select";
 import type { Bookmark, Cursor, ExplainStyle, GraphAsset, GraphUnit, MasteryMap, MasteryState, TeachingGraph } from "./types";
 
 export const SKIP_CHECK_ITEMS = 2;
@@ -41,6 +42,11 @@ export type PlannerContext = {
   /** Set by the caller when the request needs new scientific or mathematical
    * content that no validated part carries (stops the ladder at rung 3). */
   needsUnverifiedContent?: boolean;
+  /** B4.1: per unit key, the ids the item bank would use for a unit whose
+   * graph assets carry none (the loop resolves these before planning, with
+   * `selectUnitItems`). A unit absent here, or with an empty `check`, has no
+   * check; the graph's own ids always win over these. */
+  bankItems?: Record<string, UnitItems>;
 };
 
 export type LadderRung = 1 | 2 | 3;
@@ -74,13 +80,42 @@ function prereqWarning(ctx: PlannerContext, unit: GraphUnit): { warning: string;
   const missing = unmetPrereqs(ctx, unit);
   if (!missing.length) return null;
   const first = missing[0]!;
-  const check = checkAsset(first);
+  const check = checkFor(ctx, first);
   const warning = `${unit.title} uses ${first.title}'s idea; quick check first?`;
-  return check ? { warning, suggestedCheck: { unitKey: first.unit_key, itemIds: check.item_ids!.slice(0, SKIP_CHECK_ITEMS), purpose: "prereq" } } : { warning };
+  return check ? { warning, suggestedCheck: { unitKey: first.unit_key, itemIds: check.itemIds.slice(0, SKIP_CHECK_ITEMS), purpose: "prereq" } } : { warning };
 }
 
 export const checkAsset = (u: GraphUnit): GraphAsset | undefined => u.assets.find((a) => a.kind === "check" && a.item_ids?.length);
 export const practiceAsset = (u: GraphUnit): GraphAsset | undefined => u.assets.find((a) => a.kind === "practice" && a.item_ids?.length);
+
+/** The asset id a bank-sourced check/practice runs under: not in the graph
+ * (`assetOf` finds nothing, the student page keeps the clip it has, as it
+ * does for the stand-in graph's segment-less check asset), unique per unit,
+ * and the same on every server so a replayed cursor matches. */
+export const bankAssetId = (unitKey: string, kind: "check" | "practice") => `bank:${unitKey}:${kind}`;
+export const isBankAssetId = (assetId: string) => assetId.startsWith("bank:");
+
+export type ItemSource = { asset: GraphAsset; itemIds: string[]; source: "graph" | "bank" };
+
+/** The unit's check: the graph's own asset when it carries ids, else the
+ * bank's selection (B4.1), else none. */
+export function checkFor(ctx: PlannerContext, unit: GraphUnit): ItemSource | undefined {
+  const own = checkAsset(unit);
+  if (own) return { asset: own, itemIds: [...own.item_ids!], source: "graph" };
+  const bank = ctx.bankItems?.[unit.unit_key];
+  if (!bank?.check.length) return undefined;
+  return { asset: { asset_id: bankAssetId(unit.unit_key, "check"), kind: "check", item_ids: [...bank.check], origin: "prepared" }, itemIds: [...bank.check], source: "bank" };
+}
+
+export function practiceFor(ctx: PlannerContext, unit: GraphUnit): ItemSource | undefined {
+  const own = practiceAsset(unit);
+  if (own) return { asset: own, itemIds: [...own.item_ids!], source: "graph" };
+  const bank = ctx.bankItems?.[unit.unit_key];
+  if (!bank?.practice.length) return undefined;
+  return { asset: { asset_id: bankAssetId(unit.unit_key, "practice"), kind: "practice", item_ids: [...bank.practice], origin: "prepared" }, itemIds: [...bank.practice], source: "bank" };
+}
+
+const fromBank = (s: ItemSource) => (s.source === "bank" ? " (items from the bank: the graph carries none)" : "");
 
 /** A prepared, validated teaching asset: the only kind the planner presents without the ladder. */
 const isValidated = (a: GraphAsset) => !!a.segment && (a.origin ?? "prepared") === "prepared" && a.validation !== "fail" && a.validation !== "pending";
@@ -154,11 +189,11 @@ export function plan(ctx: PlannerContext, req: RouteRequest): Decision {
     case "next": {
       if (!here) return { kind: "none", reasons: ["cursor names no unit"] };
       // Within the unit: a check after the main explanation, before moving on.
-      const check = checkAsset(here);
-      const onCheck = ctx.cursor.assetId === check?.asset_id;
+      const check = checkFor(ctx, here);
+      const onCheck = ctx.cursor.assetId === check?.asset.asset_id;
       if (check && !onCheck && !mastered(ctx.mastery, here.unit_key) && !ctx.lastCheckFailed) {
-        reasons.push(`unit ${here.unit_key} not yet mastered: run its check before moving on`);
-        return { kind: "check", unitKey: here.unit_key, itemIds: [...check.item_ids!], purpose: "unit", cursor: cursorFor(g, here, check), bookmark: false, reasons };
+        reasons.push(`unit ${here.unit_key} not yet mastered: run its check before moving on${fromBank(check)}`);
+        return { kind: "check", unitKey: here.unit_key, itemIds: check.itemIds, purpose: "unit", cursor: cursorFor(g, here, check.asset), bookmark: false, reasons };
       }
       const nxt = nextUnit(ctx, here);
       if (!nxt) return { kind: "none", reasons: ["end of chapter: no next unit"] };
@@ -182,10 +217,10 @@ export function plan(ctx: PlannerContext, req: RouteRequest): Decision {
       const unit = target(req.unitKey);
       if (!unit) return { kind: "none", reasons: ["nothing to skip"] };
       const nxt = nextUnit(ctx, unit);
-      const check = checkAsset(unit);
+      const check = checkFor(ctx, unit);
       if (req.withCheck && check) {
-        reasons.push(`skip counts only with a ${SKIP_CHECK_ITEMS}-item check on ${unit.unit_key}; passing records independent evidence`);
-        return { kind: "check", unitKey: unit.unit_key, itemIds: check.item_ids!.slice(0, SKIP_CHECK_ITEMS), purpose: "skip", cursor: cursorFor(g, unit, check), bookmark: true, reasons };
+        reasons.push(`skip counts only with a ${SKIP_CHECK_ITEMS}-item check on ${unit.unit_key}; passing records independent evidence${fromBank(check)}`);
+        return { kind: "check", unitKey: unit.unit_key, itemIds: check.itemIds.slice(0, SKIP_CHECK_ITEMS), purpose: "skip", cursor: cursorFor(g, unit, check.asset), bookmark: true, reasons };
       }
       reasons.push(req.withCheck ? `unit ${unit.unit_key} has no check items; skipping records NO mastery` : `skip without check: records no mastery for ${unit.unit_key}`);
       if (!nxt) return { kind: "none", reasons: [...reasons, "end of chapter: no next unit"] };
@@ -198,10 +233,10 @@ export function plan(ctx: PlannerContext, req: RouteRequest): Decision {
       const unit = target(req.unitKey);
       if (!unit) return { kind: "none", reasons: ["no unit to practise"] };
       const n = Math.max(1, Math.min(10, req.n ?? DEFAULT_PRACTISE_N));
-      const practice = practiceAsset(unit);
+      const practice = practiceFor(ctx, unit);
       if (practice) {
-        reasons.push(`practice items for ${unit.unit_key} (${Math.min(n, practice.item_ids!.length)} of ${practice.item_ids!.length}); practice evidence is assisted, never mastery`);
-        return { kind: "check", unitKey: unit.unit_key, itemIds: practice.item_ids!.slice(0, n), purpose: "practise", cursor: cursorFor(g, unit, practice), bookmark: true, reasons };
+        reasons.push(`practice items for ${unit.unit_key} (${Math.min(n, practice.itemIds.length)} of ${practice.itemIds.length}); practice evidence is assisted, never mastery${fromBank(practice)}`);
+        return { kind: "check", unitKey: unit.unit_key, itemIds: practice.itemIds.slice(0, n), purpose: "practise", cursor: cursorFor(g, unit, practice.asset), bookmark: true, reasons };
       }
       return generate(ctx, unit, true, [`unit ${unit.unit_key} has no practice items`]);
     }
@@ -209,10 +244,10 @@ export function plan(ctx: PlannerContext, req: RouteRequest): Decision {
     case "check_me": {
       const unit = target(req.unitKey);
       if (!unit) return { kind: "none", reasons: ["no unit to check"] };
-      const check = checkAsset(unit);
+      const check = checkFor(ctx, unit);
       if (!check) return { kind: "none", reasons: [`unit ${unit.unit_key} has no check items`] };
-      reasons.push(`mastery check for ${unit.unit_key}: ${check.item_ids!.length} deterministic items`);
-      return { kind: "check", unitKey: unit.unit_key, itemIds: [...check.item_ids!], purpose: "unit", cursor: cursorFor(g, unit, check), bookmark: true, reasons };
+      reasons.push(`mastery check for ${unit.unit_key}: ${check.itemIds.length} deterministic items${fromBank(check)}`);
+      return { kind: "check", unitKey: unit.unit_key, itemIds: check.itemIds, purpose: "unit", cursor: cursorFor(g, unit, check.asset), bookmark: true, reasons };
     }
 
     case "return": {

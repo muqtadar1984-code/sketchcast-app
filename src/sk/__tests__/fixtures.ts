@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import type { Segment } from "../board/engine";
 import { parseGraph } from "../graph";
+import type { BankItem } from "../items";
 import type { TeachingGraph } from "../types";
 
 export const GRAPH_JSON = {
@@ -53,6 +54,19 @@ export const GRAPH_JSON = {
 };
 
 export const graph = (): TeachingGraph => parseGraph(JSON.parse(JSON.stringify(GRAPH_JSON)));
+
+/** B4.1: a unit's bank items, deliberately scrambled — the selector's order
+ * (approved → draft, easy → hard, unknown difficulty last, then id) must not
+ * depend on the order the bank returned them. Checkable: q-a1, q-a3, q-ax,
+ * q-d2; q-un is unmapped (practice only); q-sh is a short answer (never). */
+export const BANK_SCRAMBLED: BankItem[] = [
+  { id: "q-d2", type: "mcq", prompt: "q-d2", options: ["a", "b"], answer: "a", marks: 1, status: "draft", difficulty: 2, teachingObjectiveId: "to-1" },
+  { id: "q-a3", type: "true_false", prompt: "q-a3", answer: true, marks: 1, status: "approved", difficulty: 3, teachingObjectiveId: "to-1" },
+  { id: "q-sh", type: "short", prompt: "q-sh", answer: "x", marks: 2, status: "approved", difficulty: 2, teachingObjectiveId: "to-1" },
+  { id: "q-ax", type: "mcq", prompt: "q-ax", options: ["a", "b"], answer: "a", marks: 1, status: "approved", teachingObjectiveId: "to-1" },
+  { id: "q-un", type: "mcq", prompt: "q-un", options: ["a", "b"], answer: "a", marks: 1, status: "approved", difficulty: 1, teachingObjectiveId: null },
+  { id: "q-a1", type: "fill_blank", prompt: "q-a1", answer: "400", marks: 1, status: "approved", difficulty: 1, teachingObjectiveId: "to-1" },
+];
 
 export const U4_SEGMENT: Segment = JSON.parse(readFileSync(new URL("../../../public/sk-s1/u4/segment.json", import.meta.url), "utf-8")) as Segment;
 export const U4_HITMAP = JSON.parse(readFileSync(new URL("../../../public/sk-s1/u4/optionS.hitmap.json", import.meta.url), "utf-8")) as { elements: Record<string, unknown>; asset: Record<string, { regions: Record<string, unknown> }> };
