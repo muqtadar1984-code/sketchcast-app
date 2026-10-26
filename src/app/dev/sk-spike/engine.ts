@@ -34,6 +34,101 @@ export type Segment = {
   narration: string;
 };
 
+// ── Segment validation (the security gate, contracts §2) ────────────────────
+// A segment is DATA from a file or a model. Nothing in it may reach the DOM
+// unchecked: ids are tokens, text is plain and short, numbers are finite and
+// inside the world, asset sources are local filenames, ops are from the
+// allow-list, and counts are bounded. The runtime refuses the whole segment
+// on the first violation — never a partial render (the ERE rule).
+export const LIMITS = { actions: 500, text: 200, trace: 5000, words: 5000, coord: 10_000 } as const;
+const ID_RE = /^[a-z][a-z0-9_.-]{0,63}$/i;
+const SRC_RE = /^[a-z0-9_-]+\.(png|jpg|jpeg|svg)$/i;
+const OPS = new Set(["place", "reveal", "label", "write", "highlight"]);
+// Bidi/format controls and C0/C1 controls: these can disguise what a label says.
+const BAD_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩﻿]/;
+
+export class SegmentError extends Error {}
+
+const MAX_T = 24 * 3600 * 1000; // ms
+function num(v: unknown, what: string, lo: number = -LIMITS.coord, hi: number = LIMITS.coord): number {
+  if (typeof v !== "number" || !Number.isFinite(v) || v < lo || v > hi) throw new SegmentError(`${what}: bad number ${String(v)}`);
+  return v;
+}
+function id(v: unknown, what: string): string {
+  if (typeof v !== "string" || !ID_RE.test(v)) throw new SegmentError(`${what}: bad id ${JSON.stringify(v)}`);
+  return v;
+}
+function text(v: unknown, what: string): string {
+  if (typeof v !== "string" || v.length > LIMITS.text || BAD_CHARS.test(v)) throw new SegmentError(`${what}: bad text`);
+  return v;
+}
+function box(v: unknown, what: string): Box {
+  const b = v as Box;
+  return { x: num(b?.x, what + ".x"), y: num(b?.y, what + ".y"), w: num(b?.w, what + ".w", 0), h: num(b?.h, what + ".h", 0) };
+}
+
+/** Throws SegmentError on the first violation; returns the segment otherwise. */
+export function validateSegment(seg: Segment): Segment {
+  if (!Array.isArray(seg.actions) || seg.actions.length > LIMITS.actions) throw new SegmentError("too many actions");
+  if (!Array.isArray(seg.marks?.words) || seg.marks.words.length > LIMITS.words) throw new SegmentError("too many words");
+  for (const [key, a] of Object.entries(seg.assets ?? {})) {
+    id(key, "asset key");
+    if (typeof a.src !== "string" || !SRC_RE.test(a.src)) throw new SegmentError(`asset ${key}: src must be a local image filename`);
+    num(a.w, "asset.w", 1);
+    num(a.h, "asset.h", 1);
+    if (!Array.isArray(a.trace) || a.trace.length > LIMITS.trace) throw new SegmentError(`asset ${key}: trace too long`);
+    for (const p of a.trace) {
+      num(p[0], "trace.x");
+      num(p[1], "trace.y");
+    }
+    for (const [name, boxes] of Object.entries(a.regions ?? {})) {
+      text(name, "region name");
+      for (const b of boxes) b.forEach((n) => num(n, "region"));
+    }
+  }
+  const seen = new Set<string>();
+  const check = (actions: Action[], where: string) => {
+    for (const a of actions) {
+      if (!OPS.has(a.op)) throw new SegmentError(`${where}: unknown op ${String((a as { op: unknown }).op)}`);
+      num(a.t, `${where}.t`, 0, MAX_T);
+      if ("dur" in a) num(a.dur, `${where}.dur`, 0, 3600 * 1000);
+      if (a.op === "place") {
+        if (!a.ref.startsWith("asset:") || !seg.assets[a.ref.slice(6)]) throw new SegmentError(`${where}: place ref must name a bundled asset`);
+        box(a.at, `${where}.at`);
+        const k = id(a.as, `${where}.as`);
+        if (seen.has(k)) throw new SegmentError(`${where}: duplicate id ${k}`);
+        seen.add(k);
+        continue;
+      }
+      const k = id(a.id, `${where}.id`);
+      if (seen.has(k)) throw new SegmentError(`${where}: duplicate id ${k}`);
+      seen.add(k);
+      if (a.op === "label" || a.op === "write") text(a.text, `${where}.text`);
+      if (a.op === "label" && a.side !== "left" && a.side !== "right") throw new SegmentError(`${where}: bad side`);
+      if (a.op === "write") {
+        num(a.at?.x, `${where}.at.x`);
+        num(a.at?.y, `${where}.at.y`);
+        num(a.size, `${where}.size`, 0.1, 1000);
+        if (a.style != null && a.style !== "muted") throw new SegmentError(`${where}: bad style`);
+      }
+      if (a.op === "highlight" && a.style !== "circle" && a.style !== "strike") throw new SegmentError(`${where}: bad highlight`);
+      if ("target" in a) {
+        const [root, ...rest] = a.target.split(".");
+        id(root, `${where}.target`);
+        if (rest.length) text(rest.join("."), `${where}.target part`);
+      }
+    }
+  };
+  check(seg.actions, "actions");
+  check(seg.aside?.actions ?? [], "aside");
+  for (const g of [...(seg.gestures ?? []), ...(seg.aside?.gestures ?? [])]) {
+    num(g.t, "gesture.t", 0, MAX_T);
+    if (g.until != null) num(g.until, "gesture.until", 0, MAX_T);
+    if (g.target != null) text(g.target, "gesture.target");
+  }
+  return seg;
+}
+
 /** The region's union box in asset pixels. "mic.eyepiece lens" → the asset's
  * "eyepiece lens" region; a bare "mic" → the whole asset. */
 export function regionBox(asset: AssetFixture, part: string | undefined): Box {
