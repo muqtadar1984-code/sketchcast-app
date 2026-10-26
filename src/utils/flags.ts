@@ -496,3 +496,20 @@ export function catalogueOwnerId(): string | null {
   const s = (process.env.CATALOGUE_OWNER_ID ?? "").trim().toLowerCase();
   return UUID.test(s) ? s : null;
 }
+
+/**
+ * SK, the AI tutor (plan 2026-10-26). Gates every /api/sk/* route; the client
+ * pages additionally read NEXT_PUBLIC_FEATURE_SK. OFF by default.
+ */
+export function skEnabled(): boolean {
+  return process.env.FEATURE_SK === "true";
+}
+
+/**
+ * SK live-interaction allowance metering (plan §11, R3 refinement 4). OFF until
+ * the cost measurements set the numbers; while off, a book grant is never
+ * metered and no warning is shown.
+ */
+export function skAllowanceEnforced(): boolean {
+  return process.env.FEATURE_SK_ALLOWANCE === "true";
+}
