@@ -1,0 +1,173 @@
+{
+ "segment": "s4-explain-main",
+ "option": "S",
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Claude/3.6556.2 Chrome/152.0.7977.167 Safari/537.36 MSIX",
+ "fps": {
+  "min": 0,
+  "avg": 0,
+  "n": 0
+ },
+ "driftMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "liveDriftMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "pauseLatencyMs": {
+  "p50": 0,
+  "p95": 0,
+  "max": 0,
+  "n": 0
+ },
+ "resume": {
+  "ok": 0,
+  "n": 0
+ },
+ "reload": {
+  "ok": 1,
+  "n": 1
+ },
+ "gestures": {
+  "point": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "write": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "writeHandPx": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "writeReachPx": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  },
+  "listenMs": {
+   "p50": 0,
+   "p95": 0,
+   "max": 0,
+   "n": 0
+  }
+ },
+ "duplicatesIgnored": 0,
+ "raw": {
+  "pauseLatencyMs": [],
+  "resumeTrials": [],
+  "reloadRecovery": [
+   {
+    "saved": 3339.837,
+    "resumed": 0,
+    "drawnSaved": [],
+    "drawnRestored": [],
+    "boardMatch": true,
+    "seekExact": true
+   }
+  ],
+  "gestureHits": [],
+  "listenLatencyMs": [],
+  "actionFirstFrame": [],
+  "liveFirstFrame": [],
+  "fps": [],
+  "writeSamples": 0
+ },
+ "at": "2026-10-26T21:41:47.178Z",
+ "trials": 10,
+ "reloadResults": [
+  {
+   "saved": 4128.293000000001,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 5258.566,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 2966.3650000000002,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 4459.692,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 6445.1140000000005,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 3721.9739999999997,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 6560.508,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 2699.8250000000003,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 3665.128,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  },
+  {
+   "saved": 3339.837,
+   "resumed": 0,
+   "drawnSaved": [],
+   "drawnRestored": [],
+   "boardMatch": true,
+   "seekExact": true
+  }
+ ]
+}

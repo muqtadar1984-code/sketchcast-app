@@ -47,8 +47,11 @@ export const rigBaseFor = (voiceGender: string | undefined): string => (voiceGen
 
 export type Placed = Record<string, { box: Box; asset: AssetFixture }>;
 export type GestureHit = { t: number; kind: string; target?: string; arriveMs: number };
-/** Hand-to-pen distance sampled while a `write` gesture follows the live pen (world px). */
-export type WriteSample = { t: number; target?: string; distancePx: number };
+/** Sampled while a `write` gesture follows the live pen (world px): how far
+ * the pointing RAY (elbow → fingertip) passes from the pen, and the straight
+ * fingertip-to-pen reach. A cut-out forearm rotates about a fixed elbow, so it
+ * aims at the pen; it cannot travel to it. */
+export type WriteSample = { t: number; target?: string; distancePx: number; reachPx: number };
 
 export type AvatarMeasure = { gestureHits: GestureHit[]; writeSamples: WriteSample[]; listenLatencyMs: number[] };
 export type Pen = { x: number; y: number } | null;
@@ -158,8 +161,8 @@ export class RigAvatar implements AvatarLike {
     return Math.max(-40, Math.min(70, deg));
   }
 
-  /** World position of the fingertip for the current arm angle. */
-  fingertip(): { x: number; y: number } {
+  /** World positions of the elbow and the fingertip for the current arm angle. */
+  arm(): { elbow: { x: number; y: number }; tip: { x: number; y: number } } {
     const [ex, ey] = this.rig.arm.pivot;
     const [fx, fy] = this.rig.arm.fingertip;
     const r = (this.armDeg * Math.PI) / 180;
@@ -167,7 +170,8 @@ export class RigAvatar implements AvatarLike {
     const dy = fy - ey;
     const sx = ex + dx * Math.cos(r) - dy * Math.sin(r);
     const sy = ey + dx * Math.sin(r) + dy * Math.cos(r);
-    return { x: this.ax + this.fx * this.k * sx, y: this.ay + this.k * sy };
+    const w = (x: number, y: number) => ({ x: this.ax + this.fx * this.k * x, y: this.ay + this.k * y });
+    return { elbow: w(ex, ey), tip: w(sx, sy) };
   }
 
   frame(t: number, marks: Marks, gestures: Gesture[], placed: Placed, hitBoxes: Record<string, Box>, m: AvatarMeasure, pen: Pen = null): void {
@@ -217,8 +221,13 @@ export class RigAvatar implements AvatarLike {
       this.pending = null;
     }
     if (following && pen) {
-      const f = this.fingertip();
-      m.writeSamples.push({ t, target: following.target, distancePx: Math.hypot(f.x - pen.x, f.y - pen.y) });
+      const { elbow, tip } = this.arm();
+      const vx = tip.x - elbow.x;
+      const vy = tip.y - elbow.y;
+      const len = Math.hypot(vx, vy) || 1;
+      // Perpendicular distance from the pen to the elbow→fingertip ray (0 = aimed exactly at the pen).
+      const cross = Math.abs(vx * (pen.y - elbow.y) - vy * (pen.x - elbow.x)) / len;
+      m.writeSamples.push({ t, target: following.target, distancePx: cross, reachPx: Math.hypot(tip.x - pen.x, tip.y - pen.y) });
     }
     // Head: tilt toward the student when listening, a small nod on each word, a breathing bob otherwise.
     // Listening tilt leans toward the student (screen-left); mirrored rigs tilt the other way in rig space.

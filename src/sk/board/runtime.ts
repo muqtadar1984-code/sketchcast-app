@@ -123,6 +123,8 @@ export class SpikeRuntime {
   private seen = new Set<string>();
   private pauseReq: number | null = null;
   private strokes = 0; // stroke elements created — a resume must not add any
+  /** Strokes before the current live aside was compiled: clearing it restores this. */
+  private liveStrokeBase = 0;
   private placed: Placed = {};
   private hitBoxes: Record<string, Box> = {};
   private readonly hitmap: HitMap | null;
@@ -355,16 +357,21 @@ export class SpikeRuntime {
   }
   /** Remove everything on the aside layer (the "erase" command). */
   clearLiveAside(): void {
-    if (this.live) {
-      for (const tm of this.live.timed) for (const a of tm.anims) a.cancel();
-      this.live.resolve();
-      this.live = null;
-    }
+    this.endLive();
     if (!this.asideAudio.paused) this.asideAudio.pause();
     while (this.asideLayer.firstChild) this.asideLayer.removeChild(this.asideLayer.firstChild);
     for (const d of Array.from(this.defs.children)) if (d.getAttribute("id")?.startsWith("g-")) this.defs.removeChild(d);
     // Re-compile the scripted aside (dev harness) so interrupt() still works.
     this.asideTimed = this.seg.aside ? this.compile(this.seg.aside.actions, this.asideLayer, this.defs, "a") : [];
+    this.movePen(0, 0, false);
+  }
+  /** The live aside is over (finished or erased): release it and its stroke count. */
+  private endLive(): void {
+    if (!this.live) return;
+    for (const tm of this.live.timed) for (const a of tm.anims) a.cancel();
+    this.live.resolve();
+    this.live = null;
+    this.strokes = this.liveStrokeBase; // the aside's own nodes go with it
     this.movePen(0, 0, false);
   }
   /** Draw a VALIDATED live aside program on the aside layer. The program has
@@ -373,6 +380,7 @@ export class SpikeRuntime {
    * when the program's duration has elapsed (or it is cleared). */
   playLiveAside(program: Pick<Aside, "actions" | "gestures"> & { duration_ms: number }, speech?: { uri: string; marks?: Marks }): Promise<void> {
     this.clearLiveAside();
+    this.liveStrokeBase = this.strokes;
     const timed = this.compile(program.actions, this.asideLayer, this.defs, "g");
     return new Promise<void>((resolve) => {
       const live = { timed, gestures: program.gestures, marks: speech?.marks ?? { words: [], visemes: [] }, start: performance.now(), duration: program.duration_ms, speech: !!speech, seen: new Set<string>(), lastT: -1, resolve };
@@ -502,7 +510,7 @@ export class SpikeRuntime {
       pauseLatencyMs: pct(m.pauseLatencyMs),
       resume: { ok: resumeOk, n: m.resumeTrials.length },
       reload: { ok: reloadOk, n: m.reloadRecovery.length },
-      gestures: { point: pct(m.gestureHits.filter((g) => g.kind === "point").map((g) => g.arriveMs)), write: pct(m.gestureHits.filter((g) => g.kind === "write").map((g) => g.arriveMs)), writeHandPx: pct(m.writeSamples.map((w) => w.distancePx)), listenMs: pct(m.listenLatencyMs) },
+      gestures: { point: pct(m.gestureHits.filter((g) => g.kind === "point").map((g) => g.arriveMs)), write: pct(m.gestureHits.filter((g) => g.kind === "write").map((g) => g.arriveMs)), writeHandPx: pct(m.writeSamples.map((w) => w.distancePx)), writeReachPx: pct(m.writeSamples.map((w) => w.reachPx)), listenMs: pct(m.listenLatencyMs) },
       duplicatesIgnored: this.commands.duplicates,
       raw: m,
     };
@@ -541,10 +549,14 @@ export class SpikeRuntime {
         /* ignore */
       }
       this.avatar.frame(t, seg.marks, seg.gestures, this.placed, this.hitBoxes, this.measure, this.penPos);
-    } else if (this.pauseReq != null) {
-      // First frame after the pause landed: that is the pause latency.
-      this.measure.pauseLatencyMs.push(performance.now() - this.pauseReq);
-      this.pauseReq = null;
+    } else {
+      if (this.pauseReq != null) {
+        // First frame after the pause landed: that is the pause latency.
+        this.measure.pauseLatencyMs.push(performance.now() - this.pauseReq);
+        this.pauseReq = null;
+      }
+      // Paused with nothing live: SK still breathes, blinks and turns to listen.
+      if (!this.live && aside.paused) this.avatar.frame(t, { words: [], visemes: [] }, [], this.placed, this.hitBoxes, this.measure, null);
     }
     if (main.ended && this.state === "playing") {
       this.setState("done");
@@ -577,11 +589,7 @@ export class SpikeRuntime {
       lv.lastT = tl;
       this.avatar.frame(tl, lv.marks, lv.gestures, this.placed, this.hitBoxes, this.measure, this.penPos);
       const finished = lv.speech ? aside.ended || (aside.paused && tl > 0) || tl >= lv.duration : tl >= lv.duration;
-      if (finished) {
-        lv.resolve();
-        this.live = null;
-        this.movePen(0, 0, false);
-      }
+      if (finished) this.endLive();
     }
     this.frames++;
     const now = performance.now();

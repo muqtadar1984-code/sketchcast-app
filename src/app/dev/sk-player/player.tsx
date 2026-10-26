@@ -126,12 +126,13 @@ export default function UnitPlayer() {
     const rt = runtimeRef.current;
     if (!rt || !loaded || state === "loading") return;
     if (harnessRef.current) return;
-    const h = new AutoHarness(rt, loaded.unit, ask, say);
+    const h = new AutoHarness(rt, loaded.unit, ask, say, (name) => (videoRef.current && hostRef.current ? snapshot(videoRef.current, hostRef.current, name) : Promise.resolve("")));
     harnessRef.current = h;
     const pending = readAuto();
-    if (pending && pending.unit === loaded.unit && pending.mode === "reload") void h.continueReloads(pending);
-    else if (auto?.mode === "interrupt" && !pending) void h.runInterrupts(auto.total);
-    else if (auto?.mode === "reload" && !pending) void h.continueReloads(null, auto.total);
+    const resuming = pending && pending.unit === loaded.unit && pending.mode === "reload" && pending.done < pending.total ? pending : null;
+    if (resuming) void h.continueReloads(resuming);
+    else if (auto?.mode === "interrupt") void h.runInterrupts(auto.total);
+    else if (auto?.mode === "reload") void h.continueReloads(null, auto.total);
     // One-shot: the harness object outlives state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, state]);
