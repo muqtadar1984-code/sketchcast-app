@@ -24,6 +24,8 @@ export type Action =
 export type Gesture = { t: number; kind: "point" | "write" | "listen" | "idle"; target?: string; until?: number };
 export type Segment = {
   segment_id: string;
+  /** From the TTS voice registry: picks the SK character (A female, B male). */
+  voice_gender?: "female" | "male";
   audio: { uri: string; duration_ms: number };
   marks: Marks;
   assets: Record<string, AssetFixture>;

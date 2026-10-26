@@ -4,6 +4,7 @@
  "version": 1,
  "language": "en",
  "voice": "edge-aria",
+ "voice_gender": "female",
  "audio": {
   "uri": "audio.mp3",
   "duration_ms": 81550
@@ -14116,7 +14117,7 @@
    "text": "M = image size ÷ actual size",
    "at": {
     "x": 50.0,
-    "y": 37
+    "y": 33
    },
    "size": 4.2,
    "t": 44112,
@@ -14128,7 +14129,7 @@
    "text": "actual size = image size ÷ M",
    "at": {
     "x": 50.0,
-    "y": 57
+    "y": 56
    },
    "size": 4.2,
    "t": 48775,
@@ -14140,9 +14141,9 @@
    "text": "image = 48 mm,  M = ×800",
    "at": {
     "x": 50.0,
-    "y": 65
+    "y": 62
    },
-   "size": 4.4,
+   "size": 4.0,
    "t": 57975,
    "dur": 4787
   },
@@ -14152,9 +14153,9 @@
    "text": "48 ÷ 800 = 0.06 mm",
    "at": {
     "x": 50.0,
-    "y": 73
+    "y": 68
    },
-   "size": 5.0,
+   "size": 4.6,
    "t": 63625,
    "dur": 3887
   },
@@ -14164,9 +14165,9 @@
    "text": "0.06 × 1000 = 60 µm",
    "at": {
     "x": 50.0,
-    "y": 81
+    "y": 74
    },
-   "size": 5.0,
+   "size": 4.6,
    "t": 76212,
    "dur": 4238
   },

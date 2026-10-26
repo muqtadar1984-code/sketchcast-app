@@ -110,10 +110,12 @@ elements = [
     {"id": "w1", "type": "text", "text": "10 × 40 = 400", "at": (COL, 110), "role": "term", "size": 44, "anchor": "lm"},
     {"id": "w2", "type": "text", "text": "not 10 + 40", "at": (COL + 12, 165), "role": "caption", "size": 28, "color": "muted", "anchor": "lm"},
     {"id": "w3", "type": "text", "text": "M = image size ÷ actual size", "at": (COL, 270), "role": "term", "size": 32, "anchor": "lm"},
-    {"id": "w4", "type": "text", "text": "actual size = image size ÷ M", "at": (COL, 400), "role": "term", "size": 32, "anchor": "lm"},
-    {"id": "w5", "type": "text", "text": "image = 48 mm,  M = ×800", "at": (COL, 470), "role": "label", "size": 32, "anchor": "lm"},
-    {"id": "w6", "type": "text", "text": "48 ÷ 800 = 0.06 mm", "at": (COL, 540), "role": "term", "size": 36, "anchor": "lm"},
-    {"id": "w7", "type": "text", "text": "0.06 × 1000 = 60 µm", "at": (COL, 610), "role": "term", "size": 36, "anchor": "lm"},
+    # Rows end by y≈580 and x≈1120 so the SK rig (bottom-right, 26 % of the
+    # frame tall → x ≈ 1140–1266, y ≈ 533–720) never covers the column.
+    {"id": "w4", "type": "text", "text": "actual size = image size ÷ M", "at": (COL, 380), "role": "term", "size": 32, "anchor": "lm"},
+    {"id": "w5", "type": "text", "text": "image = 48 mm,  M = ×800", "at": (COL, 440), "role": "label", "size": 30, "anchor": "lm"},
+    {"id": "w6", "type": "text", "text": "48 ÷ 800 = 0.06 mm", "at": (COL, 500), "role": "term", "size": 32, "anchor": "lm"},
+    {"id": "w7", "type": "text", "text": "0.06 × 1000 = 60 µm", "at": (COL, 560), "role": "term", "size": 32, "anchor": "lm"},
 ]
 actions = [
     {"verb": "draw", "target": "mic", "at": {"sec": sec(A["r1"]["t"])}, "duration": min(30.0, sec(A["r1"]["dur"]))},

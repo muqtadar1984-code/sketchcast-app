@@ -115,8 +115,19 @@ S-only (no live drawing without the overlay — and the overlay is E).
 
 - E's handwriting is outline tracing; a stroke font or pen-path data would be
   truer if E ever draws prepared material.
-- The avatar is a stub; the 2D SK character (B6a) replaces it, driven by Polly
-  visemes (B3) instead of the word-mark mouth.
+- **The avatar is now the chosen SK characters** (founder, 2026-10-27): **A**
+  (Malay woman teacher, teal tudung) for female narration voices, **B** (Indian
+  man teacher, glasses) for male voices; the segment's `voice_gender` (from the
+  TTS voice registry) picks the rig. Each is cut from one generated
+  illustration into three layers (`tools/sk-s1/make_rig.py` →
+  `public/sk-s1/sk-a`, `sk-b`: body, head, pointing forearm;
+  `docs/sk-s1/sk-rig-*-layers.jpg`). A is mirrored so she points left at the
+  board. The forearm rotates about the elbow to aim at the gesture target, the
+  head tilts to listen and nods on words, a vector mouth overlay opens with
+  the word marks, the eyes blink. Evidence: `docs/sk-s1/optionE-rig-*.jpg`.
+  Polly visemes replace the word-mark mouth in B3; a proper parts sheet (more
+  poses, mouth shapes) is B6b. The other two concepts (C, the owl mascot) and
+  the three roster faces are in the session notes if ever wanted.
 - fps and the two founder ratings are the only unmeasured §5.3 rows.
 - The dev harness exposes `window.__skRuntime` and writes a checkpoint to
   `localStorage`; neither pattern ships (B4 keeps the cursor server-side).

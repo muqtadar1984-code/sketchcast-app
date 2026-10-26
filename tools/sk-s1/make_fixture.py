@@ -209,11 +209,13 @@ actions = [
     {"op": "write", "id": "w1", "text": "10 × 40 = 400", "at": {"x": COL_X, "y": 14}, "size": 6.0, "t": T_W1, "dur": T_W1E - T_W1},
     {"op": "write", "id": "w2", "text": "not 10 + 40", "at": {"x": COL_X + 2, "y": 21}, "size": 4.0, "style": "muted", "t": T_NOT, "dur": 1500},
     {"op": "highlight", "id": "h1", "target": "w2", "style": "strike", "t": T_NEVER, "dur": 500},
-    {"op": "write", "id": "w3", "text": "M = image size ÷ actual size", "at": {"x": COL_X, "y": 37}, "size": 4.2, "t": T_W3, "dur": T_W3E - T_W3},
-    {"op": "write", "id": "w4", "text": "actual size = image size ÷ M", "at": {"x": COL_X, "y": 57}, "size": 4.2, "t": T_W4, "dur": T_W4E - T_W4},
-    {"op": "write", "id": "w5", "text": "image = 48 mm,  M = ×800", "at": {"x": COL_X, "y": 65}, "size": 4.4, "t": T_W5, "dur": T_W5E - T_W5},
-    {"op": "write", "id": "w6", "text": "48 ÷ 800 = 0.06 mm", "at": {"x": COL_X, "y": 73}, "size": 5.0, "t": T_W6, "dur": T_W6E - T_W6},
-    {"op": "write", "id": "w7", "text": "0.06 × 1000 = 60 µm", "at": {"x": COL_X, "y": 81}, "size": 5.0, "t": T_W7, "dur": T_W7E - T_W7},
+    # Rows end by y≈74 and x≈83 so the SK rig (bottom-right, 24 % of the
+    # board tall → x 83–98, y 76–100) never covers the working column.
+    {"op": "write", "id": "w3", "text": "M = image size ÷ actual size", "at": {"x": COL_X, "y": 33}, "size": 4.2, "t": T_W3, "dur": T_W3E - T_W3},
+    {"op": "write", "id": "w4", "text": "actual size = image size ÷ M", "at": {"x": COL_X, "y": 56}, "size": 4.2, "t": T_W4, "dur": T_W4E - T_W4},
+    {"op": "write", "id": "w5", "text": "image = 48 mm,  M = ×800", "at": {"x": COL_X, "y": 62}, "size": 4.0, "t": T_W5, "dur": T_W5E - T_W5},
+    {"op": "write", "id": "w6", "text": "48 ÷ 800 = 0.06 mm", "at": {"x": COL_X, "y": 68}, "size": 4.6, "t": T_W6, "dur": T_W6E - T_W6},
+    {"op": "write", "id": "w7", "text": "0.06 × 1000 = 60 µm", "at": {"x": COL_X, "y": 74}, "size": 4.6, "t": T_W7, "dur": T_W7E - T_W7},
     {"op": "highlight", "id": "h2", "target": "w7", "style": "circle", "t": T_W7E + 100, "dur": 700},
 ]
 for a in actions:
@@ -236,6 +238,9 @@ segment = {
     "version": 1,
     "language": "en",
     "voice": args.voice,
+    # The SK character follows the voice: A for female voices, B for male.
+    "voice_gender": {"m": "male", "male": "male"}.get(
+        str(getattr(__import__("shared.tts.registry", fromlist=["get_voice"]).get_voice(args.voice), "gender", "") or "").lower(), "female"),
     "audio": {"uri": "audio.mp3", "duration_ms": mp3_duration_ms(out / "audio.mp3") or words[-1]["t1"] + 600},
     "marks": {"words": words, "visemes": []},
     "assets": {

@@ -6,7 +6,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { validateSegment, type OpentypeLike, type Segment } from "./engine";
-import { SpikeRuntime, type HitMap, type Mode, type PlayerState } from "./runtime";
+import { SpikeRuntime, type HitMap, type Mode, type PlayerState, type Rig } from "./runtime";
+
+// The SK characters (cut into layers by tools/sk-s1/make_rig.py): A (Malay
+// woman, tudung) speaks with female voices, B (Indian man, glasses) with male
+// voices — founder's choice 2026-10-27. The segment says which voice it has.
+const rigBaseFor = (voiceGender: string | undefined) => (voiceGender === "male" ? "/sk-s1/sk-b/" : "/sk-s1/sk-a/");
 
 export default function SpikePlayer({ base, mode = "E" }: { base: string; mode?: Mode }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -17,6 +22,7 @@ export default function SpikePlayer({ base, mode = "E" }: { base: string; mode?:
   const [seg, setSeg] = useState<Segment | null>(null);
   const [font, setFont] = useState<OpentypeLike | null>(null);
   const [hitmap, setHitmap] = useState<HitMap | null>(null);
+  const [rig, setRig] = useState<Rig | null>(null);
   const [state, setState] = useState<PlayerState | "loading">("loading");
   const [clockMs, setClockMs] = useState(0);
   const [log, setLog] = useState<string[]>([]);
@@ -30,6 +36,10 @@ export default function SpikePlayer({ base, mode = "E" }: { base: string; mode?:
         import("opentype.js"),
         mode === "S" ? fetch(base + "optionS.hitmap.json").then((r) => r.json() as Promise<HitMap>) : Promise.resolve(null),
       ]);
+      const rigBase = rigBaseFor(s.voice_gender);
+      const rg = await fetch(rigBase + "rig.json")
+        .then((r) => (r.ok ? (r.json() as Promise<Rig>) : null))
+        .catch(() => null);
       const f = await new Promise<OpentypeLike>((res, rej) =>
         ot.load("/sk-s1/Caveat-Regular.ttf", (err, fnt) => (err || !fnt ? rej(err) : res(fnt as unknown as OpentypeLike))),
       );
@@ -44,6 +54,7 @@ export default function SpikePlayer({ base, mode = "E" }: { base: string; mode?:
       setSeg(s);
       setFont(f);
       setHitmap(hm);
+      setRig(rg);
     })();
     return () => {
       alive = false;
@@ -66,7 +77,7 @@ export default function SpikePlayer({ base, mode = "E" }: { base: string; mode?:
         clock: setClockMs,
         log: (s) => setLog((l) => [...l.slice(-60), `${new Date().toLocaleTimeString()} ${s}`]),
       },
-      { mode, hitmap: hitmap ?? undefined },
+      { mode, hitmap: hitmap ?? undefined, rig: rig ? { data: rig, base: rigBaseFor(seg.voice_gender) } : undefined },
     );
     runtimeRef.current = rt;
     (window as unknown as { __skRuntime?: SpikeRuntime }).__skRuntime = rt; // dev page: lets a harness read measurements
@@ -77,7 +88,7 @@ export default function SpikePlayer({ base, mode = "E" }: { base: string; mode?:
       rt.unmount();
       runtimeRef.current = null;
     };
-  }, [seg, font, hitmap, base, mode]);
+  }, [seg, font, hitmap, rig, base, mode]);
 
   // Space = interrupt (push-to-talk stand-in for the VAD).
   useEffect(() => {
