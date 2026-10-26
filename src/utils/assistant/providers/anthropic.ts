@@ -30,7 +30,13 @@ export class AnthropicProvider implements LLMProvider {
   readonly id = "anthropic";
   // Sonnet 5 is the quality tier for the student-facing assistant (same model the
   // tutor uses). Override per deploy with ASSISTANT_ANTHROPIC_MODEL.
-  readonly model = claudeModel(process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-sonnet-5");
+  readonly model: string;
+
+  /** `model` pins a first-party id for one caller (SK B4: Haiku 5.5 for the
+   * intent router, Sonnet 5.5 for the teacher); the assistant keeps the env default. */
+  constructor(model?: string) {
+    this.model = claudeModel(model || process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-sonnet-5");
+  }
 
   async *stream(opts: GenerateOpts): AsyncGenerator<StreamEvent, void, void> {
     let stream: AsyncIterable<Anthropic.RawMessageStreamEvent>;

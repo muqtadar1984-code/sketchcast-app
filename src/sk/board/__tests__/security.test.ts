@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LIMITS, SegmentError, validateSegment, type Segment } from "../engine";
 
-const FIXTURE = JSON.parse(readFileSync(new URL("../../../../../public/sk-s1/u4/segment.json", import.meta.url), "utf-8")) as Segment;
+const FIXTURE = JSON.parse(readFileSync(new URL("../../../../public/sk-s1/u4/segment.json", import.meta.url), "utf-8")) as Segment;
 const clone = (): Segment => JSON.parse(JSON.stringify(FIXTURE));
 const refuses = (mutate: (s: Segment) => void) => {
   const s = clone();

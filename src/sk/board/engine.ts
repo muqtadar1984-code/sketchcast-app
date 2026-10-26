@@ -22,19 +22,38 @@ export type Action =
   | { op: "write"; id: string; text: string; at: { x: number; y: number }; size: number; style?: "muted"; t: number; dur: number }
   | { op: "highlight"; id: string; target: string; style: "circle" | "strike"; t: number; dur: number };
 export type Gesture = { t: number; kind: "point" | "write" | "listen" | "idle"; target?: string; until?: number };
+export type Aside = { question: string; audio: { uri: string; duration_ms: number }; marks: Marks; actions: Action[]; gestures: Gesture[] };
 export type Segment = {
   segment_id: string;
   /** From the TTS voice registry: picks the SK character (A female, B male). */
   voice_gender?: "female" | "male";
   audio: { uri: string; duration_ms: number };
+  /** Option S (B3 packager): the rendered clip and its hit map, relative to the manifest. */
+  clip?: { uri: string; duration_ms: number };
+  hitmap?: string;
   marks: Marks;
+  /** Option E only; a B3 (Option S) manifest carries none — see normaliseSegment. */
   assets: Record<string, AssetFixture>;
   actions: Action[];
   gestures: Gesture[];
-  aside: { question: string; audio: { uri: string; duration_ms: number }; marks: Marks; actions: Action[]; gestures: Gesture[] };
+  /** The S1 fixture's scripted aside; B4's live asides arrive from the server instead. */
+  aside?: Aside;
   checkpoints: number[];
   narration: string;
 };
+
+/** A B3 manifest has no assets/actions/aside (the clip carries the board):
+ * fill the Option-E fields so one Segment type serves both. Pure. */
+export function normaliseSegment(raw: Segment): Segment {
+  return {
+    ...raw,
+    assets: raw.assets ?? {},
+    actions: Array.isArray(raw.actions) ? raw.actions : [],
+    gestures: Array.isArray(raw.gestures) ? raw.gestures : [],
+    marks: raw.marks ?? { words: [], visemes: [] },
+    checkpoints: Array.isArray(raw.checkpoints) ? raw.checkpoints : [0],
+  };
+}
 
 // ── Segment validation (the security gate, contracts §2) ────────────────────
 // A segment is DATA from a file or a model. Nothing in it may reach the DOM
@@ -70,7 +89,8 @@ function box(v: unknown, what: string): Box {
 }
 
 /** Throws SegmentError on the first violation; returns the segment otherwise. */
-export function validateSegment(seg: Segment): Segment {
+export function validateSegment(input: Segment): Segment {
+  const seg = normaliseSegment(input);
   if (!Array.isArray(seg.actions) || seg.actions.length > LIMITS.actions) throw new SegmentError("too many actions");
   if (!Array.isArray(seg.marks?.words) || seg.marks.words.length > LIMITS.words) throw new SegmentError("too many words");
   for (const [key, a] of Object.entries(seg.assets ?? {})) {
