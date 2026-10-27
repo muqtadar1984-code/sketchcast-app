@@ -168,7 +168,7 @@ describe("a unit with no graph items takes its items from the bank", () => {
     expect(r.view.mastery.s2).toBeUndefined();
     await runCommand(d, s, { name: "goto", args: { unitKey: "s2" } });
     const c = await runCommand(d, s, { name: "practise", args: { n: 0 } });
-    expect(c.speech).toBe("I can't do that from here.");
+    expect(c.speech).toBe("There are no check questions for Parts of a light microscope yet — keep going, or say practise to try what there is.");
     expect(c.view.openCheck).toBeNull();
     // What is gradeable still practises (assisted evidence only).
     await runCommand(d, s, { name: "practise", args: {} });
