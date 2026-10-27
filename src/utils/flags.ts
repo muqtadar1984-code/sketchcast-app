@@ -498,8 +498,11 @@ export function catalogueOwnerId(): string | null {
 }
 
 /**
- * SK, the AI tutor (plan 2026-10-26). Gates every /api/sk/* route; the client
- * pages additionally read NEXT_PUBLIC_FEATURE_SK. OFF by default.
+ * SK, the animated AI tutor (plan 2026-10-26; B4 teacher loop). Gates every
+ * /api/sk/* route (404 when off — authoritative). The student page under /sk
+ * additionally reads NEXT_PUBLIC_FEATURE_SK so the surface stays dark while
+ * the routes are off. OFF by default: production is unchanged until a founder
+ * flips both variables.
  */
 export function skEnabled(): boolean {
   return process.env.FEATURE_SK === "true";
@@ -512,4 +515,36 @@ export function skEnabled(): boolean {
  */
 export function skAllowanceEnforced(): boolean {
   return process.env.FEATURE_SK_ALLOWANCE === "true";
+}
+
+/**
+ * SK restricted-live allow-list (founder, 2026-10-27: "take it live restricted
+ * to one account for testing"). `SK_ALLOWED_EMAILS` is a comma-separated list
+ * of addresses. When it is SET and non-empty, every /api/sk/* route and the
+ * student page answer 404 — exactly as if FEATURE_SK were off — to anyone who
+ * is not signed in with a VERIFIED address on the list. When it is unset or
+ * empty, nothing changes: the flag and skAccess() decide alone. So this can
+ * only ever narrow access, never widen it, and removing the variable is the
+ * release to everyone the flag already lets in.
+ *
+ * Server-only on purpose (never NEXT_PUBLIC_*): the list must not ship in the
+ * browser bundle. Same matching rules as presentAllowed: trim, strip pasted
+ * quotes, lower-case, exact match, no Gmail dot/plus normalisation.
+ */
+export type SkGateUser = { email?: string | null; email_confirmed_at?: string | null };
+
+export function skAllowedEmails(): string[] {
+  return (process.env.SK_ALLOWED_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().replace(/^["']|["']$/g, "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** True when the allow-list is not in force, or the user is on it (verified). */
+export function skUserAllowed(user: SkGateUser | null | undefined): boolean {
+  const allow = skAllowedEmails();
+  if (!allow.length) return true;
+  if (!user?.email_confirmed_at) return false;
+  const e = (user.email ?? "").trim().toLowerCase();
+  return !!e && allow.includes(e);
 }
