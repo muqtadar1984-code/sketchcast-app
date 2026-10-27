@@ -3,7 +3,7 @@
   "graph_id": "graph-ch2-poc",
   "product_id": "sk-poc-biology",
   "chapter": 2,
-  "version": 0,
+  "version": 1,
   "language": "en",
   "status": "draft",
   "built_from": { "manuscript_version": "ch02-draft (approved) §s5", "models": { "author": "hand-written from the S1 fixture", "check": "none" } },

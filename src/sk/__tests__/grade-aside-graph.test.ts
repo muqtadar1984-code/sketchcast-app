@@ -85,7 +85,7 @@ describe("parseGraph", () => {
   it("parses the stand-in manifest and the B3 packager's Chapter 2 graph", () => {
     const standin = parseGraph(JSON.parse(readFileSync(new URL("../../../public/sk-s1/graph-ch2.json", import.meta.url), "utf-8")));
     expect(standin.units.map((u) => u.unit_key)).toEqual(["u4"]);
-    expect(startCursor(standin)).toEqual({ graphVersion: 0, unitKey: "u4", assetId: "u4-explain-main", segmentId: "u4-explain-main-s1", t: 0 });
+    expect(startCursor(standin)).toEqual({ graphVersion: 1, unitKey: "u4", assetId: "u4-explain-main", segmentId: "u4-explain-main-s1", t: 0 });
     const b3 = parseGraph(JSON.parse(readFileSync(new URL("../../../public/sk-s1/ch02/graph.json", import.meta.url), "utf-8")), "/sk-s1/ch02/");
     expect(b3.product_id).toBe("cells-structure-function-organisation");
     expect(b3.units.map((u) => u.unit_key)).toEqual(["s1", "s2", "s3", "s4", "s5", "s6"]);
