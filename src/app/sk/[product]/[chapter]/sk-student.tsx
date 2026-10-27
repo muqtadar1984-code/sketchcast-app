@@ -129,8 +129,14 @@ export default function SkStudent({ productId, chapter }: Props) {
   }, [productId, chapter, say]);
 
   // 2. Load the asset the cursor names (segment + hit map + rig + font) when it changes.
-  const assetId = view?.asset?.assetId ?? null;
-  const segmentUri = view?.asset?.segment ?? null;
+  // A check or practice asset has nothing to draw: keep the unit's teaching
+  // segment on the board (view.board), paused, so a session resumed mid-check
+  // never sits on a blank board.
+  const shown = view?.asset?.segment ? view.asset : (view?.board ?? null);
+  const assetId = shown?.assetId ?? null;
+  const segmentUri = shown?.segment ?? null;
+  const shownHitmap = shown?.hitmap;
+  const shownClip = shown?.clip;
   useEffect(() => {
     if (!assetId || !segmentUri) return;
     if (loaded?.assetId === assetId && loaded.rigChoice === rig) return;
@@ -142,8 +148,8 @@ export default function SkStudent({ productId, chapter }: Props) {
         const raw = normaliseSegment((await fetch(segmentUri).then((r) => r.json())) as Segment);
         // The security gate: a segment that fails validation never reaches the DOM.
         const seg = validateSegment(raw);
-        const hitmapUri = view?.asset?.hitmap ?? (seg.hitmap ? base + seg.hitmap : null);
-        const clipUri = view?.asset?.clip ?? (seg.clip ? base + seg.clip.uri : null);
+        const hitmapUri = shownHitmap ?? (seg.hitmap ? base + seg.hitmap : null);
+        const clipUri = shownClip ?? (seg.clip ? base + seg.clip.uri : null);
         const [hitmap, rigData] = await Promise.all([
           hitmapUri ? fetch(hitmapUri).then((r) => (r.ok ? (r.json() as Promise<HitMap>) : null)) : Promise.resolve(null),
           fetch(rigBaseForChoice(rig) + "rig.json")
@@ -168,7 +174,7 @@ export default function SkStudent({ productId, chapter }: Props) {
     return () => {
       alive = false;
     };
-  }, [assetId, segmentUri, view?.asset?.hitmap, view?.asset?.clip, loaded?.assetId, loaded?.rigChoice, rig, say]);
+  }, [assetId, segmentUri, shownHitmap, shownClip, loaded?.assetId, loaded?.rigChoice, rig, say]);
 
   // 3. Mount the runtime for the loaded asset; seek to the server's cursor.
   useEffect(() => {

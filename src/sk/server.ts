@@ -17,7 +17,8 @@ import { createClient } from "@/utils/supabase/server";
 import { normaliseSegment, validateSegment, type Segment } from "./board/engine";
 import { embedderConfigured, TitanEmbedder } from "./embed";
 import { parseGraph } from "./graph";
-import { StaticItemBank, type ItemBank } from "./items";
+import { CompositeItemBank, StaticItemBank, type ItemBank } from "./items";
+import { UUID_RE } from "./ids";
 import { SupabaseItemBank } from "./items-supabase";
 import type { LoopDeps } from "./loop";
 import { retrievalMode, selectRetrievalProvider, type RetrievalDb, type RetrievalProvider } from "./retrieval";
@@ -127,7 +128,8 @@ let override: Partial<SkDeps> | null = null;
 export function persistence(): Pick<SkDeps, "store" | "items"> {
   if (process.env.SK_STORE === "supabase") {
     const db = skDbFrom(createAdminClient());
-    return { store: new SupabaseSessionStore(db), items: new SupabaseItemBank(db) };
+    // The stand-in chapter's string ids fall through to the static items (live fix 2026-10-27).
+    return { store: new SupabaseSessionStore(db), items: new CompositeItemBank(new SupabaseItemBank(db), new StaticItemBank(), (id) => UUID_RE.test(id)) };
   }
   return { store: new InMemorySessionStore(), items: new StaticItemBank() };
 }
