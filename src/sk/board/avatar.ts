@@ -110,7 +110,38 @@ export interface AvatarLike {
   /** Barge-in: turn to the student (and record how long the pose took to land). */
   listen(on: boolean): void;
   frame(t: number, marks: Marks, gestures: Gesture[], placed: Placed, hitBoxes: Record<string, Box>, m: AvatarMeasure, pen?: Pen): void;
+  /** B9: a viseme from SK's OWN line (Polly marks, off the speech element's
+   * clock, not the board's). The mouth takes the shape until the next viseme
+   * or "sil"; word marks on the board clock still win while a clip plays.
+   * A renderer may ignore it. */
+  mouth?(viseme: string): void;
 }
+
+/** How far the mouth opens for a viseme (contracts §1.3 set), 0–1. Lip
+ * closures and silence shut it; open vowels open it wide. */
+export function visemeOpen(v: string): number {
+  switch (v) {
+    case "sil":
+      return 0;
+    case "PP":
+    case "FF":
+      return 0.12;
+    case "aa":
+      return 1;
+    case "E":
+    case "oh":
+    case "ou":
+      return 0.65;
+    case "ih":
+      return 0.45;
+    default:
+      return 0.3; // TH DD kk CH SS nn RR
+  }
+}
+
+/** A live viseme is honoured for this long without a successor: a dropped
+ * "sil" (page hidden, element error) never leaves the mouth hanging open. */
+const LIVE_VISEME_MS = 400;
 
 /** The target box of the active gesture, in world units, or null. Shared by
  * both avatars so the stub and the rig point at the same thing. */
@@ -131,6 +162,7 @@ export function gestureTarget(active: Gesture, placed: Placed, hitBoxes: Record<
 // mouth is a vector overlay driven by the word marks (visemes in B3); eyes
 // blink. All rig geometry is in SOURCE pixels inside one scaled group.
 export class RigAvatar implements AvatarLike {
+  private liveViseme: { v: string; at: number } | null = null;
   private readonly root: SVGGElement;
   private readonly headG: SVGGElement;
   private readonly armG: SVGGElement;
@@ -224,12 +256,19 @@ export class RigAvatar implements AvatarLike {
     return { elbow: w(ex, ey), tip: w(sx, sy) };
   }
 
+  mouth(viseme: string): void {
+    this.liveViseme = viseme === "sil" ? null : { v: viseme, at: performance.now() };
+  }
+
   frame(t: number, marks: Marks, gestures: Gesture[], placed: Placed, hitBoxes: Record<string, Box>, m: AvatarMeasure, pen: Pen = null): void {
-    // Mouth from the word marks (visemes replace this in B3).
+    // Mouth from the word marks on the board clock; else from a live viseme
+    // of SK's own line (B9); else closed.
     const w = wordAt(marks.words, t);
-    const open = w ? 5 + 7 * Math.abs(Math.sin((t - w.t0) / 48)) : 0;
-    setAttr(this.mouthSkin, "opacity", w ? "1" : "0");
-    setAttr(this.mouthOpen, "opacity", w ? "1" : "0");
+    const lv = !w && this.liveViseme && performance.now() - this.liveViseme.at < LIVE_VISEME_MS ? this.liveViseme : null;
+    const open = w ? 5 + 7 * Math.abs(Math.sin((t - w.t0) / 48)) : lv ? 1 + 11 * visemeOpen(lv.v) : 0;
+    const talking = !!w || !!lv;
+    setAttr(this.mouthSkin, "opacity", talking ? "1" : "0");
+    setAttr(this.mouthOpen, "opacity", talking ? "1" : "0");
     setAttr(this.mouthOpen, "ry", open.toFixed(1));
     setAttr(this.mouthOpen, "rx", (this.rig.mouth.w / 2 - 6 - open * 0.6).toFixed(1));
     // Blink every 3–5 s for ~120 ms (wall clock, so it also blinks while paused).
@@ -294,9 +333,10 @@ export class RigAvatar implements AvatarLike {
 
 // ── SK avatar stub (runs without a rig): mouth from word marks, hand from gestures ──
 export class StubAvatar implements AvatarLike {
+  private liveViseme: { v: string; at: number } | null = null;
   private readonly hx0: number;
   private readonly hy0: number;
-  private readonly mouth: SVGEllipseElement;
+  private readonly mouthEl: SVGEllipseElement;
   private readonly arm: SVGLineElement;
   private readonly hand: SVGCircleElement;
   private readonly head: SVGCircleElement;
@@ -322,7 +362,7 @@ export class StubAvatar implements AvatarLike {
     this.head = el("circle", { cx: x, cy: y, r: 6.5 * s, fill: "#FFE2C6", stroke: INK, "stroke-width": 0.35 * s });
     const eyeL = el("circle", { cx: x - 2.2 * s, cy: y - 1.2 * s, r: 0.7 * s, fill: INK });
     const eyeR = el("circle", { cx: x + 2.2 * s, cy: y - 1.2 * s, r: 0.7 * s, fill: INK });
-    this.mouth = el("ellipse", { cx: x, cy: y + 2.6 * s, rx: 1.6 * s, ry: 0.3 * s, fill: "#8B2E2E" });
+    this.mouthEl = el("ellipse", { cx: x, cy: y + 2.6 * s, rx: 1.6 * s, ry: 0.3 * s, fill: "#8B2E2E" });
     this.hx0 = x - 6 * s;
     this.hy0 = y + 9 * s;
     this.hx = this.hx0;
@@ -330,7 +370,7 @@ export class StubAvatar implements AvatarLike {
     this.arm = el("line", { x1: this.hx0, y1: this.hy0, x2: this.hx, y2: this.hy, stroke: "#FFE2C6", "stroke-width": 1.6 * s, "stroke-linecap": "round" });
     this.hand = el("circle", { cx: this.hx, cy: this.hy, r: 1.3 * s, fill: "#FFE2C6", stroke: INK, "stroke-width": 0.25 * s });
     this.ear = el("circle", { cx: x + 8.5 * s, cy: y - 2 * s, r: 1.6 * s, fill: "none", stroke: ACCENT, "stroke-width": 0.4 * s, opacity: 0 });
-    g.append(body, this.arm, this.hand, this.head, eyeL, eyeR, this.mouth, this.ear);
+    g.append(body, this.arm, this.hand, this.head, eyeL, eyeR, this.mouthEl, this.ear);
     layer.appendChild(g);
   }
 
@@ -340,11 +380,16 @@ export class StubAvatar implements AvatarLike {
     setAttr(this.head, "transform", on ? `rotate(-8 ${this.cx} ${this.cy})` : "");
   }
 
+  mouth(viseme: string): void {
+    this.liveViseme = viseme === "sil" ? null : { v: viseme, at: performance.now() };
+  }
+
   frame(t: number, marks: Marks, gestures: Gesture[], placed: Placed, hitBoxes: Record<string, Box>, m: AvatarMeasure, pen: Pen = null): void {
     const s = this.s;
     const w = wordAt(marks.words, t);
-    const open = (w ? 0.9 + 0.6 * Math.abs(Math.sin((t - w.t0) / 45)) : 0.3) * s;
-    setAttr(this.mouth, "ry", open.toFixed(2));
+    const lv = !w && this.liveViseme && performance.now() - this.liveViseme.at < LIVE_VISEME_MS ? this.liveViseme : null;
+    const open = (w ? 0.9 + 0.6 * Math.abs(Math.sin((t - w.t0) / 45)) : lv ? 0.3 + 1.2 * visemeOpen(lv.v) : 0.3) * s;
+    setAttr(this.mouthEl, "ry", open.toFixed(2));
     let tx = this.hx0;
     let ty = this.hy0;
     const active = activeGesture(gestures, t);

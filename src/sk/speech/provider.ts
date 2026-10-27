@@ -16,6 +16,8 @@ export type PlayOpts = {
   signal?: AbortSignal;
   /** Word boundaries as they happen (the browser adapter's only timing). */
   onWord?: (w: { charIndex: number; t: number }) => void;
+  /** Viseme marks as they happen (Polly); "sil" closes the mouth at the end. */
+  onViseme?: (viseme: string, t: number) => void;
 };
 
 export type SpeechResult = {

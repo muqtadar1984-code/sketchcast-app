@@ -4,8 +4,11 @@
 // asset as an Option-S segment (clip + hit map) through the board runtime,
 // and sends typed questions, commands and check answers through /api/sk/*.
 // The server owns the state: every response carries the session view and the
-// client renders FROM it (contracts §5.4 — snapshot-authoritative). Browser
-// speechSynthesis voices SK's lines through the SpeechProvider seam.
+// client renders FROM it (contracts §5.4 — snapshot-authoritative). SK's
+// lines go through the SpeechProvider seam: with NEXT_PUBLIC_SK_TTS=polly the
+// server voice (POST /api/sk/speak → mp3 + word/viseme marks: caption
+// highlight + mouth) and, on any failure or with the flag unset, browser
+// speechSynthesis exactly as before (B9).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pickBrowserVoice, RIG_LABELS, rigBaseForChoice, voiceGenderForChoice, type RigChoice } from "@/sk/board/avatar";
@@ -16,6 +19,9 @@ import { useMicSupported, useRigChoice } from "@/sk/board/use-rig-choice";
 import { uuidv7 } from "@/sk/ids";
 import type { SessionView } from "@/sk/loop";
 import { BrowserSpeechProvider, browserSpeechAvailable } from "@/sk/speech/browser";
+import { PollyClientSpeechProvider, SpeakUnavailable } from "@/sk/speech/polly-client";
+import { pollyVoiceFor, spokenWordSpan } from "@/sk/speech/polly-marks";
+import type { PlayOpts } from "@/sk/speech/provider";
 import type { CommandArgs, CommandName } from "@/sk/types";
 import { startDictation } from "@/utils/assistant/voice-client";
 
@@ -67,6 +73,10 @@ export default function SkStudent({ productId, chapter }: Props) {
   const asideAudioRef = useRef<HTMLAudioElement>(null);
   const runtimeRef = useRef<SpikeRuntime | null>(null);
   const speechRef = useRef<BrowserSpeechProvider | null>(null);
+  const pollyRef = useRef<PollyClientSpeechProvider | null>(null);
+  // The string index of the word being spoken in `skText` (-1 = none): the
+  // caption highlight, fed by either adapter's onWord.
+  const [spokenAt, setSpokenAt] = useState(-1);
   const fontRef = useRef<OpentypeLike | null>(null);
   const [view, setView] = useState<SessionView | null>(null);
   const [loaded, setLoaded] = useState<{ seg: Segment; hitmap: HitMap | null; rig: Rig | null; rigChoice: RigChoice; base: string; clipUri: string | null; assetId: string } | null>(null);
@@ -97,21 +107,61 @@ export default function SkStudent({ productId, chapter }: Props) {
     if (!text) return;
     setLog((l) => [...l.slice(-80), { at: new Date().toLocaleTimeString(), who, text }]);
   }, []);
-  const speak = useCallback(async (text: string) => {
-    if (!text || !speechRef.current) return;
-    try {
-      const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-      const name = pickBrowserVoice(voices, voiceGenderForChoice(rigRef.current));
-      const r = await speechRef.current.synthesize(text, name ? `browser:${name}` : "browser:default", { marks: [] });
-      await r.play?.({ rate: 1 });
-    } catch {
-      /* no voice */
-    }
+  /** Barge-in: stop whichever adapter is speaking, close the mouth, clear the highlight. */
+  const stopSpeaking = useCallback(() => {
+    pollyRef.current?.cancel();
+    speechRef.current?.cancel();
+    runtimeRef.current?.mouth("sil");
+    setSpokenAt(-1);
   }, []);
+  const speak = useCallback(
+    async (text: string) => {
+      if (!text) return;
+      const gender = voiceGenderForChoice(rigRef.current);
+      const marks: PlayOpts = {
+        rate: 1,
+        onWord: (w) => setSpokenAt(w.charIndex),
+        onViseme: (v) => runtimeRef.current?.mouth(v),
+      };
+      setSpokenAt(-1);
+      try {
+        const polly = pollyRef.current;
+        if (polly) {
+          try {
+            const r = await polly.synthesize(text, pollyVoiceFor(gender), { marks: ["word", "viseme"] });
+            await r.play?.(marks);
+            return;
+          } catch (e) {
+            // A 404 = the server flag is off: stop asking for this page's life.
+            // Anything else (network, 502, autoplay) falls back for this line.
+            if (e instanceof SpeakUnavailable) {
+              pollyRef.current = null;
+              say("sys", "server voice not available — using the browser voice");
+            }
+            runtimeRef.current?.mouth("sil");
+            setSpokenAt(-1);
+          }
+        }
+        if (!speechRef.current) return;
+        const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+        const name = pickBrowserVoice(voices, gender);
+        const r = await speechRef.current.synthesize(text, name ? `browser:${name}` : "browser:default", { marks: [] });
+        await r.play?.(marks);
+      } catch {
+        /* no voice */
+      } finally {
+        setSpokenAt(-1);
+      }
+    },
+    [say],
+  );
 
   // 1. Open or resume the session.
   useEffect(() => {
     speechRef.current = browserSpeechAvailable() ? new BrowserSpeechProvider() : null;
+    // The public flag only makes the client ASK; the server's SK_TTS decides
+    // (404 → the client falls back and stops asking).
+    pollyRef.current = process.env.NEXT_PUBLIC_SK_TTS === "polly" && typeof window !== "undefined" ? new PollyClientSpeechProvider(() => rigRef.current) : null;
     let alive = true;
     (async () => {
       try {
@@ -126,6 +176,7 @@ export default function SkStudent({ productId, chapter }: Props) {
     return () => {
       alive = false;
       speechRef.current?.cancel();
+      pollyRef.current?.cancel();
     };
   }, [productId, chapter, say]);
 
@@ -434,7 +485,19 @@ export default function SkStudent({ productId, chapter }: Props) {
           {skText && (
             <div className="absolute left-2 right-2 bottom-2 rounded bg-white/90 px-3 py-2 text-sm shadow" data-testid="sk-text">
               <span className="font-semibold text-[#0C8175]">SK: </span>
-              {skText}
+              {(() => {
+                const span = spokenWordSpan(skText, spokenAt);
+                if (!span) return skText;
+                return (
+                  <>
+                    {skText.slice(0, span.start)}
+                    <mark className="rounded bg-[#FFE9A8] px-0.5" data-testid="sk-word">
+                      {skText.slice(span.start, span.end)}
+                    </mark>
+                    {skText.slice(span.end)}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -509,6 +572,7 @@ export default function SkStudent({ productId, chapter }: Props) {
               onPointerDown={(e) => {
                 e.preventDefault();
                 if (stopDictationRef.current) return;
+                stopSpeaking();
                 runtimeRef.current?.pauseForTurn();
                 setListening(true);
                 const stop = startDictation(

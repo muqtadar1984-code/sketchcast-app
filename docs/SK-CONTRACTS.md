@@ -78,6 +78,91 @@ Transcribe streaming, browser (client-side only). A provider that cannot
 produce a requested mark kind returns `marks.words = []` and the caller falls
 back to sentence timing; it never fabricates word times.
 
+#### 1.3.1 Polly adapter for SK's own lines (B9) — built, inert until switched on
+
+SK's own lines (what the loop returns as `speech`: "Let's carry on.", the answer to a
+typed question, check feedback) are spoken by the browser's `speechSynthesis` adapter
+today. B9 adds the server-side Amazon Polly adapter behind the same seam; nothing
+changes until two flags are set.
+
+**Files.** `src/sk/speech/polly-marks.ts` (pure: voices, SSML escaping with the
+byte→char table, the JSON-lines speech-mark parser, the viseme map);
+`src/sk/speech/polly.ts` (`PollySpeechProvider`, server only — lazy-imports
+`@aws-sdk/client-polly`); `src/app/api/sk/speak/route.ts`; `src/sk/speech/polly-client.ts`
+(the client provider: one fetch, one `<audio>` element, marks off its clock);
+`AvatarLike.mouth(viseme)` on `src/sk/board/avatar.ts` and `SpikeRuntime.mouth()`.
+
+**Route.** `POST /api/sk/speak` `{ text, look }` → `{ format: "mp3", audio: <base64>,
+marks, voice }`. Refusals in order: `SK_TTS` unset → **404** before anything (the client
+reads it as "no server voice", stops asking for the page's life, and stays on the browser
+adapter); the SK gate (`FEATURE_SK`, `SK_ALLOWED_EMAILS`, sign-in) → 404 / 401; bad body →
+400; over 1,500 characters → 413; Polly failure → 502 (the client falls back for that one
+line). JSON with base64 audio, not multipart: one fetch and one parse on the client,
+browsers have no multipart response parser, and a line is 10–60 KB of mp3. Nothing is
+cached, on disk or in memory. `Cache-Control: no-store`.
+
+**Voices.** Neural, en-US: look A → `Joanna`, look B (the default) → `Matthew`. The
+voice name is chosen server-side from `look`; only those two names ever go to AWS. The
+line goes as SSML `<speak>…</speak>` with `& < > " '` escaped, so a student's typed text
+(echoed back in an answer) can never open a tag.
+
+**Marks.** Polly's `word` marks give `start`/`end` as byte offsets into the whole SSML
+document; the adapter maps them back to string indices in the original line
+(`WordMark.i` = the index the caption highlight uses, the same meaning as
+`SpeechSynthesis`'s `charIndex`). Polly gives no word end time: `t1` = the next word's
+`t0`, and the last word's `t1` = the closing `sil` viseme's time. Visemes map
+Polly's en-US symbols onto the §1.3 set (p→PP, t→DD, S→CH, T→TH, f→FF, k→kk, i→ih,
+r→RR, s→SS, u→ou, @→E, a→aa, e/E→E, o/O→oh, sil→sil). Two Polly requests per line (audio +
+marks), in parallel.
+
+**Client.** With `NEXT_PUBLIC_SK_TTS=polly` the student page tries the route first; word
+marks drive the caption highlight (`<mark>` on the spoken word — the browser adapter's
+`onboundary` feeds the same highlight), viseme marks drive `runtime.mouth(v)` → the
+avatar's mouth (the current rig opens the mouth by viseme shape when no clip word mark
+is active; the floating avatar that replaces the rig gets the same call). Push-to-talk
+and unmount cancel the audio (barge-in). Any failure → the browser adapter, exactly as
+before.
+
+**Founder's switch-on (three steps; the PR ships with none of them done).**
+
+1. IAM — add this statement to the policy on role `sketchcast-app-bedrock`
+   (`arn:aws:iam::172042957848:role/sketchcast-app-bedrock`, the one `AWS_ROLE_ARN` names):
+
+   ```json
+   {
+     "Sid": "SkPollySpeak",
+     "Effect": "Allow",
+     "Action": "polly:SynthesizeSpeech",
+     "Resource": "*"
+   }
+   ```
+
+   `polly:SynthesizeSpeech` takes no resource-level ARN, so `"*"` is as narrow as it
+   gets. Local runs with static keys need the same action on that user.
+
+2. Vercel env (Production, and Preview if wanted):
+   - `SK_TTS=polly` — server; read per request, a redeploy is enough.
+   - `NEXT_PUBLIC_SK_TTS=polly` — client; **inlined at build time, so it needs a rebuild**
+     (any new deployment).
+   - `POLLY_REGION` — optional; defaults to `BEDROCK_REGION`, then `us-east-1`. Polly
+     neural voices are in `us-east-1`; if `BEDROCK_REGION` is ever moved to a region
+     without them, set this.
+
+3. Rollback: unset `SK_TTS` (the route 404s; the client falls back without a rebuild).
+
+**Price.** Polly neural: **$16.00 per 1M characters**, charged for speech AND for
+speech-mark requests alike (aws.amazon.com/polly/pricing, read 2026-10-27); free tier
+1M neural characters/month for the first 12 months of the account. A session of ~200 SK
+lines at ~60 characters each is 12,000 characters × 2 requests = 24,000 billed
+characters ≈ **$0.0004 per session**; at 150-character lines ≈ $0.001. A thousand
+sessions a month ≈ $0.40–$1.00. Not worth a cache yet; if lines repeat heavily
+("Let's carry on.") an in-memory per-instance cache keyed on voice + text would halve it.
+
+**Not verified without a live call** (needs the IAM allow): the credential exchange
+reaching Polly, the shape of `AudioStream` in the Node runtime (`transformToByteArray`),
+and the actual audio/marks alignment on Joanna/Matthew. Everything else is under test
+(`src/sk/speech/__tests__/polly.test.ts`, `src/app/api/sk/__tests__/speak.test.ts`).
+
 ### 1.4 `AvatarProvider` (client, B6)
 
 ```ts
