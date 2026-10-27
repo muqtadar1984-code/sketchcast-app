@@ -26,7 +26,7 @@ import { MAX_ATTEMPTS } from "./grade";
 import { checkComplete, checkPassed, initialMachine, phaseOf, RATE_MIN, RATE_STEP, skippedOf, transition, transitionAll, withoutSkipped, withSkipped, type MachineState, type OpenCheck, type SkEvent, type SkPhase, type SkState } from "./state";
 import { DuplicateAttemptError, type Attempt, type SessionStore, type SkSession } from "./store";
 import { answerQuestion, MAX_HISTORY_TURNS, NO_TEACHER_TEXT, NOT_IN_BOOK_TEXT } from "./teacher";
-import type { Bookmark, Command, Cursor, GradeOutcome, GraphAsset, Intent, MasteryMap, SseEvent, TeachingGraph, Utterance } from "./types";
+import type { Bookmark, Command, Cursor, GradeOutcome, GraphAsset, GraphUnit, Intent, MasteryMap, SseEvent, TeachingGraph, Utterance } from "./types";
 
 export type LoopDeps = {
   store: SessionStore;
@@ -69,9 +69,22 @@ export type SessionView = {
   skipped: string[];
   unit: { unitKey: string; title: string; order: number } | null;
   asset: { assetId: string; kind: string; style?: string; segment?: string; clip?: string; hitmap?: string } | null;
+  /** What the board shows while the current asset has nothing to draw (a
+   * check or practice): the unit's main teaching segment, paused. Without it
+   * a session resumed mid-check sat on a blank board marked "loading"
+   * (founder's run, 2026-10-27). */
+  board?: { assetId: string; segment: string; clip?: string; hitmap?: string } | null;
   openCheck: { unitKey: string; purpose: OpenCheck["purpose"]; index: number; total: number; attemptNo: number; hintsUsed: number; item: StudentItem | null } | null;
   access: { source: "dev-flag"; expiresAt: null; allowance: null };
 };
+
+/** The unit's teaching segment to keep on the board behind a segment-less
+ * asset: the main explain first, else any asset with a segment. */
+export function boardFor(unit: GraphUnit | null, current: GraphAsset | undefined): SessionView["board"] {
+  if (!unit || current?.segment) return null;
+  const teach = unit.assets.find((x) => x.kind === "explain" && x.style === "main" && x.segment) ?? unit.assets.find((x) => x.segment);
+  return teach?.segment ? { assetId: teach.asset_id, segment: teach.segment, clip: teach.clip, hitmap: teach.hitmap } : null;
+}
 
 export async function sessionView(deps: LoopDeps, s: SkSession): Promise<SessionView> {
   const m = s.machine;
@@ -100,6 +113,7 @@ export async function sessionView(deps: LoopDeps, s: SkSession): Promise<Session
     skipped: skippedOf(m),
     unit: unit ? { unitKey: unit.unit_key, title: unit.title, order: unit.order } : null,
     asset: a ? { assetId: a.asset_id, kind: a.kind, style: a.style, segment: a.segment, clip: a.clip, hitmap: a.hitmap } : null,
+    board: boardFor(unit, a),
     openCheck,
     access: { source: "dev-flag", expiresAt: null, allowance: null },
   };

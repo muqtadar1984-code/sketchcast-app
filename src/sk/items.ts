@@ -132,6 +132,27 @@ export class StaticItemBank implements ItemBank {
   }
 }
 
+/** Live fix 2026-10-27: production runs the Supabase bank, which knows only
+ * uuid ids, while the stand-in chapter's graph names its items by string
+ * ("ch2-u4-c1"). The founder's first Check opened with three ids the bank
+ * could not resolve: no question shown, "Could not mark that answer." This
+ * bank asks the primary for everything it can hold and the fallback (the
+ * stand-in items) for the rest, so both chapters grade on either store. */
+export class CompositeItemBank implements ItemBank {
+  constructor(
+    private readonly primary: ItemBank,
+    private readonly fallback: ItemBank,
+    private readonly primaryHolds: (itemId: string) => boolean,
+  ) {}
+  async get(itemId: string): Promise<RawQuestion | null> {
+    return this.primaryHolds(itemId) ? this.primary.get(itemId) : this.fallback.get(itemId);
+  }
+  async listForUnit(productId: string, chapter: number, unitKey: string): Promise<BankItem[]> {
+    const items = await this.primary.listForUnit(productId, chapter, unitKey);
+    return items.length ? items : this.fallback.listForUnit(productId, chapter, unitKey);
+  }
+}
+
 /** Hints are assistance (the attempt stops counting as independent). ⚠ STAND-IN
  * until items carry a hint field from the bank. */
 const HINTS: Record<string, string> = {
