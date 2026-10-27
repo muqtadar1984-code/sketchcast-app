@@ -161,9 +161,10 @@ describe("a unit with no graph items takes its items from the bank", () => {
     await runCommand(d, s, { name: "goto", args: { unitKey: "s2" } });
     const r = await runCommand(d, s, { name: "skip", args: { scope: "unit", withCheck: true } });
     expect(r.decision?.kind).toBe("present");
-    expect(r.decision?.reasons[0]).toBe("unit s2 has no check items; skipping records NO mastery");
+    expect(r.decision?.reasons[0]).toBe("unit s2 has no check items; skipping records NO mastery (unit marked skipped)");
     expect(r.view.cursor).toMatchObject({ unitKey: "s3", assetId: "s3-explain-main" });
     expect(r.view.openCheck).toBeNull();
+    expect(r.view.skipped).toEqual(["s2"]); // founder 2026-10-27: skipped is recorded, never mastered
     expect(r.view.mastery.s2).toBeUndefined();
     await runCommand(d, s, { name: "goto", args: { unitKey: "s2" } });
     const c = await runCommand(d, s, { name: "practise", args: { n: 0 } });

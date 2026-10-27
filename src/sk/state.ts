@@ -91,7 +91,26 @@ export type MachineState = {
   openCheck: OpenCheck | null;
   /** Playback rate the "slower" command adjusts; 1 = normal. */
   rate: number;
+  /** Units the student skipped WITHOUT taking (or finishing) the 2-item check
+   * (founder, 2026-10-27): recorded as skipped, never as mastered — no
+   * mastery row is written, and the view shows them so the student (and a
+   * dashboard) can see what was passed over. A later passed check removes
+   * the key. Absent on rows stored before this field existed ⇒ []. */
+  skipped?: string[];
 };
+
+/** The skipped list of a machine, tolerant of rows stored before the field existed. */
+export const skippedOf = (m: MachineState): string[] => m.skipped ?? [];
+
+export function withSkipped(m: MachineState, unitKey: string): MachineState {
+  const cur = skippedOf(m);
+  return cur.includes(unitKey) ? m : { ...m, skipped: [...cur, unitKey] };
+}
+
+export function withoutSkipped(m: MachineState, unitKey: string): MachineState {
+  const cur = skippedOf(m);
+  return cur.includes(unitKey) ? { ...m, skipped: cur.filter((k) => k !== unitKey) } : m;
+}
 
 /** How far a question's resume rewinds (plan §4: "rewind 1–2 s"; S1 used 1.5 s). */
 export const RESUME_REWIND_MS = 1500;
@@ -140,7 +159,7 @@ const refuse = (s: MachineState, ev: SkEvent): TransitionResult => ({ ok: false,
 const inSet = (s: SkState, ...allowed: SkState[]) => allowed.includes(s);
 
 export function initialMachine(cursor: Cursor): MachineState {
-  return { state: "ONBOARD", cursor, bookmarks: [], openCheck: null, rate: 1 };
+  return { state: "ONBOARD", cursor, bookmarks: [], openCheck: null, rate: 1, skipped: [] };
 }
 
 export function pushBookmark(s: MachineState, boardSnapshotId: string | null = null): Bookmark[] {

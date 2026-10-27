@@ -142,7 +142,9 @@ create index if not exists item_attempts_session_idx on public.item_attempts (se
 create table if not exists public.mastery_state (
   student_id             uuid        not null references public.profiles(id) on delete cascade,
   teaching_objective_id  uuid        not null references public.teaching_objectives(id) on delete cascade,
-  status                 text        not null check (status in ('unknown', 'in_progress', 'mastered', 'needs_work')),
+  -- 'provisional' (founder, 2026-10-27): a check passed WITH help — unlocks the
+  -- next unit, keeps the prerequisite warning, shown apart from 'mastered'.
+  status                 text        not null check (status in ('unknown', 'in_progress', 'mastered', 'provisional', 'needs_work')),
   independent            boolean     not null default false,
   evidence               jsonb       not null default '{}'::jsonb,   -- { correct, total, attempt_ids[], runs[] }
   rule_version           text        not null,

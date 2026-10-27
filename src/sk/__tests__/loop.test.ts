@@ -179,7 +179,7 @@ describe("a turn: command, route, question (with a gated aside), replay", () => 
 });
 
 describe("answers: graded once, hints, mastery, what comes next", () => {
-  it("a full unit check with one hint: assisted pass → mastered (not independent) → next unit", async () => {
+  it("a full unit check with one hint: assisted pass → provisional (not independent) → next unit", async () => {
     const d = deps();
     const s = await open(d);
     await collect(runTurn(d, s, { eventId: eid(), utterance: { text: "check me", modality: "typed" } }));
@@ -196,10 +196,10 @@ describe("answers: graded once, hints, mastery, what comes next", () => {
     const a4 = await submitAnswer(d, s, { eventId: eid(), itemId: "ch2-u4-c3", attemptNo: 1, response: false, modality: "typed" });
     expect(a4).toMatchObject({ kind: "graded", outcome: "correct", check: { passed: true, independent: false, purpose: "unit" } });
     if (a4.kind === "graded") {
-      expect(a4.view.mastery.u2).toMatchObject({ status: "mastered", independent: false });
+      expect(a4.view.mastery.u2).toMatchObject({ status: "provisional", independent: false });
       expect(a4.view.cursor.unitKey).toBe("u4"); // moved on to the next unit
       expect(a4.view.state).toBe("PRESENTING");
-      expect(a4.speech).toMatch(/Got there\. .*Total magnification/);
+      expect(a4.speech).toMatch(/Got there — with a little help.*Total magnification/);
     }
     expect(await d.store.listAttempts(s.id)).toHaveLength(4);
   });

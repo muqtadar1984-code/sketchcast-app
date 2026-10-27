@@ -51,10 +51,13 @@ export type Cursor = { graphVersion: number; unitKey: string; assetId: string; s
 export type Bookmark = Cursor & { boardSnapshotId: string | null };
 
 // ── Mastery (derived evidence; plan §10) ────────────────────────────────────
-export type MasteryStatus = "unknown" | "in_progress" | "mastered" | "needs_work";
+/** `provisional` (founder, 2026-10-27): a check PASSED with help — a hint or a
+ * second attempt. It unlocks the next unit like `mastered` but keeps the
+ * prerequisite warning, and dashboards show it apart from an independent pass. */
+export type MasteryStatus = "unknown" | "in_progress" | "mastered" | "provisional" | "needs_work";
 export type MasteryState = {
   status: MasteryStatus;
-  /** True only when the evidence came from an unassisted check (plan §3). */
+  /** True only when the evidence came from an unassisted check (plan §3); never true on `provisional`. */
   independent: boolean;
   evidence: { correct: number; total: number };
 };

@@ -217,7 +217,7 @@ describe("mastery_state is recomputed from item_attempts after every attempt (ru
     expect(db.rows("mastery_state")).toHaveLength(1);
     expect(db.rows("mastery_state")[0]).toMatchObject({ student_id: STUDENT, teaching_objective_id: OBJ, rule_version: "sk-b5.1" });
   });
-  it("an assisted pass (a hint on the way) → mastered but NOT independent", async () => {
+  it("an assisted pass (a hint on the way) → provisional, NOT independent", async () => {
     const { store } = setup();
     const s = await store.createSession(newSession());
     await openCheck(store, s.id, { index: 0, attemptNo: 1, hintsUsed: 0 });
@@ -227,7 +227,7 @@ describe("mastery_state is recomputed from item_attempts after every attempt (ru
     await openCheck(store, s.id, { index: 1, attemptNo: 1, hintsUsed: 0 });
     await store.putAttempt(attempt(s.id, I2, 1, "correct"));
     const m = (await store.getMastery(STUDENT, OBJ))!;
-    expect(m).toMatchObject({ status: "mastered", independent: false });
+    expect(m).toMatchObject({ status: "provisional", independent: false });
     expect(m.evidence.attempt_ids).toHaveLength(3);
   });
   it("a failed check → needs_work; an unmapped item writes no mastery row", async () => {

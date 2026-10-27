@@ -9,7 +9,8 @@
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { validateAside } from "@/sk/aside";
-import { rigBaseFor } from "@/sk/board/avatar";
+import { parseRigChoice, RIG_LABELS, rigBaseForChoice, type RigChoice } from "@/sk/board/avatar";
+import { useRigChoice } from "@/sk/board/use-rig-choice";
 import { hitTargets, validateHitMap, validateSegment, type HitMap, type OpentypeLike, type Segment } from "@/sk/board/engine";
 import { SpikeRuntime, type PlayerState, type Rig } from "@/sk/board/runtime";
 import { uuidv7 } from "@/sk/ids";
@@ -18,7 +19,7 @@ import { AutoHarness, parseAuto, readAuto, snapshot } from "./harness";
 
 const GRAPH = "/sk-s1/ch02/graph.json";
 type Graph = { units: { unit_key: string; title: string; assets: { kind: string; segment: string }[] }[] };
-type Loaded = { unit: string; title: string; base: string; seg: Segment; hm: HitMap; font: OpentypeLike; rig: Rig | null; s1: S1Aside | null };
+type Loaded = { unit: string; title: string; base: string; seg: Segment; hm: HitMap; font: OpentypeLike; rig: Rig | null; rigChoice: RigChoice; s1: S1Aside | null };
 type Summary = ReturnType<SpikeRuntime["summary"]>;
 
 const pct = (v: unknown) => {
@@ -30,6 +31,11 @@ export default function UnitPlayer() {
   const params = useSearchParams();
   const unit = params.get("unit") ?? "s1";
   const auto = parseAuto(params.get("auto"));
+  // SK's look (founder, 2026-10-27): default B, remembered per browser;
+  // `?rig=A|B` pins the look for a trial (the select is then read-only).
+  const rigParam = params.get("rig");
+  const [storedRig, chooseRig] = useRigChoice();
+  const rig: RigChoice = rigParam ? parseRigChoice(rigParam) : storedRig;
   const hostRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const asideAudioRef = useRef<HTMLAudioElement>(null);
@@ -57,14 +63,14 @@ export default function UnitPlayer() {
         const seg = validateSegment(rawSeg);
         const rawHm = (await fetch(base + (seg.hitmap ?? "hitmap.json")).then((r) => r.json())) as HitMap;
         const hm = validateHitMap(rawHm);
-        const [rig, font, s1] = await Promise.all([
-          fetch(rigBaseFor(seg.voice_gender) + "rig.json").then((r) => (r.ok ? (r.json() as Promise<Rig>) : null)).catch(() => null),
+        const [rigData, font, s1] = await Promise.all([
+          fetch(rigBaseForChoice(rig) + "rig.json").then((r) => (r.ok ? (r.json() as Promise<Rig>) : null)).catch(() => null),
           new Promise<OpentypeLike>((res, rej) => ot.load("/sk-s1/Caveat-Regular.ttf", (err, fnt) => (err || !fnt ? rej(err) : res(fnt as unknown as OpentypeLike)))),
           unit === "s2" ? fetch("/sk-s1/u4/segment.json").then((r) => r.json() as Promise<Segment>).then((s) => s.aside ?? null).catch(() => null) : Promise.resolve(null),
         ]);
         if (!alive) return;
-        setLoaded({ unit, title: u.title, base, seg, hm, font, rig, s1 });
-        say(`loaded ${unit} "${u.title}": clip ${seg.clip?.duration_ms} ms, ${Object.keys(hm.elements).length} elements, ${hm.timeline.length} timeline entries`);
+        setLoaded({ unit, title: u.title, base, seg, hm, font, rig: rigData, rigChoice: rig, s1 });
+        say(`loaded ${unit} "${u.title}": clip ${seg.clip?.duration_ms} ms, ${Object.keys(hm.elements).length} elements, ${hm.timeline.length} timeline entries, look ${rig}`);
       } catch (e) {
         say(`REFUSED ${unit}: ${(e as Error).message}`);
       }
@@ -72,7 +78,7 @@ export default function UnitPlayer() {
     return () => {
       alive = false;
     };
-  }, [unit, say]);
+  }, [unit, rig, say]);
 
   // 2. Mount the runtime once everything is here.
   useEffect(() => {
@@ -86,7 +92,7 @@ export default function UnitPlayer() {
       loaded.font,
       loaded.base,
       { state: setState, clock: setClockMs, log: say },
-      { mode: "S", hitmap: loaded.hm, rig: loaded.rig ? { data: loaded.rig, base: rigBaseFor(loaded.seg.voice_gender) } : undefined, checkpointKey: `sk-b2:${loaded.unit}:cursor` },
+      { mode: "S", hitmap: loaded.hm, rig: loaded.rig ? { data: loaded.rig, base: rigBaseForChoice(loaded.rigChoice) } : undefined, checkpointKey: `sk-b2:${loaded.unit}:cursor` },
     );
     runtimeRef.current = rt;
     (window as unknown as { __skRuntime?: SpikeRuntime }).__skRuntime = rt; // dev page: lets a harness read measurements
@@ -184,6 +190,13 @@ export default function UnitPlayer() {
             {["s1", "s2", "s3", "s4", "s5", "s6"].map((u) => (
               <option key={u} value={u}>
                 {u}
+              </option>
+            ))}
+          </select>
+          <select className="h-9 px-2 border rounded" value={rig} onChange={(e) => chooseRig(e.target.value === "A" ? "A" : "B")} disabled={state === "loading" || !!rigParam} title={rigParam ? "SK's look pinned by ?rig=" : "SK's look (default B)"} data-testid="sk-rig">
+            {(["B", "A"] as RigChoice[]).map((c) => (
+              <option key={c} value={c}>
+                {RIG_LABELS[c]}
               </option>
             ))}
           </select>

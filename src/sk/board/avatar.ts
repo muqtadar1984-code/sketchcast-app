@@ -45,6 +45,56 @@ export type Rig = {
  * voices, B (Indian man teacher, glasses) for male. */
 export const rigBaseFor = (voiceGender: string | undefined): string => (voiceGender === "male" ? "/sk-s1/sk-b/" : "/sk-s1/sk-a/");
 
+// ── The tutor's look (founder, 2026-10-27) ──────────────────────────────────
+// ONE tutor identity, SK, with two looks the student may switch between:
+//   A — the Malay woman teacher (female voice)   B — the Indian man teacher (male voice)
+// The DEFAULT is B. The choice is the student's, kept per browser; a prepared
+// clip's own narration keeps the voice it was rendered with (voice_gender on
+// the segment), the rig follows the choice.
+export type RigChoice = "A" | "B";
+export const DEFAULT_RIG: RigChoice = "B";
+export const RIG_CHOICE_KEY = "sk:rig";
+export const RIG_LABELS: Record<RigChoice, string> = { A: "Look A · female voice", B: "Look B · male voice" };
+
+export const rigBaseForChoice = (c: RigChoice): string => (c === "A" ? "/sk-s1/sk-a/" : "/sk-s1/sk-b/");
+export const voiceGenderForChoice = (c: RigChoice): "female" | "male" => (c === "A" ? "female" : "male");
+
+/** Parse a stored or query value; anything but A/B (any case) is the default. */
+export function parseRigChoice(v: string | null | undefined): RigChoice {
+  const s = (v ?? "").trim().toUpperCase();
+  return s === "A" || s === "B" ? s : DEFAULT_RIG;
+}
+
+/** The browser's remembered choice (default B); safe where storage is blocked. */
+export function readRigChoice(): RigChoice {
+  try {
+    return parseRigChoice(typeof localStorage === "undefined" ? null : localStorage.getItem(RIG_CHOICE_KEY));
+  } catch {
+    return DEFAULT_RIG;
+  }
+}
+
+export function storeRigChoice(c: RigChoice): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(RIG_CHOICE_KEY, c);
+  } catch {
+    /* storage blocked: the choice lives for this page only */
+  }
+}
+
+/** Pick a browser speechSynthesis voice that matches the look, by name; the
+ * default voice when none says its gender. Exact names differ per OS. */
+export function pickBrowserVoice(voices: ReadonlyArray<{ name: string; lang: string; voiceURI: string }>, gender: "female" | "male", lang = "en"): string | null {
+  const en = voices.filter((v) => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
+  const pool = en.length ? en : voices;
+  const female = /female|woman|zira|hazel|susan|samantha|karen|moira|tessa|fiona|libby|sonia|aria|jenny|natasha|clara/i;
+  const male = /\bmale\b|\bman\b|david|mark|george|daniel|ryan|guy|thomas|james|oliver|alex\b|fred|rishi|william|liam/i;
+  const want = gender === "female" ? female : male;
+  const avoid = gender === "female" ? male : female;
+  const v = pool.find((x) => want.test(x.name) && !avoid.test(x.name)) ?? pool.find((x) => want.test(x.name));
+  return v ? v.name : null;
+}
+
 export type Placed = Record<string, { box: Box; asset: AssetFixture }>;
 export type GestureHit = { t: number; kind: string; target?: string; arriveMs: number };
 /** Sampled while a `write` gesture follows the live pen (world px): how far

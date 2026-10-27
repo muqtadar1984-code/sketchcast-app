@@ -60,7 +60,10 @@ export type Decision =
   | { kind: "generate"; unitKey: string; rung: LadderRung; basis: { assetId?: string; figures?: string[] }; cursor: Cursor; bookmark: boolean; reasons: string[] }
   | { kind: "none"; reasons: string[] };
 
-const mastered = (m: MasteryMap, key: string) => m[key]?.status === "mastered";
+/** A unit the student has PASSED a check on — independently (`mastered`) or
+ * with help (`provisional`, founder 2026-10-27). Both unlock what follows. */
+const mastered = (m: MasteryMap, key: string) => m[key]?.status === "mastered" || m[key]?.status === "provisional";
+const provisional = (m: MasteryMap, key: string) => m[key]?.status === "provisional";
 
 function accessible(ctx: PlannerContext): GraphUnit[] {
   const allow = ctx.accessibleUnitKeys ? new Set(ctx.accessibleUnitKeys) : null;
@@ -76,12 +79,19 @@ export function unmetPrereqs(ctx: PlannerContext, unit: GraphUnit): GraphUnit[] 
   return unit.prereqs.map((k) => unitOf(ctx.graph, k)).filter((u): u is GraphUnit => !!u && !mastered(ctx.mastery, u.unit_key));
 }
 
+/** Prerequisites passed only WITH help (provisional): unlocked, but still worth a warning. */
+export function provisionalPrereqs(ctx: PlannerContext, unit: GraphUnit): GraphUnit[] {
+  return unit.prereqs.map((k) => unitOf(ctx.graph, k)).filter((u): u is GraphUnit => !!u && provisional(ctx.mastery, u.unit_key));
+}
+
 function prereqWarning(ctx: PlannerContext, unit: GraphUnit): { warning: string; suggestedCheck?: SuggestedCheck } | null {
+  // An unmet prerequisite warns (never blocks); a provisional one — passed
+  // with help — still warns (founder, 2026-10-27: unlock, keep the warning).
   const missing = unmetPrereqs(ctx, unit);
-  if (!missing.length) return null;
-  const first = missing[0]!;
+  const first = missing[0] ?? provisionalPrereqs(ctx, unit)[0];
+  if (!first) return null;
   const check = checkFor(ctx, first);
-  const warning = `${unit.title} uses ${first.title}'s idea; quick check first?`;
+  const warning = missing.length ? `${unit.title} uses ${first.title}'s idea; quick check first?` : `${unit.title} uses ${first.title}'s idea, which you passed with a little help; quick check first?`;
   return check ? { warning, suggestedCheck: { unitKey: first.unit_key, itemIds: check.itemIds.slice(0, SKIP_CHECK_ITEMS), purpose: "prereq" } } : { warning };
 }
 
@@ -129,7 +139,9 @@ function nextUnit(ctx: PlannerContext, unit: GraphUnit): GraphUnit | undefined {
 
 function present(ctx: PlannerContext, unit: GraphUnit, asset: GraphAsset, bookmark: boolean, reasons: string[]): Decision {
   const pre = prereqWarning(ctx, unit);
-  if (pre) reasons.push(`prerequisite not mastered: ${unmetPrereqs(ctx, unit).map((u) => u.unit_key).join(", ")} (warn, not block)`);
+  const missing = unmetPrereqs(ctx, unit);
+  if (pre && missing.length) reasons.push(`prerequisite not mastered: ${missing.map((u) => u.unit_key).join(", ")} (warn, not block)`);
+  else if (pre) reasons.push(`prerequisite passed with help (provisional): ${provisionalPrereqs(ctx, unit).map((u) => u.unit_key).join(", ")} (unlocked, warning kept)`);
   return { kind: "present", unitKey: unit.unit_key, asset, cursor: cursorFor(ctx.graph, unit, asset), bookmark, reasons, ...(pre ?? {}) };
 }
 
@@ -222,7 +234,7 @@ export function plan(ctx: PlannerContext, req: RouteRequest): Decision {
         reasons.push(`skip counts only with a ${SKIP_CHECK_ITEMS}-item check on ${unit.unit_key}; passing records independent evidence${fromBank(check)}`);
         return { kind: "check", unitKey: unit.unit_key, itemIds: check.itemIds.slice(0, SKIP_CHECK_ITEMS), purpose: "skip", cursor: cursorFor(g, unit, check.asset), bookmark: true, reasons };
       }
-      reasons.push(req.withCheck ? `unit ${unit.unit_key} has no check items; skipping records NO mastery` : `skip without check: records no mastery for ${unit.unit_key}`);
+      reasons.push(req.withCheck ? `unit ${unit.unit_key} has no check items; skipping records NO mastery (unit marked skipped)` : `skip without check: records no mastery for ${unit.unit_key} (unit marked skipped)`);
       if (!nxt) return { kind: "none", reasons: [...reasons, "end of chapter: no next unit"] };
       const asset = mainAsset(nxt);
       if (!asset) return generate(ctx, nxt, true, [...reasons, `unit ${nxt.unit_key} has no validated explanation`]);
@@ -275,13 +287,15 @@ export function plan(ctx: PlannerContext, req: RouteRequest): Decision {
 }
 
 /** Fold a closed check into mastery. Practice never changes mastery (assisted
- * evidence only); a skip/unit check marks mastered only when passed, and
- * `independent` is carried exactly as the check recorded it. */
+ * evidence only); a skip/unit check marks `mastered` when passed
+ * independently, `provisional` when passed with help (founder, 2026-10-27),
+ * `needs_work` when failed. `independent` is carried exactly as the check
+ * recorded it and is never true on a provisional pass. */
 export function applyCheckToMastery(m: MasteryMap, unitKey: string, purpose: "skip" | "prereq" | "unit" | "practise", results: boolean[], independent: boolean): MasteryMap {
   const prev: MasteryState = m[unitKey] ?? { status: "unknown", independent: false, evidence: { correct: 0, total: 0 } };
   const correct = results.filter(Boolean).length;
   const evidence = { correct: prev.evidence.correct + correct, total: prev.evidence.total + results.length };
   if (purpose === "practise") return { ...m, [unitKey]: { ...prev, status: prev.status === "unknown" ? "in_progress" : prev.status, evidence } };
   const passed = results.length > 0 && results.every(Boolean);
-  return { ...m, [unitKey]: { status: passed ? "mastered" : "needs_work", independent: passed ? independent : prev.independent, evidence } };
+  return { ...m, [unitKey]: { status: passed ? (independent ? "mastered" : "provisional") : "needs_work", independent: passed ? independent : prev.independent, evidence } };
 }

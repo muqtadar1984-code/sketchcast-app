@@ -85,7 +85,7 @@ describe("the planner: graph ids first, the bank only when the graph carries non
     expect(d.kind).toBe("present");
     if (d.kind === "present") {
       expect(d.unitKey).toBe("u4");
-      expect(d.reasons[0]).toBe("unit u2 has no check items; skipping records NO mastery");
+      expect(d.reasons[0]).toBe("unit u2 has no check items; skipping records NO mastery (unit marked skipped)");
     }
     expect(plan(c, { name: "check_me" })).toEqual({ kind: "none", reasons: ["unit u2 has no check items"] });
     expect(plan({ ...c, bankItems: undefined }, { name: "check_me" }).kind).toBe("none");

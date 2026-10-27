@@ -8,17 +8,19 @@
 // speechSynthesis voices SK's lines through the SpeechProvider seam.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { pickBrowserVoice, RIG_LABELS, rigBaseForChoice, voiceGenderForChoice, type RigChoice } from "@/sk/board/avatar";
 import { normaliseSegment, validateSegment, type OpentypeLike, type Segment } from "@/sk/board/engine";
 import { SpikeRuntime, type HitMap, type PlayerState, type Rig } from "@/sk/board/runtime";
+import { useMicSupported, useRigChoice } from "@/sk/board/use-rig-choice";
 import { uuidv7 } from "@/sk/ids";
 import type { SessionView } from "@/sk/loop";
 import { BrowserSpeechProvider, browserSpeechAvailable } from "@/sk/speech/browser";
 import type { CommandArgs, CommandName } from "@/sk/types";
+import { startDictation } from "@/utils/assistant/voice-client";
 
 type Props = { productId: string; chapter: number };
 type LogLine = { at: string; who: "you" | "sk" | "sys"; text: string };
 
-const rigBaseFor = (voiceGender: string | undefined) => (voiceGender === "male" ? "/sk-s1/sk-b/" : "/sk-s1/sk-a/");
 const dirname = (uri: string) => uri.slice(0, uri.lastIndexOf("/") + 1);
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -66,7 +68,7 @@ export default function SkStudent({ productId, chapter }: Props) {
   const speechRef = useRef<BrowserSpeechProvider | null>(null);
   const fontRef = useRef<OpentypeLike | null>(null);
   const [view, setView] = useState<SessionView | null>(null);
-  const [loaded, setLoaded] = useState<{ seg: Segment; hitmap: HitMap | null; rig: Rig | null; base: string; clipUri: string | null; assetId: string } | null>(null);
+  const [loaded, setLoaded] = useState<{ seg: Segment; hitmap: HitMap | null; rig: Rig | null; rigChoice: RigChoice; base: string; clipUri: string | null; assetId: string } | null>(null);
   const [player, setPlayer] = useState<PlayerState | "loading">("loading");
   const [clockMs, setClockMs] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -75,6 +77,20 @@ export default function SkStudent({ productId, chapter }: Props) {
   const [draft, setDraft] = useState("");
   const [answer, setAnswer] = useState("");
   const [skText, setSkText] = useState("");
+  // SK's look (founder, 2026-10-27): one tutor, two looks, default B; the
+  // student's choice is remembered per browser (applied after hydration).
+  const [rig, chooseRig] = useRigChoice();
+  const rigRef = useRef<RigChoice>(rig); // read by speak() outside render
+  useEffect(() => {
+    rigRef.current = rig;
+  }, [rig]);
+  // Push-to-talk (founder, 2026-10-27: no continuous listening, no wake word):
+  // the mic runs only while the button is held, one utterance, and the
+  // transcript lands in the question box for the student to send — that send
+  // is their confirmation of what was heard.
+  const [listening, setListening] = useState(false);
+  const stopDictationRef = useRef<(() => void) | null>(null);
+  const mic = useMicSupported();
 
   const say = useCallback((who: LogLine["who"], text: string) => {
     if (!text) return;
@@ -83,7 +99,9 @@ export default function SkStudent({ productId, chapter }: Props) {
   const speak = useCallback(async (text: string) => {
     if (!text || !speechRef.current) return;
     try {
-      const r = await speechRef.current.synthesize(text, "browser:default", { marks: [] });
+      const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+      const name = pickBrowserVoice(voices, voiceGenderForChoice(rigRef.current));
+      const r = await speechRef.current.synthesize(text, name ? `browser:${name}` : "browser:default", { marks: [] });
       await r.play?.({ rate: 1 });
     } catch {
       /* no voice */
@@ -115,7 +133,7 @@ export default function SkStudent({ productId, chapter }: Props) {
   const segmentUri = view?.asset?.segment ?? null;
   useEffect(() => {
     if (!assetId || !segmentUri) return;
-    if (loaded?.assetId === assetId) return;
+    if (loaded?.assetId === assetId && loaded.rigChoice === rig) return;
     let alive = true;
     (async () => {
       try {
@@ -126,9 +144,9 @@ export default function SkStudent({ productId, chapter }: Props) {
         const seg = validateSegment(raw);
         const hitmapUri = view?.asset?.hitmap ?? (seg.hitmap ? base + seg.hitmap : null);
         const clipUri = view?.asset?.clip ?? (seg.clip ? base + seg.clip.uri : null);
-        const [hitmap, rig] = await Promise.all([
+        const [hitmap, rigData] = await Promise.all([
           hitmapUri ? fetch(hitmapUri).then((r) => (r.ok ? (r.json() as Promise<HitMap>) : null)) : Promise.resolve(null),
-          fetch(rigBaseFor(seg.voice_gender) + "rig.json")
+          fetch(rigBaseForChoice(rig) + "rig.json")
             .then((r) => (r.ok ? (r.json() as Promise<Rig>) : null))
             .catch(() => null),
         ]);
@@ -139,7 +157,7 @@ export default function SkStudent({ productId, chapter }: Props) {
           );
         }
         if (!alive) return;
-        setLoaded({ seg, hitmap, rig, base, clipUri, assetId });
+        setLoaded({ seg, hitmap, rig: rigData, rigChoice: rig, base, clipUri, assetId });
       } catch (e) {
         if (alive) {
           setError(`Could not load the lesson segment: ${(e as Error).message}`);
@@ -150,7 +168,7 @@ export default function SkStudent({ productId, chapter }: Props) {
     return () => {
       alive = false;
     };
-  }, [assetId, segmentUri, view?.asset?.hitmap, view?.asset?.clip, loaded?.assetId, say]);
+  }, [assetId, segmentUri, view?.asset?.hitmap, view?.asset?.clip, loaded?.assetId, loaded?.rigChoice, rig, say]);
 
   // 3. Mount the runtime for the loaded asset; seek to the server's cursor.
   useEffect(() => {
@@ -166,7 +184,7 @@ export default function SkStudent({ productId, chapter }: Props) {
       font,
       loaded.base,
       { state: setPlayer, clock: setClockMs, log: (s) => say("sys", s) },
-      { mode: "S", hitmap: loaded.hitmap, rig: loaded.rig ? { data: loaded.rig, base: rigBaseFor(loaded.seg.voice_gender) } : undefined, checkpointKey: null },
+      { mode: "S", hitmap: loaded.hitmap, rig: loaded.rig ? { data: loaded.rig, base: rigBaseForChoice(loaded.rigChoice) } : undefined, checkpointKey: null },
     );
     runtimeRef.current = rt;
     rt.mount();
@@ -379,6 +397,16 @@ export default function SkStudent({ productId, chapter }: Props) {
           <button className="h-9 px-3 border rounded" onClick={() => void sendCommand("return")} disabled={!view || busy || !view.bookmarks.length}>
             ↩ Return
           </button>
+          <label className="h-9 flex items-center gap-1 text-xs text-[#667085]" title="SK's look — one tutor, two looks; the clip's own narration keeps its voice">
+            SK&apos;s look
+            <select className="h-9 px-2 border rounded text-sm text-[#14181F]" value={rig} onChange={(e) => chooseRig(e.target.value === "A" ? "A" : "B")} data-testid="sk-rig">
+              {(["B", "A"] as RigChoice[]).map((c) => (
+                <option key={c} value={c}>
+                  {RIG_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className="text-xs text-[#667085]" data-testid="status">
             {unitsLine} · {player} · {(clockMs / 1000).toFixed(1)} s · ×{view?.rate.toFixed(2) ?? "1.00"}
           </span>
@@ -449,10 +477,40 @@ export default function SkStudent({ productId, chapter }: Props) {
             className="h-10 px-3 border rounded flex-1"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={oc ? "Type your answer, or a command (skip, explain again…)" : "Ask SK a question, or say: repeat · slower · skip · practise · go to unit 2 · explain again"}
+            placeholder={listening ? "Listening… release to stop" : oc ? "Type your answer, or a command (skip, explain again…)" : "Ask SK a question, or say: repeat · slower · skip · practise · go to unit 2 · explain again"}
             disabled={!view || busy}
             maxLength={600}
           />
+          {mic && (
+            <button
+              type="button"
+              className={`h-10 px-3 border rounded select-none ${listening ? "bg-[#0C8175] text-white" : ""}`}
+              title="Hold to talk (push-to-talk). What SK hears goes into the box; press Send to send it."
+              aria-pressed={listening}
+              data-testid="sk-ptt"
+              disabled={!view || busy}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                if (stopDictationRef.current) return;
+                runtimeRef.current?.pauseForTurn();
+                setListening(true);
+                const stop = startDictation(
+                  (t) => setDraft(t),
+                  () => {
+                    stopDictationRef.current = null;
+                    setListening(false);
+                  },
+                );
+                if (!stop) setListening(false);
+                stopDictationRef.current = stop; // one utterance: ends on release, never restarts itself
+              }}
+              onPointerUp={() => stopDictationRef.current?.()}
+              onPointerLeave={() => stopDictationRef.current?.()}
+              onPointerCancel={() => stopDictationRef.current?.()}
+            >
+              🎤 {listening ? "Listening" : "Hold to talk"}
+            </button>
+          )}
           <button className="btn-primary h-10 px-4" type="submit" disabled={!view || busy || !draft.trim()}>
             {busy ? "…" : "Send"}
           </button>
@@ -473,6 +531,8 @@ export default function SkStudent({ productId, chapter }: Props) {
             {Object.entries(view.mastery)
               .map(([k, m]) => `${k}:${m.status}${m.independent ? "*" : ""}`)
               .join(", ") || "—"}
+            {" · skipped "}
+            <span data-testid="sk-skipped">{(view.skipped ?? []).join(", ") || "—"}</span>
           </div>
         )}
         {log.map((l, i) => (

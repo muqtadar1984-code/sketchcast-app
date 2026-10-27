@@ -21,7 +21,8 @@ import { hintFor, stripItem, type ItemBank, type StudentItem } from "./items";
 import { selectUnitItems, type UnitItems } from "./items-select";
 import { applyCheckToMastery, checkAsset, isBankAssetId, plan, practiceAsset, type Decision, type PlannerContext, type RouteRequest } from "./planner";
 import { classify } from "./router";
-import { checkComplete, checkPassed, initialMachine, phaseOf, RATE_MIN, RATE_STEP, transition, transitionAll, type MachineState, type OpenCheck, type SkEvent, type SkPhase, type SkState } from "./state";
+import { MAX_ATTEMPTS } from "./grade";
+import { checkComplete, checkPassed, initialMachine, phaseOf, RATE_MIN, RATE_STEP, skippedOf, transition, transitionAll, withoutSkipped, withSkipped, type MachineState, type OpenCheck, type SkEvent, type SkPhase, type SkState } from "./state";
 import { DuplicateAttemptError, type Attempt, type SessionStore, type SkSession } from "./store";
 import { answerQuestion, MAX_HISTORY_TURNS, NO_TEACHER_TEXT } from "./teacher";
 import type { Bookmark, Command, Cursor, GradeOutcome, GraphAsset, Intent, MasteryMap, SseEvent, TeachingGraph, Utterance } from "./types";
@@ -58,6 +59,8 @@ export type SessionView = {
   bookmarks: Bookmark[];
   rate: number;
   mastery: MasteryMap;
+  /** Units skipped without (finishing) their check — recorded, never mastered (founder, 2026-10-27). */
+  skipped: string[];
   unit: { unitKey: string; title: string; order: number } | null;
   asset: { assetId: string; kind: string; style?: string; segment?: string; clip?: string; hitmap?: string } | null;
   openCheck: { unitKey: string; purpose: OpenCheck["purpose"]; index: number; total: number; attemptNo: number; hintsUsed: number; item: StudentItem | null } | null;
@@ -88,6 +91,7 @@ export async function sessionView(deps: LoopDeps, s: SkSession): Promise<Session
     bookmarks: m.bookmarks,
     rate: m.rate,
     mastery: s.mastery,
+    skipped: skippedOf(m),
     unit: unit ? { unitKey: unit.unit_key, title: unit.title, order: unit.order } : null,
     asset: a ? { assetId: a.asset_id, kind: a.kind, style: a.style, segment: a.segment, clip: a.clip, hitmap: a.hitmap } : null,
     openCheck,
@@ -192,6 +196,20 @@ export function toRouteRequest(c: Command): RouteRequest | null {
 
 const titleOf = (g: TeachingGraph, key: string) => unitOf(g, key)?.title ?? key;
 
+/** What SK may say about an open check when the student asks how it works:
+ * position, attempts left, how to answer the item's TYPE, and the way out.
+ * Deliberately built from the check's shape only — no prompt, options, key
+ * or hint text — so a "clarification" can never leak the answer. */
+export async function checkInstructions(deps: LoopDeps, oc: OpenCheck): Promise<string> {
+  const itemId = oc.itemIds[oc.index];
+  const item = itemId ? await deps.items.get(itemId) : null;
+  const how =
+    item?.type === "mcq" ? "Pick one of the options." : item?.type === "true_false" ? "Answer true or false." : item?.type === "match" ? "Type the pairs as left = right." : item?.type === "subjective" ? "Write your answer in a sentence or two." : "Type a short answer.";
+  const what = oc.purpose === "practise" ? "practice question" : "check question";
+  const left = Math.max(0, MAX_ATTEMPTS - oc.attemptNo + 1);
+  return `This is ${what} ${oc.index + 1} of ${oc.itemIds.length}, attempt ${oc.attemptNo} of ${MAX_ATTEMPTS} — ${left} ${left === 1 ? "go" : "goes"} left on it. ${how} A wrong answer gets a hint before the next try. I can't explain the topic until the check is done; say skip to move on without it.`;
+}
+
 /** SK's line for a planner decision — deterministic, and it names the reason
  * the student needs to hear (the warning, the "so it counts" rule). */
 export function speechFor(g: TeachingGraph, d: Decision): string {
@@ -218,6 +236,13 @@ export type Applied = { m: MachineState; speech: string; decision?: Decision; bo
  * Async since B4.1: the bank is asked for a unit's items when the graph has
  * none, before the planner runs. */
 export async function executeRoute(deps: LoopDeps, s: SkSession, m: MachineState, req: RouteRequest, extra: Partial<PlannerContext> = {}): Promise<Applied> {
+  // Declining the skip check (founder, 2026-10-27): a second "skip" while the
+  // 2-item skip check for that unit is open is the student saying "no, just
+  // skip it" — honour it without the check, and record the unit as skipped.
+  const oc = m.openCheck;
+  if (req.name === "skip" && oc?.purpose === "skip" && (m.state === "AWAITING" || m.state === "CONFIRM_TRANSCRIPT" || m.state === "FEEDBACK") && (!req.unitKey || req.unitKey === oc.unitKey)) {
+    req = { ...req, unitKey: oc.unitKey, withCheck: false };
+  }
   const bankItems = await resolveBankItems(deps, m, req);
   const decision = plan(plannerContext(deps, s, m, { bankItems, ...extra }), req);
   if (decision.kind === "none") {
@@ -239,7 +264,18 @@ export async function executeRoute(deps: LoopDeps, s: SkSession, m: MachineState
         : [{ kind: "planned", cursor: decision.cursor, bookmark: decision.bookmark }];
   const r = transitionAll(cur, events);
   if (!r.ok) return { m, speech: "I can't change course right now.", refused: r.reason, decision };
-  return { m: r.state, speech: speechFor(deps.graph, decision), decision, board: decision.kind === "check" ? "pause" : "play" };
+  let next = r.state;
+  let speech = speechFor(deps.graph, decision);
+  // A skip that did NOT open the check (declined, asked for without it, or the
+  // unit has no check items) records the unit as skipped — never mastered.
+  if (req.name === "skip" && decision.kind !== "check") {
+    const skippedKey = req.unitKey ?? m.cursor.unitKey;
+    if (unitOf(deps.graph, skippedKey)) {
+      next = withSkipped(next, skippedKey);
+      speech = `Skipping ${titleOf(deps.graph, skippedKey)} without the check — it stays unmarked, not learned. ${speech}`;
+    }
+  }
+  return { m: next, speech, decision, board: decision.kind === "check" ? "pause" : "play" };
 }
 
 /** Apply one command from the closed set. Route commands go through the planner. */
@@ -325,8 +361,10 @@ function attemptToResult(a: Attempt): Omit<Extract<AnswerResult, { kind: "graded
 async function afterCheck(deps: LoopDeps, s: SkSession, m: MachineState, oc: OpenCheck): Promise<Applied> {
   const passed = checkPassed(oc);
   s.mastery = applyCheckToMastery(s.mastery, oc.unitKey, oc.purpose, oc.results, oc.independent);
+  // A passed check (independent or provisional) supersedes an earlier skip of the unit.
+  if (passed && oc.purpose !== "practise") m = withoutSkipped(m, oc.unitKey);
   const unit = unitOf(deps.graph, oc.unitKey);
-  const intro = passed ? (oc.purpose === "practise" ? "Nice work. " : oc.independent ? "You've got this — that counts. " : "Got there. ") : oc.purpose === "practise" ? "Good effort — practice is how it sticks. " : "Not all the way yet — let's go through it together. ";
+  const intro = passed ? (oc.purpose === "practise" ? "Nice work. " : oc.independent ? "You've got this — that counts. " : "Got there — with a little help, so I'll keep an eye on this one. ") : oc.purpose === "practise" ? "Good effort — practice is how it sticks. " : "Not all the way yet — let's go through it together. ";
   if (oc.purpose === "practise") {
     const back = m.bookmarks.length ? await executeRoute(deps, s, m, { name: "return" }) : { m, speech: "" };
     return { ...back, speech: intro + back.speech };
@@ -547,8 +585,13 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
       decision = applied.decision;
       board = applied.board;
       yield { event: "text", data: applied.speech };
+    } else if (intent.kind === "question" && !intent.needsGrounding) {
+      // A question about the INSTRUCTIONS (how to answer, how many tries) is
+      // answered from the open check's own facts — never from the item's
+      // content or key (founder, 2026-10-27: clarification yes, answers no).
+      yield { event: "text", data: await checkInstructions(deps, m.openCheck!) };
     } else {
-      yield { event: "text", data: "Let's finish this question first — have a go, or say skip to move on." };
+      yield { event: "text", data: m.openCheck!.purpose === "practise" ? "Let's finish this practice question first — have a go, use a hint if you need one, or say skip to move on." : "Let's finish this question first — I can't explain the topic while a check is on. Have a go, use a hint if you need one, or say skip to move on." };
     }
   } else {
     yield { event: "error", data: { message: `SK is ${m.state.toLowerCase().replace(/_/g, " ")} and cannot take a turn yet.` } };

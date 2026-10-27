@@ -147,14 +147,14 @@ describe("explain_again and the ladder", () => {
 });
 
 describe("mastery from checks", () => {
-  it("a passed skip/unit check marks mastered and keeps the independence flag; a failed one needs work", () => {
+  it("a passed skip/unit check marks mastered (independent) or provisional (assisted); a failed one needs work", () => {
     const m1 = applyCheckToMastery({}, "u4", "skip", [true, true], true);
     expect(m1.u4).toEqual({ status: "mastered", independent: true, evidence: { correct: 2, total: 2 } });
     const m2 = applyCheckToMastery({}, "u4", "unit", [true, false, true], true);
     expect(m2.u4!.status).toBe("needs_work");
     expect(m2.u4!.independent).toBe(false);
     const m3 = applyCheckToMastery({}, "u4", "unit", [true, true], false);
-    expect(m3.u4).toMatchObject({ status: "mastered", independent: false });
+    expect(m3.u4).toMatchObject({ status: "provisional", independent: false }); // assisted pass is provisional (founder, 2026-10-27)
   });
   it("practice never changes mastery status beyond in_progress", () => {
     const m = applyCheckToMastery({}, "u4", "practise", [true, true], true);

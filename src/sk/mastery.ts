@@ -24,8 +24,9 @@
 //     only practice has happened and nothing has been decided yet.
 //   * `independent` is true ONLY when a passed check's every counted attempt
 //     was independent (attempt 1, no hint). One hint anywhere in the run makes
-//     the pass ASSISTED: still mastered, `independent: false` — dashboards
-//     show the two apart (plan §10).
+//     the pass ASSISTED: the status is then `provisional`, not `mastered`
+//     (founder, 2026-10-27) — it unlocks the next unit but keeps the
+//     prerequisite warning, and dashboards show the two apart (plan §10).
 //   * PRACTISE runs and attempts outside any check never change the status
 //     beyond `in_progress`; they are recorded in `evidence.practice`.
 //   * `evidence.attempt_ids` lists every attempt the status rests on, so a
@@ -201,8 +202,10 @@ export function masteryFromAttempts(teachingObjectiveId: string, attempts: reado
   let status: MasteryStatus;
   let independent = false;
   if (decided) {
-    status = decided.status === "passed" ? "mastered" : "needs_work";
+    // An assisted pass (a hint, or a later attempt) is PROVISIONAL (founder,
+    // 2026-10-27): it unlocks what follows but is shown apart from mastery.
     independent = decided.status === "passed" && decided.independent;
+    status = decided.status === "passed" ? (independent ? "mastered" : "provisional") : "needs_work";
   } else if (open || evidence.practice.attempt_ids.length > 0) {
     status = "in_progress";
   } else {
