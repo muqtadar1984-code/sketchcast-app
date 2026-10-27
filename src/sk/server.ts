@@ -23,7 +23,7 @@ import { SupabaseItemBank } from "./items-supabase";
 import type { LoopDeps } from "./loop";
 import { retrievalMode, selectRetrievalProvider, type RetrievalDb, type RetrievalProvider } from "./retrieval";
 import { InMemorySessionStore, type SessionStore } from "./store";
-import { SupabaseSessionStore, skDbFrom } from "./store-supabase";
+import { SupabaseSessionStore, skDbFrom, type SkDb } from "./store-supabase";
 import type { TeachingGraph } from "./types";
 
 /** Graph manifests served from public/, as "<url path>" entries. The one-unit
@@ -104,12 +104,19 @@ export function graphsForStore(graphs: TeachingGraph[], knownProducts: ReadonlyS
   });
 }
 
-async function servableGraphs(graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
-  if (process.env.SK_STORE !== "supabase" || graphs.length === 0) return graphs;
-  const db = createAdminClient();
+/** The graphs the Supabase store may serve: those whose product has an
+ * sk_book_products row (see graphsForStore). Takes the db so the loop tests
+ * run the same filter over the fake the store runs on. */
+export async function servableGraphsOn(db: SkDb, graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
+  if (graphs.length === 0) return graphs;
   const { data, error } = await db.from("sk_book_products").select("slug").in("slug", graphs.map((g) => g.product_id));
   if (error) throw new Error(`[sk] products: ${error.message}`);
-  return graphsForStore(graphs, new Set((data ?? []).map((r: { slug: string }) => r.slug)));
+  return graphsForStore(graphs, new Set((data ?? []).map((r) => String(r.slug))));
+}
+
+async function servableGraphs(graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
+  if (process.env.SK_STORE !== "supabase") return graphs;
+  return servableGraphsOn(skDbFrom(createAdminClient()), graphs);
 }
 
 function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> {

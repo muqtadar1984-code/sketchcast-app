@@ -40,6 +40,8 @@ export interface SkQuery {
   upsert(row: DbRow, opts?: { onConflict?: string }): SkQuery;
   delete(): SkQuery;
   eq(column: string, value: unknown): SkQuery;
+  /** `column in (values)` — the product filter that decides which graphs the Supabase store serves (server.ts). */
+  in(column: string, values: readonly unknown[]): SkQuery;
   order(column: string, opts?: { ascending?: boolean }): SkQuery;
   limit(n: number): SkQuery;
   maybeSingle(): Promise<DbResult<DbRow>>;

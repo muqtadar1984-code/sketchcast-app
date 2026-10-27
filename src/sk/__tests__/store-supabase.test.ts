@@ -3,6 +3,10 @@
 // what the tables add — one open session per student/product/chapter, a
 // stale claim taken over, the check context stamped on an attempt, and the
 // derived mastery_state recomputed after every attempt.
+//
+// The fake enforces the 0157 schema (uuid columns, NOT NULL, CHECKs, FKs), so
+// every id here is a uuid and every event hangs off a real session row —
+// as in production, where "s1"/"e1" would be a 22P02 and an orphan event a 23503.
 import { describe, expect, it } from "vitest";
 import { uuidv7 } from "../ids";
 import { initialMachine, type OpenCheck } from "../state";
@@ -11,33 +15,40 @@ import { SupabaseSessionStore } from "../store-supabase";
 import { skFakeDb } from "./fake-supabase";
 
 const STUDENT = "55555555-0157-0000-0000-000000000001";
+const STUDENT2 = "55555555-0157-0000-0000-000000000002";
+const NOBODY = "55555555-0157-0000-0000-00000000dead";
 const OBJ = "e3eaa67d-5a4f-461a-9a7e-15e6af1e700d";
 const I1 = "71acf08b-bb44-4f23-a34c-018764526476";
 const I2 = "1c37dd99-abb1-40f7-ac11-5d1c57f35e9a";
 const UNMAPPED = "5dffb113-070a-4ed6-927f-01efbffd8bb2";
+const PRODUCT = "cells-structure-function-organisation";
 
 const cursor = { graphVersion: 1, unitKey: "u5", assetId: "a1", segmentId: "s1", t: 0 };
-const newSession = (studentId = STUDENT) => ({ studentId, productId: "cells-structure-function-organisation", chapter: 2, graphVersion: 1, machine: initialMachine(cursor), mastery: {}, history: [] });
+const newSession = (studentId = STUDENT, chapter = 2) => ({ studentId, productId: PRODUCT, chapter, graphVersion: 1, machine: initialMachine(cursor), mastery: {}, history: [] });
 
 function setup(opts: { now?: () => number } = {}) {
   let t = 1_700_000_000_000;
   const now = opts.now ?? (() => (t += 1000));
   const db = skFakeDb(now);
+  db.seed("profiles", [{ id: STUDENT }, { id: STUDENT2 }]);
+  db.seed("teaching_objectives", [{ id: OBJ, chapter: 2, unit_key: "u5", status: "draft" }]);
   db.seed("topic_questions", [
     { id: I1, teaching_objective_id: OBJ, status: "approved" },
     { id: I2, teaching_objective_id: OBJ, status: "approved" },
     { id: UNMAPPED, teaching_objective_id: null, status: "draft" },
   ]);
   const store = new SupabaseSessionStore(db, { now, pollMs: 1, inflightTimeoutMs: 500, staleClaimMs: 60_000 });
-  return { db, store, now };
+  /** A session row to hang events off (chapter n keeps several open at once). */
+  const session = async (chapter = 2) => (await store.createSession(newSession(STUDENT, chapter))).id;
+  return { db, store, now, session };
 }
 
 describe("sessions", () => {
   it("creates, finds the open one for (student, product, chapter), saves copies, refuses a ghost", async () => {
     const { db, store } = setup();
     const s1 = await store.createSession(newSession());
-    expect((await store.findSession(STUDENT, "cells-structure-function-organisation", 2))!.id).toBe(s1.id);
-    expect(await store.findSession("other", "cells-structure-function-organisation", 2)).toBeNull();
+    expect((await store.findSession(STUDENT, PRODUCT, 2))!.id).toBe(s1.id);
+    expect(await store.findSession(NOBODY, PRODUCT, 2)).toBeNull();
     s1.machine.cursor.t = 999;
     expect((await store.getSession(s1.id))!.machine.cursor.t).toBe(0); // not saved yet, not aliased
     await store.saveSession(s1);
@@ -47,37 +58,49 @@ describe("sessions", () => {
     await expect(store.saveSession({ ...s1, id: uuidv7() })).rejects.toThrow(/unknown session/);
     expect(await store.getSession("not-a-uuid")).toBeNull();
     const row = db.rows("sk_sessions")[0]!;
-    expect(row).toMatchObject({ status: "open", state: "ONBOARD", phase: "GUIDE", rate: 1, product_id: "cells-structure-function-organisation", chapter: 2 });
+    expect(row).toMatchObject({ status: "open", state: "ONBOARD", phase: "GUIDE", rate: 1, product_id: PRODUCT, chapter: 2 });
     expect(row.cursor).toEqual({ ...cursor, t: 999 });
   });
   it("one OPEN session per student × product × chapter: a new one closes the old", async () => {
     const { db, store } = setup();
     const s1 = await store.createSession(newSession());
     const s2 = await store.createSession(newSession());
-    expect((await store.findSession(STUDENT, "cells-structure-function-organisation", 2))!.id).toBe(s2.id);
+    expect((await store.findSession(STUDENT, PRODUCT, 2))!.id).toBe(s2.id);
     const rows = db.rows("sk_sessions");
     expect(rows.find((r) => r.id === s1.id)).toMatchObject({ status: "closed" });
     expect(rows.find((r) => r.id === s2.id)).toMatchObject({ status: "open" });
     expect(await store.getSession(s1.id)).not.toBeNull(); // still readable by id (history)
   });
+  it("the table refuses what production refuses: a student without a profile (23503), a non-uuid student (22P02)", async () => {
+    const { store } = setup();
+    await expect(store.createSession(newSession(NOBODY))).rejects.toThrow(/23503/);
+    await expect(store.createSession(newSession("stu"))).rejects.toThrow(/22P02/);
+    // findSession is a typed comparison too: `student_id = 'stu'` is a 22P02, not an empty result.
+    await expect(store.findSession("stu", PRODUCT, 2)).rejects.toThrow(/22P02/);
+  });
 });
 
 describe("events are unique on (sessionId, eventId)", () => {
   it("runs the work once; a repeat returns the stored result and runs nothing", async () => {
-    const { db, store } = setup();
+    const { db, store, session } = setup();
+    const s1 = await session(2);
+    const s2 = await session(3);
+    const e1 = uuidv7();
     let runs = 0;
     const work = async () => ({ n: ++runs });
-    const a = await withEvent(store, "s1", "e1", "k", work);
-    const b = await withEvent(store, "s1", "e1", "k", work);
+    const a = await withEvent(store, s1, e1, "k", work);
+    const b = await withEvent(store, s1, e1, "k", work);
     expect(a).toEqual({ result: { n: 1 }, replayed: false });
     expect(b).toEqual({ result: { n: 1 }, replayed: true });
     expect(runs).toBe(1);
-    expect((await withEvent(store, "s2", "e1", "k", work)).result).toEqual({ n: 2 }); // another session = another key
-    expect((await store.listEvents("s1")).map((e) => [e.kind, e.result])).toEqual([["k", { n: 1 }]]);
+    expect((await withEvent(store, s2, e1, "k", work)).result).toEqual({ n: 2 }); // another session = another key
+    expect((await store.listEvents(s1)).map((e) => [e.kind, e.result])).toEqual([["k", { n: 1 }]]);
     expect(db.rows("sk_events").every((r) => r.status === "stored")).toBe(true);
   });
   it("a concurrent duplicate waits for the in-flight run and gets the same result", async () => {
-    const { store } = setup();
+    const { store, session } = setup();
+    const s = await session();
+    const e = uuidv7();
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     let runs = 0;
@@ -86,46 +109,59 @@ describe("events are unique on (sessionId, eventId)", () => {
       await gate;
       return "done";
     };
-    const p1 = withEvent(store, "s", "e", "k", work);
+    const p1 = withEvent(store, s, e, "k", work);
     await new Promise((r) => setTimeout(r, 5));
-    const claim = await store.claimEvent("s", "e");
+    const claim = await store.claimEvent(s, e);
     expect(claim.status).toBe("inflight");
-    const p2 = withEvent(store, "s", "e", "k", work);
+    const p2 = withEvent(store, s, e, "k", work);
     release();
     expect(await p1).toEqual({ result: "done", replayed: false });
     expect(await p2).toEqual({ result: "done", replayed: true });
     expect(runs).toBe(1);
   });
   it("a failed run releases the claim so the client's retry can run", async () => {
-    const { db, store } = setup();
-    await expect(withEvent(store, "s", "e", "k", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
+    const { db, store, session } = setup();
+    const s = await session();
+    const e = uuidv7();
+    await expect(withEvent(store, s, e, "k", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
     expect(db.rows("sk_events")).toHaveLength(0);
-    expect((await withEvent(store, "s", "e", "k", async () => "second")).result).toBe("second");
+    expect((await withEvent(store, s, e, "k", async () => "second")).result).toBe("second");
   });
   it("a waiting duplicate is told when the first run released the claim", async () => {
-    const { store } = setup();
-    await store.claimEvent("s", "e");
-    const claim = await store.claimEvent("s", "e");
+    const { store, session } = setup();
+    const s = await session();
+    const e = uuidv7();
+    await store.claimEvent(s, e);
+    const claim = await store.claimEvent(s, e);
     expect(claim.status).toBe("inflight");
     const done = claim.status === "inflight" ? claim.done : Promise.resolve(null);
-    await store.releaseEvent("s", "e");
+    await store.releaseEvent(s, e);
     await expect(done).rejects.toThrow(/released/);
   });
   it("a stale in-flight claim (a dead run) is taken over", async () => {
     let t = 1_700_000_000_000;
-    const { db, store } = setup({ now: () => t });
-    expect((await store.claimEvent("s", "e")).status).toBe("new");
+    const { db, store, session } = setup({ now: () => t });
+    const s = await session();
+    const e = uuidv7();
+    expect((await store.claimEvent(s, e)).status).toBe("new");
     t += 61_000; // past staleClaimMs
-    expect((await store.claimEvent("s", "e")).status).toBe("new");
+    expect((await store.claimEvent(s, e)).status).toBe("new");
     expect(db.rows("sk_events")).toHaveLength(1);
     expect(db.rows("sk_events")[0]).toMatchObject({ status: "inflight" });
   });
   it("completing an event that was never claimed, or twice, is refused", async () => {
-    const { store } = setup();
-    await expect(store.completeEvent("s", "e", "k", 1)).rejects.toThrow(/already stored or not claimed/);
-    await store.claimEvent("s", "e");
-    await store.completeEvent("s", "e", "k", 1);
-    await expect(store.completeEvent("s", "e", "k", 2)).rejects.toThrow(/already stored/);
+    const { store, session } = setup();
+    const s = await session();
+    const e = uuidv7();
+    await expect(store.completeEvent(s, e, "k", 1)).rejects.toThrow(/already stored or not claimed/);
+    await store.claimEvent(s, e);
+    await store.completeEvent(s, e, "k", 1);
+    await expect(store.completeEvent(s, e, "k", 2)).rejects.toThrow(/already stored/);
+  });
+  it("an event for a session that does not exist is a foreign-key violation, not a silent row", async () => {
+    const { db, store } = setup();
+    await expect(store.claimEvent(uuidv7(), uuidv7())).rejects.toThrow(/23503/);
+    expect(db.rows("sk_events")).toHaveLength(0);
   });
 });
 
@@ -178,6 +214,8 @@ describe("attempts are graded once per (sessionId, itemId, attemptNo)", () => {
     const s = await store.createSession(newSession());
     await expect(store.putAttempt(attempt(s.id, "ch2-u4-c1", 1, "correct"))).rejects.toThrow(/not a topic_questions id/);
     await expect(store.putAttempt(attempt(uuidv7(), I1, 1, "correct"))).rejects.toThrow(/unknown session/);
+    // A uuid the bank does not hold gets past the store's own guard and dies at the FK — the table's word, not ours.
+    await expect(store.putAttempt(attempt(s.id, "00000000-0000-4000-8000-000000000000", 1, "correct"))).rejects.toThrow(/23503/);
   });
   it("stamps the check context from the session's open check and resolves the objective from the item", async () => {
     const { db, store } = setup();
@@ -199,6 +237,13 @@ describe("attempts are graded once per (sessionId, itemId, attemptNo)", () => {
     await store.putAttempt(attempt(s.id, I1, 1, "correct"));
     expect(db.rows("item_attempts")[0]).toMatchObject({ purpose: null, unit_key: null, check_key: null, check_size: null, teaching_objective_id: OBJ });
     expect((await store.getMastery(STUDENT, OBJ))!.status).toBe("in_progress");
+  });
+  it("the integrity CHECKs hold: an 'independent' assisted attempt and an unconfirmed spoken answer are refused by the table", async () => {
+    const { store } = setup();
+    const s = await store.createSession(newSession());
+    await expect(store.putAttempt(attempt(s.id, I1, 2, "correct", 1, { independent: true }))).rejects.toThrow(/item_attempts_independent_check/);
+    await expect(store.putAttempt(attempt(s.id, I1, 1, "correct", 0, { modality: "spoken", transcriptConfirmed: false }))).rejects.toThrow(/item_attempts_transcript_check/);
+    expect(await store.listAttempts(s.id)).toHaveLength(0);
   });
 });
 
@@ -243,10 +288,10 @@ describe("mastery_state is recomputed from item_attempts after every attempt (ru
     await store.putAttempt(attempt(s.id, I2, 1, "correct"));
     expect((await store.getMastery(STUDENT, OBJ))).toMatchObject({ status: "needs_work", independent: false });
 
-    const s2 = await store.createSession(newSession("55555555-0157-0000-0000-000000000002"));
+    const s2 = await store.createSession(newSession(STUDENT2));
     await store.putAttempt(attempt(s2.id, UNMAPPED, 1, "correct"));
     expect(db.rows("item_attempts").find((r) => r.session_id === s2.id)).toMatchObject({ teaching_objective_id: null });
-    expect(db.rows("mastery_state").filter((r) => r.student_id === "55555555-0157-0000-0000-000000000002")).toHaveLength(0);
+    expect(db.rows("mastery_state").filter((r) => r.student_id === STUDENT2)).toHaveLength(0);
   });
   it("an explicit teachingObjectiveId on the attempt is used as given (null = unmapped)", async () => {
     const { db, store } = setup();

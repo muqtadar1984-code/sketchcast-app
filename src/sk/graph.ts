@@ -86,7 +86,10 @@ export function parseGraph(raw: unknown, baseUri = ""): TeachingGraph {
   // cannot record is refused here, at load, not at the student's first Play.
   if (!Number.isInteger(version) || version < 1) throw new GraphError("graph: bad version (must be an integer >= 1)");
   const chapter = typeof raw.chapter === "number" ? raw.chapter : Number(raw.chapter);
-  if (!Number.isInteger(chapter) || chapter < 0) throw new GraphError("graph: bad chapter");
+  // sk_sessions.chapter, sk_book_units.chapter and teaching_objectives.chapter
+  // are all CHECK (>= 1) (0156/0157): a chapter-0 graph would open and then
+  // fail at the first save, exactly as version 0 did — refuse it at load.
+  if (!Number.isInteger(chapter) || chapter < 1) throw new GraphError("graph: bad chapter (must be an integer >= 1, as sk_sessions.chapter requires)");
   return {
     graph_id: str(raw.graph_id, "graph_id"),
     product_id: str(raw.product_id ?? raw.product, "product_id"),
