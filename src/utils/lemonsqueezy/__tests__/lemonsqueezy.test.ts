@@ -41,6 +41,11 @@ class FakeDb {
   constructor(tables: Record<string, Row | null> = {}) {
     this.tables = tables;
   }
+  /** 0159's book-purchase writers are database functions; nothing in this
+   * suite reaches them (book-purchase.test.ts does), so a call here is a bug. */
+  async rpc(fn: string): Promise<{ data: unknown; error: { message: string } | null }> {
+    throw new Error(`unexpected rpc ${fn} in the pack/subscription suite`);
+  }
   from(table: string) {
     const read = async () => ({ data: this.tables[table] ?? null });
     return {
