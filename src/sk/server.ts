@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { claudeConfigured } from "@/utils/claude-backend";
-import { skEnabled } from "@/utils/flags";
+import { skEnabled, skUserAllowed } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
@@ -168,6 +168,10 @@ export async function gate(): Promise<Gate> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Restricted live (SK_ALLOWED_EMAILS set): anyone off the list — signed in
+  // or not — sees the same 404 as when the flag is off, so the surface does
+  // not even admit it exists. With the list unset this is a no-op.
+  if (!skUserAllowed(user)) return { ok: false, response: NextResponse.json({ error: "Not available." }, { status: 404 }) };
   if (!user) return { ok: false, response: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
   return { ok: true, userId: user.id };
 }
