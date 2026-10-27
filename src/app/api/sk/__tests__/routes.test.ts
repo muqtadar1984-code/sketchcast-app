@@ -15,7 +15,9 @@ import { GET as getSession } from "@/app/api/sk/session/[id]/route";
 import { POST as command } from "@/app/api/sk/command/route";
 import { POST as answer } from "@/app/api/sk/answer/route";
 import { POST as turn } from "@/app/api/sk/turn/route";
-import { __setSkDepsForTests } from "@/sk/server";
+import { LIVE_ENDED_TEXT, NO_BOOK_ACCESS_TEXT } from "@/sk/access-notice";
+import { StaticEntitlements } from "@/sk/entitlement";
+import { __setSkDepsForTests, type SkDeps } from "@/sk/server";
 import { InMemorySessionStore } from "@/sk/store";
 import { StaticItemBank } from "@/sk/items";
 import { graph, U4_HITMAP_TARGETS, U4_SEGMENT } from "@/sk/__tests__/fixtures";
@@ -38,9 +40,11 @@ async function sse(res: Response): Promise<{ event: string; data: unknown }[]> {
     });
 }
 
+const baseDeps = (): Partial<SkDeps> => ({ store: new InMemorySessionStore(), items: new StaticItemBank(), graphs: [graph()], loadSegment: async () => U4_SEGMENT, loadHitmapElementIds: async () => U4_HITMAP_TARGETS, routerProvider: undefined, teacherProvider: undefined });
+
 beforeEach(() => {
   process.env.FEATURE_SK = "true";
-  __setSkDepsForTests({ store: new InMemorySessionStore(), items: new StaticItemBank(), graphs: [graph()], loadSegment: async () => U4_SEGMENT, loadHitmapElementIds: async () => U4_HITMAP_TARGETS, routerProvider: undefined, teacherProvider: undefined });
+  __setSkDepsForTests(baseDeps());
   signedIn(STU);
 });
 afterEach(() => {
@@ -94,6 +98,14 @@ describe("session", () => {
   });
   it("404 for a product with no graph", async () => {
     expect((await openSession(req({ eventId: eid(), productId: "nothing", chapter: 2 }))).status).toBe(404);
+  });
+  it("B8: without an entitlement source the view says dev-flag; with one and no grant, 403 { reason: no_book_access }", async () => {
+    const a = (await (await openSession(req({ eventId: eid(), productId: "test-product", chapter: 2 }))).json()) as { access: { source: string } };
+    expect(a.access).toMatchObject({ source: "dev-flag", book: true, tutor: true });
+    __setSkDepsForTests({ ...baseDeps(), entitlements: new StaticEntitlements({ grants: [] }) });
+    const res = await openSession(req({ eventId: eid(), productId: "test-product", chapter: 2 }));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: NO_BOOK_ACCESS_TEXT, reason: "no_book_access" });
   });
 });
 
@@ -156,6 +168,20 @@ describe("turn (SSE)", () => {
     expect((replay[2]!.data as { view: { rate: number } }).view.rate).toBeCloseTo(0.85, 5); // not 0.7: nothing ran twice
     const fresh = await sse(await turn(req({ eventId: eid(), sessionId, utterance: { text: "slower", modality: "typed" } })));
     expect((fresh[2]!.data as { view: { rate: number } }).view.rate).toBeCloseTo(0.7, 5);
+  });
+  it("B8: a grant whose tutor window is over opens the session, runs commands, and answers a question with SK's own line", async () => {
+    const DAY = 86_400_000;
+    const expired = { product_id: "test-product", source: "code", activated_at: new Date(Date.now() - 40 * DAY).toISOString(), expires_at: null, tutor_expires_at: new Date(Date.now() - 10 * DAY).toISOString(), revoked_at: null, usage_allowance: null };
+    __setSkDepsForTests({ ...baseDeps(), entitlements: new StaticEntitlements({ grants: [expired] }) });
+    const opened = (await (await openSession(req({ eventId: eid(), productId: "test-product", chapter: 2 }))).json()) as { sessionId: string; access: { tutor: boolean; book: boolean } };
+    expect(opened.access).toMatchObject({ source: "grant", grantSource: "code", book: true, tutor: false });
+    const cmd = await sse(await turn(req({ eventId: eid(), sessionId: opened.sessionId, utterance: { text: "slower", modality: "typed" } })));
+    expect(cmd[1]!.data).toBe("I'll slow down a little.");
+    const q = await sse(await turn(req({ eventId: eid(), sessionId: opened.sessionId, utterance: { text: "why is the image upside down?", modality: "typed" } })));
+    expect(q.map((x) => x.event)).toEqual(["meta", "text", "done"]);
+    expect(q[1]!.data).toBe(LIVE_ENDED_TEXT);
+    expect((q[2]!.data as { metered?: unknown; view: { access: { tutor: boolean } } }).metered).toBeUndefined();
+    expect((q[2]!.data as { view: { access: { tutor: boolean } } }).view.access.tutor).toBe(false);
   });
   it("404 for another student's session; 400 without an utterance", async () => {
     const { sessionId } = await open();

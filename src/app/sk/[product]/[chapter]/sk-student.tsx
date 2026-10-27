@@ -17,6 +17,7 @@ import { segmentForVoice, trackFor } from "@/sk/board/voices";
 import { SpikeRuntime, type HitMap, type PlayerState, type Rig } from "@/sk/board/runtime";
 import { useMicSupported, useRigChoice } from "@/sk/board/use-rig-choice";
 import { uuidv7 } from "@/sk/ids";
+import { accessNotice } from "@/sk/access-notice";
 import type { SessionView } from "@/sk/loop";
 import { BrowserSpeechProvider, browserSpeechAvailable } from "@/sk/speech/browser";
 import { PollyClientSpeechProvider, SpeakUnavailable } from "@/sk/speech/polly-client";
@@ -433,10 +434,16 @@ export default function SkStudent({ productId, chapter }: Props) {
   const item = oc?.item ?? null;
   const unitsLine = useMemo(() => (view ? `${view.unit?.title ?? "—"} · ${view.state}` : "connecting…"), [view]);
 
+  const notice = accessNotice(view?.access);
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="card p-2">
         <audio ref={asideAudioRef} preload="none" />
+        {notice && (
+          <div className="mb-2 rounded border border-[#F2C94C] bg-[#FFF8E1] px-3 py-1.5 text-xs text-[#5B4A00]" role="status" data-testid="sk-access-notice">
+            {notice}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
           <button className="btn-primary h-9 px-3" onClick={() => void sendCommand("continue")} disabled={!view || busy || player === "loading" || player === "playing" || !!oc}>
             ▶ Play

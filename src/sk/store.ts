@@ -65,6 +65,19 @@ export class DuplicateAttemptError extends Error {
   }
 }
 
+/** One `sk_usage` row (0158): a student's live interaction on a product in a
+ * 'YYYY-MM' period. `live_turns` = turns that reached the router or teacher
+ * model; `generated_segments` = live asides the teacher drew; `interactive_ms`
+ * is not yet written by anything (B8: no active-time tracking exists). */
+export type UsageRow = { live_turns: number; generated_segments: number; interactive_ms: number };
+export type UsageDelta = Partial<UsageRow>;
+export const ZERO_USAGE: UsageRow = { live_turns: 0, generated_segments: 0, interactive_ms: 0 };
+
+export function addUsage(cur: UsageRow | null, delta: UsageDelta): UsageRow {
+  const c = cur ?? ZERO_USAGE;
+  return { live_turns: c.live_turns + (delta.live_turns ?? 0), generated_segments: c.generated_segments + (delta.generated_segments ?? 0), interactive_ms: c.interactive_ms + (delta.interactive_ms ?? 0) };
+}
+
 export interface SessionStore {
   createSession(s: NewSession): Promise<SkSession>;
   getSession(id: string): Promise<SkSession | null>;
@@ -84,6 +97,13 @@ export interface SessionStore {
   /** Insert; throws DuplicateAttemptError when (sessionId, itemId, attemptNo) exists. */
   putAttempt(a: Attempt): Promise<Attempt>;
   listAttempts(sessionId: string): Promise<Attempt[]>;
+
+  /** B8 metering: this period's usage row for (student, product), null when none. */
+  getUsage(userId: string, productId: string, period: string): Promise<UsageRow | null>;
+  /** Add `delta` to the row (creating it at zero) and return the new totals.
+   * On Supabase this is read-then-upsert on the primary key — two turns of
+   * one student on the same product in the same instant can lose a count. */
+  bumpUsage(userId: string, productId: string, period: string, delta: UsageDelta): Promise<UsageRow>;
 }
 
 /** Run `work` once per (sessionId, eventId): a duplicate returns the stored
@@ -112,6 +132,7 @@ export class InMemorySessionStore implements SessionStore {
   private order: StoredEvent[] = [];
   private pending = new Map<string, Pending>();
   private attempts = new Map<string, Attempt>();
+  private usage = new Map<string, UsageRow>();
   /** Insertion order, so two sessions created in the same millisecond still have a "most recent". */
   private seq = new Map<string, number>();
   private nextSeq = 0;
@@ -191,6 +212,17 @@ export class InMemorySessionStore implements SessionStore {
   }
   async listAttempts(sessionId: string): Promise<Attempt[]> {
     return [...this.attempts.values()].filter((a) => a.sessionId === sessionId).map((a) => clone(a));
+  }
+
+  async getUsage(userId: string, productId: string, period: string): Promise<UsageRow | null> {
+    const u = this.usage.get(key(userId, productId, period));
+    return u ? clone(u) : null;
+  }
+  async bumpUsage(userId: string, productId: string, period: string, delta: UsageDelta): Promise<UsageRow> {
+    const k = key(userId, productId, period);
+    const next = addUsage(this.usage.get(k) ?? null, delta);
+    this.usage.set(k, next);
+    return clone(next);
   }
 
   /** Test/ops helper: how many sessions are held. */

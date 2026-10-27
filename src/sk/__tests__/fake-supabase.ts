@@ -345,14 +345,74 @@ const req = (type: ColumnType, extra: Omit<ColumnSpec, "type"> = {}): ColumnSpec
 const gte = (n: number) => (v: unknown) => Number(v) >= n;
 const bool = (v: unknown) => v === true || v === "true" || v === "t";
 
+export const GRANT_SOURCES = ["code", "promo", "staff", "renewal", "purchase", "edition_code"] as const;
+
 /** The four 0157 tables with every column, CHECK, unique key and FK; the 0156
- * tables the bank reads (typed where the loop's writes point at them); and
- * `profiles`, which sk_sessions / item_attempts / mastery_state reference.
- * Seed a profiles row for every student a test opens a session for. */
+ * tables the bank reads (typed where the loop's writes point at them);
+ * `profiles` (+ school_id), which sk_sessions / item_attempts / mastery_state
+ * reference; and the B8 access tables — `entitlements` (0022), and
+ * `book_access_grants` + `sk_usage` (0158, grants as 0159 left them). Seed a
+ * profiles row for every student a test opens a session for. */
 export function skFakeDb(now: () => number = () => Date.now()): FakeDb {
   const db: FakeDb = new FakeDb(
     {
-      profiles: { unique: [{ cols: ["id"] }], columns: { id: req("uuid") } },
+      schools: { unique: [{ cols: ["id"] }], columns: { id: req("uuid") } },
+      profiles: { unique: [{ cols: ["id"] }], columns: { id: req("uuid"), school_id: col("uuid", { references: { table: "schools" } }) } },
+
+      // 0022: the plan rows utils/stripe/entitlements.ts reads (a user's own; a school's under school_id)
+      entitlements: {
+        unique: [{ cols: ["id"] }, { cols: ["user_id", "plan_key"] }],
+        strictColumns: true,
+        columns: {
+          id: req("uuid", { default: () => uuidv7(now()) }),
+          school_id: col("uuid", { references: { table: "schools" } }),
+          user_id: req("uuid", { references: { table: "profiles" } }),
+          active: req("bool", { default: () => false }),
+          plan_key: req("text"),
+          status: col("text"),
+          current_period_end: col("timestamptz"),
+          updated_at: req("timestamptz", { default: () => db.stamp() }),
+        },
+      },
+
+      // 0158 §grants, as 0159 left them: expires_at nullable (book access permanent), tutor_expires_at the tutoring window.
+      // product_id is a bare uuid (no FK) — a slug in a filter here is the 22P02 B8 guards against.
+      book_access_grants: {
+        unique: [{ cols: ["id"] }],
+        strictColumns: true,
+        columns: {
+          id: req("uuid", { default: () => uuidv7(now()) }),
+          user_id: req("uuid", { references: { table: "profiles" } }),
+          product_id: req("uuid"),
+          source: req("text", { in: GRANT_SOURCES }),
+          code_id: col("uuid"),
+          publisher_id: col("uuid"),
+          batch_id: col("uuid"),
+          activated_at: req("timestamptz", { default: () => db.stamp() }),
+          expires_at: col("timestamptz"),
+          revoked_at: col("timestamptz"),
+          renewal_of: col("uuid"),
+          usage_allowance: col("jsonb"),
+          granted_by: col("uuid"),
+          created_at: req("timestamptz", { default: () => db.stamp() }),
+          tutor_expires_at: col("timestamptz"),
+          edition_code_id: col("uuid"),
+        },
+      },
+      // 0158 §usage: PRIMARY KEY (user_id, product_id, period) — the B8 upsert key
+      sk_usage: {
+        unique: [{ cols: ["user_id", "product_id", "period"] }],
+        strictColumns: true,
+        columns: {
+          user_id: req("uuid", { references: { table: "profiles" } }),
+          product_id: req("uuid"),
+          period: req("text"),
+          live_turns: req("int", { default: () => 0 }),
+          generated_segments: req("int", { default: () => 0 }),
+          interactive_ms: req("int", { default: () => 0 }),
+          updated_at: req("timestamptz", { default: () => db.stamp() }),
+        },
+      },
 
       // 0156
       sk_book_products: { unique: [{ cols: ["id"] }, { cols: ["slug"] }], columns: { id: req("uuid", { default: () => uuidv7(now()) }), slug: req("text"), status: col("text", { in: ["draft", "approved", "retired"] }) } },
