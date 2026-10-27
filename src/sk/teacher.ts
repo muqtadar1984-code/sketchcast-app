@@ -10,6 +10,7 @@
 import type { LLMProvider, ToolDef, Turn } from "@/utils/assistant/provider";
 import { ASIDE_LIMITS, ASIDE_TAL, asideTargets, validateAside, type AsideProgram, type AsideTargets } from "./aside";
 import type { Segment } from "./board/engine";
+import type { RetrievalResult, RetrievedPassage } from "./retrieval";
 import type { GraphUnit } from "./types";
 
 export const TEACHER_MAX_TOKENS = 700;
@@ -84,6 +85,7 @@ export function buildTeacherSystem(input: { unit: GraphUnit; segment: Segment; t
     "You are SK, an animated tutor for school students. A lesson segment is PAUSED on the board and the student has just asked you something.",
     "Answer in the lesson's language, spoken style, 2–4 short sentences (under 70 words), warm and plain. You are talking to a child: no sarcasm, nothing frightening, nothing personal.",
     "GROUND every fact in the UNIT CONTENT below. If the question goes beyond it, say so in one sentence and offer to come back to it after the lesson — do not invent anatomy, numbers or formulas.",
+    "When BOOK PASSAGES come with the question, they are the book's own words on it: ground on them first, then on the unit content, and nothing else.",
     "Never give the answer to a check question that is being asked; guide instead.",
     `You may call draw_aside once to label, highlight or write on the board. Allowed targets: ${describeTargets(targets) || "(none)"}. Coordinates for write are 0–100 on the board.`,
     "Do not describe the drawing in words beyond what you say to the student.",
@@ -111,18 +113,36 @@ export type TeacherInput = {
   history?: Turn[];
   signal?: AbortSignal;
   maxTokens?: number;
+  /** What retrieval found for this question (B6/R1). Only "grounded" changes
+   * the call: its passages ride in the USER turn, so the per-unit system
+   * prefix stays byte-identical and the prompt cache keeps serving it. */
+  grounding?: RetrievalResult;
 };
+
+/** Each passage is capped so a long table cannot crowd out the question. */
+const PASSAGE_MAX_CHARS = 700;
+const MAX_PASSAGES = 5;
+
+/** The user turn when the book has something to say: the passages (the
+ * book's own words, with their unit and kind) and then the question. */
+export function questionWithPassages(question: string, passages: RetrievedPassage[]): string {
+  const q = question.slice(0, 600);
+  const lines = passages.slice(0, MAX_PASSAGES).map((p, i) => `[${i + 1}] (${p.unitKey ?? "book"}, ${p.blockType.replace(/_/g, " ")}) ${p.text.slice(0, PASSAGE_MAX_CHARS)}`);
+  if (!lines.length) return q;
+  return ["BOOK PASSAGES (the book's own words on this; ground on them):", ...lines, "", `STUDENT QUESTION: ${q}`].join("\n");
+}
 
 export async function* answerQuestion(input: TeacherInput): AsyncGenerator<TeacherEvent, void, void> {
   const targets = asideTargets(input.segment, input.hitmapElementIds ?? []);
   const system = buildTeacherSystem({ unit: input.unit, segment: input.segment, targets });
   const history = (input.history ?? []).slice(-MAX_HISTORY_TURNS);
+  const userText = input.grounding?.status === "grounded" ? questionWithPassages(input.question, input.grounding.passages) : input.question.slice(0, 600);
   let fullText = "";
   let usage = { inputTokens: 0, outputTokens: 0 };
   let asideSeen = false;
   for await (const ev of input.provider.stream({
     system,
-    messages: [...history, { role: "user", text: input.question.slice(0, 600) }],
+    messages: [...history, { role: "user", text: userText }],
     tools: [ASIDE_TOOL],
     maxTokens: input.maxTokens ?? TEACHER_MAX_TOKENS,
     signal: input.signal,
@@ -156,3 +176,9 @@ export async function* answerQuestion(input: TeacherInput): AsyncGenerator<Teach
 /** What SK says when no model is configured (local dev without a key): honest,
  * short, and it keeps the lesson moving. */
 export const NO_TEACHER_TEXT = "I can't answer questions right now, but let's keep going with the lesson and your teacher can help with that one.";
+
+/** What SK says when retrieval reports the book has nothing on the question
+ * (the hybrid gate, R1 §4.2): honest, no guess, no model call, the lesson
+ * carries on. Deterministic so an off-book question can never be answered
+ * from the model's memory. */
+export const NOT_IN_BOOK_TEXT = "I can't find that in this book, so I won't guess. Let's carry on with the lesson — that's a good one to ask your teacher, or we can come back to it at the end.";

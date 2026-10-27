@@ -15,10 +15,12 @@ import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 import { normaliseSegment, validateSegment, type Segment } from "./board/engine";
+import { embedderConfigured, TitanEmbedder } from "./embed";
 import { parseGraph } from "./graph";
 import { StaticItemBank, type ItemBank } from "./items";
 import { SupabaseItemBank } from "./items-supabase";
 import type { LoopDeps } from "./loop";
+import { retrievalMode, selectRetrievalProvider, type RetrievalDb, type RetrievalProvider } from "./retrieval";
 import { InMemorySessionStore, type SessionStore } from "./store";
 import { SupabaseSessionStore, skDbFrom } from "./store-supabase";
 import type { TeachingGraph } from "./types";
@@ -34,6 +36,7 @@ export type SkDeps = {
   graphs: TeachingGraph[];
   routerProvider?: LLMProvider;
   teacherProvider?: LLMProvider;
+  retrieval?: RetrievalProvider;
   loadSegment: LoopDeps["loadSegment"];
   loadHitmapElementIds: LoopDeps["loadHitmapElementIds"];
 };
@@ -129,6 +132,24 @@ export function persistence(): Pick<SkDeps, "store" | "items"> {
   return { store: new InMemorySessionStore(), items: new StaticItemBank() };
 }
 
+/** R1: `SK_RETRIEVAL=fts` (default) grounds questions on the OR-relaxed
+ * full-text leg of 0160; `hybrid` adds the Titan-v2 pgvector leg and the
+ * vector-score gate (`SK_RETRIEVAL_GATE`, default 0.32); `off` leaves the
+ * teacher on the unit narration alone. Both adapters go through the admin
+ * client (the 0160 functions are service-role only); without the service key
+ * (local dev) there is no retrieval, logged. */
+export function retrieval(): Pick<SkDeps, "retrieval"> {
+  if (retrievalMode() === "off") return {};
+  try {
+    const db = createAdminClient() as unknown as RetrievalDb;
+    const provider = selectRetrievalProvider({ db, embedder: new TitanEmbedder(), embedderConfigured });
+    return provider ? { retrieval: provider } : {};
+  } catch (e) {
+    console.error("[sk] retrieval disabled:", (e as Error).message);
+    return {};
+  }
+}
+
 export function skDeps(): Promise<SkDeps> {
   if (!deps) {
     deps = (async () => {
@@ -139,6 +160,7 @@ export function skDeps(): Promise<SkDeps> {
         loadSegment: loadSegmentFromPublic,
         loadHitmapElementIds: loadHitmapTargetsFromPublic,
         ...providers(),
+        ...retrieval(),
       };
       return { ...base, ...(override ?? {}) };
     })();
@@ -156,7 +178,7 @@ export function __setSkDepsForTests(d: Partial<SkDeps> | null): void {
 export function loopDepsFor(d: SkDeps, productId: string, chapter: number): LoopDeps | null {
   const graph = d.graphs.find((g) => g.product_id === productId && g.chapter === chapter);
   if (!graph) return null;
-  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds };
+  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, retrieval: d.retrieval, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds };
 }
 
 // ── Gate + auth, shared by every route ──────────────────────────────────────

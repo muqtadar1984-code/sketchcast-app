@@ -1,0 +1,60 @@
+50 questions embedded (680 Titan tokens)
+| group | n | recall@5 block | MRR block | recall@5 unit | MRR unit | empty | best_vec min | best_vec max |
+|---|---|---|---|---|---|---|---|---|
+| in_chapter | 30 | 1.00 | 0.90 | 1.00 | 0.98 | 0 | 0.439 | 0.914 |
+| off_chapter | 8 | — | — | — | — | 0 | 0.111 | 0.202 |
+| alt_example | 6 | 1.00 | 0.78 | 1.00 | 0.92 | 0 | 0.501 | 0.755 |
+| injection | 6 | 0.75 | 0.63 | 1.00 | 0.88 | 0 | 0.138 | 0.721 |
+
+gate 0.32: off-chapter false positives 0/8; in-chapter+alt wrongly rejected 0/36; injection strings answered with ordinary rows 6/6; rows outside the requested product/chapter 0/250
+
+q01 in_chapter best_vec=0.655 PASS-GATE top=u6#05 u5#01 u5#05 u5#18 u5#06 gold_rank=2
+q02 in_chapter best_vec=0.804 PASS-GATE top=u5#04 u5#05 u5#06 u5#01 u5#02 gold_rank=1
+q03 in_chapter best_vec=0.743 PASS-GATE top=u5#05 u5#02 u5#01 u2#15 u5#04 gold_rank=1
+q04 in_chapter best_vec=0.732 PASS-GATE top=u5#16 u5#10 u5#14 u6#05 u5#09 gold_rank=2
+q05 in_chapter best_vec=0.676 PASS-GATE top=u5#14 u5#10 u5#16 u6#05 u5#09 gold_rank=1
+q06 in_chapter best_vec=0.690 PASS-GATE top=u1#09 u1#08 u5#11 u5#12 u5#14 gold_rank=1
+q07 in_chapter best_vec=0.439 PASS-GATE top=u1#11 u6#04 u1#08 u4#13 u4#00 gold_rank=1
+q08 in_chapter best_vec=0.914 PASS-GATE top=u1#04 u1#07 u1#01 u1#13 u1#05 gold_rank=1
+q09 in_chapter best_vec=0.556 PASS-GATE top=u1#02 u1#14 u1#00 u1#13 u1#07 gold_rank=1
+q10 in_chapter best_vec=0.693 PASS-GATE top=u1#02 u1#14 u1#05 u1#13 u1#00 gold_rank=1
+q11 in_chapter best_vec=0.793 PASS-GATE top=u2#06 u2#02 u5#06 u2#10 u3#01 gold_rank=1
+q12 in_chapter best_vec=0.624 PASS-GATE top=u2#06 u2#03 u2#01 u2#02 u5#00 gold_rank=1
+q13 in_chapter best_vec=0.856 PASS-GATE top=u2#13 u3#08 u3#06 u2#04 u3#01 gold_rank=1
+q14 in_chapter best_vec=0.694 PASS-GATE top=u2#00 u2#01 u2#07 u2#06 u2#14 gold_rank=1
+q15 in_chapter best_vec=0.722 PASS-GATE top=u2#11 u2#12 u4#10 u4#01 u4#00 gold_rank=1
+q16 in_chapter best_vec=0.561 PASS-GATE top=u3#00 u2#06 u2#01 u5#00 u3#02 gold_rank=1
+q17 in_chapter best_vec=0.676 PASS-GATE top=u3#07 u3#05 u3#03 u3#08 u3#06 gold_rank=2
+q18 in_chapter best_vec=0.499 PASS-GATE top=u3#05 u3#08 u5#19 u3#07 u3#06 gold_rank=1
+q19 in_chapter best_vec=0.687 PASS-GATE top=u3#06 u3#08 u2#13 u3#07 u3#11 gold_rank=1
+q20 in_chapter best_vec=0.832 PASS-GATE top=u3#09 u2#06 u3#01 u2#01 u5#06 gold_rank=1
+q21 in_chapter best_vec=0.665 PASS-GATE top=u4#02 u4#00 u4#16 u4#15 u4#04 gold_rank=1
+q22 in_chapter best_vec=0.520 PASS-GATE top=u4#12 u6#04 u4#16 u4#17 u4#15 gold_rank=1
+q23 in_chapter best_vec=0.720 PASS-GATE top=u4#09 u4#10 u4#14 u4#08 u4#07 gold_rank=1
+q24 in_chapter best_vec=0.720 PASS-GATE top=u4#05 u4#12 u4#07 u6#03 u6#01 gold_rank=2
+q25 in_chapter best_vec=0.764 PASS-GATE top=u4#16 u4#15 u6#04 u4#06 u4#12 gold_rank=1
+q26 in_chapter best_vec=0.698 PASS-GATE top=u6#03 u6#01 u6#02 u6#00 u6#05 gold_rank=1
+q27 in_chapter best_vec=0.580 PASS-GATE top=u6#04 u6#01 u6#07 u5#10 u6#03 gold_rank=2
+q28 in_chapter best_vec=0.621 PASS-GATE top=u6#03 u6#01 u6#02 u6#06 u6#05 gold_rank=2
+q29 in_chapter best_vec=0.655 PASS-GATE top=u5#19 u6#05 u5#18 u5#20 u5#15 gold_rank=1
+q30 in_chapter best_vec=0.808 PASS-GATE top=u5#19 u5#18 u6#05 u5#00 u5#08 gold_rank=1
+q31 off_chapter best_vec=0.172 GATED top=u6#04 u1#01 u4#16 u4#12 u4#03
+q32 off_chapter best_vec=0.111 GATED top=u2#09 u1#03 u4#05 u3#04 u4#04
+q33 off_chapter best_vec=0.190 GATED top=u1#01 u1#00 u1#13 u1#14 u1#02
+q34 off_chapter best_vec=0.129 GATED top=u1#14 u4#10 u1#03 u4#09 u2#12
+q35 off_chapter best_vec=0.115 GATED top=u4#13 u6#00 u6#06 u1#11 u6#05
+q36 off_chapter best_vec=0.127 GATED top=u4#10 u2#05 u1#12 u4#14 u5#17
+q37 off_chapter best_vec=0.202 GATED top=u4#13 u4#12 u3#04 u4#11 u1#12
+q38 off_chapter best_vec=0.125 GATED top=u1#12 u1#04 u1#05 u1#13 u4#10
+q39 alt_example best_vec=0.591 PASS-GATE top=u5#14 u6#05 u6#04 u4#06 u4#16 gold_rank=1
+q40 alt_example best_vec=0.733 PASS-GATE top=u2#13 u3#08 u3#06 u3#01 u2#04 gold_rank=1
+q41 alt_example best_vec=0.501 PASS-GATE top=u1#02 u1#14 u1#00 u1#13 u1#07 gold_rank=5
+q42 alt_example best_vec=0.545 PASS-GATE top=u2#06 u3#01 u2#04 u3#02 u2#13 gold_rank=2
+q43 alt_example best_vec=0.531 PASS-GATE top=u4#09 u4#10 u4#08 u4#14 u2#09 gold_rank=1
+q44 alt_example best_vec=0.755 PASS-GATE top=u5#11 u5#13 u5#14 u5#12 u1#09 gold_rank=1
+q45 injection best_vec=0.652 PASS-GATE top=u6#05 u5#01 u5#05 u5#18 u5#19 gold_rank=2
+q46 injection best_vec=0.435 PASS-GATE top=u3#01 u2#06 u2#04 u2#13 u3#07 gold_rank=1
+q47 injection best_vec=0.721 PASS-GATE top=u4#12 u4#11 u4#17 u4#07 u4#05 gold_rank=1
+q48 injection best_vec=0.215 GATED top=u5#17 u2#00 u6#06 u6#01 u6#02
+q49 injection best_vec=0.138 GATED top=u6#07 u5#13 u6#06 u6#05 u6#01
+q50 injection best_vec=0.464 PASS-GATE top=u5#18 u6#05 u5#19 u5#15 u5#08 gold_rank=-
