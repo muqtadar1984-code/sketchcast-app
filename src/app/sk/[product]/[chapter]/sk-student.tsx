@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pickBrowserVoice, RIG_LABELS, rigBaseForChoice, voiceGenderForChoice, type RigChoice } from "@/sk/board/avatar";
 import { normaliseSegment, validateSegment, type OpentypeLike, type Segment } from "@/sk/board/engine";
+import { segmentForVoice, trackFor } from "@/sk/board/voices";
 import { SpikeRuntime, type HitMap, type PlayerState, type Rig } from "@/sk/board/runtime";
 import { useMicSupported, useRigChoice } from "@/sk/board/use-rig-choice";
 import { uuidv7 } from "@/sk/ids";
@@ -137,6 +138,7 @@ export default function SkStudent({ productId, chapter }: Props) {
   const segmentUri = shown?.segment ?? null;
   const shownHitmap = shown?.hitmap;
   const shownClip = shown?.clip;
+  const shownClips = shown?.clips;
   useEffect(() => {
     if (!assetId || !segmentUri) return;
     if (loaded?.assetId === assetId && loaded.rigChoice === rig) return;
@@ -147,9 +149,18 @@ export default function SkStudent({ productId, chapter }: Props) {
         const base = dirname(segmentUri);
         const raw = normaliseSegment((await fetch(segmentUri).then((r) => r.json())) as Segment);
         // The security gate: a segment that fails validation never reaches the DOM.
-        const seg = validateSegment(raw);
+        const gated = validateSegment(raw);
+        // The look picks the narration track (A female, B male). `seg` is the
+        // chosen track's view of the manifest: its clip, audio and word marks,
+        // so the runtime plays and lip-syncs that voice with no change of its own.
+        const choice = trackFor(gated, voiceGenderForChoice(rig));
+        const seg = segmentForVoice(gated, voiceGenderForChoice(rig));
         const hitmapUri = shownHitmap ?? (seg.hitmap ? base + seg.hitmap : null);
-        const clipUri = shownClip ?? (seg.clip ? base + seg.clip.uri : null);
+        // The clip: the graph's per-gender clip for what plays, else the chosen
+        // track's (manifests with `voices`), else the graph's default, else the segment's own.
+        const trackClip = seg.voices && seg.clip ? base + seg.clip.uri : null;
+        const clipUri = shownClips?.[choice.gender] ?? trackClip ?? shownClip ?? (seg.clip ? base + seg.clip.uri : null);
+        if (!choice.exact) say("sys", `no ${voiceGenderForChoice(rig)} narration for this chapter yet — playing the ${choice.gender} track`);
         const [hitmap, rigData] = await Promise.all([
           hitmapUri ? fetch(hitmapUri).then((r) => (r.ok ? (r.json() as Promise<HitMap>) : null)) : Promise.resolve(null),
           fetch(rigBaseForChoice(rig) + "rig.json")
@@ -174,7 +185,7 @@ export default function SkStudent({ productId, chapter }: Props) {
     return () => {
       alive = false;
     };
-  }, [assetId, segmentUri, shownHitmap, shownClip, loaded?.assetId, loaded?.rigChoice, rig, say]);
+  }, [assetId, segmentUri, shownHitmap, shownClip, shownClips, loaded?.assetId, loaded?.rigChoice, rig, say]);
 
   // 3. Mount the runtime for the loaded asset; seek to the server's cursor.
   useEffect(() => {
@@ -403,7 +414,7 @@ export default function SkStudent({ productId, chapter }: Props) {
           <button className="h-9 px-3 border rounded" onClick={() => void sendCommand("return")} disabled={!view || busy || !view.bookmarks.length}>
             ↩ Return
           </button>
-          <label className="h-9 flex items-center gap-1 text-xs text-[#667085]" title="SK's look — one tutor, two looks; the clip's own narration keeps its voice">
+          <label className="h-9 flex items-center gap-1 text-xs text-[#667085]" title="SK's look — one tutor, two looks; the lesson's narration follows the look when the chapter has both voices">
             SK&apos;s look
             <select className="h-9 px-2 border rounded text-sm text-[#14181F]" value={rig} onChange={(e) => chooseRig(e.target.value === "A" ? "A" : "B")} data-testid="sk-rig">
               {(["B", "A"] as RigChoice[]).map((c) => (

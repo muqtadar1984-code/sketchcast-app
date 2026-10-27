@@ -28,15 +28,31 @@ export type GestureKind = "point" | "write" | "listen" | "think" | "idle";
 export const GESTURE_KINDS: ReadonlySet<string> = new Set<GestureKind>(["point", "write", "listen", "think", "idle"]);
 export type Gesture = { t: number; kind: GestureKind; target?: string; until?: number };
 export type Aside = { question: string; audio: { uri: string; duration_ms: number }; marks: Marks; actions: Action[]; gestures: Gesture[] };
+export type VoiceGender = "female" | "male";
+export const VOICE_GENDERS: readonly VoiceGender[] = ["female", "male"];
+/** One narration track of a segment (packager `sk/voices.py`): the clip with
+ * that voice muxed in (same video stream as the segment's own clip), its
+ * audio and its word marks on the clip's timeline. */
+export type VoiceTrack = {
+  /** TTS registry id ("edge-guy"); informational. */
+  voice?: string;
+  audio: { uri: string; duration_ms: number };
+  clip?: { uri: string; duration_ms: number };
+  marks?: Marks;
+};
 export type Segment = {
   segment_id: string;
-  /** From the TTS voice registry: picks the SK character (A female, B male). */
-  voice_gender?: "female" | "male";
+  /** The gender of the narration the clip was RENDERED with (its own track). */
+  voice_gender?: VoiceGender;
   audio: { uri: string; duration_ms: number };
   /** Option S (B3 packager): the rendered clip and its hit map, relative to the manifest. */
   clip?: { uri: string; duration_ms: number };
   hitmap?: string;
   marks: Marks;
+  /** Every narration track by gender, the rendered one included (2026-10-27:
+   * the tutor's look picks the track — see `board/voices.ts`). Old manifests
+   * have none and play their single track. */
+  voices?: Partial<Record<VoiceGender, VoiceTrack>>;
   /** Option E only; a B3 (Option S) manifest carries none — see normaliseSegment. */
   assets: Record<string, AssetFixture>;
   actions: Action[];
@@ -119,6 +135,23 @@ export function validateSegment(input: Segment): Segment {
   if (seg.hitmap != null) uri(seg.hitmap, "hitmap");
   if (seg.aside?.audio?.uri) uri(seg.aside.audio.uri, "aside.audio.uri");
   if (seg.voice_gender != null && seg.voice_gender !== "female" && seg.voice_gender !== "male") throw new SegmentError("bad voice_gender");
+  // Narration tracks by gender: each is media the player may load, so each
+  // passes the same path and size gates as the segment's own.
+  if (seg.voices != null) {
+    if (typeof seg.voices !== "object" || Array.isArray(seg.voices)) throw new SegmentError("voices: not a map");
+    for (const [g, v] of Object.entries(seg.voices)) {
+      if (g !== "female" && g !== "male") throw new SegmentError(`voices: bad gender ${JSON.stringify(g)}`);
+      if (!v || typeof v !== "object") throw new SegmentError(`voices.${g}: not a track`);
+      if (v.voice != null && (typeof v.voice !== "string" || !ID_RE.test(v.voice))) throw new SegmentError(`voices.${g}.voice: bad id`);
+      uri(v.audio?.uri, `voices.${g}.audio.uri`);
+      num(v.audio.duration_ms, `voices.${g}.audio.duration_ms`, 0, MAX_T);
+      if (v.clip != null) {
+        uri(v.clip.uri, `voices.${g}.clip.uri`);
+        num(v.clip.duration_ms, `voices.${g}.clip.duration_ms`, 0, MAX_T);
+      }
+      if (v.marks != null && (!Array.isArray(v.marks.words) || v.marks.words.length > LIMITS.words)) throw new SegmentError(`voices.${g}: too many words`);
+    }
+  }
   if (!Array.isArray(seg.checkpoints) || seg.checkpoints.length > LIMITS.checkpoints) throw new SegmentError("too many checkpoints");
   for (const c of seg.checkpoints) num(c, "checkpoint", 0, MAX_T);
   for (const [key, a] of Object.entries(seg.assets ?? {})) {
