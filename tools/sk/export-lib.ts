@@ -49,6 +49,7 @@ export type DraftExercise = {
   stem: string;
   options?: string[] | null;
   pairs?: { left: string; right: string }[] | null;
+  items?: { text: string; category: string }[] | null; // sort: each item belongs to one category
   answer: unknown;
   worked_solution?: string | null;
   marking_scheme?: { point: string; marks: number }[] | null;
@@ -333,7 +334,8 @@ const OBJECTIVE_TYPES = new Set(["mcq", "true_false", "fill_blank", "match", "as
 const DB_ITEM_TYPES = new Set(["mcq", "true_false", "fill_blank", "match", "assertion_reason", "short_answer", "long_answer", "numerical", "diagram_label"]);
 
 export function dbItemType(t: string): string {
-  const mapped = t === "numeric" ? "numerical" : t;
+  // a sort (put each item in its category) is a match whose answers repeat — the quiz grades it as one
+  const mapped = t === "numeric" ? "numerical" : t === "sort" ? "match" : t;
   if (!DB_ITEM_TYPES.has(mapped)) throw new Error(`exercise item_type "${t}" has no topic_questions equivalent`);
   return mapped;
 }
@@ -357,10 +359,12 @@ export function toTopicQuestion(ex: DraftExercise, ctx: { slug: string; chapter:
       options = mcqOptions(ex.options ?? []);
       answer = { key: String(ex.answer).trim().toUpperCase() };
       break;
-    case "match":
-      options = { pairs: ex.pairs ?? [] };
-      answer = { pairs: ex.pairs ?? [] };
+    case "match": {
+      const pairs = ex.pairs ?? (ex.items ?? []).map((i) => ({ left: i.text, right: i.category }));
+      options = { pairs };
+      answer = { pairs };
       break;
+    }
     case "true_false":
       answer = { value: /^(true|t|yes)$/i.test(String(ex.answer).trim()) };
       break;
