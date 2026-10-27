@@ -26,7 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { UUID_RE, uuidv7 } from "./ids";
 import { MASTERY_RULE_VERSION, masteryFromAttempts, type AttemptRecord, type CheckPurpose, type MasteryOptions, type MasteryStateV1 } from "./mastery";
 import { phaseOf, type MachineState, type OpenCheck } from "./state";
-import { DuplicateAttemptError, type Attempt, type Claim, type NewSession, type SessionStore, type SkSession, type StoredEvent } from "./store";
+import { DuplicateAttemptError, InMemorySessionStore, type Attempt, type Claim, type NewSession, type SessionStore, type SkSession, type StoredEvent } from "./store";
 
 // ── The slice of supabase-js this store uses (so a test can fake it) ───────
 export type DbError = { code?: string; message: string };
@@ -57,6 +57,15 @@ export function skDbFrom(client: SupabaseClient): SkDb {
 
 const UNIQUE_VIOLATION = "23505";
 
+/** A SCOPE key, not a session id: `<kind>:<value>` (today only
+ * `student:<uuid>`, the key /api/sk/session claims the open event under,
+ * because no session exists yet). `sk_events.session_id` is a uuid with a
+ * foreign key to sk_sessions, so such a claim cannot be a row there — the
+ * first live run on Supabase failed exactly here (2026-10-27, 22P02). */
+export function isScopeKey(sessionId: string): boolean {
+  return sessionId.includes(":");
+}
+
 export type SupabaseStoreOptions = {
   now?: () => number;
   /** How often a waiting duplicate re-reads an in-flight event. */
@@ -79,6 +88,12 @@ export class SupabaseSessionStore implements SessionStore {
   private readonly masteryOpts: MasteryOptions;
   /** The last mastery recompute failure (an attempt is stored even when the derived row could not be). */
   lastMasteryError: unknown = null;
+  /** Replay guard for scope-keyed events (see isScopeKey): in-process, like
+   * the memory store, because they have no session row to hang off. That is
+   * enough for what they guard — a double-click on "open" within one
+   * function instance — and openSession is idempotent across instances
+   * anyway (findSession + the one-open-session index in 0157). */
+  private readonly scoped = new InMemorySessionStore();
 
   constructor(
     private readonly db: SkDb,
@@ -130,6 +145,7 @@ export class SupabaseSessionStore implements SessionStore {
 
   // ── events: the claim protocol ────────────────────────────────────────────
   async claimEvent<T>(sessionId: string, eventId: string): Promise<Claim<T>> {
+    if (isScopeKey(sessionId)) return this.scoped.claimEvent<T>(sessionId, eventId);
     for (let round = 0; round < 3; round++) {
       const t = this.now();
       const ins = await this.db.from("sk_events").insert({ session_id: sessionId, event_id: eventId, status: "inflight", claimed_at: iso(t) });
@@ -163,6 +179,7 @@ export class SupabaseSessionStore implements SessionStore {
   }
 
   async completeEvent<T>(sessionId: string, eventId: string, kind: string, result: T): Promise<StoredEvent<T>> {
+    if (isScopeKey(sessionId)) return this.scoped.completeEvent<T>(sessionId, eventId, kind, result);
     const t = this.now();
     const { data, error } = await this.db.from("sk_events").update({ status: "stored", kind, result: result === undefined ? null : result, at: iso(t) }).eq("session_id", sessionId).eq("event_id", eventId).eq("status", "inflight").select("event_id");
     fail(error, "complete event");
@@ -172,11 +189,13 @@ export class SupabaseSessionStore implements SessionStore {
 
   /** The work failed (the error is the caller's to report): drop the claim. */
   async releaseEvent(sessionId: string, eventId: string): Promise<void> {
+    if (isScopeKey(sessionId)) return this.scoped.releaseEvent(sessionId, eventId, undefined);
     const { error } = await this.db.from("sk_events").delete().eq("session_id", sessionId).eq("event_id", eventId).eq("status", "inflight");
     fail(error, "release event");
   }
 
   async listEvents(sessionId: string): Promise<StoredEvent[]> {
+    if (isScopeKey(sessionId)) return this.scoped.listEvents(sessionId);
     const { data, error } = await this.db.from("sk_events").select("event_id, kind, result, at").eq("session_id", sessionId).eq("status", "stored").order("at", { ascending: true });
     fail(error, "list events");
     return (data ?? []).map((r) => fromEventRow(sessionId, String(r.event_id), r));
