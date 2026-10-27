@@ -51,7 +51,8 @@
       "testPapers": "Kertas Ujian",
       "books": "Buku",
       "board": "Papan",
-      "kits": "Kit"
+      "kits": "Kit",
+      "skTutor": "Tutor SK"
     },
     "openMenu": "Buka menu",
     "closeMenu": "Tutup menu",

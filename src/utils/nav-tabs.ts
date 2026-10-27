@@ -39,8 +39,15 @@ export function tabsForHat(
    * the Library is (school parents, leadership). Trailing and defaulted so the
    * existing positional call sites and tests read unchanged. */
   kitsOn = false,
+  /** SK Tutor (FEATURE_SK; restricted live 2026-10-27). A LEARNING surface, so
+   * it follows the learner: the teacher hat (adults test it today) and the
+   * consumer-parent hat; never leadership. The header passes it only when the
+   * signed-in account clears the allow-list, so off-list accounts never see
+   * the door. Trailing and defaulted like kitsOn. */
+  skOn = false,
 ): NavTab[] {
   const kits: NavTab[] = kitsOn ? [{ href: "/dashboard/kits", label: t.kits }] : [];
+  const sk: NavTab[] = skOn ? [{ href: "/sk", label: t.skTutor }] : [];
   const calendar: NavTab[] = calendarOn ? [{ href: "/dashboard/calendar", label: t.calendar }] : [];
   const diary: NavTab[] = diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : [];
   // The classroom board. Teacher hat only: it is a surface you STAND at, and a
@@ -51,6 +58,7 @@ export function tabsForHat(
       { href: "/dashboard", label: t.library },
       { href: "/dashboard/analytics", label: t.myAnalytics },
       ...kits,
+      ...sk,
       ...board,
       ...diary,
       // School-linked teachers get THEIR schedule (read-only, plus cover duties).
@@ -80,6 +88,7 @@ export function tabsForHat(
             { href: "/dashboard", label: t.library },
             { href: "/dashboard/analytics", label: t.myAnalytics },
             ...kits,
+            ...sk,
           ]),
       { href: "/dashboard/children", label: t.myChildren },
       ...diary,
@@ -129,6 +138,10 @@ export function tabsFor(
   /** Ready-made kits — see tabsForHat. Every adult role here: the union view
    * is the Library's world, and the page itself refuses students. */
   kitsOn = false,
+  /** SK Tutor — see tabsForHat. Every role here, students included: it is the
+   * learner's surface, and the header only passes true for an allow-listed
+   * account. */
+  skOn = false,
 ): NavTab[] {
   if (!role || role === "student") {
     // A student's home IS /dashboard — "My lessons" — and it had NO tab. Every
@@ -138,6 +151,7 @@ export function tabsFor(
     // work that out.
     return [
       { href: "/dashboard", label: myLessons },
+      ...(skOn ? [{ href: "/sk", label: t.skTutor }] : []),
       ...(diaryOn ? [{ href: "/dashboard/diary", label: t.diary }] : []),
       ...(timetableOn ? [{ href: "/dashboard/my-timetable", label: t.timetable }] : []),
     ];
@@ -147,6 +161,7 @@ export function tabsFor(
     { href: "/dashboard/analytics", label: t.myAnalytics },
   ];
   if (kitsOn) tabs.push({ href: "/dashboard/kits", label: t.kits });
+  if (skOn) tabs.push({ href: "/sk", label: t.skTutor });
   // Right after the authoring surfaces and before the school ones: the board is
   // something she opens to teach, not something she administers.
   if (boardOn) tabs.push({ href: "/present", label: t.board });

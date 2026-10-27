@@ -51,7 +51,8 @@
       "testPapers": "Exámenes",
       "books": "Libros",
       "board": "Pizarra",
-      "kits": "Kits"
+      "kits": "Kits",
+      "skTutor": "Tutor SK"
     },
     "openMenu": "Abrir menú",
     "closeMenu": "Cerrar menú",

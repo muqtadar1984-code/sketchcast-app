@@ -51,7 +51,8 @@
       "testPapers": "Contrôles",
       "books": "Livres",
       "board": "Tableau",
-      "kits": "Kits"
+      "kits": "Kits",
+      "skTutor": "Tuteur SK"
     },
     "openMenu": "Ouvrir le menu",
     "closeMenu": "Fermer le menu",
