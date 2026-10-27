@@ -88,6 +88,30 @@ async function loadGraphs(uris: string[]): Promise<TeachingGraph[]> {
   return out;
 }
 
+/** Which loaded graphs this store can actually run. The Supabase store keeps
+ * attempts in item_attempts (item_id → topic_questions, a uuid FK) and mastery
+ * against teaching_objectives, so a graph whose product has no sk_book_products
+ * row — the hand-written stand-in, whose items and objective are strings —
+ * cannot grade there: its Check opened, drew a question, then died at the
+ * attempt insert with 22P02 (founder's run, 2026-10-27). On that store only
+ * products the database knows are served; the in-memory store serves all. */
+export function graphsForStore(graphs: TeachingGraph[], knownProducts: ReadonlySet<string> | null): TeachingGraph[] {
+  if (!knownProducts) return graphs;
+  return graphs.filter((g) => {
+    if (knownProducts.has(g.product_id)) return true;
+    console.error(`[sk] graph ${g.graph_id} withheld: product ${g.product_id} is not in sk_book_products (the Supabase store cannot grade it)`);
+    return false;
+  });
+}
+
+async function servableGraphs(graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
+  if (process.env.SK_STORE !== "supabase" || graphs.length === 0) return graphs;
+  const db = createAdminClient();
+  const { data, error } = await db.from("sk_book_products").select("slug").in("slug", graphs.map((g) => g.product_id));
+  if (error) throw new Error(`[sk] products: ${error.message}`);
+  return graphsForStore(graphs, new Set((data ?? []).map((r: { slug: string }) => r.slug)));
+}
+
 function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> {
   if (!claudeConfigured()) return {};
   // Lazy so a missing SDK key never breaks the regex-only path.
@@ -158,7 +182,7 @@ export function skDeps(): Promise<SkDeps> {
       const uris = (process.env.SK_GRAPHS || "").split(",").map((s) => s.trim()).filter(Boolean);
       const base: SkDeps = {
         ...persistence(),
-        graphs: await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS),
+        graphs: await servableGraphs(await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS)),
         loadSegment: loadSegmentFromPublic,
         loadHitmapElementIds: loadHitmapTargetsFromPublic,
         ...providers(),
