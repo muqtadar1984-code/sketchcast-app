@@ -82,7 +82,9 @@ export function parseGraph(raw: unknown, baseUri = ""): TeachingGraph {
   const status = raw.status ?? "draft";
   if (status !== "draft" && status !== "validated" && status !== "live" && status !== "retired") throw new GraphError("graph: bad status");
   const version = typeof raw.version === "number" ? raw.version : Number(raw.version);
-  if (!Number.isInteger(version) || version < 0) throw new GraphError("graph: bad version");
+  // sk_sessions.graph_version is CHECK (>= 1) (migration 0157): a graph the store
+  // cannot record is refused here, at load, not at the student's first Play.
+  if (!Number.isInteger(version) || version < 1) throw new GraphError("graph: bad version (must be an integer >= 1)");
   const chapter = typeof raw.chapter === "number" ? raw.chapter : Number(raw.chapter);
   if (!Number.isInteger(chapter) || chapter < 0) throw new GraphError("graph: bad chapter");
   return {
