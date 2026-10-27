@@ -280,6 +280,20 @@ describe("SupabaseItemBank", () => {
     expect(await b.listForUnit("no-such-book", 2, "u1")).toEqual([]);
     expect(await b.objectiveForUnit(SLUG, 2, "u3")).toEqual({ id: O.u3, status: "draft" });
   });
+  it("live fix 2026-10-27: a graph's section key (s1) resolves through sk_book_units to the exporter's unit key (u1)", async () => {
+    const { db, bank: b } = bank();
+    // The exporter keys objectives u1…; the packager keys the graph by manuscript section s1…; sk_book_units holds both.
+    db.seed("sk_book_units", [
+      { product_id: PRODUCT, chapter: 2, unit_key: "u1", section_sid: "s1", title: "Too small to see", sort_order: 1 },
+      { product_id: PRODUCT, chapter: 2, unit_key: "u5", section_sid: "s5", title: "Magnification", sort_order: 5 },
+    ]);
+    expect(await b.objectiveForUnit(SLUG, 2, "s1")).toEqual({ id: O.u1, status: "draft" });
+    expect((await b.listForUnit(SLUG, 2, "s5")).map((q) => q.id)).toEqual((await b.listForUnit(SLUG, 2, "u5")).map((q) => q.id));
+    expect(await b.listForUnit(SLUG, 2, "s9")).toEqual([]); // no such section
+    expect(await b.listForUnit(SLUG, 2, "u1")).toHaveLength(2); // the unit key still works directly
+    // A chapter with no sk_book_units rows (older exports) behaves as before: unknown key → nothing.
+    expect(await new SupabaseItemBank(bank().db).listForUnit(SLUG, 2, "s1")).toEqual([]);
+  });
   it("B4.1: listForUnit carries status, difficulty and objective; selectUnitItems picks from the real rows", async () => {
     const { db, bank: b } = bank();
     db.seed("topic_questions", [{ ...byId("a48f35f1-5a12-44e2-851b-a27d7b7163ff"), id: "0afd1b8e-6f3c-4b3e-9f1a-1234567890ab", difficulty: 2, status: "draft" }]);

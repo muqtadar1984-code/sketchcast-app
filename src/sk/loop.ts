@@ -244,8 +244,14 @@ export function speechFor(g: TeachingGraph, d: Decision): string {
       return "Back to where we were.";
     case "generate":
       return d.rung === 1 ? "Here's a demonstration that fits this." : d.rung === 2 ? "Let me draw it more simply." : "Let me put it another way.";
-    case "none":
-      return d.reasons.some((r) => r.startsWith("no bookmark")) ? "There's nothing to go back to yet." : d.reasons.some((r) => r.startsWith("end of chapter")) ? "That's the end of this chapter — well done." : "I can't do that from here.";
+    case "none": {
+      if (d.reasons.some((r) => r.startsWith("no bookmark"))) return "There's nothing to go back to yet.";
+      if (d.reasons.some((r) => r.startsWith("end of chapter"))) return "That's the end of this chapter — well done.";
+      // "Check me" on a unit the bank has no check for: say so, not "can't do that" (live, 2026-10-27).
+      const noCheck = d.reasons.map((r) => /^unit (\S+) has no check items$/.exec(r)?.[1]).find((k): k is string => !!k);
+      if (noCheck) return `There are no check questions for ${titleOf(g, noCheck)} yet — keep going, or say practise to try what there is.`;
+      return "I can't do that from here.";
+    }
   }
 }
 

@@ -150,7 +150,12 @@ export class SupabaseItemBank implements ItemBank {
     return typeof v === "string" ? v : null;
   }
 
-  /** The teaching objective of a unit (product by slug or id). */
+  /** The teaching objective of a unit (product by slug or id). The key may be
+   * the exporter's unit key (`u1`) OR the manuscript section the packager
+   * keys its graph by (`s1`): `sk_book_units` records both for every unit
+   * (unique on section_sid), so a graph key resolves through it. Live fix
+   * 2026-10-27: the cells chapter's "Check me" found no items because the
+   * graph said s1 and the objectives said u1. */
   async objectiveForUnit(product: string, chapter: number, unitKey: string): Promise<{ id: string; status: string } | null> {
     let productId = product;
     if (!UUID_RE.test(product)) {
@@ -159,6 +164,15 @@ export class SupabaseItemBank implements ItemBank {
       if (!data) return null;
       productId = String(data.id);
     }
+    const direct = await this.objectiveByUnitKey(productId, chapter, unitKey);
+    if (direct) return direct;
+    const { data, error } = await this.db.from("sk_book_units").select("unit_key").eq("product_id", productId).eq("chapter", chapter).eq("section_sid", unitKey).maybeSingle();
+    if (error) throw new Error(`[sk items] unit by section: ${error.message}`);
+    const viaSection = typeof data?.unit_key === "string" ? data.unit_key : null;
+    return viaSection && viaSection !== unitKey ? this.objectiveByUnitKey(productId, chapter, viaSection) : null;
+  }
+
+  private async objectiveByUnitKey(productId: string, chapter: number, unitKey: string): Promise<{ id: string; status: string } | null> {
     const { data, error } = await this.db.from("teaching_objectives").select("id, status").eq("product_id", productId).eq("chapter", chapter).eq("unit_key", unitKey).maybeSingle();
     if (error) throw new Error(`[sk items] objective for unit: ${error.message}`);
     return data ? { id: String(data.id), status: String(data.status) } : null;
