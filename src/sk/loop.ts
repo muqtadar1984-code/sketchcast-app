@@ -20,11 +20,12 @@ import { assetOf, cursorFor, mainAsset, startCursor, unitOf } from "./graph";
 import { hintFor, stripItem, type ItemBank, type StudentItem } from "./items";
 import { selectUnitItems, type UnitItems } from "./items-select";
 import { applyCheckToMastery, checkAsset, isBankAssetId, plan, practiceAsset, type Decision, type PlannerContext, type RouteRequest } from "./planner";
+import type { RetrievalProvider, RetrievalResult, TurnRetrieval } from "./retrieval";
 import { classify } from "./router";
 import { MAX_ATTEMPTS } from "./grade";
 import { checkComplete, checkPassed, initialMachine, phaseOf, RATE_MIN, RATE_STEP, skippedOf, transition, transitionAll, withoutSkipped, withSkipped, type MachineState, type OpenCheck, type SkEvent, type SkPhase, type SkState } from "./state";
 import { DuplicateAttemptError, type Attempt, type SessionStore, type SkSession } from "./store";
-import { answerQuestion, MAX_HISTORY_TURNS, NO_TEACHER_TEXT } from "./teacher";
+import { answerQuestion, MAX_HISTORY_TURNS, NO_TEACHER_TEXT, NOT_IN_BOOK_TEXT } from "./teacher";
 import type { Bookmark, Command, Cursor, GradeOutcome, GraphAsset, Intent, MasteryMap, SseEvent, TeachingGraph, Utterance } from "./types";
 
 export type LoopDeps = {
@@ -35,6 +36,11 @@ export type LoopDeps = {
   routerProvider?: LLMProvider;
   /** Sonnet: answers to questions. Absent → SK says it cannot answer right now. */
   teacherProvider?: LLMProvider;
+  /** Book retrieval for grounded questions (R1): started before the router
+   * call, awaited only for a question that needs grounding. "none" → SK says
+   * it cannot find that in the book (no model call). Absent → the teacher
+   * grounds on the unit narration alone, as before. */
+  retrieval?: RetrievalProvider;
   loadSegment: (uri: string) => Promise<Segment>;
   loadHitmapElementIds: (uri: string) => Promise<string[]>;
   now?: () => number;
@@ -486,7 +492,14 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
   const checkOpen = !!m.openCheck && (m.state === "AWAITING" || m.state === "CONFIRM_TRANSCRIPT");
   const usage = { inputTokens: 0, outputTokens: 0 };
   let modelMs = 0;
+  let retrievalMs = 0;
   let cancelled = false;
+
+  // Retrieval starts NOW, in parallel with the router call (R1: the query
+  // embedding is the slow part), and only where a question can be answered;
+  // it is awaited only if the intent turns out to be a grounded question.
+  const canAnswer = m.state === "PRESENTING" || m.state === "PAUSED";
+  const retrieval: TurnRetrieval | undefined = text && canAnswer && deps.retrieval ? deps.retrieval.begin(text, { product: deps.graph.product_id, chapter: deps.graph.chapter, signal: input.signal }) : undefined;
 
   const intent: Intent = text ? await classify(text, { graph: deps.graph, checkOpen, provider: deps.routerProvider, signal: input.signal }) : { kind: "question", needsGrounding: false, confidence: 0, source: "default" };
   const routerMs = now() - t0;
@@ -525,11 +538,27 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
         const found = assetOf(deps.graph, m.cursor.assetId);
         const unit = unitOf(deps.graph, m.cursor.unitKey);
         let fullText = "";
-        if (deps.teacherProvider && unit && found?.asset.segment) {
+        // A question about the TOPIC consults the book first. "none" means the
+        // book has nothing on it (the vector gate): SK says so, deterministically,
+        // instead of letting the model answer from memory. An "error" (RPC
+        // missing, Bedrock denied) degrades to unit-only grounding, logged once.
+        let grounding: RetrievalResult | undefined;
+        if (retrieval && intent.needsGrounding) {
+          const tRetr = now();
+          grounding = await retrieval.result();
+          retrievalMs = now() - tRetr;
+          yield { event: "meta", data: { grounding: { status: grounding.status, ...(grounding.status === "none" ? { reason: grounding.reason } : {}), ...(grounding.status !== "error" ? { bestVecScore: grounding.bestVecScore, gate: grounding.gate, passages: grounding.status === "grounded" ? grounding.passages.map((p) => p.sourceRef) : [] } : { message: grounding.message }), ms: grounding.ms } } };
+        }
+        if (grounding?.status === "none") {
+          fullText = NOT_IN_BOOK_TEXT;
+          yield { event: "text", data: NOT_IN_BOOK_TEXT };
+          const turns: Turn[] = [{ role: "user", text }, { role: "assistant", text: NOT_IN_BOOK_TEXT }];
+          s.history = [...s.history, ...turns].slice(-MAX_HISTORY_TURNS);
+        } else if (deps.teacherProvider && unit && found?.asset.segment) {
           const tModel = now();
           try {
             const [segment, hitmapElementIds] = await Promise.all([deps.loadSegment(found.asset.segment), found.asset.hitmap ? deps.loadHitmapElementIds(found.asset.hitmap) : Promise.resolve([])]);
-            for await (const ev of answerQuestion({ provider: deps.teacherProvider, unit, segment, hitmapElementIds, question: text, history: s.history, signal: input.signal })) {
+            for await (const ev of answerQuestion({ provider: deps.teacherProvider, unit, segment, hitmapElementIds, question: text, history: s.history, signal: input.signal, grounding })) {
               if (ev.type === "text") {
                 fullText += ev.text;
                 yield { event: "text", data: ev.text };
@@ -603,7 +632,7 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
   yield {
     event: "done",
     data: {
-      latency: { totalMs: now() - t0, routerMs, modelMs },
+      latency: { totalMs: now() - t0, routerMs, modelMs, retrievalMs },
       usage,
       ...(cancelled ? { cancelled: true } : {}),
       board,
