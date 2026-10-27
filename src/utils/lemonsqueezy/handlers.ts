@@ -24,8 +24,12 @@
 
 import { planKeyForVariant as defaultPlanKeyForVariant } from "@/utils/stripe/plans";
 import { packForOrderItem } from "@/utils/billing/packs";
+import { GRANT_TERMS } from "@/sk/access";
 
 export type Db = {
+  /** A SECURITY DEFINER function call (0159: the book-purchase writers are
+   * database functions so one order is idempotent and the grant atomic). */
+  rpc(fn: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }>;
   from(table: string): {
     select(cols: string): {
       eq(col: string, v: unknown): {
@@ -681,6 +685,16 @@ async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise
     // stamp the linked invoice's payments row from here. Storing that id does
     // not create the double count — only BOOKING the order would, and this
     // return is what prevents that.
+    //
+    // BOOKS (0159) are the one other one-off product: an order whose LS
+    // product id is a book's sk_book_products.ls_product_id becomes a
+    // book_purchases row + a 'purchase' grant (parked by email until claimed,
+    // like a pack). Looked up by the TRUSTED product id, never the name.
+    const book = await bookForOrderItem(db, item);
+    if (book) {
+      await handleLsBookOrder(db, event, name, attrs, orderId, book);
+      return;
+    }
     log("order_ignored_not_pack", { order: orderId, product: item?.product_name ?? null });
     return;
   }
@@ -946,6 +960,102 @@ async function handleLsOrderEvent(db: Db, event: LsEvent, name: string): Promise
 // subscription_payment_success delivery costs a red row in the LS dashboard and
 // nothing else, and LS retries. Silence would be the expensive failure here,
 // because the amount exists nowhere but Lemon Squeezy.
+// ── one-time orders: books (0159) ───────────────────────────────────────────
+// A Lemon Squeezy one-off product per book (distribution plan §3). The order's
+// product id is matched against sk_book_products.ls_product_id — the same
+// "trust the id, not the name" rule as plan variants. Everything durable is
+// written by ONE database function per step (record / refund) so a
+// re-delivered order is a no-op and a bound buyer's grant is created in the
+// same transaction as the purchase row. A public-link purchase is PARKED by
+// the buyer's email (book_purchases.owner_id NULL, claim_email set) and
+// claim.ts turns it into a 'purchase' grant when the account holder signs in
+// with that verified email — exactly the pack flow.
+async function bookForOrderItem(db: Db, item: LsOrderAttributes["first_order_item"]): Promise<{ id: string; slug: string } | null> {
+  const pid = item?.product_id;
+  if (pid === null || pid === undefined || pid === "") return null;
+  const { data } = await db.from("sk_book_products").select("id, slug").eq("ls_product_id", String(pid)).maybeSingle();
+  if (!data || typeof data.id !== "string") return null;
+  return { id: data.id, slug: typeof data.slug === "string" ? data.slug : "" };
+}
+
+async function handleLsBookOrder(db: Db, event: LsEvent, name: string, attrs: LsOrderAttributes, orderId: string, book: { id: string; slug: string }): Promise<void> {
+  const email = norm(attrs.user_email);
+  const refunded = name === "order_refunded" || attrs.refunded === true || attrs.status === "refunded";
+
+  // Refund: the purchase is stamped and its grant revoked (book AND tutoring —
+  // a refunded book is not kept). A refund that arrives before its
+  // order_created leaves a refunded tombstone so the retried create no-ops.
+  // A failure here throws so LS retries; the function is idempotent.
+  if (name === "order_refunded") {
+    const { error } = await db.rpc("refund_book_purchase", { p_order_id: orderId, p_product: book.id, p_email: email });
+    if (error) throw new Error(`LS book refund failed: ${error.message}`);
+    await db.from("payments").update({ status: "refunded" }).eq("ls_order_id", orderId);
+    log("book_refunded", { order: orderId, book: book.slug });
+    return;
+  }
+
+  // Same rule as packs: an order that collected nothing grants nothing
+  // (a store-wide discount is the way this happens). `=== 0` on a number only.
+  if (typeof attrs.total === "number" && attrs.total === 0) {
+    log("book_zero_total_refused", { order: orderId, book: book.slug, currency: attrs.currency ?? null, status: attrs.status ?? null });
+    return;
+  }
+
+  const lsCustomerId = String(attrs.customer_id);
+  const who = await resolveIdentity(db, event.meta?.custom_data, lsCustomerId, email);
+  if (who.kind === "refused") return; // money stays reconcilable in LS; never guess an owner
+  const boundUserId = who.kind === "user" ? who.userId : null;
+
+  const { error: mapErr } = await db.from("billing_customers").upsert(
+    { user_id: boundUserId, email, school_id: null, provider: "lemonsqueezy", ls_customer_id: lsCustomerId, stripe_customer_id: null, role: "" },
+    { onConflict: "ls_customer_id" },
+  );
+  if (mapErr) throw new Error(`LS customer mapping failed: ${mapErr.message}`);
+
+  const net = lsNetOfTax(attrs);
+  const { data, error } = await db.rpc("record_book_purchase", {
+    p_order_id: orderId,
+    p_product: book.id,
+    p_user: boundUserId, // NULL ⇒ parked by email
+    p_email: email,
+    p_total_minor: net.netMinor,
+    p_currency: net.currency,
+    p_status: attrs.status ?? null,
+    p_refunded: refunded,
+    p_tutor_days: GRANT_TERMS.purchase.tutorDays,
+    p_allowance: GRANT_TERMS.purchase.allowance,
+  });
+  if (error) throw new Error(`LS book purchase failed: ${error.message}`); // LS retries; the function is idempotent on the order id
+  const outcome = String((data as { outcome?: string } | null)?.outcome ?? "");
+  if (outcome === "duplicate") {
+    log("book_duplicate_order", { order: orderId, book: book.slug });
+    return;
+  }
+  if (outcome !== "granted") {
+    console.warn(outcome === "parked" ? "billing.ls.book_parked_unclaimed" : "billing.ls.book_not_granted", { order: orderId, book: book.slug, outcome, email });
+    return;
+  }
+
+  // Revenue, best-effort and never at the cost of the grant (the pack rule).
+  // A parked book's revenue row waits for a later backfill like 0092's.
+  const booked = lsRevenueAmount(net.netMinor, net.currency, net.netUsdMinor);
+  if (boundUserId && booked) {
+    const { error: payErr } = await db.from("payments").insert({
+      user_id: boundUserId,
+      school_id: null,
+      provider: "lemonsqueezy",
+      ls_order_id: orderId,
+      amount: booked.amount,
+      currency: booked.currency,
+      plan_key: `book:${book.slug}`,
+      status: attrs.status ?? "paid",
+      ...lsAttribution(attrs),
+    });
+    if (payErr && payErr.code !== "23505") console.warn("billing.ls.book_payment_record_failed", { order: orderId, err: payErr.message });
+  }
+  log("book_granted", { order: orderId, book: book.slug, user: boundUserId });
+}
+
 async function handleLsInvoiceEvent(db: Db, event: LsEvent, name: string): Promise<void> {
   const inv = event.data;
   const attrs = inv?.attributes as LsInvoiceAttributes | undefined;

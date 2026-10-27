@@ -49,6 +49,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { CREDIT_PACKS } from "@/utils/billing/packs";
 import { lsActiveFromStored, lsRevenueAmount } from "./handlers";
+import { GRANT_TERMS } from "@/sk/access";
 
 type ClaimError = { code?: string; message: string };
 
@@ -68,6 +69,9 @@ type ClaimUpdate = {
   select(cols: string): ClaimFilter<{ data: Record<string, unknown>[] | null; error: ClaimError | null }>;
 } & PromiseLike<{ error: ClaimError | null }>;
 export type ClaimDb = {
+  /** A SECURITY DEFINER function call (0159: claim_book_purchases binds every
+   * book parked under the verified email and grants each one, atomically). */
+  rpc(fn: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: ClaimError | null }>;
   from(table: string): {
     select(cols: string): ClaimFilter<{ data: Record<string, unknown>[] | null; error?: ClaimError | null }>;
     update(row: Record<string, unknown>): ClaimUpdate;
@@ -576,6 +580,31 @@ async function bindParkedInvoices(db: ClaimDb, userId: string, email: string): P
  * deliberately not counted here, since the return value reports entitlement
  * grants, not credits). Never throws: reconciliation must not break sign-in, a
  * billing-status read, or a dashboard render. */
+/** Books (0159): bind every book_purchases row parked under the verified
+ * email and create its 'purchase' grant — one database function, so a second
+ * tab signing in at the same moment cannot grant the same purchase twice. Total
+ * like the pack bind: every failure is logged and reads as 0. */
+async function bindParkedBooks(db: ClaimDb, userId: string, email: string): Promise<number> {
+  try {
+    const { data, error } = await db.rpc("claim_book_purchases", {
+      p_user: userId,
+      p_email: email,
+      p_tutor_days: GRANT_TERMS.purchase.tutorDays,
+      p_allowance: GRANT_TERMS.purchase.allowance,
+    });
+    if (error) {
+      console.error("billing.ls.book_claim_failed", { user: userId, err: error.message });
+      return 0;
+    }
+    const n = Number((data as { bound?: number } | null)?.bound ?? 0);
+    if (n > 0) console.log("billing.ls.books_claimed", { user: userId, count: n });
+    return n;
+  } catch (e) {
+    console.error("billing.ls.book_claim_failed", { user: userId, err: (e as Error).message });
+    return 0;
+  }
+}
+
 export async function claimLsPurchasesWith(db: ClaimDb, userId: string | null | undefined, verifiedEmail: string | null | undefined): Promise<number> {
   const email = (verifiedEmail ?? "").trim().toLowerCase();
   if (!userId || !email) return 0;
@@ -609,6 +638,8 @@ export async function claimLsPurchasesWith(db: ClaimDb, userId: string | null | 
     console.error("billing.ls.invoice_claim_failed", { user: userId, err: (e as Error).message });
   }
 
+  const booksBound = await bindParkedBooks(db, userId, email);
+
   try {
     const { data } = await db
       .from("subscriptions")
@@ -633,7 +664,7 @@ export async function claimLsPurchasesWith(db: ClaimDb, userId: string | null | 
     // true exactly when a mapping needs binding. 0092 repairs the hand-bound
     // legacy rows in bulk, rather than making every no-op dashboard render pay
     // for a write to catch a state that no longer arises.
-    if (packsBound > 0 || invoicesBound > 0 || parked.length > 0) {
+    if (packsBound > 0 || invoicesBound > 0 || booksBound > 0 || parked.length > 0) {
       await db
         .from("billing_customers")
         .update({ user_id: userId })
