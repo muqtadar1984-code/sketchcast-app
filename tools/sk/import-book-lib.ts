@@ -1,0 +1,135 @@
+// SK book import — the pure half of tools/sk/import-book.ts (founder 2026-10-27, distribution plan W2).
+//
+// Loads a whole APPROVED edition of any book into the SK book-content tables (migration 0156), from the edition
+// bundle the publishing engine writes (`python -m publishing.tools.sk_bundle <slug> --rev <rev> --label <label>`).
+// It reuses the B1 chapter exporter for every chapter (units, objectives, blocks, exercises — same rules, same
+// SQL), and adds what only the book knows:
+//   * the product's edition label and ISBN;
+//   * each chapter's catalogue topic from the bundle (no hard-coded chapter → topic table);
+//   * PROPOSED curriculum links from the coverage both validators agreed on, with their quoted evidence:
+//     taught in a section → 'covers' (0.8), assessed by a question → 'supports' (0.7). A link a human has
+//     reviewed is never touched; links stay 'proposed' until a person verifies them.
+// The whole book is ONE transaction: it lands completely or not at all.
+
+import { canonicalKeyFromTitle, renderSql } from "./export-chapter";
+import { buildExport, type ChapterDraft, type ExportPlan } from "./export-lib";
+
+export type BundleLink = { kind: "taught" | "assessed"; unit: string; code: string; evidence: (string | null)[]; via?: string };
+
+export type BundleChapter = {
+  number: number;
+  title: string;
+  draft: string; // file name next to the bundle
+  draft_sha1: string;
+  approval: { kind: "book" | "gate_d"; by?: string; at?: string; label?: string; basis?: string; version?: string };
+  topic: { slug: string; title: string; canonical_key: string } | null;
+  curriculum_links: BundleLink[];
+};
+
+export type Bundle = {
+  bundle_version: 1;
+  revision: string;
+  product: { slug: string; title: string; edition: string; isbn: string | null; curriculum_code: string | null; languages: string[]; manuscript_version: string };
+  chapters: BundleChapter[];
+};
+
+export type ChapterReport = {
+  chapter: number;
+  units: number;
+  blocks: number;
+  exercises: number;
+  exercises_skipped: string | null;
+  links: { taught: number; assessed: number; unplaced: string[] };
+  shortfall: ExportPlan["shortfall"];
+};
+
+const lit = (v: string | number | null | undefined): string =>
+  v === null || v === undefined ? "NULL" : typeof v === "number" ? String(v) : `'${v.replace(/'/g, "''")}'`;
+
+export function validateBundle(b: Bundle): void {
+  if (b?.bundle_version !== 1) throw new Error("not an SK edition bundle (bundle_version 1)");
+  if (!b.product?.slug || !b.product.manuscript_version) throw new Error("bundle has no product slug / manuscript_version");
+  if (!Array.isArray(b.chapters) || !b.chapters.length) throw new Error("bundle has no chapters");
+  for (const c of b.chapters) {
+    if (!c.approval?.kind) throw new Error(`chapter ${c.number} carries no approval — the publishing engine refuses those`);
+  }
+}
+
+/** One chapter's statements from the B1 exporter, without its own transaction and summary. */
+export function chapterStatements(plan: ExportPlan, topic: { canonical_key: string; slug: string; title: string }): string {
+  const sql = renderSql(plan, topic);
+  const body = sql.slice(sql.indexOf("begin;") + "begin;".length, sql.lastIndexOf("commit;"));
+  return body.trim();
+}
+
+function linkStatement(slug: string, chapter: number, unitKey: string, link: BundleLink, revision: string): string {
+  const covers = link.kind === "taught";
+  const ev = (link.evidence.find((e) => e && e.trim()) ?? "").replace(/\s+/g, " ").slice(0, 300);
+  const note = `${covers ? "taught" : "assessed"} in ${link.unit}: both validators agreed (${revision} coverage${link.via && link.via !== "both validators" ? `, ${link.via}` : ""}). Evidence: ${ev}`;
+  return (
+    `insert into public.objective_curriculum_map (teaching_objective_id, curriculum_node_id, relation, map_confidence, mapped_by, status, notes)\n` +
+    `select o.id, n.id, ${lit(covers ? "covers" : "supports")}, ${covers ? "0.8" : "0.7"}, 'model', 'proposed', ${lit(note)}\n` +
+    `from public.sk_book_products p\n` +
+    `join public.teaching_objectives o on o.product_id = p.id and o.chapter = ${chapter} and o.unit_key = ${lit(unitKey)}\n` +
+    `join public.curriculum_nodes n on n.curriculum_id = p.curriculum_id and n.code = ${lit(link.code)}\n` +
+    `where p.slug = ${lit(slug)}\n` +
+    `on conflict (teaching_objective_id, curriculum_node_id) do update set relation = excluded.relation, map_confidence = excluded.map_confidence, notes = excluded.notes\n` +
+    `where public.objective_curriculum_map.status = 'proposed' and public.objective_curriculum_map.mapped_by = 'model';`
+  );
+}
+
+/** The whole book as one transaction, plus a report of what it will write. */
+export function bookSql(bundle: Bundle, drafts: Map<number, ChapterDraft>): { sql: string; reports: ChapterReport[] } {
+  validateBundle(bundle);
+  const P = bundle.product;
+  const out: string[] = [
+    `-- SK book import: ${P.slug} ${P.edition} (${P.manuscript_version}); generated by tools/sk/import-book.ts — do not edit`,
+    "begin;",
+  ];
+  const reports: ChapterReport[] = [];
+  for (const ch of [...bundle.chapters].sort((a, b) => a.number - b.number)) {
+    const draft = drafts.get(ch.number);
+    if (!draft) throw new Error(`chapter ${ch.number}: draft ${ch.draft} was not loaded`);
+    if (draft.chapter.number !== ch.number) throw new Error(`${ch.draft} is chapter ${draft.chapter.number}, not ${ch.number}`);
+    const plan = buildExport(draft, { nodesByCode: new Map(), existingQuestionIds: new Set() }, P.manuscript_version);
+    plan.product = { ...plan.product, slug: P.slug, title: P.title, curriculum_code: P.curriculum_code ?? plan.product.curriculum_code, languages: P.languages };
+    // a chapter with no catalogue topic (a review chapter) has no bank for its questions: skip them, say so
+    const skipped = ch.topic ? null : "no catalogue topic for this chapter (its questions have no bank to join)";
+    if (skipped) plan.exercises = [];
+    const topic = ch.topic ?? { canonical_key: canonicalKeyFromTitle(ch.title), slug: canonicalKeyFromTitle(ch.title).replace(/_/g, "-"), title: ch.title };
+    out.push(`-- chapter ${ch.number}: ${ch.title} (approved: ${ch.approval.kind}${ch.approval.at ? ` ${ch.approval.at}` : ""})`);
+    out.push(chapterStatements(plan, topic));
+    const unitBySection = new Map(plan.units.map((u) => [u.section_sid, u.unit_key]));
+    const unitByXid = new Map(plan.exercises.map((e) => [e.xid, e.unit_key]));
+    const unplaced: string[] = [];
+    let taught = 0;
+    let assessed = 0;
+    // assessed first, taught second: where both hold, 'covers' is the row that stays
+    for (const kind of ["assessed", "taught"] as const) {
+      for (const link of ch.curriculum_links.filter((l) => l.kind === kind)) {
+        const unitKey = kind === "taught" ? unitBySection.get(link.unit) : unitByXid.get(link.unit) ?? null;
+        if (!unitKey) {
+          unplaced.push(`${link.unit}:${link.code}`);
+          continue;
+        }
+        out.push(linkStatement(P.slug, ch.number, unitKey, link, bundle.revision));
+        if (kind === "taught") taught++;
+        else assessed++;
+      }
+    }
+    reports.push({ chapter: ch.number, units: plan.units.length, blocks: plan.blocks.length, exercises: plan.exercises.length,
+                   exercises_skipped: skipped, links: { taught, assessed, unplaced }, shortfall: plan.shortfall });
+  }
+  out.push(`update public.sk_book_products set edition = ${lit(P.edition)}, isbn = coalesce(${lit(P.isbn)}, isbn), updated_at = now() where slug = ${lit(P.slug)};`);
+  out.push("commit;");
+  out.push(
+    `select jsonb_build_object('product', p.slug, 'edition', p.edition, 'manuscript_version', p.manuscript_version,\n` +
+      `  'units', (select count(*) from public.sk_book_units u where u.product_id = p.id),\n` +
+      `  'objectives', (select count(*) from public.teaching_objectives o where o.product_id = p.id),\n` +
+      `  'blocks', (select count(*) from public.sk_book_blocks b where b.product_id = p.id),\n` +
+      `  'maps', (select count(*) from public.objective_curriculum_map m join public.teaching_objectives o on o.id = m.teaching_objective_id where o.product_id = p.id),\n` +
+      `  'questions_linked', (select count(*) from public.topic_questions q join public.teaching_objectives o on o.id = q.teaching_objective_id where o.product_id = p.id)\n` +
+      `) as summary from public.sk_book_products p where p.slug = ${lit(P.slug)};`,
+  );
+  return { sql: out.join("\n\n") + "\n", reports };
+}
