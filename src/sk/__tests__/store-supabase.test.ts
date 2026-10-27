@@ -256,3 +256,32 @@ describe("mastery_state is recomputed from item_attempts after every attempt (ru
     expect(db.rows("mastery_state")).toHaveLength(0);
   });
 });
+
+describe("scope-keyed events (2026-10-27 live fix)", () => {
+  // /api/sk/session claims the open event under `student:<uuid>` — no session
+  // row exists yet, and sk_events.session_id is a uuid with a foreign key, so
+  // the first Supabase-backed run died with 22P02. Scope keys are guarded in
+  // memory instead and never reach sk_events.
+  it("claims, replays and releases a student: scope without touching sk_events", async () => {
+    const { db, store } = setup();
+    const scope = `student:${STUDENT}`;
+    const e = uuidv7();
+    let runs = 0;
+    const first = await withEvent(store, scope, e, "session.open", async () => ({ n: ++runs }));
+    const again = await withEvent(store, scope, e, "session.open", async () => ({ n: ++runs }));
+    expect(first).toEqual({ result: { n: 1 }, replayed: false });
+    expect(again).toEqual({ result: { n: 1 }, replayed: true });
+    expect(db.rows("sk_events")).toEqual([]);
+    // a failed open releases the claim so the client's retry runs the work again
+    const e2 = uuidv7();
+    await expect(withEvent(store, scope, e2, "session.open", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
+    expect((await store.claimEvent(scope, e2)).status).toBe("new");
+    expect(await store.listEvents(scope)).toHaveLength(1);
+  });
+  it("real session ids still go through sk_events", async () => {
+    const { db, store } = setup();
+    const s = await store.createSession(newSession());
+    await withEvent(store, s.id, uuidv7(), "turn", async () => "ok");
+    expect(db.rows("sk_events")).toHaveLength(1);
+  });
+});
