@@ -51,7 +51,8 @@
       "testPapers": "Test Papers",
       "books": "Books",
       "board": "Board",
-      "kits": "Kits"
+      "kits": "Kits",
+      "skTutor": "SK Tutor"
     },
     "openMenu": "Open menu",
     "closeMenu": "Close menu",

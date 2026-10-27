@@ -51,7 +51,8 @@
       "testPapers": "Provas",
       "books": "Livros",
       "board": "Lousa",
-      "kits": "Kits"
+      "kits": "Kits",
+      "skTutor": "Tutor SK"
     },
     "openMenu": "Abrir menu",
     "closeMenu": "Fechar menu",

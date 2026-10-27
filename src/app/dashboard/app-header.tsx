@@ -16,6 +16,8 @@ import {
   parentPortalEnabled,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
+  skEnabled,
+  skUserAllowed,
   timetableEnabledFor,
 } from "@/utils/flags";
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
@@ -243,9 +245,14 @@ export default async function AppHeader() {
   // decides the rest (release gate, role, allowance) — this is a door, not a
   // guard.
   const kitsOn = catalogueTabEnabled() && !!user && !!role && role !== "student";
+  // SK Tutor (founder, 2026-10-27: live, restricted to the allow-list). The
+  // door shows only when BOTH flags are on (the page needs the public one, the
+  // routes the server one) and this account clears SK_ALLOWED_EMAILS, so an
+  // off-list account never learns the surface exists. The page re-checks.
+  const skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && !!user && skUserAllowed(user);
   const tabs = activeHat
-    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn)
-    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn, kitsOn);
+    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn, skOn)
+    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn, kitsOn, skOn);
   // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
   // it is lower-cased — a no-op in the scripts that have no case at all.
   const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);
