@@ -14,7 +14,9 @@
 // model writes only the answer to a question.
 
 import type { LLMProvider, Turn } from "@/utils/assistant/provider";
+import { LIVE_ENDED_TEXT, LIVE_EXHAUSTED_TEXT, NO_BOOK_ACCESS_TEXT, type AccessView } from "./access-notice";
 import { checkpointFor, type Segment } from "./board/engine";
+import { decideAccess, devFlagAccess, liveAllowed, redecide, type EntitlementSource, type SessionAccess } from "./entitlement";
 import { GRADE_RULE_VERSION, gradeItem, type GradeResult } from "./grade";
 import { assetOf, cursorFor, mainAsset, startCursor, unitOf } from "./graph";
 import { hintFor, stripItem, type ItemBank, type StudentItem } from "./items";
@@ -44,14 +46,75 @@ export type LoopDeps = {
   loadSegment: (uri: string) => Promise<Segment>;
   loadHitmapElementIds: (uri: string) => Promise<string[]>;
   now?: () => number;
+  /** B8: where the student's licence, plan and book grants are read. Absent
+   * → the dev-flag (everything granted, nothing metered) — the in-memory
+   * wiring's behaviour since B4; server.ts always wires a source when the
+   * Supabase store is on. */
+  entitlements?: EntitlementSource;
+  /** FEATURE_SK_ALLOWANCE: refuse live turns once a grant's allowance is spent. Off → counted, never refused. */
+  allowanceEnforced?: boolean;
 };
 
 export class LoopError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** A stable code for the client (B8: "no_book_access"). */
+    public readonly reason?: string,
   ) {
     super(message);
+  }
+}
+
+// ── Access (B8) ─────────────────────────────────────────────────────────────
+/** The decision for one student on this graph's product: the entitlement
+ * rows plus this period's usage, through skAccess(). Read per request —
+ * a revoked grant takes effect on the next turn, not the next session. */
+export async function loadAccess(deps: LoopDeps, studentId: string): Promise<SessionAccess> {
+  const now = new Date((deps.now ?? Date.now)());
+  if (!deps.entitlements) return devFlagAccess(now);
+  const rows = await deps.entitlements.load(studentId, deps.graph.product_id, now);
+  const a0 = decideAccess(rows, null, { now, allowanceEnforced: !!deps.allowanceEnforced });
+  // Usage is read only where it can change the decision or the view: a
+  // product the source knows (sk_usage.product_id is that id).
+  if (!rows.productId) return a0;
+  const usage = await deps.store.getUsage(studentId, rows.productId, a0.period);
+  return usage ? decideAccess(rows, usage, { now, allowanceEnforced: !!deps.allowanceEnforced }) : a0;
+}
+
+export function accessView(a: SessionAccess): AccessView {
+  const d = a.decision;
+  return {
+    source: a.devFlag ? "dev-flag" : (d.source ?? "none"),
+    grantSource: d.grant_source,
+    book: d.book_access,
+    tutor: d.tutor_access,
+    tutorExpiresAt: d.tutor_expires_at,
+    allowance: d.allowance_remaining ? { liveTurns: d.allowance_remaining.live_turns, generatedSegments: d.allowance_remaining.generated_segments } : null,
+    liveExhausted: d.live_exhausted,
+    warning: a.warning,
+    enforced: a.enforced,
+  };
+}
+
+/** SK's line for a refused live turn. */
+export function liveRefusalText(a: SessionAccess): string {
+  return a.decision.tutor_access ? LIVE_EXHAUSTED_TEXT : LIVE_ENDED_TEXT;
+}
+
+/** Count a turn that reached a model. Never breaks the turn: a metering
+ * failure is logged and the decision stands as it was. */
+async function meter(deps: LoopDeps, studentId: string, a: SessionAccess, delta: { live_turns: number; generated_segments: number }): Promise<SessionAccess> {
+  if (a.devFlag) return a;
+  if (!a.usageKey) {
+    console.error(`[sk] usage not recorded: product ${deps.graph.product_id} is unknown to the entitlement source`);
+    return a;
+  }
+  try {
+    return redecide(a, await deps.store.bumpUsage(studentId, a.usageKey, a.period, delta));
+  } catch (e) {
+    console.error("[sk] usage not recorded:", (e as Error).message);
+    return a;
   }
 }
 
@@ -75,7 +138,8 @@ export type SessionView = {
    * (founder's run, 2026-10-27). */
   board?: { assetId: string; segment: string; clip?: string; hitmap?: string; clips?: GraphAsset["clips"] } | null;
   openCheck: { unitKey: string; purpose: OpenCheck["purpose"]; index: number; total: number; attemptNo: number; hintsUsed: number; item: StudentItem | null } | null;
-  access: { source: "dev-flag"; expiresAt: null; allowance: null };
+  /** B8: who let the student in and what live help is left (see ./access-notice). */
+  access: AccessView;
 };
 
 /** The unit's teaching segment to keep on the board behind a segment-less
@@ -86,8 +150,10 @@ export function boardFor(unit: GraphUnit | null, current: GraphAsset | undefined
   return teach?.segment ? { assetId: teach.asset_id, segment: teach.segment, clip: teach.clip, hitmap: teach.hitmap, ...(teach.clips ? { clips: teach.clips } : {}) } : null;
 }
 
-export async function sessionView(deps: LoopDeps, s: SkSession): Promise<SessionView> {
+/** `access` is the decision the caller already loaded for this request; absent → loaded here. */
+export async function sessionView(deps: LoopDeps, s: SkSession, access?: SessionAccess): Promise<SessionView> {
   const m = s.machine;
+  const acc = access ?? (await loadAccess(deps, s.studentId));
   const unit = unitOf(deps.graph, m.cursor.unitKey) ?? null;
   const found = assetOf(deps.graph, m.cursor.assetId);
   // A bank-sourced check runs under an asset id the graph does not carry
@@ -115,7 +181,7 @@ export async function sessionView(deps: LoopDeps, s: SkSession): Promise<Session
     asset: a ? { assetId: a.asset_id, kind: a.kind, style: a.style, segment: a.segment, clip: a.clip, hitmap: a.hitmap, ...(a.clips ? { clips: a.clips } : {}) } : null,
     board: boardFor(unit, a),
     openCheck,
-    access: { source: "dev-flag", expiresAt: null, allowance: null },
+    access: accessView(acc),
   };
 }
 
@@ -130,8 +196,15 @@ export function recoverTransient(m: MachineState): MachineState {
   return { ...m, state: "PAUSED", openCheck: null };
 }
 
-export async function openSession(deps: LoopDeps, input: { studentId: string; productId: string; chapter: number; resume?: boolean }): Promise<SkSession> {
+/** B8: the student must hold BOOK access (school licence, SK plan, or a live
+ * grant for the product) to open at all — 403 "no_book_access" otherwise.
+ * Tutoring access is not required here: an expired tutor window or a spent
+ * allowance still opens prepared teaching; only live turns are refused (runTurn).
+ * `access` is the decision the route already loaded for this request. */
+export async function openSession(deps: LoopDeps, input: { studentId: string; productId: string; chapter: number; resume?: boolean; access?: SessionAccess }): Promise<SkSession> {
   if (input.productId !== deps.graph.product_id || input.chapter !== deps.graph.chapter) throw new LoopError(404, "No lesson graph for that product and chapter.");
+  const access = input.access ?? (await loadAccess(deps, input.studentId));
+  if (!access.decision.book_access) throw new LoopError(403, NO_BOOK_ACCESS_TEXT, "no_book_access");
   if (input.resume !== false) {
     const existing = await deps.store.findSession(input.studentId, input.productId, input.chapter);
     if (existing) {
@@ -355,7 +428,7 @@ export async function runCommand(deps: LoopDeps, s: SkSession, c: Command, curso
   const applied = await executeCommand(deps, s, m, c);
   s.machine = applied.m;
   await deps.store.saveSession(s);
-  return { view: await sessionView(deps, s), speech: applied.speech, board: applied.board, decision: applied.decision, refused: applied.refused };
+  return { view: await sessionView(deps, s, await loadAccess(deps, s.studentId)), speech: applied.speech, board: applied.board, decision: applied.decision, refused: applied.refused };
 }
 
 // ── Answers (contracts §4 /api/sk/answer; graded once per (item, attemptNo)) ──
@@ -411,10 +484,13 @@ async function afterCheck(deps: LoopDeps, s: SkSession, m: MachineState, oc: Ope
 
 export async function submitAnswer(deps: LoopDeps, s: SkSession, input: AnswerInput): Promise<AnswerResult> {
   if (!Number.isInteger(input.attemptNo) || input.attemptNo < 1) throw new LoopError(400, "attemptNo must be a positive integer.");
+  // Grading is prepared teaching: never metered, never refused for access; the view it returns still carries the decision (read once).
+  let accessP: Promise<SessionAccess> | undefined;
+  const viewWithAccess = async () => sessionView(deps, s, await (accessP ??= loadAccess(deps, s.studentId)));
   // Graded once (contracts §5.6): a repeat of a finished attempt returns what
   // was stored, whatever the session is doing now.
   const stored = await deps.store.getAttempt(s.id, input.itemId, input.attemptNo);
-  if (stored) return { kind: "graded", ...attemptToResult(stored), feedback: "Already marked.", speech: "", replayed: true, view: await sessionView(deps, s) };
+  if (stored) return { kind: "graded", ...attemptToResult(stored), feedback: "Already marked.", speech: "", replayed: true, view: await viewWithAccess() };
 
   const m0 = s.machine;
   const oc = m0.openCheck;
@@ -431,7 +507,7 @@ export async function submitAnswer(deps: LoopDeps, s: SkSession, input: AnswerIn
       s.machine = r.state;
       await deps.store.saveSession(s);
     }
-    return { kind: "confirm", transcript: String(input.response ?? ""), view: await sessionView(deps, s) };
+    return { kind: "confirm", transcript: String(input.response ?? ""), view: await viewWithAccess() };
   }
 
   const item = await deps.items.get(input.itemId);
@@ -457,7 +533,7 @@ export async function submitAnswer(deps: LoopDeps, s: SkSession, input: AnswerIn
   try {
     await deps.store.putAttempt(attempt);
   } catch (e) {
-    if (e instanceof DuplicateAttemptError) return { kind: "graded", ...attemptToResult(e.existing), feedback: "Already marked.", speech: "", replayed: true, view: await sessionView(deps, s) };
+    if (e instanceof DuplicateAttemptError) return { kind: "graded", ...attemptToResult(e.existing), feedback: "Already marked.", speech: "", replayed: true, view: await viewWithAccess() };
     throw e;
   }
 
@@ -498,7 +574,7 @@ export async function submitAnswer(deps: LoopDeps, s: SkSession, input: AnswerIn
   }
   s.machine = m;
   await deps.store.saveSession(s);
-  return { kind: "graded", outcome: grade.outcome, score: grade.score, max: grade.max, feedback: grade.feedback, hintAvailable: grade.hintAvailable, independent: grade.independent, hint, check, speech, replayed: false, view: await sessionView(deps, s) };
+  return { kind: "graded", outcome: grade.outcome, score: grade.score, max: grade.max, feedback: grade.feedback, hintAvailable: grade.hintAvailable, independent: grade.independent, hint, check, speech, replayed: false, view: await viewWithAccess() };
 }
 
 // ── The turn (contracts §4 /api/sk/turn, SSE) ───────────────────────────────
@@ -515,13 +591,36 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
   let retrievalMs = 0;
   let cancelled = false;
 
+  // B8: live help (the router and teacher models, retrieval, asides) needs
+  // TUTOR access with allowance left; commands, routes and answers are
+  // prepared teaching and run on book access alone. The decision is read
+  // per turn so a change takes effect on the next turn.
+  let access = await loadAccess(deps, s.studentId);
+  const live = liveAllowed(access);
+  let modelReached = false; // the router or the teacher was called → one live turn
+  let asides = 0; // live asides the teacher drew (accepted programs)
+  const router: LLMProvider | undefined =
+    live && deps.routerProvider
+      ? {
+          id: deps.routerProvider.id,
+          model: deps.routerProvider.model,
+          stream: (o) => {
+            modelReached = true;
+            return deps.routerProvider!.stream(o);
+          },
+        }
+      : undefined;
+
   // Retrieval starts NOW, in parallel with the router call (R1: the query
   // embedding is the slow part), and only where a question can be answered;
   // it is awaited only if the intent turns out to be a grounded question.
   const canAnswer = m.state === "PRESENTING" || m.state === "PAUSED";
-  const retrieval: TurnRetrieval | undefined = text && canAnswer && deps.retrieval ? deps.retrieval.begin(text, { product: deps.graph.product_id, chapter: deps.graph.chapter, signal: input.signal }) : undefined;
+  const retrieval: TurnRetrieval | undefined = text && canAnswer && live && deps.retrieval ? deps.retrieval.begin(text, { product: deps.graph.product_id, chapter: deps.graph.chapter, signal: input.signal }) : undefined;
 
-  const intent: Intent = text ? await classify(text, { graph: deps.graph, checkOpen, provider: deps.routerProvider, signal: input.signal }) : { kind: "question", needsGrounding: false, confidence: 0, source: "default" };
+  // Without live access the router is the rule layer alone: a command, route
+  // or answer it recognises runs as ever; anything else is a question, and
+  // questions are what live access buys.
+  const intent: Intent = text ? await classify(text, { graph: deps.graph, checkOpen, provider: router, signal: input.signal }) : { kind: "question", needsGrounding: false, confidence: 0, source: "default" };
   const routerMs = now() - t0;
   let decision: Decision | undefined;
   let board: Applied["board"];
@@ -553,6 +652,13 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
         decision = applied.decision;
         board = applied.board;
         yield { event: "text", data: applied.speech };
+      } else if (!live) {
+        // question without live access: SK's own line, no model, no history —
+        // then back to the lesson exactly as after an answer.
+        yield { event: "text", data: liveRefusalText(access) };
+        const back = transitionAll(m, [{ kind: "answered" }, { kind: "play" }]);
+        if (back.ok) m = back.state;
+        board = "play";
       } else {
         // question → ANSWERING: one Sonnet call with the unit's content as the cached prefix.
         const found = assetOf(deps.graph, m.cursor.assetId);
@@ -576,14 +682,17 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
           s.history = [...s.history, ...turns].slice(-MAX_HISTORY_TURNS);
         } else if (deps.teacherProvider && unit && found?.asset.segment) {
           const tModel = now();
+          modelReached = true;
           try {
             const [segment, hitmapElementIds] = await Promise.all([deps.loadSegment(found.asset.segment), found.asset.hitmap ? deps.loadHitmapElementIds(found.asset.hitmap) : Promise.resolve([])]);
             for await (const ev of answerQuestion({ provider: deps.teacherProvider, unit, segment, hitmapElementIds, question: text, history: s.history, signal: input.signal, grounding })) {
               if (ev.type === "text") {
                 fullText += ev.text;
                 yield { event: "text", data: ev.text };
-              } else if (ev.type === "tal") yield { event: "tal", data: ev.program };
-              else if (ev.type === "aside_rejected") yield { event: "meta", data: { asideRejected: ev.reason } };
+              } else if (ev.type === "tal") {
+                asides++;
+                yield { event: "tal", data: ev.program };
+              } else if (ev.type === "aside_rejected") yield { event: "meta", data: { asideRejected: ev.reason } };
               else if (ev.type === "done") Object.assign(usage, ev.usage);
               else if (ev.type === "cancelled") {
                 cancelled = true;
@@ -648,12 +757,16 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
 
   s.machine = m;
   await deps.store.saveSession(s);
-  const view = await sessionView(deps, s);
+  // B8 write point: one live turn per turn that reached the router or the
+  // teacher (cancelled or not — the call was made), plus the asides it drew.
+  if (modelReached) access = await meter(deps, s.studentId, access, { live_turns: 1, generated_segments: asides });
+  const view = await sessionView(deps, s, access);
   yield {
     event: "done",
     data: {
       latency: { totalMs: now() - t0, routerMs, modelMs, retrievalMs },
       usage,
+      ...(modelReached ? { metered: { live_turns: 1, generated_segments: asides } } : {}),
       ...(cancelled ? { cancelled: true } : {}),
       board,
       decision: decision ? { kind: decision.kind, reasons: decision.reasons, ...(decision.kind === "generate" ? { rung: decision.rung, basis: decision.basis } : {}) } : undefined,

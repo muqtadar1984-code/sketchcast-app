@@ -10,12 +10,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { claudeConfigured } from "@/utils/claude-backend";
-import { skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAllowanceEnforced, skEnabled, skUserAllowed } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 import { normaliseSegment, validateSegment, type Segment } from "./board/engine";
 import { embedderConfigured, TitanEmbedder } from "./embed";
+import { SupabaseEntitlements, type EntitlementSource } from "./entitlement";
 import { parseGraph } from "./graph";
 import { CompositeItemBank, StaticItemBank, type ItemBank } from "./items";
 import { UUID_RE } from "./ids";
@@ -34,6 +35,10 @@ export const DEFAULT_GRAPH_URIS = ["/sk-s1/graph-ch2.json", "/sk-s1/ch02/graph.j
 export type SkDeps = {
   store: SessionStore;
   items: ItemBank;
+  /** B8: the student's licence / plan / grant rows. Undefined = the dev-flag (in-memory wiring only). */
+  entitlements?: EntitlementSource;
+  /** B8: FEATURE_SK_ALLOWANCE — refuse live turns past a grant's allowance. */
+  allowanceEnforced?: boolean;
   graphs: TeachingGraph[];
   routerProvider?: LLMProvider;
   teacherProvider?: LLMProvider;
@@ -156,12 +161,14 @@ let override: Partial<SkDeps> | null = null;
  * the 0157 tables through the admin client, and serves items from
  * `topic_questions`. Unset (the default) is the B4 in-memory store and the
  * U4 stand-in items — nothing changes until the flag is set. */
-export function persistence(): Pick<SkDeps, "store" | "items"> {
+export function persistence(): Pick<SkDeps, "store" | "items" | "entitlements"> {
   if (process.env.SK_STORE === "supabase") {
     const db = skDbFrom(createAdminClient());
     // The stand-in chapter's string ids fall through to the static items (live fix 2026-10-27).
-    return { store: new SupabaseSessionStore(db), items: new CompositeItemBank(new SupabaseItemBank(db), new StaticItemBank(), (id) => UUID_RE.test(id)) };
+    // B8: the same admin client reads entitlements, profiles.school_id and book_access_grants, and writes sk_usage.
+    return { store: new SupabaseSessionStore(db), items: new CompositeItemBank(new SupabaseItemBank(db), new StaticItemBank(), (id) => UUID_RE.test(id)), entitlements: new SupabaseEntitlements(db) };
   }
+  // No database: no entitlement source — the loop's dev-flag (everything granted, usage counted in memory only).
   return { store: new InMemorySessionStore(), items: new StaticItemBank() };
 }
 
@@ -189,6 +196,7 @@ export function skDeps(): Promise<SkDeps> {
       const uris = (process.env.SK_GRAPHS || "").split(",").map((s) => s.trim()).filter(Boolean);
       const base: SkDeps = {
         ...persistence(),
+        allowanceEnforced: skAllowanceEnforced(),
         graphs: await servableGraphs(await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS)),
         loadSegment: loadSegmentFromPublic,
         loadHitmapElementIds: loadHitmapTargetsFromPublic,
@@ -211,7 +219,7 @@ export function __setSkDepsForTests(d: Partial<SkDeps> | null): void {
 export function loopDepsFor(d: SkDeps, productId: string, chapter: number): LoopDeps | null {
   const graph = d.graphs.find((g) => g.product_id === productId && g.chapter === chapter);
   if (!graph) return null;
-  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, retrieval: d.retrieval, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds };
+  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, retrieval: d.retrieval, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds, entitlements: d.entitlements, allowanceEnforced: d.allowanceEnforced };
 }
 
 // ── Gate + auth, shared by every route ──────────────────────────────────────

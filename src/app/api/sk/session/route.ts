@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isEventId } from "@/sk/ids";
-import { LoopError, openSession, sessionView } from "@/sk/loop";
+import { loadAccess, LoopError, openSession, sessionView } from "@/sk/loop";
 import { gate, loopDepsFor, readBody, skDeps } from "@/sk/server";
 import { withEvent } from "@/sk/store";
 
@@ -10,6 +10,9 @@ export const runtime = "nodejs";
 // { eventId, productId, chapter, resume? } → { sessionId, graphVersion, state, cursor, bookmarks, access, … }
 // Idempotent on eventId: the event is keyed on the STUDENT (no session exists
 // yet) so a double-click creates one session, not two.
+// B8: 403 { error, reason: "no_book_access" } when the student holds no
+// licence, SK plan or grant for the product; the decision is read once here
+// and reused by the view.
 export async function POST(request: Request) {
   const g = await gate();
   if (!g.ok) return g.response;
@@ -25,12 +28,13 @@ export async function POST(request: Request) {
   if (!deps) return NextResponse.json({ error: "No lesson graph for that product and chapter." }, { status: 404 });
   try {
     const { result } = await withEvent(deps.store, `student:${g.userId}`, body.eventId, "session.open", async () => {
-      const s = await openSession(deps, { studentId: g.userId, productId, chapter, resume: body.resume !== false });
-      return sessionView(deps, s);
+      const access = await loadAccess(deps, g.userId);
+      const s = await openSession(deps, { studentId: g.userId, productId, chapter, resume: body.resume !== false, access });
+      return sessionView(deps, s, access);
     });
     return NextResponse.json(result);
   } catch (e) {
-    if (e instanceof LoopError) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof LoopError) return NextResponse.json({ error: e.message, ...(e.reason ? { reason: e.reason } : {}) }, { status: e.status });
     console.error("[sk] session open failed:", e);
     return NextResponse.json({ error: "Could not open the session." }, { status: 500 });
   }

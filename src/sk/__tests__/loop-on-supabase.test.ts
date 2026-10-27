@@ -21,7 +21,7 @@ import { graphsForStore, servableGraphsOn } from "../server";
 import { withEvent } from "../store";
 import type { SseEvent } from "../types";
 import { O, PRODUCT, SLUG } from "./cells-fixtures";
-import { cellsGraph, ITEM, LOOP_WIRINGS, standinGraph, STUDENT, supabaseLoopDeps, type LoopHarness } from "./supabase-loop-deps";
+import { cellsGraph, ITEM, LOOP_WIRINGS, staffGrant, standinGraph, STUDENT, supabaseLoopDeps, type LoopHarness } from "./supabase-loop-deps";
 
 const open = (h: LoopHarness, studentId = h.studentId) => openSession(h.deps, { studentId, productId: SLUG, chapter: 2 });
 const collect = async (gen: AsyncGenerator<SseEvent>) => {
@@ -274,7 +274,11 @@ describe("what only the Supabase wiring can tell us", () => {
   it("a student the memory store takes is one the tables refuse: a non-uuid id (22P02) and an id with no profiles row (23503)", async () => {
     const h = supabaseLoopDeps();
     await expect(open(h, "stu")).rejects.toThrow(/22P02/);
-    await expect(open(h, "0f6a2c1e-7b3d-4e5f-8a9b-000000000000")).rejects.toThrow(/23503/);
+    // B8: an unknown student is first of all a student with no access (403); give the orphan a grant and the FK is what refuses it.
+    const orphan = "0f6a2c1e-7b3d-4e5f-8a9b-000000000000";
+    await expect(open(h, orphan)).rejects.toMatchObject({ status: 403, reason: "no_book_access" });
+    h.db.seed("book_access_grants", [{ ...staffGrant(Date.now()), id: "7e3a2f4b-5c6d-4e7f-8a9b-0c1d2e3f4a99", user_id: orphan, product_id: PRODUCT }]);
+    await expect(open(h, orphan)).rejects.toThrow(/23503/);
     expect(h.db.rows("sk_sessions")).toHaveLength(0);
   });
 
