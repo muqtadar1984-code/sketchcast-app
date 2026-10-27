@@ -9,9 +9,10 @@
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { validateAside } from "@/sk/aside";
-import { parseRigChoice, RIG_LABELS, rigBaseForChoice, type RigChoice } from "@/sk/board/avatar";
+import { parseRigChoice, RIG_LABELS, rigBaseForChoice, voiceGenderForChoice, type RigChoice } from "@/sk/board/avatar";
 import { useRigChoice } from "@/sk/board/use-rig-choice";
 import { hitTargets, validateHitMap, validateSegment, type HitMap, type OpentypeLike, type Segment } from "@/sk/board/engine";
+import { segmentForVoice, trackFor } from "@/sk/board/voices";
 import { SpikeRuntime, type PlayerState, type Rig } from "@/sk/board/runtime";
 import { uuidv7 } from "@/sk/ids";
 import { liveAsideFor, type S1Aside } from "./asides";
@@ -60,7 +61,11 @@ export default function UnitPlayer() {
         const base = "/sk-s1/ch02/" + rel.slice(0, rel.lastIndexOf("/") + 1);
         const [rawSeg, ot] = await Promise.all([fetch(base + "segment.json").then((r) => r.json() as Promise<Segment>), import("opentype.js")]);
         // The two gates: a manifest or a hit map that fails never reaches the DOM.
-        const seg = validateSegment(rawSeg);
+        // Then the look picks the narration track (A female, B male); a chapter
+        // with one track plays that one whatever the look.
+        const gender = voiceGenderForChoice(rig);
+        const choice = trackFor(validateSegment(rawSeg), gender);
+        const seg = segmentForVoice(validateSegment(rawSeg), gender);
         const rawHm = (await fetch(base + (seg.hitmap ?? "hitmap.json")).then((r) => r.json())) as HitMap;
         const hm = validateHitMap(rawHm);
         const [rigData, font, s1] = await Promise.all([
@@ -70,7 +75,7 @@ export default function UnitPlayer() {
         ]);
         if (!alive) return;
         setLoaded({ unit, title: u.title, base, seg, hm, font, rig: rigData, rigChoice: rig, s1 });
-        say(`loaded ${unit} "${u.title}": clip ${seg.clip?.duration_ms} ms, ${Object.keys(hm.elements).length} elements, ${hm.timeline.length} timeline entries, look ${rig}`);
+        say(`loaded ${unit} "${u.title}": clip ${seg.clip?.uri} ${seg.clip?.duration_ms} ms (${choice.gender} voice${choice.exact ? "" : " — no track for this look, playing the segment's own"}), ${Object.keys(hm.elements).length} elements, ${hm.timeline.length} timeline entries, look ${rig}`);
       } catch (e) {
         say(`REFUSED ${unit}: ${(e as Error).message}`);
       }

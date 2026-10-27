@@ -68,12 +68,12 @@ export type SessionView = {
   /** Units skipped without (finishing) their check — recorded, never mastered (founder, 2026-10-27). */
   skipped: string[];
   unit: { unitKey: string; title: string; order: number } | null;
-  asset: { assetId: string; kind: string; style?: string; segment?: string; clip?: string; hitmap?: string } | null;
+  asset: { assetId: string; kind: string; style?: string; segment?: string; clip?: string; hitmap?: string; clips?: GraphAsset["clips"] } | null;
   /** What the board shows while the current asset has nothing to draw (a
    * check or practice): the unit's main teaching segment, paused. Without it
    * a session resumed mid-check sat on a blank board marked "loading"
    * (founder's run, 2026-10-27). */
-  board?: { assetId: string; segment: string; clip?: string; hitmap?: string } | null;
+  board?: { assetId: string; segment: string; clip?: string; hitmap?: string; clips?: GraphAsset["clips"] } | null;
   openCheck: { unitKey: string; purpose: OpenCheck["purpose"]; index: number; total: number; attemptNo: number; hintsUsed: number; item: StudentItem | null } | null;
   access: { source: "dev-flag"; expiresAt: null; allowance: null };
 };
@@ -83,7 +83,7 @@ export type SessionView = {
 export function boardFor(unit: GraphUnit | null, current: GraphAsset | undefined): SessionView["board"] {
   if (!unit || current?.segment) return null;
   const teach = unit.assets.find((x) => x.kind === "explain" && x.style === "main" && x.segment) ?? unit.assets.find((x) => x.segment);
-  return teach?.segment ? { assetId: teach.asset_id, segment: teach.segment, clip: teach.clip, hitmap: teach.hitmap } : null;
+  return teach?.segment ? { assetId: teach.asset_id, segment: teach.segment, clip: teach.clip, hitmap: teach.hitmap, ...(teach.clips ? { clips: teach.clips } : {}) } : null;
 }
 
 export async function sessionView(deps: LoopDeps, s: SkSession): Promise<SessionView> {
@@ -112,7 +112,7 @@ export async function sessionView(deps: LoopDeps, s: SkSession): Promise<Session
     mastery: s.mastery,
     skipped: skippedOf(m),
     unit: unit ? { unitKey: unit.unit_key, title: unit.title, order: unit.order } : null,
-    asset: a ? { assetId: a.asset_id, kind: a.kind, style: a.style, segment: a.segment, clip: a.clip, hitmap: a.hitmap } : null,
+    asset: a ? { assetId: a.asset_id, kind: a.kind, style: a.style, segment: a.segment, clip: a.clip, hitmap: a.hitmap, ...(a.clips ? { clips: a.clips } : {}) } : null,
     board: boardFor(unit, a),
     openCheck,
     access: { source: "dev-flag", expiresAt: null, allowance: null },

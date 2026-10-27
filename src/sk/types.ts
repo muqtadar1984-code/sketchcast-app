@@ -17,6 +17,9 @@ export type GraphAsset = {
   /** Option S (S1 decision): the prepared clip and its hit map. */
   clip?: string;
   hitmap?: string;
+  /** The clip per narration gender (packager 2026-10-27: the same video with
+   * the other voice muxed in); the look picks one, `clip` is the rendered default. */
+  clips?: Partial<Record<"female" | "male", string>>;
   /** practice/check: item ids (the keys live server-side, never in the graph). */
   item_ids?: string[];
   origin?: "prepared" | "generated";
