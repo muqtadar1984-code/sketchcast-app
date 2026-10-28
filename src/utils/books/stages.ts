@@ -45,6 +45,48 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredPerChapterUsd: 0.33,
     measuredFrom: "the Biology coverage runs of Revisions 3, 4 and 4.1 ($3.23–3.30 for 10 chapters)",
   },
+  {
+    key: "academic_audit",
+    title: "Academic audit",
+    summary:
+      "Both validators (Gemini 3.5 Flash and Claude Opus 5.5, never the author model) review each chapter for accuracy, level, curriculum fit and repetition, and record P0/P1/P2 findings. Reads the book; changes nothing in it.",
+    action: "run_report",
+    params: CHAPTERS,
+    measuredPerChapterUsd: 0.58,
+    measuredFrom: "the Biology audits of Revisions 2 and 4 ($5.70–5.88 for 10 chapters)",
+  },
+];
+
+// ── the whole pipeline ──────────────────────────────────────────────────────
+// Every stage of making a book, in order, and whether the app can run it yet.
+// `run` names the RUNNABLE_STAGES that carry it out; `book` names the book's
+// own stage keys (pub_stages, from the importer) that recorded it before the app.
+
+export type PipelineStage = {
+  key: string;
+  layer: "plan" | "produce" | "polish";
+  title: string;
+  does: string;
+  run: string[];
+  /** not runnable from the app yet: which release brings it */
+  comes?: "S3" | "S4" | "R2" | "R3";
+  book: string[];
+};
+
+export const PIPELINE: PipelineStage[] = [
+  { key: "scope", layer: "plan", title: "Scope and blueprint", does: "Curricula, objectives, chapters and the 13 blueprint checks; Gate B.", run: [], comes: "R2", book: ["scope"] },
+  { key: "articles", layer: "plan", title: "Catalogue articles", does: "Draft and approve the articles the chapters are built from; Gate R pins the sources.", run: [], comes: "R2", book: [] },
+  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review.", run: [], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
+  { key: "uniqueness", layer: "produce", title: "Uniqueness", does: "No question, Think box or picture repeats an earlier chapter.", run: [], comes: "S3", book: ["uniqueness"] },
+  { key: "gate_d", layer: "produce", title: "Gate D approval", does: "A person approves each chapter; the approval is the text's hash.", run: [], comes: "S4", book: [] },
+  { key: "audit", layer: "produce", title: "Academic audit", does: "Two independent validators review every chapter.", run: ["academic_audit"], book: ["revision_2", "revision_4"] },
+  { key: "corrections", layer: "produce", title: "Adjudicate, correct, verify", does: "Findings ruled on, corrections applied unit by unit and verified; approved chapters change only by controlled revision.", run: [], comes: "S4", book: ["revision_2", "revision_4"] },
+  { key: "coverage", layer: "produce", title: "Coverage", does: "Every objective: taught and assessed, taught only, assessed only, or not covered.", run: ["coverage"], book: ["revision_3", "revision_4_1"] },
+  { key: "checks", layer: "produce", title: "Book checks", does: "The source files are whole and every approval still matches its text.", run: ["check_files"], book: [] },
+  { key: "compile", layer: "produce", title: "Compile the book", does: "Front matter, chapters, coverage, glossary, index and credits into one book; Gate E.", run: [], comes: "S4", book: ["first_draft", "revision_4_1"] },
+  { key: "kdp", layer: "produce", title: "KDP paperback", does: "Print interior, cover and the listing sheet.", run: [], comes: "S4", book: ["kdp"] },
+  { key: "sk_export", layer: "produce", title: "SK export", does: "The approved chapters exported for the SK tutor.", run: [], comes: "S4", book: ["sk_export"] },
+  { key: "editor", layer: "polish", title: "Editor", does: "Edit the compiled book by hand, with AI help; re-approval.", run: [], comes: "R3", book: [] },
 ];
 
 export function runnableStage(key: string): RunnableStage | null {

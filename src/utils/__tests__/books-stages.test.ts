@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { checkParams, runChapters, runnableStage, RUNNABLE_STAGES } from "../books/stages";
+import { checkParams, PIPELINE, runChapters, runnableStage, RUNNABLE_STAGES } from "../books/stages";
 
 // The app's stage list must refuse what the runner refuses (worker publishing/runner/stages.py).
 describe("book run stages", () => {
   const coverage = runnableStage("coverage")!;
 
   it("knows only the runner's stages", () => {
-    expect(RUNNABLE_STAGES.map((s) => s.key)).toEqual(["check_files", "coverage"]);
+    expect(RUNNABLE_STAGES.map((s) => s.key)).toEqual(["check_files", "coverage", "academic_audit"]);
     expect(runnableStage("drop_tables")).toBeNull();
   });
 
@@ -30,5 +30,15 @@ describe("book run stages", () => {
 
   it("whole-book reports need only run_report", () => {
     for (const s of RUNNABLE_STAGES) expect(s.action).toBe("run_report");
+  });
+
+  it("every pipeline stage either runs from the app or says when it will", () => {
+    for (const p of PIPELINE) {
+      for (const k of p.run) expect(runnableStage(k), `${p.key} → ${k}`).not.toBeNull();
+      expect(p.run.length > 0 || !!p.comes, p.key).toBe(true);
+    }
+    // every runnable stage appears on the pipeline exactly once
+    const listed = PIPELINE.flatMap((p) => p.run).sort();
+    expect(listed).toEqual(RUNNABLE_STAGES.map((s) => s.key).sort());
   });
 });
