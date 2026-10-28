@@ -1,9 +1,12 @@
 import Link from "next/link";
 import RichText from "@/components/rich-text";
+import { canOn } from "@/utils/books-access";
+import { listDecisions } from "@/utils/books/decide";
 import { listFindings } from "@/utils/books/store";
 import type { Finding } from "@/utils/books/types";
 import { loadBook } from "../load";
-import { Card, Chip, Empty } from "../../ui";
+import { Card, Chip, Empty, day } from "../../ui";
+import FindingActions from "./finding-actions";
 
 // /books/[slug]/findings — every recorded finding (the independent academic
 // audits and their verification), with the other validator's ruling and what
@@ -15,8 +18,11 @@ const FILTERS = ["rev", "ch", "severity", "agreement", "status"] as const;
 export default async function FindingsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const { work, revisions } = await loadBook(slug);
-  const all = await listFindings(work.uid);
+  const { member, work, revisions } = await loadBook(slug);
+  const [all, decisions] = await Promise.all([listFindings(work.uid), listDecisions(work.uid)]);
+  const canRule = canOn(member, work.uid, "edit");
+  const rulings = new Map<number, typeof decisions>();
+  for (const d of decisions) rulings.set(d.finding_id, [...(rulings.get(d.finding_id) ?? []), d]);
   const f: Partial<Record<(typeof FILTERS)[number], string>> = {};
   for (const k of FILTERS) if (typeof sp[k] === "string" && sp[k]) f[k] = sp[k] as string;
   const match = (x: Finding) =>
@@ -102,6 +108,12 @@ export default async function FindingsPage({ params, searchParams }: { params: P
                     {x.ruling.why ? ` — ${x.ruling.why}` : ""}
                   </p>
                 )}
+                {(rulings.get(x.id) ?? []).map((d) => (
+                  <p key={d.id}>
+                    <strong>{d.status_to}</strong> by {d.decided_by}, {day(d.decided_at)}
+                    {d.reason ? ` — ${d.reason}` : ""}
+                  </p>
+                ))}
                 {x.decision?.applied && (
                   <p>
                     Applied ({x.decision.unit}): {x.decision.applied}
@@ -109,6 +121,7 @@ export default async function FindingsPage({ params, searchParams }: { params: P
                   </p>
                 )}
               </div>
+              {canRule && x.status !== "applied" && <FindingActions slug={slug} id={x.id} status={x.status} />}
             </li>
           ))}
         </ul>

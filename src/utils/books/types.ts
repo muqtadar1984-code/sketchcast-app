@@ -186,7 +186,7 @@ export type Artifact = {
   run_id?: number | null;
 };
 
-export type CostLine = { stage_key: string; revision_key: string | null; chapter: number | null; model: string | null; role: string | null; usd: number };
+export type CostLine = { stage_key: string; revision_key: string | null; chapter: number | null; model: string | null; role: string | null; usd: number; run_id?: number | null };
 
 export type OpenItem = { id: number; key: string; title: string; detail: string | null; owner: string | null; status: string };
 

@@ -1,4 +1,5 @@
 import { listCostLines, listStages } from "@/utils/books/store";
+import { listBookRuns } from "@/utils/books/runs";
 import { loadBook } from "../load";
 import { Card, usd } from "../../ui";
 
@@ -30,7 +31,10 @@ function Table({ rows, total }: { rows: [string, number, number][]; total: numbe
 export default async function CostsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { work } = await loadBook(slug);
-  const [lines, stages] = await Promise.all([listCostLines(work.uid), listStages(work.uid)]);
+  const [lines, stages, runs] = await Promise.all([listCostLines(work.uid), listStages(work.uid), listBookRuns(work.uid, 200)]);
+  const runLabel = new Map(runs.map((r) => [r.id, `#${r.id} · ${r.label}`]));
+  const runLines = lines.filter((l) => l.run_id);
+  const runTotal = runLines.reduce((s, l) => s + Number(l.usd || 0), 0);
   const title = new Map(stages.map((s) => [s.key, s.title]));
   const total = lines.reduce((s, l) => s + Number(l.usd || 0), 0);
   const by = (key: (l: (typeof lines)[number]) => string): [string, number, number][] => {
@@ -55,6 +59,22 @@ export default async function CostsPage({ params }: { params: Promise<{ slug: st
         <Card title="By model">
           <Table rows={by((l) => l.model ?? "model not recorded (corrections)")} total={total} />
         </Card>
+        {runLines.length > 0 && (
+          <Card title={`Runs from the app · ${usd(runTotal)}`}>
+            <Table
+              rows={(() => {
+                const m = new Map<string, [number, number]>();
+                for (const l of runLines) {
+                  const k = runLabel.get(l.run_id!) ?? `#${l.run_id}`;
+                  const [v, n] = m.get(k) ?? [0, 0];
+                  m.set(k, [v + Number(l.usd || 0), n + 1]);
+                }
+                return [...m.entries()].map(([k, [v, n]]) => [k, v, n] as [string, number, number]);
+              })()}
+              total={runTotal}
+            />
+          </Card>
+        )}
         <Card title="By chapter">
           <Table rows={by((l) => (l.chapter ? `Chapter ${l.chapter}` : "Book-level")).sort((a, b) => a[0].localeCompare(b[0], "en", { numeric: true }))} total={total} />
         </Card>
