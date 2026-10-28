@@ -36,7 +36,10 @@ const AUTO_MARKED_LIMIT = 30;
 // DIRECT child shares (student_id rows they shared), grouped per learner with
 // a link to each child's printable progress record. The school-transparency
 // block only renders for people who actually belong to a school.
-export default async function AnalyticsPage() {
+// `?c=<classId>` pre-filters the teacher view to one class (SK Shell's
+// `navigate` target "analytics" with a classId, S0). Unknown ids are ignored.
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
+  const { c: classFilter } = await searchParams;
   const locale = await resolveLocale();
   const dict = await getDictionary(locale);
   const t = dict.school.myAnalytics;
@@ -67,6 +70,7 @@ export default async function AnalyticsPage() {
     : await supabase.from("classes").select("id, name").eq("teacher_id", user.id).order("created_at", { ascending: false });
   const classes = (classesRaw ?? []) as { id: string; name: string }[];
   const myClassIds = new Set(classes.map((c) => c.id));
+  const onlyClass = classFilter && myClassIds.has(classFilter) ? classFilter : null;
 
   type EnrRow = { class_id: string; student_id: string; profiles: { full_name: string | null; username: string | null } | null };
   const { data: enrRaw } = parentMode
@@ -92,7 +96,9 @@ export default async function AnalyticsPage() {
         .not("student_id", "is", null)
     : await supabase.from("generation_shares").select("generation_id, class_id, student_id, due_at, generations(kind, chapter_ref, title)");
   const shares = ((sharesRaw ?? []) as unknown as ShareRow[]).filter((s) =>
-    parentMode ? s.student_id !== null && childIds.has(s.student_id) : s.class_id !== null && myClassIds.has(s.class_id),
+    parentMode
+      ? s.student_id !== null && childIds.has(s.student_id)
+      : s.class_id !== null && myClassIds.has(s.class_id) && (!onlyClass || s.class_id === onlyClass),
   );
   const myGenIds = new Set(shares.map((s) => s.generation_id));
 
