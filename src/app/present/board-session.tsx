@@ -20,6 +20,7 @@ import {
   createBoardController,
   MemorySkActionSink,
   type BoardController,
+  type BoardUnit,
   type QuestionSet,
   type SkActionSink,
 } from "./board-controller";
@@ -188,9 +189,17 @@ type Props = {
   /** Where SK actions are recorded. Defaults to an in-memory buffer — never the network
    *  (the sk_actions table lands in S0). */
   skSink?: SkActionSink;
+  /** S1 slice C (additive): told which unit is open, whenever that changes —
+   *  the SK bridge loads the lesson map for it. Null until a unit has a video. */
+  onUnit?: (unit: BoardUnit | null) => void;
 };
 
-export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink }: Props) {
+/** The open unit as the controller's `unit` port and `onUnit` report it. */
+function boardUnitOf(u: KitUnit | null): BoardUnit | null {
+  return u ? { generationId: u.video?.id ?? null, part: u.part, title: u.video?.title ?? null } : null;
+}
+
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -248,6 +257,12 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
   const units = useMemo(() => kit?.units ?? [], [kit]);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const unit = units.find((u) => unitKey(u) === openKey) ?? units[0] ?? null;
+  // The host learns of the open unit by callback (S1 slice C) — the controller's
+  // `unit` port answers the same question on demand. `unit` is derived from the
+  // memoised units list, so this fires on a real switch, not on every render.
+  useEffect(() => {
+    onUnit?.(boardUnitOf(unit));
+  }, [onUnit, unit]);
 
   // The store. Local first; the flush is a mirror, and a failure there is the
   // store's problem to retry rather than something the lesson notices.
@@ -591,6 +606,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           }),
           stageMode: () => live.current.mode,
           endSession: () => live.current.end(),
+          unit: () => boardUnitOf(live.current.unit),
         },
         sink,
         { onMoving: setMoving },

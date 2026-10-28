@@ -73,7 +73,42 @@ export type RecapGround = {
    *  read handwriting from a stroke list, and a note that guessed would be
    *  worse than one that did not mention it. */
   pages: number;
+  /** S1 slice C: the Board moves SK made in this lesson (sk_actions, kind
+   *  "board", in order), and the questions it put up. Absent for a lesson SK
+   *  took no part in — the shape before slice C. */
+  moves?: SkMove[];
+  questionsAsked?: SkQuestion[];
 };
+
+/** One `sk_actions` row of kind "board", as the recap reads it. */
+export type SkActionLike = {
+  action: string;
+  params?: Record<string, unknown> | null;
+  ok?: boolean | null;
+  at?: string | null;
+  result?: Record<string, unknown> | null;
+};
+
+export type SkMove = {
+  /** ISO timestamp of the move. */
+  at: string;
+  /** "explain", "slide", "practise", … — the `board.` prefix stripped. */
+  move: string;
+  /** The audited params, bounded to the keys the note may use. */
+  args: Record<string, string | number>;
+  /** The move's one-line result, when the row carried one. */
+  summary?: string;
+};
+
+export type SkQuestion = {
+  q_id: string;
+  /** The question text, when it is known. The manifest pins a hash, not the
+   *  text, so today this is usually absent. */
+  prompt?: string | null;
+};
+
+export const MAX_MOVES = 24;
+export const MAX_QUESTIONS = 20;
 
 /** Six, as the plan says, so the prompt stays small. A lesson that touched more
  *  than six chapters is a revision lesson, and the first six carry it. */
@@ -178,11 +213,17 @@ export function buildGround(
   items: RecapItem[],
   facts: ChapterFacts[],
   pages: number,
+  /** S1 slice C: what SK did, from `sk_actions` rows of kind "board". */
+  sk?: { moves?: SkMove[]; questionsAsked?: SkQuestion[] } | null,
 ): RecapGround {
   const { chapters, revision } = chaptersShown(items);
   const byNum = new Map(facts.map((f) => [f.chapterNum, f]));
+  const moves = (sk?.moves ?? []).slice(0, MAX_MOVES);
+  const questionsAsked = (sk?.questionsAsked ?? []).slice(0, MAX_QUESTIONS);
 
   return {
+    ...(moves.length ? { moves } : {}),
+    ...(questionsAsked.length ? { questionsAsked } : {}),
     chapters: chapters.map((c) => {
       const f = byNum.get(c.chapterNum);
       const title = (f?.title ?? "").trim() || null;
@@ -200,6 +241,110 @@ export function buildGround(
     revision,
     pages: Number.isFinite(pages) && pages > 0 ? Math.floor(pages) : 1,
   };
+}
+
+// ── what SK did (S1 slice C) ─────────────────────────────────────────────────
+
+/** The params keys a move may carry into the note — names and counts, never
+ *  ids or indices the reader cannot use. */
+const MOVE_ARG_KEYS = ["concept", "a", "b", "heading", "n"] as const;
+const SUMMARY_MAX = 160;
+
+/**
+ * `sk_actions` rows of kind "board" → the moves SK made, in order. Only
+ * successful `board.*` rows count (a refused move taught nothing); params are
+ * reduced to the few keys the note may use; the compare move's nested a/b carry
+ * their concept names. Pure.
+ */
+export function skMoves(rows: SkActionLike[]): SkMove[] {
+  const out: SkMove[] = [];
+  const sorted = [...rows].sort((x, y) => String(x.at ?? "").localeCompare(String(y.at ?? "")));
+  for (const r of sorted) {
+    if (r.ok === false) continue;
+    if (typeof r.action !== "string" || !r.action.startsWith("board.")) continue;
+    const move = r.action.slice("board.".length);
+    if (!move) continue;
+    const p = (r.params && typeof r.params === "object" ? r.params : {}) as Record<string, unknown>;
+    const args: Record<string, string | number> = {};
+    for (const k of MOVE_ARG_KEYS) {
+      const v = p[k];
+      if (typeof v === "string" && v.trim()) args[k] = v.trim().slice(0, 120);
+      else if (typeof v === "number" && Number.isFinite(v)) args[k] = v;
+      else if (v && typeof v === "object" && typeof (v as { concept?: unknown }).concept === "string") args[k] = String((v as { concept: string }).concept).slice(0, 120);
+    }
+    const summary = typeof r.result?.summary === "string" ? r.result.summary.replace(/\s+/g, " ").trim().slice(0, SUMMARY_MAX) : "";
+    out.push({ at: String(r.at ?? ""), move, args, ...(summary ? { summary } : {}) });
+    if (out.length >= MAX_MOVES) break;
+  }
+  return out;
+}
+
+/**
+ * The questions SK put up: the q_ids `board.practise` / `board.walkthrough`
+ * rows were stamped with (the route stamps the items mapped to the current
+ * segment when the lesson map is ready). Each once, in order. Pure.
+ */
+export function skQuestions(rows: SkActionLike[]): SkQuestion[] {
+  const seen = new Set<string>();
+  const out: SkQuestion[] = [];
+  const sorted = [...rows].sort((x, y) => String(x.at ?? "").localeCompare(String(y.at ?? "")));
+  for (const r of sorted) {
+    if (r.ok === false) continue;
+    if (r.action !== "board.practise" && r.action !== "board.walkthrough") continue;
+    const p = (r.params && typeof r.params === "object" ? r.params : {}) as Record<string, unknown>;
+    const items = Array.isArray(p.items) ? p.items : [];
+    const prompts = Array.isArray(p.prompts) ? p.prompts : [];
+    items.forEach((q, i) => {
+      if (typeof q !== "string" || !q.trim() || seen.has(q)) return;
+      seen.add(q);
+      const prompt = typeof prompts[i] === "string" ? String(prompts[i]).slice(0, 300) : null;
+      out.push({ q_id: q.trim().slice(0, 40), ...(prompt ? { prompt } : {}) });
+    });
+    if (out.length >= MAX_QUESTIONS) break;
+  }
+  return out.slice(0, MAX_QUESTIONS);
+}
+
+/** "Showing slide 2: Red blood cells." → "Red blood cells" (the Board
+ *  capability's summary shape), else null. */
+function headingFromSummary(summary: string | undefined): string | null {
+  const m = /slide \d+(?:\s*\(([^)]+)\)|:\s*([^.؟]+))/iu.exec(summary ?? "");
+  const h = (m?.[1] ?? m?.[2] ?? "").trim();
+  return h || null;
+}
+
+/** The topics SK's moves were about — concept names first, then slide
+ *  headings — distinct, in order. Pure. */
+export function moveTopics(moves: SkMove[] | undefined): string[] {
+  const out: string[] = [];
+  for (const m of moves ?? []) {
+    const names = [m.args.concept, m.args.a, m.args.b].filter((v): v is string => typeof v === "string" && !!v);
+    if (!names.length && (m.move === "slide" || m.move === "explain" || m.move === "compare" || m.move === "segment")) {
+      const h = m.args.heading ?? headingFromSummary(m.summary);
+      if (typeof h === "string" && h) names.push(h);
+    }
+    for (const n of names) if (!out.includes(n)) out.push(n);
+  }
+  return out;
+}
+
+/** One line per move for the prompt — DATA about the lesson, never an instruction. */
+export function moveLines(g: RecapGround): string[] {
+  const moves = g.moves ?? [];
+  if (!moves.length) return [];
+  const lines = moves.map((m) => {
+    const bits: string[] = [];
+    if (m.args.concept) bits.push(`"${m.args.concept}"`);
+    if (m.args.a && m.args.b) bits.push(`"${m.args.a}" with "${m.args.b}"`);
+    if (m.args.heading) bits.push(String(m.args.heading));
+    if (typeof m.args.n === "number") bits.push(`${m.args.n} questions`);
+    const what = bits.length ? ` ${bits.join(" ")}` : "";
+    const how = m.summary ? ` — ${m.summary}` : "";
+    return `- ${m.move}${what}${how}`;
+  });
+  const qs = g.questionsAsked ?? [];
+  if (qs.length) lines.push(`- questions put to the class: ${qs.map((q) => (q.prompt ? `${q.q_id} (${q.prompt})` : q.q_id)).join("; ")}`);
+  return lines;
 }
 
 // ── what the note may never say ──────────────────────────────────────────────
@@ -353,9 +498,18 @@ const put = (t: string, vars: Record<string, string>): string =>
  */
 export function fallbackRecap(g: RecapGround, w: FallbackWords = FALLBACK_EN): string {
   const named = g.chapters.map((c) => c.title || c.label);
-  const topics = g.chapters.flatMap((c) => c.concepts).slice(0, 3);
+  // S1 slice C: what SK explained comes first — those are the moves she made
+  // by name — then the chapter's own concept list fills the rest.
+  const topics = [...new Set([...moveTopics(g.moves), ...g.chapters.flatMap((c) => c.concepts)])].slice(0, 3);
 
-  if (!named.length) return g.revision ? w.revisionSeveral : w.currentTopic;
+  if (!named.length) {
+    // No chapter, but SK taught something by name: say what.
+    if (topics.length) {
+      const focused = put(w.focusedOn, { list: topics.join(", ") });
+      if (!violations(focused).length) return focused;
+    }
+    return g.revision ? w.revisionSeveral : w.currentTopic;
+  }
 
   const list =
     named.length === 1
@@ -437,6 +591,12 @@ export function recapPrompt(
   }
   if (g.revision) {
     parts.push("--- The class also worked on revision material spanning several chapters. ---");
+  }
+  // S1 slice C: the moves SK made, as data inside the same quoted material —
+  // what the lesson dwelt on, so the note can name it; never a rule.
+  const moves = moveLines(g);
+  if (moves.length) {
+    parts.push("--- What SK did in this lesson (the moves made and questions asked, in order) ---", ...moves);
   }
   if (!parts.length) {
     parts.push("--- No chapter material is available for this lesson. ---");

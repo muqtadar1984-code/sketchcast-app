@@ -13,6 +13,12 @@ import {
   type RecapItem,
   type ChapterFacts,
   type RecapGround,
+  skMoves,
+  skQuestions,
+  moveLines,
+  moveTopics,
+  MAX_MOVES,
+  type SkActionLike,
 } from "@/utils/present/recap";
 
 const item = (over: Partial<RecapItem> = {}): RecapItem => ({
@@ -341,5 +347,90 @@ describe("the prompt", () => {
     // absence is what makes "stay general" a followable instruction.
     const { context } = recapPrompt({ chapters: [], revision: false, pages: 1 });
     expect(context).toContain("No chapter material is available");
+  });
+});
+
+// ── S1 slice C: what SK did in the lesson ───────────────────────────────────
+
+const row = (over: Partial<SkActionLike> & { action: string }): SkActionLike => ({ ok: true, at: "2026-10-28T08:00:00Z", params: {}, result: null, ...over });
+
+const ROWS: SkActionLike[] = [
+  row({ action: "board.intro", at: "2026-10-28T08:00:00Z" }),
+  row({ action: "board.explain", at: "2026-10-28T08:05:00Z", params: { concept: "red blood cells" }, result: { summary: "Showing slide 2: Red blood cells.", facts: 1 } }),
+  row({ action: "board.slide", at: "2026-10-28T08:02:00Z", params: { k: 2 }, result: { summary: "Showing slide 3: Nerve cells." } }),
+  row({ action: "board.compare", at: "2026-10-28T08:07:00Z", params: { a: "red blood cells", b: "nerve cells" }, result: { summary: "Slide 2 (Red blood cells) against slide 3 (Nerve cells)." } }),
+  row({ action: "board.practise", at: "2026-10-28T08:09:00Z", params: { n: 2, k: 1, segmentId: "s2", items: ["ws:q3", "ws:q4"] }, result: { summary: "2 practice questions on the roll." } }),
+  row({ action: "board.practise", at: "2026-10-28T08:12:00Z", ok: false, params: { n: 9, items: ["ws:q9"] } }),
+  row({ action: "board.walkthrough", at: "2026-10-28T08:13:00Z", params: { items: ["ws:q4", "ws:q1"], prompts: ["dup", "What does a nerve cell carry?"] } }),
+  row({ action: "navigate", at: "2026-10-28T08:14:00Z", params: { target: "board" } }),
+];
+
+describe("skMoves — sk_actions rows → the moves SK made", () => {
+  it("keeps successful board.* rows in time order, with the few args the note may use and the one-line summary", () => {
+    const m = skMoves(ROWS);
+    expect(m.map((x) => x.move)).toEqual(["intro", "slide", "explain", "compare", "practise", "walkthrough"]);
+    expect(m[2]).toEqual({ at: "2026-10-28T08:05:00Z", move: "explain", args: { concept: "red blood cells" }, summary: "Showing slide 2: Red blood cells." });
+    expect(m[3].args).toEqual({ a: "red blood cells", b: "nerve cells" });
+    expect(m[4].args).toEqual({ n: 2 }); // k, segmentId, items are not the note's business
+    expect(m[1].args).toEqual({}); // slide k carries no name of its own
+  });
+  it("nested compare a/b (the model path's shape) contribute their concept names; the list is capped", () => {
+    const m = skMoves([row({ action: "board.compare", params: { a: { k: 1, concept: "diffusion" }, b: { k: 3, concept: "osmosis" } } })]);
+    expect(m[0].args).toEqual({ a: "diffusion", b: "osmosis" });
+    const many = skMoves(Array.from({ length: 40 }, (_, i) => row({ action: "board.pause", at: `2026-10-28T08:${String(i).padStart(2, "0")}:00Z` })));
+    expect(many).toHaveLength(MAX_MOVES);
+  });
+  it("skQuestions: the stamped q_ids of successful practise/walkthrough rows, each once, with a prompt when one was recorded", () => {
+    expect(skQuestions(ROWS)).toEqual([{ q_id: "ws:q3" }, { q_id: "ws:q4" }, { q_id: "ws:q1", prompt: "What does a nerve cell carry?" }]);
+    expect(skQuestions([])).toEqual([]);
+  });
+  it("moveTopics: concept names first, then headings read off slide summaries, distinct", () => {
+    expect(moveTopics(skMoves(ROWS))).toEqual(["Nerve cells", "red blood cells", "nerve cells"]);
+    expect(moveTopics(undefined)).toEqual([]);
+  });
+});
+
+describe("the recap carries what SK did (slice C)", () => {
+  const sk = { moves: skMoves(ROWS), questionsAsked: skQuestions(ROWS) };
+  const facts: ChapterFacts[] = [{ chapterNum: 3, title: "Cells", concepts: ["cell membrane"], scriptText: "Cells are the units of life." }];
+
+  it("buildGround attaches moves and questions when there are any, and leaves the slice B shape alone when not", () => {
+    const g = buildGround([item({ chapterNum: 3 })], facts, 2, sk);
+    expect(g.moves).toHaveLength(6);
+    expect(g.questionsAsked).toEqual(sk.questionsAsked);
+    const bare = buildGround([item({ chapterNum: 3 })], facts, 2);
+    expect("moves" in bare).toBe(false);
+    expect("questionsAsked" in bare).toBe(false);
+    expect(buildGround([], facts, 1, { moves: [], questionsAsked: [] })).not.toHaveProperty("moves");
+  });
+
+  it("recapPrompt adds a 'What SK did in this lesson' paragraph of DATA lines inside the context, and the instructions are unchanged", () => {
+    const g = buildGround([item({ chapterNum: 3 })], facts, 2, sk);
+    const { instructions, context } = recapPrompt(g);
+    expect(instructions).toBe(recapPrompt(buildGround([item({ chapterNum: 3 })], facts, 2)).instructions);
+    expect(context).toContain("--- What SK did in this lesson (the moves made and questions asked, in order) ---");
+    expect(moveLines(g)).toEqual([
+      "- intro",
+      "- slide — Showing slide 3: Nerve cells.",
+      '- explain "red blood cells" — Showing slide 2: Red blood cells.',
+      '- compare "red blood cells" with "nerve cells" — Slide 2 (Red blood cells) against slide 3 (Nerve cells).',
+      "- practise 2 questions — 2 practice questions on the roll.",
+      "- walkthrough",
+      "- questions put to the class: ws:q3; ws:q4; ws:q1 (What does a nerve cell carry?)",
+    ]);
+    expect(context.indexOf("Chapter 4: Cells")).toBeLessThan(context.indexOf("What SK did"));
+    // No moves → no paragraph, byte-identical to before.
+    expect(recapPrompt(buildGround([item({ chapterNum: 3 })], facts, 2)).context).not.toContain("What SK did");
+  });
+
+  it("fallbackRecap names what SK explained before the chapter's own concepts, and alone when no chapter was shown", () => {
+    const g = buildGround([item({ chapterNum: 3 })], facts, 2, sk);
+    expect(fallbackRecap(g)).toBe("Worked through Cells. Focused on Nerve cells, red blood cells, nerve cells.");
+    const noChapter = buildGround([], [], 1, sk);
+    expect(fallbackRecap(noChapter)).toBe("Focused on Nerve cells, red blood cells, nerve cells.");
+    // A topic that names the machinery is still refused, as before.
+    const bad = buildGround([], [], 1, { moves: skMoves([row({ action: "board.explain", params: { concept: "the video signal" } })]) });
+    expect(fallbackRecap(bad)).toBe("Worked through the class's current topic.");
+    expect(fallbackRecap(buildGround([], [], 1))).toBe("Worked through the class's current topic.");
   });
 });

@@ -72,10 +72,10 @@ function fakeController() {
     pageDown: () => {
       calls.push(["pageDown"]);
     },
-    showQuestions: async (start = 0) => {
-      calls.push(["showQuestions", start]);
+    showQuestions: async (start = 0, count?: number) => {
+      calls.push(count === undefined ? ["showQuestions", start] : ["showQuestions", start, count]);
       st.questions = { generationId: "ws", index: start, total: 6 };
-      return { index: start, total: 6 };
+      return count === undefined ? { index: start, total: 6 } : { index: start, total: 6, shown: Math.min(count, 6 - start), of: 6 };
     },
     nextQuestion: async () => {
       calls.push(["nextQuestion"]);
@@ -91,8 +91,10 @@ function fakeController() {
       st.ended = true;
       return true;
     },
+    getUnit: () => unit,
   };
-  return { c, calls, st };
+  let unit: ReturnType<BoardController["getUnit"]> = { generationId: "gen-1", part: 1, title: "Cells" };
+  return { c, calls, st, setUnit: (u: typeof unit) => (unit = u) };
 }
 
 const KIT: KitManifestLike = {
@@ -154,10 +156,10 @@ describe("createBoardBridge — moves → controller calls", () => {
   let fc: ReturnType<typeof fakeController>;
   let manifest: BridgeManifest | null;
   let ctl: BoardController | null;
+  // No `generationId` dep: the unit comes from the controller's getUnit() (slice C).
   const bridge = () =>
     createBoardBridge({
       controller: () => ctl,
-      generationId: () => "gen-1",
       manifest: () => manifest,
       mapStatus: () => (manifest ? "ready" : "building"),
       pollMs: 250,
@@ -200,6 +202,17 @@ describe("createBoardBridge — moves → controller calls", () => {
     manifest = null;
     const s = bridge().state();
     expect(s).toEqual({ sessionId: "sess-1", t: 0, paused: true, rollPage: 0, generationId: "gen-1" });
+  });
+  it("unit(): the controller's getUnit() wins; the host's generationId dep is only a fallback", () => {
+    expect(bridge().unit()).toEqual({ generationId: "gen-1", part: 1, title: "Cells" });
+    fc.setUnit(null);
+    expect(bridge().unit()).toBeNull();
+    expect(bridge().state()?.generationId).toBeUndefined();
+    const withFallback = createBoardBridge({ controller: () => ctl, generationId: () => "gen-old", manifest: () => manifest, mapStatus: () => "ready" });
+    expect(withFallback.unit()).toEqual({ generationId: "gen-old", part: null, title: null });
+    expect(withFallback.state()?.generationId).toBe("gen-old");
+    fc.setUnit({ generationId: "gen-2", part: 2, title: null });
+    expect(withFallback.unit()).toEqual({ generationId: "gen-2", part: 2, title: null });
   });
 
   it("intro → seek(0) + play, leaves the video playing", async () => {
@@ -261,22 +274,27 @@ describe("createBoardBridge — moves → controller calls", () => {
     expect(await bridge().run("explain", { concept: "x" })).toEqual({ ok: false, summary: "I couldn't match that to a slide." });
     expect(fc.calls).toEqual([["slide", 1], ["slide", 1]]);
   });
-  it("practise n → showQuestions(first question of the current segment); n is advisory", async () => {
+  it("practise n → showQuestions(first question of the current segment, n): a window of n", async () => {
     fc.st.t = 60; // in s3
     const r = await bridge().run("practise", { n: 3 });
     expect(r.ok).toBe(true);
-    expect(fc.calls).toEqual([["showQuestions", 2]]);
-    expect(r.summary).toBe("Question 3 of 6 on the roll (3 asked for; use next/previous).");
+    expect(fc.calls).toEqual([["showQuestions", 2, 3]]);
+    expect(r.summary).toBe("Showing 3 of 6 questions (q3–q5).");
     // The server's segmentId wins over the playhead.
     await bridge().run("practise", { n: 2, segmentId: "s1" });
-    expect(fc.calls[1]).toEqual(["showQuestions", 0]);
+    expect(fc.calls[1]).toEqual(["showQuestions", 0, 2]);
+    // A window that runs past the set is as long as what is left.
+    const tail = await bridge().run("practise", { n: 5 });
+    expect(tail.summary).toBe("Showing 4 of 6 questions (q3–q6).");
+    // One question → a single id, no range.
+    expect((await bridge().run("practise", { n: 1, segmentId: "s1" })).summary).toBe("Showing 1 of 6 questions (q1).");
   });
-  it("practise without a manifest starts at the first question", async () => {
+  it("practise without a manifest starts at the first question (default 3)", async () => {
     manifest = null;
     await bridge().run("practise", {});
-    expect(fc.calls).toEqual([["showQuestions", 0]]);
+    expect(fc.calls).toEqual([["showQuestions", 0, 3]]);
   });
-  it("walkthrough → showQuestions(0)", async () => {
+  it("walkthrough → showQuestions(0), the whole set (no window)", async () => {
     expect(await bridge().run("walkthrough", {})).toEqual({ ok: true, summary: "Worksheet question 1 of 6 on the roll." });
     expect(fc.calls).toEqual([["showQuestions", 0]]);
   });
@@ -378,5 +396,73 @@ describe("loadManifest — slice A's contract, polled", () => {
       { sleep, now: () => t },
     );
     expect(r).toEqual({ status: "failed", reason: "timeout" });
+  });
+});
+
+describe("the segment stop survives a pause/resume pair (slice E's coordinator speaks mid-segment)", () => {
+  let fc: ReturnType<typeof fakeController>;
+  let manifest: BridgeManifest;
+  const bridge = () => createBoardBridge({ controller: () => fc.c, manifest: () => manifest, mapStatus: () => "ready", pollMs: 250 });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fc = fakeController();
+    manifest = toBridgeManifest(KIT, 1);
+  });
+  afterEach(() => vi.useRealTimers());
+  const pauses = () => fc.calls.filter((c) => c[0] === "pause").length;
+
+  it("segment → pause → resume → still stops at end_s", async () => {
+    const b = bridge();
+    await b.run("segment", { k: 1 }); // 20–50 s
+    fc.st.t = 30;
+    await b.run("pause", {});
+    expect(pauses()).toBe(1); // the explicit pause only
+    // Paused for a while: the watcher is idle, nothing fires.
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(pauses()).toBe(1);
+    await b.run("resume", {});
+    fc.st.t = 40;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(pauses()).toBe(1);
+    fc.st.t = 49.98;
+    await vi.advanceTimersByTimeAsync(300);
+    expect(pauses()).toBe(2); // the watcher's pause at end_s
+    expect(fc.st.paused).toBe(true);
+    // Reached: a later resume is a plain resume, no stop re-armed.
+    await b.run("resume", {});
+    fc.st.t = 70;
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(pauses()).toBe(2);
+  });
+  it("freeze / practise keep the stop for a later resume; a new segment, slide and intro replace it", async () => {
+    const b = bridge();
+    await b.run("segment", { k: 1 });
+    await b.run("freeze", {});
+    await b.run("practise", { n: 2 });
+    await b.run("resume", {});
+    fc.st.t = 49.99;
+    await vi.advanceTimersByTimeAsync(300);
+    expect(pauses()).toBe(1);
+    expect(fc.st.paused).toBe(true);
+    // slide replaces the target: a resume after it runs free.
+    await b.run("segment", { k: 0 }); // 0–20 s
+    await b.run("slide", { k: 2 });
+    await b.run("resume", {});
+    fc.st.t = 19.99;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(pauses()).toBe(1); // slide() in the fake does not call pause(); no watcher fired
+    // intro likewise.
+    await b.run("segment", { k: 0 });
+    await b.run("intro", {});
+    fc.st.t = 19.99;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(pauses()).toBe(1);
+  });
+  it("a plain resume with no segment move behind it arms nothing", async () => {
+    const b = bridge();
+    await b.run("resume", {});
+    fc.st.t = 49.99;
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(pauses()).toBe(0);
   });
 });

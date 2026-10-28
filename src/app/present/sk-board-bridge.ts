@@ -9,17 +9,26 @@
 //      headings/concepts so the SERVER can resolve "slide 4" / "explain
 //      diffusion" without a database read.
 //   2. `run(move, args)` — each SkBoardMove the server decided, mapped onto
-//      BoardController calls (src/app/present/board-controller.ts, merged M2,
-//      NOT modified here). The controller has no "play to end_s then pause",
-//      so `segment` seeks + resumes and a 250 ms poll of getState().t pauses
-//      at the segment's end.
+//      BoardController calls (src/app/present/board-controller.ts, M2 + the
+//      slice C ports `getUnit()` and `showQuestions(start, count)`). The
+//      controller has no "play to end_s then pause", so `segment` seeks +
+//      resumes and a 250 ms poll of getState().t pauses at the segment's end.
+//      The segment's end stays the active "stop at" target across a
+//      pause/resume pair (SK speaking mid-segment pauses the video and gives
+//      it back; the stop must survive that) until a seek-class move — intro,
+//      segment, slide/explain/compare, recap — replaces it.
+//      `practise n` opens a WINDOW of n questions from the first worksheet item
+//      mapped to the current segment; `walkthrough` opens the whole set.
+//
+// Which unit is open comes from the controller (`getUnit()`, S1 slice C) —
+// the bridge no longer infers it from the audit sink.
 //
 // The manifest adapter below is STRUCTURAL: slice A's `toBoardManifest` in
 // src/sk/manifest/board.ts replaces `toBridgeManifest` once both land; the
 // shape it produces (BoardManifest + ids/concepts/items) is what the bridge
 // consumes, and nothing else in this file knows the KitManifest.
 
-import type { BoardController, BoardManifest, ManifestSegment, VisualVerdict } from "./board-controller";
+import type { BoardController, BoardManifest, BoardUnit, ManifestSegment, VisualVerdict } from "./board-controller";
 import type { SkBoardMove, SkBoardState } from "@/sk/shell/types";
 
 // ── manifest adapter ────────────────────────────────────────────────────────
@@ -156,8 +165,9 @@ export async function loadManifest(
 
 export type BridgeDeps = {
   controller: () => BoardController | null;
-  /** The open unit's video generation id, or null before a lesson runs. */
-  generationId: () => string | null;
+  /** Optional fallback for the open unit's generation when the controller has
+   *  no `unit` port (an older host). The controller's `getUnit()` wins. */
+  generationId?: () => string | null;
   manifest: () => BridgeManifest | null;
   mapStatus: () => ManifestStatus;
   /** Polling cadence for the segment-end watcher. */
@@ -170,6 +180,8 @@ export type BridgeRun = { ok: boolean; summary: string; /** True when the move l
 export type SkBoardBridge = {
   state(): SkBoardState | undefined;
   status(): ManifestStatus;
+  /** The open unit, from the controller. */
+  unit(): BoardUnit | null;
   run(move: SkBoardMove, args: Record<string, unknown>): Promise<BridgeRun>;
   dispose(): void;
 };
@@ -210,17 +222,22 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
   const now = deps.now ?? (() => Date.now());
   let watcher: ReturnType<typeof setTimeout> | null = null;
   let watching = 0;
+  /** The segment end the video must stop at, kept across pause/resume. */
+  let stopAt: { endS: number; startS: number } | null = null;
 
-  const stopWatch = () => {
+  /** Stop the timer; `clearTarget` also forgets the stop (a seek-class move). */
+  const stopWatch = (clearTarget = true) => {
     watching++;
     if (watcher) clearTimeout(watcher);
     watcher = null;
+    if (clearTarget) stopAt = null;
   };
 
   /** Pause when the playhead reaches `endS` — or give up after the segment's
    *  own length twice over, so a stalled video never leaves a timer behind. */
   const watchUntil = (c: BoardController, endS: number, startS: number) => {
     stopWatch();
+    stopAt = { endS, startS };
     const id = watching;
     const deadline = now() + Math.max(5_000, (endS - startS) * 2_000 + 5_000);
     const tick = () => {
@@ -234,6 +251,7 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
           /* the Board's own pause failing is not the bridge's to report */
         }
         watcher = null;
+        stopAt = null; // reached: nothing left to stop at
         return;
       }
       watcher = setTimeout(tick, pollMs);
@@ -253,8 +271,18 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
     return { ok: true, k };
   };
 
+  /** The open unit: the controller's port first, the host's fallback second. */
+  const unitOf = (c: BoardController | null): BoardUnit | null => {
+    const u = c?.getUnit?.() ?? null;
+    if (u?.generationId) return u;
+    const g = deps.generationId?.() ?? null;
+    return g ? { generationId: g, part: u?.part ?? null, title: u?.title ?? null } : u;
+  };
+
   return {
     status: () => deps.mapStatus(),
+
+    unit: () => unitOf(deps.controller()),
 
     state() {
       const c = deps.controller();
@@ -263,7 +291,7 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
       if (st.ended) return undefined;
       const m = deps.manifest();
       const out: SkBoardState = { sessionId: st.sessionId, t: Math.round(st.t * 10) / 10, paused: st.paused, rollPage: st.page };
-      const g = deps.generationId();
+      const g = unitOf(c)?.generationId ?? null;
       if (g) out.generationId = g;
       if (m) {
         out.manifestId = m.manifestId;
@@ -316,24 +344,29 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
             return { ok: true, summary: `Slide ${kk.k + 1}${how ? ` ${how}` : ""}.` };
           }
           case "practise": {
-            stopWatch();
-            const n = intArg(a.n) ?? 3;
+            stopWatch(false);
+            const n = Math.max(1, intArg(a.n) ?? 3);
             const m = deps.manifest();
             const st = c.getState();
             const segId = typeof a.segmentId === "string" ? a.segmentId : m ? m.ids[segmentAt(m, st.t) ?? -1] : undefined;
             const start = practiseStart(m, segId);
-            const r = await c.showQuestions(start);
-            // The controller shows the set from `start` and pages one question
-            // at a time; it cannot cap the set at n, so n is advisory here.
-            return { ok: true, summary: `Question ${r.index + 1} of ${r.total} on the roll (${n} asked for; use next/previous).` };
+            // A window of n from the first worksheet question mapped to the
+            // current segment; next/previous stay inside it (slice C).
+            const r = await c.showQuestions(start, n);
+            const shown = r.shown ?? Math.min(n, r.total - start);
+            const of = r.of ?? r.total;
+            const range = shown > 1 ? `q${start + 1}–q${start + shown}` : `q${start + 1}`;
+            return { ok: true, summary: `Showing ${shown} of ${of} questions (${range}).` };
           }
           case "walkthrough": {
-            stopWatch();
+            stopWatch(false);
+            // The whole set, in order: no window.
             const r = await c.showQuestions(0);
             return { ok: true, summary: `Worksheet question 1 of ${r.total} on the roll.` };
           }
           case "freeze": {
-            stopWatch();
+            // The frame goes onto the roll; the segment's stop stays for a later resume.
+            stopWatch(false);
             await c.freeze();
             return { ok: true, summary: "Frame frozen onto the roll." };
           }
@@ -347,10 +380,13 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
           }
           case "resume": {
             await c.resume();
+            // Still inside a segment move: re-arm the same stop (slice E's
+            // coordinator pauses while SK speaks and resumes after).
+            if (stopAt) watchUntil(c, stopAt.endS, stopAt.startS);
             return { ok: true, summary: "Resumed.", plays: true };
           }
           case "pause": {
-            stopWatch();
+            stopWatch(false);
             c.pause();
             return { ok: true, summary: "Paused." };
           }
@@ -367,6 +403,6 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
       }
     },
 
-    dispose: stopWatch,
+    dispose: () => stopWatch(),
   };
 }

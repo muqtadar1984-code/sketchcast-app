@@ -9,6 +9,12 @@
  *     neither case is anything written beyond the token row.
  * The confirm entry is a test double appended to the real registry (slice D's
  * `assign` is not in this worktree).
+ * Slice C (teaching content): explain/compare with a READY manifest run ONE
+ * teaching call (no tools, the narration as a TEACHING block) → meta → tool →
+ * board → text → done grounded [move, "manifest"]; grounding strips a name not
+ * in the narration; a not-ready manifest makes NO model call; compare carries
+ * both narrations; Board rows are audited against the PRESENT session; practise
+ * is stamped with the q_ids mapped to the current segment.
  * Run: node node_modules/vitest/vitest.mjs run src/app/api/sk/shell/__tests__/turn-s1.test.ts
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,8 +27,14 @@ const mocks = vi.hoisted(() => ({
   createAdminClient: vi.fn(),
   cookies: {} as Record<string, string>,
   script: [] as unknown[],
+  /** Slice C: one script per provider CONSTRUCTION (the teaching call builds
+   *  its own provider); when empty every provider plays `script`. */
+  queue: [] as unknown[][],
   constructed: [] as string[],
   systems: [] as string[],
+  opts: [] as GenerateOpts[],
+  /** What readManifest answers (slice C). */
+  manifest: { status: "missing" } as unknown,
 }));
 vi.mock("@/utils/supabase/server", () => ({ createClient: mocks.createClient }));
 vi.mock("@/utils/supabase/admin", () => ({ createAdminClient: mocks.createAdminClient }));
@@ -33,11 +45,12 @@ vi.mock("@/utils/assistant/providers/anthropic", async () => {
   return {
     AnthropicProvider: class extends StubProvider {
       constructor(model: string) {
-        super(mocks.script as StubTurn[]);
+        super((mocks.queue.length ? mocks.queue.shift()! : mocks.script) as StubTurn[]);
         mocks.constructed.push(model);
       }
       async *stream(opts: GenerateOpts): AsyncGenerator<StreamEvent, void, void> {
         mocks.systems.push(opts.system);
+        mocks.opts.push(opts);
         yield* super.stream(opts);
       }
     },
@@ -67,10 +80,16 @@ vi.mock("@/sk/capabilities", async () => {
   return { ...real, REGISTRY: [...real.REGISTRY, testAssign] };
 });
 
+// Slice C: the manifest store answers what the test says; nothing else of it changes.
+vi.mock("@/sk/manifest/store", async () => {
+  const real = await vi.importActual<typeof import("@/sk/manifest/store")>("@/sk/manifest/store");
+  return { ...real, readManifest: async () => mocks.manifest };
+});
+
 import { POST } from "@/app/api/sk/shell/turn/route";
 import { SK_CANNOT_CONFIRM } from "@/sk/shell/types";
-import { BOARD_NOT_OPEN } from "@/sk/capabilities/board";
-import { SCHOOL_ID, TEACHER_ID, fakeAdmin, fakeSession, readEvents } from "@/sk/shell/__tests__/fixtures";
+import { BOARD_NOT_OPEN, BOARD_NO_MAP } from "@/sk/capabilities/board";
+import { SCHOOL_ID, TEACHER_ID, fakeAdmin, fakeManifest, fakeSession, readEvents } from "@/sk/shell/__tests__/fixtures";
 
 const ENV = ["FEATURE_PARENT_PORTAL", "FEATURE_SK", "SK_ROLES", "SK_ALLOWED_EMAILS", "FEATURE_SK_SHELL_ALL_SCHOOLS", "SK_SHELL_CONSUMER", "SK_SHELL_SECRET", "BOOK_CODE_SECRET", "FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_SCHOOL_ANALYTICS", "FEATURE_CATALOGUE_TAB", "SK_SHELL_MODEL", "SK_AUDIT", "PRESENT_ALLOWED_EMAILS"];
 const saved: Record<string, string | undefined> = {};
@@ -127,8 +146,11 @@ beforeEach(() => {
   process.env.SK_AUDIT = "db";
   mocks.cookies = { sc_hat: "teacher" };
   mocks.script = [];
+  mocks.queue = [];
   mocks.constructed = [];
   mocks.systems = [];
+  mocks.opts = [];
+  mocks.manifest = { status: "missing" };
   admin = fakeAdmin("school");
   mocks.createAdminClient.mockReturnValue(admin);
   session = fakeSession(tables(), { user: USER });
@@ -265,5 +287,153 @@ describe("confirm cards (§2.5, §8.2): the token is issued here, nothing is exe
     const ev = await readEvents(await POST(req(turn("assign the worksheet to 7B for Friday"))));
     expect(ev.find((e) => e.type === "confirm")).toBeUndefined();
     expect(ev.find((e) => e.type === "text")).toEqual({ type: "text", text: SK_CANNOT_CONFIRM });
+  });
+});
+
+// ── S1 slice C: the teaching content behind explain / compare ────────────────
+
+const NARRATION = {
+  s1: "Today we look at cells. The cell is the unit of life.",
+  s2: "Red blood cells carry oxygen using haemoglobin. They have no nucleus, which leaves room for 270 million haemoglobin molecules.",
+  s3: "Nerve cells carry electrical signals along a long axon to the muscles.",
+};
+const MANIFEST = fakeManifest(
+  [
+    { id: "s1", heading: "Introduction", narration: NARRATION.s1 },
+    { id: "s2", heading: "Red blood cells", points: ["Carry oxygen"], narration: NARRATION.s2 },
+    { id: "s3", heading: "Nerve cells", points: ["Carry signals"], narration: NARRATION.s3 },
+  ],
+  [
+    { id: "c1", name: "red blood cell", segmentIds: ["s2"] },
+    { id: "c2", name: "nerve cell", segmentIds: ["s3"] },
+  ],
+  [
+    { q_id: "ws:q1", source: "worksheet", segment_ids: ["s1"] },
+    { q_id: "quiz:q2", source: "quiz", segment_ids: ["s2"] },
+    { q_id: "ws:q3", source: "worksheet", segment_ids: ["s2"] },
+    { q_id: "ws:q4", source: "worksheet", segment_ids: ["s2", "s3"] },
+  ],
+);
+const READY = { status: "ready", manifest: MANIFEST, builtAt: "2026-10-28T00:00:00Z" };
+/** The user turn of a captured stream (the teaching question). */
+const lastText = (o: GenerateOpts): string => {
+  const m = o.messages.at(-1);
+  return m && "text" in m ? m.text : "";
+};
+
+describe("explain / compare with content (slice C)", () => {
+  it("explain by rules with a ready manifest → meta → tool → board → text → done grounded [board.explain, manifest], ONE model call with no tools", async () => {
+    mocks.manifest = READY;
+    mocks.script = [{ text: ["Red blood cells carry oxygen using haemoglobin. ", "Having no nucleus leaves room for 270 million haemoglobin molecules."] }];
+    const ev = await readEvents(await POST(req(turn("explain red blood cells"))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "board", "text", "done"]);
+    expect(ev[1]).toMatchObject({ type: "tool", name: "board.explain", ok: true });
+    expect(ev[2]).toMatchObject({ type: "board", move: "slide", args: { k: 1, heading: "Red blood cells", concept: "red blood cells" } });
+    expect(ev[3]).toEqual({ type: "text", text: "Red blood cells carry oxygen using haemoglobin. Having no nucleus leaves room for 270 million haemoglobin molecules." });
+    expect(ev[4]).toMatchObject({ type: "done", label: "grounded", sources: ["board.explain", "manifest"], usage: { inputTokens: 100, outputTokens: 50 } });
+    expect((ev[4] as { trimmed?: boolean }).trimmed).toBeUndefined();
+    // Exactly one provider, one stream, no tools, the narration as DATA in the system prompt.
+    expect(mocks.constructed).toHaveLength(1);
+    expect(mocks.opts).toHaveLength(1);
+    expect(mocks.opts[0].tools).toBeUndefined();
+    expect(mocks.opts[0].maxTokens).toBe(220);
+    expect(mocks.systems[0]).toContain("You are SK");
+    expect(mocks.systems[0]).toContain('<teaching data_only="true">');
+    expect(mocks.systems[0]).toContain("--- slide 2: Red blood cells ---");
+    expect(mocks.systems[0]).toContain(`narration: ${NARRATION.s2}`);
+    expect(mocks.systems[0]).not.toContain(NARRATION.s3);
+    expect(lastText(mocks.opts[0])).toBe('Explain "Red blood cells" to the class in 2–4 short sentences, in English, using only the narration in TEACHING. No headings, no lists.');
+    // The Board move is audited against the PRESENT session, not the Shell's.
+    const row = auditRows().find((r) => r.action === "board.explain");
+    expect(row).toMatchObject({ kind: "board", ok: true, session_id: "sess-1" });
+    expect((ev[0] as { sessionId: string }).sessionId).not.toBe("sess-1");
+  });
+
+  it("grounding strips a sentence whose name is not in the narration and marks the turn trimmed", async () => {
+    mocks.manifest = READY;
+    mocks.script = [{ text: ["Red blood cells carry oxygen using haemoglobin. ", "Dr Perutz worked this out in Cambridge."] }];
+    const ev = await readEvents(await POST(req(turn("explain red blood cells"))));
+    expect(ev.find((e) => e.type === "text")).toEqual({ type: "text", text: "Red blood cells carry oxygen using haemoglobin." });
+    expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "grounded", sources: ["board.explain", "manifest"], trimmed: true });
+  });
+
+  it("nothing of the model's text survives grounding → SK's own line, still grounded", async () => {
+    mocks.manifest = READY;
+    mocks.script = [{ text: ["Perutz solved it in Cambridge in 1959."] }];
+    const ev = await readEvents(await POST(req(turn("explain red blood cells"))));
+    expect(ev.find((e) => e.type === "text")).toEqual({ type: "text", text: "Let's look at Red blood cells." });
+    expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "grounded" });
+  });
+
+  it.each(["building", "stale", "missing", "failed"])("manifest %s → the say line + the no-map line, NO model call", async (status) => {
+    mocks.manifest = { status };
+    const ev = await readEvents(await POST(req(turn("explain red blood cells"))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "board", "text", "done"]);
+    expect(ev[3]).toEqual({ type: "text", text: `Let's look at Red blood cells. ${BOARD_NO_MAP}` });
+    expect(ev[4]).toMatchObject({ label: "grounded", sources: ["board.explain"] });
+    expect(mocks.constructed).toEqual([]);
+  });
+
+  it("compare carries BOTH segments' narration as [A] and [B] and asks for the differences", async () => {
+    mocks.manifest = READY;
+    mocks.script = [{ text: ["Red blood cells carry oxygen; nerve cells carry electrical signals along an axon."] }];
+    const ev = await readEvents(await POST(req(turn("compare red blood cells and nerve cells"))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "board", "text", "done"]);
+    expect(ev[1]).toMatchObject({ name: "board.compare", ok: true });
+    expect(ev[2]).toMatchObject({ type: "board", move: "slide", args: { k: 1, next: 2 } });
+    expect(ev[3]).toEqual({ type: "text", text: "Red blood cells carry oxygen; nerve cells carry electrical signals along an axon." });
+    expect(ev[4]).toMatchObject({ label: "grounded", sources: ["board.compare", "manifest"] });
+    expect(mocks.constructed).toHaveLength(1);
+    expect(mocks.systems[0]).toContain("--- [A] slide 2: Red blood cells");
+    expect(mocks.systems[0]).toContain("--- [B] slide 3: Nerve cells");
+    expect(mocks.systems[0]).toContain(`narration: ${NARRATION.s2}`);
+    expect(mocks.systems[0]).toContain(`narration: ${NARRATION.s3}`);
+    expect(lastText(mocks.opts[0])).toContain('Compare "Red blood cells" with "Nerve cells"');
+    expect(lastText(mocks.opts[0])).toContain("the differences, drawn only from the two narrations");
+  });
+
+  it("the MODEL choosing board.explain gets the narration-grounded text in place of its own (two providers: the turn's, then the teaching call's)", async () => {
+    mocks.manifest = READY;
+    mocks.queue = [
+      [{ toolCalls: [{ id: "c1", name: "board__explain", args: { concept: "red blood cells" } }] }, { text: ["Here is what the heading says."] }],
+      [{ text: ["Red blood cells carry oxygen using haemoglobin."] }],
+    ];
+    const ev = await readEvents(await POST(req(turn("I think they are lost on the red blood cells"))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "text", "board", "done"]);
+    expect(ev[1]).toMatchObject({ name: "board.explain", ok: true });
+    expect(ev[2]).toEqual({ type: "text", text: "Red blood cells carry oxygen using haemoglobin." });
+    expect(ev[3]).toMatchObject({ type: "board", move: "slide", args: { k: 1 } });
+    expect(ev[4]).toMatchObject({ label: "grounded", sources: ["board.explain", "manifest"], usage: { inputTokens: 300, outputTokens: 150 } });
+    expect(mocks.constructed).toHaveLength(2);
+    expect(mocks.opts.at(-1)?.tools).toBeUndefined();
+    expect(mocks.systems.at(-1)).toContain(`narration: ${NARRATION.s2}`);
+    expect(auditRows().find((r) => r.action === "board.explain")).toMatchObject({ session_id: "sess-1" });
+  });
+
+  it("without a generation on the Board state the slide move stands alone (slice B shape), no model", async () => {
+    mocks.manifest = READY;
+    const { generationId: _g, ...noGen } = BOARD;
+    void _g;
+    const ev = await readEvents(await POST(req(turn("explain red blood cells", { collector: { path: "/present", locale: "en", board: noGen } }))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "board", "done"]);
+    expect(ev[3]).toMatchObject({ label: "grounded", sources: ["board.explain"] });
+    expect(mocks.constructed).toEqual([]);
+  });
+});
+
+describe("practise is stamped with the q_ids mapped to the current segment (slice C)", () => {
+  it("ready manifest → the move and the audit row carry the first n worksheet-first items of the current segment", async () => {
+    mocks.manifest = READY;
+    const ev = await readEvents(await POST(req(turn("give them two questions"))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "board", "done"]);
+    expect(ev[2]).toEqual({ type: "board", move: "practise", args: { n: 2, k: 1, segmentId: "s2", items: ["ws:q3", "ws:q4"] }, say: "2 questions for the class." });
+    const row = auditRows().find((r) => r.action === "board.practise");
+    expect(row).toMatchObject({ session_id: "sess-1", params: { n: 2, items: ["ws:q3", "ws:q4"] } });
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("manifest not ready → the slice B move exactly, nothing stamped", async () => {
+    mocks.manifest = { status: "building" };
+    const ev = await readEvents(await POST(req(turn("give them two questions"))));
+    expect(ev[2]).toEqual({ type: "board", move: "practise", args: { n: 2, k: 1, segmentId: "s2" }, say: "2 questions for the class." });
   });
 });

@@ -234,3 +234,13 @@ it("the board entries are visible to the fixture teacher (hat teacher, Board fla
     expect(c.meta.flags?.every((f) => ctx.flags[f] === true)).toBe(true);
   }
 });
+
+describe("practise carries stamped q_ids (S1 slice C)", () => {
+  it("echoes bounded string items into the move and the facts; nothing else", async () => {
+    const r = await run("board.practise", { n: 2, items: ["ws:q3", "ws:q4", 7, "", "quiz:q2"] });
+    expect(r.board).toEqual({ move: "practise", args: { n: 2, k: 2, segmentId: "s3", items: ["ws:q3", "ws:q4", "quiz:q2"] }, say: "2 questions for the class." });
+    expect(r.facts).toEqual([{ n: 2, items: "ws:q3, ws:q4, quiz:q2" }]);
+    // No items → the slice B shape exactly.
+    expect((await run("board.practise", { n: 2, items: "ws:q3" })).board?.args).toEqual({ n: 2, k: 2, segmentId: "s3" });
+  });
+});

@@ -486,3 +486,64 @@ function portsOf(h: ReturnType<typeof harness>): BoardPorts {
     endSession: async () => true,
   };
 }
+
+// ── S1 slice C: the question window and the unit port ────────────────────────
+
+describe("showQuestions(start, count) — a window of the set (S1 slice C)", () => {
+  const tenQuestions = async () => ({
+    generationId: "gen-ws",
+    cards: Array.from({ length: 10 }, (_, i) => ({ source: "question" as const, heading: `Q${i + 1}`, body: [], index: i, total: 10 })),
+  });
+
+  it("show 3 of 10 from q3: next stops at the 3rd of the window, prev at its 1st; shown/of are reported", async () => {
+    const { c, cards } = harness({ loadQuestions: tenQuestions });
+    expect(await c.showQuestions(2, 3)).toEqual({ index: 2, total: 10, shown: 3, of: 10 });
+    expect(await c.nextQuestion()).toEqual({ index: 3, total: 10 });
+    expect(await c.nextQuestion()).toEqual({ index: 4, total: 10 });
+    // The edge holds — the teacher asked for three.
+    expect(await c.nextQuestion()).toEqual({ index: 4, total: 10 });
+    expect(await c.prevQuestion()).toEqual({ index: 3, total: 10 });
+    expect(await c.prevQuestion()).toEqual({ index: 2, total: 10 });
+    expect(await c.prevQuestion()).toEqual({ index: 2, total: 10 });
+    expect(cards.map((x) => x.heading)).toEqual(["Q3", "Q4", "Q5"]);
+    expect(c.getState().questions).toEqual({ generationId: "gen-ws", index: 2, total: 10 });
+    const shows = c.getState().actions.filter((a) => a.action === "board.show_questions");
+    expect(shows[0].params).toEqual({ start: 2, count: 3 });
+    expect(shows[0].result).toEqual({ index: 2, total: 10, shown: 3, of: 10 });
+  });
+
+  it("a window past the end is as long as what is left; without count the whole set is open (M2 shape)", async () => {
+    const { c } = harness({ loadQuestions: tenQuestions });
+    expect(await c.showQuestions(8, 5)).toEqual({ index: 8, total: 10, shown: 2, of: 10 });
+    expect(await c.nextQuestion()).toEqual({ index: 9, total: 10 });
+    expect(await c.nextQuestion()).toEqual({ index: 9, total: 10 });
+    // walkthrough after practise: no window, the old throw-at-the-end behaviour.
+    expect(await c.showQuestions(0)).toEqual({ index: 0, total: 10 });
+    for (let i = 0; i < 9; i++) await c.nextQuestion();
+    await expect(c.nextQuestion()).rejects.toThrow(RangeError);
+    expect(c.getState().actions.find((a) => a.action === "board.show_questions" && !("count" in a.params))?.params).toEqual({ start: 0 });
+  });
+
+  it("a start outside the set rejects; a non-positive count means no window", async () => {
+    const { c } = harness({ loadQuestions: tenQuestions });
+    await expect(c.showQuestions(10, 3)).rejects.toThrow(RangeError);
+    expect(await c.showQuestions(1, 0)).toEqual({ index: 1, total: 10 });
+  });
+});
+
+describe("getUnit() — the open unit from BoardSession's port (S1 slice C)", () => {
+  it("answers the port, and null when the host gave none", () => {
+    const { c } = harness({ unit: () => ({ generationId: "gen-video", part: 2, title: "Cells, part 2" }) });
+    expect(c.getUnit()).toEqual({ generationId: "gen-video", part: 2, title: "Cells, part 2" });
+    const { c: bare } = harness();
+    expect(bare.getUnit()).toBeNull();
+    const { c: none } = harness({ unit: () => null });
+    expect(none.getUnit()).toBeNull();
+  });
+  it("is not a move: nothing is recorded", () => {
+    const { c, sink } = harness({ unit: () => ({ generationId: "g", part: null, title: null }) });
+    c.getUnit();
+    expect(sink.records).toEqual([]);
+    expect(c.getState().actions).toEqual([]);
+  });
+});

@@ -110,6 +110,10 @@ export class MemorySkActionSink implements SkActionSink {
 
 export type QuestionSet = { generationId: string; cards: TextCard[] };
 
+/** The open unit, as the SK bridge needs it (S1 slice C): which video the
+ *  lesson map is for, which part of the chapter, and its title for the record. */
+export type BoardUnit = { generationId: string | null; part: number | null; title: string | null };
+
 /** What BoardSession gives the controller. Each port is a callback a Board
  *  button already uses. */
 export type BoardPorts = {
@@ -139,6 +143,9 @@ export type BoardPorts = {
   stageMode: () => StageMode;
   /** End lesson. Resolves true once the close landed. */
   endSession: () => Promise<boolean>;
+  /** S1 slice C (additive): the open unit — null before a lesson has one. A
+   *  port rather than a field because BoardSession switches units mid-lesson. */
+  unit?: () => BoardUnit | null;
 };
 
 export type BoardState = {
@@ -199,13 +206,23 @@ export type BoardController = {
   blankPage(): void;
   pageUp(): void;
   pageDown(): void;
-  /** Put the unit's real questions on the board, one page per question. */
-  showQuestions(start?: number): Promise<{ index: number; total: number }>;
+  /** Put the unit's real questions on the board, one page per question.
+   *  With `count` (S1 slice C) only that WINDOW of the set is open:
+   *  next/prev stay within [start, start+count) and the result also says how
+   *  many are in the window (`shown`) out of the set (`of`). Without `count`
+   *  the whole set is open from `start`, as in M2. */
+  showQuestions(start?: number, count?: number): Promise<QuestionsShown>;
   nextQuestion(): Promise<{ index: number; total: number }>;
   prevQuestion(): Promise<{ index: number; total: number }>;
   getState(): BoardState;
   endSession(): Promise<boolean>;
+  /** S1 slice C: the open unit, from BoardSession's `unit` port; null when the
+   *  host gave no port or no unit is open. */
+  getUnit(): BoardUnit | null;
 };
+
+/** `shown`/`of` are present only when a window (`count`) was asked for. */
+export type QuestionsShown = { index: number; total: number; shown?: number; of?: number };
 
 export type ControllerOptions = {
   now?: () => number;
@@ -304,7 +321,9 @@ export function createBoardController(
   const actions: SkActionRecord[] = [];
   let ended = false;
   let moving = 0;
-  let qs: (QuestionSet & { pages: Map<number, number>; current: number }) | null = null;
+  // `window` (S1 slice C) is the open subset [start, end) when practise(n)
+  // asked for n questions; null = the whole set, as M2 had it.
+  let qs: (QuestionSet & { pages: Map<number, number>; current: number; window: { start: number; end: number } | null }) | null = null;
 
   const setMoving = (delta: 1 | -1) => {
     const was = moving > 0;
@@ -462,6 +481,9 @@ export function createBoardController(
   /** Show question i of the open set: wind to its page if it has one, else push it. */
   const showQuestion = (i: number) => {
     if (!qs) throw new Error("no question set open");
+    // Inside a window the edges hold rather than throw: "next" on the last of
+    // three stays on the third — the teacher asked for three.
+    if (qs.window) i = Math.min(Math.max(i, qs.window.start), qs.window.end - 1);
     if (i < 0 || i >= qs.cards.length) throw new RangeError(`no question ${i + 1} (set has ${qs.cards.length})`);
     const page = qs.pages.get(i);
     if (page !== undefined) {
@@ -536,19 +558,25 @@ export function createBoardController(
         const w = ports.where();
         ports.goTo(Math.min(w.count - 1, w.page + 1));
       }),
-    showQuestions: (start = 0) =>
+    showQuestions: (start = 0, count?: number) =>
       run(
         "board.show_questions",
-        { start },
-        async () => {
+        count === undefined ? { start } : { start, count },
+        async (): Promise<QuestionsShown> => {
           if (!qs) {
             const set = await ports.loadQuestions();
             if (!set || !set.cards.length) throw new Error("no questions for this unit");
-            qs = { ...set, pages: new Map(), current: 0 };
+            qs = { ...set, pages: new Map(), current: 0, window: null };
           }
+          const total = qs.cards.length;
+          if (start < 0 || start >= total) throw new RangeError(`no question ${start + 1} (set has ${total})`);
+          // A new call re-sets the window: practise(3) after a walkthrough
+          // narrows, walkthrough after practise(3) widens again.
+          qs.window = count !== undefined && Number.isInteger(count) && count > 0 ? { start, end: Math.min(total, start + count) } : null;
           ports.pause();
           ports.setStage("away");
-          return showQuestion(start);
+          const r = showQuestion(start);
+          return qs.window ? { ...r, shown: qs.window.end - qs.window.start, of: total } : r;
         },
         (r) => ({ ...r }),
       ),
@@ -573,6 +601,7 @@ export function createBoardController(
         actions: actions.slice(),
       };
     },
+    getUnit: () => ports.unit?.() ?? null,
     endSession: () =>
       run("board.end_session", {}, async () => {
         if (!(await ports.endSession())) throw new Error("close did not land");

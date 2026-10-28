@@ -8,7 +8,7 @@ import type { TourCopy } from "@/tour/definitions";
 import SkLauncher from "@/app/dashboard/sk-launcher";
 import type { SkShellCopy } from "@/app/dashboard/sk-shell";
 import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
-import type { BoardController, SkActionSink } from "./board-controller";
+import type { BoardController, BoardUnit } from "./board-controller";
 import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
 import { docLabel, groupLabel, scopeLabel, unitLabel } from "./words";
 import type { Slot, TimetableShape } from "@/utils/timetable";
@@ -281,24 +281,14 @@ export default function PresentClient({
   // The BoardController is BoardSession's (merged M2) and arrives through a
   // callback ref into STATE, so the bridge is rebuilt (not mutated) when the
   // session starts or ends and nothing reads a ref during render.
-  // Which unit is open is BoardSession's private state: the controller does
-  // not expose it, so the sink BoardSession hands every audited move to tells
-  // us the generation each move was about, and before the first move the
-  // kit's first unit with a video is the open one (BoardSession's own default).
+  // Which unit is open is BoardSession's state: it reports every switch through
+  // `onUnit` (S1 slice C) and answers the controller's `getUnit()` on demand, so
+  // nothing here is inferred from the audit sink any more.
   const [controller, setController] = useState<BoardController | null>(null);
   const controllerRef = useCallback((c: BoardController | null) => setController(c), []);
-  const [openGen, setOpenGen] = useState<string | null>(null);
-  const skSink = useMemo<SkActionSink>(
-    () => ({
-      record(r) {
-        if (r.generation_id) setOpenGen((g) => (g === r.generation_id ? g : r.generation_id));
-      },
-    }),
-    [],
-  );
-  const firstVideoUnit = kit?.units.find((u) => u.video) ?? null;
-  const unitGen = session ? (openGen ?? firstVideoUnit?.video?.id ?? null) : null;
-  const unitPart = kit?.units.find((u) => u.video?.id === unitGen)?.part ?? null;
+  const [openUnit, setOpenUnit] = useState<BoardUnit | null>(null);
+  const unitGen = session ? (openUnit?.generationId ?? null) : null;
+  const unitPart = session ? (openUnit?.part ?? null) : null;
 
   // The lesson map for the open unit: fetched (and polled while building)
   // whenever the unit's video changes. The result carries the generation it
@@ -340,12 +330,11 @@ export default function PresentClient({
       sk
         ? createBoardBridge({
             controller: () => controller,
-            generationId: () => unitGen,
             manifest: () => manifest,
             mapStatus: () => mapStatus,
           })
         : null,
-    [sk, controller, unitGen, manifest, mapStatus],
+    [sk, controller, manifest, mapStatus],
   );
   useEffect(() => () => bridge?.dispose(), [bridge]);
 
@@ -415,7 +404,7 @@ export default function PresentClient({
       </header>
 
       {session ? (
-        <BoardSession session={session} kit={kit} t={t} onEnd={endSession} controllerRef={controllerRef} skSink={skSink} />
+        <BoardSession session={session} kit={kit} t={t} onEnd={endSession} controllerRef={controllerRef} onUnit={setOpenUnit} />
       ) : ready ? (
         <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">
           <aside className="grid content-start gap-2">

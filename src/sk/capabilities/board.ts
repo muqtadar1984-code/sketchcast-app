@@ -413,13 +413,26 @@ const PRACTISE: SkJsonSchema = {
   additionalProperties: false,
 };
 
+/** Slice C: the route may stamp the q_ids of the items mapped to the current
+ *  segment (from the Kit Manifest) into the args; they travel to the client
+ *  (the bridge opens the window at the first worksheet one) and sit in the
+ *  audit row the recap reads. Bounded, strings only. */
+function qIds(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.trim().slice(0, 40)).slice(0, PRACTISE_MAX) : [];
+}
+
 export const boardPractise: SkCapability = {
   meta: meta("practise", "Board: put n practice questions from the kit's worksheet on the roll, those mapped to the current segment first. Use for 'give them three questions'.", PRACTISE),
   handler: withBoard(false, (b, ctx, args) => {
     const raw = args.n === undefined ? 3 : intArg(args.n);
     if (raw === null || raw < 1) return { ok: false, summary: "How many questions?", error: "bad_n", facts: [] };
     const n = Math.min(raw, PRACTISE_MAX);
-    return ok(`${n} practice questions on the roll.`, { move: "practise", args: { n, k: b.k ?? null, segmentId: b.segmentId ?? null }, say: sayFor("practise", ctx.user.locale, { n }) }, [{ n }]);
+    const items = qIds(args.items);
+    return ok(
+      `${n} practice questions on the roll.`,
+      { move: "practise", args: { n, k: b.k ?? null, segmentId: b.segmentId ?? null, ...(items.length ? { items } : {}) }, say: sayFor("practise", ctx.user.locale, { n }) },
+      [{ n, ...(items.length ? { items: items.join(", ") } : {}) }],
+    );
   }),
 };
 

@@ -5,6 +5,7 @@
 
 import type { SkContext, SkHat, SkRole } from "../types";
 import { buildContext } from "../context";
+import type { KitManifest } from "@/sk/manifest/derive";
 
 export const TEACHER_ID = "11111111-1111-4111-8111-111111111111";
 export const OTHER_TEACHER_ID = "22222222-2222-4222-8222-222222222222";
@@ -128,4 +129,78 @@ export async function readEvents(res: Response): Promise<Array<Record<string, un
     .map((f) => f.trim())
     .filter((f) => f.startsWith("data: "))
     .map((f) => JSON.parse(f.slice(6)) as Record<string, unknown>);
+}
+
+// ── S1 slice C: a small Kit Manifest for the teaching tests ─────────────────
+
+export type FakeManifestSegment = { id: string; part?: number; heading: string; points?: string[]; narration: string; concept?: string | null };
+
+/** A ready KitManifest (slice A's shape) with the given segments in order (k =
+ *  index), concepts linked by name → segment ids, and a few items. Narration
+ *  and headings are the only content; everything else is the minimum the type
+ *  needs. */
+export function fakeManifest(
+  segments: FakeManifestSegment[],
+  concepts: Array<{ id: string; name: string; segmentIds: string[] }> = [],
+  items: Array<{ q_id: string; source: "worksheet" | "quiz"; segment_ids: string[]; availability?: "available" | "unavailable" }> = [],
+): KitManifest {
+  const segs = segments.map((s, k) => {
+    const part = s.part ?? 1;
+    const concept = concepts.find((c) => c.segmentIds.includes(s.id));
+    return {
+      key: `p${part}:${s.id}`,
+      segment_id: s.id,
+      part,
+      k,
+      start_s: k * 30,
+      end_s: k * 30 + 30,
+      slide_t: k * 30 + 29.9,
+      slide_k: k + 1,
+      type: "explain",
+      heading: s.heading,
+      points: s.points ?? [],
+      narration: s.narration,
+      concept_slug: null,
+      assets: [],
+      video_path: `owner/gen-1/part${part}.mp4`,
+      concept: {
+        concept_id: s.concept === null ? null : (s.concept ?? concept?.id ?? null),
+        secondary: [],
+        method: "heading" as const,
+        confidence: 1,
+        availability: (s.concept === null ? "unavailable" : "available") as "available" | "unavailable",
+      },
+      visual: { status: "distinct" as const, show: "frame" as const, reason: "test", judged_by: { model: null, prompt_version: null } },
+    };
+  });
+  return {
+    schema: "sk-kit-manifest/m1",
+    manifest_id: "man-1",
+    generation_id: "gen-1",
+    book_id: null,
+    chapter_ref: null,
+    article_id: null,
+    parts: [...new Set(segs.map((s) => s.part))],
+    language: "en",
+    format_version: 3,
+    pinned: { script_ids: [], video_manifest_ids: [], format_version: 3, artifact_paths: [], artifacts_hash: "h" },
+    completeness: { video: "ok", script: "ok", questions: items.length ? "ok" : "none", concepts: concepts.length ? "ok" : "none", format_version: 3 },
+    moves: { intro: "available", segment: "available", slide: "available", practise: "available", walkthrough: "available", explain: "available", remediate: "available" },
+    segments: segs,
+    concepts: concepts.map((c) => ({ concept_id: c.id, name: c.name, definition: "", segment_ids: c.segmentIds })),
+    items: items.map((i) => ({
+      q_id: i.q_id,
+      source: i.source,
+      generation_id: i.source === "worksheet" ? "ws-1" : "qz-1",
+      type: "short",
+      prompt_hash: "p",
+      concept_ids: [],
+      segment_ids: i.segment_ids.map((id) => segs.find((s) => s.segment_id === id)?.key ?? id),
+      method: "model",
+      confidence: 0.9,
+      availability: i.availability ?? "available",
+    })),
+    retrieval: { fts: "chapter_grounding.script_text" },
+    derived_by: { model: null, prompt_versions: [], at: "2026-10-28T00:00:00Z" },
+  };
 }
