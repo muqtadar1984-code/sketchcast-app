@@ -1,27 +1,38 @@
 import Link from "next/link";
 import { canOn } from "@/utils/books-access";
-import { RUNNABLE_STAGES } from "@/utils/books/stages";
+import { PIPELINE, runnableStage } from "@/utils/books/stages";
 import { estimateRun, listBookRuns, runnerConfig } from "@/utils/books/runs";
-import { fixturePath } from "@/utils/books/store";
+import { fixturePath, listStages } from "@/utils/books/store";
+import type { Run } from "@/utils/books/types";
 import { loadBook } from "../load";
 import { Card, Chip, Empty, day, usd } from "../../ui";
 import RunForm from "./run-form";
 
 export const dynamic = "force-dynamic";
 
-// /books/[slug]/runs — start a stage, and every run started from the app or a
-// terminal, newest first. A run executes on the books runner (one AWS Fargate
-// task per run); this page only queues, watches and records (R1, S1).
+const LAYER = { plan: "Plan", produce: "Produce", polish: "Polish" } as const;
+const COMES = { S3: "comes with drafting on the server (S3)", S4: "comes with approvals and compile (S4)", R2: "comes with planning (R2)", R3: "comes with the editor (R3)" };
+
+// /books/[slug]/runs — the pipeline: every stage of making a book, in order,
+// what this book has done at each, and Run for the stages the books runner can
+// carry out today. Below, every run started from the app or a terminal. A run
+// executes on the books runner (one AWS Fargate task per run); this page only
+// queues, watches and records (R1).
 export default async function RunsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { member, work } = await loadBook(slug);
-  const runs = await listBookRuns(work.uid);
-  const estimates = await Promise.all(
-    RUNNABLE_STAGES.map(async (s) => {
-      const one = await estimateRun(work.uid, s, Object.fromEntries(s.params.map((p) => [p.key, p.key === "last" ? 1 : p.default])));
-      return { perChapter: one.usd, basis: one.basis };
-    }),
+  const [runs, bookStages] = await Promise.all([listBookRuns(work.uid), listStages(work.uid)]);
+  const stageOf = new Map(bookStages.map((s) => [s.key, s]));
+  const runnable = [...new Set(PIPELINE.flatMap((p) => p.run))].map((k) => runnableStage(k)!).filter(Boolean);
+  const estimates = new Map(
+    await Promise.all(
+      runnable.map(async (s) => {
+        const one = await estimateRun(work.uid, s, Object.fromEntries(s.params.map((p) => [p.key, p.key === "last" ? 1 : p.default])));
+        return [s.key, one] as const;
+      }),
+    ),
   );
+  const lastRun = (keys: string[]): Run | undefined => runs.find((r) => keys.includes(r.stage_key));
   const configured = !!runnerConfig() || !!fixturePath();
 
   return (
@@ -31,14 +42,51 @@ export default async function RunsPage({ params }: { params: Promise<{ slug: str
           The books runner is not set up yet: a run you start is recorded and waits in the queue until it is.
         </p>
       )}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {RUNNABLE_STAGES.map((s, i) => (
-          <Card key={s.key} title={s.title}>
-            <p className="text-sm text-[#5F5A4E] mb-3">{s.summary}</p>
-            <RunForm slug={slug} stage={s} perChapterUsd={estimates[i].perChapter} basis={estimates[i].basis} allowed={canOn(member, work.uid, s.action)} />
-          </Card>
-        ))}
-      </div>
+
+      <Card title="Pipeline">
+        <ol className="divide-y divide-[#EFE8D8]">
+          {PIPELINE.map((p, i) => {
+            const before = p.book.map((k) => stageOf.get(k)).filter((s) => !!s);
+            const last = lastRun(p.run);
+            const layerStart = i === 0 || PIPELINE[i - 1].layer !== p.layer;
+            return (
+              <li key={p.key} className="py-3">
+                {layerStart && <p className="text-[11px] uppercase tracking-wider text-[#9A9483] mb-2">{LAYER[p.layer]}</p>}
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-medium">{p.title}</h3>
+                  {p.run.length ? <Chip label="runs from the app" tone="done" /> : <span className="text-xs text-[#7A7363]">{p.comes ? COMES[p.comes] : ""}</span>}
+                </div>
+                <p className="text-sm text-[#5F5A4E] mt-0.5">{p.does}</p>
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#7A7363]">
+                  {before.map((s) => (
+                    <span key={s!.key}>
+                      This book: {s!.title} · {s!.status}
+                      {s!.finished_on ? ` · ${day(s!.finished_on)}` : ""}
+                    </span>
+                  ))}
+                  {last && (
+                    <Link href={`/books/${slug}/runs/${last.id}`} className="underline hover:text-[#1F2A24]">
+                      Last run #{last.id}: {last.status}
+                      {last.usd !== null && last.usd !== undefined ? ` · ${usd(Number(last.usd))}` : ""} · {day(last.created_at)}
+                    </Link>
+                  )}
+                </div>
+                {p.run.map((k) => {
+                  const s = runnableStage(k)!;
+                  const est = estimates.get(k)!;
+                  return (
+                    <details key={k} className="mt-2 rounded-lg border border-[#EFE8D8] bg-[#FDFBF6] px-3 py-2">
+                      <summary className="cursor-pointer text-sm font-medium">Run: {s.title}</summary>
+                      <p className="text-sm text-[#5F5A4E] my-2">{s.summary}</p>
+                      <RunForm slug={slug} stage={s} perChapterUsd={est.usd} basis={est.basis} allowed={canOn(member, work.uid, s.action)} />
+                    </details>
+                  );
+                })}
+              </li>
+            );
+          })}
+        </ol>
+      </Card>
 
       <Card title="Runs">
         {runs.length === 0 ? (

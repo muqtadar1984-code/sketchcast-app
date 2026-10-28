@@ -3,13 +3,36 @@ import { listApprovals, listChapterSummaries } from "@/utils/books/store";
 import { loadBook, pickRevision } from "../load";
 import { approvalFor, latestGateD } from "../approval";
 import RevisionPicker from "../revision-picker";
+import ChapterBoard from "./board";
 import { Card, Chip } from "../../ui";
 
 // /books/[slug]/chapters?rev= — the book's chapters at one revision.
+// /books/[slug]/chapters?view=board — the chapter board: each chapter's way through the pipeline.
 export default async function ChaptersPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
   const sp = await searchParams;
   const { work, revisions } = await loadBook(slug);
+  const board = sp.view === "board";
+  const toggle = (
+    <div className="flex gap-1.5 text-xs">
+      {[["Table", `/books/${slug}/chapters`, !board], ["Board", `/books/${slug}/chapters?view=board`, board]].map(([label, href, on]) => (
+        <Link key={String(label)} href={String(href)} aria-current={on ? "page" : undefined}
+          className={`rounded-full border px-2.5 py-0.5 ${on ? "border-[#B8862F] bg-[#B8862F] text-white" : "border-[#E4DCC8] bg-white"}`}>
+          {label}
+        </Link>
+      ))}
+    </div>
+  );
+  if (board) {
+    return (
+      <div className="space-y-4">
+        {toggle}
+        <Card>
+          <ChapterBoard slug={slug} work={work} revisions={revisions} />
+        </Card>
+      </div>
+    );
+  }
   const rev = pickRevision(work, revisions, sp.rev);
   const [all, approvals] = await Promise.all([listChapterSummaries(work.uid), listApprovals(work.uid)]);
   const prev = revisions[revisions.findIndex((r) => r.key === rev.key) - 1];
@@ -18,6 +41,7 @@ export default async function ChaptersPage({ params, searchParams }: { params: P
 
   return (
     <div className="space-y-4">
+      {toggle}
       <RevisionPicker revisions={revisions} active={rev.key} hrefFor={(k) => `/books/${slug}/chapters?rev=${encodeURIComponent(k)}`} />
       {rev.summary && <p className="text-sm text-[#5F5A4E]">{rev.summary}</p>}
       <Card>

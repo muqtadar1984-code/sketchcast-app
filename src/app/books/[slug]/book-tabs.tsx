@@ -10,7 +10,7 @@ const TABS = [
   { href: "/findings", label: "Findings" },
   { href: "/files", label: "Files" },
   { href: "/costs", label: "Costs" },
-  { href: "/runs", label: "Runs" },
+  { href: "/runs", label: "Pipeline" },
 ];
 
 export default function BookTabs({ slug }: { slug: string }) {
