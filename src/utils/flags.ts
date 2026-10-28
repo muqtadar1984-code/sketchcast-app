@@ -548,3 +548,65 @@ export function skUserAllowed(user: SkGateUser | null | undefined): boolean {
   const e = (user.email ?? "").trim().toLowerCase();
   return !!e && allow.includes(e);
 }
+
+/**
+ * SK Shell — the portal-wide companion (Final Plan 2026-10-28 §2.1, stage S0).
+ * Three gates, all of which must pass (§6: "behind FEATURE_SK + SK_ROLES + a
+ * per-school opt-in"):
+ *   1. FEATURE_SK=true (skEnabled) — the master switch shared with /api/sk.
+ *   2. SK_ROLES — comma list of profile roles the Shell is on for; default
+ *      "teacher" (the first role, §1). "school_admin" and "coordinator" come
+ *      with S5, "student" with S3, "parent" with S4.
+ *   3. Tenant opt-in: a school user needs schools.config {"sk_shell": true}
+ *      (or the global FEATURE_SK_SHELL_ALL_SCHOOLS=true); a user with no school
+ *      needs SK_SHELL_CONSUMER=true. A VERIFIED address on SK_ALLOWED_EMAILS
+ *      skips gate 3 (staff testing on any tenant) but never gates 1–2; when the
+ *      allow-list is set, anyone not on it is out regardless (skUserAllowed).
+ * Pure decision in skShellDecision() so the matrix is unit-tested; the async
+ * wrapper only fetches the school config through the caller's own session.
+ */
+export function skShellRoles(): string[] {
+  const raw = (process.env.SK_ROLES ?? "teacher").split(",").map((r) => r.trim().toLowerCase()).filter(Boolean);
+  return raw.length ? raw : ["teacher"];
+}
+
+export type SkShellDecisionInput = {
+  role: string | null | undefined;
+  user: SkGateUser | null | undefined;
+  schoolId: string | null | undefined;
+  /** schools.config.sk_shell for the user's school, or null when unknown/none. */
+  schoolOptIn: boolean | null;
+};
+export type SkShellDecision = { on: boolean; reason: "ok" | "flag_off" | "role_off" | "not_allowed" | "school_opt_out" | "consumer_off" };
+
+export function skShellDecision(input: SkShellDecisionInput): SkShellDecision {
+  if (!skEnabled()) return { on: false, reason: "flag_off" };
+  const role = (input.role ?? "").toLowerCase();
+  if (!skShellRoles().includes(role)) return { on: false, reason: "role_off" };
+  if (!skUserAllowed(input.user)) return { on: false, reason: "not_allowed" };
+  // On the allow-list (and the list is in force) → tenant opt-in is bypassed.
+  if (skAllowedEmails().length) return { on: true, reason: "ok" };
+  if (input.schoolId) {
+    if (process.env.FEATURE_SK_SHELL_ALL_SCHOOLS === "true" || input.schoolOptIn === true) return { on: true, reason: "ok" };
+    return { on: false, reason: "school_opt_out" };
+  }
+  if (process.env.SK_SHELL_CONSUMER === "true") return { on: true, reason: "ok" };
+  return { on: false, reason: "consumer_off" };
+}
+
+export async function skShellEnabledFor(
+  supabase: SupabaseClient,
+  user: SkGateUser | null | undefined,
+  role: string | null | undefined,
+  schoolId: string | null | undefined,
+): Promise<boolean> {
+  let schoolOptIn: boolean | null = null;
+  if (schoolId && skEnabled() && !skAllowedEmails().length) {
+    const { data, error } = await supabase.from("schools").select("config").eq("id", schoolId).maybeSingle();
+    if (!error) {
+      const cfg = (data?.config ?? null) as { sk_shell?: unknown } | null;
+      schoolOptIn = cfg?.sk_shell === true;
+    }
+  }
+  return skShellDecision({ role, user, schoolId, schoolOptIn }).on;
+}
