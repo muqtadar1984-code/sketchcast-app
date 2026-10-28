@@ -37,7 +37,8 @@ create table if not exists public.pub_run_steps (
   started_at      timestamptz,
   finished_at     timestamptz,
   error           text,
-  unique (run_id, chapter, step)
+  -- a whole-book step has chapter null; it must still be ONE row, so the runner's upsert updates it
+  unique nulls not distinct (run_id, chapter, step)
 );
 
 -- ── pub_run_events: append-only log the Runs page polls ───────────────────────
