@@ -87,3 +87,19 @@ describe("groundingCheck", () => {
     expect(s.has("due")).toBe(true);
   });
 });
+
+describe("groundingCheck — percent tolerance and dropped sentences (live finding 2026-10-28)", () => {
+  const facts = [{ done: 1, completionPct: 2, assigned: 45 }, "9 at risk: Aisha Khan (5A) — 20% completion"];
+  it("accepts a number with or without its percent sign when the tools carry the other form", () => {
+    const v = groundingCheck("1 of 45 is done (2%). Aisha Khan is at 20 percent.", facts, "how are my classes");
+    expect(v.ok).toBe(true);
+    expect(v.dropped).toEqual([]);
+  });
+  it("reports exactly the dropped sentences so a false positive can be diagnosed from the logs", () => {
+    const v = groundingCheck("1 of 45 is done (2%). Twelve learners scored 99% today. Aisha Khan is at 20%.", facts, "q");
+    expect(v.ok).toBe(false);
+    expect(v.unsupported).toEqual(["99%"]);
+    expect(v.dropped).toEqual(["Twelve learners scored 99% today."]);
+    expect(v.text).toBe("1 of 45 is done (2%). Aisha Khan is at 20%.");
+  });
+});

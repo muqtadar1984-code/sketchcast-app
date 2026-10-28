@@ -256,9 +256,15 @@ export async function POST(request: Request) {
         const productive = trace.filter((t) => (t.result.facts?.length ?? 0) > 0 || !!t.result.navigate || (t.result.entities?.length ?? 0) > 0);
         const support = trace.flatMap((t) => [t.result.summary, ...(t.result.facts ?? [])]);
         const verdict = groundingCheck(full, support, body.text);
+        if (!verdict.ok) {
+          // Server-side only: which tokens failed and what was dropped, so a
+          // false positive can be diagnosed from the runtime logs (2026-10-28).
+          console.info("sk-shell.turn grounding", JSON.stringify({ turnId: body.turnId, tools: trace.map((t) => t.name), unsupported: verdict.unsupported, dropped: verdict.dropped }));
+        }
         const navHit = [...trace].reverse().find((t) => t.result.ok && t.result.navigate)?.result.navigate;
         let text: string;
         let label: Extract<SkTurnEvent, { type: "done" }>["label"];
+        let trimmed = false;
         if (trace.length && !productive.length) {
           text = SK_NOTHING_ON_THAT;
           label = "declined";
@@ -269,8 +275,11 @@ export async function POST(request: Request) {
           text = full.trim();
           label = navHit ? "navigation" : "grounded";
         } else if (verdict.text) {
+          // What the user sees is only the supported sentences, so the shown
+          // text IS grounded; `trimmed` records that something was dropped.
           text = verdict.text;
-          label = "supplementary";
+          label = navHit ? "navigation" : "grounded";
+          trimmed = true;
         } else {
           text = navHit ? `Opening ${navHit.label}.` : SK_NOTHING_ON_THAT;
           label = navHit ? "navigation" : "declined";
@@ -279,7 +288,7 @@ export async function POST(request: Request) {
         const entities = trace.flatMap((t) => t.result.entities ?? []);
         send({ type: "text", text });
         if (navHit) send({ type: "navigate", path: navHit.path, label: navHit.label });
-        done({ sources, label, ...(usage ? { usage } : {}) }, text, entities);
+        done({ sources, label, ...(usage ? { usage } : {}), ...(trimmed ? { trimmed } : {}) }, text, entities);
         finish();
       } catch (e) {
         if (!abort.signal.aborted) {

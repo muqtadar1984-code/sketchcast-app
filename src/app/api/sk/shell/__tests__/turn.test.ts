@@ -217,14 +217,27 @@ describe("model path + grounding", () => {
     expect(ev[2]).toEqual({ type: "text", text: "Yes — 7B is one of your classes." });
     expect(ev[3]).toMatchObject({ label: "grounded", sources: ["context.resolve"] });
   });
-  it("a partly invented answer is trimmed to its supported sentences and labelled supplementary", async () => {
+  it("a partly invented answer is trimmed to its supported sentences: still grounded, flagged trimmed", async () => {
     mocks.script = [
       { toolCalls: [{ id: "c1", name: "context.resolve", args: { query: "7B", kind: "class" } }] },
       { text: ["7B is your class. It has 31 learners and Ahmad Zaki is top."] },
     ];
     const ev = await readEvents(await POST(req(turn("tell me about 7B"))));
     expect(ev.find((e) => e.type === "text")).toEqual({ type: "text", text: "7B is your class." });
-    expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "supplementary", sources: ["context.resolve"] });
+    // The shown text is fully supported, so the label describes what the user
+    // sees; `trimmed` says a sentence was dropped (2026-10-28 live finding:
+    // a fully tool-backed answer was badged "General knowledge").
+    expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "grounded", trimmed: true, sources: ["context.resolve"] });
+  });
+  it("a fully supported answer carries no trimmed flag", async () => {
+    mocks.script = [
+      { toolCalls: [{ id: "c1", name: "context.resolve", args: { query: "7B", kind: "class" } }] },
+      { text: ["7B is your class."] },
+    ];
+    const ev = await readEvents(await POST(req(turn("tell me about 7B"))));
+    const d = ev.find((e) => e.type === "done") as { label: string; trimmed?: boolean };
+    expect(d.label).toBe("grounded");
+    expect(d.trimmed).toBeUndefined();
   });
   it("a tool that returned nothing → SK_NOTHING_ON_THAT even when the model narrates", async () => {
     mocks.script = [

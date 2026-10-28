@@ -334,7 +334,8 @@ describe("S0 acceptance on a seeded class", () => {
     expect(text).not.toContain("Farah");
     expect(text).not.toMatch(/\b12\b/);
     expect(text).toBe("3 of 5 finished.");
-    expect(doneOf(ev)).toMatchObject({ label: "supplementary", sources: ["assignments.status"] });
+    // What remains is fully tool-backed → grounded; `trimmed` records the drop.
+    expect(doneOf(ev)).toMatchObject({ label: "grounded", trimmed: true, sources: ["assignments.status"] });
     // The invariant holds on what was spoken: no token absent from the facts survives.
     assertTraceableToTools(text);
   });
