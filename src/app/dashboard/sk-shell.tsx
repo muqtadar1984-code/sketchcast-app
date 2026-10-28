@@ -14,17 +14,26 @@
 //   narration.ts     — §4.6: the intro script and its abortable runner
 //   memory-store.ts  — S1: the memory blob across pages (sessionStorage)
 //   confirm.ts       — S1 §9.2: when a bare yes/no answers a confirm card
+//   speech.ts        — S1 slice E: SK's voice — which provider (Polly when the
+//                      server allows, the browser otherwise), the video paused
+//                      while SK speaks and given back after, barge-in
 // S1 adds the Board: on /present the launcher hands in a bridge
 // (src/app/present/sk-board-bridge.ts) whose state rides with every turn and
 // which performs the `board` events the server decides; and confirm cards,
 // whose token goes back to /api/sk/act by click or spoken yes.
 //
-// Voice reuses the Assistant's browser adapter (StreamSpeaker / startDictation)
-// so a hosted TTS/STT swap later is one module, not two panels.
+// Voice: SK speaks through the SpeechProvider seam (src/sk/speech) behind the
+// coordinator; dictation stays on the Assistant's browser adapter
+// (startDictation) so a hosted STT swap later is one module, not two panels.
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StreamSpeaker, micSupported, pageSpeechLang, startDictation } from "@/utils/assistant/voice-client";
+import { micSupported, pageSpeechLang, startDictation } from "@/utils/assistant/voice-client";
+import { createSpeechCoordinator, speechMode, type SpeechCoordinator } from "@/sk/shell/client/speech";
+import { BrowserSpeechProvider } from "@/sk/speech/browser";
+import { PollyClientSpeechProvider } from "@/sk/speech/polly-client";
+import { pollyVoiceFor } from "@/sk/speech/polly-marks";
+import { pickBrowserVoice, readRigChoice, voiceGenderForChoice } from "@/sk/board/avatar";
 import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
@@ -164,7 +173,7 @@ export default function SkShell({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const speakerRef = useRef<StreamSpeaker | null>(null);
+  const speechRef = useRef<SpeechCoordinator | null>(null);
   const turnRef = useRef<AbortController | null>(null);
   const narrationRef = useRef<AbortController | null>(null);
   const memoryRef = useRef<string | undefined>(undefined);
@@ -190,6 +199,7 @@ export default function SkShell({
       const hf = readFlag(LS_HANDS_FREE, false);
       setReadAloud(ra);
       readAloudRef.current = ra;
+      speechRef.current?.setEnabled(ra);
       setHandsFree(hf);
       handsFreeRef.current = hf;
     }, 0);
@@ -221,6 +231,56 @@ export default function SkShell({
   useEffect(() => {
     cardsRef.current = cards;
   }, [cards]);
+
+  // ── SK's voice (§2.6 lifecycle 2): one coordinator per panel ──
+  // The public flag only makes the client ASK for Polly; the server's SK_TTS
+  // decides (404 → the browser voice, sticky). The Board adapter reads the
+  // bridge through its ref so a bridge that arrives later is seen. Playback
+  // stops on barge-in (push-to-talk, hands-free start, a new question), on
+  // Stop, on read-aloud off, on pagehide and when the panel unmounts.
+  useEffect(() => {
+    const coord = createSpeechCoordinator({
+      server: speechMode(process.env.NEXT_PUBLIC_SK_TTS) === "polly",
+      makeProvider: () => new PollyClientSpeechProvider(() => readRigChoice()),
+      fallback: (lang) => new BrowserSpeechProvider(lang),
+      defaultLang: pageSpeechLang(),
+      board: {
+        isPlaying: () => {
+          const st = boardRef.current?.state();
+          return !!st && st.paused === false;
+        },
+        pause: async () => {
+          await boardRef.current?.run("pause", {});
+        },
+        resume: async () => {
+          await boardRef.current?.run("resume", {});
+        },
+      },
+      // The same look → voice rule as the student page (A female, B male).
+      // A browser voice is only picked when the page's language has voices;
+      // otherwise the engine chooses by the utterance's lang.
+      voice: (id, lang) => {
+        const gender = voiceGenderForChoice(readRigChoice());
+        if (id !== "browser") return pollyVoiceFor(gender);
+        const prefix = (lang.split("-")[0] ?? "en").toLowerCase();
+        const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+        const pool = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+        const name = pool.length ? pickBrowserVoice(pool, gender, prefix) : null;
+        return name ? `browser:${name}` : "browser:default";
+      },
+      onSpeaking: setSpeaking,
+      onFallback: (why) => console.info(`[sk] server voice ${why}; using the browser voice`),
+    });
+    coord.setEnabled(readAloudRef.current);
+    speechRef.current = coord;
+    const onPageHide = () => coord.stop();
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      coord.stop();
+      if (speechRef.current === coord) speechRef.current = null;
+    };
+  }, []);
 
   // ── the cross-page memory store (sessionStorage) + the 1 s tick ──
   useEffect(() => {
@@ -284,12 +344,12 @@ export default function SkShell({
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
   }, [entries]);
 
-  // Unmount: the voice, the mic and the in-flight turn all stop with the panel
-  // (lifecycle 2 — playback stops on navigation away; the conversation itself
-  // lives server-side in the memory blob and survives).
+  // Unmount: the mic and the in-flight turn stop with the panel (the voice
+  // stops in its own effect's cleanup — lifecycle 2, playback stops on
+  // navigation away; the conversation itself lives server-side in the memory
+  // blob and survives).
   useEffect(
     () => () => {
-      speakerRef.current?.stop();
       turnRef.current?.abort();
       narrationRef.current?.abort();
       stopMicRef.current?.();
@@ -315,18 +375,10 @@ export default function SkShell({
     window.setTimeout(() => setCards((cs) => cs.filter((c) => c.id !== id)), CARD_LINGER_MS);
   }, []);
 
-  /** Speak one line with the current read-aloud setting (a fresh speaker, so
-   *  it never queues behind an answer that was stopped). */
+  /** Speak one line (the coordinator honours the read-aloud setting and the
+   *  Board's video; a stopped answer never comes back because stop() drops the queue). */
   const speakLine = useCallback((line: string) => {
-    if (!readAloudRef.current) return;
-    const sp = new StreamSpeaker();
-    if (!sp.supported) return;
-    speakerRef.current?.stop();
-    speakerRef.current = sp;
-    sp.push(line);
-    sp.flush();
-    setSpeaking(true);
-    window.setTimeout(() => setSpeaking(!!window.speechSynthesis?.speaking), 400);
+    void speechRef.current?.say(line);
   }, []);
 
   // ── S1: the confirm card → /api/sk/act (§2.5, §9.2). The server verifies
@@ -409,18 +461,21 @@ export default function SkShell({
       narrationRef.current = ac;
       const def = tourForRole(role, tourCopy) ?? tourForRole("teacher", tourCopy);
       const lines = skIntroScript({ copy, tourCopy, steps: def?.steps ?? [], role });
-      const speaker = new StreamSpeaker();
-      speakerRef.current = speaker;
-      const voice = readAloudRef.current && speaker.supported;
-      const silent = { push: () => {}, flush: () => {}, stop: () => {} };
+      // The narration speaks through the coordinator (read-aloud off = silent
+      // lines in the transcript; Skip/Stop = the runner's stop → barge-in).
+      const coord = speechRef.current;
+      const stream = coord?.stream();
+      const speaker = {
+        push: (t: string) => stream?.push(t),
+        flush: () => void stream?.flush(),
+        stop: () => coord?.stop(),
+      };
       setNarrating(true);
-      if (voice) setSpeaking(true);
-      void runNarration(lines, voice ? speaker : silent, {
+      void runNarration(lines, speaker, {
         signal: ac.signal,
         onLine: (line) => appendSk(line),
       }).then((r) => {
         finishIntro(r.completed ? "completed" : "skipped");
-        if (voice) window.setTimeout(() => setSpeaking(!!window.speechSynthesis?.speaking), 400);
       });
     }, 500);
     return () => clearTimeout(t);
@@ -428,8 +483,7 @@ export default function SkShell({
 
   function skipIntro() {
     narrationRef.current?.abort();
-    speakerRef.current?.stop();
-    setSpeaking(false);
+    speechRef.current?.stop();
   }
 
   // ── voice controls ──
@@ -438,10 +492,9 @@ export default function SkShell({
     readAloudRef.current = nv;
     setReadAloud(nv);
     writeFlag(LS_READ_ALOUD, nv);
-    if (!nv) {
-      speakerRef.current?.stop();
-      setSpeaking(false);
-    }
+    speechRef.current?.setEnabled(nv);
+    // Off = an explicit stop (§2.6): whatever SK was saying ends now.
+    if (!nv) speechRef.current?.stop();
   }
 
   function toggleHandsFree() {
@@ -453,12 +506,12 @@ export default function SkShell({
     if (!nv && micModeRef.current === "handsFree") gateRef.current?.stop("manual");
   }
 
-  /** Stop = the voice, the answer being written AND the narration. */
+  /** Stop = the voice, the answer being written AND the narration. The video
+   *  stays where it is (an explicit stop never resumes it; "continue" does). */
   function stopAll() {
     turnRef.current?.abort();
     narrationRef.current?.abort();
-    speakerRef.current?.stop();
-    setSpeaking(false);
+    speechRef.current?.stop();
   }
 
   /** One dictation pass. Hands-free restarts it after each utterance for as
@@ -512,6 +565,7 @@ export default function SkShell({
     const gate = gateRef.current;
     if (!gate) return;
     if (!gate.start({ idle: false })) return; // not visible / not focused → no capture
+    speechRef.current?.stop(); // barge-in: the teacher is about to speak
     micModeRef.current = "ptt";
     emptyEndsRef.current = 0;
     beginDictation("ptt");
@@ -529,6 +583,7 @@ export default function SkShell({
       return;
     }
     if (!gate.start({ idle: true })) return;
+    speechRef.current?.stop(); // barge-in: hands-free capture starts
     micModeRef.current = "handsFree";
     emptyEndsRef.current = 0;
     beginDictation("handsFree");
@@ -563,13 +618,12 @@ export default function SkShell({
       // intro if it is still running.
       turnRef.current?.abort();
       narrationRef.current?.abort();
-      speakerRef.current?.stop();
+      const coord = speechRef.current;
+      coord?.stop();
       const turn = new AbortController();
       turnRef.current = turn;
-      const speaker = new StreamSpeaker();
-      speakerRef.current = speaker;
-      const willSpeak = readAloudRef.current && speaker.supported;
-      if (willSpeak) setSpeaking(true);
+      // The answer is spoken a sentence at a time as it streams.
+      const stream = coord?.stream();
 
       const skId = uuid();
       setEntries((m) => [...m, { id: uuid(), who: "user", text: q }, { id: skId, who: "sk", text: "", pending: true }]);
@@ -621,7 +675,6 @@ export default function SkShell({
           // An answer that carried nothing at all: SK's fixed line (§2.3).
           return { ...en, pending: false, text: empty && sawDone ? copy.nothingOnThat : en.text };
         });
-        if (willSpeak) window.setTimeout(() => setSpeaking(!!window.speechSynthesis?.speaking), 400);
         if (modality === "text") inputRef.current?.focus();
       }
 
@@ -635,7 +688,7 @@ export default function SkShell({
             full += ev.text;
             patchEntry(skId, (en) => ({ ...en, text: full }));
             setCaption(lastSentence(full));
-            if (willSpeak) speaker.push(ev.text);
+            stream?.push(ev.text);
             break;
           case "tool":
             patchEntry(skId, (en) => ({ ...en, tools: [...(en.tools ?? []), { name: ev.name, ok: ev.ok, summary: ev.summary }] }));
@@ -650,8 +703,10 @@ export default function SkShell({
           }
           case "board": {
             // Immediate tier, decided and audited server-side: the Board
-            // performs it here. The video is paused while SK speaks; a move
-            // that plays (intro, segment, resume) restarts it itself.
+            // performs it here, in the coordinator's order: pause the video
+            // (if it plays) → speak the move's line → run the move. The move
+            // then owns the Board's state — SK never resumes after one; a move
+            // that plays (intro, segment, resume) starts the video itself.
             const b = boardRef.current;
             const say = ev.say ?? "";
             patchEntry(skId, (en) => ({
@@ -659,19 +714,17 @@ export default function SkShell({
               text: en.text || say,
               moves: [...(en.moves ?? []), { move: ev.move, say }],
             }));
-            if (say) {
-              setCaption(say);
-              if (willSpeak && !full) speaker.push(say);
-            }
+            if (say) setCaption(say);
             if (!b) {
               patchEntry(skId, (en) => ({ ...en, moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: false, summary: copy.boardNotOpen } : m)) }));
               break;
             }
+            // The streamed answer already carries the words when text came first.
+            const line = full ? "" : say;
+            const runMove = () => b.run(ev.move, ev.args ?? {});
             moveRuns.push(
               (async () => {
-                const st = b.state();
-                if (st && st.paused === false && ev.move !== "pause") await b.run("pause", {});
-                const r = await b.run(ev.move, ev.args ?? {});
+                const r = coord ? await coord.announceMove(line, runMove) : await runMove();
                 patchEntry(skId, (en) => ({
                   ...en,
                   moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: r.ok, summary: r.summary } : m)),
@@ -693,7 +746,7 @@ export default function SkShell({
             sawDone = true;
             if (ev.memory) keepMemory(ev.memory);
             patchEntry(skId, (en) => ({ ...en, sources: ev.sources ?? [], label: ev.label }));
-            if (willSpeak) speaker.flush();
+            void stream?.flush();
             break;
           case "error":
             setError(ev.message || copy.failed);
