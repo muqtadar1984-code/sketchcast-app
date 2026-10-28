@@ -1,4 +1,4 @@
--- 0162 rollback: remove SK's audit, token and manifest tables.
+-- 0163 rollback: remove SK's audit, token and manifest tables.
 --
 -- ⚠️ This DELETES the SK action audit trail, every outstanding action token
 -- and every cached Kit Manifest. Manifests are re-derivable from the kit

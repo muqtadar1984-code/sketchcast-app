@@ -1,4 +1,4 @@
-// 0162 — SK's audit, action-token and manifest tables (Final Plan §3, §5.2,
+// 0163 (applied to production 2026-10-28 as Supabase version 20261028123125, before the file was renumbered past 0162_pub_artifact_screen_copy) — SK's audit, action-token and manifest tables (Final Plan §3, §5.2,
 // §8.2, §9.2, §9.6). Same lint pattern as migration-0107-caps: read the SQL,
 // strip comments, assert the DDL that the plan's security rules rest on.
 import { describe, expect, it } from "vitest";
@@ -12,10 +12,10 @@ const read = (f: string) =>
     .replace(/--[^\n]*/g, "")
     .toLowerCase();
 
-const up = read("0162_sk_actions_manifests_tokens.sql");
-const down = read("0162_sk_actions_manifests_tokens_rollback.sql");
+const up = read("0163_sk_actions_manifests_tokens.sql");
+const down = read("0163_sk_actions_manifests_tokens_rollback.sql");
 
-describe("0162_sk_actions_manifests_tokens.sql", () => {
+describe("0163_sk_actions_manifests_tokens.sql", () => {
   it("creates exactly the three tables the plan names (§3: one migration)", () => {
     for (const t of ["sk_actions", "sk_action_tokens", "sk_manifests"]) {
       expect(up).toMatch(new RegExp(`create table if not exists public\\.${t}\\s*\\(`));

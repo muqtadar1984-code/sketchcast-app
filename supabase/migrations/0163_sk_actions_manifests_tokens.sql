@@ -1,4 +1,4 @@
--- 0162: SK's own three tables (Final Plan 2026-10-28 §3 "one migration",
+-- 0163: SK's own three tables (Final Plan 2026-10-28 §3 "one migration",
 -- §5.2 Kit Manifest, §8.2 action tokens, §9.6 pinning/invalidation).
 --
 -- sk_actions        — the audit trail of everything SK did or was asked to do:
