@@ -15,6 +15,19 @@ const str = (v: unknown, what: string): string => {
 };
 const optStr = (v: unknown, what: string): string | undefined => (v == null ? undefined : str(v, what));
 
+/** `clips: { female: "…clip.mp4", male: "…clip-male.mp4" }` on an asset — the
+ * same clip with the other narration voice; keys are genders, values paths. */
+function clipsOf(v: unknown, assetId: string, uri: (s: string | undefined) => string | undefined): GraphAsset["clips"] {
+  if (v == null) return undefined;
+  if (!isObj(v)) throw new GraphError(`asset ${assetId}.clips: not a map`);
+  const out: NonNullable<GraphAsset["clips"]> = {};
+  for (const [g, p] of Object.entries(v)) {
+    if (g !== "female" && g !== "male") throw new GraphError(`asset ${assetId}.clips: bad gender ${g}`);
+    out[g] = uri(str(p, `asset ${assetId}.clips.${g}`));
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** `baseUri` (e.g. "/sk-s1/ch02/") resolves the B3 packager's relative segment
  * paths ("s1/explain-main/segment.json") to the URL the browser fetches. */
 export function parseGraph(raw: unknown, baseUri = ""): TeachingGraph {
@@ -54,6 +67,7 @@ export function parseGraph(raw: unknown, baseUri = ""): TeachingGraph {
         segment_id: optStr(a.segment_id, `asset ${asset_id}.segment_id`) ?? asset_id,
         clip: uri(optStr(a.clip, `asset ${asset_id}.clip`)),
         hitmap: uri(optStr(a.hitmap, `asset ${asset_id}.hitmap`)),
+        clips: clipsOf(a.clips, asset_id, uri),
         item_ids,
         origin,
         validation: validation as GraphAsset["validation"],
@@ -86,7 +100,10 @@ export function parseGraph(raw: unknown, baseUri = ""): TeachingGraph {
   // cannot record is refused here, at load, not at the student's first Play.
   if (!Number.isInteger(version) || version < 1) throw new GraphError("graph: bad version (must be an integer >= 1)");
   const chapter = typeof raw.chapter === "number" ? raw.chapter : Number(raw.chapter);
-  if (!Number.isInteger(chapter) || chapter < 0) throw new GraphError("graph: bad chapter");
+  // sk_sessions.chapter, sk_book_units.chapter and teaching_objectives.chapter
+  // are all CHECK (>= 1) (0156/0157): a chapter-0 graph would open and then
+  // fail at the first save, exactly as version 0 did — refuse it at load.
+  if (!Number.isInteger(chapter) || chapter < 1) throw new GraphError("graph: bad chapter (must be an integer >= 1, as sk_sessions.chapter requires)");
   return {
     graph_id: str(raw.graph_id, "graph_id"),
     product_id: str(raw.product_id ?? raw.product, "product_id"),

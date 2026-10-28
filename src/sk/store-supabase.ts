@@ -26,7 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { UUID_RE, uuidv7 } from "./ids";
 import { MASTERY_RULE_VERSION, masteryFromAttempts, type AttemptRecord, type CheckPurpose, type MasteryOptions, type MasteryStateV1 } from "./mastery";
 import { phaseOf, type MachineState, type OpenCheck } from "./state";
-import { DuplicateAttemptError, InMemorySessionStore, type Attempt, type Claim, type NewSession, type SessionStore, type SkSession, type StoredEvent } from "./store";
+import { addUsage, DuplicateAttemptError, InMemorySessionStore, type Attempt, type Claim, type NewSession, type SessionStore, type SkSession, type StoredEvent, type UsageDelta, type UsageRow } from "./store";
 
 // ── The slice of supabase-js this store uses (so a test can fake it) ───────
 export type DbError = { code?: string; message: string };
@@ -40,6 +40,8 @@ export interface SkQuery {
   upsert(row: DbRow, opts?: { onConflict?: string }): SkQuery;
   delete(): SkQuery;
   eq(column: string, value: unknown): SkQuery;
+  /** `column in (values)` — the product filter that decides which graphs the Supabase store serves (server.ts). */
+  in(column: string, values: readonly unknown[]): SkQuery;
   order(column: string, opts?: { ascending?: boolean }): SkQuery;
   limit(n: number): SkQuery;
   maybeSingle(): Promise<DbResult<DbRow>>;
@@ -244,6 +246,26 @@ export class SupabaseSessionStore implements SessionStore {
     return (data ?? []).map(fromAttemptRow);
   }
 
+  // ── usage (B8 metering; sk_usage, 0158: PK (user_id, product_id, period)) ──
+  async getUsage(userId: string, productId: string, period: string): Promise<UsageRow | null> {
+    const { data, error } = await this.db.from("sk_usage").select("live_turns, generated_segments, interactive_ms").eq("user_id", userId).eq("product_id", productId).eq("period", period).maybeSingle();
+    fail(error, "get usage");
+    return data ? fromUsageRow(data) : null;
+  }
+
+  /** Read-then-upsert on the primary key. PostgREST cannot express
+   * `set live_turns = live_turns + 1`, and B8 ships no migration (no
+   * increment function), so two bumps for the same (student, product, period)
+   * in the same instant can lose one. Turns on ONE session are already
+   * serialised by the event claim; the window is two sessions of one student
+   * on the same book at once. */
+  async bumpUsage(userId: string, productId: string, period: string, delta: UsageDelta): Promise<UsageRow> {
+    const next = addUsage(await this.getUsage(userId, productId, period), delta);
+    const { error } = await this.db.from("sk_usage").upsert({ user_id: userId, product_id: productId, period, ...next, updated_at: iso(this.now()) }, { onConflict: "user_id,product_id,period" });
+    fail(error, "bump usage");
+    return next;
+  }
+
   private async attemptByEvent(sessionId: string, eventId: string): Promise<Attempt | null> {
     const { data } = await this.db.from("item_attempts").select("*").eq("session_id", sessionId).eq("event_id", eventId).maybeSingle();
     return data ? fromAttemptRow(data) : null;
@@ -341,6 +363,10 @@ export function fromSessionRow(r: DbRow): SkSession {
     createdAt: ms(r.created_at),
     updatedAt: ms(r.updated_at),
   };
+}
+
+function fromUsageRow(r: DbRow): UsageRow {
+  return { live_turns: Number(r.live_turns ?? 0), generated_segments: Number(r.generated_segments ?? 0), interactive_ms: Number(r.interactive_ms ?? 0) };
 }
 
 function fromEventRow(sessionId: string, eventId: string, r: DbRow): StoredEvent {

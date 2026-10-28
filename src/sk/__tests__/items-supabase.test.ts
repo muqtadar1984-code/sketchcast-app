@@ -8,153 +8,9 @@ import { scoreQuiz, type RawQuestion } from "@/app/api/quiz/logic";
 import { gradeItem } from "../grade";
 import { stripItem } from "../items";
 import { selectUnitItems } from "../items-select";
-import { SupabaseItemBank, toRawQuestion, type TopicQuestionRow } from "../items-supabase";
+import { SupabaseItemBank, toRawQuestion } from "../items-supabase";
+import { O, PRODUCT, SLUG, FIXTURES } from "./cells-fixtures";
 import { skFakeDb } from "./fake-supabase";
-
-const PRODUCT = "d7a8282a-1f23-4ae8-8008-40e3ae458c13";
-const SLUG = "cells-structure-function-organisation";
-const O = { u1: "8d583b3b-c092-4eed-8320-58f51b6888ad", u2: "96794bf7-f582-4e14-abc7-40b86e0e4b88", u3: "8d798fea-e468-4a74-927e-7df85e71af95", u4: "d8b69af0-fe88-4275-a076-054427d7d83e", u5: "e3eaa67d-5a4f-461a-9a7e-15e6af1e700d" };
-
-/** Rows as PostgREST returns them (the bank selects ITEM_COLUMNS). */
-export const FIXTURES: TopicQuestionRow[] = [
-  {
-    id: "a48f35f1-5a12-44e2-851b-a27d7b7163ff",
-    item_type: "mcq",
-    answer_mode: "objective",
-    marks: 1,
-    stem: "Which statement about living organisms is correct?",
-    options: [
-      { key: "A", text: "Only plants and animals are made of cells." },
-      { key: "B", text: "All living organisms are made of cells." },
-      { key: "C", text: "Fungi and bacteria are not made of cells." },
-      { key: "D", text: "Only large organisms are made of cells." },
-    ],
-    answer: { key: "B" },
-    status: "approved",
-    teaching_objective_id: O.u1,
-    created_at: "2026-10-25T00:40:57.799526+00:00",
-  },
-  {
-    id: "5788dd4a-a674-49fa-ab1d-e71d8d888c46",
-    item_type: "true_false",
-    answer_mode: "objective",
-    marks: 1,
-    stem: "A unicellular organism carries out all of its life processes within a single cell.",
-    options: null,
-    answer: { value: true },
-    status: "approved",
-    teaching_objective_id: O.u1,
-    created_at: "2026-10-25T00:40:57.799526+00:00",
-  },
-  {
-    id: "11c605d4-e276-401d-80ec-149bb220f1bc",
-    item_type: "match",
-    answer_mode: "objective",
-    marks: 4,
-    stem: "Match each microscope part to its function.",
-    options: {
-      pairs: [
-        { left: "Eyepiece lens", right: "The lens looked through, commonly ×10" },
-        { left: "Nosepiece", right: "Rotates to bring a chosen objective lens over the slide" },
-        { left: "Stage clips", right: "Hold the slide in position" },
-        { left: "Base", right: "Heavy foot that keeps the microscope stable" },
-      ],
-    },
-    answer: {
-      pairs: [
-        { left: "Eyepiece lens", right: "The lens looked through, commonly ×10" },
-        { left: "Nosepiece", right: "Rotates to bring a chosen objective lens over the slide" },
-        { left: "Stage clips", right: "Hold the slide in position" },
-        { left: "Base", right: "Heavy foot that keeps the microscope stable" },
-      ],
-    },
-    status: "approved",
-    teaching_objective_id: O.u2,
-    created_at: "2026-10-25T00:40:57.799526+00:00",
-  },
-  {
-    id: "a5c8ebbe-d00e-4951-81d0-b6fd3d1a55aa",
-    item_type: "fill_blank",
-    answer_mode: "objective",
-    marks: 1,
-    stem: "A thin piece of glass or plastic placed over the specimen to hold it flat and protect the objective lens is called a ____.",
-    options: null,
-    answer: { text: "coverslip" },
-    status: "approved",
-    teaching_objective_id: O.u4,
-    created_at: "2026-10-25T00:40:57.799526+00:00",
-  },
-  {
-    id: "342866a5-0c56-4787-8fcc-e340b8317ca0",
-    item_type: "short_answer",
-    answer_mode: "subjective",
-    marks: 4,
-    stem: "Describe two differences in how onion epidermal cells and human cheek cells appear under the microscope.",
-    options: null,
-    answer: { text: "Onion cells are regular and brick-shaped, fitting closely together, whereas cheek cells are irregular, rounded and flattened. Onion cells have a visible cell wall, but cheek cells have no cell wall, only a boundary membrane. Both show a nucleus." },
-    status: "approved",
-    teaching_objective_id: O.u4,
-    created_at: "2026-10-25T00:40:57.799526+00:00",
-  },
-  {
-    id: "71acf08b-bb44-4f23-a34c-018764526476",
-    item_type: "mcq",
-    answer_mode: "objective",
-    marks: 1,
-    stem: "A microscope has a ×10 eyepiece lens and a ×4 objective lens in use. What is the total magnification?",
-    options: [
-      { key: "A", text: "×14" },
-      { key: "B", text: "×40" },
-      { key: "C", text: "×6" },
-      { key: "D", text: "×400" },
-    ],
-    answer: { key: "B" },
-    status: "approved",
-    teaching_objective_id: O.u5,
-    created_at: "2026-10-25T00:40:57.799526+00:00",
-  },
-  {
-    id: "1c37dd99-abb1-40f7-ac11-5d1c57f35e9a",
-    item_type: "numerical",
-    answer_mode: "subjective",
-    marks: 3,
-    stem: "A drawing of a cell is 52 mm long. The actual cell is 0.13 mm long. Calculate the magnification of the drawing.",
-    options: null,
-    answer: { unit: "×", value: 400, tolerance: 0 },
-    status: "approved",
-    teaching_objective_id: O.u5,
-    created_at: "2026-10-25T00:40:58.079089+00:00",
-  },
-  {
-    id: "906d5688-43c9-4b68-9c0a-7e9100a0dc2f",
-    item_type: "numerical",
-    answer_mode: "subjective",
-    marks: 4,
-    stem: "A student draws a cheek cell 48 mm wide at a stated magnification of ×800. Calculate the actual width of the cell in micrometres (µm).",
-    options: null,
-    answer: { unit: "µm", value: 60, tolerance: 0 },
-    status: "approved",
-    teaching_objective_id: O.u5,
-    created_at: "2026-10-25T00:40:58.079089+00:00",
-  },
-  {
-    id: "5dffb113-070a-4ed6-927f-01efbffd8bb2",
-    item_type: "mcq",
-    answer_mode: "objective",
-    marks: 1,
-    stem: "A student wants to see a cell more clearly and says that the highest magnification will always give the best view of a specimen. Which response is the most accurate?",
-    options: [
-      { key: "A", text: "Correct, because a bigger image is always easier to see clearly." },
-      { key: "B", text: "Incorrect, because high power makes the image smaller." },
-      { key: "C", text: "Correct, because the specimen never needs to be centred at high power." },
-      { key: "D", text: "Incorrect, because higher power narrows the field of view and makes the image darker, so the specimen is harder to find and keep in view." },
-    ],
-    answer: { key: "D" },
-    status: "draft",
-    teaching_objective_id: O.u3,
-    created_at: "2026-10-26T20:14:51.559161+00:00",
-  },
-];
 
 const byId = (id: string) => FIXTURES.find((f) => f.id === id)!;
 
@@ -279,6 +135,20 @@ describe("SupabaseItemBank", () => {
     expect(await b.listForUnit(SLUG, 2, "u9")).toEqual([]);
     expect(await b.listForUnit("no-such-book", 2, "u1")).toEqual([]);
     expect(await b.objectiveForUnit(SLUG, 2, "u3")).toEqual({ id: O.u3, status: "draft" });
+  });
+  it("live fix 2026-10-27: a graph's section key (s1) resolves through sk_book_units to the exporter's unit key (u1)", async () => {
+    const { db, bank: b } = bank();
+    // The exporter keys objectives u1…; the packager keys the graph by manuscript section s1…; sk_book_units holds both.
+    db.seed("sk_book_units", [
+      { product_id: PRODUCT, chapter: 2, unit_key: "u1", section_sid: "s1", title: "Too small to see", sort_order: 1 },
+      { product_id: PRODUCT, chapter: 2, unit_key: "u5", section_sid: "s5", title: "Magnification", sort_order: 5 },
+    ]);
+    expect(await b.objectiveForUnit(SLUG, 2, "s1")).toEqual({ id: O.u1, status: "draft" });
+    expect((await b.listForUnit(SLUG, 2, "s5")).map((q) => q.id)).toEqual((await b.listForUnit(SLUG, 2, "u5")).map((q) => q.id));
+    expect(await b.listForUnit(SLUG, 2, "s9")).toEqual([]); // no such section
+    expect(await b.listForUnit(SLUG, 2, "u1")).toHaveLength(2); // the unit key still works directly
+    // A chapter with no sk_book_units rows (older exports) behaves as before: unknown key → nothing.
+    expect(await new SupabaseItemBank(bank().db).listForUnit(SLUG, 2, "s1")).toEqual([]);
   });
   it("B4.1: listForUnit carries status, difficulty and objective; selectUnitItems picks from the real rows", async () => {
     const { db, bank: b } = bank();

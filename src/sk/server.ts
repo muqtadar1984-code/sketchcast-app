@@ -10,19 +10,23 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { claudeConfigured } from "@/utils/claude-backend";
-import { skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAllowanceEnforced, skEnabled, skUserAllowed } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 import { normaliseSegment, validateSegment, type Segment } from "./board/engine";
 import { embedderConfigured, TitanEmbedder } from "./embed";
+import { SupabaseEntitlements, type EntitlementSource } from "./entitlement";
 import { parseGraph } from "./graph";
-import { StaticItemBank, type ItemBank } from "./items";
+import { CompositeItemBank, StaticItemBank, type ItemBank } from "./items";
+import { UUID_RE } from "./ids";
 import { SupabaseItemBank } from "./items-supabase";
 import type { LoopDeps } from "./loop";
 import { retrievalMode, selectRetrievalProvider, type RetrievalDb, type RetrievalProvider } from "./retrieval";
+import { PollySpeechProvider } from "./speech/polly";
+import type { SpeechProvider } from "./speech/provider";
 import { InMemorySessionStore, type SessionStore } from "./store";
-import { SupabaseSessionStore, skDbFrom } from "./store-supabase";
+import { SupabaseSessionStore, skDbFrom, type SkDb } from "./store-supabase";
 import type { TeachingGraph } from "./types";
 
 /** Graph manifests served from public/, as "<url path>" entries. The one-unit
@@ -33,6 +37,10 @@ export const DEFAULT_GRAPH_URIS = ["/sk-s1/graph-ch2.json", "/sk-s1/ch02/graph.j
 export type SkDeps = {
   store: SessionStore;
   items: ItemBank;
+  /** B8: the student's licence / plan / grant rows. Undefined = the dev-flag (in-memory wiring only). */
+  entitlements?: EntitlementSource;
+  /** B8: FEATURE_SK_ALLOWANCE — refuse live turns past a grant's allowance. */
+  allowanceEnforced?: boolean;
   graphs: TeachingGraph[];
   routerProvider?: LLMProvider;
   teacherProvider?: LLMProvider;
@@ -87,6 +95,37 @@ async function loadGraphs(uris: string[]): Promise<TeachingGraph[]> {
   return out;
 }
 
+/** Which loaded graphs this store can actually run. The Supabase store keeps
+ * attempts in item_attempts (item_id → topic_questions, a uuid FK) and mastery
+ * against teaching_objectives, so a graph whose product has no sk_book_products
+ * row — the hand-written stand-in, whose items and objective are strings —
+ * cannot grade there: its Check opened, drew a question, then died at the
+ * attempt insert with 22P02 (founder's run, 2026-10-27). On that store only
+ * products the database knows are served; the in-memory store serves all. */
+export function graphsForStore(graphs: TeachingGraph[], knownProducts: ReadonlySet<string> | null): TeachingGraph[] {
+  if (!knownProducts) return graphs;
+  return graphs.filter((g) => {
+    if (knownProducts.has(g.product_id)) return true;
+    console.error(`[sk] graph ${g.graph_id} withheld: product ${g.product_id} is not in sk_book_products (the Supabase store cannot grade it)`);
+    return false;
+  });
+}
+
+/** The graphs the Supabase store may serve: those whose product has an
+ * sk_book_products row (see graphsForStore). Takes the db so the loop tests
+ * run the same filter over the fake the store runs on. */
+export async function servableGraphsOn(db: SkDb, graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
+  if (graphs.length === 0) return graphs;
+  const { data, error } = await db.from("sk_book_products").select("slug").in("slug", graphs.map((g) => g.product_id));
+  if (error) throw new Error(`[sk] products: ${error.message}`);
+  return graphsForStore(graphs, new Set((data ?? []).map((r) => String(r.slug))));
+}
+
+async function servableGraphs(graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
+  if (process.env.SK_STORE !== "supabase") return graphs;
+  return servableGraphsOn(skDbFrom(createAdminClient()), graphs);
+}
+
 function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> {
   if (!claudeConfigured()) return {};
   // Lazy so a missing SDK key never breaks the regex-only path.
@@ -124,11 +163,14 @@ let override: Partial<SkDeps> | null = null;
  * the 0157 tables through the admin client, and serves items from
  * `topic_questions`. Unset (the default) is the B4 in-memory store and the
  * U4 stand-in items — nothing changes until the flag is set. */
-export function persistence(): Pick<SkDeps, "store" | "items"> {
+export function persistence(): Pick<SkDeps, "store" | "items" | "entitlements"> {
   if (process.env.SK_STORE === "supabase") {
     const db = skDbFrom(createAdminClient());
-    return { store: new SupabaseSessionStore(db), items: new SupabaseItemBank(db) };
+    // The stand-in chapter's string ids fall through to the static items (live fix 2026-10-27).
+    // B8: the same admin client reads entitlements, profiles.school_id and book_access_grants, and writes sk_usage.
+    return { store: new SupabaseSessionStore(db), items: new CompositeItemBank(new SupabaseItemBank(db), new StaticItemBank(), (id) => UUID_RE.test(id)), entitlements: new SupabaseEntitlements(db) };
   }
+  // No database: no entitlement source — the loop's dev-flag (everything granted, usage counted in memory only).
   return { store: new InMemorySessionStore(), items: new StaticItemBank() };
 }
 
@@ -156,7 +198,8 @@ export function skDeps(): Promise<SkDeps> {
       const uris = (process.env.SK_GRAPHS || "").split(",").map((s) => s.trim()).filter(Boolean);
       const base: SkDeps = {
         ...persistence(),
-        graphs: await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS),
+        allowanceEnforced: skAllowanceEnforced(),
+        graphs: await servableGraphs(await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS)),
         loadSegment: loadSegmentFromPublic,
         loadHitmapElementIds: loadHitmapTargetsFromPublic,
         ...providers(),
@@ -178,10 +221,33 @@ export function __setSkDepsForTests(d: Partial<SkDeps> | null): void {
 export function loopDepsFor(d: SkDeps, productId: string, chapter: number): LoopDeps | null {
   const graph = d.graphs.find((g) => g.product_id === productId && g.chapter === chapter);
   if (!graph) return null;
-  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, retrieval: d.retrieval, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds };
+  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, retrieval: d.retrieval, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds, entitlements: d.entitlements, allowanceEnforced: d.allowanceEnforced };
 }
 
 // ── Gate + auth, shared by every route ──────────────────────────────────────
+/** SK B9: which server-side voice speaks SK's own lines. Unset (the default)
+ * = none: POST /api/sk/speak answers 404 and the client stays on the browser
+ * voice, so merging the adapter switches nothing chargeable on. */
+export function skTtsMode(): "polly" | "off" {
+  return process.env.SK_TTS === "polly" ? "polly" : "off";
+}
+
+let speechOverride: SpeechProvider | null | undefined;
+let speechSingleton: PollySpeechProvider | null = null;
+
+/** The provider behind /api/sk/speak, or null when SK_TTS is unset. One
+ * Polly client per process (its credential exchange is the shared cache). */
+export function skSpeech(): SpeechProvider | null {
+  if (speechOverride !== undefined) return speechOverride;
+  if (skTtsMode() !== "polly") return null;
+  if (!speechSingleton) speechSingleton = new PollySpeechProvider();
+  return speechSingleton;
+}
+
+export function __setSkSpeechForTests(p: SpeechProvider | null | undefined): void {
+  speechOverride = p;
+}
+
 export type Gate = { ok: true; userId: string } | { ok: false; response: NextResponse };
 
 export async function gate(): Promise<Gate> {

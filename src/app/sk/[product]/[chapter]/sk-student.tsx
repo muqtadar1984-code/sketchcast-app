@@ -4,17 +4,25 @@
 // asset as an Option-S segment (clip + hit map) through the board runtime,
 // and sends typed questions, commands and check answers through /api/sk/*.
 // The server owns the state: every response carries the session view and the
-// client renders FROM it (contracts §5.4 — snapshot-authoritative). Browser
-// speechSynthesis voices SK's lines through the SpeechProvider seam.
+// client renders FROM it (contracts §5.4 — snapshot-authoritative). SK's
+// lines go through the SpeechProvider seam: with NEXT_PUBLIC_SK_TTS=polly the
+// server voice (POST /api/sk/speak → mp3 + word/viseme marks: caption
+// highlight + mouth) and, on any failure or with the flag unset, browser
+// speechSynthesis exactly as before (B9).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pickBrowserVoice, RIG_LABELS, rigBaseForChoice, voiceGenderForChoice, type RigChoice } from "@/sk/board/avatar";
 import { normaliseSegment, validateSegment, type OpentypeLike, type Segment } from "@/sk/board/engine";
+import { segmentForVoice, trackFor } from "@/sk/board/voices";
 import { SpikeRuntime, type HitMap, type PlayerState, type Rig } from "@/sk/board/runtime";
 import { useMicSupported, useRigChoice } from "@/sk/board/use-rig-choice";
 import { uuidv7 } from "@/sk/ids";
+import { accessNotice } from "@/sk/access-notice";
 import type { SessionView } from "@/sk/loop";
 import { BrowserSpeechProvider, browserSpeechAvailable } from "@/sk/speech/browser";
+import { PollyClientSpeechProvider, SpeakUnavailable } from "@/sk/speech/polly-client";
+import { pollyVoiceFor, spokenWordSpan } from "@/sk/speech/polly-marks";
+import type { PlayOpts } from "@/sk/speech/provider";
 import type { CommandArgs, CommandName } from "@/sk/types";
 import { startDictation } from "@/utils/assistant/voice-client";
 
@@ -66,6 +74,10 @@ export default function SkStudent({ productId, chapter }: Props) {
   const asideAudioRef = useRef<HTMLAudioElement>(null);
   const runtimeRef = useRef<SpikeRuntime | null>(null);
   const speechRef = useRef<BrowserSpeechProvider | null>(null);
+  const pollyRef = useRef<PollyClientSpeechProvider | null>(null);
+  // The string index of the word being spoken in `skText` (-1 = none): the
+  // caption highlight, fed by either adapter's onWord.
+  const [spokenAt, setSpokenAt] = useState(-1);
   const fontRef = useRef<OpentypeLike | null>(null);
   const [view, setView] = useState<SessionView | null>(null);
   const [loaded, setLoaded] = useState<{ seg: Segment; hitmap: HitMap | null; rig: Rig | null; rigChoice: RigChoice; base: string; clipUri: string | null; assetId: string } | null>(null);
@@ -96,21 +108,61 @@ export default function SkStudent({ productId, chapter }: Props) {
     if (!text) return;
     setLog((l) => [...l.slice(-80), { at: new Date().toLocaleTimeString(), who, text }]);
   }, []);
-  const speak = useCallback(async (text: string) => {
-    if (!text || !speechRef.current) return;
-    try {
-      const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-      const name = pickBrowserVoice(voices, voiceGenderForChoice(rigRef.current));
-      const r = await speechRef.current.synthesize(text, name ? `browser:${name}` : "browser:default", { marks: [] });
-      await r.play?.({ rate: 1 });
-    } catch {
-      /* no voice */
-    }
+  /** Barge-in: stop whichever adapter is speaking, close the mouth, clear the highlight. */
+  const stopSpeaking = useCallback(() => {
+    pollyRef.current?.cancel();
+    speechRef.current?.cancel();
+    runtimeRef.current?.mouth("sil");
+    setSpokenAt(-1);
   }, []);
+  const speak = useCallback(
+    async (text: string) => {
+      if (!text) return;
+      const gender = voiceGenderForChoice(rigRef.current);
+      const marks: PlayOpts = {
+        rate: 1,
+        onWord: (w) => setSpokenAt(w.charIndex),
+        onViseme: (v) => runtimeRef.current?.mouth(v),
+      };
+      setSpokenAt(-1);
+      try {
+        const polly = pollyRef.current;
+        if (polly) {
+          try {
+            const r = await polly.synthesize(text, pollyVoiceFor(gender), { marks: ["word", "viseme"] });
+            await r.play?.(marks);
+            return;
+          } catch (e) {
+            // A 404 = the server flag is off: stop asking for this page's life.
+            // Anything else (network, 502, autoplay) falls back for this line.
+            if (e instanceof SpeakUnavailable) {
+              pollyRef.current = null;
+              say("sys", "server voice not available — using the browser voice");
+            }
+            runtimeRef.current?.mouth("sil");
+            setSpokenAt(-1);
+          }
+        }
+        if (!speechRef.current) return;
+        const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+        const name = pickBrowserVoice(voices, gender);
+        const r = await speechRef.current.synthesize(text, name ? `browser:${name}` : "browser:default", { marks: [] });
+        await r.play?.(marks);
+      } catch {
+        /* no voice */
+      } finally {
+        setSpokenAt(-1);
+      }
+    },
+    [say],
+  );
 
   // 1. Open or resume the session.
   useEffect(() => {
     speechRef.current = browserSpeechAvailable() ? new BrowserSpeechProvider() : null;
+    // The public flag only makes the client ASK; the server's SK_TTS decides
+    // (404 → the client falls back and stops asking).
+    pollyRef.current = process.env.NEXT_PUBLIC_SK_TTS === "polly" && typeof window !== "undefined" ? new PollyClientSpeechProvider(() => rigRef.current) : null;
     let alive = true;
     (async () => {
       try {
@@ -125,12 +177,20 @@ export default function SkStudent({ productId, chapter }: Props) {
     return () => {
       alive = false;
       speechRef.current?.cancel();
+      pollyRef.current?.cancel();
     };
   }, [productId, chapter, say]);
 
   // 2. Load the asset the cursor names (segment + hit map + rig + font) when it changes.
-  const assetId = view?.asset?.assetId ?? null;
-  const segmentUri = view?.asset?.segment ?? null;
+  // A check or practice asset has nothing to draw: keep the unit's teaching
+  // segment on the board (view.board), paused, so a session resumed mid-check
+  // never sits on a blank board.
+  const shown = view?.asset?.segment ? view.asset : (view?.board ?? null);
+  const assetId = shown?.assetId ?? null;
+  const segmentUri = shown?.segment ?? null;
+  const shownHitmap = shown?.hitmap;
+  const shownClip = shown?.clip;
+  const shownClips = shown?.clips;
   useEffect(() => {
     if (!assetId || !segmentUri) return;
     if (loaded?.assetId === assetId && loaded.rigChoice === rig) return;
@@ -141,9 +201,18 @@ export default function SkStudent({ productId, chapter }: Props) {
         const base = dirname(segmentUri);
         const raw = normaliseSegment((await fetch(segmentUri).then((r) => r.json())) as Segment);
         // The security gate: a segment that fails validation never reaches the DOM.
-        const seg = validateSegment(raw);
-        const hitmapUri = view?.asset?.hitmap ?? (seg.hitmap ? base + seg.hitmap : null);
-        const clipUri = view?.asset?.clip ?? (seg.clip ? base + seg.clip.uri : null);
+        const gated = validateSegment(raw);
+        // The look picks the narration track (A female, B male). `seg` is the
+        // chosen track's view of the manifest: its clip, audio and word marks,
+        // so the runtime plays and lip-syncs that voice with no change of its own.
+        const choice = trackFor(gated, voiceGenderForChoice(rig));
+        const seg = segmentForVoice(gated, voiceGenderForChoice(rig));
+        const hitmapUri = shownHitmap ?? (seg.hitmap ? base + seg.hitmap : null);
+        // The clip: the graph's per-gender clip for what plays, else the chosen
+        // track's (manifests with `voices`), else the graph's default, else the segment's own.
+        const trackClip = seg.voices && seg.clip ? base + seg.clip.uri : null;
+        const clipUri = shownClips?.[choice.gender] ?? trackClip ?? shownClip ?? (seg.clip ? base + seg.clip.uri : null);
+        if (!choice.exact) say("sys", `no ${voiceGenderForChoice(rig)} narration for this chapter yet — playing the ${choice.gender} track`);
         const [hitmap, rigData] = await Promise.all([
           hitmapUri ? fetch(hitmapUri).then((r) => (r.ok ? (r.json() as Promise<HitMap>) : null)) : Promise.resolve(null),
           fetch(rigBaseForChoice(rig) + "rig.json")
@@ -168,7 +237,7 @@ export default function SkStudent({ productId, chapter }: Props) {
     return () => {
       alive = false;
     };
-  }, [assetId, segmentUri, view?.asset?.hitmap, view?.asset?.clip, loaded?.assetId, loaded?.rigChoice, rig, say]);
+  }, [assetId, segmentUri, shownHitmap, shownClip, shownClips, loaded?.assetId, loaded?.rigChoice, rig, say]);
 
   // 3. Mount the runtime for the loaded asset; seek to the server's cursor.
   useEffect(() => {
@@ -365,10 +434,16 @@ export default function SkStudent({ productId, chapter }: Props) {
   const item = oc?.item ?? null;
   const unitsLine = useMemo(() => (view ? `${view.unit?.title ?? "—"} · ${view.state}` : "connecting…"), [view]);
 
+  const notice = accessNotice(view?.access);
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="card p-2">
         <audio ref={asideAudioRef} preload="none" />
+        {notice && (
+          <div className="mb-2 rounded border border-[#F2C94C] bg-[#FFF8E1] px-3 py-1.5 text-xs text-[#5B4A00]" role="status" data-testid="sk-access-notice">
+            {notice}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
           <button className="btn-primary h-9 px-3" onClick={() => void sendCommand("continue")} disabled={!view || busy || player === "loading" || player === "playing" || !!oc}>
             ▶ Play
@@ -397,7 +472,7 @@ export default function SkStudent({ productId, chapter }: Props) {
           <button className="h-9 px-3 border rounded" onClick={() => void sendCommand("return")} disabled={!view || busy || !view.bookmarks.length}>
             ↩ Return
           </button>
-          <label className="h-9 flex items-center gap-1 text-xs text-[#667085]" title="SK's look — one tutor, two looks; the clip's own narration keeps its voice">
+          <label className="h-9 flex items-center gap-1 text-xs text-[#667085]" title="SK's look — one tutor, two looks; the lesson's narration follows the look when the chapter has both voices">
             SK&apos;s look
             <select className="h-9 px-2 border rounded text-sm text-[#14181F]" value={rig} onChange={(e) => chooseRig(e.target.value === "A" ? "A" : "B")} data-testid="sk-rig">
               {(["B", "A"] as RigChoice[]).map((c) => (
@@ -417,7 +492,19 @@ export default function SkStudent({ productId, chapter }: Props) {
           {skText && (
             <div className="absolute left-2 right-2 bottom-2 rounded bg-white/90 px-3 py-2 text-sm shadow" data-testid="sk-text">
               <span className="font-semibold text-[#0C8175]">SK: </span>
-              {skText}
+              {(() => {
+                const span = spokenWordSpan(skText, spokenAt);
+                if (!span) return skText;
+                return (
+                  <>
+                    {skText.slice(0, span.start)}
+                    <mark className="rounded bg-[#FFE9A8] px-0.5" data-testid="sk-word">
+                      {skText.slice(span.start, span.end)}
+                    </mark>
+                    {skText.slice(span.end)}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -492,6 +579,7 @@ export default function SkStudent({ productId, chapter }: Props) {
               onPointerDown={(e) => {
                 e.preventDefault();
                 if (stopDictationRef.current) return;
+                stopSpeaking();
                 runtimeRef.current?.pauseForTurn();
                 setListening(true);
                 const stop = startDictation(

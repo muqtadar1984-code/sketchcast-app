@@ -303,6 +303,11 @@ export class SpikeRuntime {
 
   // ── B4 teacher-loop surface ─────────────────────────────────────────────
   /** Current main-clock position, ms. */
+  /** B9: a viseme of SK's own spoken line (the speech element's clock). */
+  mouth(viseme: string): void {
+    this.avatar?.mouth?.(viseme);
+  }
+
   get t(): number {
     return this.main.currentTime * 1000;
   }

@@ -1,0 +1,151 @@
+// SK — the cells chapter (product `cells-structure-function-organisation`,
+// Chapter 2) as the database holds it: the product, its teaching objectives
+// by unit key, and `topic_questions` rows copied from the sk-b1 branch
+// database (2026-10-27; explanation / rationale / tags trimmed, nothing else
+// changed). Shared by the bank test and the Supabase-backed loop deps.
+import type { TopicQuestionRow } from "../items-supabase";
+
+export const PRODUCT = "d7a8282a-1f23-4ae8-8008-40e3ae458c13";
+export const SLUG = "cells-structure-function-organisation";
+export const O = { u1: "8d583b3b-c092-4eed-8320-58f51b6888ad", u2: "96794bf7-f582-4e14-abc7-40b86e0e4b88", u3: "8d798fea-e468-4a74-927e-7df85e71af95", u4: "d8b69af0-fe88-4275-a076-054427d7d83e", u5: "e3eaa67d-5a4f-461a-9a7e-15e6af1e700d", u6: "4b1a8a9e-2a0e-4d9a-b5a4-0c9f6e3d2b17" };
+
+/** Rows as PostgREST returns them (the bank selects ITEM_COLUMNS). u6 ("Drawing what you see") has no items yet. */
+export const FIXTURES: TopicQuestionRow[] = [
+  {
+    id: "a48f35f1-5a12-44e2-851b-a27d7b7163ff",
+    item_type: "mcq",
+    answer_mode: "objective",
+    marks: 1,
+    stem: "Which statement about living organisms is correct?",
+    options: [
+      { key: "A", text: "Only plants and animals are made of cells." },
+      { key: "B", text: "All living organisms are made of cells." },
+      { key: "C", text: "Fungi and bacteria are not made of cells." },
+      { key: "D", text: "Only large organisms are made of cells." },
+    ],
+    answer: { key: "B" },
+    status: "approved",
+    teaching_objective_id: O.u1,
+    created_at: "2026-10-25T00:40:57.799526+00:00",
+  },
+  {
+    id: "5788dd4a-a674-49fa-ab1d-e71d8d888c46",
+    item_type: "true_false",
+    answer_mode: "objective",
+    marks: 1,
+    stem: "A unicellular organism carries out all of its life processes within a single cell.",
+    options: null,
+    answer: { value: true },
+    status: "approved",
+    teaching_objective_id: O.u1,
+    created_at: "2026-10-25T00:40:57.799526+00:00",
+  },
+  {
+    id: "11c605d4-e276-401d-80ec-149bb220f1bc",
+    item_type: "match",
+    answer_mode: "objective",
+    marks: 4,
+    stem: "Match each microscope part to its function.",
+    options: {
+      pairs: [
+        { left: "Eyepiece lens", right: "The lens looked through, commonly ×10" },
+        { left: "Nosepiece", right: "Rotates to bring a chosen objective lens over the slide" },
+        { left: "Stage clips", right: "Hold the slide in position" },
+        { left: "Base", right: "Heavy foot that keeps the microscope stable" },
+      ],
+    },
+    answer: {
+      pairs: [
+        { left: "Eyepiece lens", right: "The lens looked through, commonly ×10" },
+        { left: "Nosepiece", right: "Rotates to bring a chosen objective lens over the slide" },
+        { left: "Stage clips", right: "Hold the slide in position" },
+        { left: "Base", right: "Heavy foot that keeps the microscope stable" },
+      ],
+    },
+    status: "approved",
+    teaching_objective_id: O.u2,
+    created_at: "2026-10-25T00:40:57.799526+00:00",
+  },
+  {
+    id: "a5c8ebbe-d00e-4951-81d0-b6fd3d1a55aa",
+    item_type: "fill_blank",
+    answer_mode: "objective",
+    marks: 1,
+    stem: "A thin piece of glass or plastic placed over the specimen to hold it flat and protect the objective lens is called a ____.",
+    options: null,
+    answer: { text: "coverslip" },
+    status: "approved",
+    teaching_objective_id: O.u4,
+    created_at: "2026-10-25T00:40:57.799526+00:00",
+  },
+  {
+    id: "342866a5-0c56-4787-8fcc-e340b8317ca0",
+    item_type: "short_answer",
+    answer_mode: "subjective",
+    marks: 4,
+    stem: "Describe two differences in how onion epidermal cells and human cheek cells appear under the microscope.",
+    options: null,
+    answer: { text: "Onion cells are regular and brick-shaped, fitting closely together, whereas cheek cells are irregular, rounded and flattened. Onion cells have a visible cell wall, but cheek cells have no cell wall, only a boundary membrane. Both show a nucleus." },
+    status: "approved",
+    teaching_objective_id: O.u4,
+    created_at: "2026-10-25T00:40:57.799526+00:00",
+  },
+  {
+    id: "71acf08b-bb44-4f23-a34c-018764526476",
+    item_type: "mcq",
+    answer_mode: "objective",
+    marks: 1,
+    stem: "A microscope has a ×10 eyepiece lens and a ×4 objective lens in use. What is the total magnification?",
+    options: [
+      { key: "A", text: "×14" },
+      { key: "B", text: "×40" },
+      { key: "C", text: "×6" },
+      { key: "D", text: "×400" },
+    ],
+    answer: { key: "B" },
+    status: "approved",
+    teaching_objective_id: O.u5,
+    created_at: "2026-10-25T00:40:57.799526+00:00",
+  },
+  {
+    id: "1c37dd99-abb1-40f7-ac11-5d1c57f35e9a",
+    item_type: "numerical",
+    answer_mode: "subjective",
+    marks: 3,
+    stem: "A drawing of a cell is 52 mm long. The actual cell is 0.13 mm long. Calculate the magnification of the drawing.",
+    options: null,
+    answer: { unit: "×", value: 400, tolerance: 0 },
+    status: "approved",
+    teaching_objective_id: O.u5,
+    created_at: "2026-10-25T00:40:58.079089+00:00",
+  },
+  {
+    id: "906d5688-43c9-4b68-9c0a-7e9100a0dc2f",
+    item_type: "numerical",
+    answer_mode: "subjective",
+    marks: 4,
+    stem: "A student draws a cheek cell 48 mm wide at a stated magnification of ×800. Calculate the actual width of the cell in micrometres (µm).",
+    options: null,
+    answer: { unit: "µm", value: 60, tolerance: 0 },
+    status: "approved",
+    teaching_objective_id: O.u5,
+    created_at: "2026-10-25T00:40:58.079089+00:00",
+  },
+  {
+    id: "5dffb113-070a-4ed6-927f-01efbffd8bb2",
+    item_type: "mcq",
+    answer_mode: "objective",
+    marks: 1,
+    stem: "A student wants to see a cell more clearly and says that the highest magnification will always give the best view of a specimen. Which response is the most accurate?",
+    options: [
+      { key: "A", text: "Correct, because a bigger image is always easier to see clearly." },
+      { key: "B", text: "Incorrect, because high power makes the image smaller." },
+      { key: "C", text: "Correct, because the specimen never needs to be centred at high power." },
+      { key: "D", text: "Incorrect, because higher power narrows the field of view and makes the image darker, so the specimen is harder to find and keep in view." },
+    ],
+    answer: { key: "D" },
+    status: "draft",
+    teaching_objective_id: O.u3,
+    created_at: "2026-10-26T20:14:51.559161+00:00",
+  },
+];
