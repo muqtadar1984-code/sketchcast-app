@@ -124,7 +124,16 @@ export type GroundingVerdict = {
   unsupported: string[];
   /** The sentences that carried no unsupported token, in order. */
   text: string;
+  /** The sentences that were dropped, in order (logged server-side only). */
+  dropped: string[];
 };
+
+/** A number is supported with or without its percent sign: the tools write
+ *  "2%" in a summary but 2 in a fact, and the model may say either. */
+function numberSupported(ok: Set<string>, t: string): boolean {
+  if (ok.has(t)) return true;
+  return t.endsWith("%") ? ok.has(t.slice(0, -1)) : ok.has(`${t}%`);
+}
 
 function isCapitalised(word: string): boolean {
   return /^\p{Lu}/u.test(word) && /\p{Ll}/u.test(word.slice(1));
@@ -144,12 +153,13 @@ export function groundingCheck(text: string, support: unknown[], question: strin
     .split(/(?<=[.!?؟])\s+/u)
     .filter(Boolean);
   const kept: string[] = [];
+  const dropped: string[] = [];
   const unsupported: string[] = [];
   for (const s of sentences) {
     const bad: string[] = [];
     for (const n of s.match(NUMBER_RE) ?? []) {
       const t = normToken(n);
-      if (t && !ok.has(t)) bad.push(n);
+      if (t && !numberSupported(ok, t)) bad.push(n);
     }
     const words = s.match(WORD_RE) ?? [];
     words.forEach((w, i) => {
@@ -158,8 +168,10 @@ export function groundingCheck(text: string, support: unknown[], question: strin
       if (!t || ALWAYS_OK.has(t) || ok.has(t)) return;
       bad.push(w);
     });
-    if (bad.length) unsupported.push(...bad);
-    else kept.push(s);
+    if (bad.length) {
+      unsupported.push(...bad);
+      dropped.push(s);
+    } else kept.push(s);
   }
-  return { ok: unsupported.length === 0, unsupported, text: kept.join(" ") };
+  return { ok: unsupported.length === 0, unsupported, text: kept.join(" "), dropped };
 }

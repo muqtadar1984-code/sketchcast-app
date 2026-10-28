@@ -233,6 +233,9 @@ export type SkTurnEvent =
       usage?: { inputTokens: number; outputTokens: number };
       /** The memory blob to echo on the next turn (see SkTurnRequest.memory). */
       memory?: string;
+      /** True when the grounding check dropped one or more sentences the tools
+       *  did not support; what remains is fully supported (so still grounded). */
+      trimmed?: boolean;
     }
   | { type: "error"; message: string };
 
