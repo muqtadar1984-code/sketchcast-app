@@ -22,7 +22,10 @@
 // Model passes: ONE Haiku call for concepts (segments the mechanical rules did
 // not place) and ONE for items (questions without a valid objective_ref),
 // through src/utils/claude-backend.ts (OIDC role in production; no `temperature`
-// — Haiku 5.5 refuses it). The VISUAL pass needs the slide frames and the app
+// — Haiku 5.5 refuses it). The two calls are independent (the item pass reads
+// the SEGMENTS, not the concept pass's answer), so they run side by side: a
+// derivation costs the slower call, not the sum (live, 2026-10-28: 20.8 s for
+// the Biology kit with the calls one after the other). The VISUAL pass needs the slide frames and the app
 // has no ffmpeg: see visualForApp() for the S1 limitation.
 //
 // deriveAndStore never throws: every failure is written as `failed` and
@@ -214,28 +217,40 @@ export async function deriveAndStore(admin: ManifestAdmin, generationId: string,
     let itemsToModel = 0;
     let usedModel = false;
     if (input.concepts && input.concepts.length) {
-      const todo = segmentsNeedingModel(segs, input.concepts, input.language);
+      const concepts = input.concepts;
+      const todo = segmentsNeedingModel(segs, concepts, input.language);
       conceptsToModel = todo.length;
-      if (todo.length) {
-        const p = conceptPrompt(input.concepts, todo.map((s) => ({ key: s.key, type: s.type, heading: s.heading, narration: s.narration })), CONCEPT_PROMPT_VERSION);
-        const r = await call({ model, system: p.system, user: p.user, maxTokens: MODEL_MAX_TOKENS });
-        add(r.usage);
-        usedModel = true;
-        conceptsPass = parseModelJson<{ assignments: ModelAssignment[] }>(r.text)?.assignments || [];
-      } else conceptsPass = [];
-      const ids = new Set(input.concepts.map((x) => x.concept_id));
+      const ids = new Set(concepts.map((x) => x.concept_id));
       const pending = input.items.filter((i) => !mechanicalItem(i, input.article_id, ids, input.article_source_id ?? null));
       itemsToModel = pending.length;
-      if (pending.length) {
-        const p = itemPrompt(
-          input.concepts,
-          segs.filter((s) => s.slide_k !== null).map((s) => ({ key: s.key, type: s.type, heading: s.heading, narration: s.narration })),
-          pending.map((i) => ({ q: i.q_id, type: i.type, prompt: i.prompt, answer: i.answer, hint: i.hint })),
-        );
-        const r = await call({ model, system: p.system, user: p.user, maxTokens: MODEL_MAX_TOKENS });
-        add(r.usage);
+      // Both calls start together; the usage is summed in the fixed order
+      // (concepts, then items) so the stored numbers match a sequential run.
+      const conceptCall = todo.length
+        ? (() => {
+            const p = conceptPrompt(concepts, todo.map((s) => ({ key: s.key, type: s.type, heading: s.heading, narration: s.narration })), CONCEPT_PROMPT_VERSION);
+            return call({ model, system: p.system, user: p.user, maxTokens: MODEL_MAX_TOKENS });
+          })()
+        : null;
+      const itemCall = pending.length
+        ? (() => {
+            const p = itemPrompt(
+              concepts,
+              segs.filter((s) => s.slide_k !== null).map((s) => ({ key: s.key, type: s.type, heading: s.heading, narration: s.narration })),
+              pending.map((i) => ({ q: i.q_id, type: i.type, prompt: i.prompt, answer: i.answer, hint: i.hint })),
+            );
+            return call({ model, system: p.system, user: p.user, maxTokens: MODEL_MAX_TOKENS });
+          })()
+        : null;
+      const [rc, ri] = await Promise.all([conceptCall, itemCall]);
+      if (rc) {
+        add(rc.usage);
         usedModel = true;
-        itemsPass = parseModelJson<{ items: ModelItem[] }>(r.text)?.items || [];
+        conceptsPass = parseModelJson<{ assignments: ModelAssignment[] }>(rc.text)?.assignments || [];
+      } else conceptsPass = [];
+      if (ri) {
+        add(ri.usage);
+        usedModel = true;
+        itemsPass = parseModelJson<{ items: ModelItem[] }>(ri.text)?.items || [];
       } else itemsPass = [];
     }
     const passes: ModelPasses = { concepts: conceptsPass, items: itemsPass, model: usedModel ? model : null, usage, concept_prompt_version: CONCEPT_PROMPT_VERSION };

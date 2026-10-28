@@ -186,3 +186,10 @@ describe("helpers", () => {
     expect(answerText({})).toBe('""');
   });
 });
+
+describe("loadKitInput — concurrent downloads (fix/sk-speed)", () => {
+  it("returns exactly what the sequential loader returned (fixtures/loaded-sequential.json, captured before the change)", async () => {
+    const { default: sequential } = await import("./fixtures/loaded-sequential.json");
+    expect(JSON.parse(JSON.stringify(await loadKitInput(bookKit(), GEN)))).toEqual(sequential);
+  });
+});

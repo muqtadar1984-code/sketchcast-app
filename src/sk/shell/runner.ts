@@ -23,6 +23,8 @@ export type RunnerDeps = {
   sessionId: string | null;
   turnId: string | null;
   entries?: SkCapability[];
+  /** The turn's read memo (SkCapabilityDeps.cache); shared by every run of this turn. */
+  cache?: Map<string, Promise<unknown>>;
 };
 
 /** Cap a handler's result so a wide table can never flood the prompt. */
@@ -62,7 +64,7 @@ export async function runCapability(ctx: SkContext, name: string, args: Record<s
     result = { ok: false, summary: "Cancelled.", error: "aborted", facts: [] };
   } else {
     try {
-      result = capResult(await cap.handler(ctx, args ?? {}, { session: deps.session, now: deps.now, clock: deps.clock, signal: deps.signal }));
+      result = capResult(await cap.handler(ctx, args ?? {}, { session: deps.session, now: deps.now, clock: deps.clock, signal: deps.signal, cache: deps.cache }));
     } catch (e) {
       result = { ok: false, summary: "That lookup failed.", error: (e as Error)?.message?.slice(0, 300) ?? "handler_threw", facts: [] };
     }
@@ -104,15 +106,20 @@ export function toolResultText(r: SkCapabilityResult): string {
 
 export type ToolTrace = { name: string; args: Record<string, unknown>; result: SkCapabilityResult };
 
-/** The orchestrator's `runTool` adapter; every call is traced for grounding. */
-export function makeRunTool(ctx: SkContext, deps: RunnerDeps, trace: ToolTrace[]): (call: ToolCall) => Promise<string> {
-  return async (call) => {
+/** The orchestrator's `runTool` adapter; every call is traced for grounding.
+ *  The orchestrator runs a round's calls side by side, so `onTrace` (not
+ *  "the last trace entry") is how a caller learns which call just finished.
+ *  The orchestrator's `signal` is the turn's own; it wins over deps.signal. */
+export function makeRunTool(ctx: SkContext, deps: RunnerDeps, trace: ToolTrace[], onTrace?: (t: ToolTrace) => void): (call: ToolCall, signal?: AbortSignal) => Promise<string> {
+  return async (call, signal) => {
     const args = call.args && typeof call.args === "object" ? call.args : {};
     // The model calls the API-safe name ("library__find"); the registry, the
     // audit row, the tool event and done.sources all keep the dotted name.
     const name = fromApiToolName(call.name);
-    const result = await runCapability(ctx, name, args, deps);
-    trace.push({ name, args, result });
+    const result = await runCapability(ctx, name, args, signal ? { ...deps, signal } : deps);
+    const t: ToolTrace = { name, args, result };
+    trace.push(t);
+    onTrace?.(t);
     return toolResultText(result);
   };
 }

@@ -22,7 +22,10 @@ export type TurnConfig = {
   history: Turn[]; // prior turns of THIS session (already compacted upstream)
   question: string;
   tools?: ToolDef[];
-  runTool?: (call: ToolCall) => Promise<string>;
+  /** Runs one tool call. Every call the model makes in ONE round is started
+   * together (Promise.all) and the results go back in the model's order; the
+   * turn's `signal` is handed to each so a stopped turn stops its reads too. */
+  runTool?: (call: ToolCall, signal?: AbortSignal) => Promise<string>;
   maxToolRounds?: number;
   maxTokens?: number;
   /** Cancels the turn: the in-flight model call is aborted, no further tool
@@ -84,16 +87,21 @@ export async function* runAssistantTurn(cfg: TurnConfig): AsyncGenerator<TurnEve
     }
 
     // Tool round: append the assistant's (partial) turn + every result, continue.
+    // The round's calls are independent of one another (each carries its own
+    // arguments; none can see another's result until the next model pass), so
+    // they run SIDE BY SIDE — the round costs the slowest call, not the sum
+    // (live, 2026-10-28: assignments.status 4.0 s + learners.risk 3.9 s back to
+    // back). The results are appended in the model's order, whatever finished
+    // first, so the history the model reads back is the same as before.
     toolCallCount += calls.length;
     messages.push({ role: "assistant", text: roundText, toolCalls: calls });
-    for (const call of calls) {
-      if (cfg.signal?.aborted) {
-        yield cancelled();
-        return;
-      }
-      yield { type: "tool", name: call.name };
-      const result = await cfg.runTool(call);
-      messages.push({ role: "tool", toolCallId: call.id, name: call.name, result });
+    if (cfg.signal?.aborted) {
+      yield cancelled();
+      return;
     }
+    for (const call of calls) yield { type: "tool", name: call.name };
+    const runTool = cfg.runTool;
+    const results = await Promise.all(calls.map((call) => runTool(call, cfg.signal)));
+    calls.forEach((call, i) => messages.push({ role: "tool", toolCallId: call.id, name: call.name, result: results[i] }));
   }
 }

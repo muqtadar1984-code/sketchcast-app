@@ -1,0 +1,255 @@
+{
+ "input": {
+  "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+  "book_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "chapter_ref": "4",
+  "article_id": null,
+  "article_source_id": null,
+  "format_version": 3,
+  "language": "en",
+  "scripts": [
+   {
+    "part": 1,
+    "of": 2,
+    "language": "en",
+    "script": {
+     "script_id": "S1",
+     "segments": [
+      {
+       "segment_id": "s001",
+       "type": "hook",
+       "text": "narration s001",
+       "slide_heading": "Heading s001",
+       "slide_points": [
+        "a"
+       ],
+       "scene": {
+        "concept": null,
+        "elements": []
+       }
+      },
+      {
+       "segment_id": "s002",
+       "type": "explore",
+       "text": "narration s002",
+       "slide_heading": "Heading s002",
+       "slide_points": [
+        "a"
+       ],
+       "scene": {
+        "concept": null,
+        "elements": []
+       }
+      }
+     ]
+    },
+    "video": {
+     "manifest_id": "V1",
+     "segments": [
+      {
+       "segment_id": "s001",
+       "clip_duration_seconds": 10
+      },
+      {
+       "segment_id": "s002",
+       "clip_duration_seconds": 10
+      },
+      {
+       "segment_id": "s990",
+       "clip_duration_seconds": 2
+      }
+     ]
+    }
+   },
+   {
+    "part": 2,
+    "of": 2,
+    "language": "en",
+    "script": {
+     "script_id": "S2",
+     "segments": [
+      {
+       "segment_id": "s001",
+       "type": "hook",
+       "text": "narration s001",
+       "slide_heading": "Heading s001",
+       "slide_points": [
+        "a"
+       ],
+       "scene": {
+        "concept": null,
+        "elements": []
+       }
+      }
+     ]
+    },
+    "video": {
+     "manifest_id": "V2",
+     "segments": [
+      {
+       "segment_id": "s001",
+       "clip_duration_seconds": 10
+      },
+      {
+       "segment_id": "s990",
+       "clip_duration_seconds": 2
+      }
+     ]
+    }
+   }
+  ],
+  "artifacts": [
+   {
+    "id": "eef426bd-script_json-script_part2.json",
+    "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+    "kind": "script_json",
+    "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/script_part2.json",
+    "created_at": "2026-10-25T09:40:30+00:00"
+   },
+   {
+    "id": "eef426bd-video_mp4-lesson_part2.mp4",
+    "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+    "kind": "video_mp4",
+    "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson_part2.mp4",
+    "created_at": "2026-10-25T09:40:30+00:00"
+   },
+   {
+    "id": "eef426bd-script_json-script.json",
+    "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+    "kind": "script_json",
+    "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/script.json",
+    "created_at": "2026-10-25T09:40:30+00:00"
+   },
+   {
+    "id": "eef426bd-video_mp4-lesson.mp4",
+    "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+    "kind": "video_mp4",
+    "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+    "created_at": "2026-10-25T09:40:30+00:00"
+   },
+   {
+    "id": "eef426bd-thumbnail_png-thumb.png",
+    "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+    "kind": "thumbnail_png",
+    "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/thumb.png",
+    "created_at": "2026-10-25T09:40:30+00:00"
+   },
+   {
+    "id": "180d55c7-questions_json-worksheet_questions.json",
+    "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+    "kind": "questions_json",
+    "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/180d55c7-12f2-433e-bd9b-f442f5584431/worksheet_questions.json",
+    "created_at": "2026-10-25T09:40:30+00:00"
+   },
+   {
+    "id": "180d55c7-docx-worksheet.docx",
+    "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+    "kind": "docx",
+    "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/180d55c7-12f2-433e-bd9b-f442f5584431/worksheet.docx",
+    "created_at": "2026-10-25T09:40:30+00:00"
+   }
+  ],
+  "concepts": [
+   {
+    "concept_id": "c001",
+    "name": "Cell wall",
+    "definition": "rigid layer"
+   },
+   {
+    "concept_id": "c002",
+    "name": "Vacuole",
+    "definition": "sap store"
+   }
+  ],
+  "concept_source": "chapter_grounding",
+  "items": [
+   {
+    "q_id": "ws:180d55c7:q1",
+    "source": "worksheet",
+    "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+    "type": "fill_blank",
+    "prompt": "The wall is ____.",
+    "answer": "rigid"
+   },
+   {
+    "q_id": "ws:180d55c7:q2",
+    "source": "worksheet",
+    "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+    "type": "matching",
+    "prompt": "Match",
+    "answer": "Vacuole → sap"
+   }
+  ],
+  "has_video": {
+   "1": true,
+   "2": true
+  }
+ },
+ "artifactRows": [
+  {
+   "id": "eef426bd-script_json-script_part2.json",
+   "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+   "kind": "script_json",
+   "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/script_part2.json",
+   "created_at": "2026-10-25T09:40:30+00:00"
+  },
+  {
+   "id": "eef426bd-video_mp4-lesson_part2.mp4",
+   "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+   "kind": "video_mp4",
+   "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson_part2.mp4",
+   "created_at": "2026-10-25T09:40:30+00:00"
+  },
+  {
+   "id": "eef426bd-script_json-script.json",
+   "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+   "kind": "script_json",
+   "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/script.json",
+   "created_at": "2026-10-25T09:40:30+00:00"
+  },
+  {
+   "id": "eef426bd-video_mp4-lesson.mp4",
+   "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+   "kind": "video_mp4",
+   "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "created_at": "2026-10-25T09:40:30+00:00"
+  },
+  {
+   "id": "eef426bd-thumbnail_png-thumb.png",
+   "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+   "kind": "thumbnail_png",
+   "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/thumb.png",
+   "created_at": "2026-10-25T09:40:30+00:00"
+  },
+  {
+   "id": "180d55c7-questions_json-worksheet_questions.json",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "kind": "questions_json",
+   "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/180d55c7-12f2-433e-bd9b-f442f5584431/worksheet_questions.json",
+   "created_at": "2026-10-25T09:40:30+00:00"
+  },
+  {
+   "id": "180d55c7-docx-worksheet.docx",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "kind": "docx",
+   "storage_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/180d55c7-12f2-433e-bd9b-f442f5584431/worksheet.docx",
+   "created_at": "2026-10-25T09:40:30+00:00"
+  }
+ ],
+ "generation": {
+  "id": "eef426bd-523b-4fed-827c-95421263d89a",
+  "owner_id": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726",
+  "book_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "chapter_ref": "4",
+  "kind": "presentation",
+  "status": "done",
+  "withdrawn_at": null,
+  "params": {
+   "video_parts": 2,
+   "format_version": 3,
+   "language": "en"
+  },
+  "created_at": "2026-10-25T09:00:00+00:00"
+ },
+ "worksheetGenerationId": "180d55c7-12f2-433e-bd9b-f442f5584431"
+}

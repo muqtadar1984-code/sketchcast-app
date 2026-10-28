@@ -6,6 +6,7 @@
 // entity, whatever the client returned.
 
 import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "@/sk/shell/types";
+import { classEnrollments, teacherClasses } from "./shared";
 
 export type ResolveKind = "class" | "learner" | "book" | "any";
 
@@ -54,9 +55,8 @@ export async function resolveEntities(ctx: SkContext, args: Record<string, unkno
 
   let myClasses: Row[] = [];
   if (canTeach && (kind === "class" || kind === "learner" || kind === "any")) {
-    myClasses = (await rowsOf(deps.session.from("classes").select("id, name, teacher_id, school_id").eq("teacher_id", me))).filter((r) =>
-      mine(r, "teacher_id"),
-    );
+    // Read once per turn (shared.ts): assignments.status and assign use the same rows.
+    myClasses = (await rowsOf(teacherClasses(deps, me))).filter((r) => mine(r, "teacher_id"));
   }
   if (kind === "class" || kind === "any") {
     for (const c of myClasses) {
@@ -70,7 +70,8 @@ export async function resolveEntities(ctx: SkContext, args: Record<string, unkno
     const q = query.toLowerCase();
     if (canTeach && myClasses.length) {
       const ids = new Set(myClasses.map((c) => c.id as string));
-      const enr = await rowsOf(deps.session.from("enrollments").select("class_id, student_id, profiles(full_name, username)"));
+      // Only the own classes' rosters (the in-memory `ids` check below stays), shared with assignments.status.
+      const enr = await rowsOf(classEnrollments(deps, me, [...ids]));
       const seen = new Set<string>();
       for (const e of enr) {
         if (!ids.has(e.class_id as string) || typeof e.student_id !== "string" || seen.has(e.student_id)) continue;

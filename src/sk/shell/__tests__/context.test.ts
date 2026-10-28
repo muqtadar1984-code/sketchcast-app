@@ -187,3 +187,54 @@ describe("loadContext (server loader, fakes)", () => {
     expect(session.log.filter((l) => l.startsWith("coordinator_scope") || l.startsWith("parent_links"))).toEqual([]);
   });
 });
+
+describe("loadContext reads run side by side (fix/sk-speed)", () => {
+  const user = { id: TEACHER_ID, email: "t@school.example", email_confirmed_at: "2026-01-01T00:00:00Z" };
+  it("every independent read (scope, parent links, three tenant flags, plan_tier, staff) has STARTED before any one resolves", async () => {
+    process.env.FEATURE_ROLE_HATS = "true";
+    process.env.FEATURE_PARENT_PORTAL = "true";
+    // The three tenant flags OFF globally, so each one reads schools.config
+    // (an env "true" short-circuits the read and there is nothing to time).
+    delete process.env.FEATURE_SCHOOL_ANALYTICS;
+    delete process.env.FEATURE_TIMETABLE;
+    delete process.env.FEATURE_CALENDAR;
+    const started: string[] = [];
+    let release!: () => void;
+    const gateP = new Promise<void>((r) => (release = r));
+    // A session whose every query resolves only when the test lets it go.
+    const slowSession = {
+      from: (table: string) => {
+        started.push(table);
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const b: any = {};
+        for (const m of ["select", "eq", "in", "is", "limit", "order"]) b[m] = () => b;
+        b.maybeSingle = () => b;
+        b.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => gateP.then(() => ({ data: table === "schools" ? { config: {} } : [], error: null })).then(res, rej);
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+        return b;
+      },
+    };
+    const admin = {
+      from: (table: string) => {
+        started.push(`admin.${table}`);
+        return { select: () => ({ is: () => gateP.then(() => ({ data: [], error: null })) }) };
+      },
+      rpc: (fn: string) => {
+        started.push(`rpc.${fn}`);
+        return gateP.then(() => ({ data: "school", error: null }));
+      },
+    };
+    const pending = loadContext({ session: slowSession, admin, cookies: null, user, profile: { role: "teacher", school_id: SCHOOL_ID }, collector: { path: "/dashboard" }, now: NOW });
+    await new Promise((r) => setTimeout(r, 0));
+    // Nothing has resolved, yet every read is in flight.
+    expect(started).toContain("coordinator_scope");
+    expect(started).toContain("parent_links");
+    expect(started).toContain("rpc.plan_tier");
+    expect(started).toContain("admin.platform_admins");
+    expect(started.filter((t) => t === "schools").length).toBeGreaterThanOrEqual(3); // the three tenant flags
+    release();
+    const ctx = await pending;
+    expect(ctx.user.plan).toBe("school");
+    expect(ctx.user.role).toBe("teacher");
+  });
+});

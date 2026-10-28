@@ -1,0 +1,257 @@
+{
+ "schema": "sk-kit-manifest/m1",
+ "manifest_id": "90a0c7e83ba5f52c02af0ef2",
+ "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+ "book_id": "book",
+ "chapter_ref": "4",
+ "article_id": null,
+ "parts": [
+  1
+ ],
+ "language": "en",
+ "format_version": 3,
+ "pinned": {
+  "script_ids": [
+   "S1"
+  ],
+  "video_manifest_ids": [
+   "V1"
+  ],
+  "format_version": 3,
+  "artifact_paths": [
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/a416ce84-5c87-46fa-8874-22a8cbfdd1d2/worksheet_questions.json",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/script.json"
+  ],
+  "artifacts_hash": "ae68b0086b9149909371d56a16b2b5e0fb76f77a1a231d2646670f3cc60934d8"
+ },
+ "completeness": {
+  "video": "ok",
+  "script": "ok",
+  "questions": "ok",
+  "concepts": "ok",
+  "format_version": 3
+ },
+ "moves": {
+  "intro": "available",
+  "segment": "available",
+  "slide": "degraded",
+  "practise": "available",
+  "walkthrough": "available",
+  "explain": "available",
+  "remediate": "available"
+ },
+ "segments": [
+  {
+   "key": "p1:s001",
+   "segment_id": "s001",
+   "part": 1,
+   "k": 0,
+   "start_s": 0,
+   "end_s": 10,
+   "slide_t": 9.938,
+   "slide_k": 1,
+   "type": "explore",
+   "heading": "Hook",
+   "points": [
+    "p"
+   ],
+   "narration": "About Hook",
+   "concept_slug": null,
+   "assets": [],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": null,
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "no single concept: hook"
+   },
+   "visual": {
+    "status": "unknown",
+    "show": "caption_only",
+    "reason": "no frame check in app (S1)",
+    "judged_by": {
+     "model": null,
+     "prompt_version": null
+    }
+   }
+  },
+  {
+   "key": "p1:s002",
+   "segment_id": "s002",
+   "part": 1,
+   "k": 1,
+   "start_s": 10,
+   "end_s": 30,
+   "slide_t": 29.938,
+   "slide_k": 2,
+   "type": "explore",
+   "heading": "Cell wall structure",
+   "points": [
+    "p"
+   ],
+   "narration": "About Cell wall structure",
+   "concept_slug": "c001",
+   "assets": [],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "c001",
+    "secondary": [],
+    "method": "scene",
+    "confidence": 1,
+    "availability": "available"
+   },
+   "visual": {
+    "status": "unknown",
+    "show": "caption_only",
+    "reason": "no frame check in app (S1)",
+    "judged_by": {
+     "model": null,
+     "prompt_version": null
+    }
+   }
+  },
+  {
+   "key": "p1:s003",
+   "segment_id": "s003",
+   "part": 1,
+   "k": 2,
+   "start_s": 30,
+   "end_s": 45,
+   "slide_t": 44.938,
+   "slide_k": 3,
+   "type": "explore",
+   "heading": "Big vacuole",
+   "points": [
+    "p"
+   ],
+   "narration": "About Big vacuole",
+   "concept_slug": null,
+   "assets": [],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "c002",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.92,
+    "availability": "available",
+    "reason": "vacuole"
+   },
+   "visual": {
+    "status": "unknown",
+    "show": "caption_only",
+    "reason": "no frame check in app (S1)",
+    "judged_by": {
+     "model": null,
+     "prompt_version": null
+    }
+   }
+  },
+  {
+   "key": "p1:s990",
+   "segment_id": "s990",
+   "part": 1,
+   "k": 3,
+   "start_s": 45,
+   "end_s": 47,
+   "slide_t": 46.938,
+   "slide_k": null,
+   "type": "outro",
+   "heading": "",
+   "points": [],
+   "narration": "",
+   "concept_slug": null,
+   "assets": [],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": null,
+    "secondary": [],
+    "method": "none",
+    "confidence": 1,
+    "availability": "available",
+    "reason": "video-only outro"
+   },
+   "visual": {
+    "status": "unknown",
+    "show": "caption_only",
+    "reason": "video-only outro (not judged)",
+    "judged_by": {
+     "model": null,
+     "prompt_version": null
+    }
+   }
+  }
+ ],
+ "concepts": [
+  {
+   "concept_id": "c001",
+   "name": "Cell wall",
+   "definition": "rigid layer",
+   "segment_ids": [
+    "p1:s002"
+   ]
+  },
+  {
+   "concept_id": "c002",
+   "name": "Vacuole",
+   "definition": "sap store",
+   "segment_ids": [
+    "p1:s003"
+   ]
+  }
+ ],
+ "items": [
+  {
+   "q_id": "ws:a416ce84:q1",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "fill_blank",
+   "prompt_hash": "ad1b820859952b55",
+   "concept_ids": [
+    "c001"
+   ],
+   "segment_ids": [
+    "p1:s002"
+   ],
+   "method": "model",
+   "confidence": 0.95,
+   "availability": "available",
+   "reason": "wall"
+  },
+  {
+   "q_id": "ws:a416ce84:q2",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "short",
+   "prompt_hash": "a0cc3aef1018a368",
+   "concept_ids": [
+    "c002"
+   ],
+   "segment_ids": [
+    "p1:s003"
+   ],
+   "method": "model",
+   "confidence": 0.9,
+   "availability": "available",
+   "reason": "vacuole"
+  }
+ ],
+ "retrieval": {
+  "fts": "chapter_grounding.script_text"
+ },
+ "derived_by": {
+  "model": "claude-haiku-5-5",
+  "prompt_versions": [
+   "m1-concept-v2",
+   "m1-item-v1"
+  ],
+  "at": "2026-10-28T10:00:00.000Z",
+  "usage": {
+   "input_tokens": 2000,
+   "output_tokens": 400,
+   "usd": 0.00039999999999999996
+  }
+ }
+}

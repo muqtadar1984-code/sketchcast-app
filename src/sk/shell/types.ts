@@ -200,6 +200,11 @@ export type SkCapabilityDeps = {
   /** Local clock from the collector, when the tool needs the user's day/time. */
   clock?: SkCollector["clock"];
   signal?: AbortSignal;
+  /** Per-TURN read memo (src/sk/capabilities/shared.ts `memo`): one Map made
+   *  by the turn route and handed to every capability of that turn, so two
+   *  tools in one turn read the teacher's classes once. Never outlives the
+   *  request; keys carry the user id. Absent → every read runs. */
+  cache?: Map<string, Promise<unknown>>;
 };
 
 export type SkCapability = {

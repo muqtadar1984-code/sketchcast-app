@@ -21,6 +21,7 @@
 
 import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkCollector, SkContext } from "@/sk/shell/types";
 import { cleanQuery, normalizeName, resolveEntities } from "./resolve";
+import { teacherClasses } from "./shared";
 import { searchLibrary, type LibraryHit } from "./library";
 
 export const ASSIGN_DEFAULT_HOUR = 17;
@@ -159,7 +160,8 @@ type ClassPick = { kind: "none"; query: string } | { kind: "one"; id: string; na
 async function pickClass(ctx: SkContext, deps: SkCapabilityDeps, classId: string, classQuery: string): Promise<ClassPick> {
   const me = ctx.user.id;
   if (classId) {
-    const rows = await rowsOf(deps.session.from("classes").select("id, name, teacher_id, school_id").eq("teacher_id", me).eq("id", classId));
+    // The teacher's classes, read once per turn (shared.ts); the id check stays in code.
+    const rows = await rowsOf(teacherClasses(deps, me));
     const own = rows.find((r) => r.id === classId && r.teacher_id === me);
     return own && typeof own.name === "string" ? { kind: "one", id: classId, name: own.name } : { kind: "none", query: classId };
   }

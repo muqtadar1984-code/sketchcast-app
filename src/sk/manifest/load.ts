@@ -160,23 +160,32 @@ export async function loadKitInput(admin: ManifestAdmin, generationId: string): 
   const worksheetId = await newestWorksheet(admin, g, articleId);
   const artifacts = await rowsOf(admin, worksheetId ? [g.id, worksheetId] : [g.id]);
 
-  // Scripts, one file per part, sorted by part.
+  // Scripts, one file per part, sorted by part. Every download — the script
+  // parts, the worksheet's questions and the grounding row — starts together;
+  // the order of `scripts` is the sorted row order, whatever finished first.
   const scriptRows = artifacts
     .filter((a) => a.generation_id === g.id && a.kind === "script_json" && scriptPartFromPath(a.storage_path) !== null)
     .sort((a, b) => (scriptPartFromPath(a.storage_path) as number) - (scriptPartFromPath(b.storage_path) as number));
+  const qRow = worksheetId ? artifacts.find((a) => a.generation_id === worksheetId && a.kind === "questions_json") : undefined;
+  const chapterNum = g.book_id && g.chapter_ref !== null ? parseInt(String(g.chapter_ref), 10) : NaN;
+  const [scriptFiles, qj, cgRes] = await Promise.all([
+    Promise.all(scriptRows.map((row) => downloadJson<ScriptFile>(admin, row.storage_path))),
+    qRow ? downloadJson<{ questions?: Record<string, unknown>[] }>(admin, qRow.storage_path) : Promise.resolve(null),
+    g.book_id && !Number.isNaN(chapterNum)
+      ? (admin.from("chapter_grounding").select("concepts").eq("book_id", g.book_id).eq("chapter_num", chapterNum).maybeSingle() as Promise<{ data: unknown }>)
+      : Promise.resolve(null),
+  ]);
   const scripts: ScriptFile[] = [];
-  for (const row of scriptRows) {
-    const sf = await downloadJson<ScriptFile>(admin, row.storage_path);
-    if (!sf || !sf.script || !Array.isArray(sf.script.segments) || !sf.video || !Array.isArray(sf.video.segments)) continue;
+  scriptRows.forEach((row, i) => {
+    const sf = scriptFiles[i];
+    if (!sf || !sf.script || !Array.isArray(sf.script.segments) || !sf.video || !Array.isArray(sf.video.segments)) return;
     if (typeof sf.part !== "number") sf.part = scriptPartFromPath(row.storage_path);
     scripts.push(sf);
-  }
+  });
 
   // Items from the worksheet's questions file.
   const items: ItemSrc[] = [];
   if (worksheetId) {
-    const qRow = artifacts.find((a) => a.generation_id === worksheetId && a.kind === "questions_json");
-    const qj = qRow ? await downloadJson<{ questions?: Record<string, unknown>[] }>(admin, qRow.storage_path) : null;
     for (const q of (qj && Array.isArray(qj.questions) ? qj.questions : []) as Record<string, unknown>[]) {
       if (!q || typeof q !== "object" || q.id === undefined) continue;
       items.push({
@@ -196,9 +205,8 @@ export async function loadKitInput(admin: ManifestAdmin, generationId: string): 
   let concepts: ConceptSrc[] | null = null;
   let conceptSource: KitInput["concept_source"] = "none";
   let articleSourceId: string | null = null;
-  const chapterNum = g.book_id && g.chapter_ref !== null ? parseInt(String(g.chapter_ref), 10) : NaN;
-  if (g.book_id && !Number.isNaN(chapterNum)) {
-    const { data: cg } = await admin.from("chapter_grounding").select("concepts").eq("book_id", g.book_id).eq("chapter_num", chapterNum).maybeSingle();
+  if (cgRes) {
+    const cg = cgRes.data;
     concepts = conceptsFromGrounding(cg ? (cg as { concepts: unknown }).concepts : null);
     if (concepts) conceptSource = "chapter_grounding";
   }
