@@ -28,7 +28,20 @@ export const NAV_TARGETS = [
 ] as const;
 export type NavTarget = (typeof NAV_TARGETS)[number];
 
-export type NavFilters = { classId?: string; learnerId?: string; topic?: string; day?: string; month?: string };
+export type NavFilters = {
+  classId?: string;
+  learnerId?: string;
+  topic?: string;
+  day?: string;
+  month?: string;
+  /** Board only: the lesson to pre-select — a book + chapter_ref (the 0-based
+   *  chapter number the Board keys on) or a ready-made kit's presentation id —
+   *  and whether the Board should start it on landing (deep-link.ts). */
+  bookId?: string;
+  chapterRef?: string;
+  generationId?: string;
+  autostart?: boolean;
+};
 
 export const NAV_LABEL: Record<NavTarget, string> = {
   library: "Library",
@@ -128,12 +141,18 @@ export function navTargetsFor(ctx: SkContext): NavTarget[] {
 const ID_RE = /^[A-Za-z0-9_-]{1,120}$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
+const CHAPTER_RE = /^\d{1,3}$/;
 
 export function cleanFilters(raw: Record<string, unknown> | undefined): NavFilters {
   const f: NavFilters = {};
-  const s = (k: string) => (typeof raw?.[k] === "string" ? (raw[k] as string).trim() : "");
+  const s = (k: string) => (typeof raw?.[k] === "string" ? (raw[k] as string).trim() : typeof raw?.[k] === "number" ? String(raw[k]) : "");
   if (ID_RE.test(s("classId"))) f.classId = s("classId");
   if (ID_RE.test(s("learnerId"))) f.learnerId = s("learnerId");
+  if (ID_RE.test(s("bookId"))) f.bookId = s("bookId");
+  if (CHAPTER_RE.test(s("chapterRef"))) f.chapterRef = s("chapterRef");
+  if (ID_RE.test(s("generationId"))) f.generationId = s("generationId");
+  const a = raw?.autostart;
+  if (a === true || a === "1" || a === "true") f.autostart = true;
   if (DAY_RE.test(s("day"))) f.day = s("day");
   if (MONTH_RE.test(s("month"))) f.month = s("month");
   const topic = s("topic").slice(0, 80);
@@ -160,7 +179,18 @@ export function navPath(target: NavTarget, filters: NavFilters, ctx: SkContext):
     case "analytics":
       return { path: `/dashboard/analytics${q([["c", filters.classId]])}`, label };
     case "board":
-      return { path: "/present", label };
+      // A deep link the Board page reads (deep-link.ts): a kit stands alone;
+      // a chapter needs its book; autostart only with a lesson to start.
+      return {
+        path: `/present${q([
+          ["class", filters.classId],
+          ["kit", filters.generationId],
+          ["book", filters.generationId ? undefined : filters.bookId],
+          ["chapter", !filters.generationId && filters.bookId ? filters.chapterRef : undefined],
+          ["autostart", filters.autostart && (filters.generationId || (filters.bookId && filters.chapterRef)) ? "1" : undefined],
+        ])}`,
+        label,
+      };
     case "children":
       return { path: "/dashboard/children", label };
     case "school":
@@ -209,7 +239,7 @@ export const navigateCapability: SkCapability = {
   meta: {
     name: "navigate",
     description:
-      "Open a portal page for the user (immediate, no confirmation). Use for 'open / show / take me to' requests. Filters: classId narrows analytics or a diary to one class, learnerId picks a progress record, topic filters the kits page, day (YYYY-MM-DD) opens a diary day, month (YYYY-MM) opens a calendar month. Pages the user's role cannot see are refused.",
+      "Open a portal page for the user (immediate, no confirmation). Use for 'open / show / take me to' requests. Filters: classId narrows analytics or a diary to one class, learnerId picks a progress record, topic filters the kits page, day (YYYY-MM-DD) opens a diary day, month (YYYY-MM) opens a calendar month. Board: classId + bookId + chapterRef (or generationId of a ready-made kit's presentation) pre-select the lesson, and autostart=true starts it on landing — use that for 'start the lesson for 7B on …'. Pages the user's role cannot see are refused.",
     parameters: {
       type: "object",
       properties: {
@@ -219,6 +249,10 @@ export const navigateCapability: SkCapability = {
         topic: { type: "string", description: "Topic filter for the kits page." },
         day: { type: "string", description: "YYYY-MM-DD (diary)." },
         month: { type: "string", description: "YYYY-MM (calendar)." },
+        bookId: { type: "string", description: "Board: the book to teach from (from context.resolve or library.find)." },
+        chapterRef: { type: "string", description: "Board: the chapter_ref of that book's chapter (0-based, as library.find reports it)." },
+        generationId: { type: "string", description: "Board: a ready-made kit's presentation id (a library.find kit with no book)." },
+        autostart: { type: "boolean", description: "Board: start the lesson on landing (needs bookId+chapterRef or generationId)." },
       },
       required: ["target"],
       additionalProperties: false,

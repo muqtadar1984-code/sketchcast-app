@@ -74,8 +74,11 @@ export type SessionInfo = {
    *  artifacts storage policy checks, and it is why the board can upload
    *  directly instead of streaming bytes through a route. */
   teacherId: string;
-  bookId: string;
-  chapterNum: number;
+  /** Null for a READY-MADE KIT lesson (a catalogue kit copied into the
+   *  library has no book and no chapter); then `kitId` names the kit. */
+  bookId: string | null;
+  chapterNum: number | null;
+  kitId?: string | null;
 };
 
 export type KitDoc = {
@@ -289,9 +292,9 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
       generationId: string | null,
       at: { chapterNum: number | null; part: number | null },
     ) => {
-      void io.items([{ kind, generationId, detail: { bookId: session.bookId, ...at } }]).catch(() => {});
+      void io.items([{ kind, generationId, detail: { bookId: session.bookId, ...(session.kitId ? { kitId: session.kitId } : {}), ...at } }]).catch(() => {});
     },
-    [io, session.bookId],
+    [io, session.bookId, session.kitId],
   );
 
   // Frozen frames are images the renderer draws synchronously, so they have to

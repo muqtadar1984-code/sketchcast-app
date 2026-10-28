@@ -434,3 +434,38 @@ describe("the recap carries what SK did (slice C)", () => {
     expect(fallbackRecap(buildGround([], [], 1))).toBe("Worked through the class's current topic.");
   });
 });
+
+// ── a ready-made kit lesson: no book, no chapter, a topic ─────────────────────
+
+describe("a kit lesson is about its kit, not 'revision'", () => {
+  const items = [
+    { kind: "video" as const, chapterNum: null, part: null },
+    { kind: "worksheet" as const, chapterNum: null, part: null },
+  ];
+  it("buildGround with a topic: no chapters, revision false, the topic carried (bounded)", () => {
+    const g = buildGround(items, [], 2, { topic: "Plant and Animal Cells Compared" });
+    expect(g.chapters).toEqual([]);
+    expect(g.revision).toBe(false);
+    expect(g.topic).toBe("Plant and Animal Cells Compared");
+    // The same items with NO topic are what they always were: revision.
+    expect(buildGround(items, [], 2).revision).toBe(true);
+    expect(buildGround(items, [], 2).topic).toBeUndefined();
+    expect(buildGround(items, [], 2, { topic: "   " }).topic).toBeUndefined();
+  });
+  it("the fallback names the kit, and what SK explained after it", () => {
+    expect(fallbackRecap(buildGround(items, [], 1, { topic: "Plant and Animal Cells Compared" }))).toBe("Focused on Plant and Animal Cells Compared.");
+    const withSk = buildGround(items, [], 1, {
+      topic: "Plant and Animal Cells Compared",
+      moves: [{ at: "2026-10-28T08:05:00Z", move: "explain", args: { concept: "chloroplasts" } }],
+    });
+    expect(fallbackRecap(withSk)).toBe("Focused on Plant and Animal Cells Compared, chloroplasts.");
+    // A kit named after the machinery falls back to the honest generic line.
+    expect(fallbackRecap(buildGround(items, [], 1, { topic: "The Video Lesson" }))).toBe("Worked through the class's current topic.");
+  });
+  it("the prompt carries the topic as material, and nothing says 'no material'", () => {
+    const { context } = recapPrompt(buildGround(items, [], 1, { topic: "Plant and Animal Cells Compared" }));
+    expect(context).toContain("--- Plant and Animal Cells Compared ---");
+    expect(context).not.toContain("No chapter material");
+    expect(context).not.toContain("revision material");
+  });
+});

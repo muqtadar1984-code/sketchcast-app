@@ -1,6 +1,29 @@
 import { NextResponse } from "next/server";
 import { caller, ownedSession, jsonBody, NOT_FOUND, type Caller } from "@/utils/present/server";
 import { pointerFor, type ShownItem } from "@/utils/present/context";
+import { kitPrefix } from "@/utils/present/kit";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A READY-MADE KIT SHE OWNS, or null. A catalogue kit copied into the library
+ * has no book and no chapter (book_id and chapter_ref both null), so a lesson
+ * on one is keyed by its presentation instead: hers, done, book-less. Anything
+ * else — somebody else's kit, a kit that belongs to a book, a worksheet id —
+ * is refused rather than quietly turned into a book-less lesson.
+ */
+async function ownedKit(c: Caller, kitId: string): Promise<{ id: string; title: string } | null> {
+  if (!UUID_RE.test(kitId)) return null;
+  const { data } = await c.admin
+    .from("generations")
+    .select("id, title, owner_id, book_id, kind, status, withdrawn_at")
+    .eq("id", kitId)
+    .maybeSingle();
+  const g = (data ?? null) as { id: string; title: string | null; owner_id: string; book_id: string | null; kind: string; status: string; withdrawn_at: string | null } | null;
+  if (!g || g.owner_id !== c.userId || g.book_id !== null || g.kind !== "presentation" || g.status !== "done" || g.withdrawn_at) return null;
+  const title = kitPrefix(g.title);
+  return title ? { id: g.id, title } : null;
+}
 
 export const runtime = "nodejs";
 
@@ -46,7 +69,16 @@ export async function POST(request: Request) {
 
   const bookId = typeof b.bookId === "string" ? b.bookId : null;
   const chapterNum = typeof b.chapterNum === "number" ? b.chapterNum : null;
-  if (!bookId || chapterNum === null) {
+  const kitId = typeof b.kitId === "string" ? b.kitId : null;
+  // EITHER a book and chapter OR a ready-made kit. The kit path stores no book
+  // and no chapter (both columns are nullable); the pointer never moves for it
+  // (advancesPointer refuses a session with no book) and the subject is the
+  // kit's own name, which is what the recap page prints above the note.
+  let kit: { id: string; title: string } | null = null;
+  if (kitId) {
+    kit = await ownedKit(c, kitId);
+    if (!kit) return NextResponse.json({ error: "That is not your kit." }, { status: 400 });
+  } else if (!bookId || chapterNum === null) {
     return NextResponse.json({ error: "A book and chapter are required." }, { status: 400 });
   }
 
@@ -85,9 +117,9 @@ export async function POST(request: Request) {
       teacher_id: c.userId,
       school_id: (me?.school_id as string | null) ?? null,
       class_id: classId,
-      subject: typeof b.subject === "string" ? b.subject : null,
-      book_id: bookId,
-      chapter_num: chapterNum,
+      subject: kit ? kit.title : typeof b.subject === "string" ? b.subject : null,
+      book_id: kit ? null : bookId,
+      chapter_num: kit ? null : chapterNum,
       part: typeof b.part === "number" ? b.part : null,
       slot_day: typeof b.slotDay === "number" ? b.slotDay : null,
       slot_period: typeof b.slotPeriod === "number" ? b.slotPeriod : null,

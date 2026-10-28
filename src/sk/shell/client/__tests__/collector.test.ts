@@ -92,3 +92,13 @@ describe("collect", () => {
     expect(collect({ location: { pathname: "/present", search: "" }, now: new Date(), board }).board).toEqual(board);
   });
 });
+
+describe("a host-supplied selection (the Board's bar before a lesson)", () => {
+  it("is layered over what the URL says, and alone is enough to carry a selection", () => {
+    const base = { location: { pathname: "/present", search: "?c=url-class" }, now: new Date("2026-10-28T08:30:00+08:00"), lang: "en" };
+    expect(collect({ ...base, selection: { classId: "bar-class", bookId: "b1", chapterRef: "2" } }).selection).toEqual({ classId: "bar-class", bookId: "b1", chapterRef: "2" });
+    expect(collect({ ...base, location: { pathname: "/present", search: "" }, selection: { generationId: "g-kit" } }).selection).toEqual({ generationId: "g-kit" });
+    expect(collect({ ...base, location: { pathname: "/present", search: "" } }).selection).toBeUndefined();
+    expect(collect({ ...base, location: { pathname: "/present", search: "" }, selection: {} }).selection).toBeUndefined();
+  });
+});

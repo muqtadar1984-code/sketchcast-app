@@ -8,7 +8,8 @@ import { shapeFromConfig, type Slot } from "@/utils/timetable";
 import type { LastTaught } from "@/utils/present/context";
 import { skShellEnabledFor } from "@/utils/flags";
 import { activeHatCookie } from "@/utils/hats-server";
-import PresentClient, { type BookOption, type ClassName, type PresentSk } from "./present-client";
+import { kitGroups, type KitGroupRow } from "@/utils/present/kit";
+import PresentClient, { type BookOption, type ClassName, type KitOption, type PresentSk } from "./present-client";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,28 @@ export default async function PresentPage() {
     chapters: Array.isArray(b.chapters) ? b.chapters : [],
   }));
 
+  // Her READY-MADE KITS: catalogue kits copied into the library arrive with no
+  // book and no chapter (book_id and chapter_ref null), so the book picker
+  // cannot reach them. One chooser entry per title prefix, newest first; the
+  // id is the kit's presentation, which is what /api/present/kit?kit= and
+  // /api/present/session {kitId} key on. Best-effort like every read here.
+  let kits: KitOption[] = [];
+  try {
+    const { data } = await supabase
+      .from("generations")
+      .select("id, title, created_at")
+      .eq("owner_id", user.id)
+      .eq("kind", "presentation")
+      .eq("status", "done")
+      .is("book_id", null)
+      .is("withdrawn_at", null)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    kits = kitGroups((data ?? []) as KitGroupRow[]);
+  } catch {
+    kits = [];
+  }
+
   return (
     <PresentClient
       teacherId={user.id}
@@ -173,6 +196,7 @@ export default async function PresentPage() {
       classes={classes}
       lastTaught={lastTaught}
       books={books}
+      kits={kits}
       sk={sk}
     />
   );

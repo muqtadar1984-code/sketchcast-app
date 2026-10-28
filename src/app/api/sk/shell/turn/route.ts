@@ -17,6 +17,9 @@ import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
 import { issueActionToken } from "@/sk/shell/tokens";
 import { TEACH_MAX_TOKENS, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
 import { BOARD_NO_MAP } from "@/sk/capabilities/board";
+import { searchLibrary } from "@/sk/capabilities/library";
+import type { NavFilters } from "@/sk/capabilities/navigate";
+import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
 import { LOCALES } from "@/i18n/locales";
 import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
 
@@ -282,6 +285,58 @@ export async function POST(request: Request) {
         return null;
       };
 
+      /** START A LESSON with no Board session open (§2.7, start-lesson.ts):
+       *  the user's words → the bar's pick → the timetable → a fixed line. The
+       *  Board page starts the session from the deep link; nothing starts here.
+       *  `named` are the filters the words already resolved to. Emits the
+       *  rest of the turn and returns; no model is called on this path. */
+      const startLesson = async (named: NavFilters, sources: string[], entities: ResolvedEntity[], missing: string | null) => {
+        const plan = await planStartLesson(
+          {
+            ctx,
+            db: g.supabase,
+            run: async (name, args) => {
+              const r = await runCapability(ctx, name, args, deps);
+              send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
+              return r;
+            },
+          },
+          named,
+        );
+        const src = [...new Set([...sources, ...plan.sources])];
+        if (plan.kind === "navigate") {
+          const nav = await runCapability(ctx, "navigate", { target: "board", ...plan.filters }, deps);
+          send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
+          if (nav.ok && nav.navigate) {
+            const line = plan.say ?? nav.summary;
+            const text = missing ? `I couldn't find ${missing} — ${line}` : line;
+            send({ type: "text", text });
+            send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
+            done({ sources: [...new Set([...src, "navigate"])], label: "navigation" }, text, [...entities, ...plan.entities]);
+            return;
+          }
+          send({ type: "text", text: nav.summary });
+          done({ sources: src, label: "declined" }, nav.summary, entities);
+          return;
+        }
+        if (ctx.place.page === "board") {
+          // On the Board with nothing to start: SK's own line, no navigate, no model.
+          const text = lessonNotStarted(ctx.user.locale);
+          send({ type: "text", text });
+          done({ sources: [], label: "declined" }, text, entities);
+          return;
+        }
+        // Elsewhere: the way to the Board, where she can pick.
+        const nav = await runCapability(ctx, "navigate", { target: "board", ...(named.classId ? { classId: named.classId } : {}) }, deps);
+        send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
+        const text = missing ? `I couldn't find ${missing} — ${nav.summary}` : nav.summary;
+        send({ type: "text", text });
+        if (nav.ok && nav.navigate) {
+          send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
+          done({ sources: [...new Set([...src, "navigate"])], label: "navigation" }, text, entities);
+        } else done({ sources: src, label: "declined" }, text, entities);
+      };
+
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
 
@@ -301,14 +356,26 @@ export async function POST(request: Request) {
               done({ sources: taught.sources, label: "grounded", ...(taught.usage ? { usage: taught.usage } : {}), ...(taught.trimmed ? { trimmed: true } : {}) }, taught.text, r.entities ?? []);
             } else done({ sources: [name], label: "grounded" }, act.say, r.entities ?? []);
           } else if (!r.ok && r.error === "no board") {
-            // The Board is not open: say so and offer the way there.
-            const nav = await runCapability(ctx, "navigate", { target: "board" }, deps);
-            send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
-            send({ type: "text", text: r.summary });
-            if (nav.ok && nav.navigate) {
-              send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
-              done({ sources: ["navigate"], label: "navigation" }, r.summary, []);
-            } else done({ sources: [], label: "declined" }, r.summary, []);
+            if (decision.move === "intro") {
+              // "Start the video" with no lesson running: start one (§2.7).
+              await startLesson({}, [], [], null);
+            } else if (ctx.place.page === "board") {
+              // On the Board with no lesson: a Board move has nothing to act on.
+              // SK's own line — never a navigate to the page she is on, and
+              // never a model narrating it.
+              const text = lessonNotStarted(ctx.user.locale);
+              send({ type: "text", text });
+              done({ sources: [], label: "declined" }, text, []);
+            } else {
+              // Elsewhere: say so and offer the way there.
+              const nav = await runCapability(ctx, "navigate", { target: "board" }, deps);
+              send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
+              send({ type: "text", text: r.summary });
+              if (nav.ok && nav.navigate) {
+                send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
+                done({ sources: ["navigate"], label: "navigation" }, r.summary, []);
+              } else done({ sources: [], label: "declined" }, r.summary, []);
+            }
           } else {
             const text = act && "declined" in act ? act.declined : r.summary;
             send({ type: "text", text });
@@ -336,6 +403,27 @@ export async function POST(request: Request) {
               entities.push(hit);
               sources.push("context.resolve");
             } else missing = `${kind} "${query}"`;
+          }
+          // A kit or chapter named for the Board ("… on Specialised Cells",
+          // "… with Plant and Animal Cells"): her own kits by title, through
+          // the library search; a ready-made kit opens as itself, a book's kit
+          // as its chapter.
+          if (decision.target === "board" && decision.kitQuery) {
+            const hits = await searchLibrary(ctx, deps, decision.kitQuery, 40);
+            const hit = pickKitHit(hits, decision.kitQuery);
+            send({ type: "tool", name: "library.find", ok: true, summary: hit ? `Found "${hit.title}".` : `No kit matches "${decision.kitQuery}".` });
+            if (hit) {
+              Object.assign(filters, kitFilters(hit));
+              entities.push({ kind: hit.bookId ? "chapter" : "generation", id: hit.id, label: hit.title, via: "library.find" });
+              sources.push("library.find");
+            } else missing = missing ? `${missing} or kit "${decision.kitQuery}"` : `kit "${decision.kitQuery}"`;
+          }
+          if (decision.target === "board" && decision.filters.autostart) {
+            // Start the lesson: from the words when they named one, else from
+            // the Board's pick or the timetable (start-lesson.ts).
+            await startLesson(filters as NavFilters, sources, entities, namesLesson(filters as NavFilters) ? null : missing);
+            finish();
+            return;
           }
           const nav = await runCapability(ctx, "navigate", { target: decision.target, ...filters }, deps);
           send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });

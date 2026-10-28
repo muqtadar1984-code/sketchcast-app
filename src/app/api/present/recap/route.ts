@@ -4,6 +4,7 @@ import { anthropic, claudeConfigured, claudeModel } from "@/utils/tutor/service"
 import { TUTOR_MODELS } from "@/utils/tutor/models";
 import { caller, ownedSession, jsonBody, NOT_FOUND, type Caller } from "@/utils/present/server";
 import { checkPublish, MAX_BODY } from "@/utils/present/audience";
+import { kitPrefix } from "@/utils/present/kit";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { LOCALES, type Locale } from "@/i18n/locales";
@@ -84,21 +85,27 @@ export async function POST(request: Request) {
   // ── the evidence ───────────────────────────────────────────────────────────
   const { data: itemRows } = await c.admin
     .from("present_items")
-    .select("kind, detail")
+    .select("kind, detail, generation_id")
     .eq("session_id", session.id)
     .order("seq", { ascending: true });
 
-  type Row = { kind: string; detail: Record<string, unknown> | null };
-  const items: RecapItem[] = ((itemRows ?? []) as Row[]).map((i) => ({
+  type Row = { kind: string; detail: Record<string, unknown> | null; generation_id?: string | null };
+  const rows = (itemRows ?? []) as Row[];
+  const items: RecapItem[] = rows.map((i) => ({
     kind: i.kind === "video" || i.kind === "worksheet" ? i.kind : "blank",
     chapterNum: typeof i.detail?.chapterNum === "number" ? i.detail.chapterNum : null,
     part: typeof i.detail?.part === "number" ? i.detail.part : null,
   }));
 
   const skRows = await boardMoves(c.admin, session.id);
+  // A READY-MADE KIT LESSON has no book: the kit's name (the title prefix the
+  // shown generations share, else the subject the session was started with)
+  // stands in for the chapter, so the note can name what the lesson was.
+  const topic = session.book_id === null ? await kitTopic(c.admin, rows, session.subject) : null;
   const ground = buildGround(items, await chapterFacts(c.admin, session.book_id, items), session.page_count ?? 1, {
     moves: skMoves(skRows),
     questionsAsked: skQuestions(skRows),
+    topic,
   });
 
   // ── the allowance ─────────────────────────────────────────────────────────
@@ -147,7 +154,7 @@ export async function POST(request: Request) {
   if (!claudeConfigured()) {
     draft = fallbackRecap(ground, words);
     note = "not-configured";
-  } else if (!ground.chapters.length && !ground.revision) {
+  } else if (!ground.chapters.length && !ground.revision && !ground.topic) {
     // Nothing was shown. There is no prompt worth sending and no sentence the
     // model could write that fallbackRecap does not write for free.
     draft = fallbackRecap(ground, words);
@@ -404,6 +411,25 @@ async function chapterFacts(
       sourceText: g?.source_text ?? null,
     };
   });
+}
+
+/** The name of the ready-made kit a book-less lesson showed: the title prefix
+ *  (before " · ") the shown generations share, else the session's subject —
+ *  which /api/present/session set to that prefix. Any read error is the
+ *  subject, never a failure. */
+async function kitTopic(admin: Caller["admin"], rows: Array<{ kind: string; generation_id?: string | null }>, subject: string | null): Promise<string | null> {
+  const ids = [...new Set(rows.filter((r) => r.kind !== "blank").map((r) => r.generation_id).filter((g): g is string => typeof g === "string" && !!g))];
+  if (ids.length) {
+    try {
+      const { data } = await admin.from("generations").select("id, title").in("id", ids);
+      const names = [...new Set(((data ?? []) as { title: string | null }[]).map((g) => kitPrefix(g.title)).filter(Boolean))];
+      if (names.length) return names.slice(0, 3).join(", ");
+    } catch (e) {
+      console.warn("[present/recap] generations read threw", (e as Error).message);
+    }
+  }
+  const s = (subject ?? "").trim();
+  return s || null;
 }
 
 // ── what SK did in this lesson (S1 slice C) ──────────────────────────────────

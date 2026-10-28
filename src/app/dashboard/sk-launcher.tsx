@@ -59,7 +59,7 @@ export default function SkLauncher({
         <button
           data-tour="sk-launcher"
           onClick={() => setOpen(true)}
-          className="group btn-primary h-11 px-3 hover:px-4 focus-visible:px-4 text-sm rounded-full shadow-lg flex items-center transition-all"
+          className="group btn-primary h-11 px-3 hover:px-4 focus-visible:px-4 text-sm text-white rounded-full shadow-lg flex items-center transition-all"
           title={copy.open}
           aria-label={copy.open}
         >

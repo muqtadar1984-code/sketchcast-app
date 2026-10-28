@@ -138,3 +138,44 @@ describe("POST /api/present/recap pre-filled with SK's moves (slice C)", () => {
     expect(mocks.log.filter((l) => l.startsWith("sk_actions."))).toEqual([]);
   });
 });
+
+describe("a ready-made kit lesson (book_id null, chapter_num null) drafts a note and never fails", () => {
+  const KIT_SESSION = { ...SESSION, book_id: null, chapter_num: null, subject: "Plant and Animal Cells Compared" };
+  it("names the kit from the shown generations' title prefix; reads no book and no chapter grounding", async () => {
+    mocks.session = { ...KIT_SESSION };
+    mocks.tables.present_items = [
+      { kind: "video", detail: { bookId: null, kitId: "g-pres", chapterNum: null, part: null }, generation_id: "g-pres" },
+      { kind: "worksheet", detail: { bookId: null, kitId: "g-pres", chapterNum: null, part: null }, generation_id: "g-ws" },
+    ];
+    mocks.tables.generations = [
+      { id: "g-pres", title: "Plant and Animal Cells Compared · Plant and Animal Cells Compared" },
+      { id: "g-ws", title: "Plant and Animal Cells Compared · Worksheet" },
+    ];
+    mocks.tables.sk_actions = [];
+    const res = await POST(req({ sessionId: "sess-1" }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { draft: string; source: string; note: string | null };
+    expect(body.draft).toBe("Focused on Plant and Animal Cells Compared.");
+    expect(body.source).toBe("fallback");
+    expect(mocks.log.some((l) => l.startsWith("books."))).toBe(false);
+    expect(mocks.log.some((l) => l.startsWith("chapter_grounding."))).toBe(false);
+    expect(mocks.log).toContain('generations.in("id",["g-pres","g-ws"])');
+    expect(mocks.updates).toEqual([{ table: "present_sessions", patch: { recap_draft: body.draft } }]);
+  });
+  it("with nothing shown yet, the session's subject (the kit's name) stands in", async () => {
+    mocks.session = { ...KIT_SESSION };
+    mocks.tables.present_items = [];
+    mocks.tables.sk_actions = [];
+    const body = (await (await POST(req({ sessionId: "sess-1" }))).json()) as { draft: string };
+    expect(body.draft).toBe("Focused on Plant and Animal Cells Compared.");
+  });
+  it("the generations read failing is the subject, never a 500", async () => {
+    mocks.session = { ...KIT_SESSION };
+    mocks.tables.present_items = [{ kind: "video", detail: {}, generation_id: "g-pres" }];
+    mocks.tables.generations = new Error("boom");
+    mocks.tables.sk_actions = [];
+    const res = await POST(req({ sessionId: "sess-1" }));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { draft: string }).draft).toBe("Focused on Plant and Animal Cells Compared.");
+  });
+});

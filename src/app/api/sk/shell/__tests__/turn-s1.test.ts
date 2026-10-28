@@ -89,6 +89,7 @@ vi.mock("@/sk/manifest/store", async () => {
 import { POST } from "@/app/api/sk/shell/turn/route";
 import { SK_CANNOT_CONFIRM } from "@/sk/shell/types";
 import { BOARD_NOT_OPEN, BOARD_NO_MAP } from "@/sk/capabilities/board";
+import { LESSON_NOT_STARTED } from "@/sk/shell/lines";
 import { SCHOOL_ID, TEACHER_ID, fakeAdmin, fakeManifest, fakeSession, readEvents } from "@/sk/shell/__tests__/fixtures";
 
 const ENV = ["FEATURE_PARENT_PORTAL", "FEATURE_SK", "SK_ROLES", "SK_ALLOWED_EMAILS", "FEATURE_SK_SHELL_ALL_SCHOOLS", "SK_SHELL_CONSUMER", "SK_SHELL_SECRET", "BOOK_CODE_SECRET", "FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_SCHOOL_ANALYTICS", "FEATURE_CATALOGUE_TAB", "SK_SHELL_MODEL", "SK_AUDIT", "PRESENT_ALLOWED_EMAILS"];
@@ -239,7 +240,9 @@ describe("Board moves chosen by the model", () => {
   });
   it("a Board move with no Board open: the tool refuses, SK says so, and the way to the Board is offered", async () => {
     mocks.script = [{ toolCalls: [{ id: "c1", name: "board__intro", args: {} }] }, { text: [`${BOARD_NOT_OPEN}`] }];
-    const ev = await readEvents(await POST(req(offBoard("start the video"))));
+    // ("start the video" itself is now a rules-decided start-the-lesson; this
+    // is the model choosing the move from a looser phrase.)
+    const ev = await readEvents(await POST(req(offBoard("could you get the film going"))));
     expect(ev[1]).toMatchObject({ type: "tool", name: "board.intro", ok: false });
     expect(ev.find((e) => e.type === "board")).toBeUndefined();
     expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "declined" });
@@ -435,5 +438,135 @@ describe("practise is stamped with the q_ids mapped to the current segment (slic
     mocks.manifest = { status: "building" };
     const ev = await readEvents(await POST(req(turn("give them two questions"))));
     expect(ev[2]).toEqual({ type: "board", move: "practise", args: { n: 2, k: 1, segmentId: "s2" }, say: "2 questions for the class." });
+  });
+});
+
+// ── Starting a lesson with no Board session (§2.7; live gap 2026-10-28) ──────
+//
+// On /present with nothing open, "start the video" used to refuse ("no
+// board"), navigate to the page she was already on and let the model narrate
+// the confusion. Now: the bar's pick → the timetable → a fixed line, and a
+// deep link with autostart=1 does the starting on the page. No model on any
+// of these paths.
+
+const idleBoard = (text: string, extra: Record<string, unknown> = {}) => turn(text, { collector: { path: "/present", locale: "en", ...extra } });
+const SHAPE = { timetable: { days: 5, periodMinutes: 45, periods: [{ label: "P1", time: "07:45" }, { label: "P2", time: "08:30" }, { label: "P3", time: "09:15" }] } };
+const CLOCK = { day: 3, minutes: 510, iso: "2026-10-28T08:30:00+08:00" };
+const BOOK = { id: "b1", title: "Cambridge Biology", owner_id: TEACHER_ID, school_id: SCHOOL_ID, subject: "Science", status: "ready", chapters: [{ num: 2, title: "Specialised Cells" }] };
+
+describe("'start the video' / 'start the lesson' with no Board session", () => {
+  it("on /present with nothing picked and no timetable → the fixed line, no navigate, no model", async () => {
+    const ev = await readEvents(await POST(req(idleBoard("start the video"))));
+    expect(ev[0]).toMatchObject({ type: "meta", intent: "navigate" });
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "text", "done"]);
+    expect(ev[1]).toMatchObject({ type: "tool", name: "timetable.now_next", ok: true });
+    expect(ev[2]).toEqual({ type: "text", text: LESSON_NOT_STARTED.en });
+    expect(ev[3]).toMatchObject({ type: "done", label: "declined", sources: [] });
+    expect(ev.find((e) => e.type === "navigate")).toBeUndefined();
+    expect(ev.find((e) => e.type === "board")).toBeUndefined();
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("…in the user's locale", async () => {
+    const ev = await readEvents(await POST(req(idleBoard("start the lesson", { locale: "ms" }))));
+    expect(ev.find((e) => e.type === "text")).toEqual({ type: "text", text: LESSON_NOT_STARTED.ms });
+  });
+  it("another Board phrasing on the idle Board ('pause') → the fixed line too; never a navigate to the page she is on", async () => {
+    const ev = await readEvents(await POST(req(idleBoard("pause"))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "text", "done"]);
+    expect(ev[0]).toMatchObject({ intent: "teach" });
+    expect(ev[1]).toMatchObject({ type: "tool", name: "board.pause", ok: false });
+    expect(ev[2]).toEqual({ type: "text", text: LESSON_NOT_STARTED.en });
+    expect(ev[3]).toMatchObject({ label: "declined" });
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("with the bar's pick in the collector (hers) → navigate to the same page with the pick + autostart=1", async () => {
+    session = fakeSession({ ...tables(), books: [BOOK] }, { user: USER });
+    mocks.createClient.mockResolvedValue(session);
+    const ev = await readEvents(await POST(req(idleBoard("start the video", { selection: { classId: "c7b", bookId: "b1", chapterRef: "2" } }))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "text", "navigate", "done"]);
+    expect(ev[1]).toMatchObject({ type: "tool", name: "navigate", ok: true });
+    expect(ev[2]).toEqual({ type: "text", text: "Opening Classroom board." });
+    expect(ev[3]).toEqual({ type: "navigate", path: "/present?class=c7b&book=b1&chapter=2&autostart=1", label: "Classroom board" });
+    expect(ev[4]).toMatchObject({ label: "navigation", sources: ["navigate"] });
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("a picked book the session cannot see is NOT started from: falls through to the fixed line", async () => {
+    const ev = await readEvents(await POST(req(idleBoard("start the video", { selection: { bookId: "b-not-mine", chapterRef: "2" } }))));
+    expect(ev.find((e) => e.type === "navigate")).toBeUndefined();
+    expect(ev.find((e) => e.type === "text")).toEqual({ type: "text", text: LESSON_NOT_STARTED.en });
+  });
+  it("a picked ready-made kit (her own presentation) → ?kit=…&autostart=1", async () => {
+    session = fakeSession({ ...tables(), generations: [{ id: "g-kit", owner_id: TEACHER_ID }] }, { user: USER });
+    mocks.createClient.mockResolvedValue(session);
+    const ev = await readEvents(await POST(req(idleBoard("start the lesson", { selection: { classId: "c7b", generationId: "g-kit" } }))));
+    expect(ev.find((e) => e.type === "navigate")).toEqual({ type: "navigate", path: "/present?class=c7b&kit=g-kit&autostart=1", label: "Classroom board" });
+  });
+  it("with timetable context (in a lesson, class with a last-taught book/chapter) → navigate with those + autostart, saying which lesson", async () => {
+    session = fakeSession(
+      {
+        ...tables(),
+        schools: [{ config: SHAPE }],
+        timetable_slots: [{ class_id: "c7b", day: 3, period: 2, subject: "Science", teacher_id: TEACHER_ID, room: null, kind: "lesson" }],
+        present_last_taught: [{ teacher_id: TEACHER_ID, class_id: "c7b", subject: "Science", book_id: "b1", chapter_num: 2, part: 1 }],
+        books: [BOOK],
+      },
+      { user: USER },
+    );
+    mocks.createClient.mockResolvedValue(session);
+    const ev = await readEvents(await POST(req(idleBoard("start the video", { clock: CLOCK }))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "tool", "text", "navigate", "done"]);
+    expect(ev[1]).toMatchObject({ type: "tool", name: "timetable.now_next", ok: true });
+    expect(ev[2]).toMatchObject({ type: "tool", name: "navigate", ok: true });
+    expect(ev[3]).toEqual({ type: "text", text: "Starting 7B · Science · Specialised Cells." });
+    expect(ev[4]).toEqual({ type: "navigate", path: "/present?class=c7b&book=b1&chapter=2&autostart=1", label: "Classroom board" });
+    expect(ev[5]).toMatchObject({ label: "navigation", sources: ["timetable.now_next", "navigate"] });
+    expect(mocks.constructed).toEqual([]);
+    expect(session.log.filter((l) => /insert|update|rpc\./.test(l))).toEqual([]);
+  });
+  it("off the Board: 'open the board for 7B on Specialised Cells' → class + the book's kit → deep link with autostart", async () => {
+    session = fakeSession(
+      {
+        ...tables(),
+        books: [BOOK],
+        generations: [{ id: "g1", title: "Specialised Cells · Presentation", status: "done", kind: "presentation", chapter_ref: "2", book_id: "b1", created_at: "2026-10-20T00:00:00Z" }],
+      },
+      { user: USER },
+    );
+    mocks.createClient.mockResolvedValue(session);
+    const ev = await readEvents(await POST(req(offBoard("open the board for 7B on Specialised Cells"))));
+    expect(ev.filter((e) => e.type === "tool").map((e) => e.name)).toEqual(["context.resolve", "library.find", "navigate"]);
+    expect(ev.find((e) => e.type === "text")).toEqual({ type: "text", text: "Opening Classroom board." });
+    expect(ev.find((e) => e.type === "navigate")).toEqual({ type: "navigate", path: "/present?class=c7b&book=b1&chapter=2&autostart=1", label: "Classroom board" });
+    expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "navigation", sources: ["context.resolve", "library.find", "navigate"] });
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("off the Board: 'open the board with Plant and Animal Cells' → the ready-made kit (book_id null) → ?kit=…&autostart=1", async () => {
+    session = fakeSession(
+      {
+        ...tables(),
+        generations: [
+          { id: "g-ws", title: "Plant and Animal Cells Compared · Worksheet", status: "done", kind: "worksheet", chapter_ref: null, book_id: null, created_at: "2026-10-21T00:00:00Z" },
+          { id: "g2", title: "Plant and Animal Cells Compared · Plant and Animal Cells Compared", status: "done", kind: "presentation", chapter_ref: null, book_id: null, created_at: "2026-10-20T00:00:00Z" },
+        ],
+      },
+      { user: USER },
+    );
+    mocks.createClient.mockResolvedValue(session);
+    const ev = await readEvents(await POST(req(offBoard("open the board with Plant and Animal Cells"))));
+    expect(ev.find((e) => e.type === "navigate")).toEqual({ type: "navigate", path: "/present?kit=g2&autostart=1", label: "Classroom board" });
+    expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "navigation", sources: ["library.find", "navigate"] });
+  });
+  it("off the Board with nothing to go on: the way to the Board (plain), and a kit it could not find is said", async () => {
+    const plain = await readEvents(await POST(req(offBoard("start the lesson"))));
+    expect(plain.find((e) => e.type === "navigate")).toEqual({ type: "navigate", path: "/present", label: "Classroom board" });
+    expect(plain.find((e) => e.type === "text")).toEqual({ type: "text", text: "Opening Classroom board." });
+    const missing = await readEvents(await POST(req(offBoard("open the board with Volcanoes"))));
+    expect(missing.find((e) => e.type === "navigate")).toEqual({ type: "navigate", path: "/present", label: "Classroom board" });
+    expect(missing.find((e) => e.type === "text")).toEqual({ type: "text", text: `I couldn't find kit "Volcanoes" — Opening Classroom board.` });
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("a bare 'open the board' is unchanged: /present, no autostart", async () => {
+    const ev = await readEvents(await POST(req(offBoard("open the board"))));
+    expect(ev.find((e) => e.type === "navigate")).toEqual({ type: "navigate", path: "/present", label: "Classroom board" });
   });
 });

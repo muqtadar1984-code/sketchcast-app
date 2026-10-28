@@ -7,7 +7,10 @@ import {
   scopeOf,
   groupOf,
   railFor,
+  railForKit,
   pickerFor,
+  kitGroups,
+  kitPrefix,
   NEVER_PROJECT,
   type KitGeneration,
 } from "@/utils/present/kit";
@@ -243,5 +246,65 @@ describe("the picker", () => {
 
   it("returns nothing at all when she has generated no worksheets", () => {
     expect(pickerFor([gen({ kind: "lesson_plan" })], here)).toEqual([]);
+  });
+});
+
+// ── ready-made kits: no book, no chapter (verified on production 2026-10-28) ──
+
+describe("ready-made kits are grouped by their title prefix", () => {
+  const PREFIX = "Plant and Animal Cells Compared";
+  const rm = (over: Partial<KitGeneration> & { id: string }): KitGeneration =>
+    gen({ chapter_ref: null, params: {}, artifacts: [{ kind: "docx", storage_path: "x.docx" }, { kind: "questions_json", storage_path: "x.json" }], ...over });
+  const group = [
+    rm({ id: "pres", kind: "presentation", title: `${PREFIX} · ${PREFIX}`, artifacts: [{ kind: "video_mp4", storage_path: "v/lesson.mp4" }] }),
+    rm({ id: "ws", kind: "worksheet", title: `${PREFIX} · Worksheet` }),
+    rm({ id: "case", kind: "case_study", title: `${PREFIX} · Case study`, artifacts: [{ kind: "docx", storage_path: "c.docx" }] }),
+    rm({ id: "act", kind: "activity", title: `${PREFIX} · Activities`, artifacts: [{ kind: "docx", storage_path: "a.docx" }] }),
+    rm({ id: "deck", kind: "deck", title: `${PREFIX} · Slides`, artifacts: [{ kind: "pptx", storage_path: "d.pptx" }] }),
+  ];
+  const other = [
+    rm({ id: "o-pres", kind: "presentation", title: "Osmosis · Osmosis", artifacts: [{ kind: "video_mp4", storage_path: "o/lesson.mp4" }] }),
+    rm({ id: "o-ws", kind: "worksheet", title: "Osmosis · Worksheet" }),
+  ];
+
+  it("kitPrefix is the title before the first ' · ' (a title with none is its own prefix)", () => {
+    expect(kitPrefix(`${PREFIX} · Worksheet`)).toBe(PREFIX);
+    expect(kitPrefix(`${PREFIX} · ${PREFIX}`)).toBe(PREFIX);
+    expect(kitPrefix("Osmosis")).toBe("Osmosis");
+    expect(kitPrefix("  Osmosis · A · B ")).toBe("Osmosis");
+    expect(kitPrefix(null)).toBe("");
+    expect(kitPrefix("")).toBe("");
+  });
+
+  it("the rail for a kit: its presentation as the video, its sibling documents as docs, the deck off", () => {
+    const units = railForKit([...group, ...other], "pres");
+    expect(units).toHaveLength(1);
+    expect(units[0].part).toBeNull();
+    expect(units[0].video).toEqual({ id: "pres", title: `${PREFIX} · ${PREFIX}` });
+    expect(units[0].docs.map((d) => d.id)).toEqual(["ws", "act", "case"]);
+    expect(units[0].docs[0]).toEqual({ id: "ws", kind: "worksheet", projects: true });
+    expect(units[0].docs.find((d) => d.id === "case")).toMatchObject({ projects: false, note: "no-text" });
+    // Osmosis is another kit entirely.
+    expect(units[0].docs.some((d) => d.id === "o-ws")).toBe(false);
+    expect(railForKit([...group, ...other], "o-pres")[0].docs.map((d) => d.id)).toEqual(["o-ws"]);
+  });
+
+  it("asks for a presentation it was not given → nothing (ownership is the caller's query, not the prefix)", () => {
+    expect(railForKit(other, "pres")).toEqual([]);
+    expect(railForKit(group, "ws")).toEqual([]); // a worksheet is not a kit's head
+  });
+
+  it("kitGroups: one entry per prefix — the newest presentation — newest first, blanks dropped", () => {
+    const rows = [
+      { id: "old", title: `${PREFIX} · ${PREFIX}`, created_at: "2026-10-01T00:00:00Z" },
+      { id: "new", title: `${PREFIX} · ${PREFIX}`, created_at: "2026-10-20T00:00:00Z" },
+      { id: "osm", title: "Osmosis · Osmosis", created_at: "2026-10-10T00:00:00Z" },
+      { id: "blank", title: null, created_at: "2026-10-28T00:00:00Z" },
+    ];
+    expect(kitGroups(rows)).toEqual([
+      { id: "new", title: PREFIX },
+      { id: "osm", title: "Osmosis" },
+    ]);
+    expect(kitGroups([])).toEqual([]);
   });
 });

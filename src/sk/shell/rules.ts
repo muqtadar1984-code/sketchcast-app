@@ -10,7 +10,7 @@ import type { SkBoardMove, SkCollector, SkContext, SkIntent } from "./types";
 import { NAV_TARGETS, type NavFilters, type NavTarget } from "@/sk/capabilities/navigate";
 
 export type RulesDecision =
-  | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string }
+  | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
   | { intent: "chat"; reply: string }
   /** S1: a Board move decided by rules (only while the collector reports an
    *  open Board session). `args` are the capability's arguments; `k` is 0-based. */
@@ -261,6 +261,47 @@ export function routeBoard(raw: string, normed: string, ctx: SkContext): RulesDe
   return null;
 }
 
+// ── Starting a lesson with no Board session open (§2.7) ──────────────────────
+//
+// "start the lesson", "start the lesson for 7B on Specialised Cells", "open the
+// board with Plant and Animal Cells", "mulakan pelajaran", "ابدأ الدرس" — and,
+// with no session, the intro phrasings too ("start the video"): all become a
+// `navigate board` with autostart and whatever class / kit words were said,
+// which the turn route resolves and, failing that, fills from the Board's own
+// pick or the timetable (start-lesson.ts). A bare "open the board" stays a
+// plain navigate: going there is not the same as starting a lesson.
+const START_LESSON_RE = new RegExp(
+  "^(?:please |sila |tolong |من فضلك |الرجاء )?(?:" +
+    "(?:start|begin|kick off|set up|mula(?:kan)?|ابدأ|ابدا) (?:the |a |my |this |today'?s )?(?:lesson|class|board|classroom board|pelajaran|kelas|papan|الدرس|الحصة|اللوحة)" +
+    "|(?:open|buka|افتح) (?:the |a )?(?:board|classroom board|papan|اللوحة) (?=\\S)" +
+    ")(?<rest>.*)$",
+  "u",
+);
+const KIT_RE = /(?:^|\s)(?:on|about|with|using|covering|tentang|mengenai|dengan|menggunakan|عن|باستخدام|بـ)\s+(.+)$/u;
+const TRAILING_PREP_RE = /\s+(?:for|to|with|untuk|bagi|dengan|لـ|ل)\s*$/u;
+
+/** Class and kit words of a start-the-lesson phrase; null when it is not one. */
+export function startLessonOf(normed: string, rawText: string): { classQuery?: string; kitQuery?: string } | null {
+  const t = normed.replace(/\s*[,،]\s*/gu, " ").trim();
+  let rest: string | null = null;
+  const m = t.match(START_LESSON_RE);
+  if (m) rest = (m.groups?.rest ?? "").trim();
+  else if (INTRO_RE.test(t)) rest = "";
+  if (rest === null) return null;
+  const out: { classQuery?: string; kitQuery?: string } = {};
+  const classQuery = classQueryOf(rest);
+  if (classQuery) out.classQuery = classQuery;
+  // The kit words, with the class token taken out and the original casing
+  // kept for the title lookup ("Plant and Animal Cells", not lower-case).
+  const withoutClass = rest.replace(CLASS_RE, " ").replace(/\s+/g, " ").replace(TRAILING_PREP_RE, "").trim();
+  const k = withoutClass.match(KIT_RE)?.[1]?.replace(TRAILING_PREP_RE, "").trim();
+  if (k) {
+    const idx = rawText.toLowerCase().lastIndexOf(k.toLowerCase());
+    out.kitQuery = (idx >= 0 ? rawText.slice(idx, idx + k.length) : k).replace(/[?؟.!]+$/u, "").trim().slice(0, 80);
+  }
+  return out;
+}
+
 export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
   const raw = (text ?? "").trim();
   const t = norm(raw);
@@ -273,6 +314,17 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   if (ctx.board?.sessionId) {
     const b = routeBoard(raw, t, ctx);
     if (b) return b;
+  } else {
+    // No session: "start the lesson / the video" is a navigate-and-start; the
+    // other Board phrasings on the Board page itself ("pause", "slide 4") are
+    // still decided here, so the route answers with its fixed line and no
+    // model narrates a Board that is not running.
+    const sl = startLessonOf(t, raw);
+    if (sl) return { intent: "navigate", target: "board", filters: { autostart: true }, ...(sl.classQuery ? { classQuery: sl.classQuery } : {}), ...(sl.kitQuery ? { kitQuery: sl.kitQuery } : {}) };
+    if (ctx.place.page === "board") {
+      const b = routeBoard(raw, t, ctx);
+      if (b) return b;
+    }
   }
 
   const isQuestion = /[?؟]\s*$/.test(raw) || /^(?:what|which|who|whose|how|when|where|why|is|are|do|does|did|can|could|has|have|berapa|siapa|apa|bila|mana|bagaimana|ما|من|كم|متى|كيف|هل)\b/u.test(t);

@@ -143,7 +143,35 @@ describe("only with an open Board", () => {
     expect(routeByRules("pause", off, NOW, clock).intent).toBe("ask");
     expect(routeByRules("slide 4", off, NOW, clock).intent).toBe("ask");
     expect(routeByRules("give them three questions", off, NOW, clock).intent).toBe("ask");
-    expect(routeByRules("open the board", off, NOW, clock)).toMatchObject({ intent: "navigate", target: "board" });
+    expect(routeByRules("open the board", off, NOW, clock)).toMatchObject({ intent: "navigate", target: "board", filters: {} });
+  });
+  it("on the Board page with NO session: 'start the video' starts a lesson (navigate + autostart), the other Board phrasings are decided here so the route can answer with its fixed line", () => {
+    const idle: SkContext = buildContext({
+      user: { id: TEACHER_ID, email: "t@school.example" },
+      role: "teacher",
+      schoolId: SCHOOL_ID,
+      hat: "teacher",
+      coordinatorScope: [],
+      plan: "school",
+      staff: false,
+      flags: ALL_FLAGS,
+      collector: { path: "/present" },
+      now: NOW,
+    });
+    expect(idle.place.page).toBe("board");
+    expect(idle.board).toBeUndefined();
+    expect(routeByRules("start the video", idle, NOW, clock)).toEqual({ intent: "navigate", target: "board", filters: { autostart: true } });
+    expect(routeByRules("start the lesson", idle, NOW, clock)).toMatchObject({ intent: "navigate", target: "board", filters: { autostart: true } });
+    expect(routeByRules("pause", idle, NOW, clock)).toEqual({ intent: "teach", move: "pause", args: {} });
+    expect(routeByRules("slide 4", idle, NOW, clock)).toEqual({ intent: "teach", move: "slide", args: { k: 3 } });
+    expect(routeByRules("explain diffusion", idle, NOW, clock)).toMatchObject({ intent: "teach", move: "explain" });
+    // Questions and navigation on the idle Board are unchanged.
+    expect(routeByRules("what is diffusion?", idle, NOW, clock).intent).toBe("ask");
+    expect(routeByRules("open my analytics", idle, NOW, clock)).toMatchObject({ intent: "navigate", target: "analytics" });
+  });
+  it("with a session open, 'start the lesson' is the intro move, not a navigate", () => {
+    expect(teach("start the lesson").move).toBe("intro");
+    expect(teach("start the video").move).toBe("intro");
   });
   it("with the Board open, navigation and questions still route as before", () => {
     expect(routeByRules("open my analytics", ctx, NOW, clock)).toMatchObject({ intent: "navigate", target: "analytics" });

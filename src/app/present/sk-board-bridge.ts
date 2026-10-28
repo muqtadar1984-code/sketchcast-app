@@ -29,7 +29,7 @@
 // consumes, and nothing else in this file knows the KitManifest.
 
 import type { BoardController, BoardManifest, BoardUnit, ManifestSegment, VisualVerdict } from "./board-controller";
-import type { SkBoardMove, SkBoardState } from "@/sk/shell/types";
+import type { SkBoardMove, SkBoardState, SkSelection } from "@/sk/shell/types";
 
 // ── manifest adapter ────────────────────────────────────────────────────────
 
@@ -170,6 +170,10 @@ export type BridgeDeps = {
   generationId?: () => string | null;
   manifest: () => BridgeManifest | null;
   mapStatus: () => ManifestStatus;
+  /** The bar's current pick (class / book + chapter / ready-made kit) BEFORE
+   *  a lesson runs, so "start the video" on an idle Board can start that
+   *  lesson. Ids only; the server re-checks them before it navigates. */
+  selection?: () => SkSelection | undefined;
   /** Polling cadence for the segment-end watcher. */
   pollMs?: number;
   now?: () => number;
@@ -179,6 +183,8 @@ export type BridgeRun = { ok: boolean; summary: string; /** True when the move l
 
 export type SkBoardBridge = {
   state(): SkBoardState | undefined;
+  /** What the bar has picked (see BridgeDeps.selection); undefined when nothing. */
+  selection(): SkSelection | undefined;
   status(): ManifestStatus;
   /** The open unit, from the controller. */
   unit(): BoardUnit | null;
@@ -281,6 +287,8 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
 
   return {
     status: () => deps.mapStatus(),
+
+    selection: () => deps.selection?.(),
 
     unit: () => unitOf(deps.controller()),
 

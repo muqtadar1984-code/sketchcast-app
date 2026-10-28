@@ -155,11 +155,15 @@ export function railFor(gens: KitGeneration[], here: { chapter: number }): RailU
     const s = scopeOf(g);
     return (s.kind === "part" || s.kind === "chapter") && s.chapter === here.chapter;
   });
+  return unitsOf(mine);
+}
 
+/** The generations of one unit set, grouped by part (null = whole), each with
+ *  its video and its documents. Shared by the chapter rail and the kit rail. */
+function unitsOf(mine: KitGeneration[]): RailUnit[] {
   const byPart = new Map<number | null, KitGeneration[]>();
   for (const g of mine) {
-    const s = scopeOf(g);
-    const key = s.kind === "part" ? s.part : null;
+    const key = partOf(g);
     const list = byPart.get(key);
     if (list) list.push(g);
     else byPart.set(key, [g]);
@@ -188,6 +192,64 @@ export function railFor(gens: KitGeneration[], here: { chapter: number }): RailU
         .sort((a, b) => Number(b.projects) - Number(a.projects) || a.kind.localeCompare(b.kind)),
     };
   });
+}
+
+// ── ready-made kits: no book, no chapter ─────────────────────────────────────
+//
+// A catalogue kit copied into the library has `book_id = null` and
+// `chapter_ref = null` (verified on production, 2026-10-28): the presentation,
+// worksheet, case study, activities and deck arrive as sibling generations that
+// share nothing in the schema except their TITLE PREFIX — "Plant and Animal
+// Cells Compared · Plant and Animal Cells Compared", "Plant and Animal Cells
+// Compared · Worksheet", and so on. The prefix before the first " · " is the
+// kit's name and the only key that groups them, so it is the key here.
+
+export const KIT_TITLE_SEP = " · ";
+
+/** "Plant and Animal Cells Compared · Worksheet" → "Plant and Animal Cells Compared". */
+export function kitPrefix(title: string | null | undefined): string {
+  const t = (title ?? "").trim();
+  if (!t) return "";
+  const i = t.indexOf(KIT_TITLE_SEP);
+  return (i === -1 ? t : t.slice(0, i)).trim();
+}
+
+export type KitGroupRow = { id: string; title: string | null; created_at?: string | null };
+export type KitGroup = { id: string; title: string };
+
+/**
+ * One chooser entry per ready-made kit: the NEWEST presentation of each title
+ * prefix, newest first. Rows are the teacher's own done presentations with no
+ * book (the caller's query); a row with no usable title is dropped rather than
+ * listed as "".
+ */
+export function kitGroups(rows: KitGroupRow[]): KitGroup[] {
+  const sorted = [...rows].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+  const seen = new Set<string>();
+  const out: KitGroup[] = [];
+  for (const r of sorted) {
+    const title = kitPrefix(r.title);
+    if (!title || !r.id || seen.has(title)) continue;
+    seen.add(title);
+    out.push({ id: r.id, title });
+  }
+  return out;
+}
+
+/**
+ * The rail for one ready-made kit: every generation sharing the chosen
+ * presentation's title prefix, grouped exactly as a chapter's would be. `gens`
+ * must already be the teacher's own, done, non-withdrawn, book-less rows — the
+ * prefix is a grouping key, not an ownership check. Nothing when the
+ * presentation is not among them.
+ */
+export function railForKit(gens: KitGeneration[], presentationId: string): RailUnit[] {
+  const head = gens.find((g) => g.id === presentationId && g.kind === "presentation");
+  if (!head) return [];
+  const prefix = kitPrefix(head.title);
+  if (!prefix) return [];
+  const mine = gens.filter((g) => !isRevision(g) && kitPrefix(g.title) === prefix);
+  return unitsOf(mine);
 }
 
 export type PickerItem = {

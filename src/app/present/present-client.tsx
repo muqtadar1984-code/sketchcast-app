@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useSearchParams } from "next/navigation";
 import { resolveContext, type LastTaught, type PresentContext } from "@/utils/present/context";
+import type { SkSelection } from "@/sk/shell/types";
+import { deepLinkStartable, parsePresentDeepLink } from "./deep-link";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { fmt } from "@/i18n/format";
 import type { TourCopy } from "@/tour/definitions";
@@ -40,6 +43,9 @@ export type BookOption = {
   chapters: { num: number; title?: string }[];
 };
 
+/** A ready-made kit: one entry per title prefix, keyed by its presentation. */
+export type KitOption = { id: string; title: string };
+
 /** Exactly what /api/present/kit returns, and exactly what the board consumes. */
 type Kit = SessionKit;
 
@@ -64,6 +70,8 @@ type Props = {
   classes: ClassName[];
   lastTaught: LastTaught[];
   books: BookOption[];
+  /** Her ready-made kits (book-less presentations), newest first. */
+  kits?: KitOption[];
   /** Null when the Shell is off (gates in page.tsx). */
   sk?: PresentSk | null;
 };
@@ -135,6 +143,7 @@ export default function PresentClient({
   classes,
   lastTaught,
   books,
+  kits = [],
   sk = null,
 }: Props) {
   const now = useSyncExternalStore(subscribeClock, clockSnapshot, clockServerSnapshot);
@@ -148,9 +157,34 @@ export default function PresentClient({
   // to be careful never to overwrite a choice she had already made; a null
   // `pick` meaning "she has not chosen" needs no such care, and it makes
   // "explicitly cleared" a state the suggestion cannot quietly undo.
-  const [pick, setPick] = useState<{ book: string | null; chapter: number | null } | null>(null);
-  const bookId = pick ? pick.book : (ctx?.suggestion?.bookId ?? null);
-  const chapter = pick ? pick.chapter : (ctx?.suggestion?.chapterNum ?? null);
+  // A pick is a book + chapter OR a ready-made kit (a book-less catalogue kit
+  // in her library); choosing one clears the other, since a lesson is on one.
+  //
+  // THE DEEP LINK IS A SECOND DEFAULT LAYER, derived like the suggestion and
+  // never copied into state: `/present?class=…&book=…&chapter=…` (or `?kit=…`)
+  // is how SK "opens the Board and starts with the video" from nothing (Final
+  // Plan §2.7) and how it starts the bar's own pick from this very page — a
+  // router.push with a new query changes `search` and nothing re-mounts. Ids
+  // not in the page's own lists are dropped (deep-link.ts). Her pick is KEYED
+  // TO THE QUERY it was made under, so a new link is not quietly overridden by
+  // a choice made before it, while under one query her choice still wins.
+  const searchParams = useSearchParams();
+  const search = searchParams?.toString() ?? "";
+  const link = useMemo(() => parsePresentDeepLink(search, { classes, books, kits }), [search, classes, books, kits]);
+  const linkPick = link.kitId
+    ? { book: null, chapter: null, kit: link.kitId }
+    : link.bookId
+      ? { book: link.bookId, chapter: link.chapterNum ?? null, kit: null }
+      : null;
+
+  type Pick = { book: string | null; chapter: number | null; kit: string | null };
+  const [pickState, setPickState] = useState<(Pick & { search: string }) | null>(null);
+  const pick: Pick | null = pickState && pickState.search === search ? pickState : null;
+  const setPick = useCallback((p: Pick) => setPickState({ ...p, search }), [search]);
+  const kitId = pick ? pick.kit : (linkPick?.kit ?? null);
+  const bookId = kitId ? null : pick ? pick.book : linkPick ? linkPick.book : (ctx?.suggestion?.bookId ?? null);
+  const chapter = kitId ? null : pick ? pick.chapter : linkPick ? linkPick.chapter : (ctx?.suggestion?.chapterNum ?? null);
+  const kitPick = kits.find((k) => k.id === kitId) ?? null;
 
   // WHICH CLASS. The timetable names it when there is one; otherwise she picks,
   // and she has to be able to — an independent teacher has classes and no
@@ -162,8 +196,11 @@ export default function PresentClient({
   // winning would silently replace a class she picked for a covering lesson the
   // moment the period rolled over — and the picker was hidden whenever the
   // timetable had an opinion, so she could not have seen it happen.
-  const [pickedClass, setPickedClass] = useState<string | null>(null);
-  const classId = pickedClass ?? ctx?.classId ?? null;
+  // The deep link's class sits between her choice and the timetable's.
+  const [pickedClassState, setPickedClassState] = useState<{ id: string | null; search: string } | null>(null);
+  const pickedClass = pickedClassState && pickedClassState.search === search ? pickedClassState.id : null;
+  const setPickedClass = useCallback((id: string | null) => setPickedClassState({ id, search }), [search]);
+  const classId = pickedClass ?? link.classId ?? ctx?.classId ?? null;
   const klass = classes.find((c) => c.id === classId) ?? null;
   const book = books.find((b) => b.id === bookId) ?? null;
   const chapters = book?.chapters ?? [];
@@ -174,7 +211,7 @@ export default function PresentClient({
   // for this chapter yet" while sitting on a full set. The rail returns every
   // unit in the chapter instead, and she opens one once the board is running —
   // which is also when she actually knows, since a period often spans two.
-  const ready = !!bookId && chapter !== null;
+  const ready = (!!bookId && chapter !== null) || !!kitPick;
 
   // The running lesson. Declared here rather than beside its own handlers
   // because the kit fetch below has to know whether one exists.
@@ -198,6 +235,7 @@ export default function PresentClient({
   const locked = !!session;
   const liveBook = session ? session.bookId : bookId;
   const liveChapter = session ? session.chapterNum : chapter;
+  const liveKit = session ? (session.kitId ?? null) : kitPick?.id ?? null;
 
   // The rail, fetched once she has named a book and chapter.
   //
@@ -207,14 +245,14 @@ export default function PresentClient({
   // an effect cascades a render, and React's compiler refuses it. And it makes
   // a late response from a superseded selection structurally unable to land: a
   // `live` flag closes the window, a key comparison closes the question.
-  const key = liveBook && liveChapter !== null ? `${liveBook}|${liveChapter}` : null;
+  const key = liveKit ? `kit|${liveKit}` : liveBook && liveChapter !== null ? `${liveBook}|${liveChapter}` : null;
   const [loaded, setLoaded] = useState<{ key: string; kit: Kit | null; error: string | null } | null>(
     null,
   );
   useEffect(() => {
-    if (!key || !liveBook || liveChapter === null) return;
+    if (!key) return;
     let live = true;
-    const q = new URLSearchParams({ book: liveBook, chapter: String(liveChapter) });
+    const q = liveKit ? new URLSearchParams({ kit: liveKit }) : new URLSearchParams({ book: liveBook ?? "", chapter: String(liveChapter) });
     fetch(`/api/present/kit?${q.toString()}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 404 ? t.kit.unavailable : `Failed (${r.status})`);
@@ -233,7 +271,7 @@ export default function PresentClient({
     return () => {
       live = false;
     };
-  }, [key, liveBook, liveChapter, t]);
+  }, [key, liveKit, liveBook, liveChapter, t]);
 
   const current = loaded && loaded.key === key ? loaded : null;
   const kit = current?.kit ?? null;
@@ -246,7 +284,8 @@ export default function PresentClient({
   const [startError, setStartError] = useState<string | null>(null);
 
   const start = useCallback(async () => {
-    if (!bookId || chapter === null) return;
+    const kit = kitPick?.id ?? null;
+    if (!kit && (!bookId || chapter === null)) return;
     setStarting(true);
     setStartError(null);
     try {
@@ -254,8 +293,9 @@ export default function PresentClient({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          bookId,
-          chapterNum: chapter,
+          // A ready-made kit has no book and no chapter: the kit's presentation
+          // id is the lesson's key and the server sets the subject to its name.
+          ...(kit ? { kitId: kit } : { bookId, chapterNum: chapter }),
           classId,
           subject: ctx?.subject ?? klass?.name ?? null,
           slotDay: ctx?.day ?? null,
@@ -264,7 +304,7 @@ export default function PresentClient({
       });
       const d = (await r.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!r.ok || !d.id) throw new Error(d.error || `Could not start (${r.status})`);
-      setSession({ id: d.id, teacherId, bookId, chapterNum: chapter });
+      setSession(kit ? { id: d.id, teacherId, bookId: null, chapterNum: null, kitId: kit } : { id: d.id, teacherId, bookId, chapterNum: chapter });
     } catch (e) {
       // Starting is the one action where a silent failure is unacceptable: she
       // taps it and turns to the class.
@@ -272,9 +312,28 @@ export default function PresentClient({
     } finally {
       setStarting(false);
     }
-  }, [bookId, chapter, ctx, classId, klass, teacherId, t]);
+  }, [bookId, chapter, kitPick, ctx, classId, klass, teacherId, t]);
 
   const endSession = useCallback(() => setSession(null), []);
+
+  // ── autostart (Final Plan §2.7) ──────────────────────────────────────────
+  //
+  // `&autostart=1` on a link that resolves whole starts the lesson ONCE per
+  // distinct query, and only while none is running: a session ending under
+  // the same query must not start another, and a later session must not
+  // re-read the link. The pick is derived above, so start() already sees it;
+  // one tick's deferral keeps the start out of the effect's own render pass.
+  const startedFor = useRef<string | null>(null);
+  const startRef = useRef(start);
+  useEffect(() => {
+    startRef.current = start;
+  }, [start]);
+  useEffect(() => {
+    if (!search || !link.autostart || !deepLinkStartable(link) || session || startedFor.current === search) return;
+    startedFor.current = search;
+    const id = setTimeout(() => void startRef.current(), 0);
+    return () => clearTimeout(id);
+  }, [search, link, session]);
 
   // ── SK on the Board (S1) ──────────────────────────────────────────────────
   //
@@ -323,8 +382,23 @@ export default function PresentClient({
   const manifest = lessonNow?.manifest ?? null;
   const mapStatus: ManifestStatus = !unitGen ? "none" : lessonNow ? lessonNow.status : "building";
 
+  // The bar's pick, for SK's collector: with no lesson running, "start the
+  // video" can start THIS lesson rather than asking what to teach. Ids only.
+  const selection = useMemo<SkSelection | undefined>(() => {
+    if (session) return undefined;
+    const sel: SkSelection = {};
+    if (classId) sel.classId = classId;
+    if (kitPick) sel.generationId = kitPick.id;
+    else {
+      if (bookId) sel.bookId = bookId;
+      if (bookId && chapter !== null) sel.chapterRef = String(chapter);
+    }
+    return Object.keys(sel).length ? sel : undefined;
+  }, [session, classId, kitPick, bookId, chapter]);
+
   // Rebuilt whenever what it reads changes; the old one's segment watcher is
-  // disposed with it (a unit or session change ends the watch anyway).
+  // disposed with it (a unit or session change ends the watch anyway). The
+  // selection only changes BEFORE a lesson, when no watcher can be running.
   const bridge = useMemo(
     () =>
       sk
@@ -332,9 +406,10 @@ export default function PresentClient({
             controller: () => controller,
             manifest: () => manifest,
             mapStatus: () => mapStatus,
+            selection: () => selection,
           })
         : null,
-    [sk, controller, manifest, mapStatus],
+    [sk, controller, manifest, mapStatus, selection],
   );
   useEffect(() => () => bridge?.dispose(), [bridge]);
 
@@ -364,7 +439,7 @@ export default function PresentClient({
           aria-label={t.bar.book}
           value={bookId ?? ""}
           disabled={locked}
-          onChange={(e) => setPick({ book: e.target.value || null, chapter: null })}
+          onChange={(e) => setPick({ book: e.target.value || null, chapter: null, kit: null })}
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
         >
           <option value="">{t.bar.chooseBook}</option>
@@ -380,7 +455,7 @@ export default function PresentClient({
           value={chapter ?? ""}
           disabled={locked || !book}
           onChange={(e) =>
-            setPick({ book: bookId, chapter: e.target.value === "" ? null : Number(e.target.value) })
+            setPick({ book: bookId, chapter: e.target.value === "" ? null : Number(e.target.value), kit: null })
           }
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-40"
         >
@@ -392,6 +467,27 @@ export default function PresentClient({
             </option>
           ))}
         </select>
+
+        {/* READY-MADE KITS: catalogue kits copied into the library have no book
+            and no chapter, so the two pickers above can never reach them. One
+            entry per kit, keyed by its presentation. Only rendered when she has
+            any — an independent teacher with no kits sees the bar unchanged. */}
+        {kits.length > 0 && (
+          <select
+            aria-label={t.bar.kit}
+            value={kitId ?? ""}
+            disabled={locked}
+            onChange={(e) => setPick(e.target.value ? { book: null, chapter: null, kit: e.target.value } : { book: null, chapter: null, kit: null })}
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
+          >
+            <option value="">{t.bar.chooseKit}</option>
+            {kits.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.title}
+              </option>
+            ))}
+          </select>
+        )}
 
         <Confidence t={t} ctx={ctx} />
 
