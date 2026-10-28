@@ -1,0 +1,152 @@
+import Link from "next/link";
+import { listApprovals, listArtifacts, listOpenItems, listRuns, listStages } from "@/utils/books/store";
+import type { Approval } from "@/utils/books/types";
+import { loadBook } from "./load";
+import { Card, Chip, day, usd } from "../ui";
+
+/** "reply hit the output cap (6000)" → "output cap"; the full error is in the tooltip. */
+function shortError(e: string): string {
+  if (/output cap/i.test(e)) return "output cap";
+  if (/ForeignKeyViolation/.test(e)) return "database error";
+  if (/CalledProcessError/.test(e)) return "print error";
+  return e.split(":")[0];
+}
+
+// /books/[slug] — where the book stands (facts, open items) and its whole life,
+// stage by stage, with the approvals, runs and files each stage left.
+export default async function BookOverview({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const { work, revisions } = await loadBook(slug);
+  const [stages, approvals, runs, artifacts, openItems] = await Promise.all([
+    listStages(work.uid),
+    listApprovals(work.uid),
+    listRuns(work.uid),
+    listArtifacts(work.uid),
+    listOpenItems(work.uid),
+  ]);
+  const revLabel = new Map(revisions.map((r) => [r.key, r.label]));
+  const approvalsFor = (stageKey: string, revisionKey: string | null): Approval[] =>
+    approvals.filter((a) => a.stage_key === stageKey || (revisionKey && a.scope === "book" && a.kind === "book" && a.revision_key === revisionKey));
+  const f = work.facts;
+  const open = openItems.filter((o) => o.status !== "done");
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <div className="space-y-6 min-w-0">
+        <Card title="Life of the book">
+          <ol className="relative border-s border-[#E4DCC8] ms-2">
+            {stages.map((s) => {
+              const ap = approvalsFor(s.key, s.revision_key);
+              const rs = runs.filter((r) => r.stage_key === s.key);
+              const files = artifacts.filter((a) => a.stage_key === s.key).length;
+              return (
+                <li key={s.key} className="ms-5 pb-6 last:pb-0">
+                  <span className={`absolute -start-[7px] mt-1.5 h-3.5 w-3.5 rounded-full border-2 border-white ${s.status === "done" ? "bg-[#3F7D5A]" : "bg-[#D08A2E]"}`} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-medium">{s.title}</h3>
+                    <Chip label={s.status} />
+                    <span className="text-xs text-[#7A7363]">
+                      {day(s.started_on)}
+                      {s.finished_on && s.finished_on !== s.started_on ? ` – ${day(s.finished_on)}` : ""}
+                    </span>
+                  </div>
+                  {s.summary && <p className="text-sm text-[#5F5A4E] mt-1">{s.summary}</p>}
+                  {ap.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {ap.map((a) => (
+                        <li key={a.id} className="text-sm flex flex-wrap items-center gap-2">
+                          <span aria-hidden>✓</span>
+                          <span className="font-medium">{a.label}</span>
+                          <span className="text-[#7A7363]">
+                            {a.approved_by}, {day(a.approved_on)}
+                          </span>
+                          {a.hash_verified === true && <Chip label="hash verified" tone="done" />}
+                          {a.hash_verified === false && <Chip label="hash does not match" tone="failed" />}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#7A7363]">
+                    {s.revision_key && (
+                      <Link className="underline hover:text-[#1F2A24]" href={`/books/${slug}/chapters?rev=${encodeURIComponent(s.revision_key)}`}>
+                        Read {revLabel.get(s.revision_key) ?? s.revision_key}
+                      </Link>
+                    )}
+                    {rs.map((r) => (
+                      <span key={r.id}>
+                        Run: {r.label}
+                        {r.usd !== null ? ` · ${usd(r.usd)}` : ""}
+                        {r.status === "partial" && r.detail?._failed
+                          ? Object.entries(r.detail._failed).map(([ch, err]) => (
+                              <span key={ch} className="text-[#8A4B10]" title={err}>
+                                {` · ch ${ch} failed here (${shortError(err)}), finished in a later run`}
+                              </span>
+                            ))
+                          : r.status !== "done"
+                            ? ` · ${r.status}`
+                            : ""}
+                      </span>
+                    ))}
+                    {files > 0 && (
+                      <Link className="underline hover:text-[#1F2A24]" href={`/books/${slug}/files?stage=${s.key}`}>
+                        {files} file{files === 1 ? "" : "s"}
+                      </Link>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </Card>
+      </div>
+
+      <aside className="space-y-6">
+        <Card title="At a glance">
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            {[
+              ["Chapters", f.chapters],
+              ["Pages (KDP)", f.kdp_pages],
+              ["Questions", f.questions],
+              ["Pictures", f.figures],
+              ["Words", f.words?.toLocaleString("en-GB")],
+              ["Ages", work.age_band],
+            ].map(([k, v]) => (
+              <div key={String(k)}>
+                <dt className="text-xs text-[#7A7363]">{k}</dt>
+                <dd className="font-medium">{v ?? "—"}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="text-xs text-[#7A7363] mt-3">Curriculum: {work.curriculum_code}</p>
+        </Card>
+        <Card title={`Open items (${open.length})`}>
+          <ul className="space-y-3">
+            {open.map((o) => (
+              <li key={o.id} className="text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{o.title}</span>
+                  <Chip label={o.status} />
+                </div>
+                {o.detail && <p className="text-[#5F5A4E] mt-0.5">{o.detail}</p>}
+                {o.owner && <p className="text-xs text-[#7A7363] mt-0.5">Owner: {o.owner}</p>}
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card title="Revisions">
+          <ol className="space-y-2 text-sm">
+            {revisions.map((r) => (
+              <li key={r.key}>
+                <Link href={`/books/${slug}/chapters?rev=${encodeURIComponent(r.key)}`} className="font-medium underline-offset-2 hover:underline">
+                  {r.label}
+                </Link>
+                {r.key === work.current_revision && <span className="ms-2"><Chip label="current" tone="done" /></span>}
+                {r.summary && <p className="text-xs text-[#7A7363]">{r.summary}</p>}
+              </li>
+            ))}
+          </ol>
+        </Card>
+      </aside>
+    </div>
+  );
+}

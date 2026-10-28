@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { consoleHostname, bareHost, STAFF_LOGIN_PATH } from "@/utils/console-routing";
 import { libraryHostname, LIBRARY_LOGIN_PATH } from "@/utils/library-routing";
+import { booksHostname, BOOKS_LOGIN_PATH } from "@/utils/books-routing";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -12,6 +13,14 @@ export async function POST(request: Request) {
   const h = bareHost(request.headers.get("host"));
   const cfgHost = consoleHostname();
   const libHost = libraryHostname();
-  const dest = cfgHost && h === cfgHost ? STAFF_LOGIN_PATH : libHost && h === libHost ? LIBRARY_LOGIN_PATH : "/login";
+  const booksHost = booksHostname();
+  const dest =
+    cfgHost && h === cfgHost
+      ? STAFF_LOGIN_PATH
+      : libHost && h === libHost
+        ? LIBRARY_LOGIN_PATH
+        : booksHost && h === booksHost
+          ? BOOKS_LOGIN_PATH
+          : "/login";
   return NextResponse.redirect(`${origin}${dest}`, { status: 303 });
 }
