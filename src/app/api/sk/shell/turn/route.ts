@@ -14,7 +14,8 @@ import { makeRunTool, runCapability, type RunnerDeps, type ToolTrace } from "@/s
 import { auditSinkFor } from "@/sk/shell/audit";
 import { routeByRules } from "@/sk/shell/rules";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
-import { SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
+import { issueActionToken } from "@/sk/shell/tokens";
+import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,14 @@ export const runtime = "nodejs";
 //
 // Not in S0: writing the turn to assistant_messages (those tables are keyed by
 // student session) — the audit rows per capability are the S0 trail.
+//
+// S1 (slice B): a capability result may carry `board` (an immediate Board move
+// the client performs — emitted as a `board` event, labelled grounded) or
+// `confirm` (a confirm-tier action with resolved params — the route issues the
+// action token and emits a `confirm` card; NOTHING is executed here, the
+// client returns the token to /api/sk/act). Both come either from the rules
+// router (Board phrasings while a Board session is open) or from a tool the
+// model chose; the handling is one code path.
 
 const SK_SHELL_DEFAULT_MODEL = "claude-sonnet-5-5";
 const MAX_TEXT = 600;
@@ -162,8 +171,57 @@ export async function POST(request: Request) {
         send({ type: "done", ...ev, latencyMs: Date.now() - t0, memory: sealMemory(memory) });
       };
 
+      /** S1: turn a capability result's `board` / `confirm` into the event the
+       *  client acts on. The token is issued HERE and nowhere else; when no
+       *  secret is configured the action is declined, not executed weakly. */
+      const actionEvent = async (r: SkCapabilityResult): Promise<{ event: SkTurnEvent; say: string } | { declined: string } | null> => {
+        if (!r.ok) return null;
+        if (r.board) {
+          const say = r.board.say ?? r.summary;
+          return { event: { type: "board", move: r.board.move, args: r.board.args ?? {}, say: r.board.say }, say };
+        }
+        if (r.confirm) {
+          const issued = admin
+            ? await issueActionToken(admin, { userId: ctx.user.id, action: r.confirm.action, params: r.confirm.params, contextHash: ctx.contextHash, now: new Date() })
+            : null;
+          if (!issued) return { declined: SK_CANNOT_CONFIRM };
+          return {
+            event: { type: "confirm", token: issued.token, action: r.confirm.action, title: r.confirm.title, params: r.confirm.params, expiresAt: issued.expiresAt },
+            say: r.summary,
+          };
+        }
+        return null;
+      };
+
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
+
+        // ── S1 Board move by rules: deterministic, audited, no model ─────────
+        if (decision.intent === "teach") {
+          const name = `board.${decision.move}`;
+          const r = await runCapability(ctx, name, decision.args, deps);
+          send({ type: "tool", name, ok: r.ok, summary: r.summary });
+          const act = await actionEvent(r);
+          if (act && "event" in act) {
+            send(act.event);
+            done({ sources: [name], label: "grounded" }, act.say, r.entities ?? []);
+          } else if (!r.ok && r.error === "no board") {
+            // The Board is not open: say so and offer the way there.
+            const nav = await runCapability(ctx, "navigate", { target: "board" }, deps);
+            send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
+            send({ type: "text", text: r.summary });
+            if (nav.ok && nav.navigate) {
+              send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
+              done({ sources: ["navigate"], label: "navigation" }, r.summary, []);
+            } else done({ sources: [], label: "declined" }, r.summary, []);
+          } else {
+            const text = act && "declined" in act ? act.declined : r.summary;
+            send({ type: "text", text });
+            done({ sources: [], label: "declined" }, text, []);
+          }
+          finish();
+          return;
+        }
 
         // ── Navigate: deterministic, audited, no model ───────────────────────
         if (decision.intent === "navigate") {
@@ -252,8 +310,16 @@ export async function POST(request: Request) {
           return;
         }
 
+        // ── S1: a Board move or a confirm card the MODEL chose ───────────────
+        // The last successful one wins; the token (if any) is issued before a
+        // word reaches the client so a refusal can replace the text.
+        const actHit = [...trace].reverse().find((t) => t.result.ok && (t.result.board || t.result.confirm));
+        const act = actHit ? await actionEvent(actHit.result) : null;
+
         // ── Grounding (§2.3, §9.3) ───────────────────────────────────────────
-        const productive = trace.filter((t) => (t.result.facts?.length ?? 0) > 0 || !!t.result.navigate || (t.result.entities?.length ?? 0) > 0);
+        const productive = trace.filter(
+          (t) => (t.result.facts?.length ?? 0) > 0 || !!t.result.navigate || (t.result.entities?.length ?? 0) > 0 || (t.result.ok && (!!t.result.board || !!t.result.confirm)),
+        );
         const support = trace.flatMap((t) => [t.result.summary, ...(t.result.facts ?? [])]);
         const verdict = groundingCheck(full, support, body.text);
         if (!verdict.ok) {
@@ -284,10 +350,22 @@ export async function POST(request: Request) {
           text = navHit ? `Opening ${navHit.label}.` : SK_NOTHING_ON_THAT;
           label = navHit ? "navigation" : "declined";
         }
+        if (act && "declined" in act) {
+          // No token secret: the action is unavailable, whatever the model said.
+          text = act.declined;
+          label = "declined";
+          trimmed = false;
+        } else if (act) {
+          // The move/card carries the grounded content; a silent model still
+          // gets SK's own line for the transcript and the speaker.
+          if (text === SK_NOTHING_ON_THAT) text = act.say;
+          label = "grounded";
+        }
         const sources = [...new Set(productive.map((t) => t.name))];
         const entities = trace.flatMap((t) => t.result.entities ?? []);
         send({ type: "text", text });
-        if (navHit) send({ type: "navigate", path: navHit.path, label: navHit.label });
+        if (navHit && !(act && "event" in act && act.event.type === "board")) send({ type: "navigate", path: navHit.path, label: navHit.label });
+        if (act && "event" in act) send(act.event);
         done({ sources, label, ...(usage ? { usage } : {}), ...(trimmed ? { trimmed } : {}) }, text, entities);
         finish();
       } catch (e) {

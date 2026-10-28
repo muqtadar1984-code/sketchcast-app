@@ -72,6 +72,16 @@ export type SkBoardState = {
   t?: number;
   paused?: boolean;
   rollPage?: number;
+  /** S1 (additive): the open segment's 0-based index in `segments`, when known. */
+  k?: number;
+  /** S1 (additive): the open unit's video generation id. */
+  generationId?: string;
+  /** S1 (additive): the Board manifest's segments as the client holds them,
+   *  so the server resolves "slide 4" / "explain diffusion" without a DB read.
+   *  `id` is the manifest segment_id the concepts point at. */
+  segments?: Array<{ k: number; heading: string; id?: string; points?: string[] }>;
+  /** S1 (additive): the manifest's concepts, each with the segment ids it is taught in. */
+  concepts?: Array<{ id: string; name: string; segmentIds: string[] }>;
 };
 
 /** An entity a tool resolved on an earlier turn, kept so "their parents" and
@@ -298,3 +308,8 @@ export type SkActRequest = {
 /** The fixed line SK says when every tool came back empty (§2.3). Not a model
  *  output: the route emits it so the unsupported-claims suite is mechanical. */
 export const SK_NOTHING_ON_THAT = "I have nothing on that.";
+
+/** S1: the fixed line when a confirm-tier action cannot be offered because no
+ *  action-token secret is configured (tokens.ts refuses to issue). The action
+ *  is then unavailable rather than weak (§8.2). */
+export const SK_CANNOT_CONFIRM = "I can't confirm actions right now.";

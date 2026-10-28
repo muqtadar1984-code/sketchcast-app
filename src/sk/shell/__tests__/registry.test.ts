@@ -59,6 +59,20 @@ const SHIPPED = [
   "assignments.status",
   "learners.risk",
   "timetable.now_next",
+  // S1 slice B: the Board moves (teacher hat + Board access).
+  "board.intro",
+  "board.segment",
+  "board.slide",
+  "board.explain",
+  "board.compare",
+  "board.practise",
+  "board.walkthrough",
+  "board.freeze",
+  "board.blank",
+  "board.back",
+  "board.resume",
+  "board.pause",
+  "board.recap",
 ];
 const TEACHER_SEES = SHIPPED;
 const PARENT_SEES = ["navigate", "context.resolve"];

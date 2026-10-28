@@ -55,9 +55,30 @@ export function contextLine(ctx: SkContext, memory?: SkMemory | null): string {
     sel ? `selection={${sel}}` : "selection=none",
     recent ? `recent=[${recent}]` : "recent=none",
     memory?.pending ? `pending="${memory.pending.task}" needs=${memory.pending.needs.join("/")}` : "",
+    ctx.board?.sessionId ? boardLine(ctx.board) : "",
     `locale=${ctx.user.locale}`,
   ].filter(Boolean);
   return parts.join(" · ");
+}
+
+/** S1: the open Board in one token — session, where the video is, how many slides. */
+function boardLine(b: NonNullable<SkContext["board"]>): string {
+  const bits = ["board=open"];
+  if (typeof b.k === "number") bits.push(`k=${b.k}`);
+  if (typeof b.paused === "boolean") bits.push(b.paused ? "paused" : "playing");
+  if (b.segments?.length) bits.push(`slides=${b.segments.length}`);
+  if (!b.manifestId) bits.push("map=pending");
+  return bits.join(" ");
+}
+
+export const SK_BOARD_MAP_MAX = 40;
+
+/** S1: the lesson map as the model reads it — one line per segment, 1-based
+ *  for the teacher's words with the 0-based k the tools take. */
+export function lessonMapLines(b: NonNullable<SkContext["board"]> | undefined): string[] {
+  const segs = b?.segments ?? [];
+  if (!segs.length) return [];
+  return segs.slice(0, SK_BOARD_MAP_MAX).map((s) => `- slide ${s.k + 1} (k=${s.k}): ${s.heading || "(untitled)"}`);
 }
 
 export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabilityMeta[]; memory?: SkMemory | null }): string {
@@ -75,9 +96,15 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
     "5. To open a page call `navigate`; to turn a name the user said into an id call `context.resolve` first. Do not describe a page you could open — open it.",
     `6. Answer in the user's language (${lang}) in 1–4 short sentences, plain words, no headings, no markdown lists.`,
     "7. If a request needs something you cannot do here, say so in one sentence and name what you can do.",
+    ...(ctx.board?.sessionId
+      ? [
+          "8. The Classroom Board is open with a lesson. Drive it with the board.* tools, never by describing: board.slide for a slide (k is 0-based — the teacher's 'slide 4' is k=3), board.explain for a concept (it shows the right slide and returns its heading and points: narrate from those, briefly, as a teacher would), board.compare for two concepts, board.pause / board.resume / board.intro for the video, board.practise for questions, board.recap to end. A confirm-tier action (such as assigning work) returns a card for the teacher to confirm — never say it is done until it is.",
+        ]
+      : []),
     "",
     "CONTEXT",
     contextLine(ctx, input.memory),
+    ...(ctx.board?.sessionId && ctx.board.segments?.length ? ["", "LESSON MAP (this Board's slides)", ...lessonMapLines(ctx.board)] : []),
     "",
     "CAPABILITIES AVAILABLE TO THIS USER",
     caps,

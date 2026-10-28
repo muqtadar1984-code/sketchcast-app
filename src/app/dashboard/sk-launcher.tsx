@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import type { TourCopy } from "@/tour/definitions";
+import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import SkShell, { type SkShellCopy } from "./sk-shell";
 
 // Floating launcher for the SK Shell (Final Plan 2026-10-28 §2.1, S0). Same
@@ -24,6 +25,7 @@ export default function SkLauncher({
   role,
   hat,
   introDue,
+  board,
 }: {
   copy: SkShellCopy;
   /** app.tour — the role tour's words, which the §4.6 narration reads. */
@@ -32,6 +34,10 @@ export default function SkLauncher({
   hat: string | null;
   /** Server-decided from user_tour_progress("sk-intro") vs SK_INTRO_TOUR.version. */
   introDue: boolean;
+  /** S1: set by /present only — the Board bridge the panel drives. With it the
+   *  launcher mounts on the Board (bottom-START corner: the Stage's corner
+   *  video owns bottom-end there, 360×202 at inset 16). */
+  board?: SkBoardBridge | null;
 }) {
   const [open, setOpen] = useState(false);
   // Flipped by the panel the moment the intro ends (completed or skipped), so
@@ -41,13 +47,15 @@ export default function SkLauncher({
   const pathname = usePathname();
   if (!SK_ON) return null;
   // The leadership School pages keep their own bottom-right launcher (the
-  // School-briefing bot) until S5 retires it; the Board (/present) gets the
-  // Shell in S1, not through this layout.
-  if (pathname?.startsWith("/dashboard/school") || pathname?.startsWith("/present")) return null;
+  // School-briefing bot) until S5 retires it. The Board (/present) is not
+  // under the dashboard layout; it mounts this launcher itself WITH a bridge,
+  // so a launcher reaching /present without one is the layout's and hides.
+  if (pathname?.startsWith("/dashboard/school")) return null;
+  if (pathname?.startsWith("/present") && !board) return null;
 
   return (
     <>
-      <div className="fixed bottom-4 end-4 z-40">
+      <div className={board ? "fixed bottom-4 start-4 z-40" : "fixed bottom-4 end-4 z-40"} data-sk="launcher" data-sk-board={board ? "true" : undefined}>
         <button
           data-tour="sk-launcher"
           onClick={() => setOpen(true)}
@@ -72,6 +80,7 @@ export default function SkLauncher({
           introDue={introPending}
           onIntroDone={() => setIntroPending(false)}
           onClose={() => setOpen(false)}
+          board={board ?? null}
         />
       )}
     </>

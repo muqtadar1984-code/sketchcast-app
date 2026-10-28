@@ -1,0 +1,382 @@
+/**
+ * The SK ⇄ Board bridge (S1 slice B): every move → the expected controller
+ * calls on a fake controller, the segment watcher pausing at end_s, the
+ * practise subset, the collector state, the manifest adapter and the
+ * building→ready polling.
+ * Run: node node_modules/vitest/vitest.mjs run src/app/present/__tests__/sk-board-bridge.test.ts
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BoardController, BoardState } from "../board-controller";
+import { createBoardBridge, loadManifest, practiseStart, segmentAt, toBridgeManifest, type BridgeManifest, type KitManifestLike, type ManifestReply } from "../sk-board-bridge";
+
+// ── a fake controller that records calls and simulates a playhead ──────────
+
+function fakeController() {
+  const calls: Array<[string, ...unknown[]]> = [];
+  const st: BoardState = { sessionId: "sess-1", t: 0, duration: 120, paused: true, moving: false, stageMode: "away", page: 0, pageCount: 1, ended: false, questions: null, actions: [] };
+  const c: BoardController = {
+    play: async () => {
+      calls.push(["play"]);
+      st.paused = false;
+    },
+    resume: async () => {
+      calls.push(["resume"]);
+      st.paused = false;
+    },
+    pause: () => {
+      calls.push(["pause"]);
+      st.paused = true;
+    },
+    seek: async (t) => {
+      calls.push(["seek", t]);
+      st.t = t;
+      return t;
+    },
+    seekMeasured: async (t) => {
+      calls.push(["seekMeasured", t]);
+      st.t = t;
+      return { target: t, landed: t, errorMs: 0, latencyMs: 1, presentedMediaTime: t, frameErrorMs: 0, frameLatencyMs: 1 };
+    },
+    seekSegment: async (k, edge, m) => {
+      calls.push(["seekSegment", k, edge]);
+      st.t = edge === "start" ? m.segments[k].start_s : m.segments[k].end_s;
+      return { target: st.t, landed: st.t, errorMs: 0, latencyMs: 1, presentedMediaTime: st.t, frameErrorMs: 0, frameLatencyMs: 1 };
+    },
+    slide: async (k, m) => {
+      calls.push(["slide", k]);
+      st.paused = true;
+      st.t = m.segments[k].slide_t ?? m.segments[k].end_s;
+      const v = m.segments[k].visual;
+      return v?.show === "frame" ? { shown: "frame", shownK: k, reason: "" } : v?.show === "fallback_frame" ? { shown: "fallback_frame", shownK: v.fallback_k ?? k, reason: "" } : { shown: "caption", shownK: k, reason: "" };
+    },
+    freeze: async () => {
+      calls.push(["freeze"]);
+      st.paused = true;
+      st.pageCount++;
+      st.page = st.pageCount - 1;
+      return true;
+    },
+    openWorksheetPage: () => {
+      calls.push(["openWorksheetPage"]);
+      return true;
+    },
+    blankPage: () => {
+      calls.push(["blankPage"]);
+      st.pageCount++;
+      st.page = st.pageCount - 1;
+    },
+    pageUp: () => {
+      calls.push(["pageUp"]);
+      st.page = Math.max(0, st.page - 1);
+    },
+    pageDown: () => {
+      calls.push(["pageDown"]);
+    },
+    showQuestions: async (start = 0) => {
+      calls.push(["showQuestions", start]);
+      st.questions = { generationId: "ws", index: start, total: 6 };
+      return { index: start, total: 6 };
+    },
+    nextQuestion: async () => {
+      calls.push(["nextQuestion"]);
+      return { index: 1, total: 6 };
+    },
+    prevQuestion: async () => {
+      calls.push(["prevQuestion"]);
+      return { index: 0, total: 6 };
+    },
+    getState: () => ({ ...st, actions: [] }),
+    endSession: async () => {
+      calls.push(["endSession"]);
+      st.ended = true;
+      return true;
+    },
+  };
+  return { c, calls, st };
+}
+
+const KIT: KitManifestLike = {
+  manifest_id: "man-1",
+  segments: [
+    { segment_id: "s1", part: 1, k: 0, start_s: 0, end_s: 20, slide_t: 19.9, heading: "Introduction", points: [], visual: { status: "distinct", show: "frame", reason: "ok" } },
+    { segment_id: "s2", part: 1, k: 1, start_s: 20, end_s: 50, slide_t: 49.9, heading: "Red blood cells", points: ["Carry oxygen", ""], visual: { status: "reused_relevant", show: "fallback_frame", fallback_k: 0, reason: "same frame" } },
+    { segment_id: "s3", part: 1, k: 2, start_s: 50, end_s: 80, slide_t: 79.9, heading: "Nerve cells", points: ["Carry signals"], visual: { status: "misleading", show: "caption_only", reason: "unrelated" } },
+    { segment_id: "s4", part: 2, k: 3, start_s: 0, end_s: 30, slide_t: 29.9, heading: "Part two", points: [], visual: { status: "unknown", show: "fallback_frame", fallback_k: 0, reason: "cross-part" } },
+  ],
+  concepts: [{ concept_id: "c-rbc", name: "red blood cell", segment_ids: ["s2"] }],
+  items: [
+    { q_id: "ws:q1", source: "worksheet", generation_id: "ws", segment_ids: ["s1"] },
+    { q_id: "ws:q4", source: "worksheet", generation_id: "ws", segment_ids: ["s3"] },
+    { q_id: "ws:q3", source: "worksheet", generation_id: "ws", segment_ids: ["s3", "s2"] },
+    { q_id: "quiz:q2", source: "quiz", generation_id: "qz", segment_ids: ["s3"] },
+  ],
+};
+
+describe("toBridgeManifest (structural adapter)", () => {
+  it("keeps one part in play order, remaps fallback frames to local indices, drops empty points", () => {
+    const m = toBridgeManifest(KIT, 1);
+    expect(m.manifestId).toBe("man-1");
+    expect(m.ids).toEqual(["s1", "s2", "s3"]);
+    expect(m.segments.map((s) => s.heading)).toEqual(["Introduction", "Red blood cells", "Nerve cells"]);
+    expect(m.segments[1].points).toEqual(["Carry oxygen"]);
+    expect(m.segments[1].visual).toEqual({ status: "reused_relevant", show: "fallback_frame", fallback_k: 0, reason: "same frame" });
+    expect(m.segments[2].visual?.show).toBe("caption_only");
+    expect(m.concepts).toEqual([{ id: "c-rbc", name: "red blood cell", segmentIds: ["s2"] }]);
+    expect(m.items).toHaveLength(4);
+  });
+  it("a fallback outside the unit degrades to a caption; part null takes every segment", () => {
+    const p2 = toBridgeManifest(KIT, 2);
+    expect(p2.ids).toEqual(["s4"]);
+    expect(p2.segments[0].visual?.show).toBe("caption_only");
+    expect(toBridgeManifest(KIT, null).segments).toHaveLength(4);
+  });
+});
+
+describe("segmentAt / practiseStart (pure)", () => {
+  const m = toBridgeManifest(KIT, 1);
+  it("finds the segment under the playhead, else the last one passed", () => {
+    expect(segmentAt(m, 0)).toBe(0);
+    expect(segmentAt(m, 25)).toBe(1);
+    expect(segmentAt(m, 79.99)).toBe(2);
+    expect(segmentAt(m, 95)).toBe(2);
+    expect(segmentAt({ segments: [] }, 5)).toBeUndefined();
+  });
+  it("first worksheet question mapped to the segment (q_ids are 1-based), else 0", () => {
+    expect(practiseStart(m, "s3")).toBe(2); // ws:q3 before ws:q4; quiz items ignored
+    expect(practiseStart(m, "s1")).toBe(0);
+    expect(practiseStart(m, "s9")).toBe(0);
+    expect(practiseStart(null, "s3")).toBe(0);
+    expect(practiseStart(m, undefined)).toBe(0);
+  });
+});
+
+describe("createBoardBridge — moves → controller calls", () => {
+  let fc: ReturnType<typeof fakeController>;
+  let manifest: BridgeManifest | null;
+  let ctl: BoardController | null;
+  const bridge = () =>
+    createBoardBridge({
+      controller: () => ctl,
+      generationId: () => "gen-1",
+      manifest: () => manifest,
+      mapStatus: () => (manifest ? "ready" : "building"),
+      pollMs: 250,
+    });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fc = fakeController();
+    ctl = fc.c;
+    manifest = toBridgeManifest(KIT, 1);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("state(): session, playhead, segment, manifest id, headings/points/ids and concepts for the server", () => {
+    fc.st.t = 25.26;
+    fc.st.paused = false;
+    fc.st.page = 2;
+    const s = bridge().state();
+    expect(s).toMatchObject({ sessionId: "sess-1", t: 25.3, paused: false, rollPage: 2, k: 1, segmentId: "s2", manifestId: "man-1", generationId: "gen-1" });
+    expect(s?.segments).toEqual([
+      { k: 0, heading: "Introduction", id: "s1" },
+      { k: 1, heading: "Red blood cells", id: "s2", points: ["Carry oxygen"] },
+      { k: 2, heading: "Nerve cells", id: "s3", points: ["Carry signals"] },
+    ]);
+    expect(s?.concepts).toEqual([{ id: "c-rbc", name: "red blood cell", segmentIds: ["s2"] }]);
+  });
+  it("state() is undefined with no controller or an ended session; status follows the map", () => {
+    ctl = null;
+    const b = bridge();
+    expect(b.state()).toBeUndefined();
+    ctl = fc.c;
+    fc.st.ended = true;
+    expect(bridge().state()).toBeUndefined();
+    manifest = null;
+    expect(bridge().status()).toBe("building");
+  });
+  it("without a manifest the state still names the session (no k / segments)", () => {
+    manifest = null;
+    const s = bridge().state();
+    expect(s).toEqual({ sessionId: "sess-1", t: 0, paused: true, rollPage: 0, generationId: "gen-1" });
+  });
+
+  it("intro → seek(0) + play, leaves the video playing", async () => {
+    const r = await bridge().run("intro", {});
+    expect(r).toMatchObject({ ok: true, plays: true });
+    expect(fc.calls).toEqual([["seek", 0], ["play"]]);
+  });
+  it("segment k → seekSegment(k, start) + resume, then pauses at end_s via the watcher", async () => {
+    const b = bridge();
+    const r = await b.run("segment", { k: 1 });
+    expect(r).toMatchObject({ ok: true, plays: true });
+    expect(fc.calls).toEqual([["seekSegment", 1, "start"], ["resume"]]);
+    // The playhead advances; nothing happens before the end.
+    fc.st.t = 35;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fc.calls.filter((c) => c[0] === "pause")).toHaveLength(0);
+    fc.st.t = 49.97; // within SEGMENT_END_SLACK_S of 50
+    await vi.advanceTimersByTimeAsync(300);
+    expect(fc.calls.filter((c) => c[0] === "pause")).toHaveLength(1);
+    expect(fc.st.paused).toBe(true);
+    // And the watcher is gone: a later playhead past the end pauses nothing more.
+    fc.st.t = 70;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fc.calls.filter((c) => c[0] === "pause")).toHaveLength(1);
+  });
+  it("another move cancels the segment watcher", async () => {
+    const b = bridge();
+    await b.run("segment", { k: 0 });
+    await b.run("slide", { k: 2 });
+    fc.st.t = 19.99;
+    await vi.advanceTimersByTimeAsync(1000);
+    // slide() itself pauses in the fake; the watcher must not add a second pause.
+    expect(fc.calls.filter((c) => c[0] === "pause")).toHaveLength(0);
+    expect(fc.calls.map((c) => c[0])).toEqual(["seekSegment", "resume", "slide"]);
+  });
+  it("the watcher gives up after the deadline instead of polling for ever", async () => {
+    const b = bridge();
+    await b.run("segment", { k: 0 }); // 20 s segment → deadline 45 s
+    fc.st.t = 5; // stalled
+    await vi.advanceTimersByTimeAsync(46_000);
+    expect(fc.calls.filter((c) => c[0] === "pause")).toHaveLength(1);
+  });
+  it("segment / slide refuse without a manifest or with a bad k", async () => {
+    expect(await bridge().run("slide", { k: 7 })).toEqual({ ok: false, summary: "This lesson has 3 slides." });
+    expect(await bridge().run("segment", {})).toEqual({ ok: false, summary: "This lesson has 3 slides." });
+    manifest = null;
+    expect(await bridge().run("slide", { k: 0 })).toEqual({ ok: false, summary: "The lesson map is still being prepared." });
+    expect(fc.calls).toEqual([]);
+  });
+  it("slide k → slide(k, manifest) and reports how it was shown", async () => {
+    expect(await bridge().run("slide", { k: 0 })).toEqual({ ok: true, summary: "Slide 1." });
+    expect(await bridge().run("slide", { k: 1 })).toEqual({ ok: true, summary: "Slide 2 with slide 1's frame." });
+    expect(await bridge().run("slide", { k: "2" })).toEqual({ ok: true, summary: "Slide 3 as a caption." });
+    expect(fc.calls).toEqual([["slide", 0], ["slide", 1], ["slide", 2]]);
+  });
+  it("explain / compare arrive resolved (slide with k); unresolved ones have no slide", async () => {
+    expect((await bridge().run("explain", { k: 1, concept: "rbc" })).ok).toBe(true);
+    expect((await bridge().run("compare", { k: 1, next: 2 })).ok).toBe(true);
+    expect(await bridge().run("explain", { concept: "x" })).toEqual({ ok: false, summary: "I couldn't match that to a slide." });
+    expect(fc.calls).toEqual([["slide", 1], ["slide", 1]]);
+  });
+  it("practise n → showQuestions(first question of the current segment); n is advisory", async () => {
+    fc.st.t = 60; // in s3
+    const r = await bridge().run("practise", { n: 3 });
+    expect(r.ok).toBe(true);
+    expect(fc.calls).toEqual([["showQuestions", 2]]);
+    expect(r.summary).toBe("Question 3 of 6 on the roll (3 asked for; use next/previous).");
+    // The server's segmentId wins over the playhead.
+    await bridge().run("practise", { n: 2, segmentId: "s1" });
+    expect(fc.calls[1]).toEqual(["showQuestions", 0]);
+  });
+  it("practise without a manifest starts at the first question", async () => {
+    manifest = null;
+    await bridge().run("practise", {});
+    expect(fc.calls).toEqual([["showQuestions", 0]]);
+  });
+  it("walkthrough → showQuestions(0)", async () => {
+    expect(await bridge().run("walkthrough", {})).toEqual({ ok: true, summary: "Worksheet question 1 of 6 on the roll." });
+    expect(fc.calls).toEqual([["showQuestions", 0]]);
+  });
+  it("freeze / blank / back / resume / pause / recap → the matching controller call", async () => {
+    const b = bridge();
+    expect((await b.run("freeze", {})).ok).toBe(true);
+    expect((await b.run("blank", {})).ok).toBe(true);
+    expect((await b.run("back", {})).ok).toBe(true);
+    expect(await b.run("resume", {})).toMatchObject({ ok: true, plays: true });
+    expect(await b.run("pause", {})).toEqual({ ok: true, summary: "Paused." });
+    expect((await b.run("recap", {})).ok).toBe(true);
+    expect(fc.calls.map((c) => c[0])).toEqual(["freeze", "blankPage", "pageUp", "resume", "pause", "endSession"]);
+    expect(fc.st.ended).toBe(true);
+  });
+  it("a controller error becomes an ok:false report, never a throw", async () => {
+    fc.c.freeze = async () => {
+      throw new Error("nothing to capture");
+    };
+    expect(await bridge().run("freeze", {})).toEqual({ ok: false, summary: "nothing to capture" });
+  });
+  it("no controller → Open the Board first", async () => {
+    ctl = null;
+    expect(await bridge().run("pause", {})).toEqual({ ok: false, summary: "Open the Board first." });
+  });
+});
+
+describe("loadManifest — slice A's contract, polled", () => {
+  const sleeps: number[] = [];
+  const sleep = async (ms: number) => {
+    sleeps.push(ms);
+  };
+  beforeEach(() => sleeps.splice(0));
+
+  it("building → building → ready, every 3 s, reporting status", async () => {
+    const replies: ManifestReply[] = [{ status: "building" }, { status: "building" }, { status: "ready", manifest: KIT }];
+    const calls: string[] = [];
+    const statuses: string[] = [];
+    let t = 0;
+    const r = await loadManifest(
+      async (id, method) => {
+        calls.push(`${method} ${id}`);
+        t += 3000;
+        return replies.shift()!;
+      },
+      "gen-1",
+      { sleep, now: () => t, onStatus: (s) => statuses.push(s) },
+    );
+    expect(r).toEqual({ status: "ready", manifest: KIT });
+    expect(calls).toEqual(["GET gen-1", "GET gen-1", "GET gen-1"]);
+    expect(sleeps).toEqual([3000, 3000]);
+    expect(statuses).toEqual(["building", "building", "ready"]);
+  });
+  it("missing → asks once (POST) then polls; missing again → failed", async () => {
+    const replies: ManifestReply[] = [{ status: "missing" }, { status: "building" }, { status: "missing" }];
+    const calls: string[] = [];
+    const r = await loadManifest(
+      async (id, method) => {
+        calls.push(method);
+        return replies.shift()!;
+      },
+      "gen-1",
+      { sleep, now: () => 0 },
+    );
+    expect(calls).toEqual(["GET", "POST", "GET"]);
+    expect(r).toEqual({ status: "failed", reason: "missing" });
+  });
+  it("stale → rebuild requested (POST) then ready", async () => {
+    const replies: ManifestReply[] = [{ status: "stale" }, { status: "ready", manifest: KIT }];
+    const calls: string[] = [];
+    const r = await loadManifest(
+      async (_id, method) => {
+        calls.push(method);
+        return replies.shift()!;
+      },
+      "gen-1",
+      { sleep, now: () => 0 },
+    );
+    expect(calls).toEqual(["GET", "POST"]);
+    expect(r.status).toBe("ready");
+  });
+  it("failed is final; a thrown fetch is 'error'; two minutes of building is a timeout", async () => {
+    expect(await loadManifest(async () => ({ status: "failed" }), "g", { sleep })).toEqual({ status: "failed", reason: "failed" });
+    expect(
+      await loadManifest(
+        async () => {
+          throw new Error("net");
+        },
+        "g",
+        { sleep },
+      ),
+    ).toEqual({ status: "failed", reason: "error" });
+    let t = 0;
+    const r = await loadManifest(
+      async () => {
+        t += 30_000;
+        return { status: "building" };
+      },
+      "g",
+      { sleep, now: () => t },
+    );
+    expect(r).toEqual({ status: "failed", reason: "timeout" });
+  });
+});
