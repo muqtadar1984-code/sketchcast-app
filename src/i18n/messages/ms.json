@@ -2096,7 +2096,18 @@
       "introFirstTask": "Mahu mula dengan tugasan pertama anda? Muat naik buku, atau minta saya buka kelas anda.",
       "jobTrayEmpty": "Tiada tugasan berjalan.",
       "failed": "SK tidak dapat menjawab buat masa ini. Sila cuba lagi.",
-      "you": "Anda"
+      "you": "Anda",
+      "preparingMap": "Menyediakan peta pelajaran…",
+      "boardNotOpen": "Buka Papan dahulu.",
+      "confirmTitle": "Sahkan tindakan ini",
+      "confirm": "Sahkan",
+      "cancel": "Batal",
+      "expiresIn": "Tamat dalam {s}s",
+      "cardSent": "Mengesahkan…",
+      "cardExpired": "Kad ini telah tamat tempoh.",
+      "cardCancelled": "Dibatalkan.",
+      "actFailed": "Tindakan itu tidak berjaya. Cuba lagi.",
+      "voiceYesHint": "Sebut “ya” untuk mengesahkan, atau “tidak” untuk membatalkan."
     }
   }
 }

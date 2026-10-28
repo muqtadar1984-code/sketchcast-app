@@ -8,27 +8,36 @@
 //
 // Every decision with a rule behind it lives in a pure module under
 // src/sk/shell/client/ and is unit-tested there; this file is the wiring:
-//   collector.ts  — what the turn request says about where the user is
-//   sse.ts        — the stream → SkTurnEvents
-//   mic-gate.ts   — §2.6: the mic stops on blur/hidden/pagehide/idle, never resumes
-//   narration.ts  — §4.6: the intro script and its abortable runner
+//   collector.ts     — what the turn request says about where the user is
+//   sse.ts           — the stream → SkTurnEvents
+//   mic-gate.ts      — §2.6: the mic stops on blur/hidden/pagehide/idle, never resumes
+//   narration.ts     — §4.6: the intro script and its abortable runner
+//   memory-store.ts  — S1: the memory blob across pages (sessionStorage)
+//   confirm.ts       — S1 §9.2: when a bare yes/no answers a confirm card
+// S1 adds the Board: on /present the launcher hands in a bridge
+// (src/app/present/sk-board-bridge.ts) whose state rides with every turn and
+// which performs the `board` events the server decides; and confirm cards,
+// whose token goes back to /api/sk/act by click or spoken yes.
 //
 // Voice reuses the Assistant's browser adapter (StreamSpeaker / startDictation)
 // so a hosted TTS/STT swap later is one module, not two panels.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StreamSpeaker, micSupported, pageSpeechLang, startDictation } from "@/utils/assistant/voice-client";
 import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { tourForRole, type TourCopy } from "@/tour/definitions";
-import type { SkTurnEvent, SkTurnRequest } from "@/sk/shell/types";
+import type { SkActRequest, SkActResponse, SkBoardMove, SkTurnEvent, SkTurnRequest } from "@/sk/shell/types";
 import { SK_INTRO_TOUR } from "@/sk/shell/tour";
-import { collect } from "@/sk/shell/client/collector";
+import { collect, localeFromLang } from "@/sk/shell/client/collector";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createMicGate, type MicGate } from "@/sk/shell/client/mic-gate";
 import { runNarration, skIntroScript } from "@/sk/shell/client/narration";
+import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
+import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
+import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
 
@@ -39,16 +48,32 @@ type Entry = {
   text: string;
   tools?: Array<{ name: string; ok: boolean; summary: string }>;
   nav?: Array<{ path: string; label: string }>;
+  /** S1: Board moves this turn performed, with the Board's own report. */
+  moves?: Array<{ move: SkBoardMove; say: string; ok?: boolean; summary?: string }>;
   sources?: string[];
   label?: Label;
   /** Still streaming. */
   pending?: boolean;
 };
 
+/** S1: a confirm-tier card (§2.5, §9.2). `token` is opaque; the server decides. */
+type Card = {
+  id: string;
+  token: string;
+  action: string;
+  title: string;
+  params: Record<string, string | number | boolean | null>;
+  expiresAt: string;
+  status: "active" | "sending" | "done" | "failed" | "cancelled" | "expired";
+  result?: string;
+};
+
 type ContextReply = { ready?: boolean; greeting?: string; capabilities?: string[]; memory?: string };
 
 const LS_READ_ALOUD = "sk.readAloud";
 const LS_HANDS_FREE = "sk.handsFree";
+/** How long a settled card stays visible before it leaves the slot. */
+const CARD_LINGER_MS = 6000;
 
 function uuid(): string {
   const c = typeof crypto !== "undefined" ? (crypto as { randomUUID?: () => string }) : undefined;
@@ -103,6 +128,7 @@ export default function SkShell({
   introDue,
   onIntroDone,
   onClose,
+  board,
 }: {
   copy: SkShellCopy;
   tourCopy: TourCopy;
@@ -113,10 +139,16 @@ export default function SkShell({
   /** The launcher flips its flag so a re-open in this session does not narrate again. */
   onIntroDone: () => void;
   onClose: () => void;
+  /** S1: on /present, the Board bridge — its state rides with every turn and
+   *  it performs the `board` events the server decides. */
+  board?: SkBoardBridge | null;
 }) {
   const router = useRouter();
 
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  // A one-second tick: card countdowns and the Board's lesson-map status.
+  const [tick, setTick] = useState(0);
   const [ready, setReady] = useState<boolean | null>(null);
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [input, setInput] = useState("");
@@ -136,6 +168,9 @@ export default function SkShell({
   const turnRef = useRef<AbortController | null>(null);
   const narrationRef = useRef<AbortController | null>(null);
   const memoryRef = useRef<string | undefined>(undefined);
+  const storeRef = useRef<MemoryStore | null>(null);
+  const boardRef = useRef<SkBoardBridge | null | undefined>(board);
+  const cardsRef = useRef<Card[]>([]);
   const gateRef = useRef<MicGate | null>(null);
   const stopMicRef = useRef<(() => void) | null>(null);
   const micModeRef = useRef<"ptt" | "handsFree" | null>(null);
@@ -180,12 +215,40 @@ export default function SkShell({
     };
   }, []);
 
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+  useEffect(() => {
+    cardsRef.current = cards;
+  }, [cards]);
+
+  // ── the cross-page memory store (sessionStorage) + the 1 s tick ──
+  useEffect(() => {
+    let storage: Storage | null = null;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      storage = null;
+    }
+    storeRef.current = createMemoryStore(storage);
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  /** Remember the server's memory blob here AND across pages (§5.4). */
+  const keepMemory = useCallback((memory: string | undefined, sessionId?: string | null) => {
+    if (!memory) return;
+    memoryRef.current = memory;
+    storeRef.current?.save({ memory, sessionId: sessionId ?? null });
+  }, []);
+
   // ── warm start: greeting + capabilities + memory ──
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/sk/shell/context");
+        const q = new URLSearchParams({ path: window.location.pathname });
+        const res = await fetch(`/api/sk/shell/context?${q.toString()}`);
         const d = (await res.json().catch(() => ({}))) as ContextReply;
         if (cancelled) return;
         if (!res.ok) {
@@ -195,7 +258,12 @@ export default function SkShell({
         }
         setReady(d.ready !== false);
         setCapabilities(Array.isArray(d.capabilities) ? d.capabilities : []);
-        if (d.memory) memoryRef.current = d.memory;
+        // A conversation carried over from another page (the dashboard →
+        // the Board) beats the fresh blob; the server still has the last
+        // word on whether it applies (signature, hat, 4-hour gap).
+        const saved = storeRef.current?.load() ?? null;
+        if (saved) memoryRef.current = saved.memory;
+        else if (d.memory) memoryRef.current = d.memory;
         const greeting = (d.greeting && String(d.greeting).trim()) || copy.greetingFallback;
         setEntries([{ id: uuid(), who: "sk", text: greeting }]);
         setCaption(lastSentence(greeting));
@@ -237,6 +305,85 @@ export default function SkShell({
   const patchEntry = useCallback((id: string, patch: (e: Entry) => Entry) => {
     setEntries((m) => m.map((e) => (e.id === id ? patch(e) : e)));
   }, []);
+
+  const patchCard = useCallback((id: string, patch: Partial<Card>) => {
+    setCards((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }, []);
+
+  /** A settled card leaves the slot after a moment. */
+  const retireCard = useCallback((id: string) => {
+    window.setTimeout(() => setCards((cs) => cs.filter((c) => c.id !== id)), CARD_LINGER_MS);
+  }, []);
+
+  /** Speak one line with the current read-aloud setting (a fresh speaker, so
+   *  it never queues behind an answer that was stopped). */
+  const speakLine = useCallback((line: string) => {
+    if (!readAloudRef.current) return;
+    const sp = new StreamSpeaker();
+    if (!sp.supported) return;
+    speakerRef.current?.stop();
+    speakerRef.current = sp;
+    sp.push(line);
+    sp.flush();
+    setSpeaking(true);
+    window.setTimeout(() => setSpeaking(!!window.speechSynthesis?.speaking), 400);
+  }, []);
+
+  // ── S1: the confirm card → /api/sk/act (§2.5, §9.2). The server verifies
+  // the token, consumes it atomically and performs the write; the client only
+  // carries the token back and reports the outcome. ──
+  const act = useCallback(
+    async (card: Card, via: "click" | "voice") => {
+      if (card.status !== "active") return;
+      patchCard(card.id, { status: "sending" });
+      setError(null);
+      const req: SkActRequest = {
+        turnId: uuid(),
+        token: card.token,
+        via,
+        collector: collect({
+          location: { pathname: window.location.pathname, search: window.location.search },
+          now: new Date(),
+          lang: document.documentElement.lang,
+          board: boardRef.current?.state(),
+        }),
+      };
+      if (memoryRef.current) req.memory = memoryRef.current;
+      let reply: SkActResponse | null = null;
+      try {
+        const res = await fetch("/api/sk/act", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) });
+        reply = (await res.json().catch(() => null)) as SkActResponse | null;
+        if (!res.ok && !reply?.summary) throw new Error(copy.actFailed);
+      } catch (e) {
+        patchCard(card.id, { status: "failed", result: (e as Error).message || copy.actFailed });
+        retireCard(card.id);
+        appendSk(copy.actFailed, { label: "declined", sources: [card.action] });
+        return;
+      }
+      if (reply?.memory) keepMemory(reply.memory);
+      const ok = !!reply?.ok && reply.outcome === "done";
+      const line = (reply?.summary && String(reply.summary).trim()) || (ok ? copy.cardSent : copy.actFailed);
+      patchCard(card.id, { status: ok ? "done" : "failed", result: line });
+      retireCard(card.id);
+      appendSk(line, { label: ok ? "grounded" : "declined", sources: [card.action] });
+      speakLine(line);
+    },
+    [appendSk, copy, keepMemory, patchCard, retireCard, speakLine],
+  );
+
+  const dismissCard = useCallback(
+    (card: Card, why: "cancelled" | "expired" = "cancelled") => {
+      patchCard(card.id, { status: why, result: why === "expired" ? copy.cardExpired : copy.cardCancelled });
+      retireCard(card.id);
+    },
+    [copy, patchCard, retireCard],
+  );
+
+  // Cards expire on the server's clock; the panel stops offering them first.
+  useEffect(() => {
+    const now = Date.now();
+    for (const c of cardsRef.current) if (c.status === "active" && secondsLeft(c.expiresAt, now) === 0) dismissCard(c, "expired");
+  }, [tick, dismissCard]);
 
   // ── §4.6 SK-narrated onboarding, once per SK_INTRO_TOUR.version ──
   const finishIntro = useCallback(
@@ -393,6 +540,24 @@ export default function SkShell({
       const q = text.trim();
       if (!q || ready === false) return;
       setError(null);
+      // §9.2: with exactly one card waiting, a bare yes/no answers the CARD —
+      // spoken (push-to-talk or hands-free, the only sources of a "voice"
+      // turn) or typed (one deliberate act, reported as a click).
+      const active = cardsRef.current.filter((c) => c.status === "active");
+      if (active.length === 1) {
+        const d = decideWithCards({ activeCards: 1, modality, text: q, locale: localeFromLang(document.documentElement.lang) });
+        if (d.kind === "confirm") {
+          setEntries((m) => [...m, { id: uuid(), who: "user", text: q }]);
+          void act(active[0], modality === "voice" ? "voice" : "click");
+          return;
+        }
+        if (d.kind === "dismiss") {
+          setEntries((m) => [...m, { id: uuid(), who: "user", text: q }]);
+          dismissCard(active[0]);
+          appendSk(copy.cardCancelled, { label: "supplementary" });
+          return;
+        }
+      }
       setBusy(true);
       // A new question interrupts whatever SK was saying (barge-in) and the
       // intro if it is still running.
@@ -420,12 +585,17 @@ export default function SkShell({
           location: { pathname: window.location.pathname, search: window.location.search },
           now: new Date(),
           lang: document.documentElement.lang,
+          // The Board's state rides along so the server can decide a move.
+          board: boardRef.current?.state(),
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
 
       let full = "";
       let sawDone = false;
+      // Board moves run as their events arrive; the turn stays busy until the
+      // Board has reported on every one of them.
+      const moveRuns: Promise<void>[] = [];
       try {
         const res = await fetch("/api/sk/shell/turn", {
           method: "POST",
@@ -440,13 +610,14 @@ export default function SkShell({
         for await (const ev of skTurnEvents(res.body, turn.signal)) {
           handle(ev);
         }
+        if (moveRuns.length) await Promise.all(moveRuns);
       } catch (e) {
         if (!turn.signal.aborted) setError((e as Error).message || copy.failed);
       } finally {
         if (turnRef.current === turn) turnRef.current = null;
         setBusy(false);
         patchEntry(skId, (en) => {
-          const empty = !en.text && !(en.nav?.length || en.tools?.length);
+          const empty = !en.text && !(en.nav?.length || en.tools?.length || en.moves?.length);
           // An answer that carried nothing at all: SK's fixed line (§2.3).
           return { ...en, pending: false, text: empty && sawDone ? copy.nothingOnThat : en.text };
         });
@@ -458,7 +629,7 @@ export default function SkShell({
         switch (ev.type) {
           case "meta":
             if (ev.capabilities) setCapabilities(ev.capabilities);
-            if (ev.memory) memoryRef.current = ev.memory;
+            if (ev.memory) keepMemory(ev.memory, ev.sessionId);
             break;
           case "text":
             full += ev.text;
@@ -477,9 +648,50 @@ export default function SkShell({
             setCaption(line);
             break;
           }
+          case "board": {
+            // Immediate tier, decided and audited server-side: the Board
+            // performs it here. The video is paused while SK speaks; a move
+            // that plays (intro, segment, resume) restarts it itself.
+            const b = boardRef.current;
+            const say = ev.say ?? "";
+            patchEntry(skId, (en) => ({
+              ...en,
+              text: en.text || say,
+              moves: [...(en.moves ?? []), { move: ev.move, say }],
+            }));
+            if (say) {
+              setCaption(say);
+              if (willSpeak && !full) speaker.push(say);
+            }
+            if (!b) {
+              patchEntry(skId, (en) => ({ ...en, moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: false, summary: copy.boardNotOpen } : m)) }));
+              break;
+            }
+            moveRuns.push(
+              (async () => {
+                const st = b.state();
+                if (st && st.paused === false && ev.move !== "pause") await b.run("pause", {});
+                const r = await b.run(ev.move, ev.args ?? {});
+                patchEntry(skId, (en) => ({
+                  ...en,
+                  moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: r.ok, summary: r.summary } : m)),
+                }));
+                if (!r.ok) setError(r.summary);
+              })(),
+            );
+            break;
+          }
+          case "confirm": {
+            // Confirm tier: a card with the resolved params and the server's
+            // token. Nothing happens until Confirm (click or spoken yes).
+            const card: Card = { id: uuid(), token: ev.token, action: ev.action, title: ev.title, params: ev.params ?? {}, expiresAt: ev.expiresAt, status: "active" };
+            setCards((cs) => [...cs.filter((c) => c.status !== "active"), card]);
+            setCaption(ev.title);
+            break;
+          }
           case "done":
             sawDone = true;
-            if (ev.memory) memoryRef.current = ev.memory;
+            if (ev.memory) keepMemory(ev.memory);
             patchEntry(skId, (en) => ({ ...en, sources: ev.sources ?? [], label: ev.label }));
             if (willSpeak) speaker.flush();
             break;
@@ -489,7 +701,7 @@ export default function SkShell({
         }
       }
     },
-    [ready, router, copy, patchEntry],
+    [ready, router, copy, patchEntry, act, dismissCard, appendSk, keepMemory],
   );
   // The hands-free loop sends from inside a dictation callback that outlives
   // any one render; it reaches the current `send` through this ref.
@@ -516,6 +728,11 @@ export default function SkShell({
           : "bg-[#FFF7E6] text-[#8A5A00]";
 
   const showStop = busy || speaking || narrating;
+  // Re-read on every render — the 1 s tick keeps them fresh while the lesson
+  // map is prepared in the background and while a card counts down.
+  const mapStatus = board ? board.status() : "none";
+  const nowMs = Date.now() + tick * 0;
+  const paramLabel = (k: string) => k.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
@@ -582,6 +799,12 @@ export default function SkShell({
                   → {fmt(copy.opening, { label: n.label })}
                 </div>
               ))}
+              {e.moves?.map((m, i) => (
+                <div key={i} className={`text-xs mt-1 ms-1 ${m.ok === false ? "text-[#B42318]" : "text-[#0C8175]"}`} data-sk="board-line" data-sk-move={m.move} title={m.summary}>
+                  ▶ {m.move}
+                  {m.ok === undefined ? " …" : m.ok ? "" : ` — ${m.summary ?? ""}`}
+                </div>
+              ))}
               {e.who === "sk" && (e.tools?.length || e.sources?.length) ? (
                 <div className="flex flex-wrap gap-1 mt-1 ms-1" data-sk="tool-chips">
                   {(e.sources?.length ? e.sources.map((s) => ({ name: s, ok: true })) : (e.tools ?? [])).map((t, i) => (
@@ -617,11 +840,51 @@ export default function SkShell({
           {caption}
         </div>
 
-        {/* Job tray + confirmation-card slot: DOM hooks kept for S2; empty in S0. */}
-        <div className="px-5 py-1 text-[10px] text-[#98A0A9] border-t border-[#EEF0EC]" data-sk="job-tray">
-          {copy.jobTrayEmpty}
+        {/* Job tray (jobs arrive in S2) — on the Board it also reports the lesson map. */}
+        <div className="px-5 py-1 text-[10px] text-[#98A0A9] border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
+          {mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
         </div>
-        <div data-sk="confirm-slot" className="hidden" />
+
+        {/* S1: confirmation cards (§2.5). One active card at a time. */}
+        <div data-sk="confirm-slot" className={cards.length ? "px-4 py-2 border-t border-[#EEF0EC] space-y-2" : "hidden"}>
+          {cards.map((c) => {
+            const left = secondsLeft(c.expiresAt, nowMs);
+            const settled = c.status !== "active" && c.status !== "sending";
+            return (
+              <div key={c.id} className="rounded-xl border border-[#F3D9A4] bg-[#FFF9EC] px-3.5 py-3 text-sm" data-sk="confirm-card" data-sk-action={c.action} data-sk-status={c.status} role="group" aria-label={copy.confirmTitle}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="font-medium text-[#14181F]">{c.title}</div>
+                  {c.status === "active" && (
+                    <span className="text-[10px] text-[#8A5A00] shrink-0" data-sk="confirm-expiry">
+                      {fmt(copy.expiresIn, { s: left })}
+                    </span>
+                  )}
+                </div>
+                <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                  {Object.entries(c.params).map(([k, v]) => (
+                    <Fragment key={k}>
+                      <dt className="text-[#98A0A9]">{paramLabel(k)}</dt>
+                      <dd className="text-[#14181F] break-words">{v === null || v === undefined ? "—" : String(v)}</dd>
+                    </Fragment>
+                  ))}
+                </dl>
+                {settled ? (
+                  <p className={`mt-2 text-xs ${c.status === "done" ? "text-[#0C4E47]" : "text-[#B42318]"}`}>{c.result}</p>
+                ) : (
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <button type="button" onClick={() => void act(c, "click")} disabled={c.status !== "active"} className="btn-primary h-8 px-3 text-xs disabled:opacity-50" data-sk="confirm-yes">
+                      {c.status === "sending" ? copy.cardSent : copy.confirm}
+                    </button>
+                    <button type="button" onClick={() => dismissCard(c)} disabled={c.status !== "active"} className="h-8 px-3 text-xs rounded-lg border border-[#E6E8E4] text-[#5B6470] disabled:opacity-50" data-sk="confirm-no">
+                      {copy.cancel}
+                    </button>
+                    {mic && <span className="text-[10px] text-[#98A0A9] ms-auto">{copy.voiceYesHint}</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
         <div className="px-4 py-3 border-t border-[#EEF0EC]">
           <form

@@ -11,6 +11,7 @@ import { catalogueAvailability, libraryFind } from "./library";
 import { assignmentsStatus } from "./assignments";
 import { learnersRisk } from "./risk";
 import { timetableNowNext } from "./timetable";
+import { BOARD_CAPABILITIES } from "./board";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -22,8 +23,12 @@ const ENTRIES: SkCapability[] = [
   assignmentsStatus,
   learnersRisk,
   timetableNowNext,
+  // S1 slice B: the Classroom Board moves (board.intro … board.recap), all
+  // immediate tier, visible only with Board access and the teacher hat.
+  ...BOARD_CAPABILITIES,
+  // S1 slice D appends `assign` (confirm tier) here — the orchestrator adds it.
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
 
-export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext };
+export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES };

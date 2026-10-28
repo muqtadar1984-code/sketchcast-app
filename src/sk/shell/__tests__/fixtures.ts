@@ -93,13 +93,19 @@ export function fakeSession(tables: Record<string, Rows>, opts: { user?: { id: s
 
 export function fakeAdmin(plan: string | null = "school", staffIds: string[] = []) {
   const inserts: { table: string; row: unknown }[] = [];
+  let seq = 0;
   return {
     inserts,
     from: (table: string) => {
       const b: any = {
         insert: (row: unknown) => {
           inserts.push({ table, row });
-          return Promise.resolve({ data: null, error: null });
+          // Awaitable as before (the audit sink), and chainable with
+          // `.select("id").single()` for tokens.ts's issue path (S1).
+          const id = `33333333-3333-4333-8333-${String(++seq).padStart(12, "0")}`;
+          const p: any = Promise.resolve({ data: null, error: null });
+          p.select = () => ({ single: async () => ({ data: { id }, error: null }) });
+          return p;
         },
         select: () => b,
         is: () => Promise.resolve({ data: staffIds.map((user_id) => ({ user_id })), error: null }),
