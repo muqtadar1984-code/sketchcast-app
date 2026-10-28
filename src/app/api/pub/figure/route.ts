@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     if (fixturePath()) {
       const local = fixtureFileFor(fig.path);
       if (!local) return new NextResponse(null, { status: 404 });
-      return new NextResponse(new Uint8Array(await readFile(local)), {
+      return new NextResponse(new Uint8Array(await readFile(/*turbopackIgnore: true*/ local)), {
         headers: { "content-type": "image/png", "cache-control": "private, max-age=300" },
       });
     }

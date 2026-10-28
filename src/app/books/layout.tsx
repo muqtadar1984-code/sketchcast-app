@@ -2,6 +2,9 @@ import Link from "next/link";
 import { requireBookMember } from "@/utils/books-access";
 import { LogoMark } from "../dashboard/icons";
 
+// Every book page depends on who is signed in: never prerender one.
+export const dynamic = "force-dynamic";
+
 // Book app shell (books.sketchcast.app). requireBookMember() bounces everyone
 // else to the book-app login, and the whole surface is dark while
 // NEXT_PUBLIC_BOOKS_HOST is unset. Layouts do NOT guard route handlers — every

@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     // development fixture: serve the local file the bundle would have uploaded
     const local = fixtureFileFor(a.storage_key);
     if (!local) return new NextResponse(null, { status: 404 });
-    return new NextResponse(new Uint8Array(await readFile(local)), {
+    return new NextResponse(new Uint8Array(await readFile(/*turbopackIgnore: true*/ local)), {
       headers: { "content-type": a.content_type ?? "application/octet-stream", "cache-control": "private, no-store" },
     });
   }

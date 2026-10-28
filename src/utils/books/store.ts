@@ -38,9 +38,9 @@ export function fixturePath(): string | null {
 function fixture(): Bundle | null {
   const path = fixturePath();
   if (!path) return null;
-  const mtime = statSync(path).mtimeMs;
+  const mtime = statSync(/*turbopackIgnore: true*/ path).mtimeMs;
   if (bundleCache?.path !== path || bundleCache.mtime !== mtime) {
-    const bundle = JSON.parse(readFileSync(path, "utf-8")) as Bundle;
+    const bundle = JSON.parse(readFileSync(/*turbopackIgnore: true*/ path, "utf-8")) as Bundle;
     // bundles carry no database ids: number the rows the way serial ids would
     for (const rows of Object.values(bundle.tables)) rows.forEach((r, i) => (r.id ??= i + 1));
     bundleCache = { path, mtime, bundle };
