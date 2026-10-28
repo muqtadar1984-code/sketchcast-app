@@ -328,3 +328,109 @@ describe("gemini adapter mapping (pure, no network)", () => {
     expect(body).toHaveProperty("tools");
   });
 });
+
+describe("orchestrator: a round's tool calls run side by side (fix/sk-speed)", () => {
+  const twoCalls = () =>
+    new StubProvider([
+      {
+        toolCalls: [
+          { id: "t1", name: "assignments__status", args: {} },
+          { id: "t2", name: "learners__risk", args: {} },
+        ],
+      },
+      { text: ["done"] },
+    ]);
+  /** A tool that resolves only when the test says so. */
+  const gate = () => {
+    let release!: (v: string) => void;
+    const p = new Promise<string>((r) => (release = r));
+    return { p, release };
+  };
+
+  it("two calls in one round are BOTH started before either resolves, and the results go back in the model's order", async () => {
+    const provider = twoCalls();
+    const started: string[] = [];
+    const g1 = gate();
+    const g2 = gate();
+    const events: string[] = [];
+    const run = (async () => {
+      for await (const ev of runAssistantTurn({
+        provider,
+        system: "s",
+        history: [],
+        question: "how are my classes",
+        tools: [{ name: "assignments__status", description: "d", parameters: {} }, { name: "learners__risk", description: "d", parameters: {} }],
+        runTool: (call) => {
+          started.push(call.name);
+          return call.name === "assignments__status" ? g1.p : g2.p;
+        },
+      })) {
+        events.push(ev.type);
+      }
+    })();
+    // Let the orchestrator reach the tool round.
+    for (let i = 0; i < 20 && started.length < 2; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(started).toEqual(["assignments__status", "learners__risk"]); // both in flight, nothing resolved yet
+    // The SECOND finishes first…
+    g2.release("risk-result");
+    await new Promise((r) => setTimeout(r, 0));
+    g1.release("status-result");
+    await run;
+    // …yet the history the model reads back keeps the model's own order.
+    const second = provider.calls[1]!;
+    const toolTurns = second.messages.filter((m) => m.role === "tool");
+    expect(toolTurns.map((m) => [m.toolCallId, m.result])).toEqual([
+      ["t1", "status-result"],
+      ["t2", "risk-result"],
+    ]);
+    expect(events).toEqual(["tool", "tool", "text", "done"]);
+  });
+
+  it("hands the turn's signal to every runTool call", async () => {
+    const provider = twoCalls();
+    const ctl = new AbortController();
+    const signals: (AbortSignal | undefined)[] = [];
+    for await (const ev of runAssistantTurn({
+      provider,
+      system: "s",
+      history: [],
+      question: "q",
+      tools: [{ name: "assignments__status", description: "d", parameters: {} }],
+      runTool: async (_call, signal) => {
+        signals.push(signal);
+        return "ok";
+      },
+      signal: ctl.signal,
+    })) {
+      void ev;
+    }
+    expect(signals).toEqual([ctl.signal, ctl.signal]);
+  });
+
+  it("a signal already fired when the round begins runs NO tool and yields cancelled", async () => {
+    // The stub yields its tool_calls after the text; abort on the text so the
+    // orchestrator sees the fired signal before the tool round starts.
+    const provider = new StubProvider([{ text: ["thinking…"], toolCalls: [{ id: "t1", name: "solve", args: {} }, { id: "t2", name: "solve", args: {} }] }, { text: ["never"] }]);
+    const ctl = new AbortController();
+    let toolRuns = 0;
+    const types: string[] = [];
+    for await (const ev of runAssistantTurn({
+      provider,
+      system: "s",
+      history: [],
+      question: "q",
+      tools: [{ name: "solve", description: "d", parameters: {} }],
+      runTool: async () => {
+        toolRuns++;
+        return "2";
+      },
+      signal: ctl.signal,
+    })) {
+      types.push(ev.type);
+      if (ev.type === "text") ctl.abort();
+    }
+    expect(toolRuns).toBe(0);
+    expect(types).toEqual(["text", "cancelled"]);
+    expect(provider.calls.length).toBe(1);
+  });
+});

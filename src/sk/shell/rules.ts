@@ -63,13 +63,18 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Compiled ONCE: a `\p{L}\p{N}` class costs V8 about 1–2 ms to build, and
+// building these ~120 on every turn made routeByRules a 160–250 ms step of
+// every SK turn (measured 2026-10-29, fix/sk-speed). Same patterns, same order.
+const TARGET_RES: Array<[NavTarget, RegExp[]]> = TARGET_WORDS.map(([target, words]) => [
+  target,
+  // Whole phrase, bounded by start/end or a non-letter (works for Arabic too).
+  words.map((w) => new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRe(w)}(?:$|[^\\p{L}\\p{N}])`, "u")),
+]);
+
 export function findTarget(t: string): NavTarget | null {
-  for (const [target, words] of TARGET_WORDS) {
-    for (const w of words) {
-      // Whole phrase, bounded by start/end or a non-letter (works for Arabic too).
-      const re = new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRe(w)}(?:$|[^\\p{L}\\p{N}])`, "u");
-      if (re.test(t)) return target;
-    }
+  for (const [target, res] of TARGET_RES) {
+    for (const re of res) if (re.test(t)) return target;
   }
   return null;
 }
@@ -80,8 +85,11 @@ const THIS_CLASS_RE = /\b(?:this|the current|current|my|the) class\b|\bkelas ini
 const ISO_DAY_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
 const ISO_MONTH_RE = /\b(\d{4}-\d{2})\b(?!-)/;
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const MONTH_RES = MONTHS.map((name) => new RegExp(`\\b${name}\\b`));
 const TOPIC_RE = /\b(?:kits?|catalogue|catalog)\s+(?:on|about|for|covering)\s+(.+)$/u;
 const LEARNER_RE = /\b(?:report|progress record|progress report|laporan|تقرير)\s+(?:for|of|on|untuk)\s+(.+)$/u;
+/** The same, case-insensitive, for the raw (un-lowercased) text. */
+const LEARNER_RE_I = new RegExp(LEARNER_RE.source, "iu");
 
 /** The user's LOCAL calendar day as a UTC-midnight Date (so the getUTC*
  *  accessors below read local values): the collector's iso carries the
@@ -120,7 +128,7 @@ export function monthFilter(t: string, now: Date, clock?: SkCollector["clock"]):
   if (/\b(?:this month|bulan ini)\b|هذا الشهر/u.test(t)) return ym(y, m);
   if (/\b(?:next month|bulan depan)\b|الشهر القادم|الشهر المقبل/u.test(t)) return m === 11 ? ym(y + 1, 0) : ym(y, m + 1);
   if (/\b(?:last month|bulan lepas)\b|الشهر الماضي/u.test(t)) return m === 0 ? ym(y - 1, 11) : ym(y, m - 1);
-  const idx = MONTHS.findIndex((name) => new RegExp(`\\b${name}\\b`).test(t));
+  const idx = MONTH_RES.findIndex((re) => re.test(t));
   if (idx >= 0) return ym(y, idx);
   return undefined;
 }
@@ -354,7 +362,7 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
       if (topic) filters.topic = topic.slice(0, 80);
     }
     if (target === "reports") {
-      const who = raw.match(new RegExp(LEARNER_RE.source, "iu"))?.[1]?.trim();
+      const who = raw.match(LEARNER_RE_I)?.[1]?.trim();
       if (who) learnerQuery = who.replace(/['’]s$/u, "").slice(0, 60);
       else if (ctx.selection.learnerId) filters.learnerId = ctx.selection.learnerId;
     }

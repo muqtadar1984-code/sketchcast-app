@@ -159,6 +159,10 @@ export async function POST(request: Request) {
     sink,
     sessionId: memory.sessionId,
     turnId: body.turnId,
+    // One read memo for THIS turn: the capabilities the model calls together
+    // (assignments.status + learners.risk on "how are my classes") share the
+    // teacher's classes and enrollments instead of each reading them again.
+    cache: new Map(),
   };
 
   // Board moves are audited against the PRESENT session (sk_actions.session_id:
@@ -451,10 +455,14 @@ export async function POST(request: Request) {
         // ── The model, with the allowed tools ────────────────────────────────
         const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
         const trace: ToolTrace[] = [];
-        const runShell = makeRunTool(ctx, deps, trace);
-        const runBoard = makeRunTool(ctx, boardDeps, trace);
+        // The chip for a tool goes out the moment THAT tool finishes; the
+        // orchestrator runs a round's tools side by side, so "the last trace
+        // entry" would name the wrong one.
+        const onTrace = (t: ToolTrace) => send({ type: "tool", name: t.name, ok: t.result.ok, summary: t.result.summary.slice(0, 200) });
+        const runShell = makeRunTool(ctx, deps, trace, onTrace);
+        const runBoard = makeRunTool(ctx, boardDeps, trace, onTrace);
         // A board.* tool the model chose is audited against the present session too.
-        const run = (call: Parameters<typeof runShell>[0]) => (fromApiToolName(call.name).startsWith("board.") ? runBoard(call) : runShell(call));
+        const run = (call: Parameters<typeof runShell>[0], signal?: AbortSignal) => (fromApiToolName(call.name).startsWith("board.") ? runBoard(call, signal) : runShell(call, signal));
         const history: Turn[] = memory.turns.map((t) => ({ role: t.role, text: t.text }));
         const system = buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory });
         let full = "";
@@ -468,12 +476,7 @@ export async function POST(request: Request) {
           history,
           question: body.text,
           tools: allowed.length ? toToolDefs(allowed) : undefined,
-          runTool: async (call) => {
-            const out = await run(call);
-            const last = trace[trace.length - 1];
-            if (last) send({ type: "tool", name: last.name, ok: last.result.ok, summary: last.result.summary.slice(0, 200) });
-            return out;
-          },
+          runTool: run,
           maxToolRounds: 3,
           maxTokens: 600,
           signal: abort.signal,

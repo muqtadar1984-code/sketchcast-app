@@ -19,6 +19,7 @@ import {
   type StatusShareRow,
   type StatusSubmissionRow,
 } from "@/utils/assignment-status";
+import { classEnrollments, teacherClasses } from "./shared";
 
 export const SHARE_ROWS_CAP = 40;
 /** `.in()` lists are URL-bound; a teacher with more generations than this gets
@@ -73,10 +74,8 @@ export const assignmentsStatus: SkCapability = {
       // Own classes — the scope everything else is cut to. The predicate goes
       // to the DB AND is re-applied here (belt and braces, like risk.ts and
       // resolve.ts): a wide RLS view must never widen the teacher's scope.
-      const classes = rows<ClassRow>(
-        await db.from("classes").select("id, name, teacher_id").eq("teacher_id", me).order("created_at", { ascending: false }),
-        "classes",
-      ).filter((c) => c.teacher_id === undefined || c.teacher_id === me);
+      // Read once per turn (shared.ts): context.resolve and assign use the same rows.
+      const classes = rows<ClassRow>(await teacherClasses(deps, me), "classes").filter((c) => c.teacher_id === undefined || c.teacher_id === me);
       const myClassIds = new Set(classes.map((c) => c.id));
       const classNames: Record<string, string> = {};
       for (const c of classes) classNames[c.id] = c.name || "Class";
@@ -103,7 +102,7 @@ export const assignmentsStatus: SkCapability = {
       shares = shares.filter((s) => genSet.has(s.generation_id));
 
       const [enrQ, progQ, subsQ] = await Promise.all([
-        db.from("enrollments").select("class_id, student_id, profiles(full_name, username)").in("class_id", scopeIds),
+        classEnrollments(deps, me, scopeIds),
         db.from("student_progress").select("generation_id, student_id, status").in("generation_id", genIds),
         db.from("submissions").select("generation_id, student_id, grade_status").in("generation_id", genIds),
       ]);

@@ -335,3 +335,27 @@ describe("visualForApp — the S1 limitation", () => {
     expect(String((a.tables.sk_manifests[0].derived_by as { visual: string }).visual)).toMatch(/carried 2/);
   });
 });
+
+describe("deriveAndStore — concurrent model passes (fix/sk-speed)", () => {
+  it("both Haiku calls are in flight together, and the manifest equals the sequential one (fixtures/derived-sequential.json) but for derived_by.at", async () => {
+    const { default: sequential } = await import("./fixtures/derived-sequential.json");
+    let inFlight = 0;
+    let peak = 0;
+    const call: ModelCall = async (req) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 20));
+      inFlight--;
+      return goodModel(req);
+    };
+    const r = await deriveAndStore(admin(), GEN, { now: NOW, call, load: async () => loaded() });
+    if (r.status !== "ready") throw new Error(`expected ready, got ${r.status}`);
+    expect(peak).toBe(2);
+    const strip = (m: unknown) => {
+      const c = JSON.parse(JSON.stringify(m)) as { derived_by: Record<string, unknown> };
+      delete c.derived_by.at;
+      return c;
+    };
+    expect(strip(r.manifest)).toEqual(strip(sequential));
+  });
+});

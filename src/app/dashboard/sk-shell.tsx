@@ -14,6 +14,8 @@
 //   narration.ts     — §4.6: the intro script and its abortable runner
 //   memory-store.ts  — S1: the memory blob across pages (sessionStorage)
 //   confirm.ts       — S1 §9.2: when a bare yes/no answers a confirm card
+//   prefetch.ts      — which pages to warm (router.prefetch) so a navigate
+//                      lands on a render already under way
 //   speech.ts        — S1 slice E: SK's voice — which provider (Polly when the
 //                      server allows, the browser otherwise), the video paused
 //                      while SK speaks and given back after, barge-in
@@ -46,6 +48,7 @@ import { createMicGate, type MicGate } from "@/sk/shell/client/mic-gate";
 import { runNarration, skIntroScript } from "@/sk/shell/client/narration";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
+import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
@@ -190,6 +193,24 @@ export default function SkShell({
   const introStartedRef = useRef(false);
   const introPostedRef = useRef(false);
   const sendRef = useRef<(text: string, modality: "text" | "voice") => Promise<void>>(async () => {});
+  const prefetchedRef = useRef(new Set<string>());
+
+  /** Warm the pages `navigate` can send this role to, once each per panel,
+   *  as soon as the server says the panel may navigate (the context GET, then
+   *  every turn's `meta`). router.prefetch is a hint: it never throws into the
+   *  turn and is a no-op where the router has nothing to fetch. */
+  const warmNavigation = useCallback(
+    (capabilities: string[]) => {
+      for (const path of pathsToPrefetch({ role, hat, capabilities, done: prefetchedRef.current })) {
+        try {
+          router.prefetch(path);
+        } catch {
+          /* a hint only */
+        }
+      }
+    },
+    [role, hat, router],
+  );
 
   // ── preferences + feature detection (post-mount: no hydration mismatch) ──
   useEffect(() => {
@@ -317,7 +338,9 @@ export default function SkShell({
           return;
         }
         setReady(d.ready !== false);
-        setCapabilities(Array.isArray(d.capabilities) ? d.capabilities : []);
+        const caps = Array.isArray(d.capabilities) ? d.capabilities : [];
+        setCapabilities(caps);
+        warmNavigation(caps);
         // A conversation carried over from another page (the dashboard →
         // the Board) beats the fresh blob; the server still has the last
         // word on whether it applies (signature, hat, 4-hour gap).
@@ -684,7 +707,10 @@ export default function SkShell({
       function handle(ev: SkTurnEvent) {
         switch (ev.type) {
           case "meta":
-            if (ev.capabilities) setCapabilities(ev.capabilities);
+            if (ev.capabilities) {
+              setCapabilities(ev.capabilities);
+              warmNavigation(ev.capabilities);
+            }
             if (ev.memory) keepMemory(ev.memory, ev.sessionId);
             break;
           case "text":
@@ -757,7 +783,7 @@ export default function SkShell({
         }
       }
     },
-    [ready, router, copy, patchEntry, act, dismissCard, appendSk, keepMemory],
+    [ready, router, copy, patchEntry, act, dismissCard, appendSk, keepMemory, warmNavigation],
   );
   // The hands-free loop sends from inside a dictation callback that outlives
   // any one render; it reaches the current `send` through this ref.

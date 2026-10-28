@@ -11,9 +11,9 @@
 // "40% completion", "avg score 30%", "scores declining") is school-health's,
 // unchanged, so the teacher and the principal hear the same reasons.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ResolvedEntity, SkCapability, SkCapabilityResult } from "../shell/types";
-import { computeSchoolHealth, fetchSchoolHealthRows, type HealthRows } from "@/utils/school-health";
+import { computeSchoolHealth, type HealthRows } from "@/utils/school-health";
+import { schoolHealthRows } from "./shared";
 
 export const RISK_ROWS_CAP = 30;
 
@@ -70,7 +70,8 @@ export const learnersRisk: SkCapability = {
     const me = ctx.user.id;
     const classId = typeof args.classId === "string" && args.classId.trim() ? args.classId.trim() : undefined;
     try {
-      const all = await fetchSchoolHealthRows(deps.session as unknown as SupabaseClient);
+      // fetchSchoolHealthRows, once per turn (shared.ts) however many classes are asked about.
+      const all = await schoolHealthRows(deps, me);
       const rows = scopeHealthRows(all, me, classId);
       if (!rows.classes.length) {
         return {
