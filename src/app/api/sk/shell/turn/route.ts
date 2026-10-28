@@ -241,6 +241,9 @@ export async function POST(request: Request) {
             usage = ev.usage;
           } else if (ev.type === "error") {
             failed = true;
+            // The raw provider message stays server-side (Vercel runtime logs);
+            // the client only ever gets the friendly line.
+            console.error("sk-shell.turn provider", ev.retryable ? "retryable" : "fatal", ev.message);
             send({ type: "error", message: ev.retryable ? "One moment — try that again in a few seconds." : "I couldn't answer that one. Try asking a different way?" });
           }
         }

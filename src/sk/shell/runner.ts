@@ -6,7 +6,7 @@
 
 import type { ToolCall } from "@/utils/assistant/provider";
 import type { SkActionRow, SkCapability, SkCapabilityResult, SkCollector, SkContext, SkSessionDb } from "./types";
-import { findCapability, metaAllows } from "./registry";
+import { findCapability, fromApiToolName, metaAllows } from "./registry";
 import { recordSafely, type SkAuditSink } from "./audit";
 import { REGISTRY } from "@/sk/capabilities";
 
@@ -108,8 +108,11 @@ export type ToolTrace = { name: string; args: Record<string, unknown>; result: S
 export function makeRunTool(ctx: SkContext, deps: RunnerDeps, trace: ToolTrace[]): (call: ToolCall) => Promise<string> {
   return async (call) => {
     const args = call.args && typeof call.args === "object" ? call.args : {};
-    const result = await runCapability(ctx, call.name, args, deps);
-    trace.push({ name: call.name, args, result });
+    // The model calls the API-safe name ("library__find"); the registry, the
+    // audit row, the tool event and done.sources all keep the dotted name.
+    const name = fromApiToolName(call.name);
+    const result = await runCapability(ctx, name, args, deps);
+    trace.push({ name, args, result });
     return toolResultText(result);
   };
 }

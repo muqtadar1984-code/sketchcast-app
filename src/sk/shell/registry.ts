@@ -22,10 +22,26 @@ export function allowedFor(ctx: SkContext, entries: SkCapability[] = REGISTRY): 
   return entries.filter((e) => metaAllows(e.meta, ctx));
 }
 
-export function toToolDefs(entries: SkCapability[]): ToolDef[] {
-  return entries.map((e) => ({ name: e.meta.name, description: e.meta.description, parameters: e.meta.parameters }));
+/** Registry names are dotted ("library.find"); the Anthropic tool API only
+ *  accepts `^[a-zA-Z0-9_-]{1,64}$`, so the model sees "library__find" and the
+ *  runner maps it back. Found live on 2026-10-28: every model turn answered
+ *  400 (non-retryable) because the dotted names went through untouched. */
+export const API_TOOL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+
+export function toApiToolName(name: string): string {
+  return name.replace(/\./g, "__");
 }
 
+export function fromApiToolName(name: string): string {
+  return name.replace(/__/g, ".");
+}
+
+export function toToolDefs(entries: SkCapability[]): ToolDef[] {
+  return entries.map((e) => ({ name: toApiToolName(e.meta.name), description: e.meta.description, parameters: e.meta.parameters }));
+}
+
+/** Accepts the registry name or its API form. */
 export function findCapability(name: string, entries: SkCapability[] = REGISTRY): SkCapability | null {
-  return entries.find((e) => e.meta.name === name) ?? null;
+  const wanted = fromApiToolName(name);
+  return entries.find((e) => e.meta.name === wanted) ?? null;
 }
