@@ -51,5 +51,5 @@ describe("dev harness outside development", () => {
     };
     await walk(root);
     expect(hits).toEqual([]);
-  });
+  }, 30_000); // a source scan over all of src/: slow under a full-suite run
 });
