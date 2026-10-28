@@ -129,7 +129,7 @@ export type Run = {
   usd: number | null;
   source_path: string | null;
   detail?: { _failed?: Record<string, string>; _finished_later?: number[]; summary?: Record<string, unknown> } & Record<string, unknown>;
-  // runs started from the app or a terminal (0164); imported history has trigger "import" and none of these
+  // runs started from the app or a terminal (0165); imported history has trigger "import" and none of these
   work_uid?: string;
   trigger?: "import" | "app" | "cli";
   params?: Record<string, number>;
@@ -182,7 +182,7 @@ export type Artifact = {
   /** a screen copy of a large PDF (opens in the browser); the full file stays the download (0162) */
   screen_key?: string | null;
   screen_bytes?: number | null;
-  /** the run that produced it (0164); null for imported files */
+  /** the run that produced it (0165); null for imported files */
   run_id?: number | null;
 };
 

@@ -7,7 +7,7 @@ import { fixturePath } from "./store";
 import { runChapters, type RunnableStage } from "./stages";
 import type { Artifact, Run, RunEvent } from "./types";
 
-// Book runs (R1, migration 0164): queue a run in pub_runs, start the books
+// Book runs (R1, migration 0165): queue a run in pub_runs, start the books
 // runner for it (one AWS Fargate task per run), read its log, ask it to stop.
 // Book runs never touch public.jobs. Callers have already checked the member
 // and their right to run the stage.

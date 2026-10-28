@@ -1,5 +1,5 @@
--- Rollback for 0164_pub_book_runs.sql. Drops the run log and steps, and the
--- columns 0164 added. Imported runs (trigger = 'import') keep their rows.
+-- Rollback for 0165_pub_book_runs.sql. Drops the run log and steps, and the
+-- columns 0165 added. Imported runs (trigger = 'import') keep their rows.
 drop table if exists public.pub_run_events;
 drop table if exists public.pub_run_steps;
 drop index if exists public.pub_artifacts_run_idx;

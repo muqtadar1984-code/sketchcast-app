@@ -1,4 +1,4 @@
--- 0164: run books from the app (R1, slice S1; founder 2026-10-28).
+-- 0165: run books from the app (R1, slice S1; founder 2026-10-28).
 -- A run is queued in pub_runs by books.sketchcast.app and executed by the
 -- books runner (one AWS Fargate task per run). Book runs deliberately do NOT
 -- use public.jobs: every production lane, the capacity checks and the console
