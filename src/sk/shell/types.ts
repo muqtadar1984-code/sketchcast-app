@@ -224,6 +224,15 @@ export type SkTurnEvent =
   | { type: "text"; text: string }
   | { type: "tool"; name: string; ok: boolean; summary: string }
   | { type: "navigate"; path: string; label: string }
+  /** S1: an immediate-tier Board move the client executes through the
+   *  BoardController (src/app/present/board-controller.ts). The server
+   *  decided the move from the Context + Kit Manifest and audited it; the
+   *  client only performs it. `say` is the one line SK speaks with the move
+   *  (the video is paused while SK speaks, §2.4). */
+  | { type: "board"; move: SkBoardMove; args: Record<string, unknown>; say?: string }
+  /** S1: a confirm-tier card (§2.5, §8.2). The client renders it and returns
+   *  `token` by click or spoken yes; the server executes only with the token. */
+  | { type: "confirm"; token: string; action: string; title: string; params: Record<string, string | number | boolean | null>; expiresAt: string }
   | {
       type: "done";
       /** §2.3 / §9.3: which tools the answer rests on, and its label. */
@@ -240,6 +249,33 @@ export type SkTurnEvent =
   | { type: "error"; message: string };
 
 export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat";
+
+/** The Board moves of Final Plan §2.4, as the client executes them. */
+export type SkBoardMove =
+  | "intro"
+  | "segment"
+  | "slide"
+  | "explain"
+  | "compare"
+  | "practise"
+  | "walkthrough"
+  | "freeze"
+  | "blank"
+  | "back"
+  | "resume"
+  | "pause"
+  | "recap";
+
+/** The client's answer to a `confirm` card: the token, and how it was given
+ *  (§9.2: a spoken yes counts only with exactly one active card and an
+ *  intentional mic press). Posted to /api/sk/act. */
+export type SkActRequest = {
+  turnId: string;
+  token: string;
+  via: "click" | "voice";
+  collector: SkCollector;
+  memory?: string;
+};
 
 /** The fixed line SK says when every tool came back empty (§2.3). Not a model
  *  output: the route emits it so the unsupported-claims suite is mechanical. */
