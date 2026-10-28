@@ -4,7 +4,7 @@
  * Run: node node_modules/vitest/vitest.mjs run src/sk/shell/__tests__/rules.test.ts
  */
 import { describe, expect, it } from "vitest";
-import { SK_CHAT_NOTHING_PENDING, SK_CHAT_THANKS, classQueryOf, routeByRules } from "../rules";
+import { SK_CHAT_NOTHING_PENDING, SK_CHAT_THANKS, classQueryOf, routeByRules, startLessonOf } from "../rules";
 import { NOW, makeCtx } from "./fixtures";
 
 const ctx = makeCtx({ selection: { classId: "sel-class", learnerId: "sel-learner" } });
@@ -102,5 +102,53 @@ describe("day and month use the user's local clock", () => {
     expect(nav("open the calendar for december").filters.month).toBe("2026-12");
     expect(nav("open the calendar for last month").filters.month).toBe("2026-09");
     expect(nav("open the calendar for this month").filters.month).toBe("2026-10");
+  });
+});
+
+describe("starting a lesson with no Board session (§2.7) → navigate board + autostart", () => {
+  const start = (text: string, c = ctx) => {
+    const d = routeByRules(text, c, NOW, clock);
+    if (d.intent !== "navigate") throw new Error(`${text} → ${d.intent}`);
+    return d;
+  };
+  // phrasing → [classQuery?, kitQuery?]
+  const table: Array<[string, string | undefined, string | undefined]> = [
+    ["start the lesson", undefined, undefined],
+    ["Start the lesson for 7B on Specialised Cells", "7b", "Specialised Cells"],
+    ["start the lesson for class 7B", "7b", undefined],
+    ["start today's lesson with Plant and Animal Cells", undefined, "Plant and Animal Cells"],
+    ["open the board for 7B on Specialised Cells", "7b", "Specialised Cells"],
+    ["open the board with Plant and Animal Cells", undefined, "Plant and Animal Cells"],
+    ["open the board for 7B", "7b", undefined],
+    ["begin the class", undefined, undefined],
+    ["start the video", undefined, undefined],
+    ["play the intro", undefined, undefined],
+    ["mulakan pelajaran", undefined, undefined],
+    ["mulakan pelajaran untuk 7B tentang Sel Khusus", "7b", "Sel Khusus"],
+    ["buka papan dengan Osmosis", undefined, "Osmosis"],
+    ["ابدأ الدرس", undefined, undefined],
+    ["ابدأ الدرس عن الانتشار", undefined, "الانتشار"],
+  ];
+  it.each(table)("%s", (text, classQuery, kitQuery) => {
+    const d = start(text);
+    expect(d.target).toBe("board");
+    expect(d.filters).toEqual({ autostart: true });
+    expect(d.classQuery).toBe(classQuery);
+    expect(d.kitQuery).toBe(kitQuery);
+  });
+  it("a bare 'open the board' is a plain navigate — going there is not starting a lesson", () => {
+    expect(nav("open the board")).toMatchObject({ target: "board", filters: {} });
+    expect(nav("open the board").kitQuery).toBeUndefined();
+    expect(nav("buka papan").filters).toEqual({});
+  });
+  it("startLessonOf keeps the kit's casing from the spoken text and strips a dangling preposition", () => {
+    expect(startLessonOf("start the lesson on cells for 7b", "Start the lesson on Cells for 7B")).toEqual({ classQuery: "7b", kitQuery: "Cells" });
+    expect(startLessonOf("open the board", "open the board")).toBeNull();
+    expect(startLessonOf("pause", "pause")).toBeNull();
+    expect(startLessonOf("what's on the board", "what's on the board?")).toBeNull();
+  });
+  it("other Board phrasings off the Board are still for the model", () => {
+    expect(routeByRules("pause", ctx, NOW, clock).intent).toBe("ask");
+    expect(routeByRules("slide 4", ctx, NOW, clock).intent).toBe("ask");
   });
 });

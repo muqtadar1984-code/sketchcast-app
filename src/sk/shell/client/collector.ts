@@ -19,6 +19,10 @@ export type CollectorInput = {
   lang?: string | null;
   /** Board state, when the Shell is mounted on /present (not in S0). */
   board?: SkCollector["board"];
+  /** What the host page says is picked on screen (the Board's bar before a
+   *  lesson: class, book + chapter, or a ready-made kit). Layered over what
+   *  the URL says; still only ids the server re-checks. */
+  selection?: SkSelection;
 };
 
 /** Query string → plain record (first value wins; keys kept as written). */
@@ -85,8 +89,9 @@ export function collect(input: CollectorInput): SkCollector {
     params,
     clock: clockFrom(input.now),
   };
-  const selection = selectionFromUrl(out.path, params);
-  if (selection) out.selection = selection;
+  const fromUrl = selectionFromUrl(out.path, params);
+  const selection: SkSelection = { ...(fromUrl ?? {}), ...(input.selection ?? {}) };
+  if (Object.keys(selection).length) out.selection = selection;
   if (input.board) out.board = input.board;
   const locale = localeFromLang(input.lang);
   if (locale) out.locale = locale;

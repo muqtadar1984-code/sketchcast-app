@@ -78,6 +78,11 @@ export type RecapGround = {
    *  took no part in — the shape before slice C. */
   moves?: SkMove[];
   questionsAsked?: SkQuestion[];
+  /** A READY-MADE KIT LESSON: the kit's name (its title prefix). Such a lesson
+   *  has no book and no chapter — its items carry chapterNum null, which for a
+   *  book lesson would mean revision — so the name is the whole of what the
+   *  note may be about, and `revision` is false. */
+  topic?: string | null;
 };
 
 /** One `sk_actions` row of kind "board", as the recap reads it. */
@@ -213,17 +218,20 @@ export function buildGround(
   items: RecapItem[],
   facts: ChapterFacts[],
   pages: number,
-  /** S1 slice C: what SK did, from `sk_actions` rows of kind "board". */
-  sk?: { moves?: SkMove[]; questionsAsked?: SkQuestion[] } | null,
+  /** S1 slice C: what SK did, from `sk_actions` rows of kind "board"; and,
+   *  for a ready-made kit lesson, the kit's name as `topic`. */
+  sk?: { moves?: SkMove[]; questionsAsked?: SkQuestion[]; topic?: string | null } | null,
 ): RecapGround {
   const { chapters, revision } = chaptersShown(items);
   const byNum = new Map(facts.map((f) => [f.chapterNum, f]));
   const moves = (sk?.moves ?? []).slice(0, MAX_MOVES);
   const questionsAsked = (sk?.questionsAsked ?? []).slice(0, MAX_QUESTIONS);
+  const topic = clip(sk?.topic ?? "", 120) || null;
 
   return {
     ...(moves.length ? { moves } : {}),
     ...(questionsAsked.length ? { questionsAsked } : {}),
+    ...(topic ? { topic } : {}),
     chapters: chapters.map((c) => {
       const f = byNum.get(c.chapterNum);
       const title = (f?.title ?? "").trim() || null;
@@ -238,7 +246,9 @@ export function buildGround(
         evidence,
       };
     }),
-    revision,
+    // A kit lesson's items belong to no chapter BY DESIGN, not because she
+    // ranged across the book: with a topic named, that is not revision.
+    revision: topic ? false : revision,
     pages: Number.isFinite(pages) && pages > 0 ? Math.floor(pages) : 1,
   };
 }
@@ -503,9 +513,11 @@ export function fallbackRecap(g: RecapGround, w: FallbackWords = FALLBACK_EN): s
   const topics = [...new Set([...moveTopics(g.moves), ...g.chapters.flatMap((c) => c.concepts)])].slice(0, 3);
 
   if (!named.length) {
-    // No chapter, but SK taught something by name: say what.
-    if (topics.length) {
-      const focused = put(w.focusedOn, { list: topics.join(", ") });
+    // No chapter, but a ready-made kit by name, or SK taught something by
+    // name: say what. The kit's name leads — it is what the lesson was.
+    const list = [...new Set([...(g.topic ? [g.topic] : []), ...topics])].slice(0, 3);
+    if (list.length) {
+      const focused = put(w.focusedOn, { list: list.join(", ") });
       if (!violations(focused).length) return focused;
     }
     return g.revision ? w.revisionSeveral : w.currentTopic;
@@ -582,6 +594,8 @@ export function recapPrompt(
       : "");
 
   const parts: string[] = [];
+  // A ready-made kit lesson: the kit's name is the chapter material there is.
+  if (g.topic) parts.push(`--- ${g.topic} ---`);
   for (const c of g.chapters) {
     const head = c.title ? `${c.label}: ${c.title}` : c.label;
     const reached = c.parts.length ? ` (parts ${c.parts.join(", ")})` : "";

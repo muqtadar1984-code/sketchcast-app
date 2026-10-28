@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { presentEntitled } from "@/utils/present/entitlement";
 import { docDownloadName } from "@/utils/download-name";
-import { railFor, pickerFor, type KitGeneration } from "@/utils/present/kit";
+import { railFor, railForKit, pickerFor, type KitGeneration, type PickerGroup, type PickerItem } from "@/utils/present/kit";
 
 export const runtime = "nodejs";
 
@@ -34,6 +34,7 @@ const videoPart = (path: string): number => {
   return m ? Number(m[1]) : 1;
 };
 const NOT_FOUND = () => NextResponse.json({ error: "Not found." }, { status: 404 });
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -55,38 +56,64 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const bookId = url.searchParams.get("book");
+  const kitId = url.searchParams.get("kit");
   const chapterRaw = url.searchParams.get("chapter");
-  if (!bookId) return NextResponse.json({ error: "Missing book." }, { status: 400 });
-  const chapter = Number(chapterRaw);
-  if (!Number.isInteger(chapter)) {
-    return NextResponse.json({ error: "Missing chapter." }, { status: 400 });
+
+  let gens: KitGeneration[];
+  let units: ReturnType<typeof railFor>;
+  let picker: { group: PickerGroup; items: PickerItem[] }[];
+
+  if (kitId && !bookId) {
+    // A READY-MADE KIT: no book, no chapter. The group is the teacher's own
+    // book-less generations sharing the presentation's title prefix (see
+    // railForKit); the picker — "elsewhere in the book" — has no book to be
+    // elsewhere in, so it is empty.
+    if (!UUID_RE.test(kitId)) return NextResponse.json({ error: "Missing kit." }, { status: 400 });
+    const { data: rows, error } = await supabase
+      .from("generations")
+      .select("id, kind, title, chapter_ref, params, artifacts(kind, storage_path)")
+      .is("book_id", null)
+      .eq("owner_id", user.id)
+      .eq("status", "done")
+      .is("withdrawn_at", null);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    gens = ((rows ?? []) as unknown as KitGeneration[]).map((g) => ({ ...g, artifacts: g.artifacts ?? [] }));
+    units = railForKit(gens, kitId);
+    if (!units.length) return NOT_FOUND();
+    picker = [];
+  } else {
+    if (!bookId) return NextResponse.json({ error: "Missing book." }, { status: 400 });
+    const chapter = Number(chapterRaw);
+    if (!Number.isInteger(chapter)) {
+      return NextResponse.json({ error: "Missing chapter." }, { status: 400 });
+    }
+
+    // Her own generations for this book. RLS already confines this to what she may
+    // see; the explicit owner filter keeps a school's shared shelf from filling her
+    // rail with a colleague's kits, which would be confusing rather than unsafe.
+    const { data: rows, error } = await supabase
+      .from("generations")
+      .select("id, kind, title, chapter_ref, params, artifacts(kind, storage_path)")
+      .eq("book_id", bookId)
+      .eq("owner_id", user.id)
+      .eq("status", "done")
+      .is("withdrawn_at", null);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    gens = ((rows ?? []) as unknown as KitGeneration[]).map((g) => ({
+      ...g,
+      artifacts: g.artifacts ?? [],
+    }));
+
+    units = railFor(gens, { chapter });
+    // The picker is what the RAIL DOES NOT ALREADY SHOW: elsewhere in the book,
+    // and the revision papers. The two "here" groups are dropped rather than
+    // filtered out of pickerFor itself, because pickerFor's grouping is about
+    // where a worksheet sits and stays useful on its own terms.
+    picker = pickerFor(gens, { chapter, part: null }).filter(
+      (g) => g.group === "this-book" || g.group === "revision",
+    );
   }
-
-  // Her own generations for this book. RLS already confines this to what she may
-  // see; the explicit owner filter keeps a school's shared shelf from filling her
-  // rail with a colleague's kits, which would be confusing rather than unsafe.
-  const { data: rows, error } = await supabase
-    .from("generations")
-    .select("id, kind, title, chapter_ref, params, artifacts(kind, storage_path)")
-    .eq("book_id", bookId)
-    .eq("owner_id", user.id)
-    .eq("status", "done")
-    .is("withdrawn_at", null);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const gens = ((rows ?? []) as unknown as KitGeneration[]).map((g) => ({
-    ...g,
-    artifacts: g.artifacts ?? [],
-  }));
-
-  const units = railFor(gens, { chapter });
-  // The picker is what the RAIL DOES NOT ALREADY SHOW: elsewhere in the book,
-  // and the revision papers. The two "here" groups are dropped rather than
-  // filtered out of pickerFor itself, because pickerFor's grouping is about
-  // where a worksheet sits and stays useful on its own terms.
-  const picker = pickerFor(gens, { chapter, part: null }).filter(
-    (g) => g.group === "this-book" || g.group === "revision",
-  );
 
   // The artifacts bucket is not readable through a member session, exactly as
   // the Library does it — hence the admin client obtained above.

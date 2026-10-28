@@ -398,6 +398,7 @@ export default function SkShell({
           now: new Date(),
           lang: document.documentElement.lang,
           board: boardRef.current?.state(),
+          selection: boardRef.current?.selection(),
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
@@ -639,8 +640,10 @@ export default function SkShell({
           location: { pathname: window.location.pathname, search: window.location.search },
           now: new Date(),
           lang: document.documentElement.lang,
-          // The Board's state rides along so the server can decide a move.
+          // The Board's state rides along so the server can decide a move —
+          // and, before a lesson, the bar's pick so it can start one.
           board: boardRef.current?.state(),
+          selection: boardRef.current?.selection(),
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
@@ -789,8 +792,13 @@ export default function SkShell({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
+      {/* THE PANEL'S COLOURS ARE ITS OWN. It mounts on the Board too, whose page
+          sets light text for a dark room, and an inherited `color` made the
+          title and the typed text near-invisible there (founder, 2026-10-28).
+          Near-black on the root overrides whatever the page set; color-scheme
+          light keeps native controls from flipping dark with the page. */}
       <div
-        className="card w-full max-w-md flex flex-col max-h-[92dvh] sm:max-h-[86dvh] rounded-b-none sm:rounded-b-2xl"
+        className="card w-full max-w-md flex flex-col max-h-[92dvh] sm:max-h-[86dvh] rounded-b-none sm:rounded-b-2xl text-slate-900 [color-scheme:light]"
         onClick={(e) => e.stopPropagation()}
         data-sk="shell"
         data-sk-role={role ?? ""}
@@ -800,14 +808,14 @@ export default function SkShell({
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
           <div className="min-w-0">
-            <div className="font-display font-medium flex items-center gap-1.5">
+            <div className="font-display font-medium flex items-center gap-1.5 text-slate-900">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#0C8175] text-white text-[11px] font-semibold" aria-hidden>
                 SK
               </span>
-              <span className="truncate">{copy.title}</span>
+              <span className="truncate text-slate-900">{copy.title}</span>
             </div>
             {capabilities.length > 0 && (
-              <div className="text-[10px] text-[#98A0A9] truncate" data-sk="capabilities">
+              <div className="text-[10px] text-slate-500 truncate" data-sk="capabilities">
                 {capabilities.join(" · ")}
               </div>
             )}
@@ -821,12 +829,12 @@ export default function SkShell({
               <button
                 onClick={toggleReadAloud}
                 aria-pressed={readAloud}
-                className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}
+                className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-slate-500"} hover:underline`}
               >
                 {readAloud ? "🔊" : "🔈"} {copy.readAloud}
               </button>
             )}
-            <button onClick={onClose} className="text-[#98A0A9] hover:text-[#5B6470] text-lg leading-none" aria-label={copy.close}>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-700 text-lg leading-none" aria-label={copy.close}>
               ×
             </button>
           </div>
@@ -834,17 +842,17 @@ export default function SkShell({
 
         {/* Transcript */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3" data-sk="transcript">
-          {ready === null && <p className="text-sm text-[#98A0A9]">…</p>}
+          {ready === null && <p className="text-sm text-slate-500">…</p>}
           {entries.map((e) => (
             <div key={e.id} className={e.who === "user" ? "flex flex-col items-end" : "flex flex-col items-start"}>
-              {e.who === "user" && <span className="text-[10px] text-[#98A0A9] me-1 mb-0.5">{copy.you}</span>}
+              {e.who === "user" && <span className="text-[10px] text-slate-500 me-1 mb-0.5">{copy.you}</span>}
               {(e.text || e.pending) && (
                 <div
                   className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
-                    e.who === "user" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-[#14181F] rounded-es-sm"
+                    e.who === "user" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-slate-900 rounded-es-sm"
                   }`}
                 >
-                  {e.text ? <RichText text={e.text} /> : <span className="text-[#98A0A9]">…</span>}
+                  {e.text ? <RichText text={e.text} /> : <span className="text-slate-500">…</span>}
                 </div>
               )}
               {e.nav?.map((n, i) => (
@@ -889,12 +897,12 @@ export default function SkShell({
         </div>
 
         {/* Caption — SK's latest sentence; the Board reads this line later. */}
-        <div className="px-5 py-1.5 border-t border-[#EEF0EC] text-xs text-[#5B6470] truncate min-h-[1.75rem]" data-sk="caption" aria-live="polite">
+        <div className="px-5 py-1.5 border-t border-[#EEF0EC] text-xs text-slate-600 truncate min-h-[1.75rem]" data-sk="caption" aria-live="polite">
           {caption}
         </div>
 
         {/* Job tray (jobs arrive in S2) — on the Board it also reports the lesson map. */}
-        <div className="px-5 py-1 text-[10px] text-[#98A0A9] border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
+        <div className="px-5 py-1 text-[10px] text-slate-600 border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
           {mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
         </div>
 
@@ -998,10 +1006,10 @@ export default function SkShell({
               maxLength={600}
               disabled={ready === false}
               placeholder={listening ? copy.listening : copy.placeholder}
-              className="field h-9 px-3 text-sm flex-1"
+              className="field h-9 px-3 text-sm flex-1 bg-white text-slate-900 placeholder:text-slate-400"
               data-sk="input"
             />
-            <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
+            <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm text-white disabled:opacity-50">
               {busy ? "…" : copy.send}
             </button>
           </form>

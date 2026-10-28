@@ -42,7 +42,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const hhmm = (m: number) => `${pad(Math.floor((m % 1440) / 60))}:${pad(m % 60)}`;
 
 type ClassRow = { id: string; name: string | null; grade?: string | null };
-type BookRow = { id: string; title: string | null };
+type BookRow = { id: string; title: string | null; chapters?: Array<{ num?: number; title?: string | null }> | null };
 
 export type NowNextInput = {
   teacherId: string;
@@ -51,6 +51,8 @@ export type NowNextInput = {
   lastTaught: LastTaught[];
   classNames: Record<string, string>;
   bookTitles: Record<string, string>;
+  /** "bookId:chapterNum" → the chapter's title (books.chapters[].title). */
+  chapterTitles?: Record<string, string>;
   day: number;
   minutes: number;
 };
@@ -70,15 +72,17 @@ export type NowNextFact = {
   lastTaughtBook: string | null;
   lastTaughtBookId: string | null;
   lastTaughtChapter: number | null;
+  lastTaughtChapterTitle: string | null;
   lastTaughtPart: number | null;
 };
 
 /** The resolver applied, plus today's remaining lessons. Pure; exported for the tests. */
 export function nowNext(input: NowNextInput): { facts: NowNextFact[]; summary: string } {
-  const { teacherId, shape, slots, lastTaught, classNames, bookTitles, day, minutes } = input;
+  const { teacherId, shape, slots, lastTaught, classNames, bookTitles, chapterTitles = {}, day, minutes } = input;
   const ctx = resolveContext({ teacherId, shape, slots, lastTaught, day, minutes });
   const windows = periodWindows(shape);
   const className = (id: string | null) => (id ? classNames[id] ?? "Class" : null);
+  const chapterTitle = (l: LastTaught | null) => (l?.book_id && l.chapter_num != null ? chapterTitles[`${l.book_id}:${l.chapter_num}`] ?? null : null);
   const last = ctx.slot ? lastTaught.find((l) => l.class_id === ctx.slot!.class_id && l.subject === ctx.slot!.subject) ?? null : null;
 
   const state: NowNextFact["state"] = ctx.period ? ctx.period.state : "none";
@@ -97,6 +101,7 @@ export function nowNext(input: NowNextInput): { facts: NowNextFact[]; summary: s
     lastTaughtBook: last?.book_id ? bookTitles[last.book_id] ?? "a book" : null,
     lastTaughtBookId: last?.book_id ?? null,
     lastTaughtChapter: last?.chapter_num ?? null,
+    lastTaughtChapterTitle: chapterTitle(last),
     lastTaughtPart: last?.part ?? null,
   };
 
@@ -127,6 +132,7 @@ export function nowNext(input: NowNextInput): { facts: NowNextFact[]; summary: s
         lastTaughtBook: lt?.book_id ? bookTitles[lt.book_id] ?? "a book" : null,
         lastTaughtBookId: lt?.book_id ?? null,
         lastTaughtChapter: lt?.chapter_num ?? null,
+        lastTaughtChapterTitle: chapterTitle(lt),
         lastTaughtPart: lt?.part ?? null,
       });
     }
@@ -191,11 +197,17 @@ export const timetableNowNext: SkCapability = {
       }
       const bookIds = [...new Set(lastTaught.map((l) => l.book_id).filter((b): b is string => !!b))];
       const bookTitles: Record<string, string> = {};
+      const chapterTitles: Record<string, string> = {};
       if (bookIds.length) {
-        for (const b of rows<BookRow>(await db.from("books").select("id, title").in("id", bookIds), "books")) bookTitles[b.id] = b.title || "a book";
+        for (const b of rows<BookRow>(await db.from("books").select("id, title, chapters").in("id", bookIds), "books")) {
+          bookTitles[b.id] = b.title || "a book";
+          for (const c of Array.isArray(b.chapters) ? b.chapters : []) {
+            if (typeof c?.num === "number" && typeof c.title === "string" && c.title.trim()) chapterTitles[`${b.id}:${c.num}`] = c.title.trim();
+          }
+        }
       }
       const clock = deps.clock && Number.isFinite(deps.clock.day) && Number.isFinite(deps.clock.minutes) ? { day: deps.clock.day, minutes: deps.clock.minutes } : clockAt(deps.now);
-      const { facts, summary } = nowNext({ teacherId: me, shape, slots, lastTaught, classNames, bookTitles, day: clock.day, minutes: clock.minutes });
+      const { facts, summary } = nowNext({ teacherId: me, shape, slots, lastTaught, classNames, bookTitles, chapterTitles, day: clock.day, minutes: clock.minutes });
       const head = facts[0];
       return {
         ok: true,

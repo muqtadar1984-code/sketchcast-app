@@ -112,7 +112,7 @@ function seed(over: Partial<Record<string, Row[]>> = {}) {
       { id: "8a", name: "8A", teacher_id: T2 },
     ],
     books: [
-      { id: "b1", title: "Cambridge Biology" },
+      { id: "b1", title: "Cambridge Biology", chapters: [{ num: 2, title: "Cells" }, { num: 3, title: "Specialised Cells" }] },
       { id: "b9", title: "History of Malaysia" },
     ],
     ...over,
@@ -149,6 +149,7 @@ describe("timetable.now_next", () => {
       lastTaughtBook: "Cambridge Biology",
       lastTaughtBookId: "b1",
       lastTaughtChapter: 3,
+      lastTaughtChapterTitle: "Specialised Cells",
       lastTaughtPart: 2,
     });
     expect(r.facts!.slice(1).map((f) => [f.row, f.periodLabel, f.subject, f.className, f.startsAt, f.endsAt])).toEqual([

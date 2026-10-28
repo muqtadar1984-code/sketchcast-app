@@ -135,3 +135,36 @@ describe("navPath — the exact target table", () => {
     expect((navigateCapability.meta.parameters.properties.target as { enum: string[] }).enum).toEqual([...NAV_TARGETS]);
   });
 });
+
+describe("board filters: the deep link the Board page reads (deep-link.ts)", () => {
+  const teacher = makeCtx({ hat: "teacher" });
+  const path = (f: Record<string, unknown>) => {
+    const r = resolveNavigate(teacher, { target: "board", ...f });
+    return r.ok ? r.navigate!.path : `REFUSED:${r.error}`;
+  };
+  it("class + book + chapter + autostart", () => {
+    expect(path({ classId: "c7b", bookId: "b1", chapterRef: "2", autostart: true })).toBe("/present?class=c7b&book=b1&chapter=2&autostart=1");
+    expect(path({ bookId: "b1", chapterRef: 2, autostart: "1" })).toBe("/present?book=b1&chapter=2&autostart=1");
+  });
+  it("a ready-made kit stands alone (a book beside it is dropped)", () => {
+    expect(path({ generationId: "g-kit", autostart: true })).toBe("/present?kit=g-kit&autostart=1");
+    expect(path({ classId: "c7b", generationId: "g-kit", bookId: "b1", chapterRef: "2" })).toBe("/present?class=c7b&kit=g-kit");
+  });
+  it("autostart needs a lesson to start; a chapter needs its book; only params present are written", () => {
+    expect(path({ autostart: true })).toBe("/present");
+    expect(path({ bookId: "b1", autostart: true })).toBe("/present?book=b1");
+    expect(path({ chapterRef: "2", autostart: true })).toBe("/present");
+    expect(path({ classId: "c7b" })).toBe("/present?class=c7b");
+    expect(path({})).toBe("/present");
+  });
+  it("validates like the other filters: malformed ids and chapters are dropped", () => {
+    expect(path({ bookId: "b1; drop", chapterRef: "2" })).toBe("/present");
+    expect(path({ bookId: "b1", chapterRef: "two" })).toBe("/present?book=b1");
+    expect(path({ generationId: "../x" })).toBe("/present");
+    expect(path({ bookId: "b1", chapterRef: "2", autostart: "yes" })).toBe("/present?book=b1&chapter=2");
+  });
+  it("the Board filters are in the tool's schema", () => {
+    const props = navigateCapability.meta.parameters.properties as Record<string, unknown>;
+    expect(Object.keys(props)).toEqual(expect.arrayContaining(["bookId", "chapterRef", "generationId", "autostart"]));
+  });
+});
