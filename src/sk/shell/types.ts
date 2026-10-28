@@ -156,6 +156,24 @@ export type SkCapabilityResult = {
   navigate?: { path: string; label: string };
   entities?: ResolvedEntity[];
   error?: string;
+  /** S1: an immediate-tier Board move for the client to perform (the route
+   *  emits it as a `board` event). Only `kind: "board"` entries set this. */
+  board?: { move: SkBoardMove; args: Record<string, unknown>; say?: string };
+  /** S1: a confirm-tier action with its FULLY RESOLVED params. The route
+   *  issues the token (tokens.ts) and emits a `confirm` card; nothing is
+   *  written until the client returns that token (§2.5, §8.2). Only
+   *  `tier: "confirm"` entries set this. */
+  confirm?: { action: string; title: string; params: Record<string, string | number | boolean | null> };
+};
+
+/** What /api/sk/act answers after a token is returned (§9.2). */
+export type SkActResponse = {
+  ok: boolean;
+  outcome: "done" | "already_used" | "expired" | "context_mismatch" | "not_found" | "refused" | "error";
+  /** One line SK says, e.g. "Assigned Specialised Cells to 7B, due Friday." */
+  summary: string;
+  result?: Record<string, unknown>;
+  memory?: string;
 };
 
 /** The narrowest Supabase surface a handler may use. It is ALWAYS the
