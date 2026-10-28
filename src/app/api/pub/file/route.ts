@@ -10,6 +10,8 @@ export const runtime = "nodejs";
 // A book file (PDF, packet, report, record): a 302 to a short-lived link into
 // the private books bucket. 404 for non-members, unknown books and files (the
 // app is not probeable). Read-only; every member with `read` on the book.
+// Opening a large PDF serves its screen copy (images at 150 dpi, ~15 MB instead
+// of ~100 MB); download=1 always serves the full file.
 export async function GET(request: Request) {
   const m = await isBookMemberRequest();
   if (!m) return new NextResponse(null, { status: 404 });
@@ -20,16 +22,17 @@ export async function GET(request: Request) {
   const a = await getArtifact(work.uid, id);
   if (!a?.storage_key) return new NextResponse(null, { status: 404 });
   const download = url.searchParams.get("download") === "1" ? a.title : undefined;
+  const key = !download && a.screen_key ? a.screen_key : a.storage_key;
 
   if (fixturePath()) {
     // development fixture: serve the local file the bundle would have uploaded
-    const local = fixtureFileFor(a.storage_key);
+    const local = fixtureFileFor(key);
     if (!local) return new NextResponse(null, { status: 404 });
     return new NextResponse(new Uint8Array(await readFile(/*turbopackIgnore: true*/ local)), {
       headers: { "content-type": a.content_type ?? "application/octet-stream", "cache-control": "private, no-store" },
     });
   }
-  const link = await s3Link(a.storage_key, download);
+  const link = await s3Link(key, download);
   if (!link) return NextResponse.json({ error: "The books bucket is not configured (BOOKS_S3_BUCKET)." }, { status: 503 });
   return NextResponse.redirect(link, { status: 302, headers: { "cache-control": "private, no-store" } });
 }
