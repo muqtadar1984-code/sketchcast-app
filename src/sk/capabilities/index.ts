@@ -7,9 +7,23 @@
 import type { SkCapability } from "@/sk/shell/types";
 import { navigateCapability } from "./navigate";
 import { resolveCapability } from "./resolve";
+import { catalogueAvailability, libraryFind } from "./library";
+import { assignmentsStatus } from "./assignments";
+import { learnersRisk } from "./risk";
+import { timetableNowNext } from "./timetable";
 
-const ENTRIES: SkCapability[] = [navigateCapability, resolveCapability];
+const ENTRIES: SkCapability[] = [
+  navigateCapability,
+  resolveCapability,
+  // Teacher knowledge tools v1 (slice C): every one reads through the
+  // user-session client and scopes to the teacher's own classes.
+  libraryFind,
+  catalogueAvailability,
+  assignmentsStatus,
+  learnersRisk,
+  timetableNowNext,
+];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
 
-export { navigateCapability, resolveCapability };
+export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext };

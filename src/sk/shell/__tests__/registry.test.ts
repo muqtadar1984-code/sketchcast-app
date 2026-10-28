@@ -49,23 +49,38 @@ describe("metaAllows", () => {
   });
 });
 
+/** The shipped S0 registry, in order: core (B) then the teacher knowledge
+ *  tools v1 (C). A new entry must be added here on purpose. */
+const SHIPPED = [
+  "navigate",
+  "context.resolve",
+  "library.find",
+  "catalogue.availability",
+  "assignments.status",
+  "learners.risk",
+  "timetable.now_next",
+];
+const TEACHER_SEES = SHIPPED;
+const PARENT_SEES = ["navigate", "context.resolve"];
+const STUDENT_SEES = ["navigate"];
+
 describe("allowedFor over the shipped registry", () => {
-  it("teacher: navigate + context.resolve; student: navigate only", () => {
-    expect(allowedFor(makeCtx()).map((c) => c.meta.name)).toEqual(["navigate", "context.resolve"]);
-    expect(allowedFor(makeCtx({ role: "student" })).map((c) => c.meta.name)).toEqual(["navigate"]);
-    expect(allowedFor(makeCtx({ role: "parent", hat: "parent" })).map((c) => c.meta.name)).toEqual(["navigate", "context.resolve"]);
+  it("teacher: everything; parent: navigate + context.resolve; student: navigate only", () => {
+    expect(allowedFor(makeCtx()).map((c) => c.meta.name)).toEqual(TEACHER_SEES);
+    expect(allowedFor(makeCtx({ role: "student" })).map((c) => c.meta.name)).toEqual(STUDENT_SEES);
+    expect(allowedFor(makeCtx({ role: "parent", hat: "parent" })).map((c) => c.meta.name)).toEqual(PARENT_SEES);
   });
   it("filters a custom list and leaves REGISTRY untouched", () => {
     const list = [cap({ name: "a", roles: ["student"] }), cap({ name: "b", roles: ["teacher"] })];
     expect(allowedFor(makeCtx(), list).map((c) => c.meta.name)).toEqual(["b"]);
-    expect(REGISTRY.map((c) => c.meta.name)).toEqual(["navigate", "context.resolve"]);
+    expect(REGISTRY.map((c) => c.meta.name)).toEqual(SHIPPED);
   });
 });
 
 describe("toToolDefs / findCapability", () => {
   it("maps meta to the provider's ToolDef shape", () => {
     const defs = toToolDefs(REGISTRY);
-    expect(defs.map((d) => d.name)).toEqual(["navigate", "context.resolve"]);
+    expect(defs.map((d) => d.name)).toEqual(SHIPPED);
     for (const d of defs) {
       expect(typeof d.description).toBe("string");
       expect((d.parameters as { type: string }).type).toBe("object");

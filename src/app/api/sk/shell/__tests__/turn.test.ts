@@ -136,7 +136,11 @@ describe("navigate (deterministic)", () => {
     expect(res.headers.get("content-type")).toBe("text/event-stream");
     const ev = await readEvents(res);
     expect(ev.map((e) => e.type)).toEqual(["meta", "tool", "tool", "text", "navigate", "done"]);
-    expect(ev[0]).toMatchObject({ type: "meta", intent: "navigate", capabilities: ["navigate", "context.resolve"] });
+    expect(ev[0]).toMatchObject({ type: "meta", intent: "navigate" });
+    // The teacher sees the whole shipped registry (core + knowledge tools v1).
+    expect((ev[0] as { capabilities: string[] }).capabilities).toEqual(
+      expect.arrayContaining(["navigate", "context.resolve", "library.find", "assignments.status", "learners.risk", "timetable.now_next"]),
+    );
     expect(typeof ev[0].sessionId).toBe("string");
     expect(ev[1]).toMatchObject({ type: "tool", name: "context.resolve", ok: true });
     expect(ev[2]).toMatchObject({ type: "tool", name: "navigate", ok: true });
@@ -238,11 +242,13 @@ describe("model path + grounding", () => {
     expect(ev.find((e) => e.type === "done")).toMatchObject({ label: "navigation", sources: ["navigate"] });
   });
   it("a provider error → one friendly error event, no done, never the raw message", async () => {
-    mocks.error = "overloaded_error: 529";
+    // A distinctive token: a bare "529" can occur inside a random sessionId.
+    mocks.error = "overloaded_error: RAW-PROVIDER-TEXT-7c3e (529)";
     const ev = await readEvents(await POST(req(turn("what is pending"))));
     expect(ev.map((e) => e.type)).toEqual(["meta", "error"]);
     expect((ev[1] as { message: string }).message).toMatch(/One moment/);
-    expect(JSON.stringify(ev)).not.toContain("529");
+    expect(JSON.stringify(ev)).not.toContain("RAW-PROVIDER-TEXT-7c3e");
+    expect(JSON.stringify(ev)).not.toContain("overloaded_error");
   });
   it("an empty model answer with no tool declines cleanly", async () => {
     mocks.script = [{ text: [] }];
@@ -285,7 +291,10 @@ describe("GET /api/sk/shell/context", () => {
     const res = await GET(new Request("http://x/api/sk/shell/context?path=/dashboard/analytics"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body).toMatchObject({ ready: true, capabilities: ["navigate", "context.resolve"], role: "teacher", hat: "teacher", page: "analytics", locale: "en", promptVersion: "sk-shell-1.0" });
+    expect(body).toMatchObject({ ready: true, role: "teacher", hat: "teacher", page: "analytics", locale: "en", promptVersion: "sk-shell-1.0" });
+    expect(body.capabilities).toEqual(
+      expect.arrayContaining(["navigate", "context.resolve", "library.find", "catalogue.availability", "assignments.status", "learners.risk", "timetable.now_next"]),
+    );
     expect(body.greeting).toMatch(/I'm SK/);
     expect(body.memory).toMatch(/^[A-Za-z0-9_-]+\.[0-9a-f]{64}$/);
   });
