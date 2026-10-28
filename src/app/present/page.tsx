@@ -6,7 +6,9 @@ import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { shapeFromConfig, type Slot } from "@/utils/timetable";
 import type { LastTaught } from "@/utils/present/context";
-import PresentClient, { type BookOption, type ClassName } from "./present-client";
+import { skShellEnabledFor } from "@/utils/flags";
+import { activeHatCookie } from "@/utils/hats-server";
+import PresentClient, { type BookOption, type ClassName, type PresentSk } from "./present-client";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,8 @@ export default async function PresentPage() {
   // The page's words. Resolved on the SERVER and handed down as props — ten
   // message files must never reach the browser bundle, which is the whole reason
   // dictionaries.ts is server-only.
-  const t = (await getDictionary(await resolveLocale())).present;
+  const dict = await getDictionary(await resolveLocale());
+  const t = dict.present;
 
   const verdict = await presentEntitled(admin, user.id, user);
   if (!verdict.ok) return <Refused t={t} why={verdict.why} />;
@@ -60,6 +63,21 @@ export default async function PresentPage() {
     .eq("id", user.id)
     .maybeSingle();
   const schoolId = (profile?.school_id as string | null) ?? null;
+  const role = (profile?.role as string | null) ?? null;
+
+  // SK Shell on the Board (S1): the same gates the dashboard layout runs
+  // (FEATURE_SK + SK_ROLES + tenant opt-in / allow list) through the caller's
+  // own session; nothing here can throw. The launcher is mounted by the
+  // client page WITH the Board bridge, which is why it does not come through
+  // dashboard/layout (the Board has no layout of its own).
+  let sk: PresentSk | null = null;
+  try {
+    if (await skShellEnabledFor(supabase, user, role, schoolId)) {
+      sk = { copy: dict.sk.shell, tourCopy: dict.app.tour, role, hat: await activeHatCookie() };
+    }
+  } catch {
+    sk = null;
+  }
 
   // The school's period/day shape. No school, or no config, resolves to the
   // default shape — which is harmless: with no slots to match, the bar simply
@@ -155,6 +173,7 @@ export default async function PresentPage() {
       classes={classes}
       lastTaught={lastTaught}
       books={books}
+      sk={sk}
     />
   );
 }

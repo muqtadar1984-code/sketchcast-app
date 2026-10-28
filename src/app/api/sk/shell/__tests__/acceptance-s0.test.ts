@@ -406,8 +406,10 @@ describe("S0 acceptance on a seeded class", () => {
     // 8A's pending submission is not in this teacher's to-grade; 8A's learners are not in the count.
     expect(r.summary).toBe(QUIZ_SUMMARY);
     expect(r.facts![0]).toMatchObject({ assigned: 5, pendingToGrade: 1 });
-    // Nothing of 8A's reaches the client either.
-    expect(JSON.stringify(ev)).not.toMatch(/8A|Gopal|Hana|sh-t2|c8a/);
+    // Nothing of 8A's reaches the client either. The random sessionId is
+    // stripped first: a hex id can contain "c8a" by chance (flake seen 2026-10-28).
+    const withoutIds = JSON.stringify(ev.map((e) => (e.type === "meta" ? { ...e, sessionId: "", memory: "" } : e.type === "done" ? { ...e, memory: "" } : e)));
+    expect(withoutIds).not.toMatch(/8A|Gopal|Hana|sh-t2|c8a/);
     expect(doneOf(ev)).toMatchObject({ label: "grounded", sources: ["assignments.status"] });
   });
 });

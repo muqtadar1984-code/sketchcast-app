@@ -72,6 +72,16 @@ export type SkBoardState = {
   t?: number;
   paused?: boolean;
   rollPage?: number;
+  /** S1 (additive): the open segment's 0-based index in `segments`, when known. */
+  k?: number;
+  /** S1 (additive): the open unit's video generation id. */
+  generationId?: string;
+  /** S1 (additive): the Board manifest's segments as the client holds them,
+   *  so the server resolves "slide 4" / "explain diffusion" without a DB read.
+   *  `id` is the manifest segment_id the concepts point at. */
+  segments?: Array<{ k: number; heading: string; id?: string; points?: string[] }>;
+  /** S1 (additive): the manifest's concepts, each with the segment ids it is taught in. */
+  concepts?: Array<{ id: string; name: string; segmentIds: string[] }>;
 };
 
 /** An entity a tool resolved on an earlier turn, kept so "their parents" and
@@ -156,6 +166,24 @@ export type SkCapabilityResult = {
   navigate?: { path: string; label: string };
   entities?: ResolvedEntity[];
   error?: string;
+  /** S1: an immediate-tier Board move for the client to perform (the route
+   *  emits it as a `board` event). Only `kind: "board"` entries set this. */
+  board?: { move: SkBoardMove; args: Record<string, unknown>; say?: string };
+  /** S1: a confirm-tier action with its FULLY RESOLVED params. The route
+   *  issues the token (tokens.ts) and emits a `confirm` card; nothing is
+   *  written until the client returns that token (§2.5, §8.2). Only
+   *  `tier: "confirm"` entries set this. */
+  confirm?: { action: string; title: string; params: Record<string, string | number | boolean | null> };
+};
+
+/** What /api/sk/act answers after a token is returned (§9.2). */
+export type SkActResponse = {
+  ok: boolean;
+  outcome: "done" | "already_used" | "expired" | "context_mismatch" | "not_found" | "refused" | "error";
+  /** One line SK says, e.g. "Assigned Specialised Cells to 7B, due Friday." */
+  summary: string;
+  result?: Record<string, unknown>;
+  memory?: string;
 };
 
 /** The narrowest Supabase surface a handler may use. It is ALWAYS the
@@ -224,6 +252,15 @@ export type SkTurnEvent =
   | { type: "text"; text: string }
   | { type: "tool"; name: string; ok: boolean; summary: string }
   | { type: "navigate"; path: string; label: string }
+  /** S1: an immediate-tier Board move the client executes through the
+   *  BoardController (src/app/present/board-controller.ts). The server
+   *  decided the move from the Context + Kit Manifest and audited it; the
+   *  client only performs it. `say` is the one line SK speaks with the move
+   *  (the video is paused while SK speaks, §2.4). */
+  | { type: "board"; move: SkBoardMove; args: Record<string, unknown>; say?: string }
+  /** S1: a confirm-tier card (§2.5, §8.2). The client renders it and returns
+   *  `token` by click or spoken yes; the server executes only with the token. */
+  | { type: "confirm"; token: string; action: string; title: string; params: Record<string, string | number | boolean | null>; expiresAt: string }
   | {
       type: "done";
       /** §2.3 / §9.3: which tools the answer rests on, and its label. */
@@ -241,6 +278,38 @@ export type SkTurnEvent =
 
 export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat";
 
+/** The Board moves of Final Plan §2.4, as the client executes them. */
+export type SkBoardMove =
+  | "intro"
+  | "segment"
+  | "slide"
+  | "explain"
+  | "compare"
+  | "practise"
+  | "walkthrough"
+  | "freeze"
+  | "blank"
+  | "back"
+  | "resume"
+  | "pause"
+  | "recap";
+
+/** The client's answer to a `confirm` card: the token, and how it was given
+ *  (§9.2: a spoken yes counts only with exactly one active card and an
+ *  intentional mic press). Posted to /api/sk/act. */
+export type SkActRequest = {
+  turnId: string;
+  token: string;
+  via: "click" | "voice";
+  collector: SkCollector;
+  memory?: string;
+};
+
 /** The fixed line SK says when every tool came back empty (§2.3). Not a model
  *  output: the route emits it so the unsupported-claims suite is mechanical. */
 export const SK_NOTHING_ON_THAT = "I have nothing on that.";
+
+/** S1: the fixed line when a confirm-tier action cannot be offered because no
+ *  action-token secret is configured (tokens.ts refuses to issue). The action
+ *  is then unavailable rather than weak (§8.2). */
+export const SK_CANNOT_CONFIRM = "I can't confirm actions right now.";

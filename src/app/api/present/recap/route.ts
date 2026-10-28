@@ -12,9 +12,12 @@ import {
   cleanRecap,
   fallbackRecap,
   recapPrompt,
+  skMoves,
+  skQuestions,
   RECAP_USER_TURN,
   type ChapterFacts,
   type RecapItem,
+  type SkActionLike,
 } from "@/utils/present/recap";
 
 export const runtime = "nodejs";
@@ -35,6 +38,14 @@ export const runtime = "nodejs";
 // stuck retry is an unbounded spend, so the month's allowance is RESERVED
 // atomically before the call — 0099's present_recap_reserve, the mould of
 // tutor_sketch_reserve.
+//
+// WHAT SK DID (S1 slice C). The Board moves SK made in this lesson sit in
+// sk_actions (kind "board", session_id = this present session, written by the
+// SK Shell turn route) and the questions it put up in the practise rows' params.
+// They are read with the admin client — sk_* tables are service-role only
+// (§8.1) and the session is already proven hers — and handed to the prompt as
+// DATA ("What SK did in this lesson") and to the fallback sentence. Before 0163
+// is applied the table does not exist; that read failing changes nothing.
 //
 // THE BAN IS CHECKED, NOT REQUESTED. "never 'played the video'" is in the prompt
 // AND in cleanRecap(). Prompt compliance is the thing this codebase has already
@@ -84,7 +95,11 @@ export async function POST(request: Request) {
     part: typeof i.detail?.part === "number" ? i.detail.part : null,
   }));
 
-  const ground = buildGround(items, await chapterFacts(c.admin, session.book_id, items), session.page_count ?? 1);
+  const skRows = await boardMoves(c.admin, session.id);
+  const ground = buildGround(items, await chapterFacts(c.admin, session.book_id, items), session.page_count ?? 1, {
+    moves: skMoves(skRows),
+    questionsAsked: skQuestions(skRows),
+  });
 
   // ── the allowance ─────────────────────────────────────────────────────────
   //
@@ -389,6 +404,31 @@ async function chapterFacts(
       sourceText: g?.source_text ?? null,
     };
   });
+}
+
+// ── what SK did in this lesson (S1 slice C) ──────────────────────────────────
+
+/** The Board moves SK made in this present session, oldest first. An absent
+ *  table (0163 unapplied) or any read error is an empty list, never a failure:
+ *  the note was drafted without SK before slice C and still can be. */
+async function boardMoves(admin: Caller["admin"], sessionId: string): Promise<SkActionLike[]> {
+  try {
+    const { data, error } = await admin
+      .from("sk_actions")
+      .select("action, params, ok, at, result")
+      .eq("session_id", sessionId)
+      .eq("kind", "board")
+      .order("at", { ascending: true })
+      .limit(200);
+    if (error) {
+      console.warn("[present/recap] sk_actions read failed", error.message);
+      return [];
+    }
+    return ((data ?? []) as SkActionLike[]).filter((r) => r && typeof r.action === "string");
+  } catch (e) {
+    console.warn("[present/recap] sk_actions read threw", (e as Error).message);
+    return [];
+  }
 }
 
 /** Same reasoning as OPTIONS: Next answers a GET on a POST-only route with 405

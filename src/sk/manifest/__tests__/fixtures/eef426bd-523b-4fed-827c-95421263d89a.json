@@ -1,0 +1,1303 @@
+{
+ "schema": "sk-kit-manifest/m1",
+ "manifest_id": "bf26b8f8998b7f9316bc2c63",
+ "generation_id": "eef426bd-523b-4fed-827c-95421263d89a",
+ "book_id": null,
+ "chapter_ref": null,
+ "article_id": "16dc6420-b076-485e-ba6b-56a5df0b7e3c",
+ "parts": [
+  1
+ ],
+ "language": "en",
+ "format_version": 3,
+ "pinned": {
+  "script_ids": [
+   "0203c6f2-006b-4f4d-9964-f1ff8e4124ba"
+  ],
+  "video_manifest_ids": [
+   "c5c3854b-5763-4b9d-9ee7-8b2e2ccad398"
+  ],
+  "format_version": 3,
+  "artifact_paths": [
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/180d55c7-12f2-433e-bd9b-f442f5584431/answer_key.docx",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/180d55c7-12f2-433e-bd9b-f442f5584431/worksheet.docx",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/180d55c7-12f2-433e-bd9b-f442f5584431/worksheet_questions.json",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/4d825c15-a793-4f06-8895-5c4d03fb6ba4/deck.pptx",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/a416ce84-5c87-46fa-8874-22a8cbfdd1d2/answer_key.docx",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/a416ce84-5c87-46fa-8874-22a8cbfdd1d2/worksheet.docx",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/a416ce84-5c87-46fa-8874-22a8cbfdd1d2/worksheet_questions.json",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/script.json",
+   "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/thumb.png"
+  ],
+  "artifacts_hash": "79094523de874947ac8fd09baa9418d73b2a070b6784b352ccc1ae0b6793c0fe"
+ },
+ "completeness": {
+  "video": "ok",
+  "script": "ok",
+  "questions": "ok",
+  "concepts": "ok",
+  "format_version": 3
+ },
+ "moves": {
+  "intro": "available",
+  "segment": "available",
+  "slide": "degraded",
+  "practise": "available",
+  "walkthrough": "degraded",
+  "explain": "available",
+  "remediate": "degraded"
+ },
+ "segments": [
+  {
+   "key": "p1:s001",
+   "segment_id": "s001",
+   "part": 1,
+   "k": 0,
+   "start_s": 0,
+   "end_s": 32.5,
+   "slide_t": 32.438,
+   "slide_k": 1,
+   "type": "hook",
+   "heading": "Life's tiny building block",
+   "points": [],
+   "narration": "Here is a puzzle. A tall tree and a tiny amoeba look nothing alike, yet if you zoom in far enough, you find the same building block in both. Look at this drawing of a leaf cell. A building block? Like bricks in a wall? Very much like bricks, but these bricks are alive. We call them cells, and today we will compare the cells of plants and animals, and learn how to tell them apart. Can you really tell just by looking at one tiny cell? You can, if you know which clues to look for. By the end of this lesson, you will be the detective.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell",
+    "sk_tree"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": null,
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "no single concept: Hook introducing cells as building blocks; no single concept taught yet"
+   },
+   "visual": {
+    "status": "distinct",
+    "show": "frame",
+    "reason": "new board; Main drawing is a labelled plant cell with cell wall, chloroplasts, and large vacuole, matching the hook's leaf-cell reference.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": null,
+    "diff_min_earlier": null,
+    "nearest_earlier": null,
+    "model_confidence": 0.92
+   }
+  },
+  {
+   "key": "p1:s002",
+   "segment_id": "s002",
+   "part": 1,
+   "k": 1,
+   "start_s": 32.5,
+   "end_s": 73.33,
+   "slide_t": 73.268,
+   "slide_k": 2,
+   "type": "activate",
+   "heading": "The cell: unit of life",
+   "points": [],
+   "narration": "Let us start with what you already know. What are the things that every living thing does? It eats or gets food, it breathes, it grows, and it makes babies. Good. Nutrition, respiration, growth and reproduction. Now here is the big idea: the cell is the smallest unit that can do all those jobs. That is why we call it the basic structural and functional unit of life. Structural and functional? Those are big words. Structural means it is what living things are built from. Functional means it can actually carry out life processes, like getting energy, growing, responding to surroundings and reproducing. Nothing smaller than a cell can do all of that.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o1",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Explains cell as smallest unit doing all life processes"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.0256); Main drawing is a labelled plant cell with organelles; segment says the cell is the smallest unit doing life processes.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0256,
+    "diff_min_earlier": 0.0256,
+    "nearest_earlier": "p1:s001",
+    "model_confidence": 0.93
+   }
+  },
+  {
+   "key": "p1:s003",
+   "segment_id": "s003",
+   "part": 1,
+   "k": 2,
+   "start_s": 73.33,
+   "end_s": 110.08,
+   "slide_t": 110.018,
+   "slide_k": 3,
+   "type": "explore",
+   "heading": "One cell or many",
+   "points": [],
+   "narration": "So is a person just one giant cell? No, and that is a common mistake. Some organisms are unicellular, meaning one single cell does every life process. Bacteria and amoeba are examples. Others are multicellular, made of many cells, and the cells are often specialised for different jobs and work together. Humans, flowering plants and mushrooms are multicellular. So an amoeba has to eat, breathe and reproduce all with one cell? Exactly. One cell, every job. In your body, by contrast, muscle cells, nerve cells and skin cells share the work like a team.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell",
+    "sk_person"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o1",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Distinguishes unicellular from multicellular organisms"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.0168); Main drawing is a labelled plant cell; segment discusses cells generally (unicellular vs multicellular), so a learner would not be misled.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0168,
+    "diff_min_earlier": 0.0168,
+    "nearest_earlier": "p1:s002",
+    "model_confidence": 0.8
+   }
+  },
+  {
+   "key": "p1:s004",
+   "segment_id": "s004",
+   "part": 1,
+   "k": 3,
+   "start_s": 110.08,
+   "end_s": 172.62,
+   "slide_t": 172.558,
+   "slide_k": 4,
+   "type": "explore",
+   "heading": "Prokaryotic and eukaryotic cells",
+   "points": [],
+   "narration": "Now biologists sort all cells into two types, based on how the inside is organised. Picture two homes. One is a single big room where everything happens together. The other is a house with separate rooms, each with its own purpose. Which one is more advanced? The house with rooms. The single room is a prokaryotic cell. It is small and simple, with no true nucleus, so its genetic material lies free in the cytoplasm in a region called the nucleoid. It also has no membrane-bound organelles. Bacteria and blue-green algae are prokaryotes. And the house with rooms? That is the eukaryotic cell. It is larger and more complex. Its genetic material is wrapped inside a membrane-bound nucleus, and its cytoplasm holds membrane-bound compartments called organelles, each specialised for one task. Plant cells and animal cells are both eukaryotic. So organelles are like the rooms? Perfect way to put it. An organelle is a specialised structure inside a cell that does a particular job.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell",
+    "sk_house"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o2",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Contrasts prokaryotic and eukaryotic cells; places plant/animal as eukaryotic"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.0174); Main drawing is a labelled plant cell with organelles, matching the eukaryotic cell and organelle discussion.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0174,
+    "diff_min_earlier": 0.0174,
+    "nearest_earlier": "p1:s003",
+    "model_confidence": 0.9
+   }
+  },
+  {
+   "key": "p1:s005",
+   "segment_id": "s005",
+   "part": 1,
+   "k": 4,
+   "start_s": 172.62,
+   "end_s": 216.45,
+   "slide_t": 216.388,
+   "slide_k": 5,
+   "type": "explore",
+   "heading": "Cell membrane: the gate",
+   "points": [],
+   "narration": "Since plant and animal cells are both eukaryotic, they share many parts. Let us tour an animal cell, starting from the outside. First, the cell membrane. Is that the skin of the cell? A good picture, though it is a very special skin. It is a thin, flexible layer made of a lipid bilayer with proteins embedded in it. It is selectively permeable, which means it lets some things pass, like oxygen, nutrients and ions, and restricts others. Think of a security gate that checks who may come in or go out. So it does not just block everything? Right. A cell that blocked everything would starve, and one that let everything through would lose control of its own insides. The membrane controls what enters and leaves.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell",
+    "sk_plant"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o3",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Describes cell membrane structure and function"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.0233); Labelled plant cell diagram with 'Cell membrane' label pointing to the outer edge; matches the segment's focus on the membrane.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0233,
+    "diff_min_earlier": 0.0214,
+    "nearest_earlier": "p1:s003",
+    "model_confidence": 0.9
+   }
+  },
+  {
+   "key": "p1:s006",
+   "segment_id": "s006",
+   "part": 1,
+   "k": 5,
+   "start_s": 216.45,
+   "end_s": 262.37,
+   "slide_t": 262.308,
+   "slide_k": 6,
+   "type": "explore",
+   "heading": "Cytoplasm and the nucleus",
+   "points": [],
+   "narration": "Inside the membrane is the cytoplasm, a jelly-like, semi-fluid material between the membrane and the nucleus. It is mostly water with dissolved salts and organic molecules, and the organelles are suspended in it. Is it just filler, like the jelly in a jelly cake? Not filler at all. Many of the cell's chemical reactions take place right there in the cytoplasm. It is the busy workspace in which all the organelles float. And where is the boss of the cell? That is the nucleus, the control centre. Think of the school office that holds the rules and plans. It is surrounded by a double-membraned nuclear envelope with tiny nuclear pores that allow controlled exchange of materials with the cytoplasm. It holds the hereditary instructions that direct growth, repair, metabolism and reproduction.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell",
+    "sk_jelly"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o3",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.85,
+    "availability": "available",
+    "reason": "Describes cytoplasm and nucleus structure and function"
+   },
+   "visual": {
+    "status": "distinct",
+    "show": "frame",
+    "reason": "new board; Main drawing is a labelled plant cell showing cytoplasm, nucleus and organelles, matching the cytoplasm and nucleus segment.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0449,
+    "diff_min_earlier": 0.0363,
+    "nearest_earlier": "p1:s004",
+    "model_confidence": 0.9
+   }
+  },
+  {
+   "key": "p1:s007",
+   "segment_id": "s007",
+   "part": 1,
+   "k": 6,
+   "start_s": 262.37,
+   "end_s": 306.04,
+   "slide_t": 305.978,
+   "slide_k": 7,
+   "type": "explore",
+   "heading": "Chromosomes and DNA",
+   "points": [],
+   "narration": "How does the nucleus store all those instructions? Inside the nucleus, the genetic material is organised into thread-like chromosomes, made of DNA, short for deoxyribonucleic acid, and proteins. The chromosomes carry the hereditary information. Do all cells in my body have the same number? Yes. The chromosome number is constant for a species and the same in every body cell of an organism. Humans have 46 chromosomes in a body cell. That constancy lets the hereditary information pass accurately to the daughter cells when a cell divides. So a skin cell and a muscle cell both carry all 46? They do. They look different because they use the instructions differently, but the set is the same.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o3",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.85,
+    "availability": "available",
+    "reason": "Describes chromosomes and DNA in the nucleus"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.0452); Main drawing is a labelled plant cell showing nucleus, membrane, cytoplasm, ER and mitochondria; segment discusses the nucleus and chromosomes, same cell topic but not chromosomes themselves.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0452,
+    "diff_min_earlier": 0.0112,
+    "nearest_earlier": "p1:s002",
+    "model_confidence": 0.8
+   }
+  },
+  {
+   "key": "p1:s008",
+   "segment_id": "s008",
+   "part": 1,
+   "k": 7,
+   "start_s": 306.04,
+   "end_s": 358.25,
+   "slide_t": 358.188,
+   "slide_k": 8,
+   "type": "explore",
+   "heading": "Mitochondria: the powerhouses",
+   "points": [],
+   "narration": "Cells need energy to do all this work. That comes from the mitochondria. One of them is a mitochondrion. Is that where the cell breathes? Close. It is the site of cellular respiration. It releases energy from food molecules and stores it in ATP, adenosine triphosphate, the molecule that supplies energy for cell activities. That is why mitochondria are called the powerhouses of the cell, like small power stations. Why do they look folded inside in the drawings? Sharp eye. A mitochondrion has a smooth outer membrane and an inner membrane folded into cristae. The folds increase the surface area for the reactions, so more energy can be released. So a muscle cell should have lots of them? Exactly right. Active cells such as muscle cells contain many mitochondria because they need a lot of ATP.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell",
+    "sk_eye"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o3",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Describes mitochondria structure and energy function"
+   },
+   "visual": {
+    "status": "distinct",
+    "show": "frame",
+    "reason": "new board; Main drawing is a labelled plant cell with a mitochondrion highlighted, matching the segment on mitochondria and energy.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0314,
+    "diff_min_earlier": 0.0314,
+    "nearest_earlier": "p1:s007",
+    "model_confidence": 0.93
+   }
+  },
+  {
+   "key": "p1:s009",
+   "segment_id": "s009",
+   "part": 1,
+   "k": 8,
+   "start_s": 358.25,
+   "end_s": 422.04,
+   "slide_t": 421.978,
+   "slide_k": 9,
+   "type": "explore",
+   "heading": "ER and Golgi: factory line",
+   "points": [],
+   "narration": "Now think of a factory. It needs a manufacturing floor, conveyor belts, and a packaging and dispatch department. The cell has all three. The endoplasmic reticulum, or ER, is a network of flattened sacs and tubes continuous with the nuclear envelope. Why is it called rough or smooth in the pictures? Two forms. Rough ER has ribosomes attached to its surface, and it is concerned with making proteins. Smooth ER has no ribosomes, and it makes lipids and detoxifies harmful substances. Ribosomes, remember, are the sites where proteins are made. So once the proteins are made, where do they go? To the Golgi apparatus, a stack of flattened, membrane-bound sacs. It modifies, sorts and packages these molecules into vesicles, small membrane sacs that carry them to their destinations, inside the cell or to the cell membrane for release outside. So the ER is the factory and the Golgi is the dispatch centre? That is exactly the picture. The ER is the manufacturing and transport network, and the Golgi apparatus is the processing and dispatch centre.",
+   "concept_slug": null,
+   "assets": [
+    "plant_cell",
+    "er_golgi"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o3",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Describes ER and Golgi apparatus structure and function"
+   },
+   "visual": {
+    "status": "distinct",
+    "show": "frame",
+    "reason": "new board; Main drawing shows rough and smooth ER with Golgi apparatus and vesicles, matching the factory-line segment.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.3276,
+    "diff_min_earlier": 0.2952,
+    "nearest_earlier": "p1:s002",
+    "model_confidence": 0.93
+   }
+  },
+  {
+   "key": "p1:s010",
+   "segment_id": "s010",
+   "part": 1,
+   "k": 9,
+   "start_s": 422.04,
+   "end_s": 475.79,
+   "slide_t": 475.728,
+   "slide_k": 10,
+   "type": "explore",
+   "heading": "Cell wall: rigid support",
+   "points": [],
+   "narration": "Everything so far belongs to both plant and animal cells. Now we meet the structures characteristic of plant cells. Plants are stationary and make their own food, and three structures reflect that way of life. First, the cell wall. But we already have a cell membrane. Why would a plant need another layer? Good question. The cell wall is a rigid layer outside the cell membrane, built mainly from cellulose. It gives the cell a fixed shape, supports and protects it, and prevents it from bursting when it takes in water. Think of a brick wall around a house. Does the wall block the gate, then? No. The wall is fully permeable, so water and dissolved substances pass freely. The membrane just inside it is the one that controls entry to the cytoplasm. And together, the walls of many cells let a plant stand upright without a skeleton.",
+   "concept_slug": null,
+   "assets": [
+    "er_golgi"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o4",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Describes plant cell wall structure and function"
+   },
+   "visual": {
+    "status": "misleading",
+    "show": "caption_only",
+    "reason": "Main drawing shows Golgi apparatus and rough/smooth ER with vesicles, not a cell wall; the heading is 'Cell wall'.; no different frame verified for o4",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0226,
+    "diff_min_earlier": 0.0226,
+    "nearest_earlier": "p1:s009",
+    "model_confidence": 0.9
+   }
+  },
+  {
+   "key": "p1:s011",
+   "segment_id": "s011",
+   "part": 1,
+   "k": 10,
+   "start_s": 475.79,
+   "end_s": 515.71,
+   "slide_t": 515.648,
+   "slide_k": 11,
+   "type": "explore",
+   "heading": "Chloroplasts make food",
+   "points": [],
+   "narration": "The second structure is the chloroplast, a green organelle found in cells of leaves and other green parts. It carries out photosynthesis. I remember photosynthesis from earlier. Plants make food using sunlight, right? Right, and here is where it happens. Chloroplasts contain the green pigment chlorophyll, which absorbs light energy. That energy is used to convert carbon dioxide and water into glucose, with oxygen released as a by-product. So that is why leaves are green! Yes. And because chloroplasts let plant cells make their own food, plants are called autotrophic. Animals cannot do this, so they are heterotrophs and must take in food made by other organisms.",
+   "concept_slug": null,
+   "assets": [
+    "er_golgi"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o4",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Describes chloroplast structure and photosynthesis role"
+   },
+   "visual": {
+    "status": "misleading",
+    "show": "caption_only",
+    "reason": "Main drawing shows Rough/Smooth ER and Golgi apparatus with vesicles, not chloroplasts or photosynthesis.; no different frame verified for o4",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0,
+    "diff_min_earlier": 0,
+    "nearest_earlier": "p1:s010",
+    "model_confidence": 0.9
+   }
+  },
+  {
+   "key": "p1:s012",
+   "segment_id": "s012",
+   "part": 1,
+   "k": 11,
+   "start_s": 515.71,
+   "end_s": 568.75,
+   "slide_t": 568.688,
+   "slide_k": 12,
+   "type": "explore",
+   "heading": "Vacuole and turgor pressure",
+   "points": [],
+   "narration": "The third structure is the large central vacuole. A mature plant cell usually has one big vacuole filled with cell sap, a solution of water, sugars, mineral salts and wastes. It is bounded by a membrane called the tonoplast. Is it just a storage tank? It stores substances, yes, but it does more. When it is full of water it pushes the cytoplasm outwards against the cell wall. That outward push is turgor pressure, and it keeps non-woody parts like leaves and young stems firm. Think of a water-filled balloon pressing against the walls of a box, or air pressure in an inflated tyre. Then why does a plant wilt when I forget to water it? That is exactly the test. When a plant loses water, its vacuoles shrink and turgor falls, so the cells go soft and the plant droops. Water the plant, the vacuoles refill, turgor returns, and it stands up again.",
+   "concept_slug": null,
+   "assets": [
+    "er_golgi"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o4",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Describes large central vacuole and turgor pressure"
+   },
+   "visual": {
+    "status": "misleading",
+    "show": "caption_only",
+    "reason": "Main drawing shows Golgi apparatus with rough ER and smooth ER, not a vacuole or turgor pressure.; no different frame verified for o4",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0,
+    "diff_min_earlier": 0,
+    "nearest_earlier": "p1:s010",
+    "model_confidence": 0.9
+   }
+  },
+  {
+   "key": "p1:s013",
+   "segment_id": "s013",
+   "part": 1,
+   "k": 12,
+   "start_s": 568.75,
+   "end_s": 624.33,
+   "slide_t": 624.268,
+   "slide_k": 13,
+   "type": "explore",
+   "heading": "Shared parts and differences",
+   "points": [],
+   "narration": "Now let us compare the two cells like two house plans with the same core rooms but different extras. First, what is shared. Both are eukaryotic, so both have a cell membrane, cytoplasm, a nucleus with chromosomes, mitochondria, endoplasmic reticulum, a Golgi apparatus and ribosomes. So the basic jobs are the same in both? Yes: controlling entry and exit, storing hereditary information, releasing energy, and making and moving proteins and lipids. Every living cell must do these. Then what is different? Plant cells have a cellulose cell wall, animal cells do not. The wall fixes the plant cell's shape, often rectangular or regular, while an animal cell is rounded or irregular and can change shape. Plant cells have chloroplasts in green parts, animal cells have none. Plants have one large central vacuole, while animal cells have several small, temporary vacuoles, or none.",
+   "concept_slug": null,
+   "assets": [
+    "er_golgi",
+    "two_cells"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o5",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Compares shared and differing structures of plant and animal cells"
+   },
+   "visual": {
+    "status": "distinct",
+    "show": "frame",
+    "reason": "new board; Main drawing shows a labelled plant cell with a cell wall beside an animal cell with mitochondria and vacuoles, matching the shared-vs-different comparison.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.2407,
+    "diff_min_earlier": 0.2405,
+    "nearest_earlier": "p1:s010",
+    "model_confidence": 0.9
+   }
+  },
+  {
+   "key": "p1:s014",
+   "segment_id": "s014",
+   "part": 1,
+   "k": 13,
+   "start_s": 624.33,
+   "end_s": 678.41,
+   "slide_t": 678.348,
+   "slide_k": 14,
+   "type": "explore",
+   "heading": "The lifestyle pattern",
+   "points": [],
+   "narration": "There are a few more differences. Plants store carbohydrate as starch, animals as glycogen. In a plant cell the large vacuole often pushes the nucleus to the side, while in an animal cell the nucleus usually sits near the centre. And animal cells have centrioles, which organise spindle fibres when the cell divides, while higher plants lack them. That is a long list. Do I just memorise it? No, and that is the best part. Look for the pattern behind it: lifestyle. Plants are fixed in place and feed themselves, so they need walls, chloroplasts and vacuoles. Animals move and feed on other organisms, so their cells stay flexible and lack these structures. So each difference has a reason. Exactly. When you describe a difference in an exam, state the feature, which cell has it, and why. A complete comparison covers what is shared, what differs, and the reason.",
+   "concept_slug": null,
+   "assets": [
+    "two_cells"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o5",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.85,
+    "availability": "available",
+    "reason": "Explains why plant and animal cell differences exist via lifestyle"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.0194); Main drawing shows a labelled animal cell beside a plant-like cell, with a centrioles label; matches the comparison topic but not the lifestyle pattern specifically.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0194,
+    "diff_min_earlier": 0.0194,
+    "nearest_earlier": "p1:s013",
+    "model_confidence": 0.8
+   }
+  },
+  {
+   "key": "p1:s015",
+   "segment_id": "s015",
+   "part": 1,
+   "k": 14,
+   "start_s": 678.41,
+   "end_s": 738.79,
+   "slide_t": 738.728,
+   "slide_k": 15,
+   "type": "explore",
+   "heading": "Detective: plant or animal",
+   "points": [],
+   "narration": "Now put on your detective hat. You are shown a cell in a diagram or under a microscope. Which structures help you decide? Would the nucleus or mitochondria help? They are easy to spot. Good thinking, but no. Structures both types share, like the nucleus and mitochondria, cannot tell them apart. A detective ignores the clues that fit everyone. The reliable plant markers are the cell wall, chloroplasts and a large central vacuole. Finding any one of them confirms a plant cell. If all three are absent, and the outline is irregular, it suggests an animal cell. What if a plant cell has no chloroplasts? Excellent, that is the first caution. Root cells lie underground, receive no light and contain no chloroplasts, yet they still have a cell wall and a large vacuole. The second caution: a cell wall alone does not prove a plant cell, because bacteria and fungi also have walls. But bacterial walls are not made of cellulose, and bacterial cells lack a nucleus.",
+   "concept_slug": null,
+   "assets": [
+    "two_cells"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o6",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Teaches identifying plant versus animal cell from structures"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.0069); Main drawing shows an animal cell and plant cell side by side with a bacterium-like blob, matching the plant-vs-animal comparison topic.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.0069,
+    "diff_min_earlier": 0.0069,
+    "nearest_earlier": "p1:s014",
+    "model_confidence": 0.8
+   }
+  },
+  {
+   "key": "p1:s016",
+   "segment_id": "s016",
+   "part": 1,
+   "k": 15,
+   "start_s": 738.79,
+   "end_s": 781.62,
+   "slide_t": 781.558,
+   "slide_k": 16,
+   "type": "question_hook",
+   "heading": "Your turn: name the cell",
+   "points": [],
+   "narration": "Let me try one. Suppose I see a cell with a nucleus, a thick wall, no green colour and a big central vacuole. Plant? Tell me your reasoning, not just the answer. Which clue did you rely on, and which did you set aside? I set aside the nucleus, since both have it. The wall and the big vacuole say plant, and the missing green is fine, because it could be a root cell. That is a sound identification. You named the distinguishing structures, linked them to a function, and handled the exception. Now pause the video and try this yourself: a cell has a nucleus and mitochondria, an irregular outline, and no wall, no chloroplasts and no large vacuole. What is it, and why?",
+   "concept_slug": null,
+   "assets": [
+    "two_cells"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": "o6",
+    "secondary": [],
+    "method": "model",
+    "confidence": 0.9,
+    "availability": "available",
+    "reason": "Practice task identifying cell type with reasoning"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0.019); Main drawing shows a labelled plant cell beside a large animal cell with mitochondria, organelles and nucleus; same cell topic as the hook, though not the exact cell described.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.019,
+    "diff_min_earlier": 0.0121,
+    "nearest_earlier": "p1:s014",
+    "model_confidence": 0.8
+   }
+  },
+  {
+   "key": "p1:s017",
+   "segment_id": "s017",
+   "part": 1,
+   "k": 16,
+   "start_s": 781.62,
+   "end_s": 813.41,
+   "slide_t": 813.348,
+   "slide_k": 17,
+   "type": "synthesis",
+   "heading": "Putting it together",
+   "points": [],
+   "narration": "Let us gather it all. The cell is the basic unit of life. Plant and animal cells are both eukaryotic, with a membrane, cytoplasm, nucleus, mitochondria, ER, Golgi and ribosomes. Plants add a cell wall, chloroplasts and a large central vacuole, because they stay in one place and make their own food. And to tell them apart, I look for the wall, chloroplasts or big vacuole, not the shared parts. Yes, while remembering the exceptions: root cells lack chloroplasts, and bacteria and fungi have walls too.",
+   "concept_slug": null,
+   "assets": [
+    "two_cells"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": null,
+    "secondary": [
+     "o1",
+     "o2"
+    ],
+    "method": "model",
+    "confidence": 0.8,
+    "availability": "available",
+    "reason": "no single concept: Recap of the whole lesson gathering all concepts"
+   },
+   "visual": {
+    "status": "reused_relevant",
+    "show": "frame",
+    "reason": "board reused (diff 0); Main drawing is a labelled animal cell beside a plant cell, the same cell-comparison topic the synthesis segment summarizes.",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0,
+    "diff_min_earlier": 0,
+    "nearest_earlier": "p1:s016",
+    "model_confidence": 0.8
+   }
+  },
+  {
+   "key": "p1:s018",
+   "segment_id": "s018",
+   "part": 1,
+   "k": 17,
+   "start_s": 813.41,
+   "end_s": 838.49,
+   "slide_t": 838.428,
+   "slide_k": 18,
+   "type": "preview",
+   "heading": "Test yourself outdoors",
+   "points": [],
+   "narration": "Here is a challenge for the next time you are outside. Pick a leaf and a drop of water from a pond, and imagine the cells inside each. Which clues would you expect to find in each one, and why? And I can test myself by drawing a plant and an animal cell from memory, and explaining the reason for every difference. That is the best way to check. If you can give the reason behind each structure, you truly understand the cell.",
+   "concept_slug": null,
+   "assets": [
+    "two_cells"
+   ],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": null,
+    "secondary": [
+     "o6"
+    ],
+    "method": "model",
+    "confidence": 0.8,
+    "availability": "available",
+    "reason": "no single concept: Preview challenge for next time, not a single concept"
+   },
+   "visual": {
+    "status": "misleading",
+    "show": "caption_only",
+    "reason": "Main drawing shows a labelled animal cell beside a plant-like blob; segment is an outdoor challenge about leaves and pond water, not this diagram.; no mapped concept, so no verified fallback",
+    "judged_by": {
+     "model": "global.anthropic.claude-haiku-5-5",
+     "prompt_version": "m1-visual-v3"
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0,
+    "diff_min_earlier": 0,
+    "nearest_earlier": "p1:s016",
+    "model_confidence": 0.8
+   }
+  },
+  {
+   "key": "p1:s990",
+   "segment_id": "s990",
+   "part": 1,
+   "k": 18,
+   "start_s": 838.49,
+   "end_s": 851.53,
+   "slide_t": 851.468,
+   "slide_k": null,
+   "type": "outro",
+   "heading": "",
+   "points": [],
+   "narration": "",
+   "concept_slug": null,
+   "assets": [],
+   "video_path": "9d41e12e-e9c9-4b82-b3a9-3421c2c57726/eef426bd-523b-4fed-827c-95421263d89a/lesson.mp4",
+   "concept": {
+    "concept_id": null,
+    "secondary": [],
+    "method": "none",
+    "confidence": 1,
+    "availability": "available",
+    "reason": "video-only outro"
+   },
+   "visual": {
+    "status": "unknown",
+    "show": "caption_only",
+    "reason": "video-only outro (not judged)",
+    "judged_by": {
+     "model": null,
+     "prompt_version": null
+    }
+   },
+   "visual_metrics": {
+    "diff_prev": 0.2096,
+    "diff_min_earlier": 0.2039,
+    "nearest_earlier": "p1:s013"
+   }
+  }
+ ],
+ "concepts": [
+  {
+   "concept_id": "o1",
+   "name": "State that the cell is the basic structural and functional unit of life and distinguish unicellular from multicellular organisms.",
+   "definition": "State that the cell is the basic structural and functional unit of life and distinguish unicellular from multicellular organisms.",
+   "segment_ids": [
+    "p1:s002",
+    "p1:s003",
+    "p1:s017"
+   ]
+  },
+  {
+   "concept_id": "o2",
+   "name": "Distinguish prokaryotic cells from eukaryotic cells and classify plant and animal cells as eukaryotic.",
+   "definition": "Distinguish prokaryotic cells from eukaryotic cells and classify plant and animal cells as eukaryotic.",
+   "segment_ids": [
+    "p1:s004",
+    "p1:s017"
+   ]
+  },
+  {
+   "concept_id": "o3",
+   "name": "Describe the structure and function of the cell membrane, cytoplasm, nucleus, chromosomes, mitochondria, endoplasmic reticulum and Golgi apparatus as features shared by plant and animal cells.",
+   "definition": "Describe the structure and function of the cell membrane, cytoplasm, nucleus, chromosomes, mitochondria, endoplasmic reticulum and Golgi apparatus as features shared by plant and animal cells.",
+   "segment_ids": [
+    "p1:s005",
+    "p1:s006",
+    "p1:s007",
+    "p1:s008",
+    "p1:s009"
+   ]
+  },
+  {
+   "concept_id": "o4",
+   "name": "Describe the structure and function of the cell wall, chloroplasts and large central vacuole as features characteristic of plant cells.",
+   "definition": "Describe the structure and function of the cell wall, chloroplasts and large central vacuole as features characteristic of plant cells.",
+   "segment_ids": [
+    "p1:s010",
+    "p1:s011",
+    "p1:s012"
+   ]
+  },
+  {
+   "concept_id": "o5",
+   "name": "Describe the similarities and differences between the structures of plant and animal cells, and explain why each difference exists.",
+   "definition": "Describe the similarities and differences between the structures of plant and animal cells, and explain why each difference exists.",
+   "segment_ids": [
+    "p1:s013",
+    "p1:s014"
+   ]
+  },
+  {
+   "concept_id": "o6",
+   "name": "Identify an unlabelled cell as plant or animal from its structures, giving reasons.",
+   "definition": "Identify an unlabelled cell as plant or animal from its structures, giving reasons.",
+   "segment_ids": [
+    "p1:s015",
+    "p1:s016",
+    "p1:s018"
+   ]
+  }
+ ],
+ "items": [
+  {
+   "q_id": "ws:q1",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "fill_blank",
+   "prompt_hash": "b19e43ffdfa63660",
+   "concept_ids": [
+    "o1"
+   ],
+   "segment_ids": [
+    "p1:s002"
+   ],
+   "method": "model",
+   "confidence": 0.95,
+   "availability": "available",
+   "reason": "Cell as basic structural and functional unit of life"
+  },
+  {
+   "q_id": "ws:q2",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "fill_blank",
+   "prompt_hash": "2b6bf0682a5fcf8c",
+   "concept_ids": [
+    "o2"
+   ],
+   "segment_ids": [
+    "p1:s004"
+   ],
+   "method": "model",
+   "confidence": 0.95,
+   "availability": "available",
+   "reason": "Prokaryotic cells lack a true nucleus and membrane-bound organelles"
+  },
+  {
+   "q_id": "ws:q3",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "fill_blank",
+   "prompt_hash": "4c764d3e24fbcdb6",
+   "concept_ids": [
+    "o3"
+   ],
+   "segment_ids": [
+    "p1:s005"
+   ],
+   "method": "model",
+   "confidence": 0.93,
+   "availability": "available",
+   "reason": "Cell membrane as selectively permeable outer boundary"
+  },
+  {
+   "q_id": "ws:q4",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "fill_blank",
+   "prompt_hash": "bab4c2fd0c233908",
+   "concept_ids": [
+    "o3"
+   ],
+   "segment_ids": [
+    "p1:s008"
+   ],
+   "method": "model",
+   "confidence": 0.93,
+   "availability": "available",
+   "reason": "Mitochondria release energy stored as ATP"
+  },
+  {
+   "q_id": "ws:q5",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "true_false",
+   "prompt_hash": "a2e093f131aa8e6f",
+   "concept_ids": [
+    "o1"
+   ],
+   "segment_ids": [
+    "p1:s003"
+   ],
+   "method": "model",
+   "confidence": 0.9,
+   "availability": "available",
+   "reason": "Amoeba is unicellular, so distinguishing unicellular vs multicellular"
+  },
+  {
+   "q_id": "ws:q6",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "true_false",
+   "prompt_hash": "cd94aa824659750b",
+   "concept_ids": [
+    "o2"
+   ],
+   "segment_ids": [
+    "p1:s013"
+   ],
+   "method": "model",
+   "confidence": 0.92,
+   "availability": "available",
+   "reason": "Plant and animal cells both classified as eukaryotic"
+  },
+  {
+   "q_id": "ws:q7",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "true_false",
+   "prompt_hash": "7c7c6dbeaa330a07",
+   "concept_ids": [
+    "o4"
+   ],
+   "segment_ids": [
+    "p1:s010"
+   ],
+   "method": "model",
+   "confidence": 0.85,
+   "availability": "available",
+   "reason": "Cell wall structure and function characteristic of plant cells; selective permeability belongs to membrane"
+  },
+  {
+   "q_id": "ws:q8",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "true_false",
+   "prompt_hash": "11b64268b78c6338",
+   "concept_ids": [
+    "o3"
+   ],
+   "segment_ids": [
+    "p1:s009"
+   ],
+   "method": "model",
+   "confidence": 0.88,
+   "availability": "available",
+   "reason": "Rough ER with ribosomes and protein synthesis function"
+  },
+  {
+   "q_id": "ws:q9",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "match",
+   "prompt_hash": "83e4869da5a9fa03",
+   "concept_ids": [],
+   "segment_ids": [
+    "p1:s008",
+    "p1:s009"
+   ],
+   "method": "model",
+   "confidence": 0.7,
+   "availability": "unavailable",
+   "reason": "model confidence 0.7 < 0.8: Matches organelles to functions: nucleus, mitochondria, Golgi"
+  },
+  {
+   "q_id": "ws:q10",
+   "source": "worksheet",
+   "generation_id": "a416ce84-5c87-46fa-8874-22a8cbfdd1d2",
+   "type": "short",
+   "prompt_hash": "eb4b2bdcec265457",
+   "concept_ids": [
+    "o2"
+   ],
+   "segment_ids": [
+    "p1:s004"
+   ],
+   "method": "model",
+   "confidence": 0.92,
+   "availability": "available",
+   "reason": "Differences between prokaryotic and eukaryotic cells"
+  },
+  {
+   "q_id": "quiz:q1",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "e98a8798bb797ab1",
+   "difficulty": 1,
+   "bank_item_id": "e772023d-7932-427c-a01d-d1ed3837feb0",
+   "concept_ids": [
+    "o2"
+   ],
+   "segment_ids": [
+    "p1:s004"
+   ],
+   "method": "model",
+   "confidence": 0.95,
+   "availability": "available",
+   "reason": "Eukaryotic cells defined by membrane-bound nucleus and organelles"
+  },
+  {
+   "q_id": "quiz:q2",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "true_false",
+   "prompt_hash": "4e2dd0c0ea5ba4ec",
+   "difficulty": 1,
+   "bank_item_id": "8391cd09-e1e7-46df-87e3-50aec0abba97",
+   "concept_ids": [
+    "o2"
+   ],
+   "segment_ids": [
+    "p1:s013"
+   ],
+   "method": "model",
+   "confidence": 0.92,
+   "availability": "available",
+   "reason": "Plant and animal cells both eukaryotic"
+  },
+  {
+   "q_id": "quiz:q3",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "17523aefa9e9d50f",
+   "difficulty": 1,
+   "bank_item_id": "a70c0fb3-6dd0-4104-b220-a575f20cac1a",
+   "concept_ids": [
+    "o3"
+   ],
+   "segment_ids": [
+    "p1:s005"
+   ],
+   "method": "model",
+   "confidence": 0.93,
+   "availability": "available",
+   "reason": "Cell membrane structure and function"
+  },
+  {
+   "q_id": "quiz:q4",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "e396aba72561f654",
+   "difficulty": 2,
+   "bank_item_id": "de7d4707-f31f-4a4e-88ed-463a41aa3a18",
+   "concept_ids": [
+    "o3"
+   ],
+   "segment_ids": [
+    "p1:s008"
+   ],
+   "method": "model",
+   "confidence": 0.95,
+   "availability": "available",
+   "reason": "Mitochondria convert food energy to ATP"
+  },
+  {
+   "q_id": "quiz:q5",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "93d4ff38a9b92122",
+   "difficulty": 2,
+   "bank_item_id": "49781968-d967-4871-850c-9977a2f512d4",
+   "concept_ids": [
+    "o2"
+   ],
+   "segment_ids": [
+    "p1:s004"
+   ],
+   "method": "model",
+   "confidence": 0.95,
+   "availability": "available",
+   "reason": "Prokaryotic cells lack membrane-bound nucleus"
+  },
+  {
+   "q_id": "quiz:q6",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "3ce71931ee140c85",
+   "difficulty": 2,
+   "bank_item_id": "13c550fb-30bf-484a-9fa1-33e0ef65b124",
+   "concept_ids": [
+    "o3"
+   ],
+   "segment_ids": [
+    "p1:s009"
+   ],
+   "method": "model",
+   "confidence": 0.85,
+   "availability": "available",
+   "reason": "Ribosomes on rough ER synthesize proteins"
+  },
+  {
+   "q_id": "quiz:q7",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "7c0304078a3ad539",
+   "difficulty": 2,
+   "bank_item_id": "bea90489-a16a-4967-98a3-6deec44191e9",
+   "concept_ids": [
+    "o5"
+   ],
+   "segment_ids": [
+    "p1:s010",
+    "p1:s013"
+   ],
+   "method": "model",
+   "confidence": 0.9,
+   "availability": "available",
+   "reason": "Plant cell wall is a structural difference from animal cells"
+  },
+  {
+   "q_id": "quiz:q8",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "50eb7127ac030074",
+   "difficulty": 3,
+   "bank_item_id": "020a2a70-b2cc-47db-a7cb-5ee42f57cb6c",
+   "concept_ids": [
+    "o5"
+   ],
+   "segment_ids": [
+    "p1:s010",
+    "p1:s012"
+   ],
+   "method": "model",
+   "confidence": 0.8,
+   "availability": "available",
+   "reason": "Cell wall and turgor pressure explain plant cell rigidity"
+  },
+  {
+   "q_id": "quiz:q9",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "150aa9f25a46079d",
+   "difficulty": 3,
+   "bank_item_id": "b075fefd-6f0e-40d3-8415-13afc0f7108a",
+   "concept_ids": [
+    "o4"
+   ],
+   "segment_ids": [
+    "p1:s012"
+   ],
+   "method": "model",
+   "confidence": 0.9,
+   "availability": "available",
+   "reason": "Central vacuole turgor pressure supports plant structure"
+  },
+  {
+   "q_id": "quiz:q10",
+   "source": "quiz",
+   "generation_id": "180d55c7-12f2-433e-bd9b-f442f5584431",
+   "type": "mcq",
+   "prompt_hash": "7c6c0452ef1003f0",
+   "concept_ids": [
+    "o5"
+   ],
+   "segment_ids": [
+    "p1:s013",
+    "p1:s014"
+   ],
+   "method": "objective_ref",
+   "confidence": 1,
+   "availability": "available",
+   "difficulty": 3,
+   "bank_item_id": "dd8e280d-a2b2-4906-8263-0871cf98bae0"
+  }
+ ],
+ "retrieval": {
+  "fts": "topic_articles.sections"
+ },
+ "derived_by": {
+  "model": "global.anthropic.claude-haiku-5-5",
+  "prompt_versions": [
+   "m1-concept-v2",
+   "m1-item-v1",
+   "m1-visual-v3"
+  ],
+  "at": "2026-10-28T07:38:24.471Z",
+  "usage": {
+   "input_tokens": 0,
+   "output_tokens": 0,
+   "usd": 0
+  }
+ }
+}

@@ -90,7 +90,9 @@ export function sanitizeBoard(board: unknown): SkBoardState | undefined {
   const sessionId = str(b.sessionId, 120);
   if (!sessionId) return undefined;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
-  return {
+  const int = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : undefined);
+  const strs = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v.map((x) => str(x, max)).filter((x): x is string => !!x).slice(0, n) : undefined);
+  const out: SkBoardState = {
     sessionId,
     manifestId: str(b.manifestId, 120),
     move: str(b.move, 60),
@@ -98,7 +100,38 @@ export function sanitizeBoard(board: unknown): SkBoardState | undefined {
     t: num(b.t),
     paused: typeof b.paused === "boolean" ? b.paused : undefined,
     rollPage: num(b.rollPage),
+    k: int(b.k),
+    generationId: str(b.generationId, 120),
   };
+  // S1: the lesson map the client holds, bounded — at most 200 segments and 60
+  // concepts, short headings, a handful of points each.
+  if (Array.isArray(b.segments)) {
+    const segments: NonNullable<SkBoardState["segments"]> = [];
+    for (const raw of b.segments.slice(0, 200)) {
+      if (!raw || typeof raw !== "object") continue;
+      const s = raw as Record<string, unknown>;
+      const k = int(s.k);
+      if (k === undefined) continue;
+      const heading = typeof s.heading === "string" ? s.heading.trim().slice(0, 160) : "";
+      const id = str(s.id, 120);
+      const points = strs(s.points, 8, 200);
+      segments.push({ k, heading, ...(id ? { id } : {}), ...(points?.length ? { points } : {}) });
+    }
+    out.segments = segments;
+  }
+  if (Array.isArray(b.concepts)) {
+    const concepts: NonNullable<SkBoardState["concepts"]> = [];
+    for (const raw of b.concepts.slice(0, 60)) {
+      if (!raw || typeof raw !== "object") continue;
+      const c = raw as Record<string, unknown>;
+      const id = str(c.id, 120);
+      const name = str(c.name, 120);
+      if (!id || !name) continue;
+      concepts.push({ id, name, segmentIds: strs(c.segmentIds, 40, 120) ?? [] });
+    }
+    out.concepts = concepts;
+  }
+  return out;
 }
 
 export type BuildContextInput = {

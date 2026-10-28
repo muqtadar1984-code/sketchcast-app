@@ -2096,7 +2096,18 @@
       "introFirstTask": "Vamos começar pela sua primeira tarefa? Envie um livro, ou peça para eu abrir suas turmas.",
       "jobTrayEmpty": "Nenhuma tarefa em andamento.",
       "failed": "O SK não conseguiu responder agora. Tente novamente.",
-      "you": "Você"
+      "you": "Você",
+      "preparingMap": "A preparar o mapa da lição…",
+      "boardNotOpen": "Abra primeiro o quadro.",
+      "confirmTitle": "Confirmar esta ação",
+      "confirm": "Confirmar",
+      "cancel": "Cancelar",
+      "expiresIn": "Expira em {s} s",
+      "cardSent": "A confirmar…",
+      "cardExpired": "Este cartão expirou.",
+      "cardCancelled": "Cancelado.",
+      "actFailed": "Não foi possível concluir. Tente novamente.",
+      "voiceYesHint": "Diga «sim» para confirmar ou «não» para cancelar."
     }
   }
 }

@@ -2096,7 +2096,18 @@
       "introFirstTask": "Shall we start with your first task? Upload a book, or ask me to open your classes.",
       "jobTrayEmpty": "No jobs running.",
       "failed": "SK couldn't answer just now. Please try again.",
-      "you": "You"
+      "you": "You",
+      "preparingMap": "Preparing the lesson map…",
+      "boardNotOpen": "Open the Board first.",
+      "confirmTitle": "Confirm this action",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "expiresIn": "Expires in {s}s",
+      "cardSent": "Confirming…",
+      "cardExpired": "This card has expired.",
+      "cardCancelled": "Cancelled.",
+      "actFailed": "That didn't go through. Try again.",
+      "voiceYesHint": "Say “yes” to confirm, or “no” to cancel."
     }
   }
 }

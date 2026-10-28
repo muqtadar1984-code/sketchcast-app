@@ -2096,7 +2096,18 @@
       "introFirstTask": "On commence par votre première tâche ? Importez un livre, ou demandez-moi d'ouvrir vos classes.",
       "jobTrayEmpty": "Aucune tâche en cours.",
       "failed": "SK n'a pas pu répondre pour le moment. Veuillez réessayer.",
-      "you": "Vous"
+      "you": "Vous",
+      "preparingMap": "Préparation du plan de la leçon…",
+      "boardNotOpen": "Ouvrez d'abord le tableau.",
+      "confirmTitle": "Confirmer cette action",
+      "confirm": "Confirmer",
+      "cancel": "Annuler",
+      "expiresIn": "Expire dans {s} s",
+      "cardSent": "Confirmation en cours…",
+      "cardExpired": "Cette carte a expiré.",
+      "cardCancelled": "Annulé.",
+      "actFailed": "Cela n'a pas abouti. Réessayez.",
+      "voiceYesHint": "Dites « oui » pour confirmer, ou « non » pour annuler."
     }
   }
 }

@@ -9,12 +9,16 @@ import type { Turn } from "@/utils/assistant/provider";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
 import { loadContext } from "@/sk/shell/context";
 import { openMemory, rememberTurn, sealMemory } from "@/sk/shell/memory";
-import { allowedFor, toToolDefs } from "@/sk/shell/registry";
+import { allowedFor, fromApiToolName, toToolDefs } from "@/sk/shell/registry";
 import { makeRunTool, runCapability, type RunnerDeps, type ToolTrace } from "@/sk/shell/runner";
 import { auditSinkFor } from "@/sk/shell/audit";
 import { routeByRules } from "@/sk/shell/rules";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
-import { SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
+import { issueActionToken } from "@/sk/shell/tokens";
+import { TEACH_MAX_TOKENS, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
+import { BOARD_NO_MAP } from "@/sk/capabilities/board";
+import { LOCALES } from "@/i18n/locales";
+import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
 
 export const runtime = "nodejs";
 
@@ -29,6 +33,24 @@ export const runtime = "nodejs";
 //
 // Not in S0: writing the turn to assistant_messages (those tables are keyed by
 // student session) — the audit rows per capability are the S0 trail.
+//
+// S1 (slice B): a capability result may carry `board` (an immediate Board move
+// the client performs — emitted as a `board` event, labelled grounded) or
+// `confirm` (a confirm-tier action with resolved params — the route issues the
+// action token and emits a `confirm` card; NOTHING is executed here, the
+// client returns the token to /api/sk/act). Both come either from the rules
+// router (Board phrasings while a Board session is open) or from a tool the
+// model chose; the handling is one code path.
+//
+// S1 (slice C): `board.explain` / `board.compare` carry CONTENT. After the
+// slide move is emitted, the segment's own narration is read from the Kit
+// Manifest (teach.ts) and ONE model call — no tools, the narration as DATA in a
+// TEACHING block, 220 tokens — writes the 2–4 sentence explanation, which
+// groundingCheck holds to the narration's names and numbers before it is sent:
+// meta → tool → board → text → done{grounded, sources: [move, "manifest"]}.
+// A manifest that is not ready gets SK's own line plus "the lesson map isn't
+// ready yet" and NO model call. Board audit rows carry the PRESENT session id
+// (sk_actions.session_id) so the recap can read what SK did in that lesson.
 
 const SK_SHELL_DEFAULT_MODEL = "claude-sonnet-5-5";
 const MAX_TEXT = 600;
@@ -136,6 +158,82 @@ export async function POST(request: Request) {
     turnId: body.turnId,
   };
 
+  // Board moves are audited against the PRESENT session (sk_actions.session_id:
+  // "present session / assistant session, whichever applies") — that is the id
+  // the recap route reads them back by. Everything else keeps the Shell's own.
+  const boardDeps: RunnerDeps = ctx.board?.sessionId ? { ...deps, sessionId: ctx.board.sessionId } : deps;
+  const boardGen = ctx.board?.sessionId && ctx.board.generationId ? ctx.board.generationId : null;
+  const language = LOCALES.find((l) => l.value === ctx.user.locale)?.label ?? "English";
+
+  /** A Board-local k (what the client holds) → the manifest segment id it sent,
+   *  so the manifest is addressed by id and never by an index that differs
+   *  between a part and the kit. Falls back to the spoken concept. */
+  const refFor = (k: unknown, concept: unknown): TeachRef | null => {
+    const seg = typeof k === "number" ? ctx.board?.segments?.find((x) => x.k === k) : undefined;
+    if (seg?.id) return { segmentId: seg.id };
+    if (typeof concept === "string" && concept.trim()) return { concept };
+    return null;
+  };
+
+  const support = async (target: TeachTarget): Promise<TeachingSupport | null> => (admin && boardGen ? teachingSupport(admin, boardGen, target) : null);
+
+  /** practise: stamp the q_ids of the items mapped to the current segment into
+   *  the args (they reach the client and the audit row the recap reads). A
+   *  manifest that is not ready stamps nothing — the move still works. */
+  const stampPractiseItems = async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const b = ctx.board;
+    if (!b || !boardGen || !admin) return args;
+    const ref: TeachRef | null = b.segmentId ? { segmentId: b.segmentId } : typeof b.k === "number" ? refFor(b.k, null) : null;
+    if (!ref) return args;
+    try {
+      const sup = await support(ref);
+      if (!sup || sup.status !== "ready" || !sup.items.length) return args;
+      const n = Math.max(1, Math.min(10, Number(args.n) || 3));
+      return { ...args, items: sup.items.map((i) => i.q_id).slice(0, n) };
+    } catch {
+      return args;
+    }
+  };
+
+  /** explain/compare: the teaching text. Null when the move carries no
+   *  generation (the caller falls back to the `say` line); a not-ready
+   *  manifest answers with SK's line + BOARD_NO_MAP and makes NO model call. */
+  const teach = async (
+    kind: "explain" | "compare",
+    moveArgs: Record<string, unknown>,
+    say: string,
+  ): Promise<{ text: string; sources: string[]; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean } | null> => {
+    if (!boardGen) return null;
+    const name = `board.${kind}`;
+    const a = (moveArgs.a ?? {}) as Record<string, unknown>;
+    const b = (moveArgs.b ?? {}) as Record<string, unknown>;
+    let target: TeachTarget | null = null;
+    if (kind === "compare") {
+      const ra = refFor(a.k ?? moveArgs.k, a.concept);
+      const rb = refFor(b.k ?? moveArgs.next, b.concept);
+      target = ra && rb ? { pair: [ra, rb] } : null;
+    } else target = refFor(moveArgs.k, moveArgs.concept);
+    const sup = target ? await support(target) : null;
+    if (!sup || sup.status !== "ready") {
+      // Not ready, missing, failed, or nothing matched: SK's own line, no model.
+      return { text: `${say} ${BOARD_NO_MAP}`.trim(), sources: [name] };
+    }
+    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
+    const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${teachingBlock(sup)}`;
+    let full = "";
+    let usage: { inputTokens: number; outputTokens: number } | undefined;
+    for await (const ev of runAssistantTurn({ provider, system, history: [], question: teachingQuestion(kind, sup, language), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
+      if (ev.type === "text") full += ev.text;
+      else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
+      else if (ev.type === "error") console.error("sk-shell.turn teach", ev.retryable ? "retryable" : "fatal", ev.message);
+    }
+    // §9.3: every name and number must occur in the narration (or the question).
+    const verdict = groundingCheck(full, [...teachingSupportTokens(sup), say], body.text);
+    if (!verdict.ok) console.info("sk-shell.turn teach grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: verdict.dropped }));
+    const text = (verdict.ok ? full.trim() : verdict.text.trim()) || say;
+    return { text, sources: [name, "manifest"], ...(usage ? { usage } : {}), ...(!verdict.ok && verdict.text.trim() ? { trimmed: true } : {}) };
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     cancel() {
       abort.abort();
@@ -162,8 +260,63 @@ export async function POST(request: Request) {
         send({ type: "done", ...ev, latencyMs: Date.now() - t0, memory: sealMemory(memory) });
       };
 
+      /** S1: turn a capability result's `board` / `confirm` into the event the
+       *  client acts on. The token is issued HERE and nowhere else; when no
+       *  secret is configured the action is declined, not executed weakly. */
+      const actionEvent = async (r: SkCapabilityResult): Promise<{ event: SkTurnEvent; say: string } | { declined: string } | null> => {
+        if (!r.ok) return null;
+        if (r.board) {
+          const say = r.board.say ?? r.summary;
+          return { event: { type: "board", move: r.board.move, args: r.board.args ?? {}, say: r.board.say }, say };
+        }
+        if (r.confirm) {
+          const issued = admin
+            ? await issueActionToken(admin, { userId: ctx.user.id, action: r.confirm.action, params: r.confirm.params, contextHash: ctx.contextHash, now: new Date() })
+            : null;
+          if (!issued) return { declined: SK_CANNOT_CONFIRM };
+          return {
+            event: { type: "confirm", token: issued.token, action: r.confirm.action, title: r.confirm.title, params: r.confirm.params, expiresAt: issued.expiresAt },
+            say: r.summary,
+          };
+        }
+        return null;
+      };
+
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
+
+        // ── S1 Board move by rules: deterministic, audited, no model ─────────
+        // (explain/compare add ONE teaching call once the slide is shown.)
+        if (decision.intent === "teach") {
+          const name = `board.${decision.move}`;
+          const args = decision.move === "practise" ? await stampPractiseItems(decision.args) : decision.args;
+          const r = await runCapability(ctx, name, args, boardDeps);
+          send({ type: "tool", name, ok: r.ok, summary: r.summary });
+          const act = await actionEvent(r);
+          if (act && "event" in act) {
+            send(act.event);
+            const taught = (decision.move === "explain" || decision.move === "compare") && r.board ? await teach(decision.move, r.board.args, act.say) : null;
+            if (taught) {
+              send({ type: "text", text: taught.text });
+              done({ sources: taught.sources, label: "grounded", ...(taught.usage ? { usage: taught.usage } : {}), ...(taught.trimmed ? { trimmed: true } : {}) }, taught.text, r.entities ?? []);
+            } else done({ sources: [name], label: "grounded" }, act.say, r.entities ?? []);
+          } else if (!r.ok && r.error === "no board") {
+            // The Board is not open: say so and offer the way there.
+            const nav = await runCapability(ctx, "navigate", { target: "board" }, deps);
+            send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
+            send({ type: "text", text: r.summary });
+            if (nav.ok && nav.navigate) {
+              send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
+              done({ sources: ["navigate"], label: "navigation" }, r.summary, []);
+            } else done({ sources: [], label: "declined" }, r.summary, []);
+          } else {
+            const text = act && "declined" in act ? act.declined : r.summary;
+            send({ type: "text", text });
+            done({ sources: [], label: "declined" }, text, []);
+          }
+          finish();
+          return;
+        }
 
         // ── Navigate: deterministic, audited, no model ───────────────────────
         if (decision.intent === "navigate") {
@@ -210,7 +363,10 @@ export async function POST(request: Request) {
         // ── The model, with the allowed tools ────────────────────────────────
         const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
         const trace: ToolTrace[] = [];
-        const run = makeRunTool(ctx, deps, trace);
+        const runShell = makeRunTool(ctx, deps, trace);
+        const runBoard = makeRunTool(ctx, boardDeps, trace);
+        // A board.* tool the model chose is audited against the present session too.
+        const run = (call: Parameters<typeof runShell>[0]) => (fromApiToolName(call.name).startsWith("board.") ? runBoard(call) : runShell(call));
         const history: Turn[] = memory.turns.map((t) => ({ role: t.role, text: t.text }));
         const system = buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory });
         let full = "";
@@ -252,8 +408,16 @@ export async function POST(request: Request) {
           return;
         }
 
+        // ── S1: a Board move or a confirm card the MODEL chose ───────────────
+        // The last successful one wins; the token (if any) is issued before a
+        // word reaches the client so a refusal can replace the text.
+        const actHit = [...trace].reverse().find((t) => t.result.ok && (t.result.board || t.result.confirm));
+        const act = actHit ? await actionEvent(actHit.result) : null;
+
         // ── Grounding (§2.3, §9.3) ───────────────────────────────────────────
-        const productive = trace.filter((t) => (t.result.facts?.length ?? 0) > 0 || !!t.result.navigate || (t.result.entities?.length ?? 0) > 0);
+        const productive = trace.filter(
+          (t) => (t.result.facts?.length ?? 0) > 0 || !!t.result.navigate || (t.result.entities?.length ?? 0) > 0 || (t.result.ok && (!!t.result.board || !!t.result.confirm)),
+        );
         const support = trace.flatMap((t) => [t.result.summary, ...(t.result.facts ?? [])]);
         const verdict = groundingCheck(full, support, body.text);
         if (!verdict.ok) {
@@ -284,10 +448,34 @@ export async function POST(request: Request) {
           text = navHit ? `Opening ${navHit.label}.` : SK_NOTHING_ON_THAT;
           label = navHit ? "navigation" : "declined";
         }
-        const sources = [...new Set(productive.map((t) => t.name))];
+        if (act && "declined" in act) {
+          // No token secret: the action is unavailable, whatever the model said.
+          text = act.declined;
+          label = "declined";
+          trimmed = false;
+        } else if (act) {
+          // The move/card carries the grounded content; a silent model still
+          // gets SK's own line for the transcript and the speaker.
+          if (text === SK_NOTHING_ON_THAT) text = act.say;
+          label = "grounded";
+        }
+        let sources = [...new Set(productive.map((t) => t.name))];
+        // S1 slice C: the model chose explain/compare → the narration-grounded
+        // teaching text replaces what the model wrote from headings alone.
+        if (actHit && act && "event" in act && (actHit.name === "board.explain" || actHit.name === "board.compare") && actHit.result.board) {
+          const taught = await teach(actHit.name === "board.explain" ? "explain" : "compare", actHit.result.board.args, act.say);
+          if (taught) {
+            text = taught.text;
+            label = "grounded";
+            trimmed = !!taught.trimmed;
+            sources = [...new Set([...sources, ...taught.sources])];
+            if (taught.usage) usage = usage ? { inputTokens: usage.inputTokens + taught.usage.inputTokens, outputTokens: usage.outputTokens + taught.usage.outputTokens } : taught.usage;
+          }
+        }
         const entities = trace.flatMap((t) => t.result.entities ?? []);
         send({ type: "text", text });
-        if (navHit) send({ type: "navigate", path: navHit.path, label: navHit.label });
+        if (navHit && !(act && "event" in act && act.event.type === "board")) send({ type: "navigate", path: navHit.path, label: navHit.label });
+        if (act && "event" in act) send(act.event);
         done({ sources, label, ...(usage ? { usage } : {}), ...(trimmed ? { trimmed } : {}) }, text, entities);
         finish();
       } catch (e) {

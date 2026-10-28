@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { resolveContext, type LastTaught, type PresentContext } from "@/utils/present/context";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { fmt } from "@/i18n/format";
+import type { TourCopy } from "@/tour/definitions";
+import SkLauncher from "@/app/dashboard/sk-launcher";
+import type { SkShellCopy } from "@/app/dashboard/sk-shell";
 import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
+import type { BoardController, BoardUnit } from "./board-controller";
+import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
 import { docLabel, groupLabel, scopeLabel, unitLabel } from "./words";
 import type { Slot, TimetableShape } from "@/utils/timetable";
 
@@ -40,6 +45,14 @@ type Kit = SessionKit;
 
 export type PresentWords = Dictionary["present"];
 
+/** S1: what the server hands down when the SK Shell is on for this user. */
+export type PresentSk = {
+  copy: SkShellCopy;
+  tourCopy: TourCopy;
+  role: string | null;
+  hat: string | null;
+};
+
 type Props = {
   teacherId: string;
   teacherName: string | null;
@@ -51,7 +64,19 @@ type Props = {
   classes: ClassName[];
   lastTaught: LastTaught[];
   books: BookOption[];
+  /** Null when the Shell is off (gates in page.tsx). */
+  sk?: PresentSk | null;
 };
+
+/** GET/POST /api/sk/manifest (slice A's contract) as the bridge's fetch. */
+async function fetchManifest(generationId: string, method: "GET" | "POST"): Promise<ManifestReply> {
+  const q = new URLSearchParams({ generationId });
+  const r = await fetch(`/api/sk/manifest?${q.toString()}`, { method });
+  if (r.status === 404) return { status: "missing" };
+  if (!r.ok) throw new Error(`manifest ${r.status}`);
+  const j = (await r.json()) as ManifestReply;
+  return j && typeof j.status === "string" ? j : { status: "failed" };
+}
 
 // ── the clock ────────────────────────────────────────────────────────────────
 //
@@ -110,6 +135,7 @@ export default function PresentClient({
   classes,
   lastTaught,
   books,
+  sk = null,
 }: Props) {
   const now = useSyncExternalStore(subscribeClock, clockSnapshot, clockServerSnapshot);
 
@@ -250,6 +276,68 @@ export default function PresentClient({
 
   const endSession = useCallback(() => setSession(null), []);
 
+  // ── SK on the Board (S1) ──────────────────────────────────────────────────
+  //
+  // The BoardController is BoardSession's (merged M2) and arrives through a
+  // callback ref into STATE, so the bridge is rebuilt (not mutated) when the
+  // session starts or ends and nothing reads a ref during render.
+  // Which unit is open is BoardSession's state: it reports every switch through
+  // `onUnit` (S1 slice C) and answers the controller's `getUnit()` on demand, so
+  // nothing here is inferred from the audit sink any more.
+  const [controller, setController] = useState<BoardController | null>(null);
+  const controllerRef = useCallback((c: BoardController | null) => setController(c), []);
+  const [openUnit, setOpenUnit] = useState<BoardUnit | null>(null);
+  const unitGen = session ? (openUnit?.generationId ?? null) : null;
+  const unitPart = session ? (openUnit?.part ?? null) : null;
+
+  // The lesson map for the open unit: fetched (and polled while building)
+  // whenever the unit's video changes. The result carries the generation it
+  // was fetched for, so a late reply for a unit she has left cannot land, and
+  // the status before the first reply is derived ("building"), not synced.
+  const [lesson, setLesson] = useState<{ gen: string; manifest: BridgeManifest | null; status: ManifestStatus } | null>(null);
+  useEffect(() => {
+    if (!sk || !unitGen) return;
+    const gen = unitGen;
+    const part = unitPart;
+    const ac = new AbortController();
+    void loadManifest(fetchManifest, gen, {
+      signal: ac.signal,
+      onStatus: (s) => {
+        if (!ac.signal.aborted && s !== "ready") setLesson({ gen, manifest: null, status: s });
+      },
+    }).then((r) => {
+      if (ac.signal.aborted) return;
+      if (r.status !== "ready") {
+        setLesson({ gen, manifest: null, status: "failed" });
+        return;
+      }
+      try {
+        setLesson({ gen, manifest: toBridgeManifest(r.manifest, part), status: "ready" });
+      } catch {
+        setLesson({ gen, manifest: null, status: "failed" });
+      }
+    });
+    return () => ac.abort();
+  }, [sk, unitGen, unitPart]);
+  const lessonNow = lesson && lesson.gen === unitGen ? lesson : null;
+  const manifest = lessonNow?.manifest ?? null;
+  const mapStatus: ManifestStatus = !unitGen ? "none" : lessonNow ? lessonNow.status : "building";
+
+  // Rebuilt whenever what it reads changes; the old one's segment watcher is
+  // disposed with it (a unit or session change ends the watch anyway).
+  const bridge = useMemo(
+    () =>
+      sk
+        ? createBoardBridge({
+            controller: () => controller,
+            manifest: () => manifest,
+            mapStatus: () => mapStatus,
+          })
+        : null,
+    [sk, controller, manifest, mapStatus],
+  );
+  useEffect(() => () => bridge?.dispose(), [bridge]);
+
   return (
     <main className="min-h-dvh bg-[#0F1417] text-[#E7EDE9]">
       {/* Dark, because it sits above a lit board in a room with the lights down,
@@ -316,7 +404,7 @@ export default function PresentClient({
       </header>
 
       {session ? (
-        <BoardSession session={session} kit={kit} t={t} onEnd={endSession} />
+        <BoardSession session={session} kit={kit} t={t} onEnd={endSession} controllerRef={controllerRef} onUnit={setOpenUnit} />
       ) : ready ? (
         <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">
           <aside className="grid content-start gap-2">
@@ -432,6 +520,12 @@ export default function PresentClient({
           </div>
         </section>
       )}
+
+      {/* SK Shell on the Board (S1): bottom-start, clear of the Stage's
+          bottom-end corner video. Mounted with the bridge whether or not a
+          lesson is running — before one, the Shell navigates and answers;
+          its Board moves need the session. */}
+      {sk && bridge && <SkLauncher copy={sk.copy} tourCopy={sk.tourCopy} role={sk.role} hat={sk.hat} introDue={false} board={bridge} />}
     </main>
   );
 }
