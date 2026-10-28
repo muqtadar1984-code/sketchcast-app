@@ -73,6 +73,8 @@ const SHIPPED = [
   "board.resume",
   "board.pause",
   "board.recap",
+  // S1 slice D: the first confirm-tier action (teacher hat only).
+  "assign",
 ];
 const TEACHER_SEES = SHIPPED;
 const PARENT_SEES = ["navigate", "context.resolve"];
