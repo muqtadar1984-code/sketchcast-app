@@ -2069,5 +2069,34 @@
     "downloads": "Fichiers",
     "noMatches": "Aucune leçon ne correspond.",
     "allowanceLine": "{used} kits sur {cap} cette semaine · réinitialisation le {date}"
+  },
+  "sk": {
+    "shell": {
+      "open": "Demander à SK",
+      "close": "Fermer SK",
+      "title": "SK, votre compagnon SketchCast",
+      "greetingFallback": "Bonjour, je suis SK. Posez-moi vos questions sur vos livres, vos classes et vos leçons, ou dites-moi où aller.",
+      "placeholder": "Demandez à SK, ou dites où aller…",
+      "send": "Envoyer",
+      "holdToTalk": "Maintenir pour parler",
+      "listening": "Écoute…",
+      "handsFree": "Mains libres",
+      "handsFreeHint": "Le mode mains libres reste actif jusqu'à ce que vous quittiez cette fenêtre ou restiez silencieux une minute. Il ne se réactive jamais tout seul.",
+      "readAloud": "Lire à voix haute",
+      "stop": "Arrêter",
+      "skip": "Passer",
+      "opening": "Ouverture de {label}",
+      "nothingOnThat": "Je n'ai rien à ce sujet.",
+      "labelGrounded": "D'après vos données",
+      "labelSupplementary": "Culture générale",
+      "labelDeclined": "Non disponible",
+      "labelNavigation": "Navigation",
+      "introHello": "Bonjour, je suis SK, votre compagnon SketchCast. Laissez-moi vous faire visiter en une minute.",
+      "introSkip": "Passer l'introduction",
+      "introFirstTask": "On commence par votre première tâche ? Importez un livre, ou demandez-moi d'ouvrir vos classes.",
+      "jobTrayEmpty": "Aucune tâche en cours.",
+      "failed": "SK n'a pas pu répondre pour le moment. Veuillez réessayer.",
+      "you": "Vous"
+    }
   }
 }

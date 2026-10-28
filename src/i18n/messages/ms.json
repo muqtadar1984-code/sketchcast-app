@@ -2069,5 +2069,34 @@
     "downloads": "Fail",
     "noMatches": "Tiada pelajaran yang sepadan.",
     "allowanceLine": "{used} daripada {cap} kit minggu ini · diset semula {date}"
+  },
+  "sk": {
+    "shell": {
+      "open": "Tanya SK",
+      "close": "Tutup SK",
+      "title": "SK, teman SketchCast anda",
+      "greetingFallback": "Hai, saya SK. Tanya saya tentang buku, kelas dan pelajaran anda, atau beritahu saya ke mana hendak pergi.",
+      "placeholder": "Tanya SK, atau sebut ke mana hendak pergi…",
+      "send": "Hantar",
+      "holdToTalk": "Tahan untuk bercakap",
+      "listening": "Mendengar…",
+      "handsFree": "Bebas tangan",
+      "handsFreeHint": "Mod bebas tangan kekal hidup sehingga anda meninggalkan tetingkap ini atau senyap selama seminit. Ia tidak akan hidup semula dengan sendirinya.",
+      "readAloud": "Bacakan",
+      "stop": "Henti",
+      "skip": "Langkau",
+      "opening": "Membuka {label}",
+      "nothingOnThat": "Saya tiada maklumat tentang itu.",
+      "labelGrounded": "Daripada data anda",
+      "labelSupplementary": "Pengetahuan umum",
+      "labelDeclined": "Tidak tersedia",
+      "labelNavigation": "Navigasi",
+      "introHello": "Hai, saya SK, teman SketchCast anda. Izinkan saya tunjukkan sekeliling dalam seminit.",
+      "introSkip": "Langkau pengenalan",
+      "introFirstTask": "Mahu mula dengan tugasan pertama anda? Muat naik buku, atau minta saya buka kelas anda.",
+      "jobTrayEmpty": "Tiada tugasan berjalan.",
+      "failed": "SK tidak dapat menjawab buat masa ini. Sila cuba lagi.",
+      "you": "Anda"
+    }
   }
 }

@@ -2069,5 +2069,34 @@
     "downloads": "Files",
     "noMatches": "No lessons match.",
     "allowanceLine": "{used} of {cap} kits this week · resets {date}"
+  },
+  "sk": {
+    "shell": {
+      "open": "Ask SK",
+      "close": "Close SK",
+      "title": "SK, your SketchCast companion",
+      "greetingFallback": "Hi, I'm SK. Ask me about your books, classes and lessons, or tell me where to go.",
+      "placeholder": "Ask SK, or say where to go…",
+      "send": "Send",
+      "holdToTalk": "Hold to talk",
+      "listening": "Listening…",
+      "handsFree": "Hands-free",
+      "handsFreeHint": "Hands-free stays on until you leave this window or stay quiet for a minute. It never switches itself back on.",
+      "readAloud": "Read aloud",
+      "stop": "Stop",
+      "skip": "Skip",
+      "opening": "Opening {label}",
+      "nothingOnThat": "I have nothing on that.",
+      "labelGrounded": "From your data",
+      "labelSupplementary": "General knowledge",
+      "labelDeclined": "Not available",
+      "labelNavigation": "Navigation",
+      "introHello": "Hi, I'm SK, your SketchCast companion. Let me show you around in a minute.",
+      "introSkip": "Skip the introduction",
+      "introFirstTask": "Shall we start with your first task? Upload a book, or ask me to open your classes.",
+      "jobTrayEmpty": "No jobs running.",
+      "failed": "SK couldn't answer just now. Please try again.",
+      "you": "You"
+    }
   }
 }
