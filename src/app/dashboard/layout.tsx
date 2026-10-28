@@ -1,13 +1,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
-import { onboardingEnabled } from "@/utils/flags";
+import { onboardingEnabled, skShellEnabledFor } from "@/utils/flags";
 import { claimLsPurchases } from "@/utils/lemonsqueezy/claim";
 import { stampAssumedCountry } from "@/utils/assumed-country";
 import { assertAdultRole } from "@/utils/stripe/guards";
+import { activeHatCookie } from "@/utils/hats-server";
 import AssistantLauncher from "./assistant-launcher";
+import SkLauncher from "./sk-launcher";
 import TourProvider from "@/tour/TourProvider";
 import { tourForRole } from "@/tour/definitions";
+import { shouldAutoStart } from "@/tour/logic";
 import type { TourSeen } from "@/tour/types";
+import { SK_INTRO_TOUR } from "@/sk/shell/tour";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 
@@ -24,10 +28,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   let role: string | null = null;
   let seen: TourSeen | null = null;
+  // SK Shell (S0): on only when every gate in skShellEnabledFor() passes; the
+  // §4.6 intro is due until a user_tour_progress("sk-intro") row carries the
+  // current SK_INTRO_TOUR.version (same shouldAutoStart rule as the tours).
+  let skOn = false;
+  let skIntroDue = false;
+  let hat: string | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, onboarded_at")
+      .select("role, onboarded_at, school_id")
       .eq("id", user.id)
       .maybeSingle();
     // Blocking new-joiner gate: an adult self-signup that was never onboarded is
@@ -137,6 +147,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
         .maybeSingle();
       if (prog) seen = { version: prog.version as number, status: prog.status as "completed" | "skipped" };
     }
+
+    // SK Shell gates, through the caller's own session (the school-config read
+    // inside is RLS-scoped). Nothing here can throw: a missing schools.config
+    // or a database behind on 0162 simply reads as "not opted in".
+    const schoolId = (profile?.school_id as string | null | undefined) ?? null;
+    skOn = await skShellEnabledFor(supabase, user, role, schoolId);
+    if (skOn) {
+      hat = await activeHatCookie();
+      let skSeen: TourSeen | null = null;
+      const { data: skProg } = await supabase
+        .from("user_tour_progress")
+        .select("version, status")
+        .eq("tour_key", SK_INTRO_TOUR.key)
+        .maybeSingle();
+      if (skProg) skSeen = { version: skProg.version as number, status: skProg.status as "completed" | "skipped" };
+      skIntroDue = shouldAutoStart(skSeen, SK_INTRO_TOUR.version);
+    }
   }
 
   // The tour's WORDS (definitions.ts carries only its targets and order), so a
@@ -151,8 +178,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
           the leadership School pages, where the School-briefing bot takes over
           the bottom-right slot. */}
       {role !== "school_admin" && (
-        <AssistantLauncher t={{ ...t.school.assistant, close: t.common.close }} />
+        <AssistantLauncher t={{ ...t.school.assistant, close: t.common.close }} hidden={skOn} />
       )}
+      {/* SK Shell (S0): the portal-wide companion, in the same corner — so the
+          Assistant above is handed `hidden` whenever this one renders. */}
+      {skOn && <SkLauncher copy={t.sk.shell} tourCopy={t.app.tour} role={role} hat={hat} introDue={skIntroDue} />}
     </TourProvider>
   );
 }

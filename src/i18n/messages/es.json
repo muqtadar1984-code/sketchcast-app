@@ -2069,5 +2069,34 @@
     "downloads": "Archivos",
     "noMatches": "Ninguna lección coincide.",
     "allowanceLine": "{used} de {cap} kits esta semana · se reinicia el {date}"
+  },
+  "sk": {
+    "shell": {
+      "open": "Pregúntale a SK",
+      "close": "Cerrar SK",
+      "title": "SK, tu compañero de SketchCast",
+      "greetingFallback": "Hola, soy SK. Pregúntame sobre tus libros, clases y lecciones, o dime a dónde ir.",
+      "placeholder": "Pregúntale a SK, o di a dónde ir…",
+      "send": "Enviar",
+      "holdToTalk": "Mantén pulsado para hablar",
+      "listening": "Escuchando…",
+      "handsFree": "Manos libres",
+      "handsFreeHint": "El modo manos libres sigue activo hasta que salgas de esta ventana o guardes silencio un minuto. Nunca se vuelve a activar por sí solo.",
+      "readAloud": "Leer en voz alta",
+      "stop": "Detener",
+      "skip": "Omitir",
+      "opening": "Abriendo {label}",
+      "nothingOnThat": "No tengo nada sobre eso.",
+      "labelGrounded": "De tus datos",
+      "labelSupplementary": "Conocimiento general",
+      "labelDeclined": "No disponible",
+      "labelNavigation": "Navegación",
+      "introHello": "Hola, soy SK, tu compañero de SketchCast. Déjame mostrarte todo en un minuto.",
+      "introSkip": "Omitir la introducción",
+      "introFirstTask": "¿Empezamos con tu primera tarea? Sube un libro, o pídeme que abra tus clases.",
+      "jobTrayEmpty": "No hay tareas en curso.",
+      "failed": "SK no pudo responder ahora. Inténtalo de nuevo.",
+      "you": "Tú"
+    }
   }
 }
