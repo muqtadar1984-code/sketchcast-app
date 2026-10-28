@@ -6,6 +6,7 @@ import { bytes, Card, Chip, Empty } from "../../ui";
 
 // /books/[slug]/files[?stage=] — every stored file of the book, by the stage
 // that made it. Opening or downloading mints a short-lived link per click.
+// A large PDF opens as its screen copy; "download full file" fetches the original.
 const KIND_LABEL: Record<string, string> = {
   book_pdf: "book PDF",
   qa_report: "report",
@@ -81,9 +82,15 @@ export default async function FilesPage({ params, searchParams }: { params: Prom
                   </span>
                   <span className="flex items-center gap-3 text-xs text-[#7A7363]">
                     <Chip label={KIND_LABEL[a.kind] ?? a.kind} tone="parked" />
-                    <span className="tabular-nums w-16 text-end">{bytes(a.bytes)}</span>
+                    {a.screen_key ? (
+                      <span className="tabular-nums text-end" title="Opens a lighter copy for reading on screen; the download is the full file">
+                        opens {bytes(a.screen_bytes)} · full {bytes(a.bytes)}
+                      </span>
+                    ) : (
+                      <span className="tabular-nums w-16 text-end">{bytes(a.bytes)}</span>
+                    )}
                     <a href={fileHref(a, true)} className="underline">
-                      download
+                      {a.screen_key ? "download full file" : "download"}
                     </a>
                   </span>
                 </li>
