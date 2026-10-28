@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { consoleHostname, consoleRoute, bareHost, STAFF_LOGIN_PATH } from "@/utils/console-routing";
 import { schoolHostname, schoolRoute } from "@/utils/school-routing";
 import { libraryHostname, libraryRoute } from "@/utils/library-routing";
+import { booksHostname, booksRoute } from "@/utils/books-routing";
 import { sessionScoped } from "@/utils/supabase/session-cookies";
 
 // Refreshes the Supabase auth session on every request and guards routes.
@@ -81,6 +82,19 @@ export async function updateSession(request: NextRequest) {
     // On the portal host every route is handled by the rules above — never fall
     // through to the teacher-app guards.
     if (lHost && bareHost(host) === lHost) return response;
+  }
+
+  // ── Book app host (books.sketchcast.app; study-guide books) ────────────────
+  // Same shape as the Library block. Dormant (= the book app does not exist
+  // anywhere) unless NEXT_PUBLIC_BOOKS_HOST is set. Who may enter is decided by
+  // the books layout / API guards (books-access.ts), not here.
+  const bHost = booksHostname();
+  {
+    // A local development fixture stands in for a signed-in reader (never in production).
+    const devFixture = process.env.NODE_ENV !== "production" && !!process.env.BOOKS_FIXTURE;
+    const decision = booksRoute({ booksHostname: bHost, host: host ?? "", path, hasUser: !!user || devFixture });
+    if (decision.type === "redirect") return redirectTo(decision.path, true);
+    if (bHost && bareHost(host) === bHost) return response;
   }
 
   // ── School-portal host (dormant unless NEXT_PUBLIC_SCHOOL_HOST is set) ──────
