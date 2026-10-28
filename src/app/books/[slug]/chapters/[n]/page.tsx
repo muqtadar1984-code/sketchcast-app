@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getChapter, listAnnotations, listApprovals, listChapterSummaries } from "@/utils/books/store";
 import { loadBook, pickRevision } from "../../load";
 import { approvalFor, latestGateD } from "../../approval";
+import { canOn } from "@/utils/books-access";
+import ApproveGateD from "./approve-gate-d";
 import RevisionPicker from "../../revision-picker";
 import { BlockView, ExerciseView, type FigureCtx } from "../../blocks";
 import { Card, Chip, day } from "../../../ui";
@@ -19,7 +21,7 @@ export default async function ChapterPage({
   const sp = await searchParams;
   const num = Number(n);
   if (!Number.isInteger(num)) notFound();
-  const { work, revisions } = await loadBook(slug);
+  const { member, work, revisions } = await loadBook(slug);
   const rev = pickRevision(work, revisions, sp.rev);
   const [chapter, approvals, annotations, summaries] = await Promise.all([
     getChapter(work.uid, rev.key, num),
@@ -84,6 +86,9 @@ export default async function ChapterPage({
               </div>
             ) : (
               <p className="text-sm text-[#7A7363]">No approval covers this revision of the chapter.</p>
+            )}
+            {!ap && rev.key === work.current_revision && canOn(member, work.uid, "approve") && (
+              <ApproveGateD slug={slug} chapter={num} rev={rev.key} sha={chapter.content_sha256} />
             )}
             {lock && (
               <p className="text-xs text-[#24543A] mt-3">

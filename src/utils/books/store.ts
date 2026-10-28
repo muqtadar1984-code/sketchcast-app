@@ -1,5 +1,5 @@
 import "server-only";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { createAdminClient } from "@/utils/supabase/admin";
 import type {
   Annotation,
@@ -48,6 +48,22 @@ function fixture(): Bundle | null {
   return bundleCache.bundle;
 }
 
+/**
+ * Development only: what the app wrote locally (BOOKS_RUNS_FILE — in-app approvals, finding rulings) on top of the
+ * importer bundle's rows, so the triage and approval screens can be exercised without production.
+ */
+function overlay(table: string, rows: Row[]): Row[] {
+  const path = process.env.BOOKS_RUNS_FILE;
+  if (!path || !existsSync(/*turbopackIgnore: true*/ path)) return rows;
+  const d = JSON.parse(readFileSync(/*turbopackIgnore: true*/ path, "utf-8")) as Record<string, Row[] | Record<string, Row>>;
+  if (table === "pub_findings") {
+    const patch = (d.pub_findings_patch ?? {}) as Record<string, Row>;
+    return rows.map((r) => (patch[String(r.id)] ? { ...r, ...patch[String(r.id)] } : r));
+  }
+  const extra = d[table];
+  return Array.isArray(extra) ? [...rows, ...extra] : rows;
+}
+
 /** The local file behind an S3 key, from the fixture's upload list (development only). */
 export function fixtureFileFor(key: string): string | null {
   const b = fixture();
@@ -61,7 +77,7 @@ async function select<T>(
 ): Promise<T[]> {
   const fx = fixture();
   if (fx) {
-    let rows = (fx.tables[table] ?? []).filter((r) => Object.entries(filters).every(([k, v]) => r[k] === v));
+    let rows = overlay(table, fx.tables[table] ?? []).filter((r) => Object.entries(filters).every(([k, v]) => r[k] === v));
     for (const [col, asc] of [...(opts.order ?? [])].reverse()) {
       rows = [...rows].sort((a, b) => cmp(a[col], b[col]) * (asc ? 1 : -1));
     }
@@ -145,7 +161,7 @@ export async function getArtifact(workUid: string, id: number): Promise<Artifact
 
 export function listCostLines(workUid: string): Promise<CostLine[]> {
   return select<CostLine>("pub_cost_lines", { work_uid: workUid }, {
-    columns: ["stage_key", "revision_key", "chapter", "model", "role", "usd"],
+    columns: ["stage_key", "revision_key", "chapter", "model", "role", "usd", "run_id"],
   });
 }
 

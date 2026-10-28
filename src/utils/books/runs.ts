@@ -18,14 +18,14 @@ import type { Artifact, Run, RunEvent } from "./types";
 //   python -m publishing.runner --run-id <id> --store file:<BOOKS_RUNS_FILE> --bucket s3
 
 type Row = Record<string, unknown>;
-type RunsFile = { pub_works: Row[]; pub_runs: Row[]; pub_run_events: Row[]; [table: string]: Row[] };
+export type RunsFile = { pub_works: Row[]; pub_runs: Row[]; pub_run_events: Row[]; [table: string]: Row[] };
 
-function runsFile(): string | null {
+export function runsFile(): string | null {
   if (!fixturePath()) return null;
   return process.env.BOOKS_RUNS_FILE || null;
 }
 
-function readRunsFile(path: string): RunsFile {
+export function readRunsFile(path: string): RunsFile {
   if (!existsSync(/*turbopackIgnore: true*/ path)) return { pub_works: [], pub_runs: [], pub_run_events: [] };
   const d = JSON.parse(readFileSync(/*turbopackIgnore: true*/ path, "utf-8")) as RunsFile;
   d.pub_runs ??= [];
@@ -34,7 +34,7 @@ function readRunsFile(path: string): RunsFile {
   return d;
 }
 
-function writeRunsFile(path: string, d: RunsFile) {
+export function writeRunsFile(path: string, d: RunsFile) {
   writeFileSync(/*turbopackIgnore: true*/ path, JSON.stringify(d, null, 1), "utf-8");
 }
 
