@@ -12,10 +12,13 @@ import AssistantPanel, { type AssistantMessages } from "./assistant-panel";
 // panel only mounts when opened.
 const ASSISTANT_ON = process.env.NEXT_PUBLIC_FEATURE_AI_ASSISTANT === "true";
 
-export default function AssistantLauncher({ t }: { t: AssistantMessages }) {
+export default function AssistantLauncher({ t, hidden = false }: { t: AssistantMessages; hidden?: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   if (!ASSISTANT_ON) return null;
+  // The SK Shell (sk-launcher.tsx) takes this corner when it is on for the
+  // user; the server layout passes `hidden` so exactly one launcher renders.
+  if (hidden) return null;
   // The leadership School pages surface their own bottom-right launcher (the
   // School-briefing bot); hide the teaching Assistant there so the two don't
   // overlap (and a principal isn't offered a book tutor they don't use).
