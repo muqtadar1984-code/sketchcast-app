@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "Congelado, pero no se pudo guardar este fotograma, así que se perdería al recargar.",
       "freezeFailed": "No se pudo capturar el fotograma.",
       "videoExpired": "El enlace del video venció: vuelve a abrir la lección para actualizarlo.",
-      "worksheetOnBoard": "Ficha en la pizarra"
+      "worksheetOnBoard": "Ficha en la pizarra",
+      "moving": "Moviendo…",
+      "showAnswer": "Mostrar respuesta",
+      "hideAnswer": "Ocultar respuesta",
+      "questionOf": "Pregunta {n} de {total}",
+      "marks": "{n} puntos",
+      "answer": "Respuesta: {a}",
+      "answerTrue": "Verdadero",
+      "answerFalse": "Falso",
+      "prevQuestion": "Pregunta anterior",
+      "nextQuestion": "Pregunta siguiente"
     },
     "wrapUp": {
       "saved": "Lección guardada",

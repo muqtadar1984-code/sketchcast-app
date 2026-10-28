@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { newRoll, type PageBackground, type Tool } from "@/board/model";
 import type { Rect } from "@/board/render";
@@ -16,6 +16,14 @@ import type { PresentWords } from "./present-client";
 import { framePath, rollPdfPath } from "@/utils/present/paths";
 import { Stage, type StageHandle, type StageMode } from "./stage";
 import WrapUp from "./wrap-up";
+import {
+  createBoardController,
+  MemorySkActionSink,
+  type BoardController,
+  type QuestionSet,
+  type SkActionSink,
+} from "./board-controller";
+import { answerKey, cardPng, drawCard, questionCards, type CardWords } from "./text-card";
 
 // A lesson in progress: the bar's choice, the kit, the stage and the roll.
 //
@@ -77,6 +85,8 @@ export type KitDoc = {
   note?: "never-project" | "no-text";
   title: string | null;
   download: string | null;
+  /** Signed URL of the worksheet's questions.json, when the board may project it. */
+  questions?: string | null;
 };
 
 export type KitUnit = {
@@ -105,9 +115,82 @@ export type SessionKit = {
  *  usable as identity across a reload and null needs a name of its own. */
 const unitKey = (u: { part: number | null }) => (u.part === null ? "whole" : `p${u.part}`);
 
-type Props = { session: SessionInfo; kit: SessionKit | null; t: PresentWords; onEnd: () => void };
+/**
+ * Everything the board sends over the network, in one place so a host can swap
+ * it. The default is exactly what the board always did; the SK dev harness
+ * injects an in-memory version so driving the board from code writes nothing.
+ */
+export type BoardIO = {
+  sync: (records: LogRecord[]) => Promise<void>;
+  items: (items: { kind: string; generationId: string | null; detail: Record<string, unknown> }[]) => Promise<void>;
+  signFrame: (path: string) => Promise<string | null>;
+  upload: (path: string, blob: Blob, contentType: string) => Promise<void>;
+  recordRoll: () => Promise<void>;
+  /** Resolves true once the close landed. */
+  close: (pageCount: number) => Promise<boolean>;
+};
 
-export default function BoardSession({ session, kit, t, onEnd }: Props) {
+export function defaultIO(db: ReturnType<typeof createClient>, sessionId: string): BoardIO {
+  return {
+    sync: async (records) => {
+      const r = await fetch("/api/present/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, records }),
+      });
+      if (!r.ok) throw new Error(`sync ${r.status}`);
+    },
+    items: async (items) => {
+      await fetch("/api/present/items", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, items }),
+      });
+    },
+    signFrame: async (src) => {
+      const { data } = await db.storage.from("artifacts").createSignedUrl(src, 8 * 60 * 60);
+      return data?.signedUrl ?? null;
+    },
+    upload: async (path, blob, contentType) => {
+      const { error } = await db.storage.from("artifacts").upload(path, blob, { contentType, upsert: true });
+      if (error) throw error;
+    },
+    recordRoll: async () => {
+      // The route records pdf_path only after confirming the object is there,
+      // so the row can never point at a file that failed to arrive.
+      const r = await fetch("/api/present/roll", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      if (!r.ok) throw new Error(`recording failed (${r.status})`);
+    },
+    close: (pageCount) =>
+      fetch("/api/present/session", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, pageCount }),
+      })
+        .then((r) => r.ok)
+        .catch(() => false),
+  };
+}
+
+type Props = {
+  session: SessionInfo;
+  kit: SessionKit | null;
+  t: PresentWords;
+  onEnd: () => void;
+  /** Network seam; omitted on the real page. */
+  io?: BoardIO;
+  /** The Board driven from code (SK). Purely additive: no control changes. */
+  controllerRef?: Ref<BoardController>;
+  /** Where SK actions are recorded. Defaults to an in-memory buffer — never the network
+   *  (the sk_actions table lands in S0). */
+  skSink?: SkActionSink;
+};
+
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -119,6 +202,23 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
   const [mode, setMode] = useState<StageMode>("away");
   const [where, setWhere] = useState({ page: 0, count: 1 });
   const [note, setNote] = useState<string | null>(null);
+  /** A seek is under way (SK): the stage says "Moving…" until its frame shows. */
+  const [moving, setMoving] = useState(false);
+  /** Question pages (SK): the answer key, in memory only, and which answers are showing. */
+  const answers = useRef(new Map<string, string>());
+  const revealedRef = useRef(new Set<string>());
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set());
+  const [answerKeys, setAnswerKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const cardWords = useMemo<CardWords>(
+    () => ({
+      questionOf: t.board.questionOf,
+      marks: t.board.marks,
+      answer: t.board.answer,
+      answerTrue: t.board.answerTrue,
+      answerFalse: t.board.answerFalse,
+    }),
+    [t],
+  );
   const spec = TOOLS.find((t) => t.key === tool)!;
 
   // The lesson has three states, and the middle one is load-bearing: the board,
@@ -135,6 +235,7 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
   >(null);
 
   const db = useMemo(() => createClient(), []);
+  const io = useMemo(() => ioProp ?? defaultIO(db, session.id), [ioProp, db, session.id]);
   /** Storage path -> the object URL captured in THIS tab. The fast path: a frame
    *  she just froze is already decoded, and going back to the network for it
    *  would blank the page she is about to write on. */
@@ -152,14 +253,7 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
   // store's problem to retry rather than something the lesson notices.
   useEffect(() => {
     const s = new BoardStore(session.id, {
-      flush: async (records: LogRecord[]) => {
-        const r = await fetch("/api/present/sync", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sessionId: session.id, records }),
-        });
-        if (!r.ok) throw new Error(`sync ${r.status}`);
-      },
+      flush: (records: LogRecord[]) => io.sync(records),
     });
     storeRef.current = s;
     void s.open();
@@ -169,7 +263,7 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
       s.close();
       storeRef.current = null;
     };
-  }, [session.id]);
+  }, [session.id, io]);
 
   /** Tell the server what she put in front of the class, and WHERE IN THE BOOK
    *  it came from. Best-effort: a lost item costs the recap a little context,
@@ -180,16 +274,9 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
       generationId: string | null,
       at: { chapterNum: number | null; part: number | null },
     ) => {
-      void fetch("/api/present/items", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          items: [{ kind, generationId, detail: { bookId: session.bookId, ...at } }],
-        }),
-      }).catch(() => {});
+      void io.items([{ kind, generationId, detail: { bookId: session.bookId, ...at } }]).catch(() => {});
     },
-    [session.id, session.bookId],
+    [io, session.bookId],
   );
 
   // Frozen frames are images the renderer draws synchronously, so they have to
@@ -205,10 +292,9 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
       const local = localFrames.current.get(src);
       if (local) return local;
       if (/^(?:blob:|data:|https?:)/i.test(src)) return src;
-      const { data } = await db.storage.from("artifacts").createSignedUrl(src, 8 * 60 * 60);
-      return data?.signedUrl ?? null;
+      return io.signFrame(src);
     },
-    [db],
+    [io],
   );
 
   const drawBackground = useCallback(
@@ -235,6 +321,11 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
         }
         return;
       }
+      if (bg.kind === "card") {
+        const k = answerKey(bg.card.generationId, bg.card.questionId);
+        drawCard(ctx, bg.card, page, cardWords, revealedRef.current.has(k) ? (answers.current.get(k) ?? null) : null);
+        return;
+      }
       if (bg.kind === "question") {
         ctx.fillStyle = "#F1F5F3";
         ctx.fillRect(0, 0, page.w, 150);
@@ -244,14 +335,15 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
         ctx.fillText(bg.prompt.slice(0, 60), 40, 75);
       }
     },
-    [frameUrl],
+    [frameUrl, cardWords],
   );
 
-  const playVideo = useCallback(() => {
+  const playVideo = useCallback(async () => {
     if (!unit?.video?.urls.length) return;
     setMode("full");
-    void stage.current?.play();
+    const playing = stage.current?.play();
     recordItem("video", unit.video.id, { chapterNum: session.chapterNum, part: unit.part });
+    await playing;
   }, [unit, recordItem, session.chapterNum]);
 
   /** Pause, capture the frame, and land it on a NEW page of the roll.
@@ -262,11 +354,11 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
    *  path and the network catches up in the background. If the upload fails the
    *  page still renders for the rest of the lesson and still reaches the PDF;
    *  only a reload would lose it, and the note says so. */
-  const freeze = useCallback(async () => {
+  const freeze = useCallback(async (): Promise<boolean> => {
     const f = await stage.current?.freeze();
     if (!f) {
       setNote(t.board.freezeFailed);
-      return;
+      return false;
     }
     // addPage appends, so the page it is about to occupy is the current count.
     const path = framePath(session.teacherId, session.id, roll.pages.length);
@@ -278,21 +370,19 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
     void (async () => {
       try {
         const blob = await (await fetch(f.url)).blob();
-        const { error } = await db.storage
-          .from("artifacts")
-          .upload(path, blob, { contentType: "image/jpeg", upsert: true });
-        if (error) throw error;
+        await io.upload(path, blob, "image/jpeg");
       } catch {
         // Not worth interrupting a lesson for. The frame is on the board and in
         // the export; what it loses is surviving a reload.
         setNote(t.board.frozenUnsaved);
       }
     })();
-  }, [unit, session.teacherId, session.id, roll, db, t]);
+    return true;
+  }, [unit, session.teacherId, session.id, roll, io, t]);
 
-  const resume = useCallback(() => {
+  const resume = useCallback(async () => {
     setMode("full");
-    void stage.current?.play();
+    await stage.current?.play();
   }, []);
 
   const openWorksheet = useCallback(
@@ -347,6 +437,12 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
       title: "Board",
       text: (bg: PageBackground) => (bg.kind === "question" ? bg.prompt : null),
       image: async (bg: PageBackground) => {
+        if (bg.kind === "card") {
+          // Pixels, not pdf-lib text: the export's font is WinAnsi-only and a
+          // Hindi question would throw and take the whole PDF with it.
+          const bytes = await cardPng(bg.card, cardWords).catch(() => null);
+          return bytes ? { bytes, type: "png" as const } : null;
+        }
         if (bg.kind !== "frame") return null;
         try {
           const url = await frameUrl(bg.src);
@@ -363,7 +459,7 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
         }
       },
     }),
-    [frameUrl],
+    [frameUrl, cardWords],
   );
 
   const exportPdf = useCallback(async () => {
@@ -386,8 +482,8 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
    * it goes last and is not conditional on the export succeeding — a board whose
    * PDF failed to upload is still a lesson that was taught.
    */
-  const end = useCallback(async () => {
-    if (phase !== "board") return;
+  const end = useCallback(async (): Promise<boolean> => {
+    if (phase !== "board") return false;
     setPhase("ending");
     const store = storeRef.current;
 
@@ -408,21 +504,8 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
     try {
       const bytes = await exportRoll(roll, exportOpts);
       const path = rollPdfPath(session.teacherId, session.id);
-      const { error } = await db.storage
-        .from("artifacts")
-        .upload(path, new Blob([bytes as BlobPart], { type: "application/pdf" }), {
-          contentType: "application/pdf",
-          upsert: true,
-        });
-      if (error) throw error;
-      // The route records pdf_path only after confirming the object is there,
-      // so the row can never point at a file that failed to arrive.
-      const r = await fetch("/api/present/roll", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
-      });
-      if (!r.ok) throw new Error(`recording failed (${r.status})`);
+      await io.upload(path, new Blob([bytes as BlobPart], { type: "application/pdf" }), "application/pdf");
+      await io.recordRoll();
       setRollSaved({ ok: true, pages: roll.pages.length });
     } catch (e) {
       setRollSaved({ ok: false, why: e instanceof Error ? e.message : "upload failed" });
@@ -438,22 +521,100 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
     //    session the recap route refuses, with no way back to the board. The
     //    route is idempotent by design precisely so this can be retried, and
     //    until now nothing retried it.
-    const closed = await fetch("/api/present/session", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sessionId: session.id, pageCount: where.count }),
-    })
-      .then((r) => r.ok)
-      .catch(() => false);
+    const closed = await io.close(where.count);
 
     if (!closed) {
       setPhase("board");
       setNote(t.board.endFailed);
-      return;
+      return false;
     }
 
     setPhase("wrap");
-  }, [phase, roll, exportOpts, session.teacherId, session.id, where.count, db, t]);
+    return true;
+  }, [phase, roll, exportOpts, session.teacherId, session.id, where.count, io, t]);
+
+  // -- The Board from code (SK spike M2) --------------------------------------
+  // The ports call the SAME callbacks the buttons below call. They read the
+  // latest render through a ref, so the controller is built once per session
+  // and never goes stale. It exists whether or not a host asks for it; with no
+  // controllerRef nothing calls it, and its default sink is a buffer in memory.
+  const live = useRef({ playVideo, resume, freeze, openWorksheet, end, recordItem, unit, where, mode, session });
+  useEffect(() => {
+    live.current = { playVideo, resume, freeze, openWorksheet, end, recordItem, unit, where, mode, session };
+  });
+  const sink = useMemo(() => skSink ?? new MemorySkActionSink(), [skSink]);
+  // Built in the commit phase (useImperativeHandle), never during render: the
+  // ports read refs. The Board's own question buttons reach it through ctlRef.
+  const ctlRef = useRef<BoardController | null>(null);
+  useImperativeHandle(
+    ctlRef,
+    () =>
+      createBoardController(
+        {
+          sessionId: () => live.current.session.id,
+          actorId: () => live.current.session.teacherId,
+          generationId: () => live.current.unit?.video?.id ?? null,
+          video: () => stage.current?.element() ?? null,
+          play: () => live.current.playVideo(),
+          resume: () => live.current.resume(),
+          pause: () => stage.current?.pause(),
+          setStage: (m) => setMode(m),
+          freeze: () => live.current.freeze(),
+          openWorksheetPage: () => {
+            const { unit: u, session: s } = live.current;
+            const d = u?.docs.find((x) => x.projects);
+            if (!u || !d) return false;
+            live.current.openWorksheet(d.id, docLabel(t, d.kind), { chapterNum: s.chapterNum, part: u.part });
+            return true;
+          },
+          blankPage: () => board.current?.push({ kind: "blank" }),
+          pushCard: (card) => board.current?.push({ kind: "card", card }),
+          loadQuestions: async (): Promise<QuestionSet | null> => {
+            const { unit: u, session: s } = live.current;
+            const d = u?.docs.find((x) => x.projects && x.questions);
+            if (!u || !d?.questions) return null;
+            const r = await fetch(d.questions);
+            if (!r.ok) throw new Error(`questions ${r.status}`);
+            const { cards, answers: key } = questionCards(await r.json(), d.id, cardWords);
+            for (const [k, v] of key) answers.current.set(k, v);
+            setAnswerKeys(new Set(answers.current.keys()));
+            // Logged as what it is in present_items' terms: a worksheet she put up.
+            live.current.recordItem("worksheet", d.id, { chapterNum: s.chapterNum, part: u.part });
+            return { generationId: d.id, cards };
+          },
+          goTo: (p) => board.current?.goTo(p),
+          // The roll's own count is current the moment push returns; `where`
+          // follows a render later.
+          where: () => ({
+            page: live.current.where.page,
+            count: Math.max(live.current.where.count, roll.pages.length),
+          }),
+          stageMode: () => live.current.mode,
+          endSession: () => live.current.end(),
+        },
+        sink,
+        { onMoving: setMoving },
+      ),
+    [sink, roll, t, cardWords],
+  );
+  // No deps: it follows ctlRef whenever that is rebuilt.
+  useImperativeHandle(controllerRef, () => ctlRef.current as BoardController);
+
+  /** The question card on the current page, if it is one. */
+  const currentCard = (() => {
+    const bg = roll.pages[where.page]?.background;
+    return bg?.kind === "card" && bg.card.source === "question" ? bg.card : null;
+  })();
+  const currentKey = currentCard ? answerKey(currentCard.generationId, currentCard.questionId) : null;
+  const toggleAnswer = useCallback(() => {
+    if (!currentKey) return;
+    const next = new Set(revealedRef.current);
+    if (next.has(currentKey)) next.delete(currentKey);
+    else next.add(currentKey);
+    revealedRef.current = next;
+    setRevealed(next);
+    board.current?.repaint();
+  }, [currentKey]);
 
   const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]";
   // EVERY CONTROL, not just the End button. The export walks the live roll page
@@ -659,6 +820,11 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
           style={{ height: "68dvh", minHeight: 320 }}
         />
         {note && <p className="font-mono text-[11px] text-[#4FD6C2]">{note}</p>}
+        {moving && mode === "away" && (
+          <p role="status" className="font-mono text-[11px] text-[#4FD6C2]">
+            {t.board.moving}
+          </p>
+        )}
       </div>
 
       <aside className="grid content-start gap-2">
@@ -696,6 +862,36 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
         <p className="text-center font-mono text-[11px] text-[#5F6F69]">
           {fmt(t.board.pageOf, { n: where.page + 1, total: where.count })}
         </p>
+        {/* Only on a question page, which only SK puts up. */}
+        {currentCard && (
+          <>
+            <button
+              type="button"
+              className={btn}
+              disabled={saving || (currentCard.index ?? 0) <= 0}
+              aria-label={t.board.prevQuestion}
+              title={t.board.prevQuestion}
+              onClick={() => void ctlRef.current?.prevQuestion().catch(() => {})}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className={btn}
+              disabled={saving || (currentCard.index ?? 0) >= (currentCard.total ?? 1) - 1}
+              aria-label={t.board.nextQuestion}
+              title={t.board.nextQuestion}
+              onClick={() => void ctlRef.current?.nextQuestion().catch(() => {})}
+            >
+              ›
+            </button>
+            {currentKey && answerKeys.has(currentKey) && (
+              <button type="button" className={btn} disabled={saving} onClick={toggleAnswer}>
+                {revealed.has(currentKey) ? t.board.hideAnswer : t.board.showAnswer}
+              </button>
+            )}
+          </>
+        )}
       </aside>
 
       {/* Mounted for the whole lesson, whatever the mode. See stage.tsx. */}
@@ -703,6 +899,7 @@ export default function BoardSession({ session, kit, t, onEnd }: Props) {
         ref={stage}
         src={unit?.video?.urls[0] ?? null}
         mode={mode}
+        status={moving ? t.board.moving : null}
         onTapToFreeze={freeze}
         onEnded={() => setMode("corner")}
         onError={() => setNote(t.board.videoExpired)}

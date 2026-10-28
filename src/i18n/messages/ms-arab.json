@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "دبيکوکن — تتاڤي بيڠکاي اين تيدق داڤت دسيمڤن، جادي موات سمولا اکن مڠهيلڠکنڽ.",
       "freezeFailed": "بيڠکاي تيدق داڤت دتڠکڤ.",
       "videoExpired": "ڤاوتن ۏيديو تله تامت تيمڤوه — بوک سمولا ڤلاجرن اونتوق مڽݢرکنڽ.",
-      "worksheetOnBoard": "لمبرن کرجا ڤد ڤاڤن"
+      "worksheetOnBoard": "لمبرن کرجا ڤد ڤاڤن",
+      "moving": "سدڠ براليه…",
+      "showAnswer": "تونجوق جاواڤن",
+      "hideAnswer": "سمبوڽي جاواڤن",
+      "questionOf": "سوالن {n} درڤد {total}",
+      "marks": "{n} مارکه",
+      "answer": "جاواڤن: {a}",
+      "answerTrue": "بتول",
+      "answerFalse": "ساله",
+      "prevQuestion": "سوالن سبلومڽ",
+      "nextQuestion": "سوالن ستروسڽ"
     },
     "wrapUp": {
       "saved": "ڤلاجرن دسيمڤن",

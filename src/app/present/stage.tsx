@@ -62,6 +62,8 @@ export type StageProps = {
   /** Tapping the video pauses and freezes it: the gesture a teacher already
    *  makes when she wants to write on what is on screen. */
   onTapToFreeze?: () => void;
+  /** A short status over the video ("Moving…" while SK seeks). Null shows nothing. */
+  status?: string | null;
 };
 
 /**
@@ -113,7 +115,7 @@ function styleFor(mode: StageMode): CSSProperties {
 }
 
 export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
-  { src, mode, onEnded, onError, onTapToFreeze },
+  { src, mode, onEnded, onError, onTapToFreeze, status },
   ref,
 ) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -189,6 +191,14 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
         onClick={onTapToFreeze}
         style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
       />
+      {status && (
+        <span
+          role="status"
+          className="pointer-events-none absolute end-2 top-2 rounded-lg bg-[#141B1F] px-2 py-1 font-mono text-[11px] text-[#4FD6C2]"
+        >
+          {status}
+        </span>
+      )}
     </div>
   );
 });

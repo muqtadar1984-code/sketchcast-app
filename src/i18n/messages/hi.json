@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "दृश्य रोक तो दिया, पर वह सहेजा नहीं जा सका — पृष्ठ दोबारा खुलते ही वह चला जाएगा।",
       "freezeFailed": "दृश्य नहीं लिया जा सका।",
       "videoExpired": "वीडियो की कड़ी समाप्त हो गई — इसे ताज़ा करने के लिए पाठ फिर खोलें।",
-      "worksheetOnBoard": "बोर्ड पर कार्यपत्रक"
+      "worksheetOnBoard": "बोर्ड पर कार्यपत्रक",
+      "moving": "आगे बढ़ रहे हैं…",
+      "showAnswer": "उत्तर दिखाएँ",
+      "hideAnswer": "उत्तर छिपाएँ",
+      "questionOf": "प्रश्न {n} / {total}",
+      "marks": "{n} अंक",
+      "answer": "उत्तर: {a}",
+      "answerTrue": "सही",
+      "answerFalse": "गलत",
+      "prevQuestion": "पिछला प्रश्न",
+      "nextQuestion": "अगला प्रश्न"
     },
     "wrapUp": {
       "saved": "पाठ सहेजा गया",

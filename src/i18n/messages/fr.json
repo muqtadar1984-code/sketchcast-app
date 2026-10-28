@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "Figé — mais cette image n'a pas pu être enregistrée : un rechargement la perdrait.",
       "freezeFailed": "Impossible de capturer l'image.",
       "videoExpired": "Le lien de la vidéo a expiré — rouvrez la leçon pour l'actualiser.",
-      "worksheetOnBoard": "Fiche sur le tableau"
+      "worksheetOnBoard": "Fiche sur le tableau",
+      "moving": "Déplacement…",
+      "showAnswer": "Afficher la réponse",
+      "hideAnswer": "Masquer la réponse",
+      "questionOf": "Question {n} sur {total}",
+      "marks": "{n} points",
+      "answer": "Réponse : {a}",
+      "answerTrue": "Vrai",
+      "answerFalse": "Faux",
+      "prevQuestion": "Question précédente",
+      "nextQuestion": "Question suivante"
     },
     "wrapUp": {
       "saved": "Leçon enregistrée",
