@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { SkCapability } from "../types";
-import { allowedFor, findCapability, metaAllows, toToolDefs } from "../registry";
+import { API_TOOL_NAME_RE, allowedFor, findCapability, fromApiToolName, metaAllows, toApiToolName, toToolDefs } from "../registry";
 import { REGISTRY } from "@/sk/capabilities";
 import { makeCtx } from "./fixtures";
 
@@ -78,9 +78,17 @@ describe("allowedFor over the shipped registry", () => {
 });
 
 describe("toToolDefs / findCapability", () => {
-  it("maps meta to the provider's ToolDef shape", () => {
+  it("maps meta to the provider's ToolDef shape with API-safe names (dots → __)", () => {
     const defs = toToolDefs(REGISTRY);
-    expect(defs.map((d) => d.name)).toEqual(SHIPPED);
+    expect(defs.map((d) => d.name)).toEqual(SHIPPED.map((n) => n.replace(/\./g, "__")));
+    // The live failure of 2026-10-28: Anthropic rejects any tool name outside
+    // this pattern with a 400, which the Shell reports as a non-retryable error.
+    for (const d of defs) expect(d.name).toMatch(API_TOOL_NAME_RE);
+    for (const n of SHIPPED) {
+      expect(fromApiToolName(toApiToolName(n))).toBe(n);
+      expect(findCapability(toApiToolName(n))?.meta.name).toBe(n);
+      expect(findCapability(n)?.meta.name).toBe(n);
+    }
     for (const d of defs) {
       expect(typeof d.description).toBe("string");
       expect((d.parameters as { type: string }).type).toBe("object");
