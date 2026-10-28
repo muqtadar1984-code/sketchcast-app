@@ -55,6 +55,11 @@ export async function ruleFinding(input: { workUid: string; findingId: number; t
     return { ok: true };
   }
   const admin = createAdminClient();
+  // the rulings log is migration 0167: until it is applied nothing is ruled (a ruling never exists without its record)
+  const probe = await admin.from("pub_finding_decisions").select("id").limit(1);
+  if (probe.error && missingTable(probe.error)) {
+    return { error: "Ruling on findings is waiting for database migration 0167, which is not applied yet.", status: 503 };
+  }
   // only if nobody ruled it in between (the status we showed is still the status)
   const { data, error } = await admin
     .from("pub_findings")
@@ -82,8 +87,14 @@ export async function listDecisions(workUid: string): Promise<FindingDecision[]>
     .select("id, finding_id, status_from, status_to, reason, decided_by, decided_at")
     .eq("work_uid", workUid)
     .order("id", { ascending: true });
+  if (error && missingTable(error)) return []; // 0167 not applied yet: no rulings to show
   if (error) throw new Error(`pub_finding_decisions: ${error.message}`);
   return (data ?? []) as FindingDecision[];
+}
+
+/** PostgREST's "no such table" (schema cache) or Postgres's undefined_table. */
+function missingTable(e: { code?: string; message?: string }): boolean {
+  return e.code === "PGRST205" || e.code === "42P01" || /could not find the table|does not exist/i.test(e.message ?? "");
 }
 
 /** The Gate D approval that already covers this exact text, if any. */
