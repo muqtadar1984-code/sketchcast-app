@@ -128,8 +128,23 @@ export type Run = {
   status: string;
   usd: number | null;
   source_path: string | null;
-  detail?: { _failed?: Record<string, string>; _finished_later?: number[] } & Record<string, unknown>;
+  detail?: { _failed?: Record<string, string>; _finished_later?: number[]; summary?: Record<string, unknown> } & Record<string, unknown>;
+  // runs started from the app or a terminal (0165); imported history has trigger "import" and none of these
+  work_uid?: string;
+  trigger?: "import" | "app" | "cli";
+  params?: Record<string, number>;
+  requested_by?: string | null;
+  estimate_usd?: number | null;
+  progress?: { step?: string; note?: string; chapter?: number };
+  created_at?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  heartbeat_at?: string | null;
+  cancel_requested_at?: string | null;
+  error?: string | null;
 };
+
+export type RunEvent = { id: number; at: string; level: string; kind: string; message: string };
 
 export type Finding = {
   id: number;
@@ -167,6 +182,8 @@ export type Artifact = {
   /** a screen copy of a large PDF (opens in the browser); the full file stays the download (0162) */
   screen_key?: string | null;
   screen_bytes?: number | null;
+  /** the run that produced it (0165); null for imported files */
+  run_id?: number | null;
 };
 
 export type CostLine = { stage_key: string; revision_key: string | null; chapter: number | null; model: string | null; role: string | null; usd: number };
