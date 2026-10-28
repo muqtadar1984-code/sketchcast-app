@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readdir, readFile } from "node:fs/promises";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 // The SK M2 harness must not exist outside `next dev`. vitest runs with
@@ -34,22 +34,24 @@ describe("dev harness outside development", () => {
     });
   }
 
-  it("nothing outside src/app/dev/sk-board names the harness's local inputs", async () => {
+  it("nothing outside src/app/dev/sk-board names the harness's local inputs", () => {
     const root = path.resolve(__dirname, "../../../..");
     const hits: string[] = [];
-    const walk = async (dir: string) => {
-      for (const e of await readdir(dir, { withFileTypes: true })) {
+    // Synchronous walk: the async version awaited every file and timed out
+    // at 30 s under a full-suite run (seen twice on 2026-10-28).
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
         const p = path.join(dir, e.name);
         if (e.isDirectory()) {
           if (p.includes(path.join("app", "dev", "sk-board"))) continue;
-          await walk(p);
+          walk(p);
         } else if (/\.(ts|tsx)$/.test(e.name)) {
-          const src = await readFile(p, "utf8");
+          const src = readFileSync(p, "utf8");
           if (/SK_M2_|\/dev\/sk-board/.test(src)) hits.push(path.relative(root, p));
         }
       }
     };
-    await walk(root);
+    walk(root);
     expect(hits).toEqual([]);
-  }, 30_000); // a source scan over all of src/: slow under a full-suite run
+  }, 30_000);
 });
