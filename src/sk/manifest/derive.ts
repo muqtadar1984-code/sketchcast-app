@@ -20,6 +20,7 @@
 //     >= CONCEPT_MIN_CONFIDENCE; otherwise the segment's concept is unavailable
 //     with a reason.
 //  I1 item→concept is mechanical when the item came from the catalogue bank AND
+//     (I1b, translations) its source item belongs to the article version the kit's article was translated from, AND
 //     the bank row's article_id equals the kit's article_id (objective_ref is
 //     only meaningful against the article version it was written for).
 //  I2 everything else goes to ONE Haiku pass; accepted only with valid ids and
@@ -64,6 +65,8 @@ export type ItemSrc = {
   answer: string;
   bank_item_id?: string;
   bank_article_id?: string;
+  /** For a translated bank item: the article_id of the item it was translated FROM (null = source not found). */
+  bank_source_article_id?: string | null;
   objective_ref?: string;
   difficulty?: number;
   hint?: string;
@@ -74,6 +77,8 @@ export type KitInput = {
   book_id: string | null;
   chapter_ref: string | null;
   article_id: string | null;
+  /** topic_articles.source_article_id of the kit's article (the English version a translation was made from). */
+  article_source_id?: string | null;
   format_version: number | null;
   language: string | null;
   scripts: ScriptFile[];
@@ -110,7 +115,114 @@ export type ManifestSegment = {
   assets: string[];
   video_path: string | null;
   concept: ConceptLink;
+  /** Contract with the M2 Board controller — field names are fixed. */
+  visual: SegmentVisual;
+  visual_metrics?: VisualMetrics;
 };
+
+// ── V1–V3: semantic visual suitability ─────────────────────────────────────
+export type VisualStatus = "distinct" | "reused_relevant" | "misleading" | "unknown";
+export type VisualShow = "frame" | "fallback_frame" | "caption_only";
+export type SegmentVisual = {
+  status: VisualStatus;
+  show: VisualShow;
+  /** `k` (0-based kit-wide segment index) of the segment whose slide frame to show instead. */
+  fallback_k?: number;
+  reason: string;
+  judged_by: { model: string | null; prompt_version: string | null };
+};
+/** Mechanical image difference of this segment's slide frame (fraction of masked pixels changed). */
+export type VisualMetrics = { diff_prev: number | null; diff_min_earlier: number | null; nearest_earlier: string | null; model_confidence?: number };
+/** m1-visual-v1 answered depicts yes/no; m1-visual-v2 answers verdict matches/related/unrelated. */
+export type ModelVisual = { depicts?: "yes" | "no"; verdict?: "matches" | "related" | "unrelated"; confidence: number; reason?: string };
+
+/** "yes" = the drawing may be shown for this segment; "no" = it would mislead; null = unusable reply. */
+export function relevanceOf(j: ModelVisual | undefined): "yes" | "no" | null {
+  if (!j) return null;
+  if (j.verdict === "matches" || j.verdict === "related") return "yes";
+  if (j.verdict === "unrelated") return "no";
+  if (j.depicts === "yes" || j.depicts === "no") return j.depicts;
+  return null;
+}
+
+/** Calibrated on the M1 kits: reused boards measured 0.000–0.026, new boards ≥ 0.04 (report §3b). */
+export const VISUAL_DISTINCT_MIN = 0.03;
+export const VISUAL_MIN_CONFIDENCE = 0.7;
+
+export function isDistinct(m: VisualMetrics | undefined): boolean | null {
+  if (!m) return null;
+  if (m.diff_prev === null && m.diff_min_earlier === null) return true; // first segment of the kit
+  const vals = [m.diff_prev, m.diff_min_earlier].filter((x): x is number => typeof x === "number");
+  return vals.every((v) => v >= VISUAL_DISTINCT_MIN);
+}
+
+/** V1+V2: one segment, before fallbacks. A misleading frame is NEVER `show: "frame"`. */
+export function decideVisual(
+  metrics: VisualMetrics | undefined,
+  judgement: ModelVisual | undefined,
+  judgedBy: SegmentVisual["judged_by"],
+): SegmentVisual {
+  if (!metrics) return { status: "unknown", show: "caption_only", reason: "no slide frame measured", judged_by: judgedBy };
+  const rel = relevanceOf(judgement);
+  if (!judgement || rel === null)
+    return { status: "unknown", show: "caption_only", reason: "no model judgement", judged_by: judgedBy };
+  const conf = Number.isFinite(judgement.confidence) ? judgement.confidence : 0;
+  if (conf < VISUAL_MIN_CONFIDENCE)
+    return { status: "unknown", show: "caption_only", reason: `model confidence ${conf} < ${VISUAL_MIN_CONFIDENCE}: ${judgement.reason || ""}`.trim(), judged_by: judgedBy };
+  if (rel === "no")
+    return { status: "misleading", show: "caption_only", reason: judgement.reason || "drawing does not depict this segment", judged_by: judgedBy };
+  const distinct = isDistinct(metrics);
+  return {
+    status: distinct ? "distinct" : "reused_relevant",
+    show: "frame",
+    reason: `${distinct ? "new board" : `board reused (diff ${metrics.diff_prev ?? metrics.diff_min_earlier})`}; ${judgement.reason || "depicts the segment"}`,
+    judged_by: judgedBy,
+  };
+}
+
+/** Measured image difference between two segments' slide frames (keys), or null when not measured. */
+export type FrameDiff = (aKey: string, bKey: string) => number | null;
+
+/** V3: a misleading segment borrows a VERIFIED frame — another segment of the same kit whose own
+ * frame was judged relevant (show "frame"), whose primary concept is this segment's primary
+ * concept (both available), and whose picture is measurably DIFFERENT from the misleading frame
+ * (diff >= VISUAL_DISTINCT_MIN; otherwise it is the same picture under another heading).
+ * Nearest earlier first, then nearest later. Otherwise caption only. */
+export function resolveFallbacks(segments: ManifestSegment[], diff?: FrameDiff): void {
+  for (const s of segments) {
+    if (s.visual.status !== "misleading") continue;
+    const cid = s.concept.availability === "available" ? s.concept.concept_id : null;
+    if (!cid) {
+      s.visual = { ...s.visual, show: "caption_only", reason: `${s.visual.reason}; no mapped concept, so no verified fallback` };
+      continue;
+    }
+    const ok = (o: ManifestSegment) =>
+      o.key !== s.key && o.visual.show === "frame" && (o.visual.status === "distinct" || o.visual.status === "reused_relevant") &&
+      o.concept.availability === "available" && o.concept.concept_id === cid &&
+      (() => {
+        const d = diff ? diff(s.key, o.key) : null;
+        return d !== null && d >= VISUAL_DISTINCT_MIN; // unmeasured or same picture → not verified
+      })();
+    const earlier = segments.filter((o) => o.k < s.k && ok(o)).sort((a, b) => b.k - a.k);
+    const later = segments.filter((o) => o.k > s.k && ok(o)).sort((a, b) => a.k - b.k);
+    const pick = earlier[0] || later[0];
+    s.visual = pick
+      ? { ...s.visual, show: "fallback_frame", fallback_k: pick.k, reason: `${s.visual.reason}; using ${pick.key} (same concept ${cid}, frame judged relevant)` }
+      : { ...s.visual, show: "caption_only", reason: `${s.visual.reason}; no different frame verified for ${cid}` };
+  }
+  assertNoMisleadingFrame(segments);
+}
+
+export function assertNoMisleadingFrame(segments: ManifestSegment[]): void {
+  for (const s of segments) {
+    if ((s.visual.status === "misleading" || s.visual.status === "unknown") && s.visual.show === "frame")
+      throw new Error(`visual invariant broken: ${s.key} is ${s.visual.status} but show=frame`);
+    if (s.visual.show === "fallback_frame") {
+      const t = segments.find((o) => o.k === s.visual.fallback_k);
+      if (!t || t.visual.show !== "frame") throw new Error(`visual invariant broken: ${s.key} falls back to an unverified frame`);
+    }
+  }
+}
 export type ManifestItem = {
   q_id: string;
   source: "worksheet" | "quiz";
@@ -208,6 +320,7 @@ export function buildSegments(scripts: ScriptFile[], artifacts: ArtifactRow[], g
         assets: Array.from(new Set(assets)),
         video_path: video,
         concept: { concept_id: null, secondary: [], method: "none", confidence: 0, availability: "unavailable", reason: "not yet mapped" },
+        visual: { status: "unknown", show: "caption_only", reason: "not yet judged", judged_by: { model: null, prompt_version: null } },
       });
       t += d;
     }
@@ -243,13 +356,23 @@ export function headingMatches(heading: string, concepts: ConceptSrc[]): Concept
   });
 }
 
-export function mechanicalConcept(seg: ManifestSegment, concepts: ConceptSrc[]): ConceptLink | null {
+/** The heading rule's tokenizer, stop-words and stemmer are English-only (ASCII words).
+ * Any other language — Arabic, Malay, Jawi, Chinese… — skips the heading rule and goes
+ * to the model pass. Unknown language (legacy kits store none) counts as English only when
+ * the heading text itself is plain ASCII. */
+export function headingRuleApplies(language: string | null | undefined, heading: string): boolean {
+  const lang = (language || "").trim().toLowerCase();
+  if (lang) return lang === "en" || lang.startsWith("en-");
+  return /^[\x00-\x7f]*$/.test(heading);
+}
+
+export function mechanicalConcept(seg: ManifestSegment, concepts: ConceptSrc[], language: string | null = "en"): ConceptLink | null {
   if (seg.concept_slug) {
     const slug = seg.concept_slug.toLowerCase();
     const c = concepts.find((x) => x.concept_id.toLowerCase() === slug || x.name.toLowerCase() === slug);
     if (c) return { concept_id: c.concept_id, secondary: [], method: "scene", confidence: 1, availability: "available" };
   }
-  if (!seg.heading) return null;
+  if (!seg.heading || !headingRuleApplies(language, seg.heading)) return null;
   const m = headingMatches(seg.heading, concepts);
   if (m.length === 1) return { concept_id: m[0].concept_id, secondary: [], method: "heading", confidence: 0.95, availability: "available" };
   return null;
@@ -279,9 +402,17 @@ export function acceptConcept(a: ModelAssignment | undefined, conceptIds: Set<st
 // ── I1 / I2: items ──────────────────────────────────────────────────────────
 export const promptHash = (s: string) => createHash("sha256").update(s.trim()).digest("hex").slice(0, 16);
 
-export function mechanicalItem(item: ItemSrc, kitArticleId: string | null, conceptIds: Set<string>): ManifestItem | null {
+export function mechanicalItem(
+  item: ItemSrc,
+  kitArticleId: string | null,
+  conceptIds: Set<string>,
+  kitArticleSourceId: string | null = null,
+): ManifestItem | null {
   if (!item.bank_item_id || !item.objective_ref || !kitArticleId) return null;
   if (item.bank_article_id !== kitArticleId) return null; // I1: older article version → objective ids differ
+  // I1b: a translated item keeps the objective_ref of the item it was translated from. It is only valid
+  // when that source item belongs to the article version this translation was made from.
+  if (item.bank_source_article_id !== undefined && (!kitArticleSourceId || item.bank_source_article_id !== kitArticleSourceId)) return null;
   if (!conceptIds.has(item.objective_ref)) return null;
   return {
     q_id: item.q_id,
@@ -366,7 +497,8 @@ export function movesOf(c: KitManifest["completeness"], segments: ManifestSegmen
   return {
     intro: segments.length ? segOk : "unavailable",
     segment: segOk,
-    slide: segOk,
+    // a slide move is only "available" when every lesson segment may show its own frame (V1–V3)
+    slide: segOk === "available" && segments.some((s) => s.slide_k !== null && s.visual.show !== "frame") ? "degraded" : segOk,
     practise: items.length ? "available" : "unavailable",
     walkthrough: items.length ? (mappedItems === items.length ? "available" : "degraded") : "unavailable",
     explain: "available", // retrieval over chapter text / article always works (§9.1)
@@ -380,10 +512,20 @@ export type ModelPasses = {
   items?: ModelItem[];
   model: string | null;
   usage?: { input_tokens: number; output_tokens: number; usd: number };
+  concept_prompt_version?: string;
+  /** Visual pass: per segment key, the measured frame metrics and the model's judgement. */
+  visual?: {
+    metrics: Record<string, VisualMetrics>;
+    judgements: Record<string, ModelVisual>;
+    model: string | null;
+    prompt_version: string;
+    /** pair_diff[a][b] = image difference between the slide frames of segments a and b (either order). */
+    pair_diff?: Record<string, Record<string, number>>;
+  };
 };
 
-export function segmentsNeedingModel(segments: ManifestSegment[], concepts: ConceptSrc[]): ManifestSegment[] {
-  return segments.filter((s) => s.slide_k !== null && !mechanicalConcept(s, concepts));
+export function segmentsNeedingModel(segments: ManifestSegment[], concepts: ConceptSrc[], language: string | null = "en"): ManifestSegment[] {
+  return segments.filter((s) => s.slide_k !== null && !mechanicalConcept(s, concepts, language));
 }
 
 export function assemble(input: KitInput, passes: ModelPasses, at: string): KitManifest {
@@ -400,14 +542,30 @@ export function assemble(input: KitInput, passes: ModelPasses, at: string): KitM
       s.concept = { concept_id: null, secondary: [], method: "none", confidence: 0, availability: "unavailable", reason: "no concept source for this kit" };
       continue;
     }
-    s.concept = mechanicalConcept(s, concepts) || acceptConcept(byKey.get(s.key), ids);
+    s.concept = mechanicalConcept(s, concepts, input.language) || acceptConcept(byKey.get(s.key), ids);
+  }
+  if (passes.visual) {
+    const v = passes.visual;
+    for (const s of segments) {
+      const metrics = v.metrics[s.key];
+      const j = v.judgements[s.key];
+      if (s.slide_k === null) {
+        s.visual = { status: "unknown", show: "caption_only", reason: "video-only outro (not judged)", judged_by: { model: null, prompt_version: null } };
+      } else {
+        s.visual = decideVisual(metrics, j, { model: j ? v.model : null, prompt_version: j ? v.prompt_version : null });
+      }
+      if (metrics) s.visual_metrics = { ...metrics, model_confidence: j ? j.confidence : undefined };
+    }
+    const pd = v.pair_diff || {};
+    const fd: FrameDiff = (a, b) => (pd[a] && typeof pd[a][b] === "number" ? pd[a][b] : pd[b] && typeof pd[b][a] === "number" ? pd[b][a] : null);
+    resolveFallbacks(segments, fd);
   }
   const segKeys = new Set(segments.map((s) => s.key));
   const modelItems = new Map((passes.items || []).map((m) => [m.q, m] as const));
   const items: ManifestItem[] = input.items.map((it) => {
     if (!concepts.length)
       return { q_id: it.q_id, source: it.source, generation_id: it.generation_id, type: it.type, prompt_hash: promptHash(it.prompt), concept_ids: [], segment_ids: [], method: "none", confidence: 0, availability: "unavailable", reason: "no concept source for this kit" };
-    const mech = mechanicalItem(it, input.article_id, ids);
+    const mech = mechanicalItem(it, input.article_id, ids, input.article_source_id ?? null);
     if (mech) {
       mech.segment_ids = segmentsForConcept(mech.concept_ids[0], segments);
       return mech;
@@ -426,8 +584,9 @@ export function assemble(input: KitInput, passes: ModelPasses, at: string): KitM
   const artifacts_hash = artifactsHash(pinnedRows);
   const completeness = completenessOf(input, items);
   const prompt_versions: string[] = [];
-  if (passes.concepts) prompt_versions.push(CONCEPT_PROMPT_VERSION);
+  if (passes.concepts) prompt_versions.push(passes.concept_prompt_version || CONCEPT_PROMPT_VERSION);
   if (passes.items) prompt_versions.push(ITEM_PROMPT_VERSION);
+  if (passes.visual) prompt_versions.push(passes.visual.prompt_version);
   const m: KitManifest = {
     schema: MANIFEST_SCHEMA,
     manifest_id: createHash("sha256").update(`${input.generation_id}|${artifacts_hash}|${prompt_versions.join(",")}`).digest("hex").slice(0, 24),

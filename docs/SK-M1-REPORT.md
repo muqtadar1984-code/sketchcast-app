@@ -1,120 +1,550 @@
-# SK spike M1: Kit Manifest validation (2026-10-28)
+# SK spike M1: Kit Manifest validation (rev 2, 2026-10-28)
 
 Plan: `SketchCast SK Assistant - Final Plan 2026-10-28.md` §5.1, §5.2, §9.1, §9.6.
-Code: `src/sk/manifest/derive.ts` (pure logic), `src/sk/manifest/prompts.ts` (versioned Haiku prompts),
-`src/sk/manifest/__tests__/derive.test.ts` (9 tests), `tools/sk/manifest/derive.ts` (CLI).
-Production was only read: SELECTs and Storage GETs. Nothing was written, no migration ran and no job was queued.
-Kit data, frames and manifests stay in the session scratchpad and are not committed.
+Code:
+- `src/sk/manifest/derive.ts` (pure logic)
+- `src/sk/manifest/prompts.ts` (versioned prompts)
+- `src/sk/manifest/__tests__/derive.test.ts` (16 tests)
+- `tools/sk/manifest/derive.ts` (CLI)
+
+Production was only read: SELECTs and Storage GETs. Nothing was written, no migration ran and no job was queued. Kit data, frames and manifests stay in the session scratchpad and are not committed.
+
+Rev 2 adds the follow-ups the founder asked for:
+- semantic visual suitability per segment;
+- concept prompt v2 for question hooks;
+- an Arabic kit and a Malay kit;
+- a deck-alignment check;
+- a translation-lineage rule for `objective_ref`.
 
 ## 1. Verdict
 
-| §9.6 validation | Acceptance | Measured | Pass? |
+| §9.6 validation | Acceptance | Measured (7 kits: 5 en, 1 ar, 1 ms) | Pass? |
 |---|---|---|---|
-| Segment timing and completed-slide frames | 100 % | **87 / 87** end frames show the settled board (83 lesson segments + 4 outros) | yes |
-| Concept ↔ segment | ≥ 95 % | **79 / 82 = 96.3 %** of mapped rows are right; 79 / 83 = 95.2 % if the 1 unavailable row counts against it | yes, but only just |
-| Item ↔ concept | ≥ 98 %, the rest `unavailable` | **51 / 51 = 100 %** of mapped items are right. 13 / 64 are `unavailable`: 5 have no matching concept, and 8 could have been mapped but fell below the confidence bar | yes on precision; coverage is **80 %** |
-| Uncertain → `unavailable` with reason | every row | 1 segment and 13 items, each with a reason | yes |
-| Pinning and invalidation | pin ids, paths and a rows hash | `pinned.{script_ids, video_manifest_ids, format_version, artifact_paths, artifacts_hash}`. The unit tests show that a re-run row, a dropped row or a new format version makes `isStale()` true | yes, as logic only (no rebuild job) |
+| Segment timing, slide frame is the finished board | 100 % | **117 / 117** end frames are settled (111 lesson segments + 6 outros); static for ≥ 0.5 s before `end_s` | yes |
+| **Showing a frame is safe** (new, §3b) | wrong `frame` = 0 | **5 wrong `frame` verdicts out of 80 frames shown** (all Biology s013–s017: a mislabelled raster) → frame precision **75/80 = 93.8 %** | **no** |
+| Concept ↔ segment | ≥ 95 % | **106 / 107 = 99.1 %** of mapped rows right (1 uncertain, 0 wrong); 4 rows unavailable → 106 / 111 = 95.5 % of all rows | yes |
+| Item ↔ concept | ≥ 98 %; uncertain → unavailable | **79 / 80 = 98.75 %** of mapped items right (1 uncertain, 0 wrong). **Coverage 80 / 108 = 74 %**: 28 unavailable, 9 with no matching concept and 19 lost | yes on accuracy; coverage is low |
+| Uncertain → `unavailable` with reason | every row | 4 segments, 28 items and 8 visual `unknown`, each with a reason | yes |
+| Pinning and invalidation | pin ids, paths and a rows hash | unchanged from rev 1; the pin now also covers the deck rows; tested | yes (logic only) |
 
-**Can S1 be estimated? Yes.** On five real kits, manifests can be built from what is already in production, with no worker change and for less than $0.003 per kit in Haiku calls. Coverage is the weak point, not accuracy. About 1 in 5 worksheet items, and 1 in 83 segments, comes back `unavailable`. SK has to plan around that (§9.1 fallbacks) rather than treat it as an edge case.
+**Can S1 be estimated? Yes, with one hard condition.**
+- **What works.** Concepts, items, timing and degradation can be built from production data at about **$0.004 per kit** in Haiku calls, and English, Arabic and Malay all work.
+- **The condition.** `slide(k)` frames cannot yet be trusted to be safe to show. A model pass, even with a label-check rule and even with Sonnet 5.5, still shows a factually wrong drawing in 5 segments of one kit.
+- **What S1 must budget for.** Treat "is this picture correct" as a worker/asset-gate responsibility (§8, item 1), not something SK can fix at runtime. Until that gate exists, SK can only show a slide as an illustration with the caption beside it, never "this is what a plant cell looks like".
 
-## 2. The five pilot kits
+## 2. The kits
 
-| generation | subject | parts | format_version | segments (+outro) | slides complete | concept ↔ segment | item ↔ concept (mapped / total) | concept source | items source |
-|---|---|---|---|---|---|---|---|---|---|
-| `eef426bd-523b-4fed-827c-95421263d89a` | Biology: Plant and Animal Cells (catalogue) | 1 | 3 | 18 (+1) | 19/19 | 18/18 | 19/19 (19/20) | article objectives o1–o6 | kit worksheet (10) + bank quiz (10) |
-| `b8f6d34c-01f5-4746-b6ba-f8553b8c39eb` | Chemistry: States of Matter (catalogue) | 1 | 3 | 17 (+1) | 18/18 | 16/17 | 19/19 (19/20) | article objectives o1–o6 | kit worksheet (10) + bank quiz (10) |
-| `2063bcc4-7d4c-4cad-8fc1-934880d1d3f3` | English: Headway Unit 1 (book) | **3** | **null (legacy)** | 27 | 27/27 | 26/26 (+1 unavailable) | 3/3 (3/10) | chapter_grounding (21) | worksheet (10) |
-| `dfafb2f9-da9d-4e47-8ba7-c0388b8fcd89` | Mathematics: Mean (book) | 1 | **2 (legacy)** | 10 (+1) | 11/11 | 8/10 (1 wrong, 1 uncertain) | 5/5 (5/6) | chapter_grounding (8) | worksheet (6) |
-| `9fa9704c-d068-4f6e-8616-18d9cbafc8f9` | Science: Air, water and weather (book) | 1 | 3 | 11 (+1) | 12/12 | 11/11 | 5/5 (5/8) | chapter_grounding (13) | worksheet (8) |
+| generation | subject | lang | parts | format_version | segments (+outro) | slides complete | concept right / mapped (unavail) | items right / mapped (total) | frames shown (wrong) | misleading flagged (right) | deck |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `eef426bd-523b-4fed-827c-95421263d89a` | Biology: Plant & Animal Cells (catalogue) | en | 1 | 3 | 18 (+1) | 19/19 | 18/18 (0) | 19/19 (20) | 14 (**5**) | 4 (4) | 23 slides ≠ 18 segs |
+| `b8f6d34c-01f5-4746-b6ba-f8553b8c39eb` | Chemistry: States of Matter (catalogue) | en | 1 | 3 | 17 (+1) | 18/18 | 17/17 (0) | 19/19 (20) | 12 (0) | 5 (0) | 30 ≠ 17 |
+| `2063bcc4-7d4c-4cad-8fc1-934880d1d3f3` | English: Headway (book) | en | **3** | **null** | 27 | 27/27 | 24/24 (3) | 3/3 (10) | 12 (0) | 11 (7 + 3 uncertain) | no deck (deck job errored) |
+| `dfafb2f9-da9d-4e47-8ba7-c0388b8fcd89` | Maths: Mean (book) | en | 1 | **2** | 10 (+1) | 11/11 | 10/10 (0) | 5/5 (6) | 10 (0) | 0 | 17 ≠ 10 |
+| `9fa9704c-d068-4f6e-8616-18d9cbafc8f9` | Science: Air, water, weather (book) | en | 1 | 3 | 11 (+1) | 12/12 | 11/11 (0) | 5/5 (8) | 9 (0) | 1 (1) | 19 ≠ 11 |
+| `8f8f4a9a-4ce7-4718-af7b-45efc596e148` | Biology: Inheritance & Variation (catalogue) | **ar** | 1 | 3 | 17 (+1) | 18/18 | 16/17 (0), 1 uncertain | 15/16 (20), 1 uncertain | 12 (0) | 4 (3) | 19 ≠ 17 |
+| `541fd796-4a47-4955-9288-276c6f942154` | Maths: Congruent Triangles (catalogue) | **ms** | 1 | 3 | 11 (+1) | 12/12 | 10/10 (1) | 13/13 (24) | 11 (0) | 0 | 19 ≠ 11 |
 
-Extra degradation case, not counted: `f5530a03-f9d6-4c4f-b1d0-b42db9e4ef87` (Sci 7 Forces and energy, part 1 of 6, 2026-10-22). Its `chapter_grounding.concepts` is **NULL**. The manifest builds with `completeness.concepts = "none"`, every segment's concept is `unavailable`, and `remediate` is `unavailable`. Slides, segments, practice and explain all still work, which is what §9.1 asks for.
+Extra degradation case, not counted: `f5530a03-f9d6-4c4f-b1d0-b42db9e4ef87` (Sci 7 Forces, part 1/6). Its `chapter_grounding.concepts` is NULL, so it gets concepts "none" and remediation unavailable. The other moves still work (§9.1).
 
-How the kits were chosen: presentation, `status='done'`, not withdrawn and not removed. The worksheet joins as the `worksheet` generation with the same `book_id`, the same `created_at` (book kits) or the same `params.kit_id` (catalogue). Catalogue items also come from the English "Online quiz" on the same article, which is bank-drawn: `params.question_set_id` → `question_sets.question_ids[i]` ↔ `q(i+1)`, confirmed by exact stem match on 20/20.
+## 3. Segment timing and slide frames (unchanged rules)
 
-## 3. Segment timing and slide frames
+- **T1–T3, unchanged from rev 1.**
+  - `start_s`/`end_s` are the cumulative sum of `clip_duration_seconds`; the mp4 is a plain concatenation, matching within 0.03 s on all 9 videos.
+  - `slide_k` is the script order.
+  - `slide_t = end_s − 0.0625 s`, the last frame. No offset is needed.
+- **Arabic and Malay.** Every board is static for ≥ 2 s before `end_s`.
+- **Caption bubble.** The narration caption is burned into the video and often half-faded in that last frame. This is cosmetic.
 
-- **T1.** `start_s`/`end_s` are the cumulative sum of `video.segments[].clip_duration_seconds`. The mp4 is a straight concatenation: its duration matched the summed clips to within 0.03 s on all 7 videos. `video.total_duration_seconds` is **not** reliable; it is 0.2–0.4 s short. The outro `s990` exists only in the video.
-- **T2.** `slide_k` is the segment's 1-based position in `script.segments` for its part, so the deck has one slide per segment. The outro gets `slide_k = null`.
-- **T3.** `slide_t = end_s − 0.0625 s`, about 1.5 frames at 24 fps, which is the last frame of the segment. **No `slide_t` offset is needed**: cuts are hard and no transition bleeds into the next segment.
-- **How it was checked.** For all 87 segments, frames were taken at `end_s−0.0625` and at 0.5, 1, 2 and 3 s earlier (ffmpeg 7.1). Pixels that changed by more than 40/255 were counted outside the caption-bubble zone (x 715–1225, y 260–490 on 1280×720).
-  - Every segment's board is static for **at least the last 0.5 s**. 73 of 87 are static for ≥ 2 s, and the shortest are the legacy Headway parts.
-  - Inside the caption zone the speech bubble is usually **fading out** in the last 0.45 s, because `key_point_choreo` schedules the fade at cue + estimated speech time.
-  - Laplacian variance of the end frames was 574–2864; the low end is the plain outro cards. Nothing was blurred mid-wipe.
-- **By eye.** I looked at all five contact sheets and at full-size pairs for the suspicious ones. Every end frame shows the segment's finished drawing. The scratchpad sheets are `m1-out/contact_<generation_id>_o60.png`.
-- **What the frame check does not catch: content fidelity.** A frame can be complete and still show the wrong picture. The board can keep showing an earlier picture under a new heading: Biology s010–s012 (headings: cell wall, chloroplasts, vacuole) still show the ER/Golgi drawing from s009, Headway p3 s005 "Active Listening" still shows the s004 grid, and Science s003 "Power of Wind" still shows the balloons. These segments pass "is the slide finished", but if SK says "here is the slide about cell walls" it would show ER/Golgi. That is a worker visual-plan defect, not a manifest one, and the manifest cannot detect it.
-- **Cosmetic.** The narration caption bubble is burned into the video, so `slide(k)` frames often carry a half-faded caption.
+## 3b. Semantic visual suitability (new)
 
-## 4. Concept ↔ segment
+Each segment gets this per-segment `visual` object. It is the contract with the M2 Board controller and its field names are fixed:
 
-- **Concept source.** Book kits use `chapter_grounding.concepts.concepts.concepts[]` (the field is nested three deep). Catalogue kits use `topic_articles.objectives[]` (`o1…`) of `params.article_id`.
-- **`scene.concept` is empty on every segment of all five kits**, so the "scene.concept" rule in §5.2 never fires. Its only mechanical signal is the heading.
-- **C1, heading rule.** A segment is mapped mechanically when all the content words of exactly one concept name appear in its heading, and that name has at least 2 content words. It matched 6 of 83 segments, all correct. Single-word names were excluded after the first run: "What is Air Made Of?" matched `Air` instead of `Composition of Air`.
-- **C2, one Haiku 5.5 pass per kit** (`m1-concept-v1`) for the rest. The model returns `{primary | null, secondary[≤2], confidence, reason}`.
-  - An assignment is accepted only if the ids exist and **confidence ≥ 0.7**. Otherwise the segment is `unavailable` with the reason.
-  - `null` is a valid answer for hook, recap and preview segments.
-- **Errors.**
-  - 2 wrong. Both are `question_hook` segments that pose a problem on one concept (Chemistry s015, drying cloth = evaporation; Maths s008, "Try it" mean problem), and the model returned `null` for them.
-  - 1 uncertain: Maths s004 got `Sum of Values` where `Arithmetic Mean` is arguably the primary concept.
-  - 1 unavailable: Headway p2 s005 (conf 0.6).
-  - Proposed fix for `m1-concept-v2`: tell the model that a `question_hook` maps to the concept it practises. Not run, so the reported numbers stay those of v1.
+```ts
+visual: { status: "distinct"|"reused_relevant"|"misleading"|"unknown"; show: "frame"|"fallback_frame"|"caption_only";
+          fallback_k?: number /* manifest k of the segment whose frame to show */; reason: string;
+          judged_by: { model, prompt_version } }
+```
 
-## 5. Item ↔ concept
+The measurements behind it are in `visual_metrics` (`diff_prev`, `diff_min_earlier`, `nearest_earlier`, `model_confidence`).
 
-- **I1, mechanical `objective_ref`.** This fired on only **3 of 20** catalogue bank items.
-  - The other 17 bank items carry an `objective_ref` written against an **older article version**: `topic_questions.article_id` ≠ the kit's `article_id`.
-  - The objective numbering changed between versions. For example, Cells `o1` meant prokaryote/eukaryote in article v2 and unit of life in v3.
-  - Joining on `objective_ref` alone would have mis-tagged 9 of 17 (checked against the reviewed mapping; 8 agree). The rule therefore trusts `objective_ref` only when `bank.article_id == kit.article_id`. Otherwise the item goes to Haiku, with the old objective text passed as a hint.
-- **Kit worksheets carry no tags at all.** None of the five questions files has `bank_item_id` or `objective_ref`.
-  - The two catalogue kit worksheets were written by the model (`coverage` path), not drawn from the bank. Their stems match no bank stem; the best Jaccard was 0.81.
-  - Worker #331 (merged 2026-10-27) keeps tags when items are bank-drawn. It does not help model-written worksheets.
-- **I2, one Haiku 5.5 pass per kit** (`m1-item-v1`). It returns concepts[≤2], segments[≤3], confidence and a reason. An item is accepted only if its ids are valid and **confidence ≥ 0.8**; segment keys that do not exist are dropped.
-- **Result.** All 51 mapped items are right. Of the 13 `unavailable`:
-  - 5 have no matching concept: four Headway reading-comprehension facts about "Erika", and "range" in Mathematics, which is not a chapter concept.
-  - 8 are lost coverage: four match-the-columns items that span several concepts, plus four items whose confidence was 0.6–0.75.
-  - Raising coverage means a per-item second pass or a lower bar, and both trade against the 98 % precision target. Not tried.
-- **Segment links.** Mathematics q2, q3 and q6 (median, mode) map correctly to concepts that **no segment of the video teaches**. Their `segment_ids` are empty, so a "show me where this was taught" move would correctly have nothing to show. Segment links were checked loosely: all plausible. For `objective_ref` items the links are every segment of that concept, which is broad.
+### V1, mechanical distinctness
 
-## 6. Pinning, invalidation, completeness
+The frames are shrunk to 320×180 and the caption-bubble and avatar corners are masked out. The measure is the fraction of pixels that changed by more than 40/255, against segment k−1 and against every earlier segment of the kit. A frame is **distinct** when both values are **≥ 0.03**. The threshold was calibrated on the known reused boards:
 
-- **Pinned.** `pinned` holds `script_ids` and `video_manifest_ids` per part, `format_version`, the sorted `artifact_paths`, and `artifacts_hash`. The hash is SHA-256 over `id|generation_id|kind|storage_path|created_at` of the presentation, worksheet and quiz rows.
-- **Invalidation.** `isStale(manifest, currentRows, currentFormatVersion)` is the check a serve path must run. The unit tests show that a re-run (new `created_at`), a removed part and a format change all invalidate. The rebuild job (`kind: "manifest"`) is **not** built.
-- **Completeness.** Kits with `format_version` null or below 3 get `script: "legacy"`. Both legacy kits (fv null, fv 2) still derive fully, because their script.json has the same shape.
-- **Moves.** `moves` follows §9.1. `walkthrough` and `remediate` are `degraded` whenever any item is `unavailable`, which was the case on all five kits.
+| board | difference |
+|---|---|
+| Biology s010–s012 | 0.023 / 0 / 0 |
+| Headway p3 s005 | 0.026 |
+| Science s003 | 0 |
+| new boards | ≥ 0.04, usually ≥ 0.09 |
+| text slides (Maths) | 0.04–0.07 |
+
+### V2, one multimodal Haiku 5.5 call per segment
+
+Each call carries the 768×432 JPEG plus heading, points, narration and the mapped concept name. It returns a verdict of `matches`, `related` or `unrelated`. The prompt went through three versions:
+
+| version | what it asked | outcome |
+|---|---|---|
+| `m1-visual-v1` | yes/no: does the drawing depict this segment | **rejected**: on Biology it flagged 10/18 frames, 7 of them a whole-cell diagram while one part was being discussed |
+| `m1-visual-v2` | separates "related" (same object or topic, not misleading) from "unrelated" | better precision |
+| `m1-visual-v3` (**used**) | v2 plus a label check: a label pointing at a drawing of something else counts as unrelated | used for all reported numbers |
+
+### V3, the rule
+
+| model verdict | distinct? | result |
+|---|---|---|
+| `matches`/`related` | yes | `distinct`, show `frame` |
+| `matches`/`related` | no | `reused_relevant`, show `frame` |
+| `unrelated` | — | `misleading`, then the fallback below |
+| confidence < 0.7 or unparsable | — | `unknown`, show `caption_only` |
+
+**Fallback for a misleading segment.** It borrows another segment's frame only when that frame:
+- was itself judged `distinct` or `reused_relevant`;
+- belongs to a segment with the same primary concept;
+- differs from the misleading frame by ≥ 0.03, so it is not the same picture under another heading.
+
+The nearest earlier segment is tried first, then the nearest later one. Otherwise the result is `caption_only`.
+
+**Guards.** `assertNoMisleadingFrame()` throws if any `misleading` or `unknown` segment has `show: "frame"`, or if a fallback points at an unverified frame. Unit tests cover every verdict × difference combination.
+
+**`moves.slide`** is `degraded` whenever any segment cannot show its own frame.
+
+### Hand review, all 111 segments
+
+| measure | result |
+|---|---|
+| frames shown (`frame` + `fallback_frame`) | 80 |
+| **wrong frame (critical)** | **5**: Biology s013, s014, s015, s016, s017 |
+| frame precision | 75/80 = **93.8 %** |
+| flagged misleading | 25 |
+| misleading right / uncertain / false positive | **15 / 3 / 7** → precision 15/25 = **60 %** (72 % counting uncertain) |
+| `unknown` → caption_only | 8 (7 of them had a fine picture, i.e. lost coverage; 1 rightly withheld) |
+| fallback frames used | 2: Arabic s015 → the s009 Punnett square; Chemistry s013 → the s011 state diagram. Both correct |
+
+**Known cases.** All five are caught and shown as `caption_only`: Biology s010, s011, s012, Headway p3 s005 and Science s003.
+
+**Root cause of the critical errors.** The `two_cells` library raster draws a **bacterium-like blob under the label "Plant cell"** (scene asset `two_cells`, layer `plant_cell_left`). Five later segments reuse that board.
+- **Haiku v2/v3:** reads the labels and says "plant cell beside animal cell".
+- **Sonnet 5.5 probe** (`--visual-model sonnet-5-5`, 6 frames, $0.035): flagged s013, s014 and s017 as mislabelled, but passed s015 and s016. It is not reliable either.
+- **Conclusion.** This class (a wrong picture for a correct label) has to be stopped where the asset is made (worker image gate / registry approval), not in the manifest. Until then the manifest cannot promise "frame = true picture".
+
+**False positives** are all the safe direction: the frame is withheld or replaced. Most are a reused diagram during a closely related subtopic (Chemistry s004, s008, s010, s012, s013).
+
+## 4. Concept ↔ segment (`m1-concept-v2`)
+
+**v2 change.** A `question_hook` that poses a task on one concept maps to that concept. It re-measured on all seven kits with the floor unchanged at 0.7. Against v1 on the five English kits:
+
+| segment | v1 → v2 | effect |
+|---|---|---|
+| Chemistry s015 | null → o6 | fixed (was wrong) |
+| Maths s008 | null → c1 | fixed (was wrong) |
+| Maths s004 | c2 → c1 | fixed (was uncertain) |
+| Headway p3 s004 | c003 → c004 | still right, better pick |
+| Headway p2 s001, p2 s007 | null-available → unavailable | confidence 0.6 < 0.7; lost coverage, not error |
+
+**Result on the five English kits:** 80/80 mapped rows right, 3 unavailable (80/83 = 96.4 %); in v1 it was 79/82.
+
+**Language-aware matcher.** The heading rule's tokenizer, stop-words and stemmer are English only.
+- It now runs only when the kit language is `en`/`en-*`, or when no language is stored and the heading is ASCII.
+- Arabic, Malay and every other language skip it and go to the model pass.
+- A test shows a Malay heading that *would* match token-for-token is not mechanically mapped.
+- The heading rule mapped 6 of 83 English segments, all right.
+
+| language | rows | right | uncertain | unavailable | §9.6 |
+|---|---|---|---|---|---|
+| en (5 kits) | 83 | 80 | 0 | 3 | 100 % of mapped |
+| ar | 17 | 16 | 1 (s006, alleles → o1; o2/o3 fit as well) | 0 | 94.1 % strict / 100 % lenient: **borderline** |
+| ms | 11 | 10 | 0 | 1 | 100 % of mapped |
+
+## 5. Item ↔ concept (`m1-item-v1`, floor 0.8)
+
+### Version-aware `objective_ref`
+
+The rev 1 rule (I1) trusts `objective_ref` only when `bank.article_id == kit.article_id`.
+
+**New in rev 2 (I1b):** a translated bank item (`source_item_id` set) is trusted only when its **source** item belongs to `topic_articles.source_article_id` of the kit's article, i.e. the English version the translation was made from. This was found on Arabic: the items carry the Arabic article id, but 4 of 10 copied `objective_ref` from source items written against the **older English v2 article** (89032457), whose o3/o4 mean different things. Without I1b, 3 of those 4 would have been mis-tagged (acquired variation → "sex inheritance"; independent assortment → "sex inheritance"; X/Y gametes → "Mendel"). With I1b they went to the model: 2 were mapped right and 2 became unavailable.
+
+**Mechanical (objective_ref) items:** 19 of 108. Malay 10/10, Arabic 6/10, English catalogue 3/20.
+
+### Results
+
+| language | items | mapped | right | uncertain | unavailable (no concept / lost) |
+|---|---|---|---|---|---|
+| en (5 kits) | 64 | 51 | 51 | 0 | 13 (5 / 8) |
+| ar | 20 | 16 | 15 | 1 (quiz q8: bank tag o2 for "23 chromosomes from the mother") | 4 (0 / 4) |
+| ms | 24 | 13 | 13 | 0 | 11 (4 / 7) |
+| **all** | **108** | **80** | **79 (98.75 %)** | 1 | **28 (9 / 19)** → coverage **74 %** |
+
+**Coverage, honestly.**
+- The lost items are mostly worksheet items that apply a concept to a calculation: Malay q1–q5 and q12–q13 sit at 0.6–0.75 confidence; there are also match-the-columns items.
+- The floors (0.7 / 0.8) were **not** lowered.
+- The one uncertain item is an `objective_ref` the bank itself assigned. Mechanical tags inherit the bank author's judgement.
+
+## 6. Deck alignment (new)
+
+The deck pptx was parsed with python-pptx in the worker venv, with the data directory treated as untrusted.
+
+| kit | deck slides | script segments | title ≈ heading (sim ≥ 0.9) | notes ≈ narration (sim ≥ 0.9) |
+|---|---|---|---|---|
+| Biology en | 23 | 18 | 1/18 | 0/18 |
+| Chemistry en | 30 | 17 | 0/17 | 0/17 |
+| English (Headway) | — | 27 | deck generation `error`, no file | — |
+| Maths en | 17 | 10 | 0/10 | 0/10 |
+| Science en | 19 | 11 | 0/11 | 0/11 |
+| Biology ar | 19 | 17 | 0/17 | 0/17 |
+| Maths ms | 19 | 11 | 0/11 | 0/11 |
+
+**There is no deck equivalence on any current kit.**
+- **What the deck is.** It is a separate `deck` generation, the teacher deck built by Deck AI Director. Its slides are "ROADMAP", "LEARNING OBJECTIVES", "WATCH OUT FOR", "WORKED EXAMPLE" and so on, and its notes are teacher notes ("Welcome the class…") or image alt text, not narration.
+- **Old 1:1 decks.** The `deck_pptx` stored inside a `presentation` generation existed only until 2026-08-31, and those kits have no `script.json` to compare against.
+- **Consequence.** §5.1/§5.2's "slide k ≡ segment k" **does not hold**. `slide_k` in the manifest means "k-th script segment / video slide", not "k-th pptx slide". SK must take slides from the video frame (or a worker-exported per-segment PNG), never from the deck.
 
 ## 7. Cost
 
-10 Haiku 5.5 calls (`global.anthropic.claude-haiku-5-5`, Bedrock, IAM user sketchcast-ops): **40,180 input + 9,220 output tokens = $0.0086**. That is about $0.0017 per kit at $0.10/M input and $0.50/M output (worker `MODEL_PRICING`). Replies are cached by input hash, so re-runs cost nothing.
+All on Bedrock, IAM user sketchcast-ops.
 
-Haiku 5.5 rejects `temperature`, with a 400 "deprecated for this model". The CLI therefore sends none and turns thinking off.
+| pass | calls | input tokens | output tokens | $ |
+|---|---|---|---|---|
+| rev 1: concept v1 + items, 5 kits | 10 | 40,180 | 9,220 | 0.0086 |
+| rev 2: concept v2 + items (ar/ms, Arabic re-run) | 10 | 50,554 | 9,562 | 0.0098 |
+| rev 2: visual v1 (Bio), v2 (7 kits), v3 (7 kits + Bio retry) | 240 | 316,398 | 17,978 | 0.0406 |
+| rev 2: Sonnet 5.5 visual probe (6 frames) | 6 | 8,507 | 1,797 | 0.0350 |
+| **total** | **266** | | | **$0.094** (cap $5) |
+
+**Steady-state cost per kit** (one of each pass, Haiku only) is about **$0.004–0.006**. The visual pass is about $0.00015 per segment.
+
+API quirks:
+- Haiku 5.5 rejects `temperature`.
+- Sonnet 5.5 rejects `thinking: disabled` and needs `between_tools`.
 
 ## 8. Worker changes
 
-**Required for S1 to meet §9.6 without hand review:** none are blocking. These would remove the spike's weakest assumptions:
+**Required before SK may say "here is the slide about X":**
 
-1. Keep the `objective_ref` **and the `article_id`/version** on every item in `*_questions.json`. #331 does this only for bank-drawn items, and kit worksheets are model-written. Either draw kit worksheets from the bank, or have the worksheet writer emit `objective_ref` against the article version the kit used.
-2. Re-tag bank items to the current article version when an article is re-versioned. 17 of 20 quiz items pointed at superseded objective ids.
+1. **Asset correctness gate.** A library raster must match its labels and layers. `two_cells.plant_cell_left` is a bacterium. Verification has to happen at publish time: registry approval, the image gate, or a human check. Neither Haiku nor Sonnet catches it reliably at manifest time.
+2. **Keep `objective_ref` together with the article id and version** on every item, including model-written worksheets. Re-tag bank items when an article is re-versioned. Translated items must take their source's article version into account.
 
-**Optional, but each one removes a model guess or a heuristic:**
+**Strongly recommended:**
 
-3. Write `scene.concept` (or a `concept_ids[]` per segment) from the visual plan. The field exists but is empty on every M1 kit.
-4. Write `section_id` and `segment_id` into the deck pptx notes, so that slide k ≡ segment k is checked rather than assumed. The deck was not inspected in M1, and catalogue decks are a separate `deck` generation.
-5. Upload `words.json` (word timings) so that SK can seek inside a segment and line the caption up.
-6. Emit `board_settled_s` per segment (end of the last board action) and keep the caption on a separate track, or export one clean PNG per slide. The `slide(k)` frame then carries no half-faded caption.
-7. Flag segments whose board does not change while the heading does (the content-fidelity cases in §3), or fix the visual plan so each heading gets its own drawing.
-8. Fix `video.total_duration_seconds` (it is 0.2–0.4 s short), or drop it.
-9. Investigate `chapter_grounding.concepts IS NULL` on the 2026-10-22 Sci 7 kits. Concepts are missing, so remediation is unavailable for that whole book.
+3. **Give each heading its own drawing**, or flag segments whose board does not change while the heading does. Biology s010–s012 and Headway p3 s005 are visual-plan failures.
+4. **Emit per-segment clean slide PNGs**, or `board_settled_s` plus the caption on its own track. This avoids burned-in captions, and the visual check would no longer need the mask heuristics.
 
-## 9. Not done in M1
+**Optional:**
 
-- No `kind: "manifest"` job, no table and no serve path. Invalidation is logic plus tests only.
-- Deck pptx files were not downloaded or compared slide by slide.
-- No non-English kit was tested. Arabic and Jawi kits use the same script.json shape, but concept matching on headings is English-only (`contentTokens` is ASCII).
-- The concept prompt fix (`m1-concept-v2`, question hooks) and a second item pass for coverage are proposed only.
+5. Write `scene.concept` (empty everywhere).
+6. Upload `words.json`.
+7. Fix `video.total_duration_seconds`.
+8. Investigate the NULL `chapter_grounding.concepts` on the 2026-10-22 Sci 7 kits.
+9. If a 1:1 handout deck is ever wanted, write `segment_id` into the slide notes. The current teacher deck is a different artifact.
 
-## Appendix: hand review, every row
+## 9. Not done
 
-The reviewer is the spike author. "right" rows use the concept name as the reason. Every wrong, uncertain or unavailable row has its own reason. Item prompts are shown as `prompt_hash`; the text is in the scratchpad kit data.
+- No manifest job, table or serve path; invalidation is logic plus tests.
+- Visual v3 was tuned on the same 7 kits it is scored on, so the numbers are in-sample.
+- No second item pass to raise coverage.
+- The Sonnet probe covered 6 frames only.
+- Arabic was reviewed by the spike author with working Arabic. It is not a native-speaker review.
+- The 8 unparsed or low-confidence visual replies were not retried.
+
+## Appendix A: rev 2 hand review, every row (7 kits)
+
+The reviewer is the spike author. Visual verdict codes:
+- **CRIT**: a frame shown while the picture misleads.
+- **FP**: flagged misleading although the frame was fine (safe).
+- **unknown (lost)**: withheld although the picture was fine.
+
+Concept "right" rows use the concept name as the reason.
+
+### Biology (catalogue, en) — `eef426bd-523b-4fed-827c-95421263d89a`
+
+Concepts: `o1` State that the cell is the basic structural and functional unit of lif; `o2` Distinguish prokaryotic cells from eukaryotic cells and classify plant; `o3` Describe the structure and function of the cell membrane, cytoplasm, n; `o4` Describe the structure and function of the cell wall, chloroplasts and; `o5` Describe the similarities and differences between the structures of pl; `o6` Identify an unlabelled cell as plant or animal from its structures, gi
+
+| segment | heading | concept (method, conf) | concept verdict | visual status / show | visual verdict | reason |
+|---|---|---|---|---|---|---|
+| p1:s001 | Life's tiny building block | null (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s002 | The cell: unit of life | o1 (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s003 | One cell or many | o1 (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s004 | Prokaryotic and eukaryotic cells | o2 (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s005 | Cell membrane: the gate | o3 (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s006 | Cytoplasm and the nucleus | o3 (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s007 | Chromosomes and DNA | o3 (model, 0.85) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s008 | Mitochondria: the powerhouses | o3 (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s009 | ER and Golgi: factory line | o3 (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s010 | Cell wall: rigid support | o4 (model, 0.9) | right | misleading / caption_only | right | picture is about another subject |
+| p1:s011 | Chloroplasts make food | o4 (model, 0.9) | right | misleading / caption_only | right | picture is about another subject |
+| p1:s012 | Vacuole and turgor pressure | o4 (model, 0.9) | right | misleading / caption_only | right | picture is about another subject |
+| p1:s013 | Shared parts and differences | o5 (model, 0.9) | right | distinct / frame | CRIT | 'Plant cell' label points at a bacterium-like blob (wrong raster in asset two_cells); learner sees a wrong plant cell |
+| p1:s014 | The lifestyle pattern | o5 (model, 0.85) | right | reused_relevant / frame | CRIT | same mislabelled two-cell drawing |
+| p1:s015 | Detective: plant or animal | o6 (model, 0.9) | right | reused_relevant / frame | CRIT | same mislabelled two-cell drawing |
+| p1:s016 | Your turn: name the cell | o6 (model, 0.9) | right | reused_relevant / frame | CRIT | same mislabelled two-cell drawing |
+| p1:s017 | Putting it together | null (+o1,o2) (model, 0.8) | right | reused_relevant / frame | CRIT | same mislabelled two-cell drawing |
+| p1:s018 | Test yourself outdoors | null (+o6) (model, 0.8) | right | misleading / caption_only | right | preview over the mislabelled drawing: caption_only is the safe call |
+
+| item | concepts → segments (method, conf) | verdict | reason |
+|---|---|---|---|
+| ws:q1 | o1 → p1:s002 (model, 0.95) | right | assesses State that the cell is the basic structural and fu |
+| ws:q2 | o2 → p1:s004 (model, 0.95) | right | assesses Distinguish prokaryotic cells from eukaryotic cell |
+| ws:q3 | o3 → p1:s005 (model, 0.93) | right | assesses Describe the structure and function of the cell me |
+| ws:q4 | o3 → p1:s008 (model, 0.93) | right | assesses Describe the structure and function of the cell me |
+| ws:q5 | o1 → p1:s003 (model, 0.9) | right | assesses State that the cell is the basic structural and fu |
+| ws:q6 | o2 → p1:s013 (model, 0.92) | right | assesses Distinguish prokaryotic cells from eukaryotic cell |
+| ws:q7 | o4 → p1:s010 (model, 0.85) | right | assesses Describe the structure and function of the cell wa |
+| ws:q8 | o3 → p1:s009 (model, 0.88) | right | assesses Describe the structure and function of the cell me |
+| ws:q9 | — → p1:s008,p1:s009 (model, 0.7) | unavailable | lost: match item spans o3 organelles; multi-concept |
+| ws:q10 | o2 → p1:s004 (model, 0.92) | right | assesses Distinguish prokaryotic cells from eukaryotic cell |
+| quiz:q1 | o2 → p1:s004 (model, 0.95) | right | assesses Distinguish prokaryotic cells from eukaryotic cell |
+| quiz:q2 | o2 → p1:s013 (model, 0.92) | right | assesses Distinguish prokaryotic cells from eukaryotic cell |
+| quiz:q3 | o3 → p1:s005 (model, 0.93) | right | assesses Describe the structure and function of the cell me |
+| quiz:q4 | o3 → p1:s008 (model, 0.95) | right | assesses Describe the structure and function of the cell me |
+| quiz:q5 | o2 → p1:s004 (model, 0.95) | right | assesses Distinguish prokaryotic cells from eukaryotic cell |
+| quiz:q6 | o3 → p1:s009 (model, 0.85) | right | assesses Describe the structure and function of the cell me |
+| quiz:q7 | o5 → p1:s010,p1:s013 (model, 0.9) | right | o5 (differences) fits; o4 (cell wall) would also be defensible |
+| quiz:q8 | o5 → p1:s010,p1:s012 (model, 0.8) | right | assertion-reason on why plant cells keep shape = o5 'explain why each difference exists' |
+| quiz:q9 | o4 → p1:s012 (model, 0.9) | right | assesses Describe the structure and function of the cell wa |
+| quiz:q10 | o5 → p1:s013,p1:s014 (objective_ref, 1) | right | assesses Describe the similarities and differences between  |
+
+### Chemistry (catalogue, en) — `b8f6d34c-01f5-4746-b6ba-f8553b8c39eb`
+
+Concepts: `o1` Define matter and state the main ideas of the particle model.; `o2` Describe solids, liquids and gases in terms of the arrangement, separa; `o3` Explain diffusion in gases and liquids as the net movement of particle; `o4` Explain why diffusion matters for cells taking in and releasing substa; `o5` Describe melting, freezing, evaporation, condensation and sublimation,; `o6` Explain why evaporation causes cooling.
+
+| segment | heading | concept (method, conf) | concept verdict | visual status / show | visual verdict | reason |
+|---|---|---|---|---|---|---|
+| p1:s001 | The mystery of the ink drop | null (+o1,o3) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s002 | What is matter? | o1 (+o2) (model, 0.9) | right | unknown / caption_only | unknown (lost) | picture was fine; withheld for low confidence / unparsed reply |
+| p1:s003 | Particles and the spaces between | o1 (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s004 | Motion versus attraction | o1 (+o2) (model, 0.85) | right | misleading / caption_only | FP | ink-in-water particle glass fits 'motion versus attraction' (same particle model) |
+| p1:s005 | Solids and liquids | o2 (model, 0.92) | right | distinct / frame | right | picture fits the segment |
+| p1:s006 | Gases, compression and density | o2 (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s007 | Diffusion down a gradient | o3 (model, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p1:s008 | Speed of diffusion | o3 (+o2) (model, 0.85) | right | misleading / caption_only | FP | diffusion drawing fits 'speed of diffusion' |
+| p1:s009 | Diffusion across cell membranes | o4 (+o3) (model, 0.93) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s010 | Why cells are small | o4 (+o3) (model, 0.9) | right | misleading / caption_only | FP | diffusion-into-cell drawing fits 'why cells are small' (diffusion distance) |
+| p1:s011 | Melting and freezing | o5 (+o2) (model, 0.93) | right | distinct / frame | right | picture fits the segment |
+| p1:s012 | Evaporation and cooling | o6 (+o5) (model, 0.93) | right | misleading / caption_only | FP | state-change diagram with Evaporation label fits |
+| p1:s013 | Condensation and sublimation | o5 (model, 0.9) | right | misleading / fallback_frame → k10 | FP | state-change diagram fits; fallback to s011's version of it is harmless |
+| p1:s014 | Evaporation versus boiling | o5 (+o6) (model, 0.88) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s015 | Test your thinking | o6 (+o5) (model, 0.8) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s016 | One model explains it all | null (+o1,o2) (model, 0.85) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s017 | Test yourself in daily life | null (+o5,o6) (model, 0.8) | right | reused_relevant / frame | right | picture fits the segment |
+
+| item | concepts → segments (method, conf) | verdict | reason |
+|---|---|---|---|
+| ws:q1 | o1 → p1:s002 (model, 0.9) | right | assesses Define matter and state the main ideas of the part |
+| ws:q2 | o1 → p1:s004 (model, 0.85) | right | assesses Define matter and state the main ideas of the part |
+| ws:q3 | o2 → p1:s005 (model, 0.9) | right | assesses Describe solids, liquids and gases in terms of the |
+| ws:q4 | o3 → p1:s007 (model, 0.95) | right | assesses Explain diffusion in gases and liquids as the net  |
+| ws:q5 | o1 → p1:s002 (model, 0.8) | right | assesses Define matter and state the main ideas of the part |
+| ws:q6 | o2 → p1:s005 (model, 0.85) | right | assesses Describe solids, liquids and gases in terms of the |
+| ws:q7 | o2 → p1:s006 (model, 0.9) | right | assesses Describe solids, liquids and gases in terms of the |
+| ws:q8 | o3 → p1:s007 (model, 0.85) | right | assesses Explain diffusion in gases and liquids as the net  |
+| ws:q9 | — → p1:s005,p1:s006 (model, 0.7) | unavailable | lost: match item = o2 (states); model conf 0.7 |
+| ws:q10 | o1 → p1:s003 (model, 0.8) | right | assesses Define matter and state the main ideas of the part |
+| quiz:q1 | o1 → p1:s004 (model, 0.9) | right | assesses Define matter and state the main ideas of the part |
+| quiz:q2 | o2 → p1:s005 (model, 0.9) | right | assesses Describe solids, liquids and gases in terms of the |
+| quiz:q3 | o5 → p1:s011 (model, 0.95) | right | assesses Describe melting, freezing, evaporation, condensat |
+| quiz:q4 | o5 → p1:s013 (model, 0.95) | right | assesses Describe melting, freezing, evaporation, condensat |
+| quiz:q5 | o2 → p1:s005 (model, 0.85) | right | assesses Describe solids, liquids and gases in terms of the |
+| quiz:q6 | o1 → p1:s004 (model, 0.9) | right | assesses Define matter and state the main ideas of the part |
+| quiz:q7 | o5 → p1:s011,p1:s013,p1:s014 (objective_ref, 1) | right | assesses Describe melting, freezing, evaporation, condensat |
+| quiz:q8 | o3 → p1:s008 (model, 0.85) | right | assesses Explain diffusion in gases and liquids as the net  |
+| quiz:q9 | o6 → p1:s012 (model, 0.95) | right | assesses Explain why evaporation causes cooling. |
+| quiz:q10 | o1 → p1:s002,p1:s003,p1:s004 (objective_ref, 1) | right | assesses Define matter and state the main ideas of the part |
+
+### English (book, en, 3 parts) — `2063bcc4-7d4c-4cad-8fc1-934880d1d3f3`
+
+Concepts: `p1-c001` Information Questions with Wh- Questions; `p1-c002` Describing People (Appearance and Personality); `p1-c003` Describing Places (Properties and Location); `p1-c004` Describing Things (Specifications and Features); `p1-c005` Adjective-Noun Collocations; `p1-c006` Compound Adjectives; `p1-c007` -ed vs -ing Adjectives (Participial Adjectives); `p2-c001` Personality Adjectives; `p2-c002` Adjective Opposites and Prefixes; `p2-c003` Character Analysis; `p2-c004` Literary Theme of Escapism; `p2-c005` Documentary Film Narrative; `p3-c001` Adjectives of Personality and Character; `p3-c002` Idioms for Relationships; `p3-c003` Syntactic Inversion for Emphasis; `p3-c004` Cleft Sentences and Emphatic Structures; `p3-c005` Conversational Backchanneling; `p3-c006` Intonation and Vocal Range in Social Interaction; `p3-c007` Distinguishing Fact vs. Personal Opinion; `p3-c008` Adjective Modifiers (Grading Adjectives); `p3-c009` Descriptive Portrait Writing
+
+| segment | heading | concept (method, conf) | concept verdict | visual status / show | visual verdict | reason |
+|---|---|---|---|---|---|---|
+| p1:s001 | What's your story? | null (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s002 | Unlocking Information | p1-c001 (model, 0.9) | right | unknown / caption_only | unknown (lost) | picture was fine; withheld for low confidence / unparsed reply |
+| p1:s003 | People: Looks vs. Character | p1-c002 (+p1-c001) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s004 | The Adjective Train | p1-c006 (+p2-c001) (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s005 | Describing Places | p1-c003 (model, 0.8) | right | distinct / frame | right | picture fits the segment |
+| p1:s006 | Specs of a Device | p1-c004 (+p1-c001) (model, 0.85) | right | unknown / caption_only | unknown (lost) | picture was fine; withheld for low confidence / unparsed reply |
+| p1:s007 | The Emotion Engine | p1-c007 (model, 0.95) | right | misleading / caption_only | right | picture is about another subject |
+| p1:s008 | Your Story Toolkit | null (+p1-c001,p1-c002) (model, 0.75) | right | misleading / caption_only | uncertain | recap over the -ed/-ing laptop board |
+| p1:s009 | Coming Up Next... | null (model, 0.9) | right | misleading / caption_only | right | picture is about another subject |
+| p2:s001 | What's your story? Part 2 | null (model, 0.6) | unavailable | misleading / caption_only | right | lost: hook on describing the Angulo brothers (p2-c003); conf 0.6 (v1 had null/available) · picture is about another subject |
+| p2:s002 | Who you are inside | p2-c001 (model, 0.8) | right | misleading / caption_only | uncertain | seesaw 'Inner Personality Mirror' under 'Who you are inside' |
+| p2:s003 | Opposites and Prefixes | p2-c002 (+p2-c001) (model, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p2:s004 | The Power of Escapism | p2-c004 (+p2-c005) (model, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p2:s005 | Then and Now | null (model, 0.65) | unavailable | distinct / frame | right | lost: 'write three adjectives' hook practises p2-c001; conf 0.6 · picture fits the segment |
+| p2:s006 | Documenting Reality | p2-c005 (+p2-c004) (model, 0.9) | right | unknown / caption_only | unknown (lost) | picture was fine; withheld for low confidence / unparsed reply |
+| p2:s007 | Next time: Writing Biographies | null (model, 0.6) | unavailable | misleading / caption_only | right | preview of biography writing: no part-2 concept fits; unavailable is acceptable · picture is about another subject |
+| p3:s001 | Describing the Inner Person | null (+p3-c001) (model, 0.7) | right | distinct / frame | right | picture fits the segment |
+| p3:s002 | The Birth Order Cast | p3-c001 (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p3:s003 | Idioms for Relationships | p3-c002 (heading, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p3:s004 | Creating Emphasis | p3-c004 (+p3-c003) (model, 0.9) | right | misleading / caption_only | FP | SVO / cleft-sentence grid IS the emphasis lesson |
+| p3:s005 | Active Listening | p3-c005 (model, 0.95) | right | misleading / caption_only | right | picture is about another subject |
+| p3:s006 | The Voice Rollercoaster | p3-c006 (+p3-c005) (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p3:s007 | Fact vs. Personal Opinion | p3-c007 (+p3-c009) (model, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p3:s008 | Adjective Modifiers | p3-c008 (model, 0.95) | right | unknown / caption_only | unknown (lost) | picture was fine; withheld for low confidence / unparsed reply |
+| p3:s009 | Your Turn to Write | p3-c009 (+p3-c001,p3-c004) (model, 0.7) | right | misleading / caption_only | right | picture is about another subject |
+| p3:s010 | The Storyteller's Toolkit | null (+p3-c001,p3-c004) (model, 0.85) | right | misleading / caption_only | uncertain | recap over the gradable-adjective thermometer |
+| p3:s011 | Observe the World | null (model, 0.85) | right | misleading / caption_only | right | picture is about another subject |
+
+| item | concepts → segments (method, conf) | verdict | reason |
+|---|---|---|---|
+| ws:q1 | p1-c004 → p1:s006 (model, 0.85) | right | assesses Describing Things (Specifications and Features) |
+| ws:q2 | p1-c004 → p1:s006 (model, 0.8) | right | assesses Describing Things (Specifications and Features) |
+| ws:q3 | — → p1:s005 (model, 0.75) | unavailable | lost: kitchen-diner = describing places (p1-c003) |
+| ws:q4 | — → p1:s003 (model, 0.6) | unavailable | lost: greenish-brown = describing people / compound adjective |
+| ws:q5 | — → — (model, 0.2) | unavailable | correct: reading-comprehension fact about Erika; no concept |
+| ws:q6 | — → — (model, 0.2) | unavailable | correct: reading-comprehension fact; no concept |
+| ws:q7 | p1-c004 → p1:s006 (model, 0.8) | right | assesses Describing Things (Specifications and Features) |
+| ws:q8 | — → p1:s003 (model, 0.7) | unavailable | lost: match = wh-questions about people (p1-c002) |
+| ws:q9 | — → — (model, 0.25) | unavailable | correct: reading-comprehension fact; no concept |
+| ws:q10 | — → — (model, 0.3) | unavailable | correct: reading-comprehension fact; no concept |
+
+### Mathematics (book, en) — `dfafb2f9-da9d-4e47-8ba7-c0388b8fcd89`
+
+Concepts: `c1` Arithmetic Mean; `c2` Sum of Values; `c3` Deviation from Mean; `c4` Assumed Mean Method; `c5` Sum of Deviations; `c6` Median; `c7` Median of Even and Odd Datasets; `c8` Mode
+
+| segment | heading | concept (method, conf) | concept verdict | visual status / show | visual verdict | reason |
+|---|---|---|---|---|---|---|
+| p1:s001 | Mean 8 Class 7.1: Content | null (+c1) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s002 | Mean 8 Class 7.1: Content | c1 (+c2,c3) (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s003 | Example 1: Find the arithmetic mean of t | c1 (heading, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p1:s004 | Example 2: The mean of six numbers is 15 | c1 (+c2) (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s005 | Example 3: The mean weight of 10 student | c1 (+c2) (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s006 | Example 4: The mean of four observations | c1 (+c2) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s007 | Common mistakes | c1 (+c2) (model, 0.8) | right | distinct / frame | right | picture fits the segment |
+| p1:s008 | Try it | c1 (+c2) (model, 0.85) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s009 | Try it: The mean of five scores is 14. I | c1 (+c2) (model, 0.9) | right | distinct / frame | right | picture fits the segment |
+| p1:s010 | Mean 8 Class 7.1: Content | null (model, 0.95) | right | reused_relevant / frame | right | picture fits the segment |
+
+| item | concepts → segments (method, conf) | verdict | reason |
+|---|---|---|---|
+| ws:q1 | c1 → p1:s002,p1:s003 (model, 0.95) | right | assesses Arithmetic Mean |
+| ws:q2 | c6 → — (model, 0.9) | right | assesses Median |
+| ws:q3 | c8 → — (model, 0.95) | right | assesses Mode |
+| ws:q4 | — → — (model, 0.1) | unavailable | correct: 'range' is not in the chapter's concept list |
+| ws:q5 | c1 → p1:s002,p1:s003 (model, 0.9) | right | assesses Arithmetic Mean |
+| ws:q6 | c7 → — (model, 0.8) | right | assesses Median of Even and Odd Datasets |
+
+### Science (book, en) — `9fa9704c-d068-4f6e-8616-18d9cbafc8f9`
+
+Concepts: `c001` Air; `c002` Wind; `c003` Composition of Air; `c004` Air Pollution; `c005` States of Water; `c006` Evaporation; `c007` Condensation; `c008` The Water Cycle; `c009` Groundwater; `c010` Weather; `c011` Storms and Cyclones; `c012` Seasons; `c013` Climate
+
+| segment | heading | concept (method, conf) | concept verdict | visual status / show | visual verdict | reason |
+|---|---|---|---|---|---|---|
+| p1:s001 | Invisible Air Around Us | null (+c001) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s002 | Air Takes Shape and Rises | c001 (model, 0.8) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s003 | The Power of Wind | c002 (+c001) (model, 0.95) | right | misleading / caption_only | right | picture is about another subject |
+| p1:s004 | What is Air Made Of? | c003 (+c001) (model, 0.95) | right | unknown / caption_only | unknown (lost) | picture was fine; withheld for low confidence / unparsed reply |
+| p1:s005 | Breathing and Air Pollution | c004 (heading, 0.95) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s006 | The Blue Planet and States of Water | c005 (heading, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p1:s007 | The Water Cycle | c008 (heading, 0.95) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s008 | Fresh Water and Weather vs Climate | c009 (+c010,c013) (model, 0.8) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s009 | Storms, Cyclones, and Seasons | c011 (heading, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p1:s010 | How It All Connects | c012 (+c002,c008) (model, 0.75) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s011 | Observe the World Around You | null (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+
+| item | concepts → segments (method, conf) | verdict | reason |
+|---|---|---|---|
+| ws:q1 | c002 → p1:s003 (model, 0.95) | right | assesses Wind |
+| ws:q2 | c003 → p1:s005 (model, 0.85) | right | no 'breathing' concept exists; c003 Composition of Air is the nearest listed concept |
+| ws:q3 | — → p1:s008 (model, 0.6) | unavailable | lost: rain as purest water = fresh water / water cycle |
+| ws:q4 | — → p1:s002 (model, 0.7) | unavailable | lost: hot air rises = c001 Air (s002) |
+| ws:q5 | c005 → p1:s006 (model, 0.8) | right | assesses States of Water |
+| ws:q6 | c012 → p1:s010 (model, 0.95) | right | assesses Seasons |
+| ws:q7 | — → p1:s003,p1:s007 (model, 0.7) | unavailable | lost: match spans wind (c002) + condensation (c007) |
+| ws:q8 | c005 → p1:s006 (model, 0.95) | right | assesses States of Water |
+
+### Biology: Inheritance (catalogue, ar) — `8f8f4a9a-4ce7-4718-af7b-45efc596e148`
+
+Concepts: `o1` اذكر أن الكروموسومات توجد في النواة وتحتوي على الجينات، وأن الجينات تت; `o2` اشرح كيف تسهم الجينات في تحديد صفات الكائن الحي.; `o3` صِف تزاوج مندل أحادي الصفة واذكر قانونَي الانعزال والتوزيع المستقل.; `o4` اشرح وراثة الجنس عند الإنسان من خلال الكروموسومات XX وXY.; `o5` صِف التباين داخل النوع الواحد واربطه بالاختلافات الجينية بين الأفراد.
+
+| segment | heading | concept (method, conf) | concept verdict | visual status / show | visual verdict | reason |
+|---|---|---|---|---|---|---|
+| p1:s001 | أين تعيش تعليماتكم | null (+o1) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s002 | ما الوراثة؟ | null (+o2) (model, 0.8) | right | unknown / caption_only | unknown (lost) | picture was fine; withheld for low confidence / unparsed reply |
+| p1:s003 | النواة، الكروموسوم، الجين | o1 (model, 0.95) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s004 | الحمض النووي (DNA): السلّم المشفّر | o1 (+o2) (model, 0.85) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s005 | الجينات والبروتينات والصفات | o2 (+o1) (model, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p1:s006 | الأليلات وأزواج الكروموسومات | o1 (+o3) (model, 0.75) | uncertain | distinct / frame | right | alleles & chromosome pairs → o1; o2/o3 fit at least as well · picture fits the segment |
+| p1:s007 | تجربة مندل على البازلاء | o3 (model, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p1:s008 | سائد، متنحٍّ، النمط الجيني | o3 (model, 0.85) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s009 | التنبؤ باستخدام مربع بانيت | o3 (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s010 | قانونا مندل | o3 (model, 0.95) | right | misleading / caption_only | FP | monohybrid pea cross is the law-of-segregation picture |
+| p1:s011 | كيف يتحدد الجنس | o4 (+o1) (model, 0.95) | right | distinct / frame | right | picture fits the segment |
+| p1:s012 | التباين داخل النوع الواحد | o5 (+o2) (model, 0.95) | right | misleading / caption_only | right | picture is about another subject |
+| p1:s013 | مصادر التباين الجيني | o5 (+o3) (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s014 | الطفرة والتوائم والإخوة | o5 (model, 0.85) | right | unknown / caption_only | right | withheld; picture would mislead |
+| p1:s015 | لغز لتجربوه | o3 (model, 0.85) | right | misleading / fallback_frame → k8 | right | picture is about another subject |
+| p1:s016 | جمع كل شيء معًا | null (+o1,o2) (model, 0.8) | right | reused_relevant / frame | right | picture fits the segment |
+| p1:s017 | اختبروا أنفسكم | null (+o3,o5) (model, 0.75) | right | misleading / caption_only | right | picture is about another subject |
+
+| item | concepts → segments (method, conf) | verdict | reason |
+|---|---|---|---|
+| ws:q1 | o1 → p1:s003,p1:s004 (model, 0.85) | right | assesses اذكر أن الكروموسومات توجد في النواة وتحتوي على الج |
+| ws:q2 | o3 → p1:s006 (model, 0.8) | right | assesses صِف تزاوج مندل أحادي الصفة واذكر قانونَي الانعزال  |
+| ws:q3 | o3 → p1:s007,p1:s009 (model, 0.9) | right | assesses صِف تزاوج مندل أحادي الصفة واذكر قانونَي الانعزال  |
+| ws:q4 | — → p1:s011 (model, 0.7) | unavailable | lost: 23 chromosomes in a gamete = o1/o4 |
+| ws:q5 | o2 → p1:s005 (model, 0.9) | right | assesses اشرح كيف تسهم الجينات في تحديد صفات الكائن الحي. |
+| ws:q6 | o4 → p1:s011 (model, 0.9) | right | assesses اشرح وراثة الجنس عند الإنسان من خلال الكروموسومات  |
+| ws:q7 | o3 → p1:s008 (model, 0.85) | right | assesses صِف تزاوج مندل أحادي الصفة واذكر قانونَي الانعزال  |
+| ws:q8 | — → p1:s008 (model, 0.6) | unavailable | lost: match genotype/phenotype/allele = o3 |
+| ws:q9 | o1 → p1:s003,p1:s004 (model, 0.85) | right | assesses اذكر أن الكروموسومات توجد في النواة وتحتوي على الج |
+| ws:q10 | o3 → p1:s010 (model, 0.95) | right | assesses صِف تزاوج مندل أحادي الصفة واذكر قانونَي الانعزال  |
+| quiz:q1 | — → p1:s013,p1:s014 (model, 0.7) | unavailable | lost: acquired variation not inherited = o5 (bank tag o4 from an older source version, rejected by I1b) |
+| quiz:q2 | — → p1:s006 (model, 0.6) | unavailable | lost: 46 chromosomes = o1 (bank tag rejected by I1b) |
+| quiz:q3 | o1 → p1:s003,p1:s004,p1:s006 (objective_ref, 1) | right | assesses اذكر أن الكروموسومات توجد في النواة وتحتوي على الج |
+| quiz:q4 | o3 → p1:s007,p1:s008,p1:s009,p1:s010,p1:s015 (objective_ref, 1) | right | assesses صِف تزاوج مندل أحادي الصفة واذكر قانونَي الانعزال  |
+| quiz:q5 | o5 → p1:s013,p1:s014 (model, 0.8) | right | assesses صِف التباين داخل النوع الواحد واربطه بالاختلافات ا |
+| quiz:q6 | o1 → p1:s003,p1:s004,p1:s006 (objective_ref, 1) | right | assesses اذكر أن الكروموسومات توجد في النواة وتحتوي على الج |
+| quiz:q7 | o2 → p1:s005 (objective_ref, 1) | right | assesses اشرح كيف تسهم الجينات في تحديد صفات الكائن الحي. |
+| quiz:q8 | o2 → p1:s005 (objective_ref, 1) | uncertain | bank tag o2 (same lineage) for '23 chromosomes from the mother'; o1/o4 fit better |
+| quiz:q9 | o5 → p1:s012,p1:s013,p1:s014 (objective_ref, 1) | right | assesses صِف التباين داخل النوع الواحد واربطه بالاختلافات ا |
+| quiz:q10 | o4 → p1:s011 (model, 0.8) | right | assesses اشرح وراثة الجنس عند الإنسان من خلال الكروموسومات  |
+
+### Maths: Congruent triangles (catalogue, ms) — `541fd796-4a47-4955-9288-276c6f942154`
+
+Concepts: `o1` Takrifkan maksud dua segi tiga itu kongruen.; `o2` Kenal pasti dan gunakan empat syarat kekongruenan piawai: SSS, SAS, AS; `o3` Tulis bukti geometri yang formal untuk menunjukkan kekongruenan segi t
+
+| segment | heading | concept (method, conf) | concept verdict | visual status / show | visual verdict | reason |
+|---|---|---|---|---|---|---|
+| p1:s001 | Segi Tiga Kongruen: SSS, SAS, ASA dan RH | null (+o2) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s002 | Segi Tiga Kongruen: SSS, SAS, ASA dan RH | o1 (+o2) (model, 0.85) | right | distinct / frame | right | picture fits the segment |
+| p1:s003 | Contoh 1: Antara segi tiga ini, yang man | o2 (+o1) (model, 0.8) | right | distinct / frame | right | picture fits the segment |
+| p1:s004 | Contoh 2: Segi tiga A, B dan C masing-ma | o2 (+o1) (model, 0.8) | right | distinct / frame | right | picture fits the segment |
+| p1:s005 | Contoh 3: Segi tiga ABC mempunyai sudut  | o2 (+o1) (model, 0.75) | right | distinct / frame | right | picture fits the segment |
+| p1:s006 | Contoh 4: Segi tiga ABC ialah segi tiga  | null (model, 0.6) | unavailable | distinct / frame | right | lost: isosceles base-angle proof = o3/o2; conf 0.6 · picture fits the segment |
+| p1:s007 | Contoh 5: Segi tiga ABC mempunyai sudut  | o2 (+o1) (model, 0.75) | right | distinct / frame | right | picture fits the segment |
+| p1:s008 | Kesilapan lazim | o3 (+o2) (model, 0.8) | right | distinct / frame | right | picture fits the segment |
+| p1:s009 | Cuba sendiri | o2 (+o1) (model, 0.7) | right | distinct / frame | right | picture fits the segment |
+| p1:s010 | Cuba sendiri: Setiap segi tiga bersudut  | o2 (+o1) (model, 0.8) | right | distinct / frame | right | picture fits the segment |
+| p1:s011 | Segi Tiga Kongruen: SSS, SAS, ASA dan RH | null (model, 0.9) | right | reused_relevant / frame | right | picture fits the segment |
+
+| item | concepts → segments (method, conf) | verdict | reason |
+|---|---|---|---|
+| ws:q1 | — → p1:s001,p1:s002 (model, 0.6) | unavailable | lost: corresponding sides of congruent triangles = o1 |
+| ws:q2 | — → p1:s001,p1:s002 (model, 0.6) | unavailable | lost: corresponding angles of congruent triangles = o1 |
+| ws:q3 | — → p1:s001 (model, 0.75) | unavailable | lost: SSS correspondence = o2 |
+| ws:q4 | — → p1:s001 (model, 0.75) | unavailable | lost: SAS correspondence = o2 |
+| ws:q5 | — → p1:s001,p1:s005 (model, 0.75) | unavailable | lost: ASA correspondence = o2 |
+| ws:q6 | o2 → p1:s003 (model, 0.8) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| ws:q7 | o2 → p1:s003 (model, 0.8) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| ws:q8 | o2 → p1:s003 (model, 0.8) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| ws:q9 | — → p1:s009,p1:s010 (model, 0.5) | unavailable | correct: 'which triangle is right-angled' tests no listed congruence objective |
+| ws:q10 | — → p1:s009,p1:s010 (model, 0.5) | unavailable | correct: right-angle identification only |
+| ws:q11 | — → p1:s009,p1:s010 (model, 0.5) | unavailable | correct: right-angle identification only |
+| ws:q12 | — → p1:s007 (model, 0.7) | unavailable | lost: AAS-from-ASA angle sum = o2 |
+| ws:q13 | — → p1:s006 (model, 0.7) | unavailable | lost: isosceles base angle via SAS twin = o2/o3 |
+| ws:q14 | — → p1:s007 (model, 0.65) | unavailable | correct: plain angle-sum exercise; no congruence objective |
+| quiz:q1 | o1 → p1:s002 (objective_ref, 1) | right | assesses Takrifkan maksud dua segi tiga itu kongruen. |
+| quiz:q2 | o2 → p1:s003,p1:s004,p1:s005,p1:s007,p1:s009,p1:s010 (objective_ref, 1) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| quiz:q3 | o1 → p1:s002 (objective_ref, 1) | right | assesses Takrifkan maksud dua segi tiga itu kongruen. |
+| quiz:q4 | o2 → p1:s003,p1:s004,p1:s005,p1:s007,p1:s009,p1:s010 (objective_ref, 1) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| quiz:q5 | o1 → p1:s002 (objective_ref, 1) | right | assesses Takrifkan maksud dua segi tiga itu kongruen. |
+| quiz:q6 | o2 → p1:s003,p1:s004,p1:s005,p1:s007,p1:s009,p1:s010 (objective_ref, 1) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| quiz:q7 | o2 → p1:s003,p1:s004,p1:s005,p1:s007,p1:s009,p1:s010 (objective_ref, 1) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| quiz:q8 | o3 → p1:s008 (objective_ref, 1) | right | assesses Tulis bukti geometri yang formal untuk menunjukkan |
+| quiz:q9 | o2 → p1:s003,p1:s004,p1:s005,p1:s007,p1:s009,p1:s010 (objective_ref, 1) | right | assesses Kenal pasti dan gunakan empat syarat kekongruenan  |
+| quiz:q10 | o1 → p1:s002 (objective_ref, 1) | right | assesses Takrifkan maksud dua segi tiga itu kongruen. |
+
+## Appendix B: rev 1 hand review (concept v1, 5 English kits), kept for comparison
 
 ### Biology (catalogue) — `eef426bd-523b-4fed-827c-95421263d89a`
 
