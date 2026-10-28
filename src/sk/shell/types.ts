@@ -210,11 +210,17 @@ export type SkTurnRequest = {
   /** "voice" when the text came from the microphone (confirmations care, §9.2). */
   modality: "text" | "voice";
   collector: SkCollector;
+  /** Opaque, server-signed conversation memory (recent entities, pending task,
+   *  last turns, issued-at) returned by the previous turn's `done` event and
+   *  echoed back verbatim. The server verifies the signature and the 4-hour
+   *  gap; a missing or invalid blob simply starts a new conversation. Needed
+   *  because serverless instances share no memory between requests (§5.4). */
+  memory?: string;
 };
 
 /** SSE events, one JSON object per `data:` line. */
 export type SkTurnEvent =
-  | { type: "meta"; sessionId: string; turnId: string; intent: SkIntent; capabilities: string[] }
+  | { type: "meta"; sessionId: string; turnId: string; intent: SkIntent; capabilities: string[]; memory?: string }
   | { type: "text"; text: string }
   | { type: "tool"; name: string; ok: boolean; summary: string }
   | { type: "navigate"; path: string; label: string }
@@ -225,6 +231,8 @@ export type SkTurnEvent =
       label: "grounded" | "supplementary" | "declined" | "navigation";
       latencyMs: number;
       usage?: { inputTokens: number; outputTokens: number };
+      /** The memory blob to echo on the next turn (see SkTurnRequest.memory). */
+      memory?: string;
     }
   | { type: "error"; message: string };
 
