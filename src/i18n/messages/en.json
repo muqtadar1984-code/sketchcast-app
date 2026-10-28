@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "Frozen — but this frame could not be saved, so a reload would lose it.",
       "freezeFailed": "Could not capture the frame.",
       "videoExpired": "The video link expired — reopen the lesson to refresh it.",
-      "worksheetOnBoard": "Worksheet on the board"
+      "worksheetOnBoard": "Worksheet on the board",
+      "moving": "Moving…",
+      "showAnswer": "Show answer",
+      "hideAnswer": "Hide answer",
+      "questionOf": "Question {n} of {total}",
+      "marks": "{n} marks",
+      "answer": "Answer: {a}",
+      "answerTrue": "True",
+      "answerFalse": "False",
+      "prevQuestion": "Previous question",
+      "nextQuestion": "Next question"
     },
     "wrapUp": {
       "saved": "Lesson saved",

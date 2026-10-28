@@ -122,12 +122,19 @@ export async function GET(request: Request) {
         u.docs.map(async (d) => {
           const g = byId.get(d.id);
           const docPath = g?.artifacts.find((a) => a.kind === "docx")?.storage_path ?? null;
+          // The structured questions, for the board's question pages (SK).
+          // Signed exactly like the video: her own generation, same TTL. Only
+          // for a doc the board may project — a test paper never reaches it.
+          const qPath = d.projects
+            ? (g?.artifacts.find((a) => a.kind === "questions_json")?.storage_path ?? null)
+            : null;
           return {
             ...d,
             title: g?.title ?? null,
             // A download name, so a test paper does not land in Downloads under
             // its storage basename — what docDownloadName exists for.
             download: await sign(docPath, docDownloadName(g?.kind, "docx")),
+            questions: await sign(qPath),
           };
         }),
       );

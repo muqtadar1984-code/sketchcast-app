@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "Congelado — mas esta imagem não pôde ser salva, então recarregar a página a perderia.",
       "freezeFailed": "Não foi possível capturar a imagem.",
       "videoExpired": "O link do vídeo expirou — reabra a aula para atualizá-lo.",
-      "worksheetOnBoard": "Folha de exercícios na lousa"
+      "worksheetOnBoard": "Folha de exercícios na lousa",
+      "moving": "A mudar…",
+      "showAnswer": "Mostrar resposta",
+      "hideAnswer": "Ocultar resposta",
+      "questionOf": "Pergunta {n} de {total}",
+      "marks": "{n} pontos",
+      "answer": "Resposta: {a}",
+      "answerTrue": "Verdadeiro",
+      "answerFalse": "Falso",
+      "prevQuestion": "Pergunta anterior",
+      "nextQuestion": "Próxima pergunta"
     },
     "wrapUp": {
       "saved": "Aula salva",

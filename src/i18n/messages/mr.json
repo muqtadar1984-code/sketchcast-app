@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "थांबवले — पण ही चौकट जतन करता आली नाही, त्यामुळे पान पुन्हा उघडल्यास ती जाईल.",
       "freezeFailed": "चौकट टिपता आली नाही.",
       "videoExpired": "चित्रफितीचा दुवा कालबाह्य झाला — तो ताजा करण्यासाठी पाठ पुन्हा उघडा.",
-      "worksheetOnBoard": "फळ्यावर कार्यपत्रिका"
+      "worksheetOnBoard": "फळ्यावर कार्यपत्रिका",
+      "moving": "पुढे जात आहे…",
+      "showAnswer": "उत्तर दाखवा",
+      "hideAnswer": "उत्तर लपवा",
+      "questionOf": "प्रश्न {n} / {total}",
+      "marks": "{n} गुण",
+      "answer": "उत्तर: {a}",
+      "answerTrue": "बरोबर",
+      "answerFalse": "चूक",
+      "prevQuestion": "मागील प्रश्न",
+      "nextQuestion": "पुढील प्रश्न"
     },
     "wrapUp": {
       "saved": "पाठ जतन झाला",

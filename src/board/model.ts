@@ -40,7 +40,31 @@ export type PageBackground =
   | { kind: "blank" }
   | { kind: "frame"; src: string; generationId?: string; t?: number }
   | { kind: "question"; generationId: string; questionId: string; prompt: string; marks?: number }
-  | { kind: "svg"; svg: string };
+  | { kind: "svg"; svg: string }
+  | { kind: "card"; card: TextCard };
+
+/**
+ * A page of READABLE TEXT — one kit question, or a slide's caption when its
+ * frame cannot be trusted. The host lays it out (as it does a question prompt).
+ *
+ * NO ANSWER LIVES HERE. Backgrounds are persisted (present_pages) and exported,
+ * and a board PDF reaches students; the answer key stays in the host's memory and
+ * is drawn only while the teacher has it revealed.
+ */
+export type TextCard = {
+  /** "question": one item of a worksheet's questions.json; "caption": a slide's heading + points. */
+  source: "question" | "caption";
+  heading: string;
+  body: string[];
+  /** Multiple-choice options, lettered by the host. */
+  options?: string[];
+  marks?: number;
+  generationId?: string;
+  questionId?: string;
+  /** 0-based position in its set, and the set's size. */
+  index?: number;
+  total?: number;
+};
 
 export type Page = {
   /** Position in the roll, 0-based and dense. */
@@ -275,6 +299,33 @@ const TOOLS: ReadonlySet<string> = new Set<Tool>(["pen", "highlighter", "eraser"
 const isObj = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
 
+const strs = (v: unknown): string[] | null =>
+  Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : null;
+
+function parseCard(v: unknown): PageBackground | null {
+  if (!isObj(v)) return null;
+  if (v.source !== "question" && v.source !== "caption") return null;
+  const body = strs(v.body);
+  if (typeof v.heading !== "string" || !body) return null;
+  const options = v.options === undefined ? undefined : strs(v.options);
+  if (options === null) return null;
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
+  const str = (x: unknown) => (typeof x === "string" ? x : undefined);
+  const card: TextCard = { source: v.source, heading: v.heading, body };
+  if (options) card.options = options;
+  const marks = num(v.marks);
+  if (marks !== undefined) card.marks = marks;
+  const generationId = str(v.generationId);
+  if (generationId) card.generationId = generationId;
+  const questionId = str(v.questionId);
+  if (questionId) card.questionId = questionId;
+  const index = num(v.index);
+  if (index !== undefined) card.index = index;
+  const total = num(v.total);
+  if (total !== undefined) card.total = total;
+  return { kind: "card", card };
+}
+
 function parseBackground(v: unknown): PageBackground | null {
   if (!isObj(v)) return null;
   switch (v.kind) {
@@ -303,6 +354,8 @@ function parseBackground(v: unknown): PageBackground | null {
         : null;
     case "svg":
       return typeof v.svg === "string" ? { kind: "svg", svg: v.svg } : null;
+    case "card":
+      return parseCard(v.card);
     default:
       return null;
   }

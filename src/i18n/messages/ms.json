@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "Dibekukan — tetapi bingkai ini tidak dapat disimpan, jadi muat semula akan menghilangkannya.",
       "freezeFailed": "Tidak dapat menangkap bingkai.",
       "videoExpired": "Pautan video telah luput — buka semula pelajaran untuk menyegarkannya.",
-      "worksheetOnBoard": "Lembaran kerja pada papan"
+      "worksheetOnBoard": "Lembaran kerja pada papan",
+      "moving": "Sedang beralih…",
+      "showAnswer": "Tunjuk jawapan",
+      "hideAnswer": "Sembunyi jawapan",
+      "questionOf": "Soalan {n} daripada {total}",
+      "marks": "{n} markah",
+      "answer": "Jawapan: {a}",
+      "answerTrue": "Betul",
+      "answerFalse": "Salah",
+      "prevQuestion": "Soalan sebelumnya",
+      "nextQuestion": "Soalan seterusnya"
     },
     "wrapUp": {
       "saved": "Pelajaran disimpan",

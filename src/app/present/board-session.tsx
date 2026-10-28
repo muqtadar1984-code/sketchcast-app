@@ -16,7 +16,14 @@ import type { PresentWords } from "./present-client";
 import { framePath, rollPdfPath } from "@/utils/present/paths";
 import { Stage, type StageHandle, type StageMode } from "./stage";
 import WrapUp from "./wrap-up";
-import { createBoardController, itemsRouteLogger, type BoardController, type MoveLogger } from "./board-controller";
+import {
+  createBoardController,
+  MemorySkActionSink,
+  type BoardController,
+  type QuestionSet,
+  type SkActionSink,
+} from "./board-controller";
+import { answerKey, cardPng, drawCard, questionCards, type CardWords } from "./text-card";
 
 // A lesson in progress: the bar's choice, the kit, the stage and the roll.
 //
@@ -78,6 +85,8 @@ export type KitDoc = {
   note?: "never-project" | "no-text";
   title: string | null;
   download: string | null;
+  /** Signed URL of the worksheet's questions.json, when the board may project it. */
+  questions?: string | null;
 };
 
 export type KitUnit = {
@@ -121,7 +130,7 @@ export type BoardIO = {
   close: (pageCount: number) => Promise<boolean>;
 };
 
-function defaultIO(db: ReturnType<typeof createClient>, sessionId: string): BoardIO {
+export function defaultIO(db: ReturnType<typeof createClient>, sessionId: string): BoardIO {
   return {
     sync: async (records) => {
       const r = await fetch("/api/present/sync", {
@@ -176,11 +185,12 @@ type Props = {
   io?: BoardIO;
   /** The Board driven from code (SK). Purely additive: no control changes. */
   controllerRef?: Ref<BoardController>;
-  /** Where controller moves are logged. Defaults to /api/present/items. */
-  moveLogger?: MoveLogger;
+  /** Where SK actions are recorded. Defaults to an in-memory buffer — never the network
+   *  (the sk_actions table lands in S0). */
+  skSink?: SkActionSink;
 };
 
-export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, moveLogger }: Props) {
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -192,6 +202,23 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
   const [mode, setMode] = useState<StageMode>("away");
   const [where, setWhere] = useState({ page: 0, count: 1 });
   const [note, setNote] = useState<string | null>(null);
+  /** A seek is under way (SK): the stage says "Moving…" until its frame shows. */
+  const [moving, setMoving] = useState(false);
+  /** Question pages (SK): the answer key, in memory only, and which answers are showing. */
+  const answers = useRef(new Map<string, string>());
+  const revealedRef = useRef(new Set<string>());
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set());
+  const [answerKeys, setAnswerKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const cardWords = useMemo<CardWords>(
+    () => ({
+      questionOf: t.board.questionOf,
+      marks: t.board.marks,
+      answer: t.board.answer,
+      answerTrue: t.board.answerTrue,
+      answerFalse: t.board.answerFalse,
+    }),
+    [t],
+  );
   const spec = TOOLS.find((t) => t.key === tool)!;
 
   // The lesson has three states, and the middle one is load-bearing: the board,
@@ -294,6 +321,11 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         }
         return;
       }
+      if (bg.kind === "card") {
+        const k = answerKey(bg.card.generationId, bg.card.questionId);
+        drawCard(ctx, bg.card, page, cardWords, revealedRef.current.has(k) ? (answers.current.get(k) ?? null) : null);
+        return;
+      }
       if (bg.kind === "question") {
         ctx.fillStyle = "#F1F5F3";
         ctx.fillRect(0, 0, page.w, 150);
@@ -303,7 +335,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         ctx.fillText(bg.prompt.slice(0, 60), 40, 75);
       }
     },
-    [frameUrl],
+    [frameUrl, cardWords],
   );
 
   const playVideo = useCallback(async () => {
@@ -348,9 +380,9 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
     return true;
   }, [unit, session.teacherId, session.id, roll, io, t]);
 
-  const resume = useCallback(() => {
+  const resume = useCallback(async () => {
     setMode("full");
-    void stage.current?.play();
+    await stage.current?.play();
   }, []);
 
   const openWorksheet = useCallback(
@@ -405,6 +437,12 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
       title: "Board",
       text: (bg: PageBackground) => (bg.kind === "question" ? bg.prompt : null),
       image: async (bg: PageBackground) => {
+        if (bg.kind === "card") {
+          // Pixels, not pdf-lib text: the export's font is WinAnsi-only and a
+          // Hindi question would throw and take the whole PDF with it.
+          const bytes = await cardPng(bg.card, cardWords).catch(() => null);
+          return bytes ? { bytes, type: "png" as const } : null;
+        }
         if (bg.kind !== "frame") return null;
         try {
           const url = await frameUrl(bg.src);
@@ -421,7 +459,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         }
       },
     }),
-    [frameUrl],
+    [frameUrl, cardWords],
   );
 
   const exportPdf = useCallback(async () => {
@@ -497,31 +535,53 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
 
   // -- The Board from code (SK spike M2) --------------------------------------
   // The ports call the SAME callbacks the buttons below call. They read the
-  // latest render through a ref, so the controller object is built once per
-  // session and never goes stale.
-  const live = useRef({ playVideo, freeze, openWorksheet, end, unit, where, mode, t, session });
+  // latest render through a ref, so the controller is built once per session
+  // and never goes stale. It exists whether or not a host asks for it; with no
+  // controllerRef nothing calls it, and its default sink is a buffer in memory.
+  const live = useRef({ playVideo, resume, freeze, openWorksheet, end, recordItem, unit, where, mode, session });
   useEffect(() => {
-    live.current = { playVideo, freeze, openWorksheet, end, unit, where, mode, t, session };
+    live.current = { playVideo, resume, freeze, openWorksheet, end, recordItem, unit, where, mode, session };
   });
-  const logger = useMemo(() => moveLogger ?? itemsRouteLogger(session.id), [moveLogger, session.id]);
+  const sink = useMemo(() => skSink ?? new MemorySkActionSink(), [skSink]);
+  // Built in the commit phase (useImperativeHandle), never during render: the
+  // ports read refs. The Board's own question buttons reach it through ctlRef.
+  const ctlRef = useRef<BoardController | null>(null);
   useImperativeHandle(
-    controllerRef,
+    ctlRef,
     () =>
       createBoardController(
         {
           sessionId: () => live.current.session.id,
+          actorId: () => live.current.session.teacherId,
+          generationId: () => live.current.unit?.video?.id ?? null,
           video: () => stage.current?.element() ?? null,
           play: () => live.current.playVideo(),
+          resume: () => live.current.resume(),
           pause: () => stage.current?.pause(),
+          setStage: (m) => setMode(m),
           freeze: () => live.current.freeze(),
           openWorksheetPage: () => {
-            const { unit: u, t: words, session: s } = live.current;
+            const { unit: u, session: s } = live.current;
             const d = u?.docs.find((x) => x.projects);
             if (!u || !d) return false;
-            live.current.openWorksheet(d.id, docLabel(words, d.kind), { chapterNum: s.chapterNum, part: u.part });
+            live.current.openWorksheet(d.id, docLabel(t, d.kind), { chapterNum: s.chapterNum, part: u.part });
             return true;
           },
           blankPage: () => board.current?.push({ kind: "blank" }),
+          pushCard: (card) => board.current?.push({ kind: "card", card }),
+          loadQuestions: async (): Promise<QuestionSet | null> => {
+            const { unit: u, session: s } = live.current;
+            const d = u?.docs.find((x) => x.projects && x.questions);
+            if (!u || !d?.questions) return null;
+            const r = await fetch(d.questions);
+            if (!r.ok) throw new Error(`questions ${r.status}`);
+            const { cards, answers: key } = questionCards(await r.json(), d.id, cardWords);
+            for (const [k, v] of key) answers.current.set(k, v);
+            setAnswerKeys(new Set(answers.current.keys()));
+            // Logged as what it is in present_items' terms: a worksheet she put up.
+            live.current.recordItem("worksheet", d.id, { chapterNum: s.chapterNum, part: u.part });
+            return { generationId: d.id, cards };
+          },
           goTo: (p) => board.current?.goTo(p),
           // The roll's own count is current the moment push returns; `where`
           // follows a render later.
@@ -532,10 +592,29 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           stageMode: () => live.current.mode,
           endSession: () => live.current.end(),
         },
-        logger,
+        sink,
+        { onMoving: setMoving },
       ),
-    [logger, roll],
+    [sink, roll, t, cardWords],
   );
+  // No deps: it follows ctlRef whenever that is rebuilt.
+  useImperativeHandle(controllerRef, () => ctlRef.current as BoardController);
+
+  /** The question card on the current page, if it is one. */
+  const currentCard = (() => {
+    const bg = roll.pages[where.page]?.background;
+    return bg?.kind === "card" && bg.card.source === "question" ? bg.card : null;
+  })();
+  const currentKey = currentCard ? answerKey(currentCard.generationId, currentCard.questionId) : null;
+  const toggleAnswer = useCallback(() => {
+    if (!currentKey) return;
+    const next = new Set(revealedRef.current);
+    if (next.has(currentKey)) next.delete(currentKey);
+    else next.add(currentKey);
+    revealedRef.current = next;
+    setRevealed(next);
+    board.current?.repaint();
+  }, [currentKey]);
 
   const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]";
   // EVERY CONTROL, not just the End button. The export walks the live roll page
@@ -741,6 +820,11 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           style={{ height: "68dvh", minHeight: 320 }}
         />
         {note && <p className="font-mono text-[11px] text-[#4FD6C2]">{note}</p>}
+        {moving && mode === "away" && (
+          <p role="status" className="font-mono text-[11px] text-[#4FD6C2]">
+            {t.board.moving}
+          </p>
+        )}
       </div>
 
       <aside className="grid content-start gap-2">
@@ -778,6 +862,36 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         <p className="text-center font-mono text-[11px] text-[#5F6F69]">
           {fmt(t.board.pageOf, { n: where.page + 1, total: where.count })}
         </p>
+        {/* Only on a question page, which only SK puts up. */}
+        {currentCard && (
+          <>
+            <button
+              type="button"
+              className={btn}
+              disabled={saving || (currentCard.index ?? 0) <= 0}
+              aria-label={t.board.prevQuestion}
+              title={t.board.prevQuestion}
+              onClick={() => void ctlRef.current?.prevQuestion().catch(() => {})}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className={btn}
+              disabled={saving || (currentCard.index ?? 0) >= (currentCard.total ?? 1) - 1}
+              aria-label={t.board.nextQuestion}
+              title={t.board.nextQuestion}
+              onClick={() => void ctlRef.current?.nextQuestion().catch(() => {})}
+            >
+              ›
+            </button>
+            {currentKey && answerKeys.has(currentKey) && (
+              <button type="button" className={btn} disabled={saving} onClick={toggleAnswer}>
+                {revealed.has(currentKey) ? t.board.hideAnswer : t.board.showAnswer}
+              </button>
+            )}
+          </>
+        )}
       </aside>
 
       {/* Mounted for the whole lesson, whatever the mode. See stage.tsx. */}
@@ -785,6 +899,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         ref={stage}
         src={unit?.video?.urls[0] ?? null}
         mode={mode}
+        status={moving ? t.board.moving : null}
         onTapToFreeze={freeze}
         onEnded={() => setMode("corner")}
         onError={() => setNote(t.board.videoExpired)}

@@ -1949,7 +1949,17 @@
       "frozenUnsaved": "تم التجميد — لكن تعذّر حفظ هذه اللقطة، لذا ستُفقد عند إعادة التحميل.",
       "freezeFailed": "تعذّر التقاط اللقطة.",
       "videoExpired": "انتهت صلاحية رابط الفيديو — أعد فتح الدرس لتحديثه.",
-      "worksheetOnBoard": "ورقة عمل على السبورة"
+      "worksheetOnBoard": "ورقة عمل على السبورة",
+      "moving": "جارٍ الانتقال…",
+      "showAnswer": "إظهار الإجابة",
+      "hideAnswer": "إخفاء الإجابة",
+      "questionOf": "السؤال {n} من {total}",
+      "marks": "{n} درجات",
+      "answer": "الإجابة: {a}",
+      "answerTrue": "صح",
+      "answerFalse": "خطأ",
+      "prevQuestion": "السؤال السابق",
+      "nextQuestion": "السؤال التالي"
     },
     "wrapUp": {
       "saved": "تم حفظ الدرس",
