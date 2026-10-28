@@ -164,6 +164,9 @@ export type Artifact = {
   content_type: string | null;
   storage: string;
   storage_key: string | null;
+  /** a screen copy of a large PDF (opens in the browser); the full file stays the download (0162) */
+  screen_key?: string | null;
+  screen_bytes?: number | null;
 };
 
 export type CostLine = { stage_key: string; revision_key: string | null; chapter: number | null; model: string | null; role: string | null; usd: number };
