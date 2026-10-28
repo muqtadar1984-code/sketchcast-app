@@ -25,7 +25,7 @@ export const SHARE_ROWS_CAP = 40;
  *  the most recent shares' generations only. */
 const GEN_IDS_CAP = 200;
 
-type ClassRow = { id: string; name: string | null };
+type ClassRow = { id: string; name: string | null; teacher_id?: string | null };
 
 const rows = <T>(res: { data: unknown; error: { message?: string } | null } | null | undefined, what: string): T[] => {
   if (!res) return [];
@@ -70,8 +70,13 @@ export const assignmentsStatus: SkCapability = {
     const dueRaw = str(args, "due");
     const due = DUE.find((d) => d === dueRaw);
     try {
-      // Own classes — the scope everything else is cut to.
-      const classes = rows<ClassRow>(await db.from("classes").select("id, name").eq("teacher_id", me).order("created_at", { ascending: false }), "classes");
+      // Own classes — the scope everything else is cut to. The predicate goes
+      // to the DB AND is re-applied here (belt and braces, like risk.ts and
+      // resolve.ts): a wide RLS view must never widen the teacher's scope.
+      const classes = rows<ClassRow>(
+        await db.from("classes").select("id, name, teacher_id").eq("teacher_id", me).order("created_at", { ascending: false }),
+        "classes",
+      ).filter((c) => c.teacher_id === undefined || c.teacher_id === me);
       const myClassIds = new Set(classes.map((c) => c.id));
       const classNames: Record<string, string> = {};
       for (const c of classes) classNames[c.id] = c.name || "Class";
