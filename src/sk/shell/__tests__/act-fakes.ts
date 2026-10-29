@@ -170,7 +170,7 @@ export function diarySession(tables: Record<string, Array<Record<string, unknown
             if (r.sk_action_id && keys.has(key(r))) return { data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "generations_sk_action_kind_part_uidx"' } };
             keys.add(key(r));
           }
-          const out = pendingInsert.map((r) => ({ ...r, id: `gen-${++seq}` }));
+          const out: Array<Record<string, unknown>> = pendingInsert.map((r) => ({ ...r, id: `gen-${++seq}` }));
           generations.push(...out);
           return { data: out.map((o) => ({ id: o.id, kind: o.kind })), error: null };
         }

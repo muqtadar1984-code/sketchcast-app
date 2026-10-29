@@ -212,7 +212,7 @@ describe("lesson.status — how the kit is going", () => {
     expect(r.entities).toEqual([{ kind: "kit", id: "p1", label: "Specialised Cells", via: "lesson.status", ids: [BIO, "2"] }]);
   });
   it("0169 not applied (the column is missing) → falls back to her newest generations", async () => {
-    const t = { ...tables(), generations: gens().map(({ sk_action_id: _a, ...g }) => g) };
+    const t = { ...tables(), generations: gens().map((g) => Object.fromEntries(Object.entries(g).filter(([k]) => k !== "sk_action_id"))) };
     const s = session(t, undefined, { code: "42703", message: 'column generations.sk_action_id does not exist' });
     const r = await lessonStatus.handler(makeCtx(), {}, { session: s, now: NOW });
     expect(r.ok).toBe(true);

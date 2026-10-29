@@ -209,7 +209,7 @@ describe("lesson.prepare — execution", () => {
     const out = await w.run();
     expect(out.response).toMatchObject({ ok: true, outcome: "done", summary: lineFor(PREP_STARTED, "en", { chapter: "Specialised Cells" }) });
     const expected = kitRows({ bookId: BOOK, schoolId: SCHOOL_ID, userId: TEACHER_ID, chapterNum: 2, language: "en", narrationStyle: defaultNarrationForGrade("Form 4") });
-    expect(w.session.generations.map(({ id: _id, ...r }) => r)).toEqual(expected.map((r) => ({ ...r, sk_action_id: ID })));
+    expect(w.session.generations.map((g) => Object.fromEntries(Object.entries(g).filter(([k]) => k !== "id")))).toEqual(expected.map((r) => ({ ...r, sk_action_id: ID })));
     expect(w.session.generations[0].kind).toBe("presentation"); // the lesson FIRST — load-bearing for the docs guard
     expect(kitCredits(expected)).toBe(6);
     expect(out.response.result).toMatchObject({ generation_id: "gen-1", book_id: BOOK, chapter_ref: "2", credits: 6 });

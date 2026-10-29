@@ -33,7 +33,6 @@ import { cleanQuery, normalizeName } from "./resolve";
 import { lineFor } from "@/sk/shell/lines";
 import { PREP_CARD_TITLE, PREP_CARD_TITLE_FOR, PREP_EXISTS, PREP_GATE_WARNING } from "@/sk/shell/act-lines";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Row = Record<string, unknown>;
 const rows = <T = Row>(res: unknown, what: string): T[] => {
   const r = res as { data?: unknown; error?: { message?: string } | null } | null;
