@@ -31,7 +31,12 @@ import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilitie
 import { searchLibrary } from "@/sk/capabilities/library";
 import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
-import { LOCALES } from "@/i18n/locales";
+// 2026-10-30: the answer language (override > the source's > the UI's) and
+// "repeat that in X" — one translation call on the last answer.
+import { answerLanguage, canSpeakList, langMeta, languageName, linesLocale, overrideForBack, ownName, targetCode, type AnswerLanguage, type LangCommand, type SkAnswerLang } from "@/sk/shell/language";
+import { LANG_CAN_SPEAK, LANG_NOTHING_TO_REPEAT, LANG_SOURCE_UNSUPPORTED, LANG_SWITCHED, langLine } from "@/sk/shell/language-lines";
+import { repeatAnswer, skTranslateModel } from "@/sk/shell/repeat";
+import { repeatForStudent } from "@/sk/capabilities/tutor";
 // S5 slice B: the leader school-read gate (analytics, 60/day cap, audit row).
 import { SCHOOL_READ_REFUSALS, schoolReadGate } from "@/sk/shell/school-meter";
 import { SM_ANALYTICS_OFF } from "@/sk/shell/school-meter-lines";
@@ -165,6 +170,20 @@ export async function POST(request: Request) {
   });
 
   let memory = openMemory(body.memory, ctx, now).memory;
+  // 2026-10-30: the language SK answers in — her explicit choice in this
+  // conversation, else the ONE language of the kit open on the Board / her
+  // player, else the UI locale (shell/language.ts). The fixed lines follow it
+  // too: ctx.user.locale becomes the lines' locale (zh → English lines; the
+  // model still answers in Chinese).
+  const uiLocale = ctx.user.locale;
+  const preSources = [ctx.board?.sessionId ? ctx.board.language : undefined, ctx.user.role === "student" ? ctx.tutor?.language : undefined].filter((x): x is string => !!x);
+  let answer: AnswerLanguage = answerLanguage({ override: memory.langOverride ?? null, sourceLanguages: preSources, uiLocale });
+  const setAnswer = (a: AnswerLanguage, override: SkAnswerLang | null) => {
+    answer = a;
+    ctx.answer = { lang: a.lang, from: a.from, override, uiLocale };
+    ctx.user.locale = linesLocale(a.lang);
+  };
+  setAnswer(answer, memory.langOverride ?? null);
   // The conversation's resolved entities (signed memory) become ctx.recent, so a
   // capability can resolve "their parents" from the last not-done list (§5.4).
   ctx.recent = { ...ctx.recent, entities: memory.entities };
@@ -211,7 +230,6 @@ export async function POST(request: Request) {
   // the recap route reads them back by. Everything else keeps the Shell's own.
   const boardDeps: RunnerDeps = ctx.board?.sessionId ? { ...deps, sessionId: ctx.board.sessionId } : deps;
   const boardGen = ctx.board?.sessionId && ctx.board.generationId ? ctx.board.generationId : null;
-  const language = LOCALES.find((l) => l.value === ctx.user.locale)?.label ?? "English";
 
   /** A Board-local k (what the client holds) → the manifest segment id it sent,
    *  so the manifest is addressed by id and never by an index that differs
@@ -250,7 +268,7 @@ export async function POST(request: Request) {
     kind: "explain" | "compare",
     moveArgs: Record<string, unknown>,
     say: string,
-  ): Promise<{ text: string; sources: string[]; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean } | null> => {
+  ): Promise<{ text: string; sources: string[]; lang?: SkAnswerLang; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean } | null> => {
     if (!boardGen) return null;
     const name = `board.${kind}`;
     const a = (moveArgs.a ?? {}) as Record<string, unknown>;
@@ -266,11 +284,13 @@ export async function POST(request: Request) {
       // Not ready, missing, failed, or nothing matched: SK's own line, no model.
       return { text: `${say} ${BOARD_NO_MAP}`.trim(), sources: [name] };
     }
+    // The manifest's own language (server truth) decides, under her override.
+    const tl = answerLanguage({ override: memory.langOverride ?? null, sourceLanguages: sup.language ? [sup.language] : preSources, uiLocale });
     const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${teachingBlock(sup)}`;
     let full = "";
     let usage: { inputTokens: number; outputTokens: number } | undefined;
-    for await (const ev of runAssistantTurn({ provider, system, history: [], question: teachingQuestion(kind, sup, language), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
+    for await (const ev of runAssistantTurn({ provider, system, history: [], question: teachingQuestion(kind, sup, languageName(tl.lang)), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
       if (ev.type === "text") full += ev.text;
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn teach", ev.retryable ? "retryable" : "fatal", ev.message);
@@ -282,7 +302,7 @@ export async function POST(request: Request) {
     if (!verdict.ok || claims.dropped.length) console.info("sk-shell.turn teach grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: [...claims.dropped, ...verdict.dropped] }));
     const text = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || say;
     const cut = !verdict.ok || claims.dropped.length > 0;
-    return { text, sources: [name, "manifest"], ...(usage ? { usage } : {}), ...(cut && text !== say ? { trimmed: true } : {}) };
+    return { text, sources: [name, "manifest"], lang: tl.lang, ...(usage ? { usage } : {}), ...(cut && text !== say ? { trimmed: true } : {}) };
   };
 
   /** explain_selection: the highlighted part of a deck slide, explained from
@@ -309,7 +329,7 @@ export async function POST(request: Request) {
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${selectionBlock(slide, selected)}`;
     let full = "";
     let usage: { inputTokens: number; outputTokens: number } | undefined;
-    for await (const ev of runAssistantTurn({ provider, system, history: [], question: selectionQuestion(language), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
+    for await (const ev of runAssistantTurn({ provider, system, history: [], question: selectionQuestion(languageName(answer.lang)), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
       if (ev.type === "text") full += ev.text;
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn selection", ev.retryable ? "retryable" : "fatal", ev.message);
@@ -348,12 +368,45 @@ export async function POST(request: Request) {
           /* already closed */
         }
       };
-      const done = (ev: Omit<Extract<SkTurnEvent, { type: "done" }>, "type" | "latencyMs" | "memory">, assistantText: string, entities: ResolvedEntity[], pending?: SkMemory["pending"] | null) => {
+      // 2026-10-30: the language each answer goes out in — sent before its
+      // text (direction, read-aloud voice; dictation too when she chose it).
+      let sentLang: SkAnswerLang | null = null;
+      const sendLang = (lang: SkAnswerLang, override = answer.from === "override") => {
+        if (sentLang === lang) return;
+        sentLang = lang;
+        send({ type: "lang", ...langMeta(lang), override });
+      };
+      let noted: string | undefined;
+      const done = (
+        ev: Omit<Extract<SkTurnEvent, { type: "done" }>, "type" | "latencyMs" | "memory">,
+        assistantText: string,
+        entities: ResolvedEntity[],
+        pending?: SkMemory["pending"] | null,
+        lang?: { langOverride: SkAnswerLang | null },
+      ) => {
         // S4 slice D: a book code / order number typed to SK is never remembered
         // (the memory travels to the browser and back into later prompts), and
         // book.activate's pending question lasts exactly one turn.
         const keep = pending !== undefined ? pending : memory.pending?.task === "book.activate" ? null : undefined;
-        memory = rememberTurn(memory, { user: maskBookSecrets(body.text), assistant: assistantText, entities, pending: keep }, new Date());
+        // 2026-10-30: the last explanation, whole, for "say that in Malay" — an
+        // answer (grounded or supplementary), never a navigation, a refusal, a
+        // pleasantry or a repeat (a repeat re-says the ORIGINAL, so "now in
+        // Arabic" translates from the source, not from the Malay).
+        const keepLast =
+          decision.intent !== "lang" && decision.intent !== "chat" && (ev.label === "grounded" || ev.label === "supplementary") && !!assistantText.trim() && assistantText !== SK_NOTHING_ON_THAT;
+        memory = rememberTurn(
+          memory,
+          {
+            user: maskBookSecrets(body.text),
+            assistant: assistantText,
+            entities,
+            pending: keep,
+            ...(keepLast ? { lastAnswer: { text: assistantText, lang: sentLang ?? answer.lang, label: ev.label as "grounded" | "supplementary", sources: ev.sources } } : {}),
+            ...(lang ? { langOverride: lang.langOverride } : {}),
+            ...(noted ? { langNoted: noted } : {}),
+          },
+          new Date(),
+        );
         // S6 slice C: remember the class / lesson this turn used (adults only,
         // the owner's own session, time-boxed, never fails the turn).
         const notes = workflowFromTurn({ role: ctx.user.role, navigatePath: navigatedTo, entities, known: memory.entities });
@@ -451,6 +504,8 @@ export async function POST(request: Request) {
         }
         if (r.reply) {
           const text = r.reply.text || r.summary;
+          // tutor.explain read the kit's own language: the answer is in it (unless she chose one).
+          if (r.language && answer.from !== "override") sendLang(answerLanguage({ override: null, sourceLanguages: [r.language], uiLocale }).lang);
           send({ type: "text", text });
           done({ sources: r.reply.sources, label: r.reply.label, ...(r.reply.usage ? { usage: r.reply.usage } : {}), ...(r.reply.trimmed ? { trimmed: true } : {}) }, text, r.entities ?? []);
           return;
@@ -459,8 +514,71 @@ export async function POST(request: Request) {
         done({ sources: [], label: "declined" }, r.summary, []);
       };
 
+      /** 2026-10-30: "say that in Malay" / "back to English". A repeat makes
+       *  ONE translation call on the last answer (a student with her kit open:
+       *  through the kit turn, metered once); everything else is SK's line. */
+      const runLanguage = async (cmd: LangCommand) => {
+        const code = targetCode(cmd.target, uiLocale);
+        if (!code) {
+          const text = langLine(LANG_CAN_SPEAK, answer.lang, { list: canSpeakList() });
+          send({ type: "text", text });
+          done({ sources: [], label: "declined" }, text, []);
+          return;
+        }
+        if (cmd.kind === "back") {
+          const next = overrideForBack(code, { sourceLanguages: preSources, uiLocale });
+          setAnswer(answerLanguage({ override: next, sourceLanguages: preSources, uiLocale }), next);
+          sendLang(answer.lang, next !== null);
+          const text = langLine(LANG_SWITCHED, answer.lang, { language: ownName(answer.lang) });
+          send({ type: "text", text });
+          done({ sources: [], label: "supplementary" }, text, [], undefined, { langOverride: next });
+          return;
+        }
+        const last = memory.lastAnswer;
+        if (!last) {
+          const text = langLine(LANG_NOTHING_TO_REPEAT, answer.lang);
+          send({ type: "text", text });
+          done({ sources: [], label: "declined" }, text, []);
+          return;
+        }
+        // From here on SK answers in `code` until she says otherwise.
+        setAnswer({ lang: code, from: "override" }, code);
+        sendLang(code, true);
+        const sources = [...new Set([...last.sources, "sk.repeat"])];
+        if (last.lang === code) {
+          // Already in that language: say it again, no model.
+          send({ type: "text", text: last.text });
+          done({ sources: last.sources, label: last.label }, last.text, [], undefined, { langOverride: code });
+          return;
+        }
+        if (ctx.user.role === "student" && ctx.tutor) {
+          const r = await repeatForStudent(ctx, { original: last.text, target: code, question: body.text }, deps);
+          const text = r.text || last.text;
+          send({ type: "text", text });
+          done({ sources: r.label === "grounded" ? sources : [], label: r.label === "grounded" ? last.label : "declined", ...(r.usage ? { usage: r.usage } : {}), ...(r.trimmed ? { trimmed: true } : {}) }, text, [], undefined, { langOverride: code });
+          return;
+        }
+        const r = await repeatAnswer({ provider: new AnthropicProvider(skTranslateModel()), original: last.text, target: code, question: body.text, signal: abort.signal });
+        if (r.cancelled) return;
+        send({ type: "text", text: r.text });
+        done({ sources, label: last.label, ...(r.usage ? { usage: r.usage } : {}), ...(r.trimmed ? { trimmed: true } : {}) }, r.text, [], undefined, { langOverride: code });
+      };
+
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
+        sendLang(answer.lang);
+        // A source in a language SK cannot answer in (Tamil): said once per conversation.
+        if (answer.unsupportedSource && memory.langNoted !== answer.unsupportedSource && decision.intent !== "lang") {
+          noted = answer.unsupportedSource;
+          send({ type: "text", text: `${langLine(LANG_SOURCE_UNSUPPORTED, answer.lang, { source: answer.unsupportedSource, language: ownName(answer.lang) })} ` });
+        }
+
+        // ── 2026-10-30: the answer-language commands — no teacher model ──────
+        if (decision.intent === "lang") {
+          await runLanguage(decision.command);
+          finish();
+          return;
+        }
 
         // ── S2: the answer to the greeting's offer — deterministic, no model ──
         if (offer && offerReply) {
@@ -563,6 +681,7 @@ export async function POST(request: Request) {
             send(act.event);
             const taught = (decision.move === "explain" || decision.move === "compare") && r.board ? await teach(decision.move, r.board.args, act.say) : null;
             if (taught) {
+              if (taught.lang) sendLang(taught.lang);
               send({ type: "text", text: taught.text });
               done({ sources: taught.sources, label: "grounded", ...(taught.usage ? { usage: taught.usage } : {}), ...(taught.trimmed ? { trimmed: true } : {}) }, taught.text, r.entities ?? []);
             } else done({ sources: [name], label: "grounded" }, act.say, r.entities ?? []);
@@ -824,11 +943,16 @@ export async function POST(request: Request) {
           }
         }
         let sources = [...new Set(productive.map((t) => t.name))];
+        // 2026-10-30: tool results that name their source's language decide
+        // the answer's, when they agree (and she chose none).
+        const toolLangs = productive.map((t) => t.result.language).filter((x): x is string => !!x);
+        let finalLang: SkAnswerLang | null = toolLangs.length && answer.from !== "override" ? answerLanguage({ override: null, sourceLanguages: [...preSources, ...toolLangs], uiLocale }).lang : null;
         // S1 slice C: the model chose explain/compare → the narration-grounded
         // teaching text replaces what the model wrote from headings alone.
         if (actHit && act && "event" in act && (actHit.name === "board.explain" || actHit.name === "board.compare") && actHit.result.board) {
           const taught = await teach(actHit.name === "board.explain" ? "explain" : "compare", actHit.result.board.args, act.say);
           if (taught) {
+            if (taught.lang) finalLang = taught.lang;
             text = taught.text;
             label = "grounded";
             trimmed = !!taught.trimmed;
@@ -856,6 +980,7 @@ export async function POST(request: Request) {
           trimmed = false;
         }
         const entities = trace.flatMap((t) => t.result.entities ?? []);
+        if (finalLang) sendLang(finalLang);
         send({ type: "text", text });
         if (navHit && !(act && "event" in act && act.event.type === "board")) send({ type: "navigate", path: navHit.path, label: navHit.label });
         if (act && "event" in act) send(act.event);

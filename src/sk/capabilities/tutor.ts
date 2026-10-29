@@ -52,10 +52,10 @@ import {
   TUTOR_WHERE_WEAK,
 } from "@/sk/shell/tutor-lines";
 import { SK_STUDENT_RULES } from "@/sk/shell/prompt";
-import { LOCALES } from "@/i18n/locales";
 import { isEventId } from "@/sk/ids";
 import { kitDeps, readyManifest, resolveKit } from "@/sk/kit-server";
-import { runKitExplain } from "@/sk/kit-turn";
+import { runKitExplain, runKitRepeat } from "@/sk/kit-turn";
+import { answerLanguage, languageName, type SkAnswerLang } from "@/sk/shell/language";
 import type { SseEvent } from "@/sk/types";
 import { loadTutorKit, practisedSections, progressGroups, readKitAttempts, readObjectiveMastery, studentChapters, visibleProducts, whereNext } from "@/sk/tutor";
 import { resolveSegment } from "./board";
@@ -226,7 +226,11 @@ async function explainSection(ctx: SkContext, t: SkTutorState, s: Section, quest
   if (!r.ok) return answer(name, say(ctx, TUTOR_REFUSED), false, r.reason);
   const ready = await readyManifest(kd, r);
   if (!ready) return answer(name, say(ctx, TUTOR_PREPARING), false, "preparing");
-  const language = LOCALES.find((l) => l.value === ctx.user.locale)?.label ?? "English";
+  // 2026-10-30: her override, else the KIT's language (the manifest, read
+  // here — the player's report is only a hint), else her UI locale.
+  const sourceLanguage = ready.manifest.language ?? null;
+  const lang = answerLanguage({ override: ctx.answer?.override ?? null, sourceLanguages: [sourceLanguage], uiLocale: ctx.answer?.uiLocale ?? ctx.user.locale });
+  const language = languageName(lang.lang);
 
   // Replay guard: the Shell turn id, in the kit turn's own scope, so a resent
   // turn replays the first answer — never a second model call or meter.
@@ -273,6 +277,7 @@ async function explainSection(ctx: SkContext, t: SkTutorState, s: Section, quest
   return {
     ok: !!text,
     summary: text.slice(0, 300) || "No answer.",
+    ...(sourceLanguage ? { language: sourceLanguage } : {}),
     facts: [{ section: s.k + 1, heading: s.heading, label, metered: !!done.metered && !replayed, replayed }],
     reply: {
       text,
@@ -282,6 +287,57 @@ async function explainSection(ctx: SkContext, t: SkTutorState, s: Section, quest
       ...(done.trimmed ? { trimmed: true } : {}),
     },
   };
+}
+
+// ── "say that in Malay" on her open kit (2026-10-30) ────────────────────────
+
+/** The student's repeat-in-another-language with her kit open: the Shell's
+ *  last answer, re-expressed by ONE translation call (kit-turn.ts
+ *  runKitRepeat) under her tutor access and METERED ONCE like the kit turn it
+ *  came from — the Shell turn id claimed in the kit turn's replay scope, so a
+ *  resent turn replays and never meters twice. Not a registry capability:
+ *  the route calls it for the rules router's `lang` intent. */
+export async function repeatForStudent(
+  ctx: SkContext,
+  input: { original: string; target: SkAnswerLang; question: string },
+  deps: SkCapabilityDeps,
+): Promise<{ text: string; label: "grounded" | "declined"; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean; metered: boolean }> {
+  const t = tutorOf(ctx);
+  if (!t) return { text: say(ctx, TUTOR_NO_KIT), label: "declined", metered: false };
+  const kd = kitDeps();
+  const r = await resolveKit(kd, ctx.user.id, { product: t.product, chapter: t.chapter, kit: t.kit });
+  if (!r.ok) return { text: say(ctx, TUTOR_REFUSED), label: "declined", metered: false };
+  const scope = `kit:${ctx.user.id}`;
+  const eventId = isEventId(deps.turnId) ? deps.turnId : null;
+  let events: SseEvent[] | null = null;
+  let replayed = false;
+  if (eventId) {
+    const claim = await kd.store.claimEvent<SseEvent[]>(scope, eventId);
+    if (claim.status !== "new") {
+      const stored = claim.status === "stored" ? claim.event : await claim.done.catch(() => null);
+      events = stored?.result ?? [];
+      replayed = true;
+    }
+  }
+  if (!events) {
+    const sent: SseEvent[] = [];
+    try {
+      for await (const ev of runKitRepeat(kd, { studentId: ctx.user.id, productSlug: r.product.slug, original: input.original, target: input.target, question: input.question, signal: deps.signal })) sent.push(ev);
+      if (eventId) await kd.store.completeEvent(scope, eventId, "kit_turn", sent);
+    } catch (e) {
+      if (eventId) await kd.store.releaseEvent(scope, eventId, e);
+      throw e;
+    }
+    events = sent;
+  }
+  const text = events
+    .filter((e) => e.event === "text")
+    .map((e) => String(e.data ?? ""))
+    .join("")
+    .trim();
+  const done = (events.find((e) => e.event === "done")?.data ?? {}) as { label?: string; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean; metered?: unknown };
+  const label = done.label === "grounded" && text ? "grounded" : "declined";
+  return { text, label, ...(done.usage && !replayed ? { usage: done.usage } : {}), ...(done.trimmed ? { trimmed: true } : {}), metered: !!done.metered && !replayed };
 }
 
 // ── tutor.where / tutor.progress: deterministic reads ───────────────────────
