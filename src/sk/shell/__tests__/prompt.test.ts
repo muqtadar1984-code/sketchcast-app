@@ -88,6 +88,50 @@ describe("groundingCheck", () => {
   });
 });
 
+describe("groundingCheck — emails, phone numbers and URLs (S5 gate finding 2026-10-29)", () => {
+  const facts = [{ name: "Amir", className: "5 Amanah", reasons: "never started" }, "At risk in the school: 1. Amir (5 Amanah) — never started."];
+  it("drops a sentence with an email address no tool carries (u-parent-email)", () => {
+    const v = groundingCheck("Amir is at risk. You can reach Amir's family at amir.family@gmail.com.", facts, "what is Amir's parent's email address");
+    expect(v.ok).toBe(false);
+    expect(v.unsupported).toEqual(["amir.family@gmail.com"]);
+    expect(v.dropped).toEqual(["You can reach Amir's family at amir.family@gmail.com."]);
+    expect(v.text).toBe("Amir is at risk.");
+  });
+  it("keeps an email address the tool support carries, whatever its case", () => {
+    expect(groundingCheck("Write to office@school.edu.my.", ["Office: Office@School.edu.my"], "q").ok).toBe(true);
+  });
+  it("the question is not support for an email address", () => {
+    const v = groundingCheck("Her address is siti@example.com.", [], "is siti@example.com her address?");
+    expect(v.ok).toBe(false);
+    expect(v.unsupported).toEqual(["siti@example.com"]);
+  });
+  it("drops an invented phone number, keeps one the facts carry in any format", () => {
+    const v = groundingCheck("Her mother's number is 012-345 6789.", facts, "give me Balqis's mother's phone number");
+    expect(v.ok).toBe(false);
+    expect(v.unsupported).toContain("012-345 6789");
+    expect(v.text).toBe("");
+    expect(groundingCheck("Call the office on 03-1234 5678.", [{ phone: "03-1234 5678" }], "q").ok).toBe(true);
+    // The contact layer compares digits, so a fact's other formatting still
+    // matches (the number check then holds each digit group as before).
+    expect(groundingCheck("Call the office on 03-1234 5678.", [{ phone: "0312345678" }], "q").unsupported).not.toContain("03-1234 5678");
+  });
+  it("a date, a time range or a count list is not a phone number", () => {
+    const f = [{ due: "2026-10-30", period: "P2", start: "08:30", end: "09:15", n: 13 }];
+    expect(groundingCheck("Due (2026-10-30). P2 (08:30–09:15): 13.", f, "q").ok).toBe(true);
+  });
+  it("drops an invented URL, keeps a supported one and SK's own address", () => {
+    const v = groundingCheck("See https://results.example.org/amir for more. Or open sketchcast.app.", facts, "q");
+    expect(v.unsupported).toEqual(["https://results.example.org/amir"]);
+    expect(v.text).toBe("Or open sketchcast.app.");
+    expect(groundingCheck("Open www.moe.gov.my/upsr.", [{ link: "https://www.moe.gov.my/upsr/" }], "q").ok).toBe(true);
+    const bare = groundingCheck("It is on schoolportal.com.", [], "q");
+    expect(bare.unsupported).toEqual(["schoolportal.com"]);
+  });
+  it("an email's domain is not read again as a URL", () => {
+    expect(groundingCheck("Write to office@school.edu.my.", ["office@school.edu.my"], "q").unsupported).toEqual([]);
+  });
+});
+
 describe("groundingCheck — percent tolerance and dropped sentences (live finding 2026-10-28)", () => {
   const facts = [{ done: 1, completionPct: 2, assigned: 45 }, "9 at risk: Aisha Khan (5A) — 20% completion"];
   it("accepts a number with or without its percent sign when the tools carry the other form", () => {

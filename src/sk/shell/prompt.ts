@@ -193,14 +193,91 @@ function isCapitalised(word: string): boolean {
   return /^\p{Lu}/u.test(word) && /\p{Ll}/u.test(word.slice(1));
 }
 
+// ── Contact details (S5 gate finding 2026-10-29: an invented parent email
+// passed, because only numbers and capitalised words were checked). An email
+// address, a phone number or a URL in SK's answer must occur in the TOOL
+// support — never the user's question: "what is Amir's mother's email?" does
+// not make an address SK writes true. A sentence carrying an unsupported one
+// is dropped like a sentence with an unsupported number.
+
+const EMAIL_RE = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu;
+const URL_RE = /(?:https?:\/\/|www\.)[^\s<>"'()]+|(?<![\p{L}\p{N}@.-])(?:[a-z0-9-]+\.)+(?:com|net|org|edu|gov|app|io|co|info|biz|my|sg|uk|in|ae|sa)(?:\.[a-z]{2})?(?:\/[^\s<>"'()]*)?(?![\p{L}\p{N}])/giu;
+// Groups of digits joined by spaces, dots, dashes or brackets (an optional +
+// country code), 8–15 digits in all: "012-345 6789", "+60 3-1234 5678".
+const PHONE_RE = /(?<![\p{L}\p{N}])\+?\(?\d[\d\s().-]{6,}\d(?![\p{L}\p{N}])/gu;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** SK's own address may always be said. */
+const ALWAYS_OK_URLS: ReadonlySet<string> = new Set(["sketchcast.app"]);
+
+const trimUrl = (u: string) =>
+  u
+    .toLowerCase()
+    .replace(/[.,;:!?]+$/u, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/+$/, "");
+const trimEmail = (e: string) => e.toLowerCase().replace(/[.]+$/u, "");
+const digitsOf = (p: string) => p.replace(/\D/g, "");
+
+/** A digit run is a phone number when it has 8–15 digits, at least one
+ *  separator (a bare long number is a count or an id, and the number check
+ *  holds it already), and is not an ISO date. */
+function phoneDigits(raw: string): string | null {
+  const t = raw.trim().replace(/[.\s()-]+$/u, "");
+  if (ISO_DATE_RE.test(t.replace(/^\(/, ""))) return null;
+  if (!/[\s().-]/.test(t) && !t.startsWith("+")) return null;
+  const d = digitsOf(t);
+  return d.length >= 8 && d.length <= 15 ? d : null;
+}
+
+type ContactSupport = { emails: Set<string>; urls: Set<string>; digits: string[] };
+
+function contactSupport(support: unknown[]): ContactSupport {
+  const flat: string[] = [];
+  support.forEach((s) => flatten(s, flat));
+  const emails = new Set<string>();
+  const urls = new Set<string>();
+  const digits: string[] = [];
+  for (const s of flat) {
+    for (const m of s.match(EMAIL_RE) ?? []) emails.add(trimEmail(m));
+    for (const m of s.replace(EMAIL_RE, " ").match(URL_RE) ?? []) urls.add(trimUrl(m));
+    // Every digit run (separators allowed), so "0123456789" in a fact supports "012-345 6789".
+    for (const m of s.match(/\+?\d[\d\s().-]*\d/g) ?? []) {
+      const d = digitsOf(m);
+      if (d.length >= 8) digits.push(d);
+    }
+  }
+  return { emails, urls, digits };
+}
+
+/** The emails, URLs and phone numbers in one sentence that the tool support does not carry. */
+export function unsupportedContacts(sentence: string, cs: ContactSupport): string[] {
+  const bad: string[] = [];
+  const emails = sentence.match(EMAIL_RE) ?? [];
+  for (const e of emails) if (!cs.emails.has(trimEmail(e))) bad.push(e.replace(/[.]+$/u, ""));
+  const rest = sentence.replace(EMAIL_RE, " ");
+  for (const u of rest.match(URL_RE) ?? []) {
+    const t = trimUrl(u);
+    if (t && !ALWAYS_OK_URLS.has(t) && !cs.urls.has(t)) bad.push(u.replace(/[.,;:!?]+$/u, ""));
+  }
+  for (const p of rest.replace(URL_RE, " ").match(PHONE_RE) ?? []) {
+    const d = phoneDigits(p);
+    if (d && !cs.digits.some((s) => s === d || s.endsWith(d) || d.endsWith(s))) bad.push(p.trim());
+  }
+  return bad;
+}
+
 /**
  * Every number token and every capitalised name in `text` must occur in the
  * support (tool facts + summaries) or in the user's question. Sentence-initial
  * capitals are ordinary grammar and exempt; a capitalised word elsewhere is
- * taken for a name. Returns the supported sentences and what was stripped.
+ * taken for a name. Email addresses, phone numbers and URLs must occur in the
+ * support itself (the question does not count for them). Returns the
+ * supported sentences and what was stripped.
  */
 export function groundingCheck(text: string, support: unknown[], question: string): GroundingVerdict {
   const ok = supportTokens([...support, question]);
+  const contacts = contactSupport(support);
   const sentences = text
     .replace(/\s+/g, " ")
     .trim()
@@ -210,7 +287,7 @@ export function groundingCheck(text: string, support: unknown[], question: strin
   const dropped: string[] = [];
   const unsupported: string[] = [];
   for (const s of sentences) {
-    const bad: string[] = [];
+    const bad: string[] = unsupportedContacts(s, contacts);
     for (const n of s.match(NUMBER_RE) ?? []) {
       const t = normToken(n);
       if (t && !numberSupported(ok, t)) bad.push(n);

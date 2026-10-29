@@ -17,6 +17,8 @@ import { offerAnswer } from "@/sk/shell/offer";
 import { lineFor } from "@/sk/shell/lines";
 import { KIT_OFFER_DECLINED } from "@/sk/shell/act-lines";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
+// S5 slice E: a claimed action no completed action backs is dropped (§8.4 gates).
+import { actionClaimGuard, claimCorrection } from "@/sk/shell/action-claims";
 import { issueActionToken, publicParams } from "@/sk/shell/tokens";
 import { maskBookSecrets } from "@/sk/book-activate";
 import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
@@ -269,11 +271,14 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn teach", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    // A teaching call has no tools: any "I've sent / assigned …" is unbacked.
+    const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur in the narration (or the question).
-    const verdict = groundingCheck(full, [...teachingSupportTokens(sup), say], body.text);
-    if (!verdict.ok) console.info("sk-shell.turn teach grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: verdict.dropped }));
-    const text = (verdict.ok ? full.trim() : verdict.text.trim()) || say;
-    return { text, sources: [name, "manifest"], ...(usage ? { usage } : {}), ...(!verdict.ok && verdict.text.trim() ? { trimmed: true } : {}) };
+    const verdict = groundingCheck(claims.text, [...teachingSupportTokens(sup), say], body.text);
+    if (!verdict.ok || claims.dropped.length) console.info("sk-shell.turn teach grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: [...claims.dropped, ...verdict.dropped] }));
+    const text = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || say;
+    const cut = !verdict.ok || claims.dropped.length > 0;
+    return { text, sources: [name, "manifest"], ...(usage ? { usage } : {}), ...(cut && text !== say ? { trimmed: true } : {}) };
   };
 
   /** explain_selection: the highlighted part of a deck slide, explained from
@@ -305,11 +310,13 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn selection", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur on the slide (text or notes) or in the question.
-    const verdict = groundingCheck(full, selectionSupportTokens(slide), body.text);
-    if (!verdict.ok) console.info("sk-shell.turn selection grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: verdict.dropped }));
-    const text = (verdict.ok ? full.trim() : verdict.text.trim()) || fallback;
-    return { text, sources: [name, "deck"], label: "grounded", ...(usage ? { usage } : {}), ...(!verdict.ok && verdict.text.trim() ? { trimmed: true } : {}) };
+    const verdict = groundingCheck(claims.text, selectionSupportTokens(slide), body.text);
+    if (!verdict.ok || claims.dropped.length) console.info("sk-shell.turn selection grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: [...claims.dropped, ...verdict.dropped] }));
+    const text = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || fallback;
+    const cut = !verdict.ok || claims.dropped.length > 0;
+    return { text, sources: [name, "deck"], label: "grounded", ...(usage ? { usage } : {}), ...(cut && text !== fallback ? { trimmed: true } : {}) };
   };
 
   const stream = new ReadableStream<Uint8Array>({
@@ -726,11 +733,20 @@ export async function POST(request: Request) {
           (t) => (t.result.facts?.length ?? 0) > 0 || !!t.result.navigate || (t.result.entities?.length ?? 0) > 0 || (t.result.ok && (!!t.result.board || !!t.result.confirm)),
         );
         const support = trace.flatMap((t) => [t.result.summary, ...(t.result.facts ?? [])]);
-        const verdict = groundingCheck(full, support, body.text);
-        if (!verdict.ok) {
+        // S5 slice E (§8.4 gates): a sentence claiming SK DID something —
+        // deleted, emailed, posted, assigned, graded … (EN/MS/AR) — is dropped
+        // before grounding. Nothing of act tier completes in this route (a
+        // confirm-tier tool only issues a card; it runs at /api/sk/act), so no
+        // completed action backs a claim here. The guard ignores the support
+        // set, so the question's own words ("delete Amir's record") never
+        // make "I have deleted Amir's record." pass.
+        const claims = actionClaimGuard(full, []);
+        const modelText = claims.text;
+        const verdict = groundingCheck(modelText, support, body.text);
+        if (!verdict.ok || claims.dropped.length) {
           // Server-side only: which tokens failed and what was dropped, so a
           // false positive can be diagnosed from the runtime logs (2026-10-28).
-          console.info("sk-shell.turn grounding", JSON.stringify({ turnId: body.turnId, tools: trace.map((t) => t.name), unsupported: verdict.unsupported, dropped: verdict.dropped }));
+          console.info("sk-shell.turn grounding", JSON.stringify({ turnId: body.turnId, tools: trace.map((t) => t.name), unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped }));
         }
         const navHit = [...trace].reverse().find((t) => t.result.ok && t.result.navigate)?.result.navigate;
         let text: string;
@@ -740,11 +756,12 @@ export async function POST(request: Request) {
           text = SK_NOTHING_ON_THAT;
           label = "declined";
         } else if (!trace.length) {
-          text = verdict.ok && full.trim() ? full.trim() : SK_NOTHING_ON_THAT;
-          label = verdict.ok && full.trim() ? "supplementary" : "declined";
-        } else if (verdict.ok && full.trim()) {
-          text = full.trim();
+          text = verdict.ok && modelText.trim() ? modelText.trim() : SK_NOTHING_ON_THAT;
+          label = verdict.ok && modelText.trim() ? "supplementary" : "declined";
+        } else if (verdict.ok && modelText.trim()) {
+          text = modelText.trim();
           label = navHit ? "navigation" : "grounded";
+          trimmed = claims.dropped.length > 0;
         } else if (verdict.text) {
           // What the user sees is only the supported sentences, so the shown
           // text IS grounded; `trimmed` records that something was dropped.
@@ -765,6 +782,21 @@ export async function POST(request: Request) {
           // gets SK's own line for the transcript and the speaker.
           if (text === SK_NOTHING_ON_THAT) text = act.say;
           label = "grounded";
+        }
+        // The claim was dropped; say the true thing instead. A card this turn
+        // already IS the confirm flow (its own line stands); otherwise: the
+        // confirm-card line when a capability of that kind is open to this
+        // user, else "I can't do that from here."
+        if (claims.dropped.length && !(act && "event" in act && act.event.type === "confirm") && !(act && "declined" in act)) {
+          const line = claimCorrection(claims.kinds, allowed.map((c) => c.meta.name), ctx.user.locale);
+          if (text === SK_NOTHING_ON_THAT || !text.trim()) {
+            text = line;
+            label = "declined";
+            trimmed = false;
+          } else {
+            text = `${text} ${line}`;
+            trimmed = true;
+          }
         }
         let sources = [...new Set(productive.map((t) => t.name))];
         // S1 slice C: the model chose explain/compare → the narration-grounded

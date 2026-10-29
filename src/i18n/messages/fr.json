@@ -2249,7 +2249,8 @@
         "tooLong": "Cet avis est trop long — un avis contient au plus 4000 caractères.",
         "dateUnparsed": "Je n'ai pas compris le jour « {day} » — dites aujourd'hui, demain, un jour de la semaine ou 2026-11-03.",
         "datePassed": "Ce jour est déjà passé — un avis doit annoncer quelque chose à venir.",
-        "yourSchool": "votre école"
+        "yourSchool": "votre école",
+        "notPostedUntil": "Rien n'est publié tant que le responsable n'a pas cliqué sur Confirmer sur la carte."
       },
       "cardParams": {
         "target_label": "Pour",
@@ -2359,7 +2360,17 @@
         "ttIn": "En ce moment dans {where} — {period} ({start}–{end}) : cours {n}. {items}.",
         "ttNext": "Ensuite dans {where} — {period} ({start}–{end}) : cours {n}. {items}.",
         "ttNone": "Aucun cours n'est prévu dans {where} pour {period}.",
-        "ttClosed": "Aucune période de cours n'est en cours en ce moment."
+        "ttClosed": "Aucune période de cours n'est en cours en ce moment.",
+        "ttNoNext": "C'est la dernière période de la journée ; il n'y a rien après.",
+        "reasonCompletion": "{pct} % de travail fait",
+        "reasonInactive": "inactif depuis {days} j",
+        "reasonNeverStarted": "jamais commencé",
+        "reasonAvgScore": "moyenne {pct} %",
+        "reasonDeclining": "notes en baisse",
+        "reasonOverdue": "{n} en retard",
+        "flagBelowCohort": "{pts} pts sous la cohorte",
+        "flagToGrade": "{n} à corriger",
+        "flagSlowGrading": "{days} j pour corriger"
       },
       "schoolMeter": {
         "analyticsOff": "Les analyses de l'école ne sont pas activées pour votre école.",
@@ -2418,6 +2429,10 @@
         "diarySeenLeadersPrivate": "{name} n'a pas encore d'enseignant de classe — vue par la direction de l'école, pas par {name}.",
         "diarySeenHome": "{name} apprend à la maison — cette note est pour votre propre suivi et pour {name}.",
         "diarySeenHomePrivate": "{name} apprend à la maison — cette note est pour votre seul suivi ; {name} ne la verra pas."
+      },
+      "actionClaim": {
+        "cant": "Je ne peux pas faire cela d'ici.",
+        "card": "Rien n'a encore été fait : je peux le préparer sous forme de carte, et rien ne se passe tant que vous ne l'avez pas confirmée."
       }
     },
     "player": {

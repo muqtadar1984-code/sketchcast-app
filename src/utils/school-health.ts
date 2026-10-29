@@ -25,6 +25,52 @@ export const BELOW_BASELINE = 15;
 
 const DAY = 86400000;
 
+// ── Reasons and flags as CODES (S5 gate finding 2026-10-29) ──────────────────
+// The English strings stay exactly as the leadership pages show them; the code
+// next to each one lets a caller say it in the reader's language through a
+// dictionary key (SK: sk.shell.school.reason* / flag*) instead of
+// pattern-matching the English.
+
+export type RiskReason =
+  | { code: "completion"; pct: number }
+  | { code: "inactive"; days: number }
+  | { code: "never_started" }
+  | { code: "avg_score"; pct: number }
+  | { code: "declining" }
+  | { code: "overdue"; n: number };
+
+export type TeacherFlag = { code: "below_cohort"; pts: number } | { code: "to_grade"; n: number } | { code: "slow_grading"; days: number };
+
+/** The pages' English text for a reason code. */
+export function riskReasonText(r: RiskReason): string {
+  switch (r.code) {
+    case "completion":
+      return `${r.pct}% completion`;
+    case "inactive":
+      return `inactive ${r.days}d`;
+    case "never_started":
+      return "never started";
+    case "avg_score":
+      return `avg score ${r.pct}%`;
+    case "declining":
+      return "scores declining";
+    case "overdue":
+      return `${r.n} overdue`;
+  }
+}
+
+/** The pages' English text for a teacher flag code. */
+export function teacherFlagText(f: TeacherFlag): string {
+  switch (f.code) {
+    case "below_cohort":
+      return `${f.pts}pts below cohort`;
+    case "to_grade":
+      return `${f.n} to grade`;
+    case "slow_grading":
+      return `${f.days}d to grade`;
+  }
+}
+
 export type HealthRows = {
   /** `school_id` (S5): lets SK's principal read cut to the user's own school
    *  and its coordinator read cut to scope grades (sk/capabilities/leader-scope.ts). */
@@ -69,7 +115,8 @@ export type SchoolHealth = {
     pendingToGrade: number;
   };
   atRiskByGrade: { grade: string; count: number }[];
-  atRisk: { name: string; className: string; grade: string; reasons: string[]; parentEmail: string | null }[];
+  /** `codes`: the same reasons as codes, in the same order (say them in any language). */
+  atRisk: { name: string; className: string; grade: string; reasons: string[]; codes?: RiskReason[]; parentEmail: string | null }[];
   classes: { name: string; grade: string; teacher: string; students: number; completionPct: number | null; overdue: number }[];
   teachers: {
     name: string;
@@ -79,6 +126,8 @@ export type SchoolHealth = {
     avgTurnaroundDays: number | null;
     completionPct: number | null;
     flags: string[];
+    /** The same flags as codes, in the same order. */
+    flagCodes?: TeacherFlag[];
   }[];
 };
 
@@ -141,8 +190,11 @@ const clean = (s: string | null | undefined, max = 80): string =>
     .trim()
     .slice(0, max);
 
-/** Pure aggregation — injectable clock so the at-risk rules are unit-testable. */
-export function computeSchoolHealth(rows: HealthRows, now: number = Date.now()): SchoolHealth {
+/** Pure aggregation — injectable clock so the at-risk rules are unit-testable.
+ *  `codes: true` adds the reason / flag CODES next to the English text (SK says
+ *  them in the reader's language); off by default so the School Briefing's
+ *  serialised snapshot is unchanged. */
+export function computeSchoolHealth(rows: HealthRows, now: number = Date.now(), opts: { codes?: boolean } = {}): SchoolHealth {
   const classMeta = new Map(
     rows.classes.map((c) => [c.id, { name: clean(c.name) || "Class", grade: clean(c.grade, 20) || "—", teacher: c.teacher_id }] as const),
   );
@@ -226,7 +278,7 @@ export function computeSchoolHealth(rows: HealthRows, now: number = Date.now()):
 
     const last = lastActivity.get(stu);
     if (last && now - last <= INACTIVE_DAYS * DAY) activeStudents++;
-    const { reasons } = learnerReasons({
+    const { reasons, codes } = learnerReasons({
       assigned: items.length,
       completed,
       overdue,
@@ -243,6 +295,7 @@ export function computeSchoolHealth(rows: HealthRows, now: number = Date.now()):
         className: cm?.name || "—",
         grade: cm?.grade || "—",
         reasons,
+        ...(opts.codes ? { codes } : {}),
         parentEmail: parentEmail.get(stu) ?? null,
       });
     }
@@ -336,15 +389,17 @@ export function computeSchoolHealth(rows: HealthRows, now: number = Date.now()):
       avgTurnaroundDays: ta && ta.n ? Math.round((ta.sum / ta.n) * 10) / 10 : null,
       completionPct: total ? Math.round((done / total) * 100) : null,
       flags: [] as string[],
+      flagCodes: [] as TeacherFlag[],
     };
   });
   const baselinePct = baseTotal ? Math.round((baseDone / baseTotal) * 100) : 0;
   for (const r of teacherRows) {
     if (r.completionPct != null && r.completionPct < baselinePct - BELOW_BASELINE)
-      r.flags.push(`${baselinePct - r.completionPct}pts below cohort`);
-    if (r.pendingToGrade >= GRADING_BACKLOG) r.flags.push(`${r.pendingToGrade} to grade`);
+      r.flagCodes.push({ code: "below_cohort", pts: baselinePct - r.completionPct });
+    if (r.pendingToGrade >= GRADING_BACKLOG) r.flagCodes.push({ code: "to_grade", n: r.pendingToGrade });
     if (r.avgTurnaroundDays != null && r.avgTurnaroundDays > SLOW_GRADING_DAYS)
-      r.flags.push(`${r.avgTurnaroundDays}d to grade`);
+      r.flagCodes.push({ code: "slow_grading", days: r.avgTurnaroundDays });
+    r.flags = r.flagCodes.map(teacherFlagText);
   }
   teacherRows.sort((a, b) => b.flags.length - a.flags.length || (a.completionPct ?? 101) - (b.completionPct ?? 101));
 
@@ -362,7 +417,10 @@ export function computeSchoolHealth(rows: HealthRows, now: number = Date.now()):
     atRiskByGrade: [...byGrade.entries()].map(([grade, count]) => ({ grade, count })).sort((a, b) => b.count - a.count),
     atRisk,
     classes: classRows,
-    teachers: teacherRows,
+    // Without `codes` the rows are exactly as before (the Briefing serialises them).
+    teachers: opts.codes
+      ? teacherRows
+      : teacherRows.map(({ name, lessons, assignments, pendingToGrade, avgTurnaroundDays, completionPct, flags }) => ({ name, lessons, assignments, pendingToGrade, avgTurnaroundDays, completionPct, flags })),
   };
 }
 
@@ -383,7 +441,7 @@ export type LearnerReasonsInput = {
 /** THE at-risk rules (school/page.tsx:156-227), one learner at a time. Pure.
  *  computeSchoolHealth calls it per student, so the leadership pages, the
  *  teacher's learners.risk and a parent's child.risk give the same reasons. */
-export function learnerReasons(i: LearnerReasonsInput): { reasons: string[]; avg: number | null; inactiveDays: number; declining: boolean } {
+export function learnerReasons(i: LearnerReasonsInput): { reasons: string[]; codes: RiskReason[]; avg: number | null; inactiveDays: number; declining: boolean } {
   const inactiveDays = i.lastActivity ? Math.floor((i.now - i.lastActivity) / DAY) : Infinity;
   const scores = i.scores.slice().sort((a, b) => a.at - b.at);
   const avg = scores.length ? scores.reduce((s, x) => s + x.pct, 0) / scores.length : null;
@@ -397,16 +455,16 @@ export function learnerReasons(i: LearnerReasonsInput): { reasons: string[]; avg
     declining = rm < em - DECLINE_DELTA;
   }
 
-  const reasons: string[] = [];
+  const codes: RiskReason[] = [];
   const hasIncomplete = i.assigned > i.completed;
   if (i.assigned >= MIN_ASSIGNED && i.completed / i.assigned < LOW_COMPLETION)
-    reasons.push(`${Math.round((i.completed / i.assigned) * 100)}% completion`);
-  if (hasIncomplete && inactiveDays !== Infinity && inactiveDays > INACTIVE_DAYS) reasons.push(`inactive ${inactiveDays}d`);
-  else if (hasIncomplete && inactiveDays === Infinity && i.assigned > 0) reasons.push("never started");
-  if (avg != null && avg < LOW_SCORE) reasons.push(`avg score ${Math.round(avg * 100)}%`);
-  if (declining) reasons.push("scores declining");
-  if (i.overdue >= OVERDUE_FLAG) reasons.push(`${i.overdue} overdue`);
-  return { reasons, avg, inactiveDays, declining };
+    codes.push({ code: "completion", pct: Math.round((i.completed / i.assigned) * 100) });
+  if (hasIncomplete && inactiveDays !== Infinity && inactiveDays > INACTIVE_DAYS) codes.push({ code: "inactive", days: inactiveDays });
+  else if (hasIncomplete && inactiveDays === Infinity && i.assigned > 0) codes.push({ code: "never_started" });
+  if (avg != null && avg < LOW_SCORE) codes.push({ code: "avg_score", pct: Math.round(avg * 100) });
+  if (declining) codes.push({ code: "declining" });
+  if (i.overdue >= OVERDUE_FLAG) codes.push({ code: "overdue", n: i.overdue });
+  return { reasons: codes.map(riskReasonText), codes, avg, inactiveDays, declining };
 }
 
 export type LearnerHealth = {
@@ -419,6 +477,8 @@ export type LearnerHealth = {
   avg: number | null;
   inactiveDays: number;
   reasons: string[];
+  /** The same reasons as codes, in the same order. */
+  codes?: RiskReason[];
 };
 
 /**
@@ -478,5 +538,6 @@ export function computeLearnerHealth(
     avg: r.avg,
     inactiveDays: r.inactiveDays,
     reasons: r.reasons,
+    codes: r.codes,
   };
 }
