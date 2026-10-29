@@ -42,7 +42,7 @@ export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" |
 /** S4 slice D: what the rules pull out of a book-activation utterance. */
 export type BookActArgs = { code?: string; orderNumber?: string; childQuery?: string };
 
-export type SkActPhrase = "diary.note" | "parents.remind" | "marking.next" | "marking.grade" | "lesson.prepare";
+export type SkActPhrase = "diary.note" | "parents.remind" | "marking.next" | "marking.grade" | "lesson.prepare" | "notice.school";
 
 export const SK_CHAT_NOTHING_PENDING = "Nothing is waiting on an answer — ask me something, or tell me where to go.";
 export const SK_CHAT_THANKS = "You're welcome.";
@@ -431,6 +431,31 @@ const REMIND_PHRASE_RE = new RegExp(
     ")",
   "u",
 );
+// S5 slice D: a SCHOOL-WIDE or ALL-STAFF notice (notice.school, click-only).
+// Checked before the diary phrasings, which would otherwise take "post a
+// notice to …" / "hantar notis …" for one class's diary.
+const WHOLE = "(?:the |all |all the |every |each |our |the whole |the entire |whole |entire )?";
+const SCHOOLWIDE = "(?:whole school|entire school|school|everyone|everybody|staff|staffs|teachers|teaching staff|parents and (?:students|teachers)|all parents)";
+const NOTICE_SCHOOL_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    // post a notice to the whole school / send an announcement to all staff / share a message with everyone
+    "(?:post|send|put up|put out|publish|share|issue|make|give|write) (?:a |an |the )?(?:school(?:-wide| wide)? |staff |general )?(?:notice|announcement|message|memo|circular|notification) (?:to|for|with) " + WHOLE + SCHOOLWIDE + "(?![\\p{L}])" +
+    // send a school notice / post a staff notice / make a school-wide announcement
+    "|(?:post|send|put up|publish|issue|make|write) (?:a |an |the )?(?:school(?:-wide| wide)?|staff|whole[- ]school) (?:notice|announcement|memo|circular|notification)" +
+    // tell all staff / tell the whole school / tell everyone at school / announce to everyone
+    "|(?:tell|inform|notify|remind|let) " + WHOLE + "(?:whole school|entire school|staff|teachers|teaching staff|everyone|everybody)(?![\\p{L}])(?! (?:in|of|from) (?:class |form |grade )?[0-9])" +
+    "|announce (?:to|for) " + WHOLE + SCHOOLWIDE + "(?![\\p{L}])" +
+    // MS: hantar notis kepada semua … / maklumkan kepada semua guru / beritahu semua staf / notis sekolah
+    "|(?:hantar|siarkan|keluarkan|kirim|buat) (?:satu )?(?:notis|makluman|pengumuman|hebahan|memo|pekeliling) (?:sekolah|kepada (?:semua|seluruh|warga)|untuk (?:semua|seluruh|warga)|kpd (?:semua|seluruh))" +
+    "|(?:maklumkan|beritahu|bagitahu|hebahkan|umumkan) (?:kepada |pada |kpd )?(?:semua|seluruh|warga) (?:guru|cikgu|staf|kakitangan|warga sekolah|sekolah|ibu ?bapa|murid|pelajar|orang)" +
+    // AR: أرسل إشعارًا للمدرسة / انشر إعلانا لجميع المعلمين / أخبر جميع الموظفين
+    "|(?:أرسل|ارسل|انشر|أصدر|اصدر|وجّه|وجه) (?:إشعار|اشعار|إعلان|اعلان|تعميم|تنبيه)[\u064b-\u0652ا]* (?:لل|إلى ال|الى ال|ل|إلى |الى )?(?:مدرسة|جميع|كل|موظفين|معلمين|هيئة)" +
+    "|(?:أخبر|اخبر|بلغ|بلّغ|أبلغ|ابلغ) (?:جميع|كل) (?:المعلمين|الموظفين|المدرسة|الطلاب|أولياء|اولياء)" +
+    ")",
+  "u",
+);
 const DIARY_PHRASE_RE = new RegExp(
   "^" +
     ACT_POLITE +
@@ -535,6 +560,7 @@ const LESSON_PREPARE_PHRASE_RE = new RegExp(
 export function actPhraseOf(t: string, raw: string): SkActPhrase | null {
   if (/[?؟]\s*$/u.test(raw)) return null;
   if (REMIND_PHRASE_RE.test(t)) return "parents.remind";
+  if (NOTICE_SCHOOL_PHRASE_RE.test(t)) return "notice.school";
   if (DIARY_PHRASE_RE.test(t)) return "diary.note";
   if (MARK_GRADE_PHRASE_RE.test(t)) return "marking.grade";
   if (MARK_NEXT_PHRASE_RE.test(t)) return "marking.next";

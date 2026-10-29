@@ -21,6 +21,8 @@ import { TUTOR_CAPABILITIES } from "./tutor";
 // S4 slices A+B: the parent reads (child.*).
 import { PARENT_CAPABILITIES } from "./parent";
 import { bookActivateAction } from "./book";
+// S5 slice D: the click-only school notice (principal + coordinator).
+import { noticeSchoolAction } from "./notice";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -58,9 +60,13 @@ const ENTRIES: SkCapability[] = [
   // S4 slice D: book activation (student for herself, parent for a verified
   // child), confirm tier and CLICK-ONLY (it spends a code; act-book.ts).
   bookActivateAction,
+  // S5 slice D: the school / all-staff notice (principal + coordinator hats),
+  // confirm tier and CLICK-ONLY (§9.2 school-wide notices; act-notice.ts).
+  noticeSchoolAction,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
 
 export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus, TUTOR_CAPABILITIES, bookActivateAction };
 export { PARENT_CAPABILITIES };
+export { noticeSchoolAction };

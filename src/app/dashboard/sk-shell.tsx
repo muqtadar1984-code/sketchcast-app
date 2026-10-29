@@ -960,8 +960,9 @@ export default function SkShell({
   const cardLabels = copy.cardParams as Record<string, string> | undefined;
   const paramLabel = (k: string) => cardLabels?.[k] ?? k.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
   // Ids are for the server, not the teacher: a card shows names, text and dates.
-  // `chapter_ref` (0-based) and `click_only` are for the server too.
-  const shownParams = (params: Card["params"]) => Object.entries(params).filter(([k]) => !/(?:^|_)ids?$/.test(k) && k !== "chapter_ref" && k !== "click_only");
+  // `chapter_ref` (0-based) and `click_only` are for the server too, and so is
+  // a notice's raw `audience` (S5 slice D: the card says it as `seen_by`).
+  const shownParams = (params: Card["params"]) => Object.entries(params).filter(([k]) => !/(?:^|_)ids?$/.test(k) && k !== "chapter_ref" && k !== "click_only" && k !== "audience");
   const paramValue = (v: Card["params"][string]) => (v === null || v === undefined ? "—" : typeof v === "boolean" ? (v ? cardLabels?.yes ?? "Yes" : cardLabels?.no ?? "No") : String(v));
 
   return (
