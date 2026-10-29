@@ -2338,6 +2338,11 @@
         "ttNone": "No lessons are timetabled in {where} for {period}.",
         "ttClosed": "No school periods are running right now."
       },
+      "schoolMeter": {
+        "analyticsOff": "School analytics aren't switched on for your school.",
+        "auditFailed": "I can't open school figures right now — try again in a moment.",
+        "capReached": "You've reached today's {cap} school questions — it resets at midnight UTC."
+      },
       "parent": {
         "noChildren": "You have no linked children yet — add one on My Children.",
         "notLinked": "That child isn't linked to your account, so I can't show anything about them.",

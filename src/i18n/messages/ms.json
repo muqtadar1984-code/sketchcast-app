@@ -2338,6 +2338,11 @@
         "ttNone": "Tiada pelajaran dijadualkan dalam {where} untuk {period}.",
         "ttClosed": "Tiada waktu persekolahan berjalan sekarang."
       },
+      "schoolMeter": {
+        "analyticsOff": "Analitik sekolah belum dihidupkan untuk sekolah anda.",
+        "auditFailed": "Saya tidak dapat membuka angka sekolah sekarang — cuba lagi sebentar lagi.",
+        "capReached": "Anda telah mencapai had {cap} soalan sekolah hari ini — ia ditetapkan semula pada tengah malam UTC."
+      },
       "parent": {
         "noChildren": "Anda belum ada anak yang dipautkan — tambah seorang di Anak Saya.",
         "notLinked": "Anak itu tidak dipautkan kepada akaun anda, jadi saya tidak boleh tunjukkan apa-apa tentangnya.",

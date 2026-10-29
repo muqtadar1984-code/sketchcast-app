@@ -26,6 +26,9 @@ import { searchLibrary } from "@/sk/capabilities/library";
 import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
 import { LOCALES } from "@/i18n/locales";
+// S5 slice B: the leader school-read gate (analytics, 60/day cap, audit row).
+import { SCHOOL_READ_REFUSALS, schoolReadGate } from "@/sk/shell/school-meter";
+import { SM_ANALYTICS_OFF } from "@/sk/shell/school-meter-lines";
 import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
 
 export const runtime = "nodejs";
@@ -190,6 +193,11 @@ export async function POST(request: Request) {
     // (assignments.status + learners.risk on "how are my classes") share the
     // teacher's classes and enrollments instead of each reading them again.
     cache: new Map(),
+    // S5 slice B: every leader school read this turn (the leader block below,
+    // the model's tools, a board/start-lesson read in a leader hat) passes the
+    // analytics gate and is metered ONCE — the audit row written BEFORE the
+    // read, refused when that write fails; the shared 60/day counter.
+    schoolRead: schoolReadGate(ctx, g.supabase, body.turnId, now),
   };
 
   // Board moves are audited against the PRESENT session (sk_actions.session_id:
@@ -639,6 +647,17 @@ export async function POST(request: Request) {
         // no model; every number is one of its facts. Not allowed → the model.
         if ("leader" in decision && decision.leader) {
           const name = decision.leader.capability;
+          // S5 slice B: school analytics off for this school → the fixed line
+          // (school.health carries the `analytics` flag, so the runner would
+          // only say not_allowed and hand a school question to the model).
+          if (ctx.flags.analytics !== true) {
+            const text = lineFor(SM_ANALYTICS_OFF, ctx.user.locale);
+            send({ type: "text", text });
+            done({ sources: [], label: "declined" }, text, []);
+            finish();
+            return;
+          }
+          // The read is gated + metered inside runCapability (deps.schoolRead).
           const r = await runCapability(ctx, name, decision.leader.args, deps);
           if (r.error !== "not_allowed") {
             send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
@@ -769,6 +788,15 @@ export async function POST(request: Request) {
           trimmed = !!s.trimmed;
           sources = [...new Set([...sources, ...s.sources])];
           if (s.usage) usage = usage ? { inputTokens: usage.inputTokens + s.usage.inputTokens, outputTokens: usage.outputTokens + s.usage.outputTokens } : s.usage;
+        }
+        // S5 slice B: a leader school read the gate refused (analytics off,
+        // the 60/day cap, the audit write failed) — its line is the answer
+        // when nothing else in the turn produced one.
+        const refusedRead = trace.find((t) => SCHOOL_READ_REFUSALS.has(t.result.error ?? ""));
+        if (refusedRead && (!productive.length || text === SK_NOTHING_ON_THAT)) {
+          text = refusedRead.result.summary;
+          label = "declined";
+          trimmed = false;
         }
         const entities = trace.flatMap((t) => t.result.entities ?? []);
         send({ type: "text", text });

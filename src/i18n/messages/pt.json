@@ -2338,6 +2338,11 @@
         "ttNone": "Não há aulas marcadas em {where} para {period}.",
         "ttClosed": "Não há nenhum tempo letivo a decorrer neste momento."
       },
+      "schoolMeter": {
+        "analyticsOff": "A análise da escola não está ativada para a sua escola.",
+        "auditFailed": "Não consigo abrir os números da escola neste momento — tente novamente daqui a pouco.",
+        "capReached": "Atingiu as {cap} perguntas sobre a escola de hoje — o limite repõe-se à meia-noite UTC."
+      },
       "parent": {
         "noChildren": "Ainda não tem filhos associados — adicione um em Os meus filhos.",
         "notLinked": "Essa criança não está associada à sua conta, por isso não posso mostrar nada sobre ela.",
