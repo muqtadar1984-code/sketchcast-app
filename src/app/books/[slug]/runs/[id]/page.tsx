@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { canOn } from "@/utils/books-access";
 import { runnableStage } from "@/utils/books/stages";
 import { getBookRun, listRunArtifacts, listRunEvents } from "@/utils/books/runs";
+import { listApprovals } from "@/utils/books/store";
+import { approvalOfText, gateERefusal, type CompiledBook } from "@/utils/books/decide";
+import ApproveGateE from "./gate-e";
 import { loadBook } from "../../load";
 import { Card, bytes } from "../../../ui";
 import RunLive from "./run-live";
@@ -20,6 +23,10 @@ export default async function RunPage({ params }: { params: Promise<{ slug: stri
   const [events, files] = await Promise.all([listRunEvents(run.id), listRunArtifacts(work.uid, run.id)]);
   const fileHref = (id: number) => `/api/pub/file?book=${encodeURIComponent(slug)}&id=${id}`;
   const pictures = files.filter((a) => /\.png$/i.test(a.rel_path));
+  const compiled = run.stage_key === "compile_book" && run.status === "done" ? (run.detail?.summary as CompiledBook | undefined) : undefined;
+  const approvals = compiled ? await listApprovals(work.uid) : [];
+  const gateE = compiled ? approvals.find((a) => a.kind === "gate_e" && a.content_sha256 === compiled.pdf_sha256) : undefined;
+  const refusal = compiled && !gateE ? gateERefusal(compiled, approvals) : null;
 
   return (
     <div className="space-y-4">
@@ -27,6 +34,35 @@ export default async function RunPage({ params }: { params: Promise<{ slug: stri
         <Link href={`/books/${slug}/runs`} className="text-[#7A7363] hover:text-[#1F2A24]">← All runs</Link>
       </p>
       <RunLive slug={slug} initialRun={run} initialEvents={events} canControl={!!stage && canOn(member, work.uid, stage.action)} />
+      {compiled && (
+        <Card title={`Compiled book · ${compiled.pages} pages`}>
+          <ul className="text-sm divide-y divide-[#EFE8D8]">
+            {compiled.chapters.map((c) => {
+              const ok = !!approvalOfText(approvals, c.number, c.content_sha256);
+              return (
+                <li key={c.number} className="flex flex-wrap items-baseline justify-between gap-2 py-1.5">
+                  <span>
+                    Chapter {c.number} · {c.title} <span className="text-xs text-[#7A7363]">p. {c.start}, {c.pages} pp</span>
+                  </span>
+                  <span className={"text-xs " + (ok ? "text-[#24543A]" : "text-[#8A4B10]")}>{ok ? "Gate D approved" : "not Gate D approved"}</span>
+                </li>
+              );
+            })}
+            {compiled.missing.length > 0 && <li className="py-1.5 text-xs text-[#8A4B10]">Not drafted yet: chapters {compiled.missing.join(", ")}</li>}
+          </ul>
+          <div className="mt-3">
+            {gateE ? (
+              <p className="text-sm text-[#24543A]">Approved at Gate E by {gateE.approved_by} on {gateE.approved_on}.</p>
+            ) : refusal ? (
+              <p className="text-sm text-[#7A7363]">Gate E: {refusal}</p>
+            ) : canOn(member, work.uid, "approve") ? (
+              <ApproveGateE slug={slug} run={run.id} sha={compiled.pdf_sha256} pages={compiled.pages} />
+            ) : (
+              <p className="text-sm text-[#7A7363]">Ready for Gate E; an approver approves it.</p>
+            )}
+          </div>
+        </Card>
+      )}
       {pictures.length > 0 && (
         <Card title="Pictures from this run">
           {/* e.g. the font proof's first pages, side by side: compare/<font>-p1.png */}
