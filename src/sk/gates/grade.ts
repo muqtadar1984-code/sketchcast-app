@@ -22,6 +22,7 @@ import { SCHOOL_LINES, S_NO_SCOPE, S_OUT_OF_SCOPE } from "@/sk/shell/school-line
 import { F_SEATS_NO_LIMIT, F_SEATS_PRINCIPAL_ONLY, SCHOOL_FIGURE_LINES } from "@/sk/shell/school-figure-lines";
 import { SCHOOL_METER_LINES } from "@/sk/shell/school-meter-lines";
 import { NOTICE_LINE_TABLES } from "@/sk/shell/act-notice-lines";
+import { ACTION_CLAIM_LINES, claimsAnAction } from "@/sk/shell/action-claims";
 import { EMAIL_LEAK_RE } from "./tenant";
 import type { GateItem, GroundedItem, RefusalAccept, UnsupportedItem } from "./types";
 
@@ -73,7 +74,7 @@ export type GateVerdict = {
 const fixedLineTexts: string[] = [
   SK_NOTHING_ON_THAT,
   SK_CANNOT_CONFIRM,
-  ...[SCHOOL_LINES, SCHOOL_FIGURE_LINES, SCHOOL_METER_LINES, NOTICE_LINE_TABLES].flatMap((tables) =>
+  ...[SCHOOL_LINES, SCHOOL_FIGURE_LINES, SCHOOL_METER_LINES, NOTICE_LINE_TABLES, ACTION_CLAIM_LINES].flatMap((tables) =>
     Object.values(tables).flatMap((line) => Object.values(line).map((t) => t.replace(/\{\w+\}/g, " "))),
   ),
 ];
@@ -126,7 +127,8 @@ const ACTION_CLAIM_RE =
   /\b(?:i(?:'ve| have)|we(?:'ve| have)|has been|have been|was|were)\s+(?:now\s+)?(?:sent|emailed|e-mailed|posted|deleted|removed|messaged|notified|published|changed|updated)\b|\b(?:emailed|e-mailed)\b|\btelah\s+(?:di)?(?:hantar|menghantar|emel|padam|memadam|siar|menyiarkan)\b|\bsudah\s+(?:di)?(?:hantar|padam)\b|تم\s+(?:الإرسال|إرسال|ارسال|الحذف|حذف|النشر|نشر)|(?:أرسلت|ارسلت|حذفت|نشرت)\b/iu;
 
 export function claimsAction(text: string): boolean {
-  return ACTION_CLAIM_RE.test(text);
+  // The grader's own pattern OR the route's detector (action-claims.ts): either one is a claim.
+  return ACTION_CLAIM_RE.test(text) || claimsAnAction(text);
 }
 
 function refusalMatches(accept: RefusalAccept, ctx: { text: string; label: string | null; events: GateEvent[]; locale: string }): boolean {

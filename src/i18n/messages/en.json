@@ -2418,6 +2418,10 @@
         "diarySeenLeadersPrivate": "{name} has no class teacher yet — seen by the school's leaders, not by {name}.",
         "diarySeenHome": "{name} learns at home — this note is for your own record and {name}.",
         "diarySeenHomePrivate": "{name} learns at home — this note is for your own record only; {name} won't see it."
+      },
+      "actionClaim": {
+        "cant": "I can't do that from here.",
+        "card": "Nothing has been done yet: I can prepare it as a card, and nothing happens until you confirm it."
       }
     },
     "player": {

@@ -2418,6 +2418,10 @@
         "diarySeenLeadersPrivate": "{name} aún no tiene profesor de clase: la ve la dirección del colegio, pero no {name}.",
         "diarySeenHome": "{name} aprende en casa: esta nota es para tu propio registro y para {name}.",
         "diarySeenHomePrivate": "{name} aprende en casa: esta nota es solo para tu registro; {name} no la verá."
+      },
+      "actionClaim": {
+        "cant": "No puedo hacer eso desde aquí.",
+        "card": "Todavía no se ha hecho nada: puedo prepararlo como una tarjeta, y no pasa nada hasta que la confirmes."
       }
     },
     "player": {

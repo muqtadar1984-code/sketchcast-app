@@ -2418,6 +2418,10 @@
         "diarySeenLeadersPrivate": "{name} n'a pas encore d'enseignant de classe — vue par la direction de l'école, pas par {name}.",
         "diarySeenHome": "{name} apprend à la maison — cette note est pour votre propre suivi et pour {name}.",
         "diarySeenHomePrivate": "{name} apprend à la maison — cette note est pour votre seul suivi ; {name} ne la verra pas."
+      },
+      "actionClaim": {
+        "cant": "Je ne peux pas faire cela d'ici.",
+        "card": "Rien n'a encore été fait : je peux le préparer sous forme de carte, et rien ne se passe tant que vous ne l'avez pas confirmée."
       }
     },
     "player": {

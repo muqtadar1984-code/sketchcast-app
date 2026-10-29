@@ -2418,6 +2418,10 @@
         "diarySeenLeadersPrivate": "{name} belum ada guru kelas — dilihat oleh pimpinan sekolah, bukan oleh {name}.",
         "diarySeenHome": "{name} belajar di rumah — nota ini untuk rekod anda sendiri dan {name}.",
         "diarySeenHomePrivate": "{name} belajar di rumah — nota ini untuk rekod anda sahaja; {name} tidak akan melihatnya."
+      },
+      "actionClaim": {
+        "cant": "Saya tidak dapat melakukannya dari sini.",
+        "card": "Belum ada apa-apa yang dibuat: saya boleh menyediakannya sebagai kad, dan tiada apa-apa berlaku sehingga anda mengesahkannya."
       }
     },
     "player": {

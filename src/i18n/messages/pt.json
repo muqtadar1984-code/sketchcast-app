@@ -2418,6 +2418,10 @@
         "diarySeenLeadersPrivate": "{name} ainda não tem professor de turma — vista pela direção da escola, não por {name}.",
         "diarySeenHome": "{name} aprende em casa — esta nota é para o seu próprio registo e para {name}.",
         "diarySeenHomePrivate": "{name} aprende em casa — esta nota é só para o seu registo; {name} não a verá."
+      },
+      "actionClaim": {
+        "cant": "Não consigo fazer isso a partir daqui.",
+        "card": "Ainda não foi feito nada: posso prepará-lo num cartão, e nada acontece até o confirmar."
       }
     },
     "player": {
