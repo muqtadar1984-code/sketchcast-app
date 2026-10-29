@@ -2299,6 +2299,27 @@
         "refused": "لا يمكنك فتح هذا الدرس. اسأل معلّمك أو وليّ أمرك عن الوصول إلى الكتاب."
       },
       "tutorNotOpen": "مشغّل الدرس غير مفتوح في هذه الصفحة.",
+      "school": {
+        "noScope": "ليس لديك نطاق منسّق في هذه المدرسة، لذا لا يوجد ما أعرضه.",
+        "readFailed": "تعذّر عليّ قراءة بيانات المدرسة الآن.",
+        "whereSchool": "المدرسة",
+        "whereGrade": "الصف {grade}",
+        "outOfScope": "{grade} خارج نطاقك ({scope})، لذا لا يمكنني عرضه.",
+        "notYet": "لا يوجد بعد",
+        "empty": "لا توجد فصول في {where} للإبلاغ عنها بعد.",
+        "overview": "نظرة عامة على {where}: المتعلمون {students}، الفصول {classes}، المعلمون {teachers}. النشطون في آخر 14 يومًا: {active}. العمل المنجز: {completion}. المعرّضون للخطر: {atRisk}. المتأخر: {overdue}. بانتظار التصحيح: {pending}.",
+        "byGrade": "المعرّضون للخطر حسب الصف: {items}.",
+        "atRisk": "المعرّضون للخطر في {where}: {n}. {items}.",
+        "atRiskNone": "لا أحد في {where} معرّض للخطر وفق قواعد صحة المدرسة (المتعلمون: {students}).",
+        "teachers": "المعلمون المُنبَّه عليهم في {where}: {n}. {items}.",
+        "teachersNone": "لا يوجد معلم مُنبَّه عليه في {where} (المعلمون: {teachers}).",
+        "assign": "الواجبات في {where}: {n} عبر الفصول {classes}. المنجز {done} من {assigned} ({pct}%)، غير المنجز {notDone}، المتأخر {overdue}، بانتظار التصحيح {pending}.",
+        "assignNone": "لم يُسنَد أي واجب في {where}.",
+        "ttIn": "الآن في {where} — {period} ({start}–{end}): الحصص {n}. {items}.",
+        "ttNext": "التالي في {where} — {period} ({start}–{end}): الحصص {n}. {items}.",
+        "ttNone": "لا توجد حصص مجدولة في {where} لـ{period}.",
+        "ttClosed": "لا توجد حصص مدرسية جارية الآن."
+      },
       "parent": {
         "noChildren": "لا يوجد أطفال مرتبطون بحسابك بعد — أضف طفلًا من صفحة أطفالي.",
         "notLinked": "هذا الطفل غير مرتبط بحسابك، لذا لا يمكنني عرض أي شيء عنه.",

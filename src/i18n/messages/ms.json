@@ -2299,6 +2299,27 @@
         "refused": "Anda tidak boleh membuka pelajaran ini. Tanya guru atau ibu bapa anda tentang akses kepada buku itu."
       },
       "tutorNotOpen": "Pemain pelajaran tidak dibuka di halaman ini.",
+      "school": {
+        "noScope": "Anda tiada skop penyelaras di sekolah ini, jadi tiada apa-apa untuk ditunjukkan.",
+        "readFailed": "Saya tidak dapat membaca data sekolah sekarang.",
+        "whereSchool": "sekolah",
+        "whereGrade": "tahun {grade}",
+        "outOfScope": "{grade} di luar skop anda ({scope}), jadi saya tidak boleh menunjukkannya.",
+        "notYet": "belum ada",
+        "empty": "Belum ada kelas dalam {where} untuk dilaporkan.",
+        "overview": "Gambaran keseluruhan {where}: murid {students}, kelas {classes}, guru {teachers}. Aktif dalam 14 hari lepas: {active}. Kerja siap: {completion}. Berisiko: {atRisk}. Lewat: {overdue}. Menunggu penandaan: {pending}.",
+        "byGrade": "Berisiko mengikut tahun: {items}.",
+        "atRisk": "Berisiko dalam {where}: {n}. {items}.",
+        "atRiskNone": "Tiada sesiapa dalam {where} berisiko mengikut peraturan kesihatan sekolah (murid: {students}).",
+        "teachers": "Guru yang ditandakan dalam {where}: {n}. {items}.",
+        "teachersNone": "Tiada guru dalam {where} yang ditandakan (guru: {teachers}).",
+        "assign": "Tugasan dalam {where}: {n} merentas kelas {classes}. Siap {done} daripada {assigned} ({pct}%), belum siap {notDone}, lewat {overdue}, menunggu penandaan {pending}.",
+        "assignNone": "Belum ada tugasan diberikan dalam {where}.",
+        "ttIn": "Sekarang dalam {where} — {period} ({start}–{end}): pelajaran {n}. {items}.",
+        "ttNext": "Seterusnya dalam {where} — {period} ({start}–{end}): pelajaran {n}. {items}.",
+        "ttNone": "Tiada pelajaran dijadualkan dalam {where} untuk {period}.",
+        "ttClosed": "Tiada waktu persekolahan berjalan sekarang."
+      },
       "parent": {
         "noChildren": "Anda belum ada anak yang dipautkan — tambah seorang di Anak Saya.",
         "notLinked": "Anak itu tidak dipautkan kepada akaun anda, jadi saya tidak boleh tunjukkan apa-apa tentangnya.",

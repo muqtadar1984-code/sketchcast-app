@@ -2299,6 +2299,27 @@
         "refused": "Não podes abrir esta lição. Pergunta ao teu professor ou aos teus pais pelo acesso ao livro."
       },
       "tutorNotOpen": "O leitor da lição não está aberto nesta página.",
+      "school": {
+        "noScope": "Não tem nenhum âmbito de coordenação nesta escola, por isso não tenho nada para mostrar.",
+        "readFailed": "Não consegui ler os dados da escola neste momento.",
+        "whereSchool": "a escola",
+        "whereGrade": "o ano {grade}",
+        "outOfScope": "{grade} está fora do seu âmbito ({scope}), por isso não o posso mostrar.",
+        "notYet": "ainda não",
+        "empty": "Ainda não há turmas em {where} para relatar.",
+        "overview": "Visão geral de {where}: alunos {students}, turmas {classes}, professores {teachers}. Ativos nos últimos 14 dias: {active}. Trabalho feito: {completion}. Em risco: {atRisk}. Em atraso: {overdue}. Por corrigir: {pending}.",
+        "byGrade": "Em risco por ano: {items}.",
+        "atRisk": "Em risco em {where}: {n}. {items}.",
+        "atRiskNone": "Ninguém em {where} está em risco segundo as regras de acompanhamento da escola (alunos: {students}).",
+        "teachers": "Professores assinalados em {where}: {n}. {items}.",
+        "teachersNone": "Nenhum professor está assinalado em {where} (professores: {teachers}).",
+        "assign": "Trabalhos em {where}: {n} nas turmas {classes}. Feitos {done} de {assigned} ({pct}%), por fazer {notDone}, em atraso {overdue}, por corrigir {pending}.",
+        "assignNone": "Nada foi atribuído em {where}.",
+        "ttIn": "Agora em {where} — {period} ({start}–{end}): aulas {n}. {items}.",
+        "ttNext": "A seguir em {where} — {period} ({start}–{end}): aulas {n}. {items}.",
+        "ttNone": "Não há aulas marcadas em {where} para {period}.",
+        "ttClosed": "Não há nenhum tempo letivo a decorrer neste momento."
+      },
       "parent": {
         "noChildren": "Ainda não tem filhos associados — adicione um em Os meus filhos.",
         "notLinked": "Essa criança não está associada à sua conta, por isso não posso mostrar nada sobre ela.",

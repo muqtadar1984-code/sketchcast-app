@@ -26,7 +26,9 @@ export const BELOW_BASELINE = 15;
 const DAY = 86400000;
 
 export type HealthRows = {
-  classes: { id: string; name: string; grade: string | null; teacher_id: string }[];
+  /** `school_id` (S5): lets SK's principal read cut to the user's own school
+   *  and its coordinator read cut to scope grades (sk/capabilities/leader-scope.ts). */
+  classes: { id: string; name: string; grade: string | null; teacher_id: string; school_id?: string | null }[];
   enrollments: {
     class_id: string;
     student_id: string;
@@ -83,7 +85,7 @@ export type SchoolHealth = {
 /** The superset of both leadership pages' reads, RLS-scoped to the caller. */
 export async function fetchSchoolHealthRows(supabase: SupabaseClient): Promise<HealthRows> {
   const [classesQ, enrQ, sharesQ, progQ, subsQ, gensQ] = await Promise.all([
-    supabase.from("classes").select("id, name, grade, teacher_id"),
+    supabase.from("classes").select("id, name, grade, teacher_id, school_id"),
     supabase.from("enrollments").select("class_id, student_id, profiles(full_name, username, parent_email)"),
     supabase.from("generation_shares").select("generation_id, class_id, student_id, shared_by, due_at"),
     supabase.from("student_progress").select("generation_id, student_id, status, updated_at"),
