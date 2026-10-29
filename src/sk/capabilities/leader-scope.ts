@@ -167,7 +167,11 @@ export function cutLeaderRows(rows: HealthRows, ls: LeaderScope, opts: LeaderCut
   );
   const classIds = new Set(classes.map((c) => c.id));
   const gradeOf = new Map(classes.map((c) => [c.id, c.grade] as const));
-  const enrollments = rows.enrollments.filter((e) => classIds.has(e.class_id));
+  // The email boundary starts here: no parent email travels on, and a name
+  // that IS an address (a username like "kid@mail.example") is no name.
+  const enrollments = rows.enrollments
+    .filter((e) => classIds.has(e.class_id))
+    .map((e) => ({ ...e, parent_email: null, full_name: notAnEmail(e.full_name), username: notAnEmail(e.username) }));
   const students = new Set(enrollments.map((e) => e.student_id));
   const shares = rows.shares.filter(
     (s) =>
@@ -178,7 +182,7 @@ export function cutLeaderRows(rows: HealthRows, ls: LeaderScope, opts: LeaderCut
   const gens = new Set(shares.map((s) => s.generation_id));
   const teachers = new Set(classes.map((c) => c.teacher_id));
   const teacherNames: Record<string, string> = {};
-  for (const id of teachers) if (rows.teacherNames[id] !== undefined) teacherNames[id] = rows.teacherNames[id];
+  for (const id of teachers) if (rows.teacherNames[id] !== undefined) teacherNames[id] = notAnEmail(rows.teacherNames[id]) ?? "Teacher";
   if (ls.mode === "school") {
     return {
       classes,
@@ -206,7 +210,15 @@ export function cutLeaderRows(rows: HealthRows, ls: LeaderScope, opts: LeaderCut
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const EMAIL_KEY_RE = /e-?mail/i;
 
-const scrub = (s: string): string => s.replace(EMAIL_RE, "").replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").trim();
+const scrub = (s: string): string => {
+  const out = s.replace(EMAIL_RE, "").replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").trim();
+  return out || (s.trim() ? "—" : out);
+};
+
+/** null for a value containing an email address (so the name falls back). */
+function notAnEmail(s: string | null): string | null {
+  return s && new RegExp(EMAIL_RE.source).test(s) ? null : s;
+}
 
 /**
  * Strip every email from a leader read's result: any fact key that names an
