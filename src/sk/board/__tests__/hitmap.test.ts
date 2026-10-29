@@ -1,38 +1,37 @@
 // SK B2 — the hit map is DATA from the renderer's export (or, one day, a
 // bucket): numeric clamped boxes, allow-listed ids and verbs, bounded counts,
-// every timeline target an element the map declares. The real six Chapter 2
-// maps and the S1 U4 map pass unchanged; each adversarial case is refused
-// whole (SegmentError) or, for an out-of-world box, clamped.
-import { readFileSync } from "node:fs";
+// every timeline target an element the map declares. A real Chapter 2 map
+// (s2) and the S1 U4 map pass unchanged; each adversarial case is refused
+// whole (SegmentError) or, for an out-of-world box, clamped. (Both maps are
+// inline in src/sk/__tests__ since S3 slice E retired the files in public/.)
 import { describe, expect, it } from "vitest";
+import { CH02_S2_HITMAP, U4_HITMAP } from "../../__tests__/segment-fixtures";
 import { drawnAt, hitBox, hitTargets, lastDrawnAt, LIMITS, SegmentError, validateHitMap, type HitMap } from "../engine";
 
-const load = (p: string) => JSON.parse(readFileSync(new URL(p, import.meta.url), "utf-8")) as HitMap;
-const UNITS = ["s1", "s2", "s3", "s4", "s5", "s6"];
-const ch02 = (u: string) => load(`../../../../public/sk-s1/ch02/${u}/explain-main/hitmap.json`);
 const clone = (h: HitMap): HitMap => JSON.parse(JSON.stringify(h));
-const refuses = (mutate: (h: HitMap) => void, from: HitMap = ch02("s2")) => {
+const ch02s2 = () => clone(CH02_S2_HITMAP);
+const refuses = (mutate: (h: HitMap) => void, from: HitMap = ch02s2()) => {
   const h = clone(from);
   mutate(h);
   expect(() => validateHitMap(h)).toThrow(SegmentError);
 };
 
 describe("the real hit maps pass", () => {
-  it.each(UNITS)("ch02 %s validates and normalises to itself", (u) => {
-    const h = ch02(u);
+  it("ch02 s2 validates and normalises to itself", () => {
+    const h = ch02s2();
     const v = validateHitMap(h);
     expect(Object.keys(v.elements)).toEqual(Object.keys(h.elements));
     expect(v.timeline.length).toBe(h.timeline.length);
     expect(v.world).toEqual({ w: 1280, h: 720 });
   });
   it("the S1 U4 Option S map validates", () => {
-    expect(() => validateHitMap(load("../../../../public/sk-s1/u4/optionS.hitmap.json"))).not.toThrow();
+    expect(() => validateHitMap(clone(U4_HITMAP))).not.toThrow();
   });
 });
 
 describe("numeric boxes, clamped into the world", () => {
   it("clamps an element box that leaves the world and orders its corners", () => {
-    const h = clone(ch02("s1"));
+    const h = ch02s2();
     h.elements.w1!.box = [1400, -20, 100, 800];
     const v = validateHitMap(h);
     expect(v.elements.w1!.box).toEqual([100, 0, 1280, 720]);
@@ -88,7 +87,7 @@ describe("resource exhaustion", () => {
 });
 
 describe("what the overlay and the avatar read from a map", () => {
-  const s2 = validateHitMap(ch02("s2"));
+  const s2 = validateHitMap(ch02s2());
   it("resolves elements, assets and regions in world pixels", () => {
     expect(hitBox(s2, "w1")).toEqual({ x: 544, y: 592.1, w: 390, h: 42 });
     expect(hitBox(s2, "ill")).toEqual({ x: 126, y: 92, w: 348, h: 560 });

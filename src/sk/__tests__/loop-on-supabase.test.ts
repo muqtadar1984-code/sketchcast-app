@@ -13,15 +13,14 @@
  * mismatch fails here.
  * Run: node node_modules/vitest/vitest.mjs run src/sk/__tests__/loop-on-supabase.test.ts
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseGraph } from "../graph";
 import { uuidv7 } from "../ids";
 import { openSession, runCommand, runTurn, submitAnswer, type LoopDeps } from "../loop";
-import { graphsForStore, servableGraphsOn } from "../server";
 import { withEvent } from "../store";
 import type { SseEvent } from "../types";
 import { O, PRODUCT, SLUG } from "./cells-fixtures";
-import { cellsGraph, ITEM, LOOP_WIRINGS, staffGrant, standinGraph, STUDENT, supabaseLoopDeps, type LoopHarness } from "./supabase-loop-deps";
+import { cellsGraph, ITEM, LOOP_WIRINGS, staffGrant, STUDENT, supabaseLoopDeps, type LoopHarness } from "./supabase-loop-deps";
 
 const open = (h: LoopHarness, studentId = h.studentId) => openSession(h.deps, { studentId, productId: SLUG, chapter: 2 });
 const collect = async (gen: AsyncGenerator<SseEvent>) => {
@@ -59,7 +58,7 @@ describe.each(LOOP_WIRINGS)("the teacher loop on the cells chapter — $name", (
     const r2 = await runCommand(h.deps, s, { name: "slower", args: {} });
     expect(r2.view.rate).toBeCloseTo(0.85, 5);
     const r3 = await runCommand(h.deps, s, { name: "repeat", args: {} });
-    expect(r3.view.cursor.t).toBe(5475); // s1-explain-main's checkpoints: 0, 5475, 13412 …
+    expect(r3.view.cursor.t).toBe(100); // the fixture segment's checkpoints: 0, 100, 20738 …
     expect(r3.board).toBe("seek");
     expect((await h.store.getSession(s.id))!.machine).toEqual(s.machine); // what was saved is what the loop holds
   });
@@ -280,19 +279,6 @@ describe("what only the Supabase wiring can tell us", () => {
     h.db.seed("book_access_grants", [{ ...staffGrant(Date.now()), id: "7e3a2f4b-5c6d-4e7f-8a9b-0c1d2e3f4a99", user_id: orphan, product_id: PRODUCT }]);
     await expect(open(h, orphan)).rejects.toThrow(/23503/);
     expect(h.db.rows("sk_sessions")).toHaveLength(0);
-  });
-
-  it("the stand-in graph is withheld on the Supabase store (its product has no sk_book_products row) and served on the in-memory store", async () => {
-    const h = supabaseLoopDeps();
-    const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    const graphs = [standinGraph(), cellsGraph()];
-    const served = await servableGraphsOn(h.db, graphs);
-    expect(served.map((g) => g.product_id)).toEqual([SLUG]);
-    expect(err).toHaveBeenCalledWith(expect.stringContaining("sk-poc-biology is not in sk_book_products"));
-    err.mockRestore();
-    expect(graphsForStore(graphs, null)).toHaveLength(2);
-    // The product row the filter matched is the one the bank resolves units through.
-    expect(h.db.rows("sk_book_products")[0]).toMatchObject({ id: PRODUCT, slug: SLUG });
   });
 
   it("a graph the tables could not record is refused at load: chapter 0 and version 0", () => {

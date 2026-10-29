@@ -1,5 +1,5 @@
 // SK — the two production wirings of the teacher loop, side by side, on the
-// packaged cells chapter (public/sk-s1/ch02/graph.json) so the same scenario
+// packaged cells chapter (the inline CELLS_GRAPH_JSON in ./fixtures) so the same scenario
 // runs on both and a contract one wiring keeps and the other breaks fails
 // here, not in the founder's browser:
 //
@@ -21,22 +21,22 @@
 // `AccessSeed` lets a scenario act out any other state (no grant, an expired
 // tutor window, a spent allowance, a school licence, a plan).
 //
-// Segments and hit maps are the real packaged files, read through the same
-// loaders the routes use.
-import { readFileSync } from "node:fs";
+// Every section plays the packager's s2 segment and hit map (inline, in
+// ./segment-fixtures), through the same segment and hit-map gates the routes
+// used to load files through.
 import type { Grant, Subscription } from "../access";
 import { StaticEntitlements, SupabaseEntitlements, type EntitlementSource } from "../entitlement";
 import { UUID_RE } from "../ids";
 import { CompositeItemBank, StaticItemBank, type ItemBank } from "../items";
 import { SupabaseItemBank, toRawQuestion } from "../items-supabase";
-import { parseGraph } from "../graph";
+import { hitTargets, normaliseSegment, validateHitMap, validateSegment, type Segment } from "../board/engine";
 import type { LoopDeps } from "../loop";
-import { loadHitmapTargetsFromPublic, loadSegmentFromPublic } from "../server";
 import { InMemorySessionStore, type SessionStore } from "../store";
 import { SupabaseSessionStore } from "../store-supabase";
-import type { TeachingGraph } from "../types";
 import { FIXTURES, O, PRODUCT, SLUG } from "./cells-fixtures";
 import { FakeDb, skFakeDb } from "./fake-supabase";
+import { cellsGraph } from "./fixtures";
+import { CH02_S2_HITMAP, CH02_S2_SEGMENT } from "./segment-fixtures";
 
 /** The signed-in student (auth user id = profiles.id), as /api/sk/* passes it. */
 export const STUDENT = "0f6a2c1e-7b3d-4e5f-8a9b-0c1d2e3f4a5b";
@@ -70,12 +70,7 @@ export const ITEM = {
   s4_fill: "a5c8ebbe-d00e-4951-81d0-b6fd3d1a55aa",
 } as const;
 
-export const GRAPH_URI = "/sk-s1/ch02/graph.json";
-export const STANDIN_URI = "/sk-s1/graph-ch2.json";
-
-const readPublic = (uri: string): unknown => JSON.parse(readFileSync(new URL(`../../../public${uri}`, import.meta.url), "utf-8"));
-export const cellsGraph = (): TeachingGraph => parseGraph(readPublic(GRAPH_URI), "/sk-s1/ch02/");
-export const standinGraph = (): TeachingGraph => parseGraph(readPublic(STANDIN_URI), "/sk-s1/");
+export { cellsGraph, standinGraph } from "./fixtures";
 
 /** The static bank's view of the same chapter: the uuid items under the graph's section keys. */
 export function cellsStaticBank(): StaticItemBank {
@@ -118,7 +113,11 @@ export function cellsDb(now: () => number = () => Date.now(), access: AccessSeed
 export type LoopHarness = { deps: LoopDeps; store: SessionStore; items: ItemBank; entitlements: EntitlementSource; db: FakeDb | null; studentId: string };
 export type HarnessOpts = { now?: () => number; access?: AccessSeed; allowanceEnforced?: boolean };
 
-const loaders = { loadSegment: loadSegmentFromPublic, loadHitmapElementIds: loadHitmapTargetsFromPublic };
+/** Every section's segment is the s2 fixture (checkpoints 0, 100, 20738 …), gated as a loaded file was. */
+const loaders = {
+  loadSegment: async (): Promise<Segment> => validateSegment(normaliseSegment(JSON.parse(JSON.stringify(CH02_S2_SEGMENT)) as Segment)),
+  loadHitmapElementIds: async (): Promise<string[]> => hitTargets(validateHitMap(JSON.parse(JSON.stringify(CH02_S2_HITMAP)))),
+};
 
 /** The static source's view of `access`: grants keyed on the SLUG (the memory store knows no uuid). */
 export function staticEntitlements(access: AccessSeed): StaticEntitlements {
