@@ -14,6 +14,8 @@ import { findBookCode, findOrderNumber } from "@/sk/book-activate";
 import { routeParent, type ParentRoute } from "./parent-rules";
 // S5 slice A: the leader phrasings (school.health + the leader modes).
 import { routeLeader, type LeaderRoute } from "./leader-rules";
+// 2026-10-30: "say that in Malay" / "back to English" — the answer language.
+import { parseLanguageCommand, type LangCommand } from "./language";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -40,7 +42,11 @@ export type RulesDecision =
   /** S5 slice A: a principal's / coordinator's school question, answered by
    *  the capability itself in the hat's school / scope mode — no model. */
   | { intent: "ask"; leader: LeaderRoute }
-  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor"> };
+  /** 2026-10-30: repeat SK's last explanation in another language, or go
+   *  back to one — every role; the route answers without the teacher model
+   *  (a repeat makes ONE translation call on the last answer). */
+  | { intent: "lang"; command: LangCommand }
+  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor" | "lang"> };
 
 export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" | "tutor.practise" | "tutor.where" | "tutor.progress" | "tutor.explain";
 
@@ -789,6 +795,11 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   // every role, before anything that could hand the text to a model.
   const book = bookActivateOf(raw, t, ctx);
   if (book) return { intent: "act", action: "book.activate", book };
+
+  // 2026-10-30: an answer-language command, for every role, before anything
+  // that could read "explain that again in English" as a Board or tutor move.
+  const lang = parseLanguageCommand(raw);
+  if (lang) return { intent: "lang", command: lang };
 
   // S3 slice D: a student's tutor phrasings come first, and a student never
   // reaches the Board, start-a-lesson or teacher-action rules below.

@@ -67,6 +67,13 @@ export function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> 
   };
 }
 
+/** 2026-10-30: the re-expression model for "repeat that in X" (Haiku 5.5,
+ *  SK_TRANSLATE_MODEL overrides — shell/repeat.ts); undefined without Claude. */
+export function translateProvider(): LLMProvider | undefined {
+  if (!claudeConfigured()) return undefined;
+  return lazyProvider(process.env.SK_TRANSLATE_MODEL || "claude-haiku-5-5");
+}
+
 const providerCache = new Map<string, LLMProvider>();
 function lazyProvider(model: string): LLMProvider {
   let p = providerCache.get(model);

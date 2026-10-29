@@ -19,11 +19,15 @@ import { liveAllowed } from "./entitlement";
 import { accessView, liveRefusalText, loadAccessFor, meterUsage, type AccessDeps } from "./loop";
 import type { KitManifest } from "./manifest/derive";
 import { groundingCheck } from "./shell/prompt";
+import type { SkAnswerLang } from "./shell/language";
+import { repeatAnswer } from "./shell/repeat";
 import { supportFrom, TEACH_MAX_TOKENS, teachingBlock, teachingSupportTokens } from "./shell/teach";
 import { NO_TEACHER_TEXT } from "./teacher";
 import type { SseEvent } from "./types";
 
-export type KitTurnDeps = AccessDeps & { teacherProvider?: LLMProvider };
+/** `translateProvider`: the re-expression model for "repeat that in X"
+ *  (Haiku 5.5, shell/repeat.ts); absent → the teacher provider. */
+export type KitTurnDeps = AccessDeps & { teacherProvider?: LLMProvider; translateProvider?: LLMProvider };
 
 export type KitTurnInput = {
   studentId: string;
@@ -118,6 +122,71 @@ export async function* runKitExplain(deps: KitTurnDeps, input: KitTurnInput): As
   }
 
   // B8 write point, unchanged: a turn that reached the model is one live turn.
+  if (modelReached) access = await meterUsage(deps.store, input.studentId, access, { live_turns: 1, generated_segments: 0 }, input.productSlug);
+  yield {
+    event: "done",
+    data: {
+      latency: { totalMs: now() - t0 },
+      usage,
+      label,
+      ...(trimmed ? { trimmed: true } : {}),
+      ...(modelReached ? { metered: { live_turns: 1, generated_segments: 0 } } : {}),
+      ...(cancelled ? { cancelled: true } : {}),
+      access: accessView(access),
+    },
+  };
+}
+
+// ── "repeat that in X" (2026-10-30) ─────────────────────────────────────────
+
+export type KitRepeatInput = {
+  studentId: string;
+  productSlug: string;
+  /** SK's last explanation, whole (the kit session / the Shell memory keeps it). */
+  original: string;
+  target: SkAnswerLang;
+  /** The original's sources (the section's narration), widening the support. */
+  support?: unknown[];
+  /** The student's words ("say that in Malay"). */
+  question?: string;
+  signal?: AbortSignal;
+};
+
+/**
+ * The student's "say that in Malay" on a kit: the last explanation in another
+ * language by ONE translation call (shell/repeat.ts), under the SAME rules as
+ * runKitExplain — tutor access with allowance left, or SK's own line and no
+ * model; a call that reached the model is ONE live turn through meterUsage,
+ * never two. Same event shape: meta → text → done.
+ */
+export async function* runKitRepeat(deps: KitTurnDeps, input: KitRepeatInput): AsyncGenerator<SseEvent, void, void> {
+  const now = deps.now ?? Date.now;
+  const t0 = now();
+  let access = await loadAccessFor(deps, input.studentId, input.productSlug);
+  let usage = { inputTokens: 0, outputTokens: 0 };
+  let modelReached = false;
+  let cancelled = false;
+  let label: "grounded" | "declined" = "grounded";
+  let trimmed = false;
+  yield { event: "meta", data: { move: "repeat", lang: input.target } };
+
+  const provider = deps.translateProvider ?? deps.teacherProvider;
+  if (!liveAllowed(access)) {
+    label = "declined";
+    yield { event: "text", data: liveRefusalText(access) };
+  } else if (!provider) {
+    label = "declined";
+    yield { event: "text", data: NO_TEACHER_TEXT };
+  } else {
+    modelReached = true;
+    const r = await repeatAnswer({ provider, original: input.original, target: input.target, support: input.support, question: input.question, signal: input.signal });
+    if (r.usage) usage = r.usage;
+    trimmed = r.trimmed || r.fellBack;
+    cancelled = !!r.cancelled || !!input.signal?.aborted;
+    if (!cancelled) yield { event: "text", data: r.text };
+  }
+
+  // The same write point as an explain turn: a call that reached the model is one live turn.
   if (modelReached) access = await meterUsage(deps.store, input.studentId, access, { live_turns: 1, generated_segments: 0 }, input.productSlug);
   yield {
     event: "done",

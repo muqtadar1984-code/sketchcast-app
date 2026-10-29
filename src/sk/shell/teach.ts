@@ -48,7 +48,9 @@ export type TeachSegment = {
 export type TeachItem = Pick<ManifestItem, "q_id" | "source" | "generation_id" | "segment_ids">;
 
 export type TeachingSupport =
-  | { status: "ready"; segments: TeachSegment[]; items: TeachItem[] }
+  /** `language`: the kit's lesson language (KitManifest.language) — the
+   *  explanation defaults to it (shell/language.ts answerLanguage). */
+  | { status: "ready"; segments: TeachSegment[]; items: TeachItem[]; language?: string }
   | { status: "building" | "stale" | "failed" | "missing"; reason?: string }
   /** The manifest is ready but names nothing like the ref(s). */
   | { status: "no_match"; missing: string[] };
@@ -146,7 +148,7 @@ export function supportFrom(m: KitManifest, target: TeachTarget): TeachingSuppor
     else missing.push(refLabel(ref));
   }
   if (missing.length) return { status: "no_match", missing };
-  return { status: "ready", segments, items: itemsFor(m, segments) };
+  return { status: "ready", segments, items: itemsFor(m, segments), ...(m.language ? { language: m.language } : {}) };
 }
 
 /** The one loader: the manifest must be `ready`; every other status is returned
