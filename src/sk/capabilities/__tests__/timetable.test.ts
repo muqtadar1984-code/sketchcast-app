@@ -7,7 +7,9 @@
 import { describe, expect, it } from "vitest";
 import type { SkCapabilityDeps, SkContext } from "../../shell/types";
 import { DEFAULT_SHAPE } from "@/utils/timetable";
-import { clockAt, nowNext, timetableNowNext } from "../timetable";
+import { clockAt, nowNext, periodFor, timetableNowNext, whenOf } from "../timetable";
+import { periodWindows } from "@/utils/present/context";
+import { FakeDb as LeaderDb, allRows, coordinatorCtx, depsFor, principalCtx } from "./leader-fixtures";
 
 type Row = Record<string, unknown>;
 
@@ -223,5 +225,78 @@ describe("timetable.now_next", () => {
     expect(facts.filter((f) => f.row === "remaining")).toHaveLength(8);
     expect(summary.length).toBeLessThanOrEqual(400);
     for (const f of facts) for (const v of Object.values(f)) expect(["string", "number", "boolean"].includes(typeof v) || v === null).toBe(true);
+  });
+});
+
+// S5 gate finding 2026-10-29 (p-tt-02, c-tt-03): "what's on next" answered
+// with the CURRENT period, in the leader modes and in the teacher's own view.
+describe("timetable.now_next — when: now | next", () => {
+  const shape = { days: 5, periodMinutes: 45, periods: [{ label: "P1", time: "07:45" }, { label: "P2", time: "08:30" }, { label: "P3", time: "10:40" }, { label: "P4", time: "11:25" }] };
+  const windows = periodWindows(shape as Parameters<typeof periodWindows>[0]);
+
+  it("periodFor: now = the running period; next = the one after it; before school both name the first; after the last next is null", () => {
+    expect(periodFor(windows, at(8, 40), "now")).toMatchObject({ period: 2, state: "in" });
+    expect(periodFor(windows, at(8, 40), "next")).toMatchObject({ period: 3, label: "P3", state: "next" });
+    expect(periodFor(windows, at(7, 0), "next")).toMatchObject({ period: 1, state: "next" });
+    expect(periodFor(windows, at(11, 30), "next")).toBeNull();
+    expect(periodFor(windows, at(11, 30), "now")).toMatchObject({ period: 4, state: "in" });
+    expect(whenOf("next")).toBe("next");
+    expect(whenOf("later")).toBe("now");
+    expect(whenOf(undefined)).toBe("now");
+  });
+
+  it("teacher: 'next' during P2 names her P3 lesson, not the one she is in", async () => {
+    const clock = { day: 2, minutes: at(8, 40), iso: NOW.toISOString() };
+    const now = await timetableNowNext.handler(ctx(), { when: "now" }, deps(seed(), clock));
+    expect(now.facts![0]).toMatchObject({ row: "now", state: "in", className: "7B", period: 2 });
+    const next = await timetableNowNext.handler(ctx(), { when: "next" }, deps(seed(), clock));
+    expect(next.facts![0]).toMatchObject({ row: "now", state: "next", confidence: "slot", className: "7C", subject: "Science", period: 3, startsAt: "10:40" });
+    expect(next.summary).toMatch(/^Next: Science with 7C, P3 \(10:40–11:25\)\./);
+    expect(next.summary).not.toContain("with 7B, P2");
+    expect(next.entities).toEqual([{ kind: "class", id: "7c", label: "7C", via: "timetable.now_next" }]);
+  });
+
+  it("teacher: 'next' during the last period says there is nothing after it; before school it is the first period", async () => {
+    const last = await timetableNowNext.handler(ctx(), { when: "next" }, deps(seed(), { day: 2, minutes: at(11, 30), iso: NOW.toISOString() }));
+    expect(last.facts![0]).toMatchObject({ state: "none", confidence: "none", className: null });
+    expect(last.summary).toBe("This is the last period today; nothing comes after it.");
+    const early = nowNext({ teacherId: T1, shape: shape as never, slots: [{ class_id: "7b", day: 2, period: 1, subject: "Science", teacher_id: T1 }], lastTaught: [], classNames: { "7b": "7B" }, bookTitles: {}, day: 2, minutes: at(7, 0), when: "next" });
+    expect(early.facts[0]).toMatchObject({ state: "next", className: "7B", period: 1 });
+  });
+
+  it("teacher: 'next' while her current cell is free still looks one period ahead", () => {
+    const r = nowNext({ teacherId: T1, shape: shape as never, slots: [{ class_id: "7c", day: 2, period: 3, subject: "Science", teacher_id: T1 }], lastTaught: [], classNames: { "7c": "7C" }, bookTitles: {}, day: 2, minutes: at(8, 40), when: "next" });
+    expect(r.facts[0]).toMatchObject({ state: "next", confidence: "slot", className: "7C", period: 3 });
+  });
+
+  function leaderDb() {
+    const rows = allRows();
+    // The leader fixture's lessons are all Wed P2; add a P3 for some classes.
+    const p3 = (rows.timetable_slots as Array<Record<string, unknown>>).filter((s) => s.class_id === "c5a" || s.class_id === "c6c" || s.class_id === "c5z");
+    rows.timetable_slots = [...rows.timetable_slots, ...p3.map((s) => ({ ...s, period: 3, subject: `${s.subject} II` }))];
+    return new LeaderDb(rows);
+  }
+
+  it("principal: 'next' lists the NEXT period's lessons (school-wide), 'now' the current one", async () => {
+    const db = leaderDb();
+    const now = await timetableNowNext.handler(principalCtx(), {}, depsFor(db));
+    expect(now.summary).toMatch(/^Now in the school — P2 /);
+    const next = await timetableNowNext.handler(principalCtx(), { when: "next" }, depsFor(db));
+    expect(next.summary).toMatch(/^Next in the school — P3 /);
+    expect(next.facts!.every((f) => f.row === "next" && f.period === 3)).toBe(true);
+    expect(next.facts!.map((f) => f.subject).every((s) => String(s).endsWith(" II"))).toBe(true);
+    // School B's P3 lesson never shows for school A's principal.
+    expect(JSON.stringify(next)).not.toContain("5 Zamrud");
+  });
+
+  it("coordinator: 'next' stays inside the scope grades; Malay and Arabic lines", async () => {
+    const db = leaderDb();
+    const next = await timetableNowNext.handler(coordinatorCtx(), { when: "next" }, depsFor(db));
+    expect(next.summary).toMatch(/^Next in grade 5 — P3 /);
+    expect(JSON.stringify(next)).not.toContain("6 Cemerlang");
+    const ms = await timetableNowNext.handler(coordinatorCtx("coordinator", [{ grade: "5", subject: null }], "ms"), { when: "next" }, depsFor(db));
+    expect(ms.summary).toMatch(/^Seterusnya dalam tahun 5 — P3 /);
+    const ar = await timetableNowNext.handler(coordinatorCtx("coordinator", [{ grade: "5", subject: null }], "ar"), { when: "next" }, depsFor(db));
+    expect(ar.summary).toMatch(/^التالي في الصف 5 — P3 /);
   });
 });

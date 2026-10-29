@@ -20,10 +20,10 @@
 // did not return cannot appear, whatever the grade spelling.
 
 import type { SkCapabilityResult, SkContext } from "@/sk/shell/types";
-import type { HealthRows } from "@/utils/school-health";
+import type { HealthRows, RiskReason, TeacherFlag } from "@/utils/school-health";
 import { isRelevant } from "@/utils/school-books";
 import { lineFor } from "@/sk/shell/lines";
-import { S_WHERE_GRADE, S_WHERE_SCHOOL } from "@/sk/shell/school-lines";
+import { S_F_BELOW, S_F_SLOW, S_F_TO_GRADE, S_R_AVG, S_R_COMPLETION, S_R_DECLINING, S_R_INACTIVE, S_R_NEVER, S_R_OVERDUE, S_WHERE_GRADE, S_WHERE_SCHOOL } from "@/sk/shell/school-lines";
 
 export type LeaderMode = "own" | "school" | "scope";
 /** One coordinator_scope row, normalised: a grade, and a subject or null (= all). */
@@ -245,10 +245,57 @@ export function stripEmails(r: SkCapabilityResult): SkCapabilityResult {
 
 // ── Labels ───────────────────────────────────────────────────────────────────
 
-/** "grade 5" for a bare number, the stored text otherwise ("Form 1"). */
+/** A grade said as "grade 5" / "year 5" / "standard 5" / "class 5" / "tahun 5"
+ *  / "darjah 5" / "الصف 5" (rules' gradeOf keeps the words) is the bare level. */
+const GRADE_WORD_RE = /^(?:grade|year|standard|class|tahun|darjah|الصف|صف)\s?(\d{1,2})$/iu;
+
+/** "grade 5" in the reader's language for a bare number or a "grade N"-style
+ *  phrase (S5 gate finding 2026-10-29: "نظرة عامة على grade 5"); the stored
+ *  text otherwise ("Form 1", "tingkatan 2" — another system, kept as said). */
 export function gradeLabel(grade: string, locale: string): string {
   const g = trimmed(grade);
-  return /^\d{1,2}$/.test(g) ? lineFor(S_WHERE_GRADE, locale, { grade: g }) : g;
+  const n = /^\d{1,2}$/.test(g) ? g : g.match(GRADE_WORD_RE)?.[1];
+  return n ? lineFor(S_WHERE_GRADE, locale, { grade: n }) : g;
+}
+
+/** An at-risk reason in the reader's language, from its CODE. */
+export function reasonLabel(r: RiskReason, locale: string): string {
+  switch (r.code) {
+    case "completion":
+      return lineFor(S_R_COMPLETION, locale, { pct: r.pct });
+    case "inactive":
+      return lineFor(S_R_INACTIVE, locale, { days: r.days });
+    case "never_started":
+      return lineFor(S_R_NEVER, locale);
+    case "avg_score":
+      return lineFor(S_R_AVG, locale, { pct: r.pct });
+    case "declining":
+      return lineFor(S_R_DECLINING, locale);
+    case "overdue":
+      return lineFor(S_R_OVERDUE, locale, { n: r.n });
+  }
+}
+
+/** A teacher flag in the reader's language, from its CODE. */
+export function flagLabel(f: TeacherFlag, locale: string): string {
+  switch (f.code) {
+    case "below_cohort":
+      return lineFor(S_F_BELOW, locale, { pts: f.pts });
+    case "to_grade":
+      return lineFor(S_F_TO_GRADE, locale, { n: f.n });
+    case "slow_grading":
+      return lineFor(S_F_SLOW, locale, { days: f.days });
+  }
+}
+
+/** A learner's reasons, said in `locale` (the codes; the English text when a row carries none). */
+export function reasonsSaid(row: { reasons: string[]; codes?: RiskReason[] }, locale: string): string {
+  return (row.codes ? row.codes.map((c) => reasonLabel(c, locale)) : row.reasons).join(", ");
+}
+
+/** A teacher's flags, said in `locale`. */
+export function flagsSaid(row: { flags: string[]; flagCodes?: TeacherFlag[] }, locale: string): string {
+  return (row.flagCodes ? row.flagCodes.map((f) => flagLabel(f, locale)) : row.flags).join(", ");
 }
 
 /** The coordinator's scope in words: "grade 5", "grade 5 (Science), Form 2". */

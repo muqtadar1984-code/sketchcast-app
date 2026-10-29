@@ -2231,7 +2231,8 @@
         "tooLong": "Notis itu terlalu panjang — notis boleh mengandungi sehingga 4000 aksara.",
         "dateUnparsed": "Saya tidak faham hari \"{day}\" — sebut hari ini, esok, nama hari, atau 2026-11-03.",
         "datePassed": "Hari itu sudah berlalu — notis mesti merujuk kepada sesuatu yang belum berlaku.",
-        "yourSchool": "sekolah anda"
+        "yourSchool": "sekolah anda",
+        "notPostedUntil": "Tiada apa-apa disiarkan sehingga pemimpin menekan Sahkan pada kad."
       },
       "cardParams": {
         "target_label": "Untuk",
@@ -2341,7 +2342,17 @@
         "ttIn": "Sekarang dalam {where} — {period} ({start}–{end}): pelajaran {n}. {items}.",
         "ttNext": "Seterusnya dalam {where} — {period} ({start}–{end}): pelajaran {n}. {items}.",
         "ttNone": "Tiada pelajaran dijadualkan dalam {where} untuk {period}.",
-        "ttClosed": "Tiada waktu persekolahan berjalan sekarang."
+        "ttClosed": "Tiada waktu persekolahan berjalan sekarang.",
+        "ttNoNext": "Ini waktu terakhir hari ini; tiada apa-apa selepasnya.",
+        "reasonCompletion": "penyiapan {pct}%",
+        "reasonInactive": "tidak aktif {days} hari",
+        "reasonNeverStarted": "belum pernah bermula",
+        "reasonAvgScore": "purata markah {pct}%",
+        "reasonDeclining": "markah menurun",
+        "reasonOverdue": "{n} lewat",
+        "flagBelowCohort": "{pts} mata di bawah kohort",
+        "flagToGrade": "{n} untuk ditanda",
+        "flagSlowGrading": "{days} hari untuk menanda"
       },
       "schoolMeter": {
         "analyticsOff": "Analitik sekolah belum dihidupkan untuk sekolah anda.",
@@ -2400,6 +2411,10 @@
         "diarySeenLeadersPrivate": "{name} belum ada guru kelas — dilihat oleh pimpinan sekolah, bukan oleh {name}.",
         "diarySeenHome": "{name} belajar di rumah — nota ini untuk rekod anda sendiri dan {name}.",
         "diarySeenHomePrivate": "{name} belajar di rumah — nota ini untuk rekod anda sahaja; {name} tidak akan melihatnya."
+      },
+      "actionClaim": {
+        "cant": "Saya tidak dapat melakukannya dari sini.",
+        "card": "Belum ada apa-apa yang dibuat: saya boleh menyediakannya sebagai kad, dan tiada apa-apa berlaku sehingga anda mengesahkannya."
       }
     },
     "player": {

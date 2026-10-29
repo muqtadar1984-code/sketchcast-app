@@ -2231,7 +2231,8 @@
         "tooLong": "هذا الإشعار طويل جدًا — يتسع الإشعار لـ4000 حرف كحد أقصى.",
         "dateUnparsed": "لم أفهم اليوم \"{day}\" — قل اليوم أو غدًا أو اسم يوم أو 2026-11-03.",
         "datePassed": "هذا اليوم قد مضى — يجب أن يشير الإشعار إلى أمر لم يحدث بعد.",
-        "yourSchool": "مدرستك"
+        "yourSchool": "مدرستك",
+        "notPostedUntil": "لا يُنشر شيء حتى ينقر القائد على «تأكيد» في البطاقة."
       },
       "cardParams": {
         "target_label": "إلى",
@@ -2341,7 +2342,17 @@
         "ttIn": "الآن في {where} — {period} ({start}–{end}): الحصص {n}. {items}.",
         "ttNext": "التالي في {where} — {period} ({start}–{end}): الحصص {n}. {items}.",
         "ttNone": "لا توجد حصص مجدولة في {where} لـ{period}.",
-        "ttClosed": "لا توجد حصص مدرسية جارية الآن."
+        "ttClosed": "لا توجد حصص مدرسية جارية الآن.",
+        "ttNoNext": "هذه آخر حصة اليوم؛ لا شيء بعدها.",
+        "reasonCompletion": "نسبة الإنجاز {pct}%",
+        "reasonInactive": "غير نشط منذ {days} يومًا",
+        "reasonNeverStarted": "لم يبدأ أبدًا",
+        "reasonAvgScore": "متوسط الدرجات {pct}%",
+        "reasonDeclining": "الدرجات في تراجع",
+        "reasonOverdue": "متأخر {n}",
+        "flagBelowCohort": "أقل من المجموعة بـ{pts} نقطة",
+        "flagToGrade": "{n} بانتظار التصحيح",
+        "flagSlowGrading": "{days} يومًا للتصحيح"
       },
       "schoolMeter": {
         "analyticsOff": "تحليلات المدرسة غير مفعّلة لمدرستك.",
@@ -2400,6 +2411,10 @@
         "diarySeenLeadersPrivate": "ليس لـ{name} معلم صف بعد — تراها قيادة المدرسة، ولا يراها {name}.",
         "diarySeenHome": "{name} يتعلم في البيت — هذه الملاحظة لسجلك أنت ولـ{name}.",
         "diarySeenHomePrivate": "{name} يتعلم في البيت — هذه الملاحظة لسجلك أنت فقط؛ لن يراها {name}."
+      },
+      "actionClaim": {
+        "cant": "لا أستطيع فعل ذلك من هنا.",
+        "card": "لم يُنفَّذ شيء بعد: يمكنني تجهيزه في بطاقة، ولن يحدث شيء حتى تؤكّده."
       }
     },
     "player": {

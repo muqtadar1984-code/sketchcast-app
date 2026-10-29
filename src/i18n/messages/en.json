@@ -2231,7 +2231,8 @@
         "tooLong": "That notice is too long — a notice takes up to 4000 characters.",
         "dateUnparsed": "I didn't catch the day \"{day}\" — say today, tomorrow, a weekday, or 2026-11-03.",
         "datePassed": "That day has already passed — a notice has to point at something still ahead.",
-        "yourSchool": "your school"
+        "yourSchool": "your school",
+        "notPostedUntil": "Nothing is posted until the leader clicks Confirm on the card."
       },
       "cardParams": {
         "target_label": "For",
@@ -2341,7 +2342,17 @@
         "ttIn": "Now in {where} — {period} ({start}–{end}): lessons {n}. {items}.",
         "ttNext": "Next in {where} — {period} ({start}–{end}): lessons {n}. {items}.",
         "ttNone": "No lessons are timetabled in {where} for {period}.",
-        "ttClosed": "No school periods are running right now."
+        "ttClosed": "No school periods are running right now.",
+        "ttNoNext": "This is the last period today; nothing comes after it.",
+        "reasonCompletion": "{pct}% completion",
+        "reasonInactive": "inactive {days}d",
+        "reasonNeverStarted": "never started",
+        "reasonAvgScore": "avg score {pct}%",
+        "reasonDeclining": "scores declining",
+        "reasonOverdue": "{n} overdue",
+        "flagBelowCohort": "{pts}pts below cohort",
+        "flagToGrade": "{n} to grade",
+        "flagSlowGrading": "{days}d to grade"
       },
       "schoolMeter": {
         "analyticsOff": "School analytics aren't switched on for your school.",
@@ -2400,6 +2411,10 @@
         "diarySeenLeadersPrivate": "{name} has no class teacher yet — seen by the school's leaders, not by {name}.",
         "diarySeenHome": "{name} learns at home — this note is for your own record and {name}.",
         "diarySeenHomePrivate": "{name} learns at home — this note is for your own record only; {name} won't see it."
+      },
+      "actionClaim": {
+        "cant": "I can't do that from here.",
+        "card": "Nothing has been done yet: I can prepare it as a card, and nothing happens until you confirm it."
       }
     },
     "player": {

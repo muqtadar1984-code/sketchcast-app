@@ -17,7 +17,7 @@ import { generationSubjects, schoolHealthRows } from "./shared";
 // S5 slice A: the principal / coordinator modes (leader-scope.ts).
 import { lineFor } from "../shell/lines";
 import { S_AT_RISK, S_AT_RISK_NONE, S_EMPTY, S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED } from "../shell/school-lines";
-import { cutLeaderRows, gradeOutsideScope, leaderScope, needsSubjects, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
+import { cutLeaderRows, gradeOutsideScope, leaderScope, needsSubjects, reasonsSaid, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
 // S5 slice B: a leader mode with school analytics off answers the fixed line.
 import { analyticsOffResult } from "@/sk/shell/school-meter";
 
@@ -96,7 +96,7 @@ export const learnersRisk: SkCapability = {
           entities: [],
         };
       }
-      const health = computeSchoolHealth(rows, deps.now.getTime());
+      const health = computeSchoolHealth(rows, deps.now.getTime(), { codes: true });
       const atRisk = health.atRisk.slice(0, RISK_ROWS_CAP);
 
       // Map the cleaned (name, class) back to learner ids for the entity.
@@ -152,7 +152,7 @@ export async function leaderRisk(ctx: SkContext, ls: LeaderScope, classId: strin
     const classNameById = new Map(rows.classes.map((c) => [c.id, clean(c.name) || "Class"] as const));
     const where = classId && classNameById.has(classId) ? classNameById.get(classId)! : whereLabel(ls, locale, grade);
     if (!rows.classes.length) return { ok: true, summary: lineFor(S_EMPTY, locale, { where }), facts: [], entities: [] };
-    const health = computeSchoolHealth(rows, deps.now.getTime());
+    const health = computeSchoolHealth(rows, deps.now.getTime(), { codes: true });
     const atRisk = health.atRisk.slice(0, RISK_ROWS_CAP);
 
     const idsByKey = new Map<string, string[]>();
@@ -170,7 +170,7 @@ export async function leaderRisk(ctx: SkContext, ls: LeaderScope, classId: strin
           n: health.totals.atRisk,
           items: `${atRisk
             .slice(0, 6)
-            .map((r) => `${r.name} (${r.className}) — ${r.reasons.join(", ")}`)
+            .map((r) => `${r.name} (${r.className}) — ${reasonsSaid(r, locale)}`)
             .join("; ")}${health.totals.atRisk > 6 ? "; …" : ""}`,
         })
       : lineFor(S_AT_RISK_NONE, locale, { where, students: health.totals.students });

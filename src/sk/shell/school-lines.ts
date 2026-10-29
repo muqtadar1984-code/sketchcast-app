@@ -259,6 +259,141 @@ export const S_TT_CLOSED: Line = {
   hi: "अभी स्कूल का कोई पीरियड नहीं चल रहा है।",
 };
 
+export const S_TT_NO_NEXT: Line = {
+  en: "This is the last period today; nothing comes after it.",
+  ms: "Ini waktu terakhir hari ini; tiada apa-apa selepasnya.",
+  "ms-arab": "اين وقتو تراخير هاري اين؛ تيادا اڤ-اڤ سلڤسڽ.",
+  ar: "هذه آخر حصة اليوم؛ لا شيء بعدها.",
+  fr: "C'est la dernière période de la journée ; il n'y a rien après.",
+  es: "Este es el último periodo de hoy; no hay nada después.",
+  pt: "Este é o último tempo de hoje; não há nada depois.",
+  te: "ఇది ఈరోజు చివరి పీరియడ్; దీని తర్వాత ఏమీ లేదు.",
+  mr: "ही आजची शेवटची तासिका आहे; त्यानंतर काहीही नाही.",
+  hi: "यह आज का आख़िरी पीरियड है; इसके बाद कुछ नहीं है।",
+};
+
+// ── Reasons and teacher flags (S5 gate finding 2026-10-29: "3 to grade" and
+// "never started" stayed English inside Malay and Arabic answers). Said from
+// school-health's CODES (RiskReason / TeacherFlag), never by matching the
+// English text. English is exactly the leadership pages' wording.
+
+export const S_R_COMPLETION: Line = {
+  en: "{pct}% completion",
+  ms: "penyiapan {pct}%",
+  "ms-arab": "ڤڽياڤن {pct}%",
+  ar: "نسبة الإنجاز {pct}%",
+  fr: "{pct} % de travail fait",
+  es: "{pct}% completado",
+  pt: "{pct}% concluído",
+  te: "{pct}% పూర్తి",
+  mr: "{pct}% पूर्ण",
+  hi: "{pct}% पूरा",
+};
+
+export const S_R_INACTIVE: Line = {
+  en: "inactive {days}d",
+  ms: "tidak aktif {days} hari",
+  "ms-arab": "تيدق اکتيف {days} هاري",
+  ar: "غير نشط منذ {days} يومًا",
+  fr: "inactif depuis {days} j",
+  es: "inactivo {days} días",
+  pt: "inativo há {days} dias",
+  te: "{days} రోజులుగా నిష్క్రియం",
+  mr: "{days} दिवस निष्क्रिय",
+  hi: "{days} दिन से निष्क्रिय",
+};
+
+export const S_R_NEVER: Line = {
+  en: "never started",
+  ms: "belum pernah bermula",
+  "ms-arab": "بلوم ڤرنه برمولا",
+  ar: "لم يبدأ أبدًا",
+  fr: "jamais commencé",
+  es: "nunca empezó",
+  pt: "nunca começou",
+  te: "ఎప్పుడూ ప్రారంభించలేదు",
+  mr: "कधीही सुरू केले नाही",
+  hi: "कभी शुरू नहीं किया",
+};
+
+export const S_R_AVG: Line = {
+  en: "avg score {pct}%",
+  ms: "purata markah {pct}%",
+  "ms-arab": "ڤوراتا مرکه {pct}%",
+  ar: "متوسط الدرجات {pct}%",
+  fr: "moyenne {pct} %",
+  es: "nota media {pct}%",
+  pt: "média {pct}%",
+  te: "సగటు స్కోరు {pct}%",
+  mr: "सरासरी गुण {pct}%",
+  hi: "औसत अंक {pct}%",
+};
+
+export const S_R_DECLINING: Line = {
+  en: "scores declining",
+  ms: "markah menurun",
+  "ms-arab": "مرکه منورون",
+  ar: "الدرجات في تراجع",
+  fr: "notes en baisse",
+  es: "notas en descenso",
+  pt: "notas a descer",
+  te: "స్కోర్లు తగ్గుతున్నాయి",
+  mr: "गुण घसरत आहेत",
+  hi: "अंक गिर रहे हैं",
+};
+
+export const S_R_OVERDUE: Line = {
+  en: "{n} overdue",
+  ms: "{n} lewat",
+  "ms-arab": "{n} ليوت",
+  ar: "متأخر {n}",
+  fr: "{n} en retard",
+  es: "{n} atrasadas",
+  pt: "{n} em atraso",
+  te: "{n} గడువు దాటినవి",
+  mr: "{n} मुदत उलटलेले",
+  hi: "{n} समय से पीछे",
+};
+
+export const S_F_BELOW: Line = {
+  en: "{pts}pts below cohort",
+  ms: "{pts} mata di bawah kohort",
+  "ms-arab": "{pts} مات د باوه کوهورت",
+  ar: "أقل من المجموعة بـ{pts} نقطة",
+  fr: "{pts} pts sous la cohorte",
+  es: "{pts} pts por debajo del grupo",
+  pt: "{pts} pts abaixo do grupo",
+  te: "సమూహం కంటే {pts} పాయింట్లు తక్కువ",
+  mr: "समूहापेक्षा {pts} गुण कमी",
+  hi: "समूह से {pts} अंक कम",
+};
+
+export const S_F_TO_GRADE: Line = {
+  en: "{n} to grade",
+  ms: "{n} untuk ditanda",
+  "ms-arab": "{n} اونتوق دتندا",
+  ar: "{n} بانتظار التصحيح",
+  fr: "{n} à corriger",
+  es: "{n} por corregir",
+  pt: "{n} por corrigir",
+  te: "దిద్దడానికి {n}",
+  mr: "तपासायचे {n}",
+  hi: "जाँचने के लिए {n}",
+};
+
+export const S_F_SLOW: Line = {
+  en: "{days}d to grade",
+  ms: "{days} hari untuk menanda",
+  "ms-arab": "{days} هاري اونتوق منندا",
+  ar: "{days} يومًا للتصحيح",
+  fr: "{days} j pour corriger",
+  es: "{days} días para corregir",
+  pt: "{days} dias para corrigir",
+  te: "దిద్దడానికి {days} రోజులు",
+  mr: "तपासायला {days} दिवस",
+  hi: "जाँचने में {days} दिन",
+};
+
 /** Every line, keyed by its `sk.shell.school.*` dictionary key (the test walks this). */
 export const SCHOOL_LINES: Record<string, Line> = {
   noScope: S_NO_SCOPE,
@@ -280,4 +415,14 @@ export const SCHOOL_LINES: Record<string, Line> = {
   ttNext: S_TT_NEXT,
   ttNone: S_TT_NONE,
   ttClosed: S_TT_CLOSED,
+  ttNoNext: S_TT_NO_NEXT,
+  reasonCompletion: S_R_COMPLETION,
+  reasonInactive: S_R_INACTIVE,
+  reasonNeverStarted: S_R_NEVER,
+  reasonAvgScore: S_R_AVG,
+  reasonDeclining: S_R_DECLINING,
+  reasonOverdue: S_R_OVERDUE,
+  flagBelowCohort: S_F_BELOW,
+  flagToGrade: S_F_TO_GRADE,
+  flagSlowGrading: S_F_SLOW,
 };

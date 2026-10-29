@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { canonicalSha } from "./hash";
-import { readRunsFile, runsFile, writeRunsFile } from "./runs";
+import { getBookRun, readRunsFile, runsFile, writeRunsFile } from "./runs";
 import { getChapter, listApprovals, listFindings } from "./store";
 import type { Approval, Finding } from "./types";
 
@@ -137,4 +137,60 @@ export async function approveGateD(input: { workUid: string; revisionKey: string
   const { error } = await createAdminClient().from("pub_approvals").insert(row);
   if (error) throw new Error(`pub_approvals: ${error.message}`);
   return { ok: true, sha };
+}
+
+// ── Gate E: the compiled book ────────────────────────────────────────────────
+export type CompiledBook = {
+  pdf: string;
+  pdf_sha256: string;
+  pages: number;
+  chapters: { number: number; title: string; start: number; pages: number; content_sha256: string }[];
+  missing: number[];
+};
+
+/** Why this compiled book may not be approved at Gate E, or null. Pure (tested): every chapter it holds must be Gate D
+ * approved for exactly the text it printed, none may be missing, and the same PDF is approved once. */
+export function gateERefusal(book: CompiledBook, approvals: Approval[]): string | null {
+  if (book.missing.length) return `Chapters ${book.missing.join(", ")} are not drafted yet; compile the whole book first.`;
+  if (!book.chapters.length) return "The compile holds no chapters.";
+  const unapproved = book.chapters.filter((c) => !approvalOfText(approvals, c.number, c.content_sha256)).map((c) => c.number);
+  if (unapproved.length) return `Chapters ${unapproved.join(", ")} are not Gate D approved for the text this compile printed.`;
+  if (approvals.some((a) => a.kind === "gate_e" && a.content_sha256 === book.pdf_sha256)) return "This compiled book is already approved at Gate E.";
+  return null;
+}
+
+export async function approveGateE(input: { workUid: string; runId: number; revisionKey: string | null; by: string; note: string }) {
+  const run = await getBookRun(input.workUid, input.runId);
+  if (!run || run.stage_key !== "compile_book" || run.status !== "done") return { error: "Not a finished compile of this book.", status: 404 };
+  const book = run.detail?.summary as CompiledBook | undefined;
+  if (!book?.pdf_sha256) return { error: "This compile recorded no book.", status: 409 };
+  const refused = gateERefusal(book, await listApprovals(input.workUid));
+  if (refused) return { error: refused, status: 409 };
+  const row = {
+    work_uid: input.workUid,
+    kind: "gate_e",
+    scope: "book",
+    chapter: null,
+    revision_key: input.revisionKey,
+    stage_key: "compile",
+    label: `Gate E — compiled book (run #${input.runId}, ${book.pages} pages), approved in the book app`,
+    approved_by: input.by,
+    approved_on: new Date().toISOString().slice(0, 10),
+    basis: input.note.trim() || `Chapters ${book.chapters.map((c) => c.number).join(", ")}, each at its Gate D approved text.`,
+    content_sha256: book.pdf_sha256,
+    hash_of: `compiled book PDF (${book.pdf})`,
+    hash_verified: true,
+    waived: [],
+    open_flags: [],
+  };
+  const f = runsFile();
+  if (f) {
+    const d = readRunsFile(f);
+    d.pub_approvals = [...(d.pub_approvals ?? []), { ...row, id: 950000 + (d.pub_approvals?.length ?? 0) }];
+    writeRunsFile(f, d);
+    return { ok: true };
+  }
+  const { error } = await createAdminClient().from("pub_approvals").insert(row);
+  if (error) throw new Error(`pub_approvals: ${error.message}`);
+  return { ok: true };
 }
