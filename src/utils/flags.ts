@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { consoleModeOn } from "./console-routing";
 import { libraryModeOn } from "./library-routing";
+import { isStudentOfAllowedTeacher } from "@/sk/access-gate";
 
 /**
  * Console subdomain — when NEXT_PUBLIC_CONSOLE_HOST is set (e.g.
@@ -519,34 +520,97 @@ export function skAllowanceEnforced(): boolean {
 
 /**
  * SK restricted-live allow-list (founder, 2026-10-27: "take it live restricted
- * to one account for testing"). `SK_ALLOWED_EMAILS` is a comma-separated list
- * of addresses. When it is SET and non-empty, every /api/sk/* route and the
- * student page answer 404 — exactly as if FEATURE_SK were off — to anyone who
- * is not signed in with a VERIFIED address on the list. When it is unset or
- * empty, nothing changes: the flag and skAccess() decide alone. So this can
- * only ever narrow access, never widen it, and removing the variable is the
- * release to everyone the flag already lets in.
+ * to one account for testing"; widened 2026-10-30 to "<founder>, <Sara> and
+ * her students till I pass the test"). Two server-only variables:
  *
- * Server-only on purpose (never NEXT_PUBLIC_*): the list must not ship in the
- * browser bundle. Same matching rules as presentAllowed: trim, strip pasted
- * quotes, lower-case, exact match, no Gmail dot/plus normalisation.
+ *   SK_ALLOWED_EMAILS       comma list of addresses — a signed-in user with a
+ *                           VERIFIED address on it is allowed;
+ *   SK_ALLOWED_STUDENTS_OF  comma list of TEACHER addresses — a student
+ *                           currently ENROLLED in a class taught by a verified
+ *                           user on it is allowed, whatever (or whether) the
+ *                           student's own address is (src/sk/access-gate.ts).
+ *
+ * When EITHER is set and non-empty the list is "in force": every SK surface
+ * (/api/sk/*, the /sk pages, /activate, the Shell launchers, the SK Tutor tab)
+ * answers 404 / stays dark — exactly as if FEATURE_SK were off — to anyone not
+ * allowed. When BOTH are unset or empty, nothing changes: the flag and
+ * skAccess() decide alone. So this can only ever narrow access, never widen
+ * it, and removing both variables is the release to everyone the flag already
+ * lets in. See docs/sk-access.md.
+ *
+ * Server-only on purpose (never NEXT_PUBLIC_*): neither list may ship in the
+ * browser bundle. Matching rules as presentAllowed: trim, strip pasted quotes,
+ * lower-case, exact match, no Gmail dot/plus normalisation.
+ *
+ * skAccessAllowed() is THE gate; every SK entry point awaits it (directly, via
+ * src/sk/server.ts gate(), or via skShellEnabledFor). skUserAllowed() is its
+ * synchronous email-only half, kept for the pure decision functions; it never
+ * admits anyone skAccessAllowed() would refuse.
  */
-export type SkGateUser = { email?: string | null; email_confirmed_at?: string | null };
+export type SkGateUser = { id?: string | null; email?: string | null; email_confirmed_at?: string | null };
 
-export function skAllowedEmails(): string[] {
-  return (process.env.SK_ALLOWED_EMAILS ?? "")
+function emailList(raw: string | undefined): string[] {
+  return (raw ?? "")
     .split(",")
     .map((e) => e.trim().replace(/^["']|["']$/g, "").trim().toLowerCase())
     .filter(Boolean);
 }
 
-/** True when the allow-list is not in force, or the user is on it (verified). */
+export function skAllowedEmails(): string[] {
+  return emailList(process.env.SK_ALLOWED_EMAILS);
+}
+
+/** Teacher addresses whose enrolled students are allowed (server-only). */
+export function skAllowedStudentsOf(): string[] {
+  return emailList(process.env.SK_ALLOWED_STUDENTS_OF);
+}
+
+/** True when either allow-list is set: SK is restricted to allowed users. */
+export function skAllowListInForce(): boolean {
+  return skAllowedEmails().length > 0 || skAllowedStudentsOf().length > 0;
+}
+
+/**
+ * Synchronous, email-only half of the gate: true when no allow-list is in
+ * force, or the user's VERIFIED address is on SK_ALLOWED_EMAILS. A student
+ * admitted only through SK_ALLOWED_STUDENTS_OF is NOT allowed here — use
+ * skAccessAllowed() for every SK surface.
+ */
 export function skUserAllowed(user: SkGateUser | null | undefined): boolean {
+  if (!skAllowListInForce()) return true;
   const allow = skAllowedEmails();
-  if (!allow.length) return true;
-  if (!user?.email_confirmed_at) return false;
+  if (!allow.length || !user?.email_confirmed_at) return false;
   const e = (user.email ?? "").trim().toLowerCase();
   return !!e && allow.includes(e);
+}
+
+/**
+ * THE SK access gate (async). True when:
+ *   - no allow-list is in force (today's behaviour: the flag decides), or
+ *   - the user's verified address is on SK_ALLOWED_EMAILS, or
+ *   - the user is currently enrolled in a class of a verified teacher on
+ *     SK_ALLOWED_STUDENTS_OF (no email needed).
+ * Fails CLOSED: a lookup error is "not allowed", logged server-side. `profile`
+ * is optional; when its role is known and is not "student", the enrollment
+ * lookup is skipped (only students are admitted that way).
+ */
+export async function skAccessAllowed(
+  user: SkGateUser | null | undefined,
+  profile?: { role?: string | null } | null,
+): Promise<boolean> {
+  if (!skAllowListInForce()) return true;
+  if (!user) return false;
+  if (skUserAllowed(user)) return true;
+  const teachers = skAllowedStudentsOf();
+  if (!teachers.length || !user.id) return false;
+  const role = profile?.role;
+  if (role != null && role !== "student") return false;
+  try {
+    return await isStudentOfAllowedTeacher(user.id, teachers);
+  } catch (e) {
+    console.error("[sk-access] student lookup failed; refusing:", e instanceof Error ? e.message : String(e));
+    return false;
+  }
 }
 
 /**
@@ -559,9 +623,11 @@ export function skUserAllowed(user: SkGateUser | null | undefined): boolean {
  *      with S5, "student" with S3, "parent" with S4.
  *   3. Tenant opt-in: a school user needs schools.config {"sk_shell": true}
  *      (or the global FEATURE_SK_SHELL_ALL_SCHOOLS=true); a user with no school
- *      needs SK_SHELL_CONSUMER=true. A VERIFIED address on SK_ALLOWED_EMAILS
- *      skips gate 3 (staff testing on any tenant) but never gates 1–2; when the
- *      allow-list is set, anyone not on it is out regardless (skUserAllowed).
+ *      needs SK_SHELL_CONSUMER=true. A user ALLOWED by the allow-list
+ *      (skAccessAllowed: a verified address on SK_ALLOWED_EMAILS, or a student
+ *      of a teacher on SK_ALLOWED_STUDENTS_OF) skips gate 3 (testing on any
+ *      tenant) but never gates 1–2; when the allow-list is in force, anyone it
+ *      does not allow is out regardless.
  * Pure decision in skShellDecision() so the matrix is unit-tested; the async
  * wrapper only fetches the school config through the caller's own session.
  */
@@ -576,6 +642,9 @@ export type SkShellDecisionInput = {
   schoolId: string | null | undefined;
   /** schools.config.sk_shell for the user's school, or null when unknown/none. */
   schoolOptIn: boolean | null;
+  /** skAccessAllowed(user) when the caller resolved it; absent ⇒ the
+   *  email-only skUserAllowed (which never admits more). */
+  allowed?: boolean;
 };
 export type SkShellDecision = { on: boolean; reason: "ok" | "flag_off" | "role_off" | "not_allowed" | "school_opt_out" | "consumer_off" };
 
@@ -583,9 +652,9 @@ export function skShellDecision(input: SkShellDecisionInput): SkShellDecision {
   if (!skEnabled()) return { on: false, reason: "flag_off" };
   const role = (input.role ?? "").toLowerCase();
   if (!skShellRoles().includes(role)) return { on: false, reason: "role_off" };
-  if (!skUserAllowed(input.user)) return { on: false, reason: "not_allowed" };
-  // On the allow-list (and the list is in force) → tenant opt-in is bypassed.
-  if (skAllowedEmails().length) return { on: true, reason: "ok" };
+  if (!(input.allowed ?? skUserAllowed(input.user))) return { on: false, reason: "not_allowed" };
+  // Allowed by the allow-list (and the list is in force) → tenant opt-in is bypassed.
+  if (skAllowListInForce()) return { on: true, reason: "ok" };
   if (input.schoolId) {
     if (process.env.FEATURE_SK_SHELL_ALL_SCHOOLS === "true" || input.schoolOptIn === true) return { on: true, reason: "ok" };
     return { on: false, reason: "school_opt_out" };
@@ -599,7 +668,7 @@ export function skShellDecision(input: SkShellDecisionInput): SkShellDecision {
  * above AND the /sk pages' own gate, so the Shell can never be shown to
  * anyone the tutor pages would 404:
  *   - /sk's gate: NEXT_PUBLIC_FEATURE_SK + FEATURE_SK, signed in, and — while
- *     SK_ALLOWED_EMAILS is set — a VERIFIED address on the list;
+ *     an allow-list is in force — allowed by skAccessAllowed;
  *   - the Shell's: FEATURE_SK, the role in SK_ROLES (default "teacher", so
  *     students need SK_ROLES to include "student"), the allow-list again, and
  *     the tenant opt-in (bypassed only BY the allow-list).
@@ -607,7 +676,7 @@ export function skShellDecision(input: SkShellDecisionInput): SkShellDecision {
  */
 export function skTutorShellDecision(input: SkShellDecisionInput & { signedIn: boolean }): SkShellDecision {
   if (process.env.NEXT_PUBLIC_FEATURE_SK !== "true" || !skEnabled()) return { on: false, reason: "flag_off" };
-  if (!input.signedIn || !skUserAllowed(input.user)) return { on: false, reason: "not_allowed" };
+  if (!input.signedIn || !(input.allowed ?? skUserAllowed(input.user))) return { on: false, reason: "not_allowed" };
   return skShellDecision(input);
 }
 
@@ -617,8 +686,9 @@ export async function skTutorShellEnabledFor(
   role: string | null | undefined,
   schoolId: string | null | undefined,
 ): Promise<boolean> {
-  // The /sk half first (no read); the Shell half reads the school's opt-in.
-  if (!user || process.env.NEXT_PUBLIC_FEATURE_SK !== "true" || !skEnabled() || !skUserAllowed(user)) return false;
+  // The /sk half first (no read); the Shell half runs skAccessAllowed and
+  // reads the school's opt-in.
+  if (!user || process.env.NEXT_PUBLIC_FEATURE_SK !== "true" || !skEnabled()) return false;
   return skShellEnabledFor(supabase, user, role, schoolId);
 }
 
@@ -628,13 +698,17 @@ export async function skShellEnabledFor(
   role: string | null | undefined,
   schoolId: string | null | undefined,
 ): Promise<boolean> {
+  // Cheap env gates first, so the allow-list lookup only runs when it decides.
+  if (!skEnabled() || !skShellRoles().includes((role ?? "").toLowerCase())) return false;
+  const allowed = await skAccessAllowed(user, { role });
+  if (!allowed) return false;
   let schoolOptIn: boolean | null = null;
-  if (schoolId && skEnabled() && !skAllowedEmails().length) {
+  if (schoolId && !skAllowListInForce()) {
     const { data, error } = await supabase.from("schools").select("config").eq("id", schoolId).maybeSingle();
     if (!error) {
       const cfg = (data?.config ?? null) as { sk_shell?: unknown } | null;
       schoolOptIn = cfg?.sk_shell === true;
     }
   }
-  return skShellDecision({ role, user, schoolId, schoolOptIn }).on;
+  return skShellDecision({ role, user, schoolId, schoolOptIn, allowed }).on;
 }

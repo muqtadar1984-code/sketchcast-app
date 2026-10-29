@@ -15,7 +15,7 @@ import {
   schoolAnalyticsEnabledFor,
   skEnabled,
   skShellEnabledFor,
-  skUserAllowed,
+  skAccessAllowed,
   timetableEnabledFor,
 } from "@/utils/flags";
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
@@ -235,7 +235,7 @@ export default async function PresentPage() {
  */
 async function portalTabs(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  user: Parameters<typeof skUserAllowed>[0],
+  user: Parameters<typeof skAccessAllowed>[0],
   role: string | null,
   schoolId: string | null,
   dict: Dictionary,
@@ -263,7 +263,7 @@ async function portalTabs(
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const kitsOn = catalogueTabEnabled() && adult;
-  const skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && skUserAllowed(user);
+  const skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && (await skAccessAllowed(user, { role }));
   const boardOn = true;
   const t = dict.nav.tabs;
   return activeHat
