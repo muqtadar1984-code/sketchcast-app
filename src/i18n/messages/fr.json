@@ -2236,6 +2236,21 @@
         "codeKindCard": "Carte à code",
         "codeKindEdition": "Code d'édition (dans le livre)"
       },
+      "notice": {
+        "cardTitleSchool": "Publier un avis pour toute l'école",
+        "cardTitleStaff": "Publier un avis pour tout le personnel",
+        "seenSchool": "Chaque parent, élève et enseignant de {school}",
+        "seenStaff": "Tout le personnel de {school}",
+        "postedSchool": "Publié pour toute l'école : {title}.",
+        "postedStaff": "Publié pour tout le personnel : {title}.",
+        "noStanding": "Seuls la direction et les coordinateurs publient des avis de l'école.",
+        "off": "Les avis de l'école ne sont pas activés pour votre école.",
+        "whatToSay": "Que doit dire l'avis ?",
+        "tooLong": "Cet avis est trop long — un avis contient au plus 4000 caractères.",
+        "dateUnparsed": "Je n'ai pas compris le jour « {day} » — dites aujourd'hui, demain, un jour de la semaine ou 2026-11-03.",
+        "datePassed": "Ce jour est déjà passé — un avis doit annoncer quelque chose à venir.",
+        "yourSchool": "votre école"
+      },
       "cardParams": {
         "target_label": "Pour",
         "note_type": "Type de note",
@@ -2261,7 +2276,10 @@
         "child_label": "Pour",
         "yes": "Oui",
         "no": "Non",
-        "seen_by": "Qui la voit"
+        "seen_by": "Qui la voit",
+        "title": "Titre",
+        "starts_at": "Date",
+        "school_label": "École"
       },
       "tray": {
         "title": "Vos kits",
@@ -2300,6 +2318,29 @@
       },
       "tutorNotOpen": "Le lecteur de leçon n'est pas ouvert sur cette page.",
       "school": {
+        "figures": {
+          "seats": "Votre école : enseignants {teachers}, élèves {students}, administrateurs {admins}.",
+          "seatsPlan": "Licence : {plan}, statut {status}, période en cours jusqu'au {end}.",
+          "seatsNoLimit": "Aucune limite de places n'est encore enregistrée pour votre école.",
+          "seatsPrincipalOnly": "Les chiffres de licence et de places sont réservés à la direction.",
+          "cost": "Coût de génération pour {where}, 30 derniers jours : kits {kits} (avec coût enregistré {costed}), {usd}.",
+          "costSince": "Depuis le début du suivi des coûts le {date} : kits {kits} (avec coût enregistré {costed}), {usd}.",
+          "costTracking": "Le suivi des coûts a commencé le {date} : les kits antérieurs n'ont pas de coût.",
+          "costTop": "Enseignants au coût le plus élevé (30 derniers jours) : {items}.",
+          "gaps": "Manques sur l'étagère pour {where} : {n}. {items}.",
+          "gapNoBook": "aucun livre sur l'étagère",
+          "gapNoKits": "livre sur l'étagère, pas encore de kit",
+          "gapPeriods": "séances par semaine : {n}",
+          "gapsNone": "Chaque matière à l'emploi du temps de {where} a un livre sur l'étagère et des kits (paires matière-niveau : {pairs}).",
+          "gapsNoTimetable": "Il n'y a pas encore d'emploi du temps pour {where} : je ne peux pas le comparer à l'étagère.",
+          "gapsOffer": "Pour ajouter un livre, ouvrez l'étagère de l'école.",
+          "openShelf": "Ouvrir l'étagère de l'école",
+          "trend": "Tendance pour {where}, 4 dernières semaines — approximative (d'après les dates de remise et d'échéance) : {items}.",
+          "trendWeek": "{week} : à rendre {due}, rendus {submitted}, à l'heure {onTime}, à corriger {pending}",
+          "weekOf": "semaine du {date}",
+          "thisWeek": "cette semaine (jusqu'ici)",
+          "trendNone": "Aucun travail à rendre ni rendu dans {where} ces 4 dernières semaines : pas encore de tendance à montrer."
+        },
         "noScope": "Vous n'avez aucun périmètre de coordination dans cette école : je n'ai rien à afficher.",
         "readFailed": "Je n'arrive pas à lire les données de l'école pour le moment.",
         "whereSchool": "l'école",
@@ -2319,6 +2360,11 @@
         "ttNext": "Ensuite dans {where} — {period} ({start}–{end}) : cours {n}. {items}.",
         "ttNone": "Aucun cours n'est prévu dans {where} pour {period}.",
         "ttClosed": "Aucune période de cours n'est en cours en ce moment."
+      },
+      "schoolMeter": {
+        "analyticsOff": "Les analyses de l'école ne sont pas activées pour votre école.",
+        "auditFailed": "Je ne peux pas ouvrir les chiffres de l'école pour le moment — réessayez dans un instant.",
+        "capReached": "Vous avez atteint les {cap} questions sur l'école d'aujourd'hui — le compteur repart à minuit UTC."
       },
       "parent": {
         "noChildren": "Aucun enfant n'est encore lié à votre compte — ajoutez-en un dans Mes enfants.",

@@ -5,6 +5,8 @@ import { fetchSchoolHealthRows, computeSchoolHealth } from "@/utils/school-healt
 import { buildSchoolBriefingPrompt, briefingGreeting, STARTER_QUESTIONS, type BriefingViewer } from "@/utils/school-assistant/prompt";
 import { assistantProvider, type Turn } from "@/utils/assistant/provider";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
+// SK S5 slice B: ONE daily counter shared with SK's leader school reads.
+import { SCHOOL_BRIEFING_SCOPE, SK_SCHOOL_SCOPE } from "@/sk/shell/school-meter";
 
 export const runtime = "nodejs";
 
@@ -106,13 +108,17 @@ export async function POST(request: Request) {
     .map((t) => ({ role: t.role as "user" | "assistant", text: String(t.content).slice(0, 2000) }));
 
   // Daily cap — counted off the audit log itself (one row per turn, below).
+  // SK S5 slice B: SK's leader school reads (scope 'sk_school') count too, so
+  // the panel and SK share ONE 60/day counter in both directions until slice
+  // E retires this panel. (The panel still inserts AFTER counting; SK's meter
+  // inserts first and fails closed. Left as is: the panel goes in E.)
   const dayStart = new Date();
   dayStart.setUTCHours(0, 0, 0, 0);
   const { count: turnsToday } = await supabase
     .from("analytics_access_log")
     .select("*", { count: "exact", head: true })
     .eq("actor_id", g.userId)
-    .eq("scope", "school_briefing")
+    .in("scope", [SCHOOL_BRIEFING_SCOPE, SK_SCHOOL_SCOPE])
     .gte("created_at", dayStart.toISOString());
   if ((turnsToday ?? 0) >= DAILY_TURN_CAP) {
     return NextResponse.json({ error: "Daily briefing limit reached — try again tomorrow." }, { status: 429 });

@@ -2236,6 +2236,21 @@
         "codeKindCard": "Tarjeta con código",
         "codeKindEdition": "Código de edición (en el libro)"
       },
+      "notice": {
+        "cardTitleSchool": "Publicar un aviso para toda la escuela",
+        "cardTitleStaff": "Publicar un aviso para todo el personal",
+        "seenSchool": "Cada padre, alumno y docente de {school}",
+        "seenStaff": "Todo el personal de {school}",
+        "postedSchool": "Publicado para toda la escuela: {title}.",
+        "postedStaff": "Publicado para todo el personal: {title}.",
+        "noStanding": "Solo la dirección y los coordinadores publican avisos de la escuela.",
+        "off": "Los avisos escolares no están activados para su escuela.",
+        "whatToSay": "¿Qué debe decir el aviso?",
+        "tooLong": "Ese aviso es demasiado largo: un aviso admite hasta 4000 caracteres.",
+        "dateUnparsed": "No entendí el día \"{day}\": diga hoy, mañana, un día de la semana o 2026-11-03.",
+        "datePassed": "Ese día ya pasó: un aviso debe referirse a algo que aún está por llegar.",
+        "yourSchool": "su escuela"
+      },
       "cardParams": {
         "target_label": "Para",
         "note_type": "Tipo",
@@ -2261,7 +2276,10 @@
         "child_label": "Para",
         "yes": "Sí",
         "no": "No",
-        "seen_by": "Quién la ve"
+        "seen_by": "Quién la ve",
+        "title": "Título",
+        "starts_at": "Fecha",
+        "school_label": "Escuela"
       },
       "tray": {
         "title": "Tus kits",
@@ -2300,6 +2318,29 @@
       },
       "tutorNotOpen": "El reproductor de la lección no está abierto en esta página.",
       "school": {
+        "figures": {
+          "seats": "Tu escuela: docentes {teachers}, alumnos {students}, administradores {admins}.",
+          "seatsPlan": "Licencia: {plan}, estado {status}, el periodo actual termina el {end}.",
+          "seatsNoLimit": "Todavía no hay un límite de plazas registrado para tu escuela.",
+          "seatsPrincipalOnly": "Las cifras de licencia y plazas son solo para la dirección.",
+          "cost": "Coste de generación de {where}, últimos 30 días: kits {kits} (con coste registrado {costed}), {usd}.",
+          "costSince": "Desde que empezó el seguimiento de costes el {date}: kits {kits} (con coste registrado {costed}), {usd}.",
+          "costTracking": "El seguimiento de costes empezó el {date}, así que los kits anteriores no tienen coste.",
+          "costTop": "Docentes con mayor coste (últimos 30 días): {items}.",
+          "gaps": "Huecos en la estantería de {where}: {n}. {items}.",
+          "gapNoBook": "ningún libro en la estantería",
+          "gapNoKits": "libro en la estantería, aún sin kits",
+          "gapPeriods": "sesiones por semana: {n}",
+          "gapsNone": "Cada asignatura del horario de {where} tiene un libro en la estantería con kits creados (pares asignatura-curso: {pairs}).",
+          "gapsNoTimetable": "Aún no hay horario para {where}, así que no puedo compararlo con la estantería.",
+          "gapsOffer": "Para añadir un libro, abre la estantería de la escuela.",
+          "openShelf": "Abrir la estantería de la escuela",
+          "trend": "Tendencia de {where}, últimas 4 semanas — aproximada (a partir de las fechas de entrega y de vencimiento): {items}.",
+          "trendWeek": "{week}: con entrega {due}, entregados {submitted}, a tiempo {onTime}, por corregir {pending}",
+          "weekOf": "semana del {date}",
+          "thisWeek": "esta semana (hasta ahora)",
+          "trendNone": "No hay trabajo con entrega ni entregado en {where} en las últimas 4 semanas, así que aún no hay tendencia que mostrar."
+        },
         "noScope": "No tienes ningún ámbito de coordinación en esta escuela, así que no tengo nada que mostrar.",
         "readFailed": "No he podido leer los datos de la escuela ahora mismo.",
         "whereSchool": "la escuela",
@@ -2319,6 +2360,11 @@
         "ttNext": "A continuación en {where} — {period} ({start}–{end}): clases {n}. {items}.",
         "ttNone": "No hay clases programadas en {where} para {period}.",
         "ttClosed": "No hay ningún periodo de clase en curso ahora mismo."
+      },
+      "schoolMeter": {
+        "analyticsOff": "Las analíticas escolares no están activadas para tu escuela.",
+        "auditFailed": "No puedo abrir las cifras de la escuela ahora mismo — inténtalo de nuevo en un momento.",
+        "capReached": "Has alcanzado las {cap} preguntas sobre la escuela de hoy — se reinicia a medianoche UTC."
       },
       "parent": {
         "noChildren": "Aún no tienes hijos vinculados — añade uno en Mis hijos.",

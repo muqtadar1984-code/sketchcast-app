@@ -109,12 +109,21 @@ const SHIPPED = [
   "book.activate",
   // S5 slice A: the leader read (principal / coordinator hats only).
   "school.health",
+  // S5 slice D: the school notice (principal + coordinator hats, notices flag; click-only).
+  "notice.school",
+  // S5 slice C: the leader figures (seats: principal only).
+  "school.seats",
+  "school.cost",
+  "school.gaps",
+  "school.trend",
 ];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
 const PARENT_ONLY = SHIPPED.filter((n) => n.startsWith("child."));
 const STUDENT_AND_PARENT = ["book.activate"];
-// S5 slice A: leader-hat entries (never a plain teacher's).
-const LEADER_ONLY = ["school.health"];
+// S5 slice A: leader-hat entries (never a plain teacher's): school.health;
+// S5 slice D: the school notice (school_admin, or a coordinator scope) under a leader hat.
+// S5 slice C: the leader figures (school.seats is principal-only).
+const LEADER_ONLY = ["school.health", "notice.school", "school.seats", "school.cost", "school.gaps", "school.trend"];
 const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n) && !LEADER_ONLY.includes(n));
 // S4 slice C: diary.note's parent branch (a note to one of her own children).
 const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT];

@@ -2236,6 +2236,21 @@
         "codeKindCard": "Code card",
         "codeKindEdition": "Edition code (in the book)"
       },
+      "notice": {
+        "cardTitleSchool": "Post a notice to the whole school",
+        "cardTitleStaff": "Post a notice to all staff",
+        "seenSchool": "Every parent, student and teacher at {school}",
+        "seenStaff": "All staff at {school}",
+        "postedSchool": "Posted to the whole school: {title}.",
+        "postedStaff": "Posted to all staff: {title}.",
+        "noStanding": "Only the principal and coordinators post school notices.",
+        "off": "School notices aren't switched on for your school.",
+        "whatToSay": "What should the notice say?",
+        "tooLong": "That notice is too long — a notice takes up to 4000 characters.",
+        "dateUnparsed": "I didn't catch the day \"{day}\" — say today, tomorrow, a weekday, or 2026-11-03.",
+        "datePassed": "That day has already passed — a notice has to point at something still ahead.",
+        "yourSchool": "your school"
+      },
       "cardParams": {
         "target_label": "For",
         "note_type": "Type",
@@ -2261,7 +2276,10 @@
         "child_label": "For",
         "yes": "Yes",
         "no": "No",
-        "seen_by": "Who sees it"
+        "seen_by": "Who sees it",
+        "title": "Title",
+        "starts_at": "Date",
+        "school_label": "School"
       },
       "tray": {
         "title": "Your kits",
@@ -2300,6 +2318,29 @@
       },
       "tutorNotOpen": "The lesson player isn't open on this page.",
       "school": {
+        "figures": {
+          "seats": "Your school: teachers {teachers}, students {students}, school admins {admins}.",
+          "seatsPlan": "Licence: {plan}, status {status}, current period ends {end}.",
+          "seatsNoLimit": "No seat limit is recorded for your school yet.",
+          "seatsPrincipalOnly": "School licence and seat figures are for the principal only.",
+          "cost": "Generation cost for {where}, last 30 days: kits {kits} (with cost recorded {costed}), {usd}.",
+          "costSince": "Since cost tracking began on {date}: kits {kits} (with cost recorded {costed}), {usd}.",
+          "costTracking": "Cost tracking began on {date}, so kits made before then carry no cost.",
+          "costTop": "Top teachers by cost (last 30 days): {items}.",
+          "gaps": "Shelf gaps in {where}: {n}. {items}.",
+          "gapNoBook": "no book on the shelf",
+          "gapNoKits": "book on shelf, no kits yet",
+          "gapPeriods": "periods a week: {n}",
+          "gapsNone": "Every timetabled subject in {where} has a book on the shelf with kits made (subject and grade pairs: {pairs}).",
+          "gapsNoTimetable": "There is no timetable for {where} yet, so I can't compare it with the shelf.",
+          "gapsOffer": "To add a book, open the school shelf.",
+          "openShelf": "Open the school shelf",
+          "trend": "Trend for {where}, last 4 weeks — approximate (from submission and due dates): {items}.",
+          "trendWeek": "{week}: due {due}, submitted {submitted}, on time {onTime}, awaiting marking {pending}",
+          "weekOf": "week of {date}",
+          "thisWeek": "this week (so far)",
+          "trendNone": "There is no work due or submitted in {where} in the last 4 weeks, so there is no trend to show yet."
+        },
         "noScope": "You hold no coordinator scope in this school, so I have nothing to show.",
         "readFailed": "I could not read the school data right now.",
         "whereSchool": "the school",
@@ -2319,6 +2360,11 @@
         "ttNext": "Next in {where} — {period} ({start}–{end}): lessons {n}. {items}.",
         "ttNone": "No lessons are timetabled in {where} for {period}.",
         "ttClosed": "No school periods are running right now."
+      },
+      "schoolMeter": {
+        "analyticsOff": "School analytics aren't switched on for your school.",
+        "auditFailed": "I can't open school figures right now — try again in a moment.",
+        "capReached": "You've reached today's {cap} school questions — it resets at midnight UTC."
       },
       "parent": {
         "noChildren": "You have no linked children yet — add one on My Children.",

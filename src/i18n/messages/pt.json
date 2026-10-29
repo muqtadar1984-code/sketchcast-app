@@ -2236,6 +2236,21 @@
         "codeKindCard": "Cartão com código",
         "codeKindEdition": "Código da edição (no livro)"
       },
+      "notice": {
+        "cardTitleSchool": "Publicar um aviso para toda a escola",
+        "cardTitleStaff": "Publicar um aviso para toda a equipa",
+        "seenSchool": "Cada encarregado, aluno e professor de {school}",
+        "seenStaff": "Toda a equipa de {school}",
+        "postedSchool": "Publicado para toda a escola: {title}.",
+        "postedStaff": "Publicado para toda a equipa: {title}.",
+        "noStanding": "Só a direção e os coordenadores publicam avisos da escola.",
+        "off": "Os avisos da escola não estão ativados para a sua escola.",
+        "whatToSay": "O que deve dizer o aviso?",
+        "tooLong": "Esse aviso é demasiado longo — um aviso aceita até 4000 caracteres.",
+        "dateUnparsed": "Não percebi o dia \"{day}\" — diga hoje, amanhã, um dia da semana ou 2026-11-03.",
+        "datePassed": "Esse dia já passou — um aviso tem de apontar para algo que ainda vem.",
+        "yourSchool": "a sua escola"
+      },
       "cardParams": {
         "target_label": "Para",
         "note_type": "Tipo",
@@ -2261,7 +2276,10 @@
         "child_label": "Para",
         "yes": "Sim",
         "no": "Não",
-        "seen_by": "Quem a vê"
+        "seen_by": "Quem a vê",
+        "title": "Título",
+        "starts_at": "Data",
+        "school_label": "Escola"
       },
       "tray": {
         "title": "Os seus kits",
@@ -2300,6 +2318,29 @@
       },
       "tutorNotOpen": "O leitor da lição não está aberto nesta página.",
       "school": {
+        "figures": {
+          "seats": "A sua escola: professores {teachers}, alunos {students}, administradores {admins}.",
+          "seatsPlan": "Licença: {plan}, estado {status}, o período atual termina a {end}.",
+          "seatsNoLimit": "Ainda não há um limite de lugares registado para a sua escola.",
+          "seatsPrincipalOnly": "Os números de licença e lugares são apenas para a direção.",
+          "cost": "Custo de geração ({where}), últimos 30 dias: kits {kits} (com custo registado {costed}), {usd}.",
+          "costSince": "Desde o início do registo de custos a {date}: kits {kits} (com custo registado {costed}), {usd}.",
+          "costTracking": "O registo de custos começou a {date}, por isso os kits anteriores não têm custo.",
+          "costTop": "Professores com maior custo (últimos 30 dias): {items}.",
+          "gaps": "Lacunas na estante ({where}): {n}. {items}.",
+          "gapNoBook": "nenhum livro na estante",
+          "gapNoKits": "livro na estante, ainda sem kits",
+          "gapPeriods": "tempos por semana: {n}",
+          "gapsNone": "Cada disciplina do horário ({where}) tem um livro na estante com kits criados (pares disciplina-ano: {pairs}).",
+          "gapsNoTimetable": "Ainda não há horário ({where}), por isso não o posso comparar com a estante.",
+          "gapsOffer": "Para adicionar um livro, abra a estante da escola.",
+          "openShelf": "Abrir a estante da escola",
+          "trend": "Tendência ({where}), últimas 4 semanas — aproximada (a partir das datas de entrega e de prazo): {items}.",
+          "trendWeek": "{week}: a entregar {due}, entregues {submitted}, a tempo {onTime}, por corrigir {pending}",
+          "weekOf": "semana de {date}",
+          "thisWeek": "esta semana (até agora)",
+          "trendNone": "Não há trabalho a entregar nem entregue ({where}) nas últimas 4 semanas, por isso ainda não há tendência para mostrar."
+        },
         "noScope": "Não tem nenhum âmbito de coordenação nesta escola, por isso não tenho nada para mostrar.",
         "readFailed": "Não consegui ler os dados da escola neste momento.",
         "whereSchool": "a escola",
@@ -2319,6 +2360,11 @@
         "ttNext": "A seguir em {where} — {period} ({start}–{end}): aulas {n}. {items}.",
         "ttNone": "Não há aulas marcadas em {where} para {period}.",
         "ttClosed": "Não há nenhum tempo letivo a decorrer neste momento."
+      },
+      "schoolMeter": {
+        "analyticsOff": "A análise da escola não está ativada para a sua escola.",
+        "auditFailed": "Não consigo abrir os números da escola neste momento — tente novamente daqui a pouco.",
+        "capReached": "Atingiu as {cap} perguntas sobre a escola de hoje — o limite repõe-se à meia-noite UTC."
       },
       "parent": {
         "noChildren": "Ainda não tem filhos associados — adicione um em Os meus filhos.",

@@ -26,6 +26,10 @@ export type RunnerDeps = {
   entries?: SkCapability[];
   /** The turn's read memo (SkCapabilityDeps.cache); shared by every run of this turn. */
   cache?: Map<string, Promise<unknown>>;
+  /** S5 slice B: the turn's leader school-read gate (school-meter.ts
+   *  schoolReadGate) — the analytics gate, then the 60/day cap + audit row,
+   *  BEFORE the handler runs. A result = the read is refused with it. */
+  schoolRead?: (name: string, args: Record<string, unknown>) => Promise<SkCapabilityResult | null>;
 };
 
 /** Cap a handler's result so a wide table can never flood the prompt. */
@@ -67,7 +71,9 @@ export async function runCapability(ctx: SkContext, name: string, args: Record<s
     result = { ok: false, summary: "Cancelled.", error: "aborted", facts: [] };
   } else {
     try {
-      result = capResult(await cap.handler(ctx, args ?? {}, { session: deps.session, now: deps.now, clock: deps.clock, signal: deps.signal, cache: deps.cache, turnId: deps.turnId }));
+      // S5 slice B: a leader school read is gated and metered before it runs.
+      const refused = deps.schoolRead ? await deps.schoolRead(name, args ?? {}) : null;
+      result = refused ?? capResult(await cap.handler(ctx, args ?? {}, { session: deps.session, now: deps.now, clock: deps.clock, signal: deps.signal, cache: deps.cache, turnId: deps.turnId }));
     } catch (e) {
       result = { ok: false, summary: "That lookup failed.", error: (e as Error)?.message?.slice(0, 300) ?? "handler_threw", facts: [] };
     }

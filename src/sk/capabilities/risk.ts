@@ -18,6 +18,8 @@ import { generationSubjects, schoolHealthRows } from "./shared";
 import { lineFor } from "../shell/lines";
 import { S_AT_RISK, S_AT_RISK_NONE, S_EMPTY, S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED } from "../shell/school-lines";
 import { cutLeaderRows, gradeOutsideScope, leaderScope, needsSubjects, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
+// S5 slice B: a leader mode with school analytics off answers the fixed line.
+import { analyticsOffResult } from "@/sk/shell/school-meter";
 
 export const RISK_ROWS_CAP = 30;
 
@@ -78,6 +80,9 @@ export const learnersRisk: SkCapability = {
     const classId = typeof args.classId === "string" && args.classId.trim() ? args.classId.trim() : undefined;
     // S5: the principal / coordinator hats answer at school / scope level.
     const ls = leaderScope(ctx);
+    // S5 slice B: the leader mode needs school analytics (the turn route's
+    // gate says so first; this holds for any other caller). Own-class: unchanged.
+    if (ls.mode !== "own" && ctx.flags.analytics !== true) return analyticsOffResult(ctx);
     if (ls.mode !== "own") return leaderRisk(ctx, ls, classId, typeof args.grade === "string" && args.grade.trim() ? args.grade.trim().slice(0, 20) : undefined, deps);
     try {
       // fetchSchoolHealthRows, once per turn (shared.ts) however many classes are asked about.

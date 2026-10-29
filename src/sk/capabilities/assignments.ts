@@ -24,6 +24,8 @@ import { classEnrollments, generationSubjects, teacherClasses, visibleClasses } 
 import { lineFor } from "../shell/lines";
 import { S_ASSIGN, S_ASSIGN_NONE, S_EMPTY, S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED } from "../shell/school-lines";
 import { classInScope, gradeOutsideScope, leaderScope, needsSubjects, sameGrade, scopeLabel, shareInScope, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
+// S5 slice B: a leader mode with school analytics off answers the fixed line.
+import { analyticsOffResult } from "@/sk/shell/school-meter";
 
 export const SHARE_ROWS_CAP = 40;
 /** `.in()` lists are URL-bound; a teacher with more generations than this gets
@@ -79,6 +81,9 @@ export const assignmentsStatus: SkCapability = {
     const due = DUE.find((d) => d === dueRaw);
     // S5: the principal / coordinator hats answer at school / scope level.
     const ls = leaderScope(ctx);
+    // S5 slice B: the leader mode needs school analytics (the turn route's
+    // gate says so first; this holds for any other caller). Own-class: unchanged.
+    if (ls.mode !== "own" && ctx.flags.analytics !== true) return analyticsOffResult(ctx);
     if (ls.mode !== "own") return leaderAssignments(ctx, ls, { classId, generationId, due, grade: str(args, "grade")?.slice(0, 20) }, deps);
     try {
       // Own classes — the scope everything else is cut to. The predicate goes

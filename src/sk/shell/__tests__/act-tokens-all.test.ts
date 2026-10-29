@@ -2,7 +2,8 @@
  * The token suite across EVERY confirm-tier action /api/sk/act can execute
  * (assign, diary.note, parents.remind; S2 slice B: marking.grade, lesson.prepare;
  * S4 slice C: diary.note's PARENT branch, as parent A to her own child;
- * S4 slice D: book.activate — its "write" is the redeem RPC), against a stateful admin with 0163's
+ * S4 slice D: book.activate — its "write" is the redeem RPC; S5 slice D:
+ * notice.school — the principal's click-only school notice), against a stateful admin with 0163's
  * real consume semantics: single use, expired refused, altered params refused
  * (the HMAC is re-derived from the STORED row), a context change refused, and
  * a duplicate click — two at once — producing exactly ONE write.
@@ -30,11 +31,14 @@ const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
   saved.SK_SHELL_SECRET = process.env.SK_SHELL_SECRET;
   saved.BOOK_CODE_SECRET = process.env.BOOK_CODE_SECRET;
+  saved.FEATURE_NOTICES = process.env.FEATURE_NOTICES;
   process.env.SK_SHELL_SECRET = ACT_SECRET;
   process.env.BOOK_CODE_SECRET = BOOK_SECRET;
+  // S5 slice D: notice.school needs the notices migration gate on.
+  process.env.FEATURE_NOTICES = "true";
 });
 afterEach(() => {
-  for (const k of ["SK_SHELL_SECRET", "BOOK_CODE_SECRET"] as const) {
+  for (const k of ["SK_SHELL_SECRET", "BOOK_CODE_SECRET", "FEATURE_NOTICES"] as const) {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
   }
@@ -93,6 +97,21 @@ const CASES: Record<string, Case> = {
     user: TEACHER_ID,
     redeem: () => ({ codes: { [hmacCode(EDITION, BOOK_SECRET)]: { product_id: PRODUCT } }, links: [{ parent: TEACHER_ID, child: AISYAH }] }),
   },
+  /** S5 slice D: the principal's click-only school notice (one school_events row). */
+  "notice.school": {
+    action: "notice.school",
+    params: {
+      audience: "school",
+      title: "No school on Friday",
+      body: "No school on Friday. Classes resume on Monday.",
+      starts_at: "2026-10-29",
+      school_label: "Demo School",
+      seen_by: "Every parent, student and teacher at Demo School",
+      click_only: true,
+    },
+    ctx: (o: { plan?: string } = {}) => makeCtx({ role: "school_admin", hat: "principal", plan: o.plan }),
+    user: TEACHER_ID,
+  },
 };
 
 const TABLES = {
@@ -120,8 +139,8 @@ function world(name: string, o: { ctx?: SkContext; issuedFor?: SkContext; expire
   const session = diarySession(structuredClone(TABLES)); // updates patch rows in place
   const sink = new MemoryAuditSink();
   const input = (over: Partial<ActInput> = {}): ActInput => ({ ctx, token, via: "click", turnId: "t-1", now: NOW, memory: freshMemory(ctx, NOW), admin, session, sink, ...over });
-  /** Every write this world has seen: diary notes + assign's shares + grades that matched + kit rows + book grants. */
-  const writes = () => session.notes.length + admin.shareWrites.length + session.updates.reduce((n, u) => n + u.ids.length, 0) + session.generations.length + admin.grants.length;
+  /** Every write this world has seen: diary notes + assign's shares + grades that matched + kit rows + book grants + notices. */
+  const writes = () => session.notes.length + admin.shareWrites.length + session.updates.reduce((n, u) => n + u.ids.length, 0) + session.generations.length + admin.grants.length + session.events.length;
   return { ctx, row, token, admin, session, sink, input, writes };
 }
 

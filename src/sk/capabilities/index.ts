@@ -23,6 +23,10 @@ import { PARENT_CAPABILITIES } from "./parent";
 import { bookActivateAction } from "./book";
 // S5 slice A: the leader read (principal / coordinator hats).
 import { schoolHealth } from "./school";
+// S5 slice D: the click-only school notice (principal + coordinator).
+import { noticeSchoolAction } from "./notice";
+// S5 slice C: the leader figures (seats, cost, shelf gaps, trend).
+import { SCHOOL_FIGURE_CAPABILITIES } from "./school-figures";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -63,6 +67,12 @@ const ENTRIES: SkCapability[] = [
   // S5 slice A: school.health — principal (school) / coordinator (scope)
   // hats only, immediate read; scope cut in code (leader-scope.ts).
   schoolHealth,
+  // S5 slice D: the school / all-staff notice (principal + coordinator hats),
+  // confirm tier and CLICK-ONLY (§9.2 school-wide notices; act-notice.ts).
+  noticeSchoolAction,
+  // S5 slice C: school.seats (principal only), school.cost, school.gaps,
+  // school.trend — leader hats only, immediate reads (school-figures.ts).
+  ...SCHOOL_FIGURE_CAPABILITIES,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
@@ -70,3 +80,5 @@ export const REGISTRY: SkCapability[] = ENTRIES;
 export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus, TUTOR_CAPABILITIES, bookActivateAction };
 export { PARENT_CAPABILITIES };
 export { schoolHealth };
+export { noticeSchoolAction };
+export { SCHOOL_FIGURE_CAPABILITIES };

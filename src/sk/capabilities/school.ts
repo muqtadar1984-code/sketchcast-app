@@ -135,6 +135,9 @@ export const schoolHealth: SkCapability = {
     kind: "read",
     roles: ["school_admin", "coordinator"],
     hats: ["principal", "coordinator"],
+    // S5 slice B: the school pages' and the briefing's gate (ctx.flags.analytics
+    // = schoolAnalyticsEnabledFor). Off → the turn route's fixed line.
+    flags: ["analytics"],
   },
   async handler(ctx, args, deps) {
     const me = ctx.user.id;
