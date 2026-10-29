@@ -10,7 +10,8 @@
 // Two execution shapes (act-core.ts):
 // - `assign` (S1): the per-action RPC consumes the token and writes in ONE
 //   transaction (0164 sk_assign_with_token) and writes its own `done` audit row.
-// - S2 actions (`diary.note`, `parents.remind`): `consumeThenWrite` — consume
+// - S2 actions (`diary.note`, `parents.remind`, `marking.grade`,
+//   `lesson.prepare`): `consumeThenWrite` — consume
 //   through the admin RPC, then write AS THE TEACHER with the user-session
 //   client, carrying sk_action_id = token id (0169).
 //
@@ -30,6 +31,10 @@ import { ACT_CLICK_ONLY_LINE, ACT_NOT_ALLOWED_LINE, fail, str, toOutcome, type A
 import { runDiaryNote, runParentsRemind } from "./act-diary";
 import { diaryNoteAction } from "@/sk/capabilities/diary";
 import { parentsRemindAction } from "@/sk/capabilities/remind";
+import { runMarkingGrade } from "./act-marking";
+import { runLessonPrepare } from "./act-prepare";
+import { markingGrade } from "@/sk/capabilities/marking";
+import { lessonPrepareAction } from "@/sk/capabilities/prepare";
 
 export { ACT_CLICK_ONLY_LINE, ACT_LINES, ACT_NOT_ALLOWED_LINE, consumeThenWrite, writeFailure } from "./act-core";
 export type { ActAdmin, ActHandler, ActInput, ActOutcome, Handled, WriteOutcome } from "./act-core";
@@ -42,6 +47,7 @@ export const CLICK_ONLY: ReadonlySet<string> = new Set([
   "notice.multi_class", // multi-class notice
   "kit.generate", // spends credits
   "chapter.prepare", // spends credits
+  "lesson.prepare", // spends credits (S2 slice B; also flagged clickOnly on its handler)
   "purchase", // spends money
   "book.activate", // activate with a code
   "access.revoke", // revoking access
@@ -101,6 +107,10 @@ export const HANDLERS: Record<string, ActHandler> = {
   // S2 slice A: consume (admin RPC) → write AS THE TEACHER (session client).
   "diary.note": { tier: "confirm", kind: "act", meta: diaryNoteAction.meta, run: runDiaryNote },
   "parents.remind": { tier: "confirm", kind: "act", meta: parentsRemindAction.meta, run: runParentsRemind },
+  // S2 slice B: the marking queue's grade (status-guarded update, act-marking.ts)
+  // and lesson prep — CLICK-ONLY because it spends credits (act-prepare.ts).
+  "marking.grade": { tier: "confirm", kind: "act", meta: markingGrade.meta, run: runMarkingGrade },
+  "lesson.prepare": { tier: "confirm", kind: "act", clickOnly: true, meta: lessonPrepareAction.meta, run: runLessonPrepare },
 };
 
 // ── The decision ─────────────────────────────────────────────────────────────

@@ -15,6 +15,8 @@ import { BOARD_CAPABILITIES } from "./board";
 import { assignAction } from "./assign";
 import { diaryNoteAction } from "./diary";
 import { parentsRemindAction } from "./remind";
+import { markingGrade, markingNext } from "./marking";
+import { lessonPrepareAction, lessonStatus } from "./prepare";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -36,8 +38,14 @@ const ENTRIES: SkCapability[] = [
   // admin RPC, then a user-session insert carrying sk_action_id, 0169).
   diaryNoteAction,
   parentsRemindAction,
+  // S2 slice B: the marking queue (read + grade) and lesson prep (click-only,
+  // spends credits) with its status read.
+  markingNext,
+  markingGrade,
+  lessonPrepareAction,
+  lessonStatus,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
 
-export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction };
+export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus };
