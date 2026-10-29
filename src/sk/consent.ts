@@ -81,6 +81,24 @@ export async function hasConsent(admin: ConsentDb, studentId: string, scope: Con
 }
 
 /**
+ * SK S6 slice C (additive): WHO switched a student's memory on — the same two
+ * checks as hasConsent, in the same order, answered by name for the settings
+ * page ("Your memory is on — your parent turned it on"). Any failure → null
+ * (shown as off, as hasConsent would answer).
+ */
+export async function consentSource(admin: ConsentDb, studentId: string, scope: ConsentScope): Promise<"parent" | "school" | null> {
+  if (!UUID_RE.test(studentId) || !CONSENT_SCOPES.includes(scope)) return null;
+  try {
+    if (await guardianConsent(admin, studentId, scope)) return "parent";
+    const p = await profileOf(admin, studentId);
+    return p && (await schoolSwitchOn(admin, p.schoolId)) ? "school" : null;
+  } catch (e) {
+    console.error((e as Error).message);
+    return null;
+  }
+}
+
+/**
  * May SK KEEP memory for this user under `scope`? The rule of consentAllows
  * (access.ts): an adult needs no one's consent for their own memory; a
  * STUDENT needs hasConsent. An unreadable profile keeps nothing.

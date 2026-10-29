@@ -30,7 +30,20 @@ export type SkOffer =
   | { target: "library"; bookId: string; label: string }
   /** S3 slice D: the student greeting's "Carry on?" — her kit, by the ids
    *  the kit routes re-check (product slug, chapter ref, kit generation). */
-  | { target: "tutor"; product: string; chapter: string; kit: string; label: string };
+  | { target: "tutor"; product: string; chapter: string; kit: string; label: string }
+  /** S6 slice C: the greeting suggestion's "Open the Board?" / "carry on?" —
+   *  the Board's deep-link filters (navigate re-checks the target). */
+  | { target: "board"; classId?: string; bookId?: string; chapterRef?: string; generationId?: string; label: string }
+  /** S6 slice C: "want the first?" / "want the list?" / "want the details?" —
+   *  one READ capability (an allow-list, SUGGEST_READS) re-run through the
+   *  runner, which re-checks the registry for this user. */
+  | { target: "read"; capability: SuggestRead; args: Record<string, string>; label: string };
+
+/** The read capabilities a suggestion's "yes" may run. Never a school.* read
+ *  (metered, S5) and never an act. */
+export const SUGGEST_READS = ["marking.next", "assignments.status", "child.status"] as const;
+export type SuggestRead = (typeof SUGGEST_READS)[number];
+const ARG_KEYS = ["due", "child", "classId"] as const;
 
 export type SkMemory = {
   v: typeof SK_MEMORY_VERSION;
@@ -97,7 +110,17 @@ export function verifyMemory(blob: string | null | undefined): SkMemory | null {
     if (o && o.target === "library" && typeof o.bookId === "string" && ID_RE.test(o.bookId) && typeof o.label === "string") out.offer = { target: "library", bookId: o.bookId, label: o.label.slice(0, 160) };
     else if (o && o.target === "tutor" && typeof o.product === "string" && ID_RE.test(o.product) && typeof o.chapter === "string" && /^[A-Za-z0-9._-]{1,20}$/.test(o.chapter) && typeof o.kit === "string" && ID_RE.test(o.kit) && typeof o.label === "string")
       out.offer = { target: "tutor", product: o.product, chapter: o.chapter, kit: o.kit, label: o.label.slice(0, 160) };
-    else delete out.offer;
+    else if (o && o.target === "board" && typeof o.label === "string") {
+      const b: Extract<SkOffer, { target: "board" }> = { target: "board", label: o.label.slice(0, 160) };
+      for (const k of ["classId", "bookId", "generationId"] as const) if (typeof o[k] === "string" && ID_RE.test(o[k] as string)) b[k] = o[k] as string;
+      if (typeof o.chapterRef === "string" && /^[A-Za-z0-9._-]{1,20}$/.test(o.chapterRef)) b.chapterRef = o.chapterRef;
+      out.offer = b;
+    } else if (o && o.target === "read" && typeof o.capability === "string" && (SUGGEST_READS as readonly string[]).includes(o.capability) && typeof o.label === "string") {
+      const args: Record<string, string> = {};
+      const raw = (o.args && typeof o.args === "object" ? o.args : {}) as Record<string, unknown>;
+      for (const k of ARG_KEYS) if (typeof raw[k] === "string" && ID_RE.test(raw[k] as string)) args[k] = raw[k] as string;
+      out.offer = { target: "read", capability: o.capability as SuggestRead, args, label: o.label.slice(0, 160) };
+    } else delete out.offer;
     return out;
   } catch {
     return null;
