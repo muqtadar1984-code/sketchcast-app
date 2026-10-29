@@ -2,7 +2,9 @@
  * /api/sk/act (slice D): the gate (404 off, 401 signed out), body validation,
  * a tampered token → `refused` 200 with no RPC call, the done path returning
  * the summary + a memory blob that carries the turn, voice allowed for assign,
- * and the audit row for a non-done outcome when SK_AUDIT=db.
+ * and the audit row for a non-done outcome when SK_AUDIT=db. S2 slice A: the
+ * diary.note and parents.remind outcomes — consume through the admin RPC, then
+ * the write with THIS request's session client.
  * Run: node node_modules/vitest/vitest.mjs run src/app/api/sk/act/__tests__/route.test.ts
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -59,7 +61,11 @@ function tokenFor(over: Partial<ActionTokenRow> = {}): { row: ActionTokenRow; to
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function actAdmin(tokens: Record<string, ActionTokenRow>, assign: (args: Record<string, unknown>) => { data?: unknown; error?: unknown }) {
+function actAdmin(
+  tokens: Record<string, ActionTokenRow>,
+  assign: (args: Record<string, unknown>) => { data?: unknown; error?: unknown },
+  consume: (args: Record<string, unknown>) => { data?: unknown; error?: unknown } = () => ({ data: "done", error: null }),
+) {
   const inserts: Array<{ table: string; row: any }> = [];
   const rpcCalls: Array<{ fn: string; args: Record<string, unknown> | undefined }> = [];
   return {
@@ -86,6 +92,7 @@ function actAdmin(tokens: Record<string, ActionTokenRow>, assign: (args: Record<
       rpcCalls.push({ fn, args });
       if (fn === "plan_tier") return { data: "school", error: null };
       if (fn === "sk_assign_with_token") return assign(args ?? {});
+      if (fn === "sk_consume_action_token") return consume(args ?? {});
       return { data: null, error: null };
     },
     auth: { admin: { getUserById: async () => ({ data: { user: null }, error: null }) } },
@@ -223,5 +230,89 @@ describe("done path", () => {
     });
     const { token } = tokenFor();
     expect(await (await POST(req(act(token)))).json()).toMatchObject({ ok: false, outcome: "error", summary: ACT_LINES.error });
+  });
+});
+
+describe("S2 actions: consume via the admin RPC, then write AS THE TEACHER with the request's session", () => {
+  const CLASS = "c7b00000-0000-4000-8000-000000000001";
+  const GEN = "9e000000-0000-4000-8000-000000000004";
+  const SHARE = "5a000000-0000-4000-8000-000000000005";
+  const ALI = "a1000000-0000-4000-8000-000000000011";
+  const SITI = "a2000000-0000-4000-8000-000000000012";
+  const NOTE: ActionParams = { class_id: CLASS, note_type: "general", body: "No school on Friday.", parents_only: false, entry_date: "2026-10-28", target_label: "7B" };
+  const REMIND: ActionParams = { share_id: SHARE, generation_id: GEN, class_id: CLASS, student_ids: `${ALI},${SITI}`, count: 2, body: "Reminder: please finish the worksheet.", class_name: "7B", kit_title: "Cells worksheet" };
+  const sessionTables = () => ({
+    ...tables(),
+    classes: [{ id: CLASS, name: "7B", teacher_id: TEACHER_ID, school_id: SCHOOL_ID }],
+    generation_shares: [{ id: SHARE, generation_id: GEN, class_id: CLASS }],
+    enrollments: [
+      { class_id: CLASS, student_id: ALI, profiles: { full_name: "Ali Hassan" } },
+      { class_id: CLASS, student_id: SITI, profiles: { full_name: "Siti Aminah" } },
+    ],
+    student_progress: [],
+    submissions: [],
+    diary_notes: [{ id: "n1" }],
+  });
+  function arm(action: string, params: ActionParams, consume?: () => { data?: unknown; error?: unknown }) {
+    const t = tokenFor({ action, params, params_canonical: canonicalParams(params) });
+    admin = actAdmin({ [ID]: t.row }, () => DONE, consume);
+    mocks.createAdminClient.mockReturnValue(admin);
+    const session = fakeSession(sessionTables(), { user: USER });
+    mocks.createClient.mockResolvedValue(session);
+    return { token: t.token, session };
+  }
+  const consumeCalls = () => admin.rpcCalls.filter((c) => c.fn === "sk_consume_action_token");
+
+  it("diary.note done: one consume (token id + live hash), one session insert carrying sk_action_id, the line, an ok audit row", async () => {
+    process.env.SK_AUDIT = "db";
+    const { token, session } = arm("diary.note", NOTE);
+    const body = await (await POST(req(act(token)))).json();
+    expect(body).toMatchObject({ ok: true, outcome: "done", summary: "Posted to 7B's diary.", result: { note_id: "n1", class_id: CLASS } });
+    expect(consumeCalls()).toEqual([{ fn: "sk_consume_action_token", args: { p_token: ID, p_context_hash: makeCtx().contextHash } }]);
+    expect(assignCalls()).toEqual([]);
+    const insert = session.log.find((l) => l.startsWith("diary_notes.insert("));
+    expect(insert).toBeDefined();
+    expect(JSON.parse(insert!.slice("diary_notes.insert(".length, -1))).toEqual({
+      author_id: TEACHER_ID,
+      class_id: CLASS,
+      student_id: null,
+      note_type: "general",
+      body: "No school on Friday.",
+      parents_only: false,
+      entry_date: "2026-10-28",
+      sk_action_id: ID,
+    });
+    // The admin client never touched diary_notes; it wrote only the audit row.
+    expect(admin.inserts.map((i) => i.table)).toEqual(["sk_actions"]);
+    expect(admin.inserts[0].row).toMatchObject({ action: "diary.note", tier: "confirm", kind: "act", ok: true, token_id: ID });
+  });
+  it("a spoken yes confirms a diary note", async () => {
+    const { token } = arm("diary.note", NOTE);
+    expect(await (await POST(req(act(token, { via: "voice" })))).json()).toMatchObject({ ok: true, outcome: "done" });
+  });
+  it("the consume says already_used (a second click) → the fixed line, NO session write", async () => {
+    const { token, session } = arm("diary.note", NOTE, () => ({ data: "already_used", error: null }));
+    expect(await (await POST(req(act(token)))).json()).toMatchObject({ ok: false, outcome: "already_used", summary: ACT_LINES.already_used });
+    expect(session.log.some((l) => l.startsWith("diary_notes.insert"))).toBe(false);
+  });
+  it("the diary switched off since the card → refused before the consume", async () => {
+    delete process.env.FEATURE_DIARY;
+    const { token, session } = arm("diary.note", NOTE);
+    const body = await (await POST(req(act(token)))).json();
+    expect(body.ok).toBe(false);
+    expect(["refused", "context_mismatch"]).toContain(body.outcome);
+    expect(consumeCalls()).toEqual([]);
+    expect(session.log.some((l) => l.startsWith("diary_notes.insert"))).toBe(false);
+  });
+  it("parents.remind done: re-reads through the session, one insert of one reminder per learner, the line", async () => {
+    const { token, session } = arm("parents.remind", REMIND);
+    const body = await (await POST(req(act(token)))).json();
+    expect(body).toMatchObject({ ok: true, outcome: "done", summary: "Sent reminders to 2 families (diary).", result: { sent: 2, share_id: SHARE } });
+    expect(consumeCalls()).toHaveLength(1);
+    const insert = session.log.find((l) => l.startsWith("diary_notes.insert("));
+    const rows = JSON.parse(insert!.slice("diary_notes.insert(".length, -1)) as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r.student_id)).toEqual([ALI, SITI]);
+    for (const r of rows) expect(r).toMatchObject({ author_id: TEACHER_ID, class_id: null, note_type: "reminder", parents_only: true, body: REMIND.body, sk_action_id: ID });
+    for (const t of ["classes", "generation_shares", "enrollments", "student_progress", "submissions"]) expect(session.log.some((l) => l.startsWith(`${t}.`))).toBe(true);
   });
 });
