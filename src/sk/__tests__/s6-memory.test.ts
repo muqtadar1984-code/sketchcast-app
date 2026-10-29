@@ -336,6 +336,16 @@ describe("nothing is sent unasked: no S6 code path can send mail or a push", () 
     "src/sk/memory-delete.ts",
     "src/sk/memory-sweep.ts",
     "src/app/api/sk/memory/route.ts",
+    // slice B — Transcribe (the client half's network surface is pinned in
+    // src/utils/__tests__/transcribe.test.ts)
+    "src/app/api/sk/stt/url/route.ts",
+    "src/sk/speech/stt.ts",
+    "src/sk/speech/transcribe-presign.ts",
+    "src/sk/speech/transcribe-server.ts",
+    "src/utils/assistant/transcribe-client.ts",
+    "src/utils/assistant/event-stream.ts",
+    "src/utils/assistant/pcm16.ts",
+    "src/utils/assistant/voice-client.ts",
   ];
   const SENDERS = /from\s+["'](?:resend|nodemailer|@sendgrid\/[^"']+|postmark|web-push|@\/utils\/lifecycle\/send|@\/utils\/email[^"']*|@\/utils\/mail[^"']*)["']|\bnew Resend\(|sendLifecycleEmail|sendEmail\(|sendMail\(/;
 
