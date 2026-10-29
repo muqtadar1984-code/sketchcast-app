@@ -7,6 +7,7 @@ import {
   scopeOf,
   groupOf,
   railFor,
+  downloadArtifactKind,
   railForKit,
   pickerFor,
   kitGroups,
@@ -182,10 +183,10 @@ describe("the rail for a chapter", () => {
     expect(railFor(kit, { chapter: 99 })).toEqual([]);
   });
 
-  it("keeps the slide deck off the rail — it is a generation of its own now, not a document the board can show", () => {
+  it("lists the slide deck as a DOWNLOAD (Board UX 2026-10-28): never projected, a note that says why", () => {
     // 0103: the deck is queued as kind 'deck' with a deck_pptx artifact. The
-    // rail's route signs only docx, and a .pptx has no board text, so a deck
-    // on the rail would be a dead tile with a raw, untranslated label.
+    // route signs that .pptx (downloadArtifactKind), so the tile is a real
+    // download; the Board's slides are the video's own frames, never the pptx.
     const deck = gen({
       id: "deck-1",
       kind: "deck",
@@ -194,8 +195,27 @@ describe("the rail for a chapter", () => {
     });
     const units = railFor([gen(), deck], { chapter: 3 });
     expect(units).toHaveLength(1);
-    expect(units[0].docs.map((d) => d.kind)).toEqual(["worksheet"]);
-    expect(units[0].docs.some((d) => d.id === "deck-1")).toBe(false);
+    // What projects first, then by kind.
+    expect(units[0].docs.map((d) => d.kind)).toEqual(["worksheet", "deck"]);
+    expect(units[0].docs.find((d) => d.id === "deck-1")).toEqual({ id: "deck-1", kind: "deck", projects: false, note: "deck" });
+  });
+
+  it("a deck with no .pptx (still building, or failed) stays off the rail: no dead tile", () => {
+    const empty = gen({ id: "deck-2", kind: "deck", artifacts: [] });
+    expect(railFor([gen(), empty], { chapter: 3 })[0].docs.some((d) => d.id === "deck-2")).toBe(false);
+  });
+
+  it("the deck never reaches the picker: it is not a worksheet", () => {
+    const deck = gen({ id: "deck-1", kind: "deck", artifacts: [{ kind: "deck_pptx", storage_path: "a/deck.pptx" }] });
+    const ids = pickerFor([gen({ id: "mine" }), deck], { chapter: 3, part: 2 }).flatMap((g) => g.items.map((i) => i.id));
+    expect(ids).toEqual(["mine"]);
+  });
+
+  it("downloadArtifactKind: the deck downloads its deck_pptx, everything else its docx", () => {
+    expect(downloadArtifactKind("deck")).toBe("deck_pptx");
+    expect(downloadArtifactKind("worksheet")).toBe("docx");
+    expect(downloadArtifactKind("exam_paper")).toBe("docx");
+    expect(downloadArtifactKind("presentation")).toBe("docx");
   });
 });
 
@@ -260,7 +280,7 @@ describe("ready-made kits are grouped by their title prefix", () => {
     rm({ id: "ws", kind: "worksheet", title: `${PREFIX} · Worksheet` }),
     rm({ id: "case", kind: "case_study", title: `${PREFIX} · Case study`, artifacts: [{ kind: "docx", storage_path: "c.docx" }] }),
     rm({ id: "act", kind: "activity", title: `${PREFIX} · Activities`, artifacts: [{ kind: "docx", storage_path: "a.docx" }] }),
-    rm({ id: "deck", kind: "deck", title: `${PREFIX} · Slides`, artifacts: [{ kind: "pptx", storage_path: "d.pptx" }] }),
+    rm({ id: "deck", kind: "deck", title: `${PREFIX} · Slides`, artifacts: [{ kind: "deck_pptx", storage_path: "d.pptx" }] }),
   ];
   const other = [
     rm({ id: "o-pres", kind: "presentation", title: "Osmosis · Osmosis", artifacts: [{ kind: "video_mp4", storage_path: "o/lesson.mp4" }] }),
@@ -276,12 +296,13 @@ describe("ready-made kits are grouped by their title prefix", () => {
     expect(kitPrefix("")).toBe("");
   });
 
-  it("the rail for a kit: its presentation as the video, its sibling documents as docs, the deck off", () => {
+  it("the rail for a kit: its presentation as the video, its sibling documents as docs, the deck as a download", () => {
     const units = railForKit([...group, ...other], "pres");
     expect(units).toHaveLength(1);
     expect(units[0].part).toBeNull();
     expect(units[0].video).toEqual({ id: "pres", title: `${PREFIX} · ${PREFIX}` });
-    expect(units[0].docs.map((d) => d.id)).toEqual(["ws", "act", "case"]);
+    expect(units[0].docs.map((d) => d.id)).toEqual(["ws", "act", "case", "deck"]);
+    expect(units[0].docs.find((d) => d.id === "deck")).toEqual({ id: "deck", kind: "deck", projects: false, note: "deck" });
     expect(units[0].docs[0]).toEqual({ id: "ws", kind: "worksheet", projects: true });
     expect(units[0].docs.find((d) => d.id === "case")).toMatchObject({ projects: false, note: "no-text" });
     // Osmosis is another kit entirely.

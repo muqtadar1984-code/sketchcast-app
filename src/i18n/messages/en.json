@@ -1876,7 +1876,10 @@
       "outsideHours": "Outside lesson hours",
       "fromTimetable": "Set from timetable",
       "freePeriod": "No lesson this period",
-      "pickManually": "Pick manually"
+      "pickManually": "Pick manually",
+      "menu": "Menu",
+      "backToDashboard": "Back to dashboard",
+      "loadSlides": "Load slides as pages"
     },
     "start": {
       "heading": "Choose what you are teaching",
@@ -1921,7 +1924,9 @@
       "examPaper": "Test paper",
       "exam": "Exam",
       "noteNeverProject": "Download only — a paper the class has watched is no longer a test",
-      "noteNoText": "Download only — this kind has no structured text to put on a board"
+      "noteNoText": "Download only — this kind has no structured text to put on a board",
+      "deck": "Slide deck",
+      "noteDeck": "Download — the board shows the slides from the video"
     },
     "group": {
       "thisPart": "This part",
@@ -1961,7 +1966,9 @@
       "answerTrue": "True",
       "answerFalse": "False",
       "prevQuestion": "Previous question",
-      "nextQuestion": "Next question"
+      "nextQuestion": "Next question",
+      "railHandle": "Units",
+      "railClose": "Close"
     },
     "wrapUp": {
       "saved": "Lesson saved",
@@ -2111,7 +2118,9 @@
       "cardExpired": "This card has expired.",
       "cardCancelled": "Cancelled.",
       "actFailed": "That didn't go through. Try again.",
-      "voiceYesHint": "Say “yes” to confirm, or “no” to cancel."
+      "voiceYesHint": "Say “yes” to confirm, or “no” to cancel.",
+      "loadingSlides": "Loading slide {k} of {n}…",
+      "slidesLoaded": "{n} slides are on the roll as pages {a}–{b}. Page up and page down move between them; say 'blank page' to add one in between."
     }
   }
 }

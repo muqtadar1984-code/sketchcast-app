@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { resolveContext, type LastTaught, type PresentContext } from "@/utils/present/context";
 import type { SkSelection } from "@/sk/shell/types";
@@ -13,7 +13,9 @@ import type { SkShellCopy } from "@/app/dashboard/sk-shell";
 import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
 import type { BoardController, BoardUnit } from "./board-controller";
 import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
-import { docLabel, groupLabel, scopeLabel, unitLabel } from "./words";
+import { docLabel, docNote, groupLabel, scopeLabel, unitLabel } from "./words";
+import { menuItemsFor, type MenuItem } from "./menu-items";
+import { RAIL_CLOSED, railReduce } from "./rail-state";
 import type { Slot, TimetableShape } from "@/utils/timetable";
 
 // The context bar and the kit rail.
@@ -74,6 +76,10 @@ type Props = {
   kits?: KitOption[];
   /** Null when the Shell is off (gates in page.tsx). */
   sk?: PresentSk | null;
+  /** Board UX (2026-10-28): the portal's tabs for the current hat, as the app
+   *  header computes them (page.tsx), for the Board's menu. Labels already
+   *  translated; /present itself is dropped by menuItemsFor. */
+  tabs?: MenuItem[];
 };
 
 /** GET/POST /api/sk/manifest (slice A's contract) as the bridge's fetch. */
@@ -145,6 +151,7 @@ export default function PresentClient({
   books,
   kits = [],
   sk = null,
+  tabs = [],
 }: Props) {
   const now = useSyncExternalStore(subscribeClock, clockSnapshot, clockServerSnapshot);
 
@@ -314,7 +321,13 @@ export default function PresentClient({
     }
   }, [bookId, chapter, kitPick, ctx, classId, klass, teacherId, t]);
 
-  const endSession = useCallback(() => setSession(null), []);
+  // The unit rail overlay's state (Board UX 2026-10-28; see below). Declared
+  // here so ending a lesson can shut it: the next lesson starts with it closed.
+  const [rail, railDispatch] = useReducer(railReduce, RAIL_CLOSED);
+  const endSession = useCallback(() => {
+    setSession(null);
+    railDispatch("close");
+  }, [railDispatch]);
 
   // ── autostart (Final Plan §2.7) ──────────────────────────────────────────
   //
@@ -396,6 +409,25 @@ export default function PresentClient({
     return Object.keys(sel).length ? sel : undefined;
   }, [session, classId, kitPick, bookId, chapter]);
 
+  // ── Board UX (2026-10-28) ──────────────────────────────────────────────
+  //
+  // The unit rail overlay: one state for the handle, the overlay and SK's
+  // `rail` move (rail-state.ts). The bridge reads it through a stable getter
+  // (a closure box made once, kept current by an effect), so it is not rebuilt
+  // every time the rail opens and no ref is read during render.
+  const [railBox] = useState(() => {
+    let open = false;
+    return { get: () => open, set: (v: boolean) => void (open = v) };
+  });
+  useEffect(() => {
+    railBox.set(rail.open);
+  }, [railBox, rail.open]);
+
+  // The slides load (k of n while it runs, then where the pages landed), for
+  // the Board's own status line. The panel's tray reads the bridge directly.
+  const [slideLoad, setSlideLoad] = useState<{ k: number; n: number } | null>(null);
+  const [slidesDone, setSlidesDone] = useState<{ n: number; a: number; b: number } | null>(null);
+
   // Rebuilt whenever what it reads changes; the old one's segment watcher is
   // disposed with it (a unit or session change ends the watch anyway). The
   // selection only changes BEFORE a lesson, when no watcher can be running.
@@ -407,17 +439,86 @@ export default function PresentClient({
             manifest: () => manifest,
             mapStatus: () => mapStatus,
             selection: () => selection,
+            rail: (open) => railDispatch(open ? "open" : "close"),
+            railOpen: railBox.get,
+            onLoading: setSlideLoad,
           })
         : null,
-    [sk, controller, manifest, mapStatus, selection],
+    [sk, controller, manifest, mapStatus, selection, railBox, railDispatch],
   );
   useEffect(() => () => bridge?.dispose(), [bridge]);
+
+  // "Load slides as pages" from the rail: the same move SK runs, through the
+  // same bridge, so the panel's tray and the Board show one load. Offered only
+  // with the lesson map in hand: the slides ARE its segments.
+  const loadSlides = useMemo(
+    () =>
+      bridge && manifest && manifest.segments.length
+        ? () => {
+            setSlidesDone(null);
+            void bridge.run("load_slides", {}).then((r) => {
+              if (r.ok && r.loaded) setSlidesDone({ n: r.loaded.n, a: r.loaded.a, b: r.loaded.b });
+            });
+          }
+        : undefined,
+    [bridge, manifest],
+  );
+  const slideStatus =
+    sk && slideLoad
+      ? fmt(sk.copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n })
+      : sk && slidesDone
+        ? fmt(sk.copy.slidesLoaded, slidesDone)
+        : null;
+
+  // The Board's menu: "Back to dashboard", then the portal's tabs.
+  const menu = useMemo(() => menuItemsFor(tabs, { href: "/dashboard", label: t.bar.backToDashboard }), [tabs, t]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   return (
     <main className="min-h-dvh bg-[#0F1417] text-[#E7EDE9]">
       {/* Dark, because it sits above a lit board in a room with the lights down,
           and because it must read from the back of the class. */}
       <header className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
+        {/* The Board has no app header (Board UX 2026-10-28, founder): the way
+            back to the portal is this menu. Plain links. Above the stage (z 30)
+            and the rail overlay, below the SK panel (z 50). */}
+        <div className="relative">
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]"
+            data-board="menu"
+          >
+            ≡ {t.bar.menu}
+          </button>
+          {menuOpen && (
+            <>
+              <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-[41] cursor-default" onClick={() => setMenuOpen(false)} />
+              <nav role="menu" className="absolute start-0 top-full z-[42] mt-1 grid min-w-[220px] gap-0.5 rounded-xl border border-[#2A363B] bg-[#141B1F] p-1 shadow-2xl">
+                {menu.map((m, i) => (
+                  <a
+                    key={m.href}
+                    role="menuitem"
+                    href={m.href}
+                    className={`rounded-lg px-3 py-2 text-sm hover:bg-[#1C2529] ${i === 0 ? "text-[#4FD6C2]" : "text-[#E7EDE9]"}`}
+                  >
+                    {m.label}
+                  </a>
+                ))}
+              </nav>
+            </>
+          )}
+        </div>
         <Chip label={t.bar.grade} value={klass?.grade ?? "—"} />
         <Chip label={t.bar.subject} value={ctx?.subject ?? "—"} />
         <select
@@ -500,7 +601,18 @@ export default function PresentClient({
       </header>
 
       {session ? (
-        <BoardSession session={session} kit={kit} t={t} onEnd={endSession} controllerRef={controllerRef} onUnit={setOpenUnit} />
+        <BoardSession
+          session={session}
+          kit={kit}
+          t={t}
+          onEnd={endSession}
+          controllerRef={controllerRef}
+          onUnit={setOpenUnit}
+          railOpen={rail.open}
+          onRail={railDispatch}
+          onLoadSlides={loadSlides}
+          slideStatus={slideStatus}
+        />
       ) : ready ? (
         <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">
           <aside className="grid content-start gap-2">
@@ -534,10 +646,11 @@ export default function PresentClient({
                         : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
                     }`}
                   >
+                    {d.note === "deck" ? "⤓ " : ""}
                     {docLabel(t, d.kind)}
                     {d.note && (
                       <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
-                        {d.note === "never-project" ? t.doc.noteNeverProject : t.doc.noteNoText}
+                        {docNote(t, d.note)}
                       </span>
                     )}
                   </div>

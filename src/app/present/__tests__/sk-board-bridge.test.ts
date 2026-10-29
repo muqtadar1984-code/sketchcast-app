@@ -466,3 +466,108 @@ describe("the segment stop survives a pause/resume pair (slice E's coordinator s
     expect(pauses()).toBe(0);
   });
 });
+
+// ── Board UX (2026-10-28): the rail port, blank-after-current, slides as pages ──
+
+describe("Board UX — rail, blank in between, load_slides", () => {
+  const m = toBridgeManifest(KIT, 1);
+
+  it("rail(open) drives the host's rail without a session or an audit; toggle reads railOpen", async () => {
+    let open = false;
+    const seen: boolean[] = [];
+    const b = createBoardBridge({
+      controller: () => null,
+      manifest: () => null,
+      mapStatus: () => "none",
+      rail: (o) => {
+        open = o;
+        seen.push(o);
+      },
+      railOpen: () => open,
+    });
+    // No controller (no lesson running) — the rail still opens.
+    expect(await b.run("rail", { open: true })).toEqual({ ok: true, summary: "Unit rail open." });
+    expect(await b.run("rail", { open: false })).toEqual({ ok: true, summary: "Unit rail closed." });
+    expect(await b.run("rail", {})).toMatchObject({ ok: true });
+    b.rail("toggle");
+    b.rail("toggle");
+    b.rail("close");
+    expect(seen).toEqual([true, false, true, false, true, false]);
+  });
+
+  it("a Board with no rail says so instead of pretending", async () => {
+    const b = createBoardBridge({ controller: () => null, manifest: () => null, mapStatus: () => "none" });
+    expect(await b.run("rail", { open: true })).toEqual({ ok: false, summary: "This Board has no unit rail." });
+  });
+
+  it("the rail move neither needs nor cancels a slides load", async () => {
+    const fc = fakeController();
+    const cancel = vi.fn();
+    fc.c.cancelLoad = cancel;
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready", rail: () => {} });
+    await b.run("rail", { open: true });
+    expect(cancel).not.toHaveBeenCalled();
+    await b.run("pause", {});
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("blank inserts AFTER the page on screen", async () => {
+    const fc = fakeController();
+    const after: (number | undefined)[] = [];
+    fc.c.blankPage = (o) => {
+      after.push(o?.after);
+    };
+    fc.st.pageCount = 5;
+    fc.st.page = 2;
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready" });
+    const r = await b.run("blank", {});
+    expect(r).toEqual({ ok: true, summary: "Blank page added after page 3." });
+    expect(after).toEqual([2]);
+  });
+
+  it("load_slides runs the controller's load over the unit's manifest, reports progress, and returns where the pages landed", async () => {
+    const fc = fakeController();
+    const progress: Array<{ k: number; n: number } | null> = [];
+    let mid: { k: number; n: number } | null = null;
+    let bridge: ReturnType<typeof createBoardBridge> | null = null;
+    fc.c.loadSlides = async (mm, o) => {
+      fc.calls.push(["loadSlides", mm.segments.length]);
+      for (let k = 1; k <= mm.segments.length; k++) {
+        o?.onProgress?.(k, mm.segments.length);
+        if (k === 2) mid = bridge!.loading();
+      }
+      return { pages: mm.segments.length, firstPage: 4, lastPage: 6, aborted: false };
+    };
+    bridge = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready", onLoading: (p) => progress.push(p) });
+    const r = await bridge.run("load_slides", {});
+    expect(fc.calls).toContainEqual(["loadSlides", 3]);
+    expect(r.ok).toBe(true);
+    expect(r.loaded).toEqual({ n: 3, a: 5, b: 7, aborted: false });
+    expect(r.summary).toMatch(/^3 slides are on the roll as pages 5–7\. Page up and page down/);
+    expect(mid).toEqual({ k: 2, n: 3 });
+    expect(progress).toEqual([{ k: 0, n: 3 }, { k: 1, n: 3 }, { k: 2, n: 3 }, { k: 3, n: 3 }, null]);
+    // Done: nothing in the tray.
+    expect(bridge.loading()).toBeNull();
+  });
+
+  it("load_slides without a map, or on a controller that cannot load, refuses", async () => {
+    const fc = fakeController();
+    const noMap = createBoardBridge({ controller: () => fc.c, manifest: () => null, mapStatus: () => "building" });
+    expect((await noMap.run("load_slides", {})).ok).toBe(false);
+    const old = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready" });
+    expect(await old.run("load_slides", {})).toEqual({ ok: false, summary: "This Board cannot load slides as pages." });
+  });
+
+  it("an aborted load says how far it got; a load stopped before any page is not a success", async () => {
+    const fc = fakeController();
+    let pages = 2;
+    fc.c.loadSlides = async () => ({ pages, firstPage: pages ? 0 : -1, lastPage: pages - 1, aborted: true });
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready" });
+    const r = await b.run("load_slides", {});
+    expect(r.summary).toContain("(stopped after 2 of 3)");
+    expect(r.loaded).toEqual({ n: 2, a: 1, b: 2, aborted: true });
+    pages = 0;
+    expect(await b.run("load_slides", {})).toEqual({ ok: false, summary: "Stopped before the first slide." });
+    expect(b.loading()).toBeNull();
+  });
+});

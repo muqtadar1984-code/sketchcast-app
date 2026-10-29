@@ -1876,7 +1876,10 @@
       "outsideHours": "Hors heures de cours",
       "fromTimetable": "Défini par l'emploi du temps",
       "freePeriod": "Pas de cours sur ce créneau",
-      "pickManually": "Choisir manuellement"
+      "pickManually": "Choisir manuellement",
+      "menu": "Menu",
+      "backToDashboard": "Retour au tableau de bord",
+      "loadSlides": "Charger les diapositives en pages"
     },
     "start": {
       "heading": "Choisissez ce que vous allez enseigner",
@@ -1921,7 +1924,9 @@
       "examPaper": "Contrôle",
       "exam": "Examen",
       "noteNeverProject": "Téléchargement uniquement — un sujet que la classe a vu n'est plus un contrôle",
-      "noteNoText": "Téléchargement uniquement — ce type de document n'a pas de texte structuré à afficher sur un tableau"
+      "noteNoText": "Téléchargement uniquement — ce type de document n'a pas de texte structuré à afficher sur un tableau",
+      "deck": "Diaporama",
+      "noteDeck": "Téléchargement — le tableau affiche les diapositives de la vidéo"
     },
     "group": {
       "thisPart": "Cette partie",
@@ -1961,7 +1966,9 @@
       "answerTrue": "Vrai",
       "answerFalse": "Faux",
       "prevQuestion": "Question précédente",
-      "nextQuestion": "Question suivante"
+      "nextQuestion": "Question suivante",
+      "railHandle": "Unités",
+      "railClose": "Fermer"
     },
     "wrapUp": {
       "saved": "Leçon enregistrée",
@@ -2111,7 +2118,9 @@
       "cardExpired": "Cette carte a expiré.",
       "cardCancelled": "Annulé.",
       "actFailed": "Cela n'a pas abouti. Réessayez.",
-      "voiceYesHint": "Dites « oui » pour confirmer, ou « non » pour annuler."
+      "voiceYesHint": "Dites « oui » pour confirmer, ou « non » pour annuler.",
+      "loadingSlides": "Chargement de la diapositive {k} sur {n}…",
+      "slidesLoaded": "{n} diapositives sont sur le rouleau, pages {a} à {b}. Page précédente et page suivante passent de l'une à l'autre ; dites « page blanche » pour en insérer une entre deux."
     }
   }
 }

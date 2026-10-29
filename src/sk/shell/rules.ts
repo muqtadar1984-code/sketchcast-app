@@ -174,6 +174,23 @@ const INTRO_RE = polite(
 );
 const NEXT_RE = polite("(?:go to |show |move to |buka |tunjuk(?:kan)? |pergi ke |اعرض |اذهب (?:إلى|الى) |انتقل (?:إلى|الى) )?(?:(?:the )?next (?:slide|segment|part|one)|(?:slaid|bahagian|segmen) (?:seterusnya|berikutnya|selepas ini)|(?:الشريحة|الجزء|المقطع) (?:التالية|التالي|القادمة|القادم))");
 const PREV_RE = polite("(?:go to |show |move to |buka |tunjuk(?:kan)? |pergi ke |اعرض |اذهب (?:إلى|الى) |انتقل (?:إلى|الى) )?(?:(?:the )?(?:previous|last|preceding) (?:slide|segment|part)|(?:slaid|bahagian|segmen) (?:sebelumnya|sebelum ini|tadi)|(?:الشريحة|الجزء|المقطع) (?:السابقة|السابق))");
+// Board UX (2026-10-28). "Skip to the PowerPoint / show the slides": the deck
+// is never rendered (Final Plan §5.3) — slide 1 of the video's own frames,
+// with SK saying so (`deck: true` picks that line in board.ts).
+const SLIDES_RE = polite(
+  "(?:skip to|go to|jump to|show(?: me)?|open|switch to|bring up|move to|buka|tunjuk(?:kan)?|papar(?:kan)?|pergi ke|langkau ke|اعرض|أرني|اذهب (?:إلى|الى)|انتقل (?:إلى|الى)|افتح) (?:the |this |our )?(?:power ?point(?: presentation| slides)?|slides|slide deck|slide ?show|deck|presentation|ppt|pptx|slaid(?:-slaid)?|persembahan(?: slaid)?|dek slaid|الشرائح|العرض(?: التقديمي)?|البوربوينت|عرض الشرائح)",
+);
+// Every slide onto the roll as pages (the founder's "load each slide as 1 page").
+const LOAD_SLIDES_RE = polite(
+  "(?:load|put|place|bring|lay) (?:all |all of )?(?:the |this )?(?:slides|slide deck|deck|power ?point|presentation)(?: (?:on|onto|to) (?:the )?(?:board|roll))?(?: as (?:pages?|a page each|one page each))?|load (?:the )?slides as pages|muat(?:kan)? (?:semua )?slaid(?: (?:ke|pada) (?:papan|gulungan))?(?: sebagai (?:halaman|muka surat))?|letak(?:kan)? slaid (?:di|ke|pada) papan|حمّل الشرائح(?: كصفحات| على اللوحة)?|حمل الشرائح(?: كصفحات| على اللوحة)?|ضع الشرائح على اللوحة",
+);
+// The unit rail over the stage: a UI control, not a video move.
+const RAIL_OPEN_RE = polite(
+  "(?:show(?: me)?|open|bring up|display|tunjuk(?:kan)?|buka|papar(?:kan)?|اعرض|أرني|افتح) (?:the )?(?:units?(?: list| rail| panel)?|rail|side ?panel|panel|unit(?:-unit)?|senarai unit|rel|panel unit|الوحدات|اللوحة الجانبية|الشريط الجانبي|قائمة الوحدات)",
+);
+const RAIL_CLOSE_RE = polite(
+  "(?:hide|close|dismiss|tutup|sorok(?:kan)?|أغلق|اغلق|أخفِ|اخف) (?:the )?(?:units?(?: list| rail| panel)?|rail|side ?panel|panel|unit(?:-unit)?|senarai unit|rel|panel unit|الوحدات|اللوحة الجانبية|الشريط الجانبي|قائمة الوحدات)",
+);
 const SLIDE_N_RE = polite(`(?:(?:go to|show(?: me)?|open|jump to|move to|skip to|buka|tunjuk(?:kan)?|papar(?:kan)?|pergi ke|اعرض|اذهب (?:إلى|الى)|انتقل (?:إلى|الى)) )?(?:the )?(?:slide|slaid|الشريحة|شريحة|للشريحة)(?: (?:number|no\\.?|nombor|رقم))? ${NUM}`);
 const SEGMENT_N_RE = polite(`(?:(?:play|go to|jump to|skip to|show|main(?:kan)?|pergi ke|شغل|شغّل|اذهب (?:إلى|الى)|انتقل (?:إلى|الى)) )?(?:the )?(?:segment|part|section|segmen|bahagian|الجزء|جزء|المقطع|مقطع)(?: (?:number|no\\.?|nombor|رقم))? ${NUM}`);
 const COMPARE_RE = new RegExp(
@@ -219,6 +236,12 @@ export function routeBoard(raw: string, normed: string, ctx: SkContext): RulesDe
   if (INTRO_RE.test(t)) return teach("intro");
   if (NEXT_RE.test(t)) return teach("slide", { k: nextK(ctx) });
   if (PREV_RE.test(t)) return teach("slide", { k: prevK(ctx) });
+  // Board UX: the whole-deck phrasings before the numbered slide, so "show the
+  // slides" is slide 1 of the frames and "load the slides" is the page load.
+  if (LOAD_SLIDES_RE.test(t)) return teach("load_slides");
+  if (SLIDES_RE.test(t)) return teach("slide", { k: 0, deck: true });
+  if (RAIL_OPEN_RE.test(t)) return teach("rail", { open: true });
+  if (RAIL_CLOSE_RE.test(t)) return teach("rail", { open: false });
   let m = t.match(SLIDE_N_RE);
   if (m) {
     const n = numberOf(m[1]);

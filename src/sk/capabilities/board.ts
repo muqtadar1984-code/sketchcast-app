@@ -14,14 +14,20 @@ import type { SkBoardMove, SkBoardState, SkCapability, SkCapabilityMeta, SkCapab
 
 export const BOARD_NOT_OPEN = "Open the Board first.";
 export const BOARD_NO_MAP = "The lesson map isn't ready yet.";
-export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap"];
+export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap", "rail", "load_slides"];
 export const PRACTISE_MAX = 10;
 
 type Say = Record<string, string>;
 
+/** The say-line keys: one per move, plus the variants a move takes under a
+ *  particular phrasing — `slides` is `slide {k: 0}` asked for as "the
+ *  PowerPoint / the slides" (Board UX 2026-10-28), and `load_slides_any` is
+ *  the load line when the client sent no segment list to count. */
+export type SayKey = SkBoardMove | "slides" | "load_slides_any";
+
 /** SK's one line per move, ten locales. `{n}`, `{heading}`, `{a}`, `{b}`,
  *  `{ha}`, `{hb}` are filled by the handler; the client speaks the result. */
-const SAY: Record<SkBoardMove, Say> = {
+const SAY: Record<SayKey, Say> = {
   intro: {
     en: "Playing the introduction.",
     ms: "Memainkan pengenalan.",
@@ -178,13 +184,66 @@ const SAY: Record<SkBoardMove, Say> = {
     mr: "पाठ संपवूया.",
     hi: "आइए पाठ समाप्त करें।",
   },
+  // "Skip to the PowerPoint / show the slides": slide 1 of the video's own
+  // frames, with the correction that the deck file is a download in the rail.
+  slides: {
+    en: "The slides are the lesson's own frames — this is slide 1. The slide deck file is in the rail.",
+    ms: "Slaid ialah bingkai pelajaran itu sendiri — ini slaid 1. Fail dek slaid ada di rel.",
+    "ms-arab": "سلاءيد اياله بيڠکاي پلاجرن ايت سنديري — ايني سلاءيد 1. فاءيل ديق سلاءيد اد د ريل.",
+    ar: "الشرائح هي إطارات الدرس نفسها — هذه الشريحة 1. ملف الشرائح موجود في الشريط الجانبي.",
+    fr: "Les diapositives sont les images de la leçon elle-même — voici la diapositive 1. Le fichier du diaporama est dans le volet.",
+    es: "Las diapositivas son los fotogramas de la propia lección: esta es la diapositiva 1. El archivo de la presentación está en el panel.",
+    pt: "Os diapositivos são as imagens da própria lição — este é o diapositivo 1. O ficheiro da apresentação está no painel.",
+    te: "స్లైడ్‌లు పాఠం యొక్క స్వంత ఫ్రేమ్‌లు — ఇది స్లైడ్ 1. స్లైడ్ డెక్ ఫైల్ రెయిల్‌లో ఉంది.",
+    mr: "स्लाइड्स म्हणजे पाठाच्याच फ्रेम्स — ही स्लाइड 1. स्लाइड डेक फाइल रेलमध्ये आहे.",
+    hi: "स्लाइड्स पाठ के अपने फ्रेम हैं — यह स्लाइड 1 है। स्लाइड डेक फ़ाइल रेल में है।",
+  },
+  rail: {
+    en: "Here are the units.",
+    ms: "Ini unit-unitnya.",
+    "ms-arab": "ايني اونيت-اونيتڽ.",
+    ar: "هذه هي الوحدات.",
+    fr: "Voici les unités.",
+    es: "Aquí están las unidades.",
+    pt: "Aqui estão as unidades.",
+    te: "ఇవి యూనిట్లు.",
+    mr: "ही युनिट्स आहेत.",
+    hi: "ये यूनिट हैं।",
+  },
+  // Said BEFORE the load: short, because the closing line (the panel's
+  // sk.shell.slidesLoaded, with the page range the roll actually got) follows
+  // once the pages are there.
+  load_slides: {
+    en: "Loading {n} slides onto the roll as pages.",
+    ms: "Memuatkan {n} slaid ke gulungan sebagai halaman.",
+    "ms-arab": "مموتکن {n} سلاءيد ک ڬولوڠن سباڬاي هلامن.",
+    ar: "جارٍ تحميل {n} شريحة على اللفافة كصفحات.",
+    fr: "Chargement de {n} diapositives sur le rouleau, une par page.",
+    es: "Cargando {n} diapositivas en el rollo como páginas.",
+    pt: "A carregar {n} diapositivos no rolo como páginas.",
+    te: "{n} స్లైడ్‌లు రోల్‌పై పేజీలుగా లోడ్ అవుతున్నాయి.",
+    mr: "{n} स्लाइड्स रोलवर पाने म्हणून लोड केल्या जात आहेत.",
+    hi: "{n} स्लाइड्स रोल पर पेज के रूप में लोड की जा रही हैं।",
+  },
+  load_slides_any: {
+    en: "Loading the slides onto the roll as pages.",
+    ms: "Memuatkan slaid ke gulungan sebagai halaman.",
+    "ms-arab": "مموتکن سلاءيد ک ڬولوڠن سباڬاي هلامن.",
+    ar: "جارٍ تحميل الشرائح على اللفافة كصفحات.",
+    fr: "Chargement des diapositives sur le rouleau, une par page.",
+    es: "Cargando las diapositivas en el rollo como páginas.",
+    pt: "A carregar os diapositivos no rolo como páginas.",
+    te: "స్లైడ్‌లు రోల్‌పై పేజీలుగా లోడ్ అవుతున్నాయి.",
+    mr: "स्लाइड्स रोलवर पाने म्हणून लोड केल्या जात आहेत.",
+    hi: "स्लाइड्स रोल पर पेज के रूप में लोड की जा रही हैं।",
+  },
 };
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (whole, key: string) => (key in vars ? String(vars[key]) : whole));
 }
 
-export function sayFor(move: SkBoardMove, locale: string | null | undefined, vars: Record<string, string | number> = {}): string {
+export function sayFor(move: SayKey, locale: string | null | undefined, vars: Record<string, string | number> = {}): string {
   const table = SAY[move];
   return fill(table[locale ?? "en"] ?? table.en, vars);
 }
@@ -338,16 +397,61 @@ export const boardSegment: SkCapability = {
   }),
 };
 
+const SLIDE: SkJsonSchema = {
+  type: "object",
+  properties: {
+    k: { type: "integer", minimum: 0, description: "0-based segment index (the user's 'slide 4' is k=3)." },
+    deck: { type: "boolean", description: "True when the teacher asked for 'the slides / the PowerPoint / the deck' as a whole: show slide 1 and say that the slides are the video's own frames (the deck file is a download in the rail)." },
+  },
+  required: ["k"],
+  additionalProperties: false,
+};
+
 export const boardSlide: SkCapability = {
-  meta: meta("slide", "Board: show the completed slide of segment k (its end frame, paused). k is the 0-based segment index; the user's 'slide 4' is k=3.", K),
+  meta: meta("slide", "Board: show the completed slide of segment k (its end frame, paused). k is the 0-based segment index; the user's 'slide 4' is k=3. With deck=true ('skip to the PowerPoint / show the slides') use k=0.", SLIDE),
   handler: withBoard(true, (b, ctx, args) => {
     const r = checkK(b, intArg(args.k));
     if (!("k" in r)) return r;
+    // "Skip to the PowerPoint": the deck is not rendered (Final Plan §5.3) —
+    // slide 1 of the lesson's own frames, and the line says where the file is.
+    if (args.deck === true) {
+      return ok(`Showing slide ${r.k + 1} — the slides are the video's frames; the deck file is in the rail.`, { move: "slide", args: { k: r.k, heading: r.heading, points: r.points ?? [], deck: true }, say: sayFor("slides", ctx.user.locale) }, [
+        { k: r.k + 1, heading: r.heading, deck: "download in the rail" },
+      ]);
+    }
     // No heading known → "Slide 4." (the ": " before the empty heading goes).
     const say = sayFor("slide", ctx.user.locale, { n: r.k + 1, heading: r.heading }).replace(/\s*[:：]\s*(?=[.।]$)/u, "");
     return ok(`Showing slide ${r.k + 1}${r.heading ? `: ${r.heading}` : ""}.`, { move: "slide", args: { k: r.k, heading: r.heading, points: r.points ?? [] }, say }, [
       { k: r.k + 1, heading: r.heading, points: (r.points ?? []).join(" | ") },
     ]);
+  }),
+};
+
+const RAIL: SkJsonSchema = {
+  type: "object",
+  properties: { open: { type: "boolean", description: "True opens the unit rail over the stage; false closes it. Default true." } },
+  additionalProperties: false,
+};
+
+/** Board UX (2026-10-28): "show the units / show the rail / open the panel".
+ *  A UI control — the client flips the rail overlay; no controller move. */
+export const boardRail: SkCapability = {
+  meta: meta("rail", "Board: open (or close) the unit rail — the panel listing the chapter's units and documents — over the stage. Use for 'show the units / show the rail / open the panel'.", RAIL),
+  handler: withBoard(false, (b, ctx, args) => {
+    const open = args.open !== false;
+    return ok(open ? "Opening the unit rail." : "Closing the unit rail.", { move: "rail", args: { open }, say: open ? sayFor("rail", ctx.user.locale) : "" }, [{ open }]);
+  }),
+};
+
+/** Board UX (2026-10-28, founder): every slide of the open unit onto the roll
+ *  as one page each — the video's finished frames, not the pptx. The count
+ *  comes from the segment list the client sent; the client knows the pages. */
+export const boardLoadSlides: SkCapability = {
+  meta: meta("load_slides", "Board: load every slide of the lesson onto the roll as pages, one per slide (the video's finished frames), then land on the first. Use for 'load the slides as pages / put the slides on the board'.", NONE),
+  handler: withBoard(true, (b, ctx) => {
+    const n = b.segments?.length ?? 0;
+    const say = n > 0 ? sayFor("load_slides", ctx.user.locale, { n }) : sayFor("load_slides_any", ctx.user.locale);
+    return ok(n > 0 ? `Loading ${n} slides onto the roll as pages.` : "Loading the slides onto the roll as pages.", { move: "load_slides", args: n > 0 ? { count: n } : {}, say }, n > 0 ? [{ count: n }] : []);
   }),
 };
 
@@ -452,4 +556,6 @@ export const BOARD_CAPABILITIES: SkCapability[] = [
   boardResume,
   boardPause,
   boardRecap,
+  boardRail,
+  boardLoadSlides,
 ];

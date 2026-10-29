@@ -167,6 +167,10 @@ export function replay(rollId: string, records: LogRecord[]): Roll {
   const roll = newRoll(rollId);
   const sorted = [...records].sort((a, b) => a.seq - b.seq);
   const voided = new Set<string>();
+  // A stroke re-recorded under its ORIGINAL seq (moveStroke: its page was
+  // renumbered by an insert) replaces the earlier record in place — same id,
+  // same position in the undo order, new page. Never a second copy of the ink.
+  const byId = new Map<string, number>();
 
   for (const r of sorted) {
     if (r.kind === "page") {
@@ -180,7 +184,13 @@ export function replay(rollId: string, records: LogRecord[]): Roll {
       while (roll.pages.length <= r.stroke.page) {
         roll.pages.push({ index: roll.pages.length, background: { kind: "blank" } });
       }
-      roll.strokes.push({ ...r.stroke });
+      const at = byId.get(r.stroke.id);
+      if (at === undefined) {
+        byId.set(r.stroke.id, roll.strokes.length);
+        roll.strokes.push({ ...r.stroke });
+      } else {
+        roll.strokes[at] = { ...r.stroke };
+      }
     } else if (r.kind === "void") {
       voided.add(r.strokeId);
     }
@@ -296,6 +306,19 @@ export class BoardStore {
 
   addPage(index: number, background: PageBackground): Promise<void> {
     return this.record({ kind: "page", seq: this.seq++, index, background });
+  }
+
+  /**
+   * A stroke whose PAGE changed (insertPage renumbered the pages after it).
+   * Re-recorded under its original seq: IndexedDB `put`s over the old record,
+   * the server upserts on (session, seq) and so updates page_idx, and replay
+   * replaces in place. A stroke this store never numbered (another device's)
+   * is simply recorded as new.
+   */
+  moveStroke(stroke: Stroke): Promise<void> {
+    const seq = this.strokeSeq.get(stroke.id);
+    if (seq === undefined) return this.addStroke(stroke);
+    return this.record({ kind: "stroke", seq, stroke });
   }
 
   voidStroke(strokeId: string): Promise<void> {

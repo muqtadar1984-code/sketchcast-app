@@ -1876,7 +1876,10 @@
       "outsideHours": "Fuera del horario de clases",
       "fromTimetable": "Tomado del horario",
       "freePeriod": "Sin lección en este periodo",
-      "pickManually": "Elegir manualmente"
+      "pickManually": "Elegir manualmente",
+      "menu": "Menú",
+      "backToDashboard": "Volver al panel",
+      "loadSlides": "Cargar diapositivas como páginas"
     },
     "start": {
       "heading": "Elige qué vas a enseñar",
@@ -1921,7 +1924,9 @@
       "examPaper": "Prueba",
       "exam": "Examen",
       "noteNeverProject": "Solo para descargar: una prueba que la clase ya vio deja de ser una prueba",
-      "noteNoText": "Solo para descargar: este tipo no tiene texto estructurado para mostrar en una pizarra"
+      "noteNoText": "Solo para descargar: este tipo no tiene texto estructurado para mostrar en una pizarra",
+      "deck": "Presentación de diapositivas",
+      "noteDeck": "Descarga: la pizarra muestra las diapositivas del vídeo"
     },
     "group": {
       "thisPart": "Esta parte",
@@ -1961,7 +1966,9 @@
       "answerTrue": "Verdadero",
       "answerFalse": "Falso",
       "prevQuestion": "Pregunta anterior",
-      "nextQuestion": "Pregunta siguiente"
+      "nextQuestion": "Pregunta siguiente",
+      "railHandle": "Unidades",
+      "railClose": "Cerrar"
     },
     "wrapUp": {
       "saved": "Lección guardada",
@@ -2111,7 +2118,9 @@
       "cardExpired": "Esta tarjeta ha caducado.",
       "cardCancelled": "Cancelado.",
       "actFailed": "No se pudo completar. Inténtalo de nuevo.",
-      "voiceYesHint": "Di «sí» para confirmar o «no» para cancelar."
+      "voiceYesHint": "Di «sí» para confirmar o «no» para cancelar.",
+      "loadingSlides": "Cargando diapositiva {k} de {n}…",
+      "slidesLoaded": "{n} diapositivas están en el rollo como páginas {a}–{b}. Página arriba y página abajo se mueven entre ellas; di 'página en blanco' para añadir una en medio."
     }
   }
 }

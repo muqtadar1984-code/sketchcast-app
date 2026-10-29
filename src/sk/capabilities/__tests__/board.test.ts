@@ -244,3 +244,60 @@ describe("practise carries stamped q_ids (S1 slice C)", () => {
     expect((await run("board.practise", { n: 2, items: "ws:q3" })).board?.args).toEqual({ n: 2, k: 2, segmentId: "s3" });
   });
 });
+
+describe("Board UX (2026-10-28): the deck line, the rail, slides as pages", () => {
+  const LOCALES = ["en", "ms", "ms-arab", "ar", "fr", "es", "pt", "te", "mr", "hi"];
+
+  it("'skip to the PowerPoint' (slide {k:0, deck:true}) shows slide 1 and says where the deck file is", async () => {
+    const r = await run("board.slide", { k: 0, deck: true });
+    expect(r.ok).toBe(true);
+    expect(r.board).toEqual({
+      move: "slide",
+      args: { k: 0, heading: "Introduction", points: [], deck: true },
+      say: "The slides are the lesson's own frames — this is slide 1. The slide deck file is in the rail.",
+    });
+    expect(r.facts?.[0]).toMatchObject({ k: 1, deck: "download in the rail" });
+    // Without `deck` the plain slide line is unchanged.
+    expect((await run("board.slide", { k: 0 })).board?.say).toBe("Slide 1: Introduction.");
+  });
+
+  it("the deck line, the rail line and both load lines exist in all ten locales", () => {
+    for (const l of LOCALES) {
+      for (const key of ["slides", "rail", "load_slides_any"] as const) {
+        const line = sayFor(key, l);
+        expect(line.length).toBeGreaterThan(5);
+        if (l !== "en") expect(line).not.toBe(sayFor(key, "en"));
+      }
+      const load = sayFor("load_slides", l, { n: 7 });
+      expect(load).toContain("7");
+      expect(load).not.toContain("{n}");
+    }
+    // ms-arab is Malay in Jawi, never the Arabic line.
+    expect(sayFor("slides", "ms-arab")).not.toBe(sayFor("slides", "ar"));
+  });
+
+  it("board.rail opens (default) or closes the unit rail; no lesson map needed", async () => {
+    const noMap: SkBoardState = { sessionId: "sess-1" };
+    expect((await run("board.rail", {}, noMap)).board).toEqual({ move: "rail", args: { open: true }, say: "Here are the units." });
+    expect((await run("board.rail", { open: false }, noMap)).board).toEqual({ move: "rail", args: { open: false }, say: "" });
+    expect((await run("board.rail", {}, BOARD, "ms")).board?.say).toBe("Ini unit-unitnya.");
+  });
+
+  it("board.load_slides counts the client's segments into its line; needs the lesson map", async () => {
+    const r = await run("board.load_slides");
+    expect(r.ok).toBe(true);
+    expect(r.board).toEqual({ move: "load_slides", args: { count: 5 }, say: "Loading 5 slides onto the roll as pages." });
+    expect((await run("board.load_slides", {}, { sessionId: "sess-1", manifestId: "m" })).board).toEqual({
+      move: "load_slides",
+      args: {},
+      say: "Loading the slides onto the roll as pages.",
+    });
+    expect(await run("board.load_slides", {}, { sessionId: "sess-1" })).toMatchObject({ ok: false, error: "no manifest" });
+  });
+
+  it("both new moves are immediate Board capabilities in the registry", () => {
+    for (const name of ["board.rail", "board.load_slides"]) {
+      expect(cap(name).meta).toMatchObject({ tier: "immediate", kind: "board", hats: ["teacher"], flags: ["board"] });
+    }
+  });
+});

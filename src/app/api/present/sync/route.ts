@@ -54,8 +54,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Too many records in one batch." }, { status: 413 });
   }
 
-  const strokes: Record<string, unknown>[] = [];
-  const pages: Record<string, unknown>[] = [];
+  let strokes: Record<string, unknown>[] = [];
+  let pages: Record<string, unknown>[] = [];
   const voids: number[] = [];
 
   for (const raw of records) {
@@ -96,6 +96,16 @@ export async function POST(request: Request) {
       if (typeof v.targetSeq === "number" && Number.isInteger(v.targetSeq)) voids.push(v.targetSeq);
     }
   }
+
+  // ONE ROW PER KEY, the LAST one winning. A page inserted between two pages
+  // (Board UX 2026-10-28) re-reports every later page at its new index and
+  // re-records the ink that moved with them under its ORIGINAL seq, so a batch
+  // can carry the same (session, seq) or (session, idx) twice — and Postgres
+  // refuses an upsert that would touch one row twice, which would fail the
+  // batch and every retry of it. Batch order is record order, so last = latest.
+  const lastBy = <T>(rows: T[], key: (r: T) => number): T[] => [...new Map(rows.map((r) => [key(r), r] as const)).values()];
+  strokes = lastBy(strokes, (r) => Number(r.seq));
+  pages = lastBy(pages, (r) => Number(r.idx));
 
   if (strokes.length) {
     const { error } = await c.admin.from("present_strokes").upsert(strokes, {

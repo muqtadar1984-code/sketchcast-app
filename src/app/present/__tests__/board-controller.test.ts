@@ -547,3 +547,127 @@ describe("getUnit() — the open unit from BoardSession's port (S1 slice C)", ()
     expect(c.getState().actions).toEqual([]);
   });
 });
+
+// ── Board UX (2026-10-28): slides as pages, and the blank page in between ──
+
+describe("loadSlides — every slide onto the roll as pages", () => {
+  /** A harness whose freeze records the time it captured and its options. */
+  function loadHarness() {
+    const shots: { t: number; replaceBlank: boolean }[] = [];
+    const h = harness({
+      freeze: async (o) => {
+        shots.push({ t: h.video.currentTime, replaceBlank: !!o?.replaceBlank });
+        h.video.paused = true;
+        // A pristine roll's blank page takes the first frame; the rest append.
+        if (!(o?.replaceBlank && h.state.count === 1)) {
+          h.state.count++;
+          h.state.page = h.state.count - 1;
+        } else {
+          h.state.page = 0;
+        }
+        h.state.mode = "corner";
+        return true;
+      },
+    });
+    return Object.assign(h, { shots });
+  }
+
+  it("seeks each segment's completed frame IN ORDER, freezes it, and lands on the first page", async () => {
+    const h = loadHarness();
+    const progress: [number, number][] = [];
+    const r = await h.c.loadSlides!(manifest, { onProgress: (k, n) => progress.push([k, n]) });
+    // slide_t where the manifest has one, else end_s − 0.10 — snapped to the 24 fps grid.
+    const want = [26.33 - 0.1, 56.398, 94.75 - 0.1].map((t) => Math.round(t * 24) / 24);
+    expect(h.shots.map((s) => s.t)).toEqual(want);
+    // Only the first slide may take a pristine blank page.
+    expect(h.shots.map((s) => s.replaceBlank)).toEqual([true, false, false]);
+    expect(progress).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
+    expect(r).toEqual({ pages: 3, firstPage: 0, lastPage: 2, aborted: false });
+    // Afterwards the video steps aside and the first loaded page is on screen.
+    expect(h.state.mode).toBe("away");
+    expect(h.state.page).toBe(0);
+    expect(h.calls.filter((x) => x.startsWith("goTo"))).toEqual(["goTo:0"]);
+  });
+
+  it("writes ONE audit row for the whole load, with count/from/to", async () => {
+    const h = loadHarness();
+    await h.c.loadSlides!(manifest);
+    const rows = h.sink.records.filter((a) => a.action === "board.load_slides");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ ok: true, tier: "immediate", kind: "board", params: { count: 3, from: 0, to: 2 } });
+    expect(rows[0].result).toMatchObject({ pages: 3, firstPage: 0, lastPage: 2, aborted: false });
+    // No per-frame rows: the load does not go through freeze()/seek() moves.
+    expect(h.sink.records.filter((a) => a.action !== "board.load_slides")).toEqual([]);
+  });
+
+  it("appends after existing pages (a used roll keeps its page 1) and honours from/to", async () => {
+    const h = loadHarness();
+    h.state.count = 2;
+    h.state.page = 1;
+    const r = await h.c.loadSlides!(manifest, { from: 1, to: 2 });
+    expect(h.shots).toHaveLength(2);
+    expect(r).toEqual({ pages: 2, firstPage: 2, lastPage: 3, aborted: false });
+    expect(h.state.page).toBe(2);
+    expect(h.sink.records.find((a) => a.action === "board.load_slides")?.params).toEqual({ count: 2, from: 1, to: 2 });
+  });
+
+  it("an abort mid-way keeps the pages already made, and still lands on the first", async () => {
+    const h = loadHarness();
+    const ac = new AbortController();
+    const r = await h.c.loadSlides!(manifest, { signal: ac.signal, onProgress: (k) => k === 2 && ac.abort() });
+    expect(h.shots).toHaveLength(2);
+    expect(r).toEqual({ pages: 2, firstPage: 0, lastPage: 1, aborted: true });
+    expect(h.state.count).toBe(2);
+    expect(h.state.mode).toBe("away");
+    expect(h.state.page).toBe(0);
+    const rows = h.sink.records.filter((a) => a.action === "board.load_slides");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].result).toMatchObject({ pages: 2, aborted: true });
+  });
+
+  it("cancelLoad() from another move stops it after the frame in hand", async () => {
+    const h = loadHarness();
+    const run = h.c.loadSlides!(manifest, { onProgress: (k) => k === 1 && h.c.cancelLoad!() });
+    const r = await run;
+    expect(r.pages).toBe(1);
+    expect(r.aborted).toBe(true);
+  });
+
+  it("an empty manifest refuses (and is audited as a failure)", async () => {
+    const h = loadHarness();
+    await expect(h.c.loadSlides!({ segments: [] })).rejects.toThrow(/no slides/);
+    expect(h.sink.records.find((a) => a.action === "board.load_slides")).toMatchObject({ ok: false });
+  });
+
+  it("a frame that cannot be captured stops the load with an error; earlier pages stay", async () => {
+    let n = 0;
+    const h = harness({
+      freeze: async () => {
+        n++;
+        if (n === 2) return false;
+        h.state.count++;
+        h.state.page = h.state.count - 1;
+        return true;
+      },
+    });
+    await expect(h.c.loadSlides!(manifest)).rejects.toThrow(/slide 2/);
+    expect(h.state.count).toBe(2);
+    expect(h.state.mode).toBe("away");
+  });
+});
+
+describe("blankPage({ after }) — a page in between", () => {
+  it("passes `after` to the port and audits it; no argument is the old append", () => {
+    const seen: (number | undefined)[] = [];
+    const h = harness({ blankPage: (o) => seen.push(o?.after) });
+    h.c.blankPage({ after: 2 });
+    h.c.blankPage();
+    expect(seen).toEqual([2, undefined]);
+    const rows = h.sink.records.filter((a) => a.action === "board.blank_page");
+    expect(rows.map((r) => r.params)).toEqual([{ after: 2 }, {}]);
+  });
+});

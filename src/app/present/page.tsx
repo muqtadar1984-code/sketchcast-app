@@ -6,7 +6,21 @@ import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { shapeFromConfig, type Slot } from "@/utils/timetable";
 import type { LastTaught } from "@/utils/present/context";
-import { skShellEnabledFor } from "@/utils/flags";
+import {
+  calendarEnabledFor,
+  catalogueTabEnabled,
+  diaryEnabled,
+  parentPortalEnabled,
+  roleHatsEnabled,
+  schoolAnalyticsEnabledFor,
+  skEnabled,
+  skShellEnabledFor,
+  skUserAllowed,
+  timetableEnabledFor,
+} from "@/utils/flags";
+import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
+import { tabsFor, tabsForHat } from "@/utils/nav-tabs";
+import type { MenuItem } from "./menu-items";
 import { activeHatCookie } from "@/utils/hats-server";
 import { kitGroups, type KitGroupRow } from "@/utils/present/kit";
 import PresentClient, { type BookOption, type ClassName, type KitOption, type PresentSk } from "./present-client";
@@ -186,6 +200,17 @@ export default async function PresentPage() {
     kits = [];
   }
 
+  // The Board's menu (Board UX 2026-10-28): the portal's tabs for her current
+  // hat, from the SAME inputs app-header.tsx uses, so the menu never offers a
+  // door the header would not. Best-effort: a failure is a menu with only
+  // "Back to dashboard", never a broken Board.
+  let tabs: MenuItem[] = [];
+  try {
+    tabs = await portalTabs(supabase, user, role, schoolId, dict);
+  } catch {
+    tabs = [];
+  }
+
   return (
     <PresentClient
       teacherId={user.id}
@@ -198,8 +223,52 @@ export default async function PresentPage() {
       books={books}
       kits={kits}
       sk={sk}
+      tabs={tabs}
     />
   );
+}
+
+/**
+ * The tabs app-header.tsx would show this teacher, computed the same way
+ * (tabsForHat with a hat, tabsFor without). The Board's own gate already
+ * passed, so `boardOn` is true; menuItemsFor drops /present from the list.
+ */
+async function portalTabs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  user: Parameters<typeof skUserAllowed>[0],
+  role: string | null,
+  schoolId: string | null,
+  dict: Dictionary,
+): Promise<MenuItem[]> {
+  const adult = !!role && role !== "student";
+  const analyticsOn = adult ? await schoolAnalyticsEnabledFor(supabase, schoolId) : false;
+  const timetableOn = role && schoolId ? await timetableEnabledFor(supabase, schoolId) : false;
+  const calendarOn = adult ? await calendarEnabledFor(supabase, schoolId) : false;
+  let hasScope = false;
+  if ((role === "teacher" || role === "coordinator") && schoolId) {
+    const { data: sc } = await supabase.from("coordinator_scope").select("id").eq("school_id", schoolId).limit(1);
+    hasScope = (sc?.length ?? 0) > 0;
+  }
+  let hasChildren = false;
+  let hasSchoolParentLinks = false;
+  if (parentPortalEnabled() && adult) {
+    const { data: pl } = await supabase.from("parent_links").select("source").limit(20);
+    hasChildren = (pl?.length ?? 0) > 0;
+    hasSchoolParentLinks = ((pl ?? []) as { source: string | null }[]).some((l) => l.source === "school");
+  }
+  const diaryOn = diaryEnabled() && !!role;
+  let activeHat: Hat | null = null;
+  if (roleHatsEnabled()) {
+    const hats = hatsFor({ role, hasScope, hasChildren, analyticsOn, timetableOn, diaryOn });
+    activeHat = resolveHat(await activeHatCookie(), hats);
+  }
+  const kitsOn = catalogueTabEnabled() && adult;
+  const skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && skUserAllowed(user);
+  const boardOn = true;
+  const t = dict.nav.tabs;
+  return activeHat
+    ? tabsForHat(t, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn, skOn)
+    : tabsFor(t, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, dict.student.title, boardOn, kitsOn, skOn);
 }
 
 /** What a teacher sees when the board is not on their plan. Deliberately not a

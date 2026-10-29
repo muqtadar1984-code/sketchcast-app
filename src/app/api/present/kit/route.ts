@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { presentEntitled } from "@/utils/present/entitlement";
 import { docDownloadName } from "@/utils/download-name";
-import { railFor, railForKit, pickerFor, type KitGeneration, type PickerGroup, type PickerItem } from "@/utils/present/kit";
+import { downloadArtifactKind, railFor, railForKit, pickerFor, type KitGeneration, type PickerGroup, type PickerItem } from "@/utils/present/kit";
 
 export const runtime = "nodejs";
 
@@ -148,7 +148,10 @@ export async function GET(request: Request) {
       const docs = await Promise.all(
         u.docs.map(async (d) => {
           const g = byId.get(d.id);
-          const docPath = g?.artifacts.find((a) => a.kind === "docx")?.storage_path ?? null;
+          // The deck downloads as its .pptx (artifact kind deck_pptx); every
+          // other document as its docx.
+          const artKind = downloadArtifactKind(d.kind);
+          const docPath = g?.artifacts.find((a) => a.kind === artKind)?.storage_path ?? null;
           // The structured questions, for the board's question pages (SK).
           // Signed exactly like the video: her own generation, same TTL. Only
           // for a doc the board may project — a test paper never reaches it.
@@ -160,7 +163,7 @@ export async function GET(request: Request) {
             title: g?.title ?? null,
             // A download name, so a test paper does not land in Downloads under
             // its storage basename — what docDownloadName exists for.
-            download: await sign(docPath, docDownloadName(g?.kind, "docx")),
+            download: await sign(docPath, docDownloadName(g?.kind, artKind)),
             questions: await sign(qPath),
           };
         }),
