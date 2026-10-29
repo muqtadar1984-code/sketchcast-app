@@ -10,6 +10,8 @@
 //   handlers' own in-code filters are what is tested) and whose diary_notes
 //   insert enforces 0169's unique index (sk_action_id, coalesce(student_id,
 //   class_id)) → 23505, and can be told to answer an RLS denial (42501).
+//   S2 slice B: generations inserts (0169's per-kind index) and status-guarded
+//   updates, see the function's own comment.
 
 import { canonicalParams, encodeToken, signToken, type ActionParams, type ActionTokenRow } from "../tokens";
 import { NOW, TEACHER_ID } from "./fixtures";
@@ -25,6 +27,10 @@ export const SITI = "a2000000-0000-4000-8000-000000000012";
 export const AHMAD = "a3000000-0000-4000-8000-000000000013";
 export const MEI = "a4000000-0000-4000-8000-000000000014";
 export const GONE = "a5000000-0000-4000-8000-000000000015";
+// S2 slice B
+export const SUB = "5b000000-0000-4000-8000-000000000021";
+export const SUB2 = "5b000000-0000-4000-8000-000000000022";
+export const BOOK = "b0000000-0000-4000-8000-000000000031";
 
 export function signedRow(
   over: Partial<Omit<ActionTokenRow, "hmac">> & { action: string; params: ActionParams; contextHash: string; id?: string },
@@ -95,24 +101,40 @@ export function statefulAdmin(rows: Record<string, ActionTokenRow>, now: Date = 
 }
 
 export type DiarySessionOpts = {
-  /** Answer every diary_notes insert with this error (e.g. {code: "42501"}). */
+  /** Answer every insert with this error (e.g. {code: "42501"}). */
   insertError?: { code?: string; message?: string };
-  /** Make reads of this table fail. */
+  /** Answer every update with this error. */
+  updateError?: { code?: string; message?: string };
+  /** Make reads of this table fail (or answer with this error). */
   failRead?: string;
+  readError?: { table: string; error: { code?: string; message?: string } };
 };
 
+/**
+ * The S2 user-session fake. Reads ignore filters (the handlers' own in-code
+ * filters are what is tested). Writes:
+ * - diary_notes insert: 0169's unique index (sk_action_id, coalesce(student_id, class_id)) → 23505;
+ * - generations insert (S2 slice B): 0169's (sk_action_id, kind, coalesce(params->>'part','1')) → 23505;
+ * - update (S2 slice B): applies the `eq` filters to the table's rows, patches
+ *   the matches IN PLACE and returns them — so a status guard really guards.
+ */
 export function diarySession(tables: Record<string, Array<Record<string, unknown>>>, opts: DiarySessionOpts = {}) {
   const notes: Array<Record<string, unknown>> = [];
+  const generations: Array<Record<string, unknown>> = [];
+  const updates: Array<{ table: string; patch: Record<string, unknown>; ids: unknown[] }> = [];
   const log: string[] = [];
   let seq = 0;
   const from = (table: string) => {
     const rows = tables[table] ?? [];
     let pendingInsert: Array<Record<string, unknown>> | null = null;
+    let pendingUpdate: Record<string, unknown> | null = null;
+    const eqs: Array<[string, unknown]> = [];
     let single = false;
     const b: any = {};
-    for (const m of ["select", "eq", "neq", "in", "is", "order", "limit", "ilike", "gte", "lte"]) {
+    for (const m of ["select", "eq", "neq", "in", "is", "not", "order", "limit", "ilike", "gte", "lte"]) {
       b[m] = (...args: unknown[]) => {
         log.push(`${table}.${m}(${args.map((a) => JSON.stringify(a)).join(",")})`);
+        if (m === "eq") eqs.push([String(args[0]), args[1]]);
         return b;
       };
     }
@@ -121,26 +143,50 @@ export function diarySession(tables: Record<string, Array<Record<string, unknown
       log.push(`${table}.insert(${pendingInsert.length})`);
       return b;
     };
+    b.update = (patch: Record<string, unknown>) => {
+      pendingUpdate = patch;
+      log.push(`${table}.update(${JSON.stringify(patch)})`);
+      return b;
+    };
     b.single = () => {
       single = true;
       return b;
     };
     b.maybeSingle = b.single;
     const run = () => {
+      if (pendingUpdate) {
+        if (opts.updateError) return { data: null, error: opts.updateError };
+        const hit = rows.filter((r) => eqs.every(([c, v]) => r[c] === v));
+        for (const r of hit) Object.assign(r, pendingUpdate);
+        updates.push({ table, patch: pendingUpdate, ids: hit.map((r) => r.id) });
+        return { data: hit.map((r) => ({ id: r.id })), error: null };
+      }
       if (pendingInsert) {
-        if (table !== "diary_notes") return { data: null, error: { message: `insert into ${table}` } };
         if (opts.insertError) return { data: null, error: opts.insertError };
+        if (table === "generations") {
+          const key = (r: Record<string, unknown>) => `${r.sk_action_id}|${r.kind}|${(r.params as Record<string, unknown> | null)?.part ?? "1"}`;
+          const keys = new Set(generations.filter((g) => g.sk_action_id).map(key));
+          for (const r of pendingInsert) {
+            if (r.sk_action_id && keys.has(key(r))) return { data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "generations_sk_action_kind_part_uidx"' } };
+            keys.add(key(r));
+          }
+          const out = pendingInsert.map((r) => ({ ...r, id: `gen-${++seq}` }));
+          generations.push(...out);
+          return { data: out.map((o) => ({ id: o.id, kind: o.kind })), error: null };
+        }
+        if (table !== "diary_notes") return { data: null, error: { message: `insert into ${table}` } };
         const keys = new Set(notes.filter((n) => n.sk_action_id).map((n) => `${n.sk_action_id}|${n.student_id ?? n.class_id}`));
         for (const r of pendingInsert) {
           const k = `${r.sk_action_id}|${r.student_id ?? r.class_id}`;
           if (r.sk_action_id && keys.has(k)) return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint \"diary_notes_sk_action_target_uidx\"" } };
           keys.add(k);
         }
-        const out = pendingInsert.map((r) => ({ ...r, id: `note-${++seq}` }));
+        const out: Array<Record<string, unknown>> = pendingInsert.map((r) => ({ ...r, id: `note-${++seq}` }));
         notes.push(...out);
         return { data: single ? { id: out[0].id } : out.map((o) => ({ id: o.id, student_id: o.student_id })), error: null };
       }
       if (opts.failRead === table) return { data: null, error: { message: `${table} read failed` } };
+      if (opts.readError?.table === table) return { data: null, error: opts.readError.error };
       return { data: single ? (rows[0] ?? null) : rows, error: null };
     };
     b.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(run()).then(res, rej);
@@ -148,6 +194,8 @@ export function diarySession(tables: Record<string, Array<Record<string, unknown
   };
   return {
     notes,
+    generations,
+    updates,
     log,
     from,
     rpc: async () => ({ data: null, error: null }),

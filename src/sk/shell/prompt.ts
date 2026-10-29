@@ -103,7 +103,7 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
       : []),
     ...(capabilities.some((c) => c.tier === "confirm")
       ? [
-          "9. A confirm-tier tool (assign, diary.note, parents.remind) only prepares a card; the teacher confirms it. Never say work is assigned, posted or sent — say what the card will do, in one sentence. For a diary note pass her own words as the body: fix grammar if needed, never add a fact, date or name she did not say.",
+          "9. A confirm-tier tool (assign, diary.note, parents.remind, marking.grade, lesson.prepare) only prepares a card; the teacher confirms it. Never say work is assigned, posted, sent, graded or started — say what the card will do, in one sentence. For a diary note pass her own words as the body, and for a grade her own feedback: fix grammar if needed, never add a fact, date, name, praise or criticism she did not say. lesson.prepare spends credits: say the cost and that it needs a click on the card (a spoken yes will not confirm it).",
         ]
       : []),
     "",

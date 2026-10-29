@@ -1,6 +1,6 @@
 /**
  * The token suite across EVERY confirm-tier action /api/sk/act can execute
- * (assign, diary.note, parents.remind), against a stateful admin with 0163's
+ * (assign, diary.note, parents.remind; S2 slice B: marking.grade, lesson.prepare), against a stateful admin with 0163's
  * real consume semantics: single use, expired refused, altered params refused
  * (the HMAC is re-derived from the STORED row), a context change refused, and
  * a duplicate click — two at once — producing exactly ONE write.
@@ -12,8 +12,8 @@ import { MemoryAuditSink } from "../audit";
 import { freshMemory } from "../memory";
 import { canonicalParams, type ActionParams } from "../tokens";
 import type { SkContext } from "../types";
-import { NOW, TEACHER_ID, makeCtx } from "./fixtures";
-import { ACT_SECRET, ALI, CLASS_7B, GEN, SHARE, SITI, diarySession, signedRow, statefulAdmin } from "./act-fakes";
+import { NOW, SCHOOL_ID, TEACHER_ID, makeCtx } from "./fixtures";
+import { ACT_SECRET, ALI, BOOK, CLASS_7B, GEN, SHARE, SITI, SUB, diarySession, signedRow, statefulAdmin } from "./act-fakes";
 
 const ID = "88888888-8888-4888-8888-888888888888";
 const saved: Record<string, string | undefined> = {};
@@ -39,6 +39,8 @@ const ACTIONS: Record<string, ActionParams> = {
     class_name: "7B",
     kit_title: "Cells worksheet",
   },
+  "marking.grade": { submission_id: SUB, score: 7, out_of: 10, feedback: "Good work on part 2.", learner_label: "Ali Hassan", kit_title: "Cells worksheet" },
+  "lesson.prepare": { book_id: BOOK, chapter_ref: "2", chapter_title: "Specialised Cells", book_title: "Biology", credits: 6, click_only: true },
 };
 
 const TABLES = {
@@ -49,18 +51,21 @@ const TABLES = {
     { class_id: CLASS_7B, student_id: SITI, profiles: { full_name: "Siti Aminah" } },
   ],
   student_progress: [],
-  submissions: [],
+  // S2 slice B: a file worksheet awaiting a grade on her own kit, and a book on her shelf.
+  submissions: [{ id: SUB, generation_id: GEN, student_id: ALI, mode: "file", grade_status: "pending", auto_score: null, max_score: null, answers: null, submitted_at: "2026-10-27T01:00:00.000Z" }],
+  generations: [{ id: GEN, kind: "worksheet", title: "Cells worksheet", chapter_ref: "1", book_id: null, owner_id: TEACHER_ID, params: null, status: "done" }],
+  books: [{ id: BOOK, title: "Biology", subject: "Science", grade: "Form 4", language: "en", status: "ready", owner_id: TEACHER_ID, school_id: SCHOOL_ID, chapters: [{ num: 2, title: "Specialised Cells", parts: [] }] }],
 };
 
 function world(action: string, o: { ctx?: SkContext; issuedFor?: SkContext; expiresAt?: string } = {}) {
   const ctx = o.ctx ?? makeCtx();
   const { row, token } = signedRow({ id: ID, action, params: ACTIONS[action], contextHash: (o.issuedFor ?? ctx).contextHash, ...(o.expiresAt ? { expires_at: o.expiresAt } : {}) });
   const admin = statefulAdmin({ [ID]: row });
-  const session = diarySession(TABLES);
+  const session = diarySession(structuredClone(TABLES)); // updates patch rows in place
   const sink = new MemoryAuditSink();
   const input = (over: Partial<ActInput> = {}): ActInput => ({ ctx, token, via: "click", turnId: "t-1", now: NOW, memory: freshMemory(ctx, NOW), admin, session, sink, ...over });
-  /** Every write this world has seen: diary notes + assign's shares. */
-  const writes = () => session.notes.length + admin.shareWrites.length;
+  /** Every write this world has seen: diary notes + assign's shares + grades that matched + kit rows. */
+  const writes = () => session.notes.length + admin.shareWrites.length + session.updates.reduce((n, u) => n + u.ids.length, 0) + session.generations.length;
   return { ctx, row, token, admin, session, sink, input, writes };
 }
 
