@@ -6,7 +6,10 @@ import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled, aiTutorEnabled, diaryEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import { noticesFor } from "@/utils/notices";
+import { childWorkItems, type ChildWorkRows } from "@/utils/child-work";
 import AddChild from "./add-child";
+import WeekCard from "./week-card";
+import { loadWeekCards } from "./week-data";
 import NoticeBanner from "../notice-banner";
 import NoticesCard from "../notices-card";
 import FairUseMeter from "../fair-use-meter";
@@ -19,9 +22,10 @@ import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 
-// The parent home: one section per linked child — their school assignments
-// (read-only: completion, due dates, scores) and the test papers this parent
-// assigned. Every read is RLS-scoped to the parent's OWN children; classmates
+// The parent home: one section per linked child — S4's "This week" card (the
+// same digest SK's child.week answers from; week-data.ts), their school
+// assignments (read-only: completion, due dates, scores) and the test papers
+// this parent assigned. Every read is RLS-scoped to the parent's OWN children; classmates
 // and other teachers' data are invisible by construction (migration 0018).
 
 export const dynamic = "force-dynamic";
@@ -103,14 +107,15 @@ export default async function ChildrenPage() {
   // self-created children are the parent's to remove; school-issued links are
   // school-managed.
   type LinkRow = {
+    parent_id: string;
     child_id: string;
     verified_at: string | null;
     source: string | null;
-    profiles: { full_name: string | null; username: string | null } | null;
+    profiles: { full_name: string | null; username: string | null; school_id: string | null } | null;
   };
   const { data: linksRaw } = await supabase
     .from("parent_links")
-    .select("child_id, verified_at, source, profiles:child_id(full_name, username)");
+    .select("parent_id, child_id, verified_at, source, profiles:child_id(full_name, username, school_id)");
   const links = (linksRaw ?? []) as unknown as LinkRow[];
   if (links.length === 0 && role !== "parent") redirect("/dashboard");
 
@@ -121,71 +126,52 @@ export default async function ChildrenPage() {
     supabase.from("classes").select("id, name"),
     supabase.from("generation_shares").select("generation_id, class_id, student_id, due_at, shared_by"),
     supabase.from("generations").select("id, title, kind, chapter_ref"),
-    supabase.from("student_progress").select("generation_id, student_id, status"),
-    supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status, feedback"),
+    // The timestamps feed the "This week" card (done this week, recent scores).
+    supabase.from("student_progress").select("generation_id, student_id, status, completed_at, updated_at"),
+    supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status, feedback, submitted_at, graded_at"),
   ]);
 
-  const enr = (enrQ.data ?? []) as { class_id: string; student_id: string }[];
   const className = new Map(((classesQ.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
-  const shares = (sharesQ.data ?? []) as { generation_id: string; class_id: string | null; student_id: string | null; due_at: string | null; shared_by: string | null }[];
-  const genOf = new Map(((gensQ.data ?? []) as { id: string; title: string | null; kind: string | null; chapter_ref: string | null }[]).map((g) => [g.id, g]));
-  const progOf = new Map(((progQ.data ?? []) as { generation_id: string; student_id: string; status: string }[]).map((p) => [`${p.generation_id}|${p.student_id}`, p.status]));
-  type Sub = {
-    generation_id: string;
-    student_id: string;
-    auto_score: number | null;
-    teacher_score: number | null;
-    max_score: number | null;
-    grade_status: string | null;
-    feedback: string | null;
+  // The rows, as the shared pure step takes them (src/utils/child-work.ts —
+  // the same assembly SK's child.status answers from).
+  const workRows: ChildWorkRows = {
+    enrollments: (enrQ.data ?? []) as ChildWorkRows["enrollments"],
+    shares: (sharesQ.data ?? []) as ChildWorkRows["shares"],
+    generations: (gensQ.data ?? []) as ChildWorkRows["generations"],
+    progress: (progQ.data ?? []) as ChildWorkRows["progress"],
+    submissions: (subsQ.data ?? []) as ChildWorkRows["submissions"],
   };
-  const subOf = new Map(((subsQ.data ?? []) as Sub[]).map((s) => [`${s.generation_id}|${s.student_id}`, s]));
-
-  const classesOfChild = new Map<string, string[]>();
-  for (const e of enr) {
-    if (!classesOfChild.has(e.student_id)) classesOfChild.set(e.student_id, []);
-    classesOfChild.get(e.student_id)!.push(e.class_id);
-  }
 
   // (server component, rendered once per request)
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
 
+  // S4 slice E: one "This week" card per VERIFIED child — the same numbers and
+  // "What to do about it" steps as SK's child.week (parent-digest.ts). Plain
+  // dashboard UI: the parent-portal flag above is its only gate.
+  const weekCards = await loadWeekCards(supabase, user.id, links as unknown as Array<Record<string, unknown>>, workRows, locale, now);
+
   function itemsFor(childId: string): { school: ChildItem[]; mine: ChildItem[] } {
-    const childClasses = new Set(classesOfChild.get(childId) ?? []);
     const school: ChildItem[] = [];
     const mine: ChildItem[] = [];
-    for (const s of shares) {
-      const direct = s.student_id === childId;
-      const viaClass = s.class_id != null && childClasses.has(s.class_id);
-      if (!direct && !viaClass) continue;
-      const g = genOf.get(s.generation_id);
-      if (!g || g.kind === "lesson_plan") continue;
-      const key = `${s.generation_id}|${childId}`;
-      const status = progOf.get(key) ?? "not started";
-      const sub = subOf.get(key);
+    for (const w of childWorkItems(workRows, childId, now)) {
       // A 'pending' quiz holds only the auto-marked part of the paper — the
       // written answers wait for the teacher. Showing that partial auto_score
       // as "8/10" told a parent it was the final mark; say what it is instead.
-      const score =
-        sub?.grade_status === "pending"
-          ? t.awaitingMarking
-          : sub && sub.max_score
-            ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}`
-            : null;
-      const kindKey = KIND_KEY[g.kind ?? ""];
+      const score = w.awaitingMarking ? t.awaitingMarking : w.score ? `${w.score.points ?? "—"}/${w.score.max}` : null;
+      const kindKey = KIND_KEY[w.kind];
       const item: ChildItem = {
-        genId: s.generation_id,
-        kind: g.kind ?? "",
-        label: g.title || (kindKey && t.kind[kindKey]) || dict.school.fallback.item,
-        from: direct ? t.fromYou : className.get(s.class_id!) ?? t.fromClass,
-        due: s.due_at,
-        overdue: !!s.due_at && new Date(s.due_at).getTime() < now && status !== "completed" && !sub,
-        status: sub ? "submitted" : status,
+        genId: w.genId,
+        kind: w.kind,
+        label: w.title || (kindKey && t.kind[kindKey]) || dict.school.fallback.item,
+        from: w.direct ? t.fromYou : className.get(w.classId!) ?? t.fromClass,
+        due: w.due,
+        overdue: w.overdue,
+        status: w.status,
         score,
-        feedback: sub?.feedback?.trim() || null,
+        feedback: w.feedback,
       };
-      (direct && s.shared_by === user!.id ? mine : school).push(item);
+      (w.direct && w.sharedBy === user!.id ? mine : school).push(item);
     }
     return { school, mine };
   }
@@ -277,6 +263,7 @@ export default async function ChildrenPage() {
                     {l.source === "self" && <DeleteStudentButton targetId={l.child_id} name={name} />}
                   </span>
                 </div>
+                {weekCards[l.child_id] && <WeekCard card={weekCards[l.child_id]} t={t.week} />}
                 <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                   {fmt(t.schoolWork, { n: school.length })}
                 </p>

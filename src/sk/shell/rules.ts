@@ -10,6 +10,8 @@ import type { SkBoardMove, SkCollector, SkContext, SkIntent } from "./types";
 import { NAV_TARGETS, type NavFilters, type NavTarget } from "@/sk/capabilities/navigate";
 import { resolveSegment } from "@/sk/capabilities/board";
 import { findBookCode, findOrderNumber } from "@/sk/book-activate";
+// S4: the parent phrasings (child.*), decided before the act and navigate rules.
+import { routeParent, type ParentRoute } from "./parent-rules";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -30,6 +32,9 @@ export type RulesDecision =
    *  only). The moves and the reads make NO model call; tutor.explain makes
    *  exactly one (the kit turn, metered once). */
   | { intent: "tutor"; capability: SkTutorCapability; args: Record<string, unknown> }
+  /** S4: a parent's question about a child, answered by the child.*
+   *  capability itself — deterministic, no model (parent-rules.ts). */
+  | { intent: "ask"; parent: ParentRoute }
   | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor"> };
 
 export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" | "tutor.practise" | "tutor.where" | "tutor.progress" | "tutor.explain";
@@ -445,6 +450,12 @@ const DIARY_PHRASE_RE = new RegExp(
     "|(?:اكتب|أكتب|سجل|سجّل) (?:في|فى) (?:مذكرة|يوميات|اليوميات|دفتر)" +
     "|(?:انشر|أرسل|ارسل|أضف|اضف) (?:إشعارا|إشعاراً|اشعارا|إعلانا|إعلاناً|ملاحظة|رسالة|تنبيها|تنبيهاً)" +
     "|(?:أخبر|اخبر|بلغ|بلّغ) " + CLASS_TOKEN +
+    // S4 slice C — a parent: tell Aisyah's teacher … / let Adam's teacher know …
+    // / beritahu cikgu Adam … / أخبر معلمة عائشة … (the diary note to her child's
+    // teacher; the capability's parent branch resolves the child).
+    "|(?:tell|inform|message|let) (?:[\\p{L}][\\p{L}'’-]{0,30}['’]s? |my (?:son|daughter|child|kid)['’]s |(?:his|her|their) )?(?:class |form )?teachers?(?: know)?(?![\\p{L}])" +
+    "|(?:beritahu|bagitahu|maklumkan(?: kepada| pada)?) (?:kepada |pada )?(?:cikgu|guru)(?: kelas)?(?![\\p{L}])" +
+    "|(?:أخبر|اخبر|بلغ|بلّغ) (?:معلم|معلمة|مدرس|مدرسة|المعلم|المعلمة)(?![\\p{L}])" +
     ")",
   "u",
 );
@@ -593,9 +604,11 @@ export function bookActivateOf(raw: string, t: string, ctx: SkContext): BookActA
       return { orderNumber, ...(childQuery ? { childQuery } : {}) };
     }
     // "Aisyah" / "for Aisyah" / "untuk Aisyah": a short answer to "which child?".
+    // A parent's question about a child ("how is Aisyah doing", "Adam's week")
+    // is not that answer: it falls through to the parent rules (child.*).
     const rest = strip(raw).replace(/[.!,]+$/u, "");
     const words = rest.split(" ").filter(Boolean);
-    if (ctx.pending.needs?.[0] === "child" && words.length >= 1 && words.length <= 4 && !VERB_RE.test(t)) return { childQuery: childPhraseOf(rest) ?? rest };
+    if (ctx.pending.needs?.[0] === "child" && words.length >= 1 && words.length <= 4 && !VERB_RE.test(t) && !routeParent(raw, ctx)) return { childQuery: childPhraseOf(rest) ?? rest };
   }
   return null;
 }
@@ -770,6 +783,11 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
     }
   }
 
+  // S4: a parent asking about a child ("how is Aisyah doing", "Aisyah's
+  // week", "bagaimana anak saya", "كيف حال ابني") — parents only.
+  const parent = routeParent(raw, ctx);
+  if (parent) return { intent: "ask", parent };
+
   // S2: a teacher action phrasing is never a navigate (the model resolves it).
   const act = student ? null : actPhraseOf(t, raw);
   if (act) return { intent: "act", action: act };
@@ -813,3 +831,4 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
 }
 
 export { NAV_TARGETS };
+export type { ParentRoute, SkParentCapability } from "./parent-rules";

@@ -134,8 +134,28 @@ export type ResolvedEntity = {
   ids?: string[];
 };
 
+/** S4: one of a parent's linked children (parent_links ⋈ profiles, read with
+ *  the parent's own session in loadContext). Every parent capability answers
+ *  ONLY about a child in this list, and only when `verified` (design decision
+ *  5): an id that is not here is refused, whatever the client or model says. */
+export type SkChild = {
+  id: string;
+  /** First word of the display name ("Aisyah"), for speech and matching. */
+  firstName: string;
+  /** The full display name (full_name, else username). */
+  name: string;
+  /** parent_links.source: a school-issued link or a parent-created child. */
+  source: "school" | "self";
+  /** parent_links.verified_at is set. */
+  verified: boolean;
+  /** The child's profiles.school_id (null for a home learner). */
+  schoolId: string | null;
+};
+
 export type SkContext = {
   user: SkContextUser;
+  /** S4: the parent's linked children (empty/absent for everyone else). */
+  children?: SkChild[];
   place: SkPlace;
   selection: SkSelection;
   board?: SkBoardState;

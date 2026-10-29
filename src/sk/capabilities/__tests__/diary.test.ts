@@ -150,12 +150,15 @@ describe("resolveDiaryNote — card", () => {
 });
 
 describe("diaryNoteAction meta", () => {
-  it("confirm/act, teacher role + teacher hat, diary flag", () => {
-    expect(diaryNoteAction.meta).toMatchObject({ name: "diary.note", tier: "confirm", kind: "act", roles: ["teacher"], hats: ["teacher"], flags: ["diary"] });
+  it("confirm/act, teacher + parent (S4 slice C: the parent branch), diary flag", () => {
+    expect(diaryNoteAction.meta).toMatchObject({ name: "diary.note", tier: "confirm", kind: "act", roles: ["teacher", "parent"], hats: ["teacher", "parent"], flags: ["diary"] });
     expect(metaAllows(diaryNoteAction.meta, makeCtx())).toBe(true);
     expect(metaAllows(diaryNoteAction.meta, makeCtx({ flags: { diary: false } }))).toBe(false);
-    expect(metaAllows(diaryNoteAction.meta, makeCtx({ hat: "parent" }))).toBe(false);
-    expect(metaAllows(diaryNoteAction.meta, makeCtx({ role: "parent", hat: null }))).toBe(false);
+    // S4 slice C: an adult in the parent hat, and a parent, now write as a parent.
+    expect(metaAllows(diaryNoteAction.meta, makeCtx({ hat: "parent" }))).toBe(true);
+    expect(metaAllows(diaryNoteAction.meta, makeCtx({ role: "parent", hat: null }))).toBe(true);
+    expect(metaAllows(diaryNoteAction.meta, makeCtx({ role: "parent", hat: "parent", flags: { diary: false } }))).toBe(false);
+    expect(metaAllows(diaryNoteAction.meta, makeCtx({ role: "school_admin", hat: "principal" }))).toBe(false);
     expect(metaAllows(diaryNoteAction.meta, makeCtx({ role: "student", hat: null }))).toBe(false);
   });
 });

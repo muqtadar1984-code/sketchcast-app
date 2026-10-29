@@ -28,7 +28,7 @@ import { recordSafely } from "./audit";
 import { rememberTurn, type SkMemory } from "./memory";
 import { assignAction, formatDue, offsetMinutesOf } from "@/sk/capabilities/assign";
 import { ACT_CLICK_ONLY_LINE, ACT_NOT_ALLOWED_LINE, fail, str, toOutcome, type ActHandler, type ActInput, type Handled } from "./act-core";
-import { runDiaryNote, runParentsRemind } from "./act-diary";
+import { runDiaryNoteChecked, runParentsRemind } from "./act-diary";
 import { diaryNoteAction } from "@/sk/capabilities/diary";
 import { parentsRemindAction } from "@/sk/capabilities/remind";
 import { runMarkingGrade } from "./act-marking";
@@ -107,7 +107,8 @@ export const HANDLERS: Record<string, ActHandler> = {
   // S1: consume + write in ONE transaction inside 0164's RPC (left as it was).
   assign: { tier: "confirm", kind: "act", auditsDone: true, meta: assignAction.meta, run: runAssign },
   // S2 slice A: consume (admin RPC) → write AS THE TEACHER (session client).
-  "diary.note": { tier: "confirm", kind: "act", meta: diaryNoteAction.meta, run: runDiaryNote },
+  // S4 slice C: its meta now admits parents; a parent's child is re-checked before the consume.
+  "diary.note": { tier: "confirm", kind: "act", meta: diaryNoteAction.meta, run: runDiaryNoteChecked },
   "parents.remind": { tier: "confirm", kind: "act", meta: parentsRemindAction.meta, run: runParentsRemind },
   // S2 slice B: the marking queue's grade (status-guarded update, act-marking.ts)
   // and lesson prep — CLICK-ONLY because it spends credits (act-prepare.ts).

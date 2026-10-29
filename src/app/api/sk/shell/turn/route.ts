@@ -619,6 +619,21 @@ export async function POST(request: Request) {
           return;
         }
 
+        // ── S4: a parent's question about a child — the child.* capability
+        // answers itself (one block per child), deterministic, no model. A
+        // capability this context may not use falls through to the model.
+        if ("parent" in decision && decision.parent) {
+          const name = decision.parent.capability;
+          const r = await runCapability(ctx, name, decision.parent.args, deps);
+          if (r.error !== "not_allowed") {
+            send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
+            send({ type: "text", text: r.summary });
+            done({ sources: r.ok ? [name] : [], label: r.ok ? "grounded" : "declined" }, r.summary, r.entities ?? []);
+            finish();
+            return;
+          }
+        }
+
         // ── The model, with the allowed tools ────────────────────────────────
         const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
         const trace: ToolTrace[] = [];

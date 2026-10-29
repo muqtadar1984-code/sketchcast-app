@@ -34,7 +34,10 @@ export type HealthRows = {
     username: string | null;
     parent_email: string | null;
   }[];
-  shares: { generation_id: string; class_id: string | null; shared_by: string; due_at: string | null }[];
+  /** `student_id` is set on a DIRECT share (to one learner, no class). The
+   *  class analytics below skip those rows exactly as before; only
+   *  computeLearnerHealth (one learner, e.g. a parent's home learner) counts them. */
+  shares: { generation_id: string; class_id: string | null; student_id?: string | null; shared_by: string; due_at: string | null }[];
   progress: { generation_id: string; student_id: string; status: string; updated_at: string }[];
   submissions: {
     generation_id: string;
@@ -82,7 +85,7 @@ export async function fetchSchoolHealthRows(supabase: SupabaseClient): Promise<H
   const [classesQ, enrQ, sharesQ, progQ, subsQ, gensQ] = await Promise.all([
     supabase.from("classes").select("id, name, grade, teacher_id"),
     supabase.from("enrollments").select("class_id, student_id, profiles(full_name, username, parent_email)"),
-    supabase.from("generation_shares").select("generation_id, class_id, shared_by, due_at"),
+    supabase.from("generation_shares").select("generation_id, class_id, student_id, shared_by, due_at"),
     supabase.from("student_progress").select("generation_id, student_id, status, updated_at"),
     supabase
       .from("submissions")
@@ -220,31 +223,15 @@ export function computeSchoolHealth(rows: HealthRows, now: number = Date.now()):
     }
 
     const last = lastActivity.get(stu);
-    const inactiveDays = last ? Math.floor((now - last) / DAY) : Infinity;
     if (last && now - last <= INACTIVE_DAYS * DAY) activeStudents++;
-
-    const scores = (scoresByStudent.get(stu) ?? []).slice().sort((a, b) => a.at - b.at);
-    const avg = scores.length ? scores.reduce((s, x) => s + x.pct, 0) / scores.length : null;
-    let declining = false;
-    if (scores.length >= 2) {
-      const mid = Math.floor(scores.length / 2);
-      const earlier = scores.slice(0, mid);
-      const recent = scores.slice(mid);
-      const em = earlier.reduce((s, x) => s + x.pct, 0) / earlier.length;
-      const rm = recent.reduce((s, x) => s + x.pct, 0) / recent.length;
-      declining = rm < em - DECLINE_DELTA;
-    }
-
-    const reasons: string[] = [];
-    const hasIncomplete = items.length > completed;
-    if (items.length >= MIN_ASSIGNED && completed / items.length < LOW_COMPLETION)
-      reasons.push(`${Math.round((completed / items.length) * 100)}% completion`);
-    if (hasIncomplete && inactiveDays !== Infinity && inactiveDays > INACTIVE_DAYS)
-      reasons.push(`inactive ${inactiveDays}d`);
-    else if (hasIncomplete && inactiveDays === Infinity && items.length > 0) reasons.push("never started");
-    if (avg != null && avg < LOW_SCORE) reasons.push(`avg score ${Math.round(avg * 100)}%`);
-    if (declining) reasons.push("scores declining");
-    if (overdue >= OVERDUE_FLAG) reasons.push(`${overdue} overdue`);
+    const { reasons } = learnerReasons({
+      assigned: items.length,
+      completed,
+      overdue,
+      lastActivity: last ?? null,
+      scores: scoresByStudent.get(stu) ?? [],
+      now,
+    });
 
     if (reasons.length) {
       const cid = classOfStudent.get(stu);
@@ -374,5 +361,120 @@ export function computeSchoolHealth(rows: HealthRows, now: number = Date.now()):
     atRisk,
     classes: classRows,
     teachers: teacherRows,
+  };
+}
+
+// ── One learner (S4: a parent's child, school or home) ─────────────────────────
+
+export type LearnerReasonsInput = {
+  /** Assigned instances for the learner. */
+  assigned: number;
+  completed: number;
+  overdue: number;
+  /** Last activity (ms), null when the learner never did anything. */
+  lastActivity: number | null;
+  /** Scored submissions: fraction 0–1 and submitted-at ms. */
+  scores: { pct: number; at: number }[];
+  now: number;
+};
+
+/** THE at-risk rules (school/page.tsx:156-227), one learner at a time. Pure.
+ *  computeSchoolHealth calls it per student, so the leadership pages, the
+ *  teacher's learners.risk and a parent's child.risk give the same reasons. */
+export function learnerReasons(i: LearnerReasonsInput): { reasons: string[]; avg: number | null; inactiveDays: number; declining: boolean } {
+  const inactiveDays = i.lastActivity ? Math.floor((i.now - i.lastActivity) / DAY) : Infinity;
+  const scores = i.scores.slice().sort((a, b) => a.at - b.at);
+  const avg = scores.length ? scores.reduce((s, x) => s + x.pct, 0) / scores.length : null;
+  let declining = false;
+  if (scores.length >= 2) {
+    const mid = Math.floor(scores.length / 2);
+    const earlier = scores.slice(0, mid);
+    const recent = scores.slice(mid);
+    const em = earlier.reduce((s, x) => s + x.pct, 0) / earlier.length;
+    const rm = recent.reduce((s, x) => s + x.pct, 0) / recent.length;
+    declining = rm < em - DECLINE_DELTA;
+  }
+
+  const reasons: string[] = [];
+  const hasIncomplete = i.assigned > i.completed;
+  if (i.assigned >= MIN_ASSIGNED && i.completed / i.assigned < LOW_COMPLETION)
+    reasons.push(`${Math.round((i.completed / i.assigned) * 100)}% completion`);
+  if (hasIncomplete && inactiveDays !== Infinity && inactiveDays > INACTIVE_DAYS) reasons.push(`inactive ${inactiveDays}d`);
+  else if (hasIncomplete && inactiveDays === Infinity && i.assigned > 0) reasons.push("never started");
+  if (avg != null && avg < LOW_SCORE) reasons.push(`avg score ${Math.round(avg * 100)}%`);
+  if (declining) reasons.push("scores declining");
+  if (i.overdue >= OVERDUE_FLAG) reasons.push(`${i.overdue} overdue`);
+  return { reasons, avg, inactiveDays, declining };
+}
+
+export type LearnerHealth = {
+  assigned: number;
+  completed: number;
+  overdue: number;
+  /** % done; null = nothing assigned. */
+  completionPct: number | null;
+  /** Mean score fraction 0–1; null = nothing scored. */
+  avg: number | null;
+  inactiveDays: number;
+  reasons: string[];
+};
+
+/**
+ * One learner's health under the same rules, counting BOTH the shares to the
+ * learner's classes and the DIRECT shares to the learner (`student_id`) — so a
+ * home learner with no class is covered. A generation shared both ways is one
+ * piece of work (the direct due date wins when it sets one, as on the printed
+ * progress record). Rows that are not this learner's are ignored, whatever the
+ * caller passed. Pure.
+ */
+export function computeLearnerHealth(
+  rows: Pick<HealthRows, "enrollments" | "shares" | "progress" | "submissions">,
+  learnerId: string,
+  now: number = Date.now(),
+): LearnerHealth {
+  const classIds = new Set(rows.enrollments.filter((e) => e.student_id === learnerId).map((e) => e.class_id));
+  const work = new Map<string, { due: string | null; direct: boolean }>();
+  for (const sh of rows.shares) {
+    const direct = !!sh.student_id && sh.student_id === learnerId;
+    const viaClass = !!sh.class_id && classIds.has(sh.class_id);
+    if (!direct && !viaClass) continue;
+    const cur = work.get(sh.generation_id);
+    if (!cur) work.set(sh.generation_id, { due: sh.due_at, direct });
+    else if (direct && sh.due_at) work.set(sh.generation_id, { due: sh.due_at, direct });
+  }
+  const progress = rows.progress.filter((p) => p.student_id === learnerId);
+  const submissions = rows.submissions.filter((s) => s.student_id === learnerId);
+  const statusOf = new Map(progress.map((p) => [p.generation_id, p.status] as const));
+  const submitted = new Set(submissions.map((s) => s.generation_id));
+  let last = 0;
+  const touch = (iso: string | null) => {
+    if (!iso) return;
+    const t = new Date(iso).getTime();
+    if (!Number.isNaN(t)) last = Math.max(last, t);
+  };
+  for (const p of progress) touch(p.updated_at);
+  const scores: { pct: number; at: number }[] = [];
+  for (const s of submissions) {
+    touch(s.submitted_at);
+    const max = s.max_score ?? 0;
+    const raw = s.teacher_score ?? s.auto_score;
+    if (max > 0 && raw != null) scores.push({ pct: raw / max, at: new Date(s.submitted_at).getTime() });
+  }
+  let completed = 0;
+  let overdue = 0;
+  for (const [gen, w] of work) {
+    const st = statusOf.get(gen);
+    if (st === "completed" || st === "revised" || submitted.has(gen)) completed++;
+    else if (w.due && new Date(w.due).getTime() < now) overdue++;
+  }
+  const r = learnerReasons({ assigned: work.size, completed, overdue, lastActivity: last || null, scores, now });
+  return {
+    assigned: work.size,
+    completed,
+    overdue,
+    completionPct: work.size ? Math.round((completed / work.size) * 100) : null,
+    avg: r.avg,
+    inactiveDays: r.inactiveDays,
+    reasons: r.reasons,
   };
 }

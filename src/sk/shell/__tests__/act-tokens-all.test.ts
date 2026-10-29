@@ -1,6 +1,7 @@
 /**
  * The token suite across EVERY confirm-tier action /api/sk/act can execute
  * (assign, diary.note, parents.remind; S2 slice B: marking.grade, lesson.prepare;
+ * S4 slice C: diary.note's PARENT branch, as parent A to her own child;
  * S4 slice D: book.activate — its "write" is the redeem RPC), against a stateful admin with 0163's
  * real consume semantics: single use, expired refused, altered params refused
  * (the HMAC is re-derived from the STORED row), a context change refused, and
@@ -15,6 +16,8 @@ import { canonicalParams, type ActionParams } from "../tokens";
 import type { SkContext } from "../types";
 import { NOW, SCHOOL_ID, TEACHER_ID, makeCtx } from "./fixtures";
 import { ACT_SECRET, AISYAH, ALI, BOOK, CLASS_7B, GEN, PRODUCT, SHARE, SITI, SUB, diarySession, signedRow, statefulAdmin, type RedeemWorld } from "./act-fakes";
+import { childrenFromLinks } from "../context";
+import { A2, LINKS, PA } from "@/sk/capabilities/__tests__/parent-fixtures";
 import { generateEditionCode, hmacCode, hmacOrderNumber } from "@/sk/access";
 import { maskCode, maskOrderNumber } from "@/sk/book-activate";
 
@@ -52,20 +55,45 @@ const ACTIONS: Record<string, ActionParams> = {
   },
   "marking.grade": { submission_id: SUB, score: 7, out_of: 10, feedback: "Good work on part 2.", learner_label: "Ali Hassan", kit_title: "Cells worksheet" },
   "lesson.prepare": { book_id: BOOK, chapter_ref: "2", chapter_title: "Specialised Cells", book_title: "Biology", credits: 6, click_only: true },
+};
+
+/** S4 slices C+D: each case = an action, its stored params, whose Context
+ *  (and token) it runs under, and (book.activate) a FRESH redeem RPC world per
+ *  test (the fake marks codes used in place). The parent case is diary.note's
+ *  parent branch. */
+type Case = { action: string; params: ActionParams; ctx: (o?: { plan?: string }) => SkContext; user: string; redeem?: () => RedeemWorld };
+const parentOf = (o: { plan?: string } = {}): SkContext => {
+  const c = makeCtx({ role: "parent", userId: PA, hat: "parent", schoolId: null, plan: o.plan });
+  c.children = childrenFromLinks(PA, LINKS);
+  return c;
+};
+const CASES: Record<string, Case> = {
+  ...Object.fromEntries(Object.entries(ACTIONS).map(([action, params]) => [action, { action, params, ctx: (o: { plan?: string } = {}) => makeCtx({ plan: o.plan }), user: TEACHER_ID }])),
+  "diary.note (parent)": {
+    action: "diary.note",
+    params: { student_id: A2, note_type: "health", body: "Adam was sick yesterday.", parents_only: false, entry_date: "2026-10-28", target_label: "Adam Rahman", seen_by: "Seen by Adam's teacher, the school's leaders and Adam." },
+    ctx: parentOf,
+    user: PA,
+  },
+  /** S4 slice D: book.activate is the parent's (or a student's), not the teacher's. */
   "book.activate": {
-    code_kind: "Edition code (in the book)",
-    code: maskCode(EDITION),
-    order_ref: maskOrderNumber(ORDER),
-    for_child_id: AISYAH,
-    child_label: "Aisyah",
-    click_only: true,
-    sealed_kind: "edition",
-    sealed_code_hmac: hmacCode(EDITION, BOOK_SECRET),
-    sealed_order_hmac: hmacOrderNumber(ORDER, BOOK_SECRET),
+    action: "book.activate",
+    params: {
+      code_kind: "Edition code (in the book)",
+      code: maskCode(EDITION),
+      order_ref: maskOrderNumber(ORDER),
+      for_child_id: AISYAH,
+      child_label: "Aisyah",
+      click_only: true,
+      sealed_kind: "edition",
+      sealed_code_hmac: hmacCode(EDITION, BOOK_SECRET),
+      sealed_order_hmac: hmacOrderNumber(ORDER, BOOK_SECRET),
+    },
+    ctx: (o: { plan?: string } = {}) => makeCtx({ role: "parent", hat: "parent", schoolId: null, plan: o.plan }),
+    user: TEACHER_ID,
+    redeem: () => ({ codes: { [hmacCode(EDITION, BOOK_SECRET)]: { product_id: PRODUCT } }, links: [{ parent: TEACHER_ID, child: AISYAH }] }),
   },
 };
-/** S4 slice D: book.activate is the parent's (or a student's), not the teacher's. */
-const CTX_FOR: Record<string, () => SkContext> = { "book.activate": () => makeCtx({ role: "parent", hat: "parent", schoolId: null }) };
 
 const TABLES = {
   classes: [{ id: CLASS_7B, name: "7B", teacher_id: TEACHER_ID }],
@@ -79,16 +107,16 @@ const TABLES = {
   submissions: [{ id: SUB, generation_id: GEN, student_id: ALI, mode: "file", grade_status: "pending", auto_score: null, max_score: null, answers: null, submitted_at: "2026-10-27T01:00:00.000Z" }],
   generations: [{ id: GEN, kind: "worksheet", title: "Cells worksheet", chapter_ref: "1", book_id: null, owner_id: TEACHER_ID, params: null, status: "done" }],
   books: [{ id: BOOK, title: "Biology", subject: "Science", grade: "Form 4", language: "en", status: "ready", owner_id: TEACHER_ID, school_id: SCHOOL_ID, chapters: [{ num: 2, title: "Specialised Cells", parts: [] }] }],
-  // S4 slice D: the parent's verified child, and the product's title.
+  // S4 slice D: the book.activate parent's verified child, and the product's title.
   parent_links: [{ parent_id: TEACHER_ID, child_id: AISYAH, verified_at: "2026-10-01T00:00:00.000Z", profiles: { full_name: "Aisyah binti Ali" } }],
   sk_book_products: [{ id: PRODUCT, title: "Biology" }],
 };
 
-function world(action: string, o: { ctx?: SkContext; issuedFor?: SkContext; expiresAt?: string } = {}) {
-  const ctx = o.ctx ?? CTX_FOR[action]?.() ?? makeCtx();
-  const { row, token } = signedRow({ id: ID, action, params: ACTIONS[action], contextHash: (o.issuedFor ?? ctx).contextHash, ...(o.expiresAt ? { expires_at: o.expiresAt } : {}) });
-  const redeem: RedeemWorld = { codes: { [hmacCode(EDITION, BOOK_SECRET)]: { product_id: PRODUCT } }, links: [{ parent: TEACHER_ID, child: AISYAH }] };
-  const admin = statefulAdmin({ [ID]: row }, NOW, redeem);
+function world(name: string, o: { ctx?: SkContext; issuedFor?: SkContext; expiresAt?: string } = {}) {
+  const c = CASES[name];
+  const ctx = o.ctx ?? c.ctx();
+  const { row, token } = signedRow({ id: ID, action: c.action, params: c.params, user_id: c.user, contextHash: (o.issuedFor ?? ctx).contextHash, ...(o.expiresAt ? { expires_at: o.expiresAt } : {}) });
+  const admin = statefulAdmin({ [ID]: row }, NOW, c.redeem?.());
   const session = diarySession(structuredClone(TABLES)); // updates patch rows in place
   const sink = new MemoryAuditSink();
   const input = (over: Partial<ActInput> = {}): ActInput => ({ ctx, token, via: "click", turnId: "t-1", now: NOW, memory: freshMemory(ctx, NOW), admin, session, sink, ...over });
@@ -97,12 +125,13 @@ function world(action: string, o: { ctx?: SkContext; issuedFor?: SkContext; expi
   return { ctx, row, token, admin, session, sink, input, writes };
 }
 
-describe.each(Object.keys(ACTIONS))("%s", (action) => {
+describe.each(Object.keys(CASES))("%s", (name) => {
+  const action = CASES[name].action;
   it("is a registered handler", () => {
     expect(HANDLERS[action]).toBeDefined();
   });
   it("single use: the first click writes, the second is `already_used` and writes nothing", async () => {
-    const w = world(action);
+    const w = world(name);
     const first = await executeAction(w.input());
     expect(first.response.outcome).toBe("done");
     const n = w.writes();
@@ -112,21 +141,21 @@ describe.each(Object.keys(ACTIONS))("%s", (action) => {
     expect(w.writes()).toBe(n);
   });
   it("a duplicate click — two at once — gives exactly one write and one `already_used`", async () => {
-    const w = world(action);
+    const w = world(name);
     const [a, b] = await Promise.all([executeAction(w.input()), executeAction(w.input({ turnId: "t-2" }))]);
     expect([a.response.outcome, b.response.outcome].sort()).toEqual(["already_used", "done"]);
-    const one = world(action);
+    const one = world(name);
     await executeAction(one.input());
     expect(w.writes()).toBe(one.writes()); // the same as a single click
   });
   it("expired → `expired`, nothing consumed or written", async () => {
-    const w = world(action, { expiresAt: new Date(NOW.getTime() - 1000).toISOString() });
+    const w = world(name, { expiresAt: new Date(NOW.getTime() - 1000).toISOString() });
     expect((await executeAction(w.input())).response).toEqual({ ok: false, outcome: "expired", summary: ACT_LINES.expired });
     expect(w.admin.calls).toEqual([]);
     expect(w.writes()).toBe(0);
   });
   it("altered params (the stored row changed after signing) → `refused`, nothing consumed", async () => {
-    const w = world(action);
+    const w = world(name);
     const tampered = { ...w.row.params, class_id: "cf000000-0000-4000-8000-000000000003" };
     // A row whose params no longer match the signed canonical form…
     w.admin.rows[ID] = { ...w.row, params: tampered };
@@ -139,19 +168,19 @@ describe.each(Object.keys(ACTIONS))("%s", (action) => {
   });
   it("a context change between card and click (another hat) → `context_mismatch`, nothing consumed", async () => {
     // Issued as the teacher; the live Context is the same user under a different plan.
-    const w = world(action, { issuedFor: makeCtx(), ctx: makeCtx({ plan: "pro" }) });
+    const w = world(name, { issuedFor: CASES[name].ctx(), ctx: CASES[name].ctx({ plan: "pro" }) });
     expect((await executeAction(w.input())).response).toEqual({ ok: false, outcome: "context_mismatch", summary: ACT_LINES.context_mismatch });
     expect(w.admin.calls).toEqual([]);
     expect(w.writes()).toBe(0);
   });
   it("another user's token → `refused`", async () => {
-    const w = world(action);
+    const w = world(name);
     w.admin.rows[ID] = { ...w.row, user_id: "99999999-9999-4999-8999-999999999999" };
     expect((await executeAction(w.input())).response.outcome).toBe("refused");
     expect(w.writes()).toBe(0);
   });
   it("every outcome leaves exactly one audit row, except assign's done (its RPC audits)", async () => {
-    const w = world(action);
+    const w = world(name);
     await executeAction(w.input());
     await executeAction(w.input());
     const rows = w.sink.rows;

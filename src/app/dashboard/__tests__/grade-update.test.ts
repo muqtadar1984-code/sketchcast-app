@@ -110,9 +110,14 @@ describe("a graded file submission reaches its readers", () => {
     const flat = (s: string) => s.replace(/\s+/g, " ");
     const src = (p: string) => flat(readFileSync(path.resolve(__dirname, "..", p), "utf-8"));
     const expr = "sub && sub.max_score ? `${(sub.teacher_score ?? sub.auto_score) ?? \"—\"}/${sub.max_score}`";
-    for (const f of ["children/page.tsx", "diary/parent-view.tsx", "diary/student-view.tsx", "diary/teacher-view.tsx"]) {
+    for (const f of ["diary/parent-view.tsx", "diary/student-view.tsx", "diary/teacher-view.tsx"]) {
       expect(src(f), f).toContain(expr);
     }
+    // S4 (2026-10-29): the children page's rule moved to utils/child-work.ts
+    // (shared with SK's parent reads) — the same rule, split into the score
+    // (teacher's mark, else the auto mark, over max) and the page's rendering.
+    expect(src("../../utils/child-work.ts")).toContain("sub && sub.max_score ? { points: sub.teacher_score ?? sub.auto_score, max: sub.max_score }");
+    expect(src("children/page.tsx")).toContain('`${w.score.points ?? "—"}/${w.score.max}`');
   });
 
   it("school health counts it toward the at-risk average", () => {
