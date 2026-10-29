@@ -93,7 +93,8 @@ describe("activation", () => {
     expect(JSON.stringify(args)).not.toContain(EDITION);
     expect(JSON.stringify(args)).not.toContain("1234567");
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body).toEqual({ grantId: "g1", productId: "p1", activatedAt: GRANT.activated_at, tutorExpiresAt: GRANT.tutor_expires_at, bookAccess: "permanent" });
+    // S4 slice D: + the book's title (null here: the fake session has no products) and who it was for.
+    expect(body).toEqual({ grantId: "g1", productId: "p1", activatedAt: GRANT.activated_at, tutorExpiresAt: GRANT.tutor_expires_at, bookAccess: "permanent", bookTitle: null, forChildId: null });
   });
   it("passes forChildId through for a parent activating for a child", async () => {
     await POST(req({ eventId: eid(), code: EDITION, orderNumber: ORDER, forChildId: "33333333-3333-4333-8333-333333333333" }));
