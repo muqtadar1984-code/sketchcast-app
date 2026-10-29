@@ -8,7 +8,7 @@
 // (src/utils/assignment-status.ts), which replicates the page's done / overdue
 // / pending-to-grade / completion definitions line for line.
 
-import type { ResolvedEntity, SkCapability, SkCapabilityResult } from "../shell/types";
+import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "../shell/types";
 import {
   assignmentStatus,
   filterByDue,
@@ -19,14 +19,20 @@ import {
   type StatusShareRow,
   type StatusSubmissionRow,
 } from "@/utils/assignment-status";
-import { classEnrollments, teacherClasses } from "./shared";
+import { classEnrollments, generationSubjects, teacherClasses, visibleClasses } from "./shared";
+// S5 slice A: the principal / coordinator modes (leader-scope.ts).
+import { lineFor } from "../shell/lines";
+import { S_ASSIGN, S_ASSIGN_NONE, S_EMPTY, S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED } from "../shell/school-lines";
+import { classInScope, gradeOutsideScope, leaderScope, needsSubjects, sameGrade, scopeLabel, shareInScope, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
 
 export const SHARE_ROWS_CAP = 40;
 /** `.in()` lists are URL-bound; a teacher with more generations than this gets
  *  the most recent shares' generations only. */
 const GEN_IDS_CAP = 200;
+/** Leaders: at most this many classes go into one `.in()` list. */
+const LEADER_CLASS_IDS_CAP = 200;
 
-type ClassRow = { id: string; name: string | null; teacher_id?: string | null };
+type ClassRow = { id: string; name: string | null; teacher_id?: string | null; grade?: string | null; school_id?: string | null };
 
 const rows = <T>(res: { data: unknown; error: { message?: string } | null } | null | undefined, what: string): T[] => {
   if (!res) return [];
@@ -49,13 +55,14 @@ export const assignmentsStatus: SkCapability = {
   meta: {
     name: "assignments.status",
     description:
-      "How the teacher's assignments stand, per class share: assigned, done, not done (with names), overdue, pending to grade, completion %. Optionally one class, one generation, or only those due overdue / today / this week.",
+      "How assignments stand, per class share: assigned, done, not done (with names), overdue, pending to grade, completion %. The teacher's own classes; with the principal hat the whole school, with the coordinator hat the coordinator's scope grades. Optionally one class, one generation, (leaders) one grade, or only those due overdue / today / this week.",
     parameters: {
       type: "object",
       properties: {
-        classId: { type: "string", description: "Only this class (one of the teacher's own)." },
+        classId: { type: "string", description: "Only this class (a teacher: one of their own)." },
         generationId: { type: "string", description: "Only this kit / quiz / worksheet." },
         due: { type: "string", enum: ["overdue", "today", "week"], description: "Only shares due in this window." },
+        grade: { type: "string", description: 'Leaders only: only this grade, e.g. "5" or "Form 2".' },
       },
       additionalProperties: false,
     },
@@ -70,6 +77,9 @@ export const assignmentsStatus: SkCapability = {
     const generationId = str(args, "generationId");
     const dueRaw = str(args, "due");
     const due = DUE.find((d) => d === dueRaw);
+    // S5: the principal / coordinator hats answer at school / scope level.
+    const ls = leaderScope(ctx);
+    if (ls.mode !== "own") return leaderAssignments(ctx, ls, { classId, generationId, due, grade: str(args, "grade")?.slice(0, 20) }, deps);
     try {
       // Own classes — the scope everything else is cut to. The predicate goes
       // to the DB AND is re-applied here (belt and braces, like risk.ts and
@@ -175,3 +185,103 @@ const toFact = (r: ShareStatus) => ({
   completionPct: r.completionPct,
   notDoneNames: r.notDoneNames.join(", "),
 });
+
+// ── S5 slice A: the leader modes ─────────────────────────────────────────────
+
+/** assignments.status with the principal hat (the school's classes) or the
+ *  coordinator hat (classes of the scope grades — RLS also returns the
+ *  coordinator's OWN classes of other grades, which are cut here; a share is
+ *  kept only when a scope row matches its class grade and, when that row
+ *  names one, its book subject). Same counting as the teacher view. */
+export async function leaderAssignments(
+  ctx: SkContext,
+  ls: LeaderScope,
+  q: { classId?: string; generationId?: string; due?: DueFilter; grade?: string },
+  deps: SkCapabilityDeps,
+): Promise<SkCapabilityResult> {
+  const me = ctx.user.id;
+  const locale = ctx.user.locale;
+  const db = deps.session;
+  if (ls.mode === "scope" && !(ls.rows ?? []).length) return { ok: true, summary: lineFor(S_NO_SCOPE, locale), facts: [], entities: [] };
+  if (gradeOutsideScope(ls, q.grade)) {
+    return { ok: true, summary: lineFor(S_OUT_OF_SCOPE, locale, { grade: whereLabel(ls, locale, q.grade), scope: scopeLabel(ls.rows ?? [], locale) }), facts: [], entities: [] };
+  }
+  try {
+    const scopeRows = ls.rows ?? [];
+    const classes = rows<ClassRow>(await visibleClasses(deps, me), "classes").filter(
+      (c) =>
+        !!ls.schoolId &&
+        c.school_id === ls.schoolId &&
+        (ls.mode === "school" || classInScope(c.grade, scopeRows)) &&
+        (!q.grade || sameGrade(c.grade, q.grade)) &&
+        (!q.classId || c.id === q.classId),
+    );
+    const classSet = new Set(classes.slice(0, LEADER_CLASS_IDS_CAP).map((c) => c.id));
+    const gradeOf = new Map(classes.map((c) => [c.id, c.grade ?? null] as const));
+    const classNames: Record<string, string> = {};
+    for (const c of classes) classNames[c.id] = c.name || "Class";
+    const where = q.classId && classNames[q.classId] ? classNames[q.classId] : whereLabel(ls, locale, q.grade);
+    if (!classSet.size) return { ok: true, summary: lineFor(S_EMPTY, locale, { where }), facts: [], entities: [] };
+    const scopeIds = [...classSet];
+
+    let shares = rows<StatusShareRow>(
+      await db
+        .from("generation_shares")
+        .select("id, generation_id, class_id, due_at, created_at, generations(kind, chapter_ref, title)")
+        .in("class_id", scopeIds)
+        .order("created_at", { ascending: false }),
+      "generation_shares",
+    ).filter((s) => s.class_id !== null && classSet.has(s.class_id));
+    if (needsSubjects(ls)) {
+      const subjectOf = await generationSubjects(deps, me, shares.map((s) => s.generation_id));
+      shares = shares.filter((s) => shareInScope(gradeOf.get(s.class_id as string), subjectOf.get(s.generation_id) ?? null, scopeRows));
+    }
+    if (q.generationId) shares = shares.filter((s) => s.generation_id === q.generationId);
+    if (!shares.length) return { ok: true, summary: lineFor(S_ASSIGN_NONE, locale, { where }), facts: [], entities: [] };
+    const genIds = [...new Set(shares.map((s) => s.generation_id))].slice(0, GEN_IDS_CAP);
+    const genSet = new Set(genIds);
+    shares = shares.filter((s) => genSet.has(s.generation_id));
+
+    const [enrQ, progQ, subsQ] = await Promise.all([
+      classEnrollments(deps, me, scopeIds),
+      db.from("student_progress").select("generation_id, student_id, status").in("generation_id", genIds),
+      db.from("submissions").select("generation_id, student_id, grade_status").in("generation_id", genIds),
+    ]);
+    const enrollments = rows<StatusEnrollmentRow>(enrQ, "enrollments").filter((e) => classSet.has(e.class_id));
+    const students = new Set(enrollments.map((e) => e.student_id));
+    const progress = rows<StatusProgressRow>(progQ, "student_progress").filter((p) => genSet.has(p.generation_id) && students.has(p.student_id));
+    const submissions = rows<StatusSubmissionRow>(subsQ, "submissions").filter((s) => genSet.has(s.generation_id) && students.has(s.student_id));
+
+    const status = assignmentStatus({ shares, enrollments, progress, submissions, classNames, now: deps.now });
+    const kept = filterByDue(status.shares, q.due, deps.now);
+    if (!kept.length) return { ok: true, summary: lineFor(S_ASSIGN_NONE, locale, { where }), facts: [], entities: [] };
+    const shown = kept.slice(0, SHARE_ROWS_CAP - 1);
+    const t = {
+      assigned: kept.reduce((n, r) => n + r.assigned, 0),
+      done: kept.reduce((n, r) => n + r.done, 0),
+      notDone: kept.reduce((n, r) => n + r.notDone, 0),
+      overdue: kept.reduce((n, r) => n + r.overdue, 0),
+    };
+    const pendingToGrade = q.due ? kept.reduce((n, r) => n + r.pendingToGrade, 0) : status.totals.pendingToGrade;
+    const pct = t.assigned ? Math.round((t.done / t.assigned) * 100) : 0;
+    const classCount = new Set(kept.map((r) => r.classId)).size;
+    const summary = lineFor(S_ASSIGN, locale, { where, n: kept.length, classes: classCount, done: t.done, assigned: t.assigned, pct, notDone: t.notDone, overdue: t.overdue, pending: pendingToGrade });
+    const entities: ResolvedEntity[] = [];
+    for (const cid of new Set(shown.map((r) => r.classId))) entities.push({ kind: "class", id: cid, label: classNames[cid] ?? "Class", via: "assignments.status" });
+    for (const r of shown.slice(0, 5)) {
+      entities.push({ kind: "share", id: r.shareId, label: `${r.title} → ${r.className}`, via: "assignments.status", ids: [r.generationId, r.classId] });
+      entities.push({ kind: "generation", id: r.generationId, label: r.title, via: "assignments.status" });
+    }
+    return stripEmails({
+      ok: true,
+      summary: summary.slice(0, 900),
+      facts: [
+        { row: "totals", scope: ls.mode, where, assignments: kept.length, classes: classCount, assigned: t.assigned, done: t.done, notDone: t.notDone, overdue: t.overdue, pendingToGrade, completionPct: pct },
+        ...shown.map(toFact),
+      ],
+      entities,
+    });
+  } catch (e) {
+    return { ok: false, summary: lineFor(S_READ_FAILED, locale), error: e instanceof Error ? e.message : String(e) };
+  }
+}

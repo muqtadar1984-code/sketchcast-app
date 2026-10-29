@@ -67,3 +67,32 @@ export function classEnrollments(deps: SkCapabilityDeps, me: string, classIds: s
 export function schoolHealthRows(deps: SkCapabilityDeps, me: string): Promise<HealthRows> {
   return memo(deps, `schoolHealth:${me}`, () => fetchSchoolHealthRows(deps.session as unknown as SupabaseClient));
 }
+
+// ── S5 slice A: the leader reads (principal / coordinator hats) ─────────────
+
+/** Every class row RLS shows this user (a principal: the school; a
+ *  coordinator: their scope grades PLUS their own classes — the union that
+ *  leader-scope.ts cuts in code). Callers re-filter by school and scope. */
+export function visibleClasses(deps: SkCapabilityDeps, me: string): Promise<QueryResult> {
+  return memo(deps, `visibleClasses:${me}`, async () => (await deps.session.from("classes").select("id, name, grade, teacher_id, school_id").order("created_at", { ascending: false })) as QueryResult, noError);
+}
+
+/** `.in()` lists are URL-bound. */
+const SUBJECT_IDS_CAP = 300;
+
+/** generation id → its book's subject (generations ⋈ books), for a coordinator
+ *  scope row that names a subject. Read only when one does (leader-scope.ts
+ *  needsSubjects). A generation with no book, or a book RLS hides, maps to
+ *  null — which no subject-scoped row matches (fail closed, like RLS). */
+export async function generationSubjects(deps: SkCapabilityDeps, me: string, generationIds: string[]): Promise<Map<string, string | null>> {
+  const ids = [...new Set(generationIds)].sort().slice(0, SUBJECT_IDS_CAP);
+  const out = new Map<string, string | null>();
+  if (!ids.length) return out;
+  const res = await memo(deps, `genSubjects:${me}:${ids.join(",")}`, async () => (await deps.session.from("generations").select("id, books(subject)").in("id", ids)) as QueryResult, noError);
+  if (res.error) throw new Error(`generations: ${res.error.message ?? "query failed"}`);
+  for (const r of (res.data ?? []) as Array<{ id: string; books?: { subject?: string | null } | Array<{ subject?: string | null }> | null }>) {
+    const b = Array.isArray(r.books) ? r.books[0] : r.books;
+    out.set(r.id, typeof b?.subject === "string" && b.subject.trim() ? b.subject : null);
+  }
+  return out;
+}

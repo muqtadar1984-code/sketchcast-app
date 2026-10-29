@@ -2299,6 +2299,27 @@
         "refused": "You can't open this lesson. Ask your teacher or parent about access to the book."
       },
       "tutorNotOpen": "The lesson player isn't open on this page.",
+      "school": {
+        "noScope": "You hold no coordinator scope in this school, so I have nothing to show.",
+        "readFailed": "I could not read the school data right now.",
+        "whereSchool": "the school",
+        "whereGrade": "grade {grade}",
+        "outOfScope": "{grade} is outside your scope ({scope}), so I can't show it.",
+        "notYet": "not yet",
+        "empty": "There are no classes in {where} to report on yet.",
+        "overview": "Overview for {where}: learners {students}, classes {classes}, teachers {teachers}. Active in the last 14 days: {active}. Work done: {completion}. At risk: {atRisk}. Overdue: {overdue}. Awaiting marking: {pending}.",
+        "byGrade": "At risk by grade: {items}.",
+        "atRisk": "At risk in {where}: {n}. {items}.",
+        "atRiskNone": "Nobody in {where} is at risk by the school-health rules (learners: {students}).",
+        "teachers": "Teachers flagged in {where}: {n}. {items}.",
+        "teachersNone": "No teacher in {where} is flagged (teachers: {teachers}).",
+        "assign": "Assignments in {where}: {n} across classes {classes}. Done {done} of {assigned} ({pct}%), not done {notDone}, overdue {overdue}, awaiting marking {pending}.",
+        "assignNone": "Nothing has been assigned in {where}.",
+        "ttIn": "Now in {where} — {period} ({start}–{end}): lessons {n}. {items}.",
+        "ttNext": "Next in {where} — {period} ({start}–{end}): lessons {n}. {items}.",
+        "ttNone": "No lessons are timetabled in {where} for {period}.",
+        "ttClosed": "No school periods are running right now."
+      },
       "parent": {
         "noChildren": "You have no linked children yet — add one on My Children.",
         "notLinked": "That child isn't linked to your account, so I can't show anything about them.",

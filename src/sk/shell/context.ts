@@ -14,6 +14,7 @@ import {
   calendarEnabledFor,
   catalogueTabEnabled,
   diaryEnabled,
+  noticesEnabledFor,
   parentPortalEnabled,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
@@ -239,7 +240,7 @@ export function buildContext(input: BuildContextInput): SkContext {
     flags: { ...input.flags, hasScope: input.coordinatorScope.length > 0 },
     issuedAt: input.now.toISOString(),
     ttlSeconds: input.ttlSeconds ?? SK_CONTEXT_TTL_SECONDS,
-    contextHash: contextHash({ role, schoolId: input.schoolId, hat, plan }),
+    contextHash: contextHash({ role, schoolId: input.schoolId, hat, plan, scope: input.coordinatorScope }),
   };
 }
 
@@ -319,7 +320,7 @@ export async function loadContext(deps: LoadContextDeps): Promise<SkContext> {
     return Array.isArray(r?.data) ? (r.data as Record<string, unknown>[]) : [];
   };
 
-  const [scopeRows, links, analyticsOn, timetableOn, calendarOn, planRes, staffIds] = await Promise.all([
+  const [scopeRows, links, analyticsOn, timetableOn, calendarOn, planRes, staffIds, noticesOn] = await Promise.all([
     adult && schoolId
       ? rows(session.from("coordinator_scope").select("grade, subject").eq("coordinator_id", deps.user.id).eq("school_id", schoolId))
       : Promise.resolve([] as Record<string, unknown>[]),
@@ -333,6 +334,10 @@ export async function loadContext(deps: LoadContextDeps): Promise<SkContext> {
     adult ? safe(calendarEnabledFor(session as never, schoolId), false) : Promise.resolve(false),
     deps.admin ? safe(Promise.resolve(deps.admin.rpc("plan_tier", { uid: deps.user.id })), { data: null }) : Promise.resolve({ data: null }),
     deps.admin ? staffUserIds(deps.admin as never) : Promise.resolve(new Set<string>()),
+    // S5: the SAME tenant gate POST /api/notices applies (FEATURE_NOTICES AND
+    // the school's calendar gate), so a notice capability is offered exactly
+    // when the route would accept it.
+    adult ? safe(noticesEnabledFor(session as never, schoolId), false) : Promise.resolve(false),
   ]);
 
   const coordinatorScope = scopeRows.map((r) => ({ grade: (r.grade as string | null) ?? null, subject: (r.subject as string | null) ?? null }));
@@ -366,6 +371,7 @@ export async function loadContext(deps: LoadContextDeps): Promise<SkContext> {
       analytics: analyticsOn,
       timetable: timetableOn,
       calendar: calendarOn,
+      notices: noticesOn,
       diary: diaryOn,
       kits: catalogueTabEnabled() && adult,
       board,

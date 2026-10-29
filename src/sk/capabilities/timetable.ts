@@ -11,9 +11,13 @@
 // User-session client only; slots and last-taught rows are pinned to
 // `teacher_id = me`.
 
-import type { SkCapability, SkCapabilityResult, SkContext, SkSessionDb } from "../shell/types";
+import type { SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext, SkSessionDb } from "../shell/types";
 import { shapeFromConfig, type Slot, type TimetableShape } from "@/utils/timetable";
-import { periodWindows, resolveContext, type LastTaught } from "@/utils/present/context";
+import { periodAt, periodWindows, resolveContext, type LastTaught } from "@/utils/present/context";
+// S5 slice A: the principal / coordinator modes (leader-scope.ts).
+import { lineFor } from "../shell/lines";
+import { S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED, S_TT_CLOSED, S_TT_IN, S_TT_NEXT, S_TT_NONE } from "../shell/school-lines";
+import { classInScope, gradeOutsideScope, leaderScope, sameGrade, sameSubject, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
 
 export const REMAINING_ROWS_CAP = 8;
 const KL_OFFSET_MIN = 8 * 60;
@@ -170,15 +174,23 @@ export const timetableNowNext: SkCapability = {
   meta: {
     name: "timetable.now_next",
     description:
-      "Which lesson the teacher is in or has next (class, subject, period, times, where that class last got to), and the rest of today's lessons.",
-    parameters: { type: "object", properties: {}, additionalProperties: false },
+      "Which lesson the teacher is in or has next (class, subject, period, times, where that class last got to), and the rest of today's lessons. With the principal hat: every class's lesson in the current or next period across the school; with the coordinator hat: the scope grades' classes only.",
+    parameters: {
+      type: "object",
+      properties: { grade: { type: "string", description: 'Leaders only: only this grade, e.g. "5" or "Form 2".' } },
+      additionalProperties: false,
+    },
     tier: "immediate",
     kind: "read",
     roles: ["teacher", "school_admin", "coordinator"],
   },
-  async handler(ctx, _args, deps) {
+  async handler(ctx, args, deps) {
     const me = ctx.user.id;
     const db = deps.session;
+    // S5: the principal / coordinator hats see the school's (scope's) lessons
+    // in the current or next period.
+    const ls = leaderScope(ctx);
+    if (ls.mode !== "own") return leaderNowNext(ctx, ls, typeof args.grade === "string" && args.grade.trim() ? args.grade.trim().slice(0, 20) : undefined, deps);
     try {
       const shape = await loadShape(ctx, db);
       const slots = rows<Slot>(
@@ -220,3 +232,89 @@ export const timetableNowNext: SkCapability = {
     }
   },
 };
+
+// ── S5 slice A: the leader modes ─────────────────────────────────────────────
+
+export const LEADER_LESSONS_CAP = 30;
+
+type LeaderClassRow = { id: string; name: string | null; grade: string | null; school_id: string | null };
+type ProfileRow = { id: string; full_name: string | null; username: string | null };
+
+/** timetable.now_next with the principal hat (every class of the school) or
+ *  the coordinator hat (classes of the scope grades; a scope row with a
+ *  subject keeps only that subject's lessons). The period comes from the
+ *  school's own shape and the same clock the teacher view uses. Slots are
+ *  school-wide under RLS (tt_member_read), so the scope cut here is what keeps
+ *  a coordinator inside their grades. */
+export async function leaderNowNext(ctx: SkContext, ls: LeaderScope, grade: string | undefined, deps: SkCapabilityDeps): Promise<SkCapabilityResult> {
+  const locale = ctx.user.locale;
+  const db = deps.session;
+  if (ls.mode === "scope" && !(ls.rows ?? []).length) return { ok: true, summary: lineFor(S_NO_SCOPE, locale), facts: [], entities: [] };
+  if (gradeOutsideScope(ls, grade)) {
+    return { ok: true, summary: lineFor(S_OUT_OF_SCOPE, locale, { grade: whereLabel(ls, locale, grade), scope: scopeLabel(ls.rows ?? [], locale) }), facts: [], entities: [] };
+  }
+  if (!ls.schoolId) return { ok: true, summary: lineFor(S_TT_CLOSED, locale), facts: [], entities: [] };
+  try {
+    const shape = await loadShape(ctx, db);
+    const clock = deps.clock && Number.isFinite(deps.clock.day) && Number.isFinite(deps.clock.minutes) ? { day: deps.clock.day, minutes: deps.clock.minutes } : clockAt(deps.now);
+    const hit = clock.day >= 1 && clock.day <= shape.days ? periodAt(periodWindows(shape), clock.minutes) : null;
+    if (!hit) return { ok: true, summary: lineFor(S_TT_CLOSED, locale), facts: [], entities: [] };
+    const where = whereLabel(ls, locale, grade);
+    const slots = rows<Slot>(
+      await db.from("timetable_slots").select("class_id, day, period, subject, teacher_id, room, kind").eq("school_id", ls.schoolId).eq("day", clock.day).eq("period", hit.period),
+      "timetable_slots",
+    ).filter((s) => (s.kind ?? "lesson") === "lesson");
+    const classIds = [...new Set(slots.map((s) => s.class_id))];
+    const classes = classIds.length ? rows<LeaderClassRow>(await db.from("classes").select("id, name, grade, school_id").in("id", classIds), "classes") : [];
+    const scopeRows = ls.rows ?? [];
+    const classById = new Map(classes.filter((c) => c.school_id === ls.schoolId && (ls.mode === "school" || classInScope(c.grade, scopeRows)) && (!grade || sameGrade(c.grade, grade))).map((c) => [c.id, c] as const));
+    // A slot whose class row RLS did not return has no grade to check: dropped.
+    const kept = slots
+      .filter((s) => {
+        const c = classById.get(s.class_id);
+        if (!c) return false;
+        if (ls.mode === "school") return true;
+        return scopeRows.some((r) => sameGrade(c.grade, r.grade) && (r.subject === null || sameSubject(s.subject, r.subject)));
+      })
+      .sort((a, b) => (classById.get(a.class_id)?.name ?? "").localeCompare(classById.get(b.class_id)?.name ?? ""));
+    const period = hit.label;
+    const start = hhmm(hit.window.startMin);
+    const end = hhmm(hit.window.endMin);
+    if (!kept.length) return { ok: true, summary: lineFor(S_TT_NONE, locale, { where, period }), facts: [], entities: [] };
+    const teacherIds = [...new Set(kept.map((s) => s.teacher_id).filter((t): t is string => !!t))];
+    const teacherName = new Map<string, string>();
+    if (teacherIds.length) {
+      for (const p of rows<ProfileRow>(await db.from("profiles").select("id, full_name, username").in("id", teacherIds), "profiles")) teacherName.set(p.id, p.full_name || p.username || "Teacher");
+    }
+    const shown = kept.slice(0, LEADER_LESSONS_CAP);
+    const facts = shown.map((s) => {
+      const c = classById.get(s.class_id)!;
+      return {
+        row: hit.state === "in" ? "now" : "next",
+        className: c.name || "Class",
+        classId: c.id,
+        grade: c.grade,
+        subject: s.subject,
+        teacher: s.teacher_id ? teacherName.get(s.teacher_id) ?? "Teacher" : null,
+        room: s.room ?? null,
+        period: hit.period,
+        periodLabel: period,
+        startsAt: start,
+        endsAt: end,
+      };
+    });
+    const items = `${facts
+      .slice(0, 8)
+      .map((f) => `${f.className} ${f.subject}${f.teacher ? ` (${f.teacher})` : ""}`)
+      .join(", ")}${facts.length > 8 ? ", …" : ""}`;
+    const summary = lineFor(hit.state === "in" ? S_TT_IN : S_TT_NEXT, locale, { where, period, start, end, n: kept.length, items });
+    return stripEmails({
+      ok: true,
+      summary: summary.slice(0, 900),
+      facts,
+      entities: shown.slice(0, 15).map((s) => ({ kind: "class" as const, id: s.class_id, label: classById.get(s.class_id)?.name || "Class", via: "timetable.now_next" })),
+    });
+  } catch (e) {
+    return { ok: false, summary: lineFor(S_READ_FAILED, locale), error: e instanceof Error ? e.message : String(e) };
+  }
+}

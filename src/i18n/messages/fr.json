@@ -2299,6 +2299,27 @@
         "refused": "Tu ne peux pas ouvrir cette leçon. Demande à ton enseignant ou à tes parents l'accès au livre."
       },
       "tutorNotOpen": "Le lecteur de leçon n'est pas ouvert sur cette page.",
+      "school": {
+        "noScope": "Vous n'avez aucun périmètre de coordination dans cette école : je n'ai rien à afficher.",
+        "readFailed": "Je n'arrive pas à lire les données de l'école pour le moment.",
+        "whereSchool": "l'école",
+        "whereGrade": "le niveau {grade}",
+        "outOfScope": "{grade} est hors de votre périmètre ({scope}) : je ne peux pas l'afficher.",
+        "notYet": "pas encore",
+        "empty": "Il n'y a encore aucune classe dans {where} sur laquelle faire un point.",
+        "overview": "Vue d'ensemble de {where} : élèves {students}, classes {classes}, enseignants {teachers}. Actifs ces 14 derniers jours : {active}. Travail fait : {completion}. À risque : {atRisk}. En retard : {overdue}. À corriger : {pending}.",
+        "byGrade": "À risque par niveau : {items}.",
+        "atRisk": "À risque dans {where} : {n}. {items}.",
+        "atRiskNone": "Personne dans {where} n'est à risque selon les règles de suivi de l'école (élèves : {students}).",
+        "teachers": "Enseignants signalés dans {where} : {n}. {items}.",
+        "teachersNone": "Aucun enseignant n'est signalé dans {where} (enseignants : {teachers}).",
+        "assign": "Devoirs dans {where} : {n} sur les classes {classes}. Faits {done} sur {assigned} ({pct} %), non faits {notDone}, en retard {overdue}, à corriger {pending}.",
+        "assignNone": "Aucun devoir n'a été donné dans {where}.",
+        "ttIn": "En ce moment dans {where} — {period} ({start}–{end}) : cours {n}. {items}.",
+        "ttNext": "Ensuite dans {where} — {period} ({start}–{end}) : cours {n}. {items}.",
+        "ttNone": "Aucun cours n'est prévu dans {where} pour {period}.",
+        "ttClosed": "Aucune période de cours n'est en cours en ce moment."
+      },
       "parent": {
         "noChildren": "Aucun enfant n'est encore lié à votre compte — ajoutez-en un dans Mes enfants.",
         "notLinked": "Cet enfant n'est pas lié à votre compte : je ne peux rien afficher à son sujet.",

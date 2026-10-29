@@ -21,6 +21,8 @@ import { TUTOR_CAPABILITIES } from "./tutor";
 // S4 slices A+B: the parent reads (child.*).
 import { PARENT_CAPABILITIES } from "./parent";
 import { bookActivateAction } from "./book";
+// S5 slice A: the leader read (principal / coordinator hats).
+import { schoolHealth } from "./school";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -58,9 +60,13 @@ const ENTRIES: SkCapability[] = [
   // S4 slice D: book activation (student for herself, parent for a verified
   // child), confirm tier and CLICK-ONLY (it spends a code; act-book.ts).
   bookActivateAction,
+  // S5 slice A: school.health — principal (school) / coordinator (scope)
+  // hats only, immediate read; scope cut in code (leader-scope.ts).
+  schoolHealth,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
 
 export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus, TUTOR_CAPABILITIES, bookActivateAction };
 export { PARENT_CAPABILITIES };
+export { schoolHealth };

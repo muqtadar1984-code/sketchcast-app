@@ -107,11 +107,15 @@ const SHIPPED = [
   "child.week",
   // S4 slice D: book activation (student + parent, sk flag; click-only).
   "book.activate",
+  // S5 slice A: the leader read (principal / coordinator hats only).
+  "school.health",
 ];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
 const PARENT_ONLY = SHIPPED.filter((n) => n.startsWith("child."));
 const STUDENT_AND_PARENT = ["book.activate"];
-const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n));
+// S5 slice A: leader-hat entries (never a plain teacher's).
+const LEADER_ONLY = ["school.health"];
+const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n) && !LEADER_ONLY.includes(n));
 // S4 slice C: diary.note's parent branch (a note to one of her own children).
 const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT];
 const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT];
@@ -123,6 +127,16 @@ describe("allowedFor over the shipped registry", () => {
     expect(teacher.some((n) => n.startsWith("child.") || n === "book.activate")).toBe(false);
     expect(allowedFor(makeCtx({ role: "student" })).map((c) => c.meta.name)).toEqual(STUDENT_SEES);
     expect(allowedFor(makeCtx({ role: "parent", hat: "parent" })).map((c) => c.meta.name)).toEqual(PARENT_SEES);
+  });
+  it("S5: school.health is the principal's and the coordinator's — by hat — never the teacher hat's", () => {
+    const sees = (o: Parameters<typeof makeCtx>[0]) => allowedFor(makeCtx(o)).map((c) => c.meta.name).includes("school.health");
+    expect(sees({ role: "school_admin", hat: "principal" })).toBe(true);
+    expect(sees({ role: "school_admin", hat: "teacher" })).toBe(false);
+    expect(sees({ role: "teacher", scope: [{ grade: "5", subject: null }], hat: "coordinator" })).toBe(true);
+    expect(sees({ role: "teacher", scope: [{ grade: "5", subject: null }], hat: "teacher" })).toBe(false);
+    expect(sees({ role: "teacher", hat: "teacher" })).toBe(false);
+    expect(sees({ role: "parent", hat: "parent" })).toBe(false);
+    expect(sees({ role: "student" })).toBe(false);
   });
   it("filters a custom list and leaves REGISTRY untouched", () => {
     const list = [cap({ name: "a", roles: ["student"] }), cap({ name: "b", roles: ["teacher"] })];

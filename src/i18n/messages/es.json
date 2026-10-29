@@ -2299,6 +2299,27 @@
         "refused": "No puedes abrir esta lección. Pregunta a tu profesor o a tus padres por el acceso al libro."
       },
       "tutorNotOpen": "El reproductor de la lección no está abierto en esta página.",
+      "school": {
+        "noScope": "No tienes ningún ámbito de coordinación en esta escuela, así que no tengo nada que mostrar.",
+        "readFailed": "No he podido leer los datos de la escuela ahora mismo.",
+        "whereSchool": "la escuela",
+        "whereGrade": "el curso {grade}",
+        "outOfScope": "{grade} está fuera de tu ámbito ({scope}), así que no puedo mostrarlo.",
+        "notYet": "aún no",
+        "empty": "Aún no hay clases en {where} sobre las que informar.",
+        "overview": "Resumen de {where}: alumnos {students}, clases {classes}, docentes {teachers}. Activos en los últimos 14 días: {active}. Trabajo hecho: {completion}. En riesgo: {atRisk}. Atrasado: {overdue}. Por corregir: {pending}.",
+        "byGrade": "En riesgo por curso: {items}.",
+        "atRisk": "En riesgo en {where}: {n}. {items}.",
+        "atRiskNone": "Nadie en {where} está en riesgo según las reglas de seguimiento de la escuela (alumnos: {students}).",
+        "teachers": "Docentes señalados en {where}: {n}. {items}.",
+        "teachersNone": "Ningún docente está señalado en {where} (docentes: {teachers}).",
+        "assign": "Tareas en {where}: {n} en las clases {classes}. Hechas {done} de {assigned} ({pct}%), sin hacer {notDone}, atrasadas {overdue}, por corregir {pending}.",
+        "assignNone": "No se ha asignado nada en {where}.",
+        "ttIn": "Ahora en {where} — {period} ({start}–{end}): clases {n}. {items}.",
+        "ttNext": "A continuación en {where} — {period} ({start}–{end}): clases {n}. {items}.",
+        "ttNone": "No hay clases programadas en {where} para {period}.",
+        "ttClosed": "No hay ningún periodo de clase en curso ahora mismo."
+      },
       "parent": {
         "noChildren": "Aún no tienes hijos vinculados — añade uno en Mis hijos.",
         "notLinked": "Ese niño no está vinculado a tu cuenta, así que no puedo mostrar nada sobre él.",

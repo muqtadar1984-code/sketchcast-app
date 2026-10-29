@@ -8,13 +8,28 @@ export type ContextHashParts = {
   schoolId: string | null | undefined;
   hat: string | null | undefined;
   plan: string | null | undefined;
+  /** S5 (design decision 8): the coordinator_scope rows. Absent or empty →
+   *  the hash is exactly the pre-S5 one, so no other user's tokens change. */
+  scope?: ReadonlyArray<{ grade: string | null; subject: string | null }> | null;
 };
 
-/** sha256 hex of `role|schoolId|hat|plan`. A hat, school, role or plan change
- *  yields a new hash, which is what invalidates memory and tokens (§5.4). */
+/** A stable digest of coordinator_scope rows: each row folded to
+ *  `grade|subject` (trimmed, lower-cased, a null subject as "*"), de-duplicated
+ *  and sorted, so row order and spelling case never change it. "" when empty. */
+export function scopeDigest(scope: ContextHashParts["scope"]): string {
+  const fold = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const rows = [...new Set((scope ?? []).map((r) => `${fold(r.grade)}|${fold(r.subject) || "*"}`).filter((r) => !r.startsWith("|")))].sort();
+  return rows.length ? createHash("sha256").update(rows.join("\n"), "utf8").digest("hex").slice(0, 32) : "";
+}
+
+/** sha256 hex of `role|schoolId|hat|plan` (+ `|scope:<digest>` when the user
+ *  holds coordinator scope). A hat, school, role, plan or SCOPE change yields
+ *  a new hash, which is what invalidates memory and tokens (§5.4, §8.1). */
 export function contextHash(p: ContextHashParts): string {
-  const line = [p.role ?? "", p.schoolId ?? "", p.hat ?? "", p.plan ?? ""].join("|");
-  return createHash("sha256").update(line, "utf8").digest("hex");
+  const parts = [p.role ?? "", p.schoolId ?? "", p.hat ?? "", p.plan ?? ""];
+  const digest = scopeDigest(p.scope);
+  if (digest) parts.push(`scope:${digest}`);
+  return createHash("sha256").update(parts.join("|"), "utf8").digest("hex");
 }
 
 export function hmacHex(secret: string, data: string): string {

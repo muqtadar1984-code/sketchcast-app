@@ -12,6 +12,8 @@ import { resolveSegment } from "@/sk/capabilities/board";
 import { findBookCode, findOrderNumber } from "@/sk/book-activate";
 // S4: the parent phrasings (child.*), decided before the act and navigate rules.
 import { routeParent, type ParentRoute } from "./parent-rules";
+// S5 slice A: the leader phrasings (school.health + the leader modes).
+import { routeLeader, type LeaderRoute } from "./leader-rules";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -35,6 +37,9 @@ export type RulesDecision =
   /** S4: a parent's question about a child, answered by the child.*
    *  capability itself — deterministic, no model (parent-rules.ts). */
   | { intent: "ask"; parent: ParentRoute }
+  /** S5 slice A: a principal's / coordinator's school question, answered by
+   *  the capability itself in the hat's school / scope mode — no model. */
+  | { intent: "ask"; leader: LeaderRoute }
   | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor"> };
 
 export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" | "tutor.practise" | "tutor.where" | "tutor.progress" | "tutor.explain";
@@ -788,6 +793,11 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   const parent = routeParent(raw, ctx);
   if (parent) return { intent: "ask", parent };
 
+  // S5: a principal / coordinator (by HAT) asking about the school or their
+  // scope ("how is the school doing", "siapa berisiko dalam tahun 5").
+  const leader = student ? null : routeLeader(raw, ctx);
+  if (leader) return { intent: "ask", leader };
+
   // S2: a teacher action phrasing is never a navigate (the model resolves it).
   const act = student ? null : actPhraseOf(t, raw);
   if (act) return { intent: "act", action: act };
@@ -832,3 +842,4 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
 
 export { NAV_TARGETS };
 export type { ParentRoute, SkParentCapability } from "./parent-rules";
+export type { LeaderRoute, SkLeaderCapability } from "./leader-rules";
