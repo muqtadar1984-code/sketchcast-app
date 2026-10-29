@@ -18,7 +18,9 @@ export type ChildScope =
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** "my kids", "both", "all of them", "anak-anak saya", "أطفالي" — everyone. */
-const ALL_RE = /^(?:all|both|everyone|each|my (?:kids|children)|the (?:kids|children)|kids|children|all (?:of )?(?:them|my (?:kids|children))|both of them|semua|kedua-dua(?:nya)?|anak-anak(?: saya)?|semua anak(?: saya)?|أطفالي|أولادي|الجميع|كلهم|كلاهما)$/u;
+/** "my kids", "both", "my son", "anak saya", "ابني" — no one child named: every
+ *  verified child (with one child, that child). */
+const ALL_RE = /^(?:all|both|everyone|each|kids|children|(?:my|the|our) (?:kids?|children|child|son|daughter|boy|girl)|all (?:of )?(?:them|my (?:kids|children))|both of them|semua|kedua-dua(?:nya)?|anak-anak(?: saya)?|anak saya|anak-anak kami|semua anak(?: saya)?|أطفالي|أولادي|ابني|ابنتي|طفلي|الجميع|كلهم|كلاهما)$/u;
 
 const fold = (s: string) =>
   s
@@ -64,7 +66,7 @@ export function resolveChild(ctx: SkContext, arg: unknown): ChildScope {
 
   const q = fold(raw);
   if (!q) return verified.length ? { kind: "children", children: verified } : { kind: "refused", reason: "no_children" };
-  if (ALL_RE.test(q)) {
+  if (ALL_RE.test(q) || ALL_RE.test(raw.toLowerCase().replace(/\s+/g, " "))) {
     if (verified.length) return { kind: "children", children: verified };
     return all.length ? { kind: "unverified", child: all[0] } : { kind: "refused", reason: "no_children" };
   }
