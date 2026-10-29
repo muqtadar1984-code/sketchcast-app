@@ -48,7 +48,7 @@ import {
   P_WEEK_TODO,
 } from "./shell/parent-lines";
 import { childWorkItems, isDoneStatus, uniqueWork, type ChildWorkItem, type ChildWorkRows } from "@/utils/child-work";
-import { MIN_ASSIGNED, type LearnerHealth } from "@/utils/school-health";
+import { MIN_ASSIGNED, type LearnerHealth, type RiskReason } from "@/utils/school-health";
 import type { ChildMasteryRow } from "./parent-mastery";
 
 export type Fact = Record<string, string | number | boolean | null>;
@@ -191,19 +191,23 @@ export function noticesBlock(child: SkChild, notices: ChildNotice[] | null, loca
 
 // ── child.risk ──────────────────────────────────────────────────────────────
 
-/** school-health's reason text → the parent's language (the rule is the same). */
-export function localizeReason(reason: string, locale: string): string {
-  let m = reason.match(/^(\d+)% completion$/);
-  if (m) return lineFor(P_R_COMPLETION, locale, { pct: m[1] });
-  m = reason.match(/^inactive (\d+)d$/);
-  if (m) return lineFor(P_R_INACTIVE, locale, { days: m[1] });
-  if (reason === "never started") return lineFor(P_R_NEVER, locale);
-  m = reason.match(/^avg score (\d+)%$/);
-  if (m) return lineFor(P_R_AVG, locale, { pct: m[1] });
-  if (reason === "scores declining") return lineFor(P_R_DECLINING, locale);
-  m = reason.match(/^(\d+) overdue$/);
-  if (m) return lineFor(P_R_OVERDUE, locale, { n: m[1] });
-  return reason;
+/** A school-health reason CODE → the parent's language (the rule is the
+ *  same; S5 2026-10-29: by key, no longer by matching the English text). */
+export function localizeReason(reason: RiskReason, locale: string): string {
+  switch (reason.code) {
+    case "completion":
+      return lineFor(P_R_COMPLETION, locale, { pct: reason.pct });
+    case "inactive":
+      return lineFor(P_R_INACTIVE, locale, { days: reason.days });
+    case "never_started":
+      return lineFor(P_R_NEVER, locale);
+    case "avg_score":
+      return lineFor(P_R_AVG, locale, { pct: reason.pct });
+    case "declining":
+      return lineFor(P_R_DECLINING, locale);
+    case "overdue":
+      return lineFor(P_R_OVERDUE, locale, { n: reason.n });
+  }
 }
 
 export type RiskVerdict = "at_risk" | "did_well" | "on_track" | "no_work";
@@ -231,7 +235,7 @@ export function riskBlock(child: SkChild, h: LearnerHealth, locale: string): Blo
     avgScorePct: h.avg == null ? null : Math.round(h.avg * 100),
   };
   if (verdict === "no_work") return { summary: lineFor(P_RISK_NO_WORK, locale, { name }), facts: [fact] };
-  if (verdict === "at_risk") return { summary: lineFor(P_RISK_AT_RISK, locale, { name, reasons: h.reasons.map((r) => localizeReason(r, locale)).join(", ") }), facts: [fact] };
+  if (verdict === "at_risk") return { summary: lineFor(P_RISK_AT_RISK, locale, { name, reasons: (h.codes ? h.codes.map((r) => localizeReason(r, locale)) : h.reasons).join(", ") }), facts: [fact] };
   if (verdict === "did_well")
     return {
       summary: lineFor(P_RISK_WELL, locale, { name, reasons: well.map((w) => lineFor(w.kind === "completion" ? P_R_COMPLETION : P_R_AVG, locale, { pct: w.pct })).join(", ") }),

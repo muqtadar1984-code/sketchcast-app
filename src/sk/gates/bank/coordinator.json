@@ -1,0 +1,1278 @@
+[
+ {
+  "id": "c-health-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "health",
+  "text": "how is my grade doing",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "grade 5",
+    "learners 8",
+    "classes 2",
+    "At risk: 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-health-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "health",
+  "text": "how is grade 5 doing",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "grade 5",
+    "learners 8",
+    "At risk: 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-health-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "health",
+  "text": "give me a school overview",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "grade 5",
+    "learners 8"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-health-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "health",
+  "text": "bagaimana tahun 5",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "tahun 5",
+    "murid 8",
+    "Berisiko: 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-health-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "health",
+  "text": "كيف حال الصف 5",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "8",
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-health-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "health",
+  "text": "Summarise how my year group is getting on",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "8",
+    "3"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.health"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-health-07",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "health",
+  "text": "school snapshot",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "grade 5",
+    "learners 8"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "who's at risk",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "At risk in grade 5: 3",
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "who's at risk in grade 5",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "At risk in grade 5: 3",
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "list the at-risk students",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "anyone at risk",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "at_risk",
+  "text": "siapa yang berisiko",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "tahun 5",
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "at_risk",
+  "text": "senarai murid berisiko",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "tahun 5",
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-07",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "at_risk",
+  "text": "من هم الطلاب المتعثرون",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "3",
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-risk-08",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "Which of my grade 5 learners haven't started anything?",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "learners.risk",
+     "args": {
+      "grade": "5"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-risk-09",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "Who should I follow up with first in grade 5?",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "learners.risk",
+     "args": {
+      "grade": "5"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-flags-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "which teachers have marking piling up",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar",
+    "3 to grade"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-flags-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "teacher flags",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-flags-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "teacher_flags",
+  "text": "guru mana yang perlu bantuan",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-flags-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "teacher_flags",
+  "text": "المعلمون المتأخرون في التصحيح",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-flags-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "Are any grade 5 teachers behind with marking?",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.health",
+     "args": {
+      "focus": "teachers",
+      "grade": "5"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-flags-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "teachers with a marking backlog",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-cost-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "cost",
+  "text": "how much have we spent on kits",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "grade 5",
+    "kits 2",
+    "$0.80"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-cost-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "cost",
+  "text": "show the generation cost",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "kits 2",
+    "$0.80"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-cost-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "cost",
+  "text": "berapa kos kit",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "kit 2",
+    "$0.80"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-cost-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "cost",
+  "text": "ما تكلفة الحزم",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "2",
+    "$0.80"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-cost-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "cost",
+  "text": "What has grade 5 cost us in generation this month?",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "0.80"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.cost"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-cost-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "cost",
+  "text": "cost of our kits",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "$0.80"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-gaps-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "gaps",
+  "text": "what are the shelf gaps",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History, grade 5",
+    "Physical Education, grade 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-gaps-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "gaps",
+  "text": "which subjects need books",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Physical Education"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-gaps-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "gaps",
+  "text": "buku apa yang tiada",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Physical Education",
+    "tahun 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-gaps-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "gaps",
+  "text": "ما الكتب الناقصة",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Physical Education"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-gaps-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "gaps",
+  "text": "Is anything on the grade 5 timetable missing a book?",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.gaps",
+     "args": {
+      "grade": "5"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-gaps-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "gaps",
+  "text": "do we have any gaps on the shelf",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Physical Education"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-trend-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "trend",
+  "text": "school trend",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "grade 5",
+    "approximate",
+    "due 8",
+    "submitted 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-trend-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "trend",
+  "text": "trend for grade 5",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "grade 5",
+    "due 8",
+    "submitted 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-trend-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "trend",
+  "text": "trend tugasan",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "tahun 5",
+    "8",
+    "dihantar 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-trend-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "trend",
+  "text": "كيف يسير الاتجاه",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "8",
+    "3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-trend-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "trend",
+  "text": "Is grade 5 handing work in on time more or less than before?",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "8",
+    "3"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.trend",
+     "args": {
+      "grade": "5"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-trend-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "trend",
+  "text": "how are we trending",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "grade 5",
+    "due 8"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "assignments",
+  "text": "what's overdue",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "grade 5",
+    "Done 5 of 8",
+    "overdue 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "assignments",
+  "text": "how are the assignments going",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "grade 5",
+    "Done 5 of 8"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "assignments",
+  "text": "overdue homework",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "overdue 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "assignments",
+  "text": "homework status",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "Done 5 of 8"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "assignments",
+  "text": "tugasan yang lewat",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "Siap 5 daripada 8",
+    "lewat 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "assignments",
+  "text": "apa yang lewat",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "lewat 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-07",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "assignments",
+  "text": "الواجبات المتأخرة",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "5",
+    "8"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-assign-08",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "assignments",
+  "text": "How many grade 5 pupils still owe the Science quiz?",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "3"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "assignments.status",
+     "args": {
+      "grade": "5"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-tt-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "timetable",
+  "text": "who is teaching now",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P2",
+    "lessons 2",
+    "5 Amanah Science (Cikgu Aminah)",
+    "5 Bestari Mathematics (Cikgu Bakar)"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-tt-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "timetable",
+  "text": "what's on now",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P2",
+    "5 Amanah Science",
+    "5 Bestari Mathematics"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-tt-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "timetable",
+  "text": "what's on next",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P3",
+    "5 Amanah History"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-tt-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "timetable",
+  "text": "kelas apa sekarang",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P2",
+    "5 Amanah"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-tt-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "timetable",
+  "text": "ما الحصص الآن",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P2",
+    "5 Bestari"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "c-tt-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "timetable",
+  "text": "Which grade 5 classes have a lesson right now?",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "5 Amanah",
+    "5 Bestari"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "timetable.now_next",
+     "args": {
+      "grade": "5"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-notice-01",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "notices",
+  "text": "post a notice to the whole school: Grade 5 camp forms are due on Monday.",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "camp forms"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "school"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "Grade 5 camp forms are due on Monday."
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-notice-02",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "notices",
+  "text": "send a staff notice: please submit grade 5 marks by Friday",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "marks"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "staff"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "Please submit grade 5 marks by Friday.",
+      "audience": "staff"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-notice-03",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ms",
+  "category": "notices",
+  "text": "hantar notis kepada semua guru: mesyuarat panitia Sains esok.",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "mesyuarat"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "staff"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "Mesyuarat panitia Sains esok.",
+      "audience": "staff"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-notice-04",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "ar",
+  "category": "notices",
+  "text": "أرسل إشعارًا للمعلمين: اجتماع معلمي الصف الخامس غدًا.",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "staff"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "اجتماع معلمي الصف الخامس غدًا.",
+      "audience": "staff"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-notice-05",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "notices",
+  "text": "post a school-wide announcement: the Science fair is next week",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "Science fair"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "school"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "The Science fair is next week."
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "c-notice-06",
+  "suite": "grounded",
+  "as": "coordinator",
+  "lang": "en",
+  "category": "notices",
+  "text": "send a staff notice: grade 5 reports are ready to check",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "reports"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "staff"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "Grade 5 reports are ready to check.",
+      "audience": "staff"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ }
+]

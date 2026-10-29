@@ -186,6 +186,19 @@ export const NOTICE_YOUR_SCHOOL: Line = {
 };
 
 /** Dictionary key (`sk.shell.notice.<key>`) → table, for the parity test. */
+export const NOTICE_NOT_UNTIL: Line = {
+  en: "Nothing is posted until the leader clicks Confirm on the card.",
+  ms: "Tiada apa-apa disiarkan sehingga pemimpin menekan Sahkan pada kad.",
+  "ms-arab": "تيادا اڤ-اڤ دسيارکن سهيڠݢ ڤميمڤين منکن سهکن ڤد کد.",
+  ar: "لا يُنشر شيء حتى ينقر القائد على «تأكيد» في البطاقة.",
+  fr: "Rien n'est publié tant que le responsable n'a pas cliqué sur Confirmer sur la carte.",
+  es: "No se publica nada hasta que el responsable pulse Confirmar en la tarjeta.",
+  pt: "Nada é publicado até o responsável clicar em Confirmar no cartão.",
+  te: "నాయకుడు కార్డుపై నిర్ధారించు నొక్కే వరకు ఏదీ పోస్ట్ చేయబడదు.",
+  mr: "प्रमुख कार्डवरील निश्चित करा दाबेपर्यंत काहीही पोस्ट होत नाही.",
+  hi: "जब तक प्रमुख कार्ड पर पुष्टि करें नहीं दबाते, तब तक कुछ भी पोस्ट नहीं होता।",
+};
+
 export const NOTICE_LINE_TABLES: Record<string, Line> = {
   cardTitleSchool: NOTICE_CARD_TITLE_SCHOOL,
   cardTitleStaff: NOTICE_CARD_TITLE_STAFF,
@@ -200,4 +213,5 @@ export const NOTICE_LINE_TABLES: Record<string, Line> = {
   dateUnparsed: NOTICE_DATE_UNPARSED,
   datePassed: NOTICE_DATE_PASSED,
   yourSchool: NOTICE_YOUR_SCHOOL,
+  notPostedUntil: NOTICE_NOT_UNTIL,
 };
