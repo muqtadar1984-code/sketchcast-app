@@ -1387,24 +1387,6 @@
       "chooseTeacher": "Choisir un enseignant…",
       "grant": "Accorder l'accès"
     },
-    "briefing": {
-      "launcher": "Briefing école",
-      "launcherHint": "Posez une question sur votre école",
-      "subtitle": "Des réponses tirées des données réelles de votre école",
-      "reading": "Lecture des dernières données de l'école…",
-      "unavailable": "Le briefing n'est pas disponible pour le moment.",
-      "unreachable": "Impossible de joindre le briefing. Réessayez dans un instant.",
-      "failed": "Le briefing est indisponible pour le moment.",
-      "readAloud": "Lire à voix haute",
-      "stopReading": "Arrêter la lecture",
-      "stop": "Arrêter",
-      "listening": "Écoute…",
-      "placeholder": "Une question sur l'achèvement, les élèves en difficulté, les corrections…",
-      "ask": "Demander",
-      "micStart": "Poser votre question à l'oral",
-      "micStop": "Arrêter l'écoute",
-      "footnote": "N'utilise que les statistiques déjà visibles ici. Chaque briefing est enregistré dans l'audit des accès."
-    },
     "assistant": {
       "launcher": "Assistant",
       "launcherHint": "Ouvrir l'assistant pédagogique IA",

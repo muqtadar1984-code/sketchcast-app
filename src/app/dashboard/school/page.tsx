@@ -2,9 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
-import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor, platformConsoleEnabled } from "@/utils/flags";
+import { schoolAnalyticsEnabledFor, platformConsoleEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
-import { SchoolAssistantLauncher } from "./school-assistant";
 import ReportIssueWidget from "../report-issue-widget";
 import AdminHelpNote from "../admin-help-note";
 import { getDictionary } from "@/i18n/dictionaries";
@@ -59,8 +58,6 @@ export default async function SchoolAnalyticsPage() {
   // One-hat mode: the School pages belong to the leadership hats.
   const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "leadership");
   if (hatAway) redirect(hatAway);
-  // The briefing assistant rides its own per-tenant gate on top of the suite.
-  const assistantOn = await schoolAssistantEnabledFor(supabase, profile?.school_id as string | null);
   const isAdmin = role === "school_admin";
 
   // Coordinator access is a GRANT (coordinator_scope rows), not an identity —
@@ -347,14 +344,9 @@ export default async function SchoolAnalyticsPage() {
         </div>
       </main>
 
-      {/* Floating, bottom-RIGHT: the School briefing bot (replaces the teaching
-          Assistant here). Bottom-LEFT: "Report a problem", so leadership can
-          raise issues too. */}
-      {assistantOn && (
-        <SchoolAssistantLauncher
-          t={{ ...dict.school.briefing, close: dict.common.close, loading: dict.common.loading }}
-        />
-      )}
+      {/* Bottom-RIGHT: the SK launcher (the dashboard layout's; SK S5 retired
+          the School Briefing bot that sat here). Bottom-LEFT: "Report a
+          problem", so leadership can raise issues too. */}
       {platformConsoleEnabled() && <ReportIssueWidget />}
     </div>
   );

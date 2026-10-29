@@ -1387,24 +1387,6 @@
       "chooseTeacher": "Escolha um professor…",
       "grant": "Conceder acesso"
     },
-    "briefing": {
-      "launcher": "Resumo da escola",
-      "launcherHint": "Pergunte sobre sua escola",
-      "subtitle": "Respostas com os dados atuais da sua escola",
-      "reading": "Lendo os dados mais recentes da escola…",
-      "unavailable": "O resumo não está disponível agora.",
-      "unreachable": "Não foi possível abrir o resumo. Tente de novo em instantes.",
-      "failed": "O resumo está indisponível no momento.",
-      "readAloud": "Ler em voz alta",
-      "stopReading": "Parar a leitura",
-      "stop": "Parar",
-      "listening": "Ouvindo…",
-      "placeholder": "Pergunte sobre conclusão, alunos em risco, correções…",
-      "ask": "Perguntar",
-      "micStart": "Fale sua pergunta",
-      "micStop": "Parar de ouvir",
-      "footnote": "Usa apenas as estatísticas que você já vê aqui. Todo resumo é registrado na auditoria de acesso."
-    },
     "assistant": {
       "launcher": "Assistente",
       "launcherHint": "Abrir o Assistente de Ensino com IA",

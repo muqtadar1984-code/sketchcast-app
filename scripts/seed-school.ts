@@ -534,10 +534,11 @@ async function main() {
         slug: SLUG,
         display_name: NAME,
         status: "active",
-        // Per-tenant features — leadership suite, briefing assistant, calendar,
-        // timetable — for THIS school only (the *EnabledFor helpers), no global
-        // env flips.
-        config: { school_analytics: true, school_assistant: true, calendar: true, timetable_enabled: true },
+        // Per-tenant features — leadership suite, calendar, timetable — for THIS
+        // school only (the *EnabledFor helpers), no global env flips. (The
+        // School Briefing assistant's `school_assistant` key is gone: SK S5
+        // retired the panel; SK answers leaders' school questions.)
+        config: { school_analytics: true, calendar: true, timetable_enabled: true },
       })
       .select("id")
       .single(),
