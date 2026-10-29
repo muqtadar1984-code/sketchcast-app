@@ -29,14 +29,18 @@ vi.mock("@/utils/assistant/providers/anthropic", async () => {
 import { POST as turnPOST } from "@/app/api/sk/shell/turn/route";
 import { fakeSession, readEvents } from "@/sk/shell/__tests__/fixtures";
 import { allRows, COORD, GRADE4, GRADE6, PA, SCH_A, SCHOOL_B } from "@/sk/capabilities/__tests__/leader-fixtures";
+// S5 slice B: a leader read is metered (analytics_access_log) — a real-ish table.
+import { fakeAuditLog, withAuditLog, type AuditLogFake } from "@/sk/shell/__tests__/audit-log-fake";
 
-const ENV = ["FEATURE_SK", "SK_ROLES", "SK_ALLOWED_EMAILS", "SK_SHELL_CONSUMER", "SK_SHELL_SECRET", "SK_AUDIT", "FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_PARENT_PORTAL"];
+const ENV = ["FEATURE_SK", "SK_ROLES", "SK_ALLOWED_EMAILS", "SK_SHELL_CONSUMER", "SK_SHELL_SECRET", "SK_AUDIT", "FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_PARENT_PORTAL", "FEATURE_SCHOOL_ANALYTICS"];
 const saved: Record<string, string | undefined> = {};
 const EMAIL = "leader@school.example";
 
+let aal: AuditLogFake;
 const session = (who: { id: string; role: string; scope?: Array<{ grade: string; subject: string | null }> }) => {
   const rows = allRows();
-  return fakeSession(
+  aal = fakeAuditLog({ user: who.id });
+  return withAuditLog(fakeSession(
     {
       ...rows,
       // The fake ignores filters: the profile read and the teacher-name read share this table.
@@ -45,7 +49,7 @@ const session = (who: { id: string; role: string; scope?: Array<{ grade: string;
       parent_links: [],
     } as never,
     { user: { id: who.id, email: EMAIL, email_confirmed_at: "2026-01-01T00:00:00Z" } },
-  );
+  ), aal);
 };
 
 beforeEach(() => {
@@ -59,6 +63,8 @@ beforeEach(() => {
   process.env.SK_SHELL_SECRET = "leader-turn-test-secret-of-adequate-length";
   process.env.FEATURE_ROLE_HATS = "true";
   process.env.FEATURE_DIARY = "true";
+  // S5 slice B: the leader reads need school analytics (the school pages' gate).
+  process.env.FEATURE_SCHOOL_ANALYTICS = "true";
   mocks.constructed = [];
   mocks.hat = undefined;
   mocks.createAdminClient.mockImplementation(() => {
@@ -91,6 +97,7 @@ describe("leader turn — deterministic school / scope answers", () => {
     for (const t of SCHOOL_B) expect(JSON.stringify(ev)).not.toContain(t);
     expect(JSON.stringify(ev)).not.toMatch(/@mail\.example/);
     expect(mocks.constructed).toEqual([]);
+    expect(aal.inserted).toHaveLength(1); // S5 slice B: metered once
   });
 
   it('coordinator hat: "who\'s at risk in grade 5" → learners.risk in scope, none of their own grade-6 class', async () => {
@@ -112,5 +119,6 @@ describe("leader turn — deterministic school / scope answers", () => {
     expect(ev.find((e) => e.type === "meta")).toMatchObject({ intent: "ask" });
     expect((ev.find((e) => e.type === "meta")?.capabilities as string[]).includes("school.health")).toBe(false);
     expect(mocks.constructed.length).toBe(1);
+    expect(aal.rows).toHaveLength(0); // S5 slice B: a teacher-hat turn is never metered
   });
 });
