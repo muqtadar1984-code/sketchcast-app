@@ -22,6 +22,10 @@ export const runtime = "nodejs";
 //   * idempotent on eventId (sk_events): a repeat replays the stored reply and
 //     grades nothing again;
 //   * sk_objective_mastery is recomputed for the item's objective (rule sk-b5.1).
+//   * S6: the attempt and the mastery are EDUCATIONAL RECORDS (Final Plan
+//     §9.5) and are kept with or without consent; a misconception rung 1
+//     names becomes an sk_learning_facts row ONLY with `transcripts` consent
+//     (src/sk/facts.ts noteLearning).
 // The item must be one the kit map assigns to this kit. Not metered: marking
 // and the ladder are prepared teaching with no model call.
 
@@ -57,6 +61,8 @@ export async function POST(request: Request) {
       eventId: body.eventId,
       response,
       now: deps.now ?? Date.now,
+      // S6: a misconception rung 1 names is remembered — with consent only.
+      noteLearning: deps.noteLearning ? (note) => deps.noteLearning!(ready.admin, g.userId, note) : undefined,
     });
     return NextResponse.json(reply.body, { status: reply.status });
   } catch (e) {

@@ -53,7 +53,34 @@ export type LoopDeps = {
   entitlements?: EntitlementSource;
   /** FEATURE_SK_ALLOWANCE: refuse live turns once a grant's allowance is spent. Off → counted, never refused. */
   allowanceEnforced?: boolean;
+  /** S6 (Final Plan §8.1, §9.5): may this student's tutor history
+   * (sk_sessions.history) be KEPT beyond the turn? server.ts wires the
+   * `transcripts` consent check (src/sk/consent.ts memoryAllowed) whenever the
+   * Supabase store is on. false (or a failed check) → the turn neither reads
+   * stored history nor persists its own. Absent → kept (the in-memory wiring,
+   * which persists nothing past the process). */
+  keepHistory?: (studentId: string) => Promise<boolean>;
 };
+
+/** S6: a turn's events as the replay guard may store them WITHOUT consent:
+ * the spoken words ("text" — SK's answer, and "Did you say …?" echoes the
+ * student's own transcript) and the asides ("tal") are dropped; meta and done
+ * stay, so a replay still settles the client without re-running the turn. */
+export function transcriptFree(events: SseEvent[]): SseEvent[] {
+  return events.filter((e) => e.event !== "text" && e.event !== "tal");
+}
+
+/** S6: whether this turn may read and keep tutor history. A check that throws
+ * keeps nothing (fail closed). */
+export async function historyAllowed(deps: Pick<LoopDeps, "keepHistory">, studentId: string): Promise<boolean> {
+  if (!deps.keepHistory) return true;
+  try {
+    return (await deps.keepHistory(studentId)) === true;
+  } catch (e) {
+    console.error("[sk] consent check failed; keeping no history:", (e as Error).message);
+    return false;
+  }
+}
 
 export class LoopError extends Error {
   constructor(
@@ -605,6 +632,10 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
   let modelMs = 0;
   let retrievalMs = 0;
   let cancelled = false;
+  // S6: without `transcripts` consent the turn keeps nothing beyond itself —
+  // no stored history reaches the model and none is saved below.
+  const keepHistory = await historyAllowed(deps, s.studentId);
+  if (!keepHistory) s.history = [];
 
   // B8: live help (the router and teacher models, retrieval, asides) needs
   // TUTOR access with allowance left; commands, routes and answers are
@@ -771,6 +802,7 @@ export async function* runTurn(deps: LoopDeps, s: SkSession, input: TurnInput): 
   }
 
   s.machine = m;
+  if (!keepHistory) s.history = [];
   await deps.store.saveSession(s);
   // B8 write point: one live turn per turn that reached the router or the
   // teacher (cancelled or not — the call was made), plus the asides it drew.

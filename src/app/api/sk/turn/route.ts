@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isEventId } from "@/sk/ids";
-import { runTurn } from "@/sk/loop";
+import { historyAllowed, runTurn, transcriptFree } from "@/sk/loop";
 import { gate, loopDepsFor, readBody, skDeps } from "@/sk/server";
 import type { SseEvent } from "@/sk/types";
 import { parseCursor } from "../command/route";
@@ -74,7 +74,9 @@ export async function POST(request: Request) {
       };
       try {
         for await (const ev of runTurn(deps, s, { eventId, utterance, cursor, signal: abort.signal })) send(ev);
-        await deps.store.completeEvent(s.id, eventId, "turn", sent);
+        // S6: without transcripts consent the stored replay keeps no words.
+        const keep = await historyAllowed(deps, s.studentId);
+        await deps.store.completeEvent(s.id, eventId, "turn", keep ? sent : transcriptFree(sent));
       } catch (e) {
         console.error("[sk] turn failed:", e);
         send({ event: "error", data: { message: "Something went wrong with that turn." } });

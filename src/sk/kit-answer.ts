@@ -30,6 +30,14 @@
 // try = needs_work. The latest finished check decides (sk-b5.1, unchanged),
 // so the ladder's check question can lift a needs_work. Unmapped items (no
 // objective key) are recorded with objective_key null and write no mastery.
+//
+// S6 — MEMORY AND CONSENT (Final Plan §9.5). The attempt (item_attempts) and
+// the mastery (sk_objective_mastery) are EDUCATIONAL RECORDS: §9.5 keeps them
+// on their existing rules, consent or not. What needs `transcripts` consent is
+// SK's conversational memory: a kit session is created with history [] and
+// this path never writes a turn to it; the one memory it can make — the
+// misconception rung 1 names — goes through input.noteLearning, which checks
+// consent first and no-ops without it.
 
 import { GRADE_RULE_VERSION, gradeItem, MAX_ATTEMPTS } from "./grade";
 import type { ItemBank } from "./items";
@@ -37,6 +45,7 @@ import { stripItem } from "./items";
 import type { KitGrade, KitPractiseItem, KitRung } from "./kit-player";
 import { kitItemIds } from "./kit-view";
 import type { KitManifest } from "./manifest/derive";
+import type { LearningNote } from "./facts";
 import type { RemediationBank } from "./remediation-bank";
 import { chosenKeyOf, ladderHistory, remediation } from "./remediation";
 import { initialMachine } from "./state";
@@ -87,6 +96,10 @@ export type KitAnswerInput = {
   eventId: string;
   response: unknown;
   now: () => number;
+  /** S6: record a learning fact (src/sk/facts.ts noteLearning, which checks
+   *  `transcripts` consent first and no-ops without it). Absent → nothing is
+   *  remembered. A failure here never fails the marking. */
+  noteLearning?: (note: LearningNote) => Promise<unknown>;
 };
 
 const FINISHED = (a: Attempt) => a.outcome === "correct" || a.outcome === "needs_review";
@@ -148,6 +161,7 @@ async function markOnce(input: KitAnswerInput, round = 0): Promise<KitAnswerRepl
   if (!done) {
     if (facts) {
       const step = remediation(facts, chosenKeyOf(facts, input.response), attemptNo, manifest, { ...ladderOpts, ...history });
+      await noteMisconception(input, step.rungs, step.state.named, objectiveKey, attemptNo);
       rungs = await withCheckItems(step.rungs, input.items);
       reveal = step.reveal;
     } else if (attemptNo >= MAX_ATTEMPTS) {
@@ -155,6 +169,25 @@ async function markOnce(input: KitAnswerInput, round = 0): Promise<KitAnswerRepl
     }
   }
   return { status: 200, body: { outcome: grade.outcome, score: grade.score, max: grade.max, attemptNo, triesLeft: done ? 0 : Math.max(0, MAX_ATTEMPTS - attemptNo), rungs, reveal } };
+}
+
+/** S6: when rung 1 NAMES a misconception, remember it (with consent only —
+ *  noteLearning decides). The fact holds the article's misconception id and
+ *  words, never the student's answer. */
+async function noteMisconception(input: KitAnswerInput, rungs: KitRung[], named: string | null, objectiveKey: string | null, attemptNo: number): Promise<void> {
+  if (!input.noteLearning) return;
+  const r1 = rungs.find((r) => r.rung === 1 && r.kind === "misconception");
+  if (!r1 || r1.kind !== "misconception") return;
+  try {
+    await input.noteLearning({
+      kind: "misconception",
+      objectiveKey,
+      detail: { item_id: input.itemId, misconception_id: named, misconception: r1.misconception.slice(0, 500), attempt_no: attemptNo },
+      source: "sk.kit.remediation",
+    });
+  } catch (e) {
+    console.error("[sk] noting a misconception failed:", (e as Error).message);
+  }
 }
 
 /** Rung 4 carries its question as the student sees it (no answer key). */

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { runSkMemorySweep } from "@/sk/memory-sweep";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { renderEmail } from "@/utils/lifecycle/copy";
 import { selectSegment, type Segment, type UserFacts } from "@/utils/lifecycle/segments";
@@ -55,12 +56,17 @@ async function run(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // SK S6: the daily SK memory retention sweep (migration 0173). Independent
+  // of the emails below — it runs even when they send nothing — skipped on a
+  // dry run, and guarded: a failure only logs (src/sk/memory-sweep.ts).
+  const skMemory = new URL(request.url).searchParams.get("dry") === "1" ? null : await runSkMemorySweep(createAdminClient);
+
   const sinceRaw = process.env.LIFECYCLE_EMAILS_SINCE;
   if (!sinceRaw) {
     // Fail closed. Existing users were contacted by hand and must never be
     // swept up by a cron that lost its cutoff.
     return NextResponse.json(
-      { skipped: "LIFECYCLE_EMAILS_SINCE not set — sending nothing" },
+      { skipped: "LIFECYCLE_EMAILS_SINCE not set — sending nothing", skMemory },
       { status: 200 },
     );
   }
@@ -157,7 +163,7 @@ async function run(request: Request) {
     sent += 1;
   }
 
-  return NextResponse.json({ since: since.toISOString(), candidates: (data ?? []).length, sent, failed });
+  return NextResponse.json({ since: since.toISOString(), candidates: (data ?? []).length, sent, failed, skMemory });
 }
 
 // Vercel Cron issues a GET; POST is kept for manual/dry runs via curl.
