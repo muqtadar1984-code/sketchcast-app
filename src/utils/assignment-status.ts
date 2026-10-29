@@ -155,7 +155,7 @@ export function assignmentStatus(input: AssignmentStatusInput): AssignmentStatus
   return { shares: out, totals };
 }
 
-export type DueFilter = "overdue" | "today" | "week";
+export type DueFilter = "overdue" | "today" | "week" | "tomorrow";
 
 /** Civil day index in the given offset. */
 const dayIndex = (ms: number, offsetMin: number) => Math.floor((ms + offsetMin * MINUTE) / DAY);
@@ -164,6 +164,9 @@ const dayIndex = (ms: number, offsetMin: number) => Math.floor((ms + offsetMin *
  * The `due` argument: "overdue" = past due with someone not done; "today" =
  * due in the current civil day (UTC+8 by default); "week" = due from now
  * through the next 7 days. A share with no due date never matches a filter.
+ * SK S6 (additive): "tomorrow" = due in the NEXT civil day in the same offset
+ * (UTC+8 by default: Kuala Lumpur time), so 23:30 KL on Tuesday asks about
+ * Wednesday even though it is already Wednesday in UTC+9.
  */
 export function filterByDue(rows: ShareStatus[], due: DueFilter | undefined, now: Date, tzOffsetMinutes = 480): ShareStatus[] {
   if (!due) return rows;
@@ -175,6 +178,7 @@ export function filterByDue(rows: ShareStatus[], due: DueFilter | undefined, now
     if (Number.isNaN(d)) return false;
     if (due === "overdue") return d < t && r.notDone > 0;
     if (due === "today") return dayIndex(d, tzOffsetMinutes) === today;
+    if (due === "tomorrow") return dayIndex(d, tzOffsetMinutes) === today + 1;
     return d >= t && d <= t + 7 * DAY;
   });
 }

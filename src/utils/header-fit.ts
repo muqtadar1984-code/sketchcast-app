@@ -17,8 +17,9 @@
 // strip rather than back to an overlap.
 
 /** Bar chrome that is always present: scrollbar, padding, brand, gaps (273) +
- *  the bell, Tour and Sign out every viewer carries with their gaps (217). */
-const BASE = 490;
+ *  the bell, Tour and Sign out every viewer carries with their gaps (217) +
+ *  the Settings icon link (SK S6 slice C: 36px + a 12px gap). */
+const BASE = 538;
 const LANGUAGE_PICKER = 189;
 const HAT_SWITCHER = 175;
 const PER_TAB = 88;

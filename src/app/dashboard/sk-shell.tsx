@@ -43,7 +43,10 @@ import type { Dictionary } from "@/i18n/dictionaries";
 import { tourForRole, type TourCopy } from "@/tour/definitions";
 import type { SkActRequest, SkActResponse, SkBoardMove, SkTurnEvent, SkTurnRequest, SkTutorMove } from "@/sk/shell/types";
 import { SK_INTRO_TOUR } from "@/sk/shell/tour";
-import { collect, localeFromLang } from "@/sk/shell/client/collector";
+import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector";
+// S6 slice C: the preferences follow the user (workflow facts), with a
+// one-time migration of this browser's localStorage values (prefs.ts).
+import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createMicGate, type MicGate } from "@/sk/shell/client/mic-gate";
 import { runNarration, skIntroScript } from "@/sk/shell/client/narration";
@@ -83,7 +86,24 @@ type Card = {
   result?: string;
 };
 
-type ContextReply = { ready?: boolean; greeting?: string; capabilities?: string[]; memory?: string; sessionId?: string; announced?: string };
+type ContextReply = { ready?: boolean; greeting?: string; capabilities?: string[]; memory?: string; sessionId?: string; announced?: string; prefs?: StoredPrefs | null };
+
+/** S6 slice C: this browser's stored preference values (localStorage). */
+function readLocalPrefs(): StoredPrefs {
+  const out: StoredPrefs = {};
+  for (const k of PREF_KEYS) {
+    const v = parseLocalFlag(readText(PREF_LOCAL_KEY[k]));
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+/** S6 slice C: store a preference on the server (the user's workflow facts). */
+function savePref(patch: Partial<Record<SkPrefKey, boolean>>): Promise<boolean> {
+  return fetch("/api/sk/prefs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) })
+    .then((r) => r.ok)
+    .catch(() => false);
+}
 
 const LS_READ_ALOUD = "sk.readAloud";
 /** S2: the server-signed note of kits the greeting already announced (ids only). */
@@ -410,7 +430,7 @@ export default function SkShell({
         const res = await fetch("/api/sk/shell/context", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ path: window.location.pathname, memory: saved?.memory, announced: readText(LS_ANNOUNCED), tutor: tutorRef.current?.state() }),
+          body: JSON.stringify({ path: window.location.pathname, memory: saved?.memory, announced: readText(LS_ANNOUNCED), tutor: tutorRef.current?.state(), clock: clockFrom(new Date()) }),
         });
         const d = (await res.json().catch(() => ({}))) as ContextReply;
         if (cancelled) return;
@@ -429,6 +449,22 @@ export default function SkShell({
         if (d.memory) keepMemory(d.memory, d.sessionId ?? null);
         else if (saved) memoryRef.current = saved.memory;
         if (d.announced) writeText(LS_ANNOUNCED, d.announced);
+        // S6 slice C: the server's preferences win; a value only this browser
+        // holds is migrated up once (prefs.ts resolvePrefs). A reply without
+        // prefs (unreadable) changes nothing.
+        if (d.prefs !== undefined) {
+          const r = resolvePrefs(d.prefs === null ? null : pick(d.prefs), readLocalPrefs(), readText(PREFS_MIGRATED_LOCAL_KEY) === "1");
+          readAloudRef.current = r.prefs.readAloud;
+          setReadAloud(r.prefs.readAloud);
+          speechRef.current?.setEnabled(r.prefs.readAloud);
+          handsFreeRef.current = r.prefs.handsFree;
+          setHandsFree(r.prefs.handsFree);
+          if (d.prefs !== null) {
+            for (const k of PREF_KEYS) writeFlag(PREF_LOCAL_KEY[k], r.prefs[k]);
+            if (Object.keys(r.migrate).length) void savePref(r.migrate).then((ok) => ok && writeText(PREFS_MIGRATED_LOCAL_KEY, "1"));
+            else writeText(PREFS_MIGRATED_LOCAL_KEY, "1");
+          }
+        }
         const greeting = (d.greeting && String(d.greeting).trim()) || copy.greetingFallback;
         setEntries([{ id: uuid(), who: "sk", text: greeting }]);
         setCaption(lastSentence(greeting));
@@ -601,6 +637,7 @@ export default function SkShell({
     readAloudRef.current = nv;
     setReadAloud(nv);
     writeFlag(LS_READ_ALOUD, nv);
+    void savePref({ readAloud: nv });
     speechRef.current?.setEnabled(nv);
     // Off = an explicit stop (§2.6): whatever SK was saying ends now.
     if (!nv) speechRef.current?.stop();
@@ -611,6 +648,7 @@ export default function SkShell({
     handsFreeRef.current = nv;
     setHandsFree(nv);
     writeFlag(LS_HANDS_FREE, nv);
+    void savePref({ handsFree: nv });
     // Turning the opt-in OFF while listening hands-free ends the capture now.
     if (!nv && micModeRef.current === "handsFree") gateRef.current?.stop("manual");
   }

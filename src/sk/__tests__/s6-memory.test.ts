@@ -3,7 +3,7 @@
 // decisions 1–4, 7). The database side (RLS, the RPC, the trigger, the sweep
 // SQL) is held by the 0173 lint and the production dry run.
 // Run: node node_modules/vitest/vitest.mjs run src/sk/__tests__/s6-memory.test.ts
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { StubProvider } from "@/utils/assistant/providers/stub";
@@ -336,6 +336,29 @@ describe("nothing is sent unasked: no S6 code path can send mail or a push", () 
     "src/sk/memory-delete.ts",
     "src/sk/memory-sweep.ts",
     "src/app/api/sk/memory/route.ts",
+    // S6 slice C: the settings, the greeting suggestion, workflow facts in use.
+    "src/sk/prefs.ts",
+    "src/sk/settings.ts",
+    "src/sk/shell/suggest.ts",
+    "src/sk/shell/suggest-lines.ts",
+    "src/sk/shell/workflow.ts",
+    "src/app/api/sk/prefs/route.ts",
+    "src/app/api/sk/consent/route.ts",
+    "src/app/api/sk/school-memory/route.ts",
+    "src/app/api/sk/shell/context/route.ts",
+    "src/app/dashboard/settings/page.tsx",
+    "src/app/dashboard/settings/lines.ts",
+    "src/app/dashboard/settings/sk-privacy.tsx",
+    // slice B — Transcribe (the client half's network surface is pinned in
+    // src/utils/__tests__/transcribe.test.ts)
+    "src/app/api/sk/stt/url/route.ts",
+    "src/sk/speech/stt.ts",
+    "src/sk/speech/transcribe-presign.ts",
+    "src/sk/speech/transcribe-server.ts",
+    "src/utils/assistant/transcribe-client.ts",
+    "src/utils/assistant/event-stream.ts",
+    "src/utils/assistant/pcm16.ts",
+    "src/utils/assistant/voice-client.ts",
   ];
   const SENDERS = /from\s+["'](?:resend|nodemailer|@sendgrid\/[^"']+|postmark|web-push|@\/utils\/lifecycle\/send|@\/utils\/email[^"']*|@\/utils\/mail[^"']*)["']|\bnew Resend\(|sendLifecycleEmail|sendEmail\(|sendMail\(/;
 
@@ -348,11 +371,24 @@ describe("nothing is sent unasked: no S6 code path can send mail or a push", () 
       const src = readFileSync(path.join(ROOT, f), "utf8");
       for (const m of src.matchAll(/from\s+["'](\.\/[^"']+|@\/sk\/[^"']+)["']/g)) {
         const rel = m[1]!.startsWith("@/") ? m[1]!.replace("@/", "src/") : path.join(path.dirname(f), m[1]!);
-        seen.add(`${rel.replace(/\\/g, "/")}.ts`);
+        const base = rel.replace(/\\/g, "/");
+        seen.add(existsSync(path.join(ROOT, `${base}.ts`)) ? `${base}.ts` : `${base}.tsx`);
       }
     }
     expect(seen.size).toBeGreaterThan(0);
     for (const f of seen) expect(readFileSync(path.join(ROOT, f), "utf8"), f).not.toMatch(SENDERS);
+  });
+  it("S6 slice C: a suggestion reads no school.* tool, and lives only in the greeting the user opened", () => {
+    const suggest = readFileSync(path.join(ROOT, "src/sk/shell/suggest.ts"), "utf8");
+    // No school-wide (metered, S5) module is imported, and no school.* tool is named.
+    expect(suggest).not.toMatch(/from\s+["']@\/sk\/capabilities\/(school|school-figures)["']|school-meter/);
+    const tools = suggest.match(/SUGGEST_TOOLS = \[([^\]]*)\]/)?.[1] ?? "";
+    expect(tools).toContain("timetable.now_next");
+    expect(tools).not.toMatch(/school\./);
+    // Nothing in the engine, the workflow memory or the settings core calls out.
+    for (const f of ["src/sk/shell/suggest.ts", "src/sk/shell/workflow.ts", "src/sk/settings.ts", "src/sk/prefs.ts", "src/app/api/sk/shell/context/route.ts"]) {
+      expect(readFileSync(path.join(ROOT, f), "utf8"), f).not.toMatch(/\bfetch\(|XMLHttpRequest|navigator\.sendBeacon|new Notification\(|showNotification\(/);
+    }
   });
   it("the sweep is called from the cron BEFORE (and independent of) its email section", () => {
     const cron = readFileSync(path.join(ROOT, "src/app/api/lifecycle/reminders/route.ts"), "utf8");

@@ -51,19 +51,20 @@ const fail = (e: unknown): SkCapabilityResult => ({
 const str = (args: Record<string, unknown>, key: string): string | undefined =>
   typeof args[key] === "string" && (args[key] as string).trim() ? (args[key] as string).trim() : undefined;
 
-const DUE: readonly DueFilter[] = ["overdue", "today", "week"];
+// SK S6 (additive): "tomorrow" — the greeting suggestion's "due tomorrow".
+const DUE: readonly DueFilter[] = ["overdue", "today", "week", "tomorrow"];
 
 export const assignmentsStatus: SkCapability = {
   meta: {
     name: "assignments.status",
     description:
-      "How assignments stand, per class share: assigned, done, not done (with names), overdue, pending to grade, completion %. The teacher's own classes; with the principal hat the whole school, with the coordinator hat the coordinator's scope grades. Optionally one class, one generation, (leaders) one grade, or only those due overdue / today / this week.",
+      "How assignments stand, per class share: assigned, done, not done (with names), overdue, pending to grade, completion %. The teacher's own classes; with the principal hat the whole school, with the coordinator hat the coordinator's scope grades. Optionally one class, one generation, (leaders) one grade, or only those due overdue / today / tomorrow / this week.",
     parameters: {
       type: "object",
       properties: {
         classId: { type: "string", description: "Only this class (a teacher: one of their own)." },
         generationId: { type: "string", description: "Only this kit / quiz / worksheet." },
-        due: { type: "string", enum: ["overdue", "today", "week"], description: "Only shares due in this window." },
+        due: { type: "string", enum: ["overdue", "today", "week", "tomorrow"], description: "Only shares due in this window (tomorrow = the next day in Kuala Lumpur time)." },
         grade: { type: "string", description: 'Leaders only: only this grade, e.g. "5" or "Form 2".' },
       },
       additionalProperties: false,
