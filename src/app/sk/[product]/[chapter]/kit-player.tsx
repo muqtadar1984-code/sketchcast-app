@@ -27,20 +27,26 @@ import {
   parseSse,
   refusalKey,
   sectionAt,
+  sectionForRung,
   slideView,
   stepSection,
+  withCheckItem,
   type KitFetchResult,
   type KitGrade,
   type KitListEntry,
   type KitPractiseItem,
   type KitReply,
+  type KitRung,
   type KitView,
   type SlideView,
 } from "@/sk/kit-player";
 
 type T = Dictionary["sk"]["player"];
 type Status = { kind: "loading" } | { kind: "preparing" } | { kind: "ready" } | { kind: "refused"; reason?: string } | { kind: "failed"; mapFailed: boolean };
-type Practice = { index: number; items: KitPractiseItem[] | null; i: number; response: unknown; grade: KitGrade | null; attemptNo: number; busy: boolean; error: boolean };
+/** The practise panel. `rungs` are the remediation ladder's rungs served on
+ *  the current question so far (slice C); `checkIds` the check questions the
+ *  ladder added to the list. The attempt number is the server's. */
+type Practice = { index: number; items: KitPractiseItem[] | null; i: number; response: unknown; grade: KitGrade | null; rungs: KitRung[]; checkIds: string[]; busy: boolean; error: boolean };
 
 const btn = "inline-flex min-h-10 items-center justify-center rounded-lg border border-[#14181F] px-3 py-2 text-sm text-[#14181F] disabled:opacity-40";
 const btnPrimary = "inline-flex min-h-10 items-center justify-center rounded-lg bg-[#0C8175] px-3 py-2 text-sm font-medium text-white disabled:opacity-40";
@@ -153,14 +159,22 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
     [segments, partsWithVideo, seekTo, markWatched],
   );
 
+  const showSlideAt = useCallback(
+    (i: number) => {
+      const k = clampIndex(segments, i);
+      if (k < 0) return;
+      setCurrent(k);
+      const view = slideView(segments, k, partsWithVideo);
+      setMode("slide");
+      stopAt.current = null;
+      if (view.kind === "frame") seekTo(view.part, view.t, false);
+      else videoRef.current?.pause();
+    },
+    [segments, partsWithVideo, seekTo],
+  );
   const showSlide = useCallback(() => {
-    if (!seg) return;
-    const view = slideView(segments, current, partsWithVideo);
-    setMode("slide");
-    stopAt.current = null;
-    if (view.kind === "frame") seekTo(view.part, view.t, false);
-    else videoRef.current?.pause();
-  }, [seg, segments, current, partsWithVideo, seekTo]);
+    if (seg) showSlideAt(current);
+  }, [seg, current, showSlideAt]);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -252,7 +266,7 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
       if (!s) return;
       setCurrent(k);
       videoRef.current?.pause();
-      setPractice({ index: k, items: null, i: 0, response: null, grade: null, attemptNo: 1, busy: true, error: false });
+      setPractice({ index: k, items: null, i: 0, response: null, grade: null, rungs: [], checkIds: [], busy: true, error: false });
       try {
         const q = query(kit?.generationId ?? null);
         q.set("segment", s.key);
@@ -275,10 +289,11 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
       const res = await fetch("/api/sk/kit/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product, chapter, kit: kit?.generationId, itemId: item.id, attemptNo: practice.attemptNo, response: practice.response }),
+        // The server counts attempts; the eventId makes a resend of this answer a replay.
+        body: JSON.stringify({ eventId: uuidv7(), product, chapter, kit: kit?.generationId, itemId: item.id, response: practice.response }),
       });
       const grade = res.ok ? ((await res.json()) as KitGrade) : null;
-      setPractice((p) => (p ? { ...p, grade, busy: false, error: !grade } : p));
+      setPractice((p) => (p ? { ...p, grade, rungs: grade ? [...p.rungs, ...(grade.rungs ?? [])] : p.rungs, busy: false, error: !grade } : p));
     } catch {
       setPractice((p) => (p ? { ...p, busy: false, error: true } : p));
     }
@@ -289,17 +304,28 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
     const g = practice.grade;
     if (g && g.triesLeft > 0 && g.outcome !== "correct") {
       // Another try on the same question.
-      setPractice({ ...practice, grade: null, response: null, attemptNo: practice.attemptNo + 1 });
+      setPractice({ ...practice, grade: null, response: null });
       return;
     }
     if (practice.i + 1 < practice.items.length) {
-      setPractice({ ...practice, i: practice.i + 1, grade: null, response: null, attemptNo: 1 });
+      setPractice({ ...practice, i: practice.i + 1, grade: null, response: null, rungs: [] });
       return;
     }
     const s = segments[practice.index];
     if (s) setPractised((d) => (d.includes(s.index) ? d : [...d, s.index]));
     setPractice(null);
   }, [practice, segments]);
+
+  /** Rung 4: put the check question right after this one and go to it. */
+  const takeCheck = useCallback(
+    (q: KitPractiseItem) => {
+      if (!practice?.items) return;
+      const items = withCheckItem(practice.items, practice.i, q);
+      const at = items.findIndex((x) => x.id === q.id);
+      setPractice({ ...practice, items, i: at, grade: null, response: null, rungs: [], checkIds: practice.checkIds.includes(q.id) ? practice.checkIds : [...practice.checkIds, q.id] });
+    },
+    [practice],
+  );
 
   const closePractice = useCallback(() => {
     if (practice?.items && practice.items.length && practice.grade) {
@@ -501,7 +527,9 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
             <p className="mt-2 text-sm text-[#5B6470]">{t.noPractice}</p>
           ) : (
             <div className="mt-2">
-              <div className="text-xs text-[#5B6470]">{fmt(t.questionOf, { n: practice.i + 1, total: practice.items.length })}</div>
+              <div className="text-xs text-[#5B6470]">
+                {practice.checkIds.includes(item.id) ? t.checkQuestion : fmt(t.questionOf, { n: practice.i + 1, total: practice.items.length })}
+              </div>
               <p className="mt-1 font-medium text-[#14181F]">{item.prompt}</p>
               <ItemInput item={item} value={practice.response} disabled={practice.busy || !!practice.grade} t={t} onChange={(v) => setPractice({ ...practice, response: v })} />
               {practice.grade && (
@@ -509,6 +537,9 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
                   {t[practice.grade.outcome === "correct" ? "correct" : practice.grade.outcome === "partial" ? "partial" : practice.grade.outcome === "needs_review" ? "needsReview" : "incorrect"]}
                   {practice.grade.triesLeft > 0 ? ` ${fmt(t.triesLeft, { n: practice.grade.triesLeft })}` : ""}
                 </p>
+              )}
+              {(practice.rungs.length > 0 || practice.grade?.reveal) && (
+                <Rungs rungs={practice.rungs} reveal={practice.grade?.reveal ?? null} t={t} onSlide={(r) => showSlideAt(sectionForRung(segments, r))} onWatch={(r) => playSection(sectionForRung(segments, r))} onCheck={takeCheck} />
               )}
               {practice.error && practice.items.length > 0 && <p className="mt-2 text-sm text-[#B42318]">{t.loadFailed}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
@@ -545,6 +576,80 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
           ))}
         </ol>
       </section>
+    </div>
+  );
+}
+
+const card = "mt-2 rounded-lg border border-[#E3E6E2] bg-[#F8FAF7] p-3 text-sm text-[#14181F]";
+
+/** The remediation ladder in the practise panel: the misconception card, the
+ *  hint, "watch this part" (slide(k)), the check question, and — after the
+ *  last try — the answer. Renders what the server sent; decides nothing. */
+function Rungs({ rungs, reveal, t, onSlide, onWatch, onCheck }: { rungs: KitRung[]; reveal: KitGrade["reveal"]; t: T; onSlide: (r: KitRung) => void; onWatch: (r: KitRung) => void; onCheck: (q: KitPractiseItem) => void }) {
+  return (
+    <div className="mt-2 flex flex-col gap-2" aria-live="polite" data-testid="kit-rungs">
+      {rungs.map((r, i) => {
+        const key = `${r.rung}-${i}`;
+        if (r.kind === "misconception")
+          return (
+            <div key={key} className={card} data-testid="kit-rung-misconception">
+              <p>{fmt(t.rungThinking, { thinking: r.misconception })}</p>
+              <p className="mt-1">{fmt(t.rungActually, { correction: r.correction })}</p>
+            </div>
+          );
+        if (r.kind === "why_wrong")
+          return (
+            <p key={key} className={card} data-testid="kit-rung-why">
+              {fmt(t.rungWhyWrong, { text: r.text })}
+            </p>
+          );
+        if (r.kind === "hint")
+          return (
+            <p key={key} className={card} data-testid="kit-rung-hint">
+              <span className="font-semibold">{t.rungHint}</span> {r.text}
+            </p>
+          );
+        if (r.kind === "slide")
+          return (
+            <div key={key} className={card} data-testid="kit-rung-slide">
+              <p>{fmt(t.rungSlide, { heading: r.heading || t.untitled })}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button className={btn} onClick={() => onSlide(r)}>
+                  {t.showSlide}
+                </button>
+                <button className={btnPrimary} onClick={() => onWatch(r)}>
+                  {t.watchThisPart}
+                </button>
+              </div>
+            </div>
+          );
+        if (r.itemId === null)
+          return (
+            <div key={key} className={card} data-testid="kit-rung-nocheck">
+              <p>{t.rungNoCheck}</p>
+              {r.explanation && !reveal?.explanation && <p className="mt-1 text-[#3A424D]">{r.explanation}</p>}
+            </div>
+          );
+        const q = r.item;
+        return (
+          <div key={key} className={card} data-testid="kit-rung-check">
+            <p>{t.rungCheck}</p>
+            {q && (
+              <button className={`${btnPrimary} mt-2`} onClick={() => onCheck(q)}>
+                {t.tryCheck}
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {reveal && (
+        <div className={card} data-testid="kit-reveal">
+          <p>
+            <span className="font-semibold">{t.revealAnswer}</span> {reveal.answer}
+          </p>
+          {reveal.explanation && <p className="mt-1 text-[#3A424D]">{reveal.explanation}</p>}
+        </div>
+      )}
     </div>
   );
 }

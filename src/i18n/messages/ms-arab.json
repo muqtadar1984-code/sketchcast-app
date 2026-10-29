@@ -2251,7 +2251,18 @@
       "nextPractise": "بوات لاتيهن بهاݢين {n}",
       "nextDone": "اندا تله منمتکن ڤلاجرن اين. شابس!",
       "untitled": "بهاݢين تنڤ تاجوق",
-      "matchPick": "ڤيليه…"
+      "matchPick": "ڤيليه…",
+      "rungThinking": "نمڤقڽ اندا برفيکير: “{thinking}”",
+      "rungActually": "سبنرڽ: {correction}",
+      "rungWhyWrong": "مڠاڤ جواڤن ايت تيدق بتول: {text}",
+      "rungHint": "ڤتونجوق:",
+      "rungSlide": "بهاݢين ڤلاجرن اين منرڠکنڽ: {heading}",
+      "watchThisPart": "تونتون بهاݢين اين",
+      "rungCheck": "سکارڠ چوبا ساتو لاݢي سوءالن تنتڠ ايديا يڠ سام.",
+      "tryCheck": "چوبا سوءالن سماقن",
+      "checkQuestion": "سوءالن سماقن",
+      "rungNoCheck": "بلوم اد سوءالن لاٴين تنتڠ ايديا اين. اين ڤنرڠنڽ.",
+      "revealAnswer": "جواڤنڽ:"
     }
   }
 }

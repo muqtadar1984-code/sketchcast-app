@@ -134,3 +134,18 @@ describe("the check question", () => {
     expect(verificationItem(m, RBC_MCQ, O2_KEY, { objectiveKeys: { [RBC_SHORT]: O2_KEY, [RBC_FILL]: null, [RBC_AR]: null } })).toEqual({ itemId: RBC_SHORT, via: "objective" });
   });
 });
+
+describe("the player's ladder helpers (client-safe, src/sk/kit-player.ts)", () => {
+  it("slide(k) → the section's position; the check question goes right after the current one, once", async () => {
+    const { kitSegments } = await import("../kit-view");
+    const { sectionForRung, withCheckItem } = await import("../kit-player");
+    const segs = kitSegments(ch5Manifest());
+    expect(sectionForRung(segs, { rung: 3, kind: "slide", k: 1, key: "p1:s002", heading: "Red blood cells" })).toBe(1);
+    expect(sectionForRung(segs, { rung: 2, kind: "hint", text: "x", from: "explanation" })).toBe(-1);
+    const a = { id: "a", type: "short" as const, prompt: "A", marks: 1 };
+    const b = { id: "b", type: "short" as const, prompt: "B", marks: 1 };
+    const c = { id: "c", type: "short" as const, prompt: "C", marks: 1 };
+    expect(withCheckItem([a, b], 0, c).map((x) => x.id)).toEqual(["a", "c", "b"]);
+    expect(withCheckItem([a, b], 0, b).map((x) => x.id)).toEqual(["a", "b"]);
+  });
+});

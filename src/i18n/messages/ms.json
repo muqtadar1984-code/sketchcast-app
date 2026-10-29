@@ -2251,7 +2251,18 @@
       "nextPractise": "Buat latihan bahagian {n}",
       "nextDone": "Anda telah menamatkan pelajaran ini. Syabas!",
       "untitled": "Bahagian tanpa tajuk",
-      "matchPick": "Pilih…"
+      "matchPick": "Pilih…",
+      "rungThinking": "Nampaknya anda berfikir: “{thinking}”",
+      "rungActually": "Sebenarnya: {correction}",
+      "rungWhyWrong": "Mengapa jawapan itu tidak betul: {text}",
+      "rungHint": "Petunjuk:",
+      "rungSlide": "Bahagian pelajaran ini menerangkannya: {heading}",
+      "watchThisPart": "Tonton bahagian ini",
+      "rungCheck": "Sekarang cuba satu lagi soalan tentang idea yang sama.",
+      "tryCheck": "Cuba soalan semakan",
+      "checkQuestion": "Soalan semakan",
+      "rungNoCheck": "Belum ada soalan lain tentang idea ini. Ini penerangannya.",
+      "revealAnswer": "Jawapannya:"
     }
   }
 }
