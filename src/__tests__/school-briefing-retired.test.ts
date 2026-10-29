@@ -42,7 +42,8 @@ describe("the School Briefing panel is retired", () => {
           .filter((h): h is string => h !== null),
       );
     expect(hits).toEqual([]);
-  });
+    // A walk of all of src/ (≈ 2k files) can take seconds when the suite runs alongside others.
+  }, 60_000);
 
   it("no locale carries the school.briefing strings", () => {
     for (const l of LOCALES) {
