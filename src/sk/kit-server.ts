@@ -24,7 +24,7 @@ import { SupabaseEntitlements } from "./entitlement";
 import type { ItemBank } from "./items";
 import { SupabaseItemBank } from "./items-supabase";
 import type { KitRefusal, KitReply } from "./kit-player";
-import { kitList, kitView } from "./kit-view";
+import { kitList, kitView, mergeChapters, type ChapterEntry } from "./kit-view";
 import type { KitManifest } from "./manifest/derive";
 import { deriveAndStore } from "./manifest/service";
 import { readManifest, type ReadResult, type StoreAdmin } from "./manifest/store";
@@ -40,7 +40,7 @@ export const KIT_VIDEO_TTL_S = 60 * 60;
 export type KitAdmin = StoreAdmin & SignAdmin;
 
 export type KitDeps = {
-  kits: Pick<ProductKits, "entitled" | "kitForChapter" | "canOpenKit">;
+  kits: Pick<ProductKits, "entitled" | "kitsForProduct" | "kitForChapter" | "canOpenKit">;
   /** The service-role client for sk_manifests, artifacts and storage. Called
    *  only after canOpenKit said yes. */
   admin: () => KitAdmin;
@@ -69,6 +69,7 @@ function realDeps(): KitDeps {
       kits: {
         // Built per call: the map is service-role only (0170) and the client is cheap.
         entitled: (u, pr) => kitsReader().entitled(u, pr),
+        kitsForProduct: (pr) => kitsReader().kitsForProduct(pr),
         kitForChapter: (pr, ch) => kitsReader().kitForChapter(pr, ch),
         canOpenKit: (u, pr, g) => kitsReader().canOpenKit(u, pr, g),
       },
@@ -164,4 +165,34 @@ export async function readyManifest(deps: KitDeps, r: Extract<Resolved, { ok: tr
   const admin = deps.admin();
   const m = await deps.read(admin, r.kit.generationId);
   return m.status === "ready" ? { admin, manifest: m.manifest } : null;
+}
+
+// ── the chapter lists (/sk, /sk/[product]) and the chapter page ─────────────
+
+/** The product's chapters for this user: its mapped kits when the user is
+ *  entitled (an unentitled user sees none of the map), merged with the clip
+ *  chapters that have no kit. A map that cannot be read (0170 not applied yet)
+ *  leaves the clip chapters alone, logged. */
+export async function chaptersFor(userId: string, productSlug: string, clipChapters: readonly number[]): Promise<ChapterEntry[]> {
+  const deps = kitDeps();
+  let kits: ProductKit[] = [];
+  try {
+    const e = await deps.kits.entitled(userId, productSlug);
+    if (e.ok) kits = await deps.kits.kitsForProduct(e.product.id);
+  } catch (err) {
+    console.error("[sk] kit map unavailable:", (err as Error).message);
+  }
+  return mergeChapters(kits, clipChapters);
+}
+
+/** Does this chapter have a mapped kit? Decides, on the server, whether the
+ *  chapter page mounts the kit player (which then asks the API, where every
+ *  refusal is made) or the old clip player. False when the map cannot be read. */
+export async function chapterHasKit(productSlug: string, chapterRef: string): Promise<boolean> {
+  try {
+    return (await kitDeps().kits.kitForChapter(productSlug, chapterRef)).length > 0;
+  } catch (err) {
+    console.error("[sk] kit map unavailable:", (err as Error).message);
+    return false;
+  }
 }

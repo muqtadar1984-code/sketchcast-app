@@ -8,7 +8,7 @@
 import type { KitManifest, ManifestSegment } from "./manifest/derive";
 import { itemsForSegment } from "./manifest/board";
 import type { KitListEntry, KitSegmentView, KitView } from "./kit-player";
-import type { ProductKit } from "./product-kits";
+import { compareChapterRef, type ProductKit } from "./product-kits";
 
 /** Practice items the student path can serve: mapped to the section, available,
  *  and traced to a bank row (topic_questions) the bank can mark. Book-path
@@ -68,4 +68,25 @@ export function kitView(m: KitManifest, kit: ProductKit, videos: { part: number;
     videos,
     segments: kitSegments(m),
   };
+}
+
+/** One chapter on /sk and /sk/[product]: its mapped kits (in sort order) and
+ *  whether the old clip path still serves it. */
+export type ChapterEntry = { chapterRef: string; kits: KitListEntry[]; clip: boolean };
+
+/** Chapters from the product → kit map, plus the clip-graph chapters that have
+ *  NO mapped kit (slice E retires those). A chapter with a kit is the kit's:
+ *  the player loads it and the clip path is not offered. Ordered by chapter. */
+export function mergeChapters(kits: readonly ProductKit[], clipChapters: readonly number[]): ChapterEntry[] {
+  const by = new Map<string, ChapterEntry>();
+  for (const k of kits) {
+    const e = by.get(k.chapterRef) ?? { chapterRef: k.chapterRef, kits: [], clip: false };
+    e.kits.push({ generationId: k.generationId, label: k.label, title: k.title });
+    by.set(k.chapterRef, e);
+  }
+  for (const c of clipChapters) {
+    const ref = String(c);
+    if (!by.has(ref)) by.set(ref, { chapterRef: ref, kits: [], clip: true });
+  }
+  return [...by.values()].sort((a, b) => compareChapterRef(a.chapterRef, b.chapterRef));
 }
