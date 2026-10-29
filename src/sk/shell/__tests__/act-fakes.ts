@@ -1,0 +1,156 @@
+// Fakes for the S2 action suites. Not a test file (vitest only picks *.test.ts).
+//
+// - `signedRow`: an sk_action_tokens row + its opaque token, HMAC'd like tokens.ts.
+// - `statefulAdmin`: the token table and the two RPCs with 0163/0164's real
+//   semantics — `sk_consume_action_token` marks used_at ONCE (a second consume
+//   is already_used), `sk_assign_with_token` consumes and records a share write.
+//   Reads return a COPY, so two concurrent clicks both pass verification and
+//   race on the consume, as they would against Postgres.
+// - `diarySession`: a user-session fake whose reads ignore filters (the
+//   handlers' own in-code filters are what is tested) and whose diary_notes
+//   insert enforces 0169's unique index (sk_action_id, coalesce(student_id,
+//   class_id)) → 23505, and can be told to answer an RLS denial (42501).
+
+import { canonicalParams, encodeToken, signToken, type ActionParams, type ActionTokenRow } from "../tokens";
+import { NOW, TEACHER_ID } from "./fixtures";
+
+export const ACT_SECRET = "act-s2-secret-of-adequate-length-0001";
+export const CLASS_7B = "c7b00000-0000-4000-8000-000000000001";
+export const CLASS_7C = "c7c00000-0000-4000-8000-000000000002";
+export const FOREIGN_CLASS = "cf000000-0000-4000-8000-000000000003";
+export const GEN = "9e000000-0000-4000-8000-000000000004";
+export const SHARE = "5a000000-0000-4000-8000-000000000005";
+export const ALI = "a1000000-0000-4000-8000-000000000011";
+export const SITI = "a2000000-0000-4000-8000-000000000012";
+export const AHMAD = "a3000000-0000-4000-8000-000000000013";
+export const MEI = "a4000000-0000-4000-8000-000000000014";
+export const GONE = "a5000000-0000-4000-8000-000000000015";
+
+export function signedRow(
+  over: Partial<Omit<ActionTokenRow, "hmac">> & { action: string; params: ActionParams; contextHash: string; id?: string },
+): { row: ActionTokenRow; token: string } {
+  const { contextHash, ...rest } = over;
+  const base: Omit<ActionTokenRow, "hmac"> = {
+    id: over.id ?? "77777777-7777-4777-8777-777777777777",
+    user_id: TEACHER_ID,
+    params_canonical: canonicalParams(over.params),
+    context_hash: contextHash,
+    nonce: "n0nce",
+    expires_at: new Date(NOW.getTime() + 600_000).toISOString(),
+    used_at: null,
+    ...rest,
+  } as Omit<ActionTokenRow, "hmac">;
+  const hmac = signToken(ACT_SECRET, {
+    userId: base.user_id,
+    action: base.action,
+    canonical: base.params_canonical,
+    contextHash: base.context_hash,
+    nonce: base.nonce,
+    expiresAt: new Date(base.expires_at).toISOString(),
+  });
+  return { row: { ...base, hmac }, token: encodeToken(base.id, hmac) };
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function statefulAdmin(rows: Record<string, ActionTokenRow>, now: Date = NOW) {
+  const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  const shareWrites: string[] = [];
+  const consume = (id: string, hash: string): string => {
+    const r = rows[id];
+    if (!r) return "not_found";
+    if (r.used_at) return "already_used";
+    if (new Date(r.expires_at).getTime() <= now.getTime()) return "expired";
+    if (r.context_hash !== hash) return "context_mismatch";
+    rows[id] = { ...r, used_at: now.toISOString() };
+    return "done";
+  };
+  return {
+    rows,
+    calls,
+    shareWrites,
+    from: (table: string) => {
+      if (table !== "sk_action_tokens") throw new Error(`admin touched ${table}`);
+      return {
+        select: () => ({
+          eq: (_c: string, id: string) => ({
+            maybeSingle: async () => ({ data: rows[id] ? { ...rows[id] } : null, error: null }),
+          }),
+        }),
+      };
+    },
+    rpc: async (fn: string, args: Record<string, unknown> = {}) => {
+      calls.push({ fn, args });
+      await Promise.resolve(); // let a concurrent click interleave
+      if (fn === "sk_consume_action_token") return { data: consume(String(args.p_token), String(args.p_context_hash)), error: null };
+      if (fn === "sk_assign_with_token") {
+        const outcome = consume(String(args.p_token), String(args.p_context_hash));
+        if (outcome !== "done") return { data: { outcome }, error: null };
+        const p = rows[String(args.p_token)].params;
+        shareWrites.push(`${p.generation_id}|${p.class_id}`);
+        return { data: { outcome: "done", share_id: "s1", class_id: p.class_id, generation_id: p.generation_id, due_at: p.due_at }, error: null };
+      }
+      return { data: null, error: { message: `unexpected rpc ${fn}` } };
+    },
+  };
+}
+
+export type DiarySessionOpts = {
+  /** Answer every diary_notes insert with this error (e.g. {code: "42501"}). */
+  insertError?: { code?: string; message?: string };
+  /** Make reads of this table fail. */
+  failRead?: string;
+};
+
+export function diarySession(tables: Record<string, Array<Record<string, unknown>>>, opts: DiarySessionOpts = {}) {
+  const notes: Array<Record<string, unknown>> = [];
+  const log: string[] = [];
+  let seq = 0;
+  const from = (table: string) => {
+    const rows = tables[table] ?? [];
+    let pendingInsert: Array<Record<string, unknown>> | null = null;
+    let single = false;
+    const b: any = {};
+    for (const m of ["select", "eq", "neq", "in", "is", "order", "limit", "ilike", "gte", "lte"]) {
+      b[m] = (...args: unknown[]) => {
+        log.push(`${table}.${m}(${args.map((a) => JSON.stringify(a)).join(",")})`);
+        return b;
+      };
+    }
+    b.insert = (row: Record<string, unknown> | Array<Record<string, unknown>>) => {
+      pendingInsert = Array.isArray(row) ? row : [row];
+      log.push(`${table}.insert(${pendingInsert.length})`);
+      return b;
+    };
+    b.single = () => {
+      single = true;
+      return b;
+    };
+    b.maybeSingle = b.single;
+    const run = () => {
+      if (pendingInsert) {
+        if (table !== "diary_notes") return { data: null, error: { message: `insert into ${table}` } };
+        if (opts.insertError) return { data: null, error: opts.insertError };
+        const keys = new Set(notes.filter((n) => n.sk_action_id).map((n) => `${n.sk_action_id}|${n.student_id ?? n.class_id}`));
+        for (const r of pendingInsert) {
+          const k = `${r.sk_action_id}|${r.student_id ?? r.class_id}`;
+          if (r.sk_action_id && keys.has(k)) return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint \"diary_notes_sk_action_target_uidx\"" } };
+          keys.add(k);
+        }
+        const out = pendingInsert.map((r) => ({ ...r, id: `note-${++seq}` }));
+        notes.push(...out);
+        return { data: single ? { id: out[0].id } : out.map((o) => ({ id: o.id, student_id: o.student_id })), error: null };
+      }
+      if (opts.failRead === table) return { data: null, error: { message: `${table} read failed` } };
+      return { data: single ? (rows[0] ?? null) : rows, error: null };
+    };
+    b.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(run()).then(res, rej);
+    return b;
+  };
+  return {
+    notes,
+    log,
+    from,
+    rpc: async () => ({ data: null, error: null }),
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */

@@ -57,7 +57,7 @@ export function formatDueDay(iso: string, locale: string): string {
   }
 }
 
-const NAME_STOP = new Set(["bin", "binti", "bte", "bt", "al", "el", "a/l", "a/p", "s/o", "d/o", "van", "von", "de", "da", "la", "le", "mohd", "muhammad", "mohamed", "mohammad", "nur", "siti"]);
+const NAME_STOP = new Set(["bin", "binti", "bte", "bt", "al", "el", "a/l", "a/p", "s/o", "d/o", "van", "von", "de", "da", "la", "le", "mohd", "muhammad", "mohamed", "mohammad", "nur"]);
 
 /** Does a dictated message name a learner of the class? Full names, and first
  *  names of 3+ letters that are not a common particle or prefix. */
