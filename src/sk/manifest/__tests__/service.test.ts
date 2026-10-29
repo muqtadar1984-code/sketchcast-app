@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { FakeAdmin, type Row } from "./fake-admin";
 import { BUILDING_TTL_MS, MAX_ITEMS, MAX_SEGMENTS, S1_VISUAL_REASON, deriveAndStore, visualForApp, type ModelCall } from "../service";
-import { artifactsHash, assemble, buildSegments, type ArtifactRow, type KitInput, type KitManifest } from "../derive";
+import { MANIFEST_DERIVATION_VERSION, artifactsHash, assemble, buildSegments, type ArtifactRow, type KitInput, type KitManifest } from "../derive";
 import type { LoadedKit } from "../load";
 import { CONCEPT_PROMPT_VERSION, ITEM_PROMPT_VERSION } from "../prompts";
 
@@ -351,11 +351,18 @@ describe("deriveAndStore — concurrent model passes (fix/sk-speed)", () => {
     const r = await deriveAndStore(admin(), GEN, { now: NOW, call, load: async () => loaded() });
     if (r.status !== "ready") throw new Error(`expected ready, got ${r.status}`);
     expect(peak).toBe(2);
+    // The fixture predates S3 slice A, which added derivation_version (and folds it
+    // into manifest_id): those two fields are compared separately below.
     const strip = (m: unknown) => {
-      const c = JSON.parse(JSON.stringify(m)) as { derived_by: Record<string, unknown> };
+      const c = JSON.parse(JSON.stringify(m)) as { derived_by: Record<string, unknown>; derivation_version?: number; manifest_id?: string };
       delete c.derived_by.at;
+      delete c.derivation_version;
+      delete c.manifest_id;
       return c;
     };
     expect(strip(r.manifest)).toEqual(strip(sequential));
+    expect(r.manifest.derivation_version).toBe(MANIFEST_DERIVATION_VERSION);
+    expect(r.manifest.manifest_id).toMatch(/^[0-9a-f]{24}$/);
+    expect(r.manifest.manifest_id).not.toBe((sequential as { manifest_id: string }).manifest_id);
   });
 });

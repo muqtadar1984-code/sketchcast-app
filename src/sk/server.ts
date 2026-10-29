@@ -22,6 +22,7 @@ import { CompositeItemBank, StaticItemBank, type ItemBank } from "./items";
 import { UUID_RE } from "./ids";
 import { SupabaseItemBank } from "./items-supabase";
 import type { LoopDeps } from "./loop";
+import { ProductKits } from "./product-kits";
 import { retrievalMode, selectRetrievalProvider, type RetrievalDb, type RetrievalProvider } from "./retrieval";
 import { PollySpeechProvider } from "./speech/polly";
 import type { SpeechProvider } from "./speech/provider";
@@ -172,6 +173,13 @@ export function persistence(): Pick<SkDeps, "store" | "items" | "entitlements"> 
   }
   // No database: no entitlement source — the loop's dev-flag (everything granted, usage counted in memory only).
   return { store: new InMemorySessionStore(), items: new StaticItemBank() };
+}
+
+/** S3: the product → kit map (0170, service-role only) with the production
+ * entitlement source. Callers run gate() first; canOpenKit() then decides the kit. */
+export function productKits(): ProductKits {
+  const db = skDbFrom(createAdminClient());
+  return new ProductKits(db, new SupabaseEntitlements(db));
 }
 
 /** R1: `SK_RETRIEVAL=fts` (default) grounds questions on the OR-relaxed

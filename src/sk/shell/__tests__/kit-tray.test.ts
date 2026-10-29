@@ -110,6 +110,7 @@ describe("trayKits", () => {
   });
   it("0169 missing: the tray is empty (no fallback to Library kits)", async () => {
     const session = {
+      rpc: async () => ({ data: null, error: null }),
       from: () => {
         const b: Record<string, unknown> = {};
         for (const m of ["select", "eq", "not", "gte", "order", "limit", "in"]) b[m] = () => b;
@@ -163,7 +164,7 @@ describe("kitNotices — the next greeting", () => {
   });
   it("a slow read is skipped after the time box and logged — the greeting is not held", async () => {
     const logs: string[] = [];
-    const session = { from: () => ({ select: () => ({ eq: () => ({ not: () => ({ gte: () => ({ order: () => ({ limit: () => new Promise(() => {}) }) }) }) }) }) }) };
+    const session = { rpc: async () => ({ data: null, error: null }), from: () => ({ select: () => ({ eq: () => ({ not: () => ({ gte: () => ({ order: () => ({ limit: () => new Promise(() => {}) }) }) }) }) }) }) };
     const t0 = Date.now();
     const n = await kitNotices(ctx, { session, now: NOW }, [], { timeoutMs: 30, log: (m) => logs.push(m) });
     expect(n).toEqual({ lines: [], ids: [], entities: [], offer: null });
@@ -173,6 +174,7 @@ describe("kitNotices — the next greeting", () => {
   it("a failing read is skipped and logged, never thrown", async () => {
     const logs: string[] = [];
     const session = {
+      rpc: async () => ({ data: null, error: null }),
       from: () => {
         throw new Error("connection reset");
       },
