@@ -27,7 +27,7 @@ vi.mock("@/utils/assistant/providers/anthropic", async () => {
   return {
     AnthropicProvider: class extends StubProvider {
       constructor(model: string) {
-        super([{ text: "MODEL WAS CALLED" }] as StubTurn[]);
+        super([{ text: ["MODEL WAS CALLED"] }] as unknown as StubTurn[]);
         mocks.constructed.push(model);
       }
     },
