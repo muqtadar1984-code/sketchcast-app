@@ -75,7 +75,6 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
   // ── load (GET → one POST to build the map → poll) ──
   useEffect(() => {
     const ac = new AbortController();
-    setStatus({ kind: "loading" });
     const fetchKit = async (method: "GET" | "POST"): Promise<KitFetchResult> => {
       const q = query(kitId);
       const res =
@@ -97,6 +96,8 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
       if (r.status === "ready") {
         setKits(r.reply.kits);
         setKit(r.reply.kit);
+        setCurrent(0);
+        setMode("video");
         setStatus({ kind: "ready" });
       } else if (r.status === "refused") setStatus({ kind: "refused", reason: r.reason });
       else if (r.reason !== "aborted") setStatus({ kind: "failed", mapFailed: r.reason === "map_failed" });
@@ -177,13 +178,10 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
     void v.play().catch(() => setPlaying(false));
   }, [seg, mode, current, playSection]);
 
-  // First load of a kit: cue section 1, paused.
+  // A kit (re)loaded: cue section 1, paused (the <video> mounts with "ready").
   useEffect(() => {
     if (status.kind !== "ready" || !kit) return;
     loadedPart.current = null;
-    refreshedOnError.current = false;
-    setCurrent(0);
-    setMode("video");
     const first = kit.segments[0];
     if (first && kit.videos.some((v) => v.part === first.part)) seekTo(first.part, first.start, false);
   }, [status.kind, kit, seekTo]);
@@ -325,8 +323,14 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
     else setSkText(t.nextDone);
   };
 
+  const reload = () => {
+    setStatus({ kind: "loading" });
+    setReloadKey((n) => n + 1);
+  };
+
   const pickKit = (id: string) => {
     if (id === kit?.generationId) return;
+    setStatus({ kind: "loading" });
     setKit(null);
     setWatched([]);
     setPractised([]);
@@ -356,7 +360,7 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
       <div className="mx-auto max-w-3xl rounded-xl border border-[#E3E6E2] bg-white p-4" role="alert" data-testid="kit-refused">
         <p className="text-sm text-[#14181F]">{msg}</p>
         {status.kind === "failed" && (
-          <button className={`${btn} mt-3`} onClick={() => setReloadKey((n) => n + 1)}>
+          <button className={`${btn} mt-3`} onClick={reload}>
             {t.retry}
           </button>
         )}
@@ -401,7 +405,7 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
               // A signed URL lasts an hour: fetch fresh ones once.
               if (refreshedOnError.current) return;
               refreshedOnError.current = true;
-              setReloadKey((n) => n + 1);
+              reload();
             }}
             data-testid="kit-video"
           />
