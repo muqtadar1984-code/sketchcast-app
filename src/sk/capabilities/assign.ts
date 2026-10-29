@@ -155,9 +155,10 @@ const rowsOf = async (q: unknown): Promise<Row[]> => {
   }
 };
 
-type ClassPick = { kind: "none"; query: string } | { kind: "one"; id: string; name: string } | { kind: "many"; options: Array<{ id: string; name: string }> };
+export type ClassPick = { kind: "none"; query: string } | { kind: "one"; id: string; name: string } | { kind: "many"; options: Array<{ id: string; name: string }> };
 
-async function pickClass(ctx: SkContext, deps: SkCapabilityDeps, classId: string, classQuery: string): Promise<ClassPick> {
+/** The teacher's own class by id or by the words said (diary.ts reuses it). */
+export async function pickClass(ctx: SkContext, deps: SkCapabilityDeps, classId: string, classQuery: string): Promise<ClassPick> {
   const me = ctx.user.id;
   if (classId) {
     // The teacher's classes, read once per turn (shared.ts); the id check stays in code.

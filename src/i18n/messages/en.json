@@ -2125,7 +2125,35 @@
       "voiceYesHint": "Say “yes” to confirm, or “no” to cancel.",
       "loadingSlides": "Loading slide {k} of {n}…",
       "slidesLoaded": "{n} slides are on the roll as pages {a}–{b}. Page up and page down move between them; say 'blank page' to add one in between.",
-      "explainSelection": "Explain this part"
+      "explainSelection": "Explain this part",
+      "act": {
+        "diaryCardTitle": "Post to {target}'s diary",
+        "diaryPosted": "Posted to {target}'s diary.",
+        "remindCardTitleOne": "Remind the parents of 1 learner in {class}",
+        "remindCardTitle": "Remind the parents of {n} learners in {class}",
+        "remindSentOne": "Sent a reminder to 1 family (diary).",
+        "remindSent": "Sent reminders to {n} families (diary).",
+        "remindLeftOutDone": "Left out {names}: already finished.",
+        "remindLeftOutGone": "Left out {n} no longer in this class.",
+        "remindNoneLeft": "Everyone has finished now, so I sent no reminders.",
+        "remindTooMany": "That's more than {max} families — narrow it to one class.",
+        "remindBody": "Reminder: \"{title}\" is not done yet — due {due}. Please encourage your child to finish it.",
+        "remindBodyNoDue": "Reminder: \"{title}\" is not done yet. Please encourage your child to finish it.",
+        "writeFailed": "That didn't go through — nothing was changed. Ask me again."
+      },
+      "cardParams": {
+        "target_label": "For",
+        "note_type": "Type",
+        "body": "Message",
+        "parents_only": "Parents only",
+        "entry_date": "Date",
+        "count": "Learners",
+        "class_name": "Class",
+        "kit_title": "Kit",
+        "due_at": "Due",
+        "yes": "Yes",
+        "no": "No"
+      }
     }
   }
 }

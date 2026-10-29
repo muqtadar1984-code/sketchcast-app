@@ -840,7 +840,12 @@ export default function SkShell({
   const mapStatus = board ? board.status() : "none";
   const slideLoad = board?.loading() ?? null;
   const nowMs = Date.now() + tick * 0;
-  const paramLabel = (k: string) => k.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  // Card labels: the dictionary's (sk.shell.cardParams) when it has one, else the key made readable.
+  const cardLabels = copy.cardParams as Record<string, string> | undefined;
+  const paramLabel = (k: string) => cardLabels?.[k] ?? k.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  // Ids are for the server, not the teacher: a card shows names, text and dates.
+  const shownParams = (params: Card["params"]) => Object.entries(params).filter(([k]) => !/(?:^|_)ids?$/.test(k));
+  const paramValue = (v: Card["params"][string]) => (v === null || v === undefined ? "—" : typeof v === "boolean" ? (v ? cardLabels?.yes ?? "Yes" : cardLabels?.no ?? "No") : String(v));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
@@ -974,10 +979,10 @@ export default function SkShell({
                   )}
                 </div>
                 <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-                  {Object.entries(c.params).map(([k, v]) => (
+                  {shownParams(c.params).map(([k, v]) => (
                     <Fragment key={k}>
                       <dt className="text-[#98A0A9]">{paramLabel(k)}</dt>
-                      <dd className="text-[#14181F] break-words">{v === null || v === undefined ? "—" : String(v)}</dd>
+                      <dd className="text-[#14181F] break-words whitespace-pre-wrap">{paramValue(v)}</dd>
                     </Fragment>
                   ))}
                 </dl>

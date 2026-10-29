@@ -2125,7 +2125,35 @@
       "voiceYesHint": "Di «sí» para confirmar o «no» para cancelar.",
       "loadingSlides": "Cargando diapositiva {k} de {n}…",
       "slidesLoaded": "{n} diapositivas están en el rollo como páginas {a}–{b}. Página arriba y página abajo se mueven entre ellas; di 'página en blanco' para añadir una en medio.",
-      "explainSelection": "Explica esta parte"
+      "explainSelection": "Explica esta parte",
+      "act": {
+        "diaryCardTitle": "Publicar en la agenda de {target}",
+        "diaryPosted": "Publicado en la agenda de {target}.",
+        "remindCardTitleOne": "Recordar a los padres de 1 alumno de {class}",
+        "remindCardTitle": "Recordar a los padres de {n} alumnos de {class}",
+        "remindSentOne": "Recordatorio enviado a 1 familia (agenda).",
+        "remindSent": "Recordatorios enviados a {n} familias (agenda).",
+        "remindLeftOutDone": "Sin incluir a {names}: ya terminaron.",
+        "remindLeftOutGone": "Sin incluir a {n} que ya no están en esta clase.",
+        "remindNoneLeft": "Ya han terminado todos, así que no envié ningún recordatorio.",
+        "remindTooMany": "Son más de {max} familias — limítalo a una clase.",
+        "remindBody": "Recordatorio: «{title}» aún no está hecho — entrega {due}. Por favor, anime a su hijo o hija a terminarlo.",
+        "remindBodyNoDue": "Recordatorio: «{title}» aún no está hecho. Por favor, anime a su hijo o hija a terminarlo.",
+        "writeFailed": "No se pudo hacer — no se cambió nada. Pídemelo de nuevo."
+      },
+      "cardParams": {
+        "target_label": "Para",
+        "note_type": "Tipo",
+        "body": "Mensaje",
+        "parents_only": "Solo padres",
+        "entry_date": "Fecha",
+        "count": "Alumnos",
+        "class_name": "Clase",
+        "kit_title": "Kit didáctico",
+        "due_at": "Entrega",
+        "yes": "Sí",
+        "no": "No"
+      }
     }
   }
 }

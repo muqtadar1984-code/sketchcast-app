@@ -4,25 +4,35 @@
 // spoken yes. This module is the whole decision: verify the token against the
 // live Context (tokens.ts re-derives the HMAC from the STORED row), refuse a
 // spoken yes for click-only actions, revalidate the capability's permission
-// at execution time, then hand the token id — never the params — to the
-// per-action RPC, which consumes the token and writes in ONE transaction
-// (0164 sk_assign_with_token). The outcome becomes one line SK says.
+// at execution time (the handler's `meta`), then dispatch to the action's
+// handler with the token row — the client never supplies params.
 //
-// Audit: the RPC writes the `done` row itself (it knows the share id); every
-// other outcome gets one SkActionRow here, ok=false, error=outcome. A token
-// that was never found cannot be referenced (sk_actions.token_id is a FK), so
-// its row carries token_id null.
+// Two execution shapes (act-core.ts):
+// - `assign` (S1): the per-action RPC consumes the token and writes in ONE
+//   transaction (0164 sk_assign_with_token) and writes its own `done` audit row.
+// - S2 actions (`diary.note`, `parents.remind`): `consumeThenWrite` — consume
+//   through the admin RPC, then write AS THE TEACHER with the user-session
+//   client, carrying sk_action_id = token id (0169).
 //
-// The admin client is used ONLY for sk_action_tokens and the RPC (§8.1).
+// Audit: one SkActionRow per execution with the HANDLER's tier/kind, except a
+// `done` the RPC already audited. A token that was never found cannot be
+// referenced (sk_actions.token_id is a FK), so its row carries token_id null.
+//
+// The admin client is used ONLY for sk_action_tokens and the RPCs (§8.1).
 
-import type { ResolvedEntity, SkActResponse, SkActionRow, SkCollector, SkContext } from "./types";
-import { decodeToken, verifyActionToken, type ActionTokenRow, type TokenDb } from "./tokens";
+import type { ResolvedEntity, SkActResponse, SkActionRow } from "./types";
+import { decodeToken, verifyActionToken, type ActionTokenRow } from "./tokens";
 import { metaAllows } from "./registry";
-import { recordSafely, type SkAuditSink } from "./audit";
+import { recordSafely } from "./audit";
 import { rememberTurn, type SkMemory } from "./memory";
 import { assignAction, formatDue, offsetMinutesOf } from "@/sk/capabilities/assign";
+import { ACT_CLICK_ONLY_LINE, ACT_NOT_ALLOWED_LINE, fail, str, toOutcome, type ActHandler, type ActInput, type Handled } from "./act-core";
+import { runDiaryNote, runParentsRemind } from "./act-diary";
+import { diaryNoteAction } from "@/sk/capabilities/diary";
+import { parentsRemindAction } from "@/sk/capabilities/remind";
 
-export type ActOutcome = SkActResponse["outcome"];
+export { ACT_CLICK_ONLY_LINE, ACT_LINES, ACT_NOT_ALLOWED_LINE, consumeThenWrite, writeFailure } from "./act-core";
+export type { ActAdmin, ActHandler, ActInput, ActOutcome, Handled, WriteOutcome } from "./act-core";
 
 /** §9.2 click-only actions: a spoken yes never confirms these. Names are the
  *  registry names those S2 actions will carry; `assign` is deliberately absent. */
@@ -38,52 +48,11 @@ export const CLICK_ONLY: ReadonlySet<string> = new Set([
   "recap.publish", // publishing a recap to parents
 ]);
 
-/** The one line SK says per non-done outcome. No details: the UI speaks it. */
-export const ACT_LINES: Record<Exclude<ActOutcome, "done">, string> = {
-  already_used: "That was already done.",
-  expired: "That confirmation expired — ask me again.",
-  context_mismatch: "Your context changed, so I did nothing.",
-  not_found: "I don't have that confirmation any more — ask me again.",
-  refused: "I can't do that one.",
-  error: "That didn't go through — nothing was changed.",
-};
-export const ACT_CLICK_ONLY_LINE = "That one needs a click to confirm.";
-export const ACT_NOT_ALLOWED_LINE = "That isn't available in your current view, so I did nothing.";
-
-/** The narrow admin surface this module touches. */
-export type ActAdmin = TokenDb;
-
-export type ActInput = {
-  ctx: SkContext;
-  token: string;
-  via: "click" | "voice";
-  turnId: string;
-  now: Date;
-  clock?: SkCollector["clock"];
-  memory: SkMemory;
-  admin: ActAdmin;
-  sink: SkAuditSink;
-};
-
 export type ActOutput = { response: SkActResponse; memory: SkMemory };
-
-type Handled = { response: SkActResponse; entities: ResolvedEntity[] };
-type Handler = (row: ActionTokenRow, input: ActInput) => Promise<Handled>;
-
-const OUTCOMES: ReadonlySet<string> = new Set<ActOutcome>(["done", "already_used", "expired", "context_mismatch", "not_found", "refused", "error"]);
-const toOutcome = (v: unknown): ActOutcome => (typeof v === "string" && OUTCOMES.has(v) ? (v as ActOutcome) : "error");
-const str = (v: unknown): string => (typeof v === "string" ? v : "");
-
-const fail = (outcome: Exclude<ActOutcome, "done">, summary = ACT_LINES[outcome], result?: Record<string, unknown>): Handled => ({
-  response: { ok: false, outcome, summary, ...(result ? { result } : {}) },
-  entities: [],
-});
 
 // ── assign → 0164 sk_assign_with_token ───────────────────────────────────────
 
 async function runAssign(row: ActionTokenRow, input: ActInput): Promise<Handled> {
-  // §2.5 per-tier revalidation: the live Context must still allow the capability.
-  if (!metaAllows(assignAction.meta, input.ctx)) return fail("refused", ACT_NOT_ALLOWED_LINE);
   type RpcRes = { data?: unknown; error?: unknown } | null;
   let res: RpcRes;
   try {
@@ -123,7 +92,16 @@ async function runAssign(row: ActionTokenRow, input: ActInput): Promise<Handled>
   };
 }
 
-const HANDLERS: Record<string, Handler> = { assign: runAssign };
+/** Every confirm-tier action /api/sk/act can execute. `tier`/`kind` go on the
+ *  audit row; `meta` is revalidated against the live Context before anything
+ *  is consumed; `auditsDone` = the per-action RPC writes its own done row. */
+export const HANDLERS: Record<string, ActHandler> = {
+  // S1: consume + write in ONE transaction inside 0164's RPC (left as it was).
+  assign: { tier: "confirm", kind: "act", auditsDone: true, meta: assignAction.meta, run: runAssign },
+  // S2 slice A: consume (admin RPC) → write AS THE TEACHER (session client).
+  "diary.note": { tier: "confirm", kind: "act", meta: diaryNoteAction.meta, run: runDiaryNote },
+  "parents.remind": { tier: "confirm", kind: "act", meta: parentsRemindAction.meta, run: runParentsRemind },
+};
 
 // ── The decision ─────────────────────────────────────────────────────────────
 
@@ -132,22 +110,29 @@ export async function executeAction(input: ActInput): Promise<ActOutput> {
   const { ctx, now } = input;
   const verdict = await verifyActionToken(input.admin, input.token, { userId: ctx.user.id, contextHash: ctx.contextHash, now });
   let row: ActionTokenRow | null = null;
+  let handler: ActHandler | undefined;
   let handled: Handled;
   if (!verdict.ok) {
     handled = fail(verdict.outcome);
   } else {
     row = verdict.row;
-    if (input.via === "voice" && CLICK_ONLY.has(row.action)) {
+    handler = Object.prototype.hasOwnProperty.call(HANDLERS, row.action) ? HANDLERS[row.action] : undefined;
+    if (input.via === "voice" && (CLICK_ONLY.has(row.action) || handler?.clickOnly)) {
       // The card stays valid for a click: nothing is consumed here.
       handled = fail("refused", ACT_CLICK_ONLY_LINE);
+    } else if (!handler) {
+      handled = fail("refused");
+    } else if (handler.meta && !metaAllows(handler.meta, ctx)) {
+      // §2.5 per-tier revalidation, before anything is consumed.
+      handled = fail("refused", ACT_NOT_ALLOWED_LINE);
     } else {
-      const handler = HANDLERS[row.action];
-      handled = handler ? await handler(row, input) : fail("refused");
+      handled = await handler.run(row, input);
     }
   }
   const { response, entities } = handled;
+  const done = response.outcome === "done";
 
-  if (response.outcome !== "done") {
+  if (!(done && handler?.auditsDone)) {
     const reason = str(response.result?.reason);
     const audit: SkActionRow = {
       actor_id: ctx.user.id,
@@ -155,14 +140,14 @@ export async function executeAction(input: ActInput): Promise<ActOutput> {
       role: ctx.user.role,
       hat: ctx.user.hat,
       action: row?.action ?? "act",
-      tier: "confirm",
-      kind: "act",
+      tier: handler?.tier ?? "confirm",
+      kind: handler?.kind ?? "act",
       params: row?.params ?? {},
-      ok: false,
+      ok: done,
       // The decoded id is kept HERE (free text), not in token_id: a token that
       // failed verification may not exist, and token_id is a foreign key.
-      result: { summary: response.summary, via: input.via, token: decodeToken(input.token)?.id ?? null },
-      error: reason ? `${response.outcome}:${reason}` : response.outcome,
+      result: { summary: response.summary, via: input.via, token: decodeToken(input.token)?.id ?? null, ...(done && response.result ? response.result : {}) },
+      ...(done ? {} : { error: handled.auditError ?? (reason ? `${response.outcome}:${reason}` : response.outcome) }),
       session_id: input.memory.sessionId,
       generation_id: str(row?.params?.generation_id) || ctx.selection.generationId || null,
       token_id: row?.id ?? null,

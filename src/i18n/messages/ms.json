@@ -2125,7 +2125,35 @@
       "voiceYesHint": "Sebut “ya” untuk mengesahkan, atau “tidak” untuk membatalkan.",
       "loadingSlides": "Memuatkan slaid {k} daripada {n}…",
       "slidesLoaded": "{n} slaid kini di gulungan sebagai halaman {a}–{b}. Halaman atas dan halaman bawah bergerak antaranya; sebut 'halaman kosong' untuk menambah satu di antaranya.",
-      "explainSelection": "Terangkan bahagian ini"
+      "explainSelection": "Terangkan bahagian ini",
+      "act": {
+        "diaryCardTitle": "Hantar ke diari {target}",
+        "diaryPosted": "Telah dihantar ke diari {target}.",
+        "remindCardTitleOne": "Ingatkan ibu bapa 1 murid dalam {class}",
+        "remindCardTitle": "Ingatkan ibu bapa {n} murid dalam {class}",
+        "remindSentOne": "Peringatan dihantar kepada 1 keluarga (diari).",
+        "remindSent": "Peringatan dihantar kepada {n} keluarga (diari).",
+        "remindLeftOutDone": "Tidak termasuk {names}: sudah selesai.",
+        "remindLeftOutGone": "Tidak termasuk {n} yang tiada lagi dalam kelas ini.",
+        "remindNoneLeft": "Semua sudah selesai sekarang, jadi saya tidak menghantar sebarang peringatan.",
+        "remindTooMany": "Itu lebih daripada {max} keluarga — hadkan kepada satu kelas.",
+        "remindBody": "Peringatan: \"{title}\" belum disiapkan — tarikh akhir {due}. Sila galakkan anak anda untuk menyiapkannya.",
+        "remindBodyNoDue": "Peringatan: \"{title}\" belum disiapkan. Sila galakkan anak anda untuk menyiapkannya.",
+        "writeFailed": "Itu tidak berjaya — tiada apa-apa yang diubah. Tanya saya sekali lagi."
+      },
+      "cardParams": {
+        "target_label": "Untuk",
+        "note_type": "Jenis",
+        "body": "Mesej",
+        "parents_only": "Ibu bapa sahaja",
+        "entry_date": "Tarikh",
+        "count": "Murid",
+        "class_name": "Kelas",
+        "kit_title": "Kit",
+        "due_at": "Tarikh akhir",
+        "yes": "Ya",
+        "no": "Tidak"
+      }
     }
   }
 }

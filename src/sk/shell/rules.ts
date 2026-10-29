@@ -15,7 +15,14 @@ export type RulesDecision =
   /** S1: a Board move decided by rules (only while the collector reports an
    *  open Board session). `args` are the capability's arguments; `k` is 0-based. */
   | { intent: "teach"; move: SkBoardMove; args: Record<string, unknown> }
-  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach"> };
+  /** S2: a teacher action phrasing ("post a notice to 7B: …", "remind the
+   *  parents …"). Decided here only so it is never mistaken for a navigate
+   *  ("write in Ali's diary" names the diary); the model still resolves it
+   *  through the action's capability, which returns a confirm card. */
+  | { intent: "act"; action: SkActPhrase }
+  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act"> };
+
+export type SkActPhrase = "diary.note" | "parents.remind";
 
 export const SK_CHAT_NOTHING_PENDING = "Nothing is waiting on an answer — ask me something, or tell me where to go.";
 export const SK_CHAT_THANKS = "You're welcome.";
@@ -384,6 +391,57 @@ export function startLessonOf(normed: string, rawText: string): { classQuery?: s
   return out;
 }
 
+// ── S2 teacher actions (diary note, parent reminders) ───────────────────────
+//
+// EN / MS / AR imperatives, anchored at the start (after a polite word), and
+// never a question. Reminders first: "send a reminder to the parents" is a
+// reminder, "send a reminder to 7B" is a diary note.
+const ACT_POLITE = "(?:please |pls |sila |tolong |boleh |can you |could you |من فضلك |الرجاء |رجاء )?";
+const CLASS_TOKEN = "(?:class |kelas |grade |year |form |tingkatan |darjah |tahun |الصف |صف |الفصل |فصل )?[0-9]{1,2} ?[a-z]{1,2}(?![a-z])";
+const REMIND_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    "remind (?:the |their |all the |all |every )?(?:parents|families|mums and dads)" +
+    "|(?:send|write|post) (?:a |the )?reminders? to (?:the |their |all the |all )?(?:parents|families)" +
+    "|ingatkan (?:semua |para )?(?:ibu ?bapa|keluarga)" +
+    "|(?:hantar|kirim) peringatan (?:kepada|pada|ke) (?:semua )?(?:ibu ?bapa|keluarga)" +
+    "|(?:ذكّر|ذكر) (?:جميع )?(?:أولياء|اولياء) (?:الأمور|الامور)" +
+    "|(?:أرسل|ارسل) (?:تذكيرا|تذكيراً|تذكير) (?:إلى |الى |ل)?(?:أولياء|اولياء) (?:الأمور|الامور)" +
+    ")",
+  "u",
+);
+const DIARY_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    // post a notice to 7B / send a note to 7B's parents / put a message in 7B's diary
+    "(?:post|send|put|add|write|give|share|leave) (?:a |an |the )?(?:notice|note|message|announcement|reminder|diary note|diary entry) (?:to|for|in|on|into) " +
+    // add to the diary for 7B / write in Ali's diary / put this in 7B's diary
+    "|(?:add|write|put|post|note)(?: this| that| it| something| a line| an entry)? (?:to|in|into|on) (?:the |[\\p{L}0-9 ]{1,30}['’]s |the class |class )?(?:class )?diary" +
+    // tell 7B … / tell 7B's parents …
+    "|tell " + CLASS_TOKEN +
+    // MS: tulis dalam diari 7B / maklumkan kepada 7B / hantar notis kepada 7B / beritahu 7B
+    "|tulis(?:kan)? (?:dalam|di|ke|pada) (?:dalam )?(?:buku komunikasi|diari)" +
+    "|maklumkan (?:kepada|pada|kpd) " +
+    "|(?:hantar|siarkan|catat(?:kan)?|tulis(?:kan)?|kirim) (?:satu )?(?:notis|nota|mesej|pesanan|catatan|makluman) " +
+    "|beritahu " + CLASS_TOKEN +
+    // AR: اكتب في مذكرة 7B / انشر إشعارا للصف 7B / أخبر 7B
+    "|(?:اكتب|أكتب|سجل|سجّل) (?:في|فى) (?:مذكرة|يوميات|اليوميات|دفتر)" +
+    "|(?:انشر|أرسل|ارسل|أضف|اضف) (?:إشعارا|إشعاراً|اشعارا|إعلانا|إعلاناً|ملاحظة|رسالة|تنبيها|تنبيهاً)" +
+    "|(?:أخبر|اخبر|بلغ|بلّغ) " + CLASS_TOKEN +
+    ")",
+  "u",
+);
+
+/** The S2 action a phrase asks for, or null. Questions never are actions. */
+export function actPhraseOf(t: string, raw: string): SkActPhrase | null {
+  if (/[?؟]\s*$/u.test(raw)) return null;
+  if (REMIND_PHRASE_RE.test(t)) return "parents.remind";
+  if (DIARY_PHRASE_RE.test(t)) return "diary.note";
+  return null;
+}
+
 export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
   const raw = (text ?? "").trim();
   const t = norm(raw);
@@ -408,6 +466,10 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
       if (b) return b;
     }
   }
+
+  // S2: a teacher action phrasing is never a navigate (the model resolves it).
+  const act = actPhraseOf(t, raw);
+  if (act) return { intent: "act", action: act };
 
   const isQuestion = /[?؟]\s*$/.test(raw) || /^(?:what|which|who|whose|how|when|where|why|is|are|do|does|did|can|could|has|have|berapa|siapa|apa|bila|mana|bagaimana|ما|من|كم|متى|كيف|هل)\b/u.test(t);
   const target = findTarget(t);

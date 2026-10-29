@@ -2125,7 +2125,35 @@
       "voiceYesHint": "قل «نعم» للتأكيد، أو «لا» للإلغاء.",
       "loadingSlides": "جارٍ تحميل الشريحة {k} من {n}…",
       "slidesLoaded": "{n} شريحة الآن على اللفافة كصفحات {a}–{b}. الصفحة السابقة والتالية تنقلان بينها؛ قل 'صفحة فارغة' لإضافة صفحة بينها.",
-      "explainSelection": "اشرح هذا الجزء"
+      "explainSelection": "اشرح هذا الجزء",
+      "act": {
+        "diaryCardTitle": "انشر في يوميات {target}",
+        "diaryPosted": "تم النشر في يوميات {target}.",
+        "remindCardTitleOne": "ذكّر أولياء أمور طالب واحد في {class}",
+        "remindCardTitle": "ذكّر أولياء أمور {n} من الطلاب في {class}",
+        "remindSentOne": "أُرسل تذكير إلى أسرة واحدة (اليوميات).",
+        "remindSent": "أُرسلت تذكيرات إلى {n} من الأسر (اليوميات).",
+        "remindLeftOutDone": "استثنيت {names}: أنهوا بالفعل.",
+        "remindLeftOutGone": "استثنيت {n} لم يعودوا في هذا الصف.",
+        "remindNoneLeft": "أنهى الجميع الآن، لذا لم أرسل أي تذكير.",
+        "remindTooMany": "هذا أكثر من {max} أسرة — اقصره على صف واحد.",
+        "remindBody": "تذكير: \"{title}\" لم يُنجز بعد — موعد التسليم {due}. يرجى تشجيع طفلكم على إنهائه.",
+        "remindBodyNoDue": "تذكير: \"{title}\" لم يُنجز بعد. يرجى تشجيع طفلكم على إنهائه.",
+        "writeFailed": "لم يتم ذلك — لم يتغير شيء. اطلب مني مرة أخرى."
+      },
+      "cardParams": {
+        "target_label": "إلى",
+        "note_type": "النوع",
+        "body": "الرسالة",
+        "parents_only": "لأولياء الأمور فقط",
+        "entry_date": "التاريخ",
+        "count": "الطلاب",
+        "class_name": "الصف",
+        "kit_title": "الحزمة",
+        "due_at": "موعد التسليم",
+        "yes": "نعم",
+        "no": "لا"
+      }
     }
   }
 }

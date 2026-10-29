@@ -2125,7 +2125,35 @@
       "voiceYesHint": "Dites « oui » pour confirmer, ou « non » pour annuler.",
       "loadingSlides": "Chargement de la diapositive {k} sur {n}…",
       "slidesLoaded": "{n} diapositives sont sur le rouleau, pages {a} à {b}. Page précédente et page suivante passent de l'une à l'autre ; dites « page blanche » pour en insérer une entre deux.",
-      "explainSelection": "Explique cette partie"
+      "explainSelection": "Explique cette partie",
+      "act": {
+        "diaryCardTitle": "Publier dans le carnet de {target}",
+        "diaryPosted": "Publié dans le carnet de {target}.",
+        "remindCardTitleOne": "Relancer les parents d'un élève de {class}",
+        "remindCardTitle": "Relancer les parents de {n} élèves de {class}",
+        "remindSentOne": "Rappel envoyé à 1 famille (carnet).",
+        "remindSent": "Rappels envoyés à {n} familles (carnet).",
+        "remindLeftOutDone": "Non inclus : {names}, déjà terminé.",
+        "remindLeftOutGone": "Non inclus : {n} qui ne sont plus dans cette classe.",
+        "remindNoneLeft": "Tout le monde a terminé maintenant, je n'ai donc envoyé aucun rappel.",
+        "remindTooMany": "Cela fait plus de {max} familles — limitez à une seule classe.",
+        "remindBody": "Rappel : « {title} » n'est pas encore terminé — à rendre {due}. Merci d'encourager votre enfant à le terminer.",
+        "remindBodyNoDue": "Rappel : « {title} » n'est pas encore terminé. Merci d'encourager votre enfant à le terminer.",
+        "writeFailed": "Cela n'a pas abouti — rien n'a été modifié. Redemandez-moi."
+      },
+      "cardParams": {
+        "target_label": "Pour",
+        "note_type": "Type de note",
+        "body": "Texte",
+        "parents_only": "Parents uniquement",
+        "entry_date": "Jour",
+        "count": "Élèves",
+        "class_name": "Classe",
+        "kit_title": "Kit pédagogique",
+        "due_at": "À rendre",
+        "yes": "Oui",
+        "no": "Non"
+      }
     }
   }
 }
