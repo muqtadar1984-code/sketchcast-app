@@ -541,7 +541,11 @@ export default function PresentClient({
   // in state), so a bridge rebuilt in between loses neither.
   const [highlightBox] = useState(() => {
     let held: HeldSelection | null = null;
-    return { get: () => held, set: (h: HeldSelection | null) => void (held = h) };
+    return {
+      set: (h: HeldSelection | null) => void (held = h),
+      /** The highlight while it is live (60 s), for the bridge's state(). */
+      active: () => activeSelection(held, Date.now()),
+    };
   });
   const [askChannel] = useState(() => createAskChannel());
   const onHighlight = useCallback(
@@ -565,7 +569,7 @@ export default function PresentClient({
             railOpen: railBox.get,
             onLoading: setSlideLoad,
             deck: deckPort,
-            highlight: () => activeSelection(highlightBox.get(), Date.now()),
+            highlight: highlightBox.active,
             asks: askChannel,
           })
         : null,
