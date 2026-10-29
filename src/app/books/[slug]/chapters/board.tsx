@@ -26,7 +26,7 @@ export default async function ChapterBoard({ slug, work, revisions }: { slug: st
   const chapters = [...new Set(all.map((c) => c.chapter))].sort((a, b) => a - b);
   const sha = (rev: string, ch: number) => all.find((c) => c.revision_key === rev && c.chapter === ch)?.content_sha256;
   const auditedRev = [...new Set(findings.map((f) => f.revision_key))].sort().pop();
-  const drafting = runs.filter((r) => r.stage_key === "drafting");
+  const drafting = runs.filter((r) => r.stage_key === "drafting" || (r.stage_key === "draft_chapter" && r.status === "done"));
   const appRuns = runs.filter((r) => r.trigger === "app" || r.trigger === "cli").sort((a, b) => b.id - a.id);
   const lastCheck = (stage: string, ch: number): Run | undefined =>
     appRuns.find((r) => r.stage_key === stage && r.status === "done" && (r.chapters ?? []).includes(ch));
