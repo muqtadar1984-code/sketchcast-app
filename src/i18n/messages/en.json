@@ -2162,7 +2162,10 @@
         "prepTrial": "Your free trial includes one kit for one part of a chapter, so I can't start this one.",
         "prepBookBusy": "That book is being re-read — try again in a few minutes.",
         "prepNoAccess": "Your account can't start new kits right now — contact support.",
-        "prepGateWarning": "This upload may not be a textbook — the kit may come out poorly."
+        "prepGateWarning": "This upload may not be a textbook — the kit may come out poorly.",
+        "kitReadyNotice": "Your kit for {chapter} is ready — want me to open it?",
+        "kitFailedNotice": "The kit for {chapter} didn't finish — ask me to try again, or check the Library.",
+        "kitOfferDeclined": "All right — it's in your Library whenever you need it."
       },
       "cardParams": {
         "target_label": "For",
@@ -2185,6 +2188,14 @@
         "warning": "Note",
         "yes": "Yes",
         "no": "No"
+      },
+      "tray": {
+        "title": "Your kits",
+        "making": "Being made",
+        "partial": "{n} of {m} pieces ready",
+        "ready": "Ready",
+        "failed": "Didn't finish",
+        "open": "Open"
       }
     }
   }

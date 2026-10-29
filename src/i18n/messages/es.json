@@ -2162,7 +2162,10 @@
         "prepTrial": "Tu prueba gratuita incluye un kit para una parte de un capítulo, así que no puedo iniciar este.",
         "prepBookBusy": "Ese libro se está releyendo — inténtalo de nuevo en unos minutos.",
         "prepNoAccess": "Tu cuenta no puede iniciar kits nuevos ahora mismo — contacta con soporte.",
-        "prepGateWarning": "Puede que este archivo no sea un libro de texto — el kit podría salir mal."
+        "prepGateWarning": "Puede que este archivo no sea un libro de texto — el kit podría salir mal.",
+        "kitReadyNotice": "Tu kit de {chapter} está listo — ¿quieres que lo abra?",
+        "kitFailedNotice": "El kit de {chapter} no se terminó — pídeme que lo intente de nuevo, o revisa la biblioteca.",
+        "kitOfferDeclined": "De acuerdo — está en tu biblioteca cuando lo necesites."
       },
       "cardParams": {
         "target_label": "Para",
@@ -2185,6 +2188,14 @@
         "warning": "Nota",
         "yes": "Sí",
         "no": "No"
+      },
+      "tray": {
+        "title": "Tus kits",
+        "making": "En preparación",
+        "partial": "{n} de {m} piezas listas",
+        "ready": "Listo",
+        "failed": "No se terminó",
+        "open": "Abrir"
       }
     }
   }
