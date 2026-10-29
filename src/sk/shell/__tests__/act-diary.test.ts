@@ -111,11 +111,11 @@ describe("consumeThenWrite", () => {
 });
 
 describe("HANDLERS", () => {
-  it("every action is confirm/act; only assign audits its own done row; none of these three is click-only", () => {
-    expect(Object.keys(HANDLERS).sort()).toEqual(["assign", "diary.note", "parents.remind"]);
-    for (const h of Object.values(HANDLERS)) {
+  it("every action is confirm/act; only assign audits its own done row; only lesson.prepare (spends credits) is click-only", () => {
+    expect(Object.keys(HANDLERS).sort()).toEqual(["assign", "diary.note", "lesson.prepare", "marking.grade", "parents.remind"]);
+    for (const [name, h] of Object.entries(HANDLERS)) {
       expect([h.tier, h.kind]).toEqual(["confirm", "act"]);
-      expect(h.clickOnly ?? false).toBe(false);
+      expect(h.clickOnly ?? false).toBe(name === "lesson.prepare");
       expect(h.meta?.tier).toBe("confirm");
     }
     expect(HANDLERS.assign.auditsDone).toBe(true);

@@ -85,6 +85,11 @@ const SHIPPED = [
   // S2 slice A: diary note + parent reminders (teacher hat, diary flag).
   "diary.note",
   "parents.remind",
+  // S2 slice B: the marking queue + lesson prep (teacher hat; prepare is click-only).
+  "marking.next",
+  "marking.grade",
+  "lesson.prepare",
+  "lesson.status",
 ];
 const TEACHER_SEES = SHIPPED;
 const PARENT_SEES = ["navigate", "context.resolve"];
