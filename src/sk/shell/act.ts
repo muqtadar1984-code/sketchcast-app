@@ -37,6 +37,8 @@ import { markingGrade } from "@/sk/capabilities/marking";
 import { lessonPrepareAction } from "@/sk/capabilities/prepare";
 import { runBookActivate } from "./act-book";
 import { bookActivateAction } from "@/sk/capabilities/book";
+import { runNoticeSchool } from "./act-notice";
+import { noticeSchoolAction } from "@/sk/capabilities/notice";
 
 export { ACT_CLICK_ONLY_LINE, ACT_LINES, ACT_NOT_ALLOWED_LINE, consumeThenWrite, writeFailure } from "./act-core";
 export type { ActAdmin, ActHandler, ActInput, ActOutcome, Handled, WriteOutcome } from "./act-core";
@@ -45,7 +47,11 @@ export type { ActAdmin, ActHandler, ActInput, ActOutcome, Handled, WriteOutcome 
  *  registry names those S2 actions will carry; `assign` is deliberately absent. */
 export const CLICK_ONLY: ReadonlySet<string> = new Set([
   "teacher.invite", // invite teacher
-  "notice.school", // school-wide notice
+  "notice.school", // school-wide / all-staff notice (S5 slice D; also flagged clickOnly on its handler)
+  // RESERVED, NOT BUILT: there is no class-scoped (or grade-scoped) notice
+  // audience — 0068 publishes school or staff only, and one class is the
+  // teacher's diary.note. Kept so a future multi-class notice is click-only
+  // from its first line.
   "notice.multi_class", // multi-class notice
   "kit.generate", // spends credits
   "chapter.prepare", // spends credits
@@ -117,6 +123,9 @@ export const HANDLERS: Record<string, ActHandler> = {
   // S4 slice D: book activation — CLICK-ONLY (spends a code); the redeem RPC
   // runs after the consume with the server-verified user (act-book.ts).
   "book.activate": { tier: "confirm", kind: "act", clickOnly: true, meta: bookActivateAction.meta, run: runBookActivate },
+  // S5 slice D: the school notice — CLICK-ONLY (§9.2, school-wide); the row is
+  // POST /api/notices' own (shared builder), inserted AS THE LEADER (act-notice.ts).
+  "notice.school": { tier: "confirm", kind: "act", clickOnly: true, meta: noticeSchoolAction.meta, run: runNoticeSchool },
 };
 
 // ── The decision ─────────────────────────────────────────────────────────────

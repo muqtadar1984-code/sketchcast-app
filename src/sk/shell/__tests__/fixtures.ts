@@ -17,6 +17,7 @@ export const ALL_FLAGS: Record<string, boolean> = {
   analytics: true,
   timetable: true,
   calendar: true,
+  notices: true,
   diary: true,
   kits: true,
   board: true,
