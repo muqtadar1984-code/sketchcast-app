@@ -15,7 +15,7 @@
 //
 // Two implementations behind one interface: `RigAvatar` (the SK characters,
 // A for female voices, B for male — founder's choice 2026-10-27; cut into
-// layers by tools/sk-s1/make_rig.py) and `StubAvatar` for runs without a rig.
+// layers by the S1 make_rig tool, retired in S3 slice E) and `StubAvatar` for runs without a rig.
 // All nodes go through `dom.ts` (allow-listed tags/attributes, local images).
 
 import { activeGesture, regionBox, toBoard, wordAt, type AssetFixture, type Box, type Gesture, type Marks } from "./engine";
@@ -24,7 +24,7 @@ import { el, setAttr, setImageHref } from "./dom";
 const INK = "#14181F";
 const ACCENT = "#0C8175";
 
-/** The SK character rig (tools/sk-s1/make_rig.py): cut-out layers of one
+/** The SK character rig (public/sk/rig/sk-a, sk-b): cut-out layers of one
  * illustration with pivots in SOURCE pixels. */
 export type Rig = {
   character?: string;
@@ -43,7 +43,7 @@ export type Rig = {
 
 /** Which rig a voice gets: A (Malay woman teacher, teal tudung) for female
  * voices, B (Indian man teacher, glasses) for male. */
-export const rigBaseFor = (voiceGender: string | undefined): string => (voiceGender === "male" ? "/sk-s1/sk-b/" : "/sk-s1/sk-a/");
+export const rigBaseFor = (voiceGender: string | undefined): string => (voiceGender === "male" ? "/sk/rig/sk-b/" : "/sk/rig/sk-a/");
 
 // ── The tutor's look (founder, 2026-10-27) ──────────────────────────────────
 // ONE tutor identity, SK, with two looks the student may switch between:
@@ -56,7 +56,7 @@ export const DEFAULT_RIG: RigChoice = "B";
 export const RIG_CHOICE_KEY = "sk:rig";
 export const RIG_LABELS: Record<RigChoice, string> = { A: "Look A · female voice", B: "Look B · male voice" };
 
-export const rigBaseForChoice = (c: RigChoice): string => (c === "A" ? "/sk-s1/sk-a/" : "/sk-s1/sk-b/");
+export const rigBaseForChoice = (c: RigChoice): string => (c === "A" ? "/sk/rig/sk-a/" : "/sk/rig/sk-b/");
 export const voiceGenderForChoice = (c: RigChoice): "female" | "male" => (c === "A" ? "female" : "male");
 
 /** Parse a stored or query value; anything but A/B (any case) is the default. */
