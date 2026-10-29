@@ -1,6 +1,7 @@
 /**
  * The token suite across EVERY confirm-tier action /api/sk/act can execute
- * (assign, diary.note, parents.remind; S2 slice B: marking.grade, lesson.prepare), against a stateful admin with 0163's
+ * (assign, diary.note, parents.remind; S2 slice B: marking.grade, lesson.prepare;
+ * S4 slice D: book.activate — its "write" is the redeem RPC), against a stateful admin with 0163's
  * real consume semantics: single use, expired refused, altered params refused
  * (the HMAC is re-derived from the STORED row), a context change refused, and
  * a duplicate click — two at once — producing exactly ONE write.
@@ -13,17 +14,27 @@ import { freshMemory } from "../memory";
 import { canonicalParams, type ActionParams } from "../tokens";
 import type { SkContext } from "../types";
 import { NOW, SCHOOL_ID, TEACHER_ID, makeCtx } from "./fixtures";
-import { ACT_SECRET, ALI, BOOK, CLASS_7B, GEN, SHARE, SITI, SUB, diarySession, signedRow, statefulAdmin } from "./act-fakes";
+import { ACT_SECRET, AISYAH, ALI, BOOK, CLASS_7B, GEN, PRODUCT, SHARE, SITI, SUB, diarySession, signedRow, statefulAdmin, type RedeemWorld } from "./act-fakes";
+import { generateEditionCode, hmacCode, hmacOrderNumber } from "@/sk/access";
+import { maskCode, maskOrderNumber } from "@/sk/book-activate";
 
 const ID = "88888888-8888-4888-8888-888888888888";
+// S4 slice D: book.activate needs BOOK_CODE_SECRET at execution.
+const BOOK_SECRET = "book-code-secret-of-adequate-length";
+const EDITION = generateEditionCode((n) => new Uint8Array(Array.from({ length: n }, (_, i) => (i * 53 + 7) & 0xff)));
+const ORDER = "123-1234567-1234567";
 const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
   saved.SK_SHELL_SECRET = process.env.SK_SHELL_SECRET;
+  saved.BOOK_CODE_SECRET = process.env.BOOK_CODE_SECRET;
   process.env.SK_SHELL_SECRET = ACT_SECRET;
+  process.env.BOOK_CODE_SECRET = BOOK_SECRET;
 });
 afterEach(() => {
-  if (saved.SK_SHELL_SECRET === undefined) delete process.env.SK_SHELL_SECRET;
-  else process.env.SK_SHELL_SECRET = saved.SK_SHELL_SECRET;
+  for (const k of ["SK_SHELL_SECRET", "BOOK_CODE_SECRET"] as const) {
+    if (saved[k] === undefined) delete process.env[k];
+    else process.env[k] = saved[k];
+  }
 });
 
 const ACTIONS: Record<string, ActionParams> = {
@@ -41,7 +52,20 @@ const ACTIONS: Record<string, ActionParams> = {
   },
   "marking.grade": { submission_id: SUB, score: 7, out_of: 10, feedback: "Good work on part 2.", learner_label: "Ali Hassan", kit_title: "Cells worksheet" },
   "lesson.prepare": { book_id: BOOK, chapter_ref: "2", chapter_title: "Specialised Cells", book_title: "Biology", credits: 6, click_only: true },
+  "book.activate": {
+    code_kind: "Edition code (in the book)",
+    code: maskCode(EDITION),
+    order_ref: maskOrderNumber(ORDER),
+    for_child_id: AISYAH,
+    child_label: "Aisyah",
+    click_only: true,
+    sealed_kind: "edition",
+    sealed_code_hmac: hmacCode(EDITION, BOOK_SECRET),
+    sealed_order_hmac: hmacOrderNumber(ORDER, BOOK_SECRET),
+  },
 };
+/** S4 slice D: book.activate is the parent's (or a student's), not the teacher's. */
+const CTX_FOR: Record<string, () => SkContext> = { "book.activate": () => makeCtx({ role: "parent", hat: "parent", schoolId: null }) };
 
 const TABLES = {
   classes: [{ id: CLASS_7B, name: "7B", teacher_id: TEACHER_ID }],
@@ -55,17 +79,21 @@ const TABLES = {
   submissions: [{ id: SUB, generation_id: GEN, student_id: ALI, mode: "file", grade_status: "pending", auto_score: null, max_score: null, answers: null, submitted_at: "2026-10-27T01:00:00.000Z" }],
   generations: [{ id: GEN, kind: "worksheet", title: "Cells worksheet", chapter_ref: "1", book_id: null, owner_id: TEACHER_ID, params: null, status: "done" }],
   books: [{ id: BOOK, title: "Biology", subject: "Science", grade: "Form 4", language: "en", status: "ready", owner_id: TEACHER_ID, school_id: SCHOOL_ID, chapters: [{ num: 2, title: "Specialised Cells", parts: [] }] }],
+  // S4 slice D: the parent's verified child, and the product's title.
+  parent_links: [{ parent_id: TEACHER_ID, child_id: AISYAH, verified_at: "2026-10-01T00:00:00.000Z", profiles: { full_name: "Aisyah binti Ali" } }],
+  sk_book_products: [{ id: PRODUCT, title: "Biology" }],
 };
 
 function world(action: string, o: { ctx?: SkContext; issuedFor?: SkContext; expiresAt?: string } = {}) {
-  const ctx = o.ctx ?? makeCtx();
+  const ctx = o.ctx ?? CTX_FOR[action]?.() ?? makeCtx();
   const { row, token } = signedRow({ id: ID, action, params: ACTIONS[action], contextHash: (o.issuedFor ?? ctx).contextHash, ...(o.expiresAt ? { expires_at: o.expiresAt } : {}) });
-  const admin = statefulAdmin({ [ID]: row });
+  const redeem: RedeemWorld = { codes: { [hmacCode(EDITION, BOOK_SECRET)]: { product_id: PRODUCT } }, links: [{ parent: TEACHER_ID, child: AISYAH }] };
+  const admin = statefulAdmin({ [ID]: row }, NOW, redeem);
   const session = diarySession(structuredClone(TABLES)); // updates patch rows in place
   const sink = new MemoryAuditSink();
   const input = (over: Partial<ActInput> = {}): ActInput => ({ ctx, token, via: "click", turnId: "t-1", now: NOW, memory: freshMemory(ctx, NOW), admin, session, sink, ...over });
-  /** Every write this world has seen: diary notes + assign's shares + grades that matched + kit rows. */
-  const writes = () => session.notes.length + admin.shareWrites.length + session.updates.reduce((n, u) => n + u.ids.length, 0) + session.generations.length;
+  /** Every write this world has seen: diary notes + assign's shares + grades that matched + kit rows + book grants. */
+  const writes = () => session.notes.length + admin.shareWrites.length + session.updates.reduce((n, u) => n + u.ids.length, 0) + session.generations.length + admin.grants.length;
   return { ctx, row, token, admin, session, sink, input, writes };
 }
 
