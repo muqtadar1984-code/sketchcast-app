@@ -13,10 +13,10 @@
 
 import type { SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext, SkSessionDb } from "../shell/types";
 import { shapeFromConfig, type Slot, type TimetableShape } from "@/utils/timetable";
-import { periodAt, periodWindows, resolveContext, type LastTaught } from "@/utils/present/context";
+import { periodAt, periodWindows, resolveContext, slotFor, type LastTaught, type PeriodHit, type PeriodWindow } from "@/utils/present/context";
 // S5 slice A: the principal / coordinator modes (leader-scope.ts).
 import { lineFor } from "../shell/lines";
-import { S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED, S_TT_CLOSED, S_TT_IN, S_TT_NEXT, S_TT_NONE } from "../shell/school-lines";
+import { S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED, S_TT_CLOSED, S_TT_IN, S_TT_NEXT, S_TT_NONE, S_TT_NO_NEXT } from "../shell/school-lines";
 import { classInScope, gradeOutsideScope, leaderScope, sameGrade, sameSubject, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
 // S5 slice B: a leader mode with school analytics off answers the fixed line.
 import { analyticsOffResult } from "@/sk/shell/school-meter";
@@ -44,6 +44,25 @@ export function clockAt(now: Date, offsetMinutes = KL_OFFSET_MIN): { day: number
   return { day, minutes: shifted.getUTCHours() * 60 + shifted.getUTCMinutes() };
 }
 
+/** "now" (default): the period the clock is in, or the next one before it
+ *  starts. "next": the period AFTER the one running ("what's on next",
+ *  "seterusnya", "التالي") — S5 gate finding 2026-10-29: it read the current one. */
+export type NowNextWhen = "now" | "next";
+
+export function whenOf(v: unknown): NowNextWhen {
+  return v === "next" ? "next" : "now";
+}
+
+/** The period a `when` points at: "now" is periodAt; "next" while a period is
+ *  running is the one after it (null after the last), otherwise the upcoming
+ *  one periodAt already names. Pure; exported for the tests. */
+export function periodFor(windows: PeriodWindow[], minutes: number, when: NowNextWhen): PeriodHit | null {
+  const hit = periodAt(windows, minutes);
+  if (when === "now" || !hit || hit.state === "next") return hit;
+  const after = windows.filter((w) => w.startMin >= hit.window.endMin && w.period !== hit.period).sort((a, b) => a.startMin - b.startMin)[0];
+  return after ? { period: after.period, label: after.label, window: after, state: "next" } : null;
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const hhmm = (m: number) => `${pad(Math.floor((m % 1440) / 60))}:${pad(m % 60)}`;
 
@@ -61,6 +80,8 @@ export type NowNextInput = {
   chapterTitles?: Record<string, string>;
   day: number;
   minutes: number;
+  /** Default "now". */
+  when?: NowNextWhen;
 };
 
 export type NowNextFact = {
@@ -84,9 +105,13 @@ export type NowNextFact = {
 
 /** The resolver applied, plus today's remaining lessons. Pure; exported for the tests. */
 export function nowNext(input: NowNextInput): { facts: NowNextFact[]; summary: string } {
-  const { teacherId, shape, slots, lastTaught, classNames, bookTitles, chapterTitles = {}, day, minutes } = input;
-  const ctx = resolveContext({ teacherId, shape, slots, lastTaught, day, minutes });
+  const { teacherId, shape, slots, lastTaught, classNames, bookTitles, chapterTitles = {}, day, minutes, when = "now" } = input;
   const windows = periodWindows(shape);
+  const current = resolveContext({ teacherId, shape, slots, lastTaught, day, minutes });
+  // "next" while a period runs: the same resolution for the period after it.
+  const wantsNext = when === "next" && current.period?.state === "in";
+  const afterLast = wantsNext && !periodFor(windows, minutes, "next");
+  const ctx = wantsNext ? nextContext(current, windows, slots, teacherId, day, minutes) : current;
   const className = (id: string | null) => (id ? classNames[id] ?? "Class" : null);
   const chapterTitle = (l: LastTaught | null) => (l?.book_id && l.chapter_num != null ? chapterTitles[`${l.book_id}:${l.chapter_num}`] ?? null : null);
   const last = ctx.slot ? lastTaught.find((l) => l.class_id === ctx.slot!.class_id && l.subject === ctx.slot!.subject) ?? null : null;
@@ -151,6 +176,8 @@ export function nowNext(input: NowNextInput): { facts: NowNextFact[]; summary: s
     summary = `${where}: ${head.subject} with ${head.className}, ${ctx.period.label} (${head.startsAt}–${head.endsAt}).${lastBit}`;
   } else if (ctx.confidence === "period" && ctx.period) {
     summary = `${ctx.period.state === "in" ? "It is" : "Next is"} ${ctx.period.label} (${head.startsAt}–${head.endsAt}); you have no lesson in it.`;
+  } else if (afterLast) {
+    summary = "This is the last period today; nothing comes after it.";
   } else {
     summary = day < 1 || day > shape.days ? "No school periods today." : minutes < (windows[0]?.startMin ?? 0) ? "School has not started yet." : "The school day is over.";
   }
@@ -163,6 +190,19 @@ export function nowNext(input: NowNextInput): { facts: NowNextFact[]; summary: s
     summary += " Nothing more after that today.";
   }
   return { facts: [head, ...remaining], summary };
+}
+
+type Resolved = ReturnType<typeof resolveContext>;
+
+/** resolveContext's answer for the period after the running one. */
+function nextContext(current: Resolved, windows: PeriodWindow[], slots: Slot[], teacherId: string, day: number, minutes: number): Resolved {
+  const hit = periodFor(windows, minutes, "next");
+  const none = { ...current, period: null, slot: null, classId: null, subject: null, timeLabel: null, suggestion: null };
+  if (!hit) return { ...none, confidence: "none" };
+  const timeLabel = `${hhmm(hit.window.startMin)} – ${hhmm(hit.window.endMin)}`;
+  const slot = slotFor(slots, teacherId, day, hit.period);
+  if (!slot) return { ...none, period: hit, timeLabel, confidence: "period" };
+  return { ...none, period: hit, slot, classId: slot.class_id, subject: slot.subject, timeLabel, confidence: "slot" };
 }
 
 async function loadShape(ctx: SkContext, db: SkSessionDb): Promise<TimetableShape> {
@@ -179,7 +219,10 @@ export const timetableNowNext: SkCapability = {
       "Which lesson the teacher is in or has next (class, subject, period, times, where that class last got to), and the rest of today's lessons. With the principal hat: every class's lesson in the current or next period across the school; with the coordinator hat: the scope grades' classes only.",
     parameters: {
       type: "object",
-      properties: { grade: { type: "string", description: 'Leaders only: only this grade, e.g. "5" or "Form 2".' } },
+      properties: {
+        grade: { type: "string", description: 'Leaders only: only this grade, e.g. "5" or "Form 2".' },
+        when: { type: "string", enum: ["now", "next"], description: "'next' for the period AFTER the current one (what's on next / seterusnya / التالي); 'now' (default) for the current one." },
+      },
       additionalProperties: false,
     },
     tier: "immediate",
@@ -195,7 +238,8 @@ export const timetableNowNext: SkCapability = {
     // S5 slice B: the leader mode needs school analytics (the turn route's
     // gate says so first; this holds for any other caller). Own-class: unchanged.
     if (ls.mode !== "own" && ctx.flags.analytics !== true) return analyticsOffResult(ctx);
-    if (ls.mode !== "own") return leaderNowNext(ctx, ls, typeof args.grade === "string" && args.grade.trim() ? args.grade.trim().slice(0, 20) : undefined, deps);
+    const when = whenOf(args.when);
+    if (ls.mode !== "own") return leaderNowNext(ctx, ls, typeof args.grade === "string" && args.grade.trim() ? args.grade.trim().slice(0, 20) : undefined, deps, when);
     try {
       const shape = await loadShape(ctx, db);
       const slots = rows<Slot>(
@@ -224,7 +268,7 @@ export const timetableNowNext: SkCapability = {
         }
       }
       const clock = deps.clock && Number.isFinite(deps.clock.day) && Number.isFinite(deps.clock.minutes) ? { day: deps.clock.day, minutes: deps.clock.minutes } : clockAt(deps.now);
-      const { facts, summary } = nowNext({ teacherId: me, shape, slots, lastTaught, classNames, bookTitles, chapterTitles, day: clock.day, minutes: clock.minutes });
+      const { facts, summary } = nowNext({ teacherId: me, shape, slots, lastTaught, classNames, bookTitles, chapterTitles, day: clock.day, minutes: clock.minutes, when });
       const head = facts[0];
       return {
         ok: true,
@@ -251,7 +295,7 @@ type ProfileRow = { id: string; full_name: string | null; username: string | nul
  *  school's own shape and the same clock the teacher view uses. Slots are
  *  school-wide under RLS (tt_member_read), so the scope cut here is what keeps
  *  a coordinator inside their grades. */
-export async function leaderNowNext(ctx: SkContext, ls: LeaderScope, grade: string | undefined, deps: SkCapabilityDeps): Promise<SkCapabilityResult> {
+export async function leaderNowNext(ctx: SkContext, ls: LeaderScope, grade: string | undefined, deps: SkCapabilityDeps, when: NowNextWhen = "now"): Promise<SkCapabilityResult> {
   const locale = ctx.user.locale;
   const db = deps.session;
   if (ls.mode === "scope" && !(ls.rows ?? []).length) return { ok: true, summary: lineFor(S_NO_SCOPE, locale), facts: [], entities: [] };
@@ -262,8 +306,14 @@ export async function leaderNowNext(ctx: SkContext, ls: LeaderScope, grade: stri
   try {
     const shape = await loadShape(ctx, db);
     const clock = deps.clock && Number.isFinite(deps.clock.day) && Number.isFinite(deps.clock.minutes) ? { day: deps.clock.day, minutes: deps.clock.minutes } : clockAt(deps.now);
-    const hit = clock.day >= 1 && clock.day <= shape.days ? periodAt(periodWindows(shape), clock.minutes) : null;
-    if (!hit) return { ok: true, summary: lineFor(S_TT_CLOSED, locale), facts: [], entities: [] };
+    const windows = periodWindows(shape);
+    const inSchoolDay = clock.day >= 1 && clock.day <= shape.days;
+    const hit = inSchoolDay ? periodFor(windows, clock.minutes, when) : null;
+    if (!hit) {
+      // "next" during the last period: there is no next one today.
+      const last = inSchoolDay && when === "next" && periodAt(windows, clock.minutes)?.state === "in";
+      return { ok: true, summary: lineFor(last ? S_TT_NO_NEXT : S_TT_CLOSED, locale), facts: [], entities: [] };
+    }
     const where = whereLabel(ls, locale, grade);
     const slots = rows<Slot>(
       await db.from("timetable_slots").select("class_id, day, period, subject, teacher_id, room, kind").eq("school_id", ls.schoolId).eq("day", clock.day).eq("period", hit.period),

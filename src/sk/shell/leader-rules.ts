@@ -129,6 +129,30 @@ const PATTERNS: Array<[SkLeaderCapability, Record<string, string>, RegExp[]]> = 
       re("كيف تسير الواجبات"),
     ],
   ],
+  // S5 gate finding 2026-10-29 (p-tt-02, c-tt-03): "what's on next" read the
+  // CURRENT period. The next-period phrasings come first and carry
+  // when: "next"; the rest are "now" (the capability's default).
+  [
+    "timetable.now_next",
+    { when: "next" },
+    [
+      re("what(?: is|'s) on next(?: period)?"),
+      re("what(?: is|'s) (?:on |in )?(?:the )?next period"),
+      re("what(?: is|'s) next"),
+      re("what(?: lessons| classes)? (?:are|is) (?:on )?next"),
+      re("who(?: is|'s) teaching next(?: period)?"),
+      re("which classes are (?:on )?next"),
+      re("(?:the )?next period"),
+      re("(?:apa|kelas apa|pelajaran apa) (?:yang )?seterusnya"),
+      re("siapa (?:yang )?mengajar (?:pada )?(?:waktu )?seterusnya"),
+      re("(?:kelas|pelajaran|waktu|jadual(?: waktu)?) (?:yang )?seterusnya"),
+      re("(?:apa|kelas apa) (?:pada |dalam )?waktu (?:yang )?seterusnya"),
+      re("(?:ما|ماذا) (?:هي )?(?:الحصة|الحصص|الدرس|الدروس) (?:التالية|التالي|القادمة|القادم)"),
+      re("من (?:يدرّس|يدرس) (?:في )?(?:الحصة )?(?:التالية|التالي|القادمة)"),
+      re("(?:الحصة|الحصص|الدرس) (?:التالية|التالي|القادمة)"),
+      re("(?:ما|ماذا) (?:التالي|بعد ذلك)"),
+    ],
+  ],
   [
     "timetable.now_next",
     {},
@@ -137,7 +161,6 @@ const PATTERNS: Array<[SkLeaderCapability, Record<string, string>, RegExp[]]> = 
       re("who(?: is|'s) teaching (?:right )?now"),
       re("what(?: lessons| classes)? (?:are|is) on (?:right )?now"),
       re("what(?: is|'s) on (?:right )?now"),
-      re("what(?: is|'s) on next(?: period)?"),
       re("which classes are (?:on|running|in session) (?:right )?now"),
       re("siapa (?:yang )?mengajar sekarang"),
       re("kelas apa (?:yang berjalan )?sekarang"),
@@ -177,10 +200,16 @@ const PATTERNS: Array<[SkLeaderCapability, Record<string, string>, RegExp[]]> = 
       re("which teachers (?:spend|cost|spent) the most"),
       re("berapa (?:kos|belanja) (?:penjanaan|kit|sekolah)(?: kita)?"),
       re("(?:kos|perbelanjaan) (?:penjanaan|kit)(?: sekolah)?"),
+      // S5 gate finding 2026-10-29 (p-cost-03): "kos penjanaan kit" fell through to navigate.
+      re("berapa (?:banyak )?(?:kos|belanja)(?: (?:penjanaan|kit|sekolah|ai))*(?: (?:kita|sekolah|bulan ini))?"),
+      re("(?:jumlah )?(?:kos|perbelanjaan|belanja) (?:penjanaan )?(?:kit|ai)(?: (?:sekolah|kita|bulan ini))?"),
+      re("(?:jumlah )?(?:kos|perbelanjaan) (?:penjanaan|sekolah)(?: kit)?(?: (?:sekolah|kita|bulan ini))?"),
       re("berapa (?:banyak )?(?:yang )?(?:kita|sekolah) (?:telah )?belanja(?:kan)?(?: untuk kit)?"),
       re("كم (?:تكلفة|كلفة) (?:الحزم|الإنشاء|التوليد|المدرسة)"),
       re("(?:ما )?(?:تكلفة|تكاليف) (?:الحزم|الإنشاء|التوليد|المدرسة)"),
       re("كم (?:أنفقنا|انفقنا|أنفقت المدرسة)(?: على الحزم)?"),
+      re("(?:ما |كم )?(?:ال)?(?:تكلفة|تكاليف|كلفة)(?: (?:الحزم|الإنشاء|التوليد|المدرسة|إنشاء الحزم|توليد الحزم|الذكاء الاصطناعي))?"),
+      re("كم (?:كلفت|تكلّف|تكلف|كلّفت) (?:الحزم|المدرسة|إنشاء الحزم)"),
     ],
   ],
   [

@@ -20,7 +20,7 @@ import type { SkCapability, SkCapabilityResult } from "../shell/types";
 import { computeSchoolHealth, type SchoolHealth } from "@/utils/school-health";
 import { lineFor } from "../shell/lines";
 import { S_AT_RISK, S_AT_RISK_NONE, S_BY_GRADE, S_EMPTY, S_NO_SCOPE, S_NOT_YET, S_OUT_OF_SCOPE, S_OVERVIEW, S_READ_FAILED, S_TEACHERS, S_TEACHERS_NONE } from "../shell/school-lines";
-import { cutLeaderRows, gradeOutsideScope, leaderScope, needsSubjects, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
+import { cutLeaderRows, flagsSaid, gradeOutsideScope, leaderScope, needsSubjects, reasonsSaid, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
 import { generationSubjects, schoolHealthRows } from "./shared";
 
 export const SCHOOL_AT_RISK_CAP = 30;
@@ -82,7 +82,7 @@ export function schoolSummary(h: SchoolHealth, focus: Focus, where: string, loca
           n: h.totals.atRisk,
           items: `${h.atRisk
             .slice(0, SAY_NAMES)
-            .map((r) => `${r.name} (${r.className}) — ${r.reasons.join(", ")}`)
+            .map((r) => `${r.name} (${r.className}) — ${reasonsSaid(r, locale)}`)
             .join("; ")}${h.atRisk.length > SAY_NAMES ? "; …" : ""}`,
         })
       : lineFor(S_AT_RISK_NONE, locale, { where, students: h.totals.students });
@@ -94,7 +94,7 @@ export function schoolSummary(h: SchoolHealth, focus: Focus, where: string, loca
           n: flagged.length,
           items: `${flagged
             .slice(0, SAY_NAMES)
-            .map((t) => `${t.name} — ${t.flags.join(", ")}`)
+            .map((t) => `${t.name} — ${flagsSaid(t, locale)}`)
             .join("; ")}${flagged.length > SAY_NAMES ? "; …" : ""}`,
         })
       : lineFor(S_TEACHERS_NONE, locale, { where, teachers: h.totals.teachers });
@@ -158,7 +158,7 @@ export const schoolHealth: SkCapability = {
       const rows = cutLeaderRows(all, ls, { grade, subjectOf });
       const where = whereLabel(ls, locale, grade);
       if (!rows.classes.length) return { ok: true, summary: lineFor(S_EMPTY, locale, { where }), facts: [], entities: [] };
-      const h = computeSchoolHealth(rows, deps.now.getTime());
+      const h = computeSchoolHealth(rows, deps.now.getTime(), { codes: true });
       const result: SkCapabilityResult = {
         ok: true,
         summary: schoolSummary(h, focus, where, locale).slice(0, 900),

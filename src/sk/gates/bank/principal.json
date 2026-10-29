@@ -1,0 +1,1266 @@
+[
+ {
+  "id": "p-health-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "health",
+  "text": "how is the school doing",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "learners 13",
+    "classes 4",
+    "teachers 3",
+    "At risk: 5",
+    "Awaiting marking: 5",
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-health-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "health",
+  "text": "give me a school overview",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "learners 13",
+    "classes 4",
+    "teachers 3",
+    "At risk: 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-health-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "health",
+  "text": "how is grade 5 doing",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "grade 5",
+    "learners 8",
+    "classes 2",
+    "At risk: 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-health-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "health",
+  "text": "bagaimana prestasi sekolah kita",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "murid 13",
+    "kelas 4",
+    "guru 3",
+    "Berisiko: 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-health-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "health",
+  "text": "كيف حال المدرسة",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "13",
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-health-06",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "health",
+  "text": "Give me the headline numbers for the whole school this week",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "13",
+    "5"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.health"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-health-07",
+  "suite": "grounded",
+  "as": "principalB",
+  "lang": "en",
+  "category": "health",
+  "text": "how is the school doing",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "learners 5",
+    "classes 2",
+    "At risk: 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-health-08",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "health",
+  "text": "bagaimana tahun 4",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "tahun 4",
+    "murid 2",
+    "Berisiko: 1"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-risk-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "who's at risk",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "At risk in the school: 5",
+    "Amir",
+    "Balqis",
+    "Citra",
+    "Dewi"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-risk-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "who is at risk in grade 5",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "At risk in grade 5: 3",
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-risk-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "which students are falling behind in grade 4",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "grade 4",
+    "Dewi"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-risk-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "at_risk",
+  "text": "siapa yang berisiko",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "5",
+    "Amir",
+    "Balqis",
+    "Citra",
+    "Dewi"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-risk-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "at_risk",
+  "text": "من هم الطلاب المعرضون للخطر",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "5",
+    "Amir",
+    "Balqis",
+    "Citra",
+    "Dewi"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-risk-06",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "Which learners have never started their work?",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "Amir",
+    "Balqis",
+    "Citra",
+    "Dewi"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "learners.risk"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-risk-07",
+  "suite": "grounded",
+  "as": "principalB",
+  "lang": "en",
+  "category": "at_risk",
+  "text": "who's at risk",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "3",
+    "Zul",
+    "Zaki",
+    "Yusuf"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-risk-08",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "at_risk",
+  "text": "murid yang berisiko dalam tahun 5",
+  "expect": {
+   "capability": [
+    "learners.risk",
+    "school.health"
+   ],
+   "mustSay": [
+    "tahun 5",
+    "Amir",
+    "Balqis"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-flags-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "which teachers have marking piling up",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar",
+    "3 to grade"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-flags-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "teacher workload",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar",
+    "3 to grade"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-flags-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "teacher_flags",
+  "text": "beban kerja guru",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-flags-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "teacher_flags",
+  "text": "عبء عمل المعلمين",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-flags-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "Is any teacher falling behind on marking?",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.health",
+     "args": {
+      "focus": "teachers"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-flags-06",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "teacher_flags",
+  "text": "which teachers need support",
+  "expect": {
+   "capability": [
+    "school.health"
+   ],
+   "mustSay": [
+    "Cikgu Bakar"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-seats-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "seats",
+  "text": "how many teachers and students do we have",
+  "expect": {
+   "capability": [
+    "school.seats"
+   ],
+   "mustSay": [
+    "teachers 3",
+    "students 13",
+    "No seat limit is recorded"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-seats-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "seats",
+  "text": "show our licence",
+  "expect": {
+   "capability": [
+    "school.seats"
+   ],
+   "mustSay": [
+    "status active",
+    "31 Mar 2027",
+    "No seat limit is recorded"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-seats-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "seats",
+  "text": "berapa ramai guru dan murid",
+  "expect": {
+   "capability": [
+    "school.seats"
+   ],
+   "mustSay": [
+    "guru 3",
+    "murid 13"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-seats-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "seats",
+  "text": "كم عدد المعلمين والطلاب",
+  "expect": {
+   "capability": [
+    "school.seats"
+   ],
+   "mustSay": [
+    "3",
+    "13",
+    "2027"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-seats-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "seats",
+  "text": "When does our subscription end?",
+  "expect": {
+   "capability": [
+    "school.seats"
+   ],
+   "mustSay": [
+    "2027"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.seats"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-seats-06",
+  "suite": "grounded",
+  "as": "principalB",
+  "lang": "en",
+  "category": "seats",
+  "text": "how many students do we have",
+  "expect": {
+   "capability": [
+    "school.seats"
+   ],
+   "mustSay": [
+    "teachers 2",
+    "students 5",
+    "15 Dec 2026"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-cost-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "cost",
+  "text": "how much have we spent on kits",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "kits 4",
+    "$1.80",
+    "Cikgu Kamal $0.80"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-cost-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "cost",
+  "text": "which teachers spend the most",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "Cikgu Kamal $0.80",
+    "Cikgu Aminah $0.70",
+    "Cikgu Bakar $0.30"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-cost-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "cost",
+  "text": "kos penjanaan kit",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "kit 4",
+    "$1.80"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-cost-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "cost",
+  "text": "كم تكلفة الحزم",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "$1.80",
+    "Cikgu Kamal"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-cost-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "cost",
+  "text": "What did AI generation cost us this month?",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "1.80"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.cost"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-cost-06",
+  "suite": "grounded",
+  "as": "principalB",
+  "lang": "en",
+  "category": "cost",
+  "text": "what's our generation cost",
+  "expect": {
+   "capability": [
+    "school.cost"
+   ],
+   "mustSay": [
+    "$7.50",
+    "Cikgu Zainal $5.00"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-gaps-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "gaps",
+  "text": "what are the shelf gaps",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History, grade 5",
+    "Art, grade 6",
+    "Physical Education, grade 5",
+    "no kits yet"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-gaps-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "gaps",
+  "text": "which subjects have no books",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Art",
+    "Mathematics, grade 6"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-gaps-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "gaps",
+  "text": "subjek mana yang tiada buku",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Physical Education",
+    "tahun 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-gaps-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "gaps",
+  "text": "ما الفجوات في رف الكتب",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Art",
+    "Physical Education"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-gaps-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "gaps",
+  "text": "Do we have books for everything on the timetable?",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Physical Education"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.gaps"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-gaps-06",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "gaps",
+  "text": "what books are we missing",
+  "expect": {
+   "capability": [
+    "school.gaps"
+   ],
+   "mustSay": [
+    "History",
+    "Art"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-trend-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "trend",
+  "text": "school trend",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "approximate",
+    "due 13",
+    "submitted 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-trend-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "trend",
+  "text": "are we improving",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "approximate",
+    "due 13"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-trend-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "trend",
+  "text": "trend sekolah",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "anggaran",
+    "13",
+    "dihantar 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-trend-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "trend",
+  "text": "هل نحن نتحسن",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "13",
+    "5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-trend-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "trend",
+  "text": "How has homework submission changed over the past month?",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "13",
+    "5"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "school.trend"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-trend-06",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "trend",
+  "text": "show the 4-week trend for grade 5",
+  "expect": {
+   "capability": [
+    "school.trend"
+   ],
+   "mustSay": [
+    "grade 5",
+    "due 8",
+    "submitted 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-assign-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "assignments",
+  "text": "what's overdue",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "Done 8 of 13",
+    "overdue 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-assign-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "assignments",
+  "text": "how are the assignments going in grade 5",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "grade 5",
+    "Done 5 of 8",
+    "overdue 3"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-assign-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "assignments",
+  "text": "status tugasan",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "Siap 8 daripada 13",
+    "lewat 5"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-assign-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "assignments",
+  "text": "ما حالة الواجبات",
+  "expect": {
+   "capability": [
+    "assignments.status"
+   ],
+   "mustSay": [
+    "8",
+    "13",
+    "62%"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-assign-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "assignments",
+  "text": "How many pieces of work are awaiting marking across the school?",
+  "expect": {
+   "capability": [
+    "assignments.status",
+    "school.health"
+   ],
+   "mustSay": [
+    "5"
+   ]
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "assignments.status"
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-tt-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "timetable",
+  "text": "who is teaching now",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P2",
+    "lessons 4",
+    "5 Amanah Science (Cikgu Aminah)",
+    "6 Cemerlang Science (Cikgu Kamal)"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-tt-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "timetable",
+  "text": "what's on next",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P3",
+    "5 Amanah History",
+    "6 Cemerlang Mathematics"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-tt-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "timetable",
+  "text": "siapa mengajar sekarang",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P2",
+    "5 Bestari Mathematics (Cikgu Bakar)"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-tt-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "timetable",
+  "text": "من يدرس الآن",
+  "expect": {
+   "capability": [
+    "timetable.now_next"
+   ],
+   "mustSay": [
+    "P2",
+    "4 Dedikasi English"
+   ]
+  },
+  "path": "rules"
+ },
+ {
+  "id": "p-notice-01",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "notices",
+  "text": "post a notice to the whole school: Sports day is on Friday 6 November.",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "Sports day"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "school"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "Sports day is on Friday 6 November."
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-notice-02",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "notices",
+  "text": "send a staff notice: staff meeting at 2pm today in the hall",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "Staff meeting"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "staff"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "Staff meeting at 2pm today in the hall.",
+      "audience": "staff"
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-notice-03",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ms",
+  "category": "notices",
+  "text": "hantar notis kepada semua: Hari Sukan pada hari Jumaat ini.",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "Hari Sukan"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "school"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "Hari Sukan pada hari Jumaat ini."
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-notice-04",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "ar",
+  "category": "notices",
+  "text": "أرسل إشعارًا للمدرسة: اجتماع أولياء الأمور يوم الخميس.",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "school"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "اجتماع أولياء الأمور يوم الخميس."
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ },
+ {
+  "id": "p-notice-05",
+  "suite": "grounded",
+  "as": "principalA",
+  "lang": "en",
+  "category": "notices",
+  "text": "send a school announcement: the library is closed for stocktake this week",
+  "expect": {
+   "capability": [
+    "notice.school"
+   ],
+   "mustSay": [
+    "library"
+   ],
+   "card": "notice.school",
+   "cardParams": {
+    "audience": "school"
+   }
+  },
+  "path": "model",
+  "scripted": {
+   "calls": [
+    {
+     "name": "notice.school",
+     "args": {
+      "body": "The library is closed for stocktake this week."
+     }
+    }
+   ],
+   "say": "{summary}"
+  }
+ }
+]

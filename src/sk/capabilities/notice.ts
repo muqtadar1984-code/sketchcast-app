@@ -34,6 +34,7 @@ import {
   NOTICE_DATE_PASSED,
   NOTICE_DATE_UNPARSED,
   NOTICE_NO_STANDING,
+  NOTICE_NOT_UNTIL,
   NOTICE_OFF,
   NOTICE_SEEN_SCHOOL,
   NOTICE_SEEN_STAFF,
@@ -159,7 +160,8 @@ export async function resolveNoticeSchool(ctx: SkContext, args: Record<string, u
   };
   return {
     ok: true,
-    summary: `${cardTitle}: "${title}" — "${body}" (${startsOn}). ${seenBy}. Nothing is posted until the leader clicks Confirm on the card.`.slice(0, 600),
+    // S5 gate finding 2026-10-29: the closing line in the leader's language too.
+    summary: `${cardTitle}: "${title}" — "${body}" (${startsOn}). ${seenBy}. ${lineFor(NOTICE_NOT_UNTIL, locale)}`.slice(0, 600),
     facts: [{ kind: "notice.school", audience, title, body, starts_at: startsOn, seen_by: seenBy }],
     entities: [],
     confirm: { action: "notice.school", title: cardTitle, params },

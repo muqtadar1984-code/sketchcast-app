@@ -54,6 +54,18 @@ const CASES: Array<[string, string, Record<string, string>?]> = [
   ["كم تكلفة الحزم", "school.cost"],
   ["تكاليف المدرسة", "school.cost"],
   ["كم أنفقنا على الحزم", "school.cost"],
+  // S5 gate finding 2026-10-29 (p-cost-03): these fell through to navigate.
+  ["kos penjanaan kit", "school.cost"],
+  ["kos kit", "school.cost"],
+  ["berapa kos", "school.cost"],
+  ["berapa kos penjanaan kit", "school.cost"],
+  ["berapa kos kit bulan ini", "school.cost"],
+  ["perbelanjaan kit sekolah", "school.cost"],
+  ["تكلفة", "school.cost"],
+  ["التكلفة", "school.cost"],
+  ["كم التكلفة", "school.cost"],
+  ["ما تكلفة إنشاء الحزم", "school.cost"],
+  ["كم كلفت الحزم", "school.cost"],
   // school.gaps
   ["shelf gaps", "school.gaps"],
   ["what are the book gaps", "school.gaps"],
