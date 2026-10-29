@@ -13,6 +13,9 @@ export type GapStep = {
   note: string | null;
 };
 
+/** One failing (or waived) audit check of a gap, with the audit's own reason (runs from 29 Oct on). */
+export type GapCheck = { code: string; language: string | null; verdict: "fail" | "warn"; sub_status: string | null; detail: string | null };
+
 export type Gap = {
   title: string;
   topic_id: string | null;
@@ -24,10 +27,38 @@ export type Gap = {
   role: string | null;
   state: string;
   failing: string[] | null;
+  checks?: GapCheck[];
   steps: GapStep[];
 };
 
 export type Curriculum = { id: string; code: string; name: string };
+
+export const CHECK_LABEL: Record<string, string> = {
+  B1: "Topic exists in the catalogue",
+  B2: "Mapped to the curriculum objectives",
+  B3: "Approved English article",
+  B4: "Article depth (words, worked examples, glossary, objectives, figures rendered)",
+  B5: "Question bank mature enough",
+  B6: "English kit built from the approved article",
+  B7: "English video published",
+  B8: "Translated article",
+  B9: "Translated kit",
+  B10: "Translated video published",
+  B11: "No failed or pending jobs",
+};
+
+/** The failing checks an editor may waive for this book: every failure except a missing topic (B1 — there is nothing
+ * to write the chapter from). Older runs carry only the codes ("B6/en"), without the reason or the kind of failure. */
+export function waivable(gap: Gap): GapCheck[] {
+  if (!gap.topic_id) return [];
+  const checks: GapCheck[] = gap.checks?.length
+    ? gap.checks.filter((c) => c.verdict === "fail")
+    : (gap.failing ?? []).map((f) => {
+        const [code, language] = f.split("/");
+        return { code, language: language ?? null, verdict: "fail" as const, sub_status: null, detail: null };
+      });
+  return checks.filter((c) => c.code !== "B1");
+}
 
 export const LIBRARY = "https://library.sketchcast.app";
 
