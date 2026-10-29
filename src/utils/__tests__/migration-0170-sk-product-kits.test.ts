@@ -41,11 +41,13 @@ describe("0170_sk_product_kits.sql", () => {
     expect(up).toMatch(/primary key \(product_id, chapter_ref, generation_id\)/);
   });
 
-  it("is service-role only: RLS on, every grant revoked, no policy, no function", () => {
+  it("sk_product_kits is service-role only: RLS on, every grant revoked, no policy; no function anywhere", () => {
     expect(up).toMatch(/alter table public\.sk_product_kits enable row level security;/);
     expect(up).toMatch(/revoke all on public\.sk_product_kits from anon, authenticated;/);
-    expect(up).not.toMatch(/create policy|alter policy/);
-    expect(up).not.toMatch(/^\s*grant\b/m); // a statement; the table comment mentions a "book grant"
+    expect(up).not.toMatch(/(create|alter) policy[^;]*on public\.sk_product_kits/);
+    expect(up).not.toMatch(/^\s*grant\b[^;]*sk_product_kits/m); // a statement; the table comment mentions a "book grant"
+    // the only grant in the file is students' read of their own kit-objective mastery
+    expect(up.match(/^\s*grant\b[^;]*;/gm)).toEqual(["grant select on public.sk_objective_mastery to authenticated;"]);
     expect(up).not.toMatch(/create (or replace )?function|security definer/);
   });
 
@@ -59,13 +61,23 @@ describe("0170_sk_product_kits.sql", () => {
     expect(up).toMatch(/\('8', 0, 'cbad6d74[^)]*\)[\s\S]*\('8', 1, '4246bd3e[^)]*\)[\s\S]*\('8', 2, '4160b18e/);
   });
 
-  it("adds a nullable objective_key to mastery_state and item_attempts with partial indexes on the owner column", () => {
-    expect(up).toMatch(/alter table public\.mastery_state add column if not exists objective_key text;/);
+  it("adds a nullable objective_key to item_attempts with a partial index, and leaves mastery_state alone", () => {
     expect(up).toMatch(/alter table public\.item_attempts add column if not exists objective_key text;/);
-    expect(up).toMatch(/create index if not exists mastery_state_student_objective_key_idx\s+on public\.mastery_state \(student_id, objective_key\)\s+where objective_key is not null;/);
     expect(up).toMatch(/create index if not exists item_attempts_student_objective_key_idx\s+on public\.item_attempts \(student_id, objective_key, at\)\s+where objective_key is not null;/);
-    expect(up).not.toMatch(/objective_key text not null/);
+    expect(up).not.toMatch(/alter table public\.mastery_state/);
     expect(up).not.toMatch(/drop column|drop table|drop constraint/);
+  });
+
+  it("creates sk_objective_mastery keyed on (student_id, objective_key), read-own for students", () => {
+    expect(up).toMatch(/create table if not exists public\.sk_objective_mastery \(/);
+    expect(up).toMatch(/objective_key\s+text\s+not null check \(objective_key ~ '\^\[0-9a-f-\]\{36\}:\.\+\$'\)/);
+    expect(up).toMatch(/primary key \(student_id, objective_key\)/);
+    expect(up).toMatch(/check \(independent = false or status = 'mastered'\)/);
+    expect(up).toMatch(/alter table public\.sk_objective_mastery enable row level security;/);
+    expect(up).toMatch(/revoke all on public\.sk_objective_mastery from anon, authenticated;/);
+    expect(up).toMatch(/grant select on public\.sk_objective_mastery to authenticated;/);
+    expect(up).toMatch(/for select to authenticated using \(student_id = auth\.uid\(\)\)/);
+    expect(up).not.toMatch(/grant (insert|update|delete|all)[^;]*sk_objective_mastery/);
   });
 
   it("is one transaction", () => {
@@ -73,13 +85,13 @@ describe("0170_sk_product_kits.sql", () => {
     expect(up.trim().endsWith("commit;")).toBe(true);
   });
 
-  it("has a rollback that drops the table, both columns and both indexes, and nothing else", () => {
-    expect(down).toMatch(/drop index if exists public\.mastery_state_student_objective_key_idx;/);
+  it("has a rollback that drops both tables, the column and its index, and nothing else", () => {
+    expect(down).toMatch(/drop table if exists public\.sk_objective_mastery;/);
     expect(down).toMatch(/drop index if exists public\.item_attempts_student_objective_key_idx;/);
-    expect(down).toMatch(/alter table public\.mastery_state drop column if exists objective_key;/);
     expect(down).toMatch(/alter table public\.item_attempts drop column if exists objective_key;/);
     expect(down).toMatch(/drop table if exists public\.sk_product_kits;/);
-    expect(down.match(/drop table/g)).toHaveLength(1);
+    expect(down).not.toMatch(/mastery_state/);
+    expect(down.match(/drop table/g)).toHaveLength(2);
     expect(down.trim().startsWith("begin;")).toBe(true);
     expect(down.trim().endsWith("commit;")).toBe(true);
   });

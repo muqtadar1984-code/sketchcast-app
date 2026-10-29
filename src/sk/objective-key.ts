@@ -1,6 +1,6 @@
 // SK S3 — the mastery key for kit items (design decision 3): the ARTICLE
 // objective, "<topic_articles.id>:<objective_ref>", stored in
-// mastery_state.objective_key / item_attempts.objective_key (migration 0170)
+// sk_objective_mastery.objective_key / item_attempts.objective_key (migration 0170)
 // next to the book path's teaching_objective_id. Pure; not wired into the loop
 // yet (slice C writes it).
 //

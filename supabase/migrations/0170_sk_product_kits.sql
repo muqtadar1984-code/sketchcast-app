@@ -1,5 +1,5 @@
 -- 0170: SK S3 slice A — the book product -> chapter -> kit map, and the
--- article-objective key on attempts and mastery
+-- article-objective key on attempts, and mastery per kit objective
 -- (SK S3 Design 2026-10-29, decisions 1-3; Final Plan §6 S3).
 --
 -- sk_product_kits   which approved catalogue kits (presentation generations)
@@ -16,9 +16,12 @@
 -- inside /sk; the Library and catalogue unlock logic is unchanged.
 --
 -- objective_key     "<topic_articles.id>:<objective_ref>" (src/sk/objective-key.ts),
---                   the mastery key for kit items (design decision 3), next to
---                   the existing teaching_objective_id. Nullable; nothing writes
---                   it until slice C.
+--                   the mastery key for kit items (design decision 3): a
+--                   nullable column on item_attempts (next to the existing
+--                   teaching_objective_id), and the key of the new
+--                   sk_objective_mastery table (mastery_state's primary key
+--                   needs a teaching_objective_id, so it is left untouched).
+--                   Nothing writes either until slice C.
 --
 -- Seed: the nine approved English Biology kits for
 -- cells-structure-function-organisation (chapters 3, 7 and 10 have no kit).
@@ -62,18 +65,36 @@ join public.sk_book_products p on p.slug = 'cells-structure-function-organisatio
 join public.generations g on g.id = v.generation_id and g.kind = 'presentation' and g.status = 'done' and g.withdrawn_at is null
 on conflict do nothing;
 
-alter table public.mastery_state add column if not exists objective_key text;
 alter table public.item_attempts add column if not exists objective_key text;
 
-create index if not exists mastery_state_student_objective_key_idx
-  on public.mastery_state (student_id, objective_key)
-  where objective_key is not null;
 create index if not exists item_attempts_student_objective_key_idx
   on public.item_attempts (student_id, objective_key, at)
   where objective_key is not null;
 
-comment on column public.mastery_state.objective_key is
-  'SK S3: "<topic_articles.id>:<objective_ref>" for kit items (article objective); null for book-path rows keyed on teaching_objective_id.';
+-- Mastery on kit (article) objectives. mastery_state's primary key is
+-- (student_id, teaching_objective_id) with teaching_objective_id NOT NULL, so a
+-- kit objective cannot live there without re-keying a live table. It gets its
+-- own table with the same shape and rules instead; mastery_state is untouched.
+create table if not exists public.sk_objective_mastery (
+  student_id     uuid        not null references public.profiles(id) on delete cascade,
+  objective_key  text        not null check (objective_key ~ '^[0-9a-f-]{36}:.+$'),
+  status         text        not null check (status in ('unknown', 'in_progress', 'mastered', 'provisional', 'needs_work')),
+  independent    boolean     not null default false,
+  evidence       jsonb       not null default '{}'::jsonb,
+  rule_version   text        not null,
+  updated_at     timestamptz not null default now(),
+  primary key (student_id, objective_key),
+  check (independent = false or status = 'mastered')
+);
+alter table public.sk_objective_mastery enable row level security;
+revoke all on public.sk_objective_mastery from anon, authenticated;
+grant select on public.sk_objective_mastery to authenticated;
+drop policy if exists sk_objective_mastery_read_own on public.sk_objective_mastery;
+create policy sk_objective_mastery_read_own on public.sk_objective_mastery
+  for select to authenticated using (student_id = auth.uid());
+
+comment on table public.sk_objective_mastery is
+  'SK S3: DERIVED mastery per kit (article) objective, objective_key = "<topic_articles.id>:<objective_ref>". Same rules as mastery_state (src/sk/mastery.ts); the service role writes; students read their own.';
 comment on column public.item_attempts.objective_key is
   'SK S3: "<topic_articles.id>:<objective_ref>" of the attempted kit item; null when unmapped.';
 
