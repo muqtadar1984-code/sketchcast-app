@@ -8,7 +8,7 @@
 // (src/utils/assignment-status.ts), which replicates the page's done / overdue
 // / pending-to-grade / completion definitions line for line.
 
-import type { ResolvedEntity, SkCapability, SkCapabilityResult } from "../shell/types";
+import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "../shell/types";
 import {
   assignmentStatus,
   filterByDue,
@@ -21,7 +21,6 @@ import {
 } from "@/utils/assignment-status";
 import { classEnrollments, generationSubjects, teacherClasses, visibleClasses } from "./shared";
 // S5 slice A: the principal / coordinator modes (leader-scope.ts).
-import type { SkCapabilityDeps, SkContext } from "../shell/types";
 import { lineFor } from "../shell/lines";
 import { S_ASSIGN, S_ASSIGN_NONE, S_EMPTY, S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED } from "../shell/school-lines";
 import { classInScope, gradeOutsideScope, leaderScope, needsSubjects, sameGrade, scopeLabel, shareInScope, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";

@@ -634,6 +634,21 @@ export async function POST(request: Request) {
           }
         }
 
+        // ── S5: a leader's school question — the school.health / leader-mode
+        // capability answers itself (school or scope by hat), deterministic,
+        // no model; every number is one of its facts. Not allowed → the model.
+        if ("leader" in decision && decision.leader) {
+          const name = decision.leader.capability;
+          const r = await runCapability(ctx, name, decision.leader.args, deps);
+          if (r.error !== "not_allowed") {
+            send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
+            send({ type: "text", text: r.summary });
+            done({ sources: r.ok ? [name] : [], label: r.ok ? "grounded" : "declined" }, r.summary, r.entities ?? []);
+            finish();
+            return;
+          }
+        }
+
         // ── The model, with the allowed tools ────────────────────────────────
         const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
         const trace: ToolTrace[] = [];

@@ -239,7 +239,7 @@ export function buildContext(input: BuildContextInput): SkContext {
     flags: { ...input.flags, hasScope: input.coordinatorScope.length > 0 },
     issuedAt: input.now.toISOString(),
     ttlSeconds: input.ttlSeconds ?? SK_CONTEXT_TTL_SECONDS,
-    contextHash: contextHash({ role, schoolId: input.schoolId, hat, plan }),
+    contextHash: contextHash({ role, schoolId: input.schoolId, hat, plan, scope: input.coordinatorScope }),
   };
 }
 

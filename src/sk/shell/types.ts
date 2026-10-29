@@ -170,7 +170,7 @@ export type SkContext = {
   flags: Record<string, boolean>;
   issuedAt: string;
   ttlSeconds: number;
-  /** Stable hash of {role, schoolId, hat, plan}: tokens are bound to it (§8.2). */
+  /** Stable hash of {role, schoolId, hat, plan, coordinator scope (S5)}: tokens are bound to it (§8.2). */
   contextHash: string;
 };
 

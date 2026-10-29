@@ -11,11 +11,10 @@
 // "40% completion", "avg score 30%", "scores declining") is school-health's,
 // unchanged, so the teacher and the principal hear the same reasons.
 
-import type { ResolvedEntity, SkCapability, SkCapabilityResult } from "../shell/types";
+import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "../shell/types";
 import { computeSchoolHealth, type HealthRows } from "@/utils/school-health";
 import { generationSubjects, schoolHealthRows } from "./shared";
 // S5 slice A: the principal / coordinator modes (leader-scope.ts).
-import type { SkCapabilityDeps, SkContext } from "../shell/types";
 import { lineFor } from "../shell/lines";
 import { S_AT_RISK, S_AT_RISK_NONE, S_EMPTY, S_NO_SCOPE, S_OUT_OF_SCOPE, S_READ_FAILED } from "../shell/school-lines";
 import { cutLeaderRows, gradeOutsideScope, leaderScope, needsSubjects, scopeLabel, stripEmails, whereLabel, type LeaderScope } from "./leader-scope";
