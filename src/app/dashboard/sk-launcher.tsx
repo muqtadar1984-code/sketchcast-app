@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { TourCopy } from "@/tour/definitions";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
@@ -45,6 +45,9 @@ export default function SkLauncher({
   // server still holds the old seen row.
   const [introPending, setIntroPending] = useState(introDue);
   const pathname = usePathname();
+  // The Board's "Ask SK about this" chip opens the panel; the panel itself
+  // takes the ask and sends it (sk-shell.tsx).
+  useEffect(() => board?.asks()?.subscribe(() => setOpen(true)), [board]);
   if (!SK_ON) return null;
   // The leadership School pages keep their own bottom-right launcher (the
   // School-briefing bot) until S5 retires it. The Board (/present) is not

@@ -1929,7 +1929,7 @@
       "noteNeverProject": "Somente download — uma prova que a turma já viu deixa de ser prova",
       "noteNoText": "Somente download — este tipo não tem texto estruturado para colocar na lousa",
       "deck": "Apresentação de diapositivos",
-      "noteDeck": "Transferência — o quadro mostra os diapositivos do vídeo"
+      "noteDeck": "Transfira-a ou carregue-a no quadro como páginas"
     },
     "group": {
       "thisPart": "Esta parte",
@@ -1971,7 +1971,8 @@
       "prevQuestion": "Pergunta anterior",
       "nextQuestion": "Próxima pergunta",
       "railHandle": "Unidades",
-      "railClose": "Fechar"
+      "railClose": "Fechar",
+      "askAboutThis": "Perguntar ao SK sobre isto"
     },
     "wrapUp": {
       "saved": "Aula salva",
@@ -2123,7 +2124,8 @@
       "actFailed": "Não foi possível concluir. Tente novamente.",
       "voiceYesHint": "Diga «sim» para confirmar ou «não» para cancelar.",
       "loadingSlides": "A carregar o diapositivo {k} de {n}…",
-      "slidesLoaded": "{n} diapositivos estão no rolo como páginas {a}–{b}. Página acima e página abaixo movem-se entre eles; diga 'página em branco' para acrescentar uma no meio."
+      "slidesLoaded": "{n} diapositivos estão no rolo como páginas {a}–{b}. Página acima e página abaixo movem-se entre eles; diga 'página em branco' para acrescentar uma no meio.",
+      "explainSelection": "Explica esta parte"
     }
   }
 }

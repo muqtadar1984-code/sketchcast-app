@@ -1929,7 +1929,7 @@
       "noteNeverProject": "Téléchargement uniquement — un sujet que la classe a vu n'est plus un contrôle",
       "noteNoText": "Téléchargement uniquement — ce type de document n'a pas de texte structuré à afficher sur un tableau",
       "deck": "Diaporama",
-      "noteDeck": "Téléchargement — le tableau affiche les diapositives de la vidéo"
+      "noteDeck": "Téléchargez-le, ou chargez-le sur le tableau en pages"
     },
     "group": {
       "thisPart": "Cette partie",
@@ -1971,7 +1971,8 @@
       "prevQuestion": "Question précédente",
       "nextQuestion": "Question suivante",
       "railHandle": "Unités",
-      "railClose": "Fermer"
+      "railClose": "Fermer",
+      "askAboutThis": "Demander à SK"
     },
     "wrapUp": {
       "saved": "Leçon enregistrée",
@@ -2123,7 +2124,8 @@
       "actFailed": "Cela n'a pas abouti. Réessayez.",
       "voiceYesHint": "Dites « oui » pour confirmer, ou « non » pour annuler.",
       "loadingSlides": "Chargement de la diapositive {k} sur {n}…",
-      "slidesLoaded": "{n} diapositives sont sur le rouleau, pages {a} à {b}. Page précédente et page suivante passent de l'une à l'autre ; dites « page blanche » pour en insérer une entre deux."
+      "slidesLoaded": "{n} diapositives sont sur le rouleau, pages {a} à {b}. Page précédente et page suivante passent de l'une à l'autre ; dites « page blanche » pour en insérer une entre deux.",
+      "explainSelection": "Explique cette partie"
     }
   }
 }

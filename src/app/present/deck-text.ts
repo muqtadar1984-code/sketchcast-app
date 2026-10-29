@@ -110,7 +110,36 @@ export type UnderBoxOptions = {
   /** Two words are on one line when their centres are within this many median
    *  word heights of each other vertically. Default 0.5. */
   lineTolerance?: number;
+  /** The deck's own direction, when known (its language is Arabic, Jawi,
+   *  Hebrew…). Decides only the lines that carry no letters of either kind
+   *  (a row of numbers); a line with letters goes by its own script. */
+  rtl?: boolean;
 };
+
+// Hebrew, Arabic (incl. the Jawi letters, which live in the Arabic blocks),
+// Syriac, Thaana, NKo, Samaritan, Arabic Supplement/Extended-A, and the Hebrew
+// and Arabic presentation forms.
+const RTL_CHAR = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
+const LETTER = /\p{L}/u;
+
+/**
+ * Is this line right-to-left? By MAJORITY of its letters: an Arabic sentence
+ * with one English term in it is still read right to left, and an English line
+ * quoting one Arabic word is not. A line with no letters at all (numbers,
+ * symbols) takes the deck's direction when it is known, else LTR.
+ */
+export function isRtlLine(words: Pick<DeckWord, "t">[], deckRtl = false): boolean {
+  let rtl = 0;
+  let other = 0;
+  for (const w of words) {
+    for (const ch of w.t) {
+      if (RTL_CHAR.test(ch)) rtl++;
+      else if (LETTER.test(ch)) other++;
+    }
+  }
+  if (!rtl && !other) return deckRtl;
+  return rtl > other;
+}
 
 /**
  * The words a box covers, in reading order.
@@ -119,10 +148,11 @@ export type UnderBoxOptions = {
  * fat and sloppy and always bigger than what it marks, so "half of the word is
  * under the ink" is the question, never "half of the ink is over the word".
  *
- * Reading order is top-to-bottom by line, left-to-right within a line; a line
- * is the words whose vertical centres sit within `lineTolerance` median word
- * heights of the line's first word. (Left-to-right: the decks are generated
- * LTR today; an RTL deck's words would need the order flipped per line.)
+ * Reading order is top-to-bottom by line; a line is the words whose vertical
+ * centres sit within `lineTolerance` median word heights of the line's first
+ * word. Within a line, left-to-right — or RIGHT-TO-LEFT when the line is
+ * mostly Arabic / Jawi / Hebrew letters (isRtlLine), so a highlighted Arabic
+ * phrase reads in the order it was written, not mirrored.
  */
 export function wordsUnderBox(slide: Pick<DeckMapSlide, "words">, b: Box, opts: UnderBoxOptions = {}): DeckWord[] {
   const min = opts.minOverlap ?? 0.5;
@@ -141,7 +171,7 @@ export function wordsUnderBox(slide: Pick<DeckMapSlide, "words">, b: Box, opts: 
     if (line && Math.abs(cy(w) - cy(line[0])) <= tol) line.push(w);
     else lines.push([w]);
   }
-  return lines.flatMap((l) => l.sort((p, q) => p.b[0] - q.b[0]));
+  return lines.flatMap((l) => (isRtlLine(l, opts.rtl) ? l.sort((p, q) => q.b[2] - p.b[2]) : l.sort((p, q) => p.b[0] - q.b[0])));
 }
 
 /** `wordsUnderBox`, joined with spaces — the phrase she highlighted. */

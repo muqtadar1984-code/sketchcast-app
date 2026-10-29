@@ -125,3 +125,21 @@ describe("sanitizeBoard: the deck's status (founder 2026-10-28)", () => {
     expect(sanitizeBoard({ sessionId: "s", deck: 1 })).not.toHaveProperty("deck");
   });
 });
+
+describe("sanitizeBoard: the highlighted selection (founder 2026-10-28)", () => {
+  const sel = { generationId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", n: 3, text: "  Particles   move\nfrom high  ", title: " Diffusion " };
+  it("keeps a deck id, a slide number, the text (whitespace folded, ≤600) and the title", () => {
+    expect(sanitizeBoard({ sessionId: "s", selection: sel })?.selection).toEqual({ generationId: sel.generationId, n: 3, text: "Particles move from high", title: "Diffusion" });
+    expect(sanitizeBoard({ sessionId: "s", selection: { ...sel, text: "x".repeat(900) } })?.selection?.text).toHaveLength(600);
+    expect(sanitizeBoard({ sessionId: "s", selection: { ...sel, title: undefined } })?.selection).not.toHaveProperty("title");
+  });
+  it("anything malformed drops the selection whole", () => {
+    for (const bad of [{ ...sel, n: 0 }, { ...sel, n: 1.5 }, { ...sel, n: "3" }, { ...sel, text: "   " }, { ...sel, text: 7 }, { ...sel, generationId: "" }, "explain", null]) {
+      expect(sanitizeBoard({ sessionId: "s", selection: bad })).not.toHaveProperty("selection");
+    }
+  });
+  it("collect() carries it with the rest of the Board state", () => {
+    const board: SkBoardState = { sessionId: "s", selection: { generationId: "g", n: 2, text: "high concentration" } };
+    expect(collect({ location: { pathname: "/present", search: "" }, now: new Date(), board }).board?.selection?.text).toBe("high concentration");
+  });
+});

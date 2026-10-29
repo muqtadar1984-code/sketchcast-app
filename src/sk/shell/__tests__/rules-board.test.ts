@@ -10,6 +10,16 @@ import { NOW, makeCtx } from "./fixtures";
 import { buildContext } from "../context";
 import type { SkBoardState, SkContext } from "../types";
 import { ALL_FLAGS, SCHOOL_ID, TEACHER_ID } from "./fixtures";
+import en from "@/i18n/messages/en.json";
+import ms from "@/i18n/messages/ms.json";
+import msArab from "@/i18n/messages/ms-arab.json";
+import ar from "@/i18n/messages/ar.json";
+import fr from "@/i18n/messages/fr.json";
+import es from "@/i18n/messages/es.json";
+import pt from "@/i18n/messages/pt.json";
+import te from "@/i18n/messages/te.json";
+import mr from "@/i18n/messages/mr.json";
+import hi from "@/i18n/messages/hi.json";
 
 const BOARD: SkBoardState = { sessionId: "sess", manifestId: "m", k: 2, segments: [{ k: 0, heading: "A" }, { k: 1, heading: "B" }, { k: 2, heading: "C" }, { k: 3, heading: "D" }] };
 
@@ -268,5 +278,57 @@ describe("Board UX (2026-10-28): the deck, the rail, slides as pages", () => {
     for (const text of ["skip to the power point", "show the units", "load the slides as pages", "load the deck"]) {
       expect(routeByRules(text, off, NOW, clock).intent).not.toBe("teach");
     }
+  });
+});
+
+// ── "Highlight a portion and ask SK" (founder 2026-10-28) ───────────────────
+
+describe("explain the highlighted part → board.explain_selection", () => {
+  const SELECTION = { generationId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", n: 3, text: "Particles move from high concentration" };
+  const withSel = onBoard({ ...BOARD, selection: SELECTION });
+
+  it.each([
+    "explain this",
+    "Explain this part",
+    "explain that bit to the class",
+    "can you explain the highlighted part?",
+    "what does this mean?",
+    "What does that word mean",
+    "tell me more about this",
+    "tell us more",
+    "terangkan ini",
+    "jelaskan bahagian ini",
+    "apa maksud ini?",
+    "ceritakan lebih lanjut tentang ini",
+    "اشرح هذا",
+    "اشرح هذا الجزء",
+    "ما معنى هذا؟",
+    "ماذا يعني هذا",
+    "أخبرني المزيد عن هذا",
+  ])("with a live highlight: %s", (text) => {
+    expect(teach(text, withSel)).toEqual({ intent: "teach", move: "explain_selection", args: {} });
+  });
+
+  it("the chip's own line routes in every locale (sk.shell.explainSelection)", () => {
+    for (const m of [en, ms, msArab, ar, fr, es, pt, te, mr, hi]) {
+      const line = m.sk.shell.explainSelection;
+      expect(teach(line, withSel).move).toBe("explain_selection");
+      // …and without a live highlight too, so the capability answers "highlight it first".
+      expect(teach(line).move).toBe("explain_selection");
+    }
+  });
+
+  it("without a highlight, 'explain this' still asks for one; the question forms go where they always went", () => {
+    expect(teach("explain this").move).toBe("explain_selection");
+    expect(teach("terangkan ini").move).toBe("explain_selection");
+    expect(routeByRules("what does this mean?", ctx, NOW, clock).intent).toBe("ask");
+    expect(routeByRules("tell me more about this", ctx, NOW, clock).intent).toBe("ask");
+    expect(routeByRules("ما معنى هذا؟", ctx, NOW, clock).intent).toBe("ask");
+  });
+
+  it("named concepts are still explain/compare, highlight or not", () => {
+    expect(teach("explain diffusion", withSel)).toMatchObject({ move: "explain", args: { concept: "diffusion" } });
+    expect(teach("explain the difference between A and B", withSel)).toMatchObject({ move: "compare" });
+    expect(teach("pause", withSel).move).toBe("pause");
   });
 });

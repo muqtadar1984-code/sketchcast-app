@@ -11,10 +11,17 @@
 // fourth, so the rules router and the `say` lines translate (n = k + 1).
 
 import type { SkBoardMove, SkBoardState, SkCapability, SkCapabilityMeta, SkCapabilityResult, SkContext, SkJsonSchema } from "@/sk/shell/types";
+import { isDeckSource, type ArtifactRow } from "@/utils/present/deck-pages";
 
 export const BOARD_NOT_OPEN = "Open the Board first.";
 export const BOARD_NO_MAP = "The lesson map isn't ready yet.";
-export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap", "rail", "load_slides", "load_deck"];
+/** explain_selection with nothing highlighted (English; sayFor("no_selection") localises). */
+export const BOARD_NO_SELECTION = "Highlight the part on the slide first, then ask me.";
+/** explain_selection on a deck that is not hers (or not a deck). */
+export const BOARD_SELECTION_REFUSED = "I can't open that deck.";
+/** explain_selection when the deck's text map (or that slide in it) can't be read. */
+export const BOARD_SELECTION_NO_SLIDE = "I couldn't read that slide's text.";
+export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap", "rail", "load_slides", "load_deck", "explain_selection"];
 export const PRACTISE_MAX = 10;
 
 type Say = Record<string, string>;
@@ -23,7 +30,7 @@ type Say = Record<string, string>;
  *  particular phrasing — `slides` is `slide {k: 0}` asked for as "the
  *  PowerPoint / the slides" (Board UX 2026-10-28), and `load_slides_any` is
  *  the load line when the client sent no segment list to count. */
-export type SayKey = SkBoardMove | "slides" | "load_slides_any" | "deck_loaded" | "deck_first";
+export type SayKey = SkBoardMove | "slides" | "load_slides_any" | "deck_loaded" | "deck_first" | "no_selection";
 
 /** SK's one line per move, ten locales. `{n}`, `{heading}`, `{a}`, `{b}`,
  *  `{ha}`, `{hb}` are filled by the handler; the client speaks the result. */
@@ -276,6 +283,34 @@ const SAY: Record<SayKey, Say> = {
     te: "ఇదిగో డెక్ — స్లైడ్ 1.",
     mr: "हा डेक — स्लाइड 1.",
     hi: "यह रहा डेक — स्लाइड 1।",
+  },
+  // "Highlight a portion and ask SK" (founder 2026-10-28). The fallback line
+  // when nothing of the model's explanation survives grounding: the slide's
+  // own words, quoted.
+  explain_selection: {
+    en: "On slide {n}: “{text}”.",
+    ms: "Pada slaid {n}: “{text}”.",
+    "ms-arab": "ڤد سلاءيد {n}: “{text}”.",
+    ar: "في الشريحة {n}: «{text}».",
+    fr: "Sur la diapositive {n} : « {text} ».",
+    es: "En la diapositiva {n}: «{text}».",
+    pt: "No diapositivo {n}: «{text}».",
+    te: "స్లైడ్ {n}లో: “{text}”.",
+    mr: "स्लाइड {n} वर: “{text}”.",
+    hi: "स्लाइड {n} पर: “{text}”।",
+  },
+  // …and when she asks with nothing highlighted.
+  no_selection: {
+    en: BOARD_NO_SELECTION,
+    ms: "Serlahkan bahagian pada slaid dahulu, kemudian tanya saya.",
+    "ms-arab": "سرلهکن بهاݢين ڤد سلاءيد دهولو، کمودين تاڽ ساي.",
+    ar: "ظلّل الجزء على الشريحة أولاً، ثم اسألني.",
+    fr: "Surlignez d'abord le passage sur la diapositive, puis demandez-moi.",
+    es: "Primero resalta la parte en la diapositiva y luego pregúntame.",
+    pt: "Primeiro destaque a parte no diapositivo e depois pergunte-me.",
+    te: "ముందుగా స్లైడ్‌లో ఆ భాగాన్ని హైలైట్ చేసి, తర్వాత నన్ను అడగండి.",
+    mr: "आधी स्लाइडवरील तो भाग हायलाइट करा, मग मला विचारा.",
+    hi: "पहले स्लाइड पर उस हिस्से को हाइलाइट करें, फिर मुझसे पूछें।",
   },
 };
 
@@ -615,6 +650,58 @@ export const boardPractise: SkCapability = {
 
 export const boardWalkthrough = simple("walkthrough", "Board: walk through the worksheet questions in order on the roll.", "Walking through the worksheet.");
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * "Highlight a portion and ask SK to explain it" (founder 2026-10-28). The
+ * selection rides in the Board state (SkBoardState.selection: the deck, the
+ * slide, the words under the ink); this decider only VALIDATES it — an open
+ * Board, something highlighted, and a deck that is HERS, re-read through her
+ * own session with an explicit owner filter exactly as /api/present/deck-pages
+ * reads it (that route is the only way a deck reaches the roll, so a deck on
+ * her roll is always one she owns). No Board move: the route writes the
+ * explanation from the slide's text map, and the video and roll stay put.
+ */
+export const boardExplainSelection: SkCapability = {
+  meta: meta(
+    "explain_selection",
+    "Board: explain the part of a deck slide the teacher highlighted (the Board state's selection) — 2–4 sentences from that slide's own text and speaker notes. Use for 'explain this / what does this mean / tell me more about this' right after she highlights on a slide. Nothing on the Board moves.",
+    NONE,
+  ),
+  handler: async (ctx, _args, deps) => {
+    const b = board(ctx);
+    if (!b) return noBoard;
+    const sel = b.selection;
+    if (!sel?.text?.trim() || !sel.generationId || !Number.isInteger(sel.n) || sel.n < 1) {
+      return { ok: false, summary: sayFor("no_selection", ctx.user.locale), error: "no_selection", facts: [] };
+    }
+    const refused: SkCapabilityResult = { ok: false, summary: BOARD_SELECTION_REFUSED, error: "not_owner", facts: [] };
+    if (!UUID_RE.test(sel.generationId)) return refused;
+    let row: { id: string; kind: string; owner_id: string; artifacts?: ArtifactRow[] | null } | null = null;
+    try {
+      const { data, error } = await deps.session
+        .from("generations")
+        .select("id, kind, owner_id, artifacts(kind, storage_path)")
+        .eq("id", sel.generationId)
+        .eq("owner_id", ctx.user.id)
+        .eq("status", "done")
+        .is("withdrawn_at", null)
+        .maybeSingle();
+      if (error) return refused;
+      row = data;
+    } catch {
+      return refused;
+    }
+    // Belt and braces: the filter above already said so (and a leaked row must not pass).
+    if (!row || row.id !== sel.generationId || row.owner_id !== ctx.user.id || !isDeckSource({ kind: row.kind, artifacts: row.artifacts ?? [] })) return refused;
+    return {
+      ok: true,
+      summary: `Explaining the highlighted part of slide ${sel.n}${sel.title ? ` (${sel.title})` : ""}.`,
+      facts: [{ slide: sel.n, title: sel.title ?? "", highlighted: sel.text }],
+    };
+  },
+};
+
 export const BOARD_CAPABILITIES: SkCapability[] = [
   boardIntro,
   boardSegment,
@@ -632,4 +719,5 @@ export const BOARD_CAPABILITIES: SkCapability[] = [
   boardRail,
   boardLoadSlides,
   boardLoadDeck,
+  boardExplainSelection,
 ];

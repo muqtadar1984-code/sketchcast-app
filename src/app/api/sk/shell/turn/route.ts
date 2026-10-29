@@ -15,8 +15,9 @@ import { auditSinkFor } from "@/sk/shell/audit";
 import { routeByRules } from "@/sk/shell/rules";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
 import { issueActionToken } from "@/sk/shell/tokens";
-import { TEACH_MAX_TOKENS, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
-import { BOARD_NO_MAP } from "@/sk/capabilities/board";
+import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
+import { loadSelectionSlide, selectionBlock, selectionOnSlide, selectionQuestion, selectionSupportTokens, type SelectionAdmin } from "@/sk/shell/selection";
+import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilities/board";
 import { searchLibrary } from "@/sk/capabilities/library";
 import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
@@ -54,6 +55,15 @@ export const runtime = "nodejs";
 // A manifest that is not ready gets SK's own line plus "the lesson map isn't
 // ready yet" and NO model call. Board audit rows carry the PRESENT session id
 // (sk_actions.session_id) so the recap can read what SK did in that lesson.
+//
+// "Highlight a portion and ask SK" (founder 2026-10-28): `board.explain_selection`
+// validates the highlight the Board state carries (her own deck, re-read
+// through her session); the route then reads that slide from the deck's text
+// map (selection.ts, admin client) and makes ONE model call — no tools, 220
+// tokens, the slide's title, text and speaker notes plus the HIGHLIGHTED part
+// as DATA — grounded against the slide: meta → tool → text →
+// done{grounded, sources: ["board.explain_selection", "deck"]}. Nothing on the
+// Board moves. Nothing highlighted → SK's fixed "highlight it first" line.
 
 const SK_SHELL_DEFAULT_MODEL = "claude-sonnet-5-5";
 const MAX_TEXT = 600;
@@ -241,6 +251,42 @@ export async function POST(request: Request) {
     return { text, sources: [name, "manifest"], ...(usage ? { usage } : {}), ...(!verdict.ok && verdict.text.trim() ? { trimmed: true } : {}) };
   };
 
+  /** explain_selection: the highlighted part of a deck slide, explained from
+   *  the slide's own text and notes. Called only after the capability said
+   *  the selection is hers. Never moves the Board. */
+  const explainSelection = async (): Promise<{
+    text: string;
+    sources: string[];
+    label: "grounded" | "declined";
+    usage?: { inputTokens: number; outputTokens: number };
+    trimmed?: boolean;
+  }> => {
+    const name = "board.explain_selection";
+    const sel = ctx.board?.selection;
+    const noSelection = sayFor("no_selection", ctx.user.locale);
+    if (!sel) return { text: noSelection, sources: [], label: "declined" };
+    const slide = admin ? await loadSelectionSlide(admin as unknown as SelectionAdmin, sel, ctx.user.id) : null;
+    if (!slide) return { text: BOARD_SELECTION_NO_SLIDE, sources: [name], label: "declined" };
+    // Only the words that are on the slide reach the model (selection.ts).
+    const selected = selectionOnSlide(sel, slide);
+    if (!selected) return { text: noSelection, sources: [name], label: "declined" };
+    const fallback = sayFor("explain_selection", ctx.user.locale, { n: slide.n, text: clipWords(selected, 160) });
+    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
+    const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${selectionBlock(slide, selected)}`;
+    let full = "";
+    let usage: { inputTokens: number; outputTokens: number } | undefined;
+    for await (const ev of runAssistantTurn({ provider, system, history: [], question: selectionQuestion(language), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
+      if (ev.type === "text") full += ev.text;
+      else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
+      else if (ev.type === "error") console.error("sk-shell.turn selection", ev.retryable ? "retryable" : "fatal", ev.message);
+    }
+    // §9.3: every name and number must occur on the slide (text or notes) or in the question.
+    const verdict = groundingCheck(full, selectionSupportTokens(slide), body.text);
+    if (!verdict.ok) console.info("sk-shell.turn selection grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: verdict.dropped }));
+    const text = (verdict.ok ? full.trim() : verdict.text.trim()) || fallback;
+    return { text, sources: [name, "deck"], label: "grounded", ...(usage ? { usage } : {}), ...(!verdict.ok && verdict.text.trim() ? { trimmed: true } : {}) };
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     cancel() {
       abort.abort();
@@ -351,6 +397,14 @@ export async function POST(request: Request) {
           const args = decision.move === "practise" ? await stampPractiseItems(decision.args) : decision.args;
           const r = await runCapability(ctx, name, args, boardDeps);
           send({ type: "tool", name, ok: r.ok, summary: r.summary });
+          if (decision.move === "explain_selection" && r.ok) {
+            // Content only: no `board` event, the video and the roll stay put.
+            const s = await explainSelection();
+            send({ type: "text", text: s.text });
+            done({ sources: s.sources, label: s.label, ...(s.usage ? { usage: s.usage } : {}), ...(s.trimmed ? { trimmed: true } : {}) }, s.text, []);
+            finish();
+            return;
+          }
           const act = await actionEvent(r);
           if (act && "event" in act) {
             send(act.event);
@@ -562,6 +616,16 @@ export async function POST(request: Request) {
             sources = [...new Set([...sources, ...taught.sources])];
             if (taught.usage) usage = usage ? { inputTokens: usage.inputTokens + taught.usage.inputTokens, outputTokens: usage.outputTokens + taught.usage.outputTokens } : taught.usage;
           }
+        }
+        // The model chose explain_selection: the slide-grounded explanation
+        // replaces what it wrote from the capability's facts alone.
+        if (trace.some((t) => t.name === "board.explain_selection" && t.result.ok)) {
+          const s = await explainSelection();
+          text = s.text;
+          label = s.label;
+          trimmed = !!s.trimmed;
+          sources = [...new Set([...sources, ...s.sources])];
+          if (s.usage) usage = usage ? { inputTokens: usage.inputTokens + s.usage.inputTokens, outputTokens: usage.outputTokens + s.usage.outputTokens } : s.usage;
         }
         const entities = trace.flatMap((t) => t.result.entities ?? []);
         send({ type: "text", text });

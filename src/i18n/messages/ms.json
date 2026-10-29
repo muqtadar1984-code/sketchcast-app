@@ -1929,7 +1929,7 @@
       "noteNeverProject": "Muat turun sahaja — kertas yang sudah ditonton kelas bukan lagi ujian",
       "noteNoText": "Muat turun sahaja — jenis ini tiada teks berstruktur untuk dipaparkan pada papan",
       "deck": "Dek slaid",
-      "noteDeck": "Muat turun — papan menunjukkan slaid daripada video"
+      "noteDeck": "Muat turun, atau muatkan ke papan sebagai halaman"
     },
     "group": {
       "thisPart": "Bahagian ini",
@@ -1971,7 +1971,8 @@
       "prevQuestion": "Soalan sebelumnya",
       "nextQuestion": "Soalan seterusnya",
       "railHandle": "Unit",
-      "railClose": "Tutup"
+      "railClose": "Tutup",
+      "askAboutThis": "Tanya SK tentang ini"
     },
     "wrapUp": {
       "saved": "Pelajaran disimpan",
@@ -2123,7 +2124,8 @@
       "actFailed": "Tindakan itu tidak berjaya. Cuba lagi.",
       "voiceYesHint": "Sebut “ya” untuk mengesahkan, atau “tidak” untuk membatalkan.",
       "loadingSlides": "Memuatkan slaid {k} daripada {n}…",
-      "slidesLoaded": "{n} slaid kini di gulungan sebagai halaman {a}–{b}. Halaman atas dan halaman bawah bergerak antaranya; sebut 'halaman kosong' untuk menambah satu di antaranya."
+      "slidesLoaded": "{n} slaid kini di gulungan sebagai halaman {a}–{b}. Halaman atas dan halaman bawah bergerak antaranya; sebut 'halaman kosong' untuk menambah satu di antaranya.",
+      "explainSelection": "Terangkan bahagian ini"
     }
   }
 }

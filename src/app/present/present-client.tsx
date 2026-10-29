@@ -14,6 +14,7 @@ import BoardSession, { type SessionInfo, type SessionKit } from "./board-session
 import type { BoardController, BoardUnit } from "./board-controller";
 import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
 import { prepareDeck, type DeckPagesReply, type DeckStatus } from "./deck-load";
+import { activeSelection, createAskChannel, type HeldSelection, type SkSelectionPayload } from "./highlight-select";
 import { docLabel, docNote, groupLabel, scopeLabel, unitLabel } from "./words";
 import { menuItemsFor, type MenuItem } from "./menu-items";
 import { RAIL_CLOSED, railReduce } from "./rail-state";
@@ -533,6 +534,26 @@ export default function PresentClient({
     [deckGen, deckStatus, runDeck],
   );
 
+  // "Highlight a portion and ask SK" (founder 2026-10-28). The Board reports
+  // the words under her latest highlighter stroke on a deck page; the bridge
+  // reads them (60 s window) into every turn's state, and the chip's click
+  // goes to the panel through the ask channel — both made ONCE (closure boxes
+  // in state), so a bridge rebuilt in between loses neither.
+  const [highlightBox] = useState(() => {
+    let held: HeldSelection | null = null;
+    return {
+      set: (h: HeldSelection | null) => void (held = h),
+      /** The highlight while it is live (60 s), for the bridge's state(). */
+      active: () => activeSelection(held, Date.now()),
+    };
+  });
+  const [askChannel] = useState(() => createAskChannel());
+  const onHighlight = useCallback(
+    (sel: SkSelectionPayload | null) => highlightBox.set(sel ? { selection: sel, at: Date.now() } : null),
+    [highlightBox],
+  );
+  const onAskSelection = useCallback(() => askChannel.post("explain_selection"), [askChannel]);
+
   // Rebuilt whenever what it reads changes; the old one's segment watcher is
   // disposed with it (a unit or session change ends the watch anyway). The
   // selection only changes BEFORE a lesson, when no watcher can be running.
@@ -548,9 +569,11 @@ export default function PresentClient({
             railOpen: railBox.get,
             onLoading: setSlideLoad,
             deck: deckPort,
+            highlight: highlightBox.active,
+            asks: askChannel,
           })
         : null,
-    [sk, controller, manifest, mapStatus, selection, railBox, railDispatch, deckPort],
+    [sk, controller, manifest, mapStatus, selection, railBox, railDispatch, deckPort, highlightBox, askChannel],
   );
   useEffect(() => () => bridge?.dispose(), [bridge]);
 
@@ -739,6 +762,8 @@ export default function PresentClient({
           onLoadSlides={loadSlides}
           slideStatus={slideStatus}
           onLoadDeck={loadDeck}
+          onHighlight={sk ? onHighlight : undefined}
+          onAskSelection={sk ? onAskSelection : undefined}
         />
       ) : ready ? (
         <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">

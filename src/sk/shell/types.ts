@@ -86,6 +86,12 @@ export type SkBoardState = {
    *  absent when the unit has no deck. "ready"/"loaded" let "skip to the
    *  PowerPoint" go to the deck's own first page. */
   deck?: "missing" | "building" | "ready" | "loaded" | "failed";
+  /** Additive (founder 2026-10-28, "highlight a portion and ask SK"): the
+   *  words she highlighted on a deck page, sent only while the highlight is
+   *  live (60 s). `generationId` is the DECK generation, `n` its 1-based slide.
+   *  Untrusted like everything here: board.explain_selection re-checks the
+   *  deck is hers, and the route keeps only the words that are on the slide. */
+  selection?: { generationId: string; n: number; text: string; title?: string };
 };
 
 /** An entity a tool resolved on an earlier turn, kept so "their parents" and
@@ -310,7 +316,10 @@ export type SkBoardMove =
   | "load_slides"
   /** Put the open unit's .pptx on the roll, one rendered slide per page
    *  (founder 2026-10-28); already there = wind to its first page. */
-  | "load_deck";
+  | "load_deck"
+  /** Explain the part of a deck slide she highlighted (SkBoardState.selection).
+   *  Content only: the route answers with text, nothing moves on the Board. */
+  | "explain_selection";
 
 /** The client's answer to a `confirm` card: the token, and how it was given
  *  (§9.2: a spoken yes counts only with exactly one active card and an
