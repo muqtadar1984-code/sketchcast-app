@@ -349,7 +349,7 @@ export async function POST(request: Request) {
         memory = rememberTurn(memory, { user: maskBookSecrets(body.text), assistant: assistantText, entities, pending: keep }, new Date());
         // S6 slice C: remember the class / lesson this turn used (adults only,
         // the owner's own session, time-boxed, never fails the turn).
-        const notes = workflowFromTurn({ role: ctx.user.role, navigatePath: navigatedTo, entities: memory.entities });
+        const notes = workflowFromTurn({ role: ctx.user.role, navigatePath: navigatedTo, entities, known: memory.entities });
         if (notes.length) void recordWorkflow(g.supabase as unknown as FactsDb, ctx.user.id, notes);
         send({ type: "done", ...ev, latencyMs: Date.now() - t0, memory: sealMemory(memory) });
       };

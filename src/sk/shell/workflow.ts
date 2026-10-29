@@ -75,11 +75,14 @@ function lessonLabel(entities: ResolvedEntity[], link: NonNullable<ReturnType<ty
 /**
  * PURE: what this turn teaches SK about the adult's workflow. A Board deep
  * link → the class (when named) + the lesson (when its name is known); else
- * the first class the turn resolved (not one the greeting announced).
+ * the first class THIS turn resolved (not one the greeting announced). `known`
+ * (the conversation's entities) only supplies names.
  */
-export function workflowFromTurn(input: { role: string | null; navigatePath?: string | null; entities: ResolvedEntity[] }): WorkflowNote[] {
+export function workflowFromTurn(input: { role: string | null; navigatePath?: string | null; entities: ResolvedEntity[]; known?: ResolvedEntity[] }): WorkflowNote[] {
   if (!input.role || input.role === "student") return [];
-  const entities = input.entities ?? [];
+  // Names may come from earlier turns (the conversation's entities); a class
+  // is "used" only when THIS turn resolved it.
+  const entities = [...(input.entities ?? []), ...(input.known ?? [])];
   const classLabel = (id: string) => clean(entities.find((e) => e.kind === "class" && e.id === id)?.label);
   const out: WorkflowNote[] = [];
   const link = boardLink(input.navigatePath);
@@ -102,7 +105,7 @@ export function workflowFromTurn(input: { role: string | null; navigatePath?: st
     }
     return out;
   }
-  const c = entities.find((e) => e.kind === "class" && e.via !== "greeting" && ID_RE.test(e.id) && clean(e.label));
+  const c = (input.entities ?? []).find((e) => e.kind === "class" && e.via !== "greeting" && ID_RE.test(e.id) && clean(e.label));
   if (c) out.push({ kind: "recent_class", key: c.id, value: { label: clean(c.label) } });
   return out;
 }

@@ -278,6 +278,11 @@ describe("workflow facts: recorded from the turn, pending saved when the blob la
     ]);
     expect(workflowFromTurn({ role: "student", navigatePath: `/present?class=${CLASS}`, entities: [{ kind: "class", id: CLASS, label: "5B", via: "x" }] })).toEqual([]);
     expect(workflowFromTurn({ role: "teacher", navigatePath: "/present?kit=gen-9", entities: [] })).toEqual([]);
+    // a class only remembered from an earlier turn is not "used" again; its name still labels a Board link
+    expect(workflowFromTurn({ role: "teacher", navigatePath: null, entities: [], known: [{ kind: "class", id: CLASS, label: "5B", via: "context.resolve" }] })).toEqual([]);
+    expect(workflowFromTurn({ role: "teacher", navigatePath: `/present?class=${CLASS}`, entities: [], known: [{ kind: "class", id: CLASS, label: "5B", via: "context.resolve" }] })).toEqual([
+      { kind: "recent_class", key: CLASS, value: { label: "5B" } },
+    ]);
     expect(boardLink("/dashboard")).toBeNull();
   });
 
