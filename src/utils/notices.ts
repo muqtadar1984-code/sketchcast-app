@@ -244,6 +244,10 @@ export async function noticesFor(
   supabase: SupabaseClient,
   viewer: { userId: string; role: string | null; schoolId: string | null },
   limit = 10,
+  /** S4 (SK child.notices): ONE school's board only — a parent asking about one
+   *  child must not hear a sibling's other school. The flag is checked for that
+   *  school; RLS still decides what the caller may read. */
+  opts: { onlySchoolId?: string | null } = {},
 ): Promise<NoticesData | null> {
   // Fast path, not a second gate: this runs on EVERY dashboard load, and the
   // parent fallback below costs a parent_links query for every school-less
@@ -251,11 +255,12 @@ export async function noticesFor(
   // "feature off" from "this school hasn't got it" once we're inside the loop.
   if (process.env.FEATURE_NOTICES !== "true") return null;
 
-  let ok = await noticesEnabledFor(supabase, viewer.schoolId);
+  const only = opts.onlySchoolId ?? null;
+  let ok = await noticesEnabledFor(supabase, only ?? viewer.schoolId);
   // Parents carry no school_id — they belong through their children. Mirror the
   // calendar page exactly: the FIRST child school with the feature on decides
   // (a multi-school parent must not get a surface that dead-ends).
-  if (!ok && !viewer.schoolId && viewer.role && viewer.role !== "student") {
+  if (!ok && !only && !viewer.schoolId && viewer.role && viewer.role !== "student") {
     const { data: links } = await supabase
       .from("parent_links")
       .select("profiles:child_id(school_id)")
@@ -277,9 +282,9 @@ export async function noticesFor(
   const todayStartIso = new Date(dayIndex(now) * DAY - TZ_OFFSET_MS).toISOString();
   const nowIso = new Date(now).toISOString();
 
-  const { data, error } = await supabase
-    .from("school_events")
-    .select(COLUMNS)
+  let query = supabase.from("school_events").select(COLUMNS);
+  if (only) query = query.eq("school_id", only);
+  const { data, error } = await query
     // Revoked notices leave every reader surface (RLS keeps showing them to
     // leadership for audit, so the filter has to be here too).
     .eq("status", "published")
