@@ -29,6 +29,7 @@ import type { KitManifest } from "./manifest/derive";
 import { deriveAndStore } from "./manifest/service";
 import { readManifest, type ReadResult, type StoreAdmin } from "./manifest/store";
 import { ProductKits, type ProductKit, type ProductRef } from "./product-kits";
+import { SupabaseRemediationBank, type RemediationBank } from "./remediation-bank";
 import { persistence, providers } from "./server";
 import type { SessionStore } from "./store";
 import { skDbFrom } from "./store-supabase";
@@ -48,7 +49,10 @@ export type KitDeps = {
   derive: (admin: KitAdmin, generationId: string) => Promise<ReadResult>;
   /** The kit's bank items (topic_questions), for practise and marking. */
   items: (admin: KitAdmin) => ItemBank;
-  /** sk_usage (metering) and the turn's replay guard. */
+  /** The remediation ladder's bank facts (rationale, misconceptions, explanation). */
+  bank: (admin: KitAdmin) => RemediationBank;
+  /** sk_usage (metering), the turn's replay guard, and (slice C) the kit
+   *  sessions, attempts and objective mastery. */
   store: SessionStore;
   entitlements?: EntitlementSource;
   allowanceEnforced?: boolean;
@@ -77,6 +81,7 @@ function realDeps(): KitDeps {
       read: (a, g) => readManifest(a, g),
       derive: (a, g) => deriveAndStore(a as unknown as Parameters<typeof deriveAndStore>[0], g),
       items: (a) => new SupabaseItemBank(skDbFrom(a as unknown as Parameters<typeof skDbFrom>[0])),
+      bank: (a) => new SupabaseRemediationBank(skDbFrom(a as unknown as Parameters<typeof skDbFrom>[0])),
       store: p.store,
       entitlements: p.entitlements,
       allowanceEnforced: skAllowanceEnforced(),
