@@ -33,13 +33,13 @@ const fold = (s: string) =>
     .trim();
 
 /** The verified children (the only ones SK reads about). */
-export function verifiedChildren(ctx: SkContext): SkChild[] {
+export function verifiedChildren(ctx: Pick<SkContext, "children">): SkChild[] {
   return (ctx.children ?? []).filter((c) => c.verified);
 }
 
 /** Is this id one of the parent's VERIFIED children? The gate in front of every
  *  admin read (child.progress) — a second check, after resolveChild. */
-export function isVerifiedChild(ctx: SkContext, childId: string): boolean {
+export function isVerifiedChild(ctx: Pick<SkContext, "children">, childId: string): boolean {
   return verifiedChildren(ctx).some((c) => c.id === childId);
 }
 

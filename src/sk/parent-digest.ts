@@ -47,7 +47,7 @@ import {
   P_WEEK_NOTHING,
   P_WEEK_TODO,
 } from "./shell/parent-lines";
-import { isDoneStatus, type ChildWorkItem } from "@/utils/child-work";
+import { childWorkItems, isDoneStatus, uniqueWork, type ChildWorkItem, type ChildWorkRows } from "@/utils/child-work";
 import { MIN_ASSIGNED, type LearnerHealth } from "@/utils/school-health";
 import type { ChildMasteryRow } from "./parent-mastery";
 
@@ -119,6 +119,42 @@ export function statusBlock(child: SkChild, items: ChildWorkItem[], locale: stri
 // ── child.diary ─────────────────────────────────────────────────────────────
 
 export type ChildDiaryNote = { id: string; authorId: string; classId: string | null; studentId: string | null; type: string; body: string; entryDate: string; createdAt: string };
+
+/** The first diary day (KL, YYYY-MM-DD) of the DIARY_DAYS window ending now. */
+export function diarySince(now: number): string {
+  return new Date(now - DIARY_DAYS * DAY).toISOString().slice(0, 10);
+}
+
+/** diary_notes rows → this child's notes: her own personal notes and the
+ *  class-wide notes of HER classes, on or after `since`, once each. PURE — a
+ *  sibling's or a classmate's note never passes, whatever the read returned.
+ *  (child.diary / child.week and the parent page's "This week" card.) */
+export function cutChildDiary(rows: Array<Record<string, unknown>>, childId: string, classIds: string[], since: string): ChildDiaryNote[] {
+  const classSet = new Set(classIds);
+  const seen = new Set<string>();
+  const out: ChildDiaryNote[] = [];
+  const s = (v: unknown) => (typeof v === "string" ? v : null);
+  for (const n of rows) {
+    const id = s(n.id);
+    if (!id || seen.has(id)) continue;
+    const own = n.student_id === childId;
+    const classWide = !n.student_id && typeof n.class_id === "string" && classSet.has(n.class_id);
+    if (!own && !classWide) continue; // never a sibling's or a classmate's note
+    if (typeof n.entry_date === "string" && n.entry_date < since) continue;
+    seen.add(id);
+    out.push({
+      id,
+      authorId: String(n.author_id ?? ""),
+      classId: s(n.class_id),
+      studentId: s(n.student_id),
+      type: String(n.note_type ?? ""),
+      body: String(n.body ?? ""),
+      entryDate: String(n.entry_date ?? ""),
+      createdAt: String(n.created_at ?? ""),
+    });
+  }
+  return out;
+}
 
 export function diaryBlock(child: SkChild, notes: ChildDiaryNote[], locale: string, me: string): Block {
   const name = child.firstName;
@@ -257,14 +293,21 @@ export function nextSteps(input: WeekInput, locale: string, now: number): string
   return steps;
 }
 
+/** The week's numbers — ONE rule for SK's child.week and the page's card. */
+export function weekNumbers(input: WeekInput, now: number): { done: number; overdue: ChildWorkItem[]; awaiting: number; mastered: number; notes: number } {
+  const since = now - WEEK_DAYS * DAY;
+  return {
+    done: input.items.filter((i) => isDoneStatus(i.status) && at(i.doneAt) >= since).length,
+    overdue: input.items.filter((i) => i.overdue).sort((a, b) => at(a.due) - at(b.due)),
+    awaiting: input.items.filter((i) => i.awaitingMarking).length,
+    mastered: groupMastery(input.mastery ?? []).mastered.filter((r) => at(r.updatedAt) >= since).length,
+    notes: input.notes.filter((n) => at(n.createdAt) >= since).length,
+  };
+}
+
 export function weekBlock(child: SkChild, input: WeekInput, locale: string, now: number): Block {
   const name = child.firstName;
-  const since = now - WEEK_DAYS * DAY;
-  const done = input.items.filter((i) => isDoneStatus(i.status) && at(i.doneAt) >= since).length;
-  const overdue = input.items.filter((i) => i.overdue).sort((a, b) => at(a.due) - at(b.due));
-  const awaiting = input.items.filter((i) => i.awaitingMarking).length;
-  const mastered = groupMastery(input.mastery ?? []).mastered.filter((r) => at(r.updatedAt) >= since).length;
-  const notes = input.notes.filter((n) => at(n.createdAt) >= since).length;
+  const { done, overdue, awaiting, mastered, notes } = weekNumbers(input, now);
   const overdueItems = overdue.length ? ` (${overdue.slice(0, 2).map((i) => lineFor(P_DUE_ON, locale, { title: titleOf(i, locale), date: shortDate(i.due, locale) })).join("; ")})` : "";
   const steps = nextSteps(input, locale, now);
   const summary = [
@@ -275,4 +318,57 @@ export function weekBlock(child: SkChild, input: WeekInput, locale: string, now:
     summary,
     facts: [{ child: name, doneThisWeek: done, overdue: overdue.length, awaitingMarking: awaiting, masteredThisWeek: mastered, newDiaryNotes: notes, nextSteps: steps.join("; ") || null }],
   };
+}
+
+// ── S4 slice E: the "This week" card on /dashboard/children ────────────────
+//
+// The SAME numbers and steps as child.week (weekNumbers + nextSteps), as data
+// for a card instead of a sentence. weekCardsFor is the page's whole assembly:
+// rows the page read through the parent's session (RLS: her own children) +
+// mastery the page read behind the verified-link gate (parent-mastery.ts) →
+// one card per VERIFIED child. PURE; every row is cut to the one child.
+
+export type WeekCard = {
+  childId: string;
+  name: string;
+  done: number;
+  overdue: number;
+  awaiting: number;
+  mastered: number;
+  notes: number;
+  /** Up to two "What to do about it" steps, in the parent's language. */
+  steps: string[];
+};
+
+export function weekCard(child: SkChild, input: WeekInput, locale: string, now: number): WeekCard {
+  const n = weekNumbers(input, now);
+  return { childId: child.id, name: child.firstName, done: n.done, overdue: n.overdue.length, awaiting: n.awaiting, mastered: n.mastered, notes: n.notes, steps: nextSteps(input, locale, now) };
+}
+
+export type WeekCardsInput = {
+  /** The parent's children (context.ts childrenFromLinks); unverified links get no card. */
+  children: SkChild[];
+  /** Work rows (child-work.ts shape), RLS-scoped; cut per child here. */
+  rows: ChildWorkRows;
+  /** diary_notes rows (id, author_id, class_id, student_id, note_type, body, entry_date, created_at). */
+  noteRows: Array<Record<string, unknown>>;
+  /** childId → mastery rows (null = unavailable), from parent-mastery.ts. */
+  mastery: Record<string, ChildMasteryRow[] | null>;
+  locale: string;
+  now: number;
+};
+
+export function weekCardsFor(input: WeekCardsInput): WeekCard[] {
+  const since = diarySince(input.now);
+  return input.children
+    .filter((c) => c.verified)
+    .map((child) => {
+      const classIds = [...new Set(input.rows.enrollments.filter((e) => e.student_id === child.id).map((e) => e.class_id))];
+      const week: WeekInput = {
+        items: uniqueWork(childWorkItems(input.rows, child.id, input.now)),
+        notes: cutChildDiary(input.noteRows, child.id, classIds, since),
+        mastery: input.mastery[child.id] ?? null,
+      };
+      return weekCard(child, week, input.locale, input.now);
+    });
 }

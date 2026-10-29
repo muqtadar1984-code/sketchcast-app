@@ -8,6 +8,8 @@ import { enforceHat } from "@/utils/hats-server";
 import { noticesFor } from "@/utils/notices";
 import { childWorkItems, type ChildWorkRows } from "@/utils/child-work";
 import AddChild from "./add-child";
+import WeekCard from "./week-card";
+import { loadWeekCards } from "./week-data";
 import NoticeBanner from "../notice-banner";
 import NoticesCard from "../notices-card";
 import FairUseMeter from "../fair-use-meter";
@@ -20,9 +22,10 @@ import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 
-// The parent home: one section per linked child — their school assignments
-// (read-only: completion, due dates, scores) and the test papers this parent
-// assigned. Every read is RLS-scoped to the parent's OWN children; classmates
+// The parent home: one section per linked child — S4's "This week" card (the
+// same digest SK's child.week answers from; week-data.ts), their school
+// assignments (read-only: completion, due dates, scores) and the test papers
+// this parent assigned. Every read is RLS-scoped to the parent's OWN children; classmates
 // and other teachers' data are invisible by construction (migration 0018).
 
 export const dynamic = "force-dynamic";
@@ -104,14 +107,15 @@ export default async function ChildrenPage() {
   // self-created children are the parent's to remove; school-issued links are
   // school-managed.
   type LinkRow = {
+    parent_id: string;
     child_id: string;
     verified_at: string | null;
     source: string | null;
-    profiles: { full_name: string | null; username: string | null } | null;
+    profiles: { full_name: string | null; username: string | null; school_id: string | null } | null;
   };
   const { data: linksRaw } = await supabase
     .from("parent_links")
-    .select("child_id, verified_at, source, profiles:child_id(full_name, username)");
+    .select("parent_id, child_id, verified_at, source, profiles:child_id(full_name, username, school_id)");
   const links = (linksRaw ?? []) as unknown as LinkRow[];
   if (links.length === 0 && role !== "parent") redirect("/dashboard");
 
@@ -122,8 +126,9 @@ export default async function ChildrenPage() {
     supabase.from("classes").select("id, name"),
     supabase.from("generation_shares").select("generation_id, class_id, student_id, due_at, shared_by"),
     supabase.from("generations").select("id, title, kind, chapter_ref"),
-    supabase.from("student_progress").select("generation_id, student_id, status"),
-    supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status, feedback"),
+    // The timestamps feed the "This week" card (done this week, recent scores).
+    supabase.from("student_progress").select("generation_id, student_id, status, completed_at, updated_at"),
+    supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status, feedback, submitted_at, graded_at"),
   ]);
 
   const className = new Map(((classesQ.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
@@ -140,6 +145,11 @@ export default async function ChildrenPage() {
   // (server component, rendered once per request)
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
+
+  // S4 slice E: one "This week" card per VERIFIED child — the same numbers and
+  // "What to do about it" steps as SK's child.week (parent-digest.ts). Plain
+  // dashboard UI: the parent-portal flag above is its only gate.
+  const weekCards = await loadWeekCards(supabase, user.id, links as unknown as Array<Record<string, unknown>>, workRows, locale, now);
 
   function itemsFor(childId: string): { school: ChildItem[]; mine: ChildItem[] } {
     const school: ChildItem[] = [];
@@ -253,6 +263,7 @@ export default async function ChildrenPage() {
                     {l.source === "self" && <DeleteStudentButton targetId={l.child_id} name={name} />}
                   </span>
                 </div>
+                {weekCards[l.child_id] && <WeekCard card={weekCards[l.child_id]} t={t.week} />}
                 <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                   {fmt(t.schoolWork, { n: school.length })}
                 </p>
