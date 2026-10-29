@@ -1387,24 +1387,6 @@
       "chooseTeacher": "Elija un profesor…",
       "grant": "Dar acceso"
     },
-    "briefing": {
-      "launcher": "Informe escolar",
-      "launcherHint": "Pregunte sobre su escuela",
-      "subtitle": "Respuestas con los datos actuales de su escuela",
-      "reading": "Leyendo los datos más recientes de la escuela…",
-      "unavailable": "El informe no está disponible ahora mismo.",
-      "unreachable": "No se pudo conectar con el informe. Inténtelo de nuevo en un momento.",
-      "failed": "El informe no está disponible ahora mismo.",
-      "readAloud": "Leer en voz alta",
-      "stopReading": "Dejar de leer en voz alta",
-      "stop": "Detener",
-      "listening": "Escuchando…",
-      "placeholder": "Pregunte por el avance, los alumnos en riesgo, las calificaciones…",
-      "ask": "Preguntar",
-      "micStart": "Diga su pregunta",
-      "micStop": "Dejar de escuchar",
-      "footnote": "Usa solo las estadísticas que usted ya puede ver aquí. Cada informe se registra en la auditoría de accesos."
-    },
     "assistant": {
       "launcher": "Asistente",
       "launcherHint": "Abrir el Asistente de enseñanza IA",

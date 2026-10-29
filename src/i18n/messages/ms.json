@@ -1387,24 +1387,6 @@
       "chooseTeacher": "Pilih guru…",
       "grant": "Beri akses"
     },
-    "briefing": {
-      "launcher": "Taklimat sekolah",
-      "launcherHint": "Tanya tentang sekolah anda",
-      "subtitle": "Jawapan daripada data sekolah anda yang terkini",
-      "reading": "Membaca data sekolah terkini…",
-      "unavailable": "Taklimat tidak tersedia buat masa ini.",
-      "unreachable": "Tidak dapat menghubungi taklimat. Cuba lagi sebentar.",
-      "failed": "Taklimat tidak tersedia buat masa ini.",
-      "readAloud": "Bacakan",
-      "stopReading": "Henti bacaan",
-      "stop": "Henti",
-      "listening": "Mendengar…",
-      "placeholder": "Tanya tentang kadar siap, pelajar berisiko, pemarkahan…",
-      "ask": "Tanya",
-      "micStart": "Sebut soalan anda",
-      "micStop": "Berhenti mendengar",
-      "footnote": "Hanya menggunakan analitik yang anda sudah boleh lihat di sini. Setiap taklimat direkodkan dalam audit akses."
-    },
     "assistant": {
       "launcher": "Pembantu",
       "launcherHint": "Buka Pembantu Pengajaran AI",

@@ -1387,24 +1387,6 @@
       "chooseTeacher": "Choose a teacher…",
       "grant": "Grant access"
     },
-    "briefing": {
-      "launcher": "School briefing",
-      "launcherHint": "Ask about your school",
-      "subtitle": "Answers from your live school data",
-      "reading": "Reading the latest school data…",
-      "unavailable": "The briefing isn't available right now.",
-      "unreachable": "Couldn't reach the briefing. Try again in a moment.",
-      "failed": "The briefing is unavailable right now.",
-      "readAloud": "Read aloud",
-      "stopReading": "Stop reading aloud",
-      "stop": "Stop",
-      "listening": "Listening…",
-      "placeholder": "Ask about completion, at-risk students, grading…",
-      "ask": "Ask",
-      "micStart": "Speak your question",
-      "micStop": "Stop listening",
-      "footnote": "Uses only the analytics you can already see here. Every briefing is recorded in the access audit."
-    },
     "assistant": {
       "launcher": "Assistant",
       "launcherHint": "Open the AI Teaching Assistant",

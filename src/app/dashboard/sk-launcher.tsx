@@ -53,11 +53,10 @@ export default function SkLauncher({
   // takes the ask and sends it (sk-shell.tsx).
   useEffect(() => board?.asks()?.subscribe(() => setOpen(true)), [board]);
   if (!SK_ON) return null;
-  // The leadership School pages keep their own bottom-right launcher (the
-  // School-briefing bot) until S5 retires it. The Board (/present) is not
-  // under the dashboard layout; it mounts this launcher itself WITH a bridge,
-  // so a launcher reaching /present without one is the layout's and hides.
-  if (pathname?.startsWith("/dashboard/school")) return null;
+  // SK S5 slice E: the School Briefing bot is retired, so SK shows on the
+  // leadership School pages too (/dashboard/school). The Board (/present) is
+  // not under the dashboard layout; it mounts this launcher itself WITH a
+  // bridge, so a launcher reaching /present without one is the layout's and hides.
   if (pathname?.startsWith("/present") && !board) return null;
 
   return (

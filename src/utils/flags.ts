@@ -63,33 +63,9 @@ export async function schoolAnalyticsEnabledFor(
 }
 
 /**
- * School-briefing assistant ("Ask about your school") — the leadership chat on
- * /dashboard/school that answers from a live, RLS-scoped analytics snapshot.
- * Requires the analytics suite to be on for the tenant, then its OWN gate:
- * global env FEATURE_SCHOOL_ASSISTANT, or per-school
- * schools.config {"school_assistant": true} (the demo-tenant rollout path).
- */
-export async function schoolAssistantEnabledFor(
-  supabase: SupabaseClient,
-  schoolId: string | null | undefined,
-): Promise<boolean> {
-  if (!(await schoolAnalyticsEnabledFor(supabase, schoolId))) return false;
-  if (process.env.FEATURE_SCHOOL_ASSISTANT === "true") return true;
-  if (!schoolId) return false;
-  const { data, error } = await supabase
-    .from("schools")
-    .select("config")
-    .eq("id", schoolId)
-    .maybeSingle();
-  if (error) return false;
-  const cfg = (data?.config ?? null) as { school_assistant?: unknown } | null;
-  return cfg?.school_assistant === true;
-}
-
-/**
  * School calendar (events + ICS subscribe/export). Needs migration 0043.
  * Global env FEATURE_CALENDAR, or per-school schools.config
- * {"calendar": true} — the demo-tenant rollout path, same as the briefing.
+ * {"calendar": true} — the demo-tenant rollout path.
  */
 export async function calendarEnabledFor(
   supabase: SupabaseClient,

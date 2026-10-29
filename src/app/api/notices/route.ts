@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   // legacy role='coordinator' rows back to teacher, so gating on the enum would
   // 403 every real coordinator out of the write path 0068 opened for them.
   // Detect them the way every other leadership surface does (dashboard/school,
-  // timetable/absence, school-assistant): scope rows in THIS school — RLS
+  // timetable/absence, the SK leader reads): scope rows in THIS school — RLS
   // returns only the caller's own, and the explicit school filter rejects a
   // stale grant from a school they have left.
   if (!role || role === "student") {

@@ -32,7 +32,8 @@ import { lineFor } from "./lines";
 import { SM_ANALYTICS_OFF, SM_AUDIT_FAILED, SM_CAP_REACHED } from "./school-meter-lines";
 
 export const SK_SCHOOL_SCOPE = "sk_school";
-/** The School Briefing panel's scope (api/school-assistant): the same counter. */
+/** The retired School Briefing panel's scope: its rows still count toward today's
+ *  shared 60/day (historic rows, today's window), so the constant stays. */
 export const SCHOOL_BRIEFING_SCOPE = "school_briefing";
 export const SCHOOL_READ_DAILY_CAP = 60;
 export const SK_SCHOOL_TARGET_KIND = "sk_capability";
