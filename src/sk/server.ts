@@ -17,6 +17,7 @@ import { skAllowanceEnforced, skEnabled, skUserAllowed } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
+import { memoryAllowed, type ConsentDb } from "./consent";
 import { embedderConfigured, TitanEmbedder } from "./embed";
 import { SupabaseEntitlements, type EntitlementSource } from "./entitlement";
 import { CompositeItemBank, StaticItemBank, type ItemBank } from "./items";
@@ -44,6 +45,8 @@ export type SkDeps = {
   retrieval?: RetrievalProvider;
   loadSegment: LoopDeps["loadSegment"];
   loadHitmapElementIds: LoopDeps["loadHitmapElementIds"];
+  /** S6: may this student's tutor history be kept (`transcripts` consent)? */
+  keepHistory?: LoopDeps["keepHistory"];
 };
 
 /** With no graph source, nothing asks for a segment or a hit map; if a caller
@@ -88,12 +91,19 @@ let override: Partial<SkDeps> | null = null;
  * the 0157 tables through the admin client, and serves items from
  * `topic_questions`. Unset (the default) is the B4 in-memory store and the
  * U4 stand-in items — nothing changes until the flag is set. */
-export function persistence(): Pick<SkDeps, "store" | "items" | "entitlements"> {
+export function persistence(): Pick<SkDeps, "store" | "items" | "entitlements" | "keepHistory"> {
   if (process.env.SK_STORE === "supabase") {
-    const db = skDbFrom(createAdminClient());
+    const admin = createAdminClient();
+    const db = skDbFrom(admin);
     // The stand-in chapter's string ids fall through to the static items (live fix 2026-10-27).
     // B8: the same admin client reads entitlements, profiles.school_id and book_access_grants, and writes sk_usage.
-    return { store: new SupabaseSessionStore(db), items: new CompositeItemBank(new SupabaseItemBank(db), new StaticItemBank(), (id) => UUID_RE.test(id)), entitlements: new SupabaseEntitlements(db) };
+    // S6: the same admin client answers the consent question (consent.ts memoryAllowed) before any history is kept.
+    return {
+      store: new SupabaseSessionStore(db),
+      items: new CompositeItemBank(new SupabaseItemBank(db), new StaticItemBank(), (id) => UUID_RE.test(id)),
+      entitlements: new SupabaseEntitlements(db),
+      keepHistory: (studentId) => memoryAllowed(admin as unknown as ConsentDb, studentId, "transcripts"),
+    };
   }
   // No database: no entitlement source — the loop's dev-flag (everything granted, usage counted in memory only).
   return { store: new InMemorySessionStore(), items: new StaticItemBank() };
@@ -152,7 +162,7 @@ export function __setSkDepsForTests(d: Partial<SkDeps> | null): void {
 export function loopDepsFor(d: SkDeps, productId: string, chapter: number): LoopDeps | null {
   const graph = d.graphs.find((g) => g.product_id === productId && g.chapter === chapter);
   if (!graph) return null;
-  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, retrieval: d.retrieval, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds, entitlements: d.entitlements, allowanceEnforced: d.allowanceEnforced };
+  return { store: d.store, items: d.items, graph, routerProvider: d.routerProvider, teacherProvider: d.teacherProvider, retrieval: d.retrieval, loadSegment: d.loadSegment, loadHitmapElementIds: d.loadHitmapElementIds, entitlements: d.entitlements, allowanceEnforced: d.allowanceEnforced, keepHistory: d.keepHistory };
 }
 
 // ── Gate + auth, shared by every route ──────────────────────────────────────

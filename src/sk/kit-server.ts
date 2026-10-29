@@ -21,6 +21,7 @@ import { signKitVideos, type SignAdmin } from "@/utils/present/sign";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import type { EntitlementSource } from "./entitlement";
 import { SupabaseEntitlements } from "./entitlement";
+import { noteLearning, type FactsDb, type LearningNote } from "./facts";
 import type { ItemBank } from "./items";
 import { SupabaseItemBank } from "./items-supabase";
 import type { KitRefusal, KitReply } from "./kit-player";
@@ -58,6 +59,9 @@ export type KitDeps = {
   allowanceEnforced?: boolean;
   teacherProvider?: LLMProvider;
   now?: () => number;
+  /** S6: remember a learning fact about the student (facts.ts noteLearning:
+   *  `transcripts` consent first, a no-op without it). Absent → nothing kept. */
+  noteLearning?: (admin: KitAdmin, studentId: string, note: LearningNote) => Promise<unknown>;
 };
 
 let real: KitDeps | null = null;
@@ -85,6 +89,7 @@ function realDeps(): KitDeps {
       store: p.store,
       entitlements: p.entitlements,
       allowanceEnforced: skAllowanceEnforced(),
+      noteLearning: (a, studentId, note) => noteLearning(a as unknown as FactsDb, studentId, note),
       ...providers(),
     };
   }
