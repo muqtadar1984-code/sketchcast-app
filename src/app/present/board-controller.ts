@@ -72,7 +72,10 @@ export type SkActionName =
   | "board.show_questions"
   | "board.next_question"
   | "board.prev_question"
-  | "board.end_session";
+  | "board.end_session"
+  /** Board UX (2026-10-28): every slide onto the roll as pages — ONE row for
+   *  the whole load (params count/from/to), not one per frame. */
+  | "board.load_slides";
 
 /** One row of the planned `sk_actions` audit table. */
 export type SkActionRecord = {
@@ -128,11 +131,14 @@ export type BoardPorts = {
   resume: () => Promise<void>;
   pause: () => void;
   setStage: (mode: StageMode) => void;
-  /** Tap-to-freeze: pause, capture, push a frame page. False when nothing was captured. */
-  freeze: () => Promise<boolean>;
+  /** Tap-to-freeze: pause, capture, push a frame page. False when nothing was captured.
+   *  `replaceBlank` (the slides load): a pristine roll — one blank page, no
+   *  ink — takes the frame ON that page, so the first slide is page 1. */
+  freeze: (opts?: { replaceBlank?: boolean }) => Promise<boolean>;
   /** Open the current unit's first projectable worksheet. False when there is none. */
   openWorksheetPage: () => boolean;
-  blankPage: () => void;
+  /** Append a blank page; with `after`, insert it right after that page. */
+  blankPage: (opts?: { after?: number }) => void;
   /** Append a text page and wind to it. */
   pushCard: (card: TextCard) => void;
   /** The open unit's first worksheet that carries questions.json, as cards. */
@@ -203,7 +209,20 @@ export type BoardController = {
   slide(k: number, manifest: BoardManifest): Promise<SlideResult>;
   freeze(): Promise<boolean>;
   openWorksheetPage(): boolean;
-  blankPage(): void;
+  /** Append a blank page — or, with `after` (Board UX 2026-10-28), insert one
+   *  right after that page so a note between two slides stays between them. */
+  blankPage(opts?: { after?: number }): void;
+  /**
+   * Board UX (2026-10-28, founder): every slide of the lesson onto the roll as
+   * pages, in order — seek to each segment's completed frame (slide_t, else
+   * end_s − backoff), wait for it to be DISPLAYED, freeze it, next. One audit
+   * row for the whole load. Abortable (`cancelLoad`, or `opts.signal`): pages
+   * already made stay. Additive and optional, so an older host or a fake
+   * controller need not carry it.
+   */
+  loadSlides?(manifest: BoardManifest, opts?: LoadSlidesOptions): Promise<LoadSlidesResult>;
+  /** Stop a running loadSlides after the frame in hand. No-op when none runs. */
+  cancelLoad?(): void;
   pageUp(): void;
   pageDown(): void;
   /** Put the unit's real questions on the board, one page per question.
@@ -223,6 +242,25 @@ export type BoardController = {
 
 /** `shown`/`of` are present only when a window (`count`) was asked for. */
 export type QuestionsShown = { index: number; total: number; shown?: number; of?: number };
+
+export type LoadSlidesOptions = {
+  /** First and last segment index to load (inclusive); the whole manifest by default. */
+  from?: number;
+  to?: number;
+  /** After each page lands: k is 1-based within the load, n its size. */
+  onProgress?: (k: number, n: number) => void;
+  signal?: AbortSignal;
+};
+
+export type LoadSlidesResult = {
+  /** Pages made by this load. */
+  pages: number;
+  /** Roll indices (0-based) of the first and last page made; -1 when none. */
+  firstPage: number;
+  lastPage: number;
+  /** True when the loop was cancelled before the last slide. */
+  aborted: boolean;
+};
 
 export type ControllerOptions = {
   now?: () => number;
@@ -321,6 +359,8 @@ export function createBoardController(
   const actions: SkActionRecord[] = [];
   let ended = false;
   let moving = 0;
+  /** The running slides load, so a new move can stop it. */
+  let loading: AbortController | null = null;
   // `window` (S1 slice C) is the open subset [start, end) when practise(n)
   // asked for n questions; null = the whole set, as M2 had it.
   let qs: (QuestionSet & { pages: Map<number, number>; current: number; window: { start: number; end: number } | null }) | null = null;
@@ -547,7 +587,54 @@ export function createBoardController(
         },
         pageCount,
       ),
-    blankPage: () => runSync("board.blank_page", {}, () => ports.blankPage(), pageCount),
+    blankPage: (o) => runSync("board.blank_page", o?.after !== undefined ? { after: o.after } : {}, () => ports.blankPage(o), pageCount),
+    cancelLoad: () => loading?.abort(),
+    loadSlides: (manifest, o = {}) => {
+      const n = manifest.segments.length;
+      const from = Math.max(0, o.from ?? 0);
+      const to = Math.min(n - 1, o.to ?? n - 1);
+      const count = Math.max(0, to - from + 1);
+      return run(
+        "board.load_slides",
+        { count, from, to },
+        async (): Promise<LoadSlidesResult> => {
+          if (!count) throw new Error("no slides in the lesson map");
+          loading?.abort();
+          const ac = new AbortController();
+          loading = ac;
+          const aborted = () => ac.signal.aborted || !!o.signal?.aborted;
+          const out: LoadSlidesResult = { pages: 0, firstPage: -1, lastPage: -1, aborted: false };
+          try {
+            ports.pause();
+            for (let k = from; k <= to; k++) {
+              if (aborted()) break;
+              // The completed frame, DISPLAYED: rawSeek resolves on the
+              // presented frame (rVFC) or its timeout; with no rVFC at all it
+              // resolves on `seeked`, so give the decoder a beat to paint.
+              const r = await rawSeek(slideTime(manifest, k, endBackoffS));
+              if (r.presentedMediaTime === null) await new Promise<void>((res) => setTimeout(res, 80));
+              if (aborted()) break;
+              // The first slide may take a pristine roll's blank first page.
+              if (!(await ports.freeze(k === from ? { replaceBlank: true } : undefined))) throw new Error(`nothing to capture for slide ${k + 1}`);
+              const page = ports.where().page;
+              if (out.firstPage < 0) out.firstPage = page;
+              out.lastPage = page;
+              out.pages++;
+              o.onProgress?.(k - from + 1, count);
+            }
+            out.aborted = aborted() && out.pages < count;
+          } finally {
+            if (loading === ac) loading = null;
+            // The roll is the surface now: the video steps aside and the
+            // first slide is the page on screen. resume/intro bring it back.
+            ports.setStage("away");
+            if (out.firstPage >= 0) ports.goTo(out.firstPage);
+          }
+          return out;
+        },
+        (r) => ({ pages: r.pages, firstPage: r.firstPage, lastPage: r.lastPage, aborted: r.aborted, ...pageCount() }),
+      );
+    },
     pageUp: () =>
       runSync("board.page_up", {}, () => {
         const w = ports.where();

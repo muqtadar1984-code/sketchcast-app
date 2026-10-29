@@ -759,6 +759,14 @@ export default function SkShell({
                   moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: r.ok, summary: r.summary } : m)),
                 }));
                 if (!r.ok) setError(r.summary);
+                // The slides load (Board UX 2026-10-28) closes with where the
+                // pages landed — known only now, so the panel says it, in her
+                // language, rather than the server ahead of time.
+                if (r.ok && r.loaded) {
+                  const done = fmt(copy.slidesLoaded, { n: r.loaded.n, a: r.loaded.a, b: r.loaded.b });
+                  setCaption(done);
+                  speakLine(done);
+                }
               })(),
             );
             break;
@@ -783,7 +791,7 @@ export default function SkShell({
         }
       }
     },
-    [ready, router, copy, patchEntry, act, dismissCard, appendSk, keepMemory, warmNavigation],
+    [ready, router, copy, patchEntry, act, dismissCard, appendSk, keepMemory, warmNavigation, speakLine],
   );
   // The hands-free loop sends from inside a dictation callback that outlives
   // any one render; it reaches the current `send` through this ref.
@@ -813,6 +821,7 @@ export default function SkShell({
   // Re-read on every render — the 1 s tick keeps them fresh while the lesson
   // map is prepared in the background and while a card counts down.
   const mapStatus = board ? board.status() : "none";
+  const slideLoad = board?.loading() ?? null;
   const nowMs = Date.now() + tick * 0;
   const paramLabel = (k: string) => k.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
 
@@ -929,7 +938,7 @@ export default function SkShell({
 
         {/* Job tray (jobs arrive in S2) — on the Board it also reports the lesson map. */}
         <div className="px-5 py-1 text-[10px] text-slate-600 border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
-          {mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
+          {slideLoad ? fmt(copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n }) : mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
         </div>
 
         {/* S1: confirmation cards (§2.5). One active card at a time. */}

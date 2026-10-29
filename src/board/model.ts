@@ -133,6 +133,41 @@ export function addPage(roll: Roll, background: PageBackground = { kind: "blank"
   return index;
 }
 
+/**
+ * Insert a page right AFTER page `after` and return its index.
+ *
+ * Board UX (2026-10-28, founder): with the lesson's slides loaded as pages, a
+ * teacher on page 3 who wants to explain something adds a blank page as page 4
+ * and the former page 4 becomes 5 — appending at the end would put her note
+ * after the last slide. Pages stay dense and 0-based, so every later page is
+ * renumbered and so is every stroke drawn on one of them (a stroke belongs to a
+ * page by index). `after` at or past the last page is a plain append, which is
+ * exactly what the old behaviour was.
+ *
+ * The strokes whose `page` moved are returned so a host persisting the roll by
+ * index can re-record them; the pages that moved are `roll.pages.slice(index+1)`.
+ */
+export function insertPage(
+  roll: Roll,
+  after: number,
+  background: PageBackground = { kind: "blank" },
+): { index: number; movedStrokes: Stroke[] } {
+  if (!Number.isInteger(after) || after >= roll.pages.length - 1) {
+    return { index: addPage(roll, background), movedStrokes: [] };
+  }
+  const index = Math.max(0, after) + 1;
+  roll.pages.splice(index, 0, { index, background });
+  for (let i = index + 1; i < roll.pages.length; i++) roll.pages[i].index = i;
+  const movedStrokes: Stroke[] = [];
+  for (const s of roll.strokes) {
+    if (s.page >= index) {
+      s.page += 1;
+      movedStrokes.push(s);
+    }
+  }
+  return { index, movedStrokes };
+}
+
 /** Replace a page's background — freezing a video frame onto the current page. */
 export function setBackground(roll: Roll, page: number, background: PageBackground): void {
   const p = roll.pages[page];

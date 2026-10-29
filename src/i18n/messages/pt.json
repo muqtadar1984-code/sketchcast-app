@@ -1876,7 +1876,10 @@
       "outsideHours": "Fora do horário de aula",
       "fromTimetable": "Definido pelo horário",
       "freePeriod": "Sem aula neste horário",
-      "pickManually": "Escolher manualmente"
+      "pickManually": "Escolher manualmente",
+      "menu": "Menu",
+      "backToDashboard": "Voltar ao painel",
+      "loadSlides": "Carregar diapositivos como páginas"
     },
     "start": {
       "heading": "Escolha o que você vai ensinar",
@@ -1921,7 +1924,9 @@
       "examPaper": "Prova",
       "exam": "Exame",
       "noteNeverProject": "Somente download — uma prova que a turma já viu deixa de ser prova",
-      "noteNoText": "Somente download — este tipo não tem texto estruturado para colocar na lousa"
+      "noteNoText": "Somente download — este tipo não tem texto estruturado para colocar na lousa",
+      "deck": "Apresentação de diapositivos",
+      "noteDeck": "Transferência — o quadro mostra os diapositivos do vídeo"
     },
     "group": {
       "thisPart": "Esta parte",
@@ -1961,7 +1966,9 @@
       "answerTrue": "Verdadeiro",
       "answerFalse": "Falso",
       "prevQuestion": "Pergunta anterior",
-      "nextQuestion": "Próxima pergunta"
+      "nextQuestion": "Próxima pergunta",
+      "railHandle": "Unidades",
+      "railClose": "Fechar"
     },
     "wrapUp": {
       "saved": "Aula salva",
@@ -2111,7 +2118,9 @@
       "cardExpired": "Este cartão expirou.",
       "cardCancelled": "Cancelado.",
       "actFailed": "Não foi possível concluir. Tente novamente.",
-      "voiceYesHint": "Diga «sim» para confirmar ou «não» para cancelar."
+      "voiceYesHint": "Diga «sim» para confirmar ou «não» para cancelar.",
+      "loadingSlides": "A carregar o diapositivo {k} de {n}…",
+      "slidesLoaded": "{n} diapositivos estão no rolo como páginas {a}–{b}. Página acima e página abaixo movem-se entre eles; diga 'página em branco' para acrescentar uma no meio."
     }
   }
 }

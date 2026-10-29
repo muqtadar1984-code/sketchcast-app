@@ -174,12 +174,28 @@ export type BridgeDeps = {
    *  a lesson runs, so "start the video" on an idle Board can start that
    *  lesson. Ids only; the server re-checks them before it navigates. */
   selection?: () => SkSelection | undefined;
+  /** Board UX (2026-10-28): the unit rail overlay — a UI control the host
+   *  owns (present-client state), NOT a controller move and not audited.
+   *  `rail(open)` sets it; `railOpen()` reads it for toggle. */
+  rail?: (open: boolean) => void;
+  railOpen?: () => boolean;
+  /** Told of a slides load's progress (k of n) and of its end (null), so the
+   *  Board itself can show it as well as the panel's tray. */
+  onLoading?: (progress: { k: number; n: number } | null) => void;
   /** Polling cadence for the segment-end watcher. */
   pollMs?: number;
   now?: () => number;
 };
 
-export type BridgeRun = { ok: boolean; summary: string; /** True when the move left the video playing. */ plays?: boolean };
+export type BridgeRun = {
+  ok: boolean;
+  summary: string;
+  /** True when the move left the video playing. */
+  plays?: boolean;
+  /** load_slides only: how many pages it made and where they sit (1-based,
+   *  inclusive) — the panel turns these into its localized closing line. */
+  loaded?: { n: number; a: number; b: number; aborted: boolean };
+};
 
 export type SkBoardBridge = {
   state(): SkBoardState | undefined;
@@ -189,6 +205,11 @@ export type SkBoardBridge = {
   /** The open unit, from the controller. */
   unit(): BoardUnit | null;
   run(move: SkBoardMove, args: Record<string, unknown>): Promise<BridgeRun>;
+  /** The unit rail overlay (Board UX 2026-10-28): a UI port for the host and
+   *  for SK's `rail` move. Nothing is audited; nothing touches the video. */
+  rail(action: "open" | "close" | "toggle"): void;
+  /** A slides-as-pages load in progress — k of n — for the panel's tray. */
+  loading(): { k: number; n: number } | null;
   dispose(): void;
 };
 
@@ -230,6 +251,13 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
   let watching = 0;
   /** The segment end the video must stop at, kept across pause/resume. */
   let stopAt: { endS: number; startS: number } | null = null;
+  /** The slides load under way, for the panel's "Loading slide k of n…". */
+  let loading: { k: number; n: number } | null = null;
+
+  const rail = (action: "open" | "close" | "toggle") => {
+    const open = action === "toggle" ? !(deps.railOpen?.() ?? false) : action === "open";
+    deps.rail?.(open);
+  };
 
   /** Stop the timer; `clearTarget` also forgets the stop (a seek-class move). */
   const stopWatch = (clearTarget = true) => {
@@ -292,6 +320,10 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
 
     unit: () => unitOf(deps.controller()),
 
+    rail,
+
+    loading: () => loading,
+
     state() {
       const c = deps.controller();
       if (!c) return undefined;
@@ -315,9 +347,18 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
     },
 
     async run(move, args) {
+      const a = args ?? {};
+      // The rail is a UI control: it needs no session and audits nothing.
+      if (move === "rail") {
+        if (!deps.rail) return { ok: false, summary: "This Board has no unit rail." };
+        const open = a.open !== false;
+        rail(open ? "open" : "close");
+        return { ok: true, summary: open ? "Unit rail open." : "Unit rail closed." };
+      }
       const c = deps.controller();
       if (!c) return { ok: false, summary: "Open the Board first." };
-      const a = args ?? {};
+      // A new move stops a slides load after the frame in hand (pages made stay).
+      if (move !== "load_slides") c.cancelLoad?.();
       try {
         switch (move) {
           case "intro": {
@@ -379,8 +420,37 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
             return { ok: true, summary: "Frame frozen onto the roll." };
           }
           case "blank": {
-            c.blankPage();
-            return { ok: true, summary: "Blank page added." };
+            // AFTER THE CURRENT PAGE, not at the end: on page 3 of the slide
+            // pages "blank page" is a note between slides 3 and 4. On the last
+            // page it is the append it always was.
+            const page = c.getState().page;
+            c.blankPage({ after: page });
+            return { ok: true, summary: `Blank page added after page ${page + 1}.` };
+          }
+          case "load_slides": {
+            const mm = needManifest();
+            if (!mm.ok) return mm;
+            if (!c.loadSlides) return { ok: false, summary: "This Board cannot load slides as pages." };
+            stopWatch();
+            const n = mm.m.segments.length;
+            const progress = (p: { k: number; n: number } | null) => {
+              loading = p;
+              deps.onLoading?.(p);
+            };
+            progress({ k: 0, n });
+            try {
+              const r = await c.loadSlides(mm.m, { onProgress: (k, total) => progress({ k, n: total }) });
+              if (!r.pages) return { ok: false, summary: "Stopped before the first slide." };
+              const range = r.pages > 1 ? `pages ${r.firstPage + 1}–${r.lastPage + 1}` : `page ${r.firstPage + 1}`;
+              const tail = r.aborted ? ` (stopped after ${r.pages} of ${n})` : "";
+              return {
+                ok: true,
+                summary: `${r.pages} slides are on the roll as ${range}${tail}. Page up and page down move between them; say 'blank page' to add one in between.`,
+                loaded: { n: r.pages, a: r.firstPage + 1, b: r.lastPage + 1, aborted: r.aborted },
+              };
+            } finally {
+              progress(null);
+            }
           }
           case "back": {
             c.pageUp();

@@ -199,3 +199,60 @@ describe("numberOf", () => {
     expect(numberOf(undefined)).toBeNull();
   });
 });
+
+describe("Board UX (2026-10-28): the deck, the rail, slides as pages", () => {
+  const table: Array<[string, string, Record<string, unknown>]> = [
+    // "skip to the PowerPoint": slide 1 of the video's own frames, deck line
+    ["skip to the power point", "slide", { k: 0, deck: true }],
+    ["skip to the PowerPoint", "slide", { k: 0, deck: true }],
+    ["skip to the slides", "slide", { k: 0, deck: true }],
+    ["go to the slide deck", "slide", { k: 0, deck: true }],
+    ["jump to the presentation", "slide", { k: 0, deck: true }],
+    ["skip to the deck please", "slide", { k: 0, deck: true }],
+    ["show the slides", "slide", { k: 0, deck: true }],
+    ["show me the powerpoint", "slide", { k: 0, deck: true }],
+    ["tunjukkan slaid", "slide", { k: 0, deck: true }],
+    ["buka slaid", "slide", { k: 0, deck: true }],
+    ["اعرض الشرائح", "slide", { k: 0, deck: true }],
+    ["افتح العرض التقديمي", "slide", { k: 0, deck: true }],
+    // the unit rail over the stage
+    ["show the units", "rail", { open: true }],
+    ["show the rail", "rail", { open: true }],
+    ["open the panel", "rail", { open: true }],
+    ["show me the unit list", "rail", { open: true }],
+    ["tunjuk unit", "rail", { open: true }],
+    ["buka senarai unit", "rail", { open: true }],
+    ["اعرض الوحدات", "rail", { open: true }],
+    ["hide the units", "rail", { open: false }],
+    ["close the rail", "rail", { open: false }],
+    ["tutup panel", "rail", { open: false }],
+    // every slide onto the roll as pages
+    ["load the slides as pages", "load_slides", {}],
+    ["put the slides on the board", "load_slides", {}],
+    ["load all the slides onto the roll", "load_slides", {}],
+    ["put the powerpoint on the board as pages", "load_slides", {}],
+    ["muatkan slaid sebagai halaman", "load_slides", {}],
+    ["muat slaid ke papan", "load_slides", {}],
+    ["letakkan slaid di papan", "load_slides", {}],
+    ["حمّل الشرائح كصفحات", "load_slides", {}],
+    ["حمل الشرائح على اللوحة", "load_slides", {}],
+    ["ضع الشرائح على اللوحة", "load_slides", {}],
+  ];
+  it.each(table)("%s → %s", (text, move, args) => {
+    const d = teach(text);
+    expect(d.move).toBe(move);
+    expect(d.args).toEqual(args);
+  });
+  it("the numbered and next/previous slides are unchanged by the deck phrasings", () => {
+    expect(teach("show slide 4")).toMatchObject({ move: "slide", args: { k: 3 } });
+    expect(teach("next slide")).toMatchObject({ move: "slide", args: { k: 3 } });
+    expect(teach("tunjukkan slaid 2")).toMatchObject({ move: "slide", args: { k: 1 } });
+    expect(teach("blank page")).toMatchObject({ move: "blank", args: {} });
+  });
+  it("off the Board none of them is a Board move", () => {
+    const off = makeCtx();
+    for (const text of ["skip to the power point", "show the units", "load the slides as pages"]) {
+      expect(routeByRules(text, off, NOW, clock).intent).not.toBe("teach");
+    }
+  });
+});

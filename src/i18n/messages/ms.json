@@ -1876,7 +1876,10 @@
       "outsideHours": "Di luar waktu pengajaran",
       "fromTimetable": "Ikut jadual waktu",
       "freePeriod": "Tiada pelajaran waktu ini",
-      "pickManually": "Pilih sendiri"
+      "pickManually": "Pilih sendiri",
+      "menu": "Menu",
+      "backToDashboard": "Kembali ke papan pemuka",
+      "loadSlides": "Muatkan slaid sebagai halaman"
     },
     "start": {
       "heading": "Pilih apa yang anda ajar",
@@ -1921,7 +1924,9 @@
       "examPaper": "Kertas ujian",
       "exam": "Peperiksaan",
       "noteNeverProject": "Muat turun sahaja — kertas yang sudah ditonton kelas bukan lagi ujian",
-      "noteNoText": "Muat turun sahaja — jenis ini tiada teks berstruktur untuk dipaparkan pada papan"
+      "noteNoText": "Muat turun sahaja — jenis ini tiada teks berstruktur untuk dipaparkan pada papan",
+      "deck": "Dek slaid",
+      "noteDeck": "Muat turun — papan menunjukkan slaid daripada video"
     },
     "group": {
       "thisPart": "Bahagian ini",
@@ -1961,7 +1966,9 @@
       "answerTrue": "Betul",
       "answerFalse": "Salah",
       "prevQuestion": "Soalan sebelumnya",
-      "nextQuestion": "Soalan seterusnya"
+      "nextQuestion": "Soalan seterusnya",
+      "railHandle": "Unit",
+      "railClose": "Tutup"
     },
     "wrapUp": {
       "saved": "Pelajaran disimpan",
@@ -2111,7 +2118,9 @@
       "cardExpired": "Kad ini telah tamat tempoh.",
       "cardCancelled": "Dibatalkan.",
       "actFailed": "Tindakan itu tidak berjaya. Cuba lagi.",
-      "voiceYesHint": "Sebut “ya” untuk mengesahkan, atau “tidak” untuk membatalkan."
+      "voiceYesHint": "Sebut “ya” untuk mengesahkan, atau “tidak” untuk membatalkan.",
+      "loadingSlides": "Memuatkan slaid {k} daripada {n}…",
+      "slidesLoaded": "{n} slaid kini di gulungan sebagai halaman {a}–{b}. Halaman atas dan halaman bawah bergerak antaranya; sebut 'halaman kosong' untuk menambah satu di antaranya."
     }
   }
 }

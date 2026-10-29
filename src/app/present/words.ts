@@ -35,8 +35,24 @@ export function docLabel(t: T, kind: string): string {
       return t.doc.examPaper;
     case "exam":
       return t.doc.exam;
+    case "deck":
+      return t.doc.deck;
     default:
       return kind;
+  }
+}
+
+/** Why a rail doc only downloads, in the reader's words. */
+export function docNote(t: T, note: "never-project" | "no-text" | "deck" | undefined): string | null {
+  switch (note) {
+    case "never-project":
+      return t.doc.noteNeverProject;
+    case "no-text":
+      return t.doc.noteNoText;
+    case "deck":
+      return t.doc.noteDeck;
+    default:
+      return null;
   }
 }
 

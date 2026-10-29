@@ -34,7 +34,9 @@ import { accepts, StrokeBuilder, toSegments, tensionFor, type InkSample, type To
 import {
   addPage,
   addStroke,
+  insertPage,
   pageStrokes,
+  setBackground,
   toPage,
   History,
   type PageBackground,
@@ -51,8 +53,11 @@ const reducedMotion = (): boolean =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export type RollHandle = {
-  /** Append a page and wind to it — what the PUSH button does. */
-  push: (background?: PageBackground) => void;
+  /** Append a page and wind to it — what the PUSH button does. With
+   *  `{ after }` the page is INSERTED right after that page instead (Board
+   *  UX 2026-10-28: a blank page between two slide pages); `after` at the end
+   *  is the plain append. */
+  push: (background?: PageBackground, opts?: { after?: number }) => void;
   /** Wind to an existing page. Out-of-range is clamped, not an error: this is
    *  driven by buttons a teacher taps quickly, and a thrown error mid-lesson is
    *  never the right answer to a double-tap. */
@@ -61,6 +66,11 @@ export type RollHandle = {
   redo: () => void;
   /** Repaint the current page — after the host changes a background. */
   repaint: () => void;
+  /** Replace an EXISTING page's background (reported through `onPage` like a
+   *  push) and wind to it. Board UX 2026-10-28: the slides load lays its first
+   *  frame on a pristine roll's blank first page instead of leaving page 1
+   *  empty. Out-of-range is ignored. */
+  replace: (page: number, background: PageBackground) => void;
 };
 
 export type RollViewProps = {
@@ -87,6 +97,10 @@ export type RollViewProps = {
    * as blank paper and lose exactly the pages she annotated most.
    */
   onPage?: (index: number, background: PageBackground) => void;
+  /** Strokes whose PAGE was renumbered by an insert (push with `after`), so a
+   *  host persisting by page index can re-record them. The shifted pages are
+   *  reported through `onPage` at their new indices. */
+  onStrokesMoved?: (strokes: Stroke[]) => void;
   onPageChange?: (page: number, pageCount: number) => void;
   /**
    * Refuse new ink, without unmounting.
@@ -107,7 +121,7 @@ export type RollViewProps = {
 type PredictingPointer = PointerEvent & { getPredictedEvents?: () => PointerEvent[] };
 
 export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
-  { roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, onPageChange, readOnly, className, style },
+  { roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, onStrokesMoved, onPageChange, readOnly, className, style },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -127,10 +141,10 @@ export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
   // Everything the pointer path reads goes through a ref. A handler that closed
   // over `tool` from a render would keep drawing with the tool she had selected
   // when that render happened.
-  const live = useRef({ roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, readOnly });
+  const live = useRef({ roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, onStrokesMoved, readOnly });
   useEffect(() => {
-    live.current = { roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, readOnly };
-  }, [roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, readOnly]);
+    live.current = { roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, onStrokesMoved, readOnly };
+  }, [roll, profile, tool, color, width, touchMode, drawBackground, onStroke, onPage, onStrokesMoved, readOnly]);
 
   const paintPage = useCallback((n: number) => {
     const r = rendererRef.current;
@@ -234,9 +248,20 @@ export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
   useImperativeHandle(
     ref,
     (): RollHandle => ({
-      push(background) {
-        const { roll: rl, onPage: report } = live.current;
+      push(background, opts) {
+        const { roll: rl, onPage: report, onStrokesMoved: moved } = live.current;
         const bg = background ?? { kind: "blank" };
+        if (opts?.after !== undefined && opts.after < rl.pages.length - 1) {
+          // Insert after a page in the middle: the later pages are renumbered,
+          // so each is reported at its NEW index (the store upserts by index)
+          // along with the ink that moved with them. The current page keeps
+          // its number — the insert is always after it.
+          const { index, movedStrokes } = insertPage(rl, opts.after, bg);
+          for (let i = index; i < rl.pages.length; i++) report?.(i, rl.pages[i].background);
+          if (movedStrokes.length) moved?.(movedStrokes);
+          wind(index);
+          return;
+        }
         const n = addPage(rl, bg);
         // Reported BEFORE the wind, which animates: a host that persists pages
         // must not have that write racing a 260ms transition.
@@ -256,6 +281,14 @@ export const RollView = forwardRef<RollHandle, RollViewProps>(function RollView(
       },
       repaint() {
         paintPage(pageRef.current);
+      },
+      replace(n, background) {
+        const { roll: rl, onPage: report } = live.current;
+        if (!Number.isInteger(n) || n < 0 || n >= rl.pages.length) return;
+        setBackground(rl, n, background);
+        report?.(n, background);
+        if (n === pageRef.current) paintPage(n);
+        else wind(n);
       },
     }),
     [wind, paintPage],

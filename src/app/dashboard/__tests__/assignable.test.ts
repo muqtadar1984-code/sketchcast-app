@@ -371,7 +371,12 @@ describe("an assigned deck has a name on the adult surfaces too", () => {
     expect(en.student.item.deckWontLoad.length).toBeGreaterThan(0);
   });
 
-  it("the Present rail still leaves the deck out on purpose", () => {
-    expect(src("utils/present/kit.ts")).toMatch(/g\.kind !== "presentation" && g\.kind !== "deck"/);
+  // Board UX (2026-10-28): the deck IS on the Present rail now — as a
+  // download only, and only when it carries its .pptx (present-kit.test.ts
+  // covers the behaviour). The legacy `presentation` kind stays off.
+  it("the Present rail lists the deck as a download, never as a projected page", () => {
+    const kit = src("utils/present/kit.ts");
+    expect(kit).toMatch(/g\.kind !== "presentation" && \(g\.kind !== "deck" \|\| hasArtifact\(g, "deck_pptx"\)\)/);
+    expect(kit).toMatch(/g\.kind === "deck"\) return \{[^}]*projects: false, note: "deck" \}/);
   });
 });

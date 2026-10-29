@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { newRoll, type PageBackground, type Tool } from "@/board/model";
+import { newRoll, type PageBackground, type Stroke, type Tool } from "@/board/model";
 import type { Rect } from "@/board/render";
 import { RollView, type RollHandle } from "@/board/roll";
 import { BoardStore, type LogRecord } from "@/board/store";
@@ -11,7 +11,8 @@ import { probeStatic, newObservations, profileFor } from "@/board/capabilities";
 import type { TouchMode } from "@/board/ink";
 import type { PickerGroup, Scope } from "@/utils/present/kit";
 import { fmt } from "@/i18n/format";
-import { docLabel, groupLabel, scopeLabel, toolLabel, unitLabel, unitShort } from "./words";
+import { docLabel, docNote, groupLabel, scopeLabel, toolLabel, unitLabel, unitShort } from "./words";
+import type { RailAction } from "./rail-state";
 import type { PresentWords } from "./present-client";
 import { framePath, rollPdfPath } from "@/utils/present/paths";
 import { Stage, type StageHandle, type StageMode } from "./stage";
@@ -85,8 +86,9 @@ export type KitDoc = {
   id: string;
   kind: string;
   projects: boolean;
-  /** A reason, not a sentence — the UI renders it. */
-  note?: "never-project" | "no-text";
+  /** A reason, not a sentence — the UI renders it. `deck`: the slide deck's
+   *  .pptx, downloadable only (Board UX 2026-10-28). */
+  note?: "never-project" | "no-text" | "deck";
   title: string | null;
   download: string | null;
   /** Signed URL of the worksheet's questions.json, when the board may project it. */
@@ -195,6 +197,18 @@ type Props = {
   /** S1 slice C (additive): told which unit is open, whenever that changes —
    *  the SK bridge loads the lesson map for it. Null until a unit has a video. */
   onUnit?: (unit: BoardUnit | null) => void;
+  /** Board UX (2026-10-28): the unit rail as an overlay over the stage, opened
+   *  from a handle on the left edge in every stage mode. The host owns the
+   *  state (rail-state.ts) so SK's `rail` move and the handle agree. Without
+   *  `onRail` there is no handle and no overlay — the Board as it was. */
+  railOpen?: boolean;
+  onRail?: (action: RailAction) => void;
+  /** "Load slides as pages": present only when the lesson map is ready (the
+   *  host runs it through the SK bridge, which owns the manifest). */
+  onLoadSlides?: () => void;
+  /** A line about the slides load in progress or just finished, already in
+   *  her words. Null shows nothing. */
+  slideStatus?: string | null;
 };
 
 /** The open unit as the controller's `unit` port and `onUnit` report it. */
@@ -202,7 +216,7 @@ function boardUnitOf(u: KitUnit | null): BoardUnit | null {
   return u ? { generationId: u.video?.id ?? null, part: u.part, title: u.video?.title ?? null } : null;
 }
 
-export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit }: Props) {
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -372,16 +386,29 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
    *  path and the network catches up in the background. If the upload fails the
    *  page still renders for the rest of the lesson and still reaches the PDF;
    *  only a reload would lose it, and the note says so. */
-  const freeze = useCallback(async (): Promise<boolean> => {
+  const freeze = useCallback(async (opts?: { replaceBlank?: boolean }): Promise<boolean> => {
     const f = await stage.current?.freeze();
     if (!f) {
       setNote(t.board.freezeFailed);
       return false;
     }
-    // addPage appends, so the page it is about to occupy is the current count.
-    const path = framePath(session.teacherId, session.id, roll.pages.length);
+    // The slides load (Board UX 2026-10-28) lays its first frame ON a pristine
+    // roll's blank first page, so slide 1 is page 1. Pristine = one page, still
+    // paper, no live ink on it; anything else and the frame is appended.
+    const pristine =
+      !!opts?.replaceBlank &&
+      roll.pages.length === 1 &&
+      roll.pages[0].background.kind === "blank" &&
+      !roll.strokes.some((st) => st.page === 0 && !st.voided);
+    // addPage appends, so the page it is about to occupy is the current count —
+    // a number no earlier freeze has used, because the count only grows. Path
+    // 0 is never taken by an append (the roll starts with page 0), so the
+    // pristine replacement uses it.
+    const path = framePath(session.teacherId, session.id, pristine ? 0 : roll.pages.length);
     localFrames.current.set(path, f.url);
-    board.current?.push({ kind: "frame", src: path, generationId: unit?.video?.id, t: f.t });
+    const bg: PageBackground = { kind: "frame", src: path, generationId: unit?.video?.id, t: f.t };
+    if (pristine) board.current?.replace(0, bg);
+    else board.current?.push(bg);
     setMode("corner");
     setNote(fmt(t.board.frozen, { t: f.t.toFixed(1) }));
 
@@ -435,6 +462,19 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
   }, []);
 
   const onPageChange = useCallback((page: number, count: number) => setWhere({ page, count }), []);
+
+  /** A page inserted mid-roll renumbers the pages after it, and the ink on
+   *  them with it (model.insertPage): re-recorded under each stroke's own seq
+   *  so the log and the server follow the stroke to its new page. */
+  const onStrokesMoved = useCallback((moved: Stroke[]) => {
+    for (const st of moved) void storeRef.current?.moveStroke(st);
+  }, []);
+
+  /** A blank page right AFTER the page on screen (Board UX 2026-10-28): on
+   *  page 3 of the slides it is the note between slides 3 and 4. */
+  const blankAfterCurrent = useCallback(() => {
+    board.current?.push({ kind: "blank" }, { after: where.page });
+  }, [where.page]);
 
   /** Every page she pushes, with what sits under it. Without this the server
    *  holds strokes and no backgrounds, and a rebuilt roll is her annotations
@@ -577,7 +617,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           resume: () => live.current.resume(),
           pause: () => stage.current?.pause(),
           setStage: (m) => setMode(m),
-          freeze: () => live.current.freeze(),
+          freeze: (o) => live.current.freeze(o),
           openWorksheetPage: () => {
             const { unit: u, session: s } = live.current;
             const d = u?.docs.find((x) => x.projects);
@@ -585,7 +625,8 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
             live.current.openWorksheet(d.id, docLabel(t, d.kind), { chapterNum: s.chapterNum, part: u.part });
             return true;
           },
-          blankPage: () => board.current?.push({ kind: "blank" }),
+          // No `after` = the append it always was; with one, an insert.
+          blankPage: (o) => board.current?.push({ kind: "blank" }, o?.after !== undefined ? { after: o.after } : undefined),
           pushCard: (card) => board.current?.push({ kind: "card", card }),
           loadQuestions: async (): Promise<QuestionSet | null> => {
             const { unit: u, session: s } = live.current;
@@ -618,6 +659,17 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
   );
   // No deps: it follows ctlRef whenever that is rebuilt.
   useImperativeHandle(controllerRef, () => ctlRef.current as BoardController);
+
+  // Escape closes the rail overlay, and only while it is open, so the key
+  // stays free for everything else the rest of the time.
+  useEffect(() => {
+    if (!railOpen || !onRail) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onRail("close");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [railOpen, onRail]);
 
   /** The question card on the current page, if it is one. */
   const currentCard = (() => {
@@ -657,132 +709,191 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
     );
   }
 
-  return (
-    <div className="grid gap-3 p-3 lg:grid-cols-[220px_1fr_96px]">
-      <aside className="grid content-start gap-2">
-        {/* The chapter's units. Shown only when there is a choice to make. */}
-        {units.length > 1 && (
-          <div className="flex flex-wrap gap-1">
-            {units.map((u) => {
-              const k = unitKey(u);
-              const on = unit ? unitKey(unit) === k : false;
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => openUnit(k)}
-                  className={`rounded-lg border px-2 py-1.5 font-mono text-[11px] ${
-                    on
-                      ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
-                      : "border-[#2A363B] bg-[#141B1F] text-[#93A09A]"
-                  }`}
-                >
-                  {unitShort(t, u)}
-                </button>
-              );
-            })}
-          </div>
-        )}
+  /** A choice from the rail closes the overlay (rail-state "pick"); in the
+   *  column beside the board it is a no-op. */
+  const pick = () => onRail?.("pick");
 
-        {unit && (
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-            {unitLabel(t, unit)}
-          </p>
-        )}
+  /** The rail's contents: the column beside the board AND the overlay the
+   *  left-edge handle opens (Board UX 2026-10-28). One list, so the two can
+   *  never offer different things. */
+  const railBody = () => (
+    <>
+      {/* The chapter's units. Shown only when there is a choice to make. */}
+      {units.length > 1 && (
+        <div className="flex flex-wrap gap-1">
+          {units.map((u) => {
+            const k = unitKey(u);
+            const on = unit ? unitKey(unit) === k : false;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => {
+                  openUnit(k);
+                  pick();
+                }}
+                className={`rounded-lg border px-2 py-1.5 font-mono text-[11px] ${
+                  on
+                    ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
+                    : "border-[#2A363B] bg-[#141B1F] text-[#93A09A]"
+                }`}
+              >
+                {unitShort(t, u)}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-        {unit?.video && (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={playVideo}
-            className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-start text-sm text-[#4FD6C2]"
-          >
-            ▶ {t.doc.presentation}
-            {unit.video.urls.length > 1 && (
-              <span className="mt-0.5 block font-mono text-[10px] opacity-70">
-                {fmt(t.kit.videoPartsFirst, { n: unit.video.urls.length })}
-              </span>
-            )}
-          </button>
-        )}
-        {mode === "corner" && (
-          <button type="button" onClick={resume} className={btn}>
-            {t.board.resumeVideo}
-          </button>
-        )}
-        {unit?.docs.map((d) => (
+      {unit && (
+        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
+          {unitLabel(t, unit)}
+        </p>
+      )}
+
+      {unit?.video && (
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => {
+            pick();
+            void playVideo();
+          }}
+          className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-start text-sm text-[#4FD6C2]"
+        >
+          ▶ {t.doc.presentation}
+          {unit.video.urls.length > 1 && (
+            <span className="mt-0.5 block font-mono text-[10px] opacity-70">
+              {fmt(t.kit.videoPartsFirst, { n: unit.video.urls.length })}
+            </span>
+          )}
+        </button>
+      )}
+      {mode === "corner" && (
+        <button
+          type="button"
+          onClick={() => {
+            pick();
+            void resume();
+          }}
+          className={btn}
+        >
+          {t.board.resumeVideo}
+        </button>
+      )}
+      {/* Every slide of the lesson onto the roll, one page each: the video's
+          own finished frames (Board UX 2026-10-28). Only when the lesson map
+          is ready; the host passes the action then and not before. */}
+      {unit?.video && onLoadSlides && (
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => {
+            pick();
+            onLoadSlides();
+          }}
+          className={`${btn} text-start`}
+          data-board="load-slides"
+        >
+          ▤ {t.bar.loadSlides}
+        </button>
+      )}
+      {unit?.docs.map((d) => {
+        const why = docNote(t, d.note);
+        return (
           <button
             key={d.id}
             type="button"
             disabled={saving}
-            onClick={() =>
-              d.projects
-                ? openWorksheet(d.id, docLabel(t, d.kind), {
-                    chapterNum: session.chapterNum,
-                    part: unit.part,
-                  })
-                : d.download && window.open(d.download)
-            }
+            onClick={() => {
+              pick();
+              if (d.projects) {
+                openWorksheet(d.id, docLabel(t, d.kind), {
+                  chapterNum: session.chapterNum,
+                  part: unit.part,
+                });
+              } else if (d.download) {
+                window.open(d.download);
+              }
+            }}
             className={`rounded-xl border px-3 py-3 text-start text-sm ${
               d.projects
                 ? "border-[#2A363B] bg-[#141B1F] text-[#E7EDE9]"
                 : "border-[#2A363B] bg-[#0F1417] text-[#7C8A85]"
             }`}
+            data-board-doc={d.kind}
           >
+            {/* The deck is a file to take away, never a page: it says so. */}
+            {d.note === "deck" ? "⤓ " : ""}
             {docLabel(t, d.kind)}
-            {d.note && (
+            {why && (
               <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[#5F6F69]">
-                {d.note === "never-project" ? t.doc.noteNeverProject : t.doc.noteNoText}
+                {why}
               </span>
             )}
           </button>
-        ))}
+        );
+      })}
 
-        {kit && !units.length && (
-          <p className="text-sm text-[#93A09A]">{t.kit.empty}</p>
-        )}
+      {kit && !units.length && (
+        <p className="text-sm text-[#93A09A]">{t.kit.empty}</p>
+      )}
 
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => board.current?.push({ kind: "blank" })}
-          className={btn}
-        >
-          {t.board.blank}
-        </button>
+      {/* AFTER THE PAGE ON SCREEN (Board UX 2026-10-28), not at the end: on a
+          roll of slide pages this is the note between two slides. On the last
+          page it is the append it always was, and PUSH still appends. */}
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => {
+          pick();
+          blankAfterCurrent();
+        }}
+        className={btn}
+      >
+        {t.board.blank}
+      </button>
 
-        {/* Anything else in the book she may want mid-lesson — the other parts'
-            worksheets, and the revision papers, which are the case the pointer
-            rule exists for. Each one carries its OWN place in the book. */}
-        {!!kit?.picker.length && (
-          <>
-            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
-              {t.kit.otherWorksheets}
-            </p>
-            {kit.picker.map((g) => (
-              <div key={g.group} className="grid gap-1">
-                <p className="font-mono text-[10px] text-[#5F6F69]">{groupLabel(t, g.group)}</p>
-                {g.items.map((i) => (
-                  <button
-                    key={i.id}
-                    type="button"
-                    disabled={saving}
-                    onClick={() =>
-                      openWorksheet(i.id, scopeLabel(t, i.scope, i.title), {
-                        chapterNum: i.chapter,
-                        part: i.part,
-                      })
-                    }
-                    className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-start text-sm text-[#C2CCC7]"
-                  >
-                    {scopeLabel(t, i.scope, i.title)}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </>
-        )}
-      </aside>
+      {/* Anything else in the book she may want mid-lesson: the other parts'
+          worksheets, and the revision papers, which are the case the pointer
+          rule exists for. Each one carries its OWN place in the book. */}
+      {!!kit?.picker.length && (
+        <>
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">
+            {t.kit.otherWorksheets}
+          </p>
+          {kit.picker.map((g) => (
+            <div key={g.group} className="grid gap-1">
+              <p className="font-mono text-[10px] text-[#5F6F69]">{groupLabel(t, g.group)}</p>
+              {g.items.map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    pick();
+                    openWorksheet(i.id, scopeLabel(t, i.scope, i.title), {
+                      chapterNum: i.chapter,
+                      part: i.part,
+                    });
+                  }}
+                  className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-start text-sm text-[#C2CCC7]"
+                >
+                  {scopeLabel(t, i.scope, i.title)}
+                </button>
+              ))}
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+
+  return (
+    // ps-10 when there is a rail handle: the handle sits on the left edge in
+    // every mode and must not cover the column's buttons.
+    <div className={`grid gap-3 p-3 lg:grid-cols-[220px_1fr_96px] ${onRail ? "ps-10" : ""}`}>
+      <aside className="grid content-start gap-2">{railBody()}</aside>
 
       <div className="grid gap-2">
         <div className="flex flex-wrap gap-2">
@@ -834,11 +945,17 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           drawBackground={drawBackground}
           onStroke={onStroke}
           onPage={onPage}
+          onStrokesMoved={onStrokesMoved}
           onPageChange={onPageChange}
           className="rounded-xl border border-[#222C30] overflow-hidden bg-white"
           style={{ height: "68dvh", minHeight: 320 }}
         />
         {note && <p className="font-mono text-[11px] text-[#4FD6C2]">{note}</p>}
+        {slideStatus && (
+          <p role="status" className="font-mono text-[11px] text-[#4FD6C2]" data-board="slide-status">
+            {slideStatus}
+          </p>
+        )}
         {moving && mode === "away" && (
           <p role="status" className="font-mono text-[11px] text-[#4FD6C2]">
             {t.board.moving}
@@ -923,6 +1040,37 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         onEnded={() => setMode("corner")}
         onError={() => setNote(t.board.videoExpired)}
       />
+
+      {/* THE RAIL, REACHABLE IN EVERY MODE (Board UX 2026-10-28, founder:
+          "full-screen video hides the left column"). The handle sits above the
+          stage (z 30) and below the SK launcher (z 40), so neither the video
+          nor the overlay ever hides SK. */}
+      {onRail && (
+        <button
+          type="button"
+          onClick={() => onRail("toggle")}
+          aria-expanded={railOpen}
+          data-board="rail-handle"
+          className="fixed start-0 top-1/2 z-[35] -translate-y-1/2 rounded-e-lg border border-s-0 border-[#17544C] bg-[#12302C] px-1.5 py-3 font-mono text-[11px] text-[#4FD6C2] shadow-lg [writing-mode:vertical-rl]"
+        >
+          {t.board.railHandle} <span className="rtl-flip inline-block">▸</span>
+        </button>
+      )}
+      {onRail && railOpen && (
+        <div className="fixed inset-0 z-[36]" role="dialog" aria-modal="true" aria-label={t.board.railHandle} data-board="rail-overlay">
+          <button type="button" aria-label={t.board.railClose} className="absolute inset-0 cursor-default bg-black/50" onClick={() => onRail("close")} />
+          {/* pb-24: the SK launcher sits bottom-start, above this panel. */}
+          <aside className="absolute inset-y-0 start-0 grid w-[min(300px,85vw)] content-start gap-2 overflow-y-auto border-e border-[#222C30] bg-[#0F1417] p-3 pb-24 text-[#E7EDE9] shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#5F6F69]">{t.board.railHandle}</p>
+              <button type="button" className={btn} onClick={() => onRail("close")}>
+                {t.board.railClose}
+              </button>
+            </div>
+            {railBody()}
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

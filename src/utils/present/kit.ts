@@ -114,9 +114,15 @@ export type RailDoc = {
   kind: string;
   /** True when tapping it projects; false when it only downloads. */
   projects: boolean;
-  /** WHY it does not project, when it does not. A reason, not a sentence. */
-  note?: "never-project" | "no-text";
+  /** WHY it does not project, when it does not. A reason, not a sentence.
+   *  `deck`: the slide deck file (.pptx) — downloadable, never rendered; the
+   *  slides the Board shows are the video's own frames (Final Plan §5.3). */
+  note?: "never-project" | "no-text" | "deck";
 };
+
+/** The artifact kind a rail doc downloads as: the deck is the one non-docx. */
+export const DOWNLOAD_ARTIFACT_KIND: Record<string, string> = { deck: "deck_pptx" };
+export const downloadArtifactKind = (genKind: string): string => DOWNLOAD_ARTIFACT_KIND[genKind] ?? "docx";
 
 export type RailUnit = {
   /** null = a kit generated for the whole chapter rather than a part of it. */
@@ -131,6 +137,7 @@ function docFor(g: KitGeneration): RailDoc {
   if (NEVER_PROJECT.has(g.kind)) {
     return { id: g.id, kind: g.kind, projects: false, note: "never-project" };
   }
+  if (g.kind === "deck") return { id: g.id, kind: g.kind, projects: false, note: "deck" };
   if (boardEligible(g)) return { id: g.id, kind: g.kind, projects: true };
   return { id: g.id, kind: g.kind, projects: false, note: "no-text" };
 }
@@ -180,11 +187,13 @@ function unitsOf(mine: KitGeneration[]): RailUnit[] {
       total,
       video: vid ? { id: vid.id, title: vid.title } : null,
       docs: group
-        // The slide deck is a generation of its own since 0103, but it is not
-        // a document the board can show: a .pptx has no text for the rail and
-        // the route signs only docx. Keeping it off the rail is the whole
-        // rule; the Library is where a deck is opened.
-        .filter((g) => g.kind !== "presentation" && g.kind !== "deck")
+        // The slide deck (its own generation since 0103) IS on the rail — as a
+        // DOWNLOAD, like a test paper: the route signs its .pptx. It is never
+        // rendered: the slides the Board shows are the video's own frames
+        // (Final Plan §5.3), and the founder's "skip to the PowerPoint" lands
+        // on slide 1 of those while the file sits here for the handout. Only
+        // a deck that actually carries a file is listed.
+        .filter((g) => g.kind !== "presentation" && (g.kind !== "deck" || hasArtifact(g, "deck_pptx")))
         .map(docFor)
         // What projects goes first: it is the one that reaches the board. Then
         // by KIND rather than by label — the label is a translation now, and

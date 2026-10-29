@@ -297,7 +297,13 @@ export type SkBoardMove =
   | "back"
   | "resume"
   | "pause"
-  | "recap";
+  | "recap"
+  /** Board UX (2026-10-28): open the unit rail as an overlay — a UI control,
+   *  not a controller move; the bridge performs it without an audit row. */
+  | "rail"
+  /** Put every slide of the open unit on the roll as pages — the video's own
+   *  finished frames, one page each (no pptx rendering). */
+  | "load_slides";
 
 /** The client's answer to a `confirm` card: the token, and how it was given
  *  (§9.2: a spoken yes counts only with exactly one active card and an

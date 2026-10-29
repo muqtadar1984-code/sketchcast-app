@@ -73,6 +73,9 @@ const SHIPPED = [
   "board.resume",
   "board.pause",
   "board.recap",
+  // Board UX (2026-10-28): the unit rail overlay and the slides-as-pages load.
+  "board.rail",
+  "board.load_slides",
   // S1 slice D: the first confirm-tier action (teacher hat only).
   "assign",
 ];
