@@ -19,7 +19,7 @@ export const GATE_BANK: GateItem[] = [...PRINCIPAL_BANK, ...COORDINATOR_BANK, ..
 
 /** The CI subset (~10 items): every role, rules and model paths, all three
  *  languages, a card, a scope refusal, a fabrication the guards must strip. */
-export const CI_SUBSET_IDS = ["p-health-01", "p-risk-03", "p-seats-02", "p-cost-04", "p-notice-01", "c-risk-01", "c-trend-05", "c-tt-03", "u-coord-grade6-en", "u-address", "u-seat-limit"];
+export const CI_SUBSET_IDS = ["p-health-01", "p-risk-03", "p-seats-02", "p-cost-04", "p-notice-01", "c-risk-01", "c-risk-05", "c-trend-05", "c-tt-01", "u-coord-grade6-en", "u-address", "u-seat-limit"];
 
 export const CI_SUBSET: GateItem[] = CI_SUBSET_IDS.map((id) => {
   const item = GATE_BANK.find((i) => i.id === id);

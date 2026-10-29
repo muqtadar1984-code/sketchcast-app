@@ -17,7 +17,6 @@
 //                 the capability results the model would read.
 
 import { groundingCheck } from "@/sk/shell/prompt";
-import { lineFor } from "@/sk/shell/lines";
 import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT } from "@/sk/shell/types";
 import { SCHOOL_LINES, S_NO_SCOPE, S_OUT_OF_SCOPE } from "@/sk/shell/school-lines";
 import { F_SEATS_NO_LIMIT, F_SEATS_PRINCIPAL_ONLY, SCHOOL_FIGURE_LINES } from "@/sk/shell/school-figure-lines";
