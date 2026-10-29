@@ -854,6 +854,8 @@ export default function SkShell({
       function handle(ev: SkTurnEvent) {
         switch (ev.type) {
           case "meta":
+            // A turn with no `lang` event is in the page's language.
+            dictLangRef.current = null;
             if (ev.capabilities) {
               setCapabilities(ev.capabilities);
               warmNavigation(ev.capabilities);

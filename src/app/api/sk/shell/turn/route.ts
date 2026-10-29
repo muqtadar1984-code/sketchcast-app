@@ -33,7 +33,7 @@ import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
 // 2026-10-30: the answer language (override > the source's > the UI's) and
 // "repeat that in X" — one translation call on the last answer.
-import { answerLanguage, canSpeakList, langMeta, languageName, linesLocale, overrideForBack, ownName, targetCode, type AnswerLanguage, type LangCommand, type SkAnswerLang } from "@/sk/shell/language";
+import { answerLanguage, canSpeakList, langMeta, languageName, linesLocale, overrideForBack, ownName, targetCode, uiAnswerLang, type AnswerLanguage, type LangCommand, type SkAnswerLang } from "@/sk/shell/language";
 import { LANG_CAN_SPEAK, LANG_NOTHING_TO_REPEAT, LANG_SOURCE_UNSUPPORTED, LANG_SWITCHED, langLine } from "@/sk/shell/language-lines";
 import { repeatAnswer, skTranslateModel } from "@/sk/shell/repeat";
 import { repeatForStudent } from "@/sk/capabilities/tutor";
@@ -370,10 +370,13 @@ export async function POST(request: Request) {
       };
       // 2026-10-30: the language each answer goes out in — sent before its
       // text (direction, read-aloud voice; dictation too when she chose it).
-      let sentLang: SkAnswerLang | null = null;
+      // The page's own language is the default and needs no event.
+      let sentLang: SkAnswerLang = uiAnswerLang(uiLocale);
+      let sentOverride = false;
       const sendLang = (lang: SkAnswerLang, override = answer.from === "override") => {
-        if (sentLang === lang) return;
+        if (sentLang === lang && sentOverride === override) return;
         sentLang = lang;
+        sentOverride = override;
         send({ type: "lang", ...langMeta(lang), override });
       };
       let noted: string | undefined;
@@ -401,7 +404,7 @@ export async function POST(request: Request) {
             assistant: assistantText,
             entities,
             pending: keep,
-            ...(keepLast ? { lastAnswer: { text: assistantText, lang: sentLang ?? answer.lang, label: ev.label as "grounded" | "supplementary", sources: ev.sources } } : {}),
+            ...(keepLast ? { lastAnswer: { text: assistantText, lang: sentLang, label: ev.label as "grounded" | "supplementary", sources: ev.sources } } : {}),
             ...(lang ? { langOverride: lang.langOverride } : {}),
             ...(noted ? { langNoted: noted } : {}),
           },
@@ -520,6 +523,7 @@ export async function POST(request: Request) {
       const runLanguage = async (cmd: LangCommand) => {
         const code = targetCode(cmd.target, uiLocale);
         if (!code) {
+          sendLang(answer.lang);
           const text = langLine(LANG_CAN_SPEAK, answer.lang, { list: canSpeakList() });
           send({ type: "text", text });
           done({ sources: [], label: "declined" }, text, []);
@@ -536,6 +540,7 @@ export async function POST(request: Request) {
         }
         const last = memory.lastAnswer;
         if (!last) {
+          sendLang(answer.lang);
           const text = langLine(LANG_NOTHING_TO_REPEAT, answer.lang);
           send({ type: "text", text });
           done({ sources: [], label: "declined" }, text, []);
@@ -566,7 +571,8 @@ export async function POST(request: Request) {
 
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
-        sendLang(answer.lang);
+        // (A language command announces its own language.)
+        if (decision.intent !== "lang") sendLang(answer.lang);
         // A source in a language SK cannot answer in (Tamil): said once per conversation.
         if (answer.unsupportedSource && memory.langNoted !== answer.unsupportedSource && decision.intent !== "lang") {
           noted = answer.unsupportedSource;
