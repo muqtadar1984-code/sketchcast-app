@@ -333,6 +333,20 @@ export default async function AppHeader() {
               t={t.nav.bell}
             />
           )}
+          {/* SK S6 slice C: Settings ("SK & privacy") for every signed-in
+              user. An icon-sized link so it fits the bar at every width, and
+              never hidden on phones: privacy controls must be reachable from
+              the device a user actually has. */}
+          {user && (
+            <Link
+              href="/dashboard/settings"
+              className="btn-ghost h-9 w-9 shrink-0 inline-flex items-center justify-center text-base"
+              aria-label={t.nav.settings}
+              title={t.nav.settings}
+            >
+              <span aria-hidden>⚙</span>
+            </Link>
+          )}
           <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
           <form action="/auth/signout" method="post">
             <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">{t.nav.signOut}</button>
