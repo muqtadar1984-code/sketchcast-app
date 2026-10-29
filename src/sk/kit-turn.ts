@@ -59,8 +59,8 @@ export function kitTurnQuestion(heading: string, language: string, question?: st
 /** What SK says when the model's words did not survive the grounding check:
  *  the section's own heading and points (kit text, so grounded by definition). */
 export function captionLine(heading: string, points: string[]): string {
-  const ps = points.filter(Boolean).slice(0, 4);
-  return [heading, ...ps].filter(Boolean).join(". ").replace(/\.\./g, ".").trim();
+  const parts = [heading, ...points.slice(0, 4)].map((p) => (p ?? "").trim()).filter(Boolean);
+  return parts.map((p) => (/[.!?؟。]$/u.test(p) ? p : `${p}.`)).join(" ");
 }
 
 export async function* runKitExplain(deps: KitTurnDeps, input: KitTurnInput): AsyncGenerator<SseEvent, void, void> {

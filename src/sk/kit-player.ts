@@ -132,9 +132,9 @@ export function slideView(segments: readonly KitSegmentView[], i: number, partsW
 export type NextMove = { kind: "practise"; index: number } | { kind: "watch"; index: number } | { kind: "done" };
 
 /** The next step, deterministically: practise the section just watched if it
- *  has questions; else the next section not yet watched (after the current
- *  one, then from the start); else any section whose questions are still
- *  unpractised; else the lesson is done. */
+ *  has questions; else the first section not yet watched (the current one,
+ *  then onwards, then from the start); else any section whose questions are
+ *  still unpractised; else the lesson is done. */
 export function nextMove(state: { segments: readonly KitSegmentView[]; current: number; watched: readonly number[]; practised: readonly number[] }): NextMove {
   const { segments } = state;
   if (!segments.length) return { kind: "done" };
@@ -143,7 +143,8 @@ export function nextMove(state: { segments: readonly KitSegmentView[]; current: 
   const cur = clampIndex(segments, state.current);
   const here = segments[cur]!;
   if (watched.has(here.index) && here.practise > 0 && !practised.has(here.index)) return { kind: "practise", index: cur };
-  const order = [...segments.keys()].slice(cur + 1).concat([...segments.keys()].slice(0, cur + 1));
+  // The current section first (not yet watched = watch it), then onwards, then wrap.
+  const order = [...segments.keys()].slice(cur).concat([...segments.keys()].slice(0, cur));
   const unwatched = order.find((i) => !watched.has(segments[i]!.index));
   if (unwatched !== undefined) return { kind: "watch", index: unwatched };
   const unpractised = order.find((i) => segments[i]!.practise > 0 && !practised.has(segments[i]!.index));
