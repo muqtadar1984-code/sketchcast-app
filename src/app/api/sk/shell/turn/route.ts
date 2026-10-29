@@ -16,6 +16,10 @@ import { routeByRules } from "@/sk/shell/rules";
 import { offerAnswer } from "@/sk/shell/offer";
 import { lineFor } from "@/sk/shell/lines";
 import { KIT_OFFER_DECLINED } from "@/sk/shell/act-lines";
+// S6 slice C: the greeting suggestion's offers, and workflow facts in use.
+import { SUGGEST_DECLINED } from "@/sk/shell/suggest-lines";
+import { recordWorkflow, workflowFromTurn } from "@/sk/shell/workflow";
+import type { FactsDb } from "@/sk/facts";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
 import { issueActionToken, publicParams } from "@/sk/shell/tokens";
 import { maskBookSecrets } from "@/sk/book-activate";
@@ -317,7 +321,11 @@ export async function POST(request: Request) {
       abort.abort();
     },
     async start(controller) {
+      // S6 slice C: the turn's last navigate (a Board deep link names the
+      // class and lesson the teacher opened — workflow.ts workflowFromTurn).
+      let navigatedTo: string | null = null;
       const send = (ev: SkTurnEvent) => {
+        if (ev.type === "navigate") navigatedTo = ev.path;
         if (abort.signal.aborted) return;
         try {
           controller.enqueue(frame(ev));
@@ -339,6 +347,10 @@ export async function POST(request: Request) {
         // book.activate's pending question lasts exactly one turn.
         const keep = pending !== undefined ? pending : memory.pending?.task === "book.activate" ? null : undefined;
         memory = rememberTurn(memory, { user: maskBookSecrets(body.text), assistant: assistantText, entities, pending: keep }, new Date());
+        // S6 slice C: remember the class / lesson this turn used (adults only,
+        // the owner's own session, time-boxed, never fails the turn).
+        const notes = workflowFromTurn({ role: ctx.user.role, navigatePath: navigatedTo, entities: memory.entities });
+        if (notes.length) void recordWorkflow(g.supabase as unknown as FactsDb, ctx.user.id, notes);
         send({ type: "done", ...ev, latencyMs: Date.now() - t0, memory: sealMemory(memory) });
       };
 
@@ -446,7 +458,9 @@ export async function POST(request: Request) {
         // ── S2: the answer to the greeting's offer — deterministic, no model ──
         if (offer && offerReply) {
           if (offerReply === "no") {
-            const text = lineFor(KIT_OFFER_DECLINED, ctx.user.locale);
+            // S6 slice C: a suggestion's offer gets a plain "All right." (the
+            // kit line names the Library, which is only right for a kit).
+            const text = lineFor(offer.target === "board" || offer.target === "read" ? SUGGEST_DECLINED : KIT_OFFER_DECLINED, ctx.user.locale);
             send({ type: "text", text });
             done({ sources: [], label: "supplementary" }, text, []);
             finish();
@@ -458,12 +472,23 @@ export async function POST(request: Request) {
             finish();
             return;
           }
-          const nav = await runCapability(
-            ctx,
-            "navigate",
-            offer.target === "tutor" ? { target: "tutor", product: offer.product, chapter: offer.chapter, generationId: offer.kit } : { target: offer.target, bookId: offer.bookId },
-            deps,
-          );
+          if (offer.target === "read") {
+            // S6 slice C: "want the first?" / "want the list?" — exactly the
+            // read the suggestion named, through the runner (registry re-checked).
+            const r = await runCapability(ctx, offer.capability, offer.args, deps);
+            send({ type: "tool", name: offer.capability, ok: r.ok, summary: r.summary.slice(0, 200) });
+            send({ type: "text", text: r.summary });
+            done({ sources: r.ok ? [offer.capability] : [], label: r.ok ? "grounded" : "declined" }, r.summary, r.entities ?? []);
+            finish();
+            return;
+          }
+          const navArgs: Record<string, unknown> =
+            offer.target === "tutor"
+              ? { target: "tutor", product: offer.product, chapter: offer.chapter, generationId: offer.kit }
+              : offer.target === "board"
+                ? { target: "board", classId: offer.classId, bookId: offer.bookId, chapterRef: offer.chapterRef, generationId: offer.generationId }
+                : { target: offer.target, bookId: offer.bookId };
+          const nav = await runCapability(ctx, "navigate", navArgs, deps);
           send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
           send({ type: "text", text: nav.summary });
           if (nav.ok && nav.navigate) {
