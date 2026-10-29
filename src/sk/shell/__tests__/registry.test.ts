@@ -107,11 +107,15 @@ const SHIPPED = [
   "child.week",
   // S4 slice D: book activation (student + parent, sk flag; click-only).
   "book.activate",
+  // S5 slice D: the school notice (principal + coordinator hats, calendar flag; click-only).
+  "notice.school",
 ];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
 const PARENT_ONLY = SHIPPED.filter((n) => n.startsWith("child."));
 const STUDENT_AND_PARENT = ["book.activate"];
-const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n));
+// S5 slice D: leaders only (school_admin, or a coordinator scope) under a leader hat.
+const LEADER_ONLY = ["notice.school"];
+const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n) && !LEADER_ONLY.includes(n));
 // S4 slice C: diary.note's parent branch (a note to one of her own children).
 const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT];
 const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT];

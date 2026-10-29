@@ -144,12 +144,14 @@ export type DiarySessionOpts = {
  * filters are what is tested). Writes:
  * - diary_notes insert: 0169's unique index (sk_action_id, coalesce(student_id, class_id)) → 23505;
  * - generations insert (S2 slice B): 0169's (sk_action_id, kind, coalesce(params->>'part','1')) → 23505;
+ * - school_events insert (S5 slice D): 0171's (sk_action_id) where not null → 23505;
  * - update (S2 slice B): applies the `eq` filters to the table's rows, patches
  *   the matches IN PLACE and returns them — so a status guard really guards.
  */
 export function diarySession(tables: Record<string, Array<Record<string, unknown>>>, opts: DiarySessionOpts = {}) {
   const notes: Array<Record<string, unknown>> = [];
   const generations: Array<Record<string, unknown>> = [];
+  const events: Array<Record<string, unknown>> = [];
   const updates: Array<{ table: string; patch: Record<string, unknown>; ids: unknown[] }> = [];
   const log: string[] = [];
   let seq = 0;
@@ -203,6 +205,16 @@ export function diarySession(tables: Record<string, Array<Record<string, unknown
           generations.push(...out);
           return { data: out.map((o) => ({ id: o.id, kind: o.kind })), error: null };
         }
+        if (table === "school_events") {
+          const ids = new Set(events.map((e) => e.sk_action_id).filter(Boolean));
+          for (const r of pendingInsert) {
+            if (r.sk_action_id && ids.has(r.sk_action_id)) return { data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "school_events_sk_action_uidx"' } };
+            ids.add(r.sk_action_id);
+          }
+          const out: Array<Record<string, unknown>> = pendingInsert.map((r) => ({ ...r, id: `event-${++seq}` }));
+          events.push(...out);
+          return { data: single ? { id: out[0].id } : out.map((o) => ({ id: o.id })), error: null };
+        }
         if (table !== "diary_notes") return { data: null, error: { message: `insert into ${table}` } };
         const keys = new Set(notes.filter((n) => n.sk_action_id).map((n) => `${n.sk_action_id}|${n.student_id ?? n.class_id}`));
         for (const r of pendingInsert) {
@@ -224,6 +236,7 @@ export function diarySession(tables: Record<string, Array<Record<string, unknown
   return {
     notes,
     generations,
+    events,
     updates,
     log,
     from,
