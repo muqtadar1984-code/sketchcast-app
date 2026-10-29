@@ -70,7 +70,7 @@ export function fakeSession(tables: Record<string, Rows>, opts: { user?: { id: s
       log.push(`${table}.${name}(${args.map((a) => JSON.stringify(a)).join(",")})`);
       return b;
     };
-    for (const m of ["select", "eq", "neq", "ilike", "in", "is", "not", "gte", "lte", "order", "limit", "insert", "update"]) b[m] = chain(m);
+    for (const m of ["select", "eq", "neq", "ilike", "in", "is", "not", "gte", "lte", "lt", "gt", "or", "order", "limit", "insert", "update"]) b[m] = chain(m);
     b.maybeSingle = () => {
       single = true;
       log.push(`${table}.maybeSingle()`);

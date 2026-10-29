@@ -246,12 +246,15 @@ export const childRisk = parentRead(
         enrollments: s.enrollments.map((e) => ({ ...e, full_name: null, username: null, parent_email: null })),
         shares: s.shares.filter((x) => live.has(x.generation_id)).map((x) => ({ generation_id: x.generation_id, class_id: x.class_id, student_id: x.student_id, shared_by: x.shared_by ?? "", due_at: x.due_at })),
         progress: s.progress.map((p) => ({ generation_id: p.generation_id, student_id: p.student_id, status: p.status, updated_at: p.updated_at ?? p.completed_at ?? "" })),
+        // A 'pending' paper holds only the auto-marked part: it counts as
+        // handed in, never as a score (the children page's rule — a parent
+        // must not hear "average 40%" from half a paper).
         submissions: s.submissions.map((x) => ({
           generation_id: x.generation_id,
           student_id: x.student_id,
-          auto_score: x.auto_score,
+          auto_score: x.grade_status === "pending" ? null : x.auto_score,
           max_score: x.max_score,
-          teacher_score: x.teacher_score,
+          teacher_score: x.grade_status === "pending" ? null : x.teacher_score,
           submitted_at: x.submitted_at ?? "",
           graded_at: x.graded_at ?? null,
           grade_status: x.grade_status ?? "",

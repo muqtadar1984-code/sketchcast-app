@@ -185,10 +185,11 @@ type NoticeRow = Dated & {
   action_label: string | null;
   featured_until: string | null;
   importance: string | null;
+  school_id?: string | null;
 };
 
 const COLUMNS =
-  "id, title, description, audience, starts_at, all_day, link_url, link_label, action_by, action_label, featured_until, importance";
+  "id, school_id, title, description, audience, starts_at, all_day, link_url, link_label, action_by, action_label, featured_until, importance";
 
 /** "Register by Fri, 8 Aug" (deadline clock) or "Sat, 9 Aug · 9:00 am" (event clock). */
 function whenText(r: NoticeRow, clock: NoticeClock, target: Date): string {
@@ -302,7 +303,8 @@ export async function noticesFor(
   // this is the belt.
   if (error || !data) return { featured: [], upcoming: [] };
 
-  const rows = data as unknown as NoticeRow[];
+  // One school's board (S4): the query filtered it; the rows are re-checked.
+  const rows = (data as unknown as NoticeRow[]).filter((r) => !only || r.school_id === only);
   // The viewer's own receipts (na_read returns nothing else anyway).
   const acked = new Set<string>();
   if (rows.length) {
