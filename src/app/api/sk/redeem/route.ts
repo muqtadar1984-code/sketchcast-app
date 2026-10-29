@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed, skEnabled } from "@/utils/flags";
 import { redeemMessage } from "@/sk/access";
 import { bookCodeSecret, bookTitleFor, hashBookCode, redeemHashed, redeemStatus } from "@/sk/book-redeem";
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!skUserAllowed(user)) return NextResponse.json({ error: "Not available." }, { status: 404 }); // restricted live: off-list ⇒ as if the flag were off
+  if (!(await skAccessAllowed(user))) return NextResponse.json({ error: "Not available." }, { status: 404 }); // restricted live: off-list ⇒ as if the flag were off
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   let body: { eventId?: string; code?: string; forChildId?: string };

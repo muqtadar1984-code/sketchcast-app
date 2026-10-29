@@ -42,7 +42,7 @@ export const GATE_ENV: Record<string, string> = {
   FEATURE_NOTICES: "true",
 };
 /** Env the gates clear so a developer's shell cannot change the route's path. */
-export const GATE_ENV_CLEARED = ["SK_SHELL_CONSUMER", "SK_AUDIT", "FEATURE_PARENT_PORTAL", "FEATURE_SK_SHELL_ALL_SCHOOLS", "FEATURE_CATALOGUE_TAB"];
+export const GATE_ENV_CLEARED = ["SK_ALLOWED_STUDENTS_OF", "SK_SHELL_CONSUMER", "SK_AUDIT", "FEATURE_PARENT_PORTAL", "FEATURE_SK_SHELL_ALL_SCHOOLS", "FEATURE_CATALOGUE_TAB"];
 
 export function applyGateEnv(): () => void {
   const keys = [...Object.keys(GATE_ENV), ...GATE_ENV_CLEARED];

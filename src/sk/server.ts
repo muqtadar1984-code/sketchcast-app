@@ -13,7 +13,7 @@
 
 import { NextResponse } from "next/server";
 import { claudeConfigured } from "@/utils/claude-backend";
-import { skAllowanceEnforced, skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed, skAllowanceEnforced, skEnabled } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
@@ -201,10 +201,11 @@ export async function gate(): Promise<Gate> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  // Restricted live (SK_ALLOWED_EMAILS set): anyone off the list — signed in
-  // or not — sees the same 404 as when the flag is off, so the surface does
-  // not even admit it exists. With the list unset this is a no-op.
-  if (!skUserAllowed(user)) return { ok: false, response: NextResponse.json({ error: "Not available." }, { status: 404 }) };
+  // Restricted live (SK_ALLOWED_EMAILS / SK_ALLOWED_STUDENTS_OF set): anyone
+  // not allowed — signed in or not — sees the same 404 as when the flag is
+  // off, so the surface does not even admit it exists. With both lists unset
+  // this is a no-op. Fails closed on a lookup error (skAccessAllowed).
+  if (!(await skAccessAllowed(user))) return { ok: false, response: NextResponse.json({ error: "Not available." }, { status: 404 }) };
   if (!user) return { ok: false, response: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
   return { ok: true, userId: user.id };
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed } from "@/utils/flags";
 import { createClient } from "@/utils/supabase/server";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -17,8 +17,8 @@ import KitPlayer from "./kit-player";
 //   2. Otherwise: "this chapter doesn't have a lesson yet". (The old packager
 //      clip player that used to sit here was retired in S3 slice E.)
 //
-// Restricted live (SK_ALLOWED_EMAILS set, founder 2026-10-27): the page is
-// 404 for anyone not signed in with a verified address on the list, the same
+// Restricted live (SK_ALLOWED_EMAILS / SK_ALLOWED_STUDENTS_OF set): the page
+// is 404 for anyone skAccessAllowed() does not admit, the same
 // 404 the routes answer, so the surface is invisible rather than "forbidden".
 
 export const dynamic = "force-dynamic";
@@ -43,7 +43,7 @@ export default async function SkStudentPage({ params, searchParams }: { params: 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (process.env.SK_ALLOWED_EMAILS && !skUserAllowed(user)) notFound();
+  if (!(await skAccessAllowed(user))) notFound();
   const locale = await resolveLocale();
 
   if (user && (await chapterHasKit(product, chapter))) {

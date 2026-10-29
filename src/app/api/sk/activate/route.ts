@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed, skEnabled } from "@/utils/flags";
 import { EDITION_PREFIX, isWellFormedCode, isWellFormedOrderNumber, redeemMessage } from "@/sk/access";
 import { bookCodeSecret, bookTitleFor, hashBookCode, redeemHashed, redeemStatus } from "@/sk/book-redeem";
 
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 // the book (SKE-…, the same in every copy) plus the buyer's Amazon order
 // number, for the signed-in user (or, for a verified parent, a linked child:
 // forChildId). Distribution plan §6. Gated exactly like /api/sk/redeem:
-// FEATURE_SK, the SK_ALLOWED_EMAILS allow-list, 503 without BOOK_CODE_SECRET.
+// FEATURE_SK, the SK allow-list (skAccessAllowed), 503 without BOOK_CODE_SECRET.
 // Neither the code nor the order number is stored or logged: both are HMACed
 // (src/sk/book-redeem.ts, shared with SK's `book.activate`) and the database
 // function redeem_edition_code() checks the order number is unused and the
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!skUserAllowed(user)) return NextResponse.json({ error: "Not available." }, { status: 404 }); // restricted live: off-list ⇒ as if the flag were off
+  if (!(await skAccessAllowed(user))) return NextResponse.json({ error: "Not available." }, { status: 404 }); // restricted live: off-list ⇒ as if the flag were off
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   let body: { eventId?: string; code?: string; orderNumber?: string; forChildId?: string };
