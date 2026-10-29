@@ -2196,7 +2196,35 @@
         "ready": "Ready",
         "failed": "Didn't finish",
         "open": "Open"
-      }
+      },
+      "tutor": {
+        "play": "Playing {heading}.",
+        "pause": "Paused.",
+        "restart": "Playing the lesson from the start.",
+        "section": "Section {n}: {heading}.",
+        "slide": "Here is the slide for {heading}.",
+        "practise": "Here are the practice questions for {heading}.",
+        "noKit": "Open a chapter first — then I can play it, show its slides and quiz you.",
+        "noSection": "I couldn't find that part of the lesson. Say a section number or its title.",
+        "needSection": "Open a chapter and pick a section, then ask me about it.",
+        "whereWeak": "Next: go over {heading} again — that idea still needs work.",
+        "whereWatch": "Next: watch section {n}, {heading}.",
+        "wherePractise": "Next: practise section {n}, {heading}.",
+        "whereDone": "You have finished this lesson. Well done!",
+        "progressHead": "Your progress on {kit}:",
+        "progressMastered": "Mastered: {list}.",
+        "progressProvisional": "Getting there (with help): {list}.",
+        "progressNeedsWork": "Needs work: {list}.",
+        "progressNone": "You haven't answered any questions in this lesson yet. Say \"quiz me\" to start.",
+        "greetingResume": "Hi {name} — you were on {section} of {kit}. Carry on?",
+        "greetingList": "Hi {name} — here are your chapters: {list}. Which one shall we open?",
+        "greetingNone": "Hi {name} — I'm SK, your tutor. Open a chapter and I'll help you through it.",
+        "chapter": "Chapter {n}",
+        "sectionN": "section {n}",
+        "preparing": "This lesson is still being prepared — try again in a moment.",
+        "refused": "You can't open this lesson. Ask your teacher or parent about access to the book."
+      },
+      "tutorNotOpen": "The lesson player isn't open on this page."
     },
     "player": {
       "title": "SK Tutor",

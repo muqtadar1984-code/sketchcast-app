@@ -2196,7 +2196,35 @@
         "ready": "Pronto",
         "failed": "Não foi concluído",
         "open": "Abrir"
-      }
+      },
+      "tutor": {
+        "play": "A reproduzir {heading}.",
+        "pause": "Em pausa.",
+        "restart": "A reproduzir a lição desde o início.",
+        "section": "Secção {n}: {heading}.",
+        "slide": "Aqui está o diapositivo de {heading}.",
+        "practise": "Aqui estão as perguntas de prática sobre {heading}.",
+        "noKit": "Abre primeiro um capítulo — depois posso reproduzi-lo, mostrar os diapositivos e fazer-te perguntas.",
+        "noSection": "Não encontrei essa parte da lição. Diz o número da secção ou o título.",
+        "needSection": "Abre um capítulo e escolhe uma secção; depois pergunta-me sobre ela.",
+        "whereWeak": "A seguir: revê {heading} outra vez — essa ideia ainda precisa de trabalho.",
+        "whereWatch": "A seguir: vê a secção {n}, {heading}.",
+        "wherePractise": "A seguir: pratica a secção {n}, {heading}.",
+        "whereDone": "Terminaste esta lição. Muito bem!",
+        "progressHead": "O teu progresso em {kit}:",
+        "progressMastered": "Dominado: {list}.",
+        "progressProvisional": "Quase (com ajuda): {list}.",
+        "progressNeedsWork": "Precisa de trabalho: {list}.",
+        "progressNone": "Ainda não respondeste a nenhuma pergunta desta lição. Diz \"faz-me perguntas\" para começar.",
+        "greetingResume": "Olá {name} — estavas em {section} de {kit}. Continuamos?",
+        "greetingList": "Olá {name} — estes são os teus capítulos: {list}. Qual abrimos?",
+        "greetingNone": "Olá {name} — sou o SK, o teu tutor. Abre um capítulo e eu ajudo-te a percorrê-lo.",
+        "chapter": "Capítulo {n}",
+        "sectionN": "a secção {n}",
+        "preparing": "Esta lição ainda está a ser preparada — tenta outra vez daqui a pouco.",
+        "refused": "Não podes abrir esta lição. Pergunta ao teu professor ou aos teus pais pelo acesso ao livro."
+      },
+      "tutorNotOpen": "O leitor da lição não está aberto nesta página."
     },
     "player": {
       "title": "Tutor SK",

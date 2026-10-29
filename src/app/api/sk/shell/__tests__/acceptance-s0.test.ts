@@ -323,16 +323,18 @@ describe("S0 acceptance on a seeded class", () => {
   it("3. fabrication is stripped: a name and a number the tool never returned do not survive", async () => {
     mocks.script = [
       { toolCalls: [{ id: "c1", name: "assignments.status", args: {} }] },
-      { text: ["3 of 5 finished. Dina, Emir and Farah have not, and 12 are overdue."] },
+      { text: ["3 of 5 finished. Dina, Emir and Farah have not, and 97 are overdue."] },
     ];
     const ev = await ask("How many finished the quiz?");
 
     const text = textOf(ev);
-    // Farah and 12 exist nowhere in any tool result of this turn…
-    expect(JSON.stringify(mocks.results)).not.toMatch(/Farah|\b12\b/);
+    // Farah and 97 exist nowhere in any tool result of this turn…
+    // (97, not a clock-like number: the seeded due dates come from the wall
+    // clock, so an hour or minute in a tool result once matched "12".)
+    expect(JSON.stringify(mocks.results)).not.toMatch(/Farah|\b97\b/);
     // …so they do not reach the user; the supported sentence does.
     expect(text).not.toContain("Farah");
-    expect(text).not.toMatch(/\b12\b/);
+    expect(text).not.toMatch(/\b97\b/);
     expect(text).toBe("3 of 5 finished.");
     // What remains is fully tool-backed → grounded; `trimmed` records the drop.
     expect(doneOf(ev)).toMatchObject({ label: "grounded", trimmed: true, sources: ["assignments.status"] });

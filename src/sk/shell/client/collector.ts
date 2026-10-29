@@ -23,6 +23,8 @@ export type CollectorInput = {
    *  lesson: class, book + chapter, or a ready-made kit). Layered over what
    *  the URL says; still only ids the server re-checks. */
   selection?: SkSelection;
+  /** S3 slice D: the student's kit player, on /sk/[product]/[chapter]. */
+  tutor?: SkCollector["tutor"];
 };
 
 /** Query string → plain record (first value wins; keys kept as written). */
@@ -93,6 +95,7 @@ export function collect(input: CollectorInput): SkCollector {
   const selection: SkSelection = { ...(fromUrl ?? {}), ...(input.selection ?? {}) };
   if (Object.keys(selection).length) out.selection = selection;
   if (input.board) out.board = input.board;
+  if (input.tutor) out.tutor = input.tutor;
   const locale = localeFromLang(input.lang);
   if (locale) out.locale = locale;
   return out;

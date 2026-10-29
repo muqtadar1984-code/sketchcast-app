@@ -38,6 +38,19 @@ const GREETING: Record<string, string> = {
   hi: "नमस्ते — मैं SK हूँ। अपनी कक्षाओं के बारे में पूछें, या बताएं कहाँ जाना है।",
 };
 
+/** S3 slice D: the STUDENT rule block (Final Plan §4.2, §9.3). Part of the
+ *  Shell prompt for a student, and handed to the kit turn (kit-turn.ts
+ *  `rules`) when the Shell asks it to explain, so the one model call a
+ *  student turn makes carries it too. */
+export const SK_STUDENT_RULES = [
+  "STUDENT RULES",
+  "S1. You are SK, a tutor for ONE student. Teach only from this student's kit: its sections, its narration and its question bank. You do not use outside sources, and you do not answer about other subjects as if the kit covered them.",
+  "S2. Never give the answer to a practice or quiz question. Wrong answers are handled by the kit's remediation ladder (the misconception, a hint, the slide that teaches it, a check question); you may point the student to it, but never reveal or confirm an answer outside it.",
+  "S3. Never show, compare with or mention another learner, a class list, a score that is not this student's own, or any teacher or school data.",
+  "S4. Moves (play, pause, a section, the slide, practice) are done with the tutor.* tools, never by describing them.",
+  "S5. Be warm and brief: 2–4 short sentences at the student's level, in the student's language.",
+].join("\n");
+
 export function shellGreeting(locale: string | null | undefined): string {
   return GREETING[locale ?? "en"] ?? GREETING.en;
 }
@@ -86,7 +99,9 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
   const lang = LOCALE_NAME[ctx.user.locale] ?? ctx.user.locale;
   const caps = capabilities.length ? capabilities.map((c) => `- ${c.name} (${c.tier}/${c.kind}): ${c.description}`).join("\n") : "- (none on this page)";
   return [
-    `You are SK, SketchCast's assistant inside the teacher portal. Prompt ${SK_SHELL_PROMPT_VERSION}.`,
+    ctx.user.role === "student"
+      ? `You are SK, SketchCast's tutor for a student. Prompt ${SK_SHELL_PROMPT_VERSION}.`
+      : `You are SK, SketchCast's assistant inside the teacher portal. Prompt ${SK_SHELL_PROMPT_VERSION}.`,
     "",
     "RULES",
     "1. Facts — every number, name, date, count and availability state — come ONLY from tool results in this conversation, quoted exactly. Never invent a class, a learner, a kit, a book or a number, and never estimate one.",
@@ -106,6 +121,7 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "9. A confirm-tier tool (assign, diary.note, parents.remind, marking.grade, lesson.prepare) only prepares a card; the teacher confirms it. Never say work is assigned, posted, sent, graded or started — say what the card will do, in one sentence. For a diary note pass her own words as the body, and for a grade her own feedback: fix grammar if needed, never add a fact, date, name, praise or criticism she did not say. lesson.prepare spends credits: say the cost and that it needs a click on the card (a spoken yes will not confirm it).",
         ]
       : []),
+    ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",
     contextLine(ctx, input.memory),

@@ -2196,7 +2196,35 @@
         "ready": "Listo",
         "failed": "No se terminó",
         "open": "Abrir"
-      }
+      },
+      "tutor": {
+        "play": "Reproduciendo {heading}.",
+        "pause": "En pausa.",
+        "restart": "Reproduciendo la lección desde el principio.",
+        "section": "Sección {n}: {heading}.",
+        "slide": "Aquí tienes la diapositiva de {heading}.",
+        "practise": "Aquí tienes las preguntas de práctica de {heading}.",
+        "noKit": "Abre primero un capítulo — luego puedo reproducirlo, mostrar sus diapositivas y hacerte preguntas.",
+        "noSection": "No encontré esa parte de la lección. Di el número de la sección o su título.",
+        "needSection": "Abre un capítulo y elige una sección; luego pregúntame sobre ella.",
+        "whereWeak": "Lo siguiente: repasa {heading} otra vez — esa idea aún necesita trabajo.",
+        "whereWatch": "Lo siguiente: mira la sección {n}, {heading}.",
+        "wherePractise": "Lo siguiente: practica la sección {n}, {heading}.",
+        "whereDone": "Has terminado esta lección. ¡Bien hecho!",
+        "progressHead": "Tu progreso en {kit}:",
+        "progressMastered": "Dominado: {list}.",
+        "progressProvisional": "Casi (con ayuda): {list}.",
+        "progressNeedsWork": "Necesita trabajo: {list}.",
+        "progressNone": "Aún no has respondido ninguna pregunta de esta lección. Di \"pregúntame\" para empezar.",
+        "greetingResume": "Hola {name} — ibas por {section} de {kit}. ¿Seguimos?",
+        "greetingList": "Hola {name} — estos son tus capítulos: {list}. ¿Cuál abrimos?",
+        "greetingNone": "Hola {name} — soy SK, tu tutor. Abre un capítulo y te ayudaré a recorrerlo.",
+        "chapter": "Capítulo {n}",
+        "sectionN": "la sección {n}",
+        "preparing": "Esta lección aún se está preparando — inténtalo de nuevo en un momento.",
+        "refused": "No puedes abrir esta lección. Pregunta a tu profesor o a tus padres por el acceso al libro."
+      },
+      "tutorNotOpen": "El reproductor de la lección no está abierto en esta página."
     },
     "player": {
       "title": "Tutor SK",

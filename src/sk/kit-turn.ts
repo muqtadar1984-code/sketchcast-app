@@ -37,6 +37,10 @@ export type KitTurnInput = {
   /** The locale's language name, for the reply ("English", "Bahasa Melayu"…). */
   language: string;
   signal?: AbortSignal;
+  /** S3 slice D: extra rules appended to the tutor's system prompt (the SK
+   *  Shell passes its student rule block, shell/prompt.ts SK_STUDENT_RULES).
+   *  Absent = the player's own explain, unchanged. */
+  rules?: string;
 };
 
 export const KIT_TUTOR_SYSTEM = [
@@ -88,7 +92,7 @@ export async function* runKitExplain(deps: KitTurnDeps, input: KitTurnInput): As
     yield { event: "text", data: NO_TEACHER_TEXT };
   } else {
     const seg = sup.segments[0]!;
-    const system = `${KIT_TUTOR_SYSTEM}\n${teachingBlock(sup)}`;
+    const system = `${KIT_TUTOR_SYSTEM}${input.rules ? `\n${input.rules}` : ""}\n${teachingBlock(sup)}`;
     const question = kitTurnQuestion(seg.heading, input.language, input.question);
     let full = "";
     modelReached = true;

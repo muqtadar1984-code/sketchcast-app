@@ -2196,7 +2196,35 @@
         "ready": "Prêt",
         "failed": "N'a pas abouti",
         "open": "Ouvrir"
-      }
+      },
+      "tutor": {
+        "play": "Lecture de {heading}.",
+        "pause": "En pause.",
+        "restart": "Lecture de la leçon depuis le début.",
+        "section": "Partie {n} : {heading}.",
+        "slide": "Voici la diapositive de {heading}.",
+        "practise": "Voici les questions d'entraînement sur {heading}.",
+        "noKit": "Ouvre d'abord un chapitre — ensuite je peux le lire, montrer ses diapositives et t'interroger.",
+        "noSection": "Je n'ai pas trouvé cette partie de la leçon. Dis le numéro de la partie ou son titre.",
+        "needSection": "Ouvre un chapitre et choisis une partie, puis pose-moi ta question.",
+        "whereWeak": "Ensuite : revois {heading} — cette idée demande encore du travail.",
+        "whereWatch": "Ensuite : regarde la partie {n}, {heading}.",
+        "wherePractise": "Ensuite : entraîne-toi sur la partie {n}, {heading}.",
+        "whereDone": "Tu as terminé cette leçon. Bravo !",
+        "progressHead": "Tes progrès sur {kit} :",
+        "progressMastered": "Maîtrisé : {list}.",
+        "progressProvisional": "Presque (avec de l'aide) : {list}.",
+        "progressNeedsWork": "À retravailler : {list}.",
+        "progressNone": "Tu n'as encore répondu à aucune question de cette leçon. Dis « interroge-moi » pour commencer.",
+        "greetingResume": "Salut {name} — tu en étais à {section} de {kit}. On continue ?",
+        "greetingList": "Salut {name} — voici tes chapitres : {list}. Lequel ouvrons-nous ?",
+        "greetingNone": "Salut {name} — je suis SK, ton tuteur. Ouvre un chapitre et je t'aiderai à le travailler.",
+        "chapter": "Chapitre {n}",
+        "sectionN": "la partie {n}",
+        "preparing": "Cette leçon est encore en préparation — réessaie dans un instant.",
+        "refused": "Tu ne peux pas ouvrir cette leçon. Demande à ton enseignant ou à tes parents l'accès au livre."
+      },
+      "tutorNotOpen": "Le lecteur de leçon n'est pas ouvert sur cette page."
     },
     "player": {
       "title": "Tuteur SK",

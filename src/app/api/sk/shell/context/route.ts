@@ -9,6 +9,8 @@ import { openAnnounced, openMemory, rememberAnnounced, sealAnnounced, sealMemory
 import { allowedFor } from "@/sk/shell/registry";
 import { SK_SHELL_PROMPT_VERSION, shellGreeting } from "@/sk/shell/prompt";
 import { kitNotices } from "@/sk/shell/kit-tray";
+import { tutorGreeting } from "@/sk/shell/tutor-greeting";
+import type { SkCollector } from "@/sk/shell/types";
 
 export const runtime = "nodejs";
 
@@ -27,7 +29,12 @@ export const runtime = "nodejs";
 // when it still applies (openMemory's rules), else a fresh one. GET (no body)
 // still works: no carried conversation, nothing announced yet.
 
-type ContextInput = { path: string; memory?: string; announced?: string };
+// S3 slice D: a STUDENT gets the tutor greeting instead (tutor-greeting.ts):
+// "Hi Aisha — you were on <section> of <kit>. Carry on?" (the panel sends the
+// kit player's state as `tutor`), else her chapters; the "Carry on?" offer
+// rides in the memory blob like the kit tray's. No kit notices for a student.
+
+type ContextInput = { path: string; memory?: string; announced?: string; tutor?: SkCollector["tutor"] };
 
 async function warmStart(input: ContextInput) {
   if (!skEnabled()) return NextResponse.json({ ready: false, error: "Not available." }, { status: 404 });
@@ -58,7 +65,7 @@ async function warmStart(input: ContextInput) {
     cookies: cookieStore,
     user,
     profile: { role, school_id: schoolId },
-    collector: { path: input.path },
+    collector: { path: input.path, ...(input.tutor ? { tutor: input.tutor } : {}) },
     locale: isLocale(localeCookie) ? localeCookie : "en",
     now,
   });
@@ -66,12 +73,14 @@ async function warmStart(input: ContextInput) {
   // What was announced before: the carried conversation's list (any blob WE
   // signed — even one too old to continue) and the long-lived note.
   const prior = [...new Set([...(verifyMemory(input.memory)?.announced ?? []), ...openAnnounced(input.announced, ctx.user.id)])];
-  const notices = await kitNotices(ctx, { session: supabase, now }, prior);
-  const memory = rememberAnnounced(openMemory(input.memory, ctx, now).memory, { ids: notices.ids, prior, entities: notices.entities, offer: notices.offer });
+  const student = ctx.user.role === "student";
+  const notices = student ? { lines: [] as string[], ids: [] as string[], entities: [], offer: null } : await kitNotices(ctx, { session: supabase, now }, prior);
+  const tutor = student ? await tutorGreeting(ctx, supabase) : null;
+  const memory = rememberAnnounced(openMemory(input.memory, ctx, now).memory, { ids: notices.ids, prior, entities: notices.entities, offer: tutor ? tutor.offer : notices.offer });
 
   return NextResponse.json({
     ready: true,
-    greeting: [...notices.lines, shellGreeting(ctx.user.locale)].join("\n"),
+    greeting: tutor ? tutor.text : [...notices.lines, shellGreeting(ctx.user.locale)].join("\n"),
     capabilities: allowedFor(ctx).map((c) => c.meta.name),
     memory: sealMemory(memory),
     sessionId: memory.sessionId,
@@ -99,5 +108,6 @@ export async function POST(request: Request) {
     raw = null;
   }
   const b = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  return warmStart({ path: pathOf(b.path), memory: blobOf(b.memory, 64_000), announced: blobOf(b.announced, 4_000) });
+  const tutor = b.tutor && typeof b.tutor === "object" ? (b.tutor as SkCollector["tutor"]) : undefined;
+  return warmStart({ path: pathOf(b.path), memory: blobOf(b.memory, 64_000), announced: blobOf(b.announced, 4_000), tutor });
 }

@@ -26,7 +26,11 @@ export type SkMemoryTurn = { role: "user" | "assistant"; text: string };
  *  greeting's "Your kit for … is ready — want me to open it?" and dropped by
  *  whatever turn comes next. A navigate target + its filter, never a raw path:
  *  the turn route still runs `navigate`, so visibility is re-checked. */
-export type SkOffer = { target: "library"; bookId: string; label: string };
+export type SkOffer =
+  | { target: "library"; bookId: string; label: string }
+  /** S3 slice D: the student greeting's "Carry on?" — her kit, by the ids
+   *  the kit routes re-check (product slug, chapter ref, kit generation). */
+  | { target: "tutor"; product: string; chapter: string; kit: string; label: string };
 
 export type SkMemory = {
   v: typeof SK_MEMORY_VERSION;
@@ -89,8 +93,10 @@ export function verifyMemory(blob: string | null | undefined): SkMemory | null {
     const announced = cleanIds(m.announced);
     if (announced.length) out.announced = announced;
     else delete out.announced;
-    const o = m.offer as Partial<SkOffer> | undefined;
+    const o = m.offer as Record<string, unknown> | undefined;
     if (o && o.target === "library" && typeof o.bookId === "string" && ID_RE.test(o.bookId) && typeof o.label === "string") out.offer = { target: "library", bookId: o.bookId, label: o.label.slice(0, 160) };
+    else if (o && o.target === "tutor" && typeof o.product === "string" && ID_RE.test(o.product) && typeof o.chapter === "string" && /^[A-Za-z0-9._-]{1,20}$/.test(o.chapter) && typeof o.kit === "string" && ID_RE.test(o.kit) && typeof o.label === "string")
+      out.offer = { target: "tutor", product: o.product, chapter: o.chapter, kit: o.kit, label: o.label.slice(0, 160) };
     else delete out.offer;
     return out;
   } catch {
