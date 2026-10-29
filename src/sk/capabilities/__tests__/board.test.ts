@@ -353,3 +353,68 @@ describe("the kit's .pptx as pages (founder 2026-10-28)", () => {
     expect(sayFor("deck_loaded", "ms-arab")).not.toBe(sayFor("deck_loaded", "ar"));
   });
 });
+
+// ── "Highlight a portion and ask SK" (founder 2026-10-28) ───────────────────
+describe("board.explain_selection: validates the highlight; never moves the Board", () => {
+  const DECK = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const SEL = { generationId: DECK, n: 3, text: "Particles move from high concentration", title: "Diffusion" };
+  const deckRow = (owner = TEACHER_ID, kind = "deck") => ({
+    id: DECK,
+    kind,
+    owner_id: owner,
+    artifacts: [{ kind: "deck_pptx", storage_path: `${owner}/${DECK}/deck.pptx` }],
+  });
+  const runSel = (board: SkBoardState | null, generations: Record<string, unknown>[], locale = "en") => {
+    const session = fakeSession({ generations });
+    return { session, result: cap("board.explain_selection").handler(ctxWith(board, locale), {}, { session, now: NOW }) };
+  };
+
+  it("no selection → the fixed 'highlight it first' line, localised, and NO read", async () => {
+    const { session, result } = runSel({ sessionId: "sess-1" }, [deckRow()]);
+    const r = await result;
+    expect(r).toMatchObject({ ok: false, error: "no_selection", summary: "Highlight the part on the slide first, then ask me." });
+    expect(r.board).toBeUndefined();
+    expect(session.log).toEqual([]);
+    expect((await runSel({ sessionId: "sess-1" }, [], "ms").result).summary).toBe(sayFor("no_selection", "ms"));
+    expect((await runSel({ sessionId: "sess-1", selection: { ...SEL, text: "   " } }, [deckRow()]).result).error).toBe("no_selection");
+  });
+
+  it("no Board → BOARD_NOT_OPEN", async () => {
+    expect(await runSel(null, [deckRow()]).result).toMatchObject({ ok: false, error: "no board", summary: BOARD_NOT_OPEN });
+  });
+
+  it("her own deck → ok, the slide and the words as facts, no move; read through HER session with an owner filter", async () => {
+    const { session, result } = runSel({ sessionId: "sess-1", selection: SEL }, [deckRow()]);
+    const r = await result;
+    expect(r.ok).toBe(true);
+    expect(r.board).toBeUndefined();
+    expect(r.facts).toEqual([{ slide: 3, title: "Diffusion", highlighted: SEL.text }]);
+    expect(session.log).toContain(`generations.eq("id","${DECK}")`);
+    expect(session.log).toContain(`generations.eq("owner_id","${TEACHER_ID}")`);
+  });
+
+  it("a deck that is not hers is refused — even when a leaked row comes back", async () => {
+    const r = await runSel({ sessionId: "sess-1", selection: SEL }, [deckRow("22222222-2222-4222-8222-222222222222")]).result;
+    expect(r).toMatchObject({ ok: false, error: "not_owner" });
+    // Nothing found at all.
+    expect(await runSel({ sessionId: "sess-1", selection: SEL }, []).result).toMatchObject({ ok: false, error: "not_owner" });
+    // Not a deck (a video generation with no .pptx).
+    expect(await runSel({ sessionId: "sess-1", selection: SEL }, [{ id: DECK, kind: "presentation", owner_id: TEACHER_ID, artifacts: [] }]).result).toMatchObject({ ok: false, error: "not_owner" });
+    // Not even an id.
+    expect(await runSel({ sessionId: "sess-1", selection: { ...SEL, generationId: "../etc" } }, [deckRow()]).result).toMatchObject({ ok: false, error: "not_owner" });
+  });
+
+  it("the two selection lines exist in all ten locales (ms-arab is Jawi, not Arabic)", () => {
+    const LOCALES = ["en", "ms", "ms-arab", "ar", "fr", "es", "pt", "te", "mr", "hi"];
+    for (const l of LOCALES) {
+      for (const key of ["no_selection", "explain_selection"] as const) {
+        const line = sayFor(key, l, { n: 3, text: "x" });
+        expect(line.length).toBeGreaterThan(5);
+        if (l !== "en") expect(line).not.toBe(sayFor(key, "en", { n: 3, text: "x" }));
+      }
+      expect(sayFor("explain_selection", l, { n: 3, text: "high concentration" })).toContain("high concentration");
+    }
+    expect(sayFor("no_selection", "ms-arab")).not.toBe(sayFor("no_selection", "ar"));
+    expect(sayFor("no_selection", "ms-arab")).toMatch(/[ڤݢڠ]/u);
+  });
+});

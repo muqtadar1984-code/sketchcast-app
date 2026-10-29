@@ -1929,7 +1929,7 @@
       "noteNeverProject": "Solo para descargar: una prueba que la clase ya vio deja de ser una prueba",
       "noteNoText": "Solo para descargar: este tipo no tiene texto estructurado para mostrar en una pizarra",
       "deck": "Presentación de diapositivas",
-      "noteDeck": "Descarga: la pizarra muestra las diapositivas del vídeo"
+      "noteDeck": "Descárgala o cárgala en la pizarra como páginas"
     },
     "group": {
       "thisPart": "Esta parte",
@@ -1971,7 +1971,8 @@
       "prevQuestion": "Pregunta anterior",
       "nextQuestion": "Pregunta siguiente",
       "railHandle": "Unidades",
-      "railClose": "Cerrar"
+      "railClose": "Cerrar",
+      "askAboutThis": "Preguntar a SK sobre esto"
     },
     "wrapUp": {
       "saved": "Lección guardada",
@@ -2123,7 +2124,8 @@
       "actFailed": "No se pudo completar. Inténtalo de nuevo.",
       "voiceYesHint": "Di «sí» para confirmar o «no» para cancelar.",
       "loadingSlides": "Cargando diapositiva {k} de {n}…",
-      "slidesLoaded": "{n} diapositivas están en el rollo como páginas {a}–{b}. Página arriba y página abajo se mueven entre ellas; di 'página en blanco' para añadir una en medio."
+      "slidesLoaded": "{n} diapositivas están en el rollo como páginas {a}–{b}. Página arriba y página abajo se mueven entre ellas; di 'página en blanco' para añadir una en medio.",
+      "explainSelection": "Explica esta parte"
     }
   }
 }

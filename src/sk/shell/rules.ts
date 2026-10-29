@@ -222,6 +222,45 @@ const RECAP_RE = polite(
   "(?:(?:let'?s )?(?:end|finish|wrap up|close|conclude|stop) (?:the |this |today'?s )?(?:lesson|class|session|period)(?: (?:now|here|there))?|(?:lesson |give (?:me |them |us )?(?:a |the )?)?recap(?: the lesson| of the lesson| time)?|wrap(?: it)? up|summar(?:y|ise|ize)(?: the lesson| time)?|(?:mari |jom |kita )?(?:tamat(?:kan)?|akhiri|habiskan|tutup) (?:pelajaran|kelas|sesi)(?: (?:ini|sekarang|hari ini))?|(?:buat |beri |berikan )?(?:rumusan|ringkasan|rekap|imbasan)(?: pelajaran)?|(?:أنهِ|أنه|انه|أنهي|انهي|اختم|اختتم|لننهِ|لننه|لنختم|أغلق|اغلق) (?:الدرس|الحصة|الجلسة)(?: الآن| هنا)?|(?:ملخص|الخلاصة|خلاصة|تلخيص)(?: الدرس)?|لخص الدرس|لخّص الدرس)",
 );
 
+// "Highlight a portion and ask SK" (founder 2026-10-28). Two sets, because
+// "this" means something only when there IS a highlight:
+//   EXPLAIN_THIS_RE — the imperative "explain this (part)" and the chip's own
+//     line in all ten locales (sk.shell.explainSelection). Always the
+//     selection move on the Board: without a highlight it answers "highlight
+//     the part first" instead of looking up a concept called "this".
+//   ASK_THIS_RE — the question forms ("what does this mean", "tell me more
+//     about this"). The selection move only while a highlight is live (the
+//     client sends it for 60 s); otherwise they go where they always went.
+const THIS_EN = "(?:this|that|it|these|those)(?: (?:part|bit|line|sentence|phrase|word|words|point))?|the highlighted (?:part|bit|text|words?|line)|what i(?:'ve)? highlighted|the highlight";
+const EXPLAIN_THIS_RE = polite(
+  [
+    `(?:can you |could you |would you )?(?:explain|clarify|describe|unpack)(?: (?:to |for )?(?:me|us|them|the class))? (?:${THIS_EN})(?: (?:to|for) (?:me|us|them|the class))?(?: (?:a bit )?more| further| in more detail)?`,
+    "(?:terangkan|jelaskan|huraikan)(?: (?:kepada|pada) (?:saya|kami|mereka|kelas))? (?:ini|itu|bahagian (?:ini|itu)|yang (?:ini|saya serlahkan))(?: lagi| dengan lebih lanjut)?",
+    "(?:تراڠکن|جلسکن) (?:بهاݢين )?(?:اين|ايني|ايت)",
+    "(?:اشرح|اشرحي|وضح|وضّح|فسر|فسّر)(?: لي| لنا| لهم)? (?:هذا|هذه|ذلك|تلك)(?: (?:الجزء|الفقرة|السطر|الكلمة|الجملة))?(?: أكثر)?|(?:اشرح|اشرحي|وضح|وضّح) (?:الجزء|النص) المظلل",
+    "explique(?:z|-moi|-nous)? (?:cette partie|ce passage|ceci|ça|cela)",
+    "explica(?:me|nos)? (?:esta parte|este fragmento|esto|eso)",
+    "explica(?:-me)?(?: lá)? (?:esta parte|este excerto|isto|isso)",
+    "ఈ భాగాన్ని వివరించండి|దీన్ని వివరించండి",
+    "हा भाग समजावून सांगा|हे समजावून सांगा",
+    "इस हिस्से को समझाइए|इसे समझाइए|इस भाग को समझाइए",
+  ].join("|"),
+);
+const ASK_THIS_RE = polite(
+  [
+    "what (?:does|do) (?:this|that|these|those)(?: (?:part|bit|line|sentence|phrase|word|words))? mean|what(?:'s| is) (?:this|that)(?: (?:part|bit))?(?: about| saying)?|what (?:is|are) (?:they|it) saying here",
+    "tell (?:me|us|them|the class) (?:a bit )?more(?: about (?:this|that|it)(?: (?:part|bit))?)?|(?:say|go) (?:a bit )?more (?:about|on) (?:this|that)|more on (?:this|that)",
+    "apa(?:kah)? maksud(?:nya)?(?: (?:ini|itu|bahagian ini|perkataan ini))?|(?:ceritakan|beritahu)(?: (?:saya|kami|mereka))? (?:lebih lanjut |lagi )?(?:tentang|mengenai) (?:ini|itu)",
+    "(?:ما|ماذا) (?:معنى|يعني) (?:هذا|هذه|ذلك|تلك)(?: الجزء| الكلمة| السطر)?|(?:أخبرني|اخبرني|حدثني|أخبرنا) (?:المزيد |أكثر )?عن (?:هذا|هذه|ذلك)(?: الجزء)?",
+  ].join("|"),
+);
+
+/** The selection move for this text, or null (see EXPLAIN_THIS_RE / ASK_THIS_RE). */
+export function explainSelectionOf(t: string, ctx: SkContext): boolean {
+  if (EXPLAIN_THIS_RE.test(t)) return true;
+  return !!ctx.board?.selection && ASK_THIS_RE.test(t);
+}
+
 // Arabic's definite article stays: "الانتشار" IS the concept as said.
 const EXPLAIN_LEAD_RE = /^(?:the |about |tentang |mengenai |عن )?/u;
 const EXPLAIN_SLIDE_RE = new RegExp(`\\s+(?:using|with|on|from|guna(?:kan)?|dengan|pada|بـ?|باستخدام|على|في|من) (?:the )?(?:slide|slaid|الشريحة|شريحة) ${NUM}$`, "u");
@@ -271,6 +310,9 @@ export function routeBoard(raw: string, normed: string, ctx: SkContext): RulesDe
     const n = numberOf(m[1]) ?? 3;
     return teach("practise", { n: Math.max(1, Math.min(10, n)) });
   }
+  // The highlighted part of a deck slide, before compare/explain: "explain
+  // this" is the highlight, never a concept called "this".
+  if (explainSelectionOf(t.replace(/[?؟]+$/u, "").trim(), ctx)) return teach("explain_selection");
   // Compare before explain: "explain the difference between a and b" is a compare.
   const bare = raw.replace(/[?؟.!]+$/u, "").trim();
   const c = bare.match(COMPARE_RE);

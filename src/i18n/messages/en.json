@@ -1929,7 +1929,7 @@
       "noteNeverProject": "Download only — a paper the class has watched is no longer a test",
       "noteNoText": "Download only — this kind has no structured text to put on a board",
       "deck": "Slide deck",
-      "noteDeck": "Download — the board shows the slides from the video"
+      "noteDeck": "Download, or load it onto the board as pages"
     },
     "group": {
       "thisPart": "This part",
@@ -1971,7 +1971,8 @@
       "prevQuestion": "Previous question",
       "nextQuestion": "Next question",
       "railHandle": "Units",
-      "railClose": "Close"
+      "railClose": "Close",
+      "askAboutThis": "Ask SK about this"
     },
     "wrapUp": {
       "saved": "Lesson saved",
@@ -2123,7 +2124,8 @@
       "actFailed": "That didn't go through. Try again.",
       "voiceYesHint": "Say “yes” to confirm, or “no” to cancel.",
       "loadingSlides": "Loading slide {k} of {n}…",
-      "slidesLoaded": "{n} slides are on the roll as pages {a}–{b}. Page up and page down move between them; say 'blank page' to add one in between."
+      "slidesLoaded": "{n} slides are on the roll as pages {a}–{b}. Page up and page down move between them; say 'blank page' to add one in between.",
+      "explainSelection": "Explain this part"
     }
   }
 }

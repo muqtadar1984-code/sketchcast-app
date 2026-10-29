@@ -106,6 +106,16 @@ export function sanitizeBoard(board: unknown): SkBoardState | undefined {
     generationId: str(b.generationId, 120),
   };
   if (typeof b.deck === "string" && DECK_STATES.has(b.deck)) out.deck = b.deck as NonNullable<SkBoardState["deck"]>;
+  // The highlighted words on a deck page: a deck id, a slide number, at most
+  // 600 characters of text. Anything malformed drops the selection whole.
+  if (b.selection && typeof b.selection === "object") {
+    const s = b.selection as Record<string, unknown>;
+    const generationId = str(s.generationId, 120);
+    const n = typeof s.n === "number" && Number.isInteger(s.n) && s.n >= 1 && s.n <= 1000 ? s.n : undefined;
+    const text = typeof s.text === "string" ? s.text.replace(/\s+/g, " ").trim().slice(0, 600).trim() : "";
+    const title = typeof s.title === "string" ? s.title.replace(/\s+/g, " ").trim().slice(0, 160) : "";
+    if (generationId && n !== undefined && text) out.selection = { generationId, n, text, ...(title ? { title } : {}) };
+  }
   // S1: the lesson map the client holds, bounded — at most 200 segments and 60
   // concepts, short headings, a handful of points each.
   if (Array.isArray(b.segments)) {
