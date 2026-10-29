@@ -8,7 +8,7 @@ import { AnthropicProvider } from "@/utils/assistant/providers/anthropic";
 import type { Turn } from "@/utils/assistant/provider";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
 import { loadContext } from "@/sk/shell/context";
-import { openMemory, rememberTurn, sealMemory } from "@/sk/shell/memory";
+import { openMemory, rememberTurn, sealMemory, type SkMemory } from "@/sk/shell/memory";
 import { allowedFor, fromApiToolName, toToolDefs } from "@/sk/shell/registry";
 import { makeRunTool, runCapability, type RunnerDeps, type ToolTrace } from "@/sk/shell/runner";
 import { auditSinkFor } from "@/sk/shell/audit";
@@ -17,7 +17,8 @@ import { offerAnswer } from "@/sk/shell/offer";
 import { lineFor } from "@/sk/shell/lines";
 import { KIT_OFFER_DECLINED } from "@/sk/shell/act-lines";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
-import { issueActionToken } from "@/sk/shell/tokens";
+import { issueActionToken, publicParams } from "@/sk/shell/tokens";
+import { maskBookSecrets } from "@/sk/book-activate";
 import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
 import { loadSelectionSlide, selectionBlock, selectionOnSlide, selectionQuestion, selectionSupportTokens, type SelectionAdmin } from "@/sk/shell/selection";
 import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilities/board";
@@ -158,6 +159,9 @@ export async function POST(request: Request) {
   // The conversation's resolved entities (signed memory) become ctx.recent, so a
   // capability can resolve "their parents" from the last not-done list (§5.4).
   ctx.recent = { ...ctx.recent, entities: memory.entities };
+  // S4 slice D: what SK asked for last turn (book.activate: the order number
+  // or the child), so the rules can take the short answer.
+  if (memory.pending) ctx.pending = memory.pending;
   const allowed = allowedFor(ctx);
   const sink = auditSinkFor(admin);
   const decision = routeByRules(body.text, ctx, now, body.collector.clock);
@@ -321,8 +325,12 @@ export async function POST(request: Request) {
           /* already closed */
         }
       };
-      const done = (ev: Omit<Extract<SkTurnEvent, { type: "done" }>, "type" | "latencyMs" | "memory">, assistantText: string, entities: ResolvedEntity[]) => {
-        memory = rememberTurn(memory, { user: body.text, assistant: assistantText, entities }, new Date());
+      const done = (ev: Omit<Extract<SkTurnEvent, { type: "done" }>, "type" | "latencyMs" | "memory">, assistantText: string, entities: ResolvedEntity[], pending?: SkMemory["pending"] | null) => {
+        // S4 slice D: a book code / order number typed to SK is never remembered
+        // (the memory travels to the browser and back into later prompts), and
+        // book.activate's pending question lasts exactly one turn.
+        const keep = pending !== undefined ? pending : memory.pending?.task === "book.activate" ? null : undefined;
+        memory = rememberTurn(memory, { user: maskBookSecrets(body.text), assistant: assistantText, entities, pending: keep }, new Date());
         send({ type: "done", ...ev, latencyMs: Date.now() - t0, memory: sealMemory(memory) });
       };
 
@@ -341,7 +349,8 @@ export async function POST(request: Request) {
             : null;
           if (!issued) return { declined: SK_CANNOT_CONFIRM };
           return {
-            event: { type: "confirm", token: issued.token, action: r.confirm.action, title: r.confirm.title, params: r.confirm.params, expiresAt: issued.expiresAt },
+            // sealed_* params stay on the server (S4 slice D: a book code's HMAC).
+            event: { type: "confirm", token: issued.token, action: r.confirm.action, title: r.confirm.title, params: publicParams(r.confirm.params) as Record<string, string | number | boolean | null>, expiresAt: issued.expiresAt },
             say: r.summary,
           };
         }
@@ -453,6 +462,29 @@ export async function POST(request: Request) {
             send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
             done({ sources: ["navigate"], label: "navigation" }, nav.summary, []);
           } else done({ sources: [], label: "declined" }, nav.summary, []);
+          finish();
+          return;
+        }
+
+        // ── S4 slice D: book activation — deterministic, no model ────────────
+        // A code (any role), an activation phrase (student / parent) or the
+        // answer to SK's own question runs book.activate directly: the code is
+        // never part of a model prompt. A card is CLICK-ONLY (act.ts).
+        if (decision.intent === "act" && decision.action === "book.activate") {
+          const r = await runCapability(ctx, "book.activate", decision.book, deps);
+          send({ type: "tool", name: "book.activate", ok: r.ok, summary: maskBookSecrets(r.summary).slice(0, 200) });
+          const act = r.confirm ? await actionEvent(r) : null;
+          if (act && "declined" in act) {
+            send({ type: "text", text: act.declined });
+            done({ sources: [], label: "declined" }, act.declined, [], null);
+          } else if (act) {
+            send({ type: "text", text: act.say });
+            send(act.event);
+            done({ sources: ["book.activate"], label: "grounded" }, act.say, r.entities ?? [], null);
+          } else {
+            send({ type: "text", text: r.summary });
+            done({ sources: r.ok ? ["book.activate"] : [], label: r.ok ? "grounded" : "declined" }, r.summary, r.entities ?? [], r.pending ?? null);
+          }
           finish();
           return;
         }

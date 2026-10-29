@@ -22,7 +22,7 @@
 // The admin client is used ONLY for sk_action_tokens and the RPCs (§8.1).
 
 import type { ResolvedEntity, SkActResponse, SkActionRow } from "./types";
-import { decodeToken, verifyActionToken, type ActionTokenRow } from "./tokens";
+import { decodeToken, publicParams, verifyActionToken, type ActionTokenRow } from "./tokens";
 import { metaAllows } from "./registry";
 import { recordSafely } from "./audit";
 import { rememberTurn, type SkMemory } from "./memory";
@@ -35,6 +35,8 @@ import { runMarkingGrade } from "./act-marking";
 import { runLessonPrepare } from "./act-prepare";
 import { markingGrade } from "@/sk/capabilities/marking";
 import { lessonPrepareAction } from "@/sk/capabilities/prepare";
+import { runBookActivate } from "./act-book";
+import { bookActivateAction } from "@/sk/capabilities/book";
 
 export { ACT_CLICK_ONLY_LINE, ACT_LINES, ACT_NOT_ALLOWED_LINE, consumeThenWrite, writeFailure } from "./act-core";
 export type { ActAdmin, ActHandler, ActInput, ActOutcome, Handled, WriteOutcome } from "./act-core";
@@ -111,6 +113,9 @@ export const HANDLERS: Record<string, ActHandler> = {
   // and lesson prep — CLICK-ONLY because it spends credits (act-prepare.ts).
   "marking.grade": { tier: "confirm", kind: "act", meta: markingGrade.meta, run: runMarkingGrade },
   "lesson.prepare": { tier: "confirm", kind: "act", clickOnly: true, meta: lessonPrepareAction.meta, run: runLessonPrepare },
+  // S4 slice D: book activation — CLICK-ONLY (spends a code); the redeem RPC
+  // runs after the consume with the server-verified user (act-book.ts).
+  "book.activate": { tier: "confirm", kind: "act", clickOnly: true, meta: bookActivateAction.meta, run: runBookActivate },
 };
 
 // ── The decision ─────────────────────────────────────────────────────────────
@@ -152,7 +157,8 @@ export async function executeAction(input: ActInput): Promise<ActOutput> {
       action: row?.action ?? "act",
       tier: handler?.tier ?? "confirm",
       kind: handler?.kind ?? "act",
-      params: row?.params ?? {},
+      // Never the sealed params (S4 slice D: a book code's HMAC stays out of the audit).
+      params: publicParams(row?.params ?? {}),
       ok: done,
       // The decoded id is kept HERE (free text), not in token_id: a token that
       // failed verification may not exist, and token_id is a foreign key.

@@ -9,6 +9,7 @@
 import type { SkBoardMove, SkCollector, SkContext, SkIntent } from "./types";
 import { NAV_TARGETS, type NavFilters, type NavTarget } from "@/sk/capabilities/navigate";
 import { resolveSegment } from "@/sk/capabilities/board";
+import { findBookCode, findOrderNumber } from "@/sk/book-activate";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -21,6 +22,10 @@ export type RulesDecision =
    *  ("write in Ali's diary" names the diary); the model still resolves it
    *  through the action's capability, which returns a confirm card. */
   | { intent: "act"; action: SkActPhrase }
+  /** S4 slice D: a book code / activation phrasing, or the answer SK asked
+   *  for (order number, which child). Decided here for EVERY role so a code
+   *  never reaches a model prompt; the route runs `book.activate` directly. */
+  | { intent: "act"; action: "book.activate"; book: BookActArgs }
   /** S3 slice D: a student tutor move or read, decided by rules (students
    *  only). The moves and the reads make NO model call; tutor.explain makes
    *  exactly one (the kit turn, metered once). */
@@ -28,6 +33,9 @@ export type RulesDecision =
   | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor"> };
 
 export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" | "tutor.practise" | "tutor.where" | "tutor.progress" | "tutor.explain";
+
+/** S4 slice D: what the rules pull out of a book-activation utterance. */
+export type BookActArgs = { code?: string; orderNumber?: string; childQuery?: string };
 
 export type SkActPhrase = "diary.note" | "parents.remind" | "marking.next" | "marking.grade" | "lesson.prepare";
 
@@ -523,6 +531,75 @@ export function actPhraseOf(t: string, raw: string): SkActPhrase | null {
   return null;
 }
 
+// ── S4 slice D: book activation (book.activate) ─────────────────────────────
+//
+// Three ways in, all deterministic:
+//   1. the text CONTAINS a book code (SKB…/SKE…, any role, question or not) —
+//      a code must never become part of a model prompt;
+//   2. a student or parent says an activation phrase ("I have a code",
+//      "activate my book", "aktifkan kod buku", "فعّل الكود");
+//   3. SK just asked for the order number or the child (memory `pending`) and
+//      this is the short answer.
+const BOOK_POLITE = "(?:please |pls |sila |tolong |can you |could you |boleh |من فضلك |الرجاء )?";
+const BOOK_PHRASE_RE = new RegExp(
+  "^" +
+    BOOK_POLITE +
+    "(?:" +
+    "(?:activate|redeem|enter|use|unlock) (?:my |a |the |this |our |his |her )?(?:book ?code|code|book)" +
+    "|i (?:have|'ve got|ve got|got) (?:a |the |my )?(?:book ?)?code" +
+    "|(?:aktifkan|tebus|masukkan|guna(?:kan)?) (?:kod(?: buku)?|buku)" +
+    "|saya (?:ada|mempunyai) kod" +
+    "|(?:فعّل|فعل|تفعيل|أدخل|ادخل) (?:الكود|الرمز|كود|رمز|الكتاب|كتاب)" +
+    "|(?:لدي|لديّ|عندي) (?:كود|رمز)" +
+    ")",
+  "u",
+);
+const BOOK_ROLES: ReadonlySet<string> = new Set(["student", "parent"]);
+const FOR_CHILD_RE = /(?:^|\s)(?:for|untuk|bagi|kepada|لـ|من أجل|الى|إلى)\s+([\p{L}][\p{L}'’ .-]{0,40})$/u;
+
+function childPhraseOf(rest: string): string | undefined {
+  const m = rest
+    .trim()
+    .replace(/[.!?؟,]+$/u, "")
+    .match(FOR_CHILD_RE);
+  const name = m?.[1]?.trim();
+  return name ? name.slice(0, 60) : undefined;
+}
+
+/** The book.activate decision for this utterance, or null. */
+export function bookActivateOf(raw: string, t: string, ctx: SkContext): BookActArgs | null {
+  const found = findBookCode(raw);
+  const orderNumber = findOrderNumber(raw) ?? undefined;
+  const strip = (s: string) => {
+    let out = s;
+    if (found) out = out.slice(0, found.start) + " " + out.slice(found.end);
+    return out
+      .replace(/(?<!\d)\d{3}[\s-]?\d{7}[\s-]?\d{7}(?!\d)/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+  if (found) {
+    const childQuery = childPhraseOf(strip(raw));
+    return { code: found.code, ...(orderNumber ? { orderNumber } : {}), ...(childQuery ? { childQuery } : {}) };
+  }
+  const question = /[?؟]\s*$/u.test(raw);
+  if (!question && BOOK_ROLES.has(ctx.user.role) && BOOK_PHRASE_RE.test(t)) {
+    const childQuery = childPhraseOf(strip(raw));
+    return { ...(orderNumber ? { orderNumber } : {}), ...(childQuery ? { childQuery } : {}) };
+  }
+  if (ctx.pending?.task === "book.activate" && !question) {
+    if (orderNumber) {
+      const childQuery = childPhraseOf(strip(raw));
+      return { orderNumber, ...(childQuery ? { childQuery } : {}) };
+    }
+    // "Aisyah" / "for Aisyah" / "untuk Aisyah": a short answer to "which child?".
+    const rest = strip(raw).replace(/[.!,]+$/u, "");
+    const words = rest.split(" ").filter(Boolean);
+    if (ctx.pending.needs?.[0] === "child" && words.length >= 1 && words.length <= 4 && !VERB_RE.test(t)) return { childQuery: childPhraseOf(rest) ?? rest };
+  }
+  return null;
+}
+
 // ── S3 slice D: the student tutor's phrasings (EN / MS / AR) ────────────────
 //
 // Checked FIRST for a student and never for anyone else. Pure moves on her
@@ -663,6 +740,11 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   if (!t) return { intent: "chat", reply: SK_CHAT_NOTHING_PENDING };
   if (THANKS_RE.test(t)) return { intent: "chat", reply: SK_CHAT_THANKS };
   if (ACK_RE.test(t)) return { intent: "chat", reply: SK_CHAT_NOTHING_PENDING };
+
+  // S4 slice D: a book code (or the answer SK asked for) is decided here for
+  // every role, before anything that could hand the text to a model.
+  const book = bookActivateOf(raw, t, ctx);
+  if (book) return { intent: "act", action: "book.activate", book };
 
   // S3 slice D: a student's tutor phrasings come first, and a student never
   // reaches the Board, start-a-lesson or teacher-action rules below.

@@ -15,6 +15,19 @@ export const SK_TOKEN_TTL_SECONDS = 600; // §8.2: 10 minutes by default
 
 export type ActionParams = Record<string, string | number | boolean | null>;
 
+/** S4 slice D: params whose key starts with `sealed_` are stored and signed
+ *  with the token (the server needs them at execution) but are NEVER sent to
+ *  the browser on the card and NEVER written to the audit row — e.g.
+ *  book.activate's code HMAC. */
+export const SEALED_PARAM_PREFIX = "sealed_";
+
+/** The params minus the sealed ones: what the card shows and the audit keeps. */
+export function publicParams<T extends Record<string, unknown>>(params: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params ?? {})) if (!k.startsWith(SEALED_PARAM_PREFIX)) out[k] = v;
+  return out as Partial<T>;
+}
+
 export type ActionTokenRow = {
   id: string;
   user_id: string;
