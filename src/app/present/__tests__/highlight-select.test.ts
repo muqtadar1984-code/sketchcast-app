@@ -10,6 +10,7 @@ import { isRtlLine, wordsUnderBox, type DeckMap, type DeckMapSlide } from "../de
 import {
   SELECTION_MAX_CHARS,
   activeSelection,
+  chipPosition,
   createDeckMapCache,
   payloadOf,
   selectionFromBox,
@@ -167,5 +168,14 @@ describe("createDeckMapCache", () => {
       throw new Error("offline");
     }, fetchJson);
     expect(await broken.get("deck-1")).toBeNull();
+  });
+});
+
+describe("chipPosition", () => {
+  it("just under the highlight in a 16:9 view; above it when there is no room below; inside the view", () => {
+    // 800x450 view: scale 0.5, no letterbox.
+    expect(chipPosition({ x: 200, y: 200, w: 400, h: 40 }, { w: 800, h: 450 })).toEqual({ left: 100, top: 128 });
+    expect(chipPosition({ x: 200, y: 820, w: 400, h: 40 }, { w: 800, h: 450 })).toEqual({ left: 100, top: 366 });
+    expect(chipPosition({ x: 1500, y: 100, w: 100, h: 40 }, { w: 800, h: 450 }).left).toBe(800 - 190 - 8);
   });
 });

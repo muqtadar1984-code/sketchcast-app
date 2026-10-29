@@ -30,6 +30,7 @@
 
 import type { BoardController, BoardManifest, BoardUnit, ManifestSegment, VisualVerdict } from "./board-controller";
 import type { SkBoardMove, SkBoardState, SkSelection } from "@/sk/shell/types";
+import type { AskChannel } from "./highlight-select";
 
 // ── manifest adapter ────────────────────────────────────────────────────────
 
@@ -192,6 +193,13 @@ export type BridgeDeps = {
     status: () => "none" | "missing" | "building" | "ready" | "loaded" | "failed";
     load: () => Promise<BridgeRun>;
   };
+  /** "Highlight a portion and ask SK" (founder 2026-10-28): the words she
+   *  highlighted on a deck page, while still live (the host applies the 60 s
+   *  window, highlight-select.ts activeSelection). Rides in state(). */
+  highlight?: () => SkBoardState["selection"] | undefined;
+  /** The Board's chip → the SK panel ("Ask SK about this"). Made once by the
+   *  host so a bridge rebuilt between the click and the panel opening keeps it. */
+  asks?: AskChannel;
   /** Polling cadence for the segment-end watcher. */
   pollMs?: number;
   now?: () => number;
@@ -223,6 +231,8 @@ export type SkBoardBridge = {
   rail(action: "open" | "close" | "toggle"): void;
   /** A slides-as-pages load in progress — k of n — for the panel's tray. */
   loading(): { k: number; n: number } | null;
+  /** The Board's chip → the panel (see BridgeDeps.asks); null when the host has none. */
+  asks(): AskChannel | null;
   dispose(): void;
 };
 
@@ -337,6 +347,8 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
 
     loading: () => loading,
 
+    asks: () => deps.asks ?? null,
+
     state() {
       const c = deps.controller();
       if (!c) return undefined;
@@ -348,6 +360,8 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
       if (g) out.generationId = g;
       const deck = deps.deck?.status();
       if (deck && deck !== "none") out.deck = deck;
+      const sel = deps.highlight?.();
+      if (sel?.text) out.selection = sel;
       if (m) {
         out.manifestId = m.manifestId;
         const k = segmentAt(m, st.t);

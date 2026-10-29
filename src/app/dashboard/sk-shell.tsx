@@ -801,6 +801,21 @@ export default function SkShell({
     sendRef.current = send;
   }, [send]);
 
+  // "Ask SK about this" on the Board (founder 2026-10-28): the chip's click
+  // arrives through the bridge's ask channel — taken at once when the panel
+  // is open, or on mount when the click is what opened it — and is sent as
+  // her own line, so the transcript reads what she asked. The highlighted
+  // words ride in the Board state (SkBoardState.selection).
+  useEffect(() => {
+    const ch = board?.asks();
+    if (!ch) return;
+    const run = () => {
+      if (ch.take() === "explain_selection") void sendRef.current(copy.explainSelection, "text");
+    };
+    run();
+    return ch.subscribe(run);
+  }, [board, copy.explainSelection]);
+
   function submit() {
     const q = input.trim();
     if (!q || busy) return;

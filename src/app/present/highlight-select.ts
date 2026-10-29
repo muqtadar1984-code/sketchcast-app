@@ -11,7 +11,7 @@
 // to bottom, each line left-to-right or right-to-left by its own script).
 // No deck page, no map, or nothing under the ink → null: there is nothing to ask about.
 
-import { PAGE_H, PAGE_W, type PageBackground, type Stroke } from "@/board/model";
+import { PAGE_H, PAGE_W, fitPage, toScreen, type PageBackground, type Stroke } from "@/board/model";
 import { pageBoxToSlide, parseDeckMap, slideOf, wordsUnderBox, type Box, type DeckMap, type DeckWord } from "./deck-text";
 
 /** Share of the page added on each side of the stroke's points. */
@@ -160,3 +160,52 @@ export function createDeckMapCache(fetchReply: (generationId: string) => Promise
     },
   };
 }
+
+// ── where the chip goes ─────────────────────────────────────────────────────
+
+/** The "Ask SK about this" chip's spot in the roll's box (CSS px from its
+ *  top-left): just under the highlighted box, or just above it when there is
+ *  no room below, kept inside the view. `r` is in page units. */
+export function chipPosition(r: PageRect, view: { w: number; h: number }, chip: { w: number; h: number } = { w: 190, h: 36 }, gap = 8): { left: number; top: number } {
+  const proj = fitPage(view.w, view.h);
+  const a = toScreen(r.x, r.y, proj);
+  const b = toScreen(r.x + r.w, r.y + r.h, proj);
+  const left = Math.max(gap, Math.min(view.w - chip.w - gap, a.x));
+  const below = b.y + gap;
+  const top = below + chip.h <= view.h - gap ? below : Math.max(gap, a.y - chip.h - gap);
+  return { left: Math.round(left), top: Math.round(top) };
+}
+
+// ── the chip → the SK panel ─────────────────────────────────────────────────
+
+/** What the Board asks the SK panel to do on her behalf. */
+export type BoardAsk = "explain_selection";
+
+/**
+ * The one-way line from the Board's chip to the SK panel, made once per Board.
+ * The panel mounts lazily (the launcher opens it), so a post is HELD until the
+ * panel takes it; subscribers are told so an open panel acts at once and the
+ * launcher can open a closed one. A newer post replaces an untaken one.
+ */
+export function createAskChannel() {
+  let pending: BoardAsk | null = null;
+  const subs = new Set<(a: BoardAsk) => void>();
+  return {
+    post(a: BoardAsk) {
+      pending = a;
+      for (const f of [...subs]) f(a);
+    },
+    take(): BoardAsk | null {
+      const a = pending;
+      pending = null;
+      return a;
+    },
+    subscribe(f: (a: BoardAsk) => void): () => void {
+      subs.add(f);
+      return () => {
+        subs.delete(f);
+      };
+    },
+  };
+}
+export type AskChannel = ReturnType<typeof createAskChannel>;

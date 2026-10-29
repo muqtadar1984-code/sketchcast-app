@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoardController, BoardState } from "../board-controller";
 import { createBoardBridge, loadManifest, practiseStart, segmentAt, toBridgeManifest, type BridgeManifest, type KitManifestLike, type ManifestReply } from "../sk-board-bridge";
+import { activeSelection, createAskChannel, type HeldSelection } from "../highlight-select";
 
 // ── a fake controller that records calls and simulates a playhead ──────────
 
@@ -626,5 +627,41 @@ describe("the kit's .pptx as pages (founder 2026-10-28)", () => {
     fc.calls.length = 0;
     await b.run("slide", { k: 0 });
     expect(fc.calls).toContainEqual(["slide", 0]);
+  });
+});
+
+describe("highlight a portion and ask SK (founder 2026-10-28)", () => {
+  const SEL = { generationId: "deck-1", n: 3, text: "high concentration to low", title: "Diffusion" };
+
+  it("state() carries the live highlight; absent once the 60 s window closes or there is none", () => {
+    const fc = fakeController();
+    let held: HeldSelection | null = { selection: SEL, at: 1_000 };
+    let now = 30_000;
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => null, mapStatus: () => "none", highlight: () => activeSelection(held, now) });
+    expect(b.state()?.selection).toEqual(SEL);
+    now = 62_000;
+    expect(b.state()).not.toHaveProperty("selection");
+    held = null;
+    now = 1_000;
+    expect(b.state()).not.toHaveProperty("selection");
+    // No highlight port at all: the state is as before.
+    expect(createBoardBridge({ controller: () => fc.c, manifest: () => null, mapStatus: () => "none" }).state()).not.toHaveProperty("selection");
+  });
+
+  it("asks(): the host's channel; a post made before the panel opened is held until taken", () => {
+    const fc = fakeController();
+    const asks = createAskChannel();
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => null, mapStatus: () => "none", asks });
+    expect(b.asks()).toBe(asks);
+    const seen: string[] = [];
+    const off = b.asks()!.subscribe((a) => seen.push(a));
+    asks.post("explain_selection");
+    expect(seen).toEqual(["explain_selection"]);
+    expect(b.asks()!.take()).toBe("explain_selection");
+    expect(b.asks()!.take()).toBeNull();
+    off();
+    asks.post("explain_selection");
+    expect(seen).toHaveLength(1);
+    expect(createBoardBridge({ controller: () => fc.c, manifest: () => null, mapStatus: () => "none" }).asks()).toBeNull();
   });
 });

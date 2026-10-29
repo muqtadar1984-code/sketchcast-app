@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { newRoll, type PageBackground, type Stroke, type Tool } from "@/board/model";
+import { CHIP_MS, chipPosition, createDeckMapCache, payloadOf, selectionFromStroke, strokePointsBox, type DeckMapReply, type SkSelectionPayload } from "./highlight-select";
 import type { Rect } from "@/board/render";
 import { RollView, type RollHandle } from "@/board/roll";
 import { BoardStore, type LogRecord } from "@/board/store";
@@ -213,14 +214,32 @@ type Props = {
    *  fetches the rendered slides (asking the worker when they are missing)
    *  and calls the controller's loadDeck. Absent = the deck only downloads. */
   onLoadDeck?: (deckGenerationId: string) => void;
+  /** "Highlight a portion and ask SK" (founder 2026-10-28), present only when
+   *  the SK Shell is on: told the words under each highlighter stroke on a
+   *  deck page (null when the highlight is dropped — a page turn). */
+  onHighlight?: (selection: SkSelectionPayload | null) => void;
+  /** The chip's click: ask SK to explain the highlighted part. */
+  onAskSelection?: () => void;
 };
+
+/** The deck-pages GET, for the text map's signed URL. */
+async function fetchDeckMapReply(generationId: string): Promise<DeckMapReply> {
+  const r = await fetch(`/api/present/deck-pages?generationId=${encodeURIComponent(generationId)}`, { cache: "no-store" });
+  if (!r.ok) return { status: "missing" };
+  return (await r.json()) as DeckMapReply;
+}
+async function fetchJson(url: string): Promise<unknown> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`map ${r.status}`);
+  return r.json();
+}
 
 /** The open unit as the controller's `unit` port and `onUnit` report it. */
 function boardUnitOf(u: KitUnit | null): BoardUnit | null {
   return u ? { generationId: u.video?.id ?? null, part: u.part, title: u.video?.title ?? null } : null;
 }
 
-export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null, onLoadDeck }: Props) {
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null, onLoadDeck, onHighlight, onAskSelection }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -463,11 +482,65 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
     stage.current?.pause();
   }, []);
 
-  const onStroke = useCallback((s: Parameters<NonNullable<Parameters<typeof RollView>[0]["onStroke"]>>[0]) => {
-    void storeRef.current?.addStroke(s);
+  // "Highlight a portion and ask SK" (founder 2026-10-28). A highlighter
+  // stroke on a deck page → the words under it (highlight-select.ts) → the
+  // host (SK's state) and a small chip by the stroke. The chip goes on the
+  // next stroke, a page turn, or after 15 s; the highlight itself stays live
+  // for SK's voice ("explain this") until the host's 60 s window closes or
+  // the page turns. The deck's text map is fetched once per deck.
+  const rollBox = useRef<HTMLDivElement | null>(null);
+  const [chip, setChip] = useState<{ left: number; top: number } | null>(null);
+  const chipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chipSeq = useRef(0);
+  const [deckMaps] = useState(() => createDeckMapCache(fetchDeckMapReply, fetchJson));
+  const hideChip = useCallback(() => {
+    chipSeq.current++;
+    if (chipTimer.current) clearTimeout(chipTimer.current);
+    chipTimer.current = null;
+    setChip(null);
+  }, []);
+  useEffect(() => () => {
+    if (chipTimer.current) clearTimeout(chipTimer.current);
   }, []);
 
-  const onPageChange = useCallback((page: number, count: number) => setWhere({ page, count }), []);
+  const onStroke = useCallback(
+    (s: Parameters<NonNullable<Parameters<typeof RollView>[0]["onStroke"]>>[0]) => {
+      void storeRef.current?.addStroke(s);
+      hideChip();
+      if (!onAskSelection || s.tool !== "highlighter") return;
+      const bg = roll.pages[s.page]?.background;
+      if (bg?.kind !== "deckPage") return;
+      const seq = chipSeq.current;
+      void deckMaps.get(bg.generationId).then((map) => {
+        if (seq !== chipSeq.current) return; // another stroke or a page turn since
+        const sel = selectionFromStroke(s, { background: bg, map });
+        const payload = sel ? payloadOf(sel, bg, map) : null;
+        if (!payload) return;
+        onHighlight?.(payload);
+        const box = rollBox.current?.getBoundingClientRect();
+        const r = strokePointsBox(s);
+        if (!box || !r) return;
+        setChip(chipPosition(r, { w: box.width, h: box.height }));
+        chipTimer.current = setTimeout(() => {
+          if (seq === chipSeq.current) setChip(null);
+        }, CHIP_MS);
+      });
+    },
+    [roll, deckMaps, hideChip, onAskSelection, onHighlight],
+  );
+
+  const lastPage = useRef(0);
+  const onPageChange = useCallback(
+    (page: number, count: number) => {
+      setWhere({ page, count });
+      if (page !== lastPage.current) {
+        lastPage.current = page;
+        hideChip();
+        onHighlight?.(null);
+      }
+    },
+    [hideChip, onHighlight],
+  );
 
   /** A page inserted mid-roll renumbers the pages after it, and the ink on
    *  them with it (model.insertPage): re-recorded under each stroke's own seq
@@ -982,6 +1055,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           </button>
         </div>
 
+        <div ref={rollBox} className="relative">
         <RollView
           ref={board}
           roll={roll}
@@ -999,6 +1073,21 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           className="rounded-xl border border-[#222C30] overflow-hidden bg-white"
           style={{ height: "68dvh", minHeight: 320 }}
         />
+        {chip && onAskSelection && (
+          <button
+            type="button"
+            data-board="ask-sk"
+            onClick={() => {
+              hideChip();
+              onAskSelection();
+            }}
+            className="absolute z-10 rounded-full bg-[#0C8175] px-3 py-1.5 text-sm font-medium text-white shadow-lg"
+            style={{ left: chip.left, top: chip.top }}
+          >
+            {t.board.askAboutThis}
+          </button>
+        )}
+        </div>
         {note && <p className="font-mono text-[11px] text-[#4FD6C2]">{note}</p>}
         {slideStatus && (
           <p role="status" className="font-mono text-[11px] text-[#4FD6C2]" data-board="slide-status">
