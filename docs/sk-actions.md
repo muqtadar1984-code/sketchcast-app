@@ -126,3 +126,130 @@ RPC. The memory blob gets the outcome appended (`rememberTurn`) and is returned.
 - Migration 0164 is NOT applied; `SK_SHELL_SECRET`/`BOOK_CODE_SECRET` must be set
   or tokens cannot be issued or verified (every act is `refused`).
 - Student (direct) shares, notices, diary entries: S2.
+
+---
+
+# S2 slice A — the action core, `diary.note`, `parents.remind`
+
+Status 2026-10-29: built on `feat/sk-s2-actions`; migration **0169** written,
+dry-run on production inside `begin … rollback` (nothing persisted), **not
+applied**. Until 0169 is applied the two new actions fail at the write
+(unknown column `sk_action_id`): the token is burned and SK says "That didn't
+go through — nothing was changed. Ask me again." `assign` is unaffected.
+
+## The S2 execution shape — writes run AS THE TEACHER
+
+```
+act:  verify token (HMAC over the STORED row, user, expiry, used_at, live context)
+      → per-tier revalidation: metaAllows(handler.meta, live ctx)   [refused, nothing consumed]
+      → shape-check the stored params                               [bad_params: refused, nothing consumed]
+      → consume: sk_consume_action_token(token, live hash)  (admin RPC, 0163)
+      → write with the USER-SESSION client, carrying sk_action_id = token id
+      → audit row (sk_actions) with the handler's tier/kind: ok + result, or the measured error
+```
+
+`src/sk/shell/act-core.ts` `consumeThenWrite(admin, session, row, ctx, write)`
+is that middle. The write goes through the request's own Supabase session (the
+route has the cookies), so the **existing RLS and triggers decide** what is
+allowed — `dn_insert` for the diary (author = me, and I own the class / teach
+the student). No SECURITY DEFINER function re-implements `owns_class` /
+`teaches_student`.
+
+`HANDLERS` (`src/sk/shell/act.ts`) entries are `{tier, kind, clickOnly?,
+auditsDone?, meta, run}`. A spoken yes is refused for `CLICK_ONLY` names and for
+any handler with `clickOnly: true`. `assign` keeps its one-transaction RPC
+(`auditsDone: true`: 0164 writes the done row); every other outcome and every
+S2 outcome gets one audit row from `/api/sk/act` with the handler's tier/kind.
+
+### Deviation from Final Plan §9.2 ("consume and write in the same transaction")
+
+The consume is a service-role RPC and the write a user-session insert, so they
+are **two transactions**, in that order. Consequences, by design:
+
+- A second click is stopped by the consume (`already_used`) before any write.
+- If the write fails after the consume, the token stays **burned**, nothing is
+  written (a multi-row reminder insert is ONE statement — all or nothing), the
+  audit row is `ok: false` with `error: "error:write:<code> <message>"`, and SK
+  says **"That didn't go through — nothing was changed. Ask me again."** (ten
+  locales). Asking again issues a fresh card.
+- RLS refusing the insert (42501 — e.g. the class was handed over) → `refused`,
+  reason `not_permitted`, burned.
+- 0169's unique index makes a repeated write under the same action id fail
+  (23505) → reported as **"That was already done."**
+
+Why accept it: running the write as the teacher keeps ONE authority (RLS) for
+who may write where; the alternative — a definer function per action — copies
+that authority into SQL that can drift from it. The cost is a burned card on an
+infrastructure error, which the teacher recovers from by asking again.
+
+## Migration 0169 `sk_action_ids`
+
+`diary_notes.sk_action_id uuid`, `generations.sk_action_id uuid` (nullable, no
+FK), and partial unique indexes:
+
+- `diary_notes_sk_action_target_uidx (sk_action_id, coalesce(student_id, class_id)) where sk_action_id is not null`
+  — one reminder action writes one note PER STUDENT.
+- `generations_sk_action_kind_part_uidx (sk_action_id, kind, coalesce(params->>'part','1')) where sk_action_id is not null`
+  — for slice B (queued jobs).
+
+No RLS change: Postgres policies have no column lists, and `authenticated`
+holds the table-level INSERT grant on both tables (checked on production).
+
+Dry run (production `pblaxsqhjwlqbrwbraxy`, 2026-10-29: one `begin … rollback`
+script whose DO block ends in a raised exception, so nothing could commit; RLS
+exercised by `set role authenticated` + the JWT claims of a real teacher and her
+own class):
+
+| Step | Result |
+|---|---|
+| columns added | 2 |
+| diary index | `UNIQUE … (sk_action_id, COALESCE(student_id, class_id)) WHERE (sk_action_id IS NOT NULL)` |
+| generations index | `UNIQUE … (sk_action_id, kind, COALESCE((params ->> 'part'), '1')) WHERE (sk_action_id IS NOT NULL)` |
+| re-run (idempotent) | no error |
+| as the teacher (`auth.uid()` = her id): class note, action A | inserted |
+| same action A, same class | 23505 |
+| 2 student reminders, action B, one statement | inserted 2 |
+| action B, student 1 again | 23505 |
+| a class that is not hers | 42501 (`dn_insert`) |
+| two app notes with `sk_action_id` null, same class | inserted 2 (unconstrained) |
+
+After: `diary_notes` 0 rows, `sk_actions` 29 (unchanged), `sk_action_tokens` 0,
+no `sk_action_id` column, neither index, `generations` 7172 (unchanged), no
+session idle in transaction.
+
+## `diary.note` (teacher, teacher hat, `diary` flag)
+
+| | |
+|---|---|
+| Capability | `src/sk/capabilities/diary.ts` — `diaryNoteAction` `{tier: confirm, kind: act, roles: [teacher], hats: [teacher], flags: [diary]}` |
+| Phrasings | "post a notice to 7B: …", "tell 7B …", "add to the diary for 7B: …", "write in Ali's diary …", "tulis dalam diari 7B …", "maklumkan kepada 7B …", "اكتب في مذكرة 7B …" — the rules router marks them `act` (never a navigate); the model calls the capability |
+| Parameters | `classQuery`/`classId` or `learnerQuery`/`learnerId`, `body` (her words; grammar may be tidied, no facts added), `type`, `parentsOnly`, `entryDate` |
+| Resolves | class: her own (`pickClass`, as assign); learner: in her own classes' rosters; neither → the selected class, else asks; several → asks |
+| Days | the diary's fixed KL day (UTC+8): today / tomorrow / day after / a weekday (its next occurrence, today counts) / next <day> / ISO; none → today; unknown → asks |
+| Card | title "Post to 7B's diary"; params `{class_id or student_id, note_type, body, parents_only, entry_date, target_label}` |
+| Write | `diary_notes` insert `{author_id: me, class_id or student_id, note_type, body, parents_only, entry_date, sk_action_id}` with the session client |
+| Line | "Posted to 7B's diary." |
+| Voice | a spoken yes is allowed (one target) |
+
+## `parents.remind` (teacher, teacher hat, `diary` flag)
+
+| | |
+|---|---|
+| Capability | `src/sk/capabilities/remind.ts` — `parentsRemindAction` |
+| Input | `shareId` (a `share` id from `assignments.status`, or `not-done:<shareId>`); none → the most recent `learners` entity `not-done:<shareId>` in the conversation memory ("remind their parents"). The turn route now copies the signed memory's entities into `ctx.recent.entities` |
+| Card time | re-reads the share (her own class only) and the not-done learners through the session with the analytics definition (`assignmentStatus`); none → "Everyone … has finished"; more than **40** → "That's more than 40 families — narrow it to one class." |
+| Message | default `Reminder: "<kit>" is not done yet — due <day>. Please encourage your child to finish it.` (no child names: the same text goes to every family); a dictated `body` replaces it ("change the message to …" re-issues the card) and is refused if it names a learner of that class |
+| Card | title "Remind the parents of 4 learners in 7B"; params `{share_id, generation_id, class_id, student_ids: "<comma-joined uuids>", count, body, class_name, kit_title}` |
+| Execution | re-verifies through the session: the class is still hers, the share still exists for that class + kit, each learner is still enrolled and still not done; ONE insert of one `diary_notes` row per remaining learner `{student_id, note_type: "reminder", parents_only: true, body, entry_date: KL today, sk_action_id}` |
+| Line | "Sent reminders to 4 families (diary). Left out Ahmad Zaki: already finished." (+ "Left out N no longer in this class."); nobody left → "Everyone has finished now, so I sent no reminders." (ok, nothing written) |
+| Voice | a spoken yes is allowed |
+
+The confirm card hides `*_id` / `*_ids` params and labels the rest from
+`sk.shell.cardParams` (booleans as Yes/No). Every new line is in ten locales in
+`src/sk/shell/act-lines.ts`, mirrored in `sk.shell.act.*` (parity test).
+
+## Not done in slice A
+
+- Migration 0169 is **not applied** (apply before enabling the two actions).
+- The older `ACT_LINES` (already used / expired / …) are still English-only.
+- Multi-class (`notice.multi_class`, click-only) and school-wide notices.
