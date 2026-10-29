@@ -25,6 +25,8 @@ import { bookActivateAction } from "./book";
 import { schoolHealth } from "./school";
 // S5 slice D: the click-only school notice (principal + coordinator).
 import { noticeSchoolAction } from "./notice";
+// S5 slice C: the leader figures (seats, cost, shelf gaps, trend).
+import { SCHOOL_FIGURE_CAPABILITIES } from "./school-figures";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -68,6 +70,9 @@ const ENTRIES: SkCapability[] = [
   // S5 slice D: the school / all-staff notice (principal + coordinator hats),
   // confirm tier and CLICK-ONLY (§9.2 school-wide notices; act-notice.ts).
   noticeSchoolAction,
+  // S5 slice C: school.seats (principal only), school.cost, school.gaps,
+  // school.trend — leader hats only, immediate reads (school-figures.ts).
+  ...SCHOOL_FIGURE_CAPABILITIES,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
@@ -76,3 +81,4 @@ export { navigateCapability, resolveCapability, libraryFind, catalogueAvailabili
 export { PARENT_CAPABILITIES };
 export { schoolHealth };
 export { noticeSchoolAction };
+export { SCHOOL_FIGURE_CAPABILITIES };
