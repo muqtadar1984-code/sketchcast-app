@@ -109,6 +109,16 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredFrom: "the book cost plan's one-pass target ($25–30 for 10 chapters); this run measures it",
   },
   {
+    key: "compile_book",
+    title: "Compile the book",
+    summary:
+      "Builds the whole book from its drafted chapters: cover, title page, contents, every chapter with page numbers running on, coverage, glossary, index and credits. The run page then offers Gate E, which approves exactly this PDF once every chapter in it is Gate D approved. No model calls.",
+    action: "run_report",
+    params: CHAPTERS,
+    measuredPerChapterUsd: 0,
+    measuredFrom: "free — no model calls",
+  },
+  {
     key: "render_trial",
     title: "Re-render a trial chapter",
     summary:
@@ -159,7 +169,7 @@ export const PIPELINE: PipelineStage[] = [
   { key: "corrections", layer: "produce", title: "Adjudicate, correct, verify", does: "Findings ruled on, corrections applied unit by unit and verified; approved chapters change only by controlled revision.", run: [], comes: "S4", book: ["revision_2", "revision_4"] },
   { key: "coverage", layer: "produce", title: "Coverage", does: "Every objective: taught and assessed, taught only, assessed only, or not covered.", run: ["coverage"], book: ["revision_3", "revision_4_1"] },
   { key: "checks", layer: "produce", title: "Book checks", does: "The source files are whole and every approval still matches its text.", run: ["check_files"], book: [] },
-  { key: "compile", layer: "produce", title: "Compile the book", does: "Front matter, chapters, coverage, glossary, index and credits into one book; Gate E.", run: [], comes: "S4", book: ["first_draft", "revision_4_1"] },
+  { key: "compile", layer: "produce", title: "Compile the book", does: "Front matter, chapters, coverage, glossary, index and credits into one book; Gate E approves the compiled PDF.", run: ["compile_book"], book: ["first_draft", "revision_4_1"] },
   { key: "kdp", layer: "produce", title: "KDP paperback", does: "Print interior, cover and the listing sheet.", run: [], comes: "S4", book: ["kdp"] },
   { key: "sk_export", layer: "produce", title: "SK export", does: "The approved chapters exported for the SK tutor.", run: [], comes: "S4", book: ["sk_export"] },
   { key: "editor", layer: "polish", title: "Editor", does: "Edit the compiled book by hand, with AI help; re-approval.", run: [], comes: "R3", book: [] },
