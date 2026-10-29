@@ -6,7 +6,7 @@ describe("book run stages", () => {
   const coverage = runnableStage("coverage")!;
 
   it("knows only the runner's stages", () => {
-    expect(RUNNABLE_STAGES.map((s) => s.key)).toEqual(["check_files", "coverage", "academic_audit"]);
+    expect(RUNNABLE_STAGES.map((s) => s.key)).toEqual(["check_files", "coverage", "academic_audit", "render_proof"]);
     expect(runnableStage("drop_tables")).toBeNull();
   });
 

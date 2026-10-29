@@ -55,6 +55,16 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredPerChapterUsd: 0.58,
     measuredFrom: "the Biology audits of Revisions 2 and 4 ($5.70–5.88 for 10 chapters)",
   },
+  {
+    key: "render_proof",
+    title: "Font proof",
+    summary:
+      "Renders one chapter on the server three times: as designed, in Source Serif 4 and in Literata, so you can pick the open heading font that replaces Sitka (Windows-only) for new books. Reads the book; changes nothing. No model calls.",
+    action: "run_report",
+    params: [{ key: "chapter", label: "Chapter", min: 1, max: 99, default: 1 }],
+    measuredPerChapterUsd: 0,
+    measuredFrom: "free — no model calls",
+  },
 ];
 
 // ── the whole pipeline ──────────────────────────────────────────────────────
@@ -76,7 +86,7 @@ export type PipelineStage = {
 export const PIPELINE: PipelineStage[] = [
   { key: "scope", layer: "plan", title: "Scope and blueprint", does: "Curricula, objectives, chapters and the 13 blueprint checks; Gate B.", run: [], comes: "R2", book: ["scope"] },
   { key: "articles", layer: "plan", title: "Catalogue articles", does: "Draft and approve the articles the chapters are built from; Gate R pins the sources.", run: [], comes: "R2", book: [] },
-  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review.", run: [], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
+  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. Rendering runs on the server now (font proof); drafting follows.", run: ["render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
   { key: "uniqueness", layer: "produce", title: "Uniqueness", does: "No question, Think box or picture repeats an earlier chapter.", run: [], comes: "S3", book: ["uniqueness"] },
   { key: "gate_d", layer: "produce", title: "Gate D approval", does: "A person approves each chapter; the approval is the text's hash.", run: [], comes: "S4", book: [] },
   { key: "audit", layer: "produce", title: "Academic audit", does: "Two independent validators review every chapter.", run: ["academic_audit"], book: ["revision_2", "revision_4"] },
