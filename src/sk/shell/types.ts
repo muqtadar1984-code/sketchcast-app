@@ -166,8 +166,12 @@ export type SkContext = {
     lastToolResults: Array<{ tool: string; summary: string }>;
   };
   pending?: { task: string; needs: string[] };
-  /** The flags and opt-ins that shaped this context, for the registry filter. */
-  flags: Record<string, boolean>;
+  /** The flags and opt-ins that shaped this context, for the registry filter.
+   *  Known keys (loadContext): analytics, timetable, calendar, notices (S5:
+   *  FEATURE_NOTICES AND the school's calendar gate — utils/flags
+   *  noticesEnabledFor, as POST /api/notices), diary, kits, board, hats,
+   *  parentPortal, sk, hasChildren, schoolParent, staff, hasScope. */
+  flags: Record<string, boolean> & { notices?: boolean };
   issuedAt: string;
   ttlSeconds: number;
   /** Stable hash of {role, schoolId, hat, plan, coordinator scope (S5)}: tokens are bound to it (§8.2). */

@@ -17,7 +17,7 @@ import { buildContext, effectiveRoles, loadContext, pageFor, roleFor, sanitizeSe
 import { contextHash } from "../hash";
 import { NOW, SCHOOL_ID, TEACHER_ID, fakeAdmin, fakeSession, makeCtx } from "./fixtures";
 
-const ENV = ["FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_SCHOOL_ANALYTICS", "FEATURE_TIMETABLE", "FEATURE_CALENDAR", "FEATURE_CATALOGUE_TAB", "FEATURE_PARENT_PORTAL", "FEATURE_SK", "PRESENT_ALLOWED_EMAILS"];
+const ENV = ["FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_SCHOOL_ANALYTICS", "FEATURE_TIMETABLE", "FEATURE_CALENDAR", "FEATURE_NOTICES", "FEATURE_CATALOGUE_TAB", "FEATURE_PARENT_PORTAL", "FEATURE_SK", "PRESENT_ALLOWED_EMAILS"];
 const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
   for (const k of ENV) {
@@ -166,6 +166,15 @@ describe("loadContext (server loader, fakes)", () => {
     // The scope read is pinned to the user AND the school.
     expect(session.log.some((l) => l.startsWith("coordinator_scope.eq(\"coordinator_id\""))).toBe(true);
     expect(session.log.some((l) => l.startsWith("coordinator_scope.eq(\"school_id\""))).toBe(true);
+  });
+  it("S5: flags.notices follows BOTH halves — FEATURE_NOTICES and the school's calendar gate (noticesEnabledFor)", async () => {
+    const notices = async (env: boolean, calendar: boolean) => {
+      if (env) process.env.FEATURE_NOTICES = "true";
+      else delete process.env.FEATURE_NOTICES;
+      const session = fakeSession({ coordinator_scope: [], parent_links: [], schools: [{ config: { calendar } }] }, { user });
+      return (await loadContext({ session, admin: null, user, profile: { role: "school_admin", school_id: SCHOOL_ID }, collector: { path: "/dashboard" }, now: NOW })).flags.notices;
+    };
+    expect([await notices(true, true), await notices(true, false), await notices(false, true), await notices(false, false)]).toEqual([true, false, false, false]);
   });
   it("falls back: a cookie for a hat the user does not hold → most senior held hat; no admin → plan unknown", async () => {
     process.env.FEATURE_ROLE_HATS = "true";
