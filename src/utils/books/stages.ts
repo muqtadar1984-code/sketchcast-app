@@ -76,6 +76,16 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredFrom: "free — no model calls",
   },
   {
+    key: "draft_chapter",
+    title: "Draft a chapter into the book",
+    summary:
+      "Writes one chapter at its 6–8 page target, checks and reviews it, lays it out, and adds it to the book: it appears on the Chapters board (in the book's draft revision), ready for Gate D. Re-drafting a chapter opens a new revision and carries the others forward. Refused at $0 if the chapter's current text is already Gate D approved. Needs Gate R. No new pictures yet.",
+    action: "run",
+    params: [{ key: "chapter", label: "Chapter", min: 1, max: 99, default: 1 }],
+    measuredPerChapterUsd: 2.5,
+    measuredFrom: "the Linear Equations chapter 1 trial on the server (run #27, $2.32)",
+  },
+  {
     key: "draft_trial",
     title: "Draft one chapter (trial)",
     summary:
@@ -84,6 +94,19 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     params: [{ key: "chapter", label: "Chapter", min: 1, max: 99, default: 1 }],
     measuredPerChapterUsd: 3,
     measuredFrom: "the book cost plan's one-pass target ($25–30 for 10 chapters); this run measures it",
+  },
+  {
+    key: "render_trial",
+    title: "Re-render a trial chapter",
+    summary:
+      "Lays out an earlier trial draft again with the current layout engine (page fill, spacing, overlap checks), so layout fixes can be seen without paying for a new draft. The text is that run's, unchanged. No model calls.",
+    action: "run_report",
+    params: [
+      { key: "run", label: "From run #", min: 1, max: 99999, default: 1 },
+      { key: "chapter", label: "Chapter", min: 1, max: 99, default: 1 },
+    ],
+    measuredPerChapterUsd: 0,
+    measuredFrom: "free — no model calls",
   },
   {
     key: "render_proof",
@@ -116,7 +139,7 @@ export type PipelineStage = {
 export const PIPELINE: PipelineStage[] = [
   { key: "scope", layer: "plan", title: "Scope and blueprint", does: "Curricula, objectives, chapters and the 13 blueprint checks; Gate B.", run: [], comes: "R2", book: ["scope"] },
   { key: "articles", layer: "plan", title: "Catalogue articles and readiness", does: "The articles the chapters are built from; a book drafts only once every topic it needs is ready (then Gate R pins the sources). Readiness re-checks and Gate R run from the app now (the Gaps tab lists what is outstanding); ordering articles comes with planning.", run: ["readiness", "gate_r"], comes: "R2", book: [] },
-  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. A trial chapter draft and rendering run on the server now; drafting into the book itself follows.", run: ["draft_trial", "render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
+  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. A trial chapter draft and rendering run on the server now; drafting into the book itself follows.", run: ["draft_chapter", "draft_trial", "render_trial", "render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
   { key: "uniqueness", layer: "produce", title: "Uniqueness", does: "No question, Think box or picture repeats an earlier chapter.", run: [], comes: "S3", book: ["uniqueness"] },
   { key: "gate_d", layer: "produce", title: "Gate D approval", does: "A person approves each chapter; the approval is the text's hash.", run: [], comes: "S4", book: [] },
   { key: "audit", layer: "produce", title: "Academic audit", does: "Two independent validators review every chapter.", run: ["academic_audit"], book: ["revision_2", "revision_4"] },
@@ -147,8 +170,9 @@ export function checkParams(stage: RunnableStage, raw: Record<string, unknown>):
   return { params };
 }
 
-/** Chapters a run covers (empty for a whole-book stage that takes no range). */
+/** Chapters a run covers: a range, one chapter, or none (a whole-book stage). */
 export function runChapters(params: Record<string, number>): number[] {
+  if ("chapter" in params) return [params.chapter];
   if (!("first" in params)) return [];
   return Array.from({ length: params.last - params.first + 1 }, (_, i) => params.first + i);
 }
