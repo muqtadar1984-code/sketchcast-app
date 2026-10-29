@@ -109,11 +109,12 @@ const SHIPPED = [
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
 const PARENT_ONLY = SHIPPED.filter((n) => n.startsWith("child."));
 const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n));
-const PARENT_SEES = ["navigate", "context.resolve", ...PARENT_ONLY];
+// S4 slice C: diary.note's parent branch (a note to one of her own children).
+const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY];
 const STUDENT_SEES = ["navigate", ...STUDENT_ONLY];
 
 describe("allowedFor over the shipped registry", () => {
-  it("teacher: everything but the tutor and child.*; parent: navigate + context.resolve + child.*; student: navigate + the tutor", () => {
+  it("teacher: everything but the tutor and child.*; parent: navigate + context.resolve + diary.note + child.*; student: navigate + the tutor", () => {
     expect(allowedFor(makeCtx()).map((c) => c.meta.name)).toEqual(TEACHER_SEES);
     expect(allowedFor(makeCtx({ role: "student" })).map((c) => c.meta.name)).toEqual(STUDENT_SEES);
     expect(allowedFor(makeCtx({ role: "parent", hat: "parent" })).map((c) => c.meta.name)).toEqual(PARENT_SEES);
