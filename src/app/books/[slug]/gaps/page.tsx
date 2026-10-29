@@ -13,7 +13,7 @@ export default async function GapsPage({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const { work } = await loadBook(slug);
   const runs = await listRuns(work.uid);
-  const readiness = runs.filter((r) => r.stage_key === "readiness" && r.status === "done").sort((a, b) => b.id - a.id)[0];
+  const readiness = runs.filter((r) => (r.stage_key === "readiness" || r.stage_key === "gate_r") && r.status === "done").sort((a, b) => b.id - a.id)[0];
   const rs = readiness?.detail?.summary as { pct?: number; ready?: boolean; gaps?: Gap[]; curriculum?: Curriculum | null } | undefined;
 
   if (!readiness || !rs) {

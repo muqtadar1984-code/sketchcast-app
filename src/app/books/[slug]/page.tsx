@@ -29,7 +29,7 @@ export default async function BookOverview({ params }: { params: Promise<{ slug:
     approvals.filter((a) => a.stage_key === stageKey || (revisionKey && a.scope === "book" && a.kind === "book" && a.revision_key === revisionKey));
   const f = work.facts ?? {};
   // the latest readiness re-check (Pipeline → Readiness re-check): how ready the book is to draft
-  const readiness = runs.filter((r) => r.stage_key === "readiness" && r.status === "done").sort((a, b) => b.id - a.id)[0];
+  const readiness = runs.filter((r) => (r.stage_key === "readiness" || r.stage_key === "gate_r") && r.status === "done").sort((a, b) => b.id - a.id)[0];
   const rs = readiness?.detail?.summary as { pct?: number; ready?: boolean; outstanding_by_state?: Record<string, number> } | undefined;
   const STATE_LABEL: Record<string, string> = {
     missing_topic: "topics with no catalogue article",

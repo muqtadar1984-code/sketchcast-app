@@ -95,7 +95,10 @@ export default function RunLive({ slug, initialRun, initialEvents, canControl }:
     setBusy(false);
   }
 
-  const summary = run.detail?.summary as Record<string, unknown> | undefined;
+  // gaps are listed on the book's Gaps tab, not dumped here
+  const raw = (run.detail?.summary ?? {}) as Record<string, unknown>;
+  const gaps = raw.gaps;
+  const summary = Object.fromEntries(Object.entries(raw).filter(([k]) => k !== "gaps" && k !== "curriculum"));
   const beat = run.status === "running" ? since(run.heartbeat_at, now) : null;
 
   return (
@@ -112,8 +115,14 @@ export default function RunLive({ slug, initialRun, initialEvents, canControl }:
           <div><dt className="text-xs text-[#7A7363]">Started by</dt><dd className="truncate">{run.requested_by ?? run.trigger ?? "—"}</dd></div>
           <div><dt className="text-xs text-[#7A7363]">Runner</dt><dd>{beat ? `alive, last heard ${beat} ago` : run.status === "queued" ? "not started yet" : "finished"}</dd></div>
         </dl>
-        {summary && Object.keys(summary).length > 0 && (
+        {Object.keys(summary).length > 0 && (
           <pre className="text-xs bg-[#FAF7EF] rounded-md p-2 overflow-x-auto">{JSON.stringify(summary, null, 1)}</pre>
+        )}
+        {Array.isArray(gaps) && gaps.length > 0 && (
+          <p className="text-sm">
+            {gaps.length} topics outstanding —{" "}
+            <a href={`/books/${slug}/gaps`} className="underline decoration-[#E4DCC8] underline-offset-2 hover:decoration-[#B8862F]">see the Gaps tab</a>
+          </p>
         )}
         {run.error && <p className="text-sm text-[#8E2A21] whitespace-pre-wrap">{run.error}</p>}
         {canControl && live && (

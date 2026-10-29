@@ -66,6 +66,26 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredFrom: "free — no model calls",
   },
   {
+    key: "gate_r",
+    title: "Gate R (pin the sources)",
+    summary:
+      "Takes a fresh catalogue snapshot and runs Gate R. Only when every topic the book needs is ready does it pin the exact article, kit and video versions the chapters will be written from, open the English edition and set the book to drafting; a book that is not 100% ready changes nothing and lists its gaps. Free.",
+    action: "run",
+    params: [],
+    measuredPerChapterUsd: 0,
+    measuredFrom: "free — no model calls",
+  },
+  {
+    key: "draft_trial",
+    title: "Draft one chapter (trial)",
+    summary:
+      "Writes one chapter on the server at its 6–8 page target, checks and reviews it, and lays it out — exactly as drafting does on the PC — but into this run's folder only: the book's own chapters are not changed and nothing is recorded in the shared publishing database. No new pictures (the chapter uses the catalogue's figures and the book's existing art). Needs Gate R; a book without it stops before any model call, at $0.",
+    action: "run",
+    params: [{ key: "chapter", label: "Chapter", min: 1, max: 99, default: 1 }],
+    measuredPerChapterUsd: 3,
+    measuredFrom: "the book cost plan's one-pass target ($25–30 for 10 chapters); this run measures it",
+  },
+  {
     key: "render_proof",
     title: "Font proof",
     summary:
@@ -95,8 +115,8 @@ export type PipelineStage = {
 
 export const PIPELINE: PipelineStage[] = [
   { key: "scope", layer: "plan", title: "Scope and blueprint", does: "Curricula, objectives, chapters and the 13 blueprint checks; Gate B.", run: [], comes: "R2", book: ["scope"] },
-  { key: "articles", layer: "plan", title: "Catalogue articles and readiness", does: "The articles the chapters are built from; a book drafts only once every topic it needs is ready (then Gate R pins the sources). Readiness re-checks run from the app now; ordering articles comes with planning.", run: ["readiness"], comes: "R2", book: [] },
-  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. Rendering runs on the server now (font proof); drafting follows.", run: ["render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
+  { key: "articles", layer: "plan", title: "Catalogue articles and readiness", does: "The articles the chapters are built from; a book drafts only once every topic it needs is ready (then Gate R pins the sources). Readiness re-checks and Gate R run from the app now (the Gaps tab lists what is outstanding); ordering articles comes with planning.", run: ["readiness", "gate_r"], comes: "R2", book: [] },
+  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. A trial chapter draft and rendering run on the server now; drafting into the book itself follows.", run: ["draft_trial", "render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
   { key: "uniqueness", layer: "produce", title: "Uniqueness", does: "No question, Think box or picture repeats an earlier chapter.", run: [], comes: "S3", book: ["uniqueness"] },
   { key: "gate_d", layer: "produce", title: "Gate D approval", does: "A person approves each chapter; the approval is the text's hash.", run: [], comes: "S4", book: [] },
   { key: "audit", layer: "produce", title: "Academic audit", does: "Two independent validators review every chapter.", run: ["academic_audit"], book: ["revision_2", "revision_4"] },
