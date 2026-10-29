@@ -6,6 +6,7 @@ import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled, aiTutorEnabled, diaryEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import { noticesFor } from "@/utils/notices";
+import { childWorkItems, type ChildWorkRows } from "@/utils/child-work";
 import AddChild from "./add-child";
 import NoticeBanner from "../notice-banner";
 import NoticesCard from "../notices-card";
@@ -125,67 +126,42 @@ export default async function ChildrenPage() {
     supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status, feedback"),
   ]);
 
-  const enr = (enrQ.data ?? []) as { class_id: string; student_id: string }[];
   const className = new Map(((classesQ.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
-  const shares = (sharesQ.data ?? []) as { generation_id: string; class_id: string | null; student_id: string | null; due_at: string | null; shared_by: string | null }[];
-  const genOf = new Map(((gensQ.data ?? []) as { id: string; title: string | null; kind: string | null; chapter_ref: string | null }[]).map((g) => [g.id, g]));
-  const progOf = new Map(((progQ.data ?? []) as { generation_id: string; student_id: string; status: string }[]).map((p) => [`${p.generation_id}|${p.student_id}`, p.status]));
-  type Sub = {
-    generation_id: string;
-    student_id: string;
-    auto_score: number | null;
-    teacher_score: number | null;
-    max_score: number | null;
-    grade_status: string | null;
-    feedback: string | null;
+  // The rows, as the shared pure step takes them (src/utils/child-work.ts —
+  // the same assembly SK's child.status answers from).
+  const workRows: ChildWorkRows = {
+    enrollments: (enrQ.data ?? []) as ChildWorkRows["enrollments"],
+    shares: (sharesQ.data ?? []) as ChildWorkRows["shares"],
+    generations: (gensQ.data ?? []) as ChildWorkRows["generations"],
+    progress: (progQ.data ?? []) as ChildWorkRows["progress"],
+    submissions: (subsQ.data ?? []) as ChildWorkRows["submissions"],
   };
-  const subOf = new Map(((subsQ.data ?? []) as Sub[]).map((s) => [`${s.generation_id}|${s.student_id}`, s]));
-
-  const classesOfChild = new Map<string, string[]>();
-  for (const e of enr) {
-    if (!classesOfChild.has(e.student_id)) classesOfChild.set(e.student_id, []);
-    classesOfChild.get(e.student_id)!.push(e.class_id);
-  }
 
   // (server component, rendered once per request)
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
 
   function itemsFor(childId: string): { school: ChildItem[]; mine: ChildItem[] } {
-    const childClasses = new Set(classesOfChild.get(childId) ?? []);
     const school: ChildItem[] = [];
     const mine: ChildItem[] = [];
-    for (const s of shares) {
-      const direct = s.student_id === childId;
-      const viaClass = s.class_id != null && childClasses.has(s.class_id);
-      if (!direct && !viaClass) continue;
-      const g = genOf.get(s.generation_id);
-      if (!g || g.kind === "lesson_plan") continue;
-      const key = `${s.generation_id}|${childId}`;
-      const status = progOf.get(key) ?? "not started";
-      const sub = subOf.get(key);
+    for (const w of childWorkItems(workRows, childId, now)) {
       // A 'pending' quiz holds only the auto-marked part of the paper — the
       // written answers wait for the teacher. Showing that partial auto_score
       // as "8/10" told a parent it was the final mark; say what it is instead.
-      const score =
-        sub?.grade_status === "pending"
-          ? t.awaitingMarking
-          : sub && sub.max_score
-            ? `${(sub.teacher_score ?? sub.auto_score) ?? "—"}/${sub.max_score}`
-            : null;
-      const kindKey = KIND_KEY[g.kind ?? ""];
+      const score = w.awaitingMarking ? t.awaitingMarking : w.score ? `${w.score.points ?? "—"}/${w.score.max}` : null;
+      const kindKey = KIND_KEY[w.kind];
       const item: ChildItem = {
-        genId: s.generation_id,
-        kind: g.kind ?? "",
-        label: g.title || (kindKey && t.kind[kindKey]) || dict.school.fallback.item,
-        from: direct ? t.fromYou : className.get(s.class_id!) ?? t.fromClass,
-        due: s.due_at,
-        overdue: !!s.due_at && new Date(s.due_at).getTime() < now && status !== "completed" && !sub,
-        status: sub ? "submitted" : status,
+        genId: w.genId,
+        kind: w.kind,
+        label: w.title || (kindKey && t.kind[kindKey]) || dict.school.fallback.item,
+        from: w.direct ? t.fromYou : className.get(w.classId!) ?? t.fromClass,
+        due: w.due,
+        overdue: w.overdue,
+        status: w.status,
         score,
-        feedback: sub?.feedback?.trim() || null,
+        feedback: w.feedback,
       };
-      (direct && s.shared_by === user!.id ? mine : school).push(item);
+      (w.direct && w.sharedBy === user!.id ? mine : school).push(item);
     }
     return { school, mine };
   }

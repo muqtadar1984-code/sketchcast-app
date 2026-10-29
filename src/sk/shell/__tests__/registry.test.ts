@@ -98,14 +98,22 @@ const SHIPPED = [
   "tutor.slide",
   "tutor.practise",
   "tutor.explain",
+  // S4 slices A+B: the parent reads (parent role only).
+  "child.status",
+  "child.diary",
+  "child.notices",
+  "child.risk",
+  "child.progress",
+  "child.week",
 ];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
-const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n));
-const PARENT_SEES = ["navigate", "context.resolve"];
+const PARENT_ONLY = SHIPPED.filter((n) => n.startsWith("child."));
+const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n));
+const PARENT_SEES = ["navigate", "context.resolve", ...PARENT_ONLY];
 const STUDENT_SEES = ["navigate", ...STUDENT_ONLY];
 
 describe("allowedFor over the shipped registry", () => {
-  it("teacher: everything but the tutor; parent: navigate + context.resolve; student: navigate + the tutor", () => {
+  it("teacher: everything but the tutor and child.*; parent: navigate + context.resolve + child.*; student: navigate + the tutor", () => {
     expect(allowedFor(makeCtx()).map((c) => c.meta.name)).toEqual(TEACHER_SEES);
     expect(allowedFor(makeCtx({ role: "student" })).map((c) => c.meta.name)).toEqual(STUDENT_SEES);
     expect(allowedFor(makeCtx({ role: "parent", hat: "parent" })).map((c) => c.meta.name)).toEqual(PARENT_SEES);

@@ -9,6 +9,8 @@
 import type { SkBoardMove, SkCollector, SkContext, SkIntent } from "./types";
 import { NAV_TARGETS, type NavFilters, type NavTarget } from "@/sk/capabilities/navigate";
 import { resolveSegment } from "@/sk/capabilities/board";
+// S4: the parent phrasings (child.*), decided before the act and navigate rules.
+import { routeParent, type ParentRoute } from "./parent-rules";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -25,6 +27,9 @@ export type RulesDecision =
    *  only). The moves and the reads make NO model call; tutor.explain makes
    *  exactly one (the kit turn, metered once). */
   | { intent: "tutor"; capability: SkTutorCapability; args: Record<string, unknown> }
+  /** S4: a parent's question about a child, answered by the child.*
+   *  capability itself — deterministic, no model (parent-rules.ts). */
+  | { intent: "ask"; parent: ParentRoute }
   | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor"> };
 
 export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" | "tutor.practise" | "tutor.where" | "tutor.progress" | "tutor.explain";
@@ -688,6 +693,11 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
     }
   }
 
+  // S4: a parent asking about a child ("how is Aisyah doing", "Aisyah's
+  // week", "bagaimana anak saya", "كيف حال ابني") — parents only.
+  const parent = routeParent(raw, ctx);
+  if (parent) return { intent: "ask", parent };
+
   // S2: a teacher action phrasing is never a navigate (the model resolves it).
   const act = student ? null : actPhraseOf(t, raw);
   if (act) return { intent: "act", action: act };
@@ -731,3 +741,4 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
 }
 
 export { NAV_TARGETS };
+export type { ParentRoute, SkParentCapability } from "./parent-rules";

@@ -7,7 +7,7 @@
 // runs for its tabs (coordinator_scope, parent_links, the tenant's flags) and
 // the ONE admin read allowed here — `plan_tier(uid)`.
 
-import type { SkBoardState, SkCollector, SkContext, SkContextUser, SkHat, SkPage, SkRole, SkSelection, SkTutorState } from "./types";
+import type { SkBoardState, SkChild, SkCollector, SkContext, SkContextUser, SkHat, SkPage, SkRole, SkSelection, SkTutorState } from "./types";
 import { contextHash } from "./hash";
 import { hatsFor, resolveHat, HAT_COOKIE, isHat } from "@/utils/hats";
 import {
@@ -205,6 +205,8 @@ export type BuildContextInput = {
   now: Date;
   locale?: string | null;
   ttlSeconds?: number;
+  /** S4: the parent's linked children (childrenFromLinks). */
+  children?: SkChild[];
 };
 
 /** Pure. Everything permission-bearing comes from `input`, never from the collector. */
@@ -228,6 +230,7 @@ export function buildContext(input: BuildContextInput): SkContext {
   };
   return {
     user,
+    ...(input.children?.length ? { children: input.children.map((c) => ({ ...c })) } : {}),
     place: { path, page: pageFor(path), params: sanitizeParams(collector?.params) },
     selection: sanitizeSelection(collector?.selection),
     board: sanitizeBoard(collector?.board),
@@ -246,6 +249,34 @@ export function effectiveRoles(ctx: SkContext): SkRole[] {
   const roles: SkRole[] = [ctx.user.role];
   if (ctx.user.coordinatorScope.length && ctx.user.role !== "student" && ctx.user.role !== "parent") roles.push("coordinator");
   return roles;
+}
+
+// ── S4: a parent's children ──────────────────────────────────────────────────
+
+/** parent_links rows (with the child's profile) → SkChild[]. Pure. Rows that
+ *  are not this parent's own links are dropped (RLS already scopes them; this
+ *  is the belt), duplicates collapse, order is kept. Unverified links stay in
+ *  the list marked `verified: false` so SK can say why it won't answer. */
+export function childrenFromLinks(parentId: string, rows: Record<string, unknown>[]): SkChild[] {
+  const out: SkChild[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (r.parent_id !== undefined && r.parent_id !== parentId) continue;
+    const id = typeof r.child_id === "string" ? r.child_id : "";
+    if (!id || id === parentId || seen.has(id)) continue;
+    seen.add(id);
+    const p = (r.profiles ?? null) as { full_name?: string | null; username?: string | null; school_id?: string | null } | null;
+    const name = (p?.full_name || p?.username || "").replace(/\s+/g, " ").trim().slice(0, 80) || "Child";
+    out.push({
+      id,
+      firstName: name.split(" ")[0] || name,
+      name,
+      source: r.source === "school" ? "school" : "self",
+      verified: typeof r.verified_at === "string" && !!r.verified_at,
+      schoolId: typeof p?.school_id === "string" && p.school_id ? p.school_id : null,
+    });
+  }
+  return out;
 }
 
 // ── Server loader ────────────────────────────────────────────────────────────
@@ -293,7 +324,7 @@ export async function loadContext(deps: LoadContextDeps): Promise<SkContext> {
       ? rows(session.from("coordinator_scope").select("grade, subject").eq("coordinator_id", deps.user.id).eq("school_id", schoolId))
       : Promise.resolve([] as Record<string, unknown>[]),
     adult && parentPortalEnabled()
-      ? rows(session.from("parent_links").select("source").eq("parent_id", deps.user.id).limit(20))
+      ? rows(session.from("parent_links").select("parent_id, child_id, source, verified_at, profiles:child_id(full_name, username, school_id)").eq("parent_id", deps.user.id).order("created_at").limit(20))
       : Promise.resolve([] as Record<string, unknown>[]),
     // `as never`: these helpers type the client as SupabaseClient; the loader
     // only needs `.from`, so tests can pass a fake.
@@ -348,5 +379,6 @@ export async function loadContext(deps: LoadContextDeps): Promise<SkContext> {
     collector: deps.collector,
     locale: deps.locale ?? null,
     now,
+    children: childrenFromLinks(deps.user.id, links),
   });
 }
