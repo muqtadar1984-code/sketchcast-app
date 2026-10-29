@@ -119,6 +119,19 @@ describe("contextHash", () => {
     expect(contextHash({ ...base, plan: "trial" })).not.toBe(h);
     expect(makeCtx().contextHash).toBe(h);
   });
+  it("S5 (decision 8): the coordinator scope is in the hash — stable under order and case, and absent scope keeps the pre-S5 hash", () => {
+    const base = { role: "teacher", schoolId: SCHOOL_ID, hat: "coordinator", plan: "school" };
+    const s5 = [{ grade: "5", subject: null }];
+    const h = contextHash({ ...base, scope: s5 });
+    expect(h).not.toBe(contextHash(base));
+    expect(contextHash({ ...base, scope: [] })).toBe(contextHash(base));
+    expect(contextHash({ ...base, scope: [{ grade: "6", subject: null }] })).not.toBe(h);
+    expect(contextHash({ ...base, scope: [{ grade: "5", subject: "Science" }] })).not.toBe(h);
+    const two = contextHash({ ...base, scope: [{ grade: "5", subject: null }, { grade: "6", subject: "Science" }] });
+    expect(contextHash({ ...base, scope: [{ grade: "6", subject: "science" }, { grade: " 5", subject: null }] })).toBe(two);
+    expect(makeCtx({ hat: "coordinator", scope: s5 }).contextHash).toBe(h);
+    expect(makeCtx({ hat: "coordinator", scope: [{ grade: "6", subject: null }] }).contextHash).not.toBe(h);
+  });
 });
 
 describe("loadContext (server loader, fakes)", () => {

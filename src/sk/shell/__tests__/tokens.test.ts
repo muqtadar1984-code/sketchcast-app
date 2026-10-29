@@ -12,6 +12,7 @@ import {
   verifyActionToken,
   type ActionTokenRow,
 } from "../tokens";
+import { buildContext } from "../context";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const ID = "22222222-2222-4222-8222-222222222222";
@@ -121,6 +122,18 @@ describe("issue → verify", () => {
     expect(await verifyActionToken(db, issued.token, { userId: USER, contextHash: "ctx", now: NOW })).toEqual({ ok: false, outcome: "already_used" });
 
     expect(await verifyActionToken(db, encodeToken("33333333-3333-4333-8333-333333333333", "a".repeat(64)), { userId: USER, contextHash: "ctx", now: NOW })).toEqual({ ok: false, outcome: "not_found" });
+  });
+
+  it("S5: a change of coordinator scope is a context change — the token is refused as context_mismatch", async () => {
+    const rows: Record<string, ActionTokenRow> = {};
+    const db = fakeDb(rows);
+    const ctx = (scope: Array<{ grade: string | null; subject: string | null }>) =>
+      buildContext({ user: { id: USER, email: null }, role: "teacher", schoolId: "s", hat: "coordinator", coordinatorScope: scope, plan: "school", staff: false, flags: {}, collector: null, now: NOW });
+    const before = ctx([{ grade: "5", subject: null }]).contextHash;
+    const issued = (await issueActionToken(db, { userId: USER, action: "notice.school", params: {}, contextHash: before, now: NOW }))!;
+    expect((await verifyActionToken(db, issued.token, { userId: USER, contextHash: ctx([{ grade: "5", subject: null }]).contextHash, now: NOW })).ok).toBe(true);
+    for (const after of [[{ grade: "6", subject: null }], [{ grade: "5", subject: "Science" }], [{ grade: "5", subject: null }, { grade: "6", subject: null }], []])
+      expect(await verifyActionToken(db, issued.token, { userId: USER, contextHash: ctx(after).contextHash, now: NOW })).toEqual({ ok: false, outcome: "context_mismatch" });
   });
 
   it("a different secret at verify time refuses every token", async () => {

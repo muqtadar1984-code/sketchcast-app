@@ -75,10 +75,10 @@ const PATTERNS: Array<[SkLeaderCapability, Record<string, string>, RegExp[]]> = 
     "school.health",
     { focus: "overview" },
     [
-      re("how (?:is|'s) (?:the|our|my) school(?: doing| going| performing)?"),
+      re("how(?: is|'s) (?:the|our|my) school(?: doing| going| performing)?"),
       re("how are we doing(?: as a school)?"),
-      re("how (?:is|'s) (?:my|our) (?:grade|scope|year group)(?: doing)?"),
-      re("how (?:is|'s|are) (?:grade|year|form|standard|tahun|tingkatan) ?[0-9]{1,2}(?: doing| going)?"),
+      re("how(?: is|'s) (?:my|our) (?:grade|scope|year group)(?: doing)?"),
+      re("how(?: is|'s| are) (?:grade|year|form|standard|tahun|tingkatan) ?[0-9]{1,2}(?: doing| going)?"),
       re("(?:give me |show me )?(?:a |the )?school (?:overview|summary|briefing|health|snapshot|report)"),
       re("(?:give me |show me )?(?:a |the )?(?:school-wide|whole-school) (?:overview|summary|picture)"),
       re("(?:bagaimana|macam mana) (?:prestasi |keadaan )?sekolah(?: (?:kita|saya|ini))?"),
