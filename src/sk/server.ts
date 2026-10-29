@@ -173,6 +173,10 @@ export function skTtsMode(): "polly" | "off" {
   return process.env.SK_TTS === "polly" ? "polly" : "off";
 }
 
+/** SK S6 slice B: which speech-to-text listens (SK_STT, default "browser").
+ * Lives in speech/stt.ts (pure, client-safe); re-exported beside skTtsMode. */
+export { skSttMode } from "./speech/stt";
+
 let speechOverride: SpeechProvider | null | undefined;
 let speechSingleton: PollySpeechProvider | null = null;
 
