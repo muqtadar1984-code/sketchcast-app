@@ -71,9 +71,18 @@ export class LoopError extends Error {
  * rows plus this period's usage, through skAccess(). Read per request —
  * a revoked grant takes effect on the next turn, not the next session. */
 export async function loadAccess(deps: LoopDeps, studentId: string): Promise<SessionAccess> {
+  return loadAccessFor(deps, studentId, deps.graph.product_id);
+}
+
+/** What loadAccess needs, without a graph: S3's kit player names the product
+ * by its slug directly (src/sk/kit-turn.ts). Same rows, same decision. */
+export type AccessDeps = Pick<LoopDeps, "store" | "entitlements" | "allowanceEnforced" | "now">;
+
+/** loadAccess for a product named by slug (the kit path has no graph). */
+export async function loadAccessFor(deps: AccessDeps, studentId: string, productSlug: string): Promise<SessionAccess> {
   const now = new Date((deps.now ?? Date.now)());
   if (!deps.entitlements) return devFlagAccess(now);
-  const rows = await deps.entitlements.load(studentId, deps.graph.product_id, now);
+  const rows = await deps.entitlements.load(studentId, productSlug, now);
   const a0 = decideAccess(rows, null, { now, allowanceEnforced: !!deps.allowanceEnforced });
   // Usage is read only where it can change the decision or the view: a
   // product the source knows (sk_usage.product_id is that id).
@@ -105,13 +114,19 @@ export function liveRefusalText(a: SessionAccess): string {
 /** Count a turn that reached a model. Never breaks the turn: a metering
  * failure is logged and the decision stands as it was. */
 async function meter(deps: LoopDeps, studentId: string, a: SessionAccess, delta: { live_turns: number; generated_segments: number }): Promise<SessionAccess> {
+  return meterUsage(deps.store, studentId, a, delta, deps.graph.product_id);
+}
+
+/** The one sk_usage write point, shared by the graph loop (meter) and S3's
+ * kit turns (src/sk/kit-turn.ts). `product` is only named in the log line. */
+export async function meterUsage(store: SessionStore, studentId: string, a: SessionAccess, delta: { live_turns: number; generated_segments: number }, product: string): Promise<SessionAccess> {
   if (a.devFlag) return a;
   if (!a.usageKey) {
-    console.error(`[sk] usage not recorded: product ${deps.graph.product_id} is unknown to the entitlement source`);
+    console.error(`[sk] usage not recorded: product ${product} is unknown to the entitlement source`);
     return a;
   }
   try {
-    return redecide(a, await deps.store.bumpUsage(studentId, a.usageKey, a.period, delta));
+    return redecide(a, await store.bumpUsage(studentId, a.usageKey, a.period, delta));
   } catch (e) {
     console.error("[sk] usage not recorded:", (e as Error).message);
     return a;

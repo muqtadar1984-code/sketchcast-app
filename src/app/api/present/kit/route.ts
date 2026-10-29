@@ -4,6 +4,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { presentEntitled } from "@/utils/present/entitlement";
 import { docDownloadName } from "@/utils/download-name";
 import { downloadArtifactKind, railFor, railForKit, pickerFor, type KitGeneration, type PickerGroup, type PickerItem } from "@/utils/present/kit";
+import { signArtifactPath, videoPathsInPartOrder } from "@/utils/present/sign";
 
 export const runtime = "nodejs";
 
@@ -28,11 +29,6 @@ export const runtime = "nodejs";
 
 const SIGN_TTL = 8 * 60 * 60;
 
-/** lesson.mp4 is part 1; lesson_part2.mp4, lesson_part3.mp4 follow. */
-const videoPart = (path: string): number => {
-  const m = /_part(\d+)\.[a-z0-9]+$/i.exec(path);
-  return m ? Number(m[1]) : 1;
-};
 const NOT_FOUND = () => NextResponse.json({ error: "Not found." }, { status: 404 });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -117,13 +113,7 @@ export async function GET(request: Request) {
 
   // The artifacts bucket is not readable through a member session, exactly as
   // the Library does it — hence the admin client obtained above.
-  const sign = async (path: string | null, download?: string): Promise<string | null> => {
-    if (!path) return null;
-    const { data } = await admin.storage
-      .from("artifacts")
-      .createSignedUrl(path, SIGN_TTL, download ? { download } : undefined);
-    return data?.signedUrl ?? null;
-  };
+  const sign = (path: string | null, download?: string): Promise<string | null> => signArtifactPath(admin, path, SIGN_TTL, download);
 
   const byId = new Map(gens.map((g) => [g.id, g]));
 
@@ -133,15 +123,11 @@ export async function GET(request: Request) {
       // ordered by storage path, which the worker names lesson.mp4,
       // lesson_part2.mp4, and so on.
       const vg = u.video ? byId.get(u.video.id) : null;
-      const paths = (vg?.artifacts ?? [])
-        .filter((a) => a.kind === "video_mp4")
-        .map((a) => a.storage_path)
-        // BY EXTRACTED PART NUMBER, never by path string. ICU collation sorts
-        // "." AFTER "_", so a plain .sort() puts lesson.mp4 (Part 1) BEHIND
-        // lesson_part2.mp4 and the class watches the middle of the lesson
-        // first. The dashboard already learned this; this route had the buggy
-        // form.
-        .sort((a, b) => videoPart(a) - videoPart(b));
+      // BY EXTRACTED PART NUMBER, never by path string. ICU collation sorts
+      // "." AFTER "_", so a plain .sort() puts lesson.mp4 (Part 1) BEHIND
+      // lesson_part2.mp4 and the class watches the middle of the lesson
+      // first. (utils/present/sign.ts, shared with the student kit player.)
+      const paths = videoPathsInPartOrder(vg?.artifacts ?? []);
       const urls = (await Promise.all(paths.map((pth) => sign(pth)))).filter(
         (x): x is string => !!x,
       );

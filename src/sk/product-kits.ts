@@ -33,6 +33,10 @@ export type ProductKit = {
   title: string;
 };
 
+export type EntitledDecision =
+  | { ok: true; product: ProductRef; grantSource: string | null; source: string | null }
+  | { ok: false; reason: "unknown_product" | "not_entitled" };
+
 export type KitDecision =
   | { ok: true; product: ProductRef; kit: ProductKit; grantSource: string | null; source: string | null }
   | { ok: false; reason: "unknown_product" | "not_entitled" | "not_mapped" };
@@ -82,18 +86,28 @@ export class ProductKits {
     return (await this.kitsForProduct(product)).filter((k) => k.chapterRef === ref);
   }
 
-  /** May this user open this kit in the student tutor? See THE RULE above. */
-  async canOpenKit(userId: string, product: string, generationId: string): Promise<KitDecision> {
+  /** Half 1 of THE RULE alone: does this user have book access to the
+   * product? Slice B asks this BEFORE listing a product's kits, so an
+   * unentitled user learns nothing about the map (not even its chapters). */
+  async entitled(userId: string, product: string): Promise<EntitledDecision> {
     const p = await this.productRow(product);
     if (!p) return { ok: false, reason: "unknown_product" };
-    // Entitlement first: an unentitled user learns nothing about the map.
     const rows = await this.entitlements.load(userId, p.slug, this.now());
     const access = decideAccess(rows, null, { now: this.now(), allowanceEnforced: false });
     if (!access.decision.book_access || rows.productId !== p.id) return { ok: false, reason: "not_entitled" };
+    return { ok: true, product: p, grantSource: access.decision.grant_source, source: access.decision.source };
+  }
+
+  /** May this user open this kit in the student tutor? See THE RULE above. */
+  async canOpenKit(userId: string, product: string, generationId: string): Promise<KitDecision> {
+    // Entitlement first: an unentitled user learns nothing about the map.
+    const e = await this.entitled(userId, product);
+    if (!e.ok) return e;
+    const p = e.product;
     if (!UUID_RE.test(generationId)) return { ok: false, reason: "not_mapped" };
     const kit = (await this.kitsOf(p.id, generationId))[0];
     if (!kit) return { ok: false, reason: "not_mapped" };
-    return { ok: true, product: p, kit, grantSource: access.decision.grant_source, source: access.decision.source };
+    return { ok: true, product: p, kit, grantSource: e.grantSource, source: e.source };
   }
 
   private async kitsOf(productId: string, onlyGeneration?: string): Promise<ProductKit[]> {
