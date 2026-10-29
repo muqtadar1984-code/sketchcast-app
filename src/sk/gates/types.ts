@@ -40,6 +40,8 @@ export type GroundedItem = {
     mustSay: string[];
     /** A click-only confirm card for this action must be issued (notices). */
     card?: string;
+    /** …and its parameters must include these (e.g. the notice audience). */
+    cardParams?: Record<string, string>;
   };
   /** "rules" = the deterministic leader route answers (no model call); "model" = the model chooses. */
   path: "rules" | "model";

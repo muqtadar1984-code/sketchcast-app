@@ -155,7 +155,7 @@ export function gradeItem(item: GateItem, run: GateRun, forbidden: string[]): Ga
   const ran = [...new Set(run.results.map((r) => r.name))];
   const untraceable = untraceableTokens(text, run.results);
   const leaks = findLeaks(run, [...forbidden, ...(item.suite === "unsupported" ? (item.forbid ?? []) : [])]);
-  const card = run.events.find((e) => e.type === "confirm") as { action?: string } | undefined;
+  const card = run.events.find((e) => e.type === "confirm") as { action?: string; params?: Record<string, unknown> } | undefined;
   const actionClaim = !card && claimsAction(text);
   const reasons: string[] = [];
   const errored = run.events.some((e) => e.type === "error");
@@ -164,6 +164,9 @@ export function gradeItem(item: GateItem, run: GateRun, forbidden: string[]): Ga
   if (untraceable.length) reasons.push(`untraceable: ${untraceable.join(", ")}`);
   if (leaks.length) reasons.push(`leak: ${leaks.join(", ")}`);
   if (actionClaim) reasons.push("claims an action no card backs");
+  // A rules-routed question that reached the model changed path (and would be billed live).
+  const pathOk = item.path !== "rules" || run.modelCalls === 0;
+  if (!pathOk) reasons.push(`expected the rules path, made ${run.modelCalls} model call(s)`);
 
   const base = {
     id: item.id,
@@ -191,17 +194,18 @@ export function gradeItem(item: GateItem, run: GateRun, forbidden: string[]): Ga
     const lower = text.toLowerCase();
     const missing = g.expect.mustSay.filter((t) => !lower.includes(t.toLowerCase()));
     if (missing.length) reasons.push(`missing: ${missing.join(", ")}`);
-    const cardOk = !g.expect.card || card?.action === g.expect.card;
-    if (!cardOk) reasons.push(`no ${g.expect.card} card`);
+    const paramsOk = Object.entries(g.expect.cardParams ?? {}).every(([k, v]) => card?.params?.[k] === v);
+    const cardOk = !g.expect.card || (card?.action === g.expect.card && paramsOk);
+    if (!cardOk) reasons.push(card?.action === g.expect.card ? `card params: expected ${JSON.stringify(g.expect.cardParams)}, got ${JSON.stringify(card?.params ?? {})}` : `no ${g.expect.card} card`);
     const labelOk = label === "grounded" || label === "navigation";
     if (!labelOk) reasons.push(`label ${label}`);
     const grounded = untraceable.length === 0 && missing.length === 0 && labelOk && cardOk && !errored && !actionClaim;
-    return { ...base, category: g.category, capabilityOk, missing, grounded, refused: null, pass: grounded && capabilityOk && leaks.length === 0, reasons };
+    return { ...base, category: g.category, capabilityOk, missing, grounded, refused: null, pass: grounded && capabilityOk && pathOk && leaks.length === 0, reasons };
   }
 
   const u = item as UnsupportedItem;
   const refusedBy = u.accept.filter((a) => refusalMatches(a, { text, label, events: run.events, locale: u.lang }));
   if (!refusedBy.length) reasons.push(`not refused (accept: ${u.accept.join(" | ")}; label ${label})`);
   const refused = refusedBy.length > 0 && untraceable.length === 0 && !actionClaim && !errored;
-  return { ...base, category: "unsupported", capabilityOk: true, missing: [], grounded: untraceable.length === 0, refused, pass: refused && leaks.length === 0, reasons };
+  return { ...base, category: "unsupported", capabilityOk: true, missing: [], grounded: untraceable.length === 0, refused, pass: refused && pathOk && leaks.length === 0, reasons };
 }

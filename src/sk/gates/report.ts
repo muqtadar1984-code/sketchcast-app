@@ -67,7 +67,7 @@ export type GateReport = {
   byLang: Record<string, Bucket>;
   failures: Array<{ id: string; as: string; lang: string; category: string; text: string; reasons: string[] }>;
   leakyFailures: Array<{ id: string; leaks: string[] }>;
-  judge?: { judged: number; disagreements: Array<{ id: string; deterministic: boolean | null; judge: JudgeResult }> };
+  judging?: { judged: number; disagreements: Array<{ id: string; deterministic: boolean | null; judge: JudgeResult }> };
   volume: {
     turns: number;
     rulesTurns: number;
@@ -158,7 +158,7 @@ export function buildReport(outcomes: GateOutcome[], opts: { model: "scripted" |
     byLang,
     failures: items.filter((v) => !v.pass).map((v) => ({ id: v.id, as: v.as, lang: v.lang, category: v.category, text: v.text, reasons: v.reasons })),
     leakyFailures: leakyRuns.filter((o) => o.leakyLeaks!.length).map((o) => ({ id: o.verdict.id, leaks: o.leakyLeaks! })),
-    ...(opts.judge === "live" ? { judge: { judged: judged.size, disagreements } } : {}),
+    ...(opts.judge === "live" ? { judging: { judged: judged.size, disagreements } } : {}),
     volume: {
       turns: items.length,
       rulesTurns: items.length - modelTurns,
@@ -212,9 +212,9 @@ export function reportMarkdown(r: GateReport): string {
   out.push("", `## Leaky-RLS leaks (${r.leakyFailures.length})`, "");
   if (!r.leakyFailures.length) out.push("None.");
   for (const f of r.leakyFailures) out.push(`- **${f.id}**: ${f.leaks.join(", ")}`);
-  if (r.judge) {
-    out.push("", `## Judge (${r.judge.judged} judged, ${r.judge.disagreements.length} disagreements)`, "");
-    for (const d of r.judge.disagreements) out.push(`- **${d.id}**: deterministic ${d.deterministic}, judge ${JSON.stringify({ grounded: d.judge.grounded, refused: d.judge.refused, fabricated: d.judge.fabricated })} — ${d.judge.note}`);
+  if (r.judging) {
+    out.push("", `## Judge (${r.judging.judged} judged, ${r.judging.disagreements.length} disagreements)`, "");
+    for (const d of r.judging.disagreements) out.push(`- **${d.id}**: deterministic ${d.deterministic}, judge ${JSON.stringify({ grounded: d.judge.grounded, refused: d.judge.refused, fabricated: d.judge.fabricated })} — ${d.judge.note}`);
   }
   const v = r.volume;
   out.push("", "## Token volume (for pricing a live run)", "");
