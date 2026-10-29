@@ -134,14 +134,15 @@ describe("routeLeader — leader hats only, deterministic", () => {
   });
 });
 
-type Shell = { sk: { shell: { school: Record<string, string> } } };
+type Shell = { sk: { shell: { school: Record<string, string | Record<string, string>> } } };
 const FILES: Record<string, Shell> = { en, ms, ar, fr, es, pt, te, mr, hi, "ms-arab": msArab } as unknown as Record<string, Shell>;
 
 describe("school-lines.ts ⇄ messages/*.json (sk.shell.school.*)", () => {
   it("every key, every locale, equal; placeholders kept", () => {
     for (const { value } of LOCALES) {
       const dict = FILES[value].sk.shell.school;
-      expect(Object.keys(dict).sort(), value).toEqual(Object.keys(SCHOOL_LINES).sort());
+      // S5 slice C keeps its own lines in the `figures` sub-block (school-figure-lines.ts).
+      expect(Object.keys(dict).filter((k) => typeof dict[k] === "string").sort(), value).toEqual(Object.keys(SCHOOL_LINES).sort());
       for (const [key, line] of Object.entries(SCHOOL_LINES)) {
         expect(line[value], `${value}.${key}`).toBe(dict[key]);
         const want = (line.en.match(/\{\w+\}/g) ?? []).sort();

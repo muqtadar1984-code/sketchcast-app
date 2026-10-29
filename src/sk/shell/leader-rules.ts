@@ -12,7 +12,9 @@
 import type { SkContext } from "./types";
 import { leaderScope } from "@/sk/capabilities/leader-scope";
 
-export type SkLeaderCapability = "school.health" | "learners.risk" | "assignments.status" | "timetable.now_next";
+export type SkLeaderCapability = "school.health" | "learners.risk" | "assignments.status" | "timetable.now_next" | SkFigureCapability;
+/** S5 slice C: the leader figures (school-figures.ts). */
+export type SkFigureCapability = "school.seats" | "school.cost" | "school.gaps" | "school.trend";
 export type LeaderRoute = { capability: SkLeaderCapability; args: Record<string, string> };
 
 /** A grade named in the words: "grade 5", "year 5", "form 2", "tahun 5",
@@ -146,6 +148,79 @@ const PATTERNS: Array<[SkLeaderCapability, Record<string, string>, RegExp[]]> = 
       re("ماذا يحدث الآن"),
     ],
   ],
+  // ── S5 slice C: the leader figures (school-figures.ts) ─────────────────────
+  [
+    "school.seats",
+    {},
+    [
+      re("how many (?:teachers and students|students and teachers|teachers|students|pupils|learners)(?: (?:do we have|have we got|are there|does the school have|are in the school|are enrolled))?"),
+      re("(?:show (?:me )?)?(?:our|the|my) (?:school'?s? )?(?:licen[cs]e|subscription|plan)(?: status| details)?"),
+      re("(?:show (?:me )?)?(?:our |the )?(?:school )?(?:seats|seat count|seat usage|headcount|head count)"),
+      re("how many seats(?: (?:do we have|are used|have we used))?"),
+      re("berapa (?:ramai |orang )?(?:guru dan (?:murid|pelajar)|(?:murid|pelajar) dan guru|guru|murid|pelajar)(?: (?:kita|yang ada|di sekolah ini|dalam sekolah))?"),
+      re("(?:jumlah|bilangan) (?:guru dan (?:murid|pelajar)|guru|murid|pelajar)(?: sekolah)?"),
+      re("(?:status )?lesen(?: sekolah)?(?: kita)?"),
+      re("كم عدد (?:المعلمين(?: و ?الطلاب)?|الطلاب(?: و ?المعلمين)?)(?: لدينا| في المدرسة)?"),
+      re("(?:ما )?(?:حالة )?(?:ترخيص|اشتراك) (?:المدرسة|مدرستنا)"),
+      re("(?:عدد )?(?:المقاعد|مقاعد المدرسة)"),
+    ],
+  ],
+  [
+    "school.cost",
+    {},
+    [
+      re("how much (?:have we|has the school|did we|do we|are we) (?:spent|spend|spending)(?: on (?:kits|generation|generating|lessons|ai))?"),
+      re("what(?: is|'s) (?:our|the school'?s?) (?:generation |kit |ai )?(?:cost|costs|spend|spending)"),
+      re("(?:show (?:me )?)?(?:the |our )?(?:generation|kit|ai|school) (?:cost|costs|spend|spending)"),
+      re("how much do (?:our )?kits cost(?: us)?"),
+      re("(?:the )?cost of (?:our )?(?:kits|generation|lessons)"),
+      re("which teachers (?:spend|cost|spent) the most"),
+      re("berapa (?:kos|belanja) (?:penjanaan|kit|sekolah)(?: kita)?"),
+      re("(?:kos|perbelanjaan) (?:penjanaan|kit)(?: sekolah)?"),
+      re("berapa (?:banyak )?(?:yang )?(?:kita|sekolah) (?:telah )?belanja(?:kan)?(?: untuk kit)?"),
+      re("كم (?:تكلفة|كلفة) (?:الحزم|الإنشاء|التوليد|المدرسة)"),
+      re("(?:ما )?(?:تكلفة|تكاليف) (?:الحزم|الإنشاء|التوليد|المدرسة)"),
+      re("كم (?:أنفقنا|انفقنا|أنفقت المدرسة)(?: على الحزم)?"),
+    ],
+  ],
+  [
+    "school.gaps",
+    {},
+    [
+      re("(?:what are |show (?:me )?)?(?:the |our )?(?:shelf|book|library) gaps"),
+      re("what(?: is|'s| are) missing (?:from|on) (?:the |our )?(?:school )?shelf"),
+      re("which subjects (?:have no|don't have|do not have|are missing|lack) (?:a )?books?"),
+      re("(?:do we have|are there) (?:any )?gaps (?:on|in) (?:the |our )?(?:school )?shelf"),
+      re("what books are we missing"),
+      re("which subjects need (?:a )?(?:books?|kits)"),
+      re("(?:apa )?jurang (?:dalam )?rak(?: buku)?(?: sekolah)?"),
+      re("subjek (?:mana|apa) (?:yang )?(?:tiada|tak ada|tidak ada) buku"),
+      re("buku apa (?:yang )?(?:tiada|kurang|belum ada)"),
+      re("apa yang (?:tiada|kurang) (?:di|dalam) rak(?: buku)?(?: sekolah)?"),
+      re("(?:ما )?(?:الفجوات|النواقص) في (?:الرف|رف الكتب|رف المدرسة)"),
+      re("(?:أي|اي|ما) المواد (?:التي )?(?:ليس لها|بلا|بدون) (?:كتاب|كتب)"),
+      re("ما (?:الكتب الناقصة|الكتب التي تنقصنا)"),
+      re("ما الذي ينقص (?:الرف|رف المدرسة|رف الكتب)"),
+    ],
+  ],
+  [
+    "school.trend",
+    {},
+    [
+      re("(?:show (?:me )?)?(?:the |our )?(?:4|four)[- ]week trend"),
+      re("(?:show (?:me )?)?(?:the |our )?(?:school |submission |homework )?trends?(?: (?:for|over) the last (?:4|four) weeks)?"),
+      re("how are we trending"),
+      re("are we (?:improving|getting better|getting worse|slipping)"),
+      re("(?:how is|how's) (?:submission|homework|work|marking) (?:trending|going over time|over the last (?:4|four) weeks)"),
+      re("on[- ]time (?:rate|submissions)(?: (?:trend|over time))?"),
+      re("trend (?:sekolah|4 minggu|empat minggu|penghantaran|tugasan)"),
+      re("(?:adakah )?kita (?:semakin )?(?:baik|bertambah baik|merosot)"),
+      re("(?:bagaimana|macam mana) (?:dengan )?trend(?: kita| sekolah)?"),
+      re("(?:ما )?(?:الاتجاه|اتجاه) (?:المدرسة|الأسابيع الأربعة|آخر 4 أسابيع|التسليم|الواجبات)"),
+      re("هل (?:نحن )?نتحسن"),
+      re("كيف (?:يسير|هو) الاتجاه"),
+    ],
+  ],
 ];
 
 /** The leader route for this utterance, or null (not a leader hat, or not a
@@ -156,6 +231,9 @@ export function routeLeader(raw: string, ctx: SkContext): LeaderRoute | null {
   if (!t) return null;
   for (const [capability, base, patterns] of PATTERNS) {
     if (!patterns.some((p) => p.test(t))) continue;
+    // S5 slice C: seats are the principal's alone (decision 5) — a
+    // coordinator's "how many teachers" is not routed to it.
+    if (capability === "school.seats" && leaderScope(ctx).mode !== "school") return null;
     const grade = gradeOf(t);
     return { capability, args: { ...base, ...(grade ? { grade } : {}) } };
   }
