@@ -56,6 +56,16 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredFrom: "the Biology audits of Revisions 2 and 4 ($5.70–5.88 for 10 chapters)",
   },
   {
+    key: "readiness",
+    title: "Readiness re-check",
+    summary:
+      "Takes a fresh snapshot of the catalogue and re-audits the book: how ready it is to draft, and which topics still need an article, a kit, a publication or a fix. Free; records the audit in the shared publishing database.",
+    action: "run_report",
+    params: [],
+    measuredPerChapterUsd: 0,
+    measuredFrom: "free — no model calls",
+  },
+  {
     key: "render_proof",
     title: "Font proof",
     summary:
@@ -85,7 +95,7 @@ export type PipelineStage = {
 
 export const PIPELINE: PipelineStage[] = [
   { key: "scope", layer: "plan", title: "Scope and blueprint", does: "Curricula, objectives, chapters and the 13 blueprint checks; Gate B.", run: [], comes: "R2", book: ["scope"] },
-  { key: "articles", layer: "plan", title: "Catalogue articles", does: "Draft and approve the articles the chapters are built from; Gate R pins the sources.", run: [], comes: "R2", book: [] },
+  { key: "articles", layer: "plan", title: "Catalogue articles and readiness", does: "The articles the chapters are built from; a book drafts only once every topic it needs is ready (then Gate R pins the sources). Readiness re-checks run from the app now; ordering articles comes with planning.", run: ["readiness"], comes: "R2", book: [] },
   { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. Rendering runs on the server now (font proof); drafting follows.", run: ["render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
   { key: "uniqueness", layer: "produce", title: "Uniqueness", does: "No question, Think box or picture repeats an earlier chapter.", run: [], comes: "S3", book: ["uniqueness"] },
   { key: "gate_d", layer: "produce", title: "Gate D approval", does: "A person approves each chapter; the approval is the text's hash.", run: [], comes: "S4", book: [] },
