@@ -761,9 +761,11 @@ export default function SkShell({
                 if (!r.ok) setError(r.summary);
                 // The slides load (Board UX 2026-10-28) closes with where the
                 // pages landed — known only now, so the panel says it, in her
-                // language, rather than the server ahead of time.
-                if (r.ok && r.loaded) {
-                  const done = fmt(copy.slidesLoaded, { n: r.loaded.n, a: r.loaded.a, b: r.loaded.b });
+                // language, rather than the server ahead of time. The deck
+                // load brings its own line (the server's template, filled by
+                // the bridge); the slides line is the fallback.
+                if (r.ok && (r.done || r.loaded)) {
+                  const done = r.done ?? fmt(copy.slidesLoaded, { n: r.loaded!.n, a: r.loaded!.a, b: r.loaded!.b });
                   setCaption(done);
                   speakLine(done);
                 }

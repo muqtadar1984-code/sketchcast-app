@@ -41,7 +41,35 @@ export type PageBackground =
   | { kind: "frame"; src: string; generationId?: string; t?: number }
   | { kind: "question"; generationId: string; questionId: string; prompt: string; marks?: number }
   | { kind: "svg"; svg: string }
-  | { kind: "card"; card: TextCard };
+  | { kind: "card"; card: TextCard }
+  | DeckPageBackground;
+
+/**
+ * One slide of the kit's .pptx, rendered by the worker (`deck_pages` job) to a
+ * PNG — the founder's "the pptx loaded on the board, each slide as 1 page".
+ *
+ * `src` IS A STORAGE PATH in the artifacts bucket, like a frozen frame's: a
+ * signed URL expires (8 h) and a page persisted in present_pages outlives it,
+ * so the host re-signs on load. `w`/`h` are the PNG's pixels — the Board draws
+ * it CONTAINED, and a highlighter box in page units is mapped back to the
+ * slide through that letterbox (app/present/deck-text.ts pageBoxToSlide).
+ *
+ * `map` is the deck's text map (pages.json) by storage path; this page's entry
+ * in it is the slide numbered `n`. Kept so a later "highlight → ask SK" can
+ * find the words under a stroke without asking which deck the page came from.
+ */
+export type DeckPageBackground = {
+  kind: "deckPage";
+  /** The deck generation (kind `deck`, or a presentation carrying deck_pptx). */
+  generationId: string;
+  /** 1-based slide number. */
+  n: number;
+  src: string;
+  w?: number;
+  h?: number;
+  title?: string;
+  map?: string;
+};
 
 /**
  * A page of READABLE TEXT — one kit question, or a slide's caption when its
@@ -361,6 +389,20 @@ function parseCard(v: unknown): PageBackground | null {
   return { kind: "card", card };
 }
 
+function parseDeckPage(v: Record<string, unknown>): PageBackground | null {
+  if (typeof v.generationId !== "string" || typeof v.src !== "string") return null;
+  if (typeof v.n !== "number" || !Number.isInteger(v.n) || v.n < 1) return null;
+  const pos = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? x : undefined);
+  const out: DeckPageBackground = { kind: "deckPage", generationId: v.generationId, n: v.n, src: v.src };
+  const w = pos(v.w);
+  const h = pos(v.h);
+  if (w !== undefined) out.w = w;
+  if (h !== undefined) out.h = h;
+  if (typeof v.title === "string") out.title = v.title;
+  if (typeof v.map === "string") out.map = v.map;
+  return out;
+}
+
 function parseBackground(v: unknown): PageBackground | null {
   if (!isObj(v)) return null;
   switch (v.kind) {
@@ -391,6 +433,8 @@ function parseBackground(v: unknown): PageBackground | null {
       return typeof v.svg === "string" ? { kind: "svg", svg: v.svg } : null;
     case "card":
       return parseCard(v.card);
+    case "deckPage":
+      return parseDeckPage(v);
     default:
       return null;
   }

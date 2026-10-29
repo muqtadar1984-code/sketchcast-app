@@ -1879,7 +1879,10 @@
       "pickManually": "Pick manually",
       "menu": "Menu",
       "backToDashboard": "Back to dashboard",
-      "loadSlides": "Load slides as pages"
+      "loadSlides": "Load slides as pages",
+      "loadDeck": "Load the deck as pages",
+      "preparingDeck": "Preparing the deck… (about 30 s)",
+      "deckFailed": "The deck could not be prepared. Try again in a minute."
     },
     "start": {
       "heading": "Choose what you are teaching",

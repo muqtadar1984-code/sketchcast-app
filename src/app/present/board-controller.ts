@@ -21,7 +21,8 @@
 // "Moving…" on a slow network instead of looking frozen.
 
 import type { StageMode } from "./stage";
-import type { TextCard } from "@/board/model";
+import type { PageBackground, TextCard } from "@/board/model";
+import { deckPageOf, type DeckSlideRef } from "./deck-load";
 
 /** The parts of an HTMLVideoElement the controller touches. A fake in tests. */
 export type VideoLike = {
@@ -75,7 +76,12 @@ export type SkActionName =
   | "board.end_session"
   /** Board UX (2026-10-28): every slide onto the roll as pages — ONE row for
    *  the whole load (params count/from/to), not one per frame. */
-  | "board.load_slides";
+  | "board.load_slides"
+  /** The kit's .pptx as pages (founder 2026-10-28): ONE row for the whole
+   *  load (params generationId/count/from/to), not one per slide. */
+  | "board.load_deck"
+  /** Wind to a deck page already on the roll ("skip to the PowerPoint"). */
+  | "board.deck_page";
 
 /** One row of the planned `sk_actions` audit table. */
 export type SkActionRecord = {
@@ -152,6 +158,14 @@ export type BoardPorts = {
   /** S1 slice C (additive): the open unit — null before a lesson has one. A
    *  port rather than a field because BoardSession switches units mid-lesson. */
   unit?: () => BoardUnit | null;
+  /** Deck pages (founder 2026-10-28, additive): put a page with this
+   *  background on the roll — inserted right after `after` (appended when that
+   *  is the last page), or ON a pristine roll's blank first page with
+   *  `replaceBlank`. Returns the roll index it landed on. */
+  putPage?: (background: PageBackground, opts: { after?: number; replaceBlank?: boolean }) => number;
+  /** The roll index of slide n of a deck on the roll (any deck when no
+   *  generation is named), or null when there is none. */
+  findDeckPage?: (n: number, generationId?: string) => number | null;
 };
 
 export type BoardState = {
@@ -223,6 +237,21 @@ export type BoardController = {
   loadSlides?(manifest: BoardManifest, opts?: LoadSlidesOptions): Promise<LoadSlidesResult>;
   /** Stop a running loadSlides after the frame in hand. No-op when none runs. */
   cancelLoad?(): void;
+  /**
+   * The kit's .pptx as pages (founder 2026-10-28: "each slide as 1 page"): one
+   * `deckPage` per rendered slide, in order — ON a pristine roll's blank first
+   * page, else right after the page on screen (so a deck loaded mid-lesson
+   * sits where she is, and a blank page added between two slides later stays
+   * between them). ONE audit row `board.load_deck`. Abortable (`cancelLoad`
+   * or `signal`): pages already made stay. Lands on the first new page, stage
+   * away. Additive and optional, like loadSlides.
+   */
+  loadDeck?(req: LoadDeckRequest): Promise<LoadSlidesResult>;
+  /** Wind to slide n (default 1) of a deck already on the roll; throws when
+   *  there is none. Audited `board.deck_page`. */
+  goToDeckPage?(n?: number, generationId?: string): number;
+  /** Where slide n of a deck sits on the roll, or null. A read: not audited. */
+  findDeckPage?(n?: number, generationId?: string): number | null;
   pageUp(): void;
   pageDown(): void;
   /** Put the unit's real questions on the board, one page per question.
@@ -248,6 +277,20 @@ export type LoadSlidesOptions = {
   from?: number;
   to?: number;
   /** After each page lands: k is 1-based within the load, n its size. */
+  onProgress?: (k: number, n: number) => void;
+  signal?: AbortSignal;
+};
+
+export type LoadDeckRequest = {
+  /** The deck generation the slides were rendered from. */
+  generationId: string;
+  /** /api/present/deck-pages' slides, in order. */
+  slides: Pick<DeckSlideRef, "n" | "path" | "w" | "h" | "title">[];
+  /** The deck's text map by storage path, for every page to keep. */
+  map?: string | null;
+  /** First and last index into `slides` (inclusive); all of them by default. */
+  from?: number;
+  to?: number;
   onProgress?: (k: number, n: number) => void;
   signal?: AbortSignal;
 };
@@ -635,6 +678,65 @@ export function createBoardController(
         (r) => ({ pages: r.pages, firstPage: r.firstPage, lastPage: r.lastPage, aborted: r.aborted, ...pageCount() }),
       );
     },
+    loadDeck: (req) => {
+      const n = req.slides.length;
+      const from = Math.max(0, req.from ?? 0);
+      const to = Math.min(n - 1, req.to ?? n - 1);
+      const count = Math.max(0, to - from + 1);
+      return run(
+        "board.load_deck",
+        { generationId: req.generationId, count, from, to },
+        async (): Promise<LoadSlidesResult> => {
+          if (!count) throw new Error("no slides in the deck");
+          const put = ports.putPage;
+          if (!put) throw new Error("this Board cannot hold deck pages");
+          loading?.abort();
+          const ac = new AbortController();
+          loading = ac;
+          const aborted = () => ac.signal.aborted || !!req.signal?.aborted;
+          const out: LoadSlidesResult = { pages: 0, firstPage: -1, lastPage: -1, aborted: false };
+          try {
+            ports.pause();
+            let after = ports.where().page;
+            for (let k = from; k <= to; k++) {
+              if (aborted()) break;
+              const bg = deckPageOf(req.generationId, req.slides[k], req.map ?? null);
+              const page = put(bg, k === from ? { after, replaceBlank: true } : { after });
+              after = page;
+              if (out.firstPage < 0) out.firstPage = page;
+              out.lastPage = page;
+              out.pages++;
+              req.onProgress?.(k - from + 1, count);
+              // A beat between pages, so a cancel (a new move, a second press)
+              // lands between two slides rather than after the last.
+              await new Promise<void>((res) => setTimeout(res, 0));
+            }
+            out.aborted = aborted() && out.pages < count;
+          } finally {
+            if (loading === ac) loading = null;
+            ports.setStage("away");
+            if (out.firstPage >= 0) ports.goTo(out.firstPage);
+          }
+          return out;
+        },
+        (r) => ({ pages: r.pages, firstPage: r.firstPage, lastPage: r.lastPage, aborted: r.aborted, ...pageCount() }),
+      );
+    },
+    findDeckPage: (n = 1, generationId) => ports.findDeckPage?.(n, generationId) ?? null,
+    goToDeckPage: (n = 1, generationId) =>
+      runSync(
+        "board.deck_page",
+        generationId ? { n, generationId } : { n },
+        () => {
+          const page = ports.findDeckPage?.(n, generationId) ?? null;
+          if (page === null) throw new Error("no deck pages on the roll");
+          ports.pause();
+          ports.setStage("away");
+          ports.goTo(page);
+          return page;
+        },
+        (page) => ({ page }),
+      ),
     pageUp: () =>
       runSync("board.page_up", {}, () => {
         const w = ports.where();

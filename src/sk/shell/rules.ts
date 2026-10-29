@@ -184,6 +184,14 @@ const SLIDES_RE = polite(
 const LOAD_SLIDES_RE = polite(
   "(?:load|put|place|bring|lay) (?:all |all of )?(?:the |this )?(?:slides|slide deck|deck|power ?point|presentation)(?: (?:on|onto|to) (?:the )?(?:board|roll))?(?: as (?:pages?|a page each|one page each))?|load (?:the )?slides as pages|muat(?:kan)? (?:semua )?slaid(?: (?:ke|pada) (?:papan|gulungan))?(?: sebagai (?:halaman|muka surat))?|letak(?:kan)? slaid (?:di|ke|pada) papan|حمّل الشرائح(?: كصفحات| على اللوحة)?|حمل الشرائح(?: كصفحات| على اللوحة)?|ضع الشرائح على اللوحة",
 );
+// The kit's .pptx onto the roll, one rendered slide per page (founder
+// 2026-10-28: "the pptx loaded on the board … each slide as 1 page"). The
+// DECK words — deck, PowerPoint, presentation, pptx — load the file's own
+// pages; "load the slides" stays the video's frames (LOAD_SLIDES_RE). Checked
+// first, so "put the powerpoint on the board" is the deck.
+const LOAD_DECK_RE = polite(
+  "(?:load|put|place|lay) (?:the |this |our )?(?:slide deck|deck|power ?point(?: presentation| slides| deck)?|presentation|pptx?|ppt file|pptx file)(?: (?:on|onto|to|in) (?:the )?(?:board|roll))?(?: as (?:pages?|a page each|one page each|slides))?|muat(?:kan)? (?:semua )?(?:dek(?: slaid)?|power ?point|persembahan(?: slaid)?|pptx?)(?: (?:ke|pada|di) (?:papan|gulungan))?(?: sebagai (?:halaman|muka surat))?|letak(?:kan)? (?:dek(?: slaid)?|power ?point|persembahan) (?:di|ke|pada) papan|(?:حمّل|حمل|ضع) (?:العرض التقديمي|البوربوينت|ملف العرض|عرض الشرائح)(?: كصفحات| على اللوحة)?",
+);
 // The unit rail over the stage: a UI control, not a video move.
 const RAIL_OPEN_RE = polite(
   "(?:show(?: me)?|open|bring up|display|tunjuk(?:kan)?|buka|papar(?:kan)?|اعرض|أرني|افتح) (?:the )?(?:units?(?: list| rail| panel)?|rail|side ?panel|panel|unit(?:-unit)?|senarai unit|rel|panel unit|الوحدات|اللوحة الجانبية|الشريط الجانبي|قائمة الوحدات)",
@@ -238,6 +246,7 @@ export function routeBoard(raw: string, normed: string, ctx: SkContext): RulesDe
   if (PREV_RE.test(t)) return teach("slide", { k: prevK(ctx) });
   // Board UX: the whole-deck phrasings before the numbered slide, so "show the
   // slides" is slide 1 of the frames and "load the slides" is the page load.
+  if (LOAD_DECK_RE.test(t)) return teach("load_deck");
   if (LOAD_SLIDES_RE.test(t)) return teach("load_slides");
   if (SLIDES_RE.test(t)) return teach("slide", { k: 0, deck: true });
   if (RAIL_OPEN_RE.test(t)) return teach("rail", { open: true });

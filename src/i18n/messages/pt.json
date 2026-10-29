@@ -1879,7 +1879,10 @@
       "pickManually": "Escolher manualmente",
       "menu": "Menu",
       "backToDashboard": "Voltar ao painel",
-      "loadSlides": "Carregar diapositivos como páginas"
+      "loadSlides": "Carregar diapositivos como páginas",
+      "loadDeck": "Carregar a apresentação como páginas",
+      "preparingDeck": "A preparar a apresentação… (cerca de 30 s)",
+      "deckFailed": "Não foi possível preparar a apresentação. Tente novamente daqui a um minuto."
     },
     "start": {
       "heading": "Escolha o que você vai ensinar",

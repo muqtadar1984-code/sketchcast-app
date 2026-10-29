@@ -209,6 +209,10 @@ type Props = {
   /** A line about the slides load in progress or just finished, already in
    *  her words. Null shows nothing. */
   slideStatus?: string | null;
+  /** "Load the deck as pages" on the deck doc (founder 2026-10-28): the host
+   *  fetches the rendered slides (asking the worker when they are missing)
+   *  and calls the controller's loadDeck. Absent = the deck only downloads. */
+  onLoadDeck?: (deckGenerationId: string) => void;
 };
 
 /** The open unit as the controller's `unit` port and `onUnit` report it. */
@@ -216,7 +220,7 @@ function boardUnitOf(u: KitUnit | null): BoardUnit | null {
   return u ? { generationId: u.video?.id ?? null, part: u.part, title: u.video?.title ?? null } : null;
 }
 
-export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null }: Props) {
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null, onLoadDeck }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -331,7 +335,9 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
 
   const drawBackground = useCallback(
     (ctx: CanvasRenderingContext2D, bg: PageBackground, page: Rect) => {
-      if (bg.kind === "frame") {
+      // A deck slide is an image at a storage path exactly as a frozen frame
+      // is: drawn contained, cached once, re-signed with her own session.
+      if (bg.kind === "frame" || bg.kind === "deckPage") {
         const img = images.current.get(bg.src);
         if (img?.complete && img.naturalWidth) {
           const s = Math.min(page.w / img.naturalWidth, page.h / img.naturalHeight);
@@ -501,14 +507,14 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           const bytes = await cardPng(bg.card, cardWords).catch(() => null);
           return bytes ? { bytes, type: "png" as const } : null;
         }
-        if (bg.kind !== "frame") return null;
+        if (bg.kind !== "frame" && bg.kind !== "deckPage") return null;
         try {
           const url = await frameUrl(bg.src);
           if (!url) return null;
           const res = await fetch(url);
           if (!res.ok) return null;
           const bytes = new Uint8Array(await res.arrayBuffer());
-          // stage.freeze() captures JPEG. Sniffed rather than assumed, because
+          // stage.freeze() captures JPEG; deck slides are PNG. Sniffed rather than assumed, because
           // a PNG handed to embedJpg throws and takes the whole export with it.
           const png = bytes[0] === 0x89 && bytes[1] === 0x50;
           return { bytes, type: png ? ("png" as const) : ("jpg" as const) };
@@ -642,6 +648,28 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
             return { generationId: d.id, cards };
           },
           goTo: (p) => board.current?.goTo(p),
+          // Deck pages (founder 2026-10-28). A pristine roll — one blank page,
+          // no live ink — takes slide 1 ON that page; otherwise the page goes
+          // right after `after` (an append when that is the last page).
+          putPage: (bg, o) => {
+            const pristine =
+              !!o.replaceBlank &&
+              roll.pages.length === 1 &&
+              roll.pages[0].background.kind === "blank" &&
+              !roll.strokes.some((st) => st.page === 0 && !st.voided);
+            if (pristine) {
+              board.current?.replace(0, bg);
+              return 0;
+            }
+            const len = roll.pages.length;
+            const at = o.after !== undefined && Number.isInteger(o.after) && o.after < len - 1 ? Math.max(0, o.after) + 1 : len;
+            board.current?.push(bg, o.after !== undefined ? { after: o.after } : undefined);
+            return at;
+          },
+          findDeckPage: (n, g) => {
+            const i = roll.pages.findIndex((p) => p.background.kind === "deckPage" && p.background.n === n && (!g || p.background.generationId === g));
+            return i < 0 ? null : i;
+          },
           // The roll's own count is current the moment push returns; `where`
           // follows a render later.
           where: () => ({
@@ -823,7 +851,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
             }`}
             data-board-doc={d.kind}
           >
-            {/* The deck is a file to take away, never a page: it says so. */}
+            {/* The deck downloads from here; its pages load from the button below. */}
             {d.note === "deck" ? "⤓ " : ""}
             {docLabel(t, d.kind)}
             {why && (
@@ -834,6 +862,27 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           </button>
         );
       })}
+      {/* The kit's .pptx as pages, one slide each (founder 2026-10-28). The
+          host renders it on demand, so the first press may take ~30 s; the
+          status line under the roll says so. */}
+      {onLoadDeck &&
+        unit?.docs
+          .filter((d) => d.note === "deck")
+          .map((d) => (
+            <button
+              key={`load-${d.id}`}
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                pick();
+                onLoadDeck(d.id);
+              }}
+              className={`${btn} text-start`}
+              data-board="load-deck"
+            >
+              ▤ {t.bar.loadDeck}
+            </button>
+          ))}
 
       {kit && !units.length && (
         <p className="text-sm text-[#93A09A]">{t.kit.empty}</p>

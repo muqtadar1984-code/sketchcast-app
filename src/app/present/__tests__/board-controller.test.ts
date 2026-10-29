@@ -10,7 +10,7 @@ import {
   type BoardPorts,
   type VideoLike,
 } from "../board-controller";
-import type { TextCard } from "@/board/model";
+import type { PageBackground, TextCard } from "@/board/model";
 import type { StageMode } from "../stage";
 
 /** A video whose seeks land asynchronously, snapped to a 24 fps frame grid. */
@@ -669,5 +669,95 @@ describe("blankPage({ after }) — a page in between", () => {
     expect(seen).toEqual([2, undefined]);
     const rows = h.sink.records.filter((a) => a.action === "board.blank_page");
     expect(rows.map((r) => r.params)).toEqual([{ after: 2 }, {}]);
+  });
+});
+
+describe("loadDeck — the kit's .pptx as pages (founder 2026-10-28)", () => {
+  /** A roll the ports can put pages on: backgrounds by index, insert-after semantics. */
+  function deckHarness(start: { pages: string[]; page: number; pristine?: boolean }) {
+    const roll: Array<string | PageBackground> = [...start.pages];
+    const h = harness({
+      putPage: (bg, o) => {
+        if (o.replaceBlank && start.pristine && roll.length === 1) {
+          roll[0] = bg;
+          return 0;
+        }
+        const at = o.after !== undefined && o.after < roll.length - 1 ? o.after + 1 : roll.length;
+        roll.splice(at, 0, bg);
+        h.state.count = roll.length;
+        h.state.page = at;
+        return at;
+      },
+      findDeckPage: (n, g) => {
+        const i = roll.findIndex((p) => typeof p !== "string" && p.kind === "deckPage" && p.n === n && (!g || p.generationId === g));
+        return i < 0 ? null : i;
+      },
+    });
+    h.state.count = roll.length;
+    h.state.page = start.page;
+    return { ...h, roll };
+  }
+  const slides = [1, 2, 3].map((n) => ({ n, path: `o/d/deck_pages/slide_0${n}.png`, w: 1920, h: 1080, title: `T${n}` }));
+  const label = (p: string | PageBackground) => (typeof p === "string" ? p : p.kind === "deckPage" ? `S${p.n}` : p.kind);
+
+  it("a pristine roll: slide 1 ON page 1, the rest after it; one audit row; lands on the first; stage away", async () => {
+    const h = deckHarness({ pages: ["blank"], page: 0, pristine: true });
+    h.state.mode = "corner";
+    const progress: number[] = [];
+    const r = await h.c.loadDeck!({ generationId: "deck-gen", slides, map: "o/d/deck_pages/pages.json", onProgress: (k) => progress.push(k) });
+    expect(r).toEqual({ pages: 3, firstPage: 0, lastPage: 2, aborted: false });
+    expect(h.roll.map(label)).toEqual(["S1", "S2", "S3"]);
+    expect(h.roll[1]).toEqual({ kind: "deckPage", generationId: "deck-gen", n: 2, src: "o/d/deck_pages/slide_02.png", w: 1920, h: 1080, title: "T2", map: "o/d/deck_pages/pages.json" });
+    expect(progress).toEqual([1, 2, 3]);
+    expect(h.state.mode).toBe("away");
+    expect(h.calls.at(-1)).toBe("goTo:0");
+    const rows = h.sink.records.filter((x) => x.action === "board.load_deck");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ ok: true, params: { generationId: "deck-gen", count: 3, from: 0, to: 2 }, result: { pages: 3, firstPage: 0, lastPage: 2 } });
+    expect(h.sink.records).toHaveLength(1);
+  });
+
+  it("mid-lesson: inserted right after the page on screen, in order, ahead of what followed", async () => {
+    const h = deckHarness({ pages: ["frame", "note", "worksheet"], page: 1 });
+    const r = await h.c.loadDeck!({ generationId: "deck-gen", slides });
+    expect(h.roll.map(label)).toEqual(["frame", "note", "S1", "S2", "S3", "worksheet"]);
+    expect(r).toMatchObject({ firstPage: 2, lastPage: 4 });
+    expect(h.calls.at(-1)).toBe("goTo:2");
+  });
+
+  it("from/to load a range; abort keeps the pages made", async () => {
+    const h = deckHarness({ pages: ["blank"], page: 0, pristine: true });
+    expect(await h.c.loadDeck!({ generationId: "g", slides, from: 1, to: 2 })).toMatchObject({ pages: 2 });
+    expect(h.roll.map(label)).toEqual(["S2", "S3"]);
+
+    const h2 = deckHarness({ pages: ["blank"], page: 0, pristine: true });
+    const ac = new AbortController();
+    const r = await h2.c.loadDeck!({ generationId: "g", slides, signal: ac.signal, onProgress: (k) => k === 1 && ac.abort() });
+    expect(r).toEqual({ pages: 1, firstPage: 0, lastPage: 0, aborted: true });
+
+    const h3 = deckHarness({ pages: ["blank"], page: 0, pristine: true });
+    const run = h3.c.loadDeck!({ generationId: "g", slides, onProgress: (k) => k === 2 && h3.c.cancelLoad!() });
+    expect(await run).toMatchObject({ pages: 2, aborted: true });
+  });
+
+  it("no slides, or a Board with no putPage port, fails with an audit row and no pages", async () => {
+    const h = deckHarness({ pages: ["blank"], page: 0, pristine: true });
+    await expect(h.c.loadDeck!({ generationId: "g", slides: [] })).rejects.toThrow(/no slides/);
+    const bare = harness();
+    await expect(bare.c.loadDeck!({ generationId: "g", slides })).rejects.toThrow(/cannot hold deck pages/);
+    expect(bare.sink.records[0]).toMatchObject({ action: "board.load_deck", ok: false });
+  });
+
+  it("goToDeckPage winds to slide n of a deck on the roll; with none it throws (audited)", async () => {
+    const h = deckHarness({ pages: ["frame"], page: 0 });
+    expect(h.c.findDeckPage!()).toBeNull();
+    expect(() => h.c.goToDeckPage!()).toThrow(/no deck pages/);
+    await h.c.loadDeck!({ generationId: "deck-gen", slides });
+    h.c.pageUp();
+    expect(h.c.findDeckPage!(2, "deck-gen")).toBe(2);
+    expect(h.c.findDeckPage!(1, "another")).toBeNull();
+    expect(h.c.goToDeckPage!()).toBe(1);
+    expect(h.calls.at(-1)).toBe("goTo:1");
+    expect(h.sink.records.at(-1)).toMatchObject({ action: "board.deck_page", ok: true, params: { n: 1 }, result: { page: 1 } });
   });
 });
