@@ -111,7 +111,8 @@ async function markOnce(input: KitAnswerInput, round = 0): Promise<KitAnswerRepl
   const exclude = new Set(all.filter((a) => a.itemId !== itemId && (FINISHED(a) || a.attemptNo >= MAX_ATTEMPTS)).map((a) => a.itemId));
   const objectiveKeys = facts ? await input.bank.objectiveKeys([...kitItemIds(manifest)]) : {};
   const ladderOpts = { exclude, objectiveKeys };
-  const served = facts ? ladderHistory(facts, mine.map((a) => chosenKeyOf(facts, a.response)), manifest, ladderOpts) : [];
+  const history = facts ? ladderHistory(facts, mine.map((a) => chosenKeyOf(facts, a.response)), manifest, ladderOpts) : null;
+  const served = history?.served ?? [];
 
   const grade = gradeItem(item, input.response, { attemptNo, hintsUsed: served.length });
   const objectiveKey = facts?.objectiveKey ?? null;
@@ -146,11 +147,11 @@ async function markOnce(input: KitAnswerInput, round = 0): Promise<KitAnswerRepl
   let reveal: KitGrade["reveal"] = null;
   if (!done) {
     if (facts) {
-      const step = remediation(facts, chosenKeyOf(facts, input.response), attemptNo, manifest, { ...ladderOpts, served });
+      const step = remediation(facts, chosenKeyOf(facts, input.response), attemptNo, manifest, { ...ladderOpts, ...history });
       rungs = await withCheckItems(step.rungs, input.items);
       reveal = step.reveal;
     } else if (attemptNo >= MAX_ATTEMPTS) {
-      reveal = { answer: answerText(item), explanation: null };
+      reveal = { answer: answerText(item), explanation: null, correction: null };
     }
   }
   return { status: 200, body: { outcome: grade.outcome, score: grade.score, max: grade.max, attemptNo, triesLeft: done ? 0 : Math.max(0, MAX_ATTEMPTS - attemptNo), rungs, reveal } };

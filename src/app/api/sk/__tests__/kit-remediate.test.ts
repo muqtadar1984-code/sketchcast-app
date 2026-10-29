@@ -73,6 +73,8 @@ describe("S3 acceptance", () => {
     const db = install();
 
     // 1. Wrong: option A, the distractor whose rationale names misconception m2.
+    //    Rung 1 NAMES it; the correction ("…leaves room for haemoglobin…") would
+    //    all but give the answer away, so it waits for the slide or the reveal.
     const a1 = await send(RBC_MCQ, "The nucleus would make the cell too red.");
     expect(a1.status).toBe(200);
     expect(a1.body).toMatchObject({ outcome: "incorrect", attemptNo: 1, triesLeft: 2, reveal: null });
@@ -81,25 +83,30 @@ describe("S3 acceptance", () => {
         rung: 1,
         kind: "misconception",
         misconception: "Red blood cells have a nucleus like other cells and the nucleus makes them red.",
-        correction: "Mature mammalian red blood cells have no nucleus. This leaves room for haemoglobin, and haemoglobin is what makes them red.",
       },
     ]);
+    expect(JSON.stringify(a1.body)).not.toContain("leaves room for haemoglobin");
 
-    // 2. Wrong again → the hint (from the explanation; no answer text, no key).
+    // 2. Wrong again → the hint. The explanation shares 2 of the right option's 3
+    //    content words (space, haemoglobin), the row has no rationale on the right
+    //    option, so the hint points to the section that teaches it.
     const a2 = await send(RBC_MCQ, "The cell can then divide more quickly.");
     expect(a2.body).toMatchObject({ outcome: "incorrect", attemptNo: 2, triesLeft: 1, reveal: null });
-    expect(a2.body.rungs).toEqual([{ rung: 2, kind: "hint", text: "Losing the nucleus frees internal space so more haemoglobin fits, and each cell carries more oxygen.", from: "explanation" }]);
-    for (const a of [a1, a2]) expect(JSON.stringify(a.body)).not.toContain("More space is available for haemoglobin");
+    expect(a2.body.rungs).toEqual([{ rung: 2, kind: "hint", from: "section", k: 1, key: "p1:s002", heading: "Red blood cells" }]);
+    for (const a of [a1, a2]) {
+      expect(JSON.stringify(a.body)).not.toContain("More space is available for haemoglobin");
+      expect(JSON.stringify(a.body)).not.toContain("frees internal space");
+    }
 
     // 3. Wrong a third time → slide(k) of the section that teaches o2, and the
     //    check question: a DIFFERENT bank item on the same objective, keyless.
     const a3 = await send(RBC_MCQ, "The cell can then repair itself more easily.");
     expect(a3.body).toMatchObject({ outcome: "incorrect", attemptNo: 3, triesLeft: 0 });
     expect(a3.body.rungs).toEqual([
-      { rung: 3, kind: "slide", k: 1, key: "p1:s002", heading: "Red blood cells" },
+      { rung: 3, kind: "slide", k: 1, key: "p1:s002", heading: "Red blood cells", correction: "Mature mammalian red blood cells have no nucleus. This leaves room for haemoglobin, and haemoglobin is what makes them red." },
       { rung: 4, kind: "verify", itemId: RBC_FILL, via: "objective", item: { id: RBC_FILL, type: "fill_blank", prompt: "The red protein in red blood cells that binds to oxygen in the lungs is called ____.", marks: 1 } },
     ]);
-    expect(a3.body.reveal).toEqual({ answer: "B. More space is available for haemoglobin.", explanation: "Losing the nucleus frees internal space so more haemoglobin fits, and each cell carries more oxygen." });
+    expect(a3.body.reveal).toEqual({ answer: "B. More space is available for haemoglobin.", explanation: "Losing the nucleus frees internal space so more haemoglobin fits, and each cell carries more oxygen.", correction: null });
     expect(mastery(db, O2_KEY)).toMatchObject({ status: "needs_work", independent: false, rule_version: MASTERY_RULE_VERSION });
 
     // Every rung used is on the record: the attempts after a rung are assisted.
@@ -180,8 +187,8 @@ describe("kit objective mastery (sk_objective_mastery, rule sk-b5.1)", () => {
     const db = install();
     const r = await send(UNMAPPED_ITEM, false);
     expect(r.body).toMatchObject({ outcome: "incorrect", attemptNo: 1 });
-    // Not an mcq and no rationale: rung 1 is skipped; no explanation or objective, so no hint — slide(k) is next.
-    expect(r.body.rungs).toEqual([{ rung: 3, kind: "slide", k: 2, key: "p1:s003", heading: "Tissues and organs" }]);
+    // Not an mcq and no rationale: rung 1 is skipped; no explanation, so the hint points to its section.
+    expect(r.body.rungs).toEqual([{ rung: 2, kind: "hint", from: "section", k: 2, key: "p1:s003", heading: "Tissues and organs" }]);
     expect(db.rows("item_attempts")[0]).toMatchObject({ objective_key: null, hints_used: 0 });
     await send(UNMAPPED_ITEM, true);
     expect(db.rows("sk_objective_mastery")).toEqual([]);

@@ -594,7 +594,6 @@ function Rungs({ rungs, reveal, t, onSlide, onWatch, onCheck }: { rungs: KitRung
           return (
             <div key={key} className={card} data-testid="kit-rung-misconception">
               <p>{fmt(t.rungThinking, { thinking: r.misconception })}</p>
-              <p className="mt-1">{fmt(t.rungActually, { correction: r.correction })}</p>
             </div>
           );
         if (r.kind === "why_wrong")
@@ -603,16 +602,28 @@ function Rungs({ rungs, reveal, t, onSlide, onWatch, onCheck }: { rungs: KitRung
               {fmt(t.rungWhyWrong, { text: r.text })}
             </p>
           );
+        if (r.kind === "hint" && r.from === "section")
+          return (
+            <div key={key} className={card} data-testid="kit-rung-hint">
+              <p>
+                <span className="font-semibold">{t.rungHint}</span> {fmt(t.rungHintSection, { heading: r.heading || t.untitled })}
+              </p>
+              <button className={`${btn} mt-2`} onClick={() => onSlide(r)}>
+                {t.showSlide}
+              </button>
+            </div>
+          );
         if (r.kind === "hint")
           return (
             <p key={key} className={card} data-testid="kit-rung-hint">
-              <span className="font-semibold">{t.rungHint}</span> {r.text}
+              <span className="font-semibold">{t.rungHint}</span> {"text" in r ? r.text : ""}
             </p>
           );
         if (r.kind === "slide")
           return (
             <div key={key} className={card} data-testid="kit-rung-slide">
               <p>{fmt(t.rungSlide, { heading: r.heading || t.untitled })}</p>
+              {r.correction && <p className="mt-1">{fmt(t.rungActually, { correction: r.correction })}</p>}
               <div className="mt-2 flex flex-wrap gap-2">
                 <button className={btn} onClick={() => onSlide(r)}>
                   {t.showSlide}
@@ -648,6 +659,7 @@ function Rungs({ rungs, reveal, t, onSlide, onWatch, onCheck }: { rungs: KitRung
             <span className="font-semibold">{t.revealAnswer}</span> {reveal.answer}
           </p>
           {reveal.explanation && <p className="mt-1 text-[#3A424D]">{reveal.explanation}</p>}
+          {reveal.correction && <p className="mt-1">{fmt(t.rungActually, { correction: reveal.correction })}</p>}
         </div>
       )}
     </div>

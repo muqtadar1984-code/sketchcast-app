@@ -2252,7 +2252,7 @@
       "nextDone": "اندا تله منمتکن ڤلاجرن اين. شابس!",
       "untitled": "بهاݢين تنڤ تاجوق",
       "matchPick": "ڤيليه…",
-      "rungThinking": "نمڤقڽ اندا برفيکير: “{thinking}”",
+      "rungThinking": "نمڤقڽ اندا برفيکير: “{thinking}”. ايت کورڠ تڤت — چوبا سکالي لاݢي.",
       "rungActually": "سبنرڽ: {correction}",
       "rungWhyWrong": "مڠاڤ جواڤن ايت تيدق بتول: {text}",
       "rungHint": "ڤتونجوق:",
@@ -2262,7 +2262,8 @@
       "tryCheck": "چوبا سوءالن سماقن",
       "checkQuestion": "سوءالن سماقن",
       "rungNoCheck": "بلوم اد سوءالن لاٴين تنتڠ ايديا اين. اين ڤنرڠنڽ.",
-      "revealAnswer": "جواڤنڽ:"
+      "revealAnswer": "جواڤنڽ:",
+      "rungHintSection": "فيکيرکن اڤ يڠ دکاتاکن اوليه بهاݢين تنتڠ {heading} مڠناٴي ڤرکارا اين."
     }
   }
 }

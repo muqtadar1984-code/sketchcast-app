@@ -48,6 +48,18 @@ export function parseMisconceptions(v: unknown): ArticleMisconception[] {
   });
 }
 
+/** A note the bank keeps on the RIGHT option (any text field but why_wrong). */
+function rightRationale(v: unknown, answerKey: string | null): string | null {
+  if (!isObj(v) || !answerKey) return null;
+  const entry = Object.entries(v).find(([k]) => k.trim().toUpperCase() === answerKey.trim().toUpperCase())?.[1];
+  if (!isObj(entry)) return null;
+  for (const f of ["why_right", "rationale", "why", "explanation", "note"]) {
+    const t = str(entry[f]);
+    if (t) return t;
+  }
+  return null;
+}
+
 function objectiveText(objectives: unknown, ref: string | null): string | null {
   if (!ref || !Array.isArray(objectives)) return null;
   const o = objectives.find((x) => isObj(x) && str(x.id) === ref) as Obj | undefined;
@@ -96,6 +108,7 @@ export function factsFrom(row: Obj, article: Obj | null): RemediationFacts | nul
     answerTexts: a.texts,
     answerDisplay: a.display,
     rationale: parseRationale(row.distractor_rationale),
+    rightRationale: rightRationale(row.distractor_rationale, a.key),
     explanation: str(row.explanation),
     misconceptions: article ? parseMisconceptions(article.misconceptions) : [],
     objectiveText: article ? objectiveText(article.objectives, ref) : null,
