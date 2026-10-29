@@ -2220,7 +2220,9 @@
         "greetingList": "Salut {name} — voici tes chapitres : {list}. Lequel ouvrons-nous ?",
         "greetingNone": "Salut {name} — je suis SK, ton tuteur. Ouvre un chapitre et je t'aiderai à le travailler.",
         "chapter": "Chapitre {n}",
-        "sectionN": "la partie {n}"
+        "sectionN": "la partie {n}",
+        "preparing": "Cette leçon est encore en préparation — réessaie dans un instant.",
+        "refused": "Tu ne peux pas ouvrir cette leçon. Demande à ton enseignant ou à tes parents l'accès au livre."
       },
       "tutorNotOpen": "Le lecteur de leçon n'est pas ouvert sur cette page."
     },

@@ -2220,7 +2220,9 @@
         "greetingList": "Olá {name} — estes são os teus capítulos: {list}. Qual abrimos?",
         "greetingNone": "Olá {name} — sou o SK, o teu tutor. Abre um capítulo e eu ajudo-te a percorrê-lo.",
         "chapter": "Capítulo {n}",
-        "sectionN": "a secção {n}"
+        "sectionN": "a secção {n}",
+        "preparing": "Esta lição ainda está a ser preparada — tenta outra vez daqui a pouco.",
+        "refused": "Não podes abrir esta lição. Pergunta ao teu professor ou aos teus pais pelo acesso ao livro."
       },
       "tutorNotOpen": "O leitor da lição não está aberto nesta página."
     },

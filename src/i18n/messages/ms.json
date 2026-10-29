@@ -2220,7 +2220,9 @@
         "greetingList": "Hai {name} — ini bab-bab anda: {list}. Yang mana patut kita buka?",
         "greetingNone": "Hai {name} — saya SK, tutor anda. Buka satu bab dan saya akan membantu anda melaluinya.",
         "chapter": "Bab {n}",
-        "sectionN": "bahagian {n}"
+        "sectionN": "bahagian {n}",
+        "preparing": "Pelajaran ini masih sedang disediakan — cuba lagi sebentar lagi.",
+        "refused": "Anda tidak boleh membuka pelajaran ini. Tanya guru atau ibu bapa anda tentang akses kepada buku itu."
       },
       "tutorNotOpen": "Pemain pelajaran tidak dibuka di halaman ini."
     },

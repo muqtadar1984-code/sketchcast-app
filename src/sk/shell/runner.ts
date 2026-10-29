@@ -64,7 +64,7 @@ export async function runCapability(ctx: SkContext, name: string, args: Record<s
     result = { ok: false, summary: "Cancelled.", error: "aborted", facts: [] };
   } else {
     try {
-      result = capResult(await cap.handler(ctx, args ?? {}, { session: deps.session, now: deps.now, clock: deps.clock, signal: deps.signal, cache: deps.cache }));
+      result = capResult(await cap.handler(ctx, args ?? {}, { session: deps.session, now: deps.now, clock: deps.clock, signal: deps.signal, cache: deps.cache, turnId: deps.turnId }));
     } catch (e) {
       result = { ok: false, summary: "That lookup failed.", error: (e as Error)?.message?.slice(0, 300) ?? "handler_threw", facts: [] };
     }

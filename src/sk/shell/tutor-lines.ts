@@ -307,6 +307,32 @@ export const TUTOR_SECTION_N: Line = {
   hi: "भाग {n}",
 };
 
+export const TUTOR_PREPARING: Line = {
+  en: "This lesson is still being prepared — try again in a moment.",
+  ms: "Pelajaran ini masih sedang disediakan — cuba lagi sebentar lagi.",
+  "ms-arab": "ڤلاجرن اين ماسيه سدڠ دسدياکن — چوبا لاݢي سبنتر لاݢي.",
+  ar: "ما زال هذا الدرس قيد التجهيز — حاول مرة أخرى بعد قليل.",
+  fr: "Cette leçon est encore en préparation — réessaie dans un instant.",
+  es: "Esta lección aún se está preparando — inténtalo de nuevo en un momento.",
+  pt: "Esta lição ainda está a ser preparada — tenta outra vez daqui a pouco.",
+  te: "ఈ పాఠం ఇంకా సిద్ధమవుతోంది — కొద్దిసేపటి తర్వాత మళ్లీ ప్రయత్నించండి.",
+  mr: "हा पाठ अजून तयार होत आहे — थोड्या वेळाने पुन्हा प्रयत्न करा.",
+  hi: "यह पाठ अभी तैयार हो रहा है — थोड़ी देर में फिर कोशिश करें।",
+};
+
+export const TUTOR_REFUSED: Line = {
+  en: "You can't open this lesson. Ask your teacher or parent about access to the book.",
+  ms: "Anda tidak boleh membuka pelajaran ini. Tanya guru atau ibu bapa anda tentang akses kepada buku itu.",
+  "ms-arab": "اندا تيدق بوليه ممبوک ڤلاجرن اين. تاڽ ݢورو اتاو ايبو باڤ اندا تنتڠ اکسيس کڤد بوکو ايت.",
+  ar: "لا يمكنك فتح هذا الدرس. اسأل معلّمك أو وليّ أمرك عن الوصول إلى الكتاب.",
+  fr: "Tu ne peux pas ouvrir cette leçon. Demande à ton enseignant ou à tes parents l'accès au livre.",
+  es: "No puedes abrir esta lección. Pregunta a tu profesor o a tus padres por el acceso al libro.",
+  pt: "Não podes abrir esta lição. Pergunta ao teu professor ou aos teus pais pelo acesso ao livro.",
+  te: "మీరు ఈ పాఠాన్ని తెరవలేరు. పుస్తకానికి ప్రవేశం గురించి మీ ఉపాధ్యాయుడిని లేదా తల్లిదండ్రులను అడగండి.",
+  mr: "तुम्ही हा पाठ उघडू शकत नाही. पुस्तकाच्या प्रवेशाबद्दल तुमच्या शिक्षकांना किंवा पालकांना विचारा.",
+  hi: "आप यह पाठ नहीं खोल सकते। किताब तक पहुँच के बारे में अपने शिक्षक या माता-पिता से पूछें।",
+};
+
 /** The dictionary key of each table (sk.shell.tutor.<key>), for the copy test. */
 export const TUTOR_LINE_KEYS: Record<string, Line> = {
   play: TUTOR_PLAY,
@@ -332,4 +358,6 @@ export const TUTOR_LINE_KEYS: Record<string, Line> = {
   greetingNone: TUTOR_GREETING_NONE,
   chapter: TUTOR_CHAPTER,
   sectionN: TUTOR_SECTION_N,
+  preparing: TUTOR_PREPARING,
+  refused: TUTOR_REFUSED,
 };

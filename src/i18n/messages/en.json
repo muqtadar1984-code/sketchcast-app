@@ -2220,7 +2220,9 @@
         "greetingList": "Hi {name} — here are your chapters: {list}. Which one shall we open?",
         "greetingNone": "Hi {name} — I'm SK, your tutor. Open a chapter and I'll help you through it.",
         "chapter": "Chapter {n}",
-        "sectionN": "section {n}"
+        "sectionN": "section {n}",
+        "preparing": "This lesson is still being prepared — try again in a moment.",
+        "refused": "You can't open this lesson. Ask your teacher or parent about access to the book."
       },
       "tutorNotOpen": "The lesson player isn't open on this page."
     },

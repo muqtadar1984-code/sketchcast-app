@@ -17,6 +17,7 @@ import { diaryNoteAction } from "./diary";
 import { parentsRemindAction } from "./remind";
 import { markingGrade, markingNext } from "./marking";
 import { lessonPrepareAction, lessonStatus } from "./prepare";
+import { TUTOR_CAPABILITIES } from "./tutor";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -44,8 +45,11 @@ const ENTRIES: SkCapability[] = [
   markingGrade,
   lessonPrepareAction,
   lessonStatus,
+  // S3 slice D: the STUDENT entries (tutor.*), student role only, all
+  // immediate: moves on her own kit player and reads of her own progress.
+  ...TUTOR_CAPABILITIES,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
 
-export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus };
+export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus, TUTOR_CAPABILITIES };
