@@ -115,7 +115,7 @@ const UNSUPPORTED = new Set([
 ]);
 
 /** Words after "bahasa …" / "باللغة …" that describe the wording, not a language. */
-const NOT_LANGUAGES = new Set(["mudah", "senang", "ringkas", "biasa", "budak", "kanak", "baku", "formal", "pasar", "harian", "البسيطة", "السهلة", "بسيطة", "سهلة", "مبسطة", "ممودة", "سنڠ"]);
+const NOT_LANGUAGES = new Set(["mudah", "senang", "ringkas", "biasa", "budak", "kanak", "baku", "formal", "pasar", "harian", "البسيطة", "السهلة", "بسيطة", "سهلة", "مبسطة", "سنڠ", "موده"]);
 
 const MINE = new Set(["saya", "my", "my own", "mine", "لغتي", "我的语言", "ma langue", "mi idioma", "minha língua", "minha lingua", "मेरी भाषा", "माझी भाषा", "నా భాష"]);
 
@@ -235,52 +235,52 @@ export function uiAnswerLang(uiLocale: string | null | undefined): SkAnswerLang 
 
 export type LangCommand = { kind: "repeat"; target: LangTarget } | { kind: "back"; target: LangTarget };
 
-const LEAD_FILLERS = /^(?:(?:please|pls|can you|could you|would you|will you|sk|hey sk|ok|okay|now|tolong|boleh|cuba|sila|من فضلك|رجاء|رجاءً|ممكن|لو سمحت|请你|请|麻烦你|麻烦|s'il te plaît|s'il vous plaît|por favor|कृपया)[ ,،]*)+/u;
-const TAIL_FILLERS = /(?:[ ,،]*(?:please|pls|thanks|thank you|tolong|ya|من فضلك|رجاء|رجاءً|لو سمحت|吧|好吗|谢谢|s'il te plaît|s'il vous plaît|svp|stp|por favor|कृपया|प्लीज़))+$/u;
+const LEAD_FILLERS = /^(?:(?:please|pls|can you|could you|would you|will you|hey sk|sk|okay|ok|now|tolong|boleh|cuba|sila|من فضلك|رجاء|رجاءً|ممكن|لو سمحت|s'il te plaît|s'il vous plaît|por favor|कृपया)[ ,،]+|请你|请|麻烦你|麻烦)+/u;
+const TAIL_FILLERS = /(?:[ ,،]+(?:please|pls|thanks|thank you|tolong|ya|من فضلك|رجاء|رجاءً|لو سمحت|s'il te plaît|s'il vous plaît|svp|stp|por favor|कृपया|प्लीज़)|吧|好吗|谢谢)+$/u;
 
 /** Anchored phrasings that REPEAT the last explanation in `lang`. */
 const REPEAT_RES: RegExp[] = [
   // English: "say that in Malay", "explain that again in English", "in Chinese", "translate it into Arabic".
-  /^(?:(?:say|repeat|explain|tell|read|give|translate|put|answer|write)(?: (?:me|us))?(?: (?:that|it|this|the explanation|the answer|your answer|what you said|that explanation|that answer|that one|this one))?(?: (?:again|once more|one more time))? )?(?:(?:and|now|again) )?(?:in|into) (?<lang>.+?)(?: (?:again|too|instead|now))?$/u,
+  /^(?:(?:say|repeat|explain|tell|read|give|translate|put|answer|write)(?: (?:me|us))?(?: (?:that|it|this|the explanation|the answer|your answer|what you said|that explanation|that answer|that one|this one))?(?: (?:again|once more|one more time))? )?(?:(?:and|now|again) )?(?:in|into) (.+?)(?: (?:again|too|instead|now))?$/u,
   // Malay: "ulang dalam bahasa Arab", "terangkan dalam bahasa Inggeris", "dalam bahasa Cina".
-  /^(?:(?:ulang(?:i|kan)?|terang(?:kan)?|jelas(?:kan)?|cakap(?:kan)?|sebut(?:kan)?|kata(?:kan)?|terjemah(?:kan)?|baca(?:kan)?|beritahu|tulis(?:kan)?)(?: (?:itu|ini|semula|lagi|balik|sekali lagi|penerangan (?:itu|tadi)|jawapan (?:itu|tadi)))* )?(?:dalam|dlm|ke dalam|ke) (?<lang>.+?)(?: (?:pula|semula|lagi))?$/u,
+  /^(?:(?:ulang(?:i|kan)?|terang(?:kan)?|jelas(?:kan)?|cakap(?:kan)?|sebut(?:kan)?|kata(?:kan)?|terjemah(?:kan)?|baca(?:kan)?|beritahu|tulis(?:kan)?)(?: (?:itu|ini|semula|lagi|balik|sekali lagi|penerangan (?:itu|tadi)|jawapan (?:itu|tadi)))* )?(?:dalam|dlm|ke dalam|ke) (.+?)(?: (?:pula|semula|lagi))?$/u,
   // Arabic: "أعد ذلك بالعربية", "بالإنجليزية", "اشرح ذلك مرة أخرى باللغة الفرنسية".
-  /^(?:(?:أعد|اعد|أعِد|كرر|كرّر|قل|قلها|قله|اشرح|إشرح|ترجم|اكتب)(?: (?:ذلك|هذا|ذاك|الشرح|الإجابة|الاجابة|كلامك|ما قلته|ما قلت))?(?: (?:مرة أخرى|مرة ثانية|مجددا|مجدداً|ثانية))? )?(?<lang>(?:باللغة |إلى |الى |ب)\S.*?)(?: (?:مرة أخرى|مجددا|مجدداً))?$/u,
+  /^(?:(?:أعد|اعد|أعِد|كرر|كرّر|قل|قلها|قله|اشرح|إشرح|ترجم|اكتب)(?: (?:ذلك|هذا|ذاك|الشرح|الإجابة|الاجابة|كلامك|ما قلته|ما قلت))?(?: (?:مرة أخرى|مرة ثانية|مجددا|مجدداً|ثانية))? )?((?:باللغة |إلى |الى |ب)\S.*?)(?: (?:مرة أخرى|مجددا|مجدداً))?$/u,
   // Chinese: "用中文再说一遍", "用英文说", "中文".
-  /^(?:你)?(?:再)?(?:用|以|说|讲)?(?<lang>\p{Script=Han}{2,6}?)(?:再)?(?:说|讲|解释|重复|翻译|写)?(?:一遍|一次|一下)?$/u,
+  /^(?:你)?(?:再)?(?:用|以|说|讲)?(\p{Script=Han}{2,6}?)(?:再)?(?:说|讲|解释|重复|翻译|写)?(?:一遍|一次|一下)?$/u,
   // French / Spanish: "en français", "répète-le en anglais", "dilo en árabe".
-  /^(?:(?:répète|repete|répétez|repetez|redis|redites|dis|dites|explique|expliquez|traduis|traduisez|repite|repítelo|repitelo|dilo|di|explícalo|explicalo|explica|tradúcelo|traducelo)(?:-le|-la|-moi ça|-moi cela| le| la| ça| cela| ceci| eso| esto)?(?: encore| de nouveau| otra vez| de nuevo)? )?en (?<lang>.+?)$/u,
+  /^(?:(?:répète|repete|répétez|repetez|redis|redites|dis|dites|explique|expliquez|traduis|traduisez|repite|repítelo|repitelo|dilo|di|explícalo|explicalo|explica|tradúcelo|traducelo)(?:-le|-la|-moi ça|-moi cela| le| la| ça| cela| ceci| eso| esto)?(?: encore| de nouveau| otra vez| de nuevo)? )?en (.+?)$/u,
   // Portuguese: "em português", "repete isso em inglês".
-  /^(?:(?:repete|repita|diz|diga|explica|explique|traduz|traduza)(?: isso| isto)?(?: outra vez| de novo)? )?em (?<lang>.+?)$/u,
+  /^(?:(?:repete|repita|diz|diga|explica|explique|traduz|traduza)(?: isso| isto)?(?: outra vez| de novo)? )?em (.+?)$/u,
   // Hindi: "हिंदी में", "अंग्रेज़ी में दोहराओ", "इसे हिंदी में फिर से बताओ".
-  /^(?:(?:इसे|यह|ये|इसको|वह) )?(?<lang>\S+?) में(?: (?:फिर से|दोबारा))?(?: (?:दोहराओ|दोहराइए|दोहराएँ|दोहराएं|बताओ|बताइए|बताएँ|बताएं|समझाओ|समझाइए|कहो|कहिए|बोलो|बोलिए))?$/u,
+  /^(?:(?:इसे|यह|ये|इसको|वह) )?(\S+?) में(?: (?:फिर से|दोबारा))?(?: (?:दोहराओ|दोहराइए|दोहराएँ|दोहराएं|बताओ|बताइए|बताएँ|बताएं|समझाओ|समझाइए|कहो|कहिए|बोलो|बोलिए))?$/u,
   // Marathi: "मराठीत", "इंग्रजीत पुन्हा सांगा".
-  /^(?:(?:हे|ते) )?(?<lang>\S+?)(?:त| मध्ये)(?: पुन्हा)?(?: (?:सांग|सांगा|समजावून सांगा|बोल|बोला))?$/u,
+  /^(?:(?:हे|ते) )?(\S+?)(?:त| मध्ये)(?: पुन्हा)?(?: (?:सांग|सांगा|समजावून सांगा|बोल|बोला))?$/u,
   // Telugu: "తెలుగులో", "ఇంగ్లీష్‌లో మళ్ళీ చెప్పండి".
-  /^(?<lang>\S+?)‌?లో(?: (?:మళ్ళీ|మళ్లీ))?(?: (?:చెప్పు|చెప్పండి|వివరించు|వివరించండి))?$/u,
+  /^(\S+?)‌?లో(?: (?:మళ్ళీ|మళ్లీ))?(?: (?:చెప్పు|చెప్పండి|వివరించు|వివరించండి))?$/u,
   // Jawi: "اولڠ دالم بهاس عرب", "دالم بهاس ايڠڬريس".
-  /^(?:(?:اولڠ|اولڠي|اولڠکن|اولڠكن|تراڠکن|تراڠكن|جلسکن|جلسكن|چاکڤ|سبوت)(?: (?:ايت|اين|سکالي لاݢي))? )?دالم (?<lang>.+?)$/u,
+  /^(?:(?:اولڠ|اولڠي|اولڠکن|اولڠكن|تراڠکن|تراڠكن|جلسکن|جلسكن|چاکڤ|سبوت)(?: (?:ايت|اين|سکالي لاݢي))? )?دالم (.+?)$/u,
 ];
 
 /** "back to English", "kembali ke bahasa Melayu", "عد إلى العربية", "换回中文". */
 const BACK_RES: RegExp[] = [
-  /^(?:(?:go|switch|change|come|move) )?back (?:to|into) (?<lang>.+?)$/u,
-  /^(?:use|speak|answer in|reply in|talk in|switch to|return to) (?<lang>my(?: own)? language)$/u,
-  /^(?:kembali|balik|tukar balik|tukar semula|tukar) (?:ke|kepada) (?<lang>.+?)$/u,
-  /^(?:guna(?:kan)?|cakap dalam|jawab dalam) (?<lang>bahasa saya)(?: sendiri)?$/u,
-  /^(?:عد|ارجع|عودة|العودة|رجوع|ارجعي|عودي) (?:إلى |الى |ل)(?<lang>.+?)$/u,
-  /^(?:استخدم|استعمل|تكلم|تحدث) (?<lang>(?:ب)?لغتي)$/u,
-  /^(?:换回|改回|切换回|回到|用回)(?<lang>\p{Script=Han}{2,6})$/u,
-  /^(?:用)(?<lang>我的语言)$/u,
-  /^(?:reviens|revenons|retourne|retour) (?:à l'|au |à |en )(?<lang>.+?)$/u,
-  /^(?:utilise|parle) (?<lang>ma langue)$/u,
-  /^(?:vuelve|volvamos|regresa) (?:al |a |en )(?<lang>.+?)$/u,
-  /^(?:usa|habla) (?<lang>mi idioma)$/u,
-  /^(?:volta|volte|voltemos) (?:ao |para o |para |em )(?<lang>.+?)$/u,
-  /^(?:usa|use|fala|fale) (?:a )?(?<lang>minha l[íi]ngua)$/u,
-  /^वापस (?<lang>\S+?) में(?: बोलो| बोलिए)?$/u,
-  /^(?<lang>मेरी भाषा) में(?: बोलो| बोलिए)?$/u,
-  /^(?<lang>నా భాష)లో(?: మాట్లాడండి)?$/u,
+  /^(?:(?:go|switch|change|come|move) )?back (?:to|into) (.+?)$/u,
+  /^(?:use|speak|answer in|reply in|talk in|switch to|return to) (my(?: own)? language)$/u,
+  /^(?:kembali|balik|tukar balik|tukar semula|tukar) (?:ke|kepada) (.+?)$/u,
+  /^(?:guna(?:kan)?|cakap dalam|jawab dalam) (bahasa saya)(?: sendiri)?$/u,
+  /^(?:عد|ارجع|عودة|العودة|رجوع|ارجعي|عودي) (?:إلى |الى )?(.+?)$/u,
+  /^(?:استخدم|استعمل|تكلم|تحدث) ((?:ب)?لغتي)$/u,
+  /^(?:换回|改回|切换回|回到|用回)(\p{Script=Han}{2,6})$/u,
+  /^(?:用)(我的语言)$/u,
+  /^(?:reviens|revenons|retourne|retour) (?:à l'|au |à |en )(.+?)$/u,
+  /^(?:utilise|parle) (ma langue)$/u,
+  /^(?:vuelve|volvamos|regresa) (?:al |a |en )(.+?)$/u,
+  /^(?:usa|habla) (mi idioma)$/u,
+  /^(?:volta|volte|voltemos) (?:ao |para o |para |em )(.+?)$/u,
+  /^(?:usa|use|fala|fale) (?:a )?(minha l[íi]ngua)$/u,
+  /^वापस (\S+?) में(?: बोलो| बोलिए)?$/u,
+  /^(मेरी भाषा) में(?: बोलो| बोलिए)?$/u,
+  /^(నా భాష)లో(?: మాట్లాడండి)?$/u,
 ];
 
 /** Lower-cased, end punctuation off, politeness off; `polite` = a filler was there. */
@@ -307,12 +307,12 @@ export function parseLanguageCommand(text: string): LangCommand | null {
   if (!s || s.length > 80) return null;
   for (const re of BACK_RES) {
     const m = re.exec(s);
-    const target = m?.groups?.lang ? resolveLanguagePhrase(m.groups.lang) : null;
+    const target = m?.[1] ? resolveLanguagePhrase(m[1]) : null;
     if (target) return { kind: "back", target };
   }
   for (const re of REPEAT_RES) {
     const m = re.exec(s);
-    const target = m?.groups?.lang ? resolveLanguagePhrase(m.groups.lang) : null;
+    const target = m?.[1] ? resolveLanguagePhrase(m[1]) : null;
     if (target) return { kind: "repeat", target };
   }
   // A bare language name with "please" ("Malay please", "中文") is a repeat too.
