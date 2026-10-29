@@ -199,6 +199,8 @@ export const bookActivateAction: SkCapability = {
     tier: "confirm",
     kind: "act",
     roles: ["student", "parent"],
+    // Like /api/sk/{redeem,activate}: off with FEATURE_SK.
+    flags: ["sk"],
   },
   handler: resolveBookActivate,
 };

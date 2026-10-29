@@ -98,11 +98,14 @@ const SHIPPED = [
   "tutor.slide",
   "tutor.practise",
   "tutor.explain",
+  // S4 slice D: book activation (student + parent, sk flag; click-only).
+  "book.activate",
 ];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
-const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n));
-const PARENT_SEES = ["navigate", "context.resolve"];
-const STUDENT_SEES = ["navigate", ...STUDENT_ONLY];
+const STUDENT_AND_PARENT = ["book.activate"];
+const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n));
+const PARENT_SEES = ["navigate", "context.resolve", ...STUDENT_AND_PARENT];
+const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT];
 
 describe("allowedFor over the shipped registry", () => {
   it("teacher: everything but the tutor; parent: navigate + context.resolve; student: navigate + the tutor", () => {
