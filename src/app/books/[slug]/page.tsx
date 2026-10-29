@@ -130,6 +130,11 @@ export default async function BookOverview({ params }: { params: Promise<{ slug:
                   ))}
                 </ul>
               )}
+              {!rs.ready && (
+                <Link href={`/books/${slug}/gaps`} className="block text-sm underline decoration-[#E4DCC8] underline-offset-2 hover:decoration-[#B8862F]">
+                  What to do next: the gaps →
+                </Link>
+              )}
               <Link href={`/books/${slug}/runs/${readiness.id}`} className="text-xs text-[#7A7363] underline hover:text-[#1F2A24]">
                 Checked {day(readiness.created_at)} · run #{readiness.id}
               </Link>
