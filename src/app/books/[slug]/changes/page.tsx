@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getChapter, listAnnotations, listChapterSummaries } from "@/utils/books/store";
 import { diffChapter, type BlockChange, type WordOp } from "@/utils/books/diff";
 import { loadBook, pickRevision } from "../load";
+import NotDrafted from "../not-drafted";
 import RevisionPicker from "../revision-picker";
 import { BlockView, type FigureCtx } from "../blocks";
 import { Card, Chip, Empty } from "../../ui";
@@ -57,6 +58,7 @@ export default async function ChangesPage({ params, searchParams }: { params: Pr
   const { slug } = await params;
   const sp = await searchParams;
   const { work, revisions } = await loadBook(slug);
+  if (!revisions.length) return <NotDrafted slug={slug} />;
   const to = pickRevision(work, revisions, sp.to);
   const toIdx = revisions.findIndex((r) => r.key === to.key);
   const from = typeof sp.from === "string" ? pickRevision(work, revisions, sp.from) : revisions[Math.max(0, toIdx - 1)];

@@ -24,7 +24,7 @@ export default async function BooksHome() {
                 </div>
                 {w.subtitle && <p className="text-sm text-[#5F5A4E] mt-1">{w.subtitle}</p>}
                 <p className="text-xs text-[#7A7363] mt-3">
-                  {[w.facts.chapters && `${w.facts.chapters} chapters`, w.facts.kdp_pages && `${w.facts.kdp_pages} pp`, w.facts.questions && `${w.facts.questions} questions`]
+                  {[w.facts?.chapters && `${w.facts.chapters} chapters`, w.facts?.kdp_pages && `${w.facts.kdp_pages} pp`, w.facts?.questions && `${w.facts.questions} questions`, !w.current_revision && "not drafted yet"]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>

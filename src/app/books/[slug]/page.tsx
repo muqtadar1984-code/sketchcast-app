@@ -27,13 +27,27 @@ export default async function BookOverview({ params }: { params: Promise<{ slug:
   const revLabel = new Map(revisions.map((r) => [r.key, r.label]));
   const approvalsFor = (stageKey: string, revisionKey: string | null): Approval[] =>
     approvals.filter((a) => a.stage_key === stageKey || (revisionKey && a.scope === "book" && a.kind === "book" && a.revision_key === revisionKey));
-  const f = work.facts;
+  const f = work.facts ?? {};
+  // the latest readiness re-check (Pipeline → Readiness re-check): how ready the book is to draft
+  const readiness = runs.filter((r) => r.stage_key === "readiness" && r.status === "done").sort((a, b) => b.id - a.id)[0];
+  const rs = readiness?.detail?.summary as { pct?: number; ready?: boolean; outstanding_by_state?: Record<string, number> } | undefined;
+  const STATE_LABEL: Record<string, string> = {
+    missing_topic: "topics with no catalogue article",
+    needs_improvement: "articles needing improvement",
+    kit_or_publication_incomplete: "kits or publications incomplete",
+    missing_video_publication: "videos not published",
+    missing_mapping: "topics not mapped to the curriculum",
+    missing_translation: "translations missing",
+  };
   const open = openItems.filter((o) => o.status !== "done");
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
       <div className="space-y-6 min-w-0">
         <Card title="Life of the book">
+          {stages.length === 0 && (
+            <p className="text-sm text-[#7A7363]">Nothing recorded yet: the book is being planned. Its readiness to draft is on the right and on the Pipeline tab.</p>
+          )}
           <ol className="relative border-s border-[#E4DCC8] ms-2">
             {stages.map((s) => {
               const ap = approvalsFor(s.key, s.revision_key);
@@ -101,6 +115,32 @@ export default async function BookOverview({ params }: { params: Promise<{ slug:
       </div>
 
       <aside className="space-y-6">
+        <Card title="Ready to draft">
+          {rs?.pct !== undefined ? (
+            <div className="text-sm space-y-2">
+              <p className="font-display text-3xl">{rs.pct}%</p>
+              {rs.ready ? (
+                <p className="text-[#24543A]">Ready: every topic the book needs is in the catalogue.</p>
+              ) : (
+                <ul className="space-y-0.5 text-[#5F5A4E]">
+                  {Object.entries(rs.outstanding_by_state ?? {}).map(([k, n]) => (
+                    <li key={k}>
+                      {n} {STATE_LABEL[k] ?? k.replace(/_/g, " ")}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link href={`/books/${slug}/runs/${readiness.id}`} className="text-xs text-[#7A7363] underline hover:text-[#1F2A24]">
+                Checked {day(readiness.created_at)} · run #{readiness.id}
+              </Link>
+            </div>
+          ) : (
+            <p className="text-sm text-[#7A7363]">
+              Not checked from the app yet: Pipeline →{" "}
+              <Link href={`/books/${slug}/runs`} className="underline hover:text-[#1F2A24]">Readiness re-check</Link> (free).
+            </p>
+          )}
+        </Card>
         <Card title="At a glance">
           <dl className="grid grid-cols-2 gap-3 text-sm">
             {[

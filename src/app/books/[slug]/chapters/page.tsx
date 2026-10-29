@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listApprovals, listChapterSummaries } from "@/utils/books/store";
 import { loadBook, pickRevision } from "../load";
+import NotDrafted from "../not-drafted";
 import { approvalFor, latestGateD } from "../approval";
 import RevisionPicker from "../revision-picker";
 import ChapterBoard from "./board";
@@ -12,6 +13,7 @@ export default async function ChaptersPage({ params, searchParams }: { params: P
   const { slug } = await params;
   const sp = await searchParams;
   const { work, revisions } = await loadBook(slug);
+  if (!revisions.length) return <NotDrafted slug={slug} />;
   const board = sp.view === "board";
   const toggle = (
     <div className="flex gap-1.5 text-xs">
