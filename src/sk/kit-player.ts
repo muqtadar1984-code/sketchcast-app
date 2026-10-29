@@ -158,3 +158,71 @@ export function refusalKey(reason: string | undefined): "refusedNotEntitled" | "
   if (reason === "no_kit") return "refusedNoKit";
   return "refusedUnknown";
 }
+
+// ── loading (the Board's pattern: GET, one POST to build, then poll) ────────
+
+export type KitFetchResult = { ok: true; reply: KitReply } | { ok: false; status: number; reason?: string };
+export type KitFetch = (method: "GET" | "POST") => Promise<KitFetchResult>;
+export type LoadKitResult = { status: "ready"; reply: Extract<KitReply, { status: "ready" }> } | { status: "refused"; reason: string | undefined } | { status: "failed"; reason: "map_failed" | "timeout" | "error" | "aborted" };
+
+export const KIT_POLL_MS = 3000;
+export const KIT_MAX_MS = 120_000;
+
+/** Load the kit: GET; on `preparing` ask for a build ONCE (POST — the first
+ *  open of a kit derives its map, about $0.005) and then poll GET every 3 s
+ *  for at most 2 min. `onPreparing` drives the "getting the lesson ready" line. */
+export async function loadKit(
+  fetchKit: KitFetch,
+  opts: { pollMs?: number; maxMs?: number; sleep?: (ms: number) => Promise<void>; now?: () => number; onPreparing?: (reply: Extract<KitReply, { status: "preparing" }>) => void; signal?: AbortSignal } = {},
+): Promise<LoadKitResult> {
+  const pollMs = opts.pollMs ?? KIT_POLL_MS;
+  const maxMs = opts.maxMs ?? KIT_MAX_MS;
+  const now = opts.now ?? (() => Date.now());
+  const sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
+  const t0 = now();
+  let method: "GET" | "POST" = "GET";
+  let requested = false;
+  for (;;) {
+    if (opts.signal?.aborted) return { status: "failed", reason: "aborted" };
+    let res: KitFetchResult;
+    try {
+      res = await fetchKit(method);
+    } catch {
+      return { status: "failed", reason: "error" };
+    }
+    method = "GET";
+    if (!res.ok) return res.status === 403 || res.status === 404 ? { status: "refused", reason: res.reason } : { status: "failed", reason: "error" };
+    const reply = res.reply;
+    if (reply.status === "ready") return { status: "ready", reply };
+    if (reply.status === "unavailable") return { status: "failed", reason: "map_failed" };
+    opts.onPreparing?.(reply);
+    if (!requested) {
+      requested = true;
+      method = "POST";
+      continue;
+    }
+    if (now() - t0 >= maxMs) return { status: "failed", reason: "timeout" };
+    await sleep(pollMs);
+  }
+}
+
+/** The text and done events of an SSE body (the kit turn's reply). */
+export function parseSse(body: string): { event: string; data: unknown }[] {
+  return body
+    .split("\n\n")
+    .filter((c) => c.trim())
+    .flatMap((chunk) => {
+      const ev = /^event: (.*)$/m.exec(chunk)?.[1];
+      const data = chunk
+        .split("\n")
+        .filter((l) => l.startsWith("data: "))
+        .map((l) => l.slice(6))
+        .join("\n");
+      if (!ev) return [];
+      try {
+        return [{ event: ev, data: JSON.parse(data) as unknown }];
+      } catch {
+        return [];
+      }
+    });
+}
