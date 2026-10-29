@@ -178,6 +178,9 @@ export const schoolSeats: SkCapability = {
     // on, the principal HAT. A coordinator never sees this entry.
     roles: ["school_admin"],
     hats: ["principal"],
+    // S5 slice B: gated like school.health (ctx.flags.analytics); off → the
+    // turn route's fixed analytics-off line, and the model is not offered it.
+    flags: ["analytics"],
   },
   async handler(ctx, _args, deps) {
     const locale = ctx.user.locale;
@@ -287,6 +290,9 @@ export const schoolCost: SkCapability = {
     kind: "read",
     roles: ["school_admin", "coordinator"],
     hats: ["principal", "coordinator"],
+    // S5 slice B: gated like school.health (ctx.flags.analytics); off → the
+    // turn route's fixed analytics-off line, and the model is not offered it.
+    flags: ["analytics"],
   },
   async handler(ctx, _args, deps) {
     const me = ctx.user.id;
@@ -421,6 +427,9 @@ export const schoolGaps: SkCapability = {
     kind: "read",
     roles: ["school_admin", "coordinator"],
     hats: ["principal", "coordinator"],
+    // S5 slice B: gated like school.health (ctx.flags.analytics); off → the
+    // turn route's fixed analytics-off line, and the model is not offered it.
+    flags: ["analytics"],
   },
   async handler(ctx, args, deps) {
     const locale = ctx.user.locale;
@@ -601,6 +610,9 @@ export const schoolTrend: SkCapability = {
     kind: "read",
     roles: ["school_admin", "coordinator"],
     hats: ["principal", "coordinator"],
+    // S5 slice B: gated like school.health (ctx.flags.analytics); off → the
+    // turn route's fixed analytics-off line, and the model is not offered it.
+    flags: ["analytics"],
   },
   async handler(ctx, args, deps) {
     const me = ctx.user.id;

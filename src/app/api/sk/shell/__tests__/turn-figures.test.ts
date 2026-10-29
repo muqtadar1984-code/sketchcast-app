@@ -5,6 +5,8 @@
  * no model; a coordinator's seats question never reaches school.seats (not
  * routed, not offered to the model). The fake session ignores filters and
  * hands over BOTH schools' rows, so the trend's boundary is the app-side cut.
+ * Slice B gates and meters every school.* read: school analytics is on here,
+ * and analytics_access_log is the filter-honouring audit-log fake.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StubTurn } from "@/utils/assistant/providers/stub";
@@ -29,22 +31,26 @@ vi.mock("@/utils/assistant/providers/anthropic", async () => {
 import { POST as turnPOST } from "@/app/api/sk/shell/turn/route";
 import { fakeSession, readEvents } from "@/sk/shell/__tests__/fixtures";
 import { allRows, COORD, GRADE6, PA, SCH_A, SCHOOL_B } from "@/sk/capabilities/__tests__/leader-fixtures";
+import { fakeAuditLog, withAuditLog } from "@/sk/shell/__tests__/audit-log-fake";
 
-const ENV = ["FEATURE_SK", "SK_ROLES", "SK_ALLOWED_EMAILS", "SK_SHELL_CONSUMER", "SK_SHELL_SECRET", "SK_AUDIT", "FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_PARENT_PORTAL"];
+const ENV = ["FEATURE_SK", "SK_ROLES", "SK_ALLOWED_EMAILS", "SK_SHELL_CONSUMER", "SK_SHELL_SECRET", "SK_AUDIT", "FEATURE_ROLE_HATS", "FEATURE_DIARY", "FEATURE_PARENT_PORTAL", "FEATURE_SCHOOL_ANALYTICS"];
 const saved: Record<string, string | undefined> = {};
 const EMAIL = "leader@school.example";
 
 const session = (who: { id: string; role: string; scope?: Array<{ grade: string; subject: string | null }> }) => {
   const rows = allRows();
-  return fakeSession(
-    {
-      ...rows,
-      // The fake ignores filters: the profile read and the teacher-name read share this table.
-      profiles: [{ id: who.id, role: who.role, school_id: SCH_A, full_name: "Leader" }],
-      coordinator_scope: (who.scope ?? []).map((s) => ({ coordinator_id: who.id, school_id: SCH_A, ...s })),
-      parent_links: [],
-    } as never,
-    { user: { id: who.id, email: EMAIL, email_confirmed_at: "2026-01-01T00:00:00Z" } },
+  return withAuditLog(
+    fakeSession(
+      {
+        ...rows,
+        // The fake ignores filters: the profile read and the teacher-name read share this table.
+        profiles: [{ id: who.id, role: who.role, school_id: SCH_A, full_name: "Leader" }],
+        coordinator_scope: (who.scope ?? []).map((s) => ({ coordinator_id: who.id, school_id: SCH_A, ...s })),
+        parent_links: [],
+      } as never,
+      { user: { id: who.id, email: EMAIL, email_confirmed_at: "2026-01-01T00:00:00Z" } },
+    ),
+    fakeAuditLog({ user: who.id }),
   );
 };
 
@@ -59,6 +65,7 @@ beforeEach(() => {
   process.env.SK_SHELL_SECRET = "leader-turn-test-secret-of-adequate-length";
   process.env.FEATURE_ROLE_HATS = "true";
   process.env.FEATURE_DIARY = "true";
+  process.env.FEATURE_SCHOOL_ANALYTICS = "true";
   mocks.constructed = [];
   mocks.hat = undefined;
   mocks.createAdminClient.mockImplementation(() => {

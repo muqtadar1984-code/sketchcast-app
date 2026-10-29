@@ -180,6 +180,31 @@ describe("the analytics gate — per role", () => {
   });
 });
 
+describe("the leader figures (slice C) — metered by name, analytics-gated", () => {
+  it('principal: "school trend" → school.trend answers; ONE sk_school row naming it', async () => {
+    mocks.createClient.mockResolvedValue(principal());
+    const ev = await readEvents(await turnPOST(turn("school trend")));
+    expect(answer(ev)).toMatch(/^Trend for the school, last 4 weeks/);
+    expect(ev.find((e) => e.type === "done")).toMatchObject({ sources: ["school.trend"], label: "grounded" });
+    expect(aal.inserted).toHaveLength(1);
+    expect(aal.inserted[0]).toMatchObject({ actor_id: PA, scope: "sk_school", target_kind: "sk_capability" });
+    expect(aal.inserted[0].detail).toMatchObject({ capability: "school.trend", mode: "school" });
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("principal with school analytics off → the analytics-off line; no row; no model; not offered to the model", async () => {
+    delete process.env.FEATURE_SCHOOL_ANALYTICS;
+    mocks.createClient.mockResolvedValue(principal());
+    const ev = await readEvents(await turnPOST(turn("school trend")));
+    expect(answer(ev)).toBe(OFF_LINE);
+    expect(ev.find((e) => e.type === "done")).toMatchObject({ sources: [], label: "declined" });
+    const offered = ev.find((e) => e.type === "meta")?.capabilities as string[];
+    expect(offered).toContain("navigate");
+    for (const f of ["school.seats", "school.cost", "school.gaps", "school.trend"]) expect(offered).not.toContain(f);
+    expect(aal.rows).toHaveLength(0);
+    expect(mocks.constructed).toEqual([]);
+  });
+});
+
 describe("the model's tool calls — the same gate", () => {
   it("two leader reads in one turn write ONE row", async () => {
     mocks.createClient.mockResolvedValue(principal());
