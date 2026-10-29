@@ -22,6 +22,8 @@
 import type { SkCapabilityResult, SkContext } from "@/sk/shell/types";
 import type { HealthRows } from "@/utils/school-health";
 import { isRelevant } from "@/utils/school-books";
+import { lineFor } from "@/sk/shell/lines";
+import { S_WHERE_GRADE, S_WHERE_SCHOOL } from "@/sk/shell/school-lines";
 
 export type LeaderMode = "own" | "school" | "scope";
 /** One coordinator_scope row, normalised: a grade, and a subject or null (= all). */
@@ -227,4 +229,29 @@ export function stripEmails(r: SkCapabilityResult): SkCapabilityResult {
   }
   if (r.entities) out.entities = r.entities.map((e) => ({ ...e, label: scrub(e.label) }));
   return out;
+}
+
+// ── Labels ───────────────────────────────────────────────────────────────────
+
+/** "grade 5" for a bare number, the stored text otherwise ("Form 1"). */
+export function gradeLabel(grade: string, locale: string): string {
+  const g = trimmed(grade);
+  return /^\d{1,2}$/.test(g) ? lineFor(S_WHERE_GRADE, locale, { grade: g }) : g;
+}
+
+/** The coordinator's scope in words: "grade 5", "grade 5 (Science), Form 2". */
+export function scopeLabel(rows: ScopeRow[], locale: string): string {
+  return rows.map((r) => `${gradeLabel(r.grade, locale)}${r.subject ? ` (${r.subject})` : ""}`).join(", ");
+}
+
+/** What {where} says: the school, the asked-for grade, or the scope. */
+export function whereLabel(ls: LeaderScope, locale: string, grade?: string): string {
+  if (grade) return gradeLabel(grade, locale);
+  if (ls.mode === "scope") return scopeLabel(ls.rows ?? [], locale);
+  return lineFor(S_WHERE_SCHOOL, locale);
+}
+
+/** An asked-for grade a coordinator does not hold. */
+export function gradeOutsideScope(ls: LeaderScope, grade: string | undefined): boolean {
+  return !!grade && ls.mode === "scope" && !classInScope(grade, ls.rows ?? []);
 }
