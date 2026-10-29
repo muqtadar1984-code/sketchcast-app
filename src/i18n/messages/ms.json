@@ -2196,7 +2196,33 @@
         "ready": "Siap",
         "failed": "Tidak berjaya",
         "open": "Buka"
-      }
+      },
+      "tutor": {
+        "play": "Memainkan {heading}.",
+        "pause": "Dijeda.",
+        "restart": "Memainkan pelajaran dari awal.",
+        "section": "Bahagian {n}: {heading}.",
+        "slide": "Ini slaid untuk {heading}.",
+        "practise": "Ini soalan latihan untuk {heading}.",
+        "noKit": "Buka satu bab dahulu — kemudian saya boleh memainkannya, menunjukkan slaidnya dan menguji anda.",
+        "noSection": "Saya tidak dapat mencari bahagian pelajaran itu. Sebutkan nombor bahagian atau tajuknya.",
+        "needSection": "Buka satu bab dan pilih satu bahagian, kemudian tanya saya tentangnya.",
+        "whereWeak": "Seterusnya: ulang kaji {heading} — idea itu masih perlu diperbaiki.",
+        "whereWatch": "Seterusnya: tonton bahagian {n}, {heading}.",
+        "wherePractise": "Seterusnya: buat latihan bahagian {n}, {heading}.",
+        "whereDone": "Anda telah menamatkan pelajaran ini. Syabas!",
+        "progressHead": "Kemajuan anda dalam {kit}:",
+        "progressMastered": "Dikuasai: {list}.",
+        "progressProvisional": "Hampir berjaya (dengan bantuan): {list}.",
+        "progressNeedsWork": "Perlu diperbaiki: {list}.",
+        "progressNone": "Anda belum menjawab sebarang soalan dalam pelajaran ini. Sebut \"uji saya\" untuk bermula.",
+        "greetingResume": "Hai {name} — anda sedang di {section} dalam {kit}. Mahu teruskan?",
+        "greetingList": "Hai {name} — ini bab-bab anda: {list}. Yang mana patut kita buka?",
+        "greetingNone": "Hai {name} — saya SK, tutor anda. Buka satu bab dan saya akan membantu anda melaluinya.",
+        "chapter": "Bab {n}",
+        "sectionN": "bahagian {n}"
+      },
+      "tutorNotOpen": "Pemain pelajaran tidak dibuka di halaman ini."
     },
     "player": {
       "title": "Tutor SK",

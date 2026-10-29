@@ -7,7 +7,7 @@
 // runs for its tabs (coordinator_scope, parent_links, the tenant's flags) and
 // the ONE admin read allowed here — `plan_tier(uid)`.
 
-import type { SkBoardState, SkCollector, SkContext, SkContextUser, SkHat, SkPage, SkRole, SkSelection } from "./types";
+import type { SkBoardState, SkCollector, SkContext, SkContextUser, SkHat, SkPage, SkRole, SkSelection, SkTutorState } from "./types";
 import { contextHash } from "./hash";
 import { hatsFor, resolveHat, HAT_COOKIE, isHat } from "@/utils/hats";
 import {
@@ -147,6 +147,51 @@ export function sanitizeBoard(board: unknown): SkBoardState | undefined {
   return out;
 }
 
+const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,119}$/i;
+const CHAPTER_RE = /^[A-Za-z0-9._-]{1,20}$/;
+const KIT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SECTION_KEY_RE = /^p\d{1,3}:[A-Za-z0-9_.-]{1,64}$/;
+
+/** S3 slice D: the kit player's state, bounded. Malformed ids drop it whole —
+ *  a tutor state is only worth anything when it names a kit the kit routes can
+ *  re-check (product slug, chapter ref, generation uuid, as kit-server.ts
+ *  parseKitQuery accepts them). */
+export function sanitizeTutor(tutor: unknown): SkTutorState | undefined {
+  if (!tutor || typeof tutor !== "object") return undefined;
+  const t = tutor as Record<string, unknown>;
+  const product = str(t.product, 120);
+  const chapter = typeof t.chapter === "number" ? String(t.chapter) : str(t.chapter, 20);
+  const kit = str(t.kit, 36);
+  if (!product || !SLUG_RE.test(product) || !chapter || !CHAPTER_RE.test(chapter) || !kit || !KIT_RE.test(kit)) return undefined;
+  const int = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 1000 ? v : undefined);
+  const ints = (v: unknown) => (Array.isArray(v) ? [...new Set(v.map(int).filter((x): x is number => x !== undefined))].slice(0, 200) : undefined);
+  const out: SkTutorState = { product, chapter, kit };
+  const k = int(t.k);
+  if (k !== undefined) out.k = k;
+  const key = str(t.key, 70);
+  if (key && SECTION_KEY_RE.test(key)) out.key = key;
+  if (typeof t.playing === "boolean") out.playing = t.playing;
+  if (t.mode === "video" || t.mode === "slide") out.mode = t.mode;
+  if (typeof t.practising === "boolean") out.practising = t.practising;
+  const watched = ints(t.watched);
+  if (watched) out.watched = watched;
+  const practised = ints(t.practised);
+  if (practised) out.practised = practised;
+  if (Array.isArray(t.segments)) {
+    const segments: NonNullable<SkTutorState["segments"]> = [];
+    for (const raw of t.segments.slice(0, 200)) {
+      if (!raw || typeof raw !== "object") continue;
+      const s = raw as Record<string, unknown>;
+      const sk = int(s.k);
+      const skey = str(s.key, 70);
+      if (sk === undefined || !skey || !SECTION_KEY_RE.test(skey)) continue;
+      segments.push({ k: sk, key: skey, heading: typeof s.heading === "string" ? s.heading.replace(/\s+/g, " ").trim().slice(0, 160) : "" });
+    }
+    out.segments = segments;
+  }
+  return out;
+}
+
 export type BuildContextInput = {
   user: { id: string; email: string | null };
   role: string | null;
@@ -186,6 +231,7 @@ export function buildContext(input: BuildContextInput): SkContext {
     place: { path, page: pageFor(path), params: sanitizeParams(collector?.params) },
     selection: sanitizeSelection(collector?.selection),
     board: sanitizeBoard(collector?.board),
+    tutor: sanitizeTutor(collector?.tutor),
     recent: { entities: [], lastToolResults: [] },
     flags: { ...input.flags, hasScope: input.coordinatorScope.length > 0 },
     issuedAt: input.now.toISOString(),

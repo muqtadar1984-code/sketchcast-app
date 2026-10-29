@@ -94,6 +94,34 @@ export type SkBoardState = {
   selection?: { generationId: string; n: number; text: string; title?: string };
 };
 
+/** S3 slice D: the student's kit player as the Shell sees it (published by
+ *  /sk/[product]/[chapter]/kit-player.tsx through the tutor bridge,
+ *  src/sk/shell/client/tutor-bridge.ts). UNTRUSTED like every collector field:
+ *  the ids only say which kit the student is looking at — every server read
+ *  re-runs the kit routes' own entitlement and mapping checks (kit-server.ts
+ *  resolveKit) — and the headings only steer the student's own player. */
+export type SkTutorState = {
+  product: string;
+  chapter: string;
+  /** The open kit's generation id. */
+  kit: string;
+  /** The current section: kit-wide 0-based index and manifest key. */
+  k?: number;
+  key?: string;
+  playing?: boolean;
+  mode?: "video" | "slide";
+  /** The practise panel is open. */
+  practising?: boolean;
+  /** Section indices watched / practised in this visit (the player's own). */
+  watched?: number[];
+  practised?: number[];
+  /** The kit's sections, so "go to the red blood cells part" resolves without a read. */
+  segments?: Array<{ k: number; key: string; heading: string }>;
+};
+
+/** S3 slice D: the moves the Shell drives on the student's kit player. */
+export type SkTutorMove = "play" | "pause" | "restart" | "section" | "slide" | "practise";
+
 /** An entity a tool resolved on an earlier turn, kept so "their parents" and
  *  "that worksheet" resolve without asking again (§5.4). */
 export type ResolvedEntity = {
@@ -111,6 +139,8 @@ export type SkContext = {
   place: SkPlace;
   selection: SkSelection;
   board?: SkBoardState;
+  /** S3 slice D: the student's open kit (students on /sk only). */
+  tutor?: SkTutorState;
   recent: {
     entities: ResolvedEntity[];
     lastToolResults: Array<{ tool: string; summary: string }>;
@@ -130,6 +160,8 @@ export type SkCollector = {
   params?: Record<string, string>;
   selection?: SkSelection;
   board?: SkBoardState;
+  /** S3 slice D: the kit player's state, on /sk/[product]/[chapter]. */
+  tutor?: SkTutorState;
   /** The browser's local clock, for timetable now/next (there is no per-school
    *  timezone today; the present page uses the browser clock too). */
   clock?: { day: number; minutes: number; iso: string };
@@ -184,6 +216,13 @@ export type SkCapabilityResult = {
    *  written until the client returns that token (§2.5, §8.2). Only
    *  `tier: "confirm"` entries set this. */
   confirm?: { action: string; title: string; params: Record<string, string | number | boolean | null> };
+  /** S3 slice D: an immediate-tier move on the student's kit player (the
+   *  route emits it as a `tutor` event). Only tutor.* entries set this. */
+  tutor?: { move: SkTutorMove; args: Record<string, unknown>; say?: string };
+  /** S3 slice D: content a capability already wrote and grounded itself
+   *  (tutor.explain runs the kit turn: one metered, grounded model call). The
+   *  route says `text` as the answer with this label and these sources. */
+  reply?: { text: string; label: "grounded" | "declined"; sources: string[]; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean };
 };
 
 /** What /api/sk/act answers after a token is returned (§9.2). */
@@ -215,6 +254,9 @@ export type SkCapabilityDeps = {
    *  tools in one turn read the teacher's classes once. Never outlives the
    *  request; keys carry the user id. Absent → every read runs. */
   cache?: Map<string, Promise<unknown>>;
+  /** S3 slice D: the Shell turn's client-minted id, so a capability that
+   *  meters (tutor.explain) can claim it once and replay a resend. */
+  turnId?: string | null;
 };
 
 export type SkCapability = {
@@ -273,6 +315,9 @@ export type SkTurnEvent =
    *  client only performs it. `say` is the one line SK speaks with the move
    *  (the video is paused while SK speaks, §2.4). */
   | { type: "board"; move: SkBoardMove; args: Record<string, unknown>; say?: string }
+  /** S3 slice D: a move on the student's kit player, performed through the
+   *  tutor bridge (src/sk/shell/client/tutor-bridge.ts). */
+  | { type: "tutor"; move: SkTutorMove; args: Record<string, unknown>; say?: string }
   /** S1: a confirm-tier card (§2.5, §8.2). The client renders it and returns
    *  `token` by click or spoken yes; the server executes only with the token. */
   | { type: "confirm"; token: string; action: string; title: string; params: Record<string, string | number | boolean | null>; expiresAt: string }
@@ -291,7 +336,7 @@ export type SkTurnEvent =
     }
   | { type: "error"; message: string };
 
-export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat";
+export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat" | "tutor";
 
 /** The Board moves of Final Plan §2.4, as the client executes them. */
 export type SkBoardMove =
