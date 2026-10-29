@@ -40,6 +40,7 @@ import {
   type KitView,
   type SlideView,
 } from "@/sk/kit-player";
+import { registerTutorPort, type TutorPort } from "@/sk/shell/client/tutor-bridge";
 
 type T = Dictionary["sk"]["player"];
 type Status = { kind: "loading" } | { kind: "preparing" } | { kind: "ready" } | { kind: "refused"; reason?: string } | { kind: "failed"; mapFailed: boolean };
@@ -334,6 +335,66 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
     }
     setPractice(null);
   }, [practice, segments]);
+
+  // ── S3 slice D: the SK Shell's controller port (shell/client/tutor-bridge.ts).
+  // Additive: the Shell's moves call the player's own handlers. The latest
+  // handlers ride in a ref, refreshed after every render; the port itself is
+  // registered once per mount.
+  const shellPort = useRef<TutorPort | null>(null);
+  useEffect(() => {
+    shellPort.current = {
+      state: () =>
+        status.kind === "ready" && kit
+          ? {
+              product,
+              chapter,
+              kit: kit.generationId,
+              k: clampIndex(segments, current),
+              ...(seg ? { key: seg.key } : {}),
+              playing: !!videoRef.current && !videoRef.current.paused,
+              mode,
+              practising: !!practice,
+              watched,
+              practised,
+              segments: segments.map((s, i) => ({ k: i, key: s.key, heading: s.heading })),
+            }
+          : null,
+      playing: () => !!videoRef.current && !videoRef.current.paused,
+      play: () => {
+        if (videoRef.current && !videoRef.current.paused) return;
+        setPractice(null);
+        togglePlay();
+      },
+      pause: () => videoRef.current?.pause(),
+      restart: () => {
+        setPractice(null);
+        playSection(0);
+      },
+      section: (k) => {
+        setPractice(null);
+        playSection(k);
+      },
+      slide: (k) => {
+        setPractice(null);
+        showSlideAt(k);
+      },
+      practise: (k) => void openPractice(k),
+    };
+  });
+  useEffect(
+    () =>
+      registerTutorPort({
+        state: () => shellPort.current?.state() ?? null,
+        playing: () => shellPort.current?.playing() ?? false,
+        play: () => shellPort.current?.play(),
+        pause: () => shellPort.current?.pause(),
+        restart: () => shellPort.current?.restart(),
+        section: (k) => shellPort.current?.section(k),
+        slide: (k) => shellPort.current?.slide(k),
+        practise: (k) => shellPort.current?.practise(k),
+      }),
+    [],
+  );
 
   // ── what's next ──
   const move = useMemo(() => nextMove({ segments, current, watched, practised }), [segments, current, watched, practised]);

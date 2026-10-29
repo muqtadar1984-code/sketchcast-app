@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { TourCopy } from "@/tour/definitions";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
+import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
 import SkShell, { type SkShellCopy } from "./sk-shell";
 
 // Floating launcher for the SK Shell (Final Plan 2026-10-28 §2.1, S0). Same
@@ -26,6 +27,7 @@ export default function SkLauncher({
   hat,
   introDue,
   board,
+  tutor,
 }: {
   copy: SkShellCopy;
   /** app.tour — the role tour's words, which the §4.6 narration reads. */
@@ -38,6 +40,8 @@ export default function SkLauncher({
    *  launcher mounts on the Board (bottom-START corner: the Stage's corner
    *  video owns bottom-end there, 360×202 at inset 16). */
   board?: SkBoardBridge | null;
+  /** S3 slice D: set by the /sk layout — the kit player bridge the panel drives. */
+  tutor?: SkTutorBridge | null;
 }) {
   const [open, setOpen] = useState(false);
   // Flipped by the panel the moment the intro ends (completed or skipped), so
@@ -84,6 +88,7 @@ export default function SkLauncher({
           onIntroDone={() => setIntroPending(false)}
           onClose={() => setOpen(false)}
           board={board ?? null}
+          tutor={tutor ?? null}
         />
       )}
     </>

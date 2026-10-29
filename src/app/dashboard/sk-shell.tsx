@@ -41,7 +41,7 @@ import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { tourForRole, type TourCopy } from "@/tour/definitions";
-import type { SkActRequest, SkActResponse, SkBoardMove, SkTurnEvent, SkTurnRequest } from "@/sk/shell/types";
+import type { SkActRequest, SkActResponse, SkBoardMove, SkTurnEvent, SkTurnRequest, SkTutorMove } from "@/sk/shell/types";
 import { SK_INTRO_TOUR } from "@/sk/shell/tour";
 import { collect, localeFromLang } from "@/sk/shell/client/collector";
 import { skTurnEvents } from "@/sk/shell/client/sse";
@@ -52,6 +52,7 @@ import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
 import { TRAY_POLL_MS, parseTray, shouldPollTray, trayStateText, trayVisible, type TrayKit } from "@/sk/shell/client/tray";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
+import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
 
@@ -63,7 +64,7 @@ type Entry = {
   tools?: Array<{ name: string; ok: boolean; summary: string }>;
   nav?: Array<{ path: string; label: string }>;
   /** S1: Board moves this turn performed, with the Board's own report. */
-  moves?: Array<{ move: SkBoardMove; say: string; ok?: boolean; summary?: string }>;
+  moves?: Array<{ move: SkBoardMove | SkTutorMove; say: string; ok?: boolean; summary?: string }>;
   sources?: string[];
   label?: Label;
   /** Still streaming. */
@@ -160,6 +161,7 @@ export default function SkShell({
   onIntroDone,
   onClose,
   board,
+  tutor,
 }: {
   copy: SkShellCopy;
   tourCopy: TourCopy;
@@ -173,6 +175,9 @@ export default function SkShell({
   /** S1: on /present, the Board bridge — its state rides with every turn and
    *  it performs the `board` events the server decides. */
   board?: SkBoardBridge | null;
+  /** S3 slice D: on /sk, the kit player bridge — its state rides with every
+   *  turn and it performs the `tutor` events the server decides. */
+  tutor?: SkTutorBridge | null;
 }) {
   const router = useRouter();
 
@@ -204,6 +209,7 @@ export default function SkShell({
   const memoryRef = useRef<string | undefined>(undefined);
   const storeRef = useRef<MemoryStore | null>(null);
   const boardRef = useRef<SkBoardBridge | null | undefined>(board);
+  const tutorRef = useRef<SkTutorBridge | null | undefined>(tutor);
   const cardsRef = useRef<Card[]>([]);
   const gateRef = useRef<MicGate | null>(null);
   const stopMicRef = useRef<(() => void) | null>(null);
@@ -272,6 +278,9 @@ export default function SkShell({
     boardRef.current = board;
   }, [board]);
   useEffect(() => {
+    tutorRef.current = tutor;
+  }, [tutor]);
+  useEffect(() => {
     cardsRef.current = cards;
   }, [cards]);
 
@@ -288,15 +297,19 @@ export default function SkShell({
       fallback: (lang) => new BrowserSpeechProvider(lang),
       defaultLang: pageSpeechLang(),
       board: {
+        // The Board's video — or, on /sk, the student's kit video (S3 slice D).
         isPlaying: () => {
           const st = boardRef.current?.state();
-          return !!st && st.paused === false;
+          if (st) return st.paused === false;
+          return tutorRef.current?.playing() ?? false;
         },
         pause: async () => {
-          await boardRef.current?.run("pause", {});
+          if (boardRef.current) await boardRef.current.run("pause", {});
+          else await tutorRef.current?.run("pause", {});
         },
         resume: async () => {
-          await boardRef.current?.run("resume", {});
+          if (boardRef.current) await boardRef.current.run("resume", {});
+          else await tutorRef.current?.run("play", {});
         },
       },
       // The same look → voice rule as the student page (A female, B male).
@@ -397,7 +410,7 @@ export default function SkShell({
         const res = await fetch("/api/sk/shell/context", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ path: window.location.pathname, memory: saved?.memory, announced: readText(LS_ANNOUNCED) }),
+          body: JSON.stringify({ path: window.location.pathname, memory: saved?.memory, announced: readText(LS_ANNOUNCED), tutor: tutorRef.current?.state() }),
         });
         const d = (await res.json().catch(() => ({}))) as ContextReply;
         if (cancelled) return;
@@ -491,6 +504,7 @@ export default function SkShell({
           lang: document.documentElement.lang,
           board: boardRef.current?.state(),
           selection: boardRef.current?.selection(),
+          tutor: tutorRef.current?.state(),
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
@@ -745,6 +759,7 @@ export default function SkShell({
           // and, before a lesson, the bar's pick so it can start one.
           board: boardRef.current?.state(),
           selection: boardRef.current?.selection(),
+          tutor: tutorRef.current?.state(),
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
@@ -847,6 +862,29 @@ export default function SkShell({
                   setCaption(done);
                   speakLine(done);
                 }
+              })(),
+            );
+            break;
+          }
+          case "tutor": {
+            // S3 slice D: a move on the student's kit player, decided and
+            // audited server-side; the player performs it through the bridge
+            // (same order as a Board move: speak the line, then move).
+            const tb = tutorRef.current;
+            const say = ev.say ?? "";
+            patchEntry(skId, (en) => ({ ...en, text: en.text || say, moves: [...(en.moves ?? []), { move: ev.move, say }] }));
+            if (say) setCaption(say);
+            if (!tb) {
+              patchEntry(skId, (en) => ({ ...en, moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: false, summary: copy.tutorNotOpen } : m)) }));
+              break;
+            }
+            const line = full ? "" : say;
+            const runMove = () => tb.run(ev.move, ev.args ?? {});
+            moveRuns.push(
+              (async () => {
+                const r = coord ? await coord.announceMove(line, runMove) : await runMove();
+                patchEntry(skId, (en) => ({ ...en, moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: r.ok, summary: r.summary } : m)) }));
+                if (!r.ok) setError(r.summary);
               })(),
             );
             break;

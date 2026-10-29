@@ -594,6 +594,34 @@ export function skShellDecision(input: SkShellDecisionInput): SkShellDecision {
   return { on: false, reason: "consumer_off" };
 }
 
+/**
+ * SK S3 slice D — the Shell on /sk (the student tutor). The Shell decision
+ * above AND the /sk pages' own gate, so the Shell can never be shown to
+ * anyone the tutor pages would 404:
+ *   - /sk's gate: NEXT_PUBLIC_FEATURE_SK + FEATURE_SK, signed in, and — while
+ *     SK_ALLOWED_EMAILS is set — a VERIFIED address on the list;
+ *   - the Shell's: FEATURE_SK, the role in SK_ROLES (default "teacher", so
+ *     students need SK_ROLES to include "student"), the allow-list again, and
+ *     the tenant opt-in (bypassed only BY the allow-list).
+ * Narrowing only: every condition is an AND.
+ */
+export function skTutorShellDecision(input: SkShellDecisionInput & { signedIn: boolean }): SkShellDecision {
+  if (process.env.NEXT_PUBLIC_FEATURE_SK !== "true" || !skEnabled()) return { on: false, reason: "flag_off" };
+  if (!input.signedIn || !skUserAllowed(input.user)) return { on: false, reason: "not_allowed" };
+  return skShellDecision(input);
+}
+
+export async function skTutorShellEnabledFor(
+  supabase: SupabaseClient,
+  user: (SkGateUser & { id?: string }) | null | undefined,
+  role: string | null | undefined,
+  schoolId: string | null | undefined,
+): Promise<boolean> {
+  // The /sk half first (no read); the Shell half reads the school's opt-in.
+  if (!user || process.env.NEXT_PUBLIC_FEATURE_SK !== "true" || !skEnabled() || !skUserAllowed(user)) return false;
+  return skShellEnabledFor(supabase, user, role, schoolId);
+}
+
 export async function skShellEnabledFor(
   supabase: SupabaseClient,
   user: SkGateUser | null | undefined,
