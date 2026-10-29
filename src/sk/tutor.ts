@@ -180,6 +180,17 @@ export async function visibleProducts(session: SkSessionDb): Promise<string[]> {
   return rows.map((r) => r.slug).filter((s): s is string => typeof s === "string").sort();
 }
 
+/** Where a kit sits in her books: the first entitled product that maps it. */
+export async function findKitChapter(userId: string, products: readonly string[], generationId: string, deps: KitDeps = kitDeps()): Promise<{ product: string; chapter: string } | null> {
+  for (const slug of products) {
+    const e = await deps.kits.entitled(userId, slug);
+    if (!e.ok) continue;
+    const hit = (await deps.kits.kitsForProduct(e.product.id)).find((k) => k.generationId === generationId);
+    if (hit) return { product: e.product.slug, chapter: hit.chapterRef };
+  }
+  return null;
+}
+
 /** The kit she last answered a question in: its generation and the item. */
 export async function lastKitSession(session: SkSessionDb, studentId: string): Promise<{ generationId: string } | null> {
   const rows = rowsOf(await session.from("sk_sessions").select("student_id, product_id, updated_at").eq("student_id", studentId).order("updated_at", { ascending: false }).limit(20));

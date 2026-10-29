@@ -8,6 +8,7 @@
 
 import type { SkBoardMove, SkCollector, SkContext, SkIntent } from "./types";
 import { NAV_TARGETS, type NavFilters, type NavTarget } from "@/sk/capabilities/navigate";
+import { resolveSegment } from "@/sk/capabilities/board";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -20,7 +21,13 @@ export type RulesDecision =
    *  ("write in Ali's diary" names the diary); the model still resolves it
    *  through the action's capability, which returns a confirm card. */
   | { intent: "act"; action: SkActPhrase }
-  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act"> };
+  /** S3 slice D: a student tutor move or read, decided by rules (students
+   *  only). The moves and the reads make NO model call; tutor.explain makes
+   *  exactly one (the kit turn, metered once). */
+  | { intent: "tutor"; capability: SkTutorCapability; args: Record<string, unknown> }
+  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor"> };
+
+export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" | "tutor.practise" | "tutor.where" | "tutor.progress" | "tutor.explain";
 
 export type SkActPhrase = "diary.note" | "parents.remind" | "marking.next" | "marking.grade" | "lesson.prepare";
 
@@ -516,6 +523,140 @@ export function actPhraseOf(t: string, raw: string): SkActPhrase | null {
   return null;
 }
 
+// ── S3 slice D: the student tutor's phrasings (EN / MS / AR) ────────────────
+//
+// Checked FIRST for a student and never for anyone else. Pure moves on her
+// kit player (play, pause, restart, a section, the slide, practice) and the
+// two reads (where am I, how am I doing) are decided here and make no model
+// call; "explain …" is decided here too and makes exactly one (the kit turn).
+
+const T_PAUSE_RE = polite(
+  "pause(?: (?:it|the video|the lesson|there|here))?|stop(?: (?:it|there|here|the video))?|hold on|wait(?: a (?:sec|second|moment))?|berhenti(?: (?:sekejap|dulu|di sini))?|jeda(?:kan)?(?: video)?|hentikan(?: video)?|tunggu(?: (?:dulu|sekejap))?|توقف(?: هنا)?|أوقف(?: الفيديو)?|اوقف(?: الفيديو)?|انتظر(?: قليلا| قليلاً)?",
+);
+const T_RESTART_RE = polite(
+  "(?:start|play|watch)(?: it| the (?:video|lesson))? (?:again|over|from the (?:start|beginning|top))|restart(?: the (?:video|lesson))?|from the (?:start|beginning|top)|(?:mula|main(?:kan)?|tonton)(?: (?:semula|video|pelajaran))? dari (?:awal|mula)|mula(?:kan)? semula|ulang(?: dari awal)?|(?:ابدأ|ابدا|شغل|شغّل)(?: الفيديو| الدرس)? من (?:البداية|الأول|جديد)|أعد التشغيل|اعد التشغيل|من البداية",
+);
+const T_PLAY_RE = polite(
+  "play(?: it| the (?:video|lesson|section|part))?|continue(?: (?:the video|the lesson|playing|watching))?|resume(?: (?:it|the video))?|carry on|go on|keep (?:going|playing|watching)|(?:yes |ok |okay )?(?:let'?s )?(?:carry on|continue|keep going)|(?:start|watch) the (?:video|lesson)|main(?:kan)?(?: (?:video|pelajaran|ia))?|sambung(?:kan)?(?: (?:video|tonton|semula))?|teruskan(?: (?:video|menonton))?|tonton(?: video)?|(?:ya |ok )?teruskan|شغل(?: الفيديو| الدرس)?|شغّل(?: الفيديو| الدرس)?|تابع(?: الفيديو| الدرس)?|استمر|واصل(?: الفيديو)?|أكمل(?: الفيديو| الدرس)?|اكمل(?: الفيديو| الدرس)?",
+);
+const T_WHERE_RE = polite(
+  "where am i|where was i|where(?:'s| is) my place|what(?:'s| is)? next|what now|what (?:should|do|can) i do (?:next|now)|what should i (?:watch|study|learn|practi[cs]e) next|(?:di )?mana saya(?: sekarang)?|saya di mana|apa (?:seterusnya|lagi|yang perlu saya (?:buat|lakukan)(?: seterusnya| sekarang)?)|(?:lepas ni|selepas ini) apa|أين أنا|اين انا|ما التالي|ماذا بعد|ماذا (?:أفعل|افعل) (?:الآن|بعد ذلك)|ما الخطوة التالية",
+);
+const T_PROGRESS_RE = polite(
+  "how am i doing|how(?:'m| am) i doing so far|how did i do|(?:show |what(?:'s| is) )?my progress|my (?:results|scores?)|what have i (?:mastered|learn(?:ed|t))|what do i need to work on|(?:bagaimana|macam mana) (?:prestasi|kemajuan|keputusan) saya|(?:tunjuk(?:kan)? )?kemajuan saya|prestasi saya|apa yang (?:saya dah kuasai|perlu saya perbaiki)|كيف (?:أدائي|ادائي|مستواي|تقدمي)|(?:أرني |اعرض )?تقدمي|ما الذي أتقنته|ماذا أتقنت|نتائجي",
+);
+const T_PRACTISE_RE = new RegExp(
+  `^(?:please |sila |tolong |من فضلك )?(?:quiz me|test me|let me (?:practi[cs]e|try)|(?:i want to |can i |let'?s )?practi[cs]e(?: (?:this|it|now|questions|this (?:part|section)))?|(?:give|show) me (?:some |a few |the )?(?:practice |practise )?questions|(?:practice|practise) questions|(?:open |show )?(?:the )?practi[cs]e(?: panel)?|uji saya|(?:beri|bagi|tunjuk(?:kan)?) saya (?:beberapa )?soalan(?: latihan)?|(?:saya nak |mari )?(?:buat )?latihan|soalan latihan|اختبرني|(?:أعطني|اعطني) (?:بعض )?(?:الأسئلة|أسئلة|اسئلة)|(?:أريد|اريد) (?:أن |ان )?(?:أتدرب|اتدرب)|تمرين|تمارين|أسئلة (?:تدريبية|للتدريب))(?: (?:on|for|about|untuk|tentang|على|عن) (?:section|part|bahagian|الجزء) ${NUM})?$`,
+  "u",
+);
+const T_SLIDE_RE = new RegExp(
+  `^(?:please |sila |tolong |من فضلك )?(?:(?:show|open|see)(?: me)? (?:the |this )?slide|(?:the )?slide|let me see the slide|(?:tunjuk(?:kan)?|buka|lihat)(?: saya)? slaid(?: (?:ini|itu))?|slaid|(?:اعرض|أرني|ارني)(?: لي)? (?:الشريحة|الشريحه)|الشريحة)(?: (?:number |no\\.? |nombor |رقم )?${NUM})?$`,
+  "u",
+);
+const T_SECTION_N_RE = new RegExp(
+  `^(?:please |sila |tolong |من فضلك )?(?:(?:go to|jump to|skip to|play|show(?: me)?|take me to|pergi ke|lompat ke|main(?:kan)?|tunjuk(?:kan)?|انتقل (?:إلى|الى)|اذهب (?:إلى|الى)|شغل|شغّل) )?(?:the )?(?:section|part|bahagian|الجزء|جزء)(?: (?:number|no\\.?|nombor|رقم))? ${NUM}$`,
+  "u",
+);
+const T_NEXT_RE = polite(
+  "(?:go to |play |show(?: me)? |pergi ke |main(?:kan)? |انتقل (?:إلى|الى) )?(?:the )?next(?: (?:section|part|bit|one))?|(?:bahagian )?(?:seterusnya|berikutnya)|(?:الجزء )?(?:التالي)",
+);
+const T_PREV_RE = polite(
+  "(?:go to |play |show(?: me)? |pergi ke |main(?:kan)? |انتقل (?:إلى|الى) )?(?:the )?(?:previous|last)(?: (?:section|part|bit|one))|go back(?: a (?:section|part))?|(?:bahagian )?sebelum(?:nya| ini)|kembali|(?:الجزء )?السابق|ارجع|عد للخلف",
+);
+/** "go to the red blood cells part", "take me to tissues", "pergi ke bahagian sel darah merah", "انتقل إلى جزء خلايا الدم". */
+const T_SECTION_WORDS_RE = new RegExp(
+  "^(?:please |sila |tolong |من فضلك )?(?:go to|jump to|skip to|take me to|play|show me|back to|pergi ke|lompat ke|main(?:kan)?|tunjuk(?:kan)?|kembali ke|انتقل (?:إلى|الى)|اذهب (?:إلى|الى)|شغل|شغّل|ارجع (?:إلى|الى)) (?:the )?(?:(?:section|part|bit|bahagian|جزء|الجزء) (?:on |about |tentang |mengenai |عن )?)?(.+?)(?: (?:part|section|bit))?$",
+  "u",
+);
+const T_EXPLAIN_RE = new RegExp(
+  "^(?:please |sila |tolong |من فضلك |can you |could you |boleh )?(?:explain|describe|clarify|terangkan|jelaskan|huraikan|اشرح|اشرحي|وضح|وضّح|فسر|فسّر)(?: (?:it|this|that|this (?:part|section|bit)|ini|itu|bahagian ini|هذا|هذه|هذا الجزء))?(?: (?:to )?(?:me|saya|لي))?(?: (?:again|lagi|semula|مرة أخرى|again please))?$",
+  "u",
+);
+const T_EXPLAIN_TOPIC_RE = new RegExp(
+  "^(?:please |sila |tolong |من فضلك |can you |could you |boleh )?(?:explain|describe|clarify|terangkan|jelaskan|huraikan|اشرح|اشرحي|وضح|وضّح|فسر|فسّر)(?: (?:to )?(?:me|saya|لي))? (?:the |about |tentang |mengenai |عن )?(.+)$",
+  "u",
+);
+const T_CONFUSED_RE = polite(
+  "i (?:don'?t|do not) (?:understand|get it|get this)|i'?m (?:confused|lost)|what does (?:this|that|it) mean|(?:saya )?(?:tak|tidak) (?:faham|paham)|saya keliru|apa maksud(?:nya| ini)?|لم (?:أفهم|افهم)|لا (?:أفهم|افهم)|ما معنى (?:هذا|ذلك)|ماذا يعني (?:هذا|ذلك)",
+);
+const T_CHAPTER_RE = new RegExp(
+  "^(?:please |sila |tolong |من فضلك )?(?:(?:open|go to|show(?: me)?|take me to|start|buka|pergi ke|tunjuk(?:kan)?|mula(?:kan)?|افتح|اذهب (?:إلى|الى)|انتقل (?:إلى|الى)) )?(?:the )?(?:chapter|bab|الفصل|فصل) ([0-9]{1,3})$",
+  "u",
+);
+const T_CHAPTERS_RE = polite(
+  "(?:(?:show|open|go to|back to)(?: me)? )?(?:all |my |the )?chapters|(?:the )?chapter list|(?:tunjuk(?:kan)?|buka|kembali ke) (?:semua )?bab|senarai bab|bab-bab saya|(?:اعرض|افتح|ارجع (?:إلى|الى)) (?:كل )?الفصول|قائمة الفصول|فصولي",
+);
+
+/** The student's book: the open kit's, the selection's, or the /sk/<product> path's. */
+function tutorProduct(ctx: SkContext): string | undefined {
+  if (ctx.tutor?.product) return ctx.tutor.product;
+  if (ctx.selection.productSlug) return ctx.selection.productSlug;
+  const m = /^\/sk\/([^/?#]+)/.exec(ctx.place.path);
+  return m?.[1] && /^[a-z0-9][a-z0-9_-]{0,119}$/i.test(m[1]) ? m[1] : undefined;
+}
+
+/** A section heading the words name, from the kit player's own list. */
+function sectionByWords(words: string, ctx: SkContext): number | null {
+  const segs = ctx.tutor?.segments ?? [];
+  if (!segs.length || !words.trim()) return null;
+  const hit = resolveSegment(words, { sessionId: "tutor", segments: segs.map((s) => ({ k: s.k, heading: s.heading, id: s.key })) });
+  return hit ? hit.k : null;
+}
+
+/** Student tutor phrasings. Null when the text is not one (it then goes on to
+ *  the navigate rules, and anything left is a question for tutor.explain). */
+export function routeTutor(raw: string, normed: string, ctx: SkContext): RulesDecision | null {
+  const tu = (capability: SkTutorCapability, args: Record<string, unknown> = {}): RulesDecision => ({ intent: "tutor", capability, args });
+  const t = normed.replace(/\s*[,،]\s*/gu, " ").replace(/[?؟]+$/u, "").trim();
+  if (T_PAUSE_RE.test(t)) return tu("tutor.play", { action: "pause" });
+  if (T_RESTART_RE.test(t)) return tu("tutor.play", { action: "restart" });
+  if (T_WHERE_RE.test(t)) return tu("tutor.where");
+  if (T_PROGRESS_RE.test(t)) return tu("tutor.progress");
+  if (T_PLAY_RE.test(t)) return tu("tutor.play", { action: "play" });
+  let m = t.match(T_PRACTISE_RE);
+  if (m) {
+    const n = numberOf(m[1]);
+    return tu("tutor.practise", n && n >= 1 ? { k: n - 1 } : {});
+  }
+  m = t.match(T_SLIDE_RE);
+  if (m) {
+    const n = numberOf(m[1]);
+    return tu("tutor.slide", n && n >= 1 ? { k: n - 1 } : {});
+  }
+  m = t.match(T_SECTION_N_RE);
+  if (m) {
+    const n = numberOf(m[1]);
+    if (n && n >= 1) return tu("tutor.section", { k: n - 1 });
+  }
+  if (T_NEXT_RE.test(t)) return tu("tutor.section", { step: "next" });
+  if (T_PREV_RE.test(t)) return tu("tutor.section", { step: "previous" });
+  // A chapter of her book: a navigate, no model.
+  const ch = t.match(T_CHAPTER_RE);
+  if (ch) {
+    const product = tutorProduct(ctx);
+    return { intent: "navigate", target: "tutor", filters: product ? { product, chapter: ch[1] } : {} };
+  }
+  if (T_CHAPTERS_RE.test(t)) {
+    const product = tutorProduct(ctx);
+    return { intent: "navigate", target: "tutor", filters: product ? { product } : {} };
+  }
+  if (T_EXPLAIN_RE.test(t) || T_CONFUSED_RE.test(t)) return tu("tutor.explain");
+  // "go to the red blood cells part": only when the words name one of HER
+  // sections (so "go to my timetable" stays a navigate).
+  const w = t.match(T_SECTION_WORDS_RE);
+  if (w) {
+    const k = sectionByWords(w[1] ?? "", ctx);
+    if (k !== null) return tu("tutor.section", { k });
+  }
+  const e = raw.replace(/[?؟.!]+$/u, "").trim().match(T_EXPLAIN_TOPIC_RE) ?? t.match(T_EXPLAIN_TOPIC_RE);
+  if (e) {
+    const words = (e[1] ?? "").trim().slice(0, 120);
+    const k = sectionByWords(words, ctx);
+    return tu("tutor.explain", k !== null ? { k } : { question: raw.slice(0, 600) });
+  }
+  return null;
+}
+
 export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
   const raw = (text ?? "").trim();
   const t = norm(raw);
@@ -523,9 +664,15 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   if (THANKS_RE.test(t)) return { intent: "chat", reply: SK_CHAT_THANKS };
   if (ACK_RE.test(t)) return { intent: "chat", reply: SK_CHAT_NOTHING_PENDING };
 
-  // S1: with a Board session open, the Board phrasings come first; without
-  // one the S0 rules apply unchanged ("open the board" → navigate).
-  if (ctx.board?.sessionId) {
+  // S3 slice D: a student's tutor phrasings come first, and a student never
+  // reaches the Board, start-a-lesson or teacher-action rules below.
+  const student = ctx.user.role === "student";
+  if (student) {
+    const tu = routeTutor(raw, t, ctx);
+    if (tu) return tu;
+  } else if (ctx.board?.sessionId) {
+    // S1: with a Board session open, the Board phrasings come first; without
+    // one the S0 rules apply unchanged ("open the board" → navigate).
     const b = routeBoard(raw, t, ctx);
     if (b) return b;
   } else {
@@ -542,7 +689,7 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   }
 
   // S2: a teacher action phrasing is never a navigate (the model resolves it).
-  const act = actPhraseOf(t, raw);
+  const act = student ? null : actPhraseOf(t, raw);
   if (act) return { intent: "act", action: act };
 
   const isQuestion = /[?؟]\s*$/.test(raw) || /^(?:what|which|who|whose|how|when|where|why|is|are|do|does|did|can|could|has|have|berapa|siapa|apa|bila|mana|bagaimana|ما|من|كم|متى|كيف|هل)\b/u.test(t);
@@ -555,7 +702,8 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
     const filters: NavFilters = {};
     let classQuery: string | undefined;
     let learnerQuery: string | undefined;
-    if (CLASS_TARGETS.has(target)) {
+    // A student names no class or learner: her navigate is her own pages.
+    if (CLASS_TARGETS.has(target) && !student) {
       if (THIS_CLASS_RE.test(t) && ctx.selection.classId) filters.classId = ctx.selection.classId;
       else classQuery = classQueryOf(t);
     }
@@ -571,7 +719,7 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
       const topic = t.match(TOPIC_RE)?.[1]?.trim();
       if (topic) filters.topic = topic.slice(0, 80);
     }
-    if (target === "reports") {
+    if (target === "reports" && !student) {
       const who = raw.match(LEARNER_RE_I)?.[1]?.trim();
       if (who) learnerQuery = who.replace(/['’]s$/u, "").slice(0, 60);
       else if (ctx.selection.learnerId) filters.learnerId = ctx.selection.learnerId;

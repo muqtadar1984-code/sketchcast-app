@@ -108,6 +108,8 @@ function parseBody(raw: unknown): SkTurnRequest | { error: string } {
     params: c.params && typeof c.params === "object" ? (c.params as Record<string, string>) : undefined,
     selection: c.selection && typeof c.selection === "object" ? (c.selection as SkCollector["selection"]) : undefined,
     board: c.board && typeof c.board === "object" ? (c.board as SkCollector["board"]) : undefined,
+    // S3 slice D: the student's kit player (sanitized in buildContext).
+    tutor: c.tutor && typeof c.tutor === "object" ? (c.tutor as SkCollector["tutor"]) : undefined,
     clock:
       clock && typeof clock.day === "number" && typeof clock.minutes === "number" && typeof clock.iso === "string"
         ? { day: clock.day, minutes: clock.minutes, iso: clock.iso.slice(0, 40) }
@@ -398,6 +400,29 @@ export async function POST(request: Request) {
         } else done({ sources: src, label: "declined" }, text, entities);
       };
 
+      /** S3 slice D: one tutor.* capability, start to finish, no model of the
+       *  route's own. A move becomes a `tutor` event the panel performs on the
+       *  kit player; a read (or tutor.explain's kit turn) carries its own
+       *  grounded text in `reply`. */
+      const runTutor = async (name: string, args: Record<string, unknown>) => {
+        const r = await runCapability(ctx, name, args, deps);
+        send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
+        if (r.ok && r.tutor) {
+          const say = r.tutor.say ?? r.summary;
+          send({ type: "tutor", move: r.tutor.move, args: r.tutor.args ?? {}, say: r.tutor.say });
+          done({ sources: [name], label: "grounded" }, say, r.entities ?? []);
+          return;
+        }
+        if (r.reply) {
+          const text = r.reply.text || r.summary;
+          send({ type: "text", text });
+          done({ sources: r.reply.sources, label: r.reply.label, ...(r.reply.usage ? { usage: r.reply.usage } : {}), ...(r.reply.trimmed ? { trimmed: true } : {}) }, text, r.entities ?? []);
+          return;
+        }
+        send({ type: "text", text: r.summary });
+        done({ sources: [], label: "declined" }, r.summary, []);
+      };
+
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
 
@@ -410,13 +435,38 @@ export async function POST(request: Request) {
             finish();
             return;
           }
-          const nav = await runCapability(ctx, "navigate", { target: offer.target, bookId: offer.bookId }, deps);
+          if (offer.target === "tutor" && ctx.tutor?.kit === offer.kit) {
+            // S3 slice D: "Carry on?" answered on the kit's own page — play.
+            await runTutor("tutor.play", { action: "play" });
+            finish();
+            return;
+          }
+          const nav = await runCapability(
+            ctx,
+            "navigate",
+            offer.target === "tutor" ? { target: "tutor", product: offer.product, chapter: offer.chapter, generationId: offer.kit } : { target: offer.target, bookId: offer.bookId },
+            deps,
+          );
           send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
           send({ type: "text", text: nav.summary });
           if (nav.ok && nav.navigate) {
             send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
             done({ sources: ["navigate"], label: "navigation" }, nav.summary, []);
           } else done({ sources: [], label: "declined" }, nav.summary, []);
+          finish();
+          return;
+        }
+
+        // ── S3 slice D: a STUDENT turn never reaches the teacher model ───────
+        // A tutor phrasing runs its tutor.* capability (moves and reads: no
+        // model call); anything else that is not a navigate or a bare
+        // acknowledgement is her question about the open lesson and goes to
+        // tutor.explain — the kit turn, ONE grounded model call, metered once
+        // — or, with no lesson open, to tutor.where (her chapters, no model).
+        if (ctx.user.role === "student" && decision.intent !== "navigate" && decision.intent !== "chat") {
+          if (decision.intent === "tutor") await runTutor(decision.capability, decision.args);
+          else if (ctx.tutor) await runTutor("tutor.explain", { question: body.text });
+          else await runTutor("tutor.where", {});
           finish();
           return;
         }
