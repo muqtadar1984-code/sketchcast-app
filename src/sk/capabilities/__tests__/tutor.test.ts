@@ -79,7 +79,8 @@ afterEach(() => {
 describe("registry scopes", () => {
   it("a student sees navigate and the tutor.* entries — nothing else", () => {
     const names = allowedFor(studentCtx()).map((c) => c.meta.name).sort();
-    expect(names).toEqual(["navigate", ...[...TUTOR].sort()].sort());
+    // + S4 slice D's book.activate (student and parent: her own book code).
+    expect(names).toEqual(["book.activate", "navigate", ...[...TUTOR].sort()].sort());
     expect(TUTOR).toEqual(new Set(["tutor.where", "tutor.progress", "tutor.play", "tutor.section", "tutor.slide", "tutor.practise", "tutor.explain"]));
   });
   it("every tutor.* entry is student-only, hat-less, immediate, behind the sk flag", () => {

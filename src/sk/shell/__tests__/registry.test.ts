@@ -105,17 +105,22 @@ const SHIPPED = [
   "child.risk",
   "child.progress",
   "child.week",
+  // S4 slice D: book activation (student + parent, sk flag; click-only).
+  "book.activate",
 ];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
 const PARENT_ONLY = SHIPPED.filter((n) => n.startsWith("child."));
-const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n));
+const STUDENT_AND_PARENT = ["book.activate"];
+const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n));
 // S4 slice C: diary.note's parent branch (a note to one of her own children).
-const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY];
-const STUDENT_SEES = ["navigate", ...STUDENT_ONLY];
+const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT];
+const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT];
 
 describe("allowedFor over the shipped registry", () => {
-  it("teacher: everything but the tutor and child.*; parent: navigate + context.resolve + diary.note + child.*; student: navigate + the tutor", () => {
-    expect(allowedFor(makeCtx()).map((c) => c.meta.name)).toEqual(TEACHER_SEES);
+  it("teacher: everything but the tutor, child.* and book.activate; parent: navigate + context.resolve + diary.note + child.* + book.activate; student: navigate + the tutor + book.activate", () => {
+    const teacher = allowedFor(makeCtx()).map((c) => c.meta.name);
+    expect(teacher).toEqual(TEACHER_SEES);
+    expect(teacher.some((n) => n.startsWith("child.") || n === "book.activate")).toBe(false);
     expect(allowedFor(makeCtx({ role: "student" })).map((c) => c.meta.name)).toEqual(STUDENT_SEES);
     expect(allowedFor(makeCtx({ role: "parent", hat: "parent" })).map((c) => c.meta.name)).toEqual(PARENT_SEES);
   });

@@ -112,10 +112,11 @@ describe("consumeThenWrite", () => {
 
 describe("HANDLERS", () => {
   it("every action is confirm/act; only assign audits its own done row; only lesson.prepare (spends credits) is click-only", () => {
-    expect(Object.keys(HANDLERS).sort()).toEqual(["assign", "diary.note", "lesson.prepare", "marking.grade", "parents.remind"]);
+    expect(Object.keys(HANDLERS).sort()).toEqual(["assign", "book.activate", "diary.note", "lesson.prepare", "marking.grade", "parents.remind"]);
     for (const [name, h] of Object.entries(HANDLERS)) {
       expect([h.tier, h.kind]).toEqual(["confirm", "act"]);
-      expect(h.clickOnly ?? false).toBe(name === "lesson.prepare");
+      // S4 slice D: book.activate spends a code — click-only too.
+      expect(h.clickOnly ?? false).toBe(name === "lesson.prepare" || name === "book.activate");
       expect(h.meta?.tier).toBe("confirm");
     }
     expect(HANDLERS.assign.auditsDone).toBe(true);

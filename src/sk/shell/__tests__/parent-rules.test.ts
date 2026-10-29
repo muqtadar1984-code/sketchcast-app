@@ -10,6 +10,7 @@ import { routeParent, type SkParentCapability } from "../parent-rules";
 import { PARENT_LINE_TABLES } from "../parent-lines";
 import { makeCtx, NOW } from "./fixtures";
 import { A1, A2, PA, PB, B1, parentCtx } from "@/sk/capabilities/__tests__/parent-fixtures";
+import { formatCode, generateEditionCode } from "@/sk/access";
 import { LOCALES } from "@/i18n/locales";
 import en from "@/i18n/messages/en.json";
 import ms from "@/i18n/messages/ms.json";
@@ -119,6 +120,33 @@ describe("routeParent — parent phrasings (EN/MS/AR)", () => {
   });
   it("one child: 'how is my son doing' is about that child", () => {
     expect(routeParent("how is my son doing", parentCtx(PB))).toEqual({ capability: "child.status", args: { child: "my son" } });
+  });
+});
+
+// S4 slices C+D together: a book code is decided BEFORE the parent rules (a
+// code never reaches anything else), and the book rules never swallow a
+// parent's question about a child.
+describe("a parent's book code → book.activate, never child.*", () => {
+  const CODE = generateEditionCode((n) => new Uint8Array(Array.from({ length: n }, (_, i) => (i * 29 + 3) & 0xff)));
+  it("'activate SKE-… for Aisyah' from a parent → book.activate with the child, not child.*", () => {
+    const d = routeByRules(`activate ${formatCode(CODE)} for Aisyah`, parentCtx(PA), NOW);
+    expect(d).toEqual({ intent: "act", action: "book.activate", book: { code: CODE, childQuery: "Aisyah" } });
+  });
+  it("a code inside a child question still goes to book.activate", () => {
+    expect(routeByRules(`how is Aisyah doing ${formatCode(CODE)}`, parentCtx(PA), NOW)).toMatchObject({ intent: "act", action: "book.activate", book: { code: CODE } });
+    expect(routeByRules(`activate my book for Aisyah`, parentCtx(PA), NOW)).toEqual({ intent: "act", action: "book.activate", book: { childQuery: "Aisyah" } });
+  });
+  it("with book.activate waiting on 'which child?': a name is the answer, a child question is still child.*", () => {
+    const ctx = parentCtx(PA);
+    ctx.pending = { task: "book.activate", needs: ["child"] };
+    expect(routeByRules("Aisyah", ctx, NOW)).toEqual({ intent: "act", action: "book.activate", book: { childQuery: "Aisyah" } });
+    expect(routeByRules("untuk Adam", ctx, NOW)).toEqual({ intent: "act", action: "book.activate", book: { childQuery: "Adam" } });
+    expect(routeByRules("how is Aisyah doing", ctx, NOW)).toEqual({ intent: "ask", parent: { capability: "child.status", args: { child: A1 } } });
+    expect(routeByRules("Adam's week", ctx, NOW)).toEqual({ intent: "ask", parent: { capability: "child.week", args: { child: A2 } } });
+  });
+  it("without a code, the parent phrasings stay the parent's", () => {
+    expect(routeByRules("how is Aisyah doing", parentCtx(PA), NOW)).toEqual({ intent: "ask", parent: { capability: "child.status", args: { child: A1 } } });
+    expect(routeByRules("tell Adam's teacher he was sick yesterday", parentCtx(PA), NOW)).toEqual({ intent: "act", action: "diary.note" });
   });
 });
 

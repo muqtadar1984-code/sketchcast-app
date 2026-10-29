@@ -31,6 +31,20 @@ export const GONE = "a5000000-0000-4000-8000-000000000015";
 export const SUB = "5b000000-0000-4000-8000-000000000021";
 export const SUB2 = "5b000000-0000-4000-8000-000000000022";
 export const BOOK = "b0000000-0000-4000-8000-000000000031";
+// S4 slice D: a book product and a parent's two children.
+export const PRODUCT = "d0000000-0000-4000-8000-000000000041";
+export const AISYAH = "a6000000-0000-4000-8000-000000000016";
+export const OMAR = "a7000000-0000-4000-8000-000000000017";
+
+/** S4 slice D: the redeem RPCs' semantics for statefulAdmin — codes by HMAC
+ *  (single use), verified parent links (else not_your_child), and a forced
+ *  outcome for the mapping tests. */
+export type RedeemWorld = {
+  codes: Record<string, { used?: boolean; product_id?: string }>;
+  links?: Array<{ parent: string; child: string }>;
+  force?: string;
+  forceError?: boolean;
+};
 
 export function signedRow(
   over: Partial<Omit<ActionTokenRow, "hmac">> & { action: string; params: ActionParams; contextHash: string; id?: string },
@@ -58,9 +72,10 @@ export function signedRow(
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function statefulAdmin(rows: Record<string, ActionTokenRow>, now: Date = NOW) {
+export function statefulAdmin(rows: Record<string, ActionTokenRow>, now: Date = NOW, redeem?: RedeemWorld) {
   const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
   const shareWrites: string[] = [];
+  const grants: Array<{ user: string; child: string | null; product: string }> = [];
   const consume = (id: string, hash: string): string => {
     const r = rows[id];
     if (!r) return "not_found";
@@ -74,6 +89,7 @@ export function statefulAdmin(rows: Record<string, ActionTokenRow>, now: Date = 
     rows,
     calls,
     shareWrites,
+    grants,
     from: (table: string) => {
       if (table !== "sk_action_tokens") throw new Error(`admin touched ${table}`);
       return {
@@ -94,6 +110,19 @@ export function statefulAdmin(rows: Record<string, ActionTokenRow>, now: Date = 
         const p = rows[String(args.p_token)].params;
         shareWrites.push(`${p.generation_id}|${p.class_id}`);
         return { data: { outcome: "done", share_id: "s1", class_id: p.class_id, generation_id: p.generation_id, due_at: p.due_at }, error: null };
+      }
+      if (redeem && (fn === "redeem_book_code" || fn === "redeem_edition_code")) {
+        if (redeem.forceError) return { data: null, error: { message: "rpc boom" } };
+        if (redeem.force) return { data: { outcome: redeem.force }, error: null };
+        const c = redeem.codes[String(args.p_code_hmac)];
+        if (!c) return { data: { outcome: "invalid" }, error: null };
+        if (c.used) return { data: { outcome: "used" }, error: null };
+        const child = (args.p_for_child as string | null) ?? null;
+        if (child && !(redeem.links ?? []).some((l) => l.parent === args.p_user && l.child === child)) return { data: { outcome: "not_your_child" }, error: null };
+        c.used = true;
+        const product = c.product_id ?? PRODUCT;
+        grants.push({ user: String(args.p_user), child, product });
+        return { data: { outcome: "redeemed", grant: { id: `grant-${grants.length}`, product_id: product, activated_at: now.toISOString(), expires_at: null, tutor_expires_at: "2026-11-27T08:30:00.000Z" } }, error: null };
       }
       return { data: null, error: { message: `unexpected rpc ${fn}` } };
     },

@@ -243,6 +243,10 @@ export type SkCapabilityResult = {
    *  (tutor.explain runs the kit turn: one metered, grounded model call). The
    *  route says `text` as the answer with this label and these sources. */
   reply?: { text: string; label: "grounded" | "declined"; sources: string[]; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean };
+  /** S4 slice D: what the conversation's signed memory should hold as the
+   *  pending task after this turn (book.activate asking for the order number
+   *  or the child keeps the code's HMAC here); null clears it. */
+  pending?: { task: string; needs: string[] } | null;
 };
 
 /** What /api/sk/act answers after a token is returned (§9.2). */

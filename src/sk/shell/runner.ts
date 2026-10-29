@@ -9,6 +9,7 @@ import type { SkActionRow, SkCapability, SkCapabilityResult, SkCollector, SkCont
 import { findCapability, fromApiToolName, metaAllows } from "./registry";
 import { recordSafely, type SkAuditSink } from "./audit";
 import { REGISTRY } from "@/sk/capabilities";
+import { maskBookSecretsDeep } from "@/sk/book-activate";
 
 export const SK_FACTS_MAX_ROWS = 40;
 export const SK_SUMMARY_MAX_CHARS = 1500;
@@ -44,9 +45,11 @@ export function capResult(r: SkCapabilityResult): SkCapabilityResult {
   };
 }
 
-function paramsForAudit(args: Record<string, unknown>): Record<string, unknown> {
-  const s = JSON.stringify(args ?? {});
-  if (s.length <= 4000) return args ?? {};
+function paramsForAudit(raw: Record<string, unknown>): Record<string, unknown> {
+  // S4 slice D: a book code or order number is never stored, here included.
+  const args = maskBookSecretsDeep(raw ?? {});
+  const s = JSON.stringify(args);
+  if (s.length <= 4000) return args;
   return { truncated: true, head: s.slice(0, 4000) };
 }
 

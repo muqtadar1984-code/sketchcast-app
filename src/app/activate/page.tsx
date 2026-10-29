@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { skUserAllowed } from "@/utils/flags";
 import { createClient } from "@/utils/supabase/server";
+import { getDictionary } from "@/i18n/dictionaries";
+import { resolveLocale } from "@/i18n/resolve";
+import { dirFor } from "@/i18n/locales";
+import { childPicker, type LinkedChild } from "@/sk/book-activate";
+import { verifiedChildren } from "@/sk/book-redeem";
 import ActivateForm from "./activate-form";
 
 // /activate — the page printed in every book: activate a code card (SKB…,
@@ -10,6 +15,14 @@ import ActivateForm from "./activate-form";
 // under /api/sk/{redeem,activate} carry the authoritative checks; this page
 // only renders the form. Behind NEXT_PUBLIC_FEATURE_SK like the student page,
 // and 404 to anyone off the SK_ALLOWED_EMAILS list while that is in force.
+//
+// SK S4 slice D (design 2026-10-29, decision 3): a signed-in parent with
+// VERIFIED linked children activates FOR A CHILD — one child is preselected,
+// two or more must be chosen (no default). A parent with no linked child
+// keeps today's behaviour (the grant is theirs) with a note saying so.
+// Students and teachers see the form as before. The children are read with
+// the user-session client (parent_links' own RLS: parent_id = auth.uid()); the
+// RPC re-checks the verified link whatever the browser sends.
 //
 // Printed URL:    https://app.sketchcast.app/activate
 // Button label:   "Activate my book"
@@ -23,22 +36,32 @@ export default async function ActivatePage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (process.env.SK_ALLOWED_EMAILS && !skUserAllowed(user)) notFound();
+  const locale = await resolveLocale();
+  const t = (await getDictionary(locale)).activate;
+
+  let picker = childPicker(null, []);
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    const role = (profile?.role as string | null) ?? null;
+    const children: LinkedChild[] = role === "student" ? [] : await verifiedChildren(supabase, user.id);
+    picker = childPicker(role, children);
+  }
+
+  const [before, after] = t.signIn.split("{link}");
   return (
-    <main className="min-h-screen bg-[#F6F7F5] p-4 sm:p-8">
+    <main className="min-h-screen bg-[#F6F7F5] p-4 sm:p-8" dir={dirFor(locale)} lang={locale}>
       <div className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-slate-900">Activate your book</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Enter the code printed in your book. Book access is yours for good; SK tutoring runs for 30 days from today.
-        </p>
+        <h1 className="text-xl font-semibold text-slate-900">{t.title}</h1>
+        <p className="mt-2 text-sm text-slate-600">{t.intro}</p>
         {user ? (
-          <ActivateForm />
+          <ActivateForm t={t} picker={picker} />
         ) : (
           <p className="mt-6 text-sm text-slate-700">
-            Please{" "}
+            {before}
             <Link href="/login?next=/activate" className="font-medium text-emerald-700 underline">
-              sign in
-            </Link>{" "}
-            first, then come back to this page.
+              {t.signInLink}
+            </Link>
+            {after ?? ""}
           </p>
         )}
       </div>

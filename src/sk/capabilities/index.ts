@@ -20,6 +20,7 @@ import { lessonPrepareAction, lessonStatus } from "./prepare";
 import { TUTOR_CAPABILITIES } from "./tutor";
 // S4 slices A+B: the parent reads (child.*).
 import { PARENT_CAPABILITIES } from "./parent";
+import { bookActivateAction } from "./book";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -54,9 +55,12 @@ const ENTRIES: SkCapability[] = [
   // child.risk, child.progress, child.week), parent role only, all immediate:
   // scoped to the parent's own VERIFIED children (child-scope.ts).
   ...PARENT_CAPABILITIES,
+  // S4 slice D: book activation (student for herself, parent for a verified
+  // child), confirm tier and CLICK-ONLY (it spends a code; act-book.ts).
+  bookActivateAction,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
 
-export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus, TUTOR_CAPABILITIES };
+export { navigateCapability, resolveCapability, libraryFind, catalogueAvailability, assignmentsStatus, learnersRisk, timetableNowNext, BOARD_CAPABILITIES, assignAction, diaryNoteAction, parentsRemindAction, markingNext, markingGrade, lessonPrepareAction, lessonStatus, TUTOR_CAPABILITIES, bookActivateAction };
 export { PARENT_CAPABILITIES };
