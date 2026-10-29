@@ -16,6 +16,7 @@
 //   confirm.ts       — S1 §9.2: when a bare yes/no answers a confirm card
 //   prefetch.ts      — which pages to warm (router.prefetch) so a navigate
 //                      lands on a render already under way
+//   tray.ts          — S2: the job tray's polling rule and state words
 //   speech.ts        — S1 slice E: SK's voice — which provider (Polly when the
 //                      server allows, the browser otherwise), the video paused
 //                      while SK speaks and given back after, barge-in
@@ -49,6 +50,7 @@ import { runNarration, skIntroScript } from "@/sk/shell/client/narration";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
+import { TRAY_POLL_MS, parseTray, shouldPollTray, trayStateText, trayVisible, type TrayKit } from "@/sk/shell/client/tray";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
@@ -80,9 +82,11 @@ type Card = {
   result?: string;
 };
 
-type ContextReply = { ready?: boolean; greeting?: string; capabilities?: string[]; memory?: string };
+type ContextReply = { ready?: boolean; greeting?: string; capabilities?: string[]; memory?: string; sessionId?: string; announced?: string };
 
 const LS_READ_ALOUD = "sk.readAloud";
+/** S2: the server-signed note of kits the greeting already announced (ids only). */
+const LS_ANNOUNCED = "sk.announced";
 const LS_HANDS_FREE = "sk.handsFree";
 /** How long a settled card stays visible before it leaves the slot. */
 const CARD_LINGER_MS = 6000;
@@ -101,6 +105,21 @@ function lastSentence(text: string): string {
     .split(/(?<=[.!?؟।])\s+/)
     .filter(Boolean);
   return parts[parts.length - 1] ?? "";
+}
+
+function readText(key: string): string | undefined {
+  try {
+    return localStorage.getItem(key) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+function writeText(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* private mode */
+  }
 }
 
 function readFlag(key: string, fallback: boolean): boolean {
@@ -173,6 +192,9 @@ export default function SkShell({
   const [mic, setMic] = useState(false);
   const [caption, setCaption] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // S2: the job tray (SK-started kits) and whether the tab is visible.
+  const [tray, setTray] = useState<TrayKit[]>([]);
+  const [visible, setVisible] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -323,13 +345,60 @@ export default function SkShell({
     storeRef.current?.save({ memory, sessionId: sessionId ?? null });
   }, []);
 
+  // ── S2: the job tray — her SK-started kits (/api/sk/shell/tray) ──
+  // Read on open, after a lesson.prepare confirm, and every 15 s while a kit
+  // is still being made AND this tab is visible (client/tray.ts shouldPollTray;
+  // the visibility test is the §2.6 mic gate's). The panel being mounted IS
+  // the panel being open. A failed read keeps what the tray showed.
+  const loadTray = useCallback(async () => {
+    try {
+      const q = new URLSearchParams({ path: window.location.pathname });
+      const res = await fetch(`/api/sk/shell/tray?${q.toString()}`, { cache: "no-store" });
+      if (!res.ok) return;
+      setTray(parseTray(await res.json().catch(() => null)));
+    } catch {
+      /* the tray is a convenience: keep the last state */
+    }
+  }, []);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      const v = document.visibilityState === "visible";
+      setVisible(v);
+      if (v) void loadTray(); // back on the tab: one read, then the rule decides
+    };
+    const t = window.setTimeout(() => {
+      setVisible(document.visibilityState === "visible");
+      void loadTray();
+    }, 0);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [loadTray]);
+
+  const trayPolling = shouldPollTray({ open: true, visibility: visible ? "visible" : "hidden", kits: tray });
+  useEffect(() => {
+    if (!trayPolling) return;
+    const id = window.setInterval(() => void loadTray(), TRAY_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [trayPolling, loadTray]);
+
   // ── warm start: greeting + capabilities + memory ──
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const q = new URLSearchParams({ path: window.location.pathname });
-        const res = await fetch(`/api/sk/shell/context?${q.toString()}`);
+        // POST (S2): the conversation this tab carries and the note of kits
+        // already announced go WITH the warm start, so the greeting can lead
+        // with "Your kit for … is ready" exactly once.
+        const saved = storeRef.current?.load() ?? null;
+        const res = await fetch("/api/sk/shell/context", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path: window.location.pathname, memory: saved?.memory, announced: readText(LS_ANNOUNCED) }),
+        });
         const d = (await res.json().catch(() => ({}))) as ContextReply;
         if (cancelled) return;
         if (!res.ok) {
@@ -341,12 +410,12 @@ export default function SkShell({
         const caps = Array.isArray(d.capabilities) ? d.capabilities : [];
         setCapabilities(caps);
         warmNavigation(caps);
-        // A conversation carried over from another page (the dashboard →
-        // the Board) beats the fresh blob; the server still has the last
-        // word on whether it applies (signature, hat, 4-hour gap).
-        const saved = storeRef.current?.load() ?? null;
-        if (saved) memoryRef.current = saved.memory;
-        else if (d.memory) memoryRef.current = d.memory;
+        // The server already applied the carried conversation (signature,
+        // hat, 4-hour gap) and returns it — plus what the greeting announced —
+        // or a fresh one; the saved blob is only the fallback.
+        if (d.memory) keepMemory(d.memory, d.sessionId ?? null);
+        else if (saved) memoryRef.current = saved.memory;
+        if (d.announced) writeText(LS_ANNOUNCED, d.announced);
         const greeting = (d.greeting && String(d.greeting).trim()) || copy.greetingFallback;
         setEntries([{ id: uuid(), who: "sk", text: greeting }]);
         setCaption(lastSentence(greeting));
@@ -438,13 +507,15 @@ export default function SkShell({
       }
       if (reply?.memory) keepMemory(reply.memory);
       const ok = !!reply?.ok && reply.outcome === "done";
+      // S2: a kit just started — the tray shows it now, not at the next poll.
+      if (ok && card.action === "lesson.prepare") void loadTray();
       const line = (reply?.summary && String(reply.summary).trim()) || (ok ? copy.cardSent : copy.actFailed);
       patchCard(card.id, { status: ok ? "done" : "failed", result: line });
       retireCard(card.id);
       appendSk(line, { label: ok ? "grounded" : "declined", sources: [card.action] });
       speakLine(line);
     },
-    [appendSk, copy, keepMemory, patchCard, retireCard, speakLine],
+    [appendSk, copy, keepMemory, loadTray, patchCard, retireCard, speakLine],
   );
 
   const dismissCard = useCallback(
@@ -905,6 +976,33 @@ export default function SkShell({
           </div>
         </div>
 
+        {/* S2 job tray: her SK-started kits, newest first, at most 3. Hidden when empty. */}
+        {trayVisible(tray) && (
+          <div className="px-5 py-2 border-b border-[#EEF0EC] bg-[#FAFBF9]" data-sk="kit-tray" data-sk-polling={trayPolling ? "on" : "off"}>
+            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 mb-1">{copy.tray.title}</div>
+            <ul className="space-y-1">
+              {tray.map((k) => (
+                <li key={k.id} className="flex items-center gap-2 text-xs" data-sk="kit-tray-item" data-sk-state={k.state}>
+                  <span className="min-w-0 flex-1 truncate text-slate-900" title={k.title}>
+                    {k.title}
+                  </span>
+                  <span
+                    className={`shrink-0 ${k.state === "failed" ? "text-[#B42318]" : k.state === "ready" ? "text-[#0C8175] font-medium" : "text-slate-600"}`}
+                  >
+                    {(k.state === "making" || k.state === "partial") && <span className="animate-pulse" aria-hidden>● </span>}
+                    {trayStateText(k, copy.tray)}
+                  </span>
+                  {k.href && (
+                    <button type="button" onClick={() => router.push(k.href as string)} className="shrink-0 text-[#0C8175] font-medium hover:underline" data-sk="kit-tray-open">
+                      {copy.tray.open}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Transcript */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3" data-sk="transcript">
           {ready === null && <p className="text-sm text-slate-500">…</p>}
@@ -966,7 +1064,8 @@ export default function SkShell({
           {caption}
         </div>
 
-        {/* Job tray (jobs arrive in S2) — on the Board it also reports the lesson map. */}
+        {/* S0's job-tray line — on the Board it reports the lesson map and the
+            slides load. S2's kits have their own list above the transcript. */}
         <div className="px-5 py-1 text-[10px] text-slate-600 border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
           {slideLoad ? fmt(copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n }) : mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
         </div>

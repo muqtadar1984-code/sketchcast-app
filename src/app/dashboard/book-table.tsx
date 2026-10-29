@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import GenerateButton from "./generate-button";
 import GenerateAllButton from "./generate-all-button";
 import DeleteBook from "./delete-book";
@@ -239,6 +240,20 @@ export default function BookTable({
   );
   const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
+  // ?book=<id> (SK's job tray "Open", the greeting's "open it" — navigate's
+  // library target): open that book's row and bring it into view. Read via
+  // useSearchParams so a push to /dashboard?book=… while already here works.
+  const wanted = useSearchParams()?.get("book") ?? null;
+  const hasWanted = !!wanted && books.some((b) => b.id === wanted);
+  useEffect(() => {
+    if (!wanted || !hasWanted) return;
+    const t = window.setTimeout(() => {
+      setOpen((o) => ({ ...o, [wanted]: true }));
+      document.getElementById(`book-${wanted}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [wanted, hasWanted]);
+
   return (
     <div className="card overflow-hidden">
       {books.map((b) => {
@@ -257,7 +272,7 @@ export default function BookTable({
             }
           : null;
         return (
-          <div key={b.id} className="border-b border-[#EEF0EC] last:border-b-0">
+          <div key={b.id} id={`book-${b.id}`} className="border-b border-[#EEF0EC] last:border-b-0 scroll-mt-24">
             <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#EEF3F1]" : ""}`}>
               <button
                 onClick={() => ready && toggle(b.id)}

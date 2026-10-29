@@ -13,6 +13,9 @@ import { allowedFor, fromApiToolName, toToolDefs } from "@/sk/shell/registry";
 import { makeRunTool, runCapability, type RunnerDeps, type ToolTrace } from "@/sk/shell/runner";
 import { auditSinkFor } from "@/sk/shell/audit";
 import { routeByRules } from "@/sk/shell/rules";
+import { offerAnswer } from "@/sk/shell/offer";
+import { lineFor } from "@/sk/shell/lines";
+import { KIT_OFFER_DECLINED } from "@/sk/shell/act-lines";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
 import { issueActionToken } from "@/sk/shell/tokens";
 import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
@@ -156,6 +159,11 @@ export async function POST(request: Request) {
   const allowed = allowedFor(ctx);
   const sink = auditSinkFor(admin);
   const decision = routeByRules(body.text, ctx, now, body.collector.clock);
+  // S2: the greeting's one-turn offer ("Your kit for … is ready — want me to
+  // open it?"). A bare yes / "open it" opens it, a no declines; anything else
+  // runs as usual and the offer lapses (rememberTurn drops it).
+  const offer = memory.offer ?? null;
+  const offerReply = offer && decision.intent !== "teach" ? offerAnswer(body.text) : null;
 
   // One controller, two sources: the request's own signal (client gone) and
   // the stream's cancel() (reader let go). Same pattern as /api/assistant.
@@ -392,6 +400,26 @@ export async function POST(request: Request) {
 
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
+
+        // ── S2: the answer to the greeting's offer — deterministic, no model ──
+        if (offer && offerReply) {
+          if (offerReply === "no") {
+            const text = lineFor(KIT_OFFER_DECLINED, ctx.user.locale);
+            send({ type: "text", text });
+            done({ sources: [], label: "supplementary" }, text, []);
+            finish();
+            return;
+          }
+          const nav = await runCapability(ctx, "navigate", { target: offer.target, bookId: offer.bookId }, deps);
+          send({ type: "tool", name: "navigate", ok: nav.ok, summary: nav.summary });
+          send({ type: "text", text: nav.summary });
+          if (nav.ok && nav.navigate) {
+            send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
+            done({ sources: ["navigate"], label: "navigation" }, nav.summary, []);
+          } else done({ sources: [], label: "declined" }, nav.summary, []);
+          finish();
+          return;
+        }
 
         // ── S1 Board move by rules: deterministic, audited, no model ─────────
         // (explain/compare add ONE teaching call once the slide is shown.)
