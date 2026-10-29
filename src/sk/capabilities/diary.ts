@@ -105,9 +105,9 @@ const rowsOf = async (q: unknown): Promise<Row[]> => {
 };
 const argStr = (args: Record<string, unknown>, key: string, max = 120): string => (typeof args[key] === "string" ? (args[key] as string).trim().slice(0, max) : "");
 
-type LearnerPick = { kind: "none"; query: string } | { kind: "one"; id: string; name: string } | { kind: "many"; options: Array<{ id: string; name: string }> };
+export type LearnerPick = { kind: "none"; query: string } | { kind: "one"; id: string; name: string } | { kind: "many"; options: Array<{ id: string; name: string }> };
 
-async function pickLearner(ctx: SkContext, deps: SkCapabilityDeps, learnerId: string, learnerQuery: string): Promise<LearnerPick> {
+export async function pickLearner(ctx: SkContext, deps: SkCapabilityDeps, learnerId: string, learnerQuery: string): Promise<LearnerPick> {
   const me = ctx.user.id;
   if (learnerId) {
     const own = (await rowsOf(teacherClasses(deps, me))).filter((c) => c.teacher_id === me);

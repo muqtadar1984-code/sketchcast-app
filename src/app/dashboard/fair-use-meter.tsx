@@ -7,6 +7,7 @@ import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang, type Locale } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
+import { spendable } from "@/utils/fair-use";
 
 // The fair-use meter — the transparent face of the monthly caps (0047).
 // Reads my_fair_use() (SECURITY DEFINER, auth.uid()-scoped); the DB triggers
@@ -60,32 +61,10 @@ const usageText = (b: Bucket, t: Messages) =>
     ? fmt(t.usageCarried, { used: b.used, cap: b.cap, carry: b.carry })
     : fmt(t.usage, { used: b.used, cap: b.cap });
 
-/** THE ONE PLACE THE CARD ANSWERS "how many more can I generate right now",
- * shared by the bar's segment widths, the amber warning, and the total-available
- * sentence so those three can never disagree.
- *
- * IT REPRODUCES enforce_fair_use EXACTLY, and the subtlety it exists for is that
- * the RPC payload does NOT. my_fair_use() returns `greatest(0, c.available)`
- * (0086), while fair_use_avail computes available = cap + carry - used
- * UNCLAMPED (0059) and the trigger gates on that raw, possibly-NEGATIVE value:
- *   if a.available < 1 and a.available + fair_use_purchased_remaining(...) < 1
- * The value goes negative for real: a chapter lesson is charged WHOLE to
- * whichever pool had any room left (the bounded one-chapter overshoot 0047
- * accepted by design), so 11 used of a cap of 12 plus a four-part chapter leaves
- * used = 15 and a raw available of -3. Reading the clamped 0 and adding a 6-pack
- * would promise 6 more generations where the database admits 3 — and would keep
- * the meter calm teal through the whole overstated window. The overdraft is a
- * genuine claim on the purchased pool, so it is subtracted there.
- *
- * `used`, `cap` and `carry` all ride in the payload, so the raw figure is
- * reconstructible with no migration and no new RPC field. */
-function spendable(b: Bucket, purchased: number) {
-  const monthly = b.cap + b.carry; // this month's allowance, carry-over included
-  const overdraft = Math.max(0, b.used - monthly); // already charged against the purchased pool
-  const monthlyLeft = Math.max(0, monthly - b.used); // === b.available (the clamped figure)
-  const purchasedLeft = Math.max(0, purchased - overdraft);
-  return { monthly, monthlyLeft, purchasedLeft, total: monthlyLeft + purchasedLeft };
-}
+// spendable() — "how many more can I generate right now", reproducing
+// enforce_fair_use exactly (the clamped RPC figure vs the trigger's raw one) —
+// lives in src/utils/fair-use.ts since S2 slice B, so SK's lesson.prepare card
+// reads credits the same way this card does. Read its comment there.
 
 /** The purchased pool's fill — deliberately NOT another flat colour.
  *

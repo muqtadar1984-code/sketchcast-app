@@ -95,6 +95,30 @@ export function kitRows(opts: {
   ];
 }
 
+/** The kinds credit_ledger_write meters (one ledger row each). The deck is
+ *  absent on purpose: it rides free with its lesson (0103). */
+export const METERED_KINDS: ReadonlySet<string> = new Set(["presentation", "worksheet", "exam_paper", "lesson_plan", "activity", "case_study"]);
+
+/**
+ * The credits a batch of generation rows will be charged — credit_ledger_write's
+ * own rule, row by row: a metered kind is 1 credit, except a CHAPTER-level
+ * lesson (a presentation with no numeric `params.part`), which is charged
+ * max(the chapter's part count, 1) — the whole chapter in one. The deck is free.
+ * `chapterParts` = books.chapters[num].parts length (0/absent = no part map).
+ * A plain kitRows() chapter kit is therefore 6 credits for a one-part chapter
+ * and N + 5 for an N-part one.
+ */
+export function kitCredits(rows: ReadonlyArray<Pick<GenerationRow, "kind" | "params">>, chapterParts = 0): number {
+  let n = 0;
+  for (const r of rows) {
+    if (!METERED_KINDS.has(r.kind)) continue;
+    const part = r.params?.part;
+    const hasPart = /^[0-9]{1,9}$/.test(part == null ? "" : String(part));
+    n += r.kind === "presentation" && !hasPart ? Math.max(chapterParts, 1) : 1;
+  }
+  return n;
+}
+
 /** The language a lesson was generated in — its row's params.language when
  *  the teacher picked one, else null (the worker then used books.language). */
 export function lessonLanguageOf(
