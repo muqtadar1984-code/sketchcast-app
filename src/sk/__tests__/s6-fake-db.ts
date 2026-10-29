@@ -58,7 +58,7 @@ class Builder implements PromiseLike<{ data: unknown; error: { message: string }
     private readonly table: string,
   ) {}
 
-  select(_cols?: string) {
+  select() {
     if (this.op === "select") return this;
     this.returning = true;
     return this;
