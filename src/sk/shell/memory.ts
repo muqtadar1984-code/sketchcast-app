@@ -15,8 +15,18 @@ export const SK_MEMORY_MAX_ENTITIES = 10;
 export const SK_MEMORY_MAX_TURNS = 6;
 export const SK_MEMORY_TURN_CHARS = 400;
 export const SK_MEMORY_GAP_MS = 4 * 60 * 60 * 1000;
+/** S2 tray: how many announced kit ids the blob keeps (newest first). 20 uuids
+ *  ≈ 1 KB of the blob's 64 000-character ceiling. */
+export const SK_MEMORY_MAX_ANNOUNCED = 20;
+const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 export type SkMemoryTurn = { role: "user" | "assistant"; text: string };
+
+/** S2: what a bare "yes" / "open it" on the NEXT turn opens — set by the
+ *  greeting's "Your kit for … is ready — want me to open it?" and dropped by
+ *  whatever turn comes next. A navigate target + its filter, never a raw path:
+ *  the turn route still runs `navigate`, so visibility is re-checked. */
+export type SkOffer = { target: "library"; bookId: string; label: string };
 
 export type SkMemory = {
   v: typeof SK_MEMORY_VERSION;
@@ -27,6 +37,10 @@ export type SkMemory = {
   entities: ResolvedEntity[];
   pending?: { task: string; needs: string[] };
   turns: SkMemoryTurn[];
+  /** S2: presentation ids of SK-started kits the greeting already announced
+   *  (finished or failed), newest first, at most SK_MEMORY_MAX_ANNOUNCED. */
+  announced?: string[];
+  offer?: SkOffer;
 };
 
 let processSecret: string | null = null;
@@ -71,7 +85,14 @@ export function verifyMemory(blob: string | null | undefined): SkMemory | null {
     const m = JSON.parse(json) as SkMemory;
     if (!m || m.v !== SK_MEMORY_VERSION || typeof m.sessionId !== "string" || typeof m.contextHash !== "string") return null;
     if (typeof m.lastAt !== "string" || typeof m.issuedAt !== "string") return null;
-    return { ...m, entities: Array.isArray(m.entities) ? m.entities : [], turns: Array.isArray(m.turns) ? m.turns : [] };
+    const out: SkMemory = { ...m, entities: Array.isArray(m.entities) ? m.entities : [], turns: Array.isArray(m.turns) ? m.turns : [] };
+    const announced = cleanIds(m.announced);
+    if (announced.length) out.announced = announced;
+    else delete out.announced;
+    const o = m.offer as Partial<SkOffer> | undefined;
+    if (o && o.target === "library" && typeof o.bookId === "string" && ID_RE.test(o.bookId) && typeof o.label === "string") out.offer = { target: "library", bookId: o.bookId, label: o.label.slice(0, 160) };
+    else delete out.offer;
+    return out;
   } catch {
     return null;
   }
@@ -117,7 +138,80 @@ export function rememberTurn(
   ];
   const turns: SkMemoryTurn[] = [...mem.turns, ...added].slice(-SK_MEMORY_MAX_TURNS);
   const next: SkMemory = { ...mem, entities, turns, lastAt: now.toISOString() };
+  // A greeting's offer answers only the turn right after it.
+  delete next.offer;
   if (turn.pending === null) delete next.pending;
   else if (turn.pending) next.pending = turn.pending;
   return next;
+}
+
+// ── S2: kits the greeting already announced ─────────────────────────────────
+
+/** Bounded, de-duplicated, well-formed ids (anything else dropped). */
+export function cleanIds(v: unknown, max = SK_MEMORY_MAX_ANNOUNCED): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const x of v) {
+    if (typeof x !== "string" || !ID_RE.test(x) || out.includes(x)) continue;
+    out.push(x);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** Record the ids the greeting just announced (newest first, bounded) and the
+ *  greeting's offer — or clear a stale offer when there is none. Merges the
+ *  kits' entities so "open the Specialised Cells kit" resolves too. Never
+ *  mutates; `lastAt` is untouched (a greeting is not a turn). */
+export function rememberAnnounced(
+  mem: SkMemory,
+  update: { ids: string[]; prior?: readonly string[]; entities?: ResolvedEntity[]; offer?: SkOffer | null },
+): SkMemory {
+  const announced = cleanIds([...update.ids, ...(update.prior ?? []), ...(mem.announced ?? [])]);
+  const seen = new Set<string>();
+  const entities: ResolvedEntity[] = [];
+  for (const e of [...(update.entities ?? []), ...mem.entities]) {
+    const key = `${e.kind}:${e.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entities.push(e);
+    if (entities.length >= SK_MEMORY_MAX_ENTITIES) break;
+  }
+  const next: SkMemory = { ...mem, entities };
+  if (announced.length) next.announced = announced;
+  else delete next.announced;
+  if (update.offer) next.offer = update.offer;
+  else delete next.offer;
+  return next;
+}
+
+/**
+ * The announced ids ALSO travel in a small signed note of their own, which the
+ * panel keeps in localStorage: the conversation blob lives in sessionStorage
+ * and resets after a 4-hour gap or a hat change, and a kit must still be
+ * announced at most once. The note carries ONLY generation ids and the user
+ * id it was issued to (no conversation text), is HMAC'd with the memory's
+ * secret, and a note for another user is ignored.
+ */
+type AnnouncedNote = { v: 1; uid: string; ids: string[] };
+
+export function sealAnnounced(uid: string, ids: readonly string[]): string {
+  const note: AnnouncedNote = { v: 1, uid, ids: cleanIds(ids) };
+  const payload = base64UrlEncode(JSON.stringify(note));
+  return `${payload}.${hmacHex(memorySecret(), `announced:${payload}`)}`;
+}
+
+/** The ids in a note issued to `uid`; [] for a missing, forged or foreign one. */
+export function openAnnounced(blob: string | null | undefined, uid: string): string[] {
+  if (!blob || typeof blob !== "string" || blob.length > 4_000) return [];
+  const dot = blob.lastIndexOf(".");
+  if (dot <= 0) return [];
+  const payload = blob.slice(0, dot);
+  if (!safeEqualHex(hmacHex(memorySecret(), `announced:${payload}`), blob.slice(dot + 1))) return [];
+  try {
+    const n = JSON.parse(base64UrlDecode(payload) ?? "") as Partial<AnnouncedNote>;
+    return n && n.v === 1 && n.uid === uid ? cleanIds(n.ids) : [];
+  } catch {
+    return [];
+  }
 }

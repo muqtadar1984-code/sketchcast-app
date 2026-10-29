@@ -318,8 +318,61 @@ kit = the presentation and its documents): "Specialised Cells: the lesson is
 being made; 1 of 7 pieces ready, 1 failed." 0169 not applied → the
 `sk_action_id` read fails with 42703 / PGRST204 and the read falls back to her
 newest generations grouped by book + chapter + part (`started_by_sk: false`).
-There is no job tray in the Shell to reuse (S1's `deck_pages` polling is the
-Board's own), so this read IS the progress path; nothing new was invented.
+Each kit's fact carries `state` — the ONE kit-state rule, `kitState`
+(prepare.ts), which the job tray and the greeting below read too:
+
+| State | When | Tray says |
+|---|---|---|
+| `failed` | the lesson (presentation) is `error`; or nothing is in progress and nothing came out | "Didn't finish" |
+| `making` | a row is still `queued` / `processing` and none is `done` | "Being made" |
+| `partial` | a row is still in progress and some are `done` | "2 of 7 pieces ready" |
+| `ready` | nothing in progress, the lesson done (a failed document does not fail the kit) | "Ready" |
+
+## The job tray and the next greeting (S2 acceptance)
+
+Final Plan §6 S2: "lesson prep lands in the job tray and the next greeting."
+Both read `recentKits` (the same read as `lesson.status`) with
+`{since: now − 7 days, skOnly: true}` and map it through `kitState`; neither
+has a state rule of its own (`src/sk/shell/kit-tray.ts`).
+
+**Job tray** (`GET /api/sk/shell/tray?path=…`, `src/app/api/sk/shell/tray/route.ts`)
+
+| | |
+|---|---|
+| Gate | the Shell's (`skEnabled` → signed in → `skShellEnabledFor` / `skShellDecision`); 404 / 401 like the context route. Kits only where `lesson.status` is allowed (teacher, teacher hat) |
+| Rows | `generations` with `sk_action_id is not null`, `owner_id = her` (re-checked in code — RLS may show a coordinator more), created in the last 7 days, grouped by action, the presentation row per action; newest first, **at most 3**. 0169 missing → empty (no fallback to Library kits) |
+| Each entry | `{id: <presentation id>, title: <chapter title>, state, ready, total, href}` |
+| Open | `href` is what `navigate` builds for `{target: "library", bookId}`: `/dashboard?book=<id>`. The Library (book-table.tsx) reads `?book=` (useSearchParams, so a push while already on /dashboard works), opens that book's row and scrolls to it (`id="book-<id>"`). The Library had no per-kit deep link; the book row IS the kit's location |
+| Panel | `src/app/dashboard/sk-shell.tsx`: a compact list ABOVE the transcript (`data-sk="kit-tray"`), hidden when empty. Read on open; again the moment a `lesson.prepare` confirm returns `done`; and every **15 s** only while a kit is `making`/`partial`, the panel is open (mounted) and the tab is visible — `shouldPollTray` (`src/sk/shell/client/tray.ts`), the same `visibilityState === "visible"` test as the §2.6 mic gate. Hidden → polling stops; visible again → one read, then the rule decides. A failed read keeps the last state |
+| Strings | `sk.shell.tray.{title, making, partial, ready, failed, open}`, ten locales |
+
+**The next greeting** (`/api/sk/shell/context`)
+
+The panel's warm start is now `POST {path, memory?, announced?}` (GET still
+answers, with nothing carried). When an SK-started kit of the window has
+finished (`ready` or `failed`) and was not announced yet, the greeting LEADS
+with one line per kit, **at most 2**, then S0's greeting:
+
+- ready: "Your kit for Specialised Cells is ready — want me to open it?"
+- failed: "The kit for Specialised Cells didn't finish — ask me to try again, or check the Library."
+
+(`act-lines.ts` `KIT_READY_NOTICE` / `KIT_FAILED_NOTICE`, = `sk.shell.act.kitReadyNotice` / `kitFailedNotice`, ten locales.)
+
+| | |
+|---|---|
+| Said once | the announced presentation ids go into the signed memory blob (`SkMemory.announced`, newest first, at most 20 ≈ 1 KB of the 64 000-char ceiling) AND into a small signed note (`sealAnnounced`: `{v, uid, ids}` only, HMAC'd with the memory secret, bound to the user) the panel keeps in localStorage `sk.announced` — the conversation blob lives in sessionStorage and resets after a 4-hour gap or a hat change; the note does not. Prior ids = any blob we signed (even one too old to continue) ∪ the note. No migration |
+| "yes" / "open it" | the first READY kit becomes the blob's one-turn `offer` `{target: "library", bookId, label}`. On the next turn the route asks `offerAnswer` (`src/sk/shell/offer.ts`: yes / ok / open it / open the kit / ya / boleh / buka / نعم / افتحها …) BEFORE the bare-ack reply: yes → `navigate` (visibility re-checked) to `/dashboard?book=…`, no model; no / not now / tidak / لا → "All right — it's in your Library whenever you need it." Any other turn runs as usual and `rememberTurn` drops the offer. The kits are also remembered as `kit` entities (`via: "greeting"`) |
+| Never blocks | `kitNotices` is time-boxed (1.5 s): past it, or on any error, the greeting is S0's alone and `sk-shell.greeting kit notices skipped: …` is logged server-side |
+| Memory | the returned memory is the carried conversation when `openMemory` still accepts it (same session id), else a fresh one — the panel now takes the server's blob rather than preferring its saved copy |
+
+## Marking-queue drain (S2 acceptance)
+
+`src/sk/shell/__tests__/marking-drain.test.ts`: 20 pending submissions in the
+act fakes; `marking.next` → `marking.grade` "7 out of 10" → the card confirmed
+through `executeAction` (signed token, one consume, GradeList's row with the
+pending guard), the returned memory carried on, until "Nothing to mark —
+you're all caught up." Asserts 20 grades, each submission exactly once,
+oldest first, `remaining_after` 19 → 0 strictly descending, 20 consumes.
 
 ## Dry run (production, 2026-10-29)
 
@@ -345,11 +398,12 @@ the tests only (act-s2b.test.ts).
 
 ## Not done in slice B
 
-- 0169 is still **not applied**. `lesson.prepare` inserts `sk_action_id`, so —
-  like slice A's diary writes — it fails ("That didn't go through") until 0169
-  is applied. `marking.*` and `lesson.status` do not need it.
+- ~~0169 is still not applied~~ — 0169 is APPLIED on production (PR #172
+  merged; `generations.sk_action_id` and `diary_notes.sk_action_id` exist), so
+  `lesson.prepare` inserts carry their action id and the tray reads them.
 - No scheduling: "for Friday" is a title. No push when a kit finishes: the
-  teacher asks "how's the kit going".
+  job tray shows it while the Shell is open, and the NEXT greeting announces
+  it (see "The job tray and the next greeting").
 - Multi-part chapters are prepared as a whole chapter (as the Library's chapter
   row does, N + 5 credits); a single part ("part 2 of chapter 3") is not
   offered yet. Trial accounts are refused by the trial pin with the trial line.

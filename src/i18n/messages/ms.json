@@ -2162,7 +2162,10 @@
         "prepTrial": "Percubaan percuma anda merangkumi satu kit untuk satu bahagian bab, jadi saya tidak boleh memulakan yang ini.",
         "prepBookBusy": "Buku itu sedang dibaca semula — cuba lagi dalam beberapa minit.",
         "prepNoAccess": "Akaun anda tidak boleh memulakan kit baharu sekarang — hubungi sokongan.",
-        "prepGateWarning": "Muat naik ini mungkin bukan buku teks — kit mungkin kurang baik."
+        "prepGateWarning": "Muat naik ini mungkin bukan buku teks — kit mungkin kurang baik.",
+        "kitReadyNotice": "Kit anda untuk {chapter} sudah siap — mahu saya bukakannya?",
+        "kitFailedNotice": "Kit untuk {chapter} tidak berjaya disiapkan — minta saya cuba lagi, atau semak Perpustakaan.",
+        "kitOfferDeclined": "Baiklah — ia ada dalam Perpustakaan anda bila-bila masa anda perlukan."
       },
       "cardParams": {
         "target_label": "Untuk",
@@ -2185,6 +2188,14 @@
         "warning": "Nota",
         "yes": "Ya",
         "no": "Tidak"
+      },
+      "tray": {
+        "title": "Kit anda",
+        "making": "Sedang disediakan",
+        "partial": "{n} daripada {m} bahagian siap",
+        "ready": "Siap",
+        "failed": "Tidak berjaya",
+        "open": "Buka"
       }
     }
   }

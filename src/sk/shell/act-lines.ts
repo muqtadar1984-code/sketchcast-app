@@ -493,6 +493,48 @@ export const PREP_GATE_WARNING: Line = {
   hi: "यह अपलोड शायद पाठ्यपुस्तक नहीं है — किट ठीक से नहीं बन सकता।",
 };
 
+/** The greeting's lead line when an SK-started kit has finished (S2 tray). */
+export const KIT_READY_NOTICE: Line = {
+  en: "Your kit for {chapter} is ready — want me to open it?",
+  ms: "Kit anda untuk {chapter} sudah siap — mahu saya bukakannya?",
+  "ms-arab": "کيت اندا اونتوق {chapter} سوده سياڤ — ماهو ساي بوکاکنڽ؟",
+  ar: "حزمتك لـ {chapter} جاهزة — هل أفتحها لك؟",
+  fr: "Votre kit pour {chapter} est prêt — voulez-vous que je l'ouvre ?",
+  es: "Tu kit de {chapter} está listo — ¿quieres que lo abra?",
+  pt: "O seu kit de {chapter} está pronto — quer que o abra?",
+  te: "{chapter} కోసం మీ కిట్ సిద్ధంగా ఉంది — నేను దాన్ని తెరవనా?",
+  mr: "{chapter} साठी तुमचे किट तयार आहे — मी ते उघडू का?",
+  hi: "{chapter} के लिए आपकी किट तैयार है — क्या मैं उसे खोल दूँ?",
+};
+
+/** The greeting's lead line when an SK-started kit failed. */
+export const KIT_FAILED_NOTICE: Line = {
+  en: "The kit for {chapter} didn't finish — ask me to try again, or check the Library.",
+  ms: "Kit untuk {chapter} tidak berjaya disiapkan — minta saya cuba lagi, atau semak Perpustakaan.",
+  "ms-arab": "کيت اونتوق {chapter} تيدق برجاي دسياڤکن — مينتا ساي چوبا لاݢي، اتاو سمق ڤرڤوستاکاءن.",
+  ar: "لم تكتمل حزمة {chapter} — اطلب مني المحاولة مجددًا، أو راجع المكتبة.",
+  fr: "Le kit pour {chapter} n'a pas abouti — demandez-moi de réessayer, ou consultez la bibliothèque.",
+  es: "El kit de {chapter} no se terminó — pídeme que lo intente de nuevo, o revisa la biblioteca.",
+  pt: "O kit de {chapter} não foi concluído — peça-me para tentar de novo, ou veja a biblioteca.",
+  te: "{chapter} కిట్ పూర్తి కాలేదు — మళ్లీ ప్రయత్నించమని నన్ను అడగండి, లేదా లైబ్రరీలో చూడండి.",
+  mr: "{chapter} चे किट पूर्ण झाले नाही — मला पुन्हा प्रयत्न करायला सांगा, किंवा लायब्ररी पाहा.",
+  hi: "{chapter} की किट पूरी नहीं हुई — मुझसे फिर से कोशिश करने को कहें, या लाइब्रेरी देखें।",
+};
+
+/** A "no" to the greeting's "want me to open it?". */
+export const KIT_OFFER_DECLINED: Line = {
+  en: "All right — it's in your Library whenever you need it.",
+  ms: "Baiklah — ia ada dalam Perpustakaan anda bila-bila masa anda perlukan.",
+  "ms-arab": "باءيقله — اي اد دالم ڤرڤوستاکاءن اندا بيلا٢ ماس اندا ڤرلوکن.",
+  ar: "حسنًا — ستجدها في مكتبتك متى احتجت إليها.",
+  fr: "D'accord — il est dans votre bibliothèque quand vous en aurez besoin.",
+  es: "De acuerdo — está en tu biblioteca cuando lo necesites.",
+  pt: "Muito bem — está na sua biblioteca sempre que precisar.",
+  te: "సరే — మీకు అవసరమైనప్పుడు అది మీ లైబ్రరీలో ఉంటుంది.",
+  mr: "ठीक आहे — तुम्हाला हवे तेव्हा ते तुमच्या लायब्ररीत आहे.",
+  hi: "ठीक है — जब भी ज़रूरत हो, वह आपकी लाइब्रेरी में है।",
+};
+
 /** Dictionary key (`sk.shell.act.<key>`) → table, for the parity test. */
 export const ACT_LINE_TABLES: Record<string, Line> = {
   diaryCardTitle: DIARY_CARD_TITLE,
@@ -530,4 +572,7 @@ export const ACT_LINE_TABLES: Record<string, Line> = {
   prepBookBusy: PREP_BOOK_BUSY,
   prepNoAccess: PREP_NO_ACCESS,
   prepGateWarning: PREP_GATE_WARNING,
+  kitReadyNotice: KIT_READY_NOTICE,
+  kitFailedNotice: KIT_FAILED_NOTICE,
+  kitOfferDeclined: KIT_OFFER_DECLINED,
 };

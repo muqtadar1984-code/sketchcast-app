@@ -175,7 +175,9 @@ export function navPath(target: NavTarget, filters: NavFilters, ctx: SkContext):
   const label = NAV_LABEL[target];
   switch (target) {
     case "library":
-      return { path: "/dashboard", label: role === "student" ? "My lessons" : label };
+      // bookId (S2 job tray / greeting "open it"): the Library with that
+      // book's row opened and scrolled to (book-table.tsx reads ?book=).
+      return { path: `/dashboard${role === "student" ? "" : q([["book", filters.bookId]])}`, label: role === "student" ? "My lessons" : label };
     case "analytics":
       return { path: `/dashboard/analytics${q([["c", filters.classId]])}`, label };
     case "board":
@@ -249,7 +251,7 @@ export const navigateCapability: SkCapability = {
         topic: { type: "string", description: "Topic filter for the kits page." },
         day: { type: "string", description: "YYYY-MM-DD (diary)." },
         month: { type: "string", description: "YYYY-MM (calendar)." },
-        bookId: { type: "string", description: "Board: the book to teach from (from context.resolve or library.find)." },
+        bookId: { type: "string", description: "Board: the book to teach from (from context.resolve or library.find). Library: opens that book's row." },
         chapterRef: { type: "string", description: "Board: the chapter_ref of that book's chapter (0-based, as library.find reports it)." },
         generationId: { type: "string", description: "Board: a ready-made kit's presentation id (a library.find kit with no book)." },
         autostart: { type: "boolean", description: "Board: start the lesson on landing (needs bookId+chapterRef or generationId)." },

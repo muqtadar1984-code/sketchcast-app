@@ -293,20 +293,59 @@ export const missingActionColumn = (e: unknown): boolean => {
   return x.code === "42703" || x.code === "PGRST204" || /sk_action_id/.test(x.message ?? "");
 };
 
-export type KitStatus = { presentationId: string | null; bookId: string | null; chapterRef: string | null; title: string; total: number; done: number; failed: number; lesson: string | null; startedAt: string; viaSk: boolean };
+export type KitStatus = {
+  presentationId: string | null;
+  bookId: string | null;
+  chapterRef: string | null;
+  title: string;
+  total: number;
+  done: number;
+  failed: number;
+  /** Rows still queued or processing. */
+  inProgress: number;
+  lesson: string | null;
+  startedAt: string;
+  viaSk: boolean;
+};
+
+/** The ONE kit-state rule (lesson.status, the Shell's job tray and the
+ *  greeting's kit notices all read it): the lesson failing fails the kit;
+ *  anything still queued/processing is "making" (nothing ready yet) or
+ *  "partial" (n of m pieces ready); otherwise "ready" when something came out,
+ *  else "failed". generations.status is queued | processing | done | error. */
+export type KitState = "making" | "partial" | "ready" | "failed";
+export function kitState(k: Pick<KitStatus, "done" | "inProgress" | "lesson">): KitState {
+  if (k.lesson === "error") return "failed";
+  if (k.inProgress > 0) return k.done > 0 ? "partial" : "making";
+  return k.done > 0 ? "ready" : "failed";
+}
+export const kitFinished = (s: KitState): boolean => s === "ready" || s === "failed";
+
+export type RecentKitsOptions = {
+  /** Only kits started at or after this instant (ISO). */
+  since?: string;
+  /** SK-started kits ONLY: when 0169's column is missing, nothing (no fallback). */
+  skOnly?: boolean;
+};
 
 /** Her recent kits, newest first: SK-started ones (sk_action_id) when 0169 is
  *  applied, else her newest generations. A kit = one (action | book, chapter, part). */
-export async function recentKits(ctx: SkContext, deps: SkCapabilityDeps, limit = 3): Promise<KitStatus[]> {
+export async function recentKits(ctx: SkContext, deps: SkCapabilityDeps, limit = 3, opts: RecentKitsOptions = {}): Promise<KitStatus[]> {
   const me = ctx.user.id;
+  const since = opts.since && Number.isFinite(Date.parse(opts.since)) ? opts.since : null;
   let viaSk = true;
-  let res = (await deps.session.from("generations").select(`${STATUS_COLS}, sk_action_id`).eq("owner_id", me).not("sk_action_id", "is", null).order("created_at", { ascending: false }).limit(60)) as { data?: unknown; error?: unknown };
+  let q = deps.session.from("generations").select(`${STATUS_COLS}, sk_action_id`).eq("owner_id", me).not("sk_action_id", "is", null);
+  if (since) q = q.gte("created_at", since);
+  let res = (await q.order("created_at", { ascending: false }).limit(60)) as { data?: unknown; error?: unknown };
   let gens: StatusGen[];
   if (res?.error && missingActionColumn(res.error)) {
+    if (opts.skOnly) return [];
     viaSk = false;
-    res = (await deps.session.from("generations").select(STATUS_COLS).eq("owner_id", me).order("created_at", { ascending: false }).limit(60)) as { data?: unknown; error?: unknown };
+    let f = deps.session.from("generations").select(STATUS_COLS).eq("owner_id", me);
+    if (since) f = f.gte("created_at", since);
+    res = (await f.order("created_at", { ascending: false }).limit(60)) as { data?: unknown; error?: unknown };
   }
-  gens = rows<StatusGen>(res, "generations").filter((g) => g.owner_id === me && (!viaSk || !!g.sk_action_id));
+  gens = rows<StatusGen>(res, "generations").filter((g) => g.owner_id === me && (!viaSk || !!g.sk_action_id) && (!since || Date.parse(g.created_at) >= Date.parse(since)));
   gens = gens.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const groups = new Map<string, StatusGen[]>();
   for (const g of gens) {
@@ -331,6 +370,7 @@ export async function recentKits(ctx: SkContext, deps: SkCapabilityDeps, limit =
       total: list.length,
       done: list.filter((g) => g.status === "done").length,
       failed: list.filter((g) => g.status === "error").length,
+      inProgress: list.filter((g) => g.status === "queued" || g.status === "processing").length,
       lesson: pres?.status ?? null,
       startedAt: list.reduce((m, g) => (g.created_at < m ? g.created_at : m), head.created_at),
       viaSk,
@@ -368,7 +408,7 @@ export const lessonStatus: SkCapability = {
       return {
         ok: true,
         summary: `${line}.`.slice(0, 600),
-        facts: kits.map((k) => ({ kind: "kit", title: k.title, lesson: k.lesson, ready: k.done, total: k.total, failed: k.failed, started_at: k.startedAt, generation_id: k.presentationId, book_id: k.bookId, chapter_ref: k.chapterRef, started_by_sk: k.viaSk })),
+        facts: kits.map((k) => ({ kind: "kit", title: k.title, state: kitState(k), lesson: k.lesson, ready: k.done, total: k.total, failed: k.failed, started_at: k.startedAt, generation_id: k.presentationId, book_id: k.bookId, chapter_ref: k.chapterRef, started_by_sk: k.viaSk })),
         entities: kits.filter((k) => k.presentationId).map<ResolvedEntity>((k) => ({ kind: "kit", id: k.presentationId as string, label: k.title, via: "lesson.status", ids: [k.bookId ?? "", k.chapterRef ?? ""] })),
       };
     } catch (e) {
