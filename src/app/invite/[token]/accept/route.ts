@@ -46,6 +46,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       .maybeSingle();
     if (!me) return back("apply");
     if (me.role === "student") return back("role"); // a minor cannot become a parent
+    // Read the child mapping BEFORE any write. A failed read must not fall
+    // through as "no children": the invite would be marked accepted with zero
+    // links and could never be redeemed again (prod ran without 0019's table).
+    const { data: mapped, error: mapErr } = await admin
+      .from("invite_children")
+      .select("student_id")
+      .eq("invite_id", invite.id);
+    if (mapErr) return back("apply");
     if (me.role === "teacher" && !me.school_id) {
       // A fresh default account (signup default is teacher) with no teaching
       // footprint → this person came to BE a parent.
@@ -60,10 +68,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     // Parents never get school_id — their school relationship flows through
     // the children (a parent with school_id would inherit the school library).
 
-    const { data: mapped } = await admin
-      .from("invite_children")
-      .select("student_id")
-      .eq("invite_id", invite.id);
     for (const m of mapped ?? []) {
       const { data: child } = await admin
         .from("profiles")
@@ -74,7 +78,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       if (!child || child.role !== "student" || child.school_id !== invite.school_id) continue;
       const verified =
         (child.parent_email || "").toLowerCase() === (invite.email || "").toLowerCase();
-      await admin
+      // Upsert is idempotent, so a failure leaves the invite open for a retry.
+      const { error: linkErr } = await admin
         .from("parent_links")
         .upsert(
           {
@@ -86,6 +91,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
           },
           { onConflict: "parent_id,child_id" },
         );
+      if (linkErr) return back("apply");
     }
     // Accepting an invite identifies this user (as a parent here) → they skip the
     // new-joiner onboarding gate (0038). Harmless if they were already onboarded.
