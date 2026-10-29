@@ -2249,7 +2249,8 @@
         "tooLong": "Esse aviso é demasiado longo — um aviso aceita até 4000 caracteres.",
         "dateUnparsed": "Não percebi o dia \"{day}\" — diga hoje, amanhã, um dia da semana ou 2026-11-03.",
         "datePassed": "Esse dia já passou — um aviso tem de apontar para algo que ainda vem.",
-        "yourSchool": "a sua escola"
+        "yourSchool": "a sua escola",
+        "notPostedUntil": "Nada é publicado até o responsável clicar em Confirmar no cartão."
       },
       "cardParams": {
         "target_label": "Para",
@@ -2360,7 +2361,16 @@
         "ttNext": "A seguir em {where} — {period} ({start}–{end}): aulas {n}. {items}.",
         "ttNone": "Não há aulas marcadas em {where} para {period}.",
         "ttClosed": "Não há nenhum tempo letivo a decorrer neste momento.",
-        "ttNoNext": "Este é o último tempo de hoje; não há nada depois."
+        "ttNoNext": "Este é o último tempo de hoje; não há nada depois.",
+        "reasonCompletion": "{pct}% concluído",
+        "reasonInactive": "inativo há {days} dias",
+        "reasonNeverStarted": "nunca começou",
+        "reasonAvgScore": "média {pct}%",
+        "reasonDeclining": "notas a descer",
+        "reasonOverdue": "{n} em atraso",
+        "flagBelowCohort": "{pts} pts abaixo do grupo",
+        "flagToGrade": "{n} por corrigir",
+        "flagSlowGrading": "{days} dias para corrigir"
       },
       "schoolMeter": {
         "analyticsOff": "A análise da escola não está ativada para a sua escola.",
