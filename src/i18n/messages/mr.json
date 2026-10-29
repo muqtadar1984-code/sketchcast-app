@@ -2251,7 +2251,19 @@
       "nextPractise": "भाग {n} चा सराव करा",
       "nextDone": "तुम्ही हा पाठ पूर्ण केला. छान!",
       "untitled": "शीर्षक नसलेला भाग",
-      "matchPick": "निवडा…"
+      "matchPick": "निवडा…",
+      "rungThinking": "तुम्हाला असे वाटते आहे असे दिसते: “{thinking}”. हे पूर्णपणे बरोबर नाही — पुन्हा प्रयत्न करा.",
+      "rungActually": "खरे तर: {correction}",
+      "rungWhyWrong": "हे उत्तर बरोबर का नाही: {text}",
+      "rungHint": "सूचना:",
+      "rungSlide": "धड्याचा हा भाग ते समजावतो: {heading}",
+      "watchThisPart": "हा भाग पाहा",
+      "rungCheck": "आता याच कल्पनेवर आणखी एक प्रश्न सोडवून पाहा.",
+      "tryCheck": "तपासणी प्रश्न सोडवा",
+      "checkQuestion": "तपासणी प्रश्न",
+      "rungNoCheck": "या कल्पनेवर अजून दुसरा प्रश्न नाही. हे घ्या स्पष्टीकरण.",
+      "revealAnswer": "उत्तर:",
+      "rungHintSection": "{heading} या भागात याबद्दल काय सांगितले आहे याचा विचार करा."
     }
   }
 }

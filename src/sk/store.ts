@@ -55,7 +55,19 @@ export type Attempt = {
    * Optional — the Supabase store resolves it from the item when absent;
    * `null` means the item is unmapped and gives no mastery evidence (plan §14). */
   teachingObjectiveId?: string | null;
+  /** S3 slice C: the kit item's ARTICLE objective, "<article_id>:<objective_ref>"
+   * (src/sk/objective-key.ts; item_attempts.objective_key, 0170). Set ⇒ the
+   * Supabase store recomputes sk_objective_mastery for it; null/absent = no
+   * kit-objective evidence. */
+  objectiveKey?: string | null;
+  /** S3 slice C: the check this attempt belongs to, stated by the caller (the
+   * kit path, which has no machine `openCheck`). Absent = derived from the
+   * session's open check, as the loop does. */
+  check?: AttemptCheck;
 };
+
+/** item_attempts' check columns (purpose / unit_key / check_key / check_size). */
+export type AttemptCheck = { purpose: "skip" | "prereq" | "unit" | "practise" | null; unitKey: string | null; checkKey: string | null; checkSize: number | null };
 
 export type Claim<T> = { status: "new" } | { status: "stored"; event: StoredEvent<T> } | { status: "inflight"; done: Promise<StoredEvent<T>> };
 

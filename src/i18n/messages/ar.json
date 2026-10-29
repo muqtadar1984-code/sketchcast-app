@@ -2251,7 +2251,19 @@
       "nextPractise": "تمرّن على القسم {n}",
       "nextDone": "أنهيت هذا الدرس. أحسنت!",
       "untitled": "قسم بلا عنوان",
-      "matchPick": "اختر…"
+      "matchPick": "اختر…",
+      "rungThinking": "يبدو أنك تعتقد أن: «{thinking}». هذا ليس صحيحًا تمامًا — حاول مرة أخرى.",
+      "rungActually": "في الحقيقة: {correction}",
+      "rungWhyWrong": "لماذا هذه الإجابة غير صحيحة: {text}",
+      "rungHint": "تلميح:",
+      "rungSlide": "هذا الجزء من الدرس يشرح ذلك: {heading}",
+      "watchThisPart": "شاهد هذا الجزء",
+      "rungCheck": "جرّب الآن سؤالًا آخر عن الفكرة نفسها.",
+      "tryCheck": "جرّب سؤال التحقق",
+      "checkQuestion": "سؤال التحقق",
+      "rungNoCheck": "لا يوجد سؤال آخر عن هذه الفكرة بعد. إليك الشرح.",
+      "revealAnswer": "الإجابة:",
+      "rungHintSection": "فكّر فيما يقوله القسم الخاص بـ {heading} عن هذا."
     }
   }
 }

@@ -2251,7 +2251,19 @@
       "nextPractise": "S'entraîner sur la partie {n}",
       "nextDone": "Tu as terminé cette leçon. Bravo !",
       "untitled": "Partie sans titre",
-      "matchPick": "Choisir…"
+      "matchPick": "Choisir…",
+      "rungThinking": "On dirait que tu penses : « {thinking} ». Ce n'est pas tout à fait juste — essaie encore.",
+      "rungActually": "En réalité : {correction}",
+      "rungWhyWrong": "Pourquoi cette réponse n'est pas juste : {text}",
+      "rungHint": "Indice :",
+      "rungSlide": "Cette partie de la leçon l'explique : {heading}",
+      "watchThisPart": "Regarder cette partie",
+      "rungCheck": "Essaie maintenant une autre question sur la même idée.",
+      "tryCheck": "Essayer la question de vérification",
+      "checkQuestion": "Question de vérification",
+      "rungNoCheck": "Il n'y a pas encore d'autre question sur cette idée. Voici l'explication.",
+      "revealAnswer": "La réponse :",
+      "rungHintSection": "Réfléchis à ce que la partie « {heading} » dit à ce sujet."
     }
   }
 }

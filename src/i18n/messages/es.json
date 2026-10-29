@@ -2251,7 +2251,19 @@
       "nextPractise": "Practicar la sección {n}",
       "nextDone": "Has terminado esta lección. ¡Muy bien!",
       "untitled": "Sección sin título",
-      "matchPick": "Elegir…"
+      "matchPick": "Elegir…",
+      "rungThinking": "Parece que piensas: «{thinking}». No es del todo correcto: inténtalo otra vez.",
+      "rungActually": "En realidad: {correction}",
+      "rungWhyWrong": "Por qué esa respuesta no es correcta: {text}",
+      "rungHint": "Pista:",
+      "rungSlide": "Esta parte de la lección lo explica: {heading}",
+      "watchThisPart": "Ver esta parte",
+      "rungCheck": "Ahora prueba otra pregunta sobre la misma idea.",
+      "tryCheck": "Probar la pregunta de comprobación",
+      "checkQuestion": "Pregunta de comprobación",
+      "rungNoCheck": "Todavía no hay otra pregunta sobre esta idea. Aquí tienes la explicación.",
+      "revealAnswer": "La respuesta:",
+      "rungHintSection": "Piensa en lo que dice sobre esto la sección «{heading}»."
     }
   }
 }

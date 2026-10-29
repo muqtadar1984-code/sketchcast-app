@@ -26,7 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { UUID_RE, uuidv7 } from "./ids";
 import { MASTERY_RULE_VERSION, masteryFromAttempts, type AttemptRecord, type CheckPurpose, type MasteryOptions, type MasteryStateV1 } from "./mastery";
 import { phaseOf, type MachineState, type OpenCheck } from "./state";
-import { addUsage, DuplicateAttemptError, InMemorySessionStore, type Attempt, type Claim, type NewSession, type SessionStore, type SkSession, type StoredEvent, type UsageDelta, type UsageRow } from "./store";
+import { addUsage, DuplicateAttemptError, InMemorySessionStore, type Attempt, type AttemptCheck, type Claim, type NewSession, type SessionStore, type SkSession, type StoredEvent, type UsageDelta, type UsageRow } from "./store";
 
 // ── The slice of supabase-js this store uses (so a test can fake it) ───────
 export type DbError = { code?: string; message: string };
@@ -216,7 +216,7 @@ export class SupabaseSessionStore implements SessionStore {
     fail(error, "read session for attempt");
     if (!session) throw new Error(`unknown session ${a.sessionId}`);
     const studentId = String(session.student_id);
-    const check = await this.checkContext(a, (session.machine as MachineState | null)?.openCheck ?? null);
+    const check = a.check ?? (await this.checkContext(a, (session.machine as MachineState | null)?.openCheck ?? null));
     const teachingObjectiveId = a.teachingObjectiveId !== undefined ? a.teachingObjectiveId : await this.objectiveForItemFn(a.itemId);
 
     const ins = await this.db.from("item_attempts").insert(toAttemptRow(a, studentId, teachingObjectiveId, check)).select().single();
@@ -228,6 +228,14 @@ export class SupabaseSessionStore implements SessionStore {
       fail(ins.error, "put attempt");
     }
     const stored = fromAttemptRow(ins.data!);
+    if (a.objectiveKey) {
+      try {
+        await this.recomputeObjectiveMastery(studentId, a.objectiveKey);
+      } catch (e) {
+        this.lastMasteryError = e;
+        console.error("[sk store] objective mastery recompute failed:", (e as Error).message);
+      }
+    }
     if (teachingObjectiveId) {
       try {
         await this.recomputeMastery(studentId, teachingObjectiveId);
@@ -307,6 +315,31 @@ export class SupabaseSessionStore implements SessionStore {
     return state;
   }
 
+  /** S3 slice C: the same rule (sk-b5.1) over the student's attempts on one
+   * KIT objective (item_attempts.objective_key), into sk_objective_mastery
+   * (0170). The key stands where the rule reads its objective id; the
+   * teaching-objective evidence gate (countsAsEvidence) does not apply to an
+   * article objective. Null (nothing written) when there is no evidence. */
+  async recomputeObjectiveMastery(studentId: string, key: string): Promise<MasteryStateV1 | null> {
+    const { data, error } = await this.db.from("item_attempts").select("*").eq("student_id", studentId).eq("objective_key", key).order("at", { ascending: true });
+    fail(error, "read attempts for objective mastery");
+    const records = (data ?? []).map((r) => ({ ...toAttemptRecord(r), teachingObjectiveId: key }));
+    const state = masteryFromAttempts(key, records, { passMarkFor: this.masteryOpts.passMarkFor });
+    if (!state) return null;
+    const up = await this.db.from("sk_objective_mastery").upsert(
+      { student_id: studentId, objective_key: key, status: state.status, independent: state.independent, evidence: state.evidence, rule_version: MASTERY_RULE_VERSION, updated_at: iso(this.now()) },
+      { onConflict: "student_id,objective_key" },
+    );
+    fail(up.error, "upsert objective mastery");
+    return state;
+  }
+
+  async getObjectiveMastery(studentId: string, key: string): Promise<MasteryStateV1 | null> {
+    const { data, error } = await this.db.from("sk_objective_mastery").select("*").eq("student_id", studentId).eq("objective_key", key).maybeSingle();
+    fail(error, "get objective mastery");
+    return data ? { status: data.status as MasteryStateV1["status"], independent: !!data.independent, evidence: data.evidence as MasteryStateV1["evidence"], rule_version: MASTERY_RULE_VERSION } : null;
+  }
+
   async getMastery(studentId: string, teachingObjectiveId: string): Promise<MasteryStateV1 | null> {
     const { data, error } = await this.db.from("mastery_state").select("*").eq("student_id", studentId).eq("teaching_objective_id", teachingObjectiveId).maybeSingle();
     fail(error, "get mastery");
@@ -315,7 +348,7 @@ export class SupabaseSessionStore implements SessionStore {
 }
 
 // ── row mapping ─────────────────────────────────────────────────────────────
-type CheckContext = { purpose: CheckPurpose | null; unitKey: string | null; checkKey: string | null; checkSize: number | null };
+type CheckContext = AttemptCheck & { purpose: CheckPurpose | null };
 
 const iso = (ms: number) => new Date(ms).toISOString();
 const ms = (v: unknown) => {
@@ -380,6 +413,7 @@ export function toAttemptRow(a: Attempt, studentId: string, teachingObjectiveId:
     student_id: studentId,
     item_id: a.itemId,
     teaching_objective_id: teachingObjectiveId,
+    objective_key: a.objectiveKey ?? null,
     attempt_no: a.attemptNo,
     response: a.response === undefined ? null : a.response,
     outcome: a.outcome,
@@ -418,6 +452,8 @@ export function fromAttemptRow(r: DbRow): Attempt {
     ruleVersion: String(r.rule_version),
     gradedAt: ms(r.at),
     teachingObjectiveId: typeof r.teaching_objective_id === "string" ? r.teaching_objective_id : null,
+    objectiveKey: typeof r.objective_key === "string" ? r.objective_key : null,
+    check: { purpose: (r.purpose ?? null) as AttemptCheck["purpose"], unitKey: typeof r.unit_key === "string" ? r.unit_key : null, checkKey: typeof r.check_key === "string" ? r.check_key : null, checkSize: r.check_size == null ? null : Number(r.check_size) },
   };
 }
 

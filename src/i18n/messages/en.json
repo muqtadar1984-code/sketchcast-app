@@ -2251,7 +2251,19 @@
       "nextPractise": "Practise section {n}",
       "nextDone": "You've finished this lesson. Well done!",
       "untitled": "Untitled section",
-      "matchPick": "Choose…"
+      "matchPick": "Choose…",
+      "rungThinking": "It looks like you're thinking: “{thinking}”. That's not quite right — have another go.",
+      "rungActually": "Actually: {correction}",
+      "rungWhyWrong": "Why that answer isn't right: {text}",
+      "rungHint": "Hint:",
+      "rungSlide": "This part of the lesson explains it: {heading}",
+      "watchThisPart": "Watch this part",
+      "rungCheck": "Now try one more question on the same idea.",
+      "tryCheck": "Try the check question",
+      "checkQuestion": "Check question",
+      "rungNoCheck": "There isn't another question on this idea yet. Here is the explanation.",
+      "revealAnswer": "The answer:",
+      "rungHintSection": "Think about what the section on {heading} says about this."
     }
   }
 }

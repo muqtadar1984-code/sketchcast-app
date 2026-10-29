@@ -3,7 +3,7 @@
 // one same-part fallback and one cross-part fallback) and a product → kit map
 // world shaped like the Biology book's (chapter 8 carries three kits).
 import type { KitManifest, ManifestItem, ManifestSegment } from "../manifest/derive";
-import { FakeDb } from "./fake-supabase";
+import { skFakeDb, type FakeDb } from "./fake-supabase";
 
 export const T0 = Date.parse("2026-10-29T10:00:00Z");
 const DAY = 86_400_000;
@@ -101,9 +101,11 @@ export function kitManifest(): KitManifest {
 const gen = (id: string, title: string, over: Record<string, unknown> = {}) => ({ id, title, kind: "presentation", status: "done", withdrawn_at: null, removed_at: null, owner_id: OWNER, ...over });
 const map = (generation_id: string, chapter_ref: string, sort = 0, product_id = PRODUCT, label: string | null = null) => ({ product_id, chapter_ref, sort, generation_id, label });
 
-/** The kit-map world: the founder-style staff grant for STUDENT, nothing for STRANGER. */
+/** The kit-map world: the founder-style staff grant for STUDENT, nothing for STRANGER.
+ *  On the schema-checking fake (slice C writes sk_sessions, item_attempts and
+ *  sk_objective_mastery here, and those must refuse what Postgres refuses). */
 export function kitWorld(opts: { tutorDays?: number } = {}): FakeDb {
-  const db = new FakeDb({}, () => T0);
+  const db = skFakeDb(() => T0);
   db.seed("sk_book_products", [
     { id: PRODUCT, slug: SLUG, status: "approved", title: "Cells" },
     { id: OTHER_PRODUCT, slug: "another-book", status: "approved", title: "Another" },

@@ -71,7 +71,56 @@ export type KitPractiseItem =
   | { id: string; type: "mcq"; prompt: string; marks: number; options: string[] }
   | { id: string; type: "match"; prompt: string; marks: number; left: string[]; options: string[] };
 
-export type KitGrade = { outcome: "correct" | "partial" | "incorrect" | "needs_review"; score: number; max: number; attemptNo: number; triesLeft: number };
+/** One rung of the remediation ladder (slice C, Final Plan §4.2), derived on
+ *  the server from the bank with no model call (src/sk/remediation.ts). No
+ *  rung before the last attempt carries the right answer. */
+export type KitRung =
+  /** 1 — the chosen option's misconception, from the article's bank, NAMED
+   *  only: its correction often restates the answer, so it waits for the
+   *  slide or the reveal. */
+  | { rung: 1; kind: "misconception"; misconception: string }
+  /** 1 — no named misconception: the chosen option's own `why_wrong`. */
+  | { rung: 1; kind: "why_wrong"; text: string }
+  /** 2 — a hint from the explanation or the right option's rationale, when it
+   *  passes the leak check (exact text, key, ≥ 60 % content-word overlap)… */
+  | { rung: 2; kind: "hint"; text: string; from: "explanation" | "rationale" }
+  /** 2 — …else a pointer to the section that teaches it. */
+  | { rung: 2; kind: "hint"; from: "section"; k: number; key: string; heading: string }
+  /** 3 — slide(k): the section that teaches this item's objective, with the
+   *  named misconception's correction when this is where it is first shown. */
+  | { rung: 3; kind: "slide"; k: number; key: string; heading: string; correction: string | null }
+  /** 4 — a check question: a DIFFERENT bank item on the same objective (or concept). */
+  | { rung: 4; kind: "verify"; itemId: string; via: "objective" | "concept"; item: KitPractiseItem | null }
+  /** 4 — no other item on this objective: say so and offer the explanation. */
+  | { rung: 4; kind: "verify"; itemId: null; explanation: string | null };
+
+/** After the last attempt: the right answer and the bank's explanation. */
+export type KitReveal = { answer: string; explanation: string | null; correction: string | null };
+
+export type KitGrade = {
+  outcome: "correct" | "partial" | "incorrect" | "needs_review";
+  score: number;
+  max: number;
+  /** The SERVER's attempt number (counted from stored attempts). */
+  attemptNo: number;
+  triesLeft: number;
+  /** The ladder's rungs for this wrong answer (empty when right). */
+  rungs: KitRung[];
+  /** Set once the tries are used up without a right answer. */
+  reveal: KitReveal | null;
+};
+
+/** The section position (index into `segments`) slide(k) points at, or −1. */
+export function sectionForRung(segments: readonly KitSegmentView[], rung: KitRung): number {
+  return rung.kind === "slide" || (rung.kind === "hint" && rung.from === "section") ? segments.findIndex((s) => s.index === rung.k || s.key === rung.key) : -1;
+}
+
+/** The practice list with a verification item placed right after position `i`
+ *  (once: an item already in the list is not added again). */
+export function withCheckItem(items: readonly KitPractiseItem[], i: number, check: KitPractiseItem): KitPractiseItem[] {
+  if (items.some((x) => x.id === check.id)) return [...items];
+  return [...items.slice(0, i + 1), check, ...items.slice(i + 1)];
+}
 
 // ── navigation ──────────────────────────────────────────────────────────────
 
