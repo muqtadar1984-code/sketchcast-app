@@ -127,7 +127,8 @@ async function servableGraphs(graphs: TeachingGraph[]): Promise<TeachingGraph[]>
   return servableGraphsOn(skDbFrom(createAdminClient()), graphs);
 }
 
-function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> {
+/** The router (Haiku) and teacher (Sonnet) providers, lazily; {} when Claude is not configured. */
+export function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> {
   if (!claudeConfigured()) return {};
   // Lazy so a missing SDK key never breaks the regex-only path.
   return {

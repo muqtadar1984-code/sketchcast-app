@@ -347,7 +347,7 @@ const bool = (v: unknown) => v === true || v === "true" || v === "t";
 
 export const GRANT_SOURCES = ["code", "promo", "staff", "renewal", "purchase", "edition_code"] as const;
 
-/** The four 0157 tables with every column, CHECK, unique key and FK; the 0156
+/** The four 0157 tables (+ 0170's objective_key and sk_objective_mastery) with every column, CHECK, unique key and FK; the 0156
  * tables the bank reads (typed where the loop's writes point at them);
  * `profiles` (+ school_id), which sk_sessions / item_attempts / mastery_state
  * reference; and the B8 access tables — `entitlements` (0022), and
@@ -480,6 +480,8 @@ export function skFakeDb(now: () => number = () => Date.now()): FakeDb {
           student_id: req("uuid", { references: { table: "profiles" } }),
           item_id: req("uuid", { references: { table: "topic_questions" } }),
           teaching_objective_id: col("uuid", { references: { table: "teaching_objectives" } }),
+          // 0170: the kit item's article objective, "<article_id>:<objective_ref>"
+          objective_key: col("text"),
           attempt_no: req("int", { check: gte(1) }),
           response: col("jsonb"),
           outcome: req("text", { in: ["correct", "partial", "incorrect", "needs_review"] }),
@@ -520,6 +522,21 @@ export function skFakeDb(now: () => number = () => Date.now()): FakeDb {
           updated_at: req("timestamptz", { default: () => db.stamp() }),
         },
         checks: { mastery_state_independent_check: (r) => !bool(r.independent) || r.status === "mastered" },
+      },
+      // 0170: mastery per KIT (article) objective, same shape and rules as mastery_state
+      sk_objective_mastery: {
+        unique: [{ cols: ["student_id", "objective_key"] }],
+        strictColumns: true,
+        columns: {
+          student_id: req("uuid", { references: { table: "profiles" } }),
+          objective_key: req("text", { check: (v) => /^[0-9a-f-]{36}:.+$/.test(String(v)) }),
+          status: req("text", { in: ["unknown", "in_progress", "mastered", "provisional", "needs_work"] }),
+          independent: req("bool", { default: () => false }),
+          evidence: req("jsonb", { default: () => ({}) }),
+          rule_version: req("text"),
+          updated_at: req("timestamptz", { default: () => db.stamp() }),
+        },
+        checks: { sk_objective_mastery_independent_check: (r) => !bool(r.independent) || r.status === "mastered" },
       },
     },
     now,
