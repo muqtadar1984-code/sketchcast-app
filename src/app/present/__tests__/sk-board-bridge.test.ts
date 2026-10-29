@@ -571,3 +571,60 @@ describe("Board UX — rail, blank in between, load_slides", () => {
     expect(b.loading()).toBeNull();
   });
 });
+
+describe("the kit's .pptx as pages (founder 2026-10-28)", () => {
+  const m = toBridgeManifest(KIT, 1);
+  const TEMPLATE = "The deck is on the roll as pages {a}–{b}. Say 'blank page' to add one in between.";
+
+  it("load_deck runs the host's deck load (no lesson map needed) and fills the server's closing line", async () => {
+    const fc = fakeController();
+    const load = vi.fn(async () => ({ ok: true, summary: "The deck is on the roll as pages 2–9.", loaded: { n: 8, a: 2, b: 9, aborted: false } }));
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => null, mapStatus: () => "none", deck: { status: () => "missing", load } });
+    const r = await b.run("load_deck", { done: TEMPLATE });
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ ok: true, loaded: { n: 8, a: 2, b: 9 }, done: "The deck is on the roll as pages 2–9. Say 'blank page' to add one in between." });
+    // Without a template the result is the host's as-is (the panel falls back to its own line).
+    expect((await b.run("load_deck", {})).done).toBeUndefined();
+  });
+
+  it("load_deck on a unit with no deck refuses; it does not cancel itself", async () => {
+    const fc = fakeController();
+    const cancel = vi.fn();
+    fc.c.cancelLoad = cancel;
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready" });
+    expect(await b.run("load_deck", {})).toEqual({ ok: false, summary: "This lesson has no slide deck." });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it("state() reports the deck's status for the server; absent when the unit has none", () => {
+    const fc = fakeController();
+    let status: "none" | "missing" | "building" | "ready" | "loaded" | "failed" = "ready";
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready", deck: { status: () => status, load: async () => ({ ok: true, summary: "" }) } });
+    expect(b.state()?.deck).toBe("ready");
+    status = "none";
+    expect(b.state()?.deck).toBeUndefined();
+    const plain = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready" });
+    expect(plain.state()).not.toHaveProperty("deck");
+  });
+
+  it("'skip to the PowerPoint' (slide deck:true) winds to the deck's first page when it is on the roll, else slide 1 of the frames", async () => {
+    const fc = fakeController();
+    let onRoll: number | null = null;
+    fc.c.findDeckPage = () => onRoll;
+    fc.c.goToDeckPage = () => {
+      fc.calls.push(["goToDeckPage"]);
+      return onRoll!;
+    };
+    const b = createBoardBridge({ controller: () => fc.c, manifest: () => m, mapStatus: () => "ready" });
+    await b.run("slide", { k: 0, deck: true });
+    expect(fc.calls).toContainEqual(["slide", 0]);
+    onRoll = 3;
+    fc.calls.length = 0;
+    expect(await b.run("slide", { k: 0, deck: true })).toEqual({ ok: true, summary: "Slide 1 of the deck (page 4)." });
+    expect(fc.calls).toEqual([["goToDeckPage"]]);
+    // A plain slide move never goes to the deck.
+    fc.calls.length = 0;
+    await b.run("slide", { k: 0 });
+    expect(fc.calls).toContainEqual(["slide", 0]);
+  });
+});

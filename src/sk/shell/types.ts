@@ -82,6 +82,10 @@ export type SkBoardState = {
   segments?: Array<{ k: number; heading: string; id?: string; points?: string[] }>;
   /** S1 (additive): the manifest's concepts, each with the segment ids it is taught in. */
   concepts?: Array<{ id: string; name: string; segmentIds: string[] }>;
+  /** Additive (founder 2026-10-28): the open unit's .pptx as pages —
+   *  absent when the unit has no deck. "ready"/"loaded" let "skip to the
+   *  PowerPoint" go to the deck's own first page. */
+  deck?: "missing" | "building" | "ready" | "loaded" | "failed";
 };
 
 /** An entity a tool resolved on an earlier turn, kept so "their parents" and
@@ -303,7 +307,10 @@ export type SkBoardMove =
   | "rail"
   /** Put every slide of the open unit on the roll as pages — the video's own
    *  finished frames, one page each (no pptx rendering). */
-  | "load_slides";
+  | "load_slides"
+  /** Put the open unit's .pptx on the roll, one rendered slide per page
+   *  (founder 2026-10-28); already there = wind to its first page. */
+  | "load_deck";
 
 /** The client's answer to a `confirm` card: the token, and how it was given
  *  (§9.2: a spoken yes counts only with exactly one active card and an

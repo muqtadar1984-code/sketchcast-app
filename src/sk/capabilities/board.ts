@@ -14,7 +14,7 @@ import type { SkBoardMove, SkBoardState, SkCapability, SkCapabilityMeta, SkCapab
 
 export const BOARD_NOT_OPEN = "Open the Board first.";
 export const BOARD_NO_MAP = "The lesson map isn't ready yet.";
-export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap", "rail", "load_slides"];
+export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap", "rail", "load_slides", "load_deck"];
 export const PRACTISE_MAX = 10;
 
 type Say = Record<string, string>;
@@ -23,7 +23,7 @@ type Say = Record<string, string>;
  *  particular phrasing — `slides` is `slide {k: 0}` asked for as "the
  *  PowerPoint / the slides" (Board UX 2026-10-28), and `load_slides_any` is
  *  the load line when the client sent no segment list to count. */
-export type SayKey = SkBoardMove | "slides" | "load_slides_any";
+export type SayKey = SkBoardMove | "slides" | "load_slides_any" | "deck_loaded" | "deck_first";
 
 /** SK's one line per move, ten locales. `{n}`, `{heading}`, `{a}`, `{b}`,
  *  `{ha}`, `{hb}` are filled by the handler; the client speaks the result. */
@@ -237,6 +237,46 @@ const SAY: Record<SayKey, Say> = {
     mr: "स्लाइड्स रोलवर पाने म्हणून लोड केल्या जात आहेत.",
     hi: "स्लाइड्स रोल पर पेज के रूप में लोड की जा रही हैं।",
   },
+  // The kit's .pptx as pages (founder 2026-10-28). Said BEFORE the load…
+  load_deck: {
+    en: "Loading the deck onto the roll as pages.",
+    ms: "Memuatkan dek ke gulungan sebagai halaman.",
+    "ms-arab": "مموتکن ديق ک ڬولوڠن سباڬاي هلامن.",
+    ar: "جارٍ تحميل العرض التقديمي على اللفافة كصفحات.",
+    fr: "Chargement du diaporama sur le rouleau, une diapositive par page.",
+    es: "Cargando la presentación en el rollo como páginas.",
+    pt: "A carregar a apresentação no rolo como páginas.",
+    te: "డెక్ రోల్‌పై పేజీలుగా లోడ్ అవుతోంది.",
+    mr: "डेक रोलवर पाने म्हणून लोड केला जात आहे.",
+    hi: "डेक रोल पर पेज के रूप में लोड किया जा रहा है।",
+  },
+  // …and AFTER it, by the client, with the pages the roll actually got
+  // ({a}–{b} are left in the template the server sends and filled there).
+  deck_loaded: {
+    en: "The deck is on the roll as pages {a}–{b}. Say 'blank page' to add one in between.",
+    ms: "Dek kini di gulungan sebagai halaman {a}–{b}. Sebut 'halaman kosong' untuk menambah satu di antaranya.",
+    "ms-arab": "ديق کيني د ڬولوڠن سباڬاي هلامن {a}–{b}. سبوت 'هلامن کوسوڠ' اونتوق منمبه ساتو د انتاراڽ.",
+    ar: "العرض التقديمي الآن على اللفافة كصفحات {a}–{b}. قل 'صفحة فارغة' لإضافة صفحة بينها.",
+    fr: "Le diaporama est sur le rouleau, pages {a} à {b}. Dites « page blanche » pour en insérer une entre deux.",
+    es: "La presentación está en el rollo como páginas {a}–{b}. Di 'página en blanco' para añadir una en medio.",
+    pt: "A apresentação está no rolo como páginas {a}–{b}. Diga 'página em branco' para acrescentar uma no meio.",
+    te: "డెక్ రోల్‌పై పేజీలు {a}–{b}గా ఉంది. మధ్యలో ఒకటి చేర్చడానికి 'ఖాళీ పేజీ' అని చెప్పండి.",
+    mr: "डेक रोलवर पाने {a}–{b} म्हणून आहे. मध्ये एक जोडण्यासाठी 'रिकामे पान' म्हणा.",
+    hi: "डेक रोल पर पेज {a}–{b} के रूप में है। बीच में एक जोड़ने के लिए 'खाली पृष्ठ' कहें।",
+  },
+  // "Skip to the PowerPoint" with the deck's pages ready or on the roll.
+  deck_first: {
+    en: "Here is the deck — slide 1.",
+    ms: "Inilah dek — slaid 1.",
+    "ms-arab": "اينيله ديق — سلاءيد 1.",
+    ar: "هذا هو العرض التقديمي — الشريحة 1.",
+    fr: "Voici le diaporama — diapositive 1.",
+    es: "Aquí está la presentación: diapositiva 1.",
+    pt: "Aqui está a apresentação — diapositivo 1.",
+    te: "ఇదిగో డెక్ — స్లైడ్ 1.",
+    mr: "हा डेक — स्लाइड 1.",
+    hi: "यह रहा डेक — स्लाइड 1।",
+  },
 };
 
 function fill(template: string, vars: Record<string, string | number>): string {
@@ -401,30 +441,47 @@ const SLIDE: SkJsonSchema = {
   type: "object",
   properties: {
     k: { type: "integer", minimum: 0, description: "0-based segment index (the user's 'slide 4' is k=3)." },
-    deck: { type: "boolean", description: "True when the teacher asked for 'the slides / the PowerPoint / the deck' as a whole: show slide 1 and say that the slides are the video's own frames (the deck file is a download in the rail)." },
+    deck: { type: "boolean", description: "True when the teacher asked for 'the slides / the PowerPoint / the deck' as a whole: the deck's own first page when its pages are rendered, else slide 1 of the video's frames with a line that the deck file is a download in the rail." },
   },
   required: ["k"],
   additionalProperties: false,
 };
 
+/** "Skip to the PowerPoint" with the .pptx's own pages ready or on the roll
+ *  (founder 2026-10-28): the deck itself — loaded if it is not on the roll
+ *  yet — landing on its first page. Needs no lesson map. */
+function deckFirst(b: SkBoardState, ctx: SkContext): SkCapabilityResult {
+  return ok(
+    "Showing the deck's slide 1.",
+    { move: "load_deck", args: { first: true, done: sayFor("deck_loaded", ctx.user.locale) }, say: sayFor("deck_first", ctx.user.locale) },
+    [{ deck: b.deck ?? "", slide: 1 }],
+  );
+}
+
+const slideHandler = withBoard(true, (b, ctx, args) => {
+  const r = checkK(b, intArg(args.k));
+  if (!("k" in r)) return r;
+  // "Skip to the PowerPoint" with no rendered deck: slide 1 of the lesson's
+  // own frames, and the line says where the file is.
+  if (args.deck === true) {
+    return ok(`Showing slide ${r.k + 1} — the slides are the video's frames; the deck file is in the rail.`, { move: "slide", args: { k: r.k, heading: r.heading, points: r.points ?? [], deck: true }, say: sayFor("slides", ctx.user.locale) }, [
+      { k: r.k + 1, heading: r.heading, deck: "download in the rail" },
+    ]);
+  }
+  // No heading known → "Slide 4." (the ": " before the empty heading goes).
+  const say = sayFor("slide", ctx.user.locale, { n: r.k + 1, heading: r.heading }).replace(/\s*[:：]\s*(?=[.।]$)/u, "");
+  return ok(`Showing slide ${r.k + 1}${r.heading ? `: ${r.heading}` : ""}.`, { move: "slide", args: { k: r.k, heading: r.heading, points: r.points ?? [] }, say }, [
+    { k: r.k + 1, heading: r.heading, points: (r.points ?? []).join(" | ") },
+  ]);
+});
+
 export const boardSlide: SkCapability = {
   meta: meta("slide", "Board: show the completed slide of segment k (its end frame, paused). k is the 0-based segment index; the user's 'slide 4' is k=3. With deck=true ('skip to the PowerPoint / show the slides') use k=0.", SLIDE),
-  handler: withBoard(true, (b, ctx, args) => {
-    const r = checkK(b, intArg(args.k));
-    if (!("k" in r)) return r;
-    // "Skip to the PowerPoint": the deck is not rendered (Final Plan §5.3) —
-    // slide 1 of the lesson's own frames, and the line says where the file is.
-    if (args.deck === true) {
-      return ok(`Showing slide ${r.k + 1} — the slides are the video's frames; the deck file is in the rail.`, { move: "slide", args: { k: r.k, heading: r.heading, points: r.points ?? [], deck: true }, say: sayFor("slides", ctx.user.locale) }, [
-        { k: r.k + 1, heading: r.heading, deck: "download in the rail" },
-      ]);
-    }
-    // No heading known → "Slide 4." (the ": " before the empty heading goes).
-    const say = sayFor("slide", ctx.user.locale, { n: r.k + 1, heading: r.heading }).replace(/\s*[:：]\s*(?=[.।]$)/u, "");
-    return ok(`Showing slide ${r.k + 1}${r.heading ? `: ${r.heading}` : ""}.`, { move: "slide", args: { k: r.k, heading: r.heading, points: r.points ?? [] }, say }, [
-      { k: r.k + 1, heading: r.heading, points: (r.points ?? []).join(" | ") },
-    ]);
-  }),
+  handler: async (ctx, args, deps) => {
+    const b = board(ctx);
+    if (b && args?.deck === true && (b.deck === "ready" || b.deck === "loaded")) return deckFirst(b, ctx);
+    return slideHandler(ctx, args, deps);
+  },
 };
 
 const RAIL: SkJsonSchema = {
@@ -453,6 +510,22 @@ export const boardLoadSlides: SkCapability = {
     const say = n > 0 ? sayFor("load_slides", ctx.user.locale, { n }) : sayFor("load_slides_any", ctx.user.locale);
     return ok(n > 0 ? `Loading ${n} slides onto the roll as pages.` : "Loading the slides onto the roll as pages.", { move: "load_slides", args: n > 0 ? { count: n } : {}, say }, n > 0 ? [{ count: n }] : []);
   }),
+};
+
+/** Founder 2026-10-28: "the pptx loaded on the board … each slide as 1 page".
+ *  The kit's .pptx rendered by the worker, one page per slide; the client
+ *  asks for the render when it is missing (~30 s), and winds to the first
+ *  page when the deck is already on the roll. No lesson map needed. The
+ *  closing line travels as a template ({a}–{b}) the client fills. */
+export const boardLoadDeck: SkCapability = {
+  meta: meta("load_deck", "Board: load the kit's PowerPoint (.pptx) onto the roll as pages, one rendered slide per page, then land on its first slide. Use for 'load the deck / load the PowerPoint as pages / put the presentation on the board'.", NONE),
+  handler: withBoard(false, (b, ctx) =>
+    ok(
+      b.deck === "loaded" ? "The deck is already on the roll; going to its first page." : "Loading the deck onto the roll as pages.",
+      { move: "load_deck", args: { done: sayFor("deck_loaded", ctx.user.locale) }, say: b.deck === "loaded" ? sayFor("deck_first", ctx.user.locale) : sayFor("load_deck", ctx.user.locale) },
+      b.deck ? [{ deck: b.deck }] : [],
+    ),
+  ),
 };
 
 const CONCEPT: SkJsonSchema = {
@@ -558,4 +631,5 @@ export const BOARD_CAPABILITIES: SkCapability[] = [
   boardRecap,
   boardRail,
   boardLoadSlides,
+  boardLoadDeck,
 ];

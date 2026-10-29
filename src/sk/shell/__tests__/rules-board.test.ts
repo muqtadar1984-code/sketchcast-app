@@ -230,13 +230,27 @@ describe("Board UX (2026-10-28): the deck, the rail, slides as pages", () => {
     ["load the slides as pages", "load_slides", {}],
     ["put the slides on the board", "load_slides", {}],
     ["load all the slides onto the roll", "load_slides", {}],
-    ["put the powerpoint on the board as pages", "load_slides", {}],
     ["muatkan slaid sebagai halaman", "load_slides", {}],
     ["muat slaid ke papan", "load_slides", {}],
     ["letakkan slaid di papan", "load_slides", {}],
     ["حمّل الشرائح كصفحات", "load_slides", {}],
     ["حمل الشرائح على اللوحة", "load_slides", {}],
     ["ضع الشرائح على اللوحة", "load_slides", {}],
+    // the kit's .pptx as pages (founder 2026-10-28): the DECK words
+    ["load the deck", "load_deck", {}],
+    ["load the PowerPoint", "load_deck", {}],
+    ["load the powerpoint as pages", "load_deck", {}],
+    ["put the powerpoint on the board as pages", "load_deck", {}],
+    ["put the presentation on the board", "load_deck", {}],
+    ["load the slide deck onto the roll please", "load_deck", {}],
+    ["load the pptx", "load_deck", {}],
+    ["muatkan dek", "load_deck", {}],
+    ["muatkan dek slaid ke papan", "load_deck", {}],
+    ["muat powerpoint sebagai halaman", "load_deck", {}],
+    ["letakkan persembahan di papan", "load_deck", {}],
+    ["حمّل العرض التقديمي", "load_deck", {}],
+    ["حمل العرض التقديمي كصفحات", "load_deck", {}],
+    ["ضع البوربوينت على اللوحة", "load_deck", {}],
   ];
   it.each(table)("%s → %s", (text, move, args) => {
     const d = teach(text);
@@ -251,7 +265,7 @@ describe("Board UX (2026-10-28): the deck, the rail, slides as pages", () => {
   });
   it("off the Board none of them is a Board move", () => {
     const off = makeCtx();
-    for (const text of ["skip to the power point", "show the units", "load the slides as pages"]) {
+    for (const text of ["skip to the power point", "show the units", "load the slides as pages", "load the deck"]) {
       expect(routeByRules(text, off, NOW, clock).intent).not.toBe("teach");
     }
   });

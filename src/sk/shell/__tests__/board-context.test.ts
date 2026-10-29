@@ -116,3 +116,12 @@ describe("the collector carries the Board state; the SSE parser accepts the S1 e
     expect(parseEventJson('{"type":"job","id":1}')).toBeNull();
   });
 });
+
+describe("sanitizeBoard: the deck's status (founder 2026-10-28)", () => {
+  it("keeps a known deck status and drops anything else", () => {
+    expect(sanitizeBoard({ sessionId: "s", deck: "ready" })?.deck).toBe("ready");
+    expect(sanitizeBoard({ sessionId: "s", deck: "loaded" })?.deck).toBe("loaded");
+    expect(sanitizeBoard({ sessionId: "s", deck: "rm -rf" })).not.toHaveProperty("deck");
+    expect(sanitizeBoard({ sessionId: "s", deck: 1 })).not.toHaveProperty("deck");
+  });
+});

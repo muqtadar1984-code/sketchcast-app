@@ -1879,7 +1879,10 @@
       "pickManually": "Pilih sendiri",
       "menu": "Menu",
       "backToDashboard": "Kembali ke papan pemuka",
-      "loadSlides": "Muatkan slaid sebagai halaman"
+      "loadSlides": "Muatkan slaid sebagai halaman",
+      "loadDeck": "Muatkan dek sebagai halaman",
+      "preparingDeck": "Menyediakan dek… (kira-kira 30 s)",
+      "deckFailed": "Dek tidak dapat disediakan. Cuba lagi sebentar lagi."
     },
     "start": {
       "heading": "Pilih apa yang anda ajar",

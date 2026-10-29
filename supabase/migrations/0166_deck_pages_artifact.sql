@@ -1,0 +1,15 @@
+-- 0166: the deck's pages for the Classroom Board (founder, 2026-10-28).
+--
+-- A teacher presents the kit's pptx on the Board one slide per page, and SK
+-- will later explain a highlighted portion of a page. The worker renders each
+-- deck slide to PNG (artifact kind `slide_png`, already in the enum since 0001)
+-- and writes ONE text map per deck: the words of every slide with their boxes
+-- (normalised 0..1 to the slide, taken from the rendered PDF so they line up
+-- with the PNG), the slide titles and the speaker notes. That map is a JSON
+-- document and gets its own artifact kind so the app can find it without
+-- guessing from a file name.
+--
+-- Adding an enum value is not reversible in Postgres (no DROP VALUE); the
+-- rollback file removes the rows that use it instead. Run as ONE statement,
+-- outside an explicit transaction block. Idempotent.
+alter type public.artifact_kind add value if not exists 'deck_pages_json';

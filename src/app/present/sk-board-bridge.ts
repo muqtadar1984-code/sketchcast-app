@@ -182,6 +182,16 @@ export type BridgeDeps = {
   /** Told of a slides load's progress (k of n) and of its end (null), so the
    *  Board itself can show it as well as the panel's tray. */
   onLoading?: (progress: { k: number; n: number } | null) => void;
+  /** The open unit's .pptx as pages (founder 2026-10-28), when the unit has a
+   *  deck. `status` is what the collector reports (SK's "skip to the
+   *  PowerPoint" goes to the deck when it is ready or loaded); `load` fetches
+   *  the rendered slides — asking the worker when they are missing — and puts
+   *  them on the roll, or winds to them when they are already there. The host
+   *  owns it (present-client), so the rail button and SK share one path. */
+  deck?: {
+    status: () => "none" | "missing" | "building" | "ready" | "loaded" | "failed";
+    load: () => Promise<BridgeRun>;
+  };
   /** Polling cadence for the segment-end watcher. */
   pollMs?: number;
   now?: () => number;
@@ -195,6 +205,9 @@ export type BridgeRun = {
   /** load_slides only: how many pages it made and where they sit (1-based,
    *  inclusive) — the panel turns these into its localized closing line. */
   loaded?: { n: number; a: number; b: number; aborted: boolean };
+  /** A closing line, already in her language, to say once the move is done
+   *  (load_deck: the server's template with the page range filled in). */
+  done?: string;
 };
 
 export type SkBoardBridge = {
@@ -333,6 +346,8 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
       const out: SkBoardState = { sessionId: st.sessionId, t: Math.round(st.t * 10) / 10, paused: st.paused, rollPage: st.page };
       const g = unitOf(c)?.generationId ?? null;
       if (g) out.generationId = g;
+      const deck = deps.deck?.status();
+      if (deck && deck !== "none") out.deck = deck;
       if (m) {
         out.manifestId = m.manifestId;
         const k = segmentAt(m, st.t);
@@ -358,7 +373,7 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
       const c = deps.controller();
       if (!c) return { ok: false, summary: "Open the Board first." };
       // A new move stops a slides load after the frame in hand (pages made stay).
-      if (move !== "load_slides") c.cancelLoad?.();
+      if (move !== "load_slides" && move !== "load_deck") c.cancelLoad?.();
       try {
         switch (move) {
           case "intro": {
@@ -388,6 +403,12 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
             const kk = segK(mm.m, a.k);
             if (!kk.ok) return move === "slide" ? kk : { ok: false, summary: "I couldn't match that to a slide." };
             stopWatch();
+            // "Skip to the PowerPoint" with the deck already on the roll: its
+            // first page, whatever the server last knew.
+            if (move === "slide" && a.deck === true && c.findDeckPage?.(1) != null && c.goToDeckPage) {
+              const page = c.goToDeckPage(1);
+              return { ok: true, summary: `Slide 1 of the deck (page ${page + 1}).` };
+            }
             const r = await c.slide(kk.k, mm.m);
             const how = r.shown === "caption" ? "as a caption" : r.shown === "fallback_frame" ? `with slide ${r.shownK + 1}'s frame` : "";
             return { ok: true, summary: `Slide ${kk.k + 1}${how ? ` ${how}` : ""}.` };
@@ -451,6 +472,18 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
             } finally {
               progress(null);
             }
+          }
+          case "load_deck": {
+            // The kit's .pptx as pages: no lesson map needed — the deck is its
+            // own document. Already on the roll = go to its first page.
+            if (!deps.deck) return { ok: false, summary: "This lesson has no slide deck." };
+            stopWatch();
+            const r = await deps.deck.load();
+            if (r.ok && r.loaded && typeof a.done === "string" && a.done) {
+              const vars: Record<string, number> = { a: r.loaded.a, b: r.loaded.b, n: r.loaded.n };
+              return { ...r, done: a.done.replace(/\{(\w+)\}/g, (whole, k: string) => (k in vars ? String(vars[k]) : whole)) };
+            }
+            return r;
           }
           case "back": {
             c.pageUp();

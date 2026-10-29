@@ -84,6 +84,8 @@ export function sanitizeParams(params: unknown): Record<string, string> {
   return out;
 }
 
+const DECK_STATES: ReadonlySet<string> = new Set(["missing", "building", "ready", "loaded", "failed"]);
+
 export function sanitizeBoard(board: unknown): SkBoardState | undefined {
   if (!board || typeof board !== "object") return undefined;
   const b = board as Record<string, unknown>;
@@ -103,6 +105,7 @@ export function sanitizeBoard(board: unknown): SkBoardState | undefined {
     k: int(b.k),
     generationId: str(b.generationId, 120),
   };
+  if (typeof b.deck === "string" && DECK_STATES.has(b.deck)) out.deck = b.deck as NonNullable<SkBoardState["deck"]>;
   // S1: the lesson map the client holds, bounded — at most 200 segments and 60
   // concepts, short headings, a handful of points each.
   if (Array.isArray(b.segments)) {

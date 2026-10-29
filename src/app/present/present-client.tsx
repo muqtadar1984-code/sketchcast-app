@@ -12,7 +12,8 @@ import SkLauncher from "@/app/dashboard/sk-launcher";
 import type { SkShellCopy } from "@/app/dashboard/sk-shell";
 import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
 import type { BoardController, BoardUnit } from "./board-controller";
-import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
+import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
+import { prepareDeck, type DeckPagesReply, type DeckStatus } from "./deck-load";
 import { docLabel, docNote, groupLabel, scopeLabel, unitLabel } from "./words";
 import { menuItemsFor, type MenuItem } from "./menu-items";
 import { RAIL_CLOSED, railReduce } from "./rail-state";
@@ -90,6 +91,19 @@ async function fetchManifest(generationId: string, method: "GET" | "POST"): Prom
   if (!r.ok) throw new Error(`manifest ${r.status}`);
   const j = (await r.json()) as ManifestReply;
   return j && typeof j.status === "string" ? j : { status: "failed" };
+}
+
+/** GET/POST /api/present/deck-pages as prepareDeck's fetch. A 404 (not her
+ *  deck, no .pptx) is an error, not "missing": there is nothing to ask for. */
+async function fetchDeckPages(generationId: string, method: "GET" | "POST"): Promise<DeckPagesReply> {
+  const r =
+    method === "GET"
+      ? await fetch(`/api/present/deck-pages?${new URLSearchParams({ generationId }).toString()}`)
+      : await fetch("/api/present/deck-pages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ generationId }) });
+  if (!r.ok) throw new Error(`deck pages ${r.status}`);
+  const j = (await r.json()) as DeckPagesReply;
+  if (!j || (j.status !== "ready" && j.status !== "building" && j.status !== "missing")) throw new Error("deck pages: bad reply");
+  return j;
 }
 
 // ── the clock ────────────────────────────────────────────────────────────────
@@ -428,6 +442,97 @@ export default function PresentClient({
   const [slideLoad, setSlideLoad] = useState<{ k: number; n: number } | null>(null);
   const [slidesDone, setSlidesDone] = useState<{ n: number; a: number; b: number } | null>(null);
 
+  // ── The kit's .pptx as pages (founder 2026-10-28) ──────────────────────
+  //
+  // The open unit's deck (its `deck` doc), whether its rendered pages exist,
+  // and the one path that loads them — shared by the rail's "Load the deck as
+  // pages" and SK's `load_deck`, so the two can never disagree. The status is
+  // looked up once per deck (a GET, never a POST: nothing is rendered until
+  // she asks) so SK's "skip to the PowerPoint" knows whether the deck is there.
+  const deckGen = useMemo(() => {
+    if (!session || !kit) return null;
+    const u =
+      kit.units.find((x) => openUnit && x.part === openUnit.part && (x.video?.id ?? null) === openUnit.generationId) ??
+      kit.units.find((x) => openUnit && x.part === openUnit.part) ??
+      kit.units[0];
+    return u?.docs.find((d) => d.note === "deck")?.id ?? null;
+  }, [session, kit, openUnit]);
+  const [deck, setDeck] = useState<{ gen: string; status: DeckStatus } | null>(null);
+  /** The deck a load is under way for (the status line shows only then). */
+  const [deckBusy, setDeckBusy] = useState<string | null>(null);
+  const [deckFailed, setDeckFailed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sk || !deckGen) return;
+    const gen = deckGen;
+    let live = true;
+    fetchDeckPages(gen, "GET")
+      .then((r) => {
+        if (live) setDeck((d) => (d?.gen === gen && d.status === "loaded" ? d : { gen, status: r.status }));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [sk, deckGen]);
+  const deckStatus: DeckStatus = deckGen && deck?.gen === deckGen ? deck.status : "none";
+  // The load under way, so a second press (or SK) restarts rather than races.
+  // A box in state, not a ref: the bridge holds runDeck and is built in render.
+  const [deckRun] = useState(() => {
+    let ac: AbortController | null = null;
+    return {
+      /** Abort the running load, if any, and start a new one. */
+      next: () => {
+        ac?.abort();
+        ac = new AbortController();
+        return ac;
+      },
+      stop: () => ac?.abort(),
+    };
+  });
+  const runDeck = useCallback(
+    async (gen: string): Promise<BridgeRun> => {
+      const c = controller;
+      if (!c?.loadDeck) return { ok: false, summary: "Open the Board first." };
+      try {
+        // Already on the roll: go to its first page rather than load it twice.
+        if (c.findDeckPage?.(1, gen) != null && c.goToDeckPage) {
+          const page = c.goToDeckPage(1, gen);
+          return { ok: true, summary: `The deck is on the roll; slide 1 is page ${page + 1}.` };
+        }
+        const ac = deckRun.next();
+        setDeckBusy(gen);
+        setDeckFailed(null);
+        const r = await prepareDeck(fetchDeckPages, gen, {
+          signal: ac.signal,
+          onStatus: (st) => {
+            if (!ac.signal.aborted) setDeck({ gen, status: st });
+          },
+        });
+        if (r.status !== "ready") {
+          if (r.reason !== "aborted") setDeckFailed(gen);
+          return { ok: false, summary: r.reason === "timeout" ? "The deck is taking too long to prepare." : "The deck could not be prepared." };
+        }
+        const res = await c.loadDeck({ generationId: gen, slides: r.slides, map: r.map, signal: ac.signal });
+        if (!res.pages) return { ok: false, summary: "Stopped before the first slide." };
+        setDeck({ gen, status: "loaded" });
+        const a = res.firstPage + 1;
+        const b = res.lastPage + 1;
+        return { ok: true, summary: `The deck is on the roll as pages ${a}–${b}.`, loaded: { n: res.pages, a, b, aborted: res.aborted } };
+      } catch (e) {
+        setDeckFailed(gen);
+        return { ok: false, summary: e instanceof Error ? e.message : String(e) };
+      } finally {
+        setDeckBusy((g) => (g === gen ? null : g));
+      }
+    },
+    [controller, deckRun],
+  );
+  useEffect(() => () => deckRun.stop(), [deckRun]);
+  const deckPort = useMemo(
+    () => (deckGen ? { status: () => deckStatus, load: () => runDeck(deckGen) } : undefined),
+    [deckGen, deckStatus, runDeck],
+  );
+
   // Rebuilt whenever what it reads changes; the old one's segment watcher is
   // disposed with it (a unit or session change ends the watch anyway). The
   // selection only changes BEFORE a lesson, when no watcher can be running.
@@ -442,9 +547,10 @@ export default function PresentClient({
             rail: (open) => railDispatch(open ? "open" : "close"),
             railOpen: railBox.get,
             onLoading: setSlideLoad,
+            deck: deckPort,
           })
         : null,
-    [sk, controller, manifest, mapStatus, selection, railBox, railDispatch],
+    [sk, controller, manifest, mapStatus, selection, railBox, railDispatch, deckPort],
   );
   useEffect(() => () => bridge?.dispose(), [bridge]);
 
@@ -463,12 +569,32 @@ export default function PresentClient({
         : undefined,
     [bridge, manifest],
   );
+  // The rail's "Load the deck as pages": the same runDeck SK uses. Its line
+  // under the roll: preparing while the worker renders, then where the pages
+  // landed (SK's own words for that, when SK is on), or that it failed.
+  const loadDeck = useCallback(
+    (gen: string) => {
+      setSlidesDone(null);
+      void runDeck(gen).then((r) => {
+        if (r.ok && r.loaded) setSlidesDone({ n: r.loaded.n, a: r.loaded.a, b: r.loaded.b });
+      });
+    },
+    [runDeck],
+  );
+  const deckLine =
+    deckBusy && deckBusy === deckGen && deckStatus === "building"
+      ? t.bar.preparingDeck
+      : deckFailed && deckFailed === deckGen && !deckBusy
+        ? t.bar.deckFailed
+        : null;
   const slideStatus =
     sk && slideLoad
       ? fmt(sk.copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n })
-      : sk && slidesDone
-        ? fmt(sk.copy.slidesLoaded, slidesDone)
-        : null;
+      : deckLine
+        ? deckLine
+        : sk && slidesDone
+          ? fmt(sk.copy.slidesLoaded, slidesDone)
+          : null;
 
   // The Board's menu: "Back to dashboard", then the portal's tabs.
   const menu = useMemo(() => menuItemsFor(tabs, { href: "/dashboard", label: t.bar.backToDashboard }), [tabs, t]);
@@ -612,6 +738,7 @@ export default function PresentClient({
           onRail={railDispatch}
           onLoadSlides={loadSlides}
           slideStatus={slideStatus}
+          onLoadDeck={loadDeck}
         />
       ) : ready ? (
         <section className="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">

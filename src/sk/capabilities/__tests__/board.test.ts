@@ -296,8 +296,60 @@ describe("Board UX (2026-10-28): the deck line, the rail, slides as pages", () =
   });
 
   it("both new moves are immediate Board capabilities in the registry", () => {
-    for (const name of ["board.rail", "board.load_slides"]) {
+    for (const name of ["board.rail", "board.load_slides", "board.load_deck"]) {
       expect(cap(name).meta).toMatchObject({ tier: "immediate", kind: "board", hats: ["teacher"], flags: ["board"] });
     }
+  });
+});
+
+describe("the kit's .pptx as pages (founder 2026-10-28)", () => {
+  const LOCALES = ["en", "ms", "ms-arab", "ar", "fr", "es", "pt", "te", "mr", "hi"];
+
+  it("board.load_deck: no lesson map needed; sends the closing line as a template the client fills", async () => {
+    const r = await run("board.load_deck", {}, { sessionId: "sess-1", deck: "missing" });
+    expect(r.ok).toBe(true);
+    expect(r.board).toEqual({
+      move: "load_deck",
+      args: { done: "The deck is on the roll as pages {a}–{b}. Say 'blank page' to add one in between." },
+      say: "Loading the deck onto the roll as pages.",
+    });
+    // Already on the roll: the same move (the client winds to it), the short line.
+    expect((await run("board.load_deck", {}, { sessionId: "sess-1", deck: "loaded" })).board?.say).toBe("Here is the deck — slide 1.");
+    expect(await run("board.load_deck", {}, null)).toMatchObject({ ok: false, summary: BOARD_NOT_OPEN });
+  });
+
+  it("'skip to the PowerPoint' goes to the deck's own first page when it is ready or loaded — even with no lesson map", async () => {
+    for (const deck of ["ready", "loaded"] as const) {
+      const r = await run("board.slide", { k: 0, deck: true }, { ...BOARD, deck });
+      expect(r.board).toEqual({
+        move: "load_deck",
+        args: { first: true, done: "The deck is on the roll as pages {a}–{b}. Say 'blank page' to add one in between." },
+        say: "Here is the deck — slide 1.",
+      });
+      const noMap = await run("board.slide", { k: 0, deck: true }, { sessionId: "sess-1", deck });
+      expect(noMap.board?.move).toBe("load_deck");
+    }
+    // Not rendered (missing / building / failed / no deck): slide 1 of the video's frames, as before.
+    for (const deck of ["missing", "building", "failed", undefined] as const) {
+      const r = await run("board.slide", { k: 0, deck: true }, { ...BOARD, deck });
+      expect(r.board?.move).toBe("slide");
+      expect(r.board?.args).toMatchObject({ k: 0, deck: true });
+    }
+    // A plain "slide 1" is never the deck.
+    expect((await run("board.slide", { k: 0 }, { ...BOARD, deck: "loaded" })).board?.move).toBe("slide");
+  });
+
+  it("the three deck lines exist in all ten locales; the closing one keeps {a}–{b} for the client", () => {
+    for (const l of LOCALES) {
+      for (const key of ["load_deck", "deck_first", "deck_loaded"] as const) {
+        const line = sayFor(key, l);
+        expect(line.length).toBeGreaterThan(5);
+        if (l !== "en") expect(line).not.toBe(sayFor(key, "en"));
+      }
+      expect(sayFor("deck_loaded", l)).toContain("{a}");
+      expect(sayFor("deck_loaded", l)).toContain("{b}");
+      expect(sayFor("deck_loaded", l, { a: 3, b: 9 })).toMatch(/3.*9/u);
+    }
+    expect(sayFor("deck_loaded", "ms-arab")).not.toBe(sayFor("deck_loaded", "ar"));
   });
 });

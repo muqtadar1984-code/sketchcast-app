@@ -1879,7 +1879,10 @@
       "pickManually": "Choisir manuellement",
       "menu": "Menu",
       "backToDashboard": "Retour au tableau de bord",
-      "loadSlides": "Charger les diapositives en pages"
+      "loadSlides": "Charger les diapositives en pages",
+      "loadDeck": "Charger le diaporama en pages",
+      "preparingDeck": "Préparation du diaporama… (environ 30 s)",
+      "deckFailed": "Le diaporama n'a pas pu être préparé. Réessayez dans une minute."
     },
     "start": {
       "heading": "Choisissez ce que vous allez enseigner",
