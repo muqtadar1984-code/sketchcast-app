@@ -2236,6 +2236,21 @@
         "codeKindCard": "Carte à code",
         "codeKindEdition": "Code d'édition (dans le livre)"
       },
+      "notice": {
+        "cardTitleSchool": "Publier un avis pour toute l'école",
+        "cardTitleStaff": "Publier un avis pour tout le personnel",
+        "seenSchool": "Chaque parent, élève et enseignant de {school}",
+        "seenStaff": "Tout le personnel de {school}",
+        "postedSchool": "Publié pour toute l'école : {title}.",
+        "postedStaff": "Publié pour tout le personnel : {title}.",
+        "noStanding": "Seuls la direction et les coordinateurs publient des avis de l'école.",
+        "off": "Les avis de l'école ne sont pas activés pour votre école.",
+        "whatToSay": "Que doit dire l'avis ?",
+        "tooLong": "Cet avis est trop long — un avis contient au plus 4000 caractères.",
+        "dateUnparsed": "Je n'ai pas compris le jour « {day} » — dites aujourd'hui, demain, un jour de la semaine ou 2026-11-03.",
+        "datePassed": "Ce jour est déjà passé — un avis doit annoncer quelque chose à venir.",
+        "yourSchool": "votre école"
+      },
       "cardParams": {
         "target_label": "Pour",
         "note_type": "Type de note",
@@ -2261,7 +2276,10 @@
         "child_label": "Pour",
         "yes": "Oui",
         "no": "Non",
-        "seen_by": "Qui la voit"
+        "seen_by": "Qui la voit",
+        "title": "Titre",
+        "starts_at": "Date",
+        "school_label": "École"
       },
       "tray": {
         "title": "Vos kits",

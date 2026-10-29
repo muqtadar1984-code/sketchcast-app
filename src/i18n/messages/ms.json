@@ -2236,6 +2236,21 @@
         "codeKindCard": "Kad kod",
         "codeKindEdition": "Kod edisi (dalam buku)"
       },
+      "notice": {
+        "cardTitleSchool": "Hantar notis kepada seluruh sekolah",
+        "cardTitleStaff": "Hantar notis kepada semua staf",
+        "seenSchool": "Setiap ibu bapa, murid dan guru di {school}",
+        "seenStaff": "Semua staf di {school}",
+        "postedSchool": "Telah dihantar kepada seluruh sekolah: {title}.",
+        "postedStaff": "Telah dihantar kepada semua staf: {title}.",
+        "noStanding": "Hanya pengetua dan penyelaras boleh menghantar notis sekolah.",
+        "off": "Notis sekolah belum diaktifkan untuk sekolah anda.",
+        "whatToSay": "Apakah kandungan notis itu?",
+        "tooLong": "Notis itu terlalu panjang — notis boleh mengandungi sehingga 4000 aksara.",
+        "dateUnparsed": "Saya tidak faham hari \"{day}\" — sebut hari ini, esok, nama hari, atau 2026-11-03.",
+        "datePassed": "Hari itu sudah berlalu — notis mesti merujuk kepada sesuatu yang belum berlaku.",
+        "yourSchool": "sekolah anda"
+      },
       "cardParams": {
         "target_label": "Untuk",
         "note_type": "Jenis",
@@ -2261,7 +2276,10 @@
         "child_label": "Untuk",
         "yes": "Ya",
         "no": "Tidak",
-        "seen_by": "Siapa yang melihat"
+        "seen_by": "Siapa yang melihat",
+        "title": "Tajuk",
+        "starts_at": "Tarikh",
+        "school_label": "Sekolah"
       },
       "tray": {
         "title": "Kit anda",

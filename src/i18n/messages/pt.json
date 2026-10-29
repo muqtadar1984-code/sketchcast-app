@@ -2236,6 +2236,21 @@
         "codeKindCard": "Cartão com código",
         "codeKindEdition": "Código da edição (no livro)"
       },
+      "notice": {
+        "cardTitleSchool": "Publicar um aviso para toda a escola",
+        "cardTitleStaff": "Publicar um aviso para toda a equipa",
+        "seenSchool": "Cada encarregado, aluno e professor de {school}",
+        "seenStaff": "Toda a equipa de {school}",
+        "postedSchool": "Publicado para toda a escola: {title}.",
+        "postedStaff": "Publicado para toda a equipa: {title}.",
+        "noStanding": "Só a direção e os coordenadores publicam avisos da escola.",
+        "off": "Os avisos da escola não estão ativados para a sua escola.",
+        "whatToSay": "O que deve dizer o aviso?",
+        "tooLong": "Esse aviso é demasiado longo — um aviso aceita até 4000 caracteres.",
+        "dateUnparsed": "Não percebi o dia \"{day}\" — diga hoje, amanhã, um dia da semana ou 2026-11-03.",
+        "datePassed": "Esse dia já passou — um aviso tem de apontar para algo que ainda vem.",
+        "yourSchool": "a sua escola"
+      },
       "cardParams": {
         "target_label": "Para",
         "note_type": "Tipo",
@@ -2261,7 +2276,10 @@
         "child_label": "Para",
         "yes": "Sim",
         "no": "Não",
-        "seen_by": "Quem a vê"
+        "seen_by": "Quem a vê",
+        "title": "Título",
+        "starts_at": "Data",
+        "school_label": "Escola"
       },
       "tray": {
         "title": "Os seus kits",
