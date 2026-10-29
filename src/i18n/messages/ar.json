@@ -1686,6 +1686,17 @@
         "creating": "جارٍ الإنشاء…",
         "create": "أنشئ حساب الدخول",
         "failed": "تعذّر إضافة الابن."
+      },
+      "week": {
+        "title": "هذا الأسبوع",
+        "period": "آخر 7 أيام",
+        "done": "أُنجز",
+        "overdue": "متأخر",
+        "awaiting": "بانتظار التصحيح",
+        "mastered": "أفكار أتقنها",
+        "notes": "ملاحظات يوميات جديدة",
+        "todo": "ما الذي يمكن فعله",
+        "nothing": "لا شيء عاجل — استمر."
       }
     },
     "books": {
@@ -2187,7 +2198,8 @@
         "credits_left": "الأرصدة المتبقية",
         "warning": "ملاحظة",
         "yes": "نعم",
-        "no": "لا"
+        "no": "لا",
+        "seen_by": "من يراها"
       },
       "tray": {
         "title": "حزمك",
@@ -2265,7 +2277,18 @@
         "stepRevisit": "راجع \"{objective}\" في {kit}",
         "stepGoOver": "راجعا {title} معًا",
         "untitled": "عمل",
-        "readFailed": "تعذّر عليّ قراءة أعمال {name} الآن."
+        "readFailed": "تعذّر عليّ قراءة أعمال {name} الآن.",
+        "diaryCardTitle": "اكتب في يوميات {name}",
+        "diaryNoClass": "ملاحظتك تُكتب في يوميات طفل واحد، لا في صف كامل — لأي طفل هي؟",
+        "diaryUnverified": "لم يتم التحقق من ارتباط {name} بعد، لذا لا يمكنني الكتابة في يومياته.",
+        "diarySeenSchool": "يراها معلم {name} وقيادة المدرسة و{name}.",
+        "diarySeenSchoolPrivate": "يراها معلم {name} وقيادة المدرسة — ولا يراها {name}.",
+        "diarySeenTeacher": "يراها معلم {name} و{name}.",
+        "diarySeenTeacherPrivate": "يراها معلم {name} — ولا يراها {name}.",
+        "diarySeenLeaders": "ليس لـ{name} معلم صف بعد — تراها قيادة المدرسة و{name}.",
+        "diarySeenLeadersPrivate": "ليس لـ{name} معلم صف بعد — تراها قيادة المدرسة، ولا يراها {name}.",
+        "diarySeenHome": "{name} يتعلم في البيت — هذه الملاحظة لسجلك أنت ولـ{name}.",
+        "diarySeenHomePrivate": "{name} يتعلم في البيت — هذه الملاحظة لسجلك أنت فقط؛ لن يراها {name}."
       }
     },
     "player": {

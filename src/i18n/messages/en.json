@@ -1686,6 +1686,17 @@
         "creating": "Creating…",
         "create": "Create login",
         "failed": "Could not add the child."
+      },
+      "week": {
+        "title": "This week",
+        "period": "Last 7 days",
+        "done": "Done",
+        "overdue": "Overdue",
+        "awaiting": "Awaiting marking",
+        "mastered": "Ideas mastered",
+        "notes": "New diary notes",
+        "todo": "What to do about it",
+        "nothing": "Nothing urgent — keep going."
       }
     },
     "books": {
@@ -2187,7 +2198,8 @@
         "credits_left": "Credits left",
         "warning": "Note",
         "yes": "Yes",
-        "no": "No"
+        "no": "No",
+        "seen_by": "Who sees it"
       },
       "tray": {
         "title": "Your kits",
@@ -2265,7 +2277,18 @@
         "stepRevisit": "revisit \"{objective}\" in {kit}",
         "stepGoOver": "go over {title} together",
         "untitled": "a piece of work",
-        "readFailed": "I couldn't read {name}'s work right now."
+        "readFailed": "I couldn't read {name}'s work right now.",
+        "diaryCardTitle": "Write in {name}'s diary",
+        "diaryNoClass": "A note from you goes to one child's diary, not a class — which child is it for?",
+        "diaryUnverified": "{name}'s link isn't verified yet, so I can't write in their diary.",
+        "diarySeenSchool": "Seen by {name}'s teacher, the school's leaders and {name}.",
+        "diarySeenSchoolPrivate": "Seen by {name}'s teacher and the school's leaders — not by {name}.",
+        "diarySeenTeacher": "Seen by {name}'s teacher and {name}.",
+        "diarySeenTeacherPrivate": "Seen by {name}'s teacher — not by {name}.",
+        "diarySeenLeaders": "{name} has no class teacher yet — seen by the school's leaders and {name}.",
+        "diarySeenLeadersPrivate": "{name} has no class teacher yet — seen by the school's leaders, not by {name}.",
+        "diarySeenHome": "{name} learns at home — this note is for your own record and {name}.",
+        "diarySeenHomePrivate": "{name} learns at home — this note is for your own record only; {name} won't see it."
       }
     },
     "player": {

@@ -1686,6 +1686,17 @@
         "creating": "Mencipta…",
         "create": "Cipta log masuk",
         "failed": "Tidak dapat menambah anak."
+      },
+      "week": {
+        "title": "Minggu ini",
+        "period": "7 hari lepas",
+        "done": "Siap",
+        "overdue": "Lewat",
+        "awaiting": "Menunggu penandaan",
+        "mastered": "Idea dikuasai",
+        "notes": "Nota diari baharu",
+        "todo": "Apa yang boleh dibuat",
+        "nothing": "Tiada yang mendesak — teruskan."
       }
     },
     "books": {
@@ -2187,7 +2198,8 @@
         "credits_left": "Baki kredit",
         "warning": "Nota",
         "yes": "Ya",
-        "no": "Tidak"
+        "no": "Tidak",
+        "seen_by": "Siapa yang melihat"
       },
       "tray": {
         "title": "Kit anda",
@@ -2265,7 +2277,18 @@
         "stepRevisit": "ulang kaji \"{objective}\" dalam {kit}",
         "stepGoOver": "semak semula {title} bersama-sama",
         "untitled": "satu tugasan",
-        "readFailed": "Saya tidak dapat membaca kerja {name} sekarang."
+        "readFailed": "Saya tidak dapat membaca kerja {name} sekarang.",
+        "diaryCardTitle": "Tulis dalam diari {name}",
+        "diaryNoClass": "Nota daripada anda masuk ke diari seorang anak, bukan kelas — untuk anak yang mana?",
+        "diaryUnverified": "Pautan {name} belum disahkan, jadi saya tidak boleh menulis dalam diarinya.",
+        "diarySeenSchool": "Dilihat oleh guru {name}, pimpinan sekolah dan {name}.",
+        "diarySeenSchoolPrivate": "Dilihat oleh guru {name} dan pimpinan sekolah — bukan oleh {name}.",
+        "diarySeenTeacher": "Dilihat oleh guru {name} dan {name}.",
+        "diarySeenTeacherPrivate": "Dilihat oleh guru {name} — bukan oleh {name}.",
+        "diarySeenLeaders": "{name} belum ada guru kelas — dilihat oleh pimpinan sekolah dan {name}.",
+        "diarySeenLeadersPrivate": "{name} belum ada guru kelas — dilihat oleh pimpinan sekolah, bukan oleh {name}.",
+        "diarySeenHome": "{name} belajar di rumah — nota ini untuk rekod anda sendiri dan {name}.",
+        "diarySeenHomePrivate": "{name} belajar di rumah — nota ini untuk rekod anda sahaja; {name} tidak akan melihatnya."
       }
     },
     "player": {

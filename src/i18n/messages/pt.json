@@ -1686,6 +1686,17 @@
         "creating": "Criando…",
         "create": "Criar login",
         "failed": "Não foi possível adicionar o filho."
+      },
+      "week": {
+        "title": "Esta semana",
+        "period": "Últimos 7 dias",
+        "done": "Feito",
+        "overdue": "Em atraso",
+        "awaiting": "A aguardar correção",
+        "mastered": "Ideias dominadas",
+        "notes": "Notas novas na agenda",
+        "todo": "O que fazer",
+        "nothing": "Nada urgente — continue assim."
       }
     },
     "books": {
@@ -2187,7 +2198,8 @@
         "credits_left": "Créditos restantes",
         "warning": "Nota",
         "yes": "Sim",
-        "no": "Não"
+        "no": "Não",
+        "seen_by": "Quem a vê"
       },
       "tray": {
         "title": "Os seus kits",
@@ -2265,7 +2277,18 @@
         "stepRevisit": "rever «{objective}» em {kit}",
         "stepGoOver": "rever {title} em conjunto",
         "untitled": "um trabalho",
-        "readFailed": "Não consegui ler o trabalho de {name} neste momento."
+        "readFailed": "Não consegui ler o trabalho de {name} neste momento.",
+        "diaryCardTitle": "Escrever na agenda de {name}",
+        "diaryNoClass": "A sua nota vai para a agenda de um só filho, não de uma turma — para que filho é?",
+        "diaryUnverified": "A associação de {name} ainda não foi verificada, por isso não posso escrever na agenda.",
+        "diarySeenSchool": "Vista pelo professor de {name}, pela direção da escola e por {name}.",
+        "diarySeenSchoolPrivate": "Vista pelo professor de {name} e pela direção da escola — não por {name}.",
+        "diarySeenTeacher": "Vista pelo professor de {name} e por {name}.",
+        "diarySeenTeacherPrivate": "Vista pelo professor de {name} — não por {name}.",
+        "diarySeenLeaders": "{name} ainda não tem professor de turma — vista pela direção da escola e por {name}.",
+        "diarySeenLeadersPrivate": "{name} ainda não tem professor de turma — vista pela direção da escola, não por {name}.",
+        "diarySeenHome": "{name} aprende em casa — esta nota é para o seu próprio registo e para {name}.",
+        "diarySeenHomePrivate": "{name} aprende em casa — esta nota é só para o seu registo; {name} não a verá."
       }
     },
     "player": {

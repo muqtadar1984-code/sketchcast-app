@@ -1686,6 +1686,17 @@
         "creating": "منچيڤتا…",
         "create": "چيڤتا لوݢ ماسوق",
         "failed": "انق تيدق داڤت دتمبه."
+      },
+      "week": {
+        "title": "مڠݢو اين",
+        "period": "٧ هاري لڤس",
+        "done": "سياڤ",
+        "overdue": "ليوت",
+        "awaiting": "منوڠݢو ڤنندأن",
+        "mastered": "ايديا دکواساءي",
+        "notes": "نوتا دياري بهارو",
+        "todo": "اڤ يڠ بوليه دبوات",
+        "nothing": "تيادا يڠ مندسق — تروسکن."
       }
     },
     "books": {
@@ -2187,7 +2198,8 @@
         "credits_left": "باکي کريديت",
         "warning": "نوت",
         "yes": "ي",
-        "no": "تيدق"
+        "no": "تيدق",
+        "seen_by": "سياڤ يڠ مليهت"
       },
       "tray": {
         "title": "کيت اندا",
@@ -2265,7 +2277,18 @@
         "stepRevisit": "اولڠ کاجي \"{objective}\" دالم {kit}",
         "stepGoOver": "سمق سمولا {title} برسام٢",
         "untitled": "ساتو توݢسن",
-        "readFailed": "ساي تيدق داڤت ممباچ کرجا {name} سکارڠ."
+        "readFailed": "ساي تيدق داڤت ممباچ کرجا {name} سکارڠ.",
+        "diaryCardTitle": "توليس دالم دياري {name}",
+        "diaryNoClass": "نوتا درڤد اندا ماسوق ک دياري سأورڠ انق، بوکن کلس — اونتوق انق يڠ مان؟",
+        "diaryUnverified": "ڤاءوتن {name} بلوم دصحکن، جادي ساي تيدق بوليه منوليس دالم دياريڽ.",
+        "diarySeenSchool": "دليهت اوليه ݢورو {name}، ڤيمڤينن سکوله دان {name}.",
+        "diarySeenSchoolPrivate": "دليهت اوليه ݢورو {name} دان ڤيمڤينن سکوله — بوکن اوليه {name}.",
+        "diarySeenTeacher": "دليهت اوليه ݢورو {name} دان {name}.",
+        "diarySeenTeacherPrivate": "دليهت اوليه ݢورو {name} — بوکن اوليه {name}.",
+        "diarySeenLeaders": "{name} بلوم اد ݢورو کلس — دليهت اوليه ڤيمڤينن سکوله دان {name}.",
+        "diarySeenLeadersPrivate": "{name} بلوم اد ݢورو کلس — دليهت اوليه ڤيمڤينن سکوله، بوکن اوليه {name}.",
+        "diarySeenHome": "{name} بلاجر د رومه — نوتا اين اونتوق ريکود اندا سنديري دان {name}.",
+        "diarySeenHomePrivate": "{name} بلاجر د رومه — نوتا اين اونتوق ريکود اندا سهاج؛ {name} تيدق اکن مليهتڽ."
       }
     },
     "player": {
