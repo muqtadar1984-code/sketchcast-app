@@ -1,11 +1,12 @@
 // SK S1 adversarial suite — the segment is data; every way a model or a file
 // could smuggle something onto the board must be refused WHOLE (contracts §2,
-// plan §14). Each case mutates the real U4 fixture and expects SegmentError.
-import { readFileSync } from "node:fs";
+// plan §14). Each case mutates the U4 fixture (inline in src/sk/__tests__
+// since S3 slice E) and expects SegmentError.
 import { describe, expect, it } from "vitest";
+import { U4_SEGMENT } from "../../__tests__/segment-fixtures";
 import { LIMITS, SegmentError, validateSegment, type Segment } from "../engine";
 
-const FIXTURE = JSON.parse(readFileSync(new URL("../../../../public/sk-s1/u4/segment.json", import.meta.url), "utf-8")) as Segment;
+const FIXTURE: Segment = U4_SEGMENT;
 const clone = (): Segment => JSON.parse(JSON.stringify(FIXTURE));
 const refuses = (mutate: (s: Segment) => void) => {
   const s = clone();

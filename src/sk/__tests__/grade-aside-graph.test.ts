@@ -1,13 +1,12 @@
 // SK B4 — grading on the quiz scorers, the live-aside gate, the graph parser
 // (both the stand-in and the B3 packager's shape), and the item strip.
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SegmentError } from "../board/engine";
 import { asideTargets, validateAside } from "../aside";
 import { coerceResponse, gradeItem } from "../grade";
 import { GraphError, parseGraph, resolveUnitKey, startCursor } from "../graph";
 import { POC_ITEMS, StaticItemBank, stripItem } from "../items";
-import { U4_HITMAP_TARGETS, U4_SEGMENT } from "./fixtures";
+import { CELLS_BASE, CELLS_GRAPH_JSON, STANDIN_GRAPH_JSON, U4_HITMAP_TARGETS, U4_SEGMENT } from "./fixtures";
 
 const item = (id: string) => POC_ITEMS.find((q) => q.id === id)!;
 
@@ -83,13 +82,13 @@ describe("validateAside — the gate for a model's live drawing", () => {
 
 describe("parseGraph", () => {
   it("parses the stand-in manifest and the B3 packager's Chapter 2 graph", () => {
-    const standin = parseGraph(JSON.parse(readFileSync(new URL("../../../public/sk-s1/graph-ch2.json", import.meta.url), "utf-8")));
+    const standin = parseGraph(JSON.parse(JSON.stringify(STANDIN_GRAPH_JSON)));
     expect(standin.units.map((u) => u.unit_key)).toEqual(["u4"]);
     expect(startCursor(standin)).toEqual({ graphVersion: 1, unitKey: "u4", assetId: "u4-explain-main", segmentId: "u4-explain-main-s1", t: 0 });
-    const b3 = parseGraph(JSON.parse(readFileSync(new URL("../../../public/sk-s1/ch02/graph.json", import.meta.url), "utf-8")), "/sk-s1/ch02/");
+    const b3 = parseGraph(JSON.parse(JSON.stringify(CELLS_GRAPH_JSON)), CELLS_BASE);
     expect(b3.product_id).toBe("cells-structure-function-organisation");
     expect(b3.units.map((u) => u.unit_key)).toEqual(["s1", "s2", "s3", "s4", "s5", "s6"]);
-    expect(b3.units[1]!.assets[0]!.segment).toBe("/sk-s1/ch02/s2/explain-main/segment.json");
+    expect(b3.units[1]!.assets[0]!.segment).toBe("/lessons/ch02/s2/explain-main/segment.json");
     expect(b3.units[1]!.assets[0]!.segment_id).toBe("s2-explain-main");
     expect(b3.units[1]!.figures).toEqual(["light_microscope"]);
     expect(b3.units[1]!.prereqs).toEqual(["s1"]);

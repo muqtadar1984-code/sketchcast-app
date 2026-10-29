@@ -8,16 +8,14 @@
  *      unit's main teaching segment on the board.
  * Run: node node_modules/vitest/vitest.mjs run src/sk/__tests__/check-on-supabase-bank.test.ts
  */
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { UUID_RE } from "../ids";
-import { parseGraph } from "../graph";
 import { CompositeItemBank, POC_ITEMS, StaticItemBank, type BankItem, type ItemBank } from "../items";
 import { boardFor, openSession, runCommand, sessionView, type LoopDeps } from "../loop";
 import { InMemorySessionStore } from "../store";
-import { U4_HITMAP_TARGETS, U4_SEGMENT } from "./fixtures";
+import { standinGraph, U4_HITMAP_TARGETS, U4_SEGMENT } from "./fixtures";
 
-const standin = parseGraph(JSON.parse(readFileSync(new URL("../../../public/sk-s1/graph-ch2.json", import.meta.url), "utf-8")), "/sk-s1/");
+const standin = standinGraph();
 
 /** A bank that, like SupabaseItemBank in production, knows only uuid ids. */
 class UuidOnlyBank implements ItemBank {
@@ -80,7 +78,7 @@ describe("sessionView.board", () => {
     const r = await runCommand(d, s, { name: "practise", args: { n: 0 } });
     expect(r.view.asset?.assetId).toBe("u4-check");
     expect(r.view.asset?.segment).toBeUndefined();
-    expect(r.view.board).toEqual({ assetId: "u4-explain-main", segment: "/sk-s1/u4/segment.json", clip: "/sk-s1/u4/optionS.mp4", hitmap: "/sk-s1/u4/optionS.hitmap.json" });
+    expect(r.view.board).toEqual({ assetId: "u4-explain-main", segment: "/lessons/u4/segment.json", clip: "/lessons/u4/optionS.mp4", hitmap: "/lessons/u4/optionS.hitmap.json" });
   });
   it("boardFor prefers the main explain, else any asset with a segment", () => {
     const unit = standin.units[0]!;

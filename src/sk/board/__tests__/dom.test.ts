@@ -53,9 +53,9 @@ describe("attributes", () => {
 
 describe("image sources", () => {
   it("accepts a site-local path and refuses everything else", () => {
-    expect(() => assertImageHref("/sk-s1/sk-a/body.png")).not.toThrow();
-    expect(() => assertImageHref("/sk-s1/u4/light_microscope.png")).not.toThrow();
-    for (const bad of ["https://evil.example/x.png", "javascript:alert(1)", "data:image/png;base64,AAAA", "/sk-s1/../../etc/passwd.png", "//cdn.example/x.png", "sk-s1/x.png", "/x.svg", "/x.png?x=1", ""]) {
+    expect(() => assertImageHref("/sk/rig/sk-a/body.png")).not.toThrow();
+    expect(() => assertImageHref("/sk/figures/light_microscope.png")).not.toThrow();
+    for (const bad of ["https://evil.example/x.png", "javascript:alert(1)", "data:image/png;base64,AAAA", "/sk/rig/../../etc/passwd.png", "//cdn.example/x.png", "sk/rig/x.png", "/x.svg", "/x.png?x=1", ""]) {
       expect(() => assertImageHref(bad), bad).toThrow(BoardError);
     }
   });

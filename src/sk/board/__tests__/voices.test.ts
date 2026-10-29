@@ -1,15 +1,13 @@
 // SK narration tracks (founder, 2026-10-27: the look and the voice agree).
 // The track choice is pure; the segment gate checks every track's media like
-// the segment's own; and the Chapter 2 fixtures carry an aligned male track
-// whose items land on the female cues the clip was rendered against.
-import { readFileSync } from "node:fs";
+// the segment's own. (The packaged Chapter 2 files and their aligned male
+// tracks were retired with the clip path in S3 slice E; the inline s2 unit
+// keeps both tracks.)
 import { describe, expect, it } from "vitest";
+import { CH02_S2_SEGMENT } from "../../__tests__/segment-fixtures";
 import { SegmentError, validateSegment, type Segment } from "../engine";
 import { availableGenders, segmentForVoice, trackFor } from "../voices";
 
-const UNITS = ["s1", "s2", "s3", "s4", "s5", "s6"];
-const read = <T,>(p: string) => JSON.parse(readFileSync(new URL(`../../../../public/sk-s1/${p}`, import.meta.url), "utf-8")) as T;
-const fixture = (u: string) => read<Segment>(`ch02/${u}/explain-main/segment.json`);
 const clone = (s: Segment): Segment => JSON.parse(JSON.stringify(s));
 
 const marks = (t: number) => ({ words: [{ i: 0, t0: t, t1: t + 300, text: "hi" }], visemes: [] });
@@ -87,9 +85,9 @@ describe("the segment gate on voices", () => {
   });
 });
 
-describe("the Chapter 2 fixtures carry both voices", () => {
-  it.each(UNITS)("%s: a female (rendered) and an aligned male track, same length as the clip", (u) => {
-    const seg = validateSegment(fixture(u));
+describe("a packager Chapter 2 unit carries both voices", () => {
+  it("a female (rendered) and a male track, same length as the clip", () => {
+    const seg = validateSegment(clone(CH02_S2_SEGMENT));
     expect(seg.voice_gender).toBe("female");
     expect(seg.voices?.female?.clip?.uri).toBe("clip.mp4");
     expect(seg.voices?.male?.clip?.uri).toBe("clip-male.mp4");
@@ -97,32 +95,7 @@ describe("the Chapter 2 fixtures carry both voices", () => {
     expect(seg.voices?.male?.voice).toBe("edge-guy");
     const m = segmentForVoice(seg, "male");
     expect(m.clip?.uri).toBe("clip-male.mp4");
-    const words = m.marks.words;
-    expect(words.length).toBeGreaterThan(50);
-    expect(words[0]!.t0).toBeGreaterThanOrEqual(0);
-    expect(words[words.length - 1]!.t1).toBeLessThanOrEqual(seg.clip!.duration_ms);
-    // the files the player will fetch exist beside the manifest
-    expect(() => readFileSync(new URL(`../../../../public/sk-s1/ch02/${u}/explain-main/clip-male.mp4`, import.meta.url))).not.toThrow();
-  });
-  it.each(UNITS)("%s: the male narration items start where the female ones do (the clip's cues)", (u) => {
-    const seg = fixture(u) as Segment & { narration_sentences: string[] };
-    const female = seg.marks.words;
-    const male = seg.voices!.male!.marks!.words;
-    expect(male.length).toBe(female.length); // the same narration, word for word
-    const tok = (s: string) => s.toLowerCase().replace(/[µμ]/g, "").match(/[a-z0-9]+/g) ?? [];
-    // first word of each narration item, found by walking the tokens
-    let wi = 0;
-    for (const item of seg.narration_sentences) {
-      const want = tok(item);
-      let k = 0;
-      const first = wi;
-      while (k < want.length) {
-        const got = tok(female[wi]!.text);
-        expect(want.slice(k, k + got.length)).toEqual(got);
-        k += got.length;
-        wi += 1;
-      }
-      expect(Math.abs(male[first]!.t0 - female[first]!.t0), `${u} item "${item.slice(0, 30)}…"`).toBeLessThanOrEqual(120);
-    }
+    expect(m.audio.uri).toBe("audio-male.mp3");
+    expect(m.marks).toBe(seg.marks); // no male marks in the entry → the rendered track's own
   });
 });

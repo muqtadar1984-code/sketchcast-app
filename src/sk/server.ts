@@ -1,23 +1,24 @@
-// SK B4 — server-side wiring for the /api/sk routes: the graphs on disk, the
-// segment/hit-map loaders (local files under public/ for the POC; S3 +
-// CloudFront later), the two model providers, the in-memory session store, and
-// the auth + feature gate every route runs. Everything a test needs to replace
-// goes through `__setSkDepsForTests`.
+// SK B4 — server-side wiring for the /api/sk routes: the two model providers,
+// the session store, the item bank, entitlements, and the auth + feature gate
+// every route runs. Everything a test needs to replace goes through
+// `__setSkDepsForTests`.
 //
-// Never imported by client code (it reads the filesystem and env).
+// S3 slice E retired the packager clip path: no teaching graph is read from
+// public/ any more, so the graph loop (session/turn/answer/command) has no
+// graph in production — every product/chapter it is asked for is "not found",
+// and the student tutor runs on kit artifacts (kit-server.ts). The loop itself
+// is unchanged and stays tested through injected graphs.
+//
+// Never imported by client code (it reads env and server-only clients).
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { claudeConfigured } from "@/utils/claude-backend";
 import { skAllowanceEnforced, skEnabled, skUserAllowed } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
-import { normaliseSegment, validateSegment, type Segment } from "./board/engine";
 import { embedderConfigured, TitanEmbedder } from "./embed";
 import { SupabaseEntitlements, type EntitlementSource } from "./entitlement";
-import { parseGraph } from "./graph";
 import { CompositeItemBank, StaticItemBank, type ItemBank } from "./items";
 import { UUID_RE } from "./ids";
 import { SupabaseItemBank } from "./items-supabase";
@@ -27,13 +28,8 @@ import { retrievalMode, selectRetrievalProvider, type RetrievalDb, type Retrieva
 import { PollySpeechProvider } from "./speech/polly";
 import type { SpeechProvider } from "./speech/provider";
 import { InMemorySessionStore, type SessionStore } from "./store";
-import { SupabaseSessionStore, skDbFrom, type SkDb } from "./store-supabase";
+import { SupabaseSessionStore, skDbFrom } from "./store-supabase";
 import type { TeachingGraph } from "./types";
-
-/** Graph manifests served from public/, as "<url path>" entries. The one-unit
- * stand-in stays alongside the B3 packager's Chapter 2 output so the check /
- * grading flow (which needs items the packager does not yet emit) can be tried. */
-export const DEFAULT_GRAPH_URIS = ["/sk-s1/graph-ch2.json", "/sk-s1/ch02/graph.json"];
 
 export type SkDeps = {
   store: SessionStore;
@@ -50,82 +46,9 @@ export type SkDeps = {
   loadHitmapElementIds: LoopDeps["loadHitmapElementIds"];
 };
 
-const PUBLIC_DIR = () => path.join(process.cwd(), "public");
-
-/** Only files under public/sk-s1/ may be read, by a clean absolute URL path. */
-export function publicPathFor(uri: string): string {
-  if (!/^\/sk-s1\/[a-z0-9_\-./]+$/i.test(uri) || uri.includes("..")) throw new Error(`refusing to read ${uri}`);
-  return path.join(PUBLIC_DIR(), ...uri.split("/").filter(Boolean));
-}
-
-async function readJson(uri: string): Promise<unknown> {
-  return JSON.parse(await readFile(publicPathFor(uri), "utf-8")) as unknown;
-}
-
-const segmentCache = new Map<string, Promise<Segment>>();
-export function loadSegmentFromPublic(uri: string): Promise<Segment> {
-  let p = segmentCache.get(uri);
-  if (!p) {
-    p = readJson(uri).then((raw) => validateSegment(normaliseSegment(raw as Segment)));
-    p.catch(() => segmentCache.delete(uri));
-    segmentCache.set(uri, p);
-  }
-  return p;
-}
-
-/** Hit-map target ids: element ids, each illustration key and "key.region". */
-export async function loadHitmapTargetsFromPublic(uri: string): Promise<string[]> {
-  const hm = (await readJson(uri)) as { elements?: Record<string, unknown>; asset?: Record<string, { regions?: Record<string, unknown> }> };
-  const out = new Set<string>(Object.keys(hm.elements ?? {}));
-  for (const [key, a] of Object.entries(hm.asset ?? {})) {
-    out.add(key);
-    for (const r of Object.keys(a.regions ?? {})) out.add(`${key}.${r}`);
-  }
-  return [...out];
-}
-
-async function loadGraphs(uris: string[]): Promise<TeachingGraph[]> {
-  const out: TeachingGraph[] = [];
-  for (const uri of uris) {
-    try {
-      out.push(parseGraph(await readJson(uri), uri.slice(0, uri.lastIndexOf("/") + 1)));
-    } catch (e) {
-      console.error(`[sk] graph ${uri} skipped:`, (e as Error).message);
-    }
-  }
-  return out;
-}
-
-/** Which loaded graphs this store can actually run. The Supabase store keeps
- * attempts in item_attempts (item_id → topic_questions, a uuid FK) and mastery
- * against teaching_objectives, so a graph whose product has no sk_book_products
- * row — the hand-written stand-in, whose items and objective are strings —
- * cannot grade there: its Check opened, drew a question, then died at the
- * attempt insert with 22P02 (founder's run, 2026-10-27). On that store only
- * products the database knows are served; the in-memory store serves all. */
-export function graphsForStore(graphs: TeachingGraph[], knownProducts: ReadonlySet<string> | null): TeachingGraph[] {
-  if (!knownProducts) return graphs;
-  return graphs.filter((g) => {
-    if (knownProducts.has(g.product_id)) return true;
-    console.error(`[sk] graph ${g.graph_id} withheld: product ${g.product_id} is not in sk_book_products (the Supabase store cannot grade it)`);
-    return false;
-  });
-}
-
-/** The graphs the Supabase store may serve: those whose product has an
- * sk_book_products row (see graphsForStore). Takes the db so the loop tests
- * run the same filter over the fake the store runs on. */
-export async function servableGraphsOn(db: SkDb, graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
-  if (graphs.length === 0) return graphs;
-  const { data, error } = await db.from("sk_book_products").select("slug").in("slug", graphs.map((g) => g.product_id));
-  if (error) throw new Error(`[sk] products: ${error.message}`);
-  return graphsForStore(graphs, new Set((data ?? []).map((r) => String(r.slug))));
-}
-
-async function servableGraphs(graphs: TeachingGraph[]): Promise<TeachingGraph[]> {
-  if (process.env.SK_STORE !== "supabase") return graphs;
-  return servableGraphsOn(skDbFrom(createAdminClient()), graphs);
-}
+/** With no graph source, nothing asks for a segment or a hit map; if a caller
+ * ever does, it is told plainly rather than handed a file. */
+const NO_GRAPH_SOURCE = (uri: string): Promise<never> => Promise.reject(new Error(`[sk] no graph content source (packager clip path retired in S3): ${uri}`));
 
 /** The router (Haiku) and teacher (Sonnet) providers, lazily; {} when Claude is not configured. */
 export function providers(): Pick<SkDeps, "routerProvider" | "teacherProvider"> {
@@ -204,13 +127,12 @@ export function retrieval(): Pick<SkDeps, "retrieval"> {
 export function skDeps(): Promise<SkDeps> {
   if (!deps) {
     deps = (async () => {
-      const uris = (process.env.SK_GRAPHS || "").split(",").map((s) => s.trim()).filter(Boolean);
       const base: SkDeps = {
         ...persistence(),
         allowanceEnforced: skAllowanceEnforced(),
-        graphs: await servableGraphs(await loadGraphs(uris.length ? uris : DEFAULT_GRAPH_URIS)),
-        loadSegment: loadSegmentFromPublic,
-        loadHitmapElementIds: loadHitmapTargetsFromPublic,
+        graphs: [],
+        loadSegment: NO_GRAPH_SOURCE,
+        loadHitmapElementIds: NO_GRAPH_SOURCE,
         ...providers(),
         ...retrieval(),
       };

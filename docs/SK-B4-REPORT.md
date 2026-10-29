@@ -1,3 +1,5 @@
+> **Retired in S3 (slice E), 2026-10-29:** the graph files and clip player this report describes (`public/sk-s1`, `sk-student.tsx`, the graph loaders in `server.ts`) were deleted; the loop modules remain, tested on inline fixtures, and the student tutor plays kit artifacts. Kept as history.
+
 # SK B4 — the teacher loop (POC): what exists, what is stubbed, how to try it
 
 Status 2026-10-27: **draft PR against `feat/sk-s1-spike`.** The whole loop is

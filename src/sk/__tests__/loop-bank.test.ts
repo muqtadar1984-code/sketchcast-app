@@ -2,7 +2,6 @@
 // checks and practice come from the item bank at the moment they open; the
 // stand-in graph (ids in the graph) is untouched; a unit the bank cannot
 // check skips with "records no mastery"; a replayed event reuses the same ids.
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { RawQuestion } from "@/app/api/quiz/logic";
 import { parseGraph } from "../graph";
@@ -10,7 +9,7 @@ import { POC_ITEMS, StaticItemBank, type BankItem, type ItemBank } from "../item
 import { openSession, resolveBankItems, runCommand, runTurn, submitAnswer, unitsToResolve, type LoopDeps } from "../loop";
 import { InMemorySessionStore, withEvent } from "../store";
 import type { SseEvent } from "../types";
-import { BANK_SCRAMBLED as SCRAMBLED, graph, U4_HITMAP_TARGETS, U4_SEGMENT } from "./fixtures";
+import { BANK_SCRAMBLED as SCRAMBLED, graph, STANDIN_GRAPH_JSON, U4_HITMAP_TARGETS, U4_SEGMENT } from "./fixtures";
 
 /** The B3 packager's shape: explain/main per unit, `checks` as draft indexes, no item assets. */
 const REAL_GRAPH = {
@@ -53,7 +52,7 @@ const S2_ONE: BankItem[] = [
   { id: "s2-short", type: "short", prompt: "s2 short", answer: "x", marks: 2, status: "approved", teachingObjectiveId: "to-s2" },
 ];
 
-function deps(bank: ItemBank, raw: unknown = REAL_GRAPH, base = "/sk-s1/ch02/"): LoopDeps {
+function deps(bank: ItemBank, raw: unknown = REAL_GRAPH, base = "/lessons/ch02/"): LoopDeps {
   return { store: new InMemorySessionStore(), graph: parseGraph(raw, base), items: bank, loadSegment: async () => U4_SEGMENT, loadHitmapElementIds: async () => U4_HITMAP_TARGETS };
 }
 const open = (d: LoopDeps) => openSession(d, { studentId: "stu", productId: d.graph.product_id, chapter: d.graph.chapter });
@@ -77,7 +76,7 @@ describe("the stand-in graph is unchanged", () => {
         return super.listForUnit(p, c, u);
       }
     })();
-    const d = deps(spy, JSON.parse(readFileSync(new URL("../../../public/sk-s1/graph-ch2.json", import.meta.url), "utf-8")), "/sk-s1/");
+    const d = deps(spy, JSON.parse(JSON.stringify(STANDIN_GRAPH_JSON)), "/lessons/");
     const s = await open(d);
     const r = await runCommand(d, s, { name: "skip", args: { scope: "unit", withCheck: true } });
     expect(r.view.cursor).toMatchObject({ unitKey: "u4", assetId: "u4-check" });

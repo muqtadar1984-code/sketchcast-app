@@ -1,3 +1,5 @@
+> **Retired in S3 (slice E), 2026-10-29:** the packager clip path this report describes (`public/sk-s1`, the dev player, `SpikeRuntime`, `sk-student.tsx`) was deleted; the student tutor plays kit artifacts. Kept as history.
+
 # SK B2 — board player on the six Chapter 2 units: report
 
 Status 2026-10-27: **the board runtime (`src/sk/board`, B4's home for the S1

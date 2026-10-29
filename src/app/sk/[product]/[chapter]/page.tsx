@@ -5,9 +5,7 @@ import { createClient } from "@/utils/supabase/server";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { chapterHasKit } from "@/sk/kit-server";
-import { skDeps } from "@/sk/server";
 import KitPlayer from "./kit-player";
-import SkStudent from "./sk-student";
 
 // SK — the student page. Behind NEXT_PUBLIC_FEATURE_SK: when the flag is off
 // the route does not exist. The routes under /api/sk carry the authoritative
@@ -16,9 +14,8 @@ import SkStudent from "./sk-student";
 //   1. S3: the chapter has a MAPPED KIT (sk_product_kits) → the kit player,
 //      on ?kit=<generation id> when given (a chapter may have several kits).
 //      Every refusal (not entitled / not mapped / no kit) is the API's.
-//   2. Otherwise, a chapter this build carries a CLIP GRAPH for → the old clip
-//      player, unchanged (slice E retires it; nothing new uses it).
-//   3. Otherwise: "this chapter doesn't have a lesson yet".
+//   2. Otherwise: "this chapter doesn't have a lesson yet". (The old packager
+//      clip player that used to sit here was retired in S3 slice E.)
 //
 // Restricted live (SK_ALLOWED_EMAILS set, founder 2026-10-27): the page is
 // 404 for anyone not signed in with a verified address on the list, the same
@@ -63,26 +60,17 @@ export default async function SkStudentPage({ params, searchParams }: { params: 
     );
   }
 
-  const ch = Number(chapter);
-  const hasClip = Number.isInteger(ch) && ch >= 0 && (await skDeps()).graphs.some((g) => g.product_id === product && g.chapter === ch);
-  if (!hasClip) {
-    const t = (await getDictionary(locale)).sk.player;
-    return (
-      <main className="min-h-screen bg-[#F6F7F5] p-3 sm:p-4">
-        <div className="mx-auto max-w-3xl rounded-xl border border-[#E3E6E2] bg-white p-4 text-sm text-[#14181F]" role="status">
-          {t.refusedNoKit}
-          <div className="mt-3">
-            <Link href={`/sk/${product}`} className="inline-flex min-h-10 items-center text-sm text-[#0C8175] underline-offset-2 hover:underline">
-              {t.allChapters}
-            </Link>
-          </div>
-        </div>
-      </main>
-    );
-  }
+  const t = (await getDictionary(locale)).sk.player;
   return (
     <main className="min-h-screen bg-[#F6F7F5] p-3 sm:p-4">
-      <SkStudent productId={product} chapter={ch} />
+      <div className="mx-auto max-w-3xl rounded-xl border border-[#E3E6E2] bg-white p-4 text-sm text-[#14181F]" role="status">
+        {t.refusedNoKit}
+        <div className="mt-3">
+          <Link href={`/sk/${product}`} className="inline-flex min-h-10 items-center text-sm text-[#0C8175] underline-offset-2 hover:underline">
+            {t.allChapters}
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

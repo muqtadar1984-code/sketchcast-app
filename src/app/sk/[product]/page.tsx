@@ -4,13 +4,12 @@ import { skEnabled, skUserAllowed } from "@/utils/flags";
 import { createClient } from "@/utils/supabase/server";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
-import { skDeps } from "@/sk/server";
 import { chaptersFor } from "@/sk/kit-server";
 import ChapterLinks from "../chapter-links";
 
 // SK — one book's chapters (SK S3 slice B): the chapters with a mapped kit
-// (when the learner has book access) and the clip-only chapters, exactly as
-// the /sk front door lists them for this book. Same gates as /sk.
+// (when the learner has book access), exactly as the /sk front door lists
+// them for this book. Same gates as /sk.
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +25,7 @@ export default async function SkProductPage({ params }: { params: Promise<{ prod
   if (!user) notFound();
   const t = (await getDictionary(await resolveLocale())).sk.player;
 
-  const deps = await skDeps();
-  const clip = deps.graphs.filter((g) => g.product_id === product).map((g) => g.chapter);
-  const entries = await chaptersFor(user.id, product, clip);
+  const entries = await chaptersFor(user.id, product);
   const { data: row } = await supabase.from("sk_book_products").select("title, subject").eq("slug", product).maybeSingle();
 
   return (

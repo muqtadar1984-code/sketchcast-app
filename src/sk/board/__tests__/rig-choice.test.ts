@@ -1,4 +1,6 @@
 // SK's look (founder, 2026-10-27): one tutor identity, two looks, default B.
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_RIG, parseRigChoice, pickBrowserVoice, readRigChoice, RIG_CHOICE_KEY, rigBaseForChoice, storeRigChoice, voiceGenderForChoice } from "../avatar";
 
@@ -27,10 +29,18 @@ describe("the tutor's look", () => {
     expect(parseRigChoice("female")).toBe("B");
   });
   it("maps each look to its rig folder and voice", () => {
-    expect(rigBaseForChoice("A")).toBe("/sk-s1/sk-a/");
-    expect(rigBaseForChoice("B")).toBe("/sk-s1/sk-b/");
+    expect(rigBaseForChoice("A")).toBe("/sk/rig/sk-a/");
+    expect(rigBaseForChoice("B")).toBe("/sk/rig/sk-b/");
     expect(voiceGenderForChoice("A")).toBe("female");
     expect(voiceGenderForChoice("B")).toBe("male");
+  });
+  it("serves each look's rig from its folder under public/ (moved there in S3 slice E)", () => {
+    for (const c of ["A", "B"] as const) {
+      const dir = join(process.cwd(), "public", ...rigBaseForChoice(c).split("/").filter(Boolean));
+      const rig = JSON.parse(readFileSync(join(dir, "rig.json"), "utf-8")) as { w: number; head: unknown; arm: unknown };
+      expect(rig.w).toBeGreaterThan(0);
+      for (const part of ["body.png", "head.png", "arm.png"]) expect(existsSync(join(dir, part)), `${c} ${part}`).toBe(true);
+    }
   });
   it("remembers the choice per browser and falls back to the default", () => {
     store.clear();

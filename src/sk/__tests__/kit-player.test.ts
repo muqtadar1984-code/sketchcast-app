@@ -167,13 +167,13 @@ describe("loadKit: GET, one POST to build, then poll", () => {
 
 describe("mergeChapters: the chapter list", () => {
   const k = (chapterRef: string, sort: number, generationId: string, title: string): ProductKit => ({ chapterRef, sort, generationId, label: null, title });
-  it("kit chapters with their kits; clip chapters only where no kit is mapped", () => {
-    const out = mergeChapters([k("1", 0, "a", "Cells"), k("8", 0, "b", "Blood"), k("8", 1, "c", "Resp"), k("8", 2, "d", "Transport"), k("10", 0, "e", "Ten")], [2, 1]);
-    expect(out.map((c) => [c.chapterRef, c.kits.map((x) => x.title), c.clip])).toEqual([
-      ["1", ["Cells"], false],
-      ["2", [], true],
-      ["8", ["Blood", "Resp", "Transport"], false],
-      ["10", ["Ten"], false],
+  it("kit chapters with their kits, in chapter order; nothing else is listed", () => {
+    const out = mergeChapters([k("10", 0, "e", "Ten"), k("1", 0, "a", "Cells"), k("8", 0, "b", "Blood"), k("8", 1, "c", "Resp"), k("8", 2, "d", "Transport")]);
+    expect(out.map((c) => [c.chapterRef, c.kits.map((x) => x.title)])).toEqual([
+      ["1", ["Cells"]],
+      ["8", ["Blood", "Resp", "Transport"]],
+      ["10", ["Ten"]],
     ]);
+    expect(mergeChapters([])).toEqual([]);
   });
 });
