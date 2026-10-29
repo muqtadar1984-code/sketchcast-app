@@ -12,6 +12,11 @@
 //   storage/artifacts  script.json (+ script_partN.json) and worksheet_questions.json
 //   chapter_grounding  concepts for (book_id, chapter_num) on the book path
 //   topic_articles     objectives on the catalogue path (article_id in params)
+//   question_sets      a composed quiz's question_ids (positional <-> q1..qN, stem-confirmed)
+//   topic_questions    the bank rows behind the items (S3 slice A): article_id,
+//                      objective_ref and, for a translation, the SOURCE item's
+//                      article_id: what derive.ts I1/I1b need to map an item by
+//                      objective_ref; anything missing or stale goes to the model pass
 //
 // Null-safe by construction: a presentation with no script_json yields
 // scripts=[] (→ completeness.script "missing"); no worksheet → items=[]; no
@@ -131,14 +136,72 @@ async function rowsOf(admin: ManifestAdmin, generationIds: string[]): Promise<Ar
 /** The newest DONE worksheet of the same owner on the same chapter (book kit)
  * or article (catalogue kit). One worksheet: a second version of the same
  * questions would only duplicate items (S1 choice, see docs/sk-manifest.md). */
-async function newestWorksheet(admin: ManifestAdmin, gen: GenerationRow, articleId: string | null): Promise<string | null> {
-  let q = admin.from("generations").select("id").eq("owner_id", gen.owner_id).eq("kind", "worksheet").eq("status", "done").is("withdrawn_at", null);
+async function newestWorksheet(admin: ManifestAdmin, gen: GenerationRow, articleId: string | null): Promise<{ id: string; params: Record<string, unknown> } | null> {
+  let q = admin.from("generations").select("id, params").eq("owner_id", gen.owner_id).eq("kind", "worksheet").eq("status", "done").is("withdrawn_at", null);
   if (gen.book_id && gen.chapter_ref !== null && gen.chapter_ref !== undefined) q = q.eq("book_id", gen.book_id).eq("chapter_ref", String(gen.chapter_ref));
   else if (articleId) q = q.eq("params->>article_id", articleId);
   else return null;
   const { data } = await q.order("created_at", { ascending: false }).limit(1);
-  const row = ((data ?? []) as { id: string }[])[0];
-  return row ? String(row.id) : null;
+  const row = ((data ?? []) as { id: string; params?: Record<string, unknown> | null }[])[0];
+  return row ? { id: String(row.id), params: (row.params ?? {}) as Record<string, unknown> } : null;
+}
+
+/** The bank columns the item mapping needs (topic_questions). */
+export type BankRow = {
+  id: string;
+  article_id: string | null;
+  objective_ref: string | null;
+  source_item_id: string | null;
+  status: string | null;
+  stem: string | null;
+  difficulty: number | null;
+};
+
+/** Stem comparison for the positional quiz join (case, punctuation and spacing ignored). */
+export const normStem = (s: string): string => s.toLowerCase().replace(/\W+/g, " ").trim();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type BankTraces = { rows: (BankRow | undefined)[]; sourceArticle: Map<string, string> };
+
+/** The bank item behind each question, by position in `questions` (undefined = no trace).
+ *  Two sources, in order:
+ *   1. the question's own `bank_item_id` (a worksheet file that carries the trace);
+ *   2. a composed quiz (`params.question_set_id`): question_sets.question_ids[i] <->
+ *      questions[i] (the worker renders the set in order), ACCEPTED ONLY when the bank
+ *      row's stem equals the prompt (normStem), so a reordered render maps nothing.
+ *  Then ONE batch read of topic_questions for every candidate id, and ONE for the
+ *  translations' source items (source_item_id -> the source's article_id). A read error
+ *  degrades to "no trace" (the model pass maps the item), never a failed manifest. */
+export async function bankTraces(admin: ManifestAdmin, questions: Record<string, unknown>[], questionSetId: string | null): Promise<BankTraces> {
+  const declared = questions.map((q) => (typeof q.bank_item_id === "string" && UUID_RE.test(q.bank_item_id) ? q.bank_item_id : undefined));
+  let positional: (string | undefined)[] = [];
+  if (questionSetId && UUID_RE.test(questionSetId) && declared.some((d) => !d)) {
+    const { data } = await admin.from("question_sets").select("id, question_ids").eq("id", questionSetId).maybeSingle();
+    const ids = (data as { question_ids?: unknown } | null)?.question_ids;
+    if (Array.isArray(ids)) positional = ids.map((x) => (typeof x === "string" && UUID_RE.test(x) ? x : undefined));
+  }
+  const candidate = questions.map((_, i) => declared[i] ?? positional[i]);
+  const wanted = Array.from(new Set(candidate.filter((x): x is string => !!x)));
+  const empty: BankTraces = { rows: questions.map(() => undefined), sourceArticle: new Map() };
+  if (!wanted.length) return empty;
+  const { data: bank, error } = await admin.from("topic_questions").select("id, article_id, objective_ref, source_item_id, status, stem, difficulty").in("id", wanted);
+  if (error || !Array.isArray(bank)) return empty;
+  const byId = new Map((bank as BankRow[]).map((b) => [String(b.id), b] as const));
+  const rows = questions.map((q, i) => {
+    const id = candidate[i];
+    const b = id ? byId.get(id) : undefined;
+    if (!b) return undefined;
+    if (!declared[i] && normStem(String(b.stem ?? "")) !== normStem(String(q.prompt ?? ""))) return undefined; // positional join not confirmed
+    return b;
+  });
+  const sourceIds = Array.from(new Set(rows.map((b) => b?.source_item_id).filter((x): x is string => !!x)));
+  const sourceArticle = new Map<string, string>();
+  if (sourceIds.length) {
+    const { data: src } = await admin.from("topic_questions").select("id, article_id").in("id", sourceIds);
+    for (const r of (Array.isArray(src) ? src : []) as { id: string; article_id: string | null }[]) if (r.article_id) sourceArticle.set(String(r.id), String(r.article_id));
+  }
+  return { rows, sourceArticle };
 }
 
 export async function loadKitInput(admin: ManifestAdmin, generationId: string): Promise<LoadedKit> {
@@ -157,7 +220,8 @@ export async function loadKitInput(admin: ManifestAdmin, generationId: string): 
   const articleId = typeof params.article_id === "string" && params.article_id ? params.article_id : null;
 
   // Presentation rows + the worksheet's rows: both are pinned.
-  const worksheetId = await newestWorksheet(admin, g, articleId);
+  const worksheet = await newestWorksheet(admin, g, articleId);
+  const worksheetId = worksheet ? worksheet.id : null;
   const artifacts = await rowsOf(admin, worksheetId ? [g.id, worksheetId] : [g.id]);
 
   // Scripts, one file per part, sorted by part. Every download — the script
@@ -183,12 +247,16 @@ export async function loadKitInput(admin: ManifestAdmin, generationId: string): 
     scripts.push(sf);
   });
 
-  // Items from the worksheet's questions file.
+  // Items from the worksheet's questions file, each with its bank trace when one
+  // is found (bankTraces). The trace decides whether derive.ts may map the item
+  // by objective_ref (I1/I1b) or must send it to the model pass.
   const items: ItemSrc[] = [];
-  if (worksheetId) {
-    for (const q of (qj && Array.isArray(qj.questions) ? qj.questions : []) as Record<string, unknown>[]) {
-      if (!q || typeof q !== "object" || q.id === undefined) continue;
-      items.push({
+  if (worksheet && worksheetId) {
+    const questions = ((qj && Array.isArray(qj.questions) ? qj.questions : []) as Record<string, unknown>[]).filter((q) => q && typeof q === "object" && q.id !== undefined);
+    const qsId = typeof worksheet.params.question_set_id === "string" ? worksheet.params.question_set_id : null;
+    const traces = await bankTraces(admin, questions, qsId);
+    questions.forEach((q, i) => {
+      const item: ItemSrc = {
         q_id: `ws:${worksheetId.slice(0, 8)}:${String(q.id)}`,
         source: "worksheet",
         generation_id: worksheetId,
@@ -197,8 +265,19 @@ export async function loadKitInput(admin: ManifestAdmin, generationId: string): 
         answer: answerText(q),
         bank_item_id: typeof q.bank_item_id === "string" ? q.bank_item_id : undefined,
         objective_ref: typeof q.objective_ref === "string" ? q.objective_ref : undefined,
-      });
-    }
+      };
+      const b = traces.rows[i];
+      if (b) {
+        item.bank_item_id = String(b.id);
+        item.bank_article_id = b.article_id ? String(b.article_id) : undefined;
+        if (b.objective_ref) item.objective_ref = String(b.objective_ref);
+        if (typeof b.difficulty === "number") item.difficulty = b.difficulty;
+        // A translation keeps its source's objective_ref: valid only against the
+        // article version the kit's article was translated from (derive.ts I1b).
+        if (b.source_item_id) item.bank_source_article_id = traces.sourceArticle.get(String(b.source_item_id)) ?? null;
+      }
+      items.push(item);
+    });
   }
 
   // Concepts: chapter_grounding on the book path, article objectives on the catalogue path.

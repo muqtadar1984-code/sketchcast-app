@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeAdmin, type Row } from "./fake-admin";
 import { generationOfPath, pinnedGenerationIds, readManifest } from "../store";
-import { artifactsHash, assemble, type ArtifactRow, type KitInput, type KitManifest } from "../derive";
+import { MANIFEST_DERIVATION_VERSION, artifactsHash, assemble, type ArtifactRow, type KitInput, type KitManifest } from "../derive";
 
 const OWNER = "9d41e12e-e9c9-4b82-b3a9-3421c2c57726";
 const GEN = "eef426bd-523b-4fed-827c-95421263d89a";
@@ -83,6 +83,19 @@ describe("readManifest — the read-path rule", () => {
     const a = admin("ready", {}, rows, 4);
     expect((await readManifest(a, GEN, NOW)).status).toBe("stale");
     expect(a.tables.sk_manifests[0].status).toBe("stale");
+  });
+
+  it("ready but built by an older derivation (no derivation_version = 1) → stale, so it is rebuilt with the bank traces", async () => {
+    expect(manifest.derivation_version).toBe(MANIFEST_DERIVATION_VERSION);
+    const old = JSON.parse(JSON.stringify(manifest)) as KitManifest;
+    delete old.derivation_version;
+    const a = admin("ready", { manifest: old });
+    const r = await readManifest(a, GEN, NOW);
+    expect(r.status).toBe("stale");
+    expect(a.tables.sk_manifests[0].status).toBe("stale");
+    expect(String(a.tables.sk_manifests[0].stale_reason)).toMatch(/derivation version 1 != 2/);
+    // the live-row re-check is not even needed: no artifacts read
+    expect(a.log.some((l) => l.startsWith("artifacts."))).toBe(false);
   });
 
   it("a ready row without a manifest document is flipped to stale, not served", async () => {

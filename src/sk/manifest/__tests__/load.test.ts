@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeAdmin, type Row } from "./fake-admin";
-import { ManifestLoadError, answerText, conceptsFromGrounding, loadKitInput, scriptPartFromPath } from "../load";
-import { assemble } from "../derive";
+import { ManifestLoadError, answerText, conceptsFromGrounding, loadKitInput, normStem, scriptPartFromPath } from "../load";
+import { MANIFEST_DERIVATION_VERSION, assemble } from "../derive";
 
 const OWNER = "9d41e12e-e9c9-4b82-b3a9-3421c2c57726";
 const GEN = "eef426bd-523b-4fed-827c-95421263d89a";
@@ -161,7 +161,94 @@ describe("loadKitInput — catalogue kit (article, no book)", () => {
   });
 });
 
+describe("loadKitInput — bank traces (S3 slice A: the objective_ref path runs)", () => {
+  const QS = "0c6f23a2-81ed-4f50-865c-3e5c913e2a16";
+  const OLD_ARTICLE = "11111111-1111-4111-8111-111111111111"; // the topic's previous article version
+  const EN_SOURCE = "22222222-2222-4222-8222-222222222222"; // the English article a translation came from
+  const b = (n: number) => `b000000${n}-0000-4000-8000-000000000000`;
+  const s = (n: number) => `5000000${n}-0000-4000-8000-000000000000`;
+
+  /** A catalogue kit whose newest worksheet is a composed quiz (params.question_set_id). */
+  function quizKit(opts: { kitArticleSource?: string | null; questionIds?: string[]; bank?: Row[]; prompts?: string[] } = {}) {
+    const admin = bookKit({ book_id: null, chapter_ref: null, params: { video_parts: 1, format_version: 3, language: "en", article_id: ARTICLE } });
+    admin.tables.artifacts = admin.tables.artifacts.filter((a) => !String(a.storage_path).includes("part2"));
+    admin.tables.generations = admin.tables.generations.map((g) =>
+      g.kind === "worksheet" ? { ...g, book_id: null, chapter_ref: null, params: g.id === WS_NEW ? { article_id: ARTICLE, question_set_id: QS } : { article_id: "other-article" } } : g,
+    );
+    admin.tables.topic_articles = [{ id: ARTICLE, source_article_id: opts.kitArticleSource ?? null, objectives: [{ id: "o1", text: "Cell wall" }, { id: "o2", text: "Vacuole" }] }];
+    admin.tables.question_sets = [{ id: QS, question_ids: opts.questionIds ?? [b(1), b(2), b(3), b(4)] }];
+    admin.tables.topic_questions = opts.bank ?? [
+      { id: b(1), article_id: ARTICLE, objective_ref: "o1", source_item_id: null, status: "approved", stem: "The wall is ____.", difficulty: 2 },
+      { id: b(2), article_id: OLD_ARTICLE, objective_ref: "o2", source_item_id: null, status: "approved", stem: "What stores sap?", difficulty: 1 }, // stale: older article version
+      { id: b(3), article_id: ARTICLE, objective_ref: "o9", source_item_id: null, status: "approved", stem: "Name the organelle.", difficulty: 3 }, // stale: objective gone
+      { id: b(4), article_id: ARTICLE, objective_ref: "o2", source_item_id: null, status: "approved", stem: "A DIFFERENT stem", difficulty: 3 }, // positional join not confirmed
+    ];
+    const prompts = opts.prompts ?? ["The wall is ____.", "What stores sap?", "Name the organelle.", "Which part is green?"];
+    admin.files[`${OWNER}/${WS_NEW}/worksheet_questions.json`] = JSON.stringify({ questions: prompts.map((p, i) => ({ id: `q${i + 1}`, type: "mcq", prompt: p, answer: "x" })) });
+    return admin;
+  }
+  const map = (m: ReturnType<typeof assemble>) => Object.fromEntries(m.items.map((i) => [i.q_id.split(":").pop(), `${i.method}${i.concept_ids.length ? ":" + i.concept_ids.join(",") : ""}`]));
+
+  it("a fresh tag maps by objective_ref; stale tags (older article version, objective gone) and an unconfirmed position fall back to the model", async () => {
+    const admin = quizKit();
+    const { input } = await loadKitInput(admin, GEN);
+    expect(input.items.map((i) => i.bank_item_id)).toEqual([b(1), b(2), b(3), undefined]);
+    expect(input.items[0]).toMatchObject({ bank_article_id: ARTICLE, objective_ref: "o1", difficulty: 2 });
+    expect(input.items[1]).toMatchObject({ bank_article_id: OLD_ARTICLE, objective_ref: "o2" });
+    expect(input.items[3].bank_article_id).toBeUndefined();
+    // one batch read for the bank rows, none for sources (no translations)
+    expect(admin.log.filter((l) => l.startsWith("topic_questions.select"))).toHaveLength(1);
+    const m = assemble(input, { model: null, items: [] }, "t");
+    expect(map(m)).toEqual({ q1: "objective_ref:o1", q2: "model", q3: "model", q4: "model" });
+    expect(m.items[0]).toMatchObject({ confidence: 1, availability: "available", bank_item_id: b(1), difficulty: 2 });
+    expect(m.derivation_version).toBe(MANIFEST_DERIVATION_VERSION);
+  });
+
+  it("a translation follows source_item_id to the source item's article: valid only when that is the kit article's source", async () => {
+    const bank = [
+      { id: b(1), article_id: ARTICLE, objective_ref: "o1", source_item_id: s(1), status: "approved", stem: "The wall is ____.", difficulty: 2 },
+      { id: b(2), article_id: ARTICLE, objective_ref: "o2", source_item_id: s(2), status: "approved", stem: "What stores sap?", difficulty: 1 },
+      { id: b(3), article_id: ARTICLE, objective_ref: "o2", source_item_id: s(9), status: "approved", stem: "Name the organelle.", difficulty: 1 }, // source row missing
+      { id: s(1), article_id: EN_SOURCE, objective_ref: "o1", source_item_id: null, status: "approved", stem: "en 1", difficulty: 2 },
+      { id: s(2), article_id: OLD_ARTICLE, objective_ref: "o2", source_item_id: null, status: "approved", stem: "en 2", difficulty: 1 }, // translated from an older English version
+    ];
+    const admin = quizKit({ kitArticleSource: EN_SOURCE, bank, questionIds: [b(1), b(2), b(3)], prompts: ["The wall is ____.", "What stores sap?", "Name the organelle."] });
+    const { input } = await loadKitInput(admin, GEN);
+    expect(input.article_source_id).toBe(EN_SOURCE);
+    expect(input.items.map((i) => i.bank_source_article_id)).toEqual([EN_SOURCE, OLD_ARTICLE, null]);
+    expect(admin.log.filter((l) => l.startsWith("topic_questions.select"))).toHaveLength(2); // bank rows, then their sources
+    expect(map(assemble(input, { model: null, items: [] }, "t"))).toEqual({ q1: "objective_ref:o1", q2: "model", q3: "model" });
+  });
+
+  it("an item that declares its own bank_item_id needs no question set and no stem match", async () => {
+    const admin = quizKit({ questionIds: [] });
+    admin.files[`${OWNER}/${WS_NEW}/worksheet_questions.json`] = JSON.stringify({ questions: [{ id: "q1", type: "mcq", prompt: "reworded", answer: "x", bank_item_id: b(1) }] });
+    const { input } = await loadKitInput(admin, GEN);
+    expect(input.items[0]).toMatchObject({ bank_item_id: b(1), bank_article_id: ARTICLE, objective_ref: "o1" });
+    expect(map(assemble(input, { model: null, items: [] }, "t"))).toEqual({ q1: "objective_ref:o1" });
+  });
+
+  it("no question set, or a bank read error, leaves the items untraced (model pass), never a failed load", async () => {
+    const none = quizKit();
+    none.tables.generations = none.tables.generations.map((g) => (g.id === WS_NEW ? { ...g, params: { article_id: ARTICLE } } : g));
+    const a = await loadKitInput(none, GEN);
+    expect(a.input.items.every((i) => i.bank_item_id === undefined && i.bank_article_id === undefined)).toBe(true);
+    expect(none.log.some((l) => l.startsWith("question_sets.") || l.startsWith("topic_questions."))).toBe(false);
+
+    const broken = quizKit();
+    const from = broken.from.bind(broken);
+    broken.from = (t: string) => (t === "topic_questions" ? { select: () => ({ in: async () => ({ data: null, error: { message: "boom" } }) }) } : from(t));
+    const r = await loadKitInput(broken, GEN);
+    expect(r.input.items).toHaveLength(4);
+    expect(r.input.items.every((i) => i.bank_article_id === undefined)).toBe(true);
+  });
+});
+
 describe("helpers", () => {
+  it("normStem ignores case, punctuation and spacing", () => {
+    expect(normStem("  What  stores SAP? ")).toBe(normStem("what stores sap"));
+    expect(normStem("Cell-wall")).toBe("cell wall");
+  });
   it("scriptPartFromPath", () => {
     expect(scriptPartFromPath("o/g/script.json")).toBe(1);
     expect(scriptPartFromPath("o/g/script_part3.json")).toBe(3);

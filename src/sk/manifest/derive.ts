@@ -30,6 +30,13 @@ import { createHash } from "crypto";
 import { CONCEPT_PROMPT_VERSION, ITEM_PROMPT_VERSION } from "./prompts";
 
 export const MANIFEST_SCHEMA = "sk-kit-manifest/m1";
+/** Bumped whenever the LOADER or the derivation rules change what a manifest
+ * would say for the same artifacts. A stored manifest with another version is
+ * served as stale and rebuilt (store.ts readManifest). Manifests written before
+ * the field existed count as version 1.
+ *   1  S1: items never carried bank traces (objective_ref path never ran)
+ *   2  S3 slice A: items carry topic_questions traces (bank_article_id, source article) */
+export const MANIFEST_DERIVATION_VERSION = 2;
 export const SLIDE_EPS_S = 0.0625;
 export const CONCEPT_MIN_CONFIDENCE = 0.7;
 export const ITEM_MIN_CONFIDENCE = 0.8;
@@ -240,6 +247,8 @@ export type ManifestItem = {
 };
 export type KitManifest = {
   schema: string;
+  /** MANIFEST_DERIVATION_VERSION at build time; absent on manifests built before S3 (= 1). */
+  derivation_version?: number;
   manifest_id: string;
   generation_id: string;
   book_id: string | null;
@@ -589,7 +598,8 @@ export function assemble(input: KitInput, passes: ModelPasses, at: string): KitM
   if (passes.visual) prompt_versions.push(passes.visual.prompt_version);
   const m: KitManifest = {
     schema: MANIFEST_SCHEMA,
-    manifest_id: createHash("sha256").update(`${input.generation_id}|${artifacts_hash}|${prompt_versions.join(",")}`).digest("hex").slice(0, 24),
+    derivation_version: MANIFEST_DERIVATION_VERSION,
+    manifest_id: createHash("sha256").update(`${input.generation_id}|${artifacts_hash}|${prompt_versions.join(",")}|d${MANIFEST_DERIVATION_VERSION}`).digest("hex").slice(0, 24),
     generation_id: input.generation_id,
     book_id: input.book_id,
     chapter_ref: input.chapter_ref,

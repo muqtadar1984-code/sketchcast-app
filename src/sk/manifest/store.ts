@@ -11,7 +11,7 @@
 // flips the row itself before answering `stale`.
 
 import type { ArtifactRow, KitManifest } from "./derive";
-import { isStale } from "./derive";
+import { isStale, MANIFEST_DERIVATION_VERSION } from "./derive";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type StoreAdmin = { from: (table: string) => any };
@@ -91,6 +91,11 @@ export async function readManifest(admin: StoreAdmin, generationId: string, now:
   if (!m || !m.pinned || !Array.isArray(m.segments)) {
     await markStale(admin, generationId, "ready row without a manifest document", now);
     return { status: "stale", reason: "ready row without a manifest document" };
+  }
+  if ((m.derivation_version ?? 1) !== MANIFEST_DERIVATION_VERSION) {
+    const reason = `derivation version ${m.derivation_version ?? 1} != ${MANIFEST_DERIVATION_VERSION}: rebuilt with the current loader`;
+    await markStale(admin, generationId, reason, now);
+    return { status: "stale", reason };
   }
   const [rows, fv] = await Promise.all([liveArtifactRows(admin, pinnedGenerationIds(m)), liveFormatVersion(admin, generationId)]);
   if (isStale(m, rows, fv)) {
