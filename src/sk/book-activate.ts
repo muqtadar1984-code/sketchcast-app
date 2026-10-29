@@ -233,3 +233,33 @@ export const REDEEM_REASONS = ["invalid", "used", "revoked", "rate_limited", "no
 export type RedeemReason = (typeof REDEEM_REASONS)[number];
 
 export const toRedeemReason = (v: unknown): RedeemReason => ((REDEEM_REASONS as readonly string[]).includes(String(v)) ? (v as RedeemReason) : "error");
+
+/** The /activate form's message key (dictionary `activate.errors.*`) for a
+ *  route refusal: the route's `reason`, else the HTTP status. */
+export type ActivateErrorKey = "invalid" | "used" | "revoked" | "rateLimited" | "notYourChild" | "orderUsed" | "dailyCap" | "badOrder" | "notConfigured" | "generic";
+export function activateErrorKey(reason: unknown, status?: number): ActivateErrorKey {
+  switch (reason) {
+    case "invalid":
+      return "invalid";
+    case "used":
+      return "used";
+    case "revoked":
+      return "revoked";
+    case "rate_limited":
+      return "rateLimited";
+    case "not_your_child":
+      return "notYourChild";
+    case "order_used":
+      return "orderUsed";
+    case "daily_cap":
+      return "dailyCap";
+    case "bad_order":
+      return "badOrder";
+    case "not_configured":
+      return "notConfigured";
+  }
+  if (status === 503) return "notConfigured";
+  if (status === 429) return "rateLimited";
+  if (status === 403) return "notYourChild";
+  return "generic";
+}
