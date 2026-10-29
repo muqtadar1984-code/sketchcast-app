@@ -68,11 +68,11 @@ const PATTERNS: Array<[SkParentCapability, RegExp[]]> = [
   [
     "child.diary",
     [
+      re(`(?:are there )?(?:any )?(?:new )?diary notes`),
       re(`(?:what's|what is|anything) (?:new )?in ${WHOS} diary`),
       re(`(?:are there )?(?:any )?(?:new )?(?:diary )?notes (?:for|about|on) ${WHO}`),
       re(`(?:show me |read me |read )?${WHOS} diary notes`),
       re(`what did (?:the |his |her )?teachers? (?:write|say) about ${WHO}`),
-      re(`(?:any )?new diary notes`),
       re(`(?:ada |apa )?catatan diari(?: (?:untuk|tentang))? ${WHO}`),
       re(`apa (?:yang )?(?:ada )?dalam diari ${WHO}`),
       re(`apa (?:cikgu|guru) tulis tentang ${WHO}`),
