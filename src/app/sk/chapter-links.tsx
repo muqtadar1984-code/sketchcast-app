@@ -6,8 +6,7 @@ import type { ChapterEntry } from "@/sk/kit-view";
 // The chapter buttons of one book, shared by /sk and /sk/[product] (SK S3
 // slice B). A chapter with one kit is one link; a chapter with several kits
 // (the Biology book's chapter 8 has three) lists each kit under its chapter,
-// each opening the player on that kit. A clip-only chapter (no kit mapped yet)
-// links to the old player until slice E retires it.
+// each opening the player on that kit.
 
 const link = "inline-flex min-h-10 items-center rounded-lg border border-[#14181F] px-3 py-1.5 text-sm text-[#14181F] hover:bg-[#14181F] hover:text-white";
 

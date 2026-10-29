@@ -70,23 +70,17 @@ export function kitView(m: KitManifest, kit: ProductKit, videos: { part: number;
   };
 }
 
-/** One chapter on /sk and /sk/[product]: its mapped kits (in sort order) and
- *  whether the old clip path still serves it. */
-export type ChapterEntry = { chapterRef: string; kits: KitListEntry[]; clip: boolean };
+/** One chapter on /sk and /sk/[product]: its mapped kits (in sort order). */
+export type ChapterEntry = { chapterRef: string; kits: KitListEntry[] };
 
-/** Chapters from the product → kit map, plus the clip-graph chapters that have
- *  NO mapped kit (slice E retires those). A chapter with a kit is the kit's:
- *  the player loads it and the clip path is not offered. Ordered by chapter. */
-export function mergeChapters(kits: readonly ProductKit[], clipChapters: readonly number[]): ChapterEntry[] {
+/** Chapters from the product → kit map, each with its kits, ordered by chapter.
+ *  (The clip-graph chapters this once merged in were retired in S3 slice E.) */
+export function mergeChapters(kits: readonly ProductKit[]): ChapterEntry[] {
   const by = new Map<string, ChapterEntry>();
   for (const k of kits) {
-    const e = by.get(k.chapterRef) ?? { chapterRef: k.chapterRef, kits: [], clip: false };
+    const e = by.get(k.chapterRef) ?? { chapterRef: k.chapterRef, kits: [] };
     e.kits.push({ generationId: k.generationId, label: k.label, title: k.title });
     by.set(k.chapterRef, e);
-  }
-  for (const c of clipChapters) {
-    const ref = String(c);
-    if (!by.has(ref)) by.set(ref, { chapterRef: ref, kits: [], clip: true });
   }
   return [...by.values()].sort((a, b) => compareChapterRef(a.chapterRef, b.chapterRef));
 }

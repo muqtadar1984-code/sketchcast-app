@@ -175,10 +175,9 @@ export async function readyManifest(deps: KitDeps, r: Extract<Resolved, { ok: tr
 // ── the chapter lists (/sk, /sk/[product]) and the chapter page ─────────────
 
 /** The product's chapters for this user: its mapped kits when the user is
- *  entitled (an unentitled user sees none of the map), merged with the clip
- *  chapters that have no kit. A map that cannot be read (0170 not applied yet)
- *  leaves the clip chapters alone, logged. */
-export async function chaptersFor(userId: string, productSlug: string, clipChapters: readonly number[]): Promise<ChapterEntry[]> {
+ *  entitled (an unentitled user sees none of the map). A map that cannot be
+ *  read (0170 not applied yet) lists nothing, logged. */
+export async function chaptersFor(userId: string, productSlug: string): Promise<ChapterEntry[]> {
   const deps = kitDeps();
   let kits: ProductKit[] = [];
   try {
@@ -187,12 +186,12 @@ export async function chaptersFor(userId: string, productSlug: string, clipChapt
   } catch (err) {
     console.error("[sk] kit map unavailable:", (err as Error).message);
   }
-  return mergeChapters(kits, clipChapters);
+  return mergeChapters(kits);
 }
 
 /** Does this chapter have a mapped kit? Decides, on the server, whether the
  *  chapter page mounts the kit player (which then asks the API, where every
- *  refusal is made) or the old clip player. False when the map cannot be read. */
+ *  refusal is made) or "no lesson yet". False when the map cannot be read. */
 export async function chapterHasKit(productSlug: string, chapterRef: string): Promise<boolean> {
   try {
     return (await kitDeps().kits.kitForChapter(productSlug, chapterRef)).length > 0;

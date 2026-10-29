@@ -1,6 +1,10 @@
 // SK B4 — teaching-graph access (contracts §3.1). Parsing is strict: a graph
 // is data from a file (later a database row), so unit keys, prerequisites and
 // asset ids are checked before any planner reads them.
+//
+// S3 slice E retired the packager's clip graphs (public/ no longer carries
+// any); this module stays because the graph loop (loop.ts, planner.ts,
+// router.ts) still runs on a TeachingGraph, now only an injected one.
 
 import type { AssetKind, Cursor, GraphAsset, GraphUnit, TeachingGraph } from "./types";
 
@@ -28,7 +32,7 @@ function clipsOf(v: unknown, assetId: string, uri: (s: string | undefined) => st
   return Object.keys(out).length ? out : undefined;
 }
 
-/** `baseUri` (e.g. "/sk-s1/ch02/") resolves the B3 packager's relative segment
+/** `baseUri` (e.g. "/lessons/ch02/") resolves the B3 packager's relative segment
  * paths ("s1/explain-main/segment.json") to the URL the browser fetches. */
 export function parseGraph(raw: unknown, baseUri = ""): TeachingGraph {
   if (!isObj(raw)) throw new GraphError("graph: not an object");
