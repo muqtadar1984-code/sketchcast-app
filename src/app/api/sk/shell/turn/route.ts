@@ -150,6 +150,9 @@ export async function POST(request: Request) {
   });
 
   let memory = openMemory(body.memory, ctx, now).memory;
+  // The conversation's resolved entities (signed memory) become ctx.recent, so a
+  // capability can resolve "their parents" from the last not-done list (§5.4).
+  ctx.recent = { ...ctx.recent, entities: memory.entities };
   const allowed = allowedFor(ctx);
   const sink = auditSinkFor(admin);
   const decision = routeByRules(body.text, ctx, now, body.collector.clock);

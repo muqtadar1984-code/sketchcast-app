@@ -18,8 +18,9 @@ export const runtime = "nodejs";
 // card plus how it was given; the Context is rebuilt server-side so the
 // token's captured context is compared with the LIVE one. Every outcome is
 // answered 200 with one line for the UI to speak — a bad token is `refused`,
-// never a 4xx that would tell a prober which part failed. The write itself
-// happens only inside the per-action RPC (src/sk/shell/act.ts).
+// never a 4xx that would tell a prober which part failed. The write happens
+// only after the token is consumed: inside the per-action RPC (assign, 0164)
+// or with THIS request's user-session client (S2 actions, act-core.ts).
 
 type Gate =
   | { ok: true; supabase: Awaited<ReturnType<typeof createClient>>; user: { id: string; email?: string | null; email_confirmed_at?: string | null }; role: string | null; schoolId: string | null }
@@ -113,6 +114,8 @@ export async function POST(request: Request) {
     clock: body.collector.clock,
     memory,
     admin,
+    // S2: the action's write runs AS THE TEACHER through this request's session.
+    session: g.supabase,
     sink: auditSinkFor(admin),
   });
   const response: SkActResponse = { ...out.response, memory: sealMemory(out.memory) };

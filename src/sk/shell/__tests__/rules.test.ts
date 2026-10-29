@@ -75,7 +75,6 @@ describe("not navigation", () => {
     "berapa ramai pelajar siap?",
     "كم طالبا أنهى الواجب؟",
     "explain diffusion to me",
-    "remind the parents of non-completers",
     "is the timetable up to date?",
   ])("%s → ask (model)", (text) => {
     expect(routeByRules(text, ctx, NOW, clock).intent).toBe("ask");

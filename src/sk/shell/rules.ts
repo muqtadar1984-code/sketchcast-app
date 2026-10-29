@@ -15,7 +15,14 @@ export type RulesDecision =
   /** S1: a Board move decided by rules (only while the collector reports an
    *  open Board session). `args` are the capability's arguments; `k` is 0-based. */
   | { intent: "teach"; move: SkBoardMove; args: Record<string, unknown> }
-  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach"> };
+  /** S2: a teacher action phrasing ("post a notice to 7B: …", "remind the
+   *  parents …"). Decided here only so it is never mistaken for a navigate
+   *  ("write in Ali's diary" names the diary); the model still resolves it
+   *  through the action's capability, which returns a confirm card. */
+  | { intent: "act"; action: SkActPhrase }
+  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act"> };
+
+export type SkActPhrase = "diary.note" | "parents.remind" | "marking.next" | "marking.grade" | "lesson.prepare";
 
 export const SK_CHAT_NOTHING_PENDING = "Nothing is waiting on an answer — ask me something, or tell me where to go.";
 export const SK_CHAT_THANKS = "You're welcome.";
@@ -384,6 +391,131 @@ export function startLessonOf(normed: string, rawText: string): { classQuery?: s
   return out;
 }
 
+// ── S2 teacher actions (diary note, parent reminders) ───────────────────────
+//
+// EN / MS / AR imperatives, anchored at the start (after a polite word), and
+// never a question. Reminders first: "send a reminder to the parents" is a
+// reminder, "send a reminder to 7B" is a diary note.
+const ACT_POLITE = "(?:please |pls |sila |tolong |boleh |can you |could you |من فضلك |الرجاء |رجاء )?";
+const CLASS_TOKEN = "(?:class |kelas |grade |year |form |tingkatan |darjah |tahun |الصف |صف |الفصل |فصل )?[0-9]{1,2} ?[a-z]{1,2}(?![a-z])";
+const REMIND_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    "remind (?:the |their |all the |all |every )?(?:parents|families|mums and dads)" +
+    "|(?:send|write|post) (?:a |the )?reminders? to (?:the |their |all the |all )?(?:parents|families)" +
+    "|ingatkan (?:semua |para )?(?:ibu ?bapa|keluarga)" +
+    "|(?:hantar|kirim) peringatan (?:kepada|pada|ke) (?:semua )?(?:ibu ?bapa|keluarga)" +
+    "|(?:ذكّر|ذكر) (?:جميع )?(?:أولياء|اولياء) (?:الأمور|الامور)" +
+    "|(?:أرسل|ارسل) (?:تذكيرا|تذكيراً|تذكير) (?:إلى |الى |ل)?(?:أولياء|اولياء) (?:الأمور|الامور)" +
+    ")",
+  "u",
+);
+const DIARY_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    // post a notice to 7B / send a note to 7B's parents / put a message in 7B's diary
+    "(?:post|send|put|add|write|give|share|leave) (?:a |an |the )?(?:notice|note|message|announcement|reminder|diary note|diary entry) (?:to|for|in|on|into) " +
+    // add to the diary for 7B / write in Ali's diary / put this in 7B's diary
+    "|(?:add|write|put|post|note)(?: this| that| it| something| a line| an entry)? (?:to|in|into|on) (?:the |[\\p{L}0-9 ]{1,30}['’]s |the class |class )?(?:class )?diary" +
+    // tell 7B … / tell 7B's parents …
+    "|tell " + CLASS_TOKEN +
+    // MS: tulis dalam diari 7B / maklumkan kepada 7B / hantar notis kepada 7B / beritahu 7B
+    "|tulis(?:kan)? (?:dalam|di|ke|pada) (?:dalam )?(?:buku komunikasi|diari)" +
+    "|maklumkan (?:kepada|pada|kpd) " +
+    "|(?:hantar|siarkan|catat(?:kan)?|tulis(?:kan)?|kirim) (?:satu )?(?:notis|nota|mesej|pesanan|catatan|makluman) " +
+    "|beritahu " + CLASS_TOKEN +
+    // AR: اكتب في مذكرة 7B / انشر إشعارا للصف 7B / أخبر 7B
+    "|(?:اكتب|أكتب|سجل|سجّل) (?:في|فى) (?:مذكرة|يوميات|اليوميات|دفتر)" +
+    "|(?:انشر|أرسل|ارسل|أضف|اضف) (?:إشعارا|إشعاراً|اشعارا|إعلانا|إعلاناً|ملاحظة|رسالة|تنبيها|تنبيهاً)" +
+    "|(?:أخبر|اخبر|بلغ|بلّغ) " + CLASS_TOKEN +
+    ")",
+  "u",
+);
+
+// ── S2 slice B: the marking queue and lesson prep ───────────────────────────
+//
+// Same contract: imperatives anchored at the start, never a question. A
+// marking.next phrasing is a READ, but it is decided here for the same reason
+// as the actions — "next worksheet to mark" must never navigate to the kits.
+const DIGITS = "[0-9٠-٩]+(?:[.,][0-9٠-٩]+)?";
+const MARK_NEXT_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    // mark the next one (from 7B) / grade the next worksheet / let's mark the next one
+    "(?:let'?s )?(?:mark|grade|check) (?:the )?next(?: one| submission| worksheet| test(?: paper)?| paper| piece of work)?" +
+    // next worksheet to mark / next one to grade
+    "|(?:the )?next (?:one|worksheet|test(?: paper)?|paper|submission|piece of work)s? (?:to|i need to|for me to) (?:mark|grade|check)" +
+    // what's left to mark / what's next to mark
+    "|what'?s (?:left|next|still) (?:to|for me to) (?:mark|grade)" +
+    // let's do some marking / start marking
+    "|(?:let'?s (?:do (?:some |the )?)?|start (?:the )?|begin (?:the )?)(?:marking|grading)" +
+    // show me / bring up the next one to mark
+    "|(?:show me|bring up|open|pull up) the next (?:one |submission |worksheet |test )?(?:to|i need to) (?:mark|grade)" +
+    // MS: tanda yang seterusnya / semak kerja berikutnya / kerja seterusnya untuk ditanda / mula menanda
+    "|(?:tanda|semak|periksa)(?:kan)? (?:yang |kerja |lembaran kerja |ujian )?(?:seterusnya|berikutnya)" +
+    "|(?:kerja|lembaran kerja|ujian|yang) (?:seterusnya|berikutnya) untuk (?:ditanda|disemak|diperiksa)" +
+    "|mula(?:kan)? (?:menanda|menyemak|tanda)" +
+    // AR: صحح التالي / صحّح الورقة التالية / التالي للتصحيح / ابدأ التصحيح
+    "|(?:صحح|صحّح|قيّم|قيم) (?:الورقة |العمل |الواجب |الاختبار )?(?:التالي|التالية)" +
+    "|(?:التالي|التالية) (?:للتصحيح|للتقييم)" +
+    "|(?:ابدأ|إبدأ|لنبدأ|نبدأ) (?:ال)?(?:تصحيح|تقييم)" +
+    ")",
+  "u",
+);
+const MARK_GRADE_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    // give it 7 out of 10 / mark it 6/10 / give Ali 8 out of 10 / score that one 9 over 10 / give him 7 marks
+    "(?:give|mark|score|grade|award|put)(?: it| that| this| this one| that one| him| her| them| [\\p{L}]{2,20})? (?:a |an )?" + DIGITS + "(?: ?(?:out of|over|/) ?" + DIGITS + "| marks?| points?)" +
+    // 7 out of 10, good work
+    "|" + DIGITS + " ?(?:out of|/) ?" + DIGITS + "(?:$|[ ,.;:—-])" +
+    // MS: beri 7 daripada 10 / berikan dia 8/10 / bagi markah 7 daripada 10 / markah 7/10
+    "|(?:beri(?:kan)?|bagi)(?: dia| ia| ini| itu| markah| [\\p{L}]{2,20})? " + DIGITS + " ?(?:daripada|drpd|/|per) ?" + DIGITS +
+    "|markah(?:nya)? " + DIGITS + " ?(?:daripada|drpd|/) ?" + DIGITS +
+    // AR: أعطه 7 من 10 / ضع لها 8 من 10 / الدرجة 7 من 10
+    "|(?:أعطه|اعطه|أعطها|اعطها|أعطِه|ضع له|ضع لها|امنحه|امنحها|قيّمه|قيمه|قيّمها|قيمها)(?: درجة)? " + DIGITS + " ?(?:من|/) ?" + DIGITS +
+    "|(?:الدرجة|العلامة) " + DIGITS + " ?(?:من|/) ?" + DIGITS +
+    ")",
+  "u",
+);
+const PREP_DAY = "(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|today|next week|next \\p{L}+|class|[0-9]{1,2} ?[a-z]{1,2})";
+const LESSON_PREPARE_PHRASE_RE = new RegExp(
+  "^" +
+    ACT_POLITE +
+    "(?:" +
+    // make a kit for chapter 3 / prepare a kit on Specialised Cells / generate the lesson kit for …
+    "(?:prepare|prep|make|create|generate|build|set up)(?: me)? (?:a |an |the |my )?(?:full |new |whole )?(?:lesson |teaching )?kits? (?:for|on|about|from) " +
+    // prepare the lesson on photosynthesis / generate a lesson for chapter 2
+    "|(?:prepare|prep|generate|make|create)(?: me)? (?:a |the |my )?(?:video )?lesson (?:for|on|about|from) " +
+    // prepare chapter 3 (of Biology)
+    "|(?:prepare|prep|generate) (?:chapter|ch\\.?|unit) ?[0-9]" +
+    // prepare Specialised Cells for Friday
+    "|(?:prepare|prep) [\\p{L}0-9][\\p{L}0-9 '’-]{1,60} for " + PREP_DAY +
+    // MS: sediakan kit untuk bab 3 / buat kit pelajaran tentang sel / sediakan bab 3 / sediakan Sel Khusus untuk Jumaat
+    "|(?:sediakan|siapkan|buat(?:kan)?|jana(?:kan)?|hasilkan) (?:satu |sebuah )?(?:kit|pelajaran)(?: pelajaran)? (?:untuk|bagi|tentang|mengenai) " +
+    "|(?:sediakan|siapkan|jana(?:kan)?) bab ?[0-9]" +
+    "|(?:sediakan|siapkan) [\\p{L}0-9][\\p{L}0-9 '’-]{1,60} untuk (?:hari )?(?:isnin|selasa|rabu|khamis|jumaat|sabtu|ahad|esok|kelas)" +
+    // AR: جهّز حزمة للفصل 3 / حضّر درس الخلايا / أنشئ حزمة للفصل 2
+    "|(?:جهّز|جهز|حضّر|حضر|أعدّ|أعد|اعد|أنشئ|انشئ|ولّد|ولد)(?: لي)? (?:حزمة|الحزمة|حزمة درس|درس|الدرس|درسا|درساً)" +
+    ")",
+  "u",
+);
+
+/** The S2 action a phrase asks for, or null. Questions never are actions. */
+export function actPhraseOf(t: string, raw: string): SkActPhrase | null {
+  if (/[?؟]\s*$/u.test(raw)) return null;
+  if (REMIND_PHRASE_RE.test(t)) return "parents.remind";
+  if (DIARY_PHRASE_RE.test(t)) return "diary.note";
+  if (MARK_GRADE_PHRASE_RE.test(t)) return "marking.grade";
+  if (MARK_NEXT_PHRASE_RE.test(t)) return "marking.next";
+  if (LESSON_PREPARE_PHRASE_RE.test(t)) return "lesson.prepare";
+  return null;
+}
+
 export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
   const raw = (text ?? "").trim();
   const t = norm(raw);
@@ -408,6 +540,10 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
       if (b) return b;
     }
   }
+
+  // S2: a teacher action phrasing is never a navigate (the model resolves it).
+  const act = actPhraseOf(t, raw);
+  if (act) return { intent: "act", action: act };
 
   const isQuestion = /[?؟]\s*$/.test(raw) || /^(?:what|which|who|whose|how|when|where|why|is|are|do|does|did|can|could|has|have|berapa|siapa|apa|bila|mana|bagaimana|ما|من|كم|متى|كيف|هل)\b/u.test(t);
   const target = findTarget(t);

@@ -627,6 +627,13 @@ export default function SkShell({
         const d = decideWithCards({ activeCards: 1, modality, text: q, locale: localeFromLang(document.documentElement.lang) });
         if (d.kind === "confirm") {
           setEntries((m) => [...m, { id: uuid(), who: "user", text: q }]);
+          // §9.2: a click-only card (it spends credits) is never confirmed by
+          // voice. Say so and keep the card — posting would only be refused.
+          if (modality === "voice" && active[0].params.click_only === true) {
+            appendSk(copy.clickOnlyHint, { label: "declined", sources: [active[0].action] });
+            speakLine(copy.clickOnlyHint);
+            return;
+          }
           void act(active[0], modality === "voice" ? "voice" : "click");
           return;
         }
@@ -840,7 +847,13 @@ export default function SkShell({
   const mapStatus = board ? board.status() : "none";
   const slideLoad = board?.loading() ?? null;
   const nowMs = Date.now() + tick * 0;
-  const paramLabel = (k: string) => k.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  // Card labels: the dictionary's (sk.shell.cardParams) when it has one, else the key made readable.
+  const cardLabels = copy.cardParams as Record<string, string> | undefined;
+  const paramLabel = (k: string) => cardLabels?.[k] ?? k.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  // Ids are for the server, not the teacher: a card shows names, text and dates.
+  // `chapter_ref` (0-based) and `click_only` are for the server too.
+  const shownParams = (params: Card["params"]) => Object.entries(params).filter(([k]) => !/(?:^|_)ids?$/.test(k) && k !== "chapter_ref" && k !== "click_only");
+  const paramValue = (v: Card["params"][string]) => (v === null || v === undefined ? "—" : typeof v === "boolean" ? (v ? cardLabels?.yes ?? "Yes" : cardLabels?.no ?? "No") : String(v));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
@@ -974,10 +987,10 @@ export default function SkShell({
                   )}
                 </div>
                 <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-                  {Object.entries(c.params).map(([k, v]) => (
+                  {shownParams(c.params).map(([k, v]) => (
                     <Fragment key={k}>
                       <dt className="text-[#98A0A9]">{paramLabel(k)}</dt>
-                      <dd className="text-[#14181F] break-words">{v === null || v === undefined ? "—" : String(v)}</dd>
+                      <dd className="text-[#14181F] break-words whitespace-pre-wrap">{paramValue(v)}</dd>
                     </Fragment>
                   ))}
                 </dl>
@@ -991,7 +1004,13 @@ export default function SkShell({
                     <button type="button" onClick={() => dismissCard(c)} disabled={c.status !== "active"} className="h-8 px-3 text-xs rounded-lg border border-[#E6E8E4] text-[#5B6470] disabled:opacity-50" data-sk="confirm-no">
                       {copy.cancel}
                     </button>
-                    {mic && <span className="text-[10px] text-[#98A0A9] ms-auto">{copy.voiceYesHint}</span>}
+                    {c.params.click_only === true ? (
+                      <span className="text-[10px] text-[#8A5A00] ms-auto" data-sk="confirm-click-only">
+                        {copy.clickOnlyHint}
+                      </span>
+                    ) : (
+                      mic && <span className="text-[10px] text-[#98A0A9] ms-auto">{copy.voiceYesHint}</span>
+                    )}
                   </div>
                 )}
               </div>

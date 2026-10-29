@@ -97,7 +97,7 @@ export type SkBoardState = {
 /** An entity a tool resolved on an earlier turn, kept so "their parents" and
  *  "that worksheet" resolve without asking again (§5.4). */
 export type ResolvedEntity = {
-  kind: "class" | "learner" | "learners" | "share" | "generation" | "book" | "chapter" | "topic";
+  kind: "class" | "learner" | "learners" | "share" | "generation" | "book" | "chapter" | "topic" | "submission" | "kit";
   id: string;
   label: string;
   /** The tool that produced it. */

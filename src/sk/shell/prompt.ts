@@ -101,6 +101,11 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "8. The Classroom Board is open with a lesson. Drive it with the board.* tools, never by describing: board.slide for a slide (k is 0-based — the teacher's 'slide 4' is k=3), board.explain for a concept (it shows the right slide and returns its heading and points: narrate from those, briefly, as a teacher would), board.compare for two concepts, board.pause / board.resume / board.intro for the video, board.practise for questions, board.recap to end. A confirm-tier action (such as assigning work) returns a card for the teacher to confirm — never say it is done until it is.",
         ]
       : []),
+    ...(capabilities.some((c) => c.tier === "confirm")
+      ? [
+          "9. A confirm-tier tool (assign, diary.note, parents.remind, marking.grade, lesson.prepare) only prepares a card; the teacher confirms it. Never say work is assigned, posted, sent, graded or started — say what the card will do, in one sentence. For a diary note pass her own words as the body, and for a grade her own feedback: fix grammar if needed, never add a fact, date, name, praise or criticism she did not say. lesson.prepare spends credits: say the cost and that it needs a click on the card (a spoken yes will not confirm it).",
+        ]
+      : []),
     "",
     "CONTEXT",
     contextLine(ctx, input.memory),
