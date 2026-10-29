@@ -179,7 +179,7 @@ describe("the kit", () => {
 
 describe("practise and marking", () => {
   const itemsReq = (segment: string) => new Request(`http://x/api/sk/kit/items?${new URLSearchParams({ product: SLUG, chapter: "1", segment }).toString()}`);
-  const answerReq = (body: Record<string, unknown>) => new Request("http://x/api/sk/kit/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product: SLUG, chapter: "1", attemptNo: 1, ...body }) });
+  const answerReq = (body: Record<string, unknown>) => new Request("http://x/api/sk/kit/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product: SLUG, chapter: "1", eventId: eid(), ...body }) });
 
   it("serves the section's bank items with every marking field stripped", async () => {
     install();
@@ -195,14 +195,25 @@ describe("practise and marking", () => {
     expect(((await (await getItems(itemsReq("p1:s002"))).json()) as { items: unknown[] }).items).toEqual([]);
   });
 
-  it("marks an answer on a kit item; refuses an item that is not the kit's; nothing is written yet (slice C)", async () => {
+  it("marks an answer on a kit item and records it; refuses an item that is not the kit's; a 4th try is refused (slice C writes)", async () => {
     const w = install();
-    const before = JSON.stringify([w.db.rows("item_attempts"), w.db.rows("sk_objective_mastery"), w.db.rows("sk_usage")]);
-    expect(await (await answer(answerReq({ itemId: ITEM_MCQ, response: "A cell" }))).json()).toEqual({ outcome: "correct", score: 1, max: 1, attemptNo: 1, triesLeft: 0 });
-    expect(await (await answer(answerReq({ itemId: ITEM_TF, response: false }))).json()).toMatchObject({ outcome: "incorrect", triesLeft: 2 });
+    expect(await (await answer(answerReq({ itemId: ITEM_MCQ, response: "A cell" }))).json()).toMatchObject({ outcome: "correct", score: 1, max: 1, attemptNo: 1, triesLeft: 0, rungs: [], reveal: null });
+    expect(await (await answer(answerReq({ itemId: ITEM_TF, response: false }))).json()).toMatchObject({ outcome: "incorrect", attemptNo: 1, triesLeft: 2 });
     expect((await answer(answerReq({ itemId: ITEM_OFFMAP, response: true }))).status).toBe(404);
-    expect((await answer(answerReq({ itemId: ITEM_TF, response: true, attemptNo: 4 }))).status).toBe(409);
-    expect(JSON.stringify([w.db.rows("item_attempts"), w.db.rows("sk_objective_mastery"), w.db.rows("sk_usage")])).toBe(before);
+    // The client's attemptNo is ignored: the server counts (2, then 3, then no tries left).
+    expect(await (await answer(answerReq({ itemId: ITEM_TF, response: false, attemptNo: 1 }))).json()).toMatchObject({ attemptNo: 2, triesLeft: 1 });
+    expect(await (await answer(answerReq({ itemId: ITEM_TF, response: false, attemptNo: 1 }))).json()).toMatchObject({ attemptNo: 3, triesLeft: 0, reveal: { answer: "true" } });
+    expect((await answer(answerReq({ itemId: ITEM_TF, response: true, attemptNo: 1 }))).status).toBe(409);
+    expect(w.db.rows("item_attempts").map((r) => [r.item_id, r.attempt_no])).toEqual([
+      [ITEM_MCQ, 1],
+      [ITEM_TF, 1],
+      [ITEM_TF, 2],
+      [ITEM_TF, 3],
+    ]);
+    // These fixture items carry no article objective: recorded, no objective mastery.
+    expect(w.db.rows("item_attempts").every((r) => r.objective_key === null)).toBe(true);
+    expect(w.db.rows("sk_objective_mastery")).toEqual([]);
+    expect(w.db.rows("sk_usage")).toEqual([]);
   });
 
   it("practice for an unentitled user is refused", async () => {
