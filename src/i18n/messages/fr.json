@@ -2359,7 +2359,8 @@
         "ttIn": "En ce moment dans {where} — {period} ({start}–{end}) : cours {n}. {items}.",
         "ttNext": "Ensuite dans {where} — {period} ({start}–{end}) : cours {n}. {items}.",
         "ttNone": "Aucun cours n'est prévu dans {where} pour {period}.",
-        "ttClosed": "Aucune période de cours n'est en cours en ce moment."
+        "ttClosed": "Aucune période de cours n'est en cours en ce moment.",
+        "ttNoNext": "C'est la dernière période de la journée ; il n'y a rien après."
       },
       "schoolMeter": {
         "analyticsOff": "Les analyses de l'école ne sont pas activées pour votre école.",

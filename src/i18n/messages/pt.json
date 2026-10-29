@@ -2359,7 +2359,8 @@
         "ttIn": "Agora em {where} — {period} ({start}–{end}): aulas {n}. {items}.",
         "ttNext": "A seguir em {where} — {period} ({start}–{end}): aulas {n}. {items}.",
         "ttNone": "Não há aulas marcadas em {where} para {period}.",
-        "ttClosed": "Não há nenhum tempo letivo a decorrer neste momento."
+        "ttClosed": "Não há nenhum tempo letivo a decorrer neste momento.",
+        "ttNoNext": "Este é o último tempo de hoje; não há nada depois."
       },
       "schoolMeter": {
         "analyticsOff": "A análise da escola não está ativada para a sua escola.",

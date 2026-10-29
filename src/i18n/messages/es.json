@@ -2359,7 +2359,8 @@
         "ttIn": "Ahora en {where} — {period} ({start}–{end}): clases {n}. {items}.",
         "ttNext": "A continuación en {where} — {period} ({start}–{end}): clases {n}. {items}.",
         "ttNone": "No hay clases programadas en {where} para {period}.",
-        "ttClosed": "No hay ningún periodo de clase en curso ahora mismo."
+        "ttClosed": "No hay ningún periodo de clase en curso ahora mismo.",
+        "ttNoNext": "Este es el último periodo de hoy; no hay nada después."
       },
       "schoolMeter": {
         "analyticsOff": "Las analíticas escolares no están activadas para tu escuela.",

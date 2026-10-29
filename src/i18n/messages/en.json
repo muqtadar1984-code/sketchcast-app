@@ -2359,7 +2359,8 @@
         "ttIn": "Now in {where} — {period} ({start}–{end}): lessons {n}. {items}.",
         "ttNext": "Next in {where} — {period} ({start}–{end}): lessons {n}. {items}.",
         "ttNone": "No lessons are timetabled in {where} for {period}.",
-        "ttClosed": "No school periods are running right now."
+        "ttClosed": "No school periods are running right now.",
+        "ttNoNext": "This is the last period today; nothing comes after it."
       },
       "schoolMeter": {
         "analyticsOff": "School analytics aren't switched on for your school.",

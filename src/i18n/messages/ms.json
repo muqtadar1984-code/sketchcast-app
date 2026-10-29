@@ -2359,7 +2359,8 @@
         "ttIn": "Sekarang dalam {where} — {period} ({start}–{end}): pelajaran {n}. {items}.",
         "ttNext": "Seterusnya dalam {where} — {period} ({start}–{end}): pelajaran {n}. {items}.",
         "ttNone": "Tiada pelajaran dijadualkan dalam {where} untuk {period}.",
-        "ttClosed": "Tiada waktu persekolahan berjalan sekarang."
+        "ttClosed": "Tiada waktu persekolahan berjalan sekarang.",
+        "ttNoNext": "Ini waktu terakhir hari ini; tiada apa-apa selepasnya."
       },
       "schoolMeter": {
         "analyticsOff": "Analitik sekolah belum dihidupkan untuk sekolah anda.",

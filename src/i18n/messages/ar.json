@@ -2359,7 +2359,8 @@
         "ttIn": "الآن في {where} — {period} ({start}–{end}): الحصص {n}. {items}.",
         "ttNext": "التالي في {where} — {period} ({start}–{end}): الحصص {n}. {items}.",
         "ttNone": "لا توجد حصص مجدولة في {where} لـ{period}.",
-        "ttClosed": "لا توجد حصص مدرسية جارية الآن."
+        "ttClosed": "لا توجد حصص مدرسية جارية الآن.",
+        "ttNoNext": "هذه آخر حصة اليوم؛ لا شيء بعدها."
       },
       "schoolMeter": {
         "analyticsOff": "تحليلات المدرسة غير مفعّلة لمدرستك.",

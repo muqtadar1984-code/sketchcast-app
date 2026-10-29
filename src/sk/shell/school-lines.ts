@@ -259,6 +259,19 @@ export const S_TT_CLOSED: Line = {
   hi: "अभी स्कूल का कोई पीरियड नहीं चल रहा है।",
 };
 
+export const S_TT_NO_NEXT: Line = {
+  en: "This is the last period today; nothing comes after it.",
+  ms: "Ini waktu terakhir hari ini; tiada apa-apa selepasnya.",
+  "ms-arab": "اين وقتو تراخير هاري اين؛ تيادا اڤ-اڤ سلڤسڽ.",
+  ar: "هذه آخر حصة اليوم؛ لا شيء بعدها.",
+  fr: "C'est la dernière période de la journée ; il n'y a rien après.",
+  es: "Este es el último periodo de hoy; no hay nada después.",
+  pt: "Este é o último tempo de hoje; não há nada depois.",
+  te: "ఇది ఈరోజు చివరి పీరియడ్; దీని తర్వాత ఏమీ లేదు.",
+  mr: "ही आजची शेवटची तासिका आहे; त्यानंतर काहीही नाही.",
+  hi: "यह आज का आख़िरी पीरियड है; इसके बाद कुछ नहीं है।",
+};
+
 /** Every line, keyed by its `sk.shell.school.*` dictionary key (the test walks this). */
 export const SCHOOL_LINES: Record<string, Line> = {
   noScope: S_NO_SCOPE,
@@ -280,4 +293,5 @@ export const SCHOOL_LINES: Record<string, Line> = {
   ttNext: S_TT_NEXT,
   ttNone: S_TT_NONE,
   ttClosed: S_TT_CLOSED,
+  ttNoNext: S_TT_NO_NEXT,
 };
