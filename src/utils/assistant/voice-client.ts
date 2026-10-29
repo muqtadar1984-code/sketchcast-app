@@ -4,6 +4,8 @@
 // (sentence by sentence), and is interruptible.
 
 import { speakableText } from "@/utils/speakable";
+import { clientSttMode, transcribeLanguageFor } from "@/sk/speech/stt";
+import { noticeBrowserFallback, startTranscribeDictation, transcribeUsable } from "./transcribe-client";
 
 // ── Read-aloud (TTS) — streaming speaker ─────────────────────────────────────
 
@@ -106,6 +108,9 @@ const SPEECH_LANG: Readonly<Record<string, string>> = {
   te: "te-IN",
   mr: "mr-IN",
   hi: "hi-IN",
+  // Not an app locale (yet): a Chinese lesson's tag, for Web Speech and as
+  // the browser fallback when Transcribe (zh-CN) is on (SK S6 slice B).
+  zh: "zh-CN",
 };
 
 /** BCP-47 tag for speech recognition from a locale code OR an <html lang>
@@ -126,9 +131,34 @@ export function pageSpeechLang(): string {
 /** Start dictation; onText gets the (interim + final) transcript, onEnd fires
  * when recognition stops. Returns a stop() handle, or null if unsupported.
  * `lang` is the recognition language (default: the page's locale).
- * (Note: browser STT is weaker on some accents — acceptable for now; this
- * adapter is the swap point for a hosted STT later.) */
+ *
+ * THE swap point for speech-to-text (SK S6 slice B). With
+ * NEXT_PUBLIC_SK_STT=transcribe, and a language Transcribe streams (en, ms,
+ * ar, zh), the words come from Amazon Transcribe through a presigned
+ * WebSocket (transcribe-client.ts); any refusal or failure before words
+ * arrive falls back to the browser below — sticky for the page, with one
+ * notice. Same signature, same callbacks, same synchronous stop handle, so the
+ * SK panel, the Board, the assistant panels and the §2.6 mic gate (whose
+ * onStop calls the handle) all inherit it unchanged. */
 export function startDictation(
+  onText: (t: string) => void,
+  onEnd: () => void,
+  opts: { lang?: string } = {},
+): (() => void) | null {
+  if (clientSttMode() === "transcribe" && micSupported() && transcribeUsable()) {
+    const lang = opts.lang ?? (typeof document !== "undefined" ? document.documentElement.lang : "") ?? "";
+    if (!transcribeLanguageFor(lang)) {
+      noticeBrowserFallback(); // a language Transcribe is not set up for
+      return startBrowserDictation(onText, onEnd, opts);
+    }
+    return startTranscribeDictation(onText, onEnd, { lang, fallback: () => startBrowserDictation(onText, onEnd, opts) });
+  }
+  return startBrowserDictation(onText, onEnd, opts);
+}
+
+/** Browser Web Speech dictation — the default path, and Transcribe's fallback.
+ * (Browser STT is weaker on some accents; Transcribe is the hosted option.) */
+export function startBrowserDictation(
   onText: (t: string) => void,
   onEnd: () => void,
   opts: { lang?: string } = {},
