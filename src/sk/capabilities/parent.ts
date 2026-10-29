@@ -35,7 +35,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveChild, verifiedChildren } from "./child-scope";
 import { memo } from "./shared";
 import { childMastery, type ChildMasteryRow } from "@/sk/parent-mastery";
-import { DIARY_DAYS, diaryBlock, noticesBlock, progressBlock, riskBlock, statusBlock, weekBlock, type Block, type ChildDiaryNote, type ChildNotice } from "@/sk/parent-digest";
+import { cutChildDiary, diaryBlock, diarySince, noticesBlock, progressBlock, riskBlock, statusBlock, weekBlock, type Block, type ChildDiaryNote, type ChildNotice } from "@/sk/parent-digest";
 
 type Row = Record<string, unknown>;
 const rowsOf = (r: unknown): Row[] => {
@@ -117,7 +117,7 @@ export function readChildSlice(deps: SkCapabilityDeps, me: string, childIds: str
 /** The child's diary notes of the last DIARY_DAYS days: her own + her classes' class-wide notes. */
 export async function readChildDiary(deps: SkCapabilityDeps, me: string, child: SkChild, slice: ChildSlice): Promise<ChildDiaryNote[]> {
   const classIds = [...new Set(slice.enrollments.filter((e) => e.student_id === child.id).map((e) => e.class_id))];
-  const since = new Date(deps.now.getTime() - DIARY_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const since = diarySince(deps.now.getTime());
   const cols = "id, author_id, class_id, student_id, note_type, body, entry_date, created_at";
   const [ownQ, classQ] = await Promise.all([
     memo(deps, `parentDiary:${me}:child:${child.id}`, async () => await deps.session.from("diary_notes").select(cols).eq("student_id", child.id).gte("entry_date", since).order("created_at", { ascending: false }).limit(30)),
@@ -125,29 +125,8 @@ export async function readChildDiary(deps: SkCapabilityDeps, me: string, child: 
       ? memo(deps, `parentDiary:${me}:classes:${classIds.sort().join(",")}`, async () => await deps.session.from("diary_notes").select(cols).in("class_id", classIds).is("student_id", null).gte("entry_date", since).order("created_at", { ascending: false }).limit(30))
       : Promise.resolve({ data: [] }),
   ]);
-  const classSet = new Set(classIds);
-  const seen = new Set<string>();
-  const out: ChildDiaryNote[] = [];
-  for (const n of [...rowsOf(ownQ), ...rowsOf(classQ)]) {
-    const id = str(n.id);
-    if (!id || seen.has(id)) continue;
-    const own = n.student_id === child.id;
-    const classWide = !n.student_id && typeof n.class_id === "string" && classSet.has(n.class_id);
-    if (!own && !classWide) continue; // never a sibling's or a classmate's note
-    if (typeof n.entry_date === "string" && n.entry_date < since) continue;
-    seen.add(id);
-    out.push({
-      id,
-      authorId: String(n.author_id ?? ""),
-      classId: str(n.class_id),
-      studentId: str(n.student_id),
-      type: String(n.note_type ?? ""),
-      body: String(n.body ?? ""),
-      entryDate: String(n.entry_date ?? ""),
-      createdAt: String(n.created_at ?? ""),
-    });
-  }
-  return out;
+  // The cut (S4 slice E: shared with the parent page's "This week" card).
+  return cutChildDiary([...rowsOf(ownQ), ...rowsOf(classQ)], child.id, classIds, since);
 }
 
 /** The child's school's upcoming notices (school audience), or null when off. */

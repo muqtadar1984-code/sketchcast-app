@@ -24,12 +24,29 @@
 // "for Friday" said on Friday is today's), "next <day>" / "<day> depan" = that
 // weekday of next calendar week, or ISO YYYY-MM-DD. No day said → today.
 
-import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "@/sk/shell/types";
+import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkChild, SkContext } from "@/sk/shell/types";
 import { cleanQuery, normalizeName, resolveEntities } from "./resolve";
 import { classEnrollments, teacherClasses } from "./shared";
 import { pickClass } from "./assign";
 import { lineFor } from "@/sk/shell/lines";
 import { DIARY_CARD_TITLE } from "@/sk/shell/act-lines";
+import { resolveChild } from "./child-scope";
+import {
+  P_DIARY_CARD_TITLE,
+  P_DIARY_NO_CLASS,
+  P_DIARY_SEEN_HOME,
+  P_DIARY_SEEN_HOME_PRIVATE,
+  P_DIARY_SEEN_LEADERS,
+  P_DIARY_SEEN_LEADERS_PRIVATE,
+  P_DIARY_SEEN_SCHOOL,
+  P_DIARY_SEEN_SCHOOL_PRIVATE,
+  P_DIARY_SEEN_TEACHER,
+  P_DIARY_SEEN_TEACHER_PRIVATE,
+  P_DIARY_UNVERIFIED,
+  P_NO_CHILDREN,
+  P_NOT_LINKED,
+  P_WHICH_CHILD,
+} from "@/sk/shell/parent-lines";
 
 export const DIARY_NOTE_TYPES = ["homework", "reminder", "praise", "concern", "health", "general"] as const;
 export type DiaryNoteType = (typeof DIARY_NOTE_TYPES)[number];
@@ -132,18 +149,28 @@ const which = (what: string, names: string[]) => `Which ${what}: ${names.slice(0
 
 // ── Resolution ───────────────────────────────────────────────────────────────
 
-export async function resolveDiaryNote(ctx: SkContext, args: Record<string, unknown>, deps: SkCapabilityDeps): Promise<SkCapabilityResult> {
+type NoteBasics = { ok: true; body: string; parentsOnly: boolean; entryDate: string } | { ok: false; result: SkCapabilityResult };
+
+/** The body, parents-only flag and day — the same checks for every writer. */
+function noteBasics(args: Record<string, unknown>, deps: SkCapabilityDeps): NoteBasics {
   const body = typeof args.body === "string" ? args.body.replace(/\r\n/g, "\n").trim() : "";
-  if (!body) return { ok: false, summary: "What should the note say?", error: "body required", facts: [] };
-  if (body.length > DIARY_BODY_MAX) return { ok: false, summary: `That note is too long — the diary takes up to ${DIARY_BODY_MAX} characters.`, error: "body_too_long", facts: [] };
-  const noteType: DiaryNoteType = DIARY_NOTE_TYPES.find((t) => t === args.type) ?? "general";
+  if (!body) return { ok: false, result: { ok: false, summary: "What should the note say?", error: "body required", facts: [] } };
+  if (body.length > DIARY_BODY_MAX) return { ok: false, result: { ok: false, summary: `That note is too long — the diary takes up to ${DIARY_BODY_MAX} characters.`, error: "body_too_long", facts: [] } };
   const parentsOnly = args.parentsOnly === true;
   const day = argStr(args, "entryDate", 60);
   const parsed = parseEntryDate(day, deps.now);
   if (parsed && !parsed.ok) {
-    return { ok: false, summary: `I didn't catch the day "${day}" — say today, tomorrow, a weekday, or 2026-11-03.`, error: "date_unparsed", facts: [] };
+    return { ok: false, result: { ok: false, summary: `I didn't catch the day "${day}" — say today, tomorrow, a weekday, or 2026-11-03.`, error: "date_unparsed", facts: [] } };
   }
-  const entryDate = parsed?.ok ? parsed.date : diaryDayKey(deps.now);
+  return { ok: true, body, parentsOnly, entryDate: parsed?.ok ? parsed.date : diaryDayKey(deps.now) };
+}
+
+export async function resolveDiaryNote(ctx: SkContext, args: Record<string, unknown>, deps: SkCapabilityDeps): Promise<SkCapabilityResult> {
+  if (isParentWriter(ctx)) return resolveParentDiaryNote(ctx, args, deps);
+  const basics = noteBasics(args, deps);
+  if (!basics.ok) return basics.result;
+  const { body, parentsOnly, entryDate } = basics;
+  const noteType: DiaryNoteType = DIARY_NOTE_TYPES.find((t) => t === args.type) ?? "general";
 
   const learnerId = argStr(args, "learnerId");
   const learnerQuery = cleanQuery(args.learnerQuery);
@@ -197,11 +224,117 @@ export async function resolveDiaryNote(ctx: SkContext, args: Record<string, unkn
   };
 }
 
+// ── S4 slice C: the parent branch ──────────────────────────────────────────
+//
+// A parent (role parent, or an adult wearing the parent hat) writes to ONE of
+// her own VERIFIED children's diary — never a class (0066 dn_insert: a
+// student_id she is_parent_of; POST /api/diary/notes refuses a parent's
+// classId too). The child comes from ctx.children ONLY (resolveChild): an id or
+// name that is not one of hers is refused, an unverified link is refused, and
+// two children with none named asks. Nothing is read about a child before that.
+//
+// The card says WHO WILL SEE the note, from 0066's dn_read: the child's
+// teachers (diary_teacher_of → teaches_student: a class she is enrolled in),
+// the school's leaders (diary_leader_of: her school's admin / coordinators),
+// and the child herself unless parents_only (diary_student_target … and not
+// parents_only). parents_only hides the note from the CHILD only — never from
+// the teacher. A home learner (no school, no class) has neither teacher nor
+// leaders: the note is the parent's own record, and the child's.
+//
+// The write is S2's executor, unchanged (act-diary.ts runDiaryNote: student_id
+// only, session client, sk_action_id); act-diary.ts runDiaryNoteChecked
+// re-checks the child against the live ctx.children BEFORE the token is consumed.
+
+/** The note types a parent may file (homework is the teacher's word). */
+export const PARENT_NOTE_TYPES = ["health", "concern", "general", "reminder", "praise"] as const;
+
+/** Is this request the parent writing (the parent role, or the parent hat)? */
+export function isParentWriter(ctx: SkContext): boolean {
+  return ctx.user.role === "parent" || ctx.user.hat === "parent";
+}
+
+export type DiaryAudience = "school" | "teacher" | "leaders" | "home";
+
+/** Who reads a parent's note about this child (0066 dn_read). Pure. */
+export function diaryAudience(child: Pick<SkChild, "schoolId">, hasTeacher: boolean): DiaryAudience {
+  if (hasTeacher) return child.schoolId ? "school" : "teacher";
+  return child.schoolId ? "leaders" : "home";
+}
+
+const SEEN_BY: Record<DiaryAudience, [Record<string, string>, Record<string, string>]> = {
+  school: [P_DIARY_SEEN_SCHOOL, P_DIARY_SEEN_SCHOOL_PRIVATE],
+  teacher: [P_DIARY_SEEN_TEACHER, P_DIARY_SEEN_TEACHER_PRIVATE],
+  leaders: [P_DIARY_SEEN_LEADERS, P_DIARY_SEEN_LEADERS_PRIVATE],
+  home: [P_DIARY_SEEN_HOME, P_DIARY_SEEN_HOME_PRIVATE],
+};
+
+/** The card's "who sees it" line. Pure. */
+export function seenByLine(child: Pick<SkChild, "firstName">, audience: DiaryAudience, parentsOnly: boolean, locale: string): string {
+  return lineFor(SEEN_BY[audience][parentsOnly ? 1 : 0], locale, { name: child.firstName });
+}
+
+/** Is the child in any class (so a teacher reads her diary)? Session read, cut
+ *  to this child in code. A failed read falls back to the school link. */
+async function childHasTeacher(deps: SkCapabilityDeps, child: SkChild): Promise<boolean> {
+  try {
+    const r = (await deps.session.from("enrollments").select("class_id, student_id").eq("student_id", child.id)) as { data?: unknown; error?: unknown } | null;
+    if (!r || r.error || !Array.isArray(r.data)) return !!child.schoolId;
+    return (r.data as Row[]).some((e) => e.student_id === child.id && typeof e.class_id === "string" && !!e.class_id);
+  } catch {
+    return !!child.schoolId;
+  }
+}
+
+export async function resolveParentDiaryNote(ctx: SkContext, args: Record<string, unknown>, deps: SkCapabilityDeps): Promise<SkCapabilityResult> {
+  const locale = ctx.user.locale;
+  // A class is never a parent's target — refused before anything is read.
+  if (argStr(args, "classId") || cleanQuery(args.classQuery)) return { ok: false, summary: lineFor(P_DIARY_NO_CLASS, locale), error: "class_not_allowed", facts: [] };
+  const basics = noteBasics(args, deps);
+  if (!basics.ok) return basics.result;
+  const { body, parentsOnly, entryDate } = basics;
+  const noteType: DiaryNoteType = PARENT_NOTE_TYPES.find((t) => t === args.type) ?? "general";
+
+  const scope = resolveChild(ctx, argStr(args, "child") || argStr(args, "learnerId") || cleanQuery(args.learnerQuery));
+  if (scope.kind === "refused") return { ok: false, summary: lineFor(scope.reason === "no_children" ? P_NO_CHILDREN : P_NOT_LINKED, locale), error: scope.reason, facts: [] };
+  if (scope.kind === "unverified") return { ok: false, summary: lineFor(P_DIARY_UNVERIFIED, locale, { name: scope.child.firstName }), error: "unverified", facts: [] };
+  const options = scope.kind === "ask" ? scope.candidates : scope.children;
+  if (options.length !== 1) {
+    // Two children and none named (or a name both share): ask — one note, one child.
+    return {
+      ok: true,
+      summary: lineFor(P_WHICH_CHILD, locale, { names: options.map((c) => c.firstName).join(", ") }),
+      facts: options.map((c) => ({ kind: "learner", id: c.id, name: c.name })),
+      entities: options.map<ResolvedEntity>((c) => ({ kind: "learner", id: c.id, label: c.name, via: "diary.note" })),
+    };
+  }
+  const child = options[0];
+
+  const seenBy = seenByLine(child, diaryAudience(child, await childHasTeacher(deps, child)), parentsOnly, locale);
+  const title = lineFor(P_DIARY_CARD_TITLE, locale, { name: child.firstName });
+  const params: Record<string, string | number | boolean | null> = {
+    student_id: child.id,
+    note_type: noteType,
+    body,
+    parents_only: parentsOnly,
+    entry_date: entryDate,
+    target_label: child.name,
+    seen_by: seenBy,
+  };
+  return {
+    ok: true,
+    summary: `${title}: "${body}" (${noteType}, ${entryDate}). ${seenBy} Nothing is written until you confirm.`.slice(0, 600),
+    facts: [{ kind: "diary.note", target: child.name, note_type: noteType, body, parents_only: parentsOnly, entry_date: entryDate, seen_by: seenBy }],
+    entities: [{ kind: "learner", id: child.id, label: child.name, via: "diary.note" }],
+    confirm: { action: "diary.note", title, params },
+  };
+}
+
 export const diaryNoteAction: SkCapability = {
   meta: {
     name: "diary.note",
     description:
-      "Post a note to the diary of ONE of the teacher's own classes (class-wide) or ONE learner in her classes (personal). Returns a confirmation card showing the exact text — nothing is posted until the teacher confirms. Use for 'post a notice to 7B: …', 'tell 7B …', 'add to the diary for 7B: …', 'write in Ali's diary …', 'tulis dalam diari 7B …', 'maklumkan kepada 7B …', 'اكتب في مذكرة 7B …'. body = the teacher's own words: you may fix grammar and spelling, never add facts, dates or names she did not say. type: homework / reminder / praise / concern / health when she says so, else general. parentsOnly: true only when she says it is for the parents ('tell 7B's parents …', 'to the parents'). entryDate in her words (today, tomorrow, Friday, 2026-11-03); omit for today. Several classes at once is not this tool — one class at a time. If more than one class or learner matches, the result asks which — pass the answer back, never guess.",
+      "Post a note to the diary of ONE of the teacher's own classes (class-wide) or ONE learner in her classes (personal). Returns a confirmation card showing the exact text — nothing is posted until the teacher confirms. Use for 'post a notice to 7B: …', 'tell 7B …', 'add to the diary for 7B: …', 'write in Ali's diary …', 'tulis dalam diari 7B …', 'maklumkan kepada 7B …', 'اكتب في مذكرة 7B …'. body = the teacher's own words: you may fix grammar and spelling, never add facts, dates or names she did not say. type: homework / reminder / praise / concern / health when she says so, else general. parentsOnly: true only when she says it is for the parents ('tell 7B's parents …', 'to the parents'). entryDate in her words (today, tomorrow, Friday, 2026-11-03); omit for today. Several classes at once is not this tool — one class at a time. If more than one class or learner matches, the result asks which — pass the answer back, never guess. " +
+      "A PARENT uses it to write in ONE of her own children's diary (never a class): 'tell Aisyah's teacher she was sick yesterday', 'write in Adam's diary …', 'tulis dalam diari Aisyah …', 'beritahu cikgu Adam …', 'اكتب في مذكرة آدم …'. Pass child = the child's name (omit it with one child; with two, the result asks which). body = the parent's own words, grammar tidied only — never a fact, date or name she did not say. type: health / concern / reminder / praise when she says so, else general. parentsOnly: true only when she says it is just for the teacher, not the child ('don't let Aisyah see', 'jangan tunjuk kepada Aisyah'). The card says who will see it.",
     parameters: {
       type: "object",
       properties: {
@@ -209,6 +342,7 @@ export const diaryNoteAction: SkCapability = {
         classId: { type: "string", description: "A class id already resolved this conversation." },
         learnerQuery: { type: "string", description: "The learner's name for a personal note, e.g. 'Ali'." },
         learnerId: { type: "string", description: "A learner id already resolved this conversation." },
+        child: { type: "string", description: "Parents only: the child's name (or id) — one of the parent's own children." },
         body: { type: "string", description: "The note text: the teacher's words (grammar may be tidied, no facts added)." },
         type: { type: "string", enum: [...DIARY_NOTE_TYPES], description: "Note type; default general." },
         parentsOnly: { type: "boolean", description: "True only when the note is for the parents (hidden from students)." },
@@ -219,8 +353,10 @@ export const diaryNoteAction: SkCapability = {
     },
     tier: "confirm",
     kind: "act",
-    roles: ["teacher"],
-    hats: ["teacher"],
+    // S4 slice C: parents too (the parent branch above); an adult wearing the
+    // parent hat writes as a parent. /api/sk/act re-checks this meta.
+    roles: ["teacher", "parent"],
+    hats: ["teacher", "parent"],
     flags: ["diary"],
   },
   handler: resolveDiaryNote,

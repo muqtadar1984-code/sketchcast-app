@@ -442,6 +442,12 @@ const DIARY_PHRASE_RE = new RegExp(
     "|(?:اكتب|أكتب|سجل|سجّل) (?:في|فى) (?:مذكرة|يوميات|اليوميات|دفتر)" +
     "|(?:انشر|أرسل|ارسل|أضف|اضف) (?:إشعارا|إشعاراً|اشعارا|إعلانا|إعلاناً|ملاحظة|رسالة|تنبيها|تنبيهاً)" +
     "|(?:أخبر|اخبر|بلغ|بلّغ) " + CLASS_TOKEN +
+    // S4 slice C — a parent: tell Aisyah's teacher … / let Adam's teacher know …
+    // / beritahu cikgu Adam … / أخبر معلمة عائشة … (the diary note to her child's
+    // teacher; the capability's parent branch resolves the child).
+    "|(?:tell|inform|message|let) (?:[\\p{L}][\\p{L}'’-]{0,30}['’]s? |my (?:son|daughter|child|kid)['’]s |(?:his|her|their) )?(?:class |form )?teachers?(?: know)?(?![\\p{L}])" +
+    "|(?:beritahu|bagitahu|maklumkan(?: kepada| pada)?) (?:kepada |pada )?(?:cikgu|guru)(?: kelas)?(?![\\p{L}])" +
+    "|(?:أخبر|اخبر|بلغ|بلّغ) (?:معلم|معلمة|مدرس|مدرسة|المعلم|المعلمة)(?![\\p{L}])" +
     ")",
   "u",
 );

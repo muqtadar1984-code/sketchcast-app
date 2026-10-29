@@ -17,7 +17,7 @@
 // child-mastery.test.ts proves the reader is never called for an unlinked,
 // unverified or forged child.
 
-import type { SkContext } from "@/sk/shell/types";
+import type { SkChild, SkContext } from "@/sk/shell/types";
 import { isVerifiedChild } from "@/sk/capabilities/child-scope";
 import { createAdminClient } from "@/utils/supabase/admin";
 
@@ -110,7 +110,19 @@ function realAdmin(): MasteryAdmin | null {
  * the reader is touched.
  */
 export async function childMastery(ctx: SkContext, childId: string): Promise<ChildMasteryRow[] | null> {
-  if (ctx.user.role !== "parent" || !childId || !isVerifiedChild(ctx, childId)) return null;
+  if (ctx.user.role !== "parent") return null;
+  return linkedChildMastery(ctx.children, childId);
+}
+
+/**
+ * S4 slice E: the same gate for the parent page's "This week" card, which has
+ * the parent's own links (context.ts childrenFromLinks: rows of THIS parent
+ * only) but no SK Context. The verified-link check (isVerifiedChild) runs
+ * FIRST: for a child that is not a verified link, neither the admin client nor
+ * the reader is touched.
+ */
+export async function linkedChildMastery(children: SkChild[] | undefined, childId: string): Promise<ChildMasteryRow[] | null> {
+  if (!childId || !isVerifiedChild({ children }, childId)) return null;
   const admin = (override?.admin ?? realAdmin)();
   if (!admin) return null;
   const reader = override?.reader ?? readChildMasteryAdmin;

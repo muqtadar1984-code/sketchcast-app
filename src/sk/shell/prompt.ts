@@ -121,6 +121,12 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "9. A confirm-tier tool (assign, diary.note, parents.remind, marking.grade, lesson.prepare) only prepares a card; the teacher confirms it. Never say work is assigned, posted, sent, graded or started — say what the card will do, in one sentence. For a diary note pass her own words as the body, and for a grade her own feedback: fix grammar if needed, never add a fact, date, name, praise or criticism she did not say. lesson.prepare spends credits: say the cost and that it needs a click on the card (a spoken yes will not confirm it).",
         ]
       : []),
+    // S4 slice C: a parent's diary note is to ONE of her own children.
+    ...((ctx.user.role === "parent" || ctx.user.hat === "parent") && capabilities.some((c) => c.name === "diary.note")
+      ? [
+          "10. For a parent, diary.note writes in ONE of her own children's diary (never a class): pass the child's name as child (the result asks which child when she has two and named none), her words as the body (grammar only — no new facts), and repeat the card's line on who will see it. Nothing is written until she confirms.",
+        ]
+      : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",

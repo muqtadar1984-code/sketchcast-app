@@ -15,10 +15,11 @@
 
 import type { ResolvedEntity, SkSessionDb } from "./types";
 import type { ActionTokenRow } from "./tokens";
-import { consumeThenWrite, fail, failedStage, str, writeFailure, type ActInput, type Handled, type WriteOutcome } from "./act-core";
+import { ACT_NOT_ALLOWED_LINE, consumeThenWrite, fail, failedStage, str, writeFailure, type ActInput, type Handled, type WriteOutcome } from "./act-core";
 import { lineFor } from "./lines";
 import { ACT_WRITE_FAILED, DIARY_POSTED, REMIND_LEFT_OUT_DONE, REMIND_LEFT_OUT_GONE, REMIND_NONE_LEFT, REMIND_SENT, REMIND_SENT_ONE } from "./act-lines";
-import { DIARY_BODY_MAX, DIARY_NOTE_TYPES, diaryDayKey, isRealDay } from "@/sk/capabilities/diary";
+import { DIARY_BODY_MAX, DIARY_NOTE_TYPES, diaryDayKey, isParentWriter, isRealDay } from "@/sk/capabilities/diary";
+import { isVerifiedChild } from "@/sk/capabilities/child-scope";
 import { REMIND_MAX } from "@/sk/capabilities/remind";
 import { assignmentStatus, type StatusEnrollmentRow, type StatusProgressRow, type StatusSubmissionRow } from "@/utils/assignment-status";
 
@@ -79,6 +80,24 @@ export async function runDiaryNote(row: ActionTokenRow, input: ActInput): Promis
     },
     entities,
   };
+}
+
+/**
+ * S4 slice C: the diary.note entry point /api/sk/act dispatches to. A PARENT's
+ * stored params are re-checked against the LIVE context BEFORE anything is
+ * consumed: exactly one student_id, no class, and that student one of
+ * ctx.children's VERIFIED links (a link removed or unverified since the card,
+ * or a row naming someone else's child, is refused here). The write itself is
+ * runDiaryNote, unchanged; a teacher goes straight to it, as before.
+ */
+export async function runDiaryNoteChecked(row: ActionTokenRow, input: ActInput): Promise<Handled> {
+  if (isParentWriter(input.ctx)) {
+    const p = row.params ?? {};
+    const studentId = isId(p.student_id) ? p.student_id : null;
+    const hasClass = p.class_id !== undefined && p.class_id !== null && p.class_id !== "";
+    if (hasClass || !studentId || !isVerifiedChild(input.ctx, studentId)) return fail("refused", ACT_NOT_ALLOWED_LINE, { reason: "not_your_child" });
+  }
+  return runDiaryNote(row, input);
 }
 
 // ── parents.remind ───────────────────────────────────────────────────────────

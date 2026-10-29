@@ -1686,6 +1686,17 @@
         "creating": "Création…",
         "create": "Créer l'accès",
         "failed": "Impossible d'ajouter l'enfant."
+      },
+      "week": {
+        "title": "Cette semaine",
+        "period": "7 derniers jours",
+        "done": "Terminé",
+        "overdue": "En retard",
+        "awaiting": "En attente de correction",
+        "mastered": "Notions maîtrisées",
+        "notes": "Nouvelles notes du carnet",
+        "todo": "Que faire",
+        "nothing": "Rien d'urgent — continuez."
       }
     },
     "books": {
@@ -2187,7 +2198,8 @@
         "credits_left": "Crédits restants",
         "warning": "Remarque",
         "yes": "Oui",
-        "no": "Non"
+        "no": "Non",
+        "seen_by": "Qui la voit"
       },
       "tray": {
         "title": "Vos kits",
@@ -2265,7 +2277,18 @@
         "stepRevisit": "revoir « {objective} » dans {kit}",
         "stepGoOver": "revoir {title} ensemble",
         "untitled": "un travail",
-        "readFailed": "Je n'arrive pas à lire le travail de {name} pour le moment."
+        "readFailed": "Je n'arrive pas à lire le travail de {name} pour le moment.",
+        "diaryCardTitle": "Écrire dans le carnet de {name}",
+        "diaryNoClass": "Votre note va dans le carnet d'un seul enfant, pas d'une classe — pour quel enfant ?",
+        "diaryUnverified": "Le lien avec {name} n'est pas encore vérifié : je ne peux pas écrire dans son carnet.",
+        "diarySeenSchool": "Vue par l'enseignant de {name}, la direction de l'école et {name}.",
+        "diarySeenSchoolPrivate": "Vue par l'enseignant de {name} et la direction de l'école — pas par {name}.",
+        "diarySeenTeacher": "Vue par l'enseignant de {name} et par {name}.",
+        "diarySeenTeacherPrivate": "Vue par l'enseignant de {name} — pas par {name}.",
+        "diarySeenLeaders": "{name} n'a pas encore d'enseignant de classe — vue par la direction de l'école et par {name}.",
+        "diarySeenLeadersPrivate": "{name} n'a pas encore d'enseignant de classe — vue par la direction de l'école, pas par {name}.",
+        "diarySeenHome": "{name} apprend à la maison — cette note est pour votre propre suivi et pour {name}.",
+        "diarySeenHomePrivate": "{name} apprend à la maison — cette note est pour votre seul suivi ; {name} ne la verra pas."
       }
     },
     "player": {

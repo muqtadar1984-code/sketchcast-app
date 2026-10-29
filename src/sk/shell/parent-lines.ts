@@ -531,6 +531,154 @@ export const P_READ_FAILED: Line = {
   hi: "मैं अभी {name} का काम नहीं पढ़ पाया।",
 };
 
+// ── S4 slice C: the parent's diary note (diary.note, parent branch) ──────
+// The card title, the refusals, and the line that says WHO WILL SEE the note
+// (0066 dn_read: the child's teachers via teaches_student, the school's
+// leaders via diary_leader_of, the child unless parents_only).
+
+export const P_DIARY_CARD_TITLE: Line = {
+  en: "Write in {name}'s diary",
+  ms: "Tulis dalam diari {name}",
+  "ms-arab": "توليس دالم دياري {name}",
+  ar: "اكتب في يوميات {name}",
+  fr: "Écrire dans le carnet de {name}",
+  es: "Escribir en la agenda de {name}",
+  pt: "Escrever na agenda de {name}",
+  te: "{name} డైరీలో రాయండి",
+  mr: "{name} च्या डायरीत लिहा",
+  hi: "{name} की डायरी में लिखें",
+};
+
+export const P_DIARY_NO_CLASS: Line = {
+  en: "A note from you goes to one child's diary, not a class — which child is it for?",
+  ms: "Nota daripada anda masuk ke diari seorang anak, bukan kelas — untuk anak yang mana?",
+  "ms-arab": "نوتا درڤد اندا ماسوق ک دياري سأورڠ انق، بوکن کلس — اونتوق انق يڠ مان؟",
+  ar: "ملاحظتك تُكتب في يوميات طفل واحد، لا في صف كامل — لأي طفل هي؟",
+  fr: "Votre note va dans le carnet d'un seul enfant, pas d'une classe — pour quel enfant ?",
+  es: "Tu nota va a la agenda de un solo hijo, no de una clase: ¿para qué hijo es?",
+  pt: "A sua nota vai para a agenda de um só filho, não de uma turma — para que filho é?",
+  te: "మీ నోట్ ఒక్క పిల్లల డైరీకి వెళ్తుంది, తరగతికి కాదు — ఇది ఏ పిల్లల కోసం?",
+  mr: "तुमची नोंद एका मुलाच्या डायरीत जाते, वर्गाच्या नाही — ती कोणत्या मुलासाठी आहे?",
+  hi: "आपका नोट एक ही बच्चे की डायरी में जाता है, पूरी कक्षा में नहीं — यह किस बच्चे के लिए है?",
+};
+
+export const P_DIARY_UNVERIFIED: Line = {
+  en: "{name}'s link isn't verified yet, so I can't write in their diary.",
+  ms: "Pautan {name} belum disahkan, jadi saya tidak boleh menulis dalam diarinya.",
+  "ms-arab": "ڤاءوتن {name} بلوم دصحکن، جادي ساي تيدق بوليه منوليس دالم دياريڽ.",
+  ar: "لم يتم التحقق من ارتباط {name} بعد، لذا لا يمكنني الكتابة في يومياته.",
+  fr: "Le lien avec {name} n'est pas encore vérifié : je ne peux pas écrire dans son carnet.",
+  es: "El vínculo con {name} aún no está verificado, así que no puedo escribir en su agenda.",
+  pt: "A associação de {name} ainda não foi verificada, por isso não posso escrever na agenda.",
+  te: "{name} లింక్ ఇంకా ధృవీకరించబడలేదు, కాబట్టి వారి డైరీలో రాయలేను.",
+  mr: "{name} ची जोडणी अजून पडताळलेली नाही, त्यामुळे मी डायरीत लिहू शकत नाही.",
+  hi: "{name} का जुड़ाव अभी सत्यापित नहीं है, इसलिए मैं उनकी डायरी में नहीं लिख सकता।",
+};
+
+export const P_DIARY_SEEN_SCHOOL: Line = {
+  en: "Seen by {name}'s teacher, the school's leaders and {name}.",
+  ms: "Dilihat oleh guru {name}, pimpinan sekolah dan {name}.",
+  "ms-arab": "دليهت اوليه ݢورو {name}، ڤيمڤينن سکوله دان {name}.",
+  ar: "يراها معلم {name} وقيادة المدرسة و{name}.",
+  fr: "Vue par l'enseignant de {name}, la direction de l'école et {name}.",
+  es: "La ven el profesor de {name}, la dirección del colegio y {name}.",
+  pt: "Vista pelo professor de {name}, pela direção da escola e por {name}.",
+  te: "{name} ఉపాధ్యాయులు, పాఠశాల నాయకత్వం మరియు {name} చూస్తారు.",
+  mr: "{name} चे शिक्षक, शाळेचे नेतृत्व आणि {name} पाहतील.",
+  hi: "{name} के शिक्षक, स्कूल का नेतृत्व और {name} इसे देखेंगे।",
+};
+
+export const P_DIARY_SEEN_SCHOOL_PRIVATE: Line = {
+  en: "Seen by {name}'s teacher and the school's leaders — not by {name}.",
+  ms: "Dilihat oleh guru {name} dan pimpinan sekolah — bukan oleh {name}.",
+  "ms-arab": "دليهت اوليه ݢورو {name} دان ڤيمڤينن سکوله — بوکن اوليه {name}.",
+  ar: "يراها معلم {name} وقيادة المدرسة — ولا يراها {name}.",
+  fr: "Vue par l'enseignant de {name} et la direction de l'école — pas par {name}.",
+  es: "La ven el profesor de {name} y la dirección del colegio, pero no {name}.",
+  pt: "Vista pelo professor de {name} e pela direção da escola — não por {name}.",
+  te: "{name} ఉపాధ్యాయులు మరియు పాఠశాల నాయకత్వం చూస్తారు — {name} చూడరు.",
+  mr: "{name} चे शिक्षक आणि शाळेचे नेतृत्व पाहतील — {name} नाही.",
+  hi: "{name} के शिक्षक और स्कूल का नेतृत्व इसे देखेंगे — {name} नहीं।",
+};
+
+export const P_DIARY_SEEN_TEACHER: Line = {
+  en: "Seen by {name}'s teacher and {name}.",
+  ms: "Dilihat oleh guru {name} dan {name}.",
+  "ms-arab": "دليهت اوليه ݢورو {name} دان {name}.",
+  ar: "يراها معلم {name} و{name}.",
+  fr: "Vue par l'enseignant de {name} et par {name}.",
+  es: "La ven el profesor de {name} y {name}.",
+  pt: "Vista pelo professor de {name} e por {name}.",
+  te: "{name} ఉపాధ్యాయులు మరియు {name} చూస్తారు.",
+  mr: "{name} चे शिक्षक आणि {name} पाहतील.",
+  hi: "{name} के शिक्षक और {name} इसे देखेंगे।",
+};
+
+export const P_DIARY_SEEN_TEACHER_PRIVATE: Line = {
+  en: "Seen by {name}'s teacher — not by {name}.",
+  ms: "Dilihat oleh guru {name} — bukan oleh {name}.",
+  "ms-arab": "دليهت اوليه ݢورو {name} — بوکن اوليه {name}.",
+  ar: "يراها معلم {name} — ولا يراها {name}.",
+  fr: "Vue par l'enseignant de {name} — pas par {name}.",
+  es: "La ve el profesor de {name}, pero no {name}.",
+  pt: "Vista pelo professor de {name} — não por {name}.",
+  te: "{name} ఉపాధ్యాయులు చూస్తారు — {name} చూడరు.",
+  mr: "{name} चे शिक्षक पाहतील — {name} नाही.",
+  hi: "{name} के शिक्षक इसे देखेंगे — {name} नहीं।",
+};
+
+export const P_DIARY_SEEN_LEADERS: Line = {
+  en: "{name} has no class teacher yet — seen by the school's leaders and {name}.",
+  ms: "{name} belum ada guru kelas — dilihat oleh pimpinan sekolah dan {name}.",
+  "ms-arab": "{name} بلوم اد ݢورو کلس — دليهت اوليه ڤيمڤينن سکوله دان {name}.",
+  ar: "ليس لـ{name} معلم صف بعد — تراها قيادة المدرسة و{name}.",
+  fr: "{name} n'a pas encore d'enseignant de classe — vue par la direction de l'école et par {name}.",
+  es: "{name} aún no tiene profesor de clase: la ven la dirección del colegio y {name}.",
+  pt: "{name} ainda não tem professor de turma — vista pela direção da escola e por {name}.",
+  te: "{name}కి ఇంకా తరగతి ఉపాధ్యాయులు లేరు — పాఠశాల నాయకత్వం మరియు {name} చూస్తారు.",
+  mr: "{name} ला अजून वर्गशिक्षक नाहीत — शाळेचे नेतृत्व आणि {name} पाहतील.",
+  hi: "{name} के अभी कोई कक्षा शिक्षक नहीं हैं — स्कूल का नेतृत्व और {name} इसे देखेंगे।",
+};
+
+export const P_DIARY_SEEN_LEADERS_PRIVATE: Line = {
+  en: "{name} has no class teacher yet — seen by the school's leaders, not by {name}.",
+  ms: "{name} belum ada guru kelas — dilihat oleh pimpinan sekolah, bukan oleh {name}.",
+  "ms-arab": "{name} بلوم اد ݢورو کلس — دليهت اوليه ڤيمڤينن سکوله، بوکن اوليه {name}.",
+  ar: "ليس لـ{name} معلم صف بعد — تراها قيادة المدرسة، ولا يراها {name}.",
+  fr: "{name} n'a pas encore d'enseignant de classe — vue par la direction de l'école, pas par {name}.",
+  es: "{name} aún no tiene profesor de clase: la ve la dirección del colegio, pero no {name}.",
+  pt: "{name} ainda não tem professor de turma — vista pela direção da escola, não por {name}.",
+  te: "{name}కి ఇంకా తరగతి ఉపాధ్యాయులు లేరు — పాఠశాల నాయకత్వం చూస్తుంది, {name} చూడరు.",
+  mr: "{name} ला अजून वर्गशिक्षक नाहीत — शाळेचे नेतृत्व पाहील, {name} नाही.",
+  hi: "{name} के अभी कोई कक्षा शिक्षक नहीं हैं — स्कूल का नेतृत्व इसे देखेगा, {name} नहीं।",
+};
+
+export const P_DIARY_SEEN_HOME: Line = {
+  en: "{name} learns at home — this note is for your own record and {name}.",
+  ms: "{name} belajar di rumah — nota ini untuk rekod anda sendiri dan {name}.",
+  "ms-arab": "{name} بلاجر د رومه — نوتا اين اونتوق ريکود اندا سنديري دان {name}.",
+  ar: "{name} يتعلم في البيت — هذه الملاحظة لسجلك أنت ولـ{name}.",
+  fr: "{name} apprend à la maison — cette note est pour votre propre suivi et pour {name}.",
+  es: "{name} aprende en casa: esta nota es para tu propio registro y para {name}.",
+  pt: "{name} aprende em casa — esta nota é para o seu próprio registo e para {name}.",
+  te: "{name} ఇంటి వద్ద నేర్చుకుంటున్నారు — ఈ నోట్ మీ స్వంత రికార్డు కోసం మరియు {name} కోసం.",
+  mr: "{name} घरी शिकतात — ही नोंद तुमच्या स्वतःच्या नोंदीसाठी आणि {name} साठी आहे.",
+  hi: "{name} घर पर पढ़ते हैं — यह नोट आपके अपने रिकॉर्ड और {name} के लिए है।",
+};
+
+export const P_DIARY_SEEN_HOME_PRIVATE: Line = {
+  en: "{name} learns at home — this note is for your own record only; {name} won't see it.",
+  ms: "{name} belajar di rumah — nota ini untuk rekod anda sahaja; {name} tidak akan melihatnya.",
+  "ms-arab": "{name} بلاجر د رومه — نوتا اين اونتوق ريکود اندا سهاج؛ {name} تيدق اکن مليهتڽ.",
+  ar: "{name} يتعلم في البيت — هذه الملاحظة لسجلك أنت فقط؛ لن يراها {name}.",
+  fr: "{name} apprend à la maison — cette note est pour votre seul suivi ; {name} ne la verra pas.",
+  es: "{name} aprende en casa: esta nota es solo para tu registro; {name} no la verá.",
+  pt: "{name} aprende em casa — esta nota é só para o seu registo; {name} não a verá.",
+  te: "{name} ఇంటి వద్ద నేర్చుకుంటున్నారు — ఈ నోట్ మీ రికార్డు కోసం మాత్రమే; {name} దీన్ని చూడరు.",
+  mr: "{name} घरी शिकतात — ही नोंद फक्त तुमच्या नोंदीसाठी आहे; {name} ती पाहणार नाहीत.",
+  hi: "{name} घर पर पढ़ते हैं — यह नोट केवल आपके रिकॉर्ड के लिए है; {name} इसे नहीं देखेंगे।",
+};
+
 /** Dictionary key (`sk.shell.parent.<key>`) → table, for the parity test. */
 export const PARENT_LINE_TABLES: Record<string, Line> = {
   noChildren: P_NO_CHILDREN,
@@ -573,4 +721,15 @@ export const PARENT_LINE_TABLES: Record<string, Line> = {
   stepGoOver: P_STEP_GO_OVER,
   untitled: P_UNTITLED,
   readFailed: P_READ_FAILED,
+  diaryCardTitle: P_DIARY_CARD_TITLE,
+  diaryNoClass: P_DIARY_NO_CLASS,
+  diaryUnverified: P_DIARY_UNVERIFIED,
+  diarySeenSchool: P_DIARY_SEEN_SCHOOL,
+  diarySeenSchoolPrivate: P_DIARY_SEEN_SCHOOL_PRIVATE,
+  diarySeenTeacher: P_DIARY_SEEN_TEACHER,
+  diarySeenTeacherPrivate: P_DIARY_SEEN_TEACHER_PRIVATE,
+  diarySeenLeaders: P_DIARY_SEEN_LEADERS,
+  diarySeenLeadersPrivate: P_DIARY_SEEN_LEADERS_PRIVATE,
+  diarySeenHome: P_DIARY_SEEN_HOME,
+  diarySeenHomePrivate: P_DIARY_SEEN_HOME_PRIVATE,
 };
