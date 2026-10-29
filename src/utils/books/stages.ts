@@ -86,6 +86,19 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredFrom: "the book cost plan's one-pass target ($25–30 for 10 chapters); this run measures it",
   },
   {
+    key: "render_trial",
+    title: "Re-render a trial chapter",
+    summary:
+      "Lays out an earlier trial draft again with the current layout engine (page fill, spacing, overlap checks), so layout fixes can be seen without paying for a new draft. The text is that run's, unchanged. No model calls.",
+    action: "run_report",
+    params: [
+      { key: "run", label: "From run #", min: 1, max: 99999, default: 1 },
+      { key: "chapter", label: "Chapter", min: 1, max: 99, default: 1 },
+    ],
+    measuredPerChapterUsd: 0,
+    measuredFrom: "free — no model calls",
+  },
+  {
     key: "render_proof",
     title: "Font proof",
     summary:
@@ -116,7 +129,7 @@ export type PipelineStage = {
 export const PIPELINE: PipelineStage[] = [
   { key: "scope", layer: "plan", title: "Scope and blueprint", does: "Curricula, objectives, chapters and the 13 blueprint checks; Gate B.", run: [], comes: "R2", book: ["scope"] },
   { key: "articles", layer: "plan", title: "Catalogue articles and readiness", does: "The articles the chapters are built from; a book drafts only once every topic it needs is ready (then Gate R pins the sources). Readiness re-checks and Gate R run from the app now (the Gaps tab lists what is outstanding); ordering articles comes with planning.", run: ["readiness", "gate_r"], comes: "R2", book: [] },
-  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. A trial chapter draft and rendering run on the server now; drafting into the book itself follows.", run: ["draft_trial", "render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
+  { key: "drafting", layer: "produce", title: "Draft, pictures, render, Gate D packet", does: "Each chapter written at its page target with its pictures, laid out, and packed for review. A trial chapter draft and rendering run on the server now; drafting into the book itself follows.", run: ["draft_trial", "render_trial", "render_proof"], comes: "S3", book: ["drafting", "expansion", "theme_gate_d"] },
   { key: "uniqueness", layer: "produce", title: "Uniqueness", does: "No question, Think box or picture repeats an earlier chapter.", run: [], comes: "S3", book: ["uniqueness"] },
   { key: "gate_d", layer: "produce", title: "Gate D approval", does: "A person approves each chapter; the approval is the text's hash.", run: [], comes: "S4", book: [] },
   { key: "audit", layer: "produce", title: "Academic audit", does: "Two independent validators review every chapter.", run: ["academic_audit"], book: ["revision_2", "revision_4"] },
