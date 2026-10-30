@@ -100,7 +100,13 @@ export type KitUnit = {
   /** null = a kit generated for the whole chapter rather than a part of it. */
   part: number | null;
   total: number;
-  video: { id: string; title: string | null; urls: string[] } | null;
+  /**
+   * `urls`: signed storage MP4s, in part order. `youtube`: the lesson's YouTube
+   * ids, in part order, for a catalogue kit (its copy's params.catalogue_ref /
+   * product_ref) — set INSTEAD of `urls`, so the stage streams from YouTube and
+   * not from our storage (founder 2026-10-30, egress).
+   */
+  video: { id: string; title: string | null; urls: string[]; youtube?: string[] } | null;
   docs: KitDoc[];
 };
 
@@ -117,6 +123,9 @@ export type SessionKit = {
     }[];
   }[];
 };
+
+/** How many videos a unit's lesson runs to, whichever source carries it. */
+export const videoParts = (v: { urls: string[]; youtube?: string[] }): number => Math.max(v.urls.length, v.youtube?.length ?? 0);
 
 /** A stable key for a unit. `part` may legitimately be null, so the index is not
  *  usable as identity across a reload and null needs a name of its own. */
@@ -396,7 +405,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
   );
 
   const playVideo = useCallback(async () => {
-    if (!unit?.video?.urls.length) return;
+    if (!unit?.video?.urls.length && !unit?.video?.youtube?.length) return;
     setMode("full");
     const playing = stage.current?.play();
     recordItem("video", unit.video.id, { chapterNum: session.chapterNum, part: unit.part });
@@ -863,9 +872,9 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-start text-sm text-[#4FD6C2]"
         >
           ▶ {t.doc.presentation}
-          {unit.video.urls.length > 1 && (
+          {videoParts(unit.video) > 1 && (
             <span className="mt-0.5 block font-mono text-[10px] opacity-70">
-              {fmt(t.kit.videoPartsFirst, { n: unit.video.urls.length })}
+              {fmt(t.kit.videoPartsFirst, { n: videoParts(unit.video) })}
             </span>
           )}
         </button>
@@ -885,7 +894,8 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
       {/* Every slide of the lesson onto the roll, one page each: the video's
           own finished frames (Board UX 2026-10-28). Only when the lesson map
           is ready; the host passes the action then and not before. */}
-      {unit?.video && onLoadSlides && (
+      {/* not on a YouTube lesson: its frames are cross-origin and cannot be captured */}
+      {unit?.video && onLoadSlides && !unit.video.youtube?.length && (
         <button
           type="button"
           disabled={saving}
@@ -1172,6 +1182,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
       <Stage
         ref={stage}
         src={unit?.video?.urls[0] ?? null}
+        youtubeId={unit?.video?.youtube?.[0] ?? null}
         mode={mode}
         status={moving ? t.board.moving : null}
         onTapToFreeze={freeze}

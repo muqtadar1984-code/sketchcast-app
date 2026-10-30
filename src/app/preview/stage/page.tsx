@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { notFound } from "next/navigation";
 import { Stage, type StageHandle, type StageMode } from "@/app/present/stage";
+import type { VideoLike } from "@/app/present/board-controller";
 
 // The stage, on its own — DEV ONLY (notFound in production).
 //
@@ -25,7 +26,7 @@ export default function StagePreview() {
 
 function Harness() {
   const stage = useRef<StageHandle | null>(null);
-  const held = useRef<HTMLVideoElement | null>(null);
+  const held = useRef<VideoLike | null>(null);
   const [src, setSrc] = useState<string | null>(null);
   const [mode, setMode] = useState<StageMode>("full");
   const [log, setLog] = useState<string[]>([]);

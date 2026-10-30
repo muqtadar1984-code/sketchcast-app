@@ -95,6 +95,27 @@ export function videoSource(youtube: readonly string[], storedParts: number): "y
   return storedParts > 0 ? "storage" : "none";
 }
 
+/**
+ * How a lesson's video is served, given its generation's params, its stored
+ * MP4 paths (in part order) and the kits' YouTube ids:
+ *   - a catalogue copy (catalogue_ref / product_ref) whose kit is on YouTube
+ *     for every part → `youtube`, and NO storage path is signed;
+ *   - a catalogue copy that is not → its storage paths, and `fellBack` names
+ *     the kit so the caller logs it;
+ *   - anything else (an uploaded book's lesson) → its own storage paths.
+ */
+export function lessonVideo(
+  params: Record<string, unknown> | null | undefined,
+  storedPaths: readonly string[],
+  byKit: ReadonlyMap<string, string[]>,
+): { youtube: string[]; paths: string[]; fellBack: string | null } {
+  const kit = topicKitIdOf(params);
+  if (!kit) return { youtube: [], paths: [...storedPaths], fellBack: null };
+  const ids = byKit.get(kit) ?? [];
+  if (videoSource(ids, storedPaths.length) === "youtube") return { youtube: [...ids], paths: [], fellBack: null };
+  return { youtube: [], paths: [...storedPaths], fellBack: storedPaths.length ? kit : null };
+}
+
 /** The watch page (the same URL the Kits gallery links: kits/logic.ts youtubeUrl). */
 export const youtubeWatchUrl = (id: string): string => `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
 

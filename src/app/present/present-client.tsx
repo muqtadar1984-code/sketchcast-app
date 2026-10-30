@@ -10,7 +10,7 @@ import { fmt } from "@/i18n/format";
 import type { WalkCopy } from "@/app/dashboard/sk-walkthrough";
 import SkLauncher from "@/app/dashboard/sk-launcher";
 import type { SkShellCopy } from "@/app/dashboard/sk-shell";
-import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
+import BoardSession, { videoParts, type SessionInfo, type SessionKit } from "./board-session";
 import type { BoardController, BoardUnit } from "./board-controller";
 import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
 import { prepareDeck, type DeckPagesReply, type DeckStatus } from "./deck-load";
@@ -918,8 +918,8 @@ export default function PresentClient({
                   <div className="rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-3 text-sm text-[#4FD6C2]">
                     ▶ {t.doc.presentation}
                     <span className="mt-0.5 block font-mono text-[10px] opacity-70">
-                      {u.video.urls.length > 1
-                        ? fmt(t.kit.videoParts, { n: u.video.urls.length })
+                      {videoParts(u.video) > 1
+                        ? fmt(t.kit.videoParts, { n: videoParts(u.video) })
                         : t.kit.videoReady}
                     </span>
                   </div>

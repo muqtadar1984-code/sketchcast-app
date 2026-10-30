@@ -5,6 +5,7 @@ import { presentEntitled } from "@/utils/present/entitlement";
 import { docDownloadName } from "@/utils/download-name";
 import { downloadArtifactKind, railFor, railForKit, pickerFor, type KitGeneration, type PickerGroup, type PickerItem } from "@/utils/present/kit";
 import { signArtifactPath, videoPathsInPartOrder } from "@/utils/present/sign";
+import { lessonVideo, loadKitYoutubeIds, topicKitIdOf } from "@/utils/catalogue/kit-youtube";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,14 @@ export const runtime = "nodejs";
 // with nothing on screen to say why.
 //
 // 404 ON EVERY FAILURE, never 403: a 403 would advertise that the surface exists.
+//
+// A CATALOGUE KIT'S LESSON STREAMS FROM YOUTUBE (founder 2026-10-30: "the
+// video should be pulled from youtube to avoid egress cost"). A ready-made kit
+// that is a catalogue copy (params.catalogue_ref, or a SketchCast book's
+// params.product_ref) answers its lesson's YouTube ids and NO signed MP4; the
+// stage plays them through the IFrame Player API. Only a copy whose kit has no
+// watchable YouTube video for every part falls back to the stored MP4, and
+// that is logged. An uploaded book's lessons are unchanged.
 
 const SIGN_TTL = 8 * 60 * 60;
 
@@ -117,6 +126,11 @@ export async function GET(request: Request) {
 
   const byId = new Map(gens.map((g) => [g.id, g]));
 
+  // The YouTube ids of every catalogue kit a unit's lesson was copied from
+  // (one service-role read; none for an uploaded book).
+  const kitIds = units.map((u) => (u.video ? topicKitIdOf(byId.get(u.video.id)?.params) : null)).filter((x): x is string => !!x);
+  const youtubeByKit = await loadKitYoutubeIds(admin, kitIds);
+
   const out = await Promise.all(
     units.map(async (u) => {
       // A long part can run to several videos (params.video_parts); they are
@@ -127,8 +141,9 @@ export async function GET(request: Request) {
       // "." AFTER "_", so a plain .sort() puts lesson.mp4 (Part 1) BEHIND
       // lesson_part2.mp4 and the class watches the middle of the lesson
       // first. (utils/present/sign.ts, shared with the student kit player.)
-      const paths = videoPathsInPartOrder(vg?.artifacts ?? []);
-      const urls = (await Promise.all(paths.map((pth) => sign(pth)))).filter(
+      const lv = lessonVideo(vg?.params, videoPathsInPartOrder(vg?.artifacts ?? []), youtubeByKit);
+      if (lv.fellBack) console.warn(`[present] no watchable YouTube video for catalogue kit ${lv.fellBack} (lesson ${vg?.id}); signing the stored MP4`);
+      const urls = (await Promise.all(lv.paths.map((pth) => sign(pth)))).filter(
         (x): x is string => !!x,
       );
       const docs = await Promise.all(
@@ -157,7 +172,7 @@ export async function GET(request: Request) {
       return {
         part: u.part,
         total: u.total,
-        video: u.video ? { id: u.video.id, title: u.video.title, urls } : null,
+        video: u.video ? { id: u.video.id, title: u.video.title, urls, ...(lv.youtube.length ? { youtube: lv.youtube } : {}) } : null,
         docs,
       };
     }),
