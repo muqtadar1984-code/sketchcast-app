@@ -3,7 +3,7 @@
 // The ONLY place the strip signs anything, and it signs only the covers of
 // books decideMyBooks() returned — the access check always comes first. A
 // cover link lives 1 hour (the Library's other covers do too). The PDF is
-// never signed here: the tile links to /api/library/book-pdf, which checks
+// never signed here: the tile links to /api/my-books/pdf, which checks
 // access again and only then mints a 10-minute link.
 
 import type { MyBook } from "./decide";
@@ -12,7 +12,7 @@ import { languageLabel } from "@/utils/narration";
 import { fmt } from "@/i18n/format";
 
 export const COVER_LINK_SECONDS = 3600;
-/** The PDF route's link (/api/library/book-pdf): 10 minutes. */
+/** The PDF route's link (/api/my-books/pdf): 10 minutes. */
 export const PDF_LINK_SECONDS = 600;
 
 export type MyBookTile = {
@@ -72,7 +72,7 @@ export async function myBookTiles(books: MyBook[], deps: TileDeps): Promise<MyBo
         language: languageLabel(b.language) ?? b.language.toUpperCase(),
         chapterCount: b.chapterCount,
         coverUrl,
-        pdfHref: b.pdfKey ? `/api/library/book-pdf?product=${encodeURIComponent(b.productId)}` : null,
+        pdfHref: b.pdfKey ? `/api/my-books/pdf?product=${encodeURIComponent(b.productId)}` : null,
         // A withdrawn book has no SK content any more (the importer removed
         // it); a child's book is the child's to open in SK, not the parent's.
         skHref: deps.skOpen && !b.withdrawn && !b.forChildren.length ? `/sk/${encodeURIComponent(b.slug)}` : null,
