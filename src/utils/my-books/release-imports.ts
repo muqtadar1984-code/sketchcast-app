@@ -109,3 +109,21 @@ export async function founderImportCard(email: string | null | undefined, founde
     return { state: "error", message: (e as Error).message, rows: [] };
   }
 }
+
+/** What K1's POST /api/sk/knowledge/import answers (its PollResult, or an error). */
+export type PollResult =
+  | { status: "waiting_for_book_app" }
+  | { status: "waiting_for_0174"; live: number }
+  | { status: "ok"; live: number; imported: number[]; unchanged: number[]; skipped: number[]; unavailable: string[]; errors: { release_id: number; error: string }[] }
+  | { error: string };
+
+/** One line for the founder after "Import now". Pure. */
+export function describePoll(r: PollResult): string {
+  if ("error" in r) return `Failed: ${r.error}`;
+  if (r.status === "waiting_for_book_app") return "Waiting for the book app: pub_releases (0172) is not there yet.";
+  if (r.status === "waiting_for_0174") return `${r.live} live release(s), but SK's migration 0174 is not applied yet — nothing imported.`;
+  const bits = [`${r.imported.length} imported`, `${r.unchanged.length} unchanged`, `${r.skipped.length} skipped`];
+  if (r.unavailable.length) bits.push(`${r.unavailable.length} marked unavailable`);
+  if (r.errors.length) bits.push(`${r.errors.length} failed (${r.errors.map((e) => `#${e.release_id}: ${e.error}`).join("; ")})`);
+  return bits.join(" · ");
+}
