@@ -108,7 +108,26 @@ export function lessonMapLines(b: NonNullable<SkContext["board"]> | undefined): 
   return segs.slice(0, SK_BOARD_MAP_MAX).map((s) => `- slide ${s.k + 1} (k=${s.k}): ${s.heading || "(untitled)"}`);
 }
 
-export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabilityMeta[]; memory?: SkMemory | null }): string {
+/** 2026-10-30: the MODEL-FIRST block (routing.ts) — in model routing every
+ *  message reaches the model, so the jobs the rules did are its to do with
+ *  tools. Absent in rules routing (the prompt is then unchanged). */
+export function modelFirstRules(ctx: SkContext, capabilities: SkCapabilityMeta[]): string[] {
+  const has = (n: string) => capabilities.some((c) => c.name === n);
+  const lines = [
+    "MODEL-FIRST",
+    "M1. Every message reaches you first. Whenever a tool can do what the user asked, call it; never describe, promise or narrate an action instead of doing it, and never say an action is done unless a tool result says so.",
+    "M2. When a tool's summary already answers (a page opening, a card, a school or child read, a tutor move, a fixed line), say that summary — you may shorten it, but keep every number, name and date exactly as the tool gave it and add none.",
+    "M3. A greeting, 'thanks', 'ok' or small talk needs no tool: one short, friendly line, with no facts.",
+  ];
+  if (has("navigate")) lines.push("M4. 'Open / show / go to / take me to' a page → navigate (resolve a class or learner the user named with context.resolve first; filters as the tool describes).");
+  if (has("start_lesson")) lines.push("M5. 'Start / play / teach' a lesson or a chapter → start_lesson with the user's own words; with nothing named ('start the lesson', 'start the lesson for 7B') call start_lesson with only the class, if one was said.");
+  if (capabilities.some((c) => c.name.startsWith("board."))) lines.push("M6. With a lesson on the Board, every Board phrase (pause, continue, next / previous slide, slide N, explain X, compare A and B, practice questions, freeze, blank page, back, the slides, load the deck, the unit rail, walk through the worksheet, recap) is its board.* tool.");
+  if (ctx.user.role !== "student" && capabilities.some((c) => c.kind === "act" || c.tier === "confirm")) lines.push("M7. An action (a diary note or class notice, reminding parents, marking, preparing a kit, a school-wide notice, assigning, a book code) → its tool, which returns a card for the user to confirm; say what the card will do.");
+  if (ctx.user.role === "student") lines.push("M8. For this student: moves on her lesson (play, pause, restart, a section, the slide, practice, where am I, how am I doing) → tutor.*; a question about the open lesson → tutor.explain; a content question with no lesson open → knowledge.search. Never answer a content question from your own knowledge.");
+  return lines;
+}
+
+export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabilityMeta[]; memory?: SkMemory | null; routing?: "rules" | "model" }): string {
   const { ctx, capabilities } = input;
   // 2026-10-30: the turn's answer language (the question's own > the
   // conversation's > the source's > the UI's — shell/language.ts).
@@ -172,6 +191,7 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "13. To start, play, teach or open a chapter of a book (or a ready-made kit) call start_lesson with the user's own words (book, chapter, part) — never context.resolve or library.find first, and never ask which book yourself: when it is unclear the tool returns the question; say its line.",
         ]
       : []),
+    ...(input.routing === "model" ? ["", ...modelFirstRules(ctx, capabilities)] : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",
@@ -361,6 +381,98 @@ export function unsupportedContacts(sentence: string, cs: ContactSupport): strin
   return bad;
 }
 
+export type GroundingMode = "strict" | "soft";
+
+export type GroundingOpts = {
+  /** "strict" (rules routing, the default): every number and every
+   *  capitalised word outside sentence starts must be supported.
+   *  "soft" (model routing, 2026-10-30): see softSentence. */
+  mode?: GroundingMode;
+  /** soft: the TOOL results alone (not the user's context entities), for
+   *  "does this sentence cite a tool fact?". Defaults to `support`. */
+  toolSupport?: unknown[];
+};
+
+// ── Soft mode (model-first) ─────────────────────────────────────────────────
+//
+// The model answers only from tool and RAG results and cites them; the hard
+// blocks stay only for high-risk invented details:
+//   - an email, phone number or URL the tools did not return (as strict);
+//   - a PERSON's name that is in neither the tools, the question nor her own
+//     context: a capitalised word after an honorific ("Mrs Tan", "Cikgu
+//     Bakar"), next to a kin / role word ("Amir's mother", "student Siti",
+//     "learners: Chandra, Cahya"), or in a list that a person-predicate
+//     follows ("Zara and Zul are at risk", "Zara dan Zul berisiko");
+//   - a number that is not supported, but only in a sentence that cites a
+//     tool fact (a data word — students, score, %, seats, RM … — or a
+//     distinctive word a tool returned). "I can help in 3 ways" passes.
+// Product words, SK's own phrasing, days, months and languages are never
+// blocked; nor is any other capitalised word (a topic, a title, a place).
+
+const NAME = String.raw`\p{Lu}[\p{Ll}\p{M}'’-]+`;
+const HONORIFIC_RE = new RegExp(
+  String.raw`(?<![\p{L}])(?:Mr|Mrs|Ms|Miss|Mx|Dr|Prof|Professor|Sir|Madam|Madame|Mme|Mlle|Señor|Señora|Sr|Sra|Cikgu|Puan|Encik|Tuan|Cik|Ustaz|Ustazah|Dato'?|Datin|Datuk|Haji|Hajah|Teacher|Coach)\.?\s+(${NAME}(?:\s+${NAME}){0,2})`,
+  "gu",
+);
+const KIN = "mother|father|mum|mom|mummy|dad|daddy|parents?|guardian|son|daughter|child|kid|brother|sister|teacher|family|grandmother|grandfather|grandma|grandpa|husband|wife|ibu|bapa|ayah|emak|mak|cikgu|guru";
+const POSSESSIVE_KIN_RE = new RegExp(String.raw`(${NAME})['’]s?\s+(?:${KIN})(?![\p{L}])`, "gu");
+const ROLE = "students?|learners?|pupils?|parents?|teachers?|child|children|kids?|sons?|daughters?|murid|pelajar|anak|guru|ibu bapa";
+const ROLE_BEFORE_RE = new RegExp(String.raw`(?<![\p{L}])(?:${ROLE})\s*[:,]?\s+(${NAME}(?:\s*(?:,|and|dan|&)\s*${NAME})*)`, "gu");
+const PREDICATE = String.raw`(?:is|are|was|were)\s+(?:at risk|absent|late|behind|struggling|failing|sick|ill|missing)|scored|scores|lives|lived|earns|earned|submitted|handed in|missed|failed|passed|berisiko|tidak hadir|tinggal|menghidap|mendapat`;
+const LIST_PREDICATE_RE = new RegExp(String.raw`(${NAME}(?:\s*(?:,|and|dan|&)\s*${NAME})*)\s+(?:${PREDICATE})(?![\p{L}])`, "gu");
+
+/** Words that make a sentence a statement about DATA (counts, scores, money, seats). */
+const DATA_WORD_RE =
+  /(?<![\p{L}])(?:students?|learners?|pupils?|kids|children|parents?|teachers?|staff|classes|class|scores?|scored|marks?|marking|grades?|points?|percent|submissions?|submitted|assignments?|worksheets?|credits?|seats?|licen[cs]es?|at[- ]risk|attendance|average|averaged|rate|rank(?:ed|ing)?|cost|costs|spent|spend|salary|earns|price|murid|pelajar|guru|kelas|markah|skor|berisiko|kehadiran|tempat|lesen|kredit|kos|gaji)(?![\p{L}])|%|\$|(?<![\p{L}])(?:RM|USD|MYR)(?![\p{L}])|طلاب|طالب|معلم|درج|نسبة|مقاعد|مقعد|ترخيص|المرتبة|الحضور|تكلفة/u;
+
+const SOFT_STOP: ReadonlySet<string> = new Set(
+  "this that these those there their they them with from into onto about have has had were been being your yours what when where which while will would could should here than then also just only some more most very each every other such like over under after before because between through during".split(" "),
+);
+
+/** Distinctive words of the tool results: four letters or more, not SK's own
+ *  vocabulary, not a function word. */
+function toolFactWords(toolSupport: unknown[]): Set<string> {
+  const out = new Set<string>();
+  for (const t of supportTokens(toolSupport)) {
+    if (t.length < 4 || /^\d/.test(t) || SOFT_STOP.has(t) || alwaysOk(t)) continue;
+    out.add(t);
+  }
+  return out;
+}
+
+function citesToolFact(sentence: string, facts: Set<string>): boolean {
+  if (DATA_WORD_RE.test(sentence)) return true;
+  for (const w of sentence.match(WORD_RE) ?? []) if (facts.has(normToken(w))) return true;
+  return false;
+}
+
+/** The capitalised words in `s` that look like a person's name. */
+export function personNameWords(s: string): string[] {
+  const words: string[] = [];
+  for (const re of [HONORIFIC_RE, POSSESSIVE_KIN_RE, ROLE_BEFORE_RE, LIST_PREDICATE_RE]) {
+    re.lastIndex = 0;
+    for (const m of s.matchAll(re)) for (const w of (m[1] ?? "").match(WORD_RE) ?? []) if (/^\p{Lu}/u.test(w)) words.push(w);
+  }
+  return [...new Set(words)];
+}
+
+function softSentence(s: string, ok: Set<string>, facts: Set<string>): string[] {
+  const bad: string[] = [];
+  for (const w of personNameWords(s)) {
+    const t = normToken(w);
+    if (!t || alwaysOk(t) || ok.has(t)) continue;
+    bad.push(w);
+  }
+  const nums = s.match(NUMBER_RE) ?? [];
+  if (nums.length && citesToolFact(s, facts)) {
+    for (const n of nums) {
+      const t = normToken(n);
+      if (t && !numberSupported(ok, t)) bad.push(n);
+    }
+  }
+  return bad;
+}
+
 /**
  * Every number token and every capitalised name in `text` must occur in the
  * support (tool facts + summaries) or in the user's question. Sentence-initial
@@ -369,9 +481,11 @@ export function unsupportedContacts(sentence: string, cs: ContactSupport): strin
  * support itself (the question does not count for them). Returns the
  * supported sentences and what was stripped.
  */
-export function groundingCheck(text: string, support: unknown[], question: string): GroundingVerdict {
+export function groundingCheck(text: string, support: unknown[], question: string, opts: GroundingOpts = {}): GroundingVerdict {
   const ok = supportTokens([...support, question]);
   const contacts = contactSupport(support);
+  const soft = opts.mode === "soft";
+  const facts = soft ? toolFactWords(opts.toolSupport ?? support) : new Set<string>();
   const sentences = text
     .replace(/\s+/g, " ")
     .trim()
@@ -382,6 +496,14 @@ export function groundingCheck(text: string, support: unknown[], question: strin
   const unsupported: string[] = [];
   for (const s of sentences) {
     const bad: string[] = unsupportedContacts(s, contacts);
+    if (soft) {
+      bad.push(...softSentence(s, ok, facts));
+      if (bad.length) {
+        unsupported.push(...bad);
+        dropped.push(s);
+      } else kept.push(s);
+      continue;
+    }
     for (const n of s.match(NUMBER_RE) ?? []) {
       const t = normToken(n);
       if (t && !numberSupported(ok, t)) bad.push(n);
