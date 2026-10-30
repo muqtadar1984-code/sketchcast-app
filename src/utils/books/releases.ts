@@ -14,6 +14,7 @@ export type Release = {
   edition_key: string;
   language: string;
   revision_key: string;
+  gate_e_approval_id: number | null;
   chapters: { chapter: number; title: string; content_sha256: string; gate_d_approval_id: number; pdf_key: string | null }[];
   chapter_count: number;
   bundle_key: string;

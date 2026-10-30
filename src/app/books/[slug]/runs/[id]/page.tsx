@@ -6,7 +6,7 @@ import { getBookRun, listRunArtifacts, listRunEvents } from "@/utils/books/runs"
 import { listApprovals, listChapterSummaries } from "@/utils/books/store";
 import { gateERefusal, printedApproval, type CompiledBook } from "@/utils/books/decide";
 import ApproveGateE from "./gate-e";
-import { loadBook } from "../../load";
+import { loadRecords } from "../../load";
 import { Card, bytes } from "../../../ui";
 import RunLive from "./run-live";
 
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 // (the client part polls every few seconds), its files once it has finished.
 export default async function RunPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
-  const { member, work } = await loadBook(slug);
+  const { member, work } = await loadRecords(slug);
   const run = Number.isInteger(Number(id)) ? await getBookRun(work.uid, Number(id)) : null;
   if (!run) notFound();
   const stage = runnableStage(run.stage_key);

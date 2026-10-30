@@ -4,7 +4,7 @@ import { canOn } from "@/utils/books-access";
 import { listDecisions } from "@/utils/books/decide";
 import { listFindings } from "@/utils/books/store";
 import type { Finding } from "@/utils/books/types";
-import { loadBook } from "../load";
+import { loadRecords } from "../load";
 import { Card, Chip, Empty, day } from "../../ui";
 import FindingActions from "./finding-actions";
 
@@ -18,7 +18,7 @@ const FILTERS = ["rev", "ch", "severity", "agreement", "status"] as const;
 export default async function FindingsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const { member, work, revisions } = await loadBook(slug);
+  const { member, work, revisions } = await loadRecords(slug);
   const [all, decisions] = await Promise.all([listFindings(work.uid), listDecisions(work.uid)]);
   const canRule = canOn(member, work.uid, "edit");
   const rulings = new Map<number, typeof decisions>();

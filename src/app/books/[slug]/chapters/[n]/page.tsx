@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getChapter, listAnnotations, listApprovals, listChapterSummaries } from "@/utils/books/store";
-import { loadBook, pickRevision } from "../../load";
+import { loadRecords, pickRevision } from "../../load";
 import NotDrafted from "../../not-drafted";
 import { approvalFor, latestGateD } from "../../approval";
 import { canOn } from "@/utils/books-access";
@@ -22,7 +22,7 @@ export default async function ChapterPage({
   const sp = await searchParams;
   const num = Number(n);
   if (!Number.isInteger(num)) notFound();
-  const { member, work, revisions } = await loadBook(slug);
+  const { member, work, revisions } = await loadRecords(slug);
   if (!revisions.length) return <NotDrafted slug={slug} />;
   const rev = pickRevision(work, revisions, sp.rev);
   const [chapter, approvals, annotations, summaries] = await Promise.all([

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "", label: "Overview" },
+  { href: "/records", label: "Overview" },
   { href: "/chapters", label: "Chapters" },
   { href: "/gaps", label: "Gaps" },
   { href: "/changes", label: "Changes" },
@@ -21,7 +21,7 @@ export default function BookTabs({ slug }: { slug: string }) {
     <nav className="flex gap-5 overflow-x-auto text-sm -mb-px">
       {TABS.map((t) => {
         const href = base + t.href;
-        const active = t.href === "" ? path === base : path === href || path.startsWith(href + "/");
+        const active = path === href || path.startsWith(href + "/");
         return (
           <Link
             key={t.href}

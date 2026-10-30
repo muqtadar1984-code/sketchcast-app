@@ -3,7 +3,7 @@ import { listRuns } from "@/utils/books/store";
 import { canOn } from "@/utils/books-access";
 import { CHECK_LABEL, gapTotals, groupGaps, libraryLink, STATE_LABEL, waivable, type Curriculum, type Gap } from "@/utils/books/gaps";
 import { listWaivers } from "@/utils/books/waivers";
-import { loadBook } from "../load";
+import { loadRecords } from "../load";
 import { Card, Empty, day, usd } from "../../ui";
 import { RevokeWaiver, WaiveCheck } from "./waive";
 
@@ -14,7 +14,7 @@ import { RevokeWaiver, WaiveCheck } from "./waive";
 // fresh Readiness re-check (Pipeline) updates this list.
 export default async function GapsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { work, member } = await loadBook(slug);
+  const { work, member } = await loadRecords(slug);
   const [runs, waivers] = await Promise.all([listRuns(work.uid), listWaivers(work.uid)]);
   const canWaive = canOn(member, work.uid, "edit");
   const readiness = runs.filter((r) => (r.stage_key === "readiness" || r.stage_key === "gate_r") && r.status === "done").sort((a, b) => b.id - a.id)[0];
