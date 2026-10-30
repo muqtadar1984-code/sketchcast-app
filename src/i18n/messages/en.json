@@ -2189,6 +2189,16 @@
       "loadingSlides": "Loading slide {k} of {n}…",
       "slidesLoaded": "{n} slides are on the roll as pages {a}–{b}. Page up and page down move between them; say 'blank page' to add one in between.",
       "explainSelection": "Explain this part",
+      "hero": {
+        "greeting": "What shall we work on today? Type below, or just talk to me.",
+        "micOn": "Mic on",
+        "micOff": "Mic off",
+        "micSwitch": "Microphone",
+        "speaking": "Speaking…",
+        "paused": "Paused — tap or start typing to listen again",
+        "micUnsupported": "Voice input isn't available in this browser — you can still type.",
+        "micDenied": "The microphone is blocked. Allow it in your browser, then switch the mic on."
+      },
       "act": {
         "diaryCardTitle": "Post to {target}'s diary",
         "diaryPosted": "Posted to {target}'s diary.",
@@ -2553,6 +2563,8 @@
     "handsFreeHint": "Tap the mic once and SK keeps listening until you stop it, instead of hold-to-talk.",
     "suggestions": "SK suggestions",
     "suggestionsHint": "At most one line in SK's greeting when you open it, taken from your own timetable, marking or work. Never sent anywhere else.",
+    "micOn": "Microphone on the home page",
+    "micOnHint": "SK listens on your home page while it is open and in front, and pauses while SK speaks. Students start with it off.",
     "on": "On",
     "off": "Off",
     "saving": "Saving…",

@@ -24,7 +24,7 @@ export function dateFmt(locale: Locale) {
 export function workflowLine(t: SettingsMessages, r: WorkflowRow): string {
   switch (r.kind) {
     case "preference": {
-      const label = r.pref === "readAloud" ? t.readAloud : r.pref === "handsFree" ? t.handsFree : t.suggestions;
+      const label = r.pref === "readAloud" ? t.readAloud : r.pref === "handsFree" ? t.handsFree : r.pref === "micOn" ? t.micOn : t.suggestions;
       return fmt(t.factPreference, { label, value: r.on ? t.on : t.off });
     }
     case "recent_class":

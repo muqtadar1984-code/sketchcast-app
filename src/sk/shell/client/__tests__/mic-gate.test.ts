@@ -265,3 +265,223 @@ describe("mic gate: stop() and dispose()", () => {
     expect(b.onStop).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── Founder decision 2026-10-30: the home hero's Mic switch ──────────────────
+// The stop conditions are unchanged; with the switch ON a stop for blur /
+// hidden / pagehide / idle / speaking comes back once the page is visible AND
+// focused again. Switch off, or no onResume (the panel): never.
+
+function buildHero(opts: { speaking?: () => boolean } = {}) {
+  const win = target();
+  const doc = fakeDoc();
+  const timers = fakeTimers();
+  const stops: MicStopReason[] = [];
+  const onStop = vi.fn((r: MicStopReason) => {
+    stops.push(r);
+  });
+  let focused = true;
+  doc.hasFocus = () => focused;
+  const b = {
+    win,
+    doc,
+    timers,
+    stops,
+    onStop,
+    resumes: 0,
+    setFocused: (f: boolean) => {
+      focused = f;
+    },
+    gate: null as unknown as ReturnType<typeof createMicGate>,
+  };
+  b.gate = createMicGate({
+    win,
+    doc,
+    onStop,
+    idleMs: 60_000,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    // The owner restarts capture inside onResume, as sk-shell.tsx does.
+    onResume: () => {
+      b.resumes++;
+      b.gate.start({ idle: true });
+    },
+    canResume: () => !(opts.speaking?.() ?? false),
+  });
+  return b;
+}
+
+describe("mic gate: the Mic switch resumes (home hero, 2026-10-30)", () => {
+  it("blur stops synchronously, focus brings it back while the switch is on", () => {
+    const b = buildHero();
+    b.gate.setAutoResume(true);
+    expect(b.gate.start({ idle: true })).toBe(true);
+    b.setFocused(false);
+    b.win.dispatch("blur");
+    expect(b.onStop).toHaveBeenCalledWith("blur");
+    expect(b.gate.active).toBe(false);
+    expect(b.gate.pending).toBe(true);
+    b.setFocused(true);
+    b.win.dispatch("focus");
+    expect(b.resumes).toBe(1);
+    expect(b.gate.active).toBe(true);
+    expect(b.gate.pending).toBe(false);
+  });
+
+  it("hidden → visible resumes only once the window is focused too", () => {
+    const b = buildHero();
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    b.doc.visibilityState = "hidden";
+    b.doc.dispatch("visibilitychange");
+    expect(b.stops).toEqual(["hidden"]);
+    b.setFocused(false);
+    b.doc.visibilityState = "visible";
+    b.doc.dispatch("visibilitychange");
+    expect(b.gate.active).toBe(false); // visible but not focused: still owed
+    expect(b.gate.pending).toBe(true);
+    b.setFocused(true);
+    b.win.dispatch("focus");
+    expect(b.gate.active).toBe(true);
+    expect(b.resumes).toBe(1);
+  });
+
+  it("pagehide → pageshow (back/forward cache) resumes", () => {
+    const b = buildHero();
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    b.win.dispatch("pagehide");
+    expect(b.gate.active).toBe(false);
+    b.win.dispatch("pageshow");
+    expect(b.gate.active).toBe(true);
+  });
+
+  it("the 60 s idle stop stays — and nothing resumes it on a timer", () => {
+    const b = buildHero();
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    b.timers.advance(60_000);
+    expect(b.stops).toEqual(["idle"]);
+    expect(b.gate.active).toBe(false);
+    expect(b.gate.pending).toBe(true); // "Paused" in the hero
+    b.timers.advance(24 * 60 * 60_000);
+    expect(b.gate.active).toBe(false);
+    expect(b.resumes).toBe(0);
+    expect(b.timers.pendingCount()).toBe(0);
+  });
+
+  for (const ev of ["pointerdown", "keydown"] as const) {
+    it(`after an idle pause, her next ${ev} on the page resumes it`, () => {
+      const b = buildHero();
+      b.gate.setAutoResume(true);
+      b.gate.start({ idle: true });
+      b.timers.advance(60_000);
+      b.doc.dispatch(ev);
+      expect(b.resumes).toBe(1);
+      expect(b.gate.active).toBe(true);
+      // A live mic ignores further interaction.
+      b.doc.dispatch(ev);
+      expect(b.resumes).toBe(1);
+    });
+  }
+
+  it("after an idle pause, focus coming back resumes it", () => {
+    const b = buildHero();
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    b.timers.advance(60_000);
+    b.win.dispatch("focus");
+    expect(b.gate.active).toBe(true);
+  });
+
+  it("interaction does nothing while the switch is off", () => {
+    const b = buildHero();
+    b.gate.start({ idle: true });
+    b.timers.advance(60_000);
+    b.doc.dispatch("pointerdown");
+    b.doc.dispatch("keydown");
+    expect(b.gate.active).toBe(false);
+    expect(b.resumes).toBe(0);
+  });
+
+  it("never resumes while SK is speaking (no echo); the owed resume waits for resume()", () => {
+    let speaking = true;
+    const b = buildHero({ speaking: () => speaking });
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    expect(b.gate.stop("speaking")).toBe(true);
+    b.win.dispatch("focus");
+    expect(b.gate.active).toBe(false);
+    expect(b.gate.resume()).toBe(false); // vetoed, still owed
+    expect(b.gate.pending).toBe(true);
+    speaking = false;
+    expect(b.gate.resume()).toBe(true);
+    expect(b.gate.active).toBe(true);
+  });
+
+  it("a stop she made (manual / release) is never resumed", () => {
+    for (const reason of ["manual", "release"] as const) {
+      const b = buildHero();
+      b.gate.setAutoResume(true);
+      b.gate.start({ idle: true });
+      b.gate.stop(reason);
+      expect(b.gate.pending).toBe(false);
+      b.win.dispatch("focus");
+      b.win.dispatch("pageshow");
+      expect(b.gate.active).toBe(false);
+      expect(b.resumes).toBe(0);
+    }
+  });
+
+  it("switch OFF: never auto-resumes, and switching off forgets an owed resume", () => {
+    const b = buildHero();
+    b.gate.start({ idle: true });
+    b.win.dispatch("blur");
+    b.win.dispatch("focus");
+    expect(b.gate.active).toBe(false);
+    expect(b.gate.resume()).toBe(false);
+
+    const c = buildHero();
+    c.gate.setAutoResume(true);
+    c.gate.start({ idle: true });
+    c.win.dispatch("blur");
+    expect(c.gate.pending).toBe(true);
+    c.gate.setAutoResume(false);
+    expect(c.gate.pending).toBe(false);
+    c.gate.setAutoResume(true); // on again: nothing was owed any more
+    c.win.dispatch("focus");
+    expect(c.gate.active).toBe(false);
+    expect(c.resumes).toBe(0);
+  });
+
+  it("resume() starts a fresh switch-on gate once the page allows it (first load in a background tab)", () => {
+    const b = buildHero();
+    b.gate.setAutoResume(true);
+    b.setFocused(false);
+    expect(b.gate.resume()).toBe(false);
+    expect(b.gate.pending).toBe(true);
+    b.setFocused(true);
+    b.win.dispatch("focus");
+    expect(b.gate.active).toBe(true);
+  });
+
+  it("the panel (no onResume) ignores setAutoResume and registers no return listeners", () => {
+    const b = build();
+    expect(b.win.count() + b.doc.count()).toBe(3);
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    b.win.dispatch("blur");
+    b.win.dispatch("focus");
+    expect(b.gate.active).toBe(false);
+    expect(b.gate.resume()).toBe(false);
+  });
+
+  it("dispose removes the return listeners too", () => {
+    const b = buildHero();
+    expect(b.win.count() + b.doc.count()).toBe(7);
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    b.gate.dispose();
+    expect(b.win.count() + b.doc.count()).toBe(0);
+    expect(b.gate.resume()).toBe(false);
+  });
+});

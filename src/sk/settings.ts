@@ -3,7 +3,7 @@
 //
 //   loadSkSettings      the page's data, by role (pure describe* helpers turn
 //                       facts into plain-language rows; the page localises them)
-//   savePrefs           POST /api/sk/prefs        — the three preferences as
+//   savePrefs           POST /api/sk/prefs        — the SK preferences as
 //                       workflow facts, the user's OWN session (RLS owner-only)
 //   consentRequest      POST /api/sk/consent      — a VERIFIED linked parent
 //                       grants / revokes `transcripts` or `voice` for a child,
@@ -118,11 +118,11 @@ const ALL_WORKFLOW_KINDS = ["preference", "recent_class", "recent_kit", "pending
 export async function loadSkSettings(input: LoadSettingsInput): Promise<SkSettingsData> {
   const { session, admin, userId, role, schoolId } = input;
   const now = input.now ?? new Date();
-  const out: SkSettingsData = { role, prefs: withDefaults(null), memoryReadable: false, workflow: [], learning: null, children: [], school: null, student: null };
+  const out: SkSettingsData = { role, prefs: withDefaults(null, role), memoryReadable: false, workflow: [], learning: null, children: [], school: null, student: null };
 
   try {
     const facts = await recallWorkflow(session as FactsDb, userId, ALL_WORKFLOW_KINDS, now);
-    out.prefs = withDefaults(prefsFromFacts(facts));
+    out.prefs = withDefaults(prefsFromFacts(facts), role);
     out.workflow = describeWorkflow(facts);
     out.memoryReadable = true;
   } catch (e) {
@@ -195,7 +195,7 @@ export async function loadSkSettings(input: LoadSettingsInput): Promise<SkSettin
 export async function savePrefs(session: FactsDb, userId: string, body: unknown, now: Date = new Date()): Promise<Reply> {
   const patch: StoredPrefs = pick(body);
   const keys = Object.keys(patch) as SkPrefKey[];
-  if (!keys.length) return { status: 400, body: { error: "Send readAloud, handsFree or suggestions as true or false." } };
+  if (!keys.length) return { status: 400, body: { error: "Send readAloud, handsFree, suggestions or micOn as true or false." } };
   const results = await Promise.all(keys.map((k) => rememberWorkflow(session, userId, PREF_KIND, PREF_FACT_KEY[k], { on: patch[k] }, now)));
   if (results.some((ok) => !ok)) return { status: 500, body: { error: "Your settings could not be saved. Please try again." } };
   return { status: 200, body: { ok: true, saved: patch } };

@@ -21,6 +21,7 @@ import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
+import { SkHomeHero } from "../sk-home";
 
 // The parent home: one section per linked child — S4's "This week" card (the
 // same digest SK's child.week answers from; week-data.ts), their school
@@ -187,6 +188,9 @@ export default async function ChildrenPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
+        {/* SK first (founder 2026-10-30): the hero renders only when the
+            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
+        <SkHomeHero />
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">{t.subtitle}</p>
