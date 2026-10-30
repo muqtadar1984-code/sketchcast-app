@@ -32,13 +32,14 @@ Intended production values, set later: `SK_BEDROCK_REGION=ap-southeast-2` and th
 
 **Every message goes to the model first**, with the role's full tool set (`allowedFor(ctx)`, in registry order, so the list is stable per role).
 
-Rules keep three jobs only. They run before the model:
+Rules keep four jobs only. They run before the model:
 
 1. **Yes/no to a pending offer.** This is the greeting's one-turn offer ("Your kit … is ready — want me to open it?", `offer.ts`).
    - Confirm cards are click-only or confirmed by a spoken yes on the client (`client/confirm.ts`). The token goes to `/api/sk/act`. That path is unchanged and never reaches the turn route.
 2. **Instant tour controls while a tour is narrating.** When the client reports `walk.active`, next/back/pause/skip/resume are matched by `walkCommand`. No model is called.
 3. **A book code, or the answer SK asked for.** A text that contains a code (`SKB…`/`SKE…`), or the short answer to SK's own book question (`memory.pending`), runs `book.activate` directly. **A code never becomes part of a model prompt.**
    - An activation phrase with no code ("I have a code") goes to the model, whose `book.activate` tool asks for the code.
+4. **A live highlight and "explain this" (2026-10-31).** With a highlight on the Board (`board.selection`) and the rules' own explain-this phrasing ("explain this (part)", "what does this mean", "tell me more about this"), the turn takes the rules' `explain_selection` path at once (`selectionAsk`, `rules.ts`). No model round is spent choosing the tool. Any other wording reaches the model, whose `board.explain_selection` is a hand-off (below).
 
 **Permission and safety stay in the registry and the role gates, not in phrase rules:**
 
@@ -72,10 +73,27 @@ After an escalation, later rounds stay on Sonnet, and the tokens of the Haiku ro
 
 - **A student's `knowledge.search`.** Her own metered, student-ruled kit turn runs (`knowledgeForStudent`, one live turn), exactly as the rules path does. The Shell model never narrates the passages for a student. If nothing answers, the open lesson's `tutor.explain` runs; with no lesson open, `tutor.where` runs.
 - **`start_lesson` with no book, chapter or kit (a teacher).** The rules' planner runs: the Board's own pick, then the timetable (`start-lesson.ts`).
+- **`board.explain_selection` (2026-10-31).** The model stops, and the route explains the highlight as the rules path does: the capability validates it, the route reads that slide's text and makes ONE grounded call (`model>selection` in the timing line). As an ordinary tool it returned only "explaining slide 7" and the highlighted words, which the model could not explain from. In production (2026-10-30) the model then read the deck with `kit.documents` for three rounds. On the last pass the orchestrator offers no tools, so the model wrote the call out as text, and the bubble showed `<invoke name="board.explain_selection"> </invoke>`.
+  - A **deck page**: the deck's own text map; for an adopted kit, the open unit's sibling deck piece through the kit (`openUnitDeckSlide`, the #233 resolution).
+  - A **video slide** loaded as a page (`selection.on = "video"`): that slide as a whole, from the lesson map's narration, introduced as such.
+  - **Any other page** (`selection.on = "page"`, her handwriting on a blank page): SK says it cannot read handwriting or drawings, and asks for the words.
 - **`start_tour`, `tour_control`, `set_answer_language`, `repeat_in_language`.** These are performed as their rule performs them (as before).
 - **A tutor move or tutor.\*'s own reply (a student).** It is emitted as the `tutor` event or the reply, with no narrating round.
 
 All other tool results produce the same client events the rules did: `navigate`, `confirm` (the token is issued in the route), `board`, `walkthrough`, `lang`, and `citations`.
+
+### The roll (2026-10-31)
+
+The Board state carries the roll: `rollPage` (0-based), `rollCount`, `rollAt` (what is on screen) and `roll`, the loaded ranges in the Board's own page numbers: `{kind: "video" | "deck", from, to, first, last}`, e.g. pages 4–25 = video slides 1–22, pages 27–54 = deck slides 1–28.
+
+- The ranges are **read off the roll's own pages** every turn (`src/app/present/roll-map.ts`): a deck page carries its slide number; a video slide loaded as a page is a frozen frame at that slide's completed-frame time. A page inserted anywhere (SK's blank page, the Board's own button, the rail's Load deck) shifts or splits them with no bookkeeping, and nothing is lost when the bridge is rebuilt.
+- The prompt shows them as a `ROLL` block, and rule 15 says which tool each phrase means.
+- **`board.page`** `{to: "page" | "next" | "previous" | "first" | "last" | "deck" | "video", n?}` turns the roll. `to=deck` with a deck that is not on the roll yet becomes `board.load_deck {page: n}`, one move. `board.load_deck` takes `page` too, for "load the deck and go to slide 4". A deck or video item also travels as `item`, and the bridge finds it again on the live roll. The controller audits it as `board.go_to_page`.
+- `board.slide` stays the video's own slides.
+
+### Tool-call markup (2026-10-31)
+
+`src/sk/shell/markup.ts` strips `<function_calls>`, `<invoke …>`, `<parameter …>` and their kind from the model's text before grounding, and again from every text event and the memory. A reply with nothing left becomes "I couldn't do that just now — try again or rephrase." in her language. Each strip logs `sk-shell.turn tool markup` with the turn id.
 
 ### Every rules ability is a tool
 
@@ -202,7 +220,9 @@ Set `SK_ROUTING=rules`, which ignores the allow-list, or clear `SK_MODEL_FIRST_E
 
 ## Files
 
-- `src/sk/shell/routing.ts`: the switch, `chooseModel`, `SkModelProvider` (escalation), the pre-model book rule and the hand-offs.
+- `src/sk/shell/routing.ts`: the switch, `chooseModel`, `SkModelProvider` (escalation), the pre-model book and highlight rules, and the hand-offs.
+- `src/sk/shell/markup.ts`: tool-call markup stripping.
+- `src/app/present/roll-map.ts`: the roll's ranges, read off its pages.
 - `src/sk/shell/intent-tools.ts`: the rule-intent → tool inventory.
 - `src/sk/shell/prompt.ts`: soft grounding, and the `MODEL-FIRST` prompt block (model routing only).
 - `src/app/api/sk/shell/turn/route.ts`: the model path and the timing line.
