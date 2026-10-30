@@ -3,10 +3,13 @@
 //
 // BOOKS: the book picker lists whatever `books` the teacher may read — her
 // own, her school's shelf, and since 0175 every SketchCast book she holds a
-// grant for (books_sk_product_read). A SketchCast book is marked `product`:
-// picking one of its chapters ADOPTS that chapter's kit (adopt_product_kit)
-// and plays the copy as a ready-made kit, because the session and kit routes
-// only ever play a kit she owns.
+// grant for (books_sk_product_read). A SketchCast book is marked `product`
+// and carries each chapter's catalogue kits (sk_product_kits, read by the
+// server after RLS showed her the book): picking a chapter ADOPTS its kit
+// (adopt_product_kit — free, the book grant is the entitlement) and plays the
+// copy as a ready-made kit, because the session and kit routes only ever play
+// a kit she owns. A chapter with several kits asks which, like the
+// ready-made picker.
 //
 // READY-MADE KITS: every catalogue kit she can open, not only the ones
 // already copied into her library. Hers first (newest first, one per title —
@@ -27,16 +30,41 @@ import { kitGroups, kitPrefix, type KitGroupRow } from "./kit";
 export const CATALOGUE_PICK = "catalogue:";
 
 export type BoardBookRow = { id: string; title: string; grade?: string | null; subject?: string | null; chapters?: unknown; sk_product_id?: string | null };
-export type BoardBook = { id: string; title: string; grade: string | null; subject: string | null; chapters: { num: number; title?: string }[]; product?: true };
+/** One catalogue kit of a SketchCast chapter: its lesson id (what /api/present/adopt `kit` takes) and the map's label. */
+export type ProductChapterKit = { id: string; label: string | null };
+export type BoardBook = {
+  id: string;
+  title: string;
+  grade: string | null;
+  subject: string | null;
+  chapters: { num: number; title?: string }[];
+  product?: true;
+  /** A SketchCast book's kits per chapter, keyed by the book's 0-based num. */
+  productKits?: Record<number, ProductChapterKit[]>;
+};
+/** A row of sk_product_kits (chapter_ref = the RELEASE chapter, 1-based). */
+export type ProductMapRow = { product_id: string; chapter_ref: string; sort: number | null; generation_id: string; label: string | null };
 
-export function boardBooks(rows: BoardBookRow[]): BoardBook[] {
+/** sk_product_kits rows of one product → its kits per 0-based chapter num, in topic order, each kit once. */
+export function productChapterKits(rows: readonly ProductMapRow[]): Record<number, ProductChapterKit[]> {
+  const out: Record<number, ProductChapterKit[]> = {};
+  const sorted = [...rows].filter((r) => /^\d{1,4}$/.test(String(r.chapter_ref)) && Number(r.chapter_ref) >= 1).sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0));
+  for (const r of sorted) {
+    const num = Number(r.chapter_ref) - 1;
+    const list = (out[num] ??= []);
+    if (!list.some((k) => k.id === r.generation_id)) list.push({ id: r.generation_id, label: r.label ?? null });
+  }
+  return out;
+}
+
+export function boardBooks(rows: BoardBookRow[], map: readonly ProductMapRow[] = []): BoardBook[] {
   return rows.map((b) => ({
     id: b.id,
     title: b.title,
     grade: b.grade ?? null,
     subject: b.subject ?? null,
     chapters: Array.isArray(b.chapters) ? (b.chapters as { num: number; title?: string }[]) : [],
-    ...(b.sk_product_id ? { product: true as const } : {}),
+    ...(b.sk_product_id ? { product: true as const, productKits: productChapterKits(map.filter((r) => r.product_id === b.sk_product_id)) } : {}),
   }));
 }
 

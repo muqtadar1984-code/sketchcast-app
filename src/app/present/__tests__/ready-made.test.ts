@@ -5,7 +5,7 @@
 // copied, never a capped tier's locked kit.
 // Run: node node_modules/vitest/vitest.mjs run src/app/present/__tests__/ready-made.test.ts
 import { describe, expect, it } from "vitest";
-import { boardBooks, boardKits, CATALOGUE_PICK, type CatalogueOffer, type OwnKitRow } from "@/utils/present/ready-made";
+import { boardBooks, boardKits, CATALOGUE_PICK, productChapterKits, type CatalogueOffer, type OwnKitRow } from "@/utils/present/ready-made";
 
 describe("boardBooks", () => {
   it("marks SketchCast books (sk_product_id) and leaves uploaded books as they were", () => {
@@ -16,9 +16,45 @@ describe("boardBooks", () => {
     ]);
     expect(out).toEqual([
       { id: "u", title: "My upload", grade: "5", subject: "Science", chapters: [{ num: 0, title: "One" }] },
-      { id: "p", title: "Cells", grade: null, subject: null, chapters: [{ num: 0, title: "Cells" }], product: true },
+      { id: "p", title: "Cells", grade: null, subject: null, chapters: [{ num: 0, title: "Cells" }], product: true, productKits: {} },
       { id: "x", title: "No chapters", grade: null, subject: null, chapters: [] },
     ]);
+  });
+});
+
+describe("productChapterKits / boardBooks with the map", () => {
+  const map = [
+    { product_id: "prod", chapter_ref: "6", sort: 1, generation_id: "diff", label: "Diffusion in Living Cells" },
+    { product_id: "prod", chapter_ref: "1", sort: 0, generation_id: "cells", label: "Cells" },
+    { product_id: "prod", chapter_ref: "6", sort: 0, generation_id: "matter", label: "States of Matter" },
+    { product_id: "prod", chapter_ref: "3", sort: 0, generation_id: "cells", label: "Cell Membranes" },
+    { product_id: "prod", chapter_ref: "6", sort: 2, generation_id: "diff", label: "dup" },
+    { product_id: "prod", chapter_ref: "x", sort: 0, generation_id: "bad", label: null },
+    { product_id: "other", chapter_ref: "1", sort: 0, generation_id: "not-mine", label: null },
+  ];
+
+  it("release chapter N → the book's num N-1, kits in topic order, each once; a shared kit sits in every chapter that maps it", () => {
+    expect(productChapterKits(map.filter((r) => r.product_id === "prod"))).toEqual({
+      0: [{ id: "cells", label: "Cells" }],
+      2: [{ id: "cells", label: "Cell Membranes" }],
+      5: [
+        { id: "matter", label: "States of Matter" },
+        { id: "diff", label: "Diffusion in Living Cells" },
+      ],
+    });
+  });
+
+  it("a SketchCast book carries only its own product's kits; an uploaded book carries none", () => {
+    const [up, prod] = boardBooks(
+      [
+        { id: "u", title: "Mine", chapters: [] },
+        { id: "p", title: "Cells", chapters: [{ num: 0 }], sk_product_id: "prod" },
+      ],
+      map,
+    );
+    expect(up.productKits).toBeUndefined();
+    expect(Object.values(prod.productKits ?? {}).flat().some((k) => k.id === "not-mine")).toBe(false);
+    expect(prod.productKits?.[0]).toEqual([{ id: "cells", label: "Cells" }]);
   });
 });
 

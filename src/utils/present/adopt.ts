@@ -3,7 +3,9 @@
 // routes play only her own done, book-less presentation.
 //
 //   SketchCast book chapter → adopt_product_kit() for every piece of the
-//     chapter's ONE master kit (0175; the database re-checks her grant);
+//     chapter's catalogue kit (sk_product_kits; the one she chose when the
+//     chapter has several, else the first). The book grant is the entitlement
+//     (0175: no unlock, no allowance); the database re-checks it;
 //   catalogue kit           → adopt_catalogue_piece() for every piece of a
 //     CURRENT catalogue kit (0132), after a free unlock_catalogue_kit() on an
 //     unlimited tier. A capped tier's locked kit is refused, never unlocked
@@ -12,11 +14,10 @@
 // Both are copies: no job, no credit, the same files. Idempotent (the
 // functions return an existing copy), so a double tap costs nothing.
 //
-// The reads use the service role (master kits and topic_kits are not hers to
-// read); every WRITE goes through her own session's RPC, so the database's own
-// checks decide. Injected so every branch is testable without a database.
+// The reads use the service role (sk_product_kits and topic_kits are not hers
+// to read); every WRITE goes through her own session's RPC, so the database's
+// own checks decide. Injected so every branch is testable without a database.
 
-import { chapterKit, type MasterKitRow, type ProductSystemBook } from "@/utils/my-books/product-book";
 import { piecesOf, type TopicKitRow } from "@/app/dashboard/kits/logic";
 import { kitPrefix } from "./kit";
 
@@ -55,24 +56,38 @@ async function adoptAll(deps: AdoptDeps, fn: "adopt_product_kit" | "adopt_catalo
   return { ok: true, kitId, title: title || kitId };
 }
 
-export async function adoptProductChapter(deps: AdoptDeps, bookId: string, chapterNum: number): Promise<AdoptResult> {
+/**
+ * A SketchCast book's chapter → her copy of ONE of its catalogue kits.
+ * `chapterNum` is the book's 0-based num (the Board's chapter key); the map is
+ * keyed by the release chapter (num + 1). `lesson` picks among a chapter's
+ * kits (the kit's lesson id, as the bar lists them); omitted → the first.
+ */
+export async function adoptProductChapter(deps: AdoptDeps, bookId: string, chapterNum: number, lesson?: string | null): Promise<AdoptResult> {
   if (!UUID.test(bookId) || !Number.isInteger(chapterNum) || chapterNum < 0) return fail(404, "not_found");
-  const { data: bookRow } = await deps.admin.from("books").select("id, owner_id, sk_product_id, title, chapters, removed_at").eq("id", bookId).maybeSingle();
-  const book = bookRow as (ProductSystemBook & { removed_at: string | null }) | null;
+  if (lesson != null && !UUID.test(lesson)) return fail(404, "not_found");
+  const { data: bookRow } = await deps.admin.from("books").select("id, sk_product_id, removed_at").eq("id", bookId).maybeSingle();
+  const book = bookRow as { id: string; sk_product_id: string | null; removed_at: string | null } | null;
   if (!book || !book.sk_product_id || book.removed_at) return fail(404, "not_found");
   // her grant, asked as HER (the definer function reads auth.uid()); no grant → as if no book
   const { data: granted, error: gErr } = await deps.rpc("has_book_grant", { p_product: book.sk_product_id });
   if (gErr || granted !== true) return fail(404, "not_found");
   const { data: rows } = await deps.admin
-    .from("generations")
-    .select("id, kind, title, chapter_ref, status, owner_id, book_id, params, created_at, removed_at, withdrawn_at")
-    .eq("book_id", book.id)
-    .eq("owner_id", book.owner_id)
-    .eq("chapter_ref", String(chapterNum))
-    .eq("status", "done");
-  const kit = chapterKit(book, ((rows ?? []) as MasterKitRow[]).map((r) => ({ ...r, artifacts: [] })), chapterNum);
-  if (!kit.length) return fail(409, "no_kit");
-  return adoptAll(deps, "adopt_product_kit", kit.map((g) => ({ id: g.id, kind: g.kind })));
+    .from("sk_product_kits")
+    .select("generation_id, sort")
+    .eq("product_id", book.sk_product_id)
+    .eq("chapter_ref", String(chapterNum + 1));
+  const lessons = ((rows ?? []) as { generation_id: string; sort: number | null }[]).sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0)).map((r) => r.generation_id);
+  if (!lessons.length) return fail(409, "no_kit");
+  const chosen = lesson ?? lessons[0];
+  if (!lessons.includes(chosen)) return fail(404, "not_found");
+  const { data: kits } = await deps.admin
+    .from("topic_kits")
+    .select("id, presentation_generation_id, doc_generation_ids, status")
+    .eq("presentation_generation_id", chosen)
+    .eq("status", "approved");
+  const kitRow = ((kits ?? []) as TopicKitRow[])[0];
+  if (!kitRow) return fail(409, "no_kit");
+  return adoptAll(deps, "adopt_product_kit", piecesOf(kitRow).map((p) => ({ id: p.generationId, kind: p.kind })));
 }
 
 export async function adoptCatalogueKit(deps: AdoptDeps, userId: string, topicKitId: string): Promise<AdoptResult> {

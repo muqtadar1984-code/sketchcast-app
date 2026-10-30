@@ -165,9 +165,10 @@ export default async function PresentPage() {
 
   // The books she can teach from — the manual picker's options, and the only
   // path available on a first lesson with any class. Since 0175 that includes
-  // every SketchCast book she holds a grant for (RLS), marked `product`: a
-  // chapter of one is adopted on pick (utils/present/ready-made.ts).
-  const books: BookOption[] = await loadBoardBooks(supabase);
+  // every SketchCast book she holds a grant for (RLS), marked `product` with
+  // each chapter's catalogue kits: a chapter of one is adopted on pick or on
+  // a ?book=&chapter= deep link (utils/present/ready-made.ts).
+  const books: BookOption[] = await loadBoardBooks(supabase, admin);
 
   // READY-MADE KITS: hers (catalogue kits copied into the library arrive with
   // no book and no chapter, so the book picker cannot reach them), then every

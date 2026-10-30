@@ -47,6 +47,8 @@ export type BookOption = {
   chapters: { num: number; title?: string }[];
   /** A SketchCast book (0175): a chapter is ADOPTED on pick and plays as a ready-made kit. */
   product?: true;
+  /** A SketchCast book's catalogue kits per chapter (0-based num), in topic order: the lesson id and its label. */
+  productKits?: Record<number, { id: string; label: string | null }[]>;
 };
 
 /** A ready-made kit: one entry per title prefix, keyed by its presentation.
@@ -213,7 +215,7 @@ export default function PresentClient({
   const chapter = kitId ? null : pick ? pick.chapter : linkPick ? linkPick.chapter : (ctx?.suggestion?.chapterNum ?? null);
   // Kits adopted on THIS visit (a SketchCast chapter or a catalogue kit picked
   // from the bar): hers now, listed first, and the offers they came from go.
-  const [adopted, setAdopted] = useState<{ kit: KitOption; from: string | null; product: { book: string; chapter: number } | null }[]>([]);
+  const [adopted, setAdopted] = useState<{ kit: KitOption; from: string | null; product: { book: string; chapter: number; lesson: string | null } | null }[]>([]);
   const allKits = useMemo(() => {
     const gone = new Set(adopted.map((a) => a.from).filter((x): x is string => !!x));
     const mine = adopted.map((a) => a.kit);
@@ -243,13 +245,26 @@ export default function PresentClient({
   const shownChapter = fromProduct ? fromProduct.chapter : chapter;
   const chapters = books.find((b) => b.id === shownBookId)?.chapters ?? [];
 
+  // A SKETCHCAST CHAPTER IS NEVER PLAYED AS A BOOK. Its kits are catalogue
+  // kits she adopts (free, the book grant is the entitlement) and then plays
+  // as a ready-made kit. Until that copy exists the chapter is PENDING: no
+  // book rail is fetched, Start waits, and the bar either adopts the
+  // chapter's one kit by itself (a pick or a ?book=&chapter= deep link) or
+  // asks which kit when the chapter has several.
+  const productBook = !kitPick && bookId ? (books.find((b) => b.id === bookId && b.product) ?? null) : null;
+  const productPending = !!productBook && chapter !== null;
+  const isProductBook = useCallback((id: string | null) => !!id && !!books.find((b) => b.id === id)?.product, [books]);
+  const chooserBook = fromProduct ? (books.find((b) => b.id === fromProduct.book) ?? null) : productBook;
+  const chooserChapter = fromProduct ? fromProduct.chapter : productBook ? chapter : null;
+  const chapterKits = chooserBook && chooserChapter !== null ? (chooserBook.productKits?.[chooserChapter] ?? []) : [];
+
   // ADOPT ON PICK: a SketchCast chapter or a catalogue kit she has not copied
   // becomes her own ready-made kit first (no job, no credit), because the
   // session and kit routes only play a kit she owns.
   const [adopting, setAdopting] = useState(false);
   const [adoptError, setAdoptError] = useState<string | null>(null);
   const adoptAndPick = useCallback(
-    async (body: { bookId: string; chapterNum: number } | { catalogueKit: string }, from: string | null) => {
+    async (body: { bookId: string; chapterNum: number; kit?: string } | { catalogueKit: string }, from: string | null) => {
       setAdopting(true);
       setAdoptError(null);
       try {
@@ -257,7 +272,7 @@ export default function PresentClient({
         const d = (await r.json().catch(() => ({}))) as { kitId?: string; title?: string; reason?: string };
         if (!r.ok || !d.kitId) throw new Error(d.reason === "no_kit" ? t.bar.kitComingSoon : d.reason === "locked" ? t.bar.kitLocked : t.bar.adoptFailed);
         const kit: KitOption = { id: d.kitId, title: d.title || d.kitId };
-        const product = "bookId" in body ? { book: body.bookId, chapter: body.chapterNum } : null;
+        const product = "bookId" in body ? { book: body.bookId, chapter: body.chapterNum, lesson: body.kit ?? null } : null;
         setAdopted((prev) => [{ kit, from, product }, ...prev.filter((a) => a.kit.id !== kit.id)]);
         setPick({ book: null, chapter: null, kit: kit.id });
       } catch (e) {
@@ -275,7 +290,7 @@ export default function PresentClient({
   // for this chapter yet" while sitting on a full set. The rail returns every
   // unit in the chapter instead, and she opens one once the board is running —
   // which is also when she actually knows, since a period often spans two.
-  const ready = (!!bookId && chapter !== null) || !!kitPick;
+  const ready = (!!bookId && chapter !== null && !productPending) || !!kitPick;
 
   // The running lesson. Declared here rather than beside its own handlers
   // because the kit fetch below has to know whether one exists.
@@ -309,7 +324,8 @@ export default function PresentClient({
   // an effect cascades a render, and React's compiler refuses it. And it makes
   // a late response from a superseded selection structurally unable to land: a
   // `live` flag closes the window, a key comparison closes the question.
-  const key = liveKit ? `kit|${liveKit}` : liveBook && liveChapter !== null ? `${liveBook}|${liveChapter}` : null;
+  // A SketchCast book has no rail of its own: only its adopted kit does.
+  const key = liveKit ? `kit|${liveKit}` : liveBook && liveChapter !== null && !isProductBook(liveBook) ? `${liveBook}|${liveChapter}` : null;
   const [loaded, setLoaded] = useState<{ key: string; kit: Kit | null; error: string | null } | null>(
     null,
   );
@@ -349,7 +365,7 @@ export default function PresentClient({
 
   const start = useCallback(async () => {
     const kit = kitPick?.id ?? null;
-    if (!kit && (!bookId || chapter === null)) return;
+    if (!kit && (!bookId || chapter === null || productPending)) return;
     setStarting(true);
     setStartError(null);
     try {
@@ -376,7 +392,7 @@ export default function PresentClient({
     } finally {
       setStarting(false);
     }
-  }, [bookId, chapter, kitPick, ctx, classId, klass, teacherId, t]);
+  }, [bookId, chapter, kitPick, productPending, ctx, classId, klass, teacherId, t]);
 
   // The unit rail overlay's state (Board UX 2026-10-28; see below). Declared
   // here so ending a lesson can shut it: the next lesson starts with it closed.
@@ -399,11 +415,30 @@ export default function PresentClient({
     startRef.current = start;
   }, [start]);
   useEffect(() => {
-    if (!search || !link.autostart || !deepLinkStartable(link) || session || startedFor.current === search) return;
+    // a SketchCast chapter starts once its kit is adopted (below), not before
+    if (!search || !link.autostart || !deepLinkStartable(link) || session || productPending || startedFor.current === search) return;
     startedFor.current = search;
     const id = setTimeout(() => void startRef.current(), 0);
     return () => clearTimeout(id);
-  }, [search, link, session]);
+  }, [search, link, session, productPending]);
+
+  // ADOPT ON ARRIVAL: a pending SketchCast chapter with ONE kit adopts it by
+  // itself — from the bar's chapter pick or a ?book=&chapter= deep link — once
+  // per (query, book, chapter). A chapter with several kits waits for her
+  // choice; a failed adopt is not retried in a loop (the chooser offers it).
+  const autoAdopted = useRef<string | null>(null);
+  useEffect(() => {
+    if (session || adopting || !productPending || !productBook || chapter === null) return;
+    const only = productBook.productKits?.[chapter] ?? [];
+    if (only.length !== 1) return;
+    const k = `${search}|${productBook.id}|${chapter}`;
+    if (autoAdopted.current === k) return;
+    const id = setTimeout(() => {
+      autoAdopted.current = k;
+      void adoptAndPick({ bookId: productBook.id, chapterNum: chapter, kit: only[0].id }, null);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [session, adopting, productPending, productBook, chapter, search, adoptAndPick]);
 
   // ── SK on the Board (S1) ──────────────────────────────────────────────────
   //
@@ -748,10 +783,9 @@ export default function PresentClient({
           disabled={locked || adopting || !shownBookId}
           onChange={(e) => {
             const num = e.target.value === "" ? null : Number(e.target.value);
-            const target = books.find((b) => b.id === shownBookId);
-            // a SketchCast chapter is adopted, then played as a ready-made kit
-            if (target?.product && num !== null) void adoptAndPick({ bookId: target.id, chapterNum: num }, null);
-            else setPick({ book: shownBookId, chapter: num, kit: null });
+            // a SketchCast chapter becomes pending: adopted by itself (one
+            // kit) or after the kit chooser below (several)
+            setPick({ book: shownBookId, chapter: num, kit: null });
           }}
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-40"
         >
@@ -763,6 +797,34 @@ export default function PresentClient({
             </option>
           ))}
         </select>
+
+        {/* A SKETCHCAST CHAPTER'S KITS: several (a chapter over several
+            topics) → she picks one, like the ready-made picker; a single kit
+            adopts by itself and shows here only to retry a failed adopt. */}
+        {chooserBook && chooserChapter !== null && (chapterKits.length > 1 || (chapterKits.length === 1 && !!adoptError && !kitPick)) && (
+          <select
+            aria-label={t.bar.chooseProductKit}
+            value={fromProduct?.lesson ?? ""}
+            disabled={locked || adopting}
+            onChange={(e) => {
+              const id = e.target.value;
+              if (id) void adoptAndPick({ bookId: chooserBook.id, chapterNum: chooserChapter, kit: id }, null);
+            }}
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
+          >
+            <option value="">{t.bar.chooseProductKit}</option>
+            {chapterKits.map((k, i) => (
+              <option key={k.id} value={k.id}>
+                {k.label || `${chooserBook.chapters.find((c) => c.num === chooserChapter)?.title ?? fmt(t.bar.chapterN, { n: chooserChapter + 1 })} · ${i + 1}`}
+              </option>
+            ))}
+          </select>
+        )}
+        {productPending && chapterKits.length === 0 && (
+          <span role="status" className="text-xs text-[#E7B05C]">
+            {t.bar.kitComingSoon}
+          </span>
+        )}
 
         {/* READY-MADE KITS: catalogue kits copied into the library have no book
             and no chapter, so the two pickers above can never reach them. One

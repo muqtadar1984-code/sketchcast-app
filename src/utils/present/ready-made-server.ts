@@ -1,5 +1,5 @@
 import "server-only";
-import { boardBooks, boardKits, type BoardBook, type BoardKit, type CatalogueOffer, type OwnKitRow } from "./ready-made";
+import { boardBooks, boardKits, type BoardBook, type BoardKit, type CatalogueOffer, type OwnKitRow, type ProductMapRow } from "./ready-made";
 
 // The Board page's two picker reads (rules in ./ready-made.ts). Best-effort
 // like every read on that page: a failure is a shorter list, never a broken
@@ -9,12 +9,28 @@ import { boardBooks, boardKits, type BoardBook, type BoardKit, type CatalogueOff
 type Db = { from: (table: string) => any; rpc: (fn: string, args?: Record<string, unknown>) => any };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Every book she may read (RLS), SketchCast books marked. Falls back to the pre-0175 columns. */
-export async function loadBoardBooks(session: Db): Promise<BoardBook[]> {
+/**
+ * Every book she may read (RLS), SketchCast books marked with their chapters'
+ * catalogue kits. RLS is the access decision (books_sk_product_read: a live
+ * grant); sk_product_kits is service-role only, so `admin` reads the map of
+ * exactly the products RLS returned. Falls back to the pre-0175 columns.
+ */
+export async function loadBoardBooks(session: Db, admin: Db | null = null): Promise<BoardBook[]> {
   const cols = "id, title, grade, subject, chapters";
   let res = await session.from("books").select(`${cols}, sk_product_id`).is("removed_at", null).order("title");
   if (res.error) res = await session.from("books").select(cols).is("removed_at", null).order("title");
-  return boardBooks(res.data ?? []);
+  const rows = (res.data ?? []) as { sk_product_id?: string | null }[];
+  const products = [...new Set(rows.map((b) => b.sk_product_id).filter((x): x is string => !!x))];
+  let map: ProductMapRow[] = [];
+  if (products.length && admin) {
+    try {
+      const { data } = await admin.from("sk_product_kits").select("product_id, chapter_ref, sort, generation_id, label").in("product_id", products);
+      map = (data ?? []) as ProductMapRow[];
+    } catch {
+      map = [];
+    }
+  }
+  return boardBooks(res.data ?? [], map);
 }
 
 /**

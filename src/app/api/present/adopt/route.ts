@@ -6,7 +6,9 @@ import { adoptCatalogueKit, adoptProductChapter, type AdoptDeps } from "@/utils/
 export const runtime = "nodejs";
 
 // POST /api/present/adopt — the Board's adopt-on-pick (utils/present/adopt.ts).
-//   { bookId, chapterNum }  a SketchCast book's chapter → her copy of its kit
+//   { bookId, chapterNum, kit? }  a SketchCast book's chapter → her copy of one
+//                           of its catalogue kits (`kit` = that kit's lesson id
+//                           when the chapter has several; omitted → the first)
 //   { catalogueKit }        a catalogue kit (topic_kits.id) → her copy of it
 // → 200 { kitId, title }: her own done, book-less presentation, which
 //   /api/present/session {kitId} and /api/present/kit?kit= then accept.
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
     typeof b.catalogueKit === "string"
       ? await adoptCatalogueKit(deps, c.userId, b.catalogueKit)
       : typeof b.bookId === "string" && typeof b.chapterNum === "number"
-        ? await adoptProductChapter(deps, b.bookId, b.chapterNum)
+        ? await adoptProductChapter(deps, b.bookId, b.chapterNum, typeof b.kit === "string" ? b.kit : null)
         : null;
   if (!result) return NextResponse.json({ error: "A book chapter or a catalogue kit is required." }, { status: 400 });
   if (result.ok) return NextResponse.json({ kitId: result.kitId, title: result.title });
