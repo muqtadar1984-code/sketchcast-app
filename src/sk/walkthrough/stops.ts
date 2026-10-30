@@ -262,7 +262,11 @@ const TEACHER: WalkStopDef[] = [
   { id: "classes", route: "/dashboard", anchors: ['[data-tour="classes"]'] },
   { id: "branding", route: "/dashboard", anchors: ['[data-tour="branding"]'] },
   { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', { sel: HERO, line: "myBooksNone" }] },
-  { id: "plan", route: "/dashboard", anchors: ['[data-tour="fair-use"]'] },
+  // The meter (fair-use-meter.tsx) renders NOTHING for an unlimited plan
+  // (my_fair_use().unlimited: staff, school plans with no cap), when the read
+  // fails, or without lesson tools — production 2026-10-30: {provider:"plan",
+  // why:"missing", error:"/dashboard settled"}. Then SK says so at its avatar.
+  { id: "plan", route: "/dashboard", anchors: ['[data-tour="fair-use"]', { sel: HERO, line: "planUnlimited" }] },
   // No autostart: pressing Start opens a Board session, so the tour only describes it.
   { id: "board", route: "/present?class={classId}", anchors: ['[data-tour="board-bar"]', '[data-sk="launcher"][data-sk-board="true"]'], needs: ["board"] },
   { id: "boardSk", route: "/present?class={classId}", anchors: ['[data-sk="launcher"][data-sk-board="true"]', HERO, LAUNCHER], needs: ["board"] },
