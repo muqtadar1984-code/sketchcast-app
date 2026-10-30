@@ -1241,7 +1241,9 @@
       "kitComingSoon": "Kit de leçon bientôt disponible",
       "assignChapter": "Attribuer le chapitre",
       "assignFailed": "Impossible de préparer ce chapitre pour l’attribuer. Veuillez réessayer.",
-      "bySketchCast": "Par SketchCast"
+      "bySketchCast": "Par SketchCast",
+      "teachOnBoard": "Enseigner au tableau",
+      "sharedWith": "Partagé avec le chapitre {n}"
     }
   },
   "school": {
@@ -1919,7 +1921,8 @@
       "preparingKit": "Ajout à votre bibliothèque…",
       "adoptFailed": "Impossible d’ouvrir ce kit. Réessayez.",
       "kitComingSoon": "Le kit de leçon de ce chapitre arrive bientôt.",
-      "kitLocked": "Débloquez d’abord ce kit sur la page Kits."
+      "kitLocked": "Débloquez d’abord ce kit sur la page Kits.",
+      "chooseProductKit": "Choisissez le kit"
     },
     "start": {
       "heading": "Choisissez ce que vous allez enseigner",

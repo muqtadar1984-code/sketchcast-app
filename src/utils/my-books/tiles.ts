@@ -26,9 +26,11 @@ export type MyBookTile = {
   forChildren: string[];
   withdrawn: boolean;
   /**
-   * 0175: the book's chapters, each with its ONE kit (product-book.ts) — the
-   * card lists them like an uploaded book. null = no system book yet (0175
-   * not applied, or the release not re-imported): the plain tile.
+   * 0175: the book's chapters, each with its catalogue kits (product-book.ts)
+   * — the card lists them like an uploaded book, with the Board and Assign.
+   * null = the plain tile: no system book yet (0175 not applied, or the
+   * release not re-imported), a student reader (their book opens in SK), or
+   * a child's book a parent sees.
    */
   chapters: ProductChapter[] | null;
   /** Who "Assign chapter" can reach (set by server.ts when chapters are listed); null = no Assign. */
@@ -43,7 +45,7 @@ export type TileDeps = {
   /** The reader passes the SK gate (flags + allow-list): "Open in SK" shows. */
   skOpen: boolean;
   /** The book's chapters (signed by the server after the decision); omitted → null. */
-  chapters?: (b: MyBook, skOpen: boolean) => Promise<ProductChapter[] | null>;
+  chapters?: (b: MyBook) => Promise<ProductChapter[] | null>;
 };
 
 export async function myBookTiles(books: MyBook[], deps: TileDeps): Promise<MyBookTile[]> {
@@ -61,7 +63,7 @@ export async function myBookTiles(books: MyBook[], deps: TileDeps): Promise<MyBo
       let chapters: ProductChapter[] | null = null;
       if (deps.chapters && !b.forChildren.length) {
         try {
-          chapters = await deps.chapters(b, deps.skOpen && !b.withdrawn);
+          chapters = await deps.chapters(b);
         } catch (e) {
           console.error("[sk-library] chapters failed:", (e as Error).message);
         }

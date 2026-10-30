@@ -5,6 +5,7 @@ import { skAccessAllowed, skEnabled, type SkGateUser } from "@/utils/flags";
 import { loadMyBooks, type MyBooksDb } from "./load";
 import { myBookTiles, type AssignTargets, type MyBookTile } from "./tiles";
 import { loadProductBooks, productChapters, type ProductBookDb } from "./product-book";
+import { presentEntitled } from "@/utils/present/entitlement";
 
 // SK S7 K3 — the dashboard's one call for the "My books" strip: decide (the
 // access check), then sign the covers of what was decided. Never throws — the
@@ -14,10 +15,14 @@ import { loadProductBooks, productChapters, type ProductBookDb } from "./product
 // FEATURE_SK + the allow-list, the same as /sk/[product]); the strip itself
 // and the PDF are not gated by any SK flag.
 //
-// 0175 — SketchCast books as Library books: for a book the reader holds
-// themselves, its chapters and each chapter's kit (the master files, signed
-// here with the service role AFTER the decision — the catalogue's pattern),
-// plus the reader's Assign targets (their classes, or a parent's children).
+// 0175 — SketchCast books as Library books: for a book a TEACHER or PARENT
+// holds themselves, its chapters and each chapter's catalogue kits (documents
+// signed here with the service role AFTER the decision — the catalogue's
+// pattern; the lesson video is a YouTube link), each chapter's Classroom
+// Board link when the reader may open the Board, and the reader's Assign
+// targets (their classes, or a parent's children). The book goes to the
+// Board, not to SK (founder 2026-10-30), so the card carries no "Open in SK";
+// a STUDENT keeps the plain tile, whose "Open in SK" is the student tutor.
 
 /** Same lifetime as every other Library link. */
 const KIT_LINK_SECONDS = 3600;
@@ -34,10 +39,20 @@ export async function myBooksStrip(user: SkGateUser & { id: string }, role: stri
       skOpen = false;
     }
     let systemBooks: Awaited<ReturnType<typeof loadProductBooks>> = new Map();
-    try {
-      systemBooks = await loadProductBooks(admin as unknown as ProductBookDb, books.filter((b) => !b.forChildren.length).map((b) => b.productId));
-    } catch (e) {
-      console.error("[sk-library] product books read failed:", (e as Error).message);
+    let boardOn = false;
+    if (role !== "student") {
+      try {
+        systemBooks = await loadProductBooks(admin as unknown as ProductBookDb, books.filter((b) => !b.forChildren.length).map((b) => b.productId));
+      } catch (e) {
+        console.error("[sk-library] product books read failed:", (e as Error).message);
+      }
+      if (systemBooks.size) {
+        try {
+          boardOn = (await presentEntitled(admin, user.id, user)).ok;
+        } catch {
+          boardOn = false;
+        }
+      }
     }
     const sign = async (path: string, download?: string) => {
       const { data } = await admin.storage.from("artifacts").createSignedUrl(path, KIT_LINK_SECONDS, download ? { download } : undefined);
@@ -46,10 +61,10 @@ export async function myBooksStrip(user: SkGateUser & { id: string }, role: stri
     const tiles = await myBookTiles(books, {
       sign: (key, seconds) => s3Link(key, undefined, seconds),
       skOpen,
-      chapters: async (b, open) => {
+      chapters: async (b) => {
         const hit = systemBooks.get(b.productId);
         if (!hit) return null;
-        return productChapters(hit.book, hit.masters, { sign, skHref: (ch) => (open ? `/sk/${encodeURIComponent(b.slug)}/${ch}` : null) });
+        return productChapters(hit, { sign, boardOn: boardOn && !b.withdrawn });
       },
     });
     // Assign targets only when a card lists chapters (one read, not per book).

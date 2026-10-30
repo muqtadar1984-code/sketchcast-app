@@ -1,125 +1,173 @@
-// SketchCast books as Library books (0175) — the bought book's chapters: every
-// chapter with its final title and its ONE kit (masters owned by the book's
-// own system owner only, newest done per kind, whole chapter), files signed
-// with download names, Assign sources = the student pieces, "coming soon" when
-// a chapter has no kit, and the loader's tolerance of 0175 not being applied.
+// SketchCast books as Library books (0175, reworked 2026-10-30) — the bought
+// book's chapters: every chapter with its final title and its CATALOGUE kits
+// (sk_product_kits, in topic order; a kit shared with an earlier chapter says
+// so), the lesson's Watch = YouTube (storage only as a logged fallback), the
+// documents signed with download names, Assign sources = the student pieces
+// across the chapter's kits, the Board deep link, "coming soon" when a chapter
+// has no kit, and the loader's tolerance of 0175 not being applied.
 // Run: node node_modules/vitest/vitest.mjs run src/utils/my-books/__tests__/product-book.test.ts
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fakeDb } from "@/sk/knowledge/__tests__/fake-db";
-import { chapterKit, loadProductBooks, productChapters, type MasterKitRow, type ProductSystemBook } from "../product-book";
+import { boardHref, loadProductBooks, productChapters, type ProductBookData, type ProductSystemBook } from "../product-book";
 import { myBookTiles } from "../tiles";
 import type { MyBook } from "../decide";
 
-const SYSTEM = "0c0c0c0c-0000-4000-8000-00000000000c";
-const TEACHER = "7e7e7e7e-0000-4000-8000-000000000007";
 const PRODUCT = "161828e0-32aa-40df-bbf3-16eb32c82504";
 const book: ProductSystemBook = {
   id: "b0000000-0000-4000-8000-000000000001",
-  owner_id: SYSTEM,
   sk_product_id: PRODUCT,
   title: "Cells",
   chapters: [
     { num: 1, title: "Microscopes" },
     { num: 0, title: "Cells" },
     { num: 2, title: "Membranes" },
+    { num: 3, title: "Transport" },
   ],
 };
 
-let n = 0;
-const g = (kind: string, chapter_ref: string, over: Partial<MasterKitRow> = {}): MasterKitRow => ({
-  id: `g${++n}`,
+const KIT_CELLS = "c0000001-0000-4000-8000-000000000000";
+const KIT_BLOOD = "c0000002-0000-4000-8000-000000000000";
+const KIT_RESP = "c0000003-0000-4000-8000-000000000000";
+const piece = (id: string, kind: string, artifacts: { kind: string; storage_path: string }[] = [], over: Record<string, unknown> = {}) => ({
+  id,
   kind,
-  title: `Cells · ${kind}`,
-  chapter_ref,
   status: "done",
-  owner_id: SYSTEM,
-  book_id: book.id,
-  params: {},
-  created_at: `2026-10-30T10:${String(n).padStart(2, "0")}:00Z`,
-  artifacts: [],
+  removed_at: null,
+  withdrawn_at: null,
+  artifacts,
   ...over,
 });
 
+function data(over: Partial<ProductBookData> = {}): ProductBookData {
+  return {
+    book,
+    map: [
+      { product_id: PRODUCT, chapter_ref: "1", sort: 0, generation_id: "cells-lesson", label: "Cells" },
+      { product_id: PRODUCT, chapter_ref: "3", sort: 0, generation_id: "cells-lesson", label: "Membranes" },
+      { product_id: PRODUCT, chapter_ref: "4", sort: 1, generation_id: "resp-lesson", label: "The Human Respiratory System" },
+      { product_id: PRODUCT, chapter_ref: "4", sort: 0, generation_id: "blood-lesson", label: "Blood and Its Components" },
+      { product_id: "another", chapter_ref: "2", sort: 0, generation_id: "x-lesson", label: "not this book" },
+    ],
+    kits: [
+      { id: KIT_CELLS, presentation_generation_id: "cells-lesson", doc_generation_ids: { worksheet: "cells-ws", lesson_plan: "cells-plan", deck: "cells-deck", case_study: "" } },
+      { id: KIT_BLOOD, presentation_generation_id: "blood-lesson", doc_generation_ids: { activity: "blood-act" } },
+      { id: KIT_RESP, presentation_generation_id: "resp-lesson", doc_generation_ids: {} },
+    ],
+    pieces: [
+      piece("cells-lesson", "presentation", [
+        { kind: "video_mp4", storage_path: "sys/c/lesson.mp4" },
+        { kind: "script_json", storage_path: "sys/c/script.json" },
+      ]),
+      piece("cells-deck", "deck", [{ kind: "deck_pptx", storage_path: "sys/c/deck.pptx" }]),
+      piece("cells-ws", "worksheet", [
+        { kind: "docx", storage_path: "sys/c/ws.docx" },
+        { kind: "answer_key_docx", storage_path: "sys/c/key.docx" },
+        { kind: "questions_json", storage_path: "sys/c/q.json" },
+      ]),
+      piece("cells-plan", "lesson_plan", [{ kind: "docx", storage_path: "sys/c/plan.docx" }]),
+      piece("blood-lesson", "presentation", [
+        { kind: "video_mp4", storage_path: "sys/b/lesson.mp4" },
+        { kind: "video_mp4", storage_path: "sys/b/lesson_part2.mp4" },
+      ]),
+      piece("blood-act", "activity", [{ kind: "docx", storage_path: "sys/b/act.docx" }], { removed_at: "2026-10-30" }),
+      piece("resp-lesson", "presentation", [{ kind: "video_mp4", storage_path: "sys/r/lesson.mp4" }]),
+    ],
+    youtube: new Map([
+      [KIT_CELLS, ["AAAAAAAAAA1"]],
+      // blood has 2 stored parts but only part 1 on YouTube → storage (logged)
+      [KIT_BLOOD, ["BBBBBBBBBB1"]],
+      [KIT_RESP, ["RRRRRRRRRR1"]],
+    ]),
+    ...over,
+  };
+}
+
 const sign = async (path: string, download?: string) => `signed:${path}${download ? `#${download}` : ""}`;
 
-describe("chapterKit", () => {
-  it("one kit: the newest done whole-chapter generation per kind, lesson first, masters only", () => {
-    const old = g("presentation", "0", { created_at: "2026-10-01T00:00:00Z" });
-    const lesson = g("presentation", "0");
-    const sheet = g("worksheet", "0");
-    const masters = [
-      sheet,
-      old,
-      lesson,
-      g("presentation", "0", { status: "error" }),
-      g("deck", "0", { params: { part: 2 } }), // a part kit is not the chapter's kit
-      g("exam_paper", "0", { owner_id: TEACHER }), // a teacher's row against the product book is never a master
-      g("activity", "0", { removed_at: "2026-10-30" }),
-      g("lesson_plan", "1"),
-    ];
-    expect(chapterKit(book, masters, 0).map((x) => x.id)).toEqual([lesson.id, sheet.id]);
-  });
-
-  it("documents without their lesson are not a kit yet", () => {
-    expect(chapterKit(book, [g("worksheet", "0")], 0)).toEqual([]);
-  });
-});
-
 describe("productChapters", () => {
-  it("lists EVERY chapter in order with its kit's signed files, or none yet", async () => {
-    const lesson = g("presentation", "0", {
-      artifacts: [
-        { kind: "video_mp4", storage_path: "sys/a/lesson_part2.mp4" },
-        { kind: "video_mp4", storage_path: "sys/a/lesson.mp4" },
-        { kind: "script_json", storage_path: "sys/a/script.json" },
-      ],
-    });
-    const deck = g("deck", "0", { artifacts: [{ kind: "deck_pptx", storage_path: "sys/d/deck.pptx" }] });
-    const sheet = g("worksheet", "0", {
-      artifacts: [
-        { kind: "docx", storage_path: "sys/w/ws.docx" },
-        { kind: "answer_key_docx", storage_path: "sys/w/key.docx" },
-        { kind: "questions_json", storage_path: "sys/w/q.json" },
-      ],
-    });
-    const plan = g("lesson_plan", "0", { artifacts: [{ kind: "docx", storage_path: "sys/p/plan.docx" }] });
-    const out = await productChapters(book, [plan, sheet, deck, lesson], { sign, skHref: (ch) => `/sk/cells/${ch}` });
-    expect(out.map((c) => [c.num, c.chapter, c.title, c.pieces.length, c.skHref])).toEqual([
-      [0, 1, "Cells", 4, "/sk/cells/1"],
-      [1, 2, "Microscopes", 0, "/sk/cells/2"],
-      [2, 3, "Membranes", 0, "/sk/cells/3"],
+  it("lists EVERY chapter in order with its catalogue kits in topic order, or none yet", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const out = await productChapters(data(), { sign, boardOn: true });
+    warn.mockRestore();
+    expect(out.map((c) => [c.num, c.chapter, c.title, c.kits.map((k) => k.lessonId)])).toEqual([
+      [0, 1, "Cells", ["cells-lesson"]],
+      [1, 2, "Microscopes", []],
+      [2, 3, "Membranes", ["cells-lesson"]],
+      [3, 4, "Transport", ["blood-lesson", "resp-lesson"]],
     ]);
-    const [c1] = out;
-    expect(c1.pieces.map((p) => p.kind)).toEqual(["presentation", "deck", "lesson_plan", "worksheet"]);
-    // videos in PART order, no download disposition (in-tab playback)
-    expect(c1.pieces[0].files).toEqual([
-      { label: "watch", part: 1, url: "signed:sys/a/lesson.mp4" },
-      { label: "watch", part: 2, url: "signed:sys/a/lesson_part2.mp4" },
-    ]);
-    expect(c1.pieces[1].files).toEqual([{ label: "deck", part: null, url: "signed:sys/d/deck.pptx#Deck.pptx" }]);
-    expect(c1.pieces[3].files.map((f) => f.label)).toEqual(["download", "answerKey"]); // never the questions json
-    // Assign carries the student pieces only (never the teacher's plan); the Board takes the whole kit
-    expect(c1.assignSources).toEqual([lesson.id, deck.id, sheet.id]);
-    expect(c1.boardSources).toEqual([lesson.id, deck.id, plan.id, sheet.id]);
   });
 
-  it("no SK gate → no per-chapter Open in SK", async () => {
-    const out = await productChapters(book, [], { sign, skHref: () => null });
-    expect(out.every((c) => c.skHref === null && c.pieces.length === 0)).toBe(true);
+  it("the lesson's Watch is the YouTube link — never a signed MP4 — and documents are signed with download names", async () => {
+    const out = await productChapters(data(), { sign, boardOn: true });
+    const kit = out[0].kits[0];
+    expect(kit.pieces.map((p) => p.kind)).toEqual(["presentation", "deck", "lesson_plan", "worksheet"]);
+    expect(kit.pieces[0].files).toEqual([{ label: "watch", part: null, url: "https://www.youtube.com/watch?v=AAAAAAAAAA1", youtube: true }]);
+    expect(kit.pieces[1].files).toEqual([{ label: "deck", part: null, url: "signed:sys/c/deck.pptx#Deck.pptx" }]);
+    expect(kit.pieces[3].files.map((f) => f.label)).toEqual(["download", "answerKey"]); // never the questions json
+  });
+
+  it("no watchable YouTube video for every part → the stored MP4s in part order, and it is logged", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const out = await productChapters(data(), { sign, boardOn: true });
+    const blood = out[3].kits[0];
+    expect(blood.pieces[0].files).toEqual([
+      { label: "watch", part: 1, url: "signed:sys/b/lesson.mp4" },
+      { label: "watch", part: 2, url: "signed:sys/b/lesson_part2.mp4" },
+    ]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(KIT_BLOOD));
+    warn.mockRestore();
+    // the removed activity is not offered
+    expect(blood.pieces.map((p) => p.kind)).toEqual(["presentation"]);
+  });
+
+  it("labels and sharing: the map's label, and a kit an earlier chapter maps says which", async () => {
+    const out = await productChapters(data(), { sign, boardOn: true });
+    expect(out[0].kits[0]).toMatchObject({ label: "Cells", sharedWith: null, topicKitId: KIT_CELLS });
+    expect(out[2].kits[0]).toMatchObject({ label: "Membranes", sharedWith: 1 });
+    expect(out[3].kits.map((k) => k.label)).toEqual(["Blood and Its Components", "The Human Respiratory System"]);
+  });
+
+  it("Assign = the student pieces across the chapter's kits (never the plan); the Board link only for a Board reader and a chapter with a kit", async () => {
+    const out = await productChapters(data(), { sign, boardOn: true });
+    expect(out[0].assignSources).toEqual(["cells-lesson", "cells-deck", "cells-ws"]);
+    expect(out[3].assignSources).toEqual(["blood-lesson", "resp-lesson"]);
+    expect(out[0].boardHref).toBe(`/present?book=${book.id}&chapter=0`);
+    expect(out[3].boardHref).toBe(boardHref(book.id, 3));
+    expect(out[1].boardHref).toBeNull(); // no kit, nothing to teach from
+    const off = await productChapters(data(), { sign, boardOn: false });
+    expect(off.every((c) => c.boardHref === null)).toBe(true);
+  });
+
+  it("a mapped lesson that is gone (withdrawn) or whose kit is unreadable is not offered", async () => {
+    const d = data();
+    d.pieces = d.pieces.map((p) => (p.id === "resp-lesson" ? { ...p, withdrawn_at: "2026-10-30" } : p));
+    d.kits = d.kits.filter((k) => k.id !== KIT_CELLS);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const out = await productChapters(d, { sign, boardOn: true });
+    warn.mockRestore();
+    expect(out[0].kits).toEqual([]);
+    expect(out[3].kits.map((k) => k.lessonId)).toEqual(["blood-lesson"]);
   });
 });
 
 describe("loadProductBooks", () => {
-  it("reads the system books of these products and their masters only", async () => {
-    const lesson = g("presentation", "0");
+  it("reads the system book, its map, the mapped APPROVED catalogue kits, their pieces and YouTube ids", async () => {
+    const d = data();
     const db = fakeDb({
-      books: [book, { ...book, id: "other-book", sk_product_id: "other" }, { id: "upload", owner_id: TEACHER, sk_product_id: null, title: "Mine", chapters: [] }],
-      generations: [lesson, g("worksheet", "0", { owner_id: TEACHER }), g("presentation", "0", { book_id: "other-book" })],
+      books: [book, { ...book, id: "other-book", sk_product_id: "other" }, { id: "upload", sk_product_id: null, title: "Mine", chapters: [] }],
+      sk_product_kits: d.map,
+      topic_kits: [...d.kits.map((k) => ({ ...k, status: "approved" })), { id: "rejected", presentation_generation_id: "cells-lesson", doc_generation_ids: {}, status: "rejected" }],
+      generations: d.pieces,
+      topic_publications: [{ topic_kit_id: KIT_CELLS, part: 1, youtube_video_id: "AAAAAAAAAA1", privacy: "public", superseded_by: null }],
     });
     const out = await loadProductBooks(db, [PRODUCT]);
     expect([...out.keys()]).toEqual([PRODUCT]);
-    expect(out.get(PRODUCT)!.book.id).toBe(book.id);
-    expect(out.get(PRODUCT)!.masters.map((m) => m.id)).toEqual([lesson.id]);
+    const hit = out.get(PRODUCT)!;
+    expect(hit.book.id).toBe(book.id);
+    expect(hit.map.every((r) => r.product_id === PRODUCT)).toBe(true);
+    expect(hit.kits.map((k) => k.id).sort()).toEqual([KIT_CELLS, KIT_BLOOD, KIT_RESP].sort());
+    expect(hit.pieces.map((p) => p.id)).toContain("cells-ws");
+    expect(hit.youtube.get(KIT_CELLS)).toEqual(["AAAAAAAAAA1"]);
   });
 
   it("0175 not applied → an empty map, no throw", async () => {
@@ -133,9 +181,9 @@ describe("myBookTiles with chapters", () => {
 
   it("a book the reader holds gets its chapters; a child's book (parent view) does not", async () => {
     let asked = 0;
-    const deps = { sign: async () => null, skOpen: true, chapters: async () => (asked++, await productChapters(book, [], { sign, skHref: () => null })) };
+    const deps = { sign: async () => null, skOpen: true, chapters: async () => (asked++, await productChapters(data({ map: [] }), { sign, boardOn: false })) };
     const [own] = await myBookTiles([mine], deps);
-    expect(own.chapters).toHaveLength(3);
+    expect(own.chapters).toHaveLength(4);
     const [kid] = await myBookTiles([{ ...mine, forChildren: ["Aisyah"] }], deps);
     expect(kid.chapters).toBeNull();
     expect(asked).toBe(1);

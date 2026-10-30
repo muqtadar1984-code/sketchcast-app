@@ -1241,7 +1241,9 @@
       "kitComingSoon": "کيت ڤلاجرن اکن داتڠ",
       "assignChapter": "توݢسکن باب",
       "assignFailed": "باب اين تيدق داڤت دسدياکن اونتوق دتوݢسکن. سيلا چوبا لاݢي.",
-      "bySketchCast": "اوليه SketchCast"
+      "bySketchCast": "اوليه SketchCast",
+      "teachOnBoard": "اجر دڤن ڤاڤن",
+      "sharedWith": "دکوڠسي دڠن باب {n}"
     }
   },
   "school": {
@@ -1919,7 +1921,8 @@
       "preparingKit": "منمبه ک ڤوستاک اندا…",
       "adoptFailed": "کيت اين تيدق داڤت دبوک. چوبا لاݢي.",
       "kitComingSoon": "کيت ڤلاجرن باب اين اکن داتڠ.",
-      "kitLocked": "بوک کونچي کيت اين دهالمن کيت دهولو."
+      "kitLocked": "بوک کونچي کيت اين دهالمن کيت دهولو.",
+      "chooseProductKit": "ڤيليه کيت"
     },
     "start": {
       "heading": "ڤيليه اڤ يڠ اندا اجر",

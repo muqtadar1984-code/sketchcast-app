@@ -1241,7 +1241,9 @@
       "kitComingSoon": "حقيبة الدرس قريبًا",
       "assignChapter": "تعيين الفصل",
       "assignFailed": "تعذّر تجهيز هذا الفصل للتعيين. يُرجى المحاولة مرة أخرى.",
-      "bySketchCast": "من SketchCast"
+      "bySketchCast": "من SketchCast",
+      "teachOnBoard": "درّس على السبورة",
+      "sharedWith": "مشترك مع الفصل {n}"
     }
   },
   "school": {
@@ -1919,7 +1921,8 @@
       "preparingKit": "جارٍ الإضافة إلى مكتبتك…",
       "adoptFailed": "تعذّر فتح هذه الحقيبة. حاول مرة أخرى.",
       "kitComingSoon": "حقيبة درس هذا الفصل قريبًا.",
-      "kitLocked": "افتح هذه الحقيبة من صفحة الحقائب أولًا."
+      "kitLocked": "افتح هذه الحقيبة من صفحة الحقائب أولًا.",
+      "chooseProductKit": "اختر الحقيبة"
     },
     "start": {
       "heading": "اختر ما ستدرّسه",

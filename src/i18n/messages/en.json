@@ -1241,7 +1241,9 @@
       "kitComingSoon": "Lesson kit coming soon",
       "assignChapter": "Assign chapter",
       "assignFailed": "This chapter could not be prepared for assigning. Please try again.",
-      "bySketchCast": "By SketchCast"
+      "bySketchCast": "By SketchCast",
+      "teachOnBoard": "Teach on the board",
+      "sharedWith": "Shared with Chapter {n}"
     }
   },
   "school": {
@@ -1919,7 +1921,8 @@
       "preparingKit": "Adding to your library…",
       "adoptFailed": "This kit could not be opened. Try again.",
       "kitComingSoon": "This chapter's lesson kit is coming soon.",
-      "kitLocked": "Unlock this kit on the Kits page first."
+      "kitLocked": "Unlock this kit on the Kits page first.",
+      "chooseProductKit": "Choose the kit"
     },
     "start": {
       "heading": "Choose what you are teaching",

@@ -1241,7 +1241,9 @@
       "kitComingSoon": "पाठ किट लवकरच येत आहे",
       "assignChapter": "प्रकरण नेमून द्या",
       "assignFailed": "हे प्रकरण नेमून देण्यासाठी तयार करता आले नाही. कृपया पुन्हा प्रयत्न करा.",
-      "bySketchCast": "SketchCast कडून"
+      "bySketchCast": "SketchCast कडून",
+      "teachOnBoard": "फलकावर शिकवा",
+      "sharedWith": "प्रकरण {n} सोबत सामायिक"
     }
   },
   "school": {
@@ -1919,7 +1921,8 @@
       "preparingKit": "तुमच्या लायब्ररीत जोडत आहे…",
       "adoptFailed": "हे किट उघडता आले नाही. पुन्हा प्रयत्न करा.",
       "kitComingSoon": "या प्रकरणाचे पाठ किट लवकरच येत आहे.",
-      "kitLocked": "आधी किट पानावर हे किट अनलॉक करा."
+      "kitLocked": "आधी किट पानावर हे किट अनलॉक करा.",
+      "chooseProductKit": "किट निवडा"
     },
     "start": {
       "heading": "तुम्ही काय शिकवणार आहात ते निवडा",

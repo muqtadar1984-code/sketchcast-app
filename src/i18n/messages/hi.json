@@ -1241,7 +1241,9 @@
       "kitComingSoon": "पाठ किट जल्द आ रही है",
       "assignChapter": "अध्याय असाइन करें",
       "assignFailed": "यह अध्याय असाइन करने के लिए तैयार नहीं हो सका। कृपया फिर से कोशिश करें।",
-      "bySketchCast": "SketchCast द्वारा"
+      "bySketchCast": "SketchCast द्वारा",
+      "teachOnBoard": "बोर्ड पर पढ़ाएँ",
+      "sharedWith": "अध्याय {n} के साथ साझा"
     }
   },
   "school": {
@@ -1919,7 +1921,8 @@
       "preparingKit": "आपकी लाइब्रेरी में जोड़ा जा रहा है…",
       "adoptFailed": "यह किट खोली नहीं जा सकी। फिर से कोशिश करें।",
       "kitComingSoon": "इस अध्याय की पाठ किट जल्द आ रही है।",
-      "kitLocked": "पहले किट पेज पर यह किट अनलॉक करें।"
+      "kitLocked": "पहले किट पेज पर यह किट अनलॉक करें।",
+      "chooseProductKit": "किट चुनें"
     },
     "start": {
       "heading": "आप क्या पढ़ा रहे हैं, वह चुनें",

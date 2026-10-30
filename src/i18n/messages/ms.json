@@ -1241,7 +1241,9 @@
       "kitComingSoon": "Kit pelajaran akan datang",
       "assignChapter": "Tugaskan bab",
       "assignFailed": "Bab ini tidak dapat disediakan untuk ditugaskan. Sila cuba lagi.",
-      "bySketchCast": "Oleh SketchCast"
+      "bySketchCast": "Oleh SketchCast",
+      "teachOnBoard": "Ajar di papan",
+      "sharedWith": "Dikongsi dengan Bab {n}"
     }
   },
   "school": {
@@ -1919,7 +1921,8 @@
       "preparingKit": "Menambah ke pustaka anda…",
       "adoptFailed": "Kit ini tidak dapat dibuka. Cuba lagi.",
       "kitComingSoon": "Kit pelajaran bab ini akan datang.",
-      "kitLocked": "Buka kunci kit ini di halaman Kit dahulu."
+      "kitLocked": "Buka kunci kit ini di halaman Kit dahulu.",
+      "chooseProductKit": "Pilih kit"
     },
     "start": {
       "heading": "Pilih apa yang anda ajar",
