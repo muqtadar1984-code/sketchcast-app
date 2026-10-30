@@ -216,3 +216,12 @@ describe("Report a problem: the stop follows the widget's flag", () => {
     }
   });
 });
+
+// Founder decision 2026-10-30: lesson videos play our STORED MP4 everywhere
+// (Board, Library, kits, SK); YouTube is only a fallback. No tour line names it.
+describe("no tour line claims YouTube playback", () => {
+  it("in any of the ten files", () => {
+    for (const [code, file] of Object.entries(FILES)) expect(JSON.stringify(file.sk.walkthrough), code).not.toMatch(/youtube|يوتيوب|यूट्यूब|యూట్యూబ్/i);
+    expect(en.sk.walkthrough.teacher.boardSk).toContain("Ready-made kits play right here on the Board");
+  });
+});
