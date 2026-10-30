@@ -42,6 +42,11 @@ export function toAnthropicTools(tools: ToolDef[]): Anthropic.Tool[] {
   }));
 }
 
+/** Where one provider's calls go (2026-10-30, SK only): a Bedrock region and a
+ *  model-id overlay (SK_BEDROCK_REGION / SK_BEDROCK_MODEL_MAP). Unset = the
+ *  app-wide BEDROCK_REGION and maps; both are ignored on the first-party API. */
+export type ProviderTarget = { region?: string; modelMap?: Readonly<Record<string, string>> };
+
 export class AnthropicProvider implements LLMProvider {
   readonly id = "anthropic";
   // Sonnet 5 is the quality tier for the student-facing assistant (same model the
@@ -50,14 +55,17 @@ export class AnthropicProvider implements LLMProvider {
 
   /** `model` pins a first-party id for one caller (SK B4: Haiku 5.5 for the
    * intent router, Sonnet 5.5 for the teacher); the assistant keeps the env default. */
-  constructor(model?: string) {
-    this.model = claudeModel(model || process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-sonnet-5");
+  private readonly region?: string;
+
+  constructor(model?: string, target: ProviderTarget = {}) {
+    this.model = claudeModel(model || process.env.ASSISTANT_ANTHROPIC_MODEL || "claude-sonnet-5", target.modelMap);
+    this.region = target.region;
   }
 
   async *stream(opts: GenerateOpts): AsyncGenerator<StreamEvent, void, void> {
     let stream: AsyncIterable<Anthropic.RawMessageStreamEvent>;
     try {
-      stream = await anthropic().messages.create({
+      stream = await anthropic(this.region ? { region: this.region } : undefined).messages.create({
         model: this.model,
         max_tokens: opts.maxTokens ?? 1024,
         // NOTE: no `temperature`. Sonnet 5 (the default model) 400s with

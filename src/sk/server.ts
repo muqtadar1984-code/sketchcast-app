@@ -13,6 +13,7 @@
 
 import { NextResponse } from "next/server";
 import { claudeConfigured } from "@/utils/claude-backend";
+import { skProviderTarget } from "./claude-target";
 import { skAccessAllowed, skAllowanceEnforced, skEnabled } from "@/utils/flags";
 import type { LLMProvider } from "@/utils/assistant/provider";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -86,7 +87,8 @@ function lazyProvider(model: string): LLMProvider {
       model,
       async *stream(opts) {
         const { AnthropicProvider } = await import("@/utils/assistant/providers/anthropic");
-        yield* new AnthropicProvider(model).stream(opts);
+        // 2026-10-30: SK's own Bedrock region / model overlay (claude-target.ts).
+        yield* new AnthropicProvider(model, skProviderTarget()).stream(opts);
       },
     };
     providerCache.set(model, p);

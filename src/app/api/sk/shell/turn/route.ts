@@ -5,6 +5,8 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { skEnabled, skShellEnabledFor } from "@/utils/flags";
 import { LOCALE_COOKIE, isLocale } from "@/i18n/locales";
 import { AnthropicProvider } from "@/utils/assistant/providers/anthropic";
+// 2026-10-30: SK's own Bedrock region / model overlay (SK_BEDROCK_REGION, SK_BEDROCK_MODEL_MAP).
+import { skProviderTarget } from "@/sk/claude-target";
 import type { Turn } from "@/utils/assistant/provider";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
 import { loadContext } from "@/sk/shell/context";
@@ -326,7 +328,7 @@ export async function POST(request: Request) {
     }
     // The manifest's own language (server truth) decides, under her override.
     const tl = langOver(sup.language ? [sup.language] : preSources);
-    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
+    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${teachingBlock(sup)}`;
     let full = "";
     let usage: { inputTokens: number; outputTokens: number } | undefined;
@@ -361,7 +363,7 @@ export async function POST(request: Request) {
     const k = await searchForUser(ctx, deps, { query: q, restrict: own, limit: 4 });
     if (k.status !== "ok" || !k.passages.length) return null;
     const tl = langOver(k.passages.map((p) => p.language));
-    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
+    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${knowledgeBlock(k.passages)}`;
     const question = `Explain "${q}" to the class in 2–4 short sentences, in ${languageName(tl.lang)}, using only the passages in KNOWLEDGE (this lesson's own book). No headings, no lists.`;
     let full = "";
@@ -405,7 +407,7 @@ export async function POST(request: Request) {
     const selected = selectionOnSlide(sel, slide);
     if (!selected) return { text: noSelection, sources: [name], label: "declined" };
     const fallback = sayFor("explain_selection", ctx.user.locale, { n: slide.n, text: clipWords(selected, 160) });
-    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
+    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${selectionBlock(slide, selected)}`;
     let full = "";
     let usage: { inputTokens: number; outputTokens: number } | undefined;
@@ -681,7 +683,7 @@ export async function POST(request: Request) {
           done({ sources: r.label === "grounded" ? sources : [], label: r.label === "grounded" ? last.label : "declined", ...(r.usage ? { usage: r.usage } : {}), ...(r.trimmed ? { trimmed: true } : {}) }, text, [], undefined, { langOverride: code });
           return;
         }
-        const r = await repeatAnswer({ provider: new AnthropicProvider(skTranslateModel()), original: last.text, target: code, question: body.text, signal: abort.signal });
+        const r = await repeatAnswer({ provider: new AnthropicProvider(skTranslateModel(), skProviderTarget()), original: last.text, target: code, question: body.text, signal: abort.signal });
         if (r.cancelled) return;
         send({ type: "text", text: r.text });
         done({ sources, label: last.label, ...(r.usage ? { usage: r.usage } : {}), ...(r.trimmed ? { trimmed: true } : {}) }, r.text, [], undefined, { langOverride: code });
@@ -1028,7 +1030,7 @@ export async function POST(request: Request) {
         }
 
         // ── The model, with the allowed tools ────────────────────────────────
-        const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
+        const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
         const trace: ToolTrace[] = [];
         // The chip for a tool goes out the moment THAT tool finishes; the
         // orchestrator runs a round's tools side by side, so "the last trace
