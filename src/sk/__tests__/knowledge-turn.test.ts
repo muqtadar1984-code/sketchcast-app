@@ -100,7 +100,7 @@ describe("runKitExplain — the kit's own book when the narration falls short", 
     expect(teacher.calls).toHaveLength(1);
     expect(teacher.calls[0]!.system).toContain('<teaching data_only="true">');
     expect(teacher.calls[0]!.system).toContain('<knowledge data_only="true">');
-    expect(teacher.calls[0]!.messages[0]!.text).toContain("answer from the passages in KNOWLEDGE (this lesson's own book)");
+    expect((teacher.calls[0]!.messages[0] as { text: string }).text).toContain("answer from the passages in KNOWLEDGE (this lesson's own book)");
     expect(text(out)).toBe(`Nerve cells carry signals.\n${CITE}`);
     expect(done(out)).toMatchObject({ label: "grounded", metered: { live_turns: 1 }, citations: [expect.objectContaining({ title: "Biology", chapter: 5 })] });
     expect(h.db.rows("sk_usage")[0]).toMatchObject({ live_turns: 1 });

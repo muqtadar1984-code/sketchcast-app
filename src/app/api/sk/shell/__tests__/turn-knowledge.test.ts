@@ -197,7 +197,7 @@ describe("a student's content question, no lesson open", () => {
     expect(evs.find((e) => e.type === "lang")).toMatchObject({ lang: "ar", dir: "rtl" });
     expect(text(evs)).toBe("التنفس الخلوي يطلق الطاقة من الغلوكوز.\nالمصدر: كتابي · الفصل 2 · التنفس");
     expect(doneOf(evs)).toMatchObject({ citations: [{ title: "كتابي", chapter: 2, anchor: "p4", section: "التنفس", kind: "user_book" }] });
-    expect(teacher.calls[0]!.messages[0]!.text).toContain("Answer in Arabic");
+    expect((teacher.calls[0]!.messages[0] as { text: string }).text).toContain("Answer in Arabic");
     expect(db.rows("sk_usage")).toHaveLength(1);
   });
 
