@@ -69,6 +69,18 @@ describe("REGISTRY × role × hat — allowedFor agrees with each entry's declar
   });
 });
 
+describe("S7 K2: knowledge.search is in the matrix", () => {
+  it("every role and every hat sees it with the sk flag on; nobody without it", () => {
+    expect(REGISTRY.map((e) => e.meta.name)).toContain("knowledge.search");
+    for (const role of ROLES) {
+      for (const hat of HATS) expect(allowedFor(cell(role, hat)).map((c) => c.meta.name), `${role}/${hat}`).toContain("knowledge.search");
+      expect(allowedFor(cell(role, null, { flags: { ...ALL_FLAGS, sk: false } })).map((c) => c.meta.name), role).not.toContain("knowledge.search");
+    }
+    const e = REGISTRY.find((x) => x.meta.name === "knowledge.search")!;
+    expect(e.meta).toMatchObject({ tier: "immediate", kind: "read", flags: ["sk"] });
+  });
+});
+
 describe("cross-tenant: context.resolve never surfaces another school's or teacher's rows", () => {
   const leaky = fakeSession({
     classes: [

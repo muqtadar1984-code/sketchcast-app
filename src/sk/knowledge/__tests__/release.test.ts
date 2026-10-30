@@ -11,6 +11,7 @@ import { pythonDumps, sha256Hex } from "../canonical-json";
 import { importRelease, pickRelease, pollReleases, releaseBlocks, verifyBundle, type BundleReader, type ReleaseRow } from "../release";
 import { fakeDb } from "./fake-db";
 
+const BOOK_APPROVAL = 77;
 const ANSWERS = ["ANSWER-SEVEN-42", "SOLUTION-STEP-SUBTRACT-3", "MARK-POINT-SECRET", "OPTION-DISTRACTOR-Q"];
 
 function chapter(n: number, lang: "en" | "ar") {
@@ -38,7 +39,8 @@ function chapter(n: number, lang: "en" | "ar") {
     chapter: n,
     title: en ? `Chapter ${n} — The Language of Algebra` : `الفصل ${n}`,
     content_sha256,
-    approval: { kind: "gate_d", id: 400 + n, by: "editor@sketchcast.app", on: "2026-10-30" },
+    // chapter 2 is covered by a BOOK-level approval (as Biology ch 2–10 by r4.1); the rest by Gate D
+    approval: n === 2 ? { kind: "book", id: BOOK_APPROVAL, by: "founder@sketchcast.app", on: "2026-10-26" } : { kind: "gate_d", id: 400 + n, by: "editor@sketchcast.app", on: "2026-10-30" },
     objectives: [{ code: "7Ae.01", text: "Use letters" }],
     sections,
     exercises,
@@ -79,7 +81,15 @@ function release(id: number, opts: { lang?: "en" | "ar"; kind?: "final" | "draft
     curriculum_code: "c",
     grade_band: "Stage 7",
     age_band: "11–14",
-    chapters: chapters.map((c) => ({ chapter: c.chapter, title: c.title, content_sha256: c.content_sha256, gate_d_approval_id: 400 + c.chapter, pdf_key: c.pdf.key })),
+    chapters: chapters.map((c) => ({
+      chapter: c.chapter,
+      title: c.title,
+      content_sha256: c.content_sha256,
+      approval_id: c.approval.id,
+      approval_kind: c.approval.kind as "gate_d" | "book",
+      gate_d_approval_id: c.approval.kind === "gate_d" ? c.approval.id : null, // null when the approval is the book-level one
+      pdf_key: c.pdf.key,
+    })),
     chapter_count: chapters.length,
     bundle_key: key,
     bundle_sha256: sha256Hex(Buffer.from(text, "utf8")),
@@ -145,6 +155,61 @@ describe("verifyBundle — the contract's hash rule", () => {
     const r = release(12);
     const row = { ...r.row, chapters: r.row.chapters.map((c) => (c.chapter === 2 ? { ...c, content_sha256: "ab".repeat(32) } : c)) };
     expect(verifyBundle(row, Buffer.from(r.text)).problems).toEqual(["chapter 2: hash differs from the release row"]);
+  });
+});
+
+describe("verifyBundle — chapter approvals (gate_d or book)", () => {
+  const patched = (r: ReturnType<typeof release>, f: (b: { chapters: { approval: Record<string, unknown> | null }[] }) => void) => {
+    const b = JSON.parse(r.text);
+    f(b);
+    return Buffer.from(JSON.stringify(b));
+  };
+  it("a book-approved chapter passes with gate_d_approval_id null on the row", () => {
+    const r = release(12);
+    expect(r.bundle.chapters[1].approval).toMatchObject({ kind: "book", id: BOOK_APPROVAL });
+    expect(r.row.chapters[1]).toMatchObject({ approval_kind: "book", approval_id: BOOK_APPROVAL, gate_d_approval_id: null });
+    expect(verifyBundle(r.row, Buffer.from(r.text)).problems).toEqual([]);
+  });
+  it("a row written before the contract change (no approval_kind / approval_id) still verifies", () => {
+    const r = release(12);
+    const row = { ...r.row, chapters: r.row.chapters.map((c) => {
+      const old = { ...c };
+      delete old.approval_id;
+      delete old.approval_kind;
+      return old;
+    }) };
+    expect(verifyBundle(row, Buffer.from(r.text)).problems).toEqual([]);
+  });
+  it("an approval with no id is refused, whatever its kind", () => {
+    const r = release(12);
+    const bytes = patched(r, (b) => { delete b.chapters[0].approval!.id; b.chapters[1].approval!.id = null; });
+    expect(verifyBundle({ ...r.row, bundle_sha256: "" }, bytes).problems).toEqual(["chapter 1: approval has no id", "chapter 2: approval has no id"]);
+  });
+  it("a missing approval or an unknown kind is refused", () => {
+    const r = release(12);
+    const bytes = patched(r, (b) => { b.chapters[0].approval = null; b.chapters[1].approval!.kind = "gate_c"; });
+    expect(verifyBundle({ ...r.row, bundle_sha256: "", chapters: r.row.chapters.map((c) => ({ ...c, approval_kind: null })) }, bytes).problems).toEqual([
+      "chapter 1: no approval",
+      'chapter 2: approval kind "gate_c" is not gate_d or book',
+    ]);
+  });
+  it("a gate_d chapter still needs its gate_d_approval_id on the row", () => {
+    const r = release(12);
+    const row = { ...r.row, chapters: r.row.chapters.map((c) => ({ ...c, gate_d_approval_id: null })) };
+    expect(verifyBundle(row, Buffer.from(r.text)).problems).toEqual(["chapter 1: a gate_d approval needs gate_d_approval_id on the release row"]);
+  });
+  it("the row and the bundle must agree on the approval kind and id", () => {
+    const r = release(12);
+    const row = { ...r.row, chapters: r.row.chapters.map((c) => (c.chapter === 2 ? { ...c, approval_kind: "gate_d" as const, approval_id: 5 } : c)) };
+    expect(verifyBundle(row, Buffer.from(r.text)).problems).toEqual([
+      "chapter 2: approval kind book differs from the release row (gate_d)",
+      "chapter 2: approval id 77 differs from the release row (5)",
+    ]);
+  });
+  it("a final with a book-approved chapter imports", async () => {
+    const r = release(12);
+    const db = fakeDb({ pub_releases: [r.row] });
+    expect(await importRelease(db, s3With({ [r.key]: r.text }), r.row)).toMatchObject({ status: "ok", release_id: 12 });
   });
 });
 

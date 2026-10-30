@@ -25,7 +25,7 @@
 //
 // Every line SK says here is a fixed line in her language (shell/tutor-lines.ts).
 
-import type { SkCapability, SkCapabilityDeps, SkCapabilityMeta, SkCapabilityResult, SkContext, SkJsonSchema, SkTutorMove, SkTutorState } from "@/sk/shell/types";
+import type { SkCapability, SkCapabilityDeps, SkCapabilityMeta, SkCapabilityResult, SkCitation, SkContext, SkJsonSchema, SkTutorMove, SkTutorState } from "@/sk/shell/types";
 import { lineFor } from "@/sk/shell/lines";
 import {
   TUTOR_CHAPTER,
@@ -51,11 +51,17 @@ import {
   TUTOR_WHERE_WATCH,
   TUTOR_WHERE_WEAK,
 } from "@/sk/shell/tutor-lines";
-import { SK_STUDENT_RULES } from "@/sk/shell/prompt";
+import { SK_STUDENT_KNOWLEDGE_RULES, SK_STUDENT_RULES } from "@/sk/shell/prompt";
 import { isEventId } from "@/sk/ids";
 import { kitDeps, readyManifest, resolveKit } from "@/sk/kit-server";
-import { runKitExplain, runKitRepeat } from "@/sk/kit-turn";
-import { answerLanguage, languageName, type SkAnswerLang } from "@/sk/shell/language";
+import { runKitExplain, runKitRepeat, runKnowledgeExplain } from "@/sk/kit-turn";
+import { liveAllowed } from "@/sk/entitlement";
+import { loadAccessFor } from "@/sk/loop";
+import { supportFrom, teachingSupportTokens } from "@/sk/shell/teach";
+import { citeLine } from "@/sk/shell/knowledge-lines";
+import { narrationCovers, type Passage } from "@/sk/knowledge/answer";
+import { kitOwnSources, searchForUser } from "./knowledge";
+import { answerLanguage, languageName, linesLocale, type SkAnswerLang } from "@/sk/shell/language";
 import type { SseEvent } from "@/sk/types";
 import { loadTutorKit, practisedSections, progressGroups, readKitAttempts, readObjectiveMastery, studentChapters, visibleProducts, whereNext } from "@/sk/tutor";
 import { resolveSegment } from "./board";
@@ -248,6 +254,22 @@ async function explainSection(ctx: SkContext, t: SkTutorState, s: Section, quest
   }
   if (!events) {
     const sent: SseEvent[] = [];
+    // S7 K2: her question goes beyond this section's narration → the kit's
+    // OWN book / article (never another source) adds passages to the ONE call.
+    let knowledge: Passage[] = [];
+    if (question) {
+      const sup = supportFrom(ready.manifest, { segmentId: s.key });
+      if (sup.status === "ready" && !narrationCovers(question, teachingSupportTokens(sup))) {
+        try {
+          const own = await kitOwnSources(ctx, deps, { productSlug: r.product.slug, bookId: ready.manifest.book_id, articleId: ready.manifest.article_id });
+          const k = own.length ? await searchForUser(ctx, deps, { query: question, restrict: own, limit: 4 }) : null;
+          if (k?.status === "ok") knowledge = k.passages;
+        } catch (e) {
+          console.error("[sk] tutor.explain knowledge:", (e as Error).message);
+        }
+      }
+    }
+    const cite = knowledge.length ? citeLine(knowledge.map((p) => ({ title: p.source_title, chapter: p.chapter, section: p.section })), linesLocale(lang.lang)) : undefined;
     try {
       for await (const ev of runKitExplain(kd, {
         studentId: ctx.user.id,
@@ -258,6 +280,7 @@ async function explainSection(ctx: SkContext, t: SkTutorState, s: Section, quest
         language,
         signal: deps.signal,
         rules: SK_STUDENT_RULES,
+        ...(knowledge.length ? { knowledge, ...(cite ? { cite } : {}) } : {}),
       }))
         sent.push(ev);
       if (eventId) await kd.store.completeEvent(scope, eventId, "kit_turn", sent);
@@ -272,20 +295,115 @@ async function explainSection(ctx: SkContext, t: SkTutorState, s: Section, quest
     .map((e) => String(e.data ?? ""))
     .join("")
     .trim();
-  const done = (events.find((e) => e.event === "done")?.data ?? {}) as { label?: string; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean; metered?: unknown };
+  const done = (events.find((e) => e.event === "done")?.data ?? {}) as { label?: string; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean; metered?: unknown; citations?: SkCitation[] };
   const label = done.label === "grounded" && text ? "grounded" : "declined";
+  const citations = label === "grounded" && done.citations?.length ? done.citations : null;
   return {
     ok: !!text,
     summary: text.slice(0, 300) || "No answer.",
     ...(sourceLanguage ? { language: sourceLanguage } : {}),
+    ...(citations ? { citations } : {}),
     facts: [{ section: s.k + 1, heading: s.heading, label, metered: !!done.metered && !replayed, replayed }],
     reply: {
       text,
       label,
-      sources: label === "grounded" ? [name, "kit"] : [],
+      sources: label === "grounded" ? [name, "kit", ...(citations ? ["knowledge.search"] : [])] : [],
       ...(done.usage && !replayed ? { usage: done.usage } : {}),
       ...(done.trimmed ? { trimmed: true } : {}),
     },
+  };
+}
+
+// ── S7 K2: her content question with no lesson open ────────────────────────
+
+/** The product a student's knowledge turn is counted against: a book the
+ *  passages came from first, then every product she can see — the first one
+ *  her tutor access (with allowance left) covers. None → the first, so the
+ *  turn says SK's own "live help has ended" line and makes no model call. */
+async function meterProductFor(ctx: SkContext, deps: SkCapabilityDeps, kd: ReturnType<typeof kitDeps>, preferred: string[]): Promise<string> {
+  const all = [...new Set([...preferred, ...(await visibleProducts(deps.session).catch(() => [] as string[]))])];
+  for (const slug of all) {
+    try {
+      if (liveAllowed(await loadAccessFor(kd, ctx.user.id, slug))) return slug;
+    } catch {
+      // an unreadable product is skipped
+    }
+  }
+  return all[0] ?? "";
+}
+
+/**
+ * A student's content question ("what is osmosis?") with no lesson open: her
+ * knowledge.search passages (her own sources only), then ONE grounded model
+ * call METERED ONCE through meterUsage (kit-turn.ts runKnowledgeExplain) —
+ * the same rules and write point as tutor.explain, the Shell turn id claimed
+ * in the kit turn's replay scope so a resend never meters twice. Null when no
+ * passage answers it (the route then shows her where she is, as before).
+ * Not a registry entry: the route calls it for a student's content question.
+ */
+export async function knowledgeForStudent(ctx: SkContext, question: string, deps: SkCapabilityDeps): Promise<(SkCapabilityResult & { metered: boolean; passages: number }) | null> {
+  const name = "knowledge.search";
+  const q = strArg(question, 600);
+  if (!q || ctx.user.role !== "student") return null;
+  const k = await searchForUser(ctx, deps, { query: q, limit: 5 });
+  if (k.status !== "ok" || !k.passages.length) return null;
+  const passages = k.passages;
+  const lang = answerLanguage({ override: ctx.answer?.override ?? null, sourceLanguages: passages.map((p) => p.language), uiLocale: ctx.answer?.uiLocale ?? ctx.user.locale });
+  const cite = citeLine(passages.map((p) => ({ title: p.source_title, chapter: p.chapter, section: p.section })), linesLocale(lang.lang));
+  const kd = kitDeps();
+
+  const scope = `kit:${ctx.user.id}`;
+  const eventId = isEventId(deps.turnId) ? deps.turnId : null;
+  let events: SseEvent[] | null = null;
+  let replayed = false;
+  if (eventId) {
+    const claim = await kd.store.claimEvent<SseEvent[]>(scope, eventId);
+    if (claim.status !== "new") {
+      const stored = claim.status === "stored" ? claim.event : await claim.done.catch(() => null);
+      events = stored?.result ?? [];
+      replayed = true;
+    }
+  }
+  if (!events) {
+    const sent: SseEvent[] = [];
+    try {
+      const preferred = passages
+        .filter((p) => p.kind === "sketchcast_book")
+        .map((p) => k.searched.find((s) => s.kind === "sketchcast_book" && s.id === p.source_id)?.product?.slug)
+        .filter((x): x is string => !!x);
+      const productSlug = await meterProductFor(ctx, deps, kd, preferred);
+      for await (const ev of runKnowledgeExplain(kd, { studentId: ctx.user.id, productSlug, passages, question: q, language: languageName(lang.lang), cite, signal: deps.signal, rules: SK_STUDENT_KNOWLEDGE_RULES })) sent.push(ev);
+      if (eventId) await kd.store.completeEvent(scope, eventId, "kit_turn", sent);
+    } catch (e) {
+      if (eventId) await kd.store.releaseEvent(scope, eventId, e);
+      throw e;
+    }
+    events = sent;
+  }
+  const text = events
+    .filter((e) => e.event === "text")
+    .map((e) => String(e.data ?? ""))
+    .join("")
+    .trim();
+  const done = (events.find((e) => e.event === "done")?.data ?? {}) as { label?: string; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean; metered?: unknown; citations?: SkCitation[] };
+  const label = done.label === "grounded" && text ? "grounded" : "declined";
+  const citations = label === "grounded" && done.citations?.length ? done.citations : null;
+  const shared = lang.from === "source" ? lang.lang : null;
+  return {
+    ok: !!text,
+    summary: text.slice(0, 300) || "No answer.",
+    ...(shared ? { language: shared } : {}),
+    ...(citations ? { citations } : {}),
+    facts: [{ passages: passages.length, label, metered: !!done.metered && !replayed, replayed }],
+    reply: {
+      text,
+      label,
+      sources: label === "grounded" ? [name, "knowledge"] : [],
+      ...(done.usage && !replayed ? { usage: done.usage } : {}),
+      ...(done.trimmed ? { trimmed: true } : {}),
+    },
+    metered: !!done.metered && !replayed,
+    passages: passages.length,
   };
 }
 

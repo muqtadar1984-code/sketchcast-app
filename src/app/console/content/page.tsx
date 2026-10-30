@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { InkUnderline } from "@/components/ink-mark";
 import TakedownButton from "./takedown-button";
+import ReleaseImportsCard from "./release-imports-card";
+import { isPlatformAdminRequest } from "@/utils/platform-admin";
 
 // All books + generations across the platform, incl. removed ones — with
 // takedown/restore. Soft-delete only: rows are hidden+frozen for school-side
@@ -15,6 +17,8 @@ export default async function ConsoleContentPage({
 }) {
   const { q } = await searchParams;
   const admin = createAdminClient();
+  // The founder's "Import now" card (SK S7 K3) renders for FOUNDER_EMAILS only.
+  const viewer = await isPlatformAdminRequest();
 
   const [booksQ, gensQ, profilesQ] = await Promise.all([
     admin.from("books").select("*").order("created_at", { ascending: false }).limit(200),
@@ -55,6 +59,8 @@ export default async function ConsoleContentPage({
           Takedown needs migration <span className="font-medium">0015</span> applied first.
         </p>
       )}
+
+      <ReleaseImportsCard email={viewer?.email ?? null} />
 
       <form method="get" className="mb-6">
         <input name="q" defaultValue={q ?? ""} placeholder="Search title, owner, kind…" className="field w-full sm:w-96 h-10 px-3" />

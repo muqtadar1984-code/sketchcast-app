@@ -1224,6 +1224,18 @@
       "strandedTitle": "Lessons from removed books",
       "strandedHint": "Their book was deleted, so they are grouped here by chapter. Everything still plays, downloads and assigns.",
       "answerKey": "Answer key"
+    },
+    "myBooks": {
+      "title": "My books",
+      "subtitle": "SketchCast books you bought or were given.",
+      "chapters": "{n} chapters",
+      "chapterOne": "1 chapter",
+      "openInSk": "Open in SK",
+      "download": "Download PDF",
+      "forChild": "for {name}",
+      "forYourChild": "for your child",
+      "withdrawn": "No longer sold. Your copy stays yours.",
+      "unavailable": "This book's PDF is not available yet. Please try again later."
     }
   },
   "school": {
@@ -2130,6 +2142,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "Sources",
+        "chapter": "ch {n}",
+        "from": "From: {source}"
+      },
       "open": "Ask SK",
       "close": "Close SK",
       "title": "SK, your SketchCast companion",

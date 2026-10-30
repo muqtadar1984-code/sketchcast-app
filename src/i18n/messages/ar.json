@@ -1224,6 +1224,18 @@
       "strandedTitle": "دروس من كتب محذوفة",
       "strandedHint": "حُذف كتابها، لذا جُمعت هنا حسب الفصل. كل شيء لا يزال يعمل: التشغيل والتنزيل والتكليف.",
       "answerKey": "مفتاح الإجابة"
+    },
+    "myBooks": {
+      "title": "كتبي",
+      "subtitle": "كتب SketchCast التي اشتريتها أو حصلت عليها.",
+      "chapters": "{n} فصول",
+      "chapterOne": "فصل واحد",
+      "openInSk": "افتح في SK",
+      "download": "تنزيل PDF",
+      "forChild": "لـ {name}",
+      "forYourChild": "لطفلك",
+      "withdrawn": "لم يعد معروضًا للبيع. تبقى نسختك ملكك.",
+      "unavailable": "ملف PDF لهذا الكتاب غير متاح بعد. يرجى المحاولة لاحقًا."
     }
   },
   "school": {
@@ -2130,6 +2142,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "المصادر",
+        "chapter": "الفصل {n}",
+        "from": "المصدر: {source}"
+      },
       "open": "اسأل SK",
       "close": "إغلاق SK",
       "title": "SK، رفيقك في SketchCast",

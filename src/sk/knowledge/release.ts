@@ -19,7 +19,9 @@
 //   3. already imported and still the product's release → skipped (idempotent);
 //   4. fetch bundle.json, check the bundle hash against the row, the schema,
 //      and EVERY chapter's content_sha256 by the contract's rule
-//      (canonical-json.ts) — any mismatch refuses the whole release;
+//      (canonical-json.ts), and every chapter's approval ({kind: 'gate_d' |
+//      'book', id}; gate_d_approval_id required only for 'gate_d') — any
+//      mismatch refuses the whole release;
 //   5. replace that work + language's blocks with this release's: section
 //      text and exercise STEMS. `answer`, `worked_solution`, `marking_scheme`
 //      and the options never become blocks (they are the answer key);
@@ -54,7 +56,7 @@ export type ReleaseRow = {
   curriculum_code?: string | null;
   grade_band?: string | null;
   age_band?: string | null;
-  chapters: { chapter: number; title?: string; content_sha256: string; gate_d_approval_id?: number | null; pdf_key?: string | null }[];
+  chapters: ReleaseRowChapter[];
   chapter_count?: number;
   bundle_key: string;
   bundle_sha256: string;
@@ -73,12 +75,31 @@ export type ReleaseRow = {
   withdrawn_by?: string | null;
 };
 
+/**
+ * One entry of pub_releases.chapters. Contract change 2026-10-30: a chapter is
+ * approved either at Gate D (`approval_kind 'gate_d'`, gate_d_approval_id set)
+ * or by a BOOK-level approval (`'book'`, e.g. Biology r4.1 for ch 2–10), in
+ * which case gate_d_approval_id is null. `approval_id` is the approval either way.
+ */
+export type ApprovalKind = "gate_d" | "book";
+export type ReleaseRowChapter = {
+  chapter: number;
+  title?: string;
+  content_sha256: string;
+  approval_id?: number | null;
+  approval_kind?: ApprovalKind | null;
+  gate_d_approval_id?: number | null;
+  pdf_key?: string | null;
+};
+export const APPROVAL_KINDS: readonly ApprovalKind[] = ["gate_d", "book"];
+
 /** Reads one object from the books bucket. */
 export type BundleReader = { getBytes(key: string): Promise<Uint8Array> };
 
 type BundleSection = { sid?: string; title?: string | null; heading?: string | null; blocks?: unknown[] };
 type BundleExercise = { xid?: string; stem?: unknown };
-type BundleChapter = { chapter: number; title?: string; content_sha256?: string; sections?: BundleSection[]; exercises?: BundleExercise[] };
+export type BundleApproval = { kind?: string; id?: number | string | null; by?: string; on?: string };
+type BundleChapter = { chapter: number; title?: string; content_sha256?: string; approval?: BundleApproval | null; sections?: BundleSection[]; exercises?: BundleExercise[] };
 export type ReleaseBundle = {
   schema: string;
   release: { id?: number | null; release_kind?: string; edition_key?: string };
@@ -128,6 +149,7 @@ export function verifyBundle(row: ReleaseRow, bytes: Uint8Array): { bundle: Rele
   const rawChapters = (raw as { chapters?: RawJson[] })?.chapters;
   if (!chapters.length || !Array.isArray(rawChapters) || rawChapters.length !== chapters.length) problems.push("bundle has no chapters");
   const declared = new Map((row.chapters ?? []).map((c) => [Number(c.chapter), String(c.content_sha256 ?? "").toLowerCase()]));
+  const rowChapters = new Map((row.chapters ?? []).map((c) => [Number(c.chapter), c]));
   chapters.forEach((c, i) => {
     const rc = (rawChapters?.[i] ?? {}) as { [k: string]: RawJson };
     const computed = chapterContentSha256(rc);
@@ -136,8 +158,34 @@ export function verifyBundle(row: ReleaseRow, bytes: Uint8Array): { bundle: Rele
     else if (computed !== stated) problems.push(`chapter ${c.chapter}: content_sha256 does not match its sections and exercises`);
     const onRow = declared.get(Number(c.chapter));
     if (declared.size && onRow !== stated) problems.push(`chapter ${c.chapter}: hash differs from the release row`);
+    problems.push(...approvalProblems(c, rowChapters.get(Number(c.chapter))));
   });
   return { bundle, problems };
+}
+
+/**
+ * A chapter's approval, by the contract (2026-10-30): `approval` is
+ * {kind: 'gate_d'|'book', id, by, on}; the id is required either way. A
+ * 'gate_d' chapter's row entry must carry its gate_d_approval_id; a 'book'
+ * chapter's need not (it is null there). When the row states approval_kind /
+ * approval_id / gate_d_approval_id they must agree with the bundle.
+ */
+export function approvalProblems(c: BundleChapter, onRow?: ReleaseRowChapter): string[] {
+  const out: string[] = [];
+  const a = c.approval;
+  const kind = a?.kind;
+  if (!a || typeof a !== "object") return [`chapter ${c.chapter}: no approval`];
+  if (!APPROVAL_KINDS.includes(kind as ApprovalKind)) out.push(`chapter ${c.chapter}: approval kind ${JSON.stringify(kind ?? null)} is not gate_d or book`);
+  const id = a.id == null || a.id === "" ? null : Number(a.id);
+  if (id == null || !Number.isFinite(id)) out.push(`chapter ${c.chapter}: approval has no id`);
+  if (!onRow) return out;
+  if (onRow.approval_kind != null && onRow.approval_kind !== kind) out.push(`chapter ${c.chapter}: approval kind ${kind} differs from the release row (${onRow.approval_kind})`);
+  if (onRow.approval_id != null && id != null && Number(onRow.approval_id) !== id) out.push(`chapter ${c.chapter}: approval id ${id} differs from the release row (${onRow.approval_id})`);
+  if (kind === "gate_d") {
+    if (onRow.gate_d_approval_id == null) out.push(`chapter ${c.chapter}: a gate_d approval needs gate_d_approval_id on the release row`);
+    else if (id != null && Number(onRow.gate_d_approval_id) !== id) out.push(`chapter ${c.chapter}: gate_d_approval_id ${onRow.gate_d_approval_id} is not the approval id ${id}`);
+  }
+  return out;
 }
 
 /** The release's blocks: one per section (cut at the 8000 cap) and one per exercise STEM. */

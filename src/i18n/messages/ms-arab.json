@@ -1224,6 +1224,18 @@
       "strandedTitle": "ڤلاجرن درڤد بوکو يڠ دبواڠ",
       "strandedHint": "بوکوڽ تله دڤادم، جادي اي دکومڤولکن دسيني مڠيکوت باب. سمواڽ ماسيه بوليه دماينکن، دموات تورون دان دتوݢسکن.",
       "answerKey": "سکيما جواڤن"
+    },
+    "myBooks": {
+      "title": "بوکو ساي",
+      "subtitle": "بوکو SketchCast يڠ اندا بلي اتاو تريما.",
+      "chapters": "{n} باب",
+      "chapterOne": "١ باب",
+      "openInSk": "بوک دالم SK",
+      "download": "موات تورون PDF",
+      "forChild": "اونتوق {name}",
+      "forYourChild": "اونتوق انق اندا",
+      "withdrawn": "تيدق لاݢي دجوال. سالينن اندا ککل ميليق اندا.",
+      "unavailable": "PDF بوکو اين بلوم ترسديا. سيلا چوبا لاݢي نانتي."
     }
   },
   "school": {
@@ -2130,6 +2142,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "سومبر",
+        "chapter": "باب {n}",
+        "from": "سومبر: {source}"
+      },
       "open": "تاڽ SK",
       "close": "توتوڤ SK",
       "title": "SK، تمن SketchCast اندا",

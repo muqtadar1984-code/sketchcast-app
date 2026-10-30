@@ -53,6 +53,16 @@ export const SK_STUDENT_RULES = [
   "S5. Be warm and brief: 2–4 short sentences at the student's level, in the student's language.",
 ].join("\n");
 
+/** S7 K2: the student rules for an answer from her KNOWLEDGE (no lesson
+ *  open): S1 names the passages instead of the kit; S2–S5 are the same. */
+export const SK_STUDENT_KNOWLEDGE_RULES = SK_STUDENT_RULES.split("\n")
+  .map((l) =>
+    l.startsWith("S1.")
+      ? "S1. You are SK, a tutor for ONE student. Teach only from the KNOWLEDGE passages: her SketchCast books, the free articles and her own uploads. You do not use outside sources, and you do not answer as if the passages said something they do not."
+      : l,
+  )
+  .join("\n");
+
 export function shellGreeting(locale: string | null | undefined): string {
   return GREETING[locale ?? "en"] ?? GREETING.en;
 }
@@ -134,6 +144,12 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
     ...((ctx.user.role === "parent" || ctx.user.hat === "parent") && capabilities.some((c) => c.name === "diary.note")
       ? [
           "10. For a parent, diary.note writes in ONE of her own children's diary (never a class): pass the child's name as child (the result asks which child when she has two and named none), her words as the body (grammar only — no new facts), and repeat the card's line on who will see it. Nothing is written until she confirms.",
+        ]
+      : []),
+    // S7 K2: content questions are answered from her own sources, with a citation line.
+    ...(capabilities.some((c) => c.name === "knowledge.search") && !ctx.board?.sessionId && !ctx.tutor?.kit
+      ? [
+          `11. For a content question ("what is…", "explain…", "why…", "how does…") prefer knowledge.search: it searches the books, articles and uploads this user may read. Answer only from its passages, then end with ONE short line naming the source exactly as the result gives it after "end with:" (e.g. "From: Biology · ch 5 · Specialised cells"). Never give the answer to an exercise. If it returns nothing, follow rule 2.`,
         ]
       : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),

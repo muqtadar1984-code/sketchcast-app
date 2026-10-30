@@ -1224,6 +1224,18 @@
       "strandedTitle": "Lecciones de libros eliminados",
       "strandedHint": "Su libro se eliminó, así que se agrupan aquí por capítulo. Todo sigue funcionando: ver, descargar y asignar.",
       "answerKey": "Clave de respuestas"
+    },
+    "myBooks": {
+      "title": "Mis libros",
+      "subtitle": "Los libros de SketchCast que compraste o recibiste.",
+      "chapters": "{n} capítulos",
+      "chapterOne": "1 capítulo",
+      "openInSk": "Abrir en SK",
+      "download": "Descargar PDF",
+      "forChild": "para {name}",
+      "forYourChild": "para tu hijo",
+      "withdrawn": "Ya no está a la venta. Tu ejemplar sigue siendo tuyo.",
+      "unavailable": "El PDF de este libro aún no está disponible. Inténtalo de nuevo más tarde."
     }
   },
   "school": {
@@ -2130,6 +2142,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "Fuentes",
+        "chapter": "cap. {n}",
+        "from": "Fuente: {source}"
+      },
       "open": "Pregúntale a SK",
       "close": "Cerrar SK",
       "title": "SK, tu compañero de SketchCast",
