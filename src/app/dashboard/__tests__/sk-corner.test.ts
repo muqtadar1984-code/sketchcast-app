@@ -200,7 +200,7 @@ describe("the menu: compact, keyboard accessible", () => {
     expect(html).toContain("Type a message");
     expect(html).toContain("Clear conversation");
     // Opens upward from the avatar, on its side.
-    expect(html).toContain("absolute bottom-full mb-2 w-56");
+    expect(html).toContain("absolute bottom-full mb-2 w-64 max-w-[calc(100vw-2rem)]");
     expect(html).toContain("end-0");
   });
   it("arrow keys, Home / End, Escape (focus back to the avatar) and Tab are handled", () => {

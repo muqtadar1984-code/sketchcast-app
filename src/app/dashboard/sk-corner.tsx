@@ -203,7 +203,7 @@ export function SkCornerMenu({ label, items, onClose, side }: { label: string; i
       aria-label={label}
       data-sk="menu"
       onKeyDown={onKey}
-      className={`pointer-events-auto absolute bottom-full mb-2 w-56 rounded-xl border border-[#E6E8E4] bg-white py-1 text-sm text-slate-900 shadow-xl [color-scheme:light] ${side === "end" ? "end-0" : "start-0"}`}
+      className={`pointer-events-auto absolute bottom-full mb-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-[#E6E8E4] bg-white py-1 text-sm text-slate-900 shadow-xl [color-scheme:light] ${side === "end" ? "end-0" : "start-0"}`}
     >
       {items.map((it) =>
         it.kind === "choice" ? (
