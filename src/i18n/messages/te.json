@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "మూలాలు",
+        "chapter": "అధ్యాయం {n}",
+        "from": "మూలం: {source}"
+      },
       "open": "SKని అడగండి",
       "close": "SKని మూసివేయండి",
       "title": "SK, మీ SketchCast తోడు",

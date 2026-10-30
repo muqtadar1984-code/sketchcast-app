@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "स्रोत",
+        "chapter": "अध्याय {n}",
+        "from": "स्रोत: {source}"
+      },
       "open": "SK से पूछें",
       "close": "SK बंद करें",
       "title": "SK, आपका SketchCast साथी",

@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "المصادر",
+        "chapter": "الفصل {n}",
+        "from": "المصدر: {source}"
+      },
       "open": "اسأل SK",
       "close": "إغلاق SK",
       "title": "SK، رفيقك في SketchCast",

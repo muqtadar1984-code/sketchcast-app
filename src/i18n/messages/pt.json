@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "Fontes",
+        "chapter": "cap. {n}",
+        "from": "Fonte: {source}"
+      },
       "open": "Perguntar ao SK",
       "close": "Fechar o SK",
       "title": "SK, seu companheiro no SketchCast",

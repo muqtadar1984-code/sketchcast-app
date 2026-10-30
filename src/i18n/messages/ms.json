@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "Sumber",
+        "chapter": "bab {n}",
+        "from": "Sumber: {source}"
+      },
       "open": "Tanya SK",
       "close": "Tutup SK",
       "title": "SK, teman SketchCast anda",

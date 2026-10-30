@@ -41,7 +41,7 @@ import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { tourForRole, type TourCopy } from "@/tour/definitions";
-import type { SkActRequest, SkActResponse, SkBoardMove, SkTurnEvent, SkTurnRequest, SkTutorMove } from "@/sk/shell/types";
+import type { SkActRequest, SkActResponse, SkBoardMove, SkCitation, SkTurnEvent, SkTurnRequest, SkTutorMove } from "@/sk/shell/types";
 import { SK_INTRO_TOUR } from "@/sk/shell/tour";
 import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector";
 // S6 slice C: the preferences follow the user (workflow facts), with a
@@ -53,6 +53,7 @@ import { runNarration, skIntroScript } from "@/sk/shell/client/narration";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
+import { citationChips } from "@/sk/shell/client/citations";
 import { TRAY_POLL_MS, parseTray, shouldPollTray, trayStateText, trayVisible, type TrayKit } from "@/sk/shell/client/tray";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
@@ -69,6 +70,8 @@ type Entry = {
   /** S1: Board moves this turn performed, with the Board's own report. */
   moves?: Array<{ move: SkBoardMove | SkTutorMove; say: string; ok?: boolean; summary?: string }>;
   sources?: string[];
+  /** S7 K2: the books / articles / uploads the answer came from (chips). */
+  citations?: SkCitation[];
   label?: Label;
   /** Still streaming. */
   pending?: boolean;
@@ -963,7 +966,7 @@ export default function SkShell({
           case "done":
             sawDone = true;
             if (ev.memory) keepMemory(ev.memory);
-            patchEntry(skId, (en) => ({ ...en, sources: ev.sources ?? [], label: ev.label }));
+            patchEntry(skId, (en) => ({ ...en, sources: ev.sources ?? [], label: ev.label, ...(ev.citations?.length ? { citations: ev.citations } : {}) }));
             void stream?.flush();
             break;
           case "error":
@@ -1146,6 +1149,21 @@ export default function SkShell({
                   ))}
                 </div>
               ) : null}
+              {e.who === "sk" && e.citations?.length
+                ? (() => {
+                    const chips = citationChips(e.citations, copy.knowledge.chapter);
+                    return chips.length ? (
+                      <div className="flex flex-wrap items-center gap-1 mt-1 ms-1" data-sk="citations" role="list" aria-label={copy.knowledge.sources}>
+                        <span className="text-[10px] text-slate-500">{copy.knowledge.sources}:</span>
+                        {chips.map((c) => (
+                          <span key={c.key} role="listitem" className="text-[10px] px-1.5 py-0.5 rounded-full border border-[#E3DAF3] bg-[#F8F5FD] text-[#4A3B78]" data-sk="citation" data-sk-kind={c.kind} title={c.text}>
+                            {c.text}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()
+                : null}
               {e.who === "sk" && e.label && (
                 <span className={`text-[10px] mt-1 ms-1 px-1.5 py-0.5 rounded ${labelTone(e.label)}`} data-sk="label">
                   {labelText(e.label)}

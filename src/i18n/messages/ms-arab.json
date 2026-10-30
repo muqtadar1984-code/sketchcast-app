@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "سومبر",
+        "chapter": "باب {n}",
+        "from": "سومبر: {source}"
+      },
       "open": "تاڽ SK",
       "close": "توتوڤ SK",
       "title": "SK، تمن SketchCast اندا",

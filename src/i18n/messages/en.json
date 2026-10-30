@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "Sources",
+        "chapter": "ch {n}",
+        "from": "From: {source}"
+      },
       "open": "Ask SK",
       "close": "Close SK",
       "title": "SK, your SketchCast companion",

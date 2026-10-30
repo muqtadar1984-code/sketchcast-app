@@ -2130,6 +2130,11 @@
   },
   "sk": {
     "shell": {
+      "knowledge": {
+        "sources": "स्रोत",
+        "chapter": "धडा {n}",
+        "from": "स्रोत: {source}"
+      },
       "open": "SK ला विचारा",
       "close": "SK बंद करा",
       "title": "SK, तुमचा SketchCast सोबती",
