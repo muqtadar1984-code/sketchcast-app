@@ -56,6 +56,10 @@ function overlay(table: string, rows: Row[]): Row[] {
   const path = process.env.BOOKS_RUNS_FILE;
   if (!path || !existsSync(/*turbopackIgnore: true*/ path)) return rows;
   const d = JSON.parse(readFileSync(/*turbopackIgnore: true*/ path, "utf-8")) as Record<string, Row[] | Record<string, Row>>;
+  if (table === "pub_works") {
+    const patch = (d.pub_works_patch ?? {}) as Record<string, Row>;
+    return rows.map((r) => (patch[String(r.uid)] ? { ...r, ...patch[String(r.uid)] } : r));
+  }
   if (table === "pub_findings") {
     const patch = (d.pub_findings_patch ?? {}) as Record<string, Row>;
     return rows.map((r) => (patch[String(r.id)] ? { ...r, ...patch[String(r.id)] } : r));

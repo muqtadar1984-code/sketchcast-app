@@ -10,6 +10,10 @@ import { BlockView, ExerciseView, type FigureCtx } from "./blocks";
 import Spine from "./workbench/spine";
 import Changes, { type ChangeItem } from "./workbench/changes";
 import Live from "./workbench/live";
+import Selection from "./workbench/selection";
+import { listEdits } from "@/utils/books/edits";
+
+export const dynamic = "force-dynamic";
 
 // /books/[slug]?ch=N | ?view=book [&printed=1] — the book's single workbench (founder 2026-10-30, direction C):
 // the stage spine on the left, the reader in the middle, the changes and the approval on the right. Everything
@@ -19,7 +23,7 @@ export default async function Workbench({ params, searchParams }: { params: Prom
   const sp = await searchParams;
   const { member, work, revisions } = await loadBook(slug);
   const rev = revisions.length ? pickRevision(work, revisions, undefined) : null;
-  const [runs, approvals, summaries, findings, releases, annotations, artifacts] = await Promise.all([
+  const [runs, approvals, summaries, findings, releases, annotations, artifacts, edits] = await Promise.all([
     listRuns(work.uid),
     listApprovals(work.uid),
     listChapterSummaries(work.uid),
@@ -27,13 +31,14 @@ export default async function Workbench({ params, searchParams }: { params: Prom
     listReleases(work.uid),
     listAnnotations(work.uid),
     listArtifacts(work.uid),
+    listEdits(work.uid),
   ]);
   const rows: (ChapterRow & { source_path?: string | null })[] = rev ? summaries.filter((c) => c.revision_key === rev.key) : [];
   const runLite = runs as unknown as RunLite[];
   const aps = approvals as unknown as ApprovalLite[];
   const plan = latestPlan(runLite);
   const fallbackPlan = plan.length ? plan : Array.from({ length: work.facts?.chapters ?? 0 }, (_, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
-  const chapters = workChapters(fallbackPlan, rows, aps, runLite);
+  const chapters = workChapters(fallbackPlan, rows, aps, runLite, summaries as unknown as ChapterRow[]);
   const stageList = stages({
     chapters,
     runs: runLite,
@@ -65,7 +70,18 @@ export default async function Workbench({ params, searchParams }: { params: Prom
   const printedArtifact = printedRel ? artifacts.find((a) => a.rel_path === printedRel) : undefined;
   const fileHref = (id: number) => `/api/pub/file?book=${encodeURIComponent(slug)}&id=${id}`;
 
-  const items: ChangeItem[] = findings
+  const chapterEdits = edits.filter((e) => !bookView && e.chapter === active && (e.status === "accepted" || e.status === "open"));
+  const editItems: ChangeItem[] = chapterEdits.map((e) => ({
+    id: `e${e.id}`,
+    tone: e.kind === "note" ? "note" : "edit",
+    text: e.kind === "note" ? (e.instruction ?? "") : (e.after_text ?? ""),
+    before: e.kind === "note" ? null : e.before_text,
+    where: e.kind === "note" ? `“${(e.before_text ?? "").slice(0, 60)}”` : e.kind === "reword" && e.instruction ? `AI · ${e.instruction}` : null,
+    editId: e.id,
+    decide: e.kind === "note" ? "resolved" : "rejected",
+  }));
+  const toApply = chapterEdits.filter((e) => e.status === "accepted" && e.revision_key === rev?.key).length;
+  const findingItems: ChangeItem[] = findings
     .filter((f) => f.status === "open" && (bookView || f.chapter === active) && (!rev || f.revision_key === rev.key))
     .map((f) => ({
       id: String(f.id),
@@ -73,9 +89,10 @@ export default async function Workbench({ params, searchParams }: { params: Prom
       text: f.problem ?? f.quote ?? "Finding",
       where: bookView ? `Chapter ${f.chapter}` : f.location,
     }));
+  const items = [...editItems, ...findingItems];
   const activeChapter = chapters.find((c) => c.chapter === active);
   const approval = activeRow
-    ? aps.filter((a) => (a.kind === "gate_d" && a.chapter === activeRow.chapter && a.content_sha256 === activeRow.content_sha256) || (a.kind === "book" && a.revision_key === activeRow.revision_key)).pop()
+    ? aps.filter((a) => (a.kind === "gate_d" && a.chapter === activeRow.chapter && a.content_sha256 === activeRow.content_sha256) || (a.kind === "book" && summaries.some((t) => t.revision_key === a.revision_key && t.chapter === activeRow.chapter && t.content_sha256 === activeRow.content_sha256))).pop()
     : undefined;
   const base = `/books/${slug}${bookView ? "?view=book" : `?ch=${active ?? ""}`}`;
 
@@ -112,8 +129,32 @@ export default async function Workbench({ params, searchParams }: { params: Prom
               <p className="font-display text-2xl text-[#1F2A24]">{activeChapter ? activeChapter.title : work.title}</p>
               <p className="mt-2 text-sm">{activeChapter?.state === "drafting" ? "Being drafted…" : "Not drafted yet."}</p>
             </div>
+          ) : !bookView && activeRow && rev && canOn(member, work.uid, "edit") ? (
+            <Selection slug={slug} chapter={activeRow.chapter} rev={rev.key}>
+              {renderBodies()}
+            </Selection>
           ) : (
-            bodies.map((c) => (
+            renderBodies()
+          )}
+        </div>
+      </main>
+      <Changes
+        slug={slug}
+        chapter={activeRow?.chapter ?? null}
+        rev={rev?.key ?? null}
+        items={items}
+        toApply={toApply}
+        approved={activeChapter?.state === "approved"}
+        approvedOn={approval?.approved_on ?? null}
+        canApprove={canOn(member, work.uid, "approve")}
+        canEdit={canOn(member, work.uid, "edit")}
+        bookView={bookView}
+      />
+    </div>
+  );
+
+  function renderBodies() {
+    return bodies.map((c) => (
               <article key={c.chapter} className="pb-12">
                 <p className="text-xs text-[#A39C8C]">{bookView ? `Chapter ${c.chapter}` : ""}</p>
                 <h1 className="font-display text-[2rem] leading-tight text-[#1F2A24]">{c.title}</h1>
@@ -121,7 +162,9 @@ export default async function Workbench({ params, searchParams }: { params: Prom
                   <section key={s.sid} className="mt-7 font-serif text-[17px] leading-[1.75]">
                     <h2 className="font-display text-xl text-[#1F2A24]">{s.heading}</h2>
                     {s.blocks.map((b, i) => (
-                      <BlockView key={i} b={b} ctx={figCtx(c.chapter, c.body.figures ?? {})} />
+                      <div key={i} data-unit={`${s.sid}.b${i}`}>
+                        <BlockView b={b} ctx={figCtx(c.chapter, c.body.figures ?? {})} />
+                      </div>
                     ))}
                   </section>
                 ))}
@@ -129,26 +172,13 @@ export default async function Workbench({ params, searchParams }: { params: Prom
                   <section className="mt-9">
                     <h2 className="font-display text-xl text-[#1F2A24]">Practice</h2>
                     {c.body.exercises.map((x, i) => (
-                      <ExerciseView key={x.xid} x={x} n={i + 1} ctx={figCtx(c.chapter, c.body.figures ?? {})} />
+                      <div key={x.xid} data-unit={x.xid}>
+                        <ExerciseView x={x} n={i + 1} ctx={figCtx(c.chapter, c.body.figures ?? {})} />
+                      </div>
                     ))}
                   </section>
                 ) : null}
               </article>
-            ))
-          )}
-        </div>
-      </main>
-
-      <Changes
-        slug={slug}
-        chapter={activeRow?.chapter ?? null}
-        rev={rev?.key ?? null}
-        items={items}
-        approved={activeChapter?.state === "approved"}
-        approvedOn={approval?.approved_on ?? null}
-        canApprove={canOn(member, work.uid, "approve")}
-        bookView={bookView}
-      />
-    </div>
-  );
+    ));
+  }
 }

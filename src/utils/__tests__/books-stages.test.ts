@@ -6,7 +6,7 @@ describe("book run stages", () => {
   const coverage = runnableStage("coverage")!;
 
   it("knows only the runner's stages", () => {
-    expect(RUNNABLE_STAGES.map((s) => s.key)).toEqual(["check_files", "coverage", "academic_audit", "readiness", "gate_r", "draft_chapter", "adopt_trial", "draft_trial", "compile_book", "release", "render_trial", "render_proof"]);
+    expect(RUNNABLE_STAGES.map((s) => s.key)).toEqual(["check_files", "coverage", "academic_audit", "readiness", "gate_r", "draft_chapter", "adopt_trial", "draft_trial", "compile_book", "release", "sync_chapter", "render_trial", "render_proof"]);
     expect(runnableStage("drop_tables")).toBeNull();
   });
 
@@ -31,7 +31,7 @@ describe("book run stages", () => {
 
   it("reports need only run_report; Gate R and drafting need run (editor and up)", () => {
     for (const s of RUNNABLE_STAGES)
-      expect(s.action, s.key).toBe(s.key === "release" ? "approve" : ["gate_r", "draft_chapter", "adopt_trial", "draft_trial"].includes(s.key) ? "run" : "run_report");
+      expect(s.action, s.key).toBe(s.key === "release" ? "approve" : ["gate_r", "draft_chapter", "adopt_trial", "draft_trial", "sync_chapter"].includes(s.key) ? "run" : "run_report");
   });
 
   it("every pipeline stage either runs from the app or says when it will", () => {

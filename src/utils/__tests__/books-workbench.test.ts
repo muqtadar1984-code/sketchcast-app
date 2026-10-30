@@ -53,3 +53,13 @@ describe("book workbench guards", () => {
     expect(s[5].state).toBe("waiting");
   });
 });
+
+describe("approvals follow the text", () => {
+  it("a chapter carried unchanged into a newer revision keeps its book approval; an edited one does not", () => {
+    const book: ApprovalLite = { id: 5, kind: "book", chapter: null, revision_key: "r4.1", content_sha256: null };
+    const old = [{ chapter: 1, title: "A", content_sha256: "S1", revision_key: "r4.1" }, { chapter: 2, title: "B", content_sha256: "S2", revision_key: "r4.1" }];
+    const now = [{ chapter: 1, title: "A", content_sha256: "S1", revision_key: "d1" }, { chapter: 2, title: "B", content_sha256: "S2-edited", revision_key: "d1" }];
+    const ch = workChapters([], now, [book], [], [...old, ...now]);
+    expect(ch.map((c) => [c.chapter, c.state])).toEqual([[1, "approved"], [2, "ready"]]);
+  });
+});
