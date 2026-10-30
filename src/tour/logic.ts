@@ -28,3 +28,18 @@ export function resolveSteps(
   }
   return { valid, missing };
 }
+
+/** What the driver.js provider does for this user (founder 2026-10-30,
+ * decision 1): for an SK user the SK walkthrough REPLACES the role tour — it
+ * never auto-starts, and the header's "Take a tour" starts SK's walkthrough
+ * instead (so the button shows even with the driver.js flag off). Everyone
+ * else keeps the driver.js tour exactly as before. */
+export function driverTourMode(opts: { flagOn: boolean; hasTour: boolean; skWalkthrough: boolean }): {
+  available: boolean;
+  autoStart: boolean;
+  replayVia: "driver" | "sk";
+} {
+  if (opts.skWalkthrough) return { available: true, autoStart: false, replayVia: "sk" };
+  const available = opts.flagOn && opts.hasTour;
+  return { available, autoStart: available, replayVia: "driver" };
+}
