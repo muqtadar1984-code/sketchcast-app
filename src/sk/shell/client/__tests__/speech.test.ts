@@ -873,3 +873,38 @@ describe("the walkthrough's lines: sayLine outcome, and a stop never strands the
     expect(browser.spoken).toEqual([]); // a stopped request is not a failure: no fallback
   });
 });
+
+// 2026-10-30: the corner avatar's speech bubble shows the sentence being said.
+describe("the current sentence (onCurrent / current)", () => {
+  it("reports each sentence as it starts, then null when the queue drains", async () => {
+    const p = fakeProvider("browser", { manual: true });
+    const seen: Array<string | null> = [];
+    const c = createSpeechCoordinator({ server: false, makeProvider: () => p, fallback: () => p, defaultLang: "en-US", onCurrent: (s) => seen.push(s ? s.text : null) });
+    const done = c.say("First sentence. Second one.");
+    await settle();
+    expect(c.current).toEqual({ text: "First sentence.", lang: "en-US" });
+    p.pending[0].finish();
+    await settle();
+    expect(c.current?.text).toBe("Second one.");
+    p.pending[0].finish();
+    await done;
+    await settle();
+    expect(c.current).toBeNull();
+    expect(seen).toEqual(["First sentence.", "Second one.", null]);
+  });
+  it("stop() clears it at once; read-aloud off never sets it", async () => {
+    const p = fakeProvider("browser", { manual: true });
+    const seen: Array<string | null> = [];
+    const c = createSpeechCoordinator({ server: false, makeProvider: () => p, fallback: () => p, onCurrent: (s) => seen.push(s ? s.text : null) });
+    void c.say("Hello there.");
+    await settle();
+    expect(c.current?.text).toBe("Hello there.");
+    c.stop();
+    expect(c.current).toBeNull();
+    await settle();
+    c.setEnabled(false);
+    await c.say("Not spoken.");
+    expect(seen).toEqual(["Hello there.", null]);
+  });
+});
+
