@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import {
+  calendarEnabledFor,
   catalogueTabEnabled,
   diaryEnabled,
   examGenerationEnabled,
@@ -20,8 +21,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // SK's first-login walkthrough (founder 2026-10-30): what the tour needs to
-// know about the caller to plan its stops — books, the first class, children,
-// the first SK Tutor chapter, and the per-school switches. Called once when
+// know about the caller to plan its stops — books (and the one the Library
+// stops open), the first class, children, the first SK Tutor chapter, and the
+// per-school switches. Called once when
 // a tour starts (never on page load).
 //
 // READ-ONLY: every query is a select through the caller's own session (RLS).
@@ -56,11 +58,15 @@ export async function GET() {
       const { data: cls } = await supabase.from("classes").select("id").eq("teacher_id", user.id).order("created_at", { ascending: false }).limit(1);
       Object.assign(facts, {
         books,
+        bookId: books ? await tourBook(supabase, user.id) : null,
         classId: (cls?.[0]?.id as string | undefined) ?? null,
         catalogue: catalogueTabEnabled(),
         exam: examGenerationEnabled(),
         timetable: !!schoolId && (await timetableEnabledFor(supabase, schoolId)),
+        calendar: await calendarEnabledFor(supabase, schoolId),
         board: presentAllowed(user),
+        // The Shell gate above already ran skAccessAllowed; the tab adds only this.
+        skTutor: process.env.NEXT_PUBLIC_FEATURE_SK === "true",
       });
     } else if (tour === "student") {
       facts.tutorPath = await firstTutorChapter(supabase, user.id);
@@ -72,6 +78,8 @@ export async function GET() {
         verifiedChildren: rows.filter((l) => !!l.verified_at).length,
         schoolParent: rows.some((l) => l.source === "school"),
         parentPortal: parentPortalEnabled(),
+        catalogue: catalogueTabEnabled(),
+        skTutor: process.env.NEXT_PUBLIC_FEATURE_SK === "true",
       });
     } else {
       Object.assign(facts, {
@@ -88,6 +96,28 @@ export async function GET() {
   }
 
   return NextResponse.json({ role: tour, facts }, { headers: { "cache-control": "no-store" } });
+}
+
+/** The book the teacher's Library stops open (`/dashboard?book=<id>` opens its
+ *  row, so its chapters, parts and kits are on the page): the newest of their
+ *  OWN books with a finished lesson — so Assign, the downloads and the
+ *  new-version control have something to point at — else their newest own
+ *  book. Only their own: a school-shelf book may sit in the closed "also in
+ *  your school" list, where nothing is visible. Null = no own book. */
+async function tourBook(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<string | null> {
+  const { data: own } = await supabase.from("books").select("id").eq("owner_id", userId).eq("status", "ready").order("created_at", { ascending: false }).limit(50);
+  const ids = ((own ?? []) as Array<{ id: string }>).map((b) => b.id);
+  if (!ids.length) return null;
+  const { data: done } = await supabase
+    .from("generations")
+    .select("book_id")
+    .eq("owner_id", userId)
+    .eq("kind", "presentation")
+    .eq("status", "done")
+    .in("book_id", ids)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  return ((done?.[0]?.book_id as string | undefined) ?? ids[0]) || null;
 }
 
 /** The first chapter /sk would list (books by title, chapters in order). */

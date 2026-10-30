@@ -15,6 +15,14 @@
 //   anchors  — what to highlight, in order: the first one visible on the page
 //              wins, and an anchor may carry its own line (e.g. the empty
 //              "My lessons" when nothing is assigned). [] = no highlight.
+//              A later anchor is a FALLBACK: it is taken only once the page
+//              has settled without the earlier ones, so a control that
+//              streams in late still wins. Each stop points at ONE control;
+//              when that control is absent (no book, no generated kit, no
+//              class), the fallback anchor says what will appear and how
+//              ("Once you generate a kit, ...") instead of skipping silently.
+//   scroll   — "start" puts a big section at the TOP of the screen (the
+//              Library list); default "center".
 //   needs    — facts that must hold, else the stop is skipped ("!x" = must
 //              NOT hold). Unknown facts count as present (the anchor wait
 //              still skips what is not on the page).
@@ -35,6 +43,11 @@ export type WalkFacts = {
   books?: boolean;
   /** The first class the user teaches (the Library's order). */
   classId?: string | null;
+  /** Teacher: the book the Library stops open (`/dashboard?book=<id>`): their
+   *  most recent own book with a finished lesson, else their newest own book. */
+  bookId?: string | null;
+  /** The SK Tutor tab (/sk) is in this user's header. */
+  skTutor?: boolean;
   catalogue?: boolean;
   exam?: boolean;
   diary?: boolean;
@@ -71,12 +84,16 @@ export type WalkNeed =
   | "children"
   | "verified"
   | "schoolParent"
-  | "parentPortal";
+  | "parentPortal"
+  | "skTutor";
 
 export type WalkNeedSpec = WalkNeed | `!${WalkNeed}`;
 
 /** A selector, optionally with the line to say when IT is the one found. */
 export type WalkAnchor = string | { sel: string; line: string };
+
+/** How a stop's anchor is scrolled into view. */
+export type WalkScroll = "start" | "center";
 
 export type WalkDemo =
   | "lessonPrepare"
@@ -117,6 +134,8 @@ export type WalkStopDef = {
   anchors: WalkAnchor[];
   /** The line key when it differs from `id`. */
   line?: string;
+  /** Default "center". */
+  scroll?: WalkScroll;
   needs?: WalkNeedSpec[];
   /** First entry whose `unless` fact is missing applies: another line and/or anchors, or skip. */
   fallback?: Array<{ unless: WalkNeedSpec; line?: string; anchors?: WalkAnchor[]; skip?: true }>;
@@ -125,38 +144,153 @@ export type WalkStopDef = {
 };
 
 // 2026-10-30: SK is the corner avatar now (no hero card): "SK here" anchors
-// point at the avatar itself.
+// point at the avatar itself. It is also the anchor of a line with nothing
+// else to point at (SK's own menu, a feature that only appears later).
 const HERO = '[data-sk="avatar"]';
 const LAUNCHER = '[data-tour="sk-launcher"]';
 const UPLOAD = '[data-tour="upload-book"]';
+const MOBILE_NAV = '[data-tour="mobile-nav"]';
+const BELL = '[data-tour="notifications"]';
+const LANGUAGE = '[data-tour="language"]';
+const TOUR_BUTTON = '[data-tour="tour-replay"]';
+const SETTINGS_LINK = '[data-tour="settings-link"]';
+
+// ── the teacher's Library (founder feedback 2026-10-30) ─────────────────────
+// Every Library stop is on `/dashboard?book=<bookId>`: the ?book= parameter
+// opens that book's row (book-table.tsx), so its chapters, parts and kits are
+// on the page. OPEN scopes a control to that open book; the bare selector
+// after it is the fallback for any other open book.
+const LIB = "/dashboard?book={bookId}";
+const OPEN = '[data-tour-book="open"] ';
+const BOOK_LIST = '[data-tour="book-card"]';
+const BOOK_BADGES = '[data-tour="book-badges"]';
+const GENERATE_ALL = '[data-tour="generate-all"]';
+const FULL_KIT = '[data-tour="generate-lesson"][data-tour-kit="full"]';
+const LESSON_OPTIONS = '[data-tour="lesson-options"]';
+const GENERATE_PART = '[data-tour="generate-part"]';
+const PART_CARD = '[data-tour="part-card"]';
+const PART_PIECES = '[data-tour="part-pieces"]';
+const CHAPTER_OUTPUT = '[data-tour="lesson-output"]';
+const DOWNLOAD = '[data-tour="download-doc"]';
+const DOWNLOAD_WORKSHEET = '[data-tour="download-doc"][data-tour-kind="worksheet"]';
+const RERUN = '[data-tour="rerun"]';
+const ASSIGN_PART = '[data-tour="assign-part"]';
+const ASSIGN_CHAPTER = '[data-tour="assign-chapter"]';
+const MORE = '[data-tour="book-tools"]';
+
+/** The trailing fallbacks of a kit stop with no generated kit to point at: the
+ *  ungenerated part, else the chapter's Generate full kit, else the book list,
+ *  else the upload card, each saying `line` ("Once you generate a kit, ..."). */
+const notYet = (line: string): WalkAnchor[] => [
+  { sel: OPEN + GENERATE_PART, line },
+  { sel: OPEN + FULL_KIT, line },
+  { sel: GENERATE_PART, line },
+  { sel: FULL_KIT, line },
+  { sel: BOOK_LIST, line },
+  { sel: UPLOAD, line },
+];
 
 const TEACHER: WalkStopDef[] = [
   { id: "hello", route: "/dashboard", anchors: [HERO, LAUNCHER] },
-  { id: "library", route: "/dashboard", anchors: ['[data-tour="book-card"]', UPLOAD], fallback: [{ unless: "books", anchors: [UPLOAD] }] },
-  // No book: stops 3–5 have nothing to point at, so ONE line at the upload card stands in for all three.
-  { id: "generate", route: "/dashboard", anchors: ['[data-tour="generate-lesson"]'], demo: "lessonPrepare", fallback: [{ unless: "books", line: "noBooks", anchors: [UPLOAD] }] },
+  // The Library at the TOP of the screen, not its middle (founder 2026-10-30).
+  { id: "library", route: LIB, scroll: "start", anchors: [BOOK_LIST, { sel: '[data-tour="library-empty"]', line: "libraryEmpty" }, { sel: UPLOAD, line: "libraryEmpty" }] },
+  { id: "bookCard", route: LIB, anchors: [OPEN + BOOK_BADGES, BOOK_BADGES], needs: ["books"] },
   {
-    id: "output",
-    route: "/dashboard",
-    anchors: ['[data-tour="lesson-output"]', '[data-tour="book-tools"]'],
+    id: "generateAll",
+    route: LIB,
+    anchors: [OPEN + GENERATE_ALL, GENERATE_ALL, { sel: OPEN + BOOK_BADGES, line: "generateAllNone" }, { sel: BOOK_BADGES, line: "generateAllNone" }],
     needs: ["books"],
-    fallback: [{ unless: "exam", line: "outputNoExam" }],
   },
-  { id: "assign", route: "/dashboard", anchors: ['[data-tour="assign-chapter"]'], needs: ["books"], demo: "assign" },
+  {
+    id: "chapterKit",
+    route: LIB,
+    anchors: [OPEN + FULL_KIT, FULL_KIT, { sel: OPEN + ASSIGN_CHAPTER, line: "chapterKitDone" }, { sel: BOOK_LIST, line: "chapterKitClosed" }],
+    needs: ["books"],
+  },
+  {
+    id: "lessonOptions",
+    route: LIB,
+    anchors: [
+      OPEN + LESSON_OPTIONS,
+      LESSON_OPTIONS,
+      { sel: OPEN + BOOK_BADGES, line: "lessonOptionsNone" },
+      { sel: BOOK_LIST, line: "lessonOptionsNone" },
+      { sel: UPLOAD, line: "lessonOptionsNone" },
+    ],
+  },
+  // A part that is "Not generated yet": ITS Generate kit, never Generate all.
+  {
+    id: "generate",
+    route: LIB,
+    anchors: [
+      OPEN + GENERATE_PART,
+      GENERATE_PART,
+      { sel: OPEN + FULL_KIT, line: "generateChapter" },
+      { sel: FULL_KIT, line: "generateChapter" },
+      { sel: OPEN + PART_CARD, line: "generateAllDone" },
+      { sel: BOOK_LIST, line: "generateAllDone" },
+    ],
+    demo: "lessonPrepare",
+    fallback: [{ unless: "books", line: "noBooks", anchors: [UPLOAD] }],
+  },
+  { id: "pieces", route: LIB, anchors: [OPEN + PART_PIECES, PART_PIECES, OPEN + CHAPTER_OUTPUT, CHAPTER_OUTPUT, ...notYet("piecesNone")] },
+  { id: "downloads", route: LIB, anchors: [OPEN + DOWNLOAD_WORKSHEET, OPEN + DOWNLOAD, DOWNLOAD_WORKSHEET, DOWNLOAD, ...notYet("downloadsNone")] },
+  { id: "rerun", route: LIB, anchors: [OPEN + RERUN, RERUN, ...notYet("rerunNone")] },
+  {
+    id: "assign",
+    route: LIB,
+    anchors: [
+      OPEN + ASSIGN_PART,
+      ASSIGN_PART,
+      { sel: OPEN + ASSIGN_CHAPTER, line: "assignChapter" },
+      { sel: ASSIGN_CHAPTER, line: "assignChapter" },
+      ...notYet("assignNone"),
+    ],
+    demo: "assign",
+  },
+  // Before the tour leaves the kits (founder 2026-10-30): the bridge to the Board.
+  { id: "boardBridge", route: LIB, anchors: [OPEN + PART_CARD, PART_CARD, OPEN + CHAPTER_OUTPUT, CHAPTER_OUTPUT, BOOK_LIST, UPLOAD], needs: ["board"] },
+  // "More" is a closed menu: the tour points at the button and names what is under it.
+  {
+    id: "more",
+    route: LIB,
+    anchors: [OPEN + MORE, MORE, { sel: BOOK_LIST, line: "moreClosed" }],
+    needs: ["books"],
+    fallback: [{ unless: "exam", line: "moreNoExam" }],
+  },
+  { id: "upload", route: "/dashboard", anchors: [UPLOAD] },
   { id: "classes", route: "/dashboard", anchors: ['[data-tour="classes"]'] },
-  { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', '[data-tour="fair-use"]'] },
-  { id: "kits", route: "/dashboard/kits", anchors: ['[data-tour="kits-allowance"]'], needs: ["catalogue"], chips: ["lessonOnPhotosynthesis"] },
-  { id: "analytics", route: "/dashboard/analytics", anchors: ['[data-tour="analytics-metrics"]'], chips: ["howAreMyClasses", "whoIsAtRisk"] },
-  { id: "gradeQueue", route: "/dashboard/analytics", anchors: ['[data-tour="grade-queue"]'], demo: "markingGrade" },
-  { id: "diary", route: "/dashboard/diary?c={classId}", anchors: ['[data-tour="diary-compose"]'], needs: ["diary", "class"], demo: "diaryNote" },
-  { id: "timetable", route: "/dashboard/my-timetable", anchors: ['[data-tour="my-timetable"]'], needs: ["timetable"], chips: ["whatsNext"] },
+  { id: "branding", route: "/dashboard", anchors: ['[data-tour="branding"]'] },
+  { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', { sel: HERO, line: "myBooksNone" }] },
+  { id: "plan", route: "/dashboard", anchors: ['[data-tour="fair-use"]'] },
   // No autostart: pressing Start opens a Board session, so the tour only describes it.
   { id: "board", route: "/present?class={classId}", anchors: ['[data-tour="board-bar"]', '[data-sk="launcher"][data-sk-board="true"]'], needs: ["board"] },
+  { id: "boardSk", route: "/present?class={classId}", anchors: ['[data-sk="launcher"][data-sk-board="true"]', HERO, LAUNCHER], needs: ["board"] },
+  { id: "kits", route: "/dashboard/kits", anchors: ['[data-tour="kits-allowance"]'], needs: ["catalogue"], chips: ["lessonOnPhotosynthesis"] },
+  { id: "skTutor", route: "/dashboard/kits", anchors: ['[data-tour="sk-nav"]', MOBILE_NAV], needs: ["skTutor"] },
+  // No class yet: the diary still says what it is for, at its tab.
+  {
+    id: "diary",
+    route: "/dashboard/diary?c={classId}",
+    anchors: ['[data-tour="diary-compose"]'],
+    needs: ["diary"],
+    demo: "diaryNote",
+    fallback: [{ unless: "class", line: "diaryNoClass", anchors: ['[data-tour="diary-nav"]', MOBILE_NAV, HERO] }],
+  },
+  { id: "analytics", route: "/dashboard/analytics", anchors: ['[data-tour="analytics-metrics"]'], chips: ["howAreMyClasses", "whoIsAtRisk"] },
+  { id: "gradeQueue", route: "/dashboard/analytics", anchors: ['[data-tour="grade-queue"]'], demo: "markingGrade" },
+  { id: "timetable", route: "/dashboard/my-timetable", anchors: ['[data-tour="my-timetable"]'], needs: ["timetable"], chips: ["whatsNext"] },
+  { id: "calendar", route: "/dashboard/calendar", anchors: ['[data-tour="calendar-grid"]'], needs: ["calendar"] },
+  { id: "notifications", route: "/dashboard/settings", anchors: [BELL] },
+  { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
   {
     id: "settings",
     route: "/dashboard/settings",
-    anchors: ['[data-tour="sk-prefs"]', '[data-tour="sk-memory"]', '[data-sk="mic"]', '[data-sk="input"]', '[data-tour="settings-link"]'],
+    anchors: ['[data-tour="sk-prefs"]', '[data-tour="sk-memory"]', '[data-sk="mic"]', '[data-sk="input"]', SETTINGS_LINK],
   },
+  // SK's own menu only exists while it is open: the tour points at the avatar and names what is in it.
+  { id: "skMenu", route: "/dashboard/settings", anchors: [HERO, LAUNCHER] },
+  { id: "skAsk", route: "/dashboard/settings", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
 ];
 
 const STUDENT: WalkStopDef[] = [
@@ -164,16 +298,20 @@ const STUDENT: WalkStopDef[] = [
   { id: "assignments", route: "/dashboard", anchors: ['[data-tour="assignments"]'] },
   // Nothing assigned: say so and show the empty "My lessons".
   { id: "openLesson", route: "/dashboard", anchors: ['[data-tour="open-lesson"]', { sel: '[data-tour="assignments"]', line: "openLessonEmpty" }] },
-  { id: "progress", route: "/dashboard", anchors: ['[data-tour="progress"]'] },
-  { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]'], demo: "bookActivate" },
+  { id: "progress", route: "/dashboard", anchors: ['[data-tour="progress"]', { sel: '[data-tour="assignments"]', line: "progressEmpty" }] },
+  { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', { sel: HERO, line: "myBooksNone" }], demo: "bookActivate" },
   // No SK book (or no mapped kit): ONE neutral line instead of stops 6–9 — no selling (founder decision 8).
   { id: "tutorNone", route: "/dashboard", anchors: [], needs: ["!tutor"] },
   { id: "skBooks", route: "/sk", anchors: ['[data-tour="sk-books"]'], needs: ["tutor"] },
   { id: "kitPlayer", route: "{tutorPath}", anchors: ['[data-tour="kit-player"]', '[data-testid="kit-player"]'], needs: ["tutor"] },
   { id: "kitHelp", route: "{tutorPath}", anchors: ['[data-tour="kit-explain"]', '[data-tour="kit-practise"]'], needs: ["tutor"] },
   { id: "kitNext", route: "{tutorPath}", anchors: ['[data-tour="kit-next-move"]'], needs: ["tutor"], chips: ["howAmIDoing"] },
-  { id: "diaryTimetable", route: "/dashboard", anchors: ['[data-tour="diary-nav"]', '[data-tour="timetable-nav"]', '[data-tour="mobile-nav"]'], needs: ["diary"] },
+  { id: "diaryTimetable", route: "/dashboard", anchors: ['[data-tour="diary-nav"]', '[data-tour="timetable-nav"]', MOBILE_NAV], needs: ["diary"] },
+  { id: "notifications", route: "/dashboard/settings", anchors: [BELL] },
+  { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
   { id: "settings", route: "/dashboard/settings", anchors: ['[data-tour="sk-memory"]', '[data-tour="sk-prefs"]', '[data-sk="mic"]', '[data-sk="input"]'] },
+  { id: "skMenu", route: "/dashboard/settings", anchors: [HERO, LAUNCHER] },
+  { id: "skAsk", route: "/dashboard/settings", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
 ];
 
 const PARENT: WalkStopDef[] = [
@@ -195,9 +333,13 @@ const PARENT: WalkStopDef[] = [
   // /activate sits outside the dashboard (no SK there): the tour never goes there.
   { id: "bookCode", route: "/dashboard/children", anchors: [HERO, LAUNCHER], needs: ["children"], demo: "bookActivateChild" },
   // Stop 10 branches: a school parent gets Test Papers, a home educator the Library.
-  { id: "testPapers", route: "/dashboard/test-papers", anchors: ['[data-tour="test-papers-nav"]', '[data-tour="mobile-nav"]'], needs: ["schoolParent", "parentPortal"] },
-  { id: "homeLibrary", route: "/dashboard", anchors: ['[data-tour="book-card"]', UPLOAD], needs: ["!schoolParent"] },
+  { id: "testPapers", route: "/dashboard/test-papers", anchors: ['[data-tour="test-papers-nav"]', MOBILE_NAV], needs: ["schoolParent", "parentPortal"] },
+  { id: "homeLibrary", route: "/dashboard", anchors: [BOOK_LIST, UPLOAD], needs: ["!schoolParent"] },
+  { id: "homeKits", route: "/dashboard", anchors: ['[data-tour="kits-nav"]', '[data-tour="sk-nav"]', MOBILE_NAV], needs: ["!schoolParent", "catalogue"] },
   { id: "consent", route: "/dashboard/settings", anchors: ['[data-tour="sk-children-consent"]'], needs: ["children"] },
+  { id: "notifications", route: "/dashboard/settings", anchors: [BELL] },
+  { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
+  { id: "skMenu", route: "/dashboard/settings", anchors: [HERO, LAUNCHER] },
   { id: "addChild", route: "/dashboard/children", anchors: ['[data-tour="add-child"]'], fallback: [{ unless: "children", line: "addChildFirst" }] },
 ];
 
@@ -213,8 +355,11 @@ const PRINCIPAL: WalkStopDef[] = [
   { id: "diary", route: "/dashboard/school/diary", anchors: ['[data-tour="school-diary"]'], needs: ["diary"] },
   { id: "notices", route: "/dashboard/calendar", anchors: ['[data-tour="notice-composer"]'], needs: ["notices"], demo: "noticeSchool" },
   { id: "schoolSwitch", route: "/dashboard/settings", anchors: ['[data-tour="sk-school-switch"]'] },
+  { id: "notifications", route: "/dashboard/settings", anchors: [BELL] },
+  { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
   // Founder decision 6: SK points at the hat switcher and NEVER switches it (that writes the hat cookie).
   { id: "hat", route: "/dashboard/school", anchors: ['[data-tour="hat-switcher"]', HERO], needs: ["roleHats"] },
+  { id: "skAsk", route: "/dashboard/school", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
 ];
 
 const COORDINATOR: WalkStopDef[] = [
@@ -227,7 +372,10 @@ const COORDINATOR: WalkStopDef[] = [
   { id: "diary", route: "/dashboard/school/diary", anchors: ['[data-tour="school-diary"]'], needs: ["diary"] },
   { id: "notices", route: "/dashboard/calendar", anchors: ['[data-tour="notice-composer"]'], needs: ["notices"], demo: "noticeSchool" },
   { id: "costTrend", route: "/dashboard/school", anchors: [HERO, LAUNCHER], chips: ["generationCost", "schoolTrend"] },
-  { id: "hatSettings", route: "/dashboard/school", anchors: ['[data-tour="hat-switcher"]', '[data-tour="settings-link"]', HERO] },
+  { id: "notifications", route: "/dashboard/school", anchors: [BELL] },
+  { id: "language", route: "/dashboard/school", anchors: [LANGUAGE] },
+  { id: "hatSettings", route: "/dashboard/school", anchors: ['[data-tour="hat-switcher"]', SETTINGS_LINK, HERO] },
+  { id: "skAsk", route: "/dashboard/school", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
 ];
 
 export const WALK_STOPS: Readonly<Record<WalkRole, readonly WalkStopDef[]>> = {
