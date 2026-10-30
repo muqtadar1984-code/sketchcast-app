@@ -39,7 +39,7 @@ export default async function SkLayout({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      <SkTutorLauncher copy={t.sk.shell} tourCopy={t.app.tour} role={role} />
+      <SkTutorLauncher copy={t.sk.shell} walkCopy={t.sk.walkthrough} role={role} />
     </>
   );
 }

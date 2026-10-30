@@ -4,14 +4,14 @@
 // tool chips and a source label per SK turn, a one-line caption of SK's latest
 // sentence (the Board's caption later), the job-tray and confirmation-card
 // DOM hooks (empty in S0), text input, push-to-talk mic, read-aloud, Stop, a
-// hands-free opt-in, and the SK-narrated onboarding on a role's first visit.
+// hands-free opt-in. (2026-10-30: the first-login onboarding is the
+// walkthrough — sk-walkthrough.tsx — which this Shell voices via `walk`.)
 //
 // Every decision with a rule behind it lives in a pure module under
 // src/sk/shell/client/ and is unit-tested there; this file is the wiring:
 //   collector.ts     — what the turn request says about where the user is
 //   sse.ts           — the stream → SkTurnEvents
 //   mic-gate.ts      — §2.6: the mic stops on blur/hidden/pagehide/idle, never resumes
-//   narration.ts     — §4.6: the intro script and its abortable runner
 //   memory-store.ts  — S1: the memory blob across pages (sessionStorage)
 //   transcript-store.ts — 2026-10-30: the visible turns across pages and
 //                      Shell instances, so the hero and the panel are ONE
@@ -57,16 +57,13 @@ import { useRigChoice } from "@/sk/board/use-rig-choice";
 import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
-import { tourForRole, type TourCopy } from "@/tour/definitions";
 import type { SkActRequest, SkActResponse, SkBoardMove, SkCitation, SkTurnEvent, SkTurnRequest, SkTutorMove } from "@/sk/shell/types";
-import { SK_INTRO_TOUR } from "@/sk/shell/tour";
 import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector";
 // S6 slice C: the preferences follow the user (workflow facts), with a
 // one-time migration of this browser's localStorage values (prefs.ts).
 import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultMicOn, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createMicGate, type MicGate } from "@/sk/shell/client/mic-gate";
-import { runNarration, skIntroScript } from "@/sk/shell/client/narration";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
@@ -77,10 +74,28 @@ import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
-export type SkShellVariant = "panel" | "hero";
+/** "dock" (2026-10-30): the walkthrough's compact bar, docked at the bottom
+ *  of every page that has no hero while a tour runs (the page stays usable). */
+export type SkShellVariant = "panel" | "hero" | "dock";
+
+/** The walkthrough this Shell carries (sk-walkthrough.tsx useSkWalkthrough). */
+export type SkShellWalk = {
+  /** Caption, sound chip, sample chips, Example card, controls. */
+  strip: ReactNode;
+  /** A new key speaks the text through THIS Shell's coordinator ("" = quiet). */
+  voice: { key: string; text: string } | null;
+  /** A sample chip was tapped: put its words in the box. Never sent by itself. */
+  fill: { key: string; text: string } | null;
+  /** Paused by her question: the dock shows the conversation. */
+  showAnswers: boolean;
+  /** A bare "next" / "back" / "pause" / "skip" / "continue": handled, no turn. */
+  command: (text: string) => boolean;
+};
 
 /** The hero keeps the conversation compact: the latest turns, scrollable. */
 const HERO_ENTRIES = 12;
+/** The dock shows only the last few turns (a question asked mid-tour). */
+const DOCK_ENTRIES = 4;
 
 type Label = "grounded" | "supplementary" | "declined" | "navigation";
 type Entry = {
@@ -191,41 +206,23 @@ function writeFlag(key: string, on: boolean) {
   }
 }
 
-function postIntroSeen(status: "completed" | "skipped") {
-  try {
-    const body = JSON.stringify({ tourKey: SK_INTRO_TOUR.key, version: SK_INTRO_TOUR.version, status });
-    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-      navigator.sendBeacon("/api/tour/seen", new Blob([body], { type: "application/json" }));
-      return;
-    }
-    void fetch("/api/tour/seen", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
-  } catch {
-    /* best-effort: the worst case is the intro offers itself once more */
-  }
-}
-
 export default function SkShell({
   copy,
-  tourCopy,
   role,
   hat,
-  introDue,
-  onIntroDone,
   onClose,
   board,
   tutor,
   variant = "panel",
   portalTo,
   onEngaged,
+  walk,
+  onTakeTour,
+  takeTourLabel,
 }: {
   copy: SkShellCopy;
-  tourCopy: TourCopy;
   role: string | null;
   hat: string | null;
-  /** Server-decided: shouldAutoStart(seen row for "sk-intro", SK_INTRO_TOUR.version). */
-  introDue: boolean;
-  /** The launcher flips its flag so a re-open in this session does not narrate again. */
-  onIntroDone?: () => void;
   /** The panel's close; the hero has none. */
   onClose?: () => void;
   /** S1: on /present, the Board bridge — its state rides with every turn and
@@ -243,9 +240,15 @@ export default function SkShell({
   /** Called when she sends a turn — the launcher carries an engaged
    *  conversation on into the panel when she leaves the hero's page. */
   onEngaged?: () => void;
+  /** 2026-10-30: the walkthrough while one runs (hero: inside the card; dock: the bar). */
+  walk?: SkShellWalk | null;
+  /** "Take the tour" (hero and panel header), and SK's "Show me around". */
+  onTakeTour?: () => void;
+  takeTourLabel?: string;
 }) {
   const router = useRouter();
   const hero = variant === "hero";
+  const dock = variant === "dock";
   const [rig] = useRigChoice();
 
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -257,7 +260,6 @@ export default function SkShell({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [narrating, setNarrating] = useState(false);
   const [readAloud, setReadAloud] = useState(true);
   const [handsFree, setHandsFree] = useState(false);
   const [listening, setListening] = useState(false);
@@ -278,7 +280,6 @@ export default function SkShell({
   const inputRef = useRef<HTMLInputElement>(null);
   const speechRef = useRef<SpeechCoordinator | null>(null);
   const turnRef = useRef<AbortController | null>(null);
-  const narrationRef = useRef<AbortController | null>(null);
   const memoryRef = useRef<string | undefined>(undefined);
   /** 2026-10-30: the dictation language while she has chosen an answer
    *  language ("say that in Arabic"); null = the page's. */
@@ -304,8 +305,8 @@ export default function SkShell({
   const speakingRef = useRef(false);
   /** The hero gate's onResume, current every render (the gate outlives renders). */
   const listenNowRef = useRef<() => void>(() => {});
-  const introStartedRef = useRef(false);
-  const introPostedRef = useRef(false);
+  const walkRef = useRef<SkShellWalk | null | undefined>(walk);
+  const onTakeTourRef = useRef(onTakeTour);
   const sendRef = useRef<(text: string, modality: "text" | "voice") => Promise<void>>(async () => {});
   const prefetchedRef = useRef(new Set<string>());
 
@@ -597,7 +598,6 @@ export default function SkShell({
   useEffect(
     () => () => {
       turnRef.current?.abort();
-      narrationRef.current?.abort();
       stopMicRef.current?.();
     },
     [],
@@ -687,61 +687,34 @@ export default function SkShell({
     for (const c of cardsRef.current) if (c.status === "active" && secondsLeft(c.expiresAt, now) === 0) dismissCard(c, "expired");
   }, [tick, dismissCard]);
 
-  // ── §4.6 SK-narrated onboarding, once per SK_INTRO_TOUR.version ──
-  const finishIntro = useCallback(
-    (status: "completed" | "skipped") => {
-      if (introPostedRef.current) return; // exactly once
-      introPostedRef.current = true;
-      postIntroSeen(status);
-      setNarrating(false);
-      narrationRef.current = null;
-      onIntroDone?.();
-    },
-    [onIntroDone],
-  );
-
+  // ── the walkthrough (2026-10-30): its lines speak through THIS coordinator,
+  // so the Google / Polly / browser choice and read-aloud apply unchanged ──
   useEffect(() => {
-    if (!introDue || ready === null || introStartedRef.current) return;
-    // The hero greets in text only — the §4.6 intro SPEAKS, and a browser
-    // blocks audio before her first gesture. A Shell that began as the hero
-    // never narrates it (not even after it moves into the panel mid-talk).
-    if (hero) {
-      introStartedRef.current = true;
+    walkRef.current = walk;
+    onTakeTourRef.current = onTakeTour;
+  });
+  const walkVoiceKey = walk?.voice?.key;
+  const tourVoicedRef = useRef(false);
+  useEffect(() => {
+    const v = walkRef.current?.voice;
+    if (!v) {
+      // The tour ended (Skip, Finish) while its line was playing: silence it.
+      if (tourVoicedRef.current) speechRef.current?.stop();
+      tourVoicedRef.current = false;
       return;
     }
-    // Deferred like TourProvider: Strict Mode's mount/unmount/mount would
-    // otherwise abort a narration that had already started and record it as
-    // skipped. The flag flips INSIDE the timer so a cleared timer reschedules.
-    const t = setTimeout(() => {
-      introStartedRef.current = true;
-      const ac = new AbortController();
-      narrationRef.current = ac;
-      const def = tourForRole(role, tourCopy) ?? tourForRole("teacher", tourCopy);
-      const lines = skIntroScript({ copy, tourCopy, steps: def?.steps ?? [], role });
-      // The narration speaks through the coordinator (read-aloud off = silent
-      // lines in the transcript; Skip/Stop = the runner's stop → barge-in).
-      const coord = speechRef.current;
-      const stream = coord?.stream();
-      const speaker = {
-        push: (t: string) => stream?.push(t),
-        flush: () => void stream?.flush(),
-        stop: () => coord?.stop(),
-      };
-      setNarrating(true);
-      void runNarration(lines, speaker, {
-        signal: ac.signal,
-        onLine: (line) => appendSk(line),
-      }).then((r) => {
-        finishIntro(r.completed ? "completed" : "skipped");
-      });
-    }, 500);
-    return () => clearTimeout(t);
-  }, [introDue, ready, role, tourCopy, copy, appendSk, finishIntro, hero]);
-
-  function skipIntro() {
-    narrationRef.current?.abort();
-    speechRef.current?.stop();
-  }
+    tourVoicedRef.current = !!v.text;
+    const coord = speechRef.current;
+    coord?.stop();
+    if (v.text) void coord?.say(v.text);
+  }, [walkVoiceKey]);
+  const walkFillKey = walk?.fill?.key;
+  useEffect(() => {
+    const f = walkRef.current?.fill;
+    if (!f) return;
+    setInput(f.text);
+    inputRef.current?.focus();
+  }, [walkFillKey]);
 
   // ── voice controls ──
   function toggleReadAloud() {
@@ -864,11 +837,10 @@ export default function SkShell({
     else gate.resume();
   }, [speaking, hero]);
 
-  /** Stop = the voice, the answer being written AND the narration. The video
+  /** Stop = the voice and the answer being written. The video
    *  stays where it is (an explicit stop never resumes it; "continue" does). */
   function stopAll() {
     turnRef.current?.abort();
-    narrationRef.current?.abort();
     speechRef.current?.stop();
   }
 
@@ -959,6 +931,12 @@ export default function SkShell({
     async (text: string, modality: "text" | "voice") => {
       const q = text.trim();
       if (!q || ready === false) return;
+      // The walkthrough's bare commands ("next", "pause"…) move the tour —
+      // no turn, no model. Anything else is a question (the tour pauses).
+      if (walkRef.current?.command(q)) {
+        setInput("");
+        return;
+      }
       setError(null);
       // §9.2: with exactly one card waiting, a bare yes/no answers the CARD —
       // spoken (push-to-talk or hands-free, the only sources of a "voice"
@@ -987,10 +965,8 @@ export default function SkShell({
       }
       setBusy(true);
       onEngagedRef.current?.();
-      // A new question interrupts whatever SK was saying (barge-in) and the
-      // intro if it is still running.
+      // A new question interrupts whatever SK was saying (barge-in).
       turnRef.current?.abort();
-      narrationRef.current?.abort();
       const coord = speechRef.current;
       coord?.stop();
       const turn = new AbortController();
@@ -1160,6 +1136,10 @@ export default function SkShell({
             setCaption(ev.title);
             break;
           }
+          case "walkthrough":
+            // "Show me around" (rules.ts, no model): the launcher restarts the tour.
+            onTakeTourRef.current?.();
+            break;
           case "lang":
             // 2026-10-30: what the text that follows is in. Dictation follows
             // only her own choice (an Arabic kit does not make her speak Arabic).
@@ -1220,7 +1200,7 @@ export default function SkShell({
           ? "bg-[#FEF3F2] text-[#B42318]"
           : "bg-[#FFF7E6] text-[#8A5A00]";
 
-  const showStop = busy || speaking || narrating;
+  const showStop = busy || speaking;
   // Re-read on every render — the 1 s tick keeps them fresh while the lesson
   // map is prepared in the background and while a card counts down.
   const mapStatus = board ? board.status() : "none";
@@ -1238,10 +1218,21 @@ export default function SkShell({
   // ── the hero (founder 2026-10-30): still avatar, Mic switch, greeting ──
   const hc = copy.hero;
   const micLive = micOn && mic;
+  // "Take the tour" (founder 2026-10-30): a small link in the hero and the
+  // panel; hidden while a tour runs. A replay — it never writes the seen row.
+  const takeTour =
+    onTakeTour && takeTourLabel && !walk ? (
+      <button type="button" onClick={onTakeTour} className="shrink-0 text-[11px] font-medium text-[#0C8175] hover:underline" data-sk="take-tour">
+        <span aria-hidden>🧭</span> {takeTourLabel}
+      </button>
+    ) : null;
   const heroHeader = (
     <div className="px-4 sm:px-6 pt-3 pb-3 border-b border-[#EEF0EC]">
       <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-xs font-medium text-slate-600">{copy.title}</span>
+        <span className="min-w-0 flex items-center gap-2">
+          <span className="truncate text-xs font-medium text-slate-600">{copy.title}</span>
+          {takeTour}
+        </span>
         <div className="flex items-center gap-3 shrink-0">
           {showStop ? (
             <button type="button" onClick={stopAll} className="text-xs font-medium text-[#B42318] hover:underline" title={copy.stop} data-sk="stop">
@@ -1291,9 +1282,15 @@ export default function SkShell({
         <span className={`mt-1 text-[11px] font-medium text-[#0C8175] transition-opacity ${speaking ? "opacity-100" : "opacity-0"}`} aria-hidden={!speaking} data-sk="speaking">
           {hc.speaking}
         </span>
-        <p className="mt-0.5 text-sm text-slate-700" data-sk="hero-greeting">
-          {hc.greeting}
-        </p>
+        {/* During the walkthrough the tour runs inside the card: its caption,
+            controls and progress take the greeting's place. */}
+        {walk ? (
+          <div className="mt-2 w-full">{walk.strip}</div>
+        ) : (
+          <p className="mt-0.5 text-sm text-slate-700" data-sk="hero-greeting">
+            {hc.greeting}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -1321,7 +1318,9 @@ export default function SkShell({
 
   const body = (
     <>
-      {hero ? (
+      {dock ? (
+        walk?.strip
+      ) : hero ? (
         heroHeader
       ) : (
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
@@ -1331,6 +1330,7 @@ export default function SkShell({
                 SK
               </span>
               <span className="truncate text-slate-900">{copy.title}</span>
+              {takeTour}
             </div>
             {capabilities.length > 0 && (
               <div className="text-[10px] text-slate-500 truncate" data-sk="capabilities">
@@ -1360,7 +1360,7 @@ export default function SkShell({
       )}
 
       {/* S2 job tray: her SK-started kits, newest first, at most 3. Hidden when empty. */}
-      {trayVisible(tray) && (
+      {!dock && trayVisible(tray) && (
         <div className="px-5 py-2 border-b border-[#EEF0EC] bg-[#FAFBF9]" data-sk="kit-tray" data-sk-polling={trayPolling ? "on" : "off"}>
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 mb-1">{copy.tray.title}</div>
           <ul className="space-y-1">
@@ -1387,9 +1387,23 @@ export default function SkShell({
       )}
 
       {/* Transcript */}
-      <div ref={scrollRef} className={hero ? "max-h-72 overflow-y-auto px-4 sm:px-6 py-3 space-y-3" : "flex-1 overflow-y-auto px-5 py-4 space-y-3"} data-sk="transcript">
-        {ready === null && <p className="text-sm text-slate-500">…</p>}
-        {(hero ? entries.slice(-HERO_ENTRIES) : entries).map((e) => (
+      {/* The dock shows the conversation only while she has asked something
+          mid-tour (the tour is paused; "Continue the tour" brings it back). */}
+      <div
+        ref={scrollRef}
+        className={
+          dock
+            ? walk?.showAnswers
+              ? "max-h-40 overflow-y-auto px-3 py-2 space-y-2 border-t border-[#EEF0EC]"
+              : "hidden"
+            : hero
+              ? "max-h-72 overflow-y-auto px-4 sm:px-6 py-3 space-y-3"
+              : "flex-1 overflow-y-auto px-5 py-4 space-y-3"
+        }
+        data-sk="transcript"
+      >
+        {ready === null && !dock && <p className="text-sm text-slate-500">…</p>}
+        {(hero ? entries.slice(-HERO_ENTRIES) : dock ? entries.slice(-DOCK_ENTRIES) : entries).map((e) => (
           <div key={e.id} className={e.who === "user" ? "flex flex-col items-end" : "flex flex-col items-start"}>
             {e.who === "user" && <span className="text-[10px] text-slate-500 me-1 mb-0.5">{copy.you}</span>}
             {(e.text || e.pending) && (
@@ -1449,20 +1463,13 @@ export default function SkShell({
             )}
           </div>
         ))}
-        {narrating && (
-          <div className="flex justify-start">
-            <button onClick={skipIntro} className="text-xs font-medium text-[#5B6470] underline" data-sk="intro-skip" title={copy.introSkip}>
-              {copy.skip}
-            </button>
-          </div>
-        )}
         {error && <p className="text-xs text-[#B42318]">{error}</p>}
       </div>
 
       {/* Caption — SK's latest sentence; the Board reads this line later.
           The hero shows the conversation itself, so it has no caption or
           job line: avatar, greeting, conversation, text box. */}
-      {!hero && (
+      {!hero && !dock && (
         <div className="px-5 py-1.5 border-t border-[#EEF0EC] text-xs text-slate-600 truncate min-h-[1.75rem]" data-sk="caption" aria-live="polite">
           {caption}
         </div>
@@ -1470,7 +1477,7 @@ export default function SkShell({
 
       {/* S0's job-tray line — on the Board it reports the lesson map and the
           slides load. S2's kits have their own list above the transcript. */}
-      {!hero && (
+      {!hero && !dock && (
         <div className="px-5 py-1 text-[10px] text-slate-600 border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
           {slideLoad ? fmt(copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n }) : mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
         </div>
@@ -1523,7 +1530,7 @@ export default function SkShell({
         })}
       </div>
 
-      <div className={hero ? "px-4 sm:px-6 py-3 border-t border-[#EEF0EC]" : "px-4 py-3 border-t border-[#EEF0EC]"}>
+      <div className={hero ? "px-4 sm:px-6 py-3 border-t border-[#EEF0EC]" : dock ? "px-3 py-2 border-t border-[#EEF0EC]" : "px-4 py-3 border-t border-[#EEF0EC]"}>
         <form
           className="flex items-center gap-2"
           onSubmit={(e) => {
@@ -1590,7 +1597,7 @@ export default function SkShell({
             {busy ? "…" : copy.send}
           </button>
         </form>
-        {hero ? (
+        {dock ? null : hero ? (
           <div className="mt-1.5 min-h-[1rem] text-[11px]" data-sk="mic-line" aria-live="polite">
             {heroMicLine}
           </div>
@@ -1622,6 +1629,13 @@ export default function SkShell({
     </>
   );
 
+  if (dock) {
+    return (
+      <DockFrame role={role} hat={hat} title={copy.title}>
+        {body}
+      </DockFrame>
+    );
+  }
   if (hero) {
     const card = (
       <HeroFrame role={role} hat={hat} title={copy.title}>
@@ -1659,6 +1673,25 @@ function PanelFrame({ onClose, role, hat, title, children }: FrameProps & { onCl
       >
         {children}
       </div>
+    </div>
+  );
+}
+
+/** The walkthrough's docked bar (2026-10-30): compact, NON-modal (no
+ *  backdrop, no click-outside), at the bottom of the page so the page above
+ *  stays visible and usable; full width on a phone, a card on wider screens. */
+function DockFrame({ role, hat, title, children }: FrameProps) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[48] flex justify-center sm:px-4 sm:pb-4">
+      <section
+        className="card pointer-events-auto w-full max-w-xl max-h-[65dvh] overflow-y-auto rounded-b-none sm:rounded-b-2xl text-slate-900 [color-scheme:light] shadow-lg"
+        data-sk="dock"
+        data-sk-role={role ?? ""}
+        data-sk-hat={hat ?? ""}
+        aria-label={title}
+      >
+        {children}
+      </section>
     </div>
   );
 }

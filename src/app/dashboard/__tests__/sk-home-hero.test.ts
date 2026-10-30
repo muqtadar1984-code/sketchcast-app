@@ -76,7 +76,7 @@ describe('SkShell variant="hero": the card', () => {
   it("still avatar (Look B by default), greeting, text box and Send, Mic switch — not the dialog", async () => {
     vi.resetModules();
     const { default: SkShell } = await import("../sk-shell");
-    const html = renderToStaticMarkup(createElement(SkShell, { variant: "hero", copy: en.sk.shell, tourCopy: en.app.tour, role: "teacher", hat: null, introDue: false }));
+    const html = renderToStaticMarkup(createElement(SkShell, { variant: "hero", copy: en.sk.shell, role: "teacher", hat: null }));
     expect(html).toContain('data-sk="hero"');
     // NOT the floating dialog: one engine, the inline variant.
     expect(html).not.toContain('role="dialog"');
@@ -100,7 +100,7 @@ describe('SkShell variant="hero": the card', () => {
   it("the panel variant is still the dialog, with no Mic switch", async () => {
     vi.resetModules();
     const { default: SkShell } = await import("../sk-shell");
-    const html = renderToStaticMarkup(createElement(SkShell, { copy: en.sk.shell, tourCopy: en.app.tour, role: "teacher", hat: null, introDue: false, onClose: () => {} }));
+    const html = renderToStaticMarkup(createElement(SkShell, { copy: en.sk.shell, role: "teacher", hat: null, onClose: () => {} }));
     expect(html).toContain('role="dialog"');
     expect(html).toContain('data-sk="shell"');
     expect(html).not.toContain('data-sk="mic-switch"');
@@ -124,19 +124,25 @@ describe("the wiring (source pins)", () => {
   it("the launcher keeps ONE Shell: portalled into the hero's place, the panel elsewhere, no pill beside a hero", () => {
     const src = read("sk-launcher.tsx");
     expect(src).toContain("const slot = useSkHeroSlot();");
-    expect(src).toContain('variant={heroHere ? "hero" : "panel"}');
+    // 2026-10-30: the walkthrough's dock is the same Shell on a page with no hero.
+    expect(src).toContain('variant={heroHere ? "hero" : docked ? "dock" : "panel"}');
     expect(src).toContain("portalTo={heroHere ? slot : null}");
-    expect(src).toContain("{!heroHere && (");
+    expect(src).toContain("{!heroHere && !docked && (");
     // Exactly one SkShell element, so React keeps its state through every move.
     expect(src.match(/<SkShell\b/g)?.length).toBe(1);
   });
   it("leaving the hero's page carries an engaged conversation on in the panel, open", () => {
     const src = read("sk-launcher.tsx");
     expect(src).toContain("if (wasHero) setOpen(engaged);");
-    expect(src).toContain("onEngaged={() => setEngaged(true)}");
+    expect(src).toMatch(/onEngaged=\{\(\) => \{\s*setEngaged\(true\);/);
   });
-  it("the hero never narrates the intro (it speaks, and nothing may play before a gesture)", () => {
-    expect(read("sk-shell.tsx")).toMatch(/if \(hero\) \{\s*introStartedRef\.current = true;\s*return;/);
+  it("the Shell never narrates on its own: the first-login tour is the walkthrough, voiced only through `walk.voice`", () => {
+    const src = read("sk-shell.tsx");
+    // The v1 narration (it spoke before any gesture) is gone from the Shell.
+    expect(src).not.toContain("runNarration");
+    expect(src).not.toContain("introDue");
+    // The tour's lines go through THIS Shell's coordinator (one voice).
+    expect(src).toContain("if (v.text) void coord?.say(v.text);");
   });
   it("a fresh Shell restores this tab's conversation instead of re-greeting", () => {
     const src = read("sk-shell.tsx");

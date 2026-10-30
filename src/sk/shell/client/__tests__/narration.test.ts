@@ -113,7 +113,9 @@ describe("runNarration", () => {
 
 describe("once per version — the same gate as the driver.js tours", () => {
   it("SK_INTRO_TOUR is the key /api/tour/seen is posted with", () => {
-    expect(SK_INTRO_TOUR).toEqual({ key: "sk-intro", version: 1 });
+    // v2 (2026-10-30): the walkthrough replaced the v1 narration, so everyone
+    // who heard v1 sees the walkthrough once.
+    expect(SK_INTRO_TOUR).toEqual({ key: "sk-intro", version: 2 });
   });
   it("plays when never seen, is silent once this version is recorded, plays again after a bump", () => {
     expect(shouldAutoStart(null, SK_INTRO_TOUR.version)).toBe(true);

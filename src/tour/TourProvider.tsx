@@ -10,7 +10,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname, useRouter } from "next/navigation";
 import type { Role, TourSeen } from "./types";
 import { tourForRole, type TourCopy } from "./definitions";
-import { resolveSteps, shouldAutoStart } from "./logic";
+import { driverTourMode, resolveSteps, shouldAutoStart } from "./logic";
+import { requestSkWalkthrough } from "@/sk/walkthrough/bus";
 import { createDriverEngine, type TourEngine } from "./engine";
 import { emitTourEvent } from "./analytics";
 
@@ -58,6 +59,7 @@ export default function TourProvider({
   role,
   seen,
   copy,
+  skWalkthrough = false,
   children,
 }: {
   role: string | null;
@@ -65,6 +67,9 @@ export default function TourProvider({
   /** The tour's words for THIS request's language, resolved by the (server)
    * dashboard layout — the steps themselves carry only targets and order. */
   copy: TourCopy;
+  /** The dashboard layout's SK gate (skShellEnabledFor): the SK walkthrough
+   *  replaces this tour — no auto-start; "Take a tour" starts SK's. */
+  skWalkthrough?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -75,7 +80,9 @@ export default function TourProvider({
   // the server, so its identity only changes when the tree is re-rendered there
   // (a language switch), which is exactly when the tour should be rebuilt.
   const def = useMemo(() => tourForRole(role, copy), [role, copy]);
-  const available = TOUR_ON && !!def;
+  const mode = driverTourMode({ flagOn: TOUR_ON, hasTour: !!def, skWalkthrough });
+  const available = mode.available;
+  const driverOn = TOUR_ON && !!def && mode.replayVia === "driver";
 
   const engineRef = useRef<TourEngine | null>(null);
   const seenRef = useRef<TourSeen | null>(seen); // local mirror; updated on finish so it won't re-nag this session
@@ -85,7 +92,7 @@ export default function TourProvider({
 
   const start = useCallback(
     (opts?: { force?: boolean }) => {
-      if (!available || !def || engineRef.current) return;
+      if (!driverOn || !def || engineRef.current) return;
       const tag = { tourKey: def.key, role: def.role as Role, version: def.version };
 
       // A target must be VISIBLE, not merely present: `hidden sm:flex` nav
@@ -142,10 +149,14 @@ export default function TourProvider({
         finish();
       }
     },
-    [available, def],
+    [driverOn, def],
   );
 
   const replay = useCallback(() => {
+    if (mode.replayVia === "sk") {
+      requestSkWalkthrough();
+      return;
+    }
     if (!available || !def) return;
     if (pathname === def.homePath) {
       start({ force: true });
@@ -153,12 +164,12 @@ export default function TourProvider({
       pendingReplayRef.current = true;
       router.push(def.homePath);
     }
-  }, [available, def, pathname, router, start]);
+  }, [mode.replayVia, available, def, pathname, router, start]);
 
   // Auto-start (or complete a pending replay) once the user is on the tour's home
   // screen — deferred if they landed elsewhere (Section 7).
   useEffect(() => {
-    if (!available || !def || pathname !== def.homePath) return;
+    if (!mode.autoStart || !def || pathname !== def.homePath) return;
     const replaying = pendingReplayRef.current;
     if (!replaying && (autoStartedRef.current || !shouldAutoStart(seenRef.current, def.version))) return;
     // Flip the guard INSIDE the timer, not here: if this effect re-runs before the
@@ -171,7 +182,7 @@ export default function TourProvider({
       start({ force: replaying });
     }, replaying ? 400 : 600); // let targets mount / hydration settle
     return () => clearTimeout(t);
-  }, [available, def, pathname, start]);
+  }, [mode.autoStart, def, pathname, start]);
 
   useEffect(
     () => () => {

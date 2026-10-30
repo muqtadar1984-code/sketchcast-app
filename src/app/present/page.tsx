@@ -88,7 +88,7 @@ export default async function PresentPage() {
   let sk: PresentSk | null = null;
   try {
     if (await skShellEnabledFor(supabase, user, role, schoolId)) {
-      sk = { copy: dict.sk.shell, tourCopy: dict.app.tour, role, hat: await activeHatCookie() };
+      sk = { copy: dict.sk.shell, walkCopy: dict.sk.walkthrough, role, hat: await activeHatCookie() };
     }
   } catch {
     sk = null;

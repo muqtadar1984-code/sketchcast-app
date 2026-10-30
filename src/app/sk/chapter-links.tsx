@@ -12,7 +12,7 @@ const link = "inline-flex min-h-10 items-center rounded-lg border border-[#14181
 
 export default function ChapterLinks({ slug, entries, t }: { slug: string; entries: ChapterEntry[]; t: Dictionary["sk"]["player"] }) {
   return (
-    <ul className="mt-3 flex flex-col gap-2">
+    <ul data-tour="sk-books" className="mt-3 flex flex-col gap-2">
       {entries.map((c) => {
         const href = `/sk/${slug}/${encodeURIComponent(c.chapterRef)}`;
         if (c.kits.length <= 1) {

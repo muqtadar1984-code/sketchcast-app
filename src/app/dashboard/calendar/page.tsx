@@ -379,7 +379,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           </div>
         </div>
 
-        <div className="card overflow-hidden">
+        <div data-tour="calendar-grid" className="card overflow-hidden">
           {/* The column heads are FORMATTED, not listed: the grid always starts
               on a Monday, so the first seven cells name themselves in whatever
               language the page is being read in — no seven more keys to keep in

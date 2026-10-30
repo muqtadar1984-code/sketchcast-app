@@ -100,7 +100,7 @@ export default async function AccessModelPage() {
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
-        <div className="card divide-y divide-[#EEF0EC] mb-10">
+        <div data-tour="school-access" className="card divide-y divide-[#EEF0EC] mb-10">
           {MODEL_ROWS.map((key) => (
             <div key={key} className="px-5 py-3 grid sm:grid-cols-[160px_1fr] gap-x-4 gap-y-1">
               <span className="font-medium">{t.model[key].role}</span>

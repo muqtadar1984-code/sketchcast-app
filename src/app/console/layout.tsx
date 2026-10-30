@@ -48,7 +48,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
       <ConsoleHeader email={admin.email} />
       {children}
       <AssistantLauncher t={{ ...t.school.assistant, close: t.common.close }} hidden={skOn} />
-      {skOn && <SkLauncher copy={t.sk.shell} tourCopy={t.app.tour} role={role} hat={hat} introDue={false} />}
+      {skOn && <SkLauncher copy={t.sk.shell} walkCopy={t.sk.walkthrough} role={role} hat={hat} introDue={false} />}
     </div>
   );
 }

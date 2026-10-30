@@ -1,0 +1,605 @@
+"use client";
+
+// SK's first-login walkthrough — the browser half (founder 2026-10-30). The
+// rules live in the pure engine (src/sk/shell/client/walkthrough.ts) and the
+// stops in src/sk/walkthrough/stops.ts; this file is the wiring the SK
+// launcher (sk-launcher.tsx) mounts:
+//
+//   useSkWalkthrough() — starts a run (facts from GET /api/sk/walkthrough →
+//     plan), moves between pages with router.push (prefetched, never a full
+//     reload), waits for each stop's anchor (observer + ~4 s, then skips it
+//     silently with a debug line), keeps the position in sessionStorage so the
+//     separate launchers on /present and /sk carry on, pauses when she asks a
+//     question or leaves the stop's page, and records completed / skipped in
+//     user_tour_progress ONLY for the first-login run.
+//   WalkStrip     — caption, "Tap for sound", sample-question chips (never
+//     sent: a tap only fills the text box), the static Example card, and
+//     Pause / Back / Next / Skip with the progress. Inside the home hero, or at
+//     the top of the docked bar on every other page.
+//   WalkExampleCard — the static demo of an action card. Client-only: no
+//     token, no /api/sk/act, Confirm disabled and labelled "Example".
+//   WalkSpotlight — a dimmed backdrop with a cut-out ring round the anchor;
+//     pointer-events none, so the page stays usable.
+//
+// Captions, highlights and moves start at once; the voice waits for her first
+// tap or key (the browser's autoplay rule) and then speaks through the
+// Shell's own speech coordinator (sk-shell.tsx, `walk.voice`), so the Google,
+// Polly or browser voice applies unchanged. No model call, no write.
+
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { fmt } from "@/i18n/format";
+import { SK_INTRO_TOUR } from "@/sk/shell/tour";
+import {
+  backStop,
+  createWalkStore,
+  currentStop,
+  findAnchor,
+  isActive,
+  jumpTo,
+  missingStop,
+  nextStop,
+  pauseWalk,
+  planWalk,
+  resumeWalk,
+  routePath,
+  skipWalk,
+  startWalk,
+  waitForAnchor,
+  walkCommand,
+  type PlannedStop,
+  type WalkState,
+  type WalkStore,
+} from "@/sk/shell/client/walkthrough";
+import { CLICK_ONLY_DEMOS, WALK_ROLES, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
+
+export type WalkCopy = Dictionary["sk"]["walkthrough"];
+
+/** A line for the Shell's voice: a new key speaks `text` ("" = be quiet). */
+export type WalkVoice = { key: string; text: string } | null;
+
+const SOUND_KEY = "sk.walkthrough.sound";
+
+function uid(): string {
+  const c = typeof crypto !== "undefined" ? (crypto as { randomUUID?: () => string }) : undefined;
+  return c?.randomUUID ? c.randomUUID() : `w-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function debug(msg: string) {
+  // The script: a stop whose anchor never appears is skipped SILENTLY, with a debug note.
+  if (typeof console !== "undefined") console.debug(`[sk-walk] ${msg}`);
+}
+
+/** The seen row for the first-login run (same pair the v1 intro posted). */
+export function postWalkSeen(status: "completed" | "skipped") {
+  try {
+    const body = JSON.stringify({ tourKey: SK_INTRO_TOUR.key, version: SK_INTRO_TOUR.version, status });
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      navigator.sendBeacon("/api/tour/seen", new Blob([body], { type: "application/json" }));
+      return;
+    }
+    void fetch("/api/tour/seen", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+  } catch {
+    /* best-effort: the worst case is the tour offers itself once more */
+  }
+}
+
+/** The words of a line key for a role ("" when the dictionary lacks it). */
+export function walkLine(copy: WalkCopy, role: WalkRole, key: string): string {
+  const table = copy[role] as Record<string, string> | undefined;
+  return table?.[key] ?? "";
+}
+
+/** "Label: value" rows of an Example card (split on the FIRST ": "). */
+export function exampleRows(rows: string): Array<[string, string]> {
+  return rows
+    .split("\n")
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .map((r) => {
+      const i = r.indexOf(": ");
+      return i > 0 ? [r.slice(0, i).trim(), r.slice(i + 2).trim()] : ["", r];
+    });
+}
+
+// ── the static Example card ─────────────────────────────────────────────────
+
+/** A demo of an action card. Purely presentational: no handler, no request,
+ *  no token. The Confirm button is disabled and says "Example". */
+export function WalkExampleCard({ demo, copy }: { demo: WalkDemo; copy: WalkCopy }) {
+  const d = copy.demo[demo];
+  const clickOnly = CLICK_ONLY_DEMOS.has(demo);
+  return (
+    <div className="rounded-xl border border-dashed border-[#F3D9A4] bg-[#FFF9EC] px-3 py-2.5 text-sm" data-sk="walk-example" data-sk-demo={demo} role="group" aria-label={`${copy.ui.example}: ${d.title}`}>
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="font-medium text-[#14181F]">{d.title}</div>
+        <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#8A5A00]">{copy.ui.example}</span>
+      </div>
+      <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+        {exampleRows(d.rows).map(([k, v], i) => (
+          <Fragment key={i}>
+            <dt className="text-[#98A0A9]">{k}</dt>
+            <dd className="text-[#14181F] break-words">{v}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" disabled aria-disabled="true" className="btn-primary h-7 px-3 text-xs opacity-50 cursor-not-allowed" data-sk="walk-example-confirm">
+          {copy.ui.example}
+        </button>
+        {clickOnly && (
+          <span className="text-[10px] text-[#8A5A00]" data-sk="walk-example-click-only">
+            {copy.ui.needsClick}
+          </span>
+        )}
+        <span className="text-[10px] text-[#5B6470] ms-auto">{copy.ui.exampleNote}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── the strip (hero and dock) ───────────────────────────────────────────────
+
+export type WalkStripProps = {
+  mode: "hero" | "dock";
+  copy: WalkCopy;
+  walk: WalkState;
+  line: string;
+  soundOn: boolean;
+  /** The dock's portrait: SK's Look (useRigChoice). */
+  look?: "A" | "B";
+  onSound: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onBack: () => void;
+  onNext: () => void;
+  onSkip: () => void;
+  onJump: (i: number) => void;
+  onChip: (text: string) => void;
+};
+
+export function WalkStrip(p: WalkStripProps) {
+  const { copy, walk } = p;
+  const ui = copy.ui;
+  const stop: PlannedStop | null = currentStop(walk);
+  if (!stop) return null;
+  const total = walk.stops.length;
+  const n = walk.index + 1;
+  const last = walk.index >= total - 1;
+  const paused = walk.status === "paused";
+  const btn = "h-8 px-2.5 rounded-lg border border-[#E6E8E4] text-xs font-medium text-[#14181F] bg-white hover:bg-[#F4F6F3] disabled:opacity-40 disabled:cursor-not-allowed";
+  return (
+    <div className={p.mode === "dock" ? "px-3 pt-3 pb-2 space-y-2" : "w-full space-y-2 text-start"} data-sk="walk" data-sk-walk-mode={p.mode} data-sk-walk-stop={stop.id} data-sk-walk-status={walk.status}>
+      <div className="flex items-start gap-2.5">
+        {p.mode === "dock" && (
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#E2F4F1]" data-sk="walk-portrait" data-sk-look={p.look ?? "B"}>
+            <Image src={p.look === "A" ? "/sk/portrait/sk-a.webp" : "/sk/portrait/sk-b.webp"} alt="" width={80} height={80} unoptimized className="h-full w-full object-cover" />
+          </div>
+        )}
+        <p className="min-w-0 flex-1 text-sm text-slate-800" data-sk="caption" aria-live="polite">
+          {p.line}
+        </p>
+      </div>
+
+      {!p.soundOn && (
+        <button type="button" onClick={p.onSound} className="inline-flex items-center gap-1 rounded-full border border-[#CFE9E4] bg-[#F1FBF9] px-2.5 py-1 text-[11px] font-medium text-[#0C8175]" data-sk="walk-sound">
+          <span aria-hidden>🔊</span> {ui.tapForSound}
+        </button>
+      )}
+
+      {stop.chips?.length ? (
+        <div className="flex flex-wrap items-center gap-1.5" data-sk="walk-chips" title={ui.chipHint}>
+          <span className="text-[10px] text-slate-500">{ui.tryAsking}:</span>
+          {stop.chips.map((c) => (
+            <button key={c} type="button" onClick={() => p.onChip(copy.chips[c])} className="rounded-full border border-[#E3DAF3] bg-[#F8F5FD] px-2 py-0.5 text-[11px] text-[#4A3B78]" data-sk="walk-chip" data-sk-chip={c}>
+              {copy.chips[c]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {stop.demo && <WalkExampleCard demo={stop.demo} copy={copy} />}
+
+      {paused && walk.pausedBy !== "user" && (
+        <button type="button" onClick={p.onResume} className="btn-primary h-8 px-3 text-xs text-white" data-sk="walk-continue">
+          {ui.continueTour}
+        </button>
+      )}
+
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={ui.controls} data-sk="walk-controls">
+        {paused ? (
+          <button type="button" onClick={p.onResume} className={btn} data-sk="walk-resume">
+            ▶ {ui.resume}
+          </button>
+        ) : (
+          <button type="button" onClick={p.onPause} className={btn} data-sk="walk-pause">
+            ❚❚ {ui.pause}
+          </button>
+        )}
+        <button type="button" onClick={p.onBack} disabled={walk.index === 0} className={btn} data-sk="walk-back">
+          <span aria-hidden className="inline-block rtl:rotate-180">‹</span> {ui.back}
+        </button>
+        <button type="button" onClick={p.onNext} className={`${btn} border-[#0C8175] text-[#0C8175]`} data-sk="walk-next">
+          {last ? ui.finish : ui.next} <span aria-hidden className="inline-block rtl:rotate-180">›</span>
+        </button>
+        <button type="button" onClick={p.onSkip} className="h-8 px-2 text-xs font-medium text-[#5B6470] underline" data-sk="walk-skip">
+          {ui.skip}
+        </button>
+        <span className="ms-auto text-[11px] text-slate-500 tabular-nums" data-sk="walk-progress">
+          {fmt(ui.progress, { n, total })}
+        </span>
+      </div>
+
+      {p.mode === "hero" && (
+        <div className="flex flex-wrap justify-center gap-1" data-sk="walk-dots" aria-hidden>
+          {walk.stops.map((s, i) => (
+            <button key={`${s.id}-${i}`} type="button" tabIndex={-1} onClick={() => p.onJump(i)} className={`h-1.5 w-1.5 rounded-full ${i === walk.index ? "bg-[#0C8175]" : i < walk.index ? "bg-[#9FD8CF]" : "bg-slate-200"}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── the spotlight ───────────────────────────────────────────────────────────
+
+/** A dim with a cut-out ring round `el`, following it on scroll and resize.
+ *  pointer-events none: the page under it stays usable. */
+export function WalkSpotlight({ el }: { el: Element }) {
+  const [box, setBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  useEffect(() => {
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!el.isConnected) return setBox(null);
+        const r = el.getBoundingClientRect();
+        const pad = 6;
+        setBox({ top: r.top - pad, left: r.left - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+      });
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+      ro?.disconnect();
+    };
+  }, [el]);
+  if (!box || typeof document === "undefined") return null;
+  return createPortal(
+    <div aria-hidden className="pointer-events-none fixed inset-0 z-[46]" data-sk="walk-spotlight">
+      <div
+        className="absolute rounded-xl ring-2 ring-[#0C8175] motion-safe:transition-all motion-safe:duration-200"
+        style={{ top: box.top, left: box.left, width: box.width, height: box.height, boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.28)" }}
+      />
+    </div>,
+    document.body,
+  );
+}
+
+// ── the hook ────────────────────────────────────────────────────────────────
+
+export type SkWalkthrough = {
+  /** A run is on (running or paused). */
+  active: boolean;
+  walk: WalkState | null;
+  /** The strip for the hero or the dock (null when no run). */
+  strip: (mode: "hero" | "dock", look?: "A" | "B") => ReactNode;
+  spotlight: ReactNode;
+  voice: WalkVoice;
+  /** A chip was tapped: the Shell puts this in its text box (never sends it). */
+  fill: WalkVoice;
+  /** Paused by her question: the dock shows the conversation. */
+  showAnswers: boolean;
+  /** A bare tour command typed or said; true = handled (no turn). */
+  command: (text: string) => boolean;
+  /** She asked SK something: the tour pauses and SK answers normally. */
+  onQuestion: () => void;
+  /** Start from stop 1. `record` only for the first-login run. */
+  start: (opts?: { record?: boolean }) => void;
+};
+
+export function useSkWalkthrough({
+  role,
+  hat,
+  copy,
+  introPending,
+  onIntroDone,
+}: {
+  role: string | null;
+  hat: string | null;
+  copy: WalkCopy | null | undefined;
+  /** Server-decided: this user has not seen the current SK_INTRO_TOUR version. */
+  introPending: boolean;
+  onIntroDone?: () => void;
+}): SkWalkthrough {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [walk, setWalk] = useState<WalkState | null>(null);
+  const [match, setMatch] = useState<{ el: Element | null; line?: string; key: string } | null>(null);
+  const [soundOn, setSoundOn] = useState(false);
+  const [voice, setVoice] = useState<WalkVoice>(null);
+  const [fill, setFill] = useState<WalkVoice>(null);
+  const storeRef = useRef<WalkStore | null>(null);
+  const walkRef = useRef<WalkState | null>(null);
+  const matchRef = useRef(match);
+  const soundRef = useRef(false);
+  const navigatingRef = useRef(false);
+  const startingRef = useRef(false);
+  const endedRef = useRef(new Set<string>());
+  const introRef = useRef(introPending);
+  const onIntroDoneRef = useRef(onIntroDone);
+  useEffect(() => {
+    walkRef.current = walk;
+    matchRef.current = match;
+    soundRef.current = soundOn;
+    introRef.current = introPending;
+    onIntroDoneRef.current = onIntroDone;
+  });
+
+  const lineOf = useCallback((w: WalkState | null, m: { line?: string } | null): string => {
+    const stop = w ? currentStop(w) : null;
+    if (!stop || !copy) return "";
+    return walkLine(copy, w!.role, m?.line ?? stop.line) || walkLine(copy, w!.role, stop.line);
+  }, [copy]);
+
+  const quiet = useCallback(() => setVoice({ key: uid(), text: "" }), []);
+
+  // Restore a run this tab already has (page move, or another layout's launcher).
+  useEffect(() => {
+    let storage: Storage | null = null;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      storage = null;
+    }
+    storeRef.current = createWalkStore(storage);
+    const t = window.setTimeout(() => {
+      const saved = storeRef.current?.load() ?? null;
+      if (saved) setWalk(saved);
+      let wanted = false;
+      try {
+        wanted = storage?.getItem(SOUND_KEY) === "on";
+      } catch {
+        wanted = false;
+      }
+      const ua = (navigator as Navigator & { userActivation?: { hasBeenActive?: boolean } }).userActivation;
+      if (saved && wanted && ua?.hasBeenActive) setSoundOn(true);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  // Persist every change; an ended run is recorded (first-login only) and
+  // dropped from sessionStorage.
+  useEffect(() => {
+    if (!walk) return;
+    storeRef.current?.save(walk);
+    if (walk.status === "done" || walk.status === "skipped") {
+      if (walk.record && !endedRef.current.has(walk.runId)) {
+        endedRef.current.add(walk.runId);
+        postWalkSeen(walk.status === "done" ? "completed" : "skipped");
+        onIntroDoneRef.current?.();
+      }
+      // An ended run renders as nothing (isActive is false): the strip, the
+      // dock and the spotlight go, and the Shell silences the tour's voice.
+    }
+  }, [walk]);
+
+  const start = useCallback(
+    (opts?: { record?: boolean }) => {
+      if (startingRef.current) return;
+      startingRef.current = true;
+      const record = !!opts?.record || introRef.current;
+      void (async () => {
+        let tour: WalkRole = walkRoleFor(role, hat);
+        let facts: WalkFacts = {};
+        try {
+          const res = await fetch("/api/sk/walkthrough", { cache: "no-store" });
+          if (res.ok) {
+            const j = (await res.json()) as { role?: string; facts?: WalkFacts };
+            if (j.role && (WALK_ROLES as readonly string[]).includes(j.role)) tour = j.role as WalkRole;
+            if (j.facts && typeof j.facts === "object") facts = j.facts;
+          }
+        } catch {
+          /* unknown facts: the anchor wait still skips what is not there */
+        }
+        startingRef.current = false;
+        setMatch(null);
+        setWalk(startWalk(tour, planWalk(tour, facts), { record, runId: uid() }));
+      })();
+    },
+    [role, hat],
+  );
+
+  // ── move to the stop, wait for its anchor, then show and say it ──
+  const stop = walk ? currentStop(walk) : null;
+  const goKey = walk && walk.status === "running" && stop ? `${walk.runId}:${walk.index}:${walk.stops.length}:${stop.id}` : null;
+  useEffect(() => {
+    if (!goKey) return;
+    const w = walkRef.current;
+    const s = w ? currentStop(w) : null;
+    if (!w || !s) return;
+    const ac = new AbortController();
+    const target = routePath(s.route);
+    const here = window.location.pathname + window.location.search;
+    const mustMove = s.route.includes("?") ? here !== s.route : window.location.pathname !== target;
+    if (mustMove) {
+      navigatingRef.current = true;
+      router.push(s.route);
+    }
+    const dom = {
+      query: (sel: string) => document.querySelector(sel),
+      visible: (el: Element) => el.getClientRects().length > 0,
+    };
+    void waitForAnchor<{ el: Element | null; line?: string }>({
+      find: () => {
+        if (window.location.pathname !== target) return null;
+        if (!s.anchors.length) return { el: null };
+        return findAnchor(s.anchors, dom);
+      },
+      observe: (cb) => {
+        const mo = new MutationObserver(cb);
+        mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] });
+        const poll = window.setInterval(cb, 300); // a route change without a mutation
+        return () => {
+          mo.disconnect();
+          window.clearInterval(poll);
+        };
+      },
+      signal: ac.signal,
+    }).then((hit) => {
+      if (ac.signal.aborted) return;
+      navigatingRef.current = false;
+      if (!hit) {
+        debug(`stop "${s.id}" (${s.route}) skipped: no anchor of ${s.anchors.map((a) => a.sel).join(", ")} appeared`);
+        setWalk((cur) => (cur && cur.runId === w.runId && cur.index === w.index ? missingStop(cur) : cur));
+        return;
+      }
+      if (hit.el) {
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        try {
+          hit.el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+        } catch {
+          /* old browsers */
+        }
+      }
+      const m = { el: hit.el, line: hit.line, key: goKey };
+      setMatch(m);
+      if (soundRef.current) setVoice({ key: uid(), text: lineOf(w, m) });
+      // Warm the next page so the hop lands on a render already under way.
+      const nx = w.stops[w.index + 1];
+      if (nx && routePath(nx.route) !== target) {
+        try {
+          router.prefetch(nx.route);
+        } catch {
+          /* a hint only */
+        }
+      }
+    });
+    return () => ac.abort();
+  }, [goKey, router, lineOf]);
+
+  // She left the stop's page herself (a link, the back button): hold the tour.
+  useEffect(() => {
+    const w = walkRef.current;
+    const s = w ? currentStop(w) : null;
+    if (!w || !s || w.status !== "running" || navigatingRef.current || !matchRef.current) return;
+    if (pathname && pathname !== routePath(s.route)) {
+      setWalk((cur) => (cur ? pauseWalk(cur, "away") : cur));
+      setMatch(null);
+    }
+  }, [pathname]);
+
+  // The voice waits for her first tap or key anywhere (autoplay rule).
+  const active = isActive(walk);
+  const unlock = useCallback(() => {
+    if (soundRef.current) return;
+    soundRef.current = true;
+    setSoundOn(true);
+    try {
+      window.sessionStorage.setItem(SOUND_KEY, "on");
+    } catch {
+      /* private mode */
+    }
+    const w = walkRef.current;
+    if (w?.status === "running" && matchRef.current) setVoice({ key: uid(), text: lineOf(w, matchRef.current) });
+  }, [lineOf]);
+  useEffect(() => {
+    if (!active || soundOn) return;
+    const onGesture = () => unlock();
+    document.addEventListener("pointerdown", onGesture, true);
+    document.addEventListener("keydown", onGesture, true);
+    return () => {
+      document.removeEventListener("pointerdown", onGesture, true);
+      document.removeEventListener("keydown", onGesture, true);
+    };
+  }, [active, soundOn, unlock]);
+
+  const move = useCallback(
+    (f: (w: WalkState) => WalkState) => {
+      quiet();
+      setMatch(null);
+      setWalk((cur) => (cur ? f(cur) : cur));
+    },
+    [quiet],
+  );
+  const controls = useMemo(
+    () => ({
+      next: () => move(nextStop),
+      back: () => move(backStop),
+      skip: () => move(skipWalk),
+      jump: (i: number) => move((w) => jumpTo(w, i)),
+      resume: () => move(resumeWalk),
+      pause: () => {
+        quiet();
+        setWalk((cur) => (cur ? pauseWalk(cur, "user") : cur));
+      },
+    }),
+    [move, quiet],
+  );
+
+  const command = useCallback(
+    (text: string) => {
+      if (!isActive(walkRef.current)) return false;
+      const c = walkCommand(text);
+      if (!c) return false;
+      if (c === "next") controls.next();
+      else if (c === "back") controls.back();
+      else if (c === "skip") controls.skip();
+      else if (c === "pause") controls.pause();
+      else controls.resume();
+      return true;
+    },
+    [controls],
+  );
+
+  const onQuestion = useCallback(() => {
+    setWalk((cur) => (cur?.status === "running" ? pauseWalk(cur, "question") : cur));
+  }, []);
+
+  const line = lineOf(walk, match?.key === goKey || walk?.status === "paused" ? match : null);
+  const strip = useCallback(
+    (mode: "hero" | "dock", look?: "A" | "B") =>
+      walk && active && copy ? (
+        <WalkStrip
+          mode={mode}
+          copy={copy}
+          walk={walk}
+          line={line}
+          soundOn={soundOn}
+          look={look}
+          onSound={unlock}
+          onPause={controls.pause}
+          onResume={controls.resume}
+          onBack={controls.back}
+          onNext={controls.next}
+          onSkip={controls.skip}
+          onJump={controls.jump}
+          onChip={(text) => setFill({ key: uid(), text })}
+        />
+      ) : null,
+    [walk, active, copy, line, soundOn, unlock, controls],
+  );
+
+  const showSpot = !!match?.el && active && (walk?.status === "running" || walk?.pausedBy === "user");
+  return {
+    active,
+    walk,
+    strip,
+    spotlight: showSpot && match?.el ? <WalkSpotlight el={match.el} /> : null,
+    voice,
+    fill,
+    showAnswers: walk?.status === "paused" && walk.pausedBy === "question",
+    command,
+    onQuestion,
+    start,
+  };
+}

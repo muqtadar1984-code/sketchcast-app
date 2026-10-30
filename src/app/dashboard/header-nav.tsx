@@ -8,9 +8,11 @@ export type NavTab = { href: string; label: string };
 
 // data-tour markers on specific nav destinations (for role tours that point at
 // where to go rather than an on-screen element).
-const TOUR_MARK: Record<string, string | undefined> = {
+export const TOUR_MARK: Record<string, string | undefined> = {
   "/dashboard/school": "school-nav",
   "/dashboard/test-papers": "test-papers-nav",
+  "/dashboard/diary": "diary-nav",
+  "/dashboard/my-timetable": "timetable-nav",
 };
 
 // A tab is active on its own route, but NOT when a more specific sibling tab also

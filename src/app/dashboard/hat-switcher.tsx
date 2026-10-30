@@ -50,7 +50,7 @@ export default function HatSwitcher({
   }
 
   return (
-    <label className="flex items-center gap-1.5 text-sm">
+    <label data-tour="hat-switcher" className="flex items-center gap-1.5 text-sm">
       <span className="text-[#98A0A9] text-xs hidden sm:inline">{viewingAs}</span>
       <select
         value={active}

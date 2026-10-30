@@ -133,7 +133,7 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
   }
 
   return (
-    <div className="card p-5 mb-6">
+    <div data-tour="notice-composer" className="card p-5 mb-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-display font-medium">{t.title}</h2>

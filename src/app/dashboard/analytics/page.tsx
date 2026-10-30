@@ -302,7 +302,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{parentMode ? t.subtitleHome : t.subtitle}</p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
+        <div data-tour="analytics-metrics" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
           {metrics.map((m) => (
             <div key={m.label} className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
               <div className="text-xs text-[#5B6470]">{m.label}</div>
@@ -380,7 +380,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <h2 className="text-xl mb-2">{t.toGradeTitle}</h2>
         <p className="text-sm text-[#5B6470] mb-3">{t.toGradeHint}</p>
-        <GradeList pending={pending} />
+        <div data-tour="grade-queue">
+          <GradeList pending={pending} />
+        </div>
 
         {autoMarked.length > 0 && (
           <details className="mt-10">

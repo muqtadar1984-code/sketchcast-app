@@ -469,7 +469,7 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
   const total = segments.length;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-3" data-testid="kit-player">
+    <div className="mx-auto flex max-w-3xl flex-col gap-3" data-testid="kit-player" data-tour="kit-player">
       <header>
         <h1 className="text-lg font-semibold text-[#14181F]">{kit.title}</h1>
         {kits.length > 1 && (
@@ -547,13 +547,13 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
 
       <div className="rounded-xl border border-[#E3E6E2] bg-white p-3">
         <div className="flex flex-wrap gap-2">
-          <button className={btn} onClick={() => void ask("")} disabled={!seg || skBusy} data-testid="kit-explain">
+          <button className={btn} onClick={() => void ask("")} disabled={!seg || skBusy} data-testid="kit-explain" data-tour="kit-explain">
             {t.explain}
           </button>
-          <button className={btn} onClick={() => void openPractice(current)} disabled={!seg || !seg.practise} data-testid="kit-practise">
+          <button className={btn} onClick={() => void openPractice(current)} disabled={!seg || !seg.practise} data-testid="kit-practise" data-tour="kit-practise">
             {t.practise}
           </button>
-          <button className={btnPrimary} onClick={doMove} data-testid="kit-next-move">
+          <button className={btnPrimary} onClick={doMove} data-testid="kit-next-move" data-tour="kit-next-move">
             {t.whatsNext}
           </button>
         </div>

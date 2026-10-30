@@ -197,7 +197,7 @@ export default function UploadBook({
 
   if (betaBlocked) {
     return (
-      <div className="card p-5 mb-8 text-sm text-[#5B6470]">
+      <div data-tour="upload-book" className="card p-5 mb-8 text-sm text-[#5B6470]">
         <span className="chip bg-[#FFF1D6] text-[#9A6400] me-2">{t.upload.trial}</span>
         {parent ? t.upload.trialParent : t.upload.trialTeacher}
       </div>
@@ -205,7 +205,7 @@ export default function UploadBook({
   }
 
   return (
-    <form onSubmit={onUpload} className="card p-5 mb-8">
+    <form data-tour="upload-book" onSubmit={onUpload} className="card p-5 mb-8">
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
         <label className="block">
           <span className="text-xs text-[#5B6470]">{t.upload.titleLabel}</span>

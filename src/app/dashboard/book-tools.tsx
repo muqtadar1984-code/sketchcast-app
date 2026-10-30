@@ -29,7 +29,7 @@ export default function BookTools({ children, t }: { children: React.ReactNode; 
   }, [open]);
 
   return (
-    <div ref={wrap} className="relative">
+    <div ref={wrap} data-tour="book-tools" className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}

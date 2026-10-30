@@ -341,6 +341,7 @@ export default async function AppHeader() {
           {user && (
             <Link
               href="/dashboard/settings"
+              data-tour="settings-link"
               className="btn-ghost h-9 w-9 shrink-0 inline-flex items-center justify-center text-base"
               aria-label={t.nav.settings}
               title={t.nav.settings}

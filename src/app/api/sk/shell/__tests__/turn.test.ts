@@ -184,6 +184,14 @@ describe("chat", () => {
     expect(ev[2]).toMatchObject({ label: "supplementary" });
     expect(mocks.constructed).toEqual([]);
   });
+  it("'show me around' → the walkthrough event and its fixed line, no model, no capability", async () => {
+    const ev = await readEvents(await POST(req(turn("Show me around"))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "walkthrough", "text", "done"]);
+    expect(ev[0]).toMatchObject({ intent: "tour" });
+    expect(ev[2]).toEqual({ type: "text", text: "Here's the tour. I'll show you around." });
+    expect(ev[3]).toMatchObject({ sources: [], label: "navigation" });
+    expect(mocks.constructed).toEqual([]);
+  });
 });
 
 describe("model path + grounding", () => {

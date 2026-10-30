@@ -42,7 +42,7 @@ export default function AddChild({ t }: { t: AddChildMessages }) {
   }
 
   return (
-    <div className="card p-5">
+    <div data-tour="add-child" className="card p-5">
       <div className="flex items-center justify-between">
         <div>
           <p className="font-medium">{t.title}</p>
