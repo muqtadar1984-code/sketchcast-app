@@ -2597,6 +2597,7 @@
         "continueTour": "تابع الجولة",
         "progress": "{n} من {total}",
         "takeTour": "ابدأ الجولة",
+        "starting": "جارٍ بدء الجولة…",
         "example": "مثال",
         "exampleNote": "مثال فقط. لا يُرسَل أي شيء.",
         "needsClick": "يحتاج إلى نقرة",

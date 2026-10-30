@@ -2597,6 +2597,7 @@
         "continueTour": "Continue the tour",
         "progress": "{n} of {total}",
         "takeTour": "Take the tour",
+        "starting": "Starting the tour…",
         "example": "Example",
         "exampleNote": "Example only. Nothing is sent.",
         "needsClick": "Needs a click",

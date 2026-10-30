@@ -5,8 +5,10 @@
 // stops in src/sk/walkthrough/stops.ts; this file is the wiring the SK
 // launcher (sk-launcher.tsx) mounts:
 //
-//   useSkWalkthrough() — starts a run (facts from GET /api/sk/walkthrough →
-//     plan) once the page it starts on has settled, prefetches every page of
+//   useSkWalkthrough() — starts a run at once (2026-10-31: "Starting the
+//     tour…" in the bubble, stop 1's page opened while the facts load from GET
+//     /api/sk/walkthrough; the page she is on is waited for only when stop 1
+//     is on it, ≤ 2 s — walkthrough.ts createWalkStarter), prefetches every page of
 //     the plan, and plays the stops STRICTLY in sequence (2026-10-30 fix):
 //     navigate (router.push, never a full reload) → wait for the page to
 //     SETTLE and the anchor to be visible and still (a stop is skipped, with
@@ -56,6 +58,7 @@ import { fmt } from "@/i18n/format";
 import { SK_INTRO_TOUR } from "@/sk/shell/tour";
 import {
   backStop,
+  createWalkStarter,
   createWalkStore,
   currentStop,
   findAnchor,
@@ -68,12 +71,12 @@ import {
   partReadingStarts,
   partSentenceStarts,
   pauseWalk,
-  planWalk,
   resumeWalk,
   routePath,
   skipWalk,
   startWalk,
   advanceDelay,
+  atRoute,
   readingMs,
   SETTLE_CAP_MS,
   waitForSettledAnchor,
@@ -87,12 +90,13 @@ import {
   type SettleProbe,
   type WalkRect,
   type WalkState,
+  type WalkStarter,
   type WalkStore,
 } from "@/sk/shell/client/walkthrough";
 import { splitSentences } from "@/sk/shell/client/speech";
 import { beaconVoiceEvents, createVoiceLog, skipOutcome, tourEvent, tourPageState, type TourOutcome, type VoiceLog } from "@/sk/shell/client/voice-log";
 import type { SkTurnWalk, SkWalkAction } from "@/sk/shell/types";
-import { CLICK_ONLY_DEMOS, WALK_ROLES, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
+import { CLICK_ONLY_DEMOS, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
 
 export type WalkCopy = Dictionary["sk"]["walkthrough"];
 
@@ -266,6 +270,21 @@ export function WalkStrip(p: WalkStripProps) {
   );
 }
 
+/** The bubble the moment a start is asked for (no run yet): "Starting the
+ *  tour…", and Skip, which gives the start up. */
+export function WalkStarting({ copy, onSkip }: { copy: WalkCopy; onSkip: () => void }) {
+  return (
+    <div className="space-y-2 text-start" data-sk="walk" data-sk-walk-status="starting">
+      <p className="text-sm leading-5 text-slate-800" data-sk="caption" aria-live="polite">
+        {copy.ui.starting}
+      </p>
+      <button type="button" onClick={onSkip} className="h-7 px-1.5 text-[11px] font-medium text-[#5B6470] underline" data-sk="walk-skip">
+        {copy.ui.skip}
+      </button>
+    </div>
+  );
+}
+
 // ── the spotlight ───────────────────────────────────────────────────────────
 
 /** A dim with a cut-out ring round `el`, following it on scroll and resize.
@@ -369,6 +388,8 @@ function settleProbe(path: string | null): SettleProbe {
 export type SkWalkthrough = {
   /** A run is on (running or paused). */
   active: boolean;
+  /** A start is under way (no run yet): the bubble says "Starting the tour…". */
+  starting: boolean;
   walk: WalkState | null;
   /** The tour inside the speech bubble (null when no run); `answer` = SK's
    *  reply to a question asked mid-tour, shown instead of the caption. */
@@ -619,40 +640,48 @@ export function useSkWalkthrough({
     }
   }, [runId, router]);
 
-  const startAbortRef = useRef<AbortController | null>(null);
-  useEffect(() => () => startAbortRef.current?.abort(), []);
-  const start = useCallback(
-    (opts?: { record?: boolean }) => {
-      if (startingRef.current) return;
-      startingRef.current = true;
-      const record = !!opts?.record || introRef.current;
-      const ac = new AbortController();
-      startAbortRef.current = ac;
-      void (async () => {
-        let tour: WalkRole = walkRoleFor(role, hat);
-        let facts: WalkFacts = {};
-        try {
-          const res = await fetch("/api/sk/walkthrough", { cache: "no-store" });
-          if (res.ok) {
-            const j = (await res.json()) as { role?: string; facts?: WalkFacts };
-            if (j.role && (WALK_ROLES as readonly string[]).includes(j.role)) tour = j.role as WalkRole;
-            if (j.facts && typeof j.facts === "object") facts = j.facts;
-          }
-        } catch {
-          /* unknown facts: the settled-page wait still skips what is not there */
-        }
-        // The tour does not START until the page it starts on has settled
-        // (loaded, no loading UI, quiet) — capped, so it always starts.
-        const ok = await waitForSettledPage({ probe: settleProbe(null), observe: observePage, signal: ac.signal });
-        startingRef.current = false;
-        if (!ok || ac.signal.aborted) return;
+  // ── the start (2026-10-31: "SK show me around still didn't start the
+  // tour"): the bubble says "Starting the tour…" at once, stop 1's page opens
+  // at once while the facts load, and the page she is on is waited for only
+  // when stop 1 is on it (≤ 2 s). One start at a time (walkthrough.ts
+  // createWalkStarter): a second "Take the tour" while starting joins it.
+  const [starting, setStarting] = useState(false);
+  const roleRef = useRef({ role, hat });
+  useEffect(() => {
+    roleRef.current = { role, hat };
+  });
+  const starterRef = useRef<WalkStarter<{ record: boolean }> | null>(null);
+  useEffect(() => {
+    const starter = createWalkStarter<{ record: boolean }>({
+      roleGuess: () => walkRoleFor(roleRef.current.role, roleRef.current.hat),
+      here: () => window.location.pathname + window.location.search,
+      navigate: (route) => router.push(route),
+      loadFacts: async (signal) => {
+        const res = await fetch("/api/sk/walkthrough", { cache: "no-store", signal });
+        return res.ok ? ((await res.json()) as { role?: string; facts?: WalkFacts }) : null;
+      },
+      // The page she is on only when stop 1 is on it, capped (≤ 2 s).
+      settle: (capMs, signal) => waitForSettledPage({ probe: settleProbe(null), observe: observePage, signal, capMs }),
+      onStarting: (on) => {
+        startingRef.current = on;
+        setStarting(on);
+      },
+      onReady: (tour, stops, ctx) => {
         setMatch(null);
         setAdvance(null);
-        setWalk(startWalk(tour, planWalk(tour, facts), { record, runId: uid() }));
-      })();
-    },
-    [role, hat],
-  );
+        setWalk(startWalk(tour, stops, { record: ctx.record, runId: uid() }));
+      },
+    });
+    starterRef.current = starter;
+    return () => {
+      starter.cancel();
+      if (starterRef.current === starter) starterRef.current = null;
+    };
+  }, [router]);
+  const start = useCallback((opts?: { record?: boolean }) => {
+    starterRef.current?.start({ record: !!opts?.record || introRef.current });
+  }, []);
+  const cancelStart = useCallback(() => starterRef.current?.cancel(), []);
 
   // ── one stop, strictly in order: navigate → settle → highlight → speak ──
   const goKey = goKeyOf(walk);
@@ -666,7 +695,7 @@ export function useSkWalkthrough({
     const t0 = Date.now();
     const target = routePath(s.route);
     const here = window.location.pathname + window.location.search;
-    const mustMove = s.route.includes("?") ? here !== s.route : window.location.pathname !== target;
+    const mustMove = !atRoute(s.route, here);
     if (mustMove) {
       navigatingRef.current = true;
       router.push(s.route);
@@ -873,19 +902,23 @@ export function useSkWalkthrough({
 
   const act = useCallback(
     (a: SkWalkAction) => {
-      if (!isActive(walkRef.current)) return;
+      // Starting (no run yet): only "skip" means something — it gives up the start.
+      if (!isActive(walkRef.current)) {
+        if (a === "skip" && startingRef.current) cancelStart();
+        return;
+      }
       if (a === "next") controls.next();
       else if (a === "back") controls.back();
       else if (a === "skip") controls.skip();
       else if (a === "pause") controls.pause();
       else if (a === "resume") controls.resume();
     },
-    [controls],
+    [controls, cancelStart],
   );
 
   const command = useCallback(
     (text: string) => {
-      if (!isActive(walkRef.current)) return false;
+      if (!isActive(walkRef.current) && !startingRef.current) return false;
       const c = walkCommand(text);
       if (!c) return false;
       act(c);
@@ -911,7 +944,9 @@ export function useSkWalkthrough({
   const line = shown ? lineOf(walk, match) : "";
   const strip = useCallback(
     (answer?: string | null) =>
-      walk && active && copy ? (
+      !active && starting && copy ? (
+        <WalkStarting copy={copy} onSkip={cancelStart} />
+      ) : walk && active && copy ? (
         <WalkStrip
           copy={copy}
           walk={walk}
@@ -927,7 +962,7 @@ export function useSkWalkthrough({
           onChip={(text) => setFill({ key: uid(), text })}
         />
       ) : null,
-    [walk, active, copy, line, soundOn, unlock, controls],
+    [walk, active, starting, cancelStart, copy, line, soundOn, unlock, controls],
   );
 
   const cur = walk ? currentStop(walk) : null;
@@ -939,6 +974,7 @@ export function useSkWalkthrough({
   const showSpot = !!match?.el && active && (walk?.status === "running" || walk?.pausedBy === "user");
   return {
     active,
+    starting,
     walk,
     strip,
     spotlight: showSpot && match?.el ? <WalkSpotlight el={match.el} /> : null,

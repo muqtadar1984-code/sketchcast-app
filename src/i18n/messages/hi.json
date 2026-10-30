@@ -2597,6 +2597,7 @@
         "continueTour": "टूर जारी रखें",
         "progress": "{total} में से {n}",
         "takeTour": "टूर देखें",
+        "starting": "टूर शुरू हो रहा है…",
         "example": "उदाहरण",
         "exampleNote": "सिर्फ़ उदाहरण है। कुछ भी भेजा नहीं जाता।",
         "needsClick": "क्लिक ज़रूरी है",

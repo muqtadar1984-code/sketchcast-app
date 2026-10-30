@@ -31,7 +31,7 @@
 // makes no model call, and never sends a sample question.
 
 import { INTENT_FILLER_WORDS, intentWords } from "@/sk/shell/intent-normalize";
-import { WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkPartDef, type WalkRole, type WalkScroll, type WalkStopDef } from "@/sk/walkthrough/stops";
+import { WALK_ROLES, WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkPartDef, type WalkRole, type WalkScroll, type WalkStopDef } from "@/sk/walkthrough/stops";
 
 export type WalkStatus = "idle" | "running" | "paused" | "done" | "skipped";
 
@@ -451,6 +451,18 @@ export const SETTLE_QUIET_MS = 800;
 export const ANCHOR_STABLE_MS = 200;
 /** The longest a stop waits for its page before it is passed over (a hard cap). */
 export const SETTLE_CAP_MS = 20_000;
+/** After this long, a loading UI that is STILL on screen (production
+ *  2026-10-30: the Library keeps aria-busy while it streams kit chunks) no
+ *  longer holds back a stop that has something to show — a fallback anchor, or
+ *  no anchor at all. A stop with nothing found keeps waiting for the loading to
+ *  clear (up to SETTLE_CAP_MS): skipping a stop on a page still streaming was
+ *  the bug the settled wait fixed. */
+export const LOADING_CAP_MS = 3_000;
+/** The tour's start waits at most this long for the page she is on (only when
+ *  stop 1 is on that page; another page is never waited for). */
+export const START_SETTLE_CAP_MS = 2_000;
+/** The facts request may take this long before the tour starts without them. */
+export const FACTS_TIMEOUT_MS = 8_000;
 
 /** What the settled-page wait reads off the page (a browser probe, or a test fake). */
 export type SettleProbe = {
@@ -472,6 +484,8 @@ export type SettleOptions = {
   quietMs?: number;
   stableMs?: number;
   capMs?: number;
+  /** See LOADING_CAP_MS. */
+  loadingCapMs?: number;
   signal?: AbortSignal;
 };
 
@@ -487,7 +501,10 @@ export type SettleOptions = {
  *             point at (`rect` → null) plays once the page has settled.
  *   missing — decided only once the page has SETTLED without one: on the
  *             stop's route, loaded, no loading UI, and no DOM change for
- *             `quietMs`.
+ *             `quietMs`. A stop that HAS something to show (a fallback, or no
+ *             anchor) stops waiting for a long-lived loading UI after
+ *             `loadingCapMs` (≈3 s; a streaming Library keeps aria-busy);
+ *             loaded and quiet are still required.
  *   cap     — after `capMs` (≈20 s): the anchor found by then (even if it is
  *             still moving), else null.
  *   abort   — null at once.
@@ -513,6 +530,7 @@ export function waitForSettledAnchor<T>(
   const quietMs = opts.quietMs ?? SETTLE_QUIET_MS;
   const stableMs = opts.stableMs ?? ANCHOR_STABLE_MS;
   const capMs = opts.capMs ?? SETTLE_CAP_MS;
+  const loadingCapMs = opts.loadingCapMs ?? LOADING_CAP_MS;
   const same = opts.same ?? ((a: T, b: T) => a === b);
   return new Promise<T | null>((resolve) => {
     if (opts.signal?.aborted) return resolve(null);
@@ -539,7 +557,10 @@ export function waitForSettledAnchor<T>(
         return null;
       }
     };
-    const settled = (t: number) => opts.probe.pathOk() && opts.probe.ready() && !opts.probe.loading() && t - lastChange >= quietMs;
+    // `shown`: the stop has something to show (a fallback, or no anchor at
+    // all): a loading UI still on screen after loadingCapMs no longer holds it.
+    const settled = (t: number, shown = false) =>
+      opts.probe.pathOk() && opts.probe.ready() && ((shown && t - started >= loadingCapMs) || !opts.probe.loading()) && t - lastChange >= quietMs;
     const check = () => {
       timer = null;
       if (finished) return;
@@ -555,10 +576,10 @@ export function waitForSettledAnchor<T>(
         const r = opts.rect(hit);
         if (r === null) {
           // Nothing to point at: the stop plays once the page has settled.
-          if (settled(t)) return finish(hit);
+          if (settled(t, true)) return finish(hit);
         } else if (r.width > 0 && r.height > 0) {
           const stable = !!candidate && same(candidate.hit, hit) && sameRect(candidate.rect, r);
-          if (stable && (!opts.provisional?.(hit) || settled(t))) return finish(hit);
+          if (stable && (!opts.provisional?.(hit) || settled(t, true))) return finish(hit);
           candidate = { hit, rect: r };
         } else candidate = null;
       } else {
@@ -580,6 +601,129 @@ export function waitForSettledAnchor<T>(
 export function waitForSettledPage(opts: SettleOptions): Promise<boolean> {
   const hit = { page: true };
   return waitForSettledAnchor({ ...opts, find: () => hit, rect: () => null }).then((v) => v !== null && !opts.signal?.aborted);
+}
+
+// ── the start (2026-10-31, founder: "SK show me around still didn't start
+// the tour") ────────────────────────────────────────────────────────────────
+// Production 2026-10-30: "Show me around" at 18:46:49, stop 1 at 18:47:32.
+// The start fetched the facts and THEN waited for the page she was on (the
+// Library, aria-busy while it streams) to settle — up to 20 s — before stop 1
+// even began its own wait. Now: the bubble says the tour is starting at once,
+// stop 1's page is opened at once (in parallel with the facts), the page she
+// is on is never waited for when stop 1 is elsewhere, and only ≤ 2 s when it
+// is the same page. One start at a time: a second tap while starting joins it.
+
+/** Is the address bar (`href` = path + search) on `route`? A route with a
+ *  query must match exactly; one without only by path. */
+export function atRoute(route: string, href: string): boolean {
+  return route.includes("?") ? href === route : routePath(href) === routePath(route);
+}
+
+/** Stop 1's page for a role, before any fact is known (null when it needs one). */
+export function firstStopRoute(role: WalkRole): string | null {
+  const def = WALK_STOPS[role][0];
+  return def ? resolveRoute(def.route, {}) : null;
+}
+
+export type WalkStarterDeps<C> = {
+  /** The tour this user gets, as the client knows it (the server may correct it). */
+  roleGuess: () => WalkRole;
+  /** Where she is now (pathname + search). */
+  here: () => string;
+  /** The client router (never a full reload). */
+  navigate: (route: string) => void;
+  /** GET /api/sk/walkthrough → role + facts (null / a throw = unknown facts). */
+  loadFacts: (signal: AbortSignal) => Promise<{ role?: string; facts?: WalkFacts } | null>;
+  /** waitForSettledPage on the page she is on, capped at `capMs`. */
+  settle: (capMs: number, signal: AbortSignal) => Promise<boolean>;
+  /** The bubble's "Starting the tour…" on / off. */
+  onStarting: (on: boolean) => void;
+  /** The plan is ready: start the run. */
+  onReady: (role: WalkRole, stops: PlannedStop[], ctx: C) => void;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (h: unknown) => void;
+  factsTimeoutMs?: number;
+  settleCapMs?: number;
+};
+
+export type WalkStarter<C> = {
+  /** Start a run; false when one is already starting (that one goes on). */
+  start: (ctx: C) => boolean;
+  /** Give up the start in progress (Skip while starting, unmount). */
+  cancel: () => void;
+  readonly starting: boolean;
+};
+
+/** The tour's start, single-flight (see above). Every dependency injected, so
+ *  node tests drive it. It never stays "starting": the facts give up after
+ *  `factsTimeoutMs`, the settle after `settleCapMs`, and a cancel ends it. */
+export function createWalkStarter<C>(d: WalkStarterDeps<C>): WalkStarter<C> {
+  const setT = d.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
+  const clearT = d.clearTimer ?? ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  let run: AbortController | null = null;
+  const end = (ac: AbortController) => {
+    if (run !== ac) return;
+    run = null;
+    d.onStarting(false);
+  };
+  const facts = (ac: AbortController): Promise<{ role?: string; facts?: WalkFacts } | null> =>
+    new Promise((resolve) => {
+      const fetchAc = new AbortController();
+      const stop = () => fetchAc.abort();
+      ac.signal.addEventListener("abort", stop);
+      const timer = setT(() => {
+        fetchAc.abort();
+        resolve(null);
+      }, d.factsTimeoutMs ?? FACTS_TIMEOUT_MS);
+      d.loadFacts(fetchAc.signal)
+        .then((v) => resolve(v), () => resolve(null))
+        .finally(() => {
+          clearT(timer);
+          ac.signal.removeEventListener("abort", stop);
+        });
+    });
+  return {
+    get starting() {
+      return run !== null;
+    },
+    start(ctx) {
+      if (run) return false;
+      const ac = new AbortController();
+      run = ac;
+      d.onStarting(true);
+      const from = d.here();
+      // Stop 1's page at once, while the facts load.
+      const guess = d.roleGuess();
+      const first = firstStopRoute(guess);
+      if (first && !atRoute(first, from)) d.navigate(first);
+      void (async () => {
+        try {
+          const j = await facts(ac);
+          if (ac.signal.aborted) return;
+          const role = j?.role && (WALK_ROLES as readonly string[]).includes(j.role) ? (j.role as WalkRole) : guess;
+          const stops = planWalk(role, j?.facts && typeof j.facts === "object" ? j.facts : {});
+          // Stop 1 on the page she started from: a short settle (≤ 2 s).
+          // Another page: no wait here — that stop waits for ITS page.
+          if (stops[0] && atRoute(stops[0].route, from)) {
+            const ok = await d.settle(d.settleCapMs ?? START_SETTLE_CAP_MS, ac.signal);
+            if (!ok || ac.signal.aborted) return;
+          }
+          d.onReady(role, stops, ctx);
+        } catch {
+          /* a failed start leaves nothing behind: she can ask again */
+        } finally {
+          end(ac);
+        }
+      })();
+      return true;
+    },
+    cancel() {
+      const ac = run;
+      if (!ac) return;
+      ac.abort();
+      end(ac);
+    },
+  };
 }
 
 /** Wait for a box to stop moving (a smooth scroll finishing): resolves once two

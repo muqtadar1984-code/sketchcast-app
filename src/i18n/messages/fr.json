@@ -2597,6 +2597,7 @@
         "continueTour": "Continuer la visite",
         "progress": "{n} sur {total}",
         "takeTour": "Faire la visite",
+        "starting": "La visite commence…",
         "example": "Exemple",
         "exampleNote": "Simple exemple. Rien n'est envoyé.",
         "needsClick": "Un clic est nécessaire",

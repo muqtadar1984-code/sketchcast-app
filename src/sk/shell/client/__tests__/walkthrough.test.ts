@@ -10,14 +10,20 @@ import { describe, expect, it } from "vitest";
 import {
   ADVANCE_AFTER_SPEECH_MS,
   ANCHOR_STABLE_MS,
+  FACTS_TIMEOUT_MS,
+  LOADING_CAP_MS,
   READ_MIN_MS,
   READ_MS_PER_CHAR,
   SETTLE_CAP_MS,
   SETTLE_QUIET_MS,
+  START_SETTLE_CAP_MS,
   advanceDelay,
+  atRoute,
   backStop,
+  createWalkStarter,
   createWalkStore,
   currentStop,
+  firstStopRoute,
   findAnchor,
   findParts,
   isActive,
@@ -46,7 +52,7 @@ import {
   type PlannedStop,
   type WalkState,
 } from "../walkthrough";
-import { WALK_STOPS, walkRoleFor, type WalkFacts } from "@/sk/walkthrough/stops";
+import { WALK_STOPS, walkRoleFor, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
 import { splitSentences } from "../speech";
 
 const ids = (stops: PlannedStop[]) => stops.map((s) => s.id);
@@ -721,21 +727,71 @@ describe("anchors", () => {
     p.advance(ANCHOR_STABLE_MS);
     await expect(wait).resolves.toEqual({ el });
   });
-  it("the tour's start waits for the home page to settle", async () => {
+  it("the start's own wait for the page she is on is capped (START_SETTLE_CAP_MS, ~2 s), even on a page that never stops loading", async () => {
     const p = fakePage({ loading: true });
     let started = false;
-    const wait = waitForSettledPage({ ...p }).then((v) => ((started = v), v));
-    p.advance(5000);
+    const wait = waitForSettledPage({ ...p, capMs: START_SETTLE_CAP_MS }).then((v) => ((started = v), v));
+    for (let i = 0; i < 9; i++) {
+      p.mutate(); // streaming
+      p.advance(200);
+    }
     await Promise.resolve();
     expect(started).toBe(false);
-    p.page.loading = false;
-    p.advance(SETTLE_QUIET_MS + 200);
+    p.advance(START_SETTLE_CAP_MS - 1800 + 200);
     await expect(wait).resolves.toBe(true);
+    expect(START_SETTLE_CAP_MS).toBeLessThanOrEqual(2000);
     const ac = new AbortController();
     const p2 = fakePage({ loading: true });
     const w2 = waitForSettledPage({ ...p2, signal: ac.signal });
     ac.abort();
     await expect(w2).resolves.toBe(false);
+  });
+  // Production 2026-10-30: the library stop's log said still-loading:aria-busy —
+  // the Library keeps aria-busy while it streams kit chunks.
+  it("a long-lived aria-busy (a streaming Library) no longer holds a stop with something to show past LOADING_CAP_MS", async () => {
+    // A fallback anchor, the page loaded and quiet, aria-busy forever.
+    const p = fakePage({ loading: true });
+    type Hit = { id: string; index: number };
+    let at = -1;
+    const wait = waitForSettledAnchor<Hit>({ find: () => ({ id: "badges", index: 1 }), rect: () => box(10), same: (a, b) => a.id === b.id, provisional: (h) => h.index > 0, ...p }).then(
+      (v) => ((at = p.now()), v),
+    );
+    p.advance(LOADING_CAP_MS - 200);
+    await Promise.resolve();
+    expect(at).toBe(-1); // before the cap the loading UI still counts
+    p.advance(600);
+    await expect(wait).resolves.toEqual({ id: "badges", index: 1 });
+    expect(at).toBeGreaterThanOrEqual(LOADING_CAP_MS);
+    expect(at).toBeLessThan(LOADING_CAP_MS + 1000); // not the old 20 s cap
+    // A stop with no anchor at all (rect null) likewise.
+    const q = fakePage({ loading: true });
+    const hit = { el: null };
+    const w2 = waitForSettledAnchor({ find: () => hit, rect: () => null, ...q });
+    q.advance(LOADING_CAP_MS + 400);
+    await expect(w2).resolves.toBe(hit);
+    // Quiet is still required: a page still changing is not settled.
+    const r = fakePage({ loading: true });
+    let done = false;
+    const w3 = waitForSettledAnchor({ find: () => hit, rect: () => null, ...r }).then(() => (done = true));
+    for (let i = 0; i < 25; i++) {
+      r.mutate();
+      r.advance(200);
+    }
+    await Promise.resolve();
+    expect(done).toBe(false);
+    r.advance(SETTLE_QUIET_MS + 200);
+    await w3;
+  });
+  it("…but a stop with NOTHING found keeps waiting while the page is loading (skipping on a streaming page was the old bug)", async () => {
+    const p = fakePage({ loading: true });
+    let done = false;
+    const wait = waitForSettledAnchor({ find: () => null, rect: () => box(), ...p }).then((v) => ((done = true), v));
+    p.advance(LOADING_CAP_MS * 3);
+    await Promise.resolve();
+    expect(done).toBe(false);
+    p.page.loading = false;
+    p.advance(SETTLE_QUIET_MS + 200);
+    await expect(wait).resolves.toBeNull();
   });
   it("the scroll has finished when the box stops moving", async () => {
     const p = fakePage();
@@ -858,5 +914,111 @@ describe("walkStartCommand: 'continue / start the tour' with no tour running", (
     ]) {
       expect(walkStartCommand(t), t).toBe(false);
     }
+  });
+});
+
+// 2026-10-31 (founder: "SK show me around still didn't start the tour").
+// Production: "Show me around" at 18:46:49, stop 1 at 18:47:32 — the start
+// fetched the facts, then waited for the Library (aria-busy while streaming)
+// to settle before stop 1 even began.
+describe("the start: at once, never waiting for a page stop 1 is not on", () => {
+  type Ctx = { record: boolean };
+  function harness(o: { here?: string; role?: WalkRole; facts?: () => Promise<{ role?: string; facts?: WalkFacts } | null>; settle?: (capMs: number) => Promise<boolean> } = {}) {
+    const log: string[] = [];
+    const timers: Array<{ fn: () => void; ms: number; id: number }> = [];
+    let id = 0;
+    const ready: Array<{ role: WalkRole; stops: string[]; ctx: Ctx }> = [];
+    const starter = createWalkStarter<Ctx>({
+      roleGuess: () => o.role ?? "teacher",
+      here: () => o.here ?? "/dashboard?book=b1",
+      navigate: (r) => log.push(`navigate ${r}`),
+      loadFacts: () => (log.push("facts"), o.facts ? o.facts() : Promise.resolve({ role: o.role ?? "teacher", facts: TEACHER_ALL })),
+      settle: (capMs) => (log.push(`settle ${capMs}`), o.settle ? o.settle(capMs) : Promise.resolve(true)),
+      onStarting: (on) => log.push(on ? "starting" : "started"),
+      onReady: (role, stops, ctx) => ready.push({ role, stops: stops.map((s) => s.id), ctx }),
+      setTimer: (fn, ms) => (timers.push({ fn, ms, id: ++id }), id),
+      clearTimer: (h) => {
+        const i = timers.findIndex((t) => t.id === h);
+        if (i >= 0) timers.splice(i, 1);
+      },
+    });
+    const flush = async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    };
+    return { starter, log, timers, ready, flush };
+  }
+
+  it("says it is starting and opens stop 1's page at once, before the facts are back", async () => {
+    let answer: (v: { role?: string; facts?: WalkFacts }) => void = () => {};
+    const h = harness({ role: "parent", here: "/dashboard", facts: () => new Promise((r) => (answer = r)) });
+    expect(h.starter.start({ record: false })).toBe(true);
+    // Synchronously: the bubble, then the parent's stop 1 page — the facts still pending.
+    expect(h.log).toEqual(["starting", "navigate /dashboard/children", "facts"]);
+    answer({ role: "parent", facts: { children: 1, verifiedChildren: 1 } });
+    await h.flush();
+    // Stop 1 is on another page than the one she started on: no settle wait at all.
+    expect(h.log).not.toContain(`settle ${START_SETTLE_CAP_MS}`);
+    expect(h.log.some((l) => l.startsWith("settle"))).toBe(false);
+    expect(h.ready).toHaveLength(1);
+    expect(h.ready[0]!.stops[0]).toBe("hello");
+    expect(h.log[h.log.length - 1]).toBe("started");
+  });
+
+  it("stop 1 on the page she is on (the teacher on the Library, /dashboard?book=…): no navigation, a settle capped at ~2 s", async () => {
+    const h = harness();
+    h.starter.start({ record: true });
+    await h.flush();
+    expect(h.log.some((l) => l.startsWith("navigate"))).toBe(false);
+    expect(h.log).toContain(`settle ${START_SETTLE_CAP_MS}`);
+    expect(h.ready).toEqual([expect.objectContaining({ role: "teacher", ctx: { record: true } })]);
+    expect(atRoute("/dashboard", "/dashboard?book=b1")).toBe(true);
+    expect(atRoute("/dashboard?book=b1", "/dashboard")).toBe(false);
+    expect(atRoute("/present?class=c1", "/present?class=c1")).toBe(true);
+    expect(firstStopRoute("principal")).toBe("/dashboard/school");
+  });
+
+  it("a second start while one is starting joins it: ONE tour", async () => {
+    let answer: (v: { role?: string; facts?: WalkFacts }) => void = () => {};
+    const h = harness({ facts: () => new Promise((r) => (answer = r)) });
+    expect(h.starter.start({ record: true })).toBe(true);
+    expect(h.starter.starting).toBe(true);
+    // She taps "Take the tour" during the delay.
+    expect(h.starter.start({ record: false })).toBe(false);
+    expect(h.log.filter((l) => l === "facts")).toHaveLength(1);
+    answer({ role: "teacher", facts: TEACHER_ALL });
+    await h.flush();
+    expect(h.ready).toHaveLength(1);
+    expect(h.ready[0]!.ctx).toEqual({ record: true });
+    expect(h.starter.starting).toBe(false);
+    // …and once started, a new start works again (a replay).
+    expect(h.starter.start({ record: false })).toBe(true);
+    answer({ role: "teacher", facts: TEACHER_ALL });
+    await h.flush();
+    expect(h.ready).toHaveLength(2);
+  });
+
+  it("never stuck starting: a facts request that hangs gives up after FACTS_TIMEOUT_MS, a failed one starts with no facts, Skip cancels", async () => {
+    const h = harness({ facts: () => new Promise(() => {}) });
+    h.starter.start({ record: false });
+    expect(h.timers.map((t) => t.ms)).toEqual([FACTS_TIMEOUT_MS]);
+    h.timers.shift()!.fn();
+    await h.flush();
+    expect(h.ready).toHaveLength(1); // started without the facts (the stops that need one drop out)
+    expect(h.starter.starting).toBe(false);
+
+    const f = harness({ facts: () => Promise.reject(new Error("offline")) });
+    f.starter.start({ record: false });
+    await f.flush();
+    expect(f.ready).toHaveLength(1);
+    expect(f.starter.starting).toBe(false);
+
+    const c = harness({ facts: () => new Promise(() => {}) });
+    c.starter.start({ record: false });
+    c.starter.cancel();
+    expect(c.starter.starting).toBe(false);
+    expect(c.log[c.log.length - 1]).toBe("started");
+    await c.flush();
+    expect(c.ready).toHaveLength(0);
+    expect(c.starter.start({ record: false })).toBe(true); // she can ask again
   });
 });

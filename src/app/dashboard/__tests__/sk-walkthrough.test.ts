@@ -66,7 +66,7 @@ describe("WalkExampleCard: a static demo of an action card", () => {
     expect(src).not.toMatch(/token/i);
     // The fetches it makes: the facts (GET) and the seen row.
     expect(src.match(/(?<![.\w])fetch\(/g)?.length).toBe(2);
-    expect(src).toContain('fetch("/api/sk/walkthrough", { cache: "no-store" })');
+    expect(src).toContain('fetch("/api/sk/walkthrough", { cache: "no-store", signal })');
     expect(src).toContain('fetch("/api/tour/seen"');
   });
   it("splits rows on the first ': ' (a time like 17:00 stays whole)", async () => {
@@ -100,6 +100,13 @@ describe("WalkStrip: the tour inside the speech bubble", () => {
     expect(html).not.toContain('data-sk="walk-dots"');
     // The caption keeps to four lines, scrolling past them.
     expect(html).toContain("max-h-20 overflow-y-auto");
+  });
+  it("while a start is under way: 'Starting the tour…' and Skip, at once (2026-10-31)", async () => {
+    const { WalkStarting } = await import("../sk-walkthrough");
+    const html = renderToStaticMarkup(createElement(WalkStarting, { copy: en.sk.walkthrough, onSkip: noop }));
+    expect(html).toContain('data-sk-walk-status="starting"');
+    expect(html).toContain("Starting the tour…");
+    expect(html).toContain('data-sk="walk-skip"');
   });
   it("the Example card and the sample chips open ABOVE the caption; chips only fill a box", async () => {
     let w = teacherWalk();
@@ -237,10 +244,16 @@ describe("strict sequence: navigate → settle → highlight → the whole line 
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
-  it("the tour does not START before the home page has settled", () => {
-    const start = w.slice(w.indexOf("const start = useCallback("), w.indexOf("const goKey = goKeyOf(walk);"));
-    expect(start.indexOf("await waitForSettledPage(")).toBeGreaterThan(0);
-    expect(start.indexOf("await waitForSettledPage(")).toBeLessThan(start.indexOf("setWalk(startWalk("));
+  // 2026-10-31 ("SK show me around still didn't start the tour"): the start
+  // no longer waits for the page she is on unless stop 1 is there (≤ 2 s).
+  it("the start: one single-flight starter, 'Starting the tour…' at once, the page settle only through the starter's capped wait", () => {
+    const start = w.slice(w.indexOf("const [starting, setStarting] = useState(false);"), w.indexOf("const goKey = goKeyOf(walk);"));
+    expect(start).toContain("const starter = createWalkStarter<{ record: boolean }>({");
+    expect(start).toContain("settle: (capMs, signal) => waitForSettledPage({ probe: settleProbe(null), observe: observePage, signal, capMs }),");
+    expect(start).toContain("navigate: (route) => router.push(route),");
+    expect(start).not.toMatch(/await waitForSettledPage\(/);
+    expect(w).toContain("<WalkStarting copy={copy} onSkip={cancelStart} />");
+    expect(read("sk-launcher.tsx")).toContain("tourActive || tour.starting");
   });
   it("auto-advance only after the line was FULLY spoken (or the reading time without sound), cancelled by a pause, a question or her typing", () => {
     expect(w).toContain("const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });");
