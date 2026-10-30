@@ -72,7 +72,15 @@ describe("KitsGallery renders in chunks", () => {
     expect(html).toContain("/api/catalogue/file?gen=pres-1&amp;kind=thumbnail_png");
     expect(html).toMatch(/<button type="button" class="relative block w-full aspect-video/);
     expect(html).toContain(`<span class="sr-only">${(en.library.kinds as Record<string, string>).worksheet}</span>`);
-    // a YouTube kit links out instead
-    expect(render([view(2)])).toContain("https://www.youtube.com/watch?v=yt2");
+  });
+
+  it("a kit on YouTube WITH a stored lesson opens the in-app player too (stored MP4 first) — no link out to YouTube", () => {
+    const html = render([view(2, { videoGenerationId: "pres-2" })]);
+    expect(html).toMatch(/<button type="button" class="relative block w-full aspect-video/);
+    expect(html).not.toContain("https://www.youtube.com/watch?v=yt2");
+    // the card's frame is still YouTube's (no storage read per card)
+    expect(html).toContain("https://i.ytimg.com/vi/yt2/mqdefault.jpg");
+    // only a kit with no presentation at all links out
+    expect(render([view(3)])).toContain("https://www.youtube.com/watch?v=yt3");
   });
 });

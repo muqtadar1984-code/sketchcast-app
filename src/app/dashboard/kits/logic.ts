@@ -215,12 +215,14 @@ export function downloadsOf(kind: string, gen: string): DownloadSpec[] {
   return out;
 }
 
-/** The in-app player's source and frame for a kit with no public video (a
- * translation, D5); null for a kit that plays on YouTube. */
-export const storageVideo = (youtubeId: string | null, videoGenerationId: string | null): { videoHref: string; posterHref: string } | null =>
-  youtubeId || !videoGenerationId
-    ? null
-    : { videoHref: catalogueFileHref(videoGenerationId, "video_mp4"), posterHref: catalogueFileHref(videoGenerationId, "thumbnail_png") };
+/** The in-app player's source and frame: the kit's STORED MP4 whenever it has
+ * a presentation, YouTube video or not (founder 2026-10-30: "the quality
+ * matters in the app so lets use stored mp4 wherever possible"); null only
+ * for a kit with no presentation, which links out instead. A kit whose MP4
+ * fails to load falls back to its YouTube video in the same player
+ * (kits-gallery.tsx). */
+export const storageVideo = (videoGenerationId: string | null): { videoHref: string; posterHref: string } | null =>
+  videoGenerationId ? { videoHref: catalogueFileHref(videoGenerationId, "video_mp4"), posterHref: catalogueFileHref(videoGenerationId, "thumbnail_png") } : null;
 
 // ── the gallery renders in chunks (2026-10-30) ──────────────────────────────
 // ~610 cards at once — each with a lazy thumbnail and its own state — made the

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { youtubeEmbedUrl, youtubeIdFromUrl } from "@/utils/catalogue/kit-youtube";
 
 // The in-app lesson player for ADULT surfaces (the Library's content cells and
 // lesson cards). Students have their own player inside student-item.tsx — it
@@ -20,6 +21,12 @@ import { useEffect, useState } from "react";
 //
 // The founder-only "Save" link (utils/video-download.ts) is untouched: it
 // signs a SEPARATE download-dispositioned URL for the allow-list.
+//
+// THE STORED MP4 FIRST (founder 2026-10-30: "the quality matters in the app so
+// lets use stored mp4 wherever possible"). A YouTube link reaches this player
+// only as the FALLBACK — a catalogue copy with no stored video — and plays in
+// YouTube's embedded player with captions OFF by default (youtubeEmbedUrl:
+// cc_load_policy=0; YouTube's own controls still let a viewer turn them on).
 
 export function LessonPlayer({
   src,
@@ -33,6 +40,7 @@ export function LessonPlayer({
   closeLabel: string;
   onClose: () => void;
 }) {
+  const youtubeId = youtubeIdFromUrl(src);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -50,17 +58,28 @@ export function LessonPlayer({
       aria-label={title}
     >
       <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-        <video
-          src={src}
-          controls
-          autoPlay
-          playsInline
-          controlsList="nodownload"
-          disablePictureInPicture
-          disableRemotePlayback
-          onContextMenu={(e) => e.preventDefault()}
-          className="w-full rounded-lg bg-black"
-        />
+        {youtubeId ? (
+          <iframe
+            src={youtubeEmbedUrl(youtubeId, { autoplay: true })}
+            title={title}
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="aspect-video w-full rounded-lg bg-black"
+          />
+        ) : (
+          <video
+            src={src}
+            controls
+            autoPlay
+            playsInline
+            controlsList="nodownload"
+            disablePictureInPicture
+            disableRemotePlayback
+            onContextMenu={(e) => e.preventDefault()}
+            className="w-full rounded-lg bg-black"
+          />
+        )}
         <div className="flex items-center justify-between gap-3 mt-2">
           <p className="text-xs text-white/70 truncate"><bdi>{title}</bdi></p>
           <button type="button" onClick={onClose} className="shrink-0 text-xs text-white/90 hover:underline">

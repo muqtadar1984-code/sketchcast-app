@@ -18,8 +18,9 @@ import { presentEntitled } from "@/utils/present/entitlement";
 // 0175 — SketchCast books as Library books: for a book a TEACHER or PARENT
 // holds themselves, its chapters and each chapter's catalogue kits (documents
 // signed here with the service role AFTER the decision — the catalogue's
-// pattern; the lesson video is a YouTube link), each chapter's Classroom
-// Board link when the reader may open the Board, and the reader's Assign
+// pattern; the lesson video is its stored MP4, YouTube only as the
+// fallback), each chapter's Classroom Board link when the reader may open the
+// Board, and the reader's Assign
 // targets (their classes, or a parent's children). The book goes to the
 // Board, not to SK (founder 2026-10-30), so the card carries no "Open in SK";
 // a STUDENT keeps the plain tile, whose "Open in SK" is the student tutor.

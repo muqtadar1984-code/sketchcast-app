@@ -117,10 +117,9 @@ describe("what a card derives in the browser", () => {
     expect(catalogueFileHref("a b", "docx")).toBe("/api/catalogue/file?gen=a%20b&kind=docx");
   });
 
-  it("a kit with no YouTube video plays from storage; one with a video (or no presentation) does not", () => {
-    expect(storageVideo(null, "p1")).toEqual({ videoHref: "/api/catalogue/file?gen=p1&kind=video_mp4", posterHref: "/api/catalogue/file?gen=p1&kind=thumbnail_png" });
-    expect(storageVideo("yt1", "p1")).toBeNull();
-    expect(storageVideo(null, null)).toBeNull();
+  it("every kit with a presentation plays its stored MP4 (quality first, YouTube or not); only a kit with none does not", () => {
+    expect(storageVideo("p1")).toEqual({ videoHref: "/api/catalogue/file?gen=p1&kind=video_mp4", posterHref: "/api/catalogue/file?gen=p1&kind=thumbnail_png" });
+    expect(storageVideo(null)).toBeNull();
   });
 
   it("assignable pieces are still derived from the pieces (no plan, no question bank)", () => {
@@ -187,7 +186,7 @@ describe("the page streams (source pins)", () => {
     const section = fnBody(page, "KitsSection");
     expect(section).not.toMatch(/downloads:|label:|videoHref|posterHref|assignableIds/);
     expect(gallery).toMatch(/downloadsOf\(p\.kind, p\.generationId\)/);
-    expect(gallery).toMatch(/storageVideo\(kit\.youtubeId, kit\.videoGenerationId\)/);
+    expect(gallery).toMatch(/storageVideo\(kit\.videoGenerationId\)/);
   });
 
   it("the gallery renders visibleKits in chunks: a sentinel IntersectionObserver plus a Show more button", () => {
