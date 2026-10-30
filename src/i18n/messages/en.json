@@ -2449,6 +2449,12 @@
       "actionClaim": {
         "cant": "I can't do that from here.",
         "card": "Nothing has been done yet: I can prepare it as a card, and nothing happens until you confirm it."
+      },
+      "lang": {
+        "nothingToRepeat": "There's nothing to repeat yet — ask me something first.",
+        "canSpeak": "I can speak {list}.",
+        "switched": "OK — I'll answer in {language} from now on.",
+        "sourceUnsupported": "This material is in a language I can't answer in yet ({source}), so I'll answer in {language}."
       }
     },
     "player": {

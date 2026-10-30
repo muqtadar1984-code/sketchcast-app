@@ -2449,6 +2449,12 @@
       "actionClaim": {
         "cant": "Saya tidak dapat melakukannya dari sini.",
         "card": "Belum ada apa-apa yang dibuat: saya boleh menyediakannya sebagai kad, dan tiada apa-apa berlaku sehingga anda mengesahkannya."
+      },
+      "lang": {
+        "nothingToRepeat": "Belum ada apa-apa untuk diulang — tanya saya sesuatu dahulu.",
+        "canSpeak": "Saya boleh bercakap dalam bahasa-bahasa ini: {list}.",
+        "switched": "Baik — saya akan menjawab dalam {language} mulai sekarang.",
+        "sourceUnsupported": "Bahan ini dalam bahasa yang belum boleh saya gunakan ({source}), jadi saya akan menjawab dalam {language}."
       }
     },
     "player": {

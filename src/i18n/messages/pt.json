@@ -2449,6 +2449,12 @@
       "actionClaim": {
         "cant": "Não consigo fazer isso a partir daqui.",
         "card": "Ainda não foi feito nada: posso prepará-lo num cartão, e nada acontece até o confirmar."
+      },
+      "lang": {
+        "nothingToRepeat": "Ainda não há nada para repetir — pergunte-me algo primeiro.",
+        "canSpeak": "Posso falar estas línguas: {list}.",
+        "switched": "Está bem — a partir de agora respondo em {language}.",
+        "sourceUnsupported": "Este material está numa língua em que ainda não consigo responder ({source}), por isso vou responder em {language}."
       }
     },
     "player": {

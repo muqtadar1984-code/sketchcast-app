@@ -256,3 +256,27 @@ describe("the student rule block and the student lines", () => {
     }
   });
 });
+
+describe("a student's 'say that in Malay' (2026-10-30)", () => {
+  it("repeats her last explanation through the kit turn: ONE more call, ONE more live turn, never the Shell's model; a resend replays", async () => {
+    const first = await readEvents(await turnPOST(turn("why are red blood cells red?")));
+    const memory = (first.find((e) => e.type === "done") as { memory: string }).memory;
+    const id = tid();
+    const body = () =>
+      new Request("http://x/api/sk/shell/turn", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ turnId: id, text: "say that in Malay", modality: "text", memory, collector: { path: `/sk/${SLUG}/5`, locale: "en", tutor: TUTOR } }) });
+    const evs = await readEvents(await turnPOST(body()));
+    expect(evs.map((e) => e.type)).toEqual(["meta", "lang", "text", "done"]);
+    expect(evs[0]).toMatchObject({ intent: "lang" });
+    expect(evs[1]).toEqual({ type: "lang", lang: "ms", dir: "ltr", speech: "ms-MY", override: true });
+    // The kit's provider re-expressed the ORIGINAL (the stub's second line stands in for the Malay).
+    expect(evs[2]).toEqual({ type: "text", text: "Red blood cells have no nucleus." });
+    expect(teacher.calls).toHaveLength(2);
+    expect(teacher.calls[1]!.system).toContain("Red blood cells carry oxygen around the body.");
+    expect(mocks.constructed).toEqual([]);
+    expect(db.rows("sk_usage")).toEqual([expect.objectContaining({ user_id: STUDENT, live_turns: 2 })]);
+    // Resent with the same turn id: replayed, never a third call or a third live turn.
+    await readEvents(await turnPOST(body()));
+    expect(teacher.calls).toHaveLength(2);
+    expect(db.rows("sk_usage")[0]).toMatchObject({ live_turns: 2 });
+  });
+});

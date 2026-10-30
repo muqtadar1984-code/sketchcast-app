@@ -87,6 +87,10 @@ export function sanitizeParams(params: unknown): Record<string, string> {
 
 const DECK_STATES: ReadonlySet<string> = new Set(["missing", "building", "ready", "loaded", "failed"]);
 
+/** A lesson language as a kit stores it ("ar", "ms-arab", "zh-CN"); anything else dropped. */
+const LANG_RE = /^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8}){0,2}$/;
+export const cleanLanguage = (v: unknown): string | undefined => (typeof v === "string" && LANG_RE.test(v.trim()) ? v.trim().toLowerCase() : undefined);
+
 export function sanitizeBoard(board: unknown): SkBoardState | undefined {
   if (!board || typeof board !== "object") return undefined;
   const b = board as Record<string, unknown>;
@@ -107,6 +111,8 @@ export function sanitizeBoard(board: unknown): SkBoardState | undefined {
     generationId: str(b.generationId, 120),
   };
   if (typeof b.deck === "string" && DECK_STATES.has(b.deck)) out.deck = b.deck as NonNullable<SkBoardState["deck"]>;
+  const language = cleanLanguage(b.language);
+  if (language) out.language = language;
   // The highlighted words on a deck page: a deck id, a slide number, at most
   // 600 characters of text. Anything malformed drops the selection whole.
   if (b.selection && typeof b.selection === "object") {
@@ -174,6 +180,8 @@ export function sanitizeTutor(tutor: unknown): SkTutorState | undefined {
   if (typeof t.playing === "boolean") out.playing = t.playing;
   if (t.mode === "video" || t.mode === "slide") out.mode = t.mode;
   if (typeof t.practising === "boolean") out.practising = t.practising;
+  const language = cleanLanguage(t.language);
+  if (language) out.language = language;
   const watched = ints(t.watched);
   if (watched) out.watched = watched;
   const practised = ints(t.practised);

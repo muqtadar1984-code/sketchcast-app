@@ -64,6 +64,11 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
   const [practised, setPractised] = useState<number[]>([]);
   const [skText, setSkText] = useState<string | null>(null);
   const [skBusy, setSkBusy] = useState(false);
+  // 2026-10-30: the language SK's reply is in (direction + lang attribute),
+  // and the signed note that carries her language choice and SK's last
+  // explanation between turns (/api/sk/kit/turn `state`).
+  const [skLang, setSkLang] = useState<{ lang: string; dir: "ltr" | "rtl" } | null>(null);
+  const skState = useRef<string | null>(null);
   const [question, setQuestion] = useState("");
   const [practice, setPractice] = useState<Practice | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -241,7 +246,7 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
         const res = await fetch("/api/sk/kit/turn", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ eventId: uuidv7(), product, chapter, kit: kit?.generationId, segment: seg.key, question: q || undefined, locale }),
+          body: JSON.stringify({ eventId: uuidv7(), product, chapter, kit: kit?.generationId, segment: seg.key, question: q || undefined, locale, ...(skState.current ? { state: skState.current } : {}) }),
         });
         if (!res.ok) {
           setSkText(t.loadFailed);
@@ -249,6 +254,9 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
         }
         const events = parseSse(await res.text());
         const text = events.filter((e) => e.event === "text").map((e) => String(e.data ?? "")).join("");
+        const done = events.find((e) => e.event === "done")?.data as { state?: unknown; lang?: { lang?: unknown; dir?: unknown } } | undefined;
+        if (typeof done?.state === "string") skState.current = done.state;
+        if (typeof done?.lang?.lang === "string") setSkLang({ lang: done.lang.lang, dir: done.lang.dir === "rtl" ? "rtl" : "ltr" });
         setSkText(text || t.loadFailed);
       } catch {
         setSkText(t.loadFailed);
@@ -357,6 +365,7 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
               watched,
               practised,
               segments: segments.map((s, i) => ({ k: i, key: s.key, heading: s.heading })),
+              ...(kit.language ? { language: kit.language } : {}),
             }
           : null,
       playing: () => !!videoRef.current && !videoRef.current.paused,
@@ -567,7 +576,7 @@ export default function KitPlayer({ product, chapter, initialKit, locale, t }: {
         {(skBusy || skText) && (
           <div className="mt-3 rounded-lg bg-[#F1F7F6] p-3 text-sm text-[#14181F]" aria-live="polite" data-testid="kit-sk-text">
             <span className="font-semibold text-[#0C8175]">{t.skSays}: </span>
-            {skBusy ? t.thinking : skText}
+            {skBusy ? t.thinking : <span dir={skLang?.dir ?? "auto"} lang={skLang?.lang === "ms-arab" ? "ms-Arab" : skLang?.lang === "zh" ? "zh-CN" : skLang?.lang}>{skText}</span>}
           </div>
         )}
       </div>
