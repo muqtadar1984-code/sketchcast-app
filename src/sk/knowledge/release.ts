@@ -81,7 +81,7 @@ type BundleExercise = { xid?: string; stem?: unknown };
 type BundleChapter = { chapter: number; title?: string; content_sha256?: string; sections?: BundleSection[]; exercises?: BundleExercise[] };
 export type ReleaseBundle = {
   schema: string;
-  release: { id: number; release_kind?: string; edition_key?: string };
+  release: { id?: number | null; release_kind?: string; edition_key?: string };
   work: { uid: string; slug?: string; title?: string; language?: string; cover?: { store?: string; path?: string } | null };
   chapters: BundleChapter[];
 };
@@ -116,7 +116,12 @@ export function verifyBundle(row: ReleaseRow, bytes: Uint8Array): { bundle: Rele
     return { bundle: null, problems: [...problems, `bundle is not valid UTF-8 JSON: ${(e as Error).message}`] };
   }
   if (bundle?.schema !== BUNDLE_SCHEMA) problems.push(`schema is ${JSON.stringify(bundle?.schema)}, not ${BUNDLE_SCHEMA}`);
-  if (Number(bundle?.release?.id) !== Number(row.id)) problems.push(`bundle release.id ${bundle?.release?.id} is not row ${row.id}`);
+  // The real bundle (first release, 2026-10-30) is written BEFORE its row exists,
+  // so it carries no release.id: the edition key (unique per work) ties it to the
+  // row instead. An id, when present, must still match.
+  if (bundle?.release?.id != null && Number(bundle.release.id) !== Number(row.id)) problems.push(`bundle release.id ${bundle.release.id} is not row ${row.id}`);
+  if (bundle?.release?.edition_key !== row.edition_key) problems.push(`bundle edition_key ${JSON.stringify(bundle?.release?.edition_key)} is not ${row.edition_key}`);
+  if (bundle?.release?.release_kind && bundle.release.release_kind !== row.release_kind) problems.push(`bundle release_kind ${bundle.release.release_kind} is not ${row.release_kind}`);
   if (bundle?.work?.uid !== row.work_uid) problems.push(`bundle work.uid ${bundle?.work?.uid} is not ${row.work_uid}`);
   if (bundle?.work?.language && bundle.work.language !== row.language) problems.push(`bundle language ${bundle.work.language} is not ${row.language}`);
   const chapters = Array.isArray(bundle?.chapters) ? bundle.chapters : [];
@@ -325,18 +330,21 @@ export async function importRelease(db: KnowledgeDb, s3: BundleReader, row: Rele
 export type PollResult =
   | { status: "waiting_for_book_app" }
   | { status: "waiting_for_0174"; live: number }
-  | { status: "ok"; live: number; imported: number[]; unchanged: number[]; skipped: number[]; unavailable: string[]; errors: { release_id: number; error: string }[] };
+  | { status: "ok"; live: number; imported: number[]; unchanged: number[]; skipped: number[]; unavailable: string[]; errors: { release_id: number; error: string }[]; dryRun?: true; migration0174?: false };
 
 /** Import every live FINAL that changed; skip drafts; mark books with no live final unavailable. */
-export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } = {}): Promise<PollResult> {
+export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader; dryRun?: boolean } = {}): Promise<PollResult> {
   const { rows, missing } = await liveReleases(db);
   if (missing) return { status: "waiting_for_book_app" };
 
   const { data: prodData, error: prodErr } = await db.from("sk_book_products").select(PRODUCT_COLS).not("work_uid", "is", null);
+  const dryRun = !!deps.dryRun;
+  let migrationMissing = false;
   if (prodErr) {
     // 0172 is live but SK's 0174 (the link columns, the blocks) is not applied yet
-    if (prodErr.code === "42703" || isMissingRelation(prodErr)) return { status: "waiting_for_0174", live: rows.length };
-    throw new Error(`sk_book_products read failed: ${prodErr.message}`);
+    if (!(prodErr.code === "42703" || isMissingRelation(prodErr))) throw new Error(`sk_book_products read failed: ${prodErr.message}`);
+    if (!dryRun) return { status: "waiting_for_0174", live: rows.length };
+    migrationMissing = true; // a dry run still reports what it WOULD do
   }
   const products = (prodData ?? []) as ProductRow[];
   const { data: logData } = await db.from("sk_release_imports").select("release_id, status");
@@ -349,11 +357,12 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } 
   const productByBook = new Map(products.map((p) => [key(p.work_uid ?? "", p.language ?? ""), p]));
 
   const out: Extract<PollResult, { status: "ok" }> = { status: "ok", live: rows.length, imported: [], unchanged: [], skipped: [], unavailable: [], errors: [] };
+  if (dryRun) Object.assign(out, { dryRun: true, ...(migrationMissing ? { migration0174: false } : {}) });
   let s3 = deps.s3 ?? null;
   // drafts are never used (founder 2026-10-30): each live draft is logged once as skipped
   for (const r of rows) {
     if (r.release_kind === "final" || logged.has(Number(r.id))) continue;
-    await logImport(db, r, "skipped", 0, DRAFT_SKIP_REASON);
+    if (!dryRun) await logImport(db, r, "skipped", 0, DRAFT_SKIP_REASON);
     out.skipped.push(Number(r.id));
   }
   const finals = new Map<string, ReleaseRow>();
@@ -368,7 +377,7 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } 
       continue;
     }
     s3 ??= (await import("./s3")).booksBundleReader;
-    const r = await importRelease(db, s3, pick);
+    const r = await importRelease(db, s3, pick, { dryRun });
     if (r.status === "ok") out.imported.push(r.release_id);
     else if (r.status === "skipped") out.skipped.push(r.release_id);
     else out.errors.push({ release_id: r.release_id, error: r.error });
@@ -377,7 +386,7 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } 
     // no live FINAL for this book + language (none, withdrawn, or only drafts) → unavailable
     if (!p.work_uid || !p.language || finals.has(key(p.work_uid, p.language))) continue;
     if (p.status === "retired" && p.release_id == null) continue;
-    await markUnavailable(db, p.work_uid, p.language);
+    if (!dryRun) await markUnavailable(db, p.work_uid, p.language);
     out.unavailable.push(p.id);
   }
   return out;
