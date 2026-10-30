@@ -122,9 +122,12 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     key: "release",
     title: "Release the book (Library and SK)",
     summary:
-      "Publishes the book for the Library and SK. Draft (0): the chapters of the current revision that are Gate D approved for their current text — re-run it as more chapters are approved. Final (1): the compiled book approved at Gate E. A newer release replaces the previous one of its kind; an approver can withdraw one. Free.",
+      "Publishes the book for the Library and SK. Draft (0): the chapters of the current revision that are Gate D approved for their current text — re-run it as more chapters are approved. Final (1): the compiled book approved at Gate E. A newer release replaces the previous one of its kind; reissue (1) releases the same Gate E final again as a new edition (en-1.1) that replaces it. An approver can withdraw one. Free.",
     action: "approve",
-    params: [{ key: "final", label: "Final (1) or draft (0)", min: 0, max: 1, default: 0 }],
+    params: [
+      { key: "final", label: "Final (1) or draft (0)", min: 0, max: 1, default: 0 },
+      { key: "reissue", label: "Reissue the same Gate E final (1)", min: 0, max: 1, default: 0 },
+    ],
     measuredPerChapterUsd: 0,
     measuredFrom: "free — no model calls",
   },
