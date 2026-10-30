@@ -1224,6 +1224,18 @@
       "strandedTitle": "Pelajaran daripada buku yang dibuang",
       "strandedHint": "Bukunya telah dipadam, jadi ia dikumpulkan di sini mengikut bab. Semuanya masih boleh dimainkan, dimuat turun dan ditugaskan.",
       "answerKey": "Skema jawapan"
+    },
+    "myBooks": {
+      "title": "Buku saya",
+      "subtitle": "Buku SketchCast yang anda beli atau terima.",
+      "chapters": "{n} bab",
+      "chapterOne": "1 bab",
+      "openInSk": "Buka dalam SK",
+      "download": "Muat turun PDF",
+      "forChild": "untuk {name}",
+      "forYourChild": "untuk anak anda",
+      "withdrawn": "Tidak lagi dijual. Salinan anda kekal milik anda.",
+      "unavailable": "PDF buku ini belum tersedia. Sila cuba lagi nanti."
     }
   },
   "school": {
