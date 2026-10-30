@@ -2121,7 +2121,8 @@
     "find": "పాఠాన్ని వెతకండి",
     "downloads": "ఫైళ్లు",
     "noMatches": "ఏ పాఠమూ సరిపోలలేదు.",
-    "allowanceLine": "ఈ వారం {cap}లో {used} కిట్‌లు · {date}న రీసెట్"
+    "allowanceLine": "ఈ వారం {cap}లో {used} కిట్‌లు · {date}న రీసెట్",
+    "showMore": "మరో {n} చూపించు"
   },
   "activate": {
     "title": "మీ పుస్తకాన్ని యాక్టివేట్ చేయండి",

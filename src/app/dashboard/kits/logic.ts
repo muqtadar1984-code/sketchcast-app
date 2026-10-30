@@ -187,3 +187,89 @@ export const topicParam = (raw: string | string[] | undefined): string | null =>
   const v = Array.isArray(raw) ? raw[0] : raw;
   return v && SLUG.test(v) ? v : null;
 };
+
+// ── the files a piece offers (2026-10-30: computed in the browser) ──────────
+// These used to be resolved on the server into every card's props — a label
+// and an href per download, for ~610 kits — which made the page's RSC payload
+// several hundred KB of repeated strings. The rule is pure, so the card asks
+// it instead and the server ships only (kind, generationId).
+
+/** Every file of a catalogue kit goes through this route (it re-checks the
+ * unlock and signs a short-lived URL). */
+export const catalogueFileHref = (gen: string, kind: string): string =>
+  `/api/catalogue/file?gen=${encodeURIComponent(gen)}&kind=${encodeURIComponent(kind)}`;
+
+/** The kinds that carry an answer key beside their .docx. */
+const ANSWER_KEY_KINDS: ReadonlySet<string> = new Set(["worksheet", "quiz", "activity", "case_study", "question_bank"]);
+
+/** Which files a piece offers: the deck its .pptx; a document its .docx and,
+ * for the kinds that carry one, the answer key; the presentation nothing (it
+ * is watched, not downloaded). The route refuses anything else, so a kind not
+ * listed here simply has no link. `label` names the dictionary word. */
+export type DownloadSpec = { label: "download" | "answerKey"; href: string };
+export function downloadsOf(kind: string, gen: string): DownloadSpec[] {
+  if (kind === "presentation") return [];
+  if (kind === "deck") return [{ label: "download", href: catalogueFileHref(gen, "deck_pptx") }];
+  const out: DownloadSpec[] = [{ label: "download", href: catalogueFileHref(gen, "docx") }];
+  if (ANSWER_KEY_KINDS.has(kind)) out.push({ label: "answerKey", href: catalogueFileHref(gen, "answer_key_docx") });
+  return out;
+}
+
+/** The in-app player's source and frame for a kit with no public video (a
+ * translation, D5); null for a kit that plays on YouTube. */
+export const storageVideo = (youtubeId: string | null, videoGenerationId: string | null): { videoHref: string; posterHref: string } | null =>
+  youtubeId || !videoGenerationId
+    ? null
+    : { videoHref: catalogueFileHref(videoGenerationId, "video_mp4"), posterHref: catalogueFileHref(videoGenerationId, "thumbnail_png") };
+
+// ── the gallery renders in chunks (2026-10-30) ──────────────────────────────
+// ~610 cards at once — each with a lazy thumbnail and its own state — made the
+// page's hydration slow enough that SK's walkthrough gave up on it. The
+// gallery now renders the first KIT_CHUNK cards that pass the filters and adds
+// KIT_CHUNK more as the reader scrolls (or taps "Show more"). Filtering and
+// the find box still run over EVERY kit; only the rendering is chunked.
+
+export const KIT_CHUNK = 24;
+
+/** The fields the filters read. */
+export type FilterableKit = { slug: string; title: string; subject: string | null; language: string; unlocked: boolean };
+export type KitFilters = {
+  /** the find box, as typed */
+  query: string;
+  /** "all", "unlocked", or a subject */
+  subject: string;
+  /** "all" or a language code */
+  language: string;
+};
+
+/** Does a kit pass the chips and the find box? (title or subject, any case) */
+export function kitMatches(k: FilterableKit, f: KitFilters): boolean {
+  const q = f.query.trim().toLowerCase();
+  return (
+    (f.subject === "all" || (f.subject === "unlocked" ? k.unlocked : k.subject === f.subject)) &&
+    (f.language === "all" || k.language === f.language) &&
+    (!q || k.title.toLowerCase().includes(q) || (k.subject ?? "").toLowerCase().includes(q))
+  );
+}
+
+/**
+ * What the gallery renders: the kits passing the filters (over ALL of them),
+ * cut to the first `count`. The `?topic=` highlight is never cut off — when it
+ * passes the filters but sits past `count`, the cut grows to include it (so
+ * the page can scroll to it). `matched` is how many passed the filters;
+ * `more` says whether a "Show more" is due.
+ */
+export function visibleKits<T extends FilterableKit>(
+  all: readonly T[],
+  filters: KitFilters,
+  highlight: string | null,
+  count: number,
+): { shown: T[]; matched: number; more: boolean } {
+  const matching = all.filter((k) => kitMatches(k, filters));
+  let n = Math.max(0, Math.floor(count));
+  if (highlight) {
+    const at = matching.findIndex((k) => k.slug === highlight);
+    if (at >= n) n = at + 1;
+  }
+  return { shown: matching.slice(0, n), matched: matching.length, more: matching.length > n };
+}

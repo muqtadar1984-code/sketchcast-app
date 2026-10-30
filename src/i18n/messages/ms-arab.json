@@ -2121,7 +2121,8 @@
     "find": "چاري ڤلاجرن",
     "downloads": "فايل",
     "noMatches": "تياد ڤلاجرن يڠ سڤادن.",
-    "allowanceLine": "{used} درڤد {cap} کيت ميڠݢو اين · دست سمولا {date}"
+    "allowanceLine": "{used} درڤد {cap} کيت ميڠݢو اين · دست سمولا {date}",
+    "showMore": "تونجوقکن {n} لاݢي"
   },
   "activate": {
     "title": "اکتيفکن بوکو اندا",
