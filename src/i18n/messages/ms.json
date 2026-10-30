@@ -1781,7 +1781,12 @@
       "readingPart": "membaca bahagian {n}/{total}",
       "partProgress": "bahagian {n}/{total} · {pct}%",
       "percent": "{pct}%",
-      "minutesLeft": "~{n} min lagi"
+      "minutesLeft": "~{n} min lagi",
+      "queuedAhead": "{n} di hadapan · bermula dalam {eta}",
+      "queuedNext": "seterusnya dalam giliran",
+      "etaMinutes": "~{n} min",
+      "etaHours": "~{h} jam",
+      "etaHoursMinutes": "~{h} jam {m} min"
     },
     "book": {
       "untitled": "Buku tanpa tajuk"

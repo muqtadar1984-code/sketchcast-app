@@ -1781,7 +1781,12 @@
       "readingPart": "قراءة الجزء {n}/{total}",
       "partProgress": "الجزء {n}/{total} · {pct}%",
       "percent": "{pct}%",
-      "minutesLeft": "بقي ~{n} د"
+      "minutesLeft": "بقي ~{n} د",
+      "queuedAhead": "{n} قبلك · يبدأ خلال {eta}",
+      "queuedNext": "التالي في الدور",
+      "etaMinutes": "~{n} د",
+      "etaHours": "~{h} س",
+      "etaHoursMinutes": "~{h} س {m} د"
     },
     "book": {
       "untitled": "كتاب بلا عنوان"

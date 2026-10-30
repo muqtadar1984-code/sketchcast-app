@@ -1781,7 +1781,12 @@
       "readingPart": "lecture de la partie {n}/{total}",
       "partProgress": "partie {n}/{total} · {pct} %",
       "percent": "{pct} %",
-      "minutesLeft": "il reste ~{n} min"
+      "minutesLeft": "il reste ~{n} min",
+      "queuedAhead": "{n} avant · démarre dans {eta}",
+      "queuedNext": "le prochain dans la file",
+      "etaMinutes": "~{n} min",
+      "etaHours": "~{h} h",
+      "etaHoursMinutes": "~{h} h {m} min"
     },
     "book": {
       "untitled": "Livre sans titre"

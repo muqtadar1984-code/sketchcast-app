@@ -1781,7 +1781,12 @@
       "readingPart": "భాగం {n}/{total} చదువుతోంది",
       "partProgress": "భాగం {n}/{total} · {pct}%",
       "percent": "{pct}%",
-      "minutesLeft": "~{n} నిమి మిగిలింది"
+      "minutesLeft": "~{n} నిమి మిగిలింది",
+      "queuedAhead": "{n} ముందు · {eta}లో మొదలవుతుంది",
+      "queuedNext": "క్యూలో తదుపరి",
+      "etaMinutes": "~{n} నిమి",
+      "etaHours": "~{h} గం",
+      "etaHoursMinutes": "~{h} గం {m} నిమి"
     },
     "book": {
       "untitled": "పేరు లేని పుస్తకం"

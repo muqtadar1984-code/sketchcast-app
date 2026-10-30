@@ -34,6 +34,7 @@ import { noticesFor, type NoticesData } from "@/utils/notices";
 import { catalogueTabEnabled, diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
+import { finishRate, isoMinutesAgo, queueSpot, type QueueSpot } from "@/utils/queue-position";
 import { builderJob } from "@/utils/builder-job";
 import { enforceHat } from "@/utils/hats-server";
 import { splitShelf } from "@/utils/school-books";
@@ -1201,6 +1202,9 @@ async function loadLessons(supabase: Db, user: User, t: LibraryMessages, userSig
         status: g.status,
         progress: job?.progress ?? 0,
         stage: job?.stage ?? null,
+        // Filled below for queued rows: "37 ahead · starts in ~40 min".
+        queue: null as QueueSpot | null,
+        queuedAt: g.status === "queued" ? (job?.created_at ?? null) : null,
         kind: g.kind || "presentation",
         params: g.params ?? null,
         bookId: g.book_id ?? null,
@@ -1375,6 +1379,31 @@ async function LibrarySection({
   const betaPinned = trialPin;
 
   type Lesson = (typeof lessons)[number];
+
+  // Queue position for QUEUED rows (surge plan Phase 1, 2026-10-22): a burst
+  // left ~250 chips saying only "queued" for up to 2 h. Position is counted
+  // over EVERY owner's queued jobs, which RLS hides from the teacher — so this
+  // reads with the service role and hands back only counts, never rows. Skipped
+  // entirely when nothing of theirs is queued (the common case).
+  const mineQueued = lessons.filter((l) => l.queuedAt);
+  if (mineQueued.length && copySigner) {
+    try {
+      const since = isoMinutesAgo(60);
+      const [{ data: q }, { count: finished }] = await Promise.all([
+        copySigner.from("jobs").select("created_at").eq("status", "queued").limit(5000),
+        copySigner
+          .from("jobs")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["done", "error"])
+          .gte("updated_at", since),
+      ]);
+      const queuedAts = ((q ?? []) as { created_at: string }[]).map((r) => r.created_at);
+      const rate = finishRate(finished ?? 0, 60);
+      for (const l of mineQueued) l.queue = queueSpot(l.queuedAt!, queuedAts, rate);
+    } catch {
+      // A position is a courtesy; the Library must render without it.
+    }
+  }
 
   // Latest generation for a book + chapter + kind (gensRaw is newest-first).
   // `part` scopes to per-part lesson units: null = the whole-chapter artifact

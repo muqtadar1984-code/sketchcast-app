@@ -1781,7 +1781,12 @@
       "readingPart": "ممباچ بهاݢين {n}/{total}",
       "partProgress": "بهاݢين {n}/{total} · {pct}%",
       "percent": "{pct}%",
-      "minutesLeft": "~{n} مينيت لاݢي"
+      "minutesLeft": "~{n} مينيت لاݢي",
+      "queuedAhead": "{n} د هادڤن · برمولا دالم {eta}",
+      "queuedNext": "ستروسڽ دالم ݢيليرن",
+      "etaMinutes": "~{n} مينيت",
+      "etaHours": "~{h} جم",
+      "etaHoursMinutes": "~{h} جم {m} مينيت"
     },
     "book": {
       "untitled": "بوکو تنڤا تاجوق"

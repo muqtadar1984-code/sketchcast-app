@@ -233,7 +233,7 @@ export default async function ConsoleIssueDetailPage({
         )}
       </div>
 
-      <AutofixPanel issueId={issue.id} run={autofixRun} provisioned={autofixProvisioned} />
+      <AutofixPanel issueId={issue.id} run={autofixRun} provisioned={autofixProvisioned} category={issue.category} />
 
       <TriageForm
         id={issue.id}
