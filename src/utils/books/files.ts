@@ -42,6 +42,17 @@ export async function s3Link(key: string, download?: string): Promise<string | n
   return getSignedUrl(s3Client(), cmd, { expiresIn: LINK_SECONDS });
 }
 
+/** An object's bytes from the books bucket (server-side reads, e.g. a release
+ *  bundle for SK's knowledge importer). Throws when the bucket is not set or
+ *  the role may not read the key — callers record the error. */
+export async function s3GetBytes(key: string): Promise<Uint8Array> {
+  const bucket = booksBucket();
+  if (!bucket) throw new Error("BOOKS_S3_BUCKET is not set");
+  const out = await s3Client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!out.Body) throw new Error(`s3://${bucket}/${key} has no body`);
+  return out.Body.transformToByteArray();
+}
+
 export async function libraryPictureLink(path: string): Promise<string | null> {
   const { data, error } = await createAdminClient().storage.from("visual-assets").createSignedUrl(path, LINK_SECONDS);
   return error ? null : data?.signedUrl ?? null;
