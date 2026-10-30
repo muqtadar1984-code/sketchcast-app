@@ -326,6 +326,7 @@ export default function ChapterGenerate({
       {kitPending && (
         <button
           data-tour="generate-lesson"
+          data-tour-kit="full"
           onClick={onGenerate}
           disabled={busy}
           className="btn-primary h-8 px-3 text-xs whitespace-nowrap"
@@ -371,7 +372,7 @@ export default function ChapterGenerate({
       )}
 
       {kitPending && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <div data-tour="lesson-options" className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <span className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{t.kit.lessonOptions}</span>
           <label className="flex items-center gap-1.5 text-xs">
             <span className="text-[#5B6470]">{t.kit.language}</span>

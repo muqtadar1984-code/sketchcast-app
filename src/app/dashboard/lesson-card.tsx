@@ -249,6 +249,7 @@ export default function LessonCard({
         gate={gate}
         premiumVoices={premiumVoices}
         t={t}
+        tour="generate-part"
         className="group/new w-full text-start flex items-center gap-3.5 rounded-xl border border-dashed border-[#C3D0CB] bg-[#E1E8E5] px-3.5 py-3 transition-colors hover:bg-[#E9EFEC] hover:border-[#1FB8A6] disabled:opacity-70"
         skipKinds={(
           [
@@ -314,7 +315,7 @@ export default function LessonCard({
   const assignable = assignableIds([part.presentation, part.deck, part.worksheet, part.exam]);
 
   return (
-    <div className="group/card flex gap-3.5 rounded-xl border border-[#DCE6E2] bg-white px-3.5 py-3">
+    <div data-tour="part-card" className="group/card flex gap-3.5 rounded-xl border border-[#DCE6E2] bg-white px-3.5 py-3">
       <SlideThumb
         n={part.n}
         title={title}
@@ -369,7 +370,7 @@ export default function LessonCard({
         </div>
 
         {/* Artifact chips: Deck + Ask Coach + the five documents. */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px]">
+        <div data-tour="part-pieces" className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px]">
           {multi ? (
             // Long lesson: one Watch(·Deck, on a legacy kit) chip per rendered part.
             Array.from({ length: Math.max(videos.length, legacyDecks.length) }, (_, i) => (
@@ -471,7 +472,7 @@ export default function LessonCard({
           </span>
 
           {assignable.length > 0 && (
-            <span className="ms-auto">
+            <span data-tour="assign-part" className="ms-auto">
               <AssignModal label={t.assign} generationIds={assignable} classes={classes} childTargets={childTargets} t={t} />
             </span>
           )}

@@ -61,7 +61,7 @@ export default function LanguageSwitcher({ locale, t }: { locale: Locale; t: Dic
 
   return (
     <>
-      <label className="flex items-center gap-1.5 text-sm">
+      <label data-tour="language" className="flex items-center gap-1.5 text-sm">
         <span aria-hidden>🌐</span>
         <select
           value={current}

@@ -186,6 +186,7 @@ export default function NotificationsBell({
   return (
     <div className="relative" ref={panelRef}>
       <button
+        data-tour="notifications"
         onClick={() => void toggle()}
         className="relative h-9 w-9 inline-flex items-center justify-center rounded-lg hover:bg-[#EEF0EC] text-base"
         aria-label={unread ? fmt(t.titleUnread, { count: unread }) : t.title}

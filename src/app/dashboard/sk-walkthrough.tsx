@@ -593,16 +593,20 @@ export function useSkWalkthrough({
     }
     const dom = {
       query: (sel: string) => document.querySelector(sel),
+      queryAll: (sel: string) => Array.from(document.querySelectorAll(sel)),
       visible: (el: Element) => el.getClientRects().length > 0,
     };
-    const none = { el: null as Element | null };
+    const none = { el: null as Element | null, index: 0 };
     void (async () => {
       // Found = visible and holding still; missing = only once the page has
       // SETTLED without it (never a clock counted from the navigation).
-      const hit = await waitForSettledAnchor<{ el: Element | null; line?: string }>({
+      const hit = await waitForSettledAnchor<{ el: Element | null; line?: string; index: number }>({
         find: () => (s.anchors.length ? findAnchor(s.anchors, dom) : none),
         rect: (h) => (h.el ? rectOf(h.el) : null),
         same: (a, b) => a.el === b.el,
+        // A fallback anchor (not the stop's own control) only once the page
+        // has settled without the control: a late-streaming control wins.
+        provisional: (h) => h.index > 0,
         probe: settleProbe(target),
         observe: observePage,
         signal: ac.signal,
@@ -627,7 +631,9 @@ export function useSkWalkthrough({
         // Into view, and only once the scroll has finished is it highlighted.
         const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
         try {
-          el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+          // "start" for a big section (the Library list at the TOP of the
+          // screen, founder 2026-10-30); "center" for one control.
+          el.scrollIntoView({ block: s.scroll ?? "center", behavior: reduce ? "auto" : "smooth" });
         } catch {
           /* old browsers */
         }

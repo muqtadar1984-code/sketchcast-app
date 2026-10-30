@@ -272,7 +272,10 @@ export default function BookTable({
             }
           : null;
         return (
-          <div key={b.id} id={`book-${b.id}`} className="border-b border-[#EEF0EC] last:border-b-0 scroll-mt-24">
+          // data-tour-book: SK's walkthrough scopes its Library stops to the
+          // OPEN book (the one ?book= opened), so it points at that book's
+          // controls rather than the first match on the page.
+          <div key={b.id} id={`book-${b.id}`} data-tour-book={isOpen ? "open" : undefined} className="border-b border-[#EEF0EC] last:border-b-0 scroll-mt-24">
             <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#EEF3F1]" : ""}`}>
               <button
                 onClick={() => ready && toggle(b.id)}
@@ -316,7 +319,7 @@ export default function BookTable({
                   </span>
                 )}
               </span>
-              <div className="flex items-center gap-2 whitespace-nowrap self-center">
+              <div data-tour="book-badges" className="flex items-center gap-2 whitespace-nowrap self-center">
                 {ready && <BookHealthBadge health={b.health} t={t} />}
                 {b.language && languageLabel(b.language) && (
                   <span className="chip bg-[#E2F4F1] text-[#0C8175]">{languageLabel(b.language)}</span>

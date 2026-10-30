@@ -92,7 +92,7 @@ describe("WalkStrip: the tour inside the speech bubble", () => {
     expect(html).toContain(esc(en.sk.walkthrough.teacher.hello));
     expect(html).toMatch(/class="inline-flex items-center gap-1 rounded-full[^"]*"[^>]*data-sk="walk-sound"/);
     for (const c of ["walk-pause", "walk-back", "walk-next", "walk-skip", "walk-progress"]) expect(html).toContain(`data-sk="${c}"`);
-    expect(html).toContain("1 of 14");
+    expect(html).toContain("1 of 32");
     // Back is disabled at the first stop; compact: an arrow with its label for screen readers.
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-sk="walk-back" aria-label="Back"/);
     // Compact: no portrait and no progress dots any more (the avatar is beside the bubble).

@@ -1612,12 +1612,12 @@ async function LibrarySection({
         gettingStarted ? (
           // The stepper above already walks the journey — keep this slim so the
           // same three steps don't appear twice on one screen.
-          <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-8 text-center text-[#5B6470]">
+          <div data-tour="library-empty" className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-8 text-center text-[#5B6470]">
             <EmptyBooks />
             <p className="font-medium text-[#14181F] mt-2">{t.empty.withStepper}</p>
           </div>
         ) : (
-        <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
+        <div data-tour="library-empty" className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
           <EmptyBooks />
           <p className="font-medium text-[#14181F] mb-4">{t.empty.title}</p>
           <div className="flex flex-wrap items-center justify-center gap-2 text-sm">

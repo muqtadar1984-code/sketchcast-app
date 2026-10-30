@@ -45,7 +45,14 @@ import { WALK_STOPS, walkRoleFor, type WalkFacts } from "@/sk/walkthrough/stops"
 
 const ids = (stops: PlannedStop[]) => stops.map((s) => s.id);
 
-const TEACHER_ALL: WalkFacts = { books: true, classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, board: true };
+const TEACHER_ALL: WalkFacts = { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true, skTutor: true };
+
+/** The teacher's tour in order (founder feedback 2026-10-30: precise and complete). */
+const TEACHER_ORDER = [
+  "hello", "library", "bookCard", "generateAll", "chapterKit", "lessonOptions", "generate", "pieces", "downloads", "rerun", "assign", "boardBridge", "more",
+  "upload", "classes", "branding", "myBooks", "plan", "board", "boardSk", "kits", "skTutor", "diary", "analytics", "gradeQueue", "timetable", "calendar",
+  "notifications", "language", "settings", "skMenu", "skAsk",
+];
 
 describe("walkRoleFor: the hat first, then the role", () => {
   it("maps roles and hats to the five tours", () => {
@@ -81,37 +88,102 @@ describe("needHolds / resolveRoute", () => {
 });
 
 describe("planWalk: per-role stops as built", () => {
-  it("every role's stop count with everything on (teacher 14, student 11, parent 12, principal 12, coordinator 10)", () => {
-    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(14);
-    expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(11);
-    expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(12);
-    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false })).toHaveLength(11); // home educator: Library in, notices + Test Papers out
-    expect(planWalk("principal", { analytics: true, timetable: true, diary: true, notices: true, roleHats: true })).toHaveLength(12);
-    expect(planWalk("coordinator", { timetable: true, diary: true, notices: true })).toHaveLength(10);
+  it("every role's stop count with everything on (teacher 14 → 32, student 11 → 15, parent 12 → 15, principal 12 → 15, coordinator 10 → 13)", () => {
+    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(32);
+    expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(15);
+    expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(15);
+    // Home educator: Library + kits in, notices + Test Papers out.
+    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(15);
+    expect(planWalk("principal", { analytics: true, timetable: true, diary: true, notices: true, roleHats: true })).toHaveLength(15);
+    expect(planWalk("coordinator", { timetable: true, diary: true, notices: true })).toHaveLength(13);
   });
-  it("teacher order follows the script and the Board stop carries the first class", () => {
+  it("teacher order: the Library and its kits first (the Board bridge, then More), then the page, the Board, the other pages, the header and SK", () => {
     const p = planWalk("teacher", TEACHER_ALL);
-    expect(ids(p)).toEqual(["hello", "library", "generate", "output", "assign", "classes", "myBooks", "kits", "analytics", "gradeQueue", "diary", "timetable", "board", "settings"]);
+    expect(ids(p)).toEqual(TEACHER_ORDER);
+    // The Library stops open the tour's book (?book= opens its row); the rest of the page needs no hop.
+    for (const id of TEACHER_ORDER.slice(1, 13)) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard?book=b1");
+    for (const id of ["upload", "classes", "branding", "myBooks", "plan"]) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard");
     expect(p.find((s) => s.id === "diary")?.route).toBe("/dashboard/diary?c=c1");
     expect(p.find((s) => s.id === "board")?.route).toBe("/present?class=c1");
     expect(p.find((s) => s.id === "generate")?.demo).toBe("lessonPrepare");
     expect(p.find((s) => s.id === "kits")?.chips).toEqual(["lessonOnPhotosynthesis"]);
+    // The bridge comes right before More (founder 2026-10-30).
+    expect(ids(p).indexOf("boardBridge")).toBe(ids(p).indexOf("more") - 1);
+    // No book id: the parameter drops and the Library stops stay on /dashboard.
+    expect(planWalk("teacher", { ...TEACHER_ALL, bookId: null }).find((s) => s.id === "library")?.route).toBe("/dashboard");
   });
-  it("teacher with no book: ONE upload line stands in for stops 3–5", () => {
-    const p = planWalk("teacher", { ...TEACHER_ALL, books: false });
-    expect(ids(p)).not.toContain("output");
-    expect(ids(p)).not.toContain("assign");
+  it("the Library is scrolled to the TOP of the screen; every other stop centres its control", () => {
+    const p = planWalk("teacher", TEACHER_ALL);
+    expect(p.find((s) => s.id === "library")?.scroll).toBe("start");
+    for (const s of p) if (s.id !== "library") expect(s.scroll, s.id).toBeUndefined();
+    for (const defs of Object.values(WALK_STOPS)) for (const d of defs) expect([undefined, "start", "center"]).toContain(d.scroll);
+  });
+  it("each Library stop points at ONE control in the open book: Generate kit on a part (never Generate all), Assign on a part, a pen on one chip, one download, More", () => {
+    const p = planWalk("teacher", TEACHER_ALL);
+    const first = (id: string) => p.find((s) => s.id === id)!.anchors[0]!.sel;
+    expect(first("generate")).toBe('[data-tour-book="open"] [data-tour="generate-part"]');
+    expect(p.find((s) => s.id === "generate")!.anchors.map((a) => a.sel)).not.toContain('[data-tour="generate-all"]');
+    expect(first("generateAll")).toBe('[data-tour-book="open"] [data-tour="generate-all"]');
+    expect(first("chapterKit")).toBe('[data-tour-book="open"] [data-tour="generate-lesson"][data-tour-kit="full"]');
+    expect(first("lessonOptions")).toBe('[data-tour-book="open"] [data-tour="lesson-options"]');
+    expect(first("assign")).toBe('[data-tour-book="open"] [data-tour="assign-part"]');
+    expect(first("rerun")).toBe('[data-tour-book="open"] [data-tour="rerun"]');
+    expect(first("downloads")).toBe('[data-tour-book="open"] [data-tour="download-doc"][data-tour-kind="worksheet"]');
+    expect(first("more")).toBe('[data-tour-book="open"] [data-tour="book-tools"]');
+    expect(first("library")).toBe('[data-tour="book-card"]');
+  });
+  it("no kit yet: assign, re-run, downloads and the pieces say 'once you generate a kit' at the ungenerated part (ordered fallbacks)", () => {
+    const p = planWalk("teacher", TEACHER_ALL);
+    const lines = { assign: "assignNone", rerun: "rerunNone", downloads: "downloadsNone", pieces: "piecesNone" } as const;
+    for (const [id, line] of Object.entries(lines)) {
+      const a = p.find((s) => s.id === id)!.anchors;
+      const fb = a.filter((x) => x.line === line).map((x) => x.sel);
+      expect(fb[0], id).toBe('[data-tour-book="open"] [data-tour="generate-part"]');
+      expect(fb, id).toContain('[data-tour="upload-book"]');
+      // The control itself comes first, with the stop's own line.
+      expect(a[0]!.line, id).toBeUndefined();
+    }
+    // A page with only an ungenerated part: Assign's fallback is the one found, with its line.
+    const dom = {
+      query: (sel: string) => (sel === '[data-tour-book="open"] [data-tour="generate-part"]' ? { sel } : null),
+      visible: () => true,
+    };
+    const hit = findAnchor(p.find((s) => s.id === "assign")!.anchors, dom)!;
+    expect(hit.line).toBe("assignNone");
+    expect(hit.index).toBeGreaterThan(0);
+    // A generated part on the page: its Assign, with the stop's own line.
+    const dom2 = { query: (sel: string) => (sel.endsWith('[data-tour="assign-part"]') || sel.endsWith('[data-tour="generate-part"]') ? { sel } : null), visible: () => true };
+    const hit2 = findAnchor(p.find((s) => s.id === "assign")!.anchors, dom2)!;
+    expect(hit2.sel).toBe('[data-tour-book="open"] [data-tour="assign-part"]');
+    expect(hit2.line).toBeUndefined();
+  });
+  it("teacher with no book: the Library and the kit stops say what to do first, at the upload card", () => {
+    const p = planWalk("teacher", { ...TEACHER_ALL, books: false, bookId: null });
+    for (const id of ["bookCard", "generateAll", "chapterKit", "more"]) expect(ids(p)).not.toContain(id);
     const gen = p.find((s) => s.id === "generate")!;
     expect(gen.line).toBe("noBooks");
     expect(gen.anchors.map((a) => a.sel)).toEqual(['[data-tour="upload-book"]']);
-    expect(p.find((s) => s.id === "library")!.anchors.map((a) => a.sel)).toEqual(['[data-tour="upload-book"]']);
+    const lib = p.find((s) => s.id === "library")!;
+    expect(lib.anchors.slice(1)).toEqual([
+      { sel: '[data-tour="library-empty"]', line: "libraryEmpty" },
+      { sel: '[data-tour="upload-book"]', line: "libraryEmpty" },
+    ]);
+    // Assign, re-run, downloads and the pieces still explain themselves (their last fallback is the upload card).
+    for (const id of ["pieces", "downloads", "rerun", "assign", "lessonOptions"]) expect(ids(p)).toContain(id);
   });
-  it("teacher with no class skips the diary; no timetable skips 12; the test paper line follows FEATURE_EXAM", () => {
-    const p = planWalk("teacher", { ...TEACHER_ALL, classId: null, timetable: false, exam: false });
-    expect(ids(p)).not.toContain("diary");
+  it("teacher with no class: the diary says what it is for at its tab; no timetable or calendar drops those; More follows FEATURE_EXAM", () => {
+    const p = planWalk("teacher", { ...TEACHER_ALL, classId: null, timetable: false, calendar: false, exam: false });
+    const diary = p.find((s) => s.id === "diary")!;
+    expect(diary.line).toBe("diaryNoClass");
+    expect(diary.route).toBe("/dashboard/diary");
+    expect(diary.anchors[0]!.sel).toBe('[data-tour="diary-nav"]');
     expect(ids(p)).not.toContain("timetable");
+    expect(ids(p)).not.toContain("calendar");
     expect(p.find((s) => s.id === "board")?.route).toBe("/present");
-    expect(p.find((s) => s.id === "output")?.line).toBe("outputNoExam");
+    expect(p.find((s) => s.id === "more")?.line).toBe("moreNoExam");
+    // No Board: neither the bridge nor the Board stops.
+    const nb = ids(planWalk("teacher", { ...TEACHER_ALL, board: false }));
+    for (const id of ["boardBridge", "board", "boardSk"]) expect(nb).not.toContain(id);
   });
   it("student with no SK book: one neutral line instead of stops 6–9", () => {
     const p = planWalk("student", { diary: true });
@@ -126,7 +198,7 @@ describe("planWalk: per-role stops as built", () => {
     expect(s.anchors[1]).toEqual({ sel: '[data-tour="assignments"]', line: "openLessonEmpty" });
   });
   it("parent: no child → straight to Add child; unverified → say why; home educator → Library, no notices or Test Papers", () => {
-    expect(ids(planWalk("parent", { children: 0 }))).toEqual(["hello", "homeLibrary", "addChild"]);
+    expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "notifications", "language", "skMenu", "addChild"]);
     expect(planWalk("parent", { children: 0 }).find((s) => s.id === "addChild")?.line).toBe("addChildFirst");
     const un = planWalk("parent", { children: 1, verifiedChildren: 0, schoolParent: true, parentPortal: true });
     expect(un.find((s) => s.id === "childCard")?.line).toBe("childUnverified");
@@ -142,7 +214,7 @@ describe("planWalk: per-role stops as built", () => {
   });
   it("leaders: a school feature that is off drops its stop; the principal's hat stop only points", () => {
     const p = planWalk("principal", { analytics: false, timetable: false, diary: false, notices: false, roleHats: false });
-    expect(ids(p)).toEqual(["hello", "teachers", "access", "admin", "books", "schoolSwitch"]);
+    expect(ids(p)).toEqual(["hello", "teachers", "access", "admin", "books", "schoolSwitch", "notifications", "language", "skAsk"]);
     const hat = planWalk("principal", { roleHats: true }).find((s) => s.id === "hat")!;
     expect(hat.anchors[0].sel).toBe('[data-tour="hat-switcher"]');
     expect(hat.demo).toBeUndefined();
@@ -272,9 +344,18 @@ describe("anchors", () => {
 
   it("the first VISIBLE anchor wins, with its own line", () => {
     const d = dom({ "#a": { id: "a", shown: false }, "#b": { id: "b", shown: true } });
-    expect(findAnchor([{ sel: "#a" }, { sel: "#b", line: "empty" }], d)).toEqual({ el: { id: "b", shown: true }, sel: "#b", line: "empty" });
+    expect(findAnchor([{ sel: "#a" }, { sel: "#b", line: "empty" }], d)).toEqual({ el: { id: "b", shown: true }, sel: "#b", line: "empty", index: 1 });
+    expect(findAnchor([{ sel: "#b" }], d)).toEqual({ el: { id: "b", shown: true }, sel: "#b", index: 0 });
     expect(findAnchor([{ sel: "#zz" }], d)).toBeNull();
     expect(findAnchor([{ sel: "[bad" }], { query: () => { throw new Error("bad selector"); }, visible: () => true })).toBeNull();
+  });
+
+  it("with queryAll, the first VISIBLE match of a selector wins (a collapsed book's control does not hide an open one's)", () => {
+    const hidden = { id: "closed", shown: false };
+    const open = { id: "open", shown: true };
+    const d = { query: () => hidden, queryAll: () => [hidden, open], visible: (e: El) => e.shown };
+    expect(findAnchor([{ sel: "#x" }], d)?.el).toBe(open);
+    expect(findAnchor([{ sel: "#x" }], { query: () => hidden, visible: (e: El) => e.shown })).toBeNull();
   });
 
   /** A fake page: a clock, one pending timer at a time, a probe and an observer. */
@@ -343,6 +424,30 @@ describe("anchors", () => {
     p.advance(200); // the same box twice, 200 ms apart
     await expect(wait).resolves.toEqual({ id: "book-card" });
     expect(p.unsubscribed()).toBe(true);
+  });
+  it("a FALLBACK anchor waits for the page to settle, so a control that streams in late still wins", async () => {
+    const p = fakePage({ loading: true });
+    type Hit = { id: string; index: number };
+    let hit: Hit = { id: "upload-card", index: 1 }; // the fallback is on the page first
+    let done = false;
+    const wait = waitForSettledAnchor<Hit>({ find: () => hit, rect: () => box(10), same: (a, b) => a.id === b.id, provisional: (h) => h.index > 0, ...p }).then(
+      (v) => ((done = true), v),
+    );
+    for (let i = 0; i < 10; i++) {
+      p.mutate();
+      p.advance(200);
+    }
+    await Promise.resolve();
+    expect(done).toBe(false); // stable, but the page is still loading: not taken
+    hit = { id: "book-list", index: 0 }; // the stop's own control streams in
+    p.page.loading = false;
+    p.advance(400);
+    await expect(wait).resolves.toEqual({ id: "book-list", index: 0 });
+    // A page that settles with only the fallback takes it.
+    const q = fakePage();
+    const w2 = waitForSettledAnchor<Hit>({ find: () => ({ id: "upload-card", index: 1 }), rect: () => box(10), same: (a, b) => a.id === b.id, provisional: (h) => h.index > 0, ...q });
+    q.advance(SETTLE_QUIET_MS + 400);
+    await expect(w2).resolves.toEqual({ id: "upload-card", index: 1 });
   });
   it("an invisible (zero-size) anchor is not found", async () => {
     const p = fakePage();

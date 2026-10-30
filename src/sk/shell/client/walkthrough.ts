@@ -25,7 +25,7 @@
 // makes no model call, and never sends a sample question.
 
 import { INTENT_FILLER_WORDS, intentWords } from "@/sk/shell/intent-normalize";
-import { WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkRole, type WalkStopDef } from "@/sk/walkthrough/stops";
+import { WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkRole, type WalkScroll, type WalkStopDef } from "@/sk/walkthrough/stops";
 
 export type WalkStatus = "idle" | "running" | "paused" | "done" | "skipped";
 
@@ -37,6 +37,9 @@ export type PlannedStop = {
   /** sk.walkthrough.<role>.<line>. */
   line: string;
   anchors: Array<{ sel: string; line?: string }>;
+  /** How the anchor is scrolled into view (default "center"; "start" puts a
+   *  big section at the top instead of showing its middle). */
+  scroll?: WalkScroll;
   demo?: WalkDemo;
   chips?: WalkChip[];
 };
@@ -88,12 +91,12 @@ export function needHolds(spec: WalkNeedSpec, f: WalkFacts): boolean {
   return neg ? !v : v;
 }
 
-const TOKEN_RE = /\{(classId|tutorPath)\}/g;
+const TOKEN_RE = /\{(classId|tutorPath|bookId)\}/g;
 
-/** Fill `{classId}` / `{tutorPath}`. A missing value in the query drops that
- *  parameter; in the path it makes the route unusable (null). */
+/** Fill `{classId}` / `{tutorPath}` / `{bookId}`. A missing value in the query
+ *  drops that parameter; in the path it makes the route unusable (null). */
 export function resolveRoute(route: string, f: WalkFacts): string | null {
-  const values: Record<string, string | null | undefined> = { classId: f.classId, tutorPath: f.tutorPath };
+  const values: Record<string, string | null | undefined> = { classId: f.classId, tutorPath: f.tutorPath, bookId: f.bookId };
   const [path, query] = route.split("?", 2) as [string, string | undefined];
   let missing = false;
   const p = path.replace(TOKEN_RE, (_m, k: string) => {
@@ -136,6 +139,7 @@ export function planStop(def: WalkStopDef, f: WalkFacts): PlannedStop | null {
     route,
     line,
     anchors: anchors.map(anchorOf),
+    ...(def.scroll && def.scroll !== "center" ? { scroll: def.scroll } : {}),
     ...(def.demo ? { demo: def.demo } : {}),
     ...(def.chips?.length ? { chips: [...def.chips] } : {}),
   };
@@ -230,7 +234,16 @@ export type WalkStore = {
 
 function validStop(x: unknown): x is PlannedStop {
   const s = x as PlannedStop;
-  return !!s && typeof s.id === "string" && typeof s.route === "string" && s.route.startsWith("/") && typeof s.line === "string" && Array.isArray(s.anchors) && s.anchors.every((a) => a && typeof a.sel === "string");
+  return (
+    !!s &&
+    typeof s.id === "string" &&
+    typeof s.route === "string" &&
+    s.route.startsWith("/") &&
+    typeof s.line === "string" &&
+    Array.isArray(s.anchors) &&
+    s.anchors.every((a) => a && typeof a.sel === "string") &&
+    (s.scroll === undefined || s.scroll === "start" || s.scroll === "center")
+  );
 }
 
 /** A store over sessionStorage (or nothing: private mode, a node test). Only a
@@ -275,24 +288,33 @@ export function createWalkStore(storage: Pick<Storage, "getItem" | "setItem" | "
 /** The DOM the anchor search needs (a node test passes a fake). */
 export type AnchorDom<E> = {
   query: (sel: string) => E | null;
+  /** Every match, in document order (querySelectorAll). When given, the first
+   *  VISIBLE match of a selector wins — a hidden first match (a collapsed
+   *  book, a phone-hidden tab) no longer hides a visible later one. */
+  queryAll?: (sel: string) => E[];
   /** Rendered with a box (getClientRects().length > 0): a `hidden sm:flex`
    *  tab is in the DOM on a phone but shows nothing. */
   visible: (el: E) => boolean;
 };
 
-export type AnchorMatch<E> = { el: E; sel: string; line?: string };
+/** `index` is the anchor's place in the stop's list: 0 is the stop's own
+ *  control, anything later is a fallback (the settled wait accepts a fallback
+ *  only once the page has settled, so a control that streams in late still
+ *  wins over it). */
+export type AnchorMatch<E> = { el: E; sel: string; line?: string; index: number };
 
 /** The first visible anchor, in the stop's order. An invalid selector is
  *  passed over rather than thrown. */
 export function findAnchor<E>(anchors: PlannedStop["anchors"], dom: AnchorDom<E>): AnchorMatch<E> | null {
-  for (const a of anchors) {
+  for (let index = 0; index < anchors.length; index++) {
+    const a = anchors[index]!;
     let el: E | null = null;
     try {
-      el = dom.query(a.sel);
+      el = dom.queryAll ? (dom.queryAll(a.sel).find((x) => dom.visible(x)) ?? null) : dom.query(a.sel);
     } catch {
       el = null;
     }
-    if (el && dom.visible(el)) return { el, sel: a.sel, ...(a.line ? { line: a.line } : {}) };
+    if (el && dom.visible(el)) return { el, sel: a.sel, ...(a.line ? { line: a.line } : {}), index };
   }
   return null;
 }
@@ -360,6 +382,9 @@ export function waitForSettledAnchor<T>(
     rect: (hit: T) => WalkRect | null;
     /** Two finds are the same anchor (default ===; the browser compares elements). */
     same?: (a: T, b: T) => boolean;
+    /** A FALLBACK find (not the stop's own control): taken only once the page
+     *  has settled without the control (or at the cap). */
+    provisional?: (hit: T) => boolean;
   },
 ): Promise<T | null> {
   const now = opts.now ?? (() => Date.now());
@@ -412,7 +437,8 @@ export function waitForSettledAnchor<T>(
           // Nothing to point at: the stop plays once the page has settled.
           if (settled(t)) return finish(hit);
         } else if (r.width > 0 && r.height > 0) {
-          if (candidate && same(candidate.hit, hit) && sameRect(candidate.rect, r)) return finish(hit);
+          const stable = !!candidate && same(candidate.hit, hit) && sameRect(candidate.rect, r);
+          if (stable && (!opts.provisional?.(hit) || settled(t))) return finish(hit);
           candidate = { hit, rect: r };
         } else candidate = null;
       } else {
