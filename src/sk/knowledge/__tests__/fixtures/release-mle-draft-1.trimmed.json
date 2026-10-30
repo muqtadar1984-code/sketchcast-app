@@ -1,0 +1,417 @@
+{
+ "schema": "sketchcast.book-release/1",
+ "release": {
+  "release_kind": "draft",
+  "edition_key": "en-draft-2026-10-30-1",
+  "supersedes": null,
+  "released_at": "2026-10-30T02:26:50+00:00",
+  "released_by": "muqtadar.quraishi@sketchcast.app",
+  "run_id": 31,
+  "gate_e_approval_id": null
+ },
+ "work": {
+  "uid": "mastering-linear-equations",
+  "slug": "mastering-linear-equations",
+  "title": "Algebra: Mastering Linear Equations",
+  "subtitle": null,
+  "language": "en",
+  "subject": "mathematics/algebra",
+  "curriculum_code": "cambridge_ls_maths_0862",
+  "grade_band": "7,8,9",
+  "age_band": "11-14",
+  "revision_key": "d1",
+  "cover": null
+ },
+ "chapters": [
+  {
+   "chapter": 1,
+   "title": "The Language of Algebra",
+   "content_sha256": "f554229e4557dc2aaa6afb2f0b20d0fc36facf0e80a36f1099f9cdef179b2c9a",
+   "approval": {
+    "kind": "gate_d",
+    "id": 10,
+    "by": "muqtadar.quraishi@sketchcast.app",
+    "on": "2026-10-29"
+   },
+   "objectives": [
+    {
+     "code": "7Ae.01",
+     "text": "Understand that letters can be used to represent unknown numbers, variables or constants."
+    },
+    {
+     "code": "7Ae.04",
+     "text": "Understand that a situation can be represented either in words or as an algebraic expression, and move between the two representations (linear with integer coefficients)."
+    },
+    {
+     "code": "8Ae.01",
+     "text": "Understand that letters have different meanings in expressions, formulae and equations."
+    },
+    {
+     "code": "8Ae.04",
+     "text": "Understand that a situation can be represented either in words or as an algebraic expression, and move between the two representations (linear with integer or fractional coefficients)."
+    }
+   ],
+   "sections": [
+    {
+     "sid": "s1",
+     "blocks": [
+      {
+       "text": "Some quantities in mathematics are fixed, and some can change or are not yet known. Algebra gives us a tidy way to write about both. Instead of always writing a…",
+       "type": "paragraph",
+       "source_refs": [
+        "sec:variables-constants-and-algebraic-expressions:s1",
+        "claim:variables-constants-and-algebraic-expressions:c2"
+       ]
+      },
+      {
+       "term": "Constant",
+       "text": "A **constant** is a fixed numerical value that never changes within a given problem. The number 5, the number negative 3 and the fraction one half are all const…",
+       "type": "key_term",
+       "source_refs": [
+        "gloss:variables-constants-and-algebraic-expressions:Constant",
+        "claim:variables-constants-and-algebraic-expressions:c1",
+        "sec:variables-constants-and-algebraic-expressions:s1"
+       ]
+      },
+      {
+       "term": "Variable",
+       "text": "A **variable** is a symbol, usually a letter such as x, y, n or a, that stands for an unspecified value, or for a value that can vary across a set of numbers.",
+       "type": "key_term",
+       "source_refs": [
+        "gloss:variables-constants-and-algebraic-expressions:Variable",
+        "claim:variables-constants-and-algebraic-expressions:c2",
+        "sec:variables-constants-and-algebraic-expressions:s1"
+       ]
+      },
+      {
+       "text": "Think of the two as partners. Constants are the anchors: they are the known, fixed measurements in a problem. Variables give flexibility: they let us describe t…",
+       "type": "paragraph",
+       "source_refs": [
+        "sec:variables-constants-and-algebraic-expressions:s1"
+       ]
+      },
+      {
+       "text": "There is a small piece of writing to learn too. When a number multiplies a letter, we leave out the multiplication sign. Three times x is written simply as 3x.…",
+       "type": "paragraph",
+       "source_refs": [
+        "sec:variables-constants-and-algebraic-expressions:s1"
+       ]
+      },
+      {
+       "type": "misconception",
+       "right": "Variables stand for numbers. If a real-world unit is needed, it belongs to the final numerical answer, not to the letter itself.",
+       "wrong": "A letter stands for an object, so x means apples and y means bananas.",
+       "source_refs": [
+        "misc:variables-constants-and-algebraic-expressions:m1"
+       ]
+      },
+      {
+       "text": "A constant is a fixed number; a variable is a letter that stands for a number that is unknown or can change.",
+       "type": "key_idea",
+       "source_refs": [
+        "claim:variables-constants-and-algebraic-expressions:c1",
+        "claim:variables-constants-and-algebraic-expressions:c2"
+       ]
+      },
+      {
+       "text": "In the expression 3x + 5, which part is a constant and which part is a variable? Give a reason for each choice.",
+       "type": "think",
+       "answer": "The 5 is a constant because it is a fixed number that never changes. The x is a variable because it is a letter standing for a number that is unspecified or can…",
+       "source_refs": [
+        "claim:variables-constants-and-algebraic-expressions:c1",
+        "claim:variables-constants-and-algebraic-expressions:c2",
+        "sec:variables-constants-and-algebraic-expressions:s1"
+       ]
+      }
+     ],
+     "heading": "Why letters? Unknowns, variables and constants",
+     "source_gaps": [
+      {
+       "missing": "A usable picture splitting an algebraic expression into its parts (variable, constant): the only library asset for this does not show letters or numbers, so no figure is placed."
+      }
+     ]
+    },
+    {
+     "sid": "s2",
+     "blocks": [
+      {
+       "text": "Look at this expression: 5x² − 3x + 7 − 2y. It looks like one long string of symbols, but it is really a set of small pieces joined together. Learning to see th…",
+       "type": "paragraph",
+       "source_refs": [
+        "sec:terms-coefficients-and-like-terms:s1",
+        "claim:terms-coefficients-and-like-terms:c2",
+        "gloss:terms-coefficients-and-like-terms:Term"
+       ]
+      },
+      {
+       "term": "Term",
+       "text": "A single number, variable, or product of numbers and variables separated by addition or subtraction signs in an expression.",
+       "type": "key_term",
+       "source_refs": [
+        "gloss:terms-coefficients-and-like-terms:Term"
+       ]
+      },
+      {
+       "text": "Count the terms in 5x² − 3x + 7 − 2y. Cutting at each plus and minus sign gives four terms: 5x², −3x, 7 and −2y. Notice that we wrote −3x and −2y with their min…",
+       "type": "paragraph",
+       "source_refs": [
+        "sec:terms-coefficients-and-like-terms:s1",
+        "claim:terms-coefficients-and-like-terms:c2",
+        "claim:terms-coefficients-and-like-terms:c3"
+       ]
+      },
+      {
+       "type": "misconception",
+       "right": "The sign immediately in front of a term belongs to that term. In 5x² − 3x + 7 − 2y, the second term is negative 3x and the fourth term is negative 2y.",
+       "wrong": "The minus sign in front of a term is a separate operation, not part of the term.",
+       "source_refs": [
+        "misc:terms-coefficients-and-like-terms:m2",
+        "claim:terms-coefficients-and-like-terms:c3"
+       ]
+      },
+      {
+       "text": "Now look inside the terms. A **variable** is a letter, such as x or y, that stands for an unspecified number. A **constant** is a fixed numerical value with no…",
+       "type": "paragraph",
+       "source_refs": [
+        "sec:terms-coefficients-and-like-terms:s1",
+        "claim:terms-coefficients-and-like-terms:c4",
+        "claim:terms-coefficients-and-like-terms:c5",
+        "gloss:terms-coefficients-and-like-terms:Constant"
+       ]
+      },
+      {
+       "term": "Constant",
+       "text": "A fixed numerical value in an expression that does not contain any variables and never changes.",
+       "type": "key_term",
+       "source_refs": [
+        "gloss:terms-coefficients-and-like-terms:Constant"
+       ]
+      },
+      {
+       "text": "Every term that contains a variable has a number multiplying it. That number is the **coefficient**. In 7x, the coefficient is 7: the variable x is multiplied b…",
+       "type": "paragraph",
+       "source_refs": [
+        "sec:terms-coefficients-and-like-terms:s2",
+        "claim:terms-coefficients-and-like-terms:c6",
+        "gloss:terms-coefficients-and-like-terms:Coefficient"
+       ]
+      },
+      {
+       "term": "Coefficient",
+       "text": "The numerical factor that multiplies a variable in an algebraic term.",
+       "type": "key_term",
+       "source_refs": [
+        "gloss:terms-coefficients-and-like-terms:Coefficient"
+       ]
+      }
+     ],
+     "heading": "Terms, coefficients and like terms",
+     "source_gaps": []
+    }
+   ],
+   "exercises": [
+    {
+     "xid": "x1",
+     "stem": "Match each word with its meaning.",
+     "tier": "guided",
+     "items": null,
+     "marks": 3,
+     "pairs": [
+      {
+       "left": "Constant",
+       "right": "A fixed numerical value that never changes within a given problem"
+      },
+      {
+       "left": "Variable",
+       "right": "A symbol that stands for an unspecified value or a value that can vary"
+      },
+      {
+       "left": "Coefficient",
+       "right": "The numerical factor that multiplies a variable in an algebraic term"
+      }
+     ],
+     "answer": "Constant: a fixed numerical value that never changes within a given problem. Variable: a symbol that stands for an unspecified value or a value that can vary. C…",
+     "options": null,
+     "item_type": "match",
+     "node_code": "7Ae.01",
+     "categories": null,
+     "figure_ref": null,
+     "skill_code": null,
+     "figure_refs": null,
+     "source_refs": [
+      "claim:variables-constants-and-algebraic-expressions:c1",
+      "claim:variables-constants-and-algebraic-expressions:c2",
+      "claim:variables-constants-and-algebraic-expressions:c3"
+     ],
+     "figure_context": null,
+     "marking_scheme": [
+      {
+       "marks": 1,
+       "point": "Matches constant with 'a fixed numerical value that never changes within a given problem'"
+      },
+      {
+       "marks": 1,
+       "point": "Matches variable with 'a symbol that stands for an unspecified value or a value that can vary'"
+      },
+      {
+       "marks": 1,
+       "point": "Matches coefficient with 'the numerical factor that multiplies a variable in an algebraic term'"
+      }
+     ],
+     "source_item_id": "item:495dabdc-fda6-4cc4-b35a-a8012fef9d3c",
+     "worked_solution": "A constant is a fixed number such as 5. A variable is a letter such as x that can stand for a number we do not know or a number that can change. The coefficient…"
+    },
+    {
+     "xid": "x2",
+     "stem": "In the algebraic term 7x, the number 7 is called the ____.",
+     "tier": "guided",
+     "items": null,
+     "marks": 1,
+     "pairs": null,
+     "answer": "coefficient",
+     "options": null,
+     "item_type": "fill_blank",
+     "node_code": "7Ae.01",
+     "categories": null,
+     "figure_ref": null,
+     "skill_code": null,
+     "figure_refs": null,
+     "source_refs": [
+      "claim:variables-constants-and-algebraic-expressions:c3"
+     ],
+     "figure_context": null,
+     "marking_scheme": [
+      {
+       "marks": 1,
+       "point": "Writes the word 'coefficient' in the blank (the name for the number that multiplies the variable)"
+      }
+     ],
+     "source_item_id": "item:51393c48-675b-4c34-95fa-7831a53b6faf",
+     "worked_solution": "The number that multiplies a variable in a term is the coefficient. In 7x, the 7 multiplies x."
+    },
+    {
+     "xid": "x3",
+     "stem": "How many terms are there in the algebraic expression 4x² − 7x + 9?",
+     "tier": "guided",
+     "items": null,
+     "marks": 1,
+     "pairs": null,
+     "answer": "Three",
+     "options": [
+      "One",
+      "Two",
+      "Three",
+      "Four"
+     ],
+     "item_type": "mcq",
+     "node_code": "8Ae.01",
+     "categories": null,
+     "figure_ref": null,
+     "skill_code": null,
+     "figure_refs": null,
+     "source_refs": [
+      "claim:variables-constants-and-algebraic-expressions:c5",
+      "claim:terms-coefficients-and-like-terms:c2"
+     ],
+     "figure_context": null,
+     "marking_scheme": [
+      {
+       "marks": 1,
+       "point": "Chooses 'Three' as the number of terms (4x², −7x and 9)"
+      }
+     ],
+     "source_item_id": "item:e4a4d662-2ea2-4f28-aaab-f51dd9b056bd",
+     "worked_solution": "Terms are the parts separated by plus or minus signs. The parts are 4x², −7x and +9, so there are three terms."
+    },
+    {
+     "xid": "x4",
+     "stem": "Which algebraic expression means 'seven less than x'?",
+     "tier": "guided",
+     "items": null,
+     "marks": 1,
+     "pairs": null,
+     "answer": "x − 7",
+     "options": [
+      "7 − x",
+      "x − 7",
+      "7x",
+      "x ÷ 7"
+     ],
+     "item_type": "mcq",
+     "node_code": "7Ae.04",
+     "categories": null,
+     "figure_ref": null,
+     "skill_code": null,
+     "figure_refs": null,
+     "source_refs": [
+      "claim:variables-constants-and-algebraic-expressions:c6"
+     ],
+     "figure_context": null,
+     "marking_scheme": [
+      {
+       "marks": 1,
+       "point": "Chooses 'x − 7' as the expression for 'seven less than x'"
+      }
+     ],
+     "source_item_id": "item:55d30493-108b-41da-b079-f69d165013e6",
+     "worked_solution": "'Seven less than x' means you take 7 away from x, so you write x − 7. The words come in a different order from the symbols."
+    }
+   ],
+   "review": {
+    "blind_answers": [
+     {
+      "xid": "x1",
+      "answer": "Constant matches 'A fixed numerical value that never changes within a given problem'; Variable matches 'A symbol that stands for an unspecified value or a value that can vary'; Coefficient matches 'The numerical factor that multiplies a variable in an algebraic term'."
+     },
+     {
+      "xid": "x2",
+      "answer": "coefficient"
+     },
+     {
+      "xid": "x3",
+      "answer": "Three"
+     },
+     {
+      "xid": "x4",
+      "answer": "x â 7"
+     }
+    ],
+    "ready_for_gate_d": true
+   },
+   "videos": [
+    "video:QgShPtHYgcw",
+    "video:kLAqbMAicFo"
+   ],
+   "topics": [
+    {
+     "slug": "variables-constants-and-algebraic-expressions",
+     "title": "Variables, Constants and Algebraic Expressions",
+     "article": {
+      "id": "c4f04e7d-d2f1-4841-8bf5-136b470c7a95",
+      "version": 1
+     }
+    },
+    {
+     "slug": "terms-coefficients-and-like-terms",
+     "title": "Terms, Coefficients and Like Terms",
+     "article": {
+      "id": "b8cc1d1d-87c6-4f36-9a79-d9fd014936df",
+      "version": 1
+     }
+    }
+   ],
+   "pdf": {
+    "key": "books/mastering-linear-equations/editions/en-draft-2026-10-30-1/ch01.pdf",
+    "sha256": "192c2a8417273d971a10e34ddf26e330f07ea0f2273b7805339d2e64454b013e"
+   }
+  }
+ ],
+ "figures": {},
+ "files": {
+  "digital_pdf": null,
+  "print_pdf": null
+ },
+ "integrity": {
+  "chapter_hash_rule": "sha256(json.dumps({sections, exercises}, sort_keys=True, ensure_ascii=False))"
+ }
+}
