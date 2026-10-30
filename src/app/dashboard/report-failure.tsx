@@ -84,6 +84,7 @@ export default function ReportFailure({
   return (
     <>
       <button
+        data-tour="report-failure"
         onClick={send}
         disabled={state === "sending"}
         className="text-[13px] text-[#98A0A9] hover:text-[#B3401F] disabled:opacity-60"

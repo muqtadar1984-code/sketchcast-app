@@ -1,6 +1,16 @@
-// Where a CATALOGUE kit's lesson video lives on YouTube — so a viewer streams
-// it from YouTube and not from our storage (founder 2026-10-30: "the video
-// should be pulled from youtube to avoid egress cost").
+// Where a CATALOGUE kit's lesson video lives on YouTube — the FALLBACK source
+// for a lesson with no stored MP4.
+//
+// STORED MP4 FIRST, EVERYWHERE IN THE APP (founder 2026-10-30, reversing the
+// same day's "pull it from YouTube to avoid egress": "the quality matters in
+// the app so lets use stored mp4 wherever possible"). YouTube re-compresses
+// our 1280x720 renders, and the Board hides YouTube's controls, so there is no
+// quality picker. Every surface — the Board, the Library, the Kits gallery,
+// SK, the SketchCast-book chapters — plays the stored file whenever one
+// exists; a kit's YouTube video is used only when the lesson has no stored
+// MP4 (videoSource / lessonVideo below). The fallback player turns captions
+// off by default (youtubeEmbedUrl here; the Board's IFrame player in
+// src/app/present/youtube-video.ts).
 //
 // THE SOURCE OF TRUTH is topic_publications (0112/0122/0148): one row per
 // (topic_kit_id, part, channel_language), carrying youtube_video_id once the
@@ -86,38 +96,64 @@ export function bundleVideoId(entry: unknown): string | null {
 }
 
 /**
- * Play from YouTube, or from our storage? YouTube whenever it covers EVERY
- * part the lesson has (a 2-part lesson with one posted part would otherwise
- * lose its second half); storage only when it does not — the caller logs that.
+ * Play from our storage, or from YouTube? STORAGE whenever the lesson has a
+ * stored part (founder 2026-10-30: quality first); YouTube only when it has
+ * none and the kit is on YouTube; nothing when neither.
  */
 export function videoSource(youtube: readonly string[], storedParts: number): "youtube" | "storage" | "none" {
-  if (youtube.length > 0 && youtube.length >= storedParts) return "youtube";
-  return storedParts > 0 ? "storage" : "none";
+  if (storedParts > 0) return "storage";
+  return youtube.length > 0 ? "youtube" : "none";
 }
 
 /**
  * How a lesson's video is served, given its generation's params, its stored
- * MP4 paths (in part order) and the kits' YouTube ids:
- *   - a catalogue copy (catalogue_ref / product_ref) whose kit is on YouTube
- *     for every part → `youtube`, and NO storage path is signed;
- *   - a catalogue copy that is not → its storage paths, and `fellBack` names
- *     the kit so the caller logs it;
- *   - anything else (an uploaded book's lesson) → its own storage paths.
+ * MP4s (paths or signed URLs, in part order) and the kits' YouTube ids:
+ *   - any stored MP4 → those, and no YouTube (every lesson, catalogue or not);
+ *   - no stored MP4, but a catalogue copy (catalogue_ref / product_ref) whose
+ *     kit is on YouTube → its YouTube ids, the fallback;
+ *   - neither → nothing.
  */
 export function lessonVideo(
   params: Record<string, unknown> | null | undefined,
-  storedPaths: readonly string[],
+  stored: readonly string[],
   byKit: ReadonlyMap<string, string[]>,
-): { youtube: string[]; paths: string[]; fellBack: string | null } {
+): { youtube: string[]; paths: string[] } {
+  if (stored.length) return { youtube: [], paths: [...stored] };
   const kit = topicKitIdOf(params);
-  if (!kit) return { youtube: [], paths: [...storedPaths], fellBack: null };
-  const ids = byKit.get(kit) ?? [];
-  if (videoSource(ids, storedPaths.length) === "youtube") return { youtube: [...ids], paths: [], fellBack: null };
-  return { youtube: [], paths: [...storedPaths], fellBack: storedPaths.length ? kit : null };
+  const ids = kit ? (byKit.get(kit) ?? []) : [];
+  return { youtube: [...ids], paths: [] };
 }
 
 /** The watch page (the same URL the Kits gallery links: kits/logic.ts youtubeUrl). */
 export const youtubeWatchUrl = (id: string): string => `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+
+/** The YouTube id a watch link (or a youtu.be / embed link) names, or null for
+ *  anything else — a signed storage URL above all. */
+export function youtubeIdFromUrl(url: string | null | undefined): string | null {
+  if (typeof url !== "string" || !url) return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.replace(/^www\./, "").replace(/^m\./, "");
+  let id: string | null = null;
+  if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    if (u.pathname === "/watch") id = u.searchParams.get("v");
+    else if (u.pathname.startsWith("/embed/")) id = u.pathname.slice(7);
+  } else if (host === "youtu.be") id = u.pathname.slice(1);
+  return id && YOUTUBE_ID.test(id) ? id : null;
+}
+
+/**
+ * The embed URL of the in-app FALLBACK player (a plain <iframe>): captions OFF
+ * by default (cc_load_policy=0 — a viewer can still turn them on from
+ * YouTube's own controls, which this player shows), no related videos from
+ * other channels, inline on phones.
+ */
+export const youtubeEmbedUrl = (id: string, opts: { autoplay?: boolean } = {}): string =>
+  `https://www.youtube.com/embed/${encodeURIComponent(id)}?cc_load_policy=0&rel=0&playsinline=1&modestbranding=1${opts.autoplay ? "&autoplay=1" : ""}`;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Db = { from: (table: string) => any };
@@ -126,7 +162,8 @@ type Db = { from: (table: string) => any };
 /**
  * topic_kit_id → watchable YouTube ids, read with the SERVICE ROLE
  * (topic_publications has no client grant). Never throws: a failed read is an
- * empty map, and every caller then falls back to storage and logs it.
+ * empty map — a lesson with a stored MP4 never needed it, and one without has
+ * no fallback.
  */
 export async function loadKitYoutubeIds(db: Db, topicKitIds: readonly string[]): Promise<Map<string, string[]>> {
   const ids = [...new Set(topicKitIds.filter((x) => typeof x === "string" && x))];

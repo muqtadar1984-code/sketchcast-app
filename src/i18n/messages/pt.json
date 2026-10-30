@@ -2696,19 +2696,22 @@
         "more": "Em Mais ficam os Materiais extras: Revisão cria exercícios ou provas com os capítulos que você já deu, juntos ou um por capítulo, e Exame monta uma prova de exame com o gabarito. Os dois são gratuitos, a partir das aulas que você já gerou.",
         "moreNoExam": "Em Mais ficam os Materiais extras: Revisão cria exercícios ou provas com os capítulos que você já deu, juntos ou um por capítulo. São gratuitos, a partir das aulas que você já gerou.",
         "moreClosed": "Dentro de cada livro, Mais guarda os Materiais extras: revisões e exames montados a partir dos capítulos que você já deu.",
-        "upload": "Para adicionar um livro didático, informe o título e o autor e escolha o PDF. Não tem PDF? Digitalizar páginas transforma fotos das páginas em um.",
+        "upload": "É aqui que você envia um livro didático, em PDF ou como fotos das páginas com Digitalizar páginas.",
         "branding": "Identidade da escola: envie uma vez só os modelos de Word e PowerPoint da sua escola, e todo documento e apresentação que criamos usa o seu timbre, suas cores e seu logo.",
         "myBooksNone": "Os livros SketchCast que você receber aparecem em Meus livros, prontos para dar na Lousa, atribuir ou baixar.",
         "plan": "Este medidor mostra as gerações deste mês: o que o seu plano inclui e o que você já usou. O que sobrar passa para o mês seguinte, e Comprar créditos adiciona um pacote que nunca expira.",
         "planUnlimited": "Os planos com uma quota mensal mostram aqui um medidor com o que está incluído e o que já usou. O seu plano não tem um, por isso não há nada a contar.",
-        "boardSk": "Eu também estou na Lousa: diga “slide 4”, “explique a membrana” ou “passe três perguntas para eles”. Os kits prontos passam direto do YouTube, e Encerrar aula salva a lousa e prepara um recado para a turma.",
+        "boardSk": "Eu também estou na Lousa: diga “slide 4”, “explique a membrana” ou “passe três perguntas para eles”. Os kits prontos passam aqui mesmo na Lousa, e Encerrar aula salva a lousa e prepara um recado para a turma.",
         "skTutor": "O Tutor SK é onde eu ensino um livro SketchCast capítulo por capítulo, com explicações e perguntas de prática. É o que seus alunos usam com os livros deles.",
         "diaryNoClass": "A Agenda é o seu canal de comunicação com as famílias. Assim que você tiver uma turma, vai publicar recados nela por aqui, ou me dizer e eu mostro o texto exato antes.",
         "calendar": "O Calendário reúne os eventos e avisos da escola, e você pode assiná-lo pelo calendário do seu celular.",
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
         "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta em outro idioma. Quando eu faço algo por você, mostro um cartão antes, e nada acontece até você confirmar. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta em outro idioma. Quando eu faço algo por você, mostro um cartão antes, e nada acontece até você confirmar. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Se um kit falhar, relate aqui mesmo e nós vamos verificar. Para qualquer outra coisa, Relatar um problema fica no canto inferior esquerdo.",
+        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado.",
+        "uploadNow": "Esse foi o guia. Quando estiver pronto, clique aqui para enviar seu livro didático e eu o transformo em aulas."
       },
       "student": {
         "hello": "Oi, eu sou o SK! Vou te mostrar tudo em dois minutos. Toque para me ouvir, ou só acompanhe a leitura.",
@@ -2729,7 +2732,9 @@
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
         "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, no seu idioma; “diga isso em inglês” repete uma resposta em outro idioma. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, no seu idioma; “diga isso em inglês” repete uma resposta em outro idioma. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Se algo falhar, toque no link para relatar aqui mesmo e nós vamos verificar.",
+        "reportProblemWidget": "Algo não está funcionando? Toque aqui, no canto inferior esquerdo, e conte pra gente em poucas palavras. Nós vamos verificar."
       },
       "parent": {
         "hello": "Olá, eu sou o SK. Vou te mostrar como acompanhar seus filhos em uns três minutos. Toque para me ouvir.",
@@ -2750,7 +2755,10 @@
         "homeKits": "Aqui em cima ficam os Kits prontos a usar, aulas finalizadas que você pode desbloquear toda semana e adicionar à sua Biblioteca, e o Tutor SK, onde eu ensino com os livros SketchCast.",
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
-        "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa."
+        "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
+        "reportProblem": "Se um kit falhar, relate aqui mesmo e nós vamos verificar. Para qualquer outra coisa, Relatar um problema fica no canto inferior esquerdo.",
+        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado.",
+        "uploadNow": "Esse foi o guia. Quando estiver pronto, clique aqui para enviar um livro didático e eu o transformo em aulas para seus filhos."
       },
       "principal": {
         "hello": "Boas-vindas. Eu sou o SK, e vou te mostrar a escola num relance em uns três minutos. Toque para me ouvir.",
@@ -2767,7 +2775,8 @@
         "hat": "Mude aqui para o seu perfil de Professor para usar a Biblioteca e a Lousa da sala de aula.",
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora, e o sino mostra o andamento."
       },
       "coordinator": {
         "hello": "Oi, eu sou o SK. Tudo o que você vai ver se limita aos seus anos e disciplinas; esta etiqueta mostra a sua parte.",
@@ -2782,7 +2791,8 @@
         "hatSettings": "Seu perfil de Professor tem suas próprias turmas, Biblioteca e Lousa, e Definições guarda o que eu lembro.",
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora, e o sino mostra o andamento."
       }
     }
   },

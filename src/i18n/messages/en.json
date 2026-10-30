@@ -2696,19 +2696,22 @@
         "more": "Under More are Extra papers: Revision papers makes worksheets or test papers across the chapters you've taught, combined or one per chapter, and Exam builds an exam paper with its answer key. Both are free, from lessons you've already generated.",
         "moreNoExam": "Under More are Extra papers: Revision papers makes worksheets or test papers across the chapters you've taught, combined or one per chapter. They're free, from lessons you've already generated.",
         "moreClosed": "Inside each book, More holds Extra papers: revision papers and exams built from the chapters you've taught.",
-        "upload": "To add a textbook, give its title and author and choose the PDF. No PDF? Scan pages turns photos of the pages into one.",
+        "upload": "This is where you upload a textbook, as a PDF or as photos of its pages with Scan pages.",
         "branding": "School branding: upload your school's Word and PowerPoint templates once, and every document and deck we make uses your letterhead, colours and logo.",
         "myBooksNone": "SketchCast books you're given appear under My books, ready to teach on the Board, assign or download.",
         "plan": "This meter shows this month's generations: what your plan includes and what you've used. Unused allowance carries forward, and Buy credits adds a pack that never expires.",
         "planUnlimited": "Plans with a monthly allowance show a meter here with what's included and what you've used. Your plan doesn't have one, so there's nothing to count.",
-        "boardSk": "I'm on the Board too: say 'slide 4', 'explain the membrane' or 'give them three questions'. Ready-made kits play straight from YouTube, and End lesson saves the board and drafts a note for the class.",
+        "boardSk": "I'm on the Board too: say 'slide 4', 'explain the membrane' or 'give them three questions'. Ready-made kits play right here on the Board, and End lesson saves the board and drafts a note for the class.",
         "skTutor": "SK Tutor is where I teach a SketchCast book chapter by chapter, with explanations and practice questions. It's what your students use with their books.",
         "diaryNoClass": "The Diary is your communication book with parents. Once you have a class, you post notes to it here, or tell me and I'll show you the exact text first.",
         "calendar": "The Calendar holds school events and notices, and you can subscribe to it from your phone's calendar.",
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
         "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
-        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer in another. When I act for you, I show a card first and nothing happens until you confirm. To see this again, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer in another. When I act for you, I show a card first and nothing happens until you confirm. To see this again, press Tour or say 'Show me around'.",
+        "reportProblem": "If a kit ever fails, report it right here and we'll look into it. For anything else, Report a problem is at the bottom left.",
+        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it.",
+        "uploadNow": "That's the tour. When you're ready, click here to upload your textbook and I'll turn it into lessons."
       },
       "student": {
         "hello": "Hi, I'm SK! I'll show you around in two minutes. Tap to hear me, or read along.",
@@ -2729,7 +2732,9 @@
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
         "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
-        "skAsk": "Ask me anything, by voice or typing, in your own language; 'say that in Malay' repeats an answer in another. To see this again, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in your own language; 'say that in Malay' repeats an answer in another. To see this again, press Tour or say 'Show me around'.",
+        "reportProblem": "If something ever fails, tap report right here and we'll look into it.",
+        "reportProblemWidget": "Something not working? Tap here, at the bottom left, and tell us in a few words. We'll look into it."
       },
       "parent": {
         "hello": "Hello, I'm SK. I'll show you how to keep up with your children in about three minutes. Tap to hear me.",
@@ -2750,7 +2755,10 @@
         "homeKits": "Up here are Ready-made kits, finished lessons you can unlock each week and add to your Library, and SK Tutor, where I teach from SketchCast books.",
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
-        "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation."
+        "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
+        "reportProblem": "If a kit ever fails, report it right here and we'll look into it. For anything else, Report a problem is at the bottom left.",
+        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it.",
+        "uploadNow": "That's the tour. When you're ready, click here to upload a textbook and I'll turn it into lessons for your children."
       },
       "principal": {
         "hello": "Welcome. I'm SK, and I'll show you the school at a glance in about three minutes. Tap to hear me.",
@@ -2767,7 +2775,8 @@
         "hat": "Switch to your Teacher hat here to use the Library and the Classroom Board.",
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
-        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'.",
+        "reportProblem": "Something not working? Report a problem, here at the bottom left, reaches our team any time, and the bell shows how it's going."
       },
       "coordinator": {
         "hello": "Hi, I'm SK. Everything you'll see is limited to your grades and subjects; this chip shows your slice.",
@@ -2782,7 +2791,8 @@
         "hatSettings": "Your Teacher hat has your own classes, Library and Board, and Settings holds what I remember.",
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
-        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'.",
+        "reportProblem": "Something not working? Report a problem, here at the bottom left, reaches our team any time, and the bell shows how it's going."
       }
     }
   },

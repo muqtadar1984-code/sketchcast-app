@@ -45,10 +45,11 @@ export type CatalogueStore = {
 export const SERVED_KINDS: ReadonlySet<string> = new Set(["docx", "answer_key_docx", "deck_pptx"]);
 
 /** The kinds served for WATCHING (Kit Translator, plan revision 3 §5.7 —
- * 2026-10-16): the video of a current kit and its thumbnail. The English
- * video is public on YouTube; a translated video has no channel yet (D5) and
- * plays from storage, so these need NO unlock — the lesson is free to watch,
- * as it is on YouTube, and the unlock still gates the documents. */
+ * 2026-10-16): the video of a current kit and its thumbnail. Since 2026-10-30
+ * EVERY kit's lesson plays from storage in the Kits gallery, YouTube or not
+ * (founder: "the quality matters in the app so lets use stored mp4 wherever
+ * possible"), so these need NO unlock — the lesson is free to watch, as it is
+ * on YouTube, and the unlock still gates the documents. */
 export const WATCH_KINDS: ReadonlySet<string> = new Set(["video_mp4", "thumbnail_png"]);
 
 /** Ten minutes: minted on the click and followed at once, then it must carry

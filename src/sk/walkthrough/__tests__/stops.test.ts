@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { WALK_ROLES, WALK_STOPS, lineKeysFor, type WalkAnchor } from "../stops";
+import { WALK_ROLES, WALK_STOPS, anchorsOf, lineKeysFor, type WalkAnchor } from "../stops";
 import en from "@/i18n/messages/en.json";
 import ms from "@/i18n/messages/ms.json";
 import msArab from "@/i18n/messages/ms-arab.json";
@@ -46,7 +46,7 @@ function attributePairs(): Array<[string, string]> {
   const pairs = new Map<string, [string, string]>();
   for (const defs of Object.values(WALK_STOPS)) {
     for (const d of defs) {
-      for (const a of [...d.anchors, ...(d.fallback ?? []).flatMap((f) => f.anchors ?? [])]) {
+      for (const a of anchorsOf(d)) {
         for (const m of selOf(a).matchAll(/\[([a-z-]+)="([^"]+)"\]/g)) pairs.set(`${m[1]}=${m[2]}`, [m[1]!, m[2]!]);
       }
     }
@@ -89,6 +89,14 @@ describe("every line a stop can say is in all ten message files", () => {
       }
     }
   });
+  it("the invitation to upload is said once: the close asks, the setup narration only names Upload", () => {
+    const t = en.sk.walkthrough.teacher;
+    expect(t.uploadNow).toBe("That's the tour. When you're ready, click here to upload your textbook and I'll turn it into lessons.");
+    expect(t.upload).not.toMatch(/click here|when you're ready/i);
+    expect(en.sk.walkthrough.parent.uploadNow).toMatch(/^That's the tour\. When you're ready, click here to upload a textbook/);
+    // The old long upload explanation (title and author) is gone.
+    expect(t.upload).not.toMatch(/title and author/);
+  });
   it("the 'once you generate a kit' and 'More' lines say what the code does: free papers, no credit numbers", () => {
     const t = en.sk.walkthrough.teacher;
     expect(t.assignNone).toMatch(/^Once you generate a kit, you'll be able to assign it to a class/);
@@ -124,6 +132,10 @@ describe("every anchor a stop names exists in a component (source scan)", () => 
     expect(read("generate-kit-button.tsx")).toMatch(/<button\s+data-tour=\{tour\}/);
     expect(read("book-table.tsx")).toContain('data-tour-book={isOpen ? "open" : undefined}');
     expect(read("book-tools.tsx")).toContain('data-tour="book-tools"');
+    // Report a problem: the inline "report" on a failed kit, and the widget's button.
+    expect(read("report-failure.tsx")).toMatch(/<button\s+data-tour="report-failure"\s+onClick=\{send\}/);
+    expect(read("content-cell.tsx")).toMatch(/lesson\.status === "error"[\s\S]*<ReportFailure/);
+    expect(read("report-issue-form.tsx")).toMatch(/<button\s+data-tour="report-issue"\s+onClick=\{\(\) => setOpen/);
   });
 });
 
@@ -155,5 +167,61 @@ describe("the 'plan' stop survives a dashboard with no meter", () => {
       expect(line, code).toBeTruthy();
       expect(line, code).not.toMatch(/[0-9]/);
     }
+  });
+});
+
+// Founder 2026-10-30: steps 3–6 and 14–16 are one narration each. The parts'
+// lines are spoken as ONE line and the highlight moves on sentence starts, so
+// every part's line must end a sentence, in every language.
+describe("combined stops: every part's line ends a sentence, in all ten files", () => {
+  it("teacher openBook and setup carry their parts", () => {
+    const t = WALK_STOPS.teacher;
+    expect(t.find((s) => s.id === "openBook")?.parts?.map((p) => p.id)).toEqual(["bookCard", "generateAll", "chapterKit", "lessonOptions"]);
+    expect(t.find((s) => s.id === "setup")?.parts?.map((p) => p.id)).toEqual(["upload", "classes", "branding"]);
+    for (const id of ["bookCard", "generateAll", "chapterKit", "lessonOptions", "upload", "classes", "branding"]) expect(t.find((s) => s.id === id), id).toBeUndefined();
+  });
+  it("each part line (own, fallback, per-anchor) ends with sentence punctuation", () => {
+    for (const role of WALK_ROLES) {
+      for (const s of WALK_STOPS[role]) {
+        for (const p of s.parts ?? []) {
+          const keys = new Set<string>([p.line ?? p.id, ...(p.fallback ?? []).flatMap((f) => (f.line ? [f.line] : [])), ...anchorsOf(p).flatMap((a) => (typeof a === "string" ? [] : [a.line]))]);
+          for (const [code, file] of Object.entries(FILES)) {
+            for (const k of keys) {
+              const line = (file.sk.walkthrough[role] as Record<string, string>)[k]!;
+              expect(line, `${code} ${role}.${k}`).toMatch(/[.!?؟।]["'”’»)]*$/u);
+            }
+          }
+        }
+      }
+    }
+  });
+});
+
+// The report stop's fact is the widget's own flag: where it renders, and the
+// facts route reporting it.
+describe("Report a problem: the stop follows the widget's flag", () => {
+  const DASHBOARD = readFileSync(join(SRC, "app", "dashboard", "page.tsx"), "utf8");
+  const SCHOOL = readFileSync(join(SRC, "app", "dashboard", "school", "page.tsx"), "utf8");
+  const ROUTE = readFileSync(join(SRC, "app", "api", "sk", "walkthrough", "route.ts"), "utf8");
+  it("the widget renders on the student, teacher/parent and School dashboards under platformConsoleEnabled()", () => {
+    expect(DASHBOARD).toContain('{platformConsoleEnabled() && <ReportIssueWidget variant="student" />}');
+    expect(DASHBOARD).toContain("{platformConsoleEnabled() && <ReportIssueWidget />}");
+    expect(SCHOOL).toContain("{platformConsoleEnabled() && <ReportIssueWidget />}");
+  });
+  it("the facts route reports it for every role, and every role's report stop needs it", () => {
+    expect(ROUTE).toContain("reportIssue: platformConsoleEnabled()");
+    for (const role of WALK_ROLES) {
+      const s = WALK_STOPS[role].find((d) => d.id === "reportProblem");
+      expect(s?.needs, role).toEqual(["reportIssue"]);
+    }
+  });
+});
+
+// Founder decision 2026-10-30: lesson videos play our STORED MP4 everywhere
+// (Board, Library, kits, SK); YouTube is only a fallback. No tour line names it.
+describe("no tour line claims YouTube playback", () => {
+  it("in any of the ten files", () => {
+    for (const [code, file] of Object.entries(FILES)) expect(JSON.stringify(file.sk.walkthrough), code).not.toMatch(/youtube|يوتيوب|यूट्यूब|యూట్యూబ్/i);
+    expect(en.sk.walkthrough.teacher.boardSk).toContain("Ready-made kits play right here on the Board");
   });
 });

@@ -7,6 +7,7 @@ import {
   examGenerationEnabled,
   noticesEnabledFor,
   parentPortalEnabled,
+  platformConsoleEnabled,
   presentAllowed,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
@@ -44,7 +45,9 @@ export async function GET() {
 
   const hat = await activeHatCookie();
   const tour: WalkRole = walkRoleFor(role, hat);
-  const facts: WalkFacts = { diary: diaryEnabled() };
+  // reportIssue: the floating "Report a problem" widget renders (every role's
+  // dashboard shows it under this flag) — else the tour's report stop skips.
+  const facts: WalkFacts = { diary: diaryEnabled(), reportIssue: platformConsoleEnabled() };
 
   try {
     if (tour === "teacher") {

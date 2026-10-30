@@ -110,6 +110,9 @@ export type SkShellWalk = {
   command: (text: string) => boolean;
   /** How `voice` ended (key = voice.key): the tour advances only after "spoken". */
   onVoiceDone?: (key: string, outcome: SayOutcome) => void;
+  /** SK starts sentence `index` (0-based) of the `voice` line `key`: a
+   *  combined stop moves its highlight to the part that sentence opens. */
+  onSentence?: (key: string, index: number) => void;
   /** The server answered a turn with a tour action (natural phrasing it caught). */
   act?: (action: SkWalkAction) => void;
   /** She is typing: hold any pending auto-advance. */
@@ -367,6 +370,8 @@ export default function SkShell({
   /** The listening gate's onResume, current every render (the gate outlives renders). */
   const listenNowRef = useRef<() => void>(() => {});
   const walkRef = useRef<SkShellWalk | null | undefined>(walk);
+  /** The tour line being spoken now, and how many of its sentences have started. */
+  const tourLineRef = useRef<{ key: string; n: number } | null>(null);
   const voiceLogRef = useRef<VoiceLog | null>(null);
   const onTakeTourRef = useRef(onTakeTour);
   const sendRef = useRef<(text: string, modality: "text" | "voice") => Promise<void>>(async () => {});
@@ -511,6 +516,9 @@ export default function SkShell({
       // The speech bubble shows the sentence being said (not the tour's own
       // narration: the tour's caption is already in the bubble).
       onCurrent: (c) => {
+        // A tour line's next sentence: the tour moves a combined stop's highlight.
+        const tl = tourLineRef.current;
+        if (c && tl && walkRef.current?.narrating) walkRef.current.onSentence?.(tl.key, tl.n++);
         if (!c) dispatchBubble({ type: "speechEnd", at: Date.now() });
         else if (!walkRef.current?.narrating) dispatchBubble({ type: "sentence", text: c.text, lang: c.lang, at: Date.now() });
       },
@@ -824,6 +832,7 @@ export default function SkShell({
   const tourVoicedRef = useRef(false);
   useEffect(() => {
     const v = walkRef.current?.voice;
+    tourLineRef.current = null;
     if (!v) {
       // The tour ended (Skip, Finish) while its line was playing: silence it.
       if (tourVoicedRef.current) speechRef.current?.stop();
@@ -834,9 +843,14 @@ export default function SkShell({
     const coord = speechRef.current;
     coord?.stop();
     if (!v.text) return;
+    // Its sentences are counted as they start (a combined stop's highlight follows them).
+    tourLineRef.current = { key: v.key, n: 0 };
     // The tour moves on by itself only once this line has FULLY been spoken
     // (every sentence); a line cut off (barge-in, Stop, an error) holds it.
-    const report = (o: SayOutcome) => walkRef.current?.onVoiceDone?.(v.key, o);
+    const report = (o: SayOutcome) => {
+      if (tourLineRef.current?.key === v.key) tourLineRef.current = null;
+      walkRef.current?.onVoiceDone?.(v.key, o);
+    };
     if (!coord) report("silent");
     else void coord.sayLine(v.text).then(report);
   }, [walkVoiceKey]);

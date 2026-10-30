@@ -8,6 +8,7 @@ import type { Dictionary } from "@/i18n/dictionaries";
 import AssignModal, { type ChildRow, type ClassRow } from "../assign-modal";
 import { kindLabel, type LibraryMessages } from "../labels";
 import { languageLabel } from "@/utils/narration";
+import { youtubeEmbedUrl } from "@/utils/catalogue/kit-youtube";
 import { KIT_CHUNK, assignablePieces, downloadsOf, languagesOf, lessonPageUrl, storageVideo, visibleKits, youtubeUrl } from "./logic";
 
 export type KitsMessages = Dictionary["kits"];
@@ -23,9 +24,12 @@ export type KitView = {
   title: string;
   subject: string | null;
   language: string;
+  /** the kit's YouTube video: the card's frame, and the FALLBACK player when
+   * the stored MP4 cannot be played */
   youtubeId: string | null;
-  /** the presentation's generation, sent only for a kit with no YouTube video
-   * (a translation, D5): it plays in-app from /api/catalogue/file?kind=video_mp4 */
+  /** the presentation's generation: its stored MP4 plays in-app from
+   * /api/catalogue/file?kind=video_mp4 — first, whether or not the kit is on
+   * YouTube (founder 2026-10-30: quality first) */
   videoGenerationId: string | null;
   questionCount: number;
   unlocked: boolean;
@@ -245,6 +249,8 @@ const KitCard = memo(function KitCard({
   const [filesOpen, setFilesOpen] = useState(false);
   /** the in-app player (a kit with no YouTube video — a translation) */
   const [playing, setPlaying] = useState(false);
+  // the stored MP4 failed to load (none stored): play the kit's YouTube video
+  const [ytFallback, setYtFallback] = useState(false);
   /** source generation id → the viewer's copy id, once adopted. */
   const [copies, setCopies] = useState<Record<string, string> | null>(null);
 
@@ -286,7 +292,7 @@ const KitCard = memo(function KitCard({
 
   // Derived here, not shipped (logic.ts): the in-app video, the assignable
   // pieces, and each piece's label and files.
-  const video = storageVideo(kit.youtubeId, kit.videoGenerationId);
+  const video = storageVideo(kit.videoGenerationId);
   const videoHref = video?.videoHref ?? null;
   const posterHref = video?.posterHref ?? null;
   const pieces = useMemo(
@@ -364,9 +370,11 @@ const KitCard = memo(function KitCard({
         </a>
       )}
       {playing && videoHref && (
-        // The translated lesson, from storage (Kit Translator §5.7): the <video>
-        // follows the route's 302 to a signed URL and seeks against it. Nothing
-        // signed is rendered into the page.
+        // The lesson, from storage (Kit Translator §5.7; every kit since
+        // 2026-10-30): the <video> follows the route's 302 to a signed URL and
+        // seeks against it. Nothing signed is rendered into the page. A kit
+        // with no stored MP4 (the route answers 404) falls back to its YouTube
+        // video, captions off by default (youtubeEmbedUrl).
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label={kit.title} onClick={() => setPlaying(false)}>
           <div className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3 text-white">
@@ -377,17 +385,31 @@ const KitCard = memo(function KitCard({
                 {t.close}
               </button>
             </div>
-            <video
-              controls
-              autoPlay
-              playsInline
-              preload="metadata"
-              src={videoHref}
-              poster={posterHref ?? undefined}
-              controlsList="nodownload"
-              disablePictureInPicture
-              className="aspect-video w-full rounded-lg bg-black"
-            />
+            {ytFallback && kit.youtubeId ? (
+              <iframe
+                src={youtubeEmbedUrl(kit.youtubeId, { autoplay: true })}
+                title={kit.title}
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+                className="aspect-video w-full rounded-lg bg-black"
+              />
+            ) : (
+              <video
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                src={videoHref}
+                onError={() => {
+                  if (kit.youtubeId) setYtFallback(true);
+                }}
+                poster={posterHref ?? undefined}
+                controlsList="nodownload"
+                disablePictureInPicture
+                className="aspect-video w-full rounded-lg bg-black"
+              />
+            )}
           </div>
         </div>
       )}
