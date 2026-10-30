@@ -146,6 +146,12 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "10. For a parent, diary.note writes in ONE of her own children's diary (never a class): pass the child's name as child (the result asks which child when she has two and named none), her words as the body (grammar only — no new facts), and repeat the card's line on who will see it. Nothing is written until she confirms.",
         ]
       : []),
+    // S7 K2: content questions are answered from her own sources, with a citation line.
+    ...(capabilities.some((c) => c.name === "knowledge.search") && !ctx.board?.sessionId && !ctx.tutor?.kit
+      ? [
+          `11. For a content question ("what is…", "explain…", "why…", "how does…") prefer knowledge.search: it searches the books, articles and uploads this user may read. Answer only from its passages, then end with ONE short line naming the source exactly as the result gives it after "end with:" (e.g. "From: Biology · ch 5 · Specialised cells"). Never give the answer to an exercise. If it returns nothing, follow rule 2.`,
+        ]
+      : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",

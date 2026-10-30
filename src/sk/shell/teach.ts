@@ -206,3 +206,22 @@ export function teachingQuestion(kind: "explain" | "compare", support: Extract<T
 export function teachingSupportTokens(support: Extract<TeachingSupport, { status: "ready" }>): unknown[] {
   return support.segments.flatMap((s) => [s.heading, s.points, s.narration, s.concept ?? ""]);
 }
+
+// ── S7 K2: the kit's own source, for an explain its narration does not cover ──
+
+/** The book / article the kit was made from (its READY manifest), so a
+ *  concept the lesson does not teach can be looked up in THAT source only
+ *  (knowledge.ts kitOwnSources). Null when the manifest is not ready. */
+export async function kitSource(
+  admin: StoreAdmin,
+  generationId: string,
+  read: (admin: StoreAdmin, generationId: string) => Promise<ReadResult> = readManifest,
+): Promise<{ bookId: string | null; articleId: string | null; language: string | null } | null> {
+  try {
+    const r = await read(admin, generationId);
+    if (r.status !== "ready") return null;
+    return { bookId: r.manifest.book_id ?? null, articleId: r.manifest.article_id ?? null, language: r.manifest.language ?? null };
+  } catch {
+    return null;
+  }
+}

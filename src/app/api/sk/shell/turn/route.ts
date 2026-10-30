@@ -36,11 +36,16 @@ import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson 
 import { answerLanguage, canSpeakList, langMeta, languageName, linesLocale, overrideForBack, ownName, targetCode, uiAnswerLang, type AnswerLanguage, type LangCommand, type SkAnswerLang } from "@/sk/shell/language";
 import { LANG_CAN_SPEAK, LANG_NOTHING_TO_REPEAT, LANG_SOURCE_UNSUPPORTED, LANG_SWITCHED, langLine } from "@/sk/shell/language-lines";
 import { repeatAnswer, skTranslateModel } from "@/sk/shell/repeat";
-import { repeatForStudent } from "@/sk/capabilities/tutor";
+import { knowledgeForStudent, repeatForStudent } from "@/sk/capabilities/tutor";
+// S7 K2: SK answers from the books, articles and uploads the user may read.
+import { kitOwnSources, searchForUser } from "@/sk/capabilities/knowledge";
+import { citationsOf, isContentQuestion, knowledgeBlock, knowledgeSupportTokens } from "@/sk/knowledge/answer";
+import { citeLine } from "@/sk/shell/knowledge-lines";
+import { kitSource } from "@/sk/shell/teach";
 // S5 slice B: the leader school-read gate (analytics, 60/day cap, audit row).
 import { SCHOOL_READ_REFUSALS, schoolReadGate } from "@/sk/shell/school-meter";
 import { SM_ANALYTICS_OFF } from "@/sk/shell/school-meter-lines";
-import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
+import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCitation, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
 
 export const runtime = "nodejs";
 
@@ -305,6 +310,46 @@ export async function POST(request: Request) {
     return { text, sources: [name, "manifest"], lang: tl.lang, ...(usage ? { usage } : {}), ...(cut && text !== say ? { trimmed: true } : {}) };
   };
 
+  /** S7 K2: "explain X" on the Board when the lesson does not teach X — the
+   *  KIT'S OWN book or article (never another source), ONE model call over
+   *  its passages as DATA, grounded on them, with SK's citation line. Null
+   *  when that source has nothing on it (the caller keeps its own line). */
+  const boardKnowledge = async (
+    concept: string,
+  ): Promise<{ text: string; sources: string[]; lang: SkAnswerLang; citations: SkCitation[]; usage?: { inputTokens: number; outputTokens: number }; trimmed?: boolean } | null> => {
+    const q = concept.replace(/\s+/g, " ").trim().slice(0, 200);
+    if (!q || !admin || !boardGen) return null;
+    const kit = await kitSource(admin, boardGen);
+    if (!kit || (!kit.bookId && !kit.articleId)) return null;
+    const own = await kitOwnSources(ctx, deps, { bookId: kit.bookId, articleId: kit.articleId });
+    if (!own.length) return null;
+    const k = await searchForUser(ctx, deps, { query: q, restrict: own, limit: 4 });
+    if (k.status !== "ok" || !k.passages.length) return null;
+    const tl = answerLanguage({ override: memory.langOverride ?? null, sourceLanguages: k.passages.map((p) => p.language), uiLocale });
+    const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
+    const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${knowledgeBlock(k.passages)}`;
+    const question = `Explain "${q}" to the class in 2–4 short sentences, in ${languageName(tl.lang)}, using only the passages in KNOWLEDGE (this lesson's own book). No headings, no lists.`;
+    let full = "";
+    let usage: { inputTokens: number; outputTokens: number } | undefined;
+    for await (const ev of runAssistantTurn({ provider, system, history: [], question, tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
+      if (ev.type === "text") full += ev.text;
+      else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
+      else if (ev.type === "error") console.error("sk-shell.turn board knowledge", ev.retryable ? "retryable" : "fatal", ev.message);
+    }
+    const claims = actionClaimGuard(full);
+    const verdict = groundingCheck(claims.text, knowledgeSupportTokens(k.passages), body.text);
+    const said = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || k.passages[0]!.text;
+    const cite = citeLine(k.passages.map((p) => ({ title: p.source_title, chapter: p.chapter, section: p.section })), linesLocale(tl.lang));
+    return {
+      text: cite ? `${said}\n${cite}` : said,
+      sources: ["board.explain", "knowledge.search"],
+      lang: tl.lang,
+      citations: citationsOf(k.passages),
+      ...(usage ? { usage } : {}),
+      ...(!verdict.ok || claims.dropped.length ? { trimmed: true } : {}),
+    };
+  };
+
   /** explain_selection: the highlighted part of a deck slide, explained from
    *  the slide's own text and notes. Called only after the capability said
    *  the selection is hers. Never moves the Board. */
@@ -510,11 +555,36 @@ export async function POST(request: Request) {
           // tutor.explain read the kit's own language: the answer is in it (unless she chose one).
           if (r.language && answer.from !== "override") sendLang(answerLanguage({ override: null, sourceLanguages: [r.language], uiLocale }).lang);
           send({ type: "text", text });
-          done({ sources: r.reply.sources, label: r.reply.label, ...(r.reply.usage ? { usage: r.reply.usage } : {}), ...(r.reply.trimmed ? { trimmed: true } : {}) }, text, r.entities ?? []);
+          done({ sources: r.reply.sources, label: r.reply.label, ...(r.reply.usage ? { usage: r.reply.usage } : {}), ...(r.reply.trimmed ? { trimmed: true } : {}), ...(r.citations?.length ? { citations: r.citations } : {}) }, text, r.entities ?? []);
           return;
         }
         send({ type: "text", text: r.summary });
         done({ sources: [], label: "declined" }, r.summary, []);
+      };
+
+      /** S7 K2: a student's content question with no lesson open — her own
+       *  knowledge passages, ONE grounded model call metered once
+       *  (tutor.ts knowledgeForStudent). False when nothing answers it. */
+      const runStudentKnowledge = async (): Promise<boolean> => {
+        const r = await knowledgeForStudent(ctx, body.text, deps);
+        if (!r) return false;
+        send({ type: "tool", name: "knowledge.search", ok: r.ok, summary: r.summary.slice(0, 200) });
+        const text = r.reply?.text || r.summary;
+        if (r.language && answer.from !== "override") sendLang(answerLanguage({ override: null, sourceLanguages: [r.language], uiLocale }).lang);
+        send({ type: "text", text });
+        const reply = r.reply;
+        done(
+          {
+            sources: reply?.sources ?? [],
+            label: reply?.label ?? "declined",
+            ...(reply?.usage ? { usage: reply.usage } : {}),
+            ...(reply?.trimmed ? { trimmed: true } : {}),
+            ...(r.citations?.length ? { citations: r.citations } : {}),
+          },
+          text,
+          [],
+        );
+        return true;
       };
 
       /** 2026-10-30: "say that in Malay" / "back to English". A repeat makes
@@ -662,7 +732,8 @@ export async function POST(request: Request) {
         if (ctx.user.role === "student" && decision.intent !== "navigate" && decision.intent !== "chat") {
           if (decision.intent === "tutor") await runTutor(decision.capability, decision.args);
           else if (ctx.tutor) await runTutor("tutor.explain", { question: body.text });
-          else await runTutor("tutor.where", {});
+          // S7 K2: "what is osmosis?" with no lesson open → her knowledge.
+          else if (!(isContentQuestion(body.text) && (await runStudentKnowledge()))) await runTutor("tutor.where", {});
           finish();
           return;
         }
@@ -711,6 +782,17 @@ export async function POST(request: Request) {
                 send({ type: "navigate", path: nav.navigate.path, label: nav.navigate.label });
                 done({ sources: ["navigate"], label: "navigation" }, r.summary, []);
               } else done({ sources: [], label: "declined" }, r.summary, []);
+            }
+          } else if (decision.move === "explain" && r.error === "no_match" && typeof decision.args.concept === "string") {
+            // S7 K2: the lesson does not teach it → the kit's own book, if it does.
+            const k = await boardKnowledge(decision.args.concept).catch(() => null);
+            if (k) {
+              sendLang(k.lang);
+              send({ type: "text", text: k.text });
+              done({ sources: k.sources, label: "grounded", citations: k.citations, ...(k.usage ? { usage: k.usage } : {}), ...(k.trimmed ? { trimmed: true } : {}) }, k.text, []);
+            } else {
+              send({ type: "text", text: r.summary });
+              done({ sources: [], label: "declined" }, r.summary, []);
             }
           } else {
             const text = act && "declined" in act ? act.declined : r.summary;
@@ -985,12 +1067,32 @@ export async function POST(request: Request) {
           label = "declined";
           trimmed = false;
         }
+        // S7 K2: the documents behind the answer (knowledge.search, library.find's
+        // text search) — only when the answer rests on the tools.
+        let citations: SkCitation[] = label === "grounded" || label === "navigation" ? productive.flatMap((t) => t.result.citations ?? []) : [];
+        // The model asked the Board to explain what the lesson does not teach:
+        // the kit's own book, when nothing else answered.
+        const boardMiss = trace.find((t) => t.name === "board.explain" && t.result.error === "no_match");
+        if (boardMiss && (label === "declined" || text === SK_NOTHING_ON_THAT)) {
+          const concept = typeof boardMiss.args?.concept === "string" ? boardMiss.args.concept : body.text;
+          const k = await boardKnowledge(concept).catch(() => null);
+          if (k) {
+            finalLang = k.lang;
+            text = k.text;
+            label = "grounded";
+            trimmed = !!k.trimmed;
+            sources = [...new Set([...sources, ...k.sources])];
+            citations = k.citations;
+            if (k.usage) usage = usage ? { inputTokens: usage.inputTokens + k.usage.inputTokens, outputTokens: usage.outputTokens + k.usage.outputTokens } : k.usage;
+          }
+        }
+        citations = [...new Map(citations.map((c) => [`${c.kind}|${c.title}|${c.chapter ?? ""}|${c.section ?? ""}`, c])).values()].slice(0, 3);
         const entities = trace.flatMap((t) => t.result.entities ?? []);
         if (finalLang) sendLang(finalLang);
         send({ type: "text", text });
         if (navHit && !(act && "event" in act && act.event.type === "board")) send({ type: "navigate", path: navHit.path, label: navHit.label });
         if (act && "event" in act) send(act.event);
-        done({ sources, label, ...(usage ? { usage } : {}), ...(trimmed ? { trimmed } : {}) }, text, entities);
+        done({ sources, label, ...(usage ? { usage } : {}), ...(trimmed ? { trimmed } : {}), ...(citations.length ? { citations } : {}) }, text, entities);
         finish();
       } catch (e) {
         if (!abort.signal.aborted) {
