@@ -11,10 +11,12 @@ export type Row = Record<string, unknown>;
 const PKS: Record<string, string> = { sk_manifests: "generation_id", generations: "id", artifacts: "id" };
 
 function get(row: Row, col: string): unknown {
-  if (col.includes("->>")) {
-    const [a, b] = col.split("->>");
-    const o = row[a] as Row | null | undefined;
-    return o && typeof o === "object" ? o[b] : undefined;
+  // `params->>key` and nested `params->catalogue_ref->>key` (PostgREST JSON paths)
+  if (col.includes("->")) {
+    const keys = col.split(/->>?/);
+    let o: unknown = row;
+    for (const k of keys) o = o && typeof o === "object" ? (o as Row)[k] : undefined;
+    return o;
   }
   return row[col];
 }

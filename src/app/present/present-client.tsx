@@ -12,7 +12,7 @@ import SkLauncher from "@/app/dashboard/sk-launcher";
 import type { SkShellCopy } from "@/app/dashboard/sk-shell";
 import BoardSession, { videoParts, type SessionInfo, type SessionKit } from "./board-session";
 import type { BoardController, BoardUnit } from "./board-controller";
-import { createBoardBridge, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestReply, type ManifestStatus } from "./sk-board-bridge";
+import { createBoardBridge, httpManifestFetch, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestStatus } from "./sk-board-bridge";
 import { prepareDeck, type DeckPagesReply, type DeckStatus } from "./deck-load";
 import { activeSelection, createAskChannel, type HeldSelection, type SkSelectionPayload } from "./highlight-select";
 import { docLabel, docNote, groupLabel, scopeLabel, unitLabel } from "./words";
@@ -91,15 +91,9 @@ type Props = {
   tabs?: MenuItem[];
 };
 
-/** GET/POST /api/sk/manifest (slice A's contract) as the bridge's fetch. */
-async function fetchManifest(generationId: string, method: "GET" | "POST"): Promise<ManifestReply> {
-  const q = new URLSearchParams({ generationId });
-  const r = await fetch(`/api/sk/manifest?${q.toString()}`, { method });
-  if (r.status === 404) return { status: "missing" };
-  if (!r.ok) throw new Error(`manifest ${r.status}`);
-  const j = (await r.json()) as ManifestReply;
-  return j && typeof j.status === "string" ? j : { status: "failed" };
-}
+/** GET/POST /api/sk/manifest (slice A's contract) as the bridge's fetch —
+ *  the POST with its JSON body (sk-board-bridge.ts httpManifestFetch). */
+const fetchManifest = httpManifestFetch();
 
 /** GET/POST /api/present/deck-pages as prepareDeck's fetch. A 404 (not her
  *  deck, no .pptx) is an error, not "missing": there is nothing to ask for. */

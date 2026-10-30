@@ -38,8 +38,15 @@ export function generationOfPath(path: string): string | null {
   return parts.length >= 3 && /^[0-9a-f-]{36}$/i.test(parts[1]) ? parts[1] : null;
 }
 
-/** Every generation whose artifacts the manifest pinned (its own, plus the worksheet's). */
+/** Every generation whose artifacts the manifest pinned (its own, plus the
+ * worksheet's): `pinned.generation_ids` when the manifest names them (built
+ * from 2026-10-31), else read off the paths — right for a kit generated into
+ * its own folder, WRONG for an adopted catalogue copy, whose rows sit under
+ * the source generation's folder (the re-check would then hash the source's
+ * rows too and call every copy's manifest stale). */
 export function pinnedGenerationIds(m: KitManifest): string[] {
+  const named = m.pinned?.generation_ids;
+  if (Array.isArray(named) && named.length && named.every((x) => typeof x === "string" && x)) return Array.from(new Set([m.generation_id, ...named]));
   const ids = new Set<string>([m.generation_id]);
   for (const p of m.pinned?.artifact_paths ?? []) {
     const g = generationOfPath(p);

@@ -89,6 +89,26 @@ describe("adoptProductChapter", () => {
     expect(await adoptProductChapter(world().deps, BOOK, 5, "not-a-uuid")).toEqual({ ok: false, status: 404, reason: "not_found" });
   });
 
+  it("opening the chapter again adopts the SAME pieces and makes no new copy (pre-adopt on open is idempotent)", async () => {
+    const w = world();
+    const made = new Map<string, string>(); // source → her copy (the RPC's per-(owner, source) rule)
+    const rpc = w.deps.rpc;
+    const deps: AdoptDeps = {
+      ...w.deps,
+      rpc: async (fn, args) => {
+        if (fn !== "adopt_product_kit") return rpc(fn, args);
+        const src = String(args?.p_source);
+        if (!made.has(src)) made.set(src, `copy-of-${src}`);
+        return { data: made.get(src)!, error: null };
+      },
+    };
+    const first = await adoptProductChapter(deps, BOOK, 0);
+    const second = await adoptProductChapter(deps, BOOK, 0);
+    expect(second).toEqual(first);
+    // every piece of the chapter's kit (lesson, plan, worksheet), each copied once
+    expect([...made.keys()].sort()).toEqual([CELLS_LESSON, "cells-plan", "cells-ws"].sort());
+  });
+
   it("no grant → as if there were no book (404), nothing adopted", async () => {
     const w = world({ grant: false });
     expect(await adoptProductChapter(w.deps, BOOK, 0)).toEqual({ ok: false, status: 404, reason: "not_found" });
@@ -135,7 +155,15 @@ describe("adoptCatalogueKit", () => {
 });
 
 // ── the route ───────────────────────────────────────────────────────────────
-const mocks = vi.hoisted(() => ({ deps: null as AdoptDeps | null, callerOk: true }));
+const mocks = vi.hoisted(() => ({ deps: null as AdoptDeps | null, callerOk: true, prepared: [] as string[] }));
+
+// The lesson map prepared after the reply (adopt-map.ts has its own suite).
+vi.mock("@/utils/present/adopt-map", () => ({
+  prepareAdoptedMap: async (_deps: unknown, kitId: string) => {
+    mocks.prepared.push(kitId);
+    return { ran: true, status: "building", copiedFrom: null };
+  },
+}));
 
 vi.mock("@/utils/present/server", async () => {
   const { NextResponse } = await import("next/server");
@@ -158,6 +186,16 @@ describe("POST /api/present/adopt", () => {
   beforeEach(() => {
     mocks.deps = world().deps;
     mocks.callerOk = true;
+    mocks.prepared.length = 0;
+  });
+
+  it("after a 200 the kit's lesson map is prepared server-side, for HER copy; nothing on a refusal", async () => {
+    await post({ bookId: BOOK, chapterNum: 0 });
+    await vi.waitFor(() => expect(mocks.prepared).toEqual([`copy-of-${CELLS_LESSON}`]));
+    await post({ bookId: BOOK, chapterNum: 1 }); // 409 no_kit
+    mocks.deps = world({ grant: false }).deps;
+    await post({ bookId: BOOK, chapterNum: 0 }); // 404
+    expect(mocks.prepared).toEqual([`copy-of-${CELLS_LESSON}`]);
   });
 
   it("a SketchCast chapter → 200 {kitId, title} of her own copy; `kit` picks among a chapter's kits", async () => {

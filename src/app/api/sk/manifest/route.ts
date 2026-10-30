@@ -16,7 +16,8 @@ export const maxDuration = 60;
 //                          building | failed | missing. The Board polls this
 //                          while a build runs. Never a stale manifest (store.ts).
 //   POST {generationId}    derive on demand (service.ts) and answer with the
-//                          read result. One sk_actions row per POST
+//                          read result (the id in the JSON body, or — as a
+//                          fallback — in ?generationId=). One sk_actions row per POST
 //                          (kind job, tier queued, action manifest.build).
 //
 // Gate: FEATURE_SK + SK Shell enabled for this user (skShellEnabledFor), signed
@@ -85,7 +86,10 @@ export async function POST(request: Request) {
   } catch {
     body = null;
   }
-  const generationId = body && typeof body === "object" && typeof (body as { generationId?: unknown }).generationId === "string" ? (body as { generationId: string }).generationId : "";
+  // The body's id; else the query string's (the Board sent only the query
+  // until 2026-10-31, and a cached tab may still do so).
+  const fromBody = body && typeof body === "object" && typeof (body as { generationId?: unknown }).generationId === "string" ? (body as { generationId: string }).generationId : "";
+  const generationId = fromBody || new URL(request.url).searchParams.get("generationId") || "";
   if (!UUID_RE.test(generationId)) return NextResponse.json({ error: "generationId is required." }, { status: 400 });
   const o = await ownedGeneration(g.user, generationId);
   if (!o.ok) return NextResponse.json({ error: o.error }, { status: o.status });
