@@ -18,7 +18,8 @@ import { lineFor } from "@/sk/shell/lines";
 import { KIT_OFFER_DECLINED } from "@/sk/shell/act-lines";
 // S6 slice C: the greeting suggestion's offers, and workflow facts in use.
 import { SUGGEST_DECLINED } from "@/sk/shell/suggest-lines";
-import { WALKTHROUGH_START } from "@/sk/shell/walkthrough-lines";
+import { WALKTHROUGH_START, walkPromptLine } from "@/sk/shell/walkthrough-lines";
+import { walkCommand } from "@/sk/shell/client/walkthrough";
 import { recordWorkflow, workflowFromTurn } from "@/sk/shell/workflow";
 import type { FactsDb } from "@/sk/facts";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
@@ -50,7 +51,7 @@ import { kitSource } from "@/sk/shell/teach";
 // S5 slice B: the leader school-read gate (analytics, 60/day cap, audit row).
 import { SCHOOL_READ_REFUSALS, schoolReadGate } from "@/sk/shell/school-meter";
 import { SM_ANALYTICS_OFF } from "@/sk/shell/school-meter-lines";
-import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCitation, type SkCollector, type SkTurnEvent, type SkTurnRequest } from "@/sk/shell/types";
+import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCitation, type SkCollector, type SkTurnEvent, type SkTurnRequest, type SkTurnWalk } from "@/sk/shell/types";
 
 export const runtime = "nodejs";
 
@@ -143,7 +144,19 @@ function parseBody(raw: unknown): SkTurnRequest | { error: string } {
   };
   const memory = typeof b.memory === "string" && b.memory.length <= 64_000 ? b.memory : undefined;
   const spokenLang = modality === "voice" && typeof b.spokenLang === "string" && b.spokenLang.length <= 12 ? b.spokenLang : undefined;
-  return { turnId, text, modality, collector, memory, ...(spokenLang ? { spokenLang } : {}) };
+  const walk = parseWalk(b.walk);
+  return { turnId, text, modality, collector, memory, ...(spokenLang ? { spokenLang } : {}), ...(walk ? { walk } : {}) };
+}
+
+/** 2026-10-30: the client's tour position — display only (a stop id and two
+ *  numbers for one prompt line); anything malformed reads as no tour. */
+function parseWalk(raw: unknown): SkTurnWalk | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const w = raw as Record<string, unknown>;
+  if (w.active !== true) return undefined;
+  const id = (v: unknown) => (typeof v === "string" ? v.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) : "");
+  const n = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 100 ? v : 0);
+  return { active: true, paused: w.paused === true, role: id(w.role), stop: id(w.stop), index: n(w.index), total: n(w.total) };
 }
 
 export async function POST(request: Request) {
@@ -676,6 +689,18 @@ export async function POST(request: Request) {
           send({ type: "text", text: `${langLine(LANG_SOURCE_UNSUPPORTED, answer.lang, { source: answer.unsupportedSource, language: ownName(answer.lang) })} ` });
         }
 
+        // ── 2026-10-30: a tour command while a tour is on ("Hi, continue with
+        // the tour?") — the client's tour takes it; no model. (The client
+        // catches the short forms itself; this is the backstop for longer
+        // phrasing that names the tour.)
+        const walkAct = body.walk?.active ? walkCommand(body.text, { loose: true }) : null;
+        if (walkAct) {
+          send({ type: "walkthrough", action: walkAct });
+          done({ sources: [], label: "navigation" }, "", []);
+          finish();
+          return;
+        }
+
         // ── 2026-10-30: the answer-language commands — no teacher model ──────
         if (decision.intent === "lang") {
           await runLanguage(decision.command);
@@ -961,7 +986,9 @@ export async function POST(request: Request) {
         // A board.* tool the model chose is audited against the present session too.
         const run = (call: Parameters<typeof runShell>[0], signal?: AbortSignal) => (fromApiToolName(call.name).startsWith("board.") ? runBoard(call, signal) : runShell(call, signal));
         const history: Turn[] = memory.turns.map((t) => ({ role: t.role, text: t.text }));
-        const system = buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory });
+        // 2026-10-30: a tour is on in her tab — the model knows, so it never
+        // says there is no tour, and points her at "continue the tour".
+        const system = [buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory }), body.walk?.active ? walkPromptLine(body.walk) : ""].filter(Boolean).join("\n\n");
         let full = "";
         let usage: { inputTokens: number; outputTokens: number } | undefined;
         let cancelled = false;

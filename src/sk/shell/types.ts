@@ -368,7 +368,18 @@ export type SkTurnRequest = {
    *  A hint: the words themselves decide when they can
    *  (question-language.ts spokenQuestionLanguage). */
   spokenLang?: string;
+  /** 2026-10-30: the first-login walkthrough, while one is on in this tab.
+   *  A tour command in it ("continue with the tour") is answered with a
+   *  `walkthrough` action and no model call; any other turn tells the model
+   *  the tour is there, so SK never says there is none. */
+  walk?: SkTurnWalk;
 };
+
+/** Where the walkthrough is (sanitised server-side; display only, never trusted for access). */
+export type SkTurnWalk = { active: boolean; paused: boolean; role: string; stop: string; index: number; total: number };
+
+/** What a `walkthrough` event asks the client's tour to do ("start" = from stop 1). */
+export type SkWalkAction = "start" | "resume" | "next" | "back" | "pause" | "skip";
 
 /** SSE events, one JSON object per `data:` line. */
 export type SkTurnEvent =
@@ -394,8 +405,9 @@ export type SkTurnEvent =
   | { type: "lang"; lang: string; dir: "ltr" | "rtl"; speech: string; override: boolean }
   /** 2026-10-30: "Show me around" — the client (re)starts the first-login
    *  walkthrough from stop 1. Decided by rules, no model; a replay never
-   *  writes the seen row. */
-  | { type: "walkthrough" }
+   *  writes the seen row. With `action` (2026-10-30): a tour command for the
+   *  tour already running in her tab ("…continue with the tour"), no model. */
+  | { type: "walkthrough"; action?: SkWalkAction }
   | {
       type: "done";
       /** §2.3 / §9.3: which tools the answer rests on, and its label. */

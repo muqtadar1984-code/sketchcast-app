@@ -96,6 +96,12 @@ export type SpeechCoordinatorDeps = {
 
 export type SayOptions = { lang?: string };
 
+/** How a line ended (sayLine): every sentence spoken; cut off (stop() — a
+ *  barge-in, Stop, read-aloud off — or no voice at all); or silent (read-aloud
+ *  off when it was queued, or nothing speakable). The walkthrough moves on by
+ *  itself only after "spoken" (founder 2026-10-30: one thing at a time). */
+export type SayOutcome = "spoken" | "stopped" | "silent";
+
 export type SentenceStream = {
   /** Feed streamed text; complete sentences are queued as they arrive. */
   push(chunk: string): void;
@@ -107,6 +113,8 @@ export type SpeechCoordinator = {
   /** Queue a line (split into sentences). Resolves when its sentences have
    *  been spoken — or at once when read-aloud is off or they were stopped. */
   say(text: string, opts?: SayOptions): Promise<void>;
+  /** `say`, telling how the line ended (see SayOutcome). */
+  sayLine(text: string, opts?: SayOptions): Promise<SayOutcome>;
   /** A sentence-at-a-time feeder for a streamed answer. */
   stream(opts?: SayOptions): SentenceStream;
   /** Pause the video if it plays → speak `line` → run the Board move. The
@@ -143,7 +151,7 @@ export const PREFETCH_AHEAD = 2;
 /** One sentence's server audio, requested ahead of its turn. */
 type Prefetch = { provider: SpeechProvider; result: Promise<SpeechResult>; abort: AbortController };
 
-type Item = { text: string; lang: string; done: () => void; pre?: Prefetch };
+type Item = { text: string; lang: string; done: (spoken: boolean) => void; pre?: Prefetch };
 
 export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoordinator {
   const defaultLang = deps.defaultLang ?? "en-US";
@@ -161,6 +169,14 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
   let gen = 0;
   /** Whatever is speaking right now, for cancel(). */
   let active: SpeechProvider | null = null;
+  /** Released by stop(): a sentence whose provider never settles (a browser
+   *  voice that drops its end event, an audio element paused from outside)
+   *  must not hold the queue — and every later line — behind it forever. */
+  let release: () => void = () => {};
+  let released: Promise<void> = new Promise<void>((r) => (release = r));
+  const rearm = () => {
+    released = new Promise<void>((r) => (release = r));
+  };
   /** Server requests in flight ahead of their turn (aborted on barge-in). */
   const prefetching = new Set<AbortController>();
   /** SK paused the video and owes it a resume when the queue drains. */
@@ -222,37 +238,44 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
    *  threw, and only when this generation still stands. */
   async function through(p: SpeechProvider, text: string, lang: string, g: number, pending?: Promise<SpeechResult>): Promise<boolean> {
     active = p;
+    const stopped = released;
     try {
-      const r = await (pending ?? p.synthesize(text, voiceFor(p.id, lang), { marks: ["word", "viseme"] }));
-      if (g !== gen) return false;
+      const synth = pending ?? p.synthesize(text, voiceFor(p.id, lang), { marks: ["word", "viseme"] });
+      synth.catch(() => {}); // a late rejection after stop() is not an unhandled one
+      const r = await Promise.race([synth, stopped.then(() => null)]);
+      if (!r || g !== gen) return false;
       // The sentences after this one are fetched while it plays.
       prefetch();
-      await r.play?.({ rate: 1, onWord: (w) => deps.onWord?.({ charIndex: w.charIndex, t: w.t, text }) });
+      const playing = r.play?.({ rate: 1, onWord: (w) => deps.onWord?.({ charIndex: w.charIndex, t: w.t, text }) });
+      playing?.catch(() => {});
+      await Promise.race([playing, stopped]);
       return g === gen;
     } finally {
       if (active === p) active = null;
     }
   }
 
-  async function speakOne(item: Item, g: number): Promise<void> {
+  /** True when the sentence was played to its end in this generation. */
+  async function speakOne(item: Item, g: number): Promise<boolean> {
     if (!serverStuck) {
       const pre = item.pre ?? request(item);
       delete item.pre;
       try {
-        await through(pre.provider, item.text, item.lang, g, pre.result);
+        const played = await through(pre.provider, item.text, item.lang, g, pre.result);
         serverFailures = 0;
-        return;
+        return played;
       } catch (e) {
-        if (g !== gen) return; // a barge-in aborted the request: not a failure, no fallback
+        if (g !== gen) return false; // a barge-in aborted the request: not a failure, no fallback
         if (e instanceof SpeakUnavailable || (e as { name?: unknown } | null)?.name === "SpeakUnavailable") stick("unavailable");
         else if (++serverFailures >= SERVER_FAILURES_TO_STICK) stick("failing");
         // this line still gets a voice: the browser's
       }
     }
     try {
-      await through(fallbackFor(item.lang), item.text, item.lang, g);
+      return await through(fallbackFor(item.lang), item.text, item.lang, g);
     } catch {
       /* no voice at all: the transcript still has the words */
+      return false;
     }
   }
 
@@ -297,11 +320,12 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
           const g = gen;
           // Keep PREFETCH_AHEAD sentences behind this one on their way.
           prefetch();
+          let spoken = false;
           try {
             await beforeLine();
-            if (g === gen) await speakOne(item, g);
+            if (g === gen) spoken = await speakOne(item, g);
           } finally {
-            item.done();
+            item.done(spoken && g === gen);
           }
         }
         await afterDrain();
@@ -315,12 +339,14 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
     }
   }
 
-  function enqueue(sentences: string[], lang: string): Promise<void> {
-    if (!sentences.length) return Promise.resolve();
-    return new Promise<void>((resolve) => {
+  function enqueue(sentences: string[], lang: string): Promise<SayOutcome> {
+    if (!sentences.length) return Promise.resolve("silent");
+    return new Promise<SayOutcome>((resolve) => {
       let left = sentences.length;
-      const done = () => {
-        if (--left === 0) resolve();
+      let all = true;
+      const done = (spoken: boolean) => {
+        if (!spoken) all = false;
+        if (--left === 0) resolve(all ? "spoken" : "stopped");
       };
       for (const s of sentences) queue.push({ text: s, lang, done });
       // The first sentence's audio is requested NOW, in the same tick it was
@@ -330,21 +356,28 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
     });
   }
 
-  function say(text: string, opts: SayOptions = {}): Promise<void> {
-    if (!enabled) return Promise.resolve();
+  function sayLine(text: string, opts: SayOptions = {}): Promise<SayOutcome> {
+    if (!enabled) return Promise.resolve("silent");
     return enqueue(splitSentences(text), opts.lang ?? defaultLang);
+  }
+
+  function say(text: string, opts: SayOptions = {}): Promise<void> {
+    return sayLine(text, opts).then(() => undefined);
   }
 
   function stop(): void {
     gen++;
     dropPrefetches();
     const dropped = queue.splice(0, queue.length);
-    for (const it of dropped) it.done();
+    for (const it of dropped) it.done(false);
     try {
       active?.cancel?.();
     } catch {
       /* a provider with nothing to cancel */
     }
+    // Whatever the provider does with the cancel, the pump moves on now.
+    release();
+    rearm();
     // Barge-in rule: the teacher is about to speak, or asked for quiet. The
     // video stays where it is; SK's claim on it ends here.
     pausedByUs = false;
@@ -353,6 +386,7 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
 
   return {
     say,
+    sayLine,
     stream(opts = {}) {
       let buf = "";
       return {

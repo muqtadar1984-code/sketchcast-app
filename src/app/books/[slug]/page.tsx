@@ -3,7 +3,7 @@ import { canOn } from "@/utils/books-access";
 import { getChapter, listAnnotations, listApprovals, listArtifacts, listChapterSummaries, listFindings, listRuns } from "@/utils/books/store";
 import { listReleases } from "@/utils/books/releases";
 import { runnableStage } from "@/utils/books/stages";
-import { anyLive, defaultChapter, latestPlan, stages, workChapters, type ApprovalLite, type ChapterRow, type RunLite } from "@/utils/books/workbench";
+import { anyLive, defaultChapter, latestPlan, nextStep, stages, workChapters, type ApprovalLite, type ChapterRow, type RunLite } from "@/utils/books/workbench";
 import type { ChapterRevision } from "@/utils/books/types";
 import { loadBook, pickRevision } from "./load";
 import { BlockView, ExerciseView, type FigureCtx } from "./blocks";
@@ -14,6 +14,8 @@ import Selection from "./workbench/selection";
 import { listEdits } from "@/utils/books/edits";
 import { frontChangedAt, frontMatter } from "@/utils/books/front-matter";
 import Front from "./workbench/front";
+import ChapterBar from "./workbench/chapters";
+import ActionButton from "./workbench/action";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,9 @@ export default async function Workbench({ params, searchParams }: { params: Prom
     draftUsd: runnableStage("draft_chapter")?.measuredPerChapterUsd ?? 2.5,
     auditUsd: runnableStage("academic_audit")?.measuredPerChapterUsd ?? 0.58,
     frontChangedAt: frontChangedAt(edits),
+    planKnown: plan.length > 0 || (work.facts?.chapters ?? 0) > 0,
   });
+  const next = nextStep(stageList);
   const frontView = sp.view === "front";
   const bookView = sp.view === "book" || frontView;
   const wanted = Number(sp.ch);
@@ -120,7 +124,9 @@ export default async function Workbench({ params, searchParams }: { params: Prom
         slug={slug}
         title={work.title}
         stages={stageList}
-        chapters={chapters}
+        next={next}
+        approved={chapters.filter((c) => c.state === "approved").length}
+        total={chapters.length}
         active={frontView ? "front" : bookView ? "book" : active}
         canRun={canOn(member, work.uid, "run")}
         canApprove={canOn(member, work.uid, "approve")}
@@ -130,7 +136,7 @@ export default async function Workbench({ params, searchParams }: { params: Prom
       <main className="min-w-0">
         <div className="mx-auto max-w-[44rem]">
           <div className="mb-3 flex items-center justify-between text-xs text-[#7A7363]">
-            <span>{frontView ? "Front matter" : bookView ? "Whole book" : activeChapter ? `Chapter ${activeChapter.chapter}` : ""}</span>
+            <ChapterBar slug={slug} chapters={chapters} active={active} view={frontView ? "front" : bookView ? "book" : "chapter"} />
             {printedArtifact && !frontView && (
               <span className="flex gap-1">
                 <Link href={base} className={`rounded-md px-2 py-0.5 ${printed ? "" : "bg-[#F4EEDF] text-[#1F2A24]"}`}>Reading</Link>
@@ -147,6 +153,15 @@ export default async function Workbench({ params, searchParams }: { params: Prom
             <div className="py-24 text-center text-[#7A7363]">
               <p className="font-display text-2xl text-[#1F2A24]">{activeChapter ? activeChapter.title : work.title}</p>
               <p className="mt-2 text-sm">{activeChapter?.state === "drafting" ? "Being drafted…" : "Not drafted yet."}</p>
+              {activeChapter?.state === "not_drafted" && next?.action?.kind === "run" && next.action.stage === "draft_chapter" && (
+                next.action.params.chapter === activeChapter.chapter ? (
+                  <div className="mt-5">
+                    <ActionButton slug={slug} action={next.action} allowed={canOn(member, work.uid, "run")} />
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs">Chapters are drafted in order: chapter {next.action.params.chapter} is next.</p>
+                )
+              )}
             </div>
           ) : !bookView && activeRow && rev && canOn(member, work.uid, "edit") ? (
             <Selection slug={slug} chapter={activeRow.chapter} rev={rev.key}>
