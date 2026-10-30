@@ -31,6 +31,7 @@
 import type { BoardController, BoardManifest, BoardUnit, ManifestSegment, VisualVerdict } from "./board-controller";
 import type { SkBoardMove, SkBoardState, SkSelection } from "@/sk/shell/types";
 import type { AskChannel } from "./highlight-select";
+import { rollAt, rollItems, rollPageOf, rollRanges, videoSlideAt, type RollItem, type RollVideo } from "./roll-map";
 
 // ── manifest adapter ────────────────────────────────────────────────────────
 
@@ -386,8 +387,29 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
       if (g) out.generationId = g;
       const deck = deps.deck?.status();
       if (deck && deck !== "none") out.deck = deck;
+      out.rollCount = st.pageCount;
+      // 2026-10-31: what the roll holds and where, read off its own pages
+      // (roll-map.ts), so "page 31", "deck page 4" and "next page" resolve.
+      const pages = c.rollPages?.() ?? null;
+      const video: RollVideo = { generationId: g, manifest: m };
+      const items = pages ? rollItems(pages, video) : null;
+      if (pages && items) {
+        const ranges = rollRanges(items);
+        if (ranges.length) out.roll = ranges;
+        const at = rollAt(pages, items, st.page);
+        if (at) out.rollAt = at;
+      }
       const sel = deps.highlight?.();
-      if (sel?.text) out.selection = sel;
+      if (sel?.on === "page" || sel?.on === "video") {
+        // A highlight with no words under it: on a frame of the open unit's
+        // video it is that video slide (the frame's time → its slide, else
+        // the segment the frame is in); anywhere else, just the page.
+        const bg = pages?.[sel.n - 1];
+        const t = bg?.kind === "frame" && g && bg.generationId === g && typeof bg.t === "number" ? bg.t : null;
+        const k = t !== null && m ? (videoSlideAt(t, video) ?? (segmentAt(m, t) ?? -1) + 1) : 0;
+        if (k >= 1 && m) out.selection = { on: "video", generationId: g!, n: k, text: "", ...(m.segments[k - 1]?.heading ? { title: m.segments[k - 1].heading } : {}) };
+        else out.selection = { on: "page", generationId: "", n: sel.n, text: "" };
+      } else if (sel?.text) out.selection = sel;
       if (m) {
         out.manifestId = m.manifestId;
         if (m.language) out.language = m.language;
@@ -519,12 +541,55 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
             // own document. Already on the roll = go to its first page.
             if (!deps.deck) return { ok: false, summary: "This lesson has no slide deck." };
             stopWatch();
-            const r = await deps.deck.load();
+            let r = await deps.deck.load();
+            // 2026-10-31: "load the deck and go to slide 4" — ONE move: land
+            // on that deck page instead of the first, once the pages are there.
+            const want = intArg(a.page);
+            if (r.ok && want && want > 1) {
+              const page = c.findDeckPage?.(want) ?? null;
+              if (page !== null && c.goToPage) {
+                c.goToPage(page);
+                r = { ...r, summary: `${r.summary} Deck page ${want} is page ${page + 1}.` };
+              } else r = { ...r, summary: `${r.summary} The deck has no page ${want}.` };
+            }
             if (r.ok && r.loaded && typeof a.done === "string" && a.done) {
               const vars: Record<string, number> = { a: r.loaded.a, b: r.loaded.b, n: r.loaded.n };
               return { ...r, done: a.done.replace(/\{(\w+)\}/g, (whole, k: string) => (k in vars ? String(vars[k]) : whole)) };
             }
             return r;
+          }
+          case "page": {
+            // 2026-10-31: the roll by its own numbers. The server resolved the
+            // target from the state it was sent; a deck page or a video slide
+            // (`item`) is found again on the live roll, so a page inserted
+            // since then cannot send her to the wrong one.
+            if (!c.goToPage) return { ok: false, summary: "This Board cannot turn to a page." };
+            const st = c.getState();
+            const count = st.pageCount;
+            let target: number | null = null;
+            const item = a.item && typeof a.item === "object" ? (a.item as Record<string, unknown>) : null;
+            const itemKind = item?.kind === "deck" || item?.kind === "video" ? (item.kind as RollItem["kind"]) : null;
+            const itemN = intArg(item?.n);
+            if (itemKind && itemN) {
+              const pages = c.rollPages?.() ?? null;
+              const items = pages ? rollItems(pages, { generationId: unitOf(c)?.generationId ?? null, manifest: deps.manifest() }) : null;
+              target = items ? rollPageOf(items, itemKind, itemN, st.page) : null;
+              if (target === null && itemKind === "deck") target = c.findDeckPage?.(itemN) ?? null;
+            }
+            const asked = intArg(a.page);
+            if (target === null && asked) target = asked - 1;
+            if (target === null) {
+              if (a.to === "next") target = st.page + 1;
+              else if (a.to === "previous") target = st.page - 1;
+              else if (a.to === "first") target = 0;
+              else if (a.to === "last") target = count - 1;
+            }
+            if (target === null) return { ok: false, summary: "Which page?" };
+            if (target < 0) return { ok: false, summary: `This is the first page (1 / ${count}).` };
+            if (target >= count) return { ok: false, summary: a.to === "next" ? `This is the last page (${count} / ${count}).` : `The roll has ${count} pages.` };
+            stopWatch(false);
+            const landed = c.goToPage(target);
+            return { ok: true, summary: `Page ${landed + 1} / ${count}.` };
           }
           case "back": {
             c.pageUp();

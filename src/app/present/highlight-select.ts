@@ -110,7 +110,16 @@ export function selectionFromStroke(stroke: Pick<Stroke, "pts" | "tool">, page: 
 // ── the selection SK is told about ──────────────────────────────────────────
 
 /** What rides in SkBoardState.selection (src/sk/shell/types.ts). */
-export type SkSelectionPayload = { generationId: string; n: number; text: string; title?: string };
+export type SkSelectionPayload = { generationId: string; n: number; text: string; title?: string; on?: "deck" | "video" | "page" };
+
+/** 2026-10-31: a highlighter stroke on a page that is NOT a deck page — a
+ *  video slide frame, a blank page with her handwriting, a card. There are no
+ *  words to read under it; `n` is the roll page (1-based) and the SK bridge
+ *  turns a video slide's frame into `on: "video"` with that slide's number. */
+export function pagePayloadOf(page: number, bg: PageBackground | undefined): SkSelectionPayload | null {
+  if (!bg || bg.kind === "deckPage" || !Number.isInteger(page) || page < 0) return null;
+  return { on: "page", generationId: bg.kind === "frame" ? bg.generationId ?? "" : "", n: page + 1, text: "" };
+}
 
 /** The Board's live selection with the time it was made. */
 export type HeldSelection = { selection: SkSelectionPayload; at: number };

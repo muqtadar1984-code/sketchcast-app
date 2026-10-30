@@ -89,7 +89,7 @@ const BANK: Array<[string, SkContext, string]> = [
   ["teacher", teacher, "Hi SK, show me around?"],
   ["teacher", teacher, "thanks"],
   // teacher on the Board
-  ...(["pause", "continue", "start the video", "next slide", "previous slide", "slide 4", "part 2", "explain red blood cells", "compare red blood cells and nerve cells", "give them 3 practice questions", "freeze", "blank page", "go back", "show the slides", "load the slides", "load the deck", "show the units", "hide the units", "walk through the worksheet", "recap", "explain this"].map(
+  ...(["pause", "continue", "start the video", "next slide", "previous slide", "slide 4", "part 2", "explain red blood cells", "compare red blood cells and nerve cells", "give them 3 practice questions", "freeze", "blank page", "go back", "show the slides", "load the slides", "load the deck", "show the units", "hide the units", "walk through the worksheet", "recap", "explain this", "next page", "page 31", "slide 4 in the deck"].map(
     (t): [string, SkContext, string] => ["board", onBoard, t],
   )),
   // student

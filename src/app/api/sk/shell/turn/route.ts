@@ -36,6 +36,9 @@ import { maskBookSecrets } from "@/sk/book-activate";
 import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
 import { loadSelectionSlide, selectionBlock, selectionOnSlide, selectionQuestion, selectionSupportTokens, type SelectionAdmin } from "@/sk/shell/selection";
 import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilities/board";
+import { openUnitDeckSlide } from "@/sk/capabilities/documents";
+// 2026-10-31: tool-call markup never reaches the bubble, the voice or the memory.
+import { COULD_NOT_DO, cleanReply, stripToolMarkup } from "@/sk/shell/markup";
 import { searchLibrary } from "@/sk/capabilities/library";
 import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
@@ -312,6 +315,14 @@ export async function POST(request: Request) {
 
   const support = async (target: TeachTarget): Promise<TeachingSupport | null> => (admin && boardGen ? teachingSupport(admin, boardGen, target) : null);
 
+  /** 2026-10-31: a model's text without tool-call markup (markup.ts) — logged
+   *  with the turn id whenever any had to go. */
+  const unmarked = (text: string, where: string): string => {
+    const r = stripToolMarkup(text);
+    if (r.stripped) console.warn("sk-shell.turn tool markup", JSON.stringify({ turnId: body.turnId, where }));
+    return r.text;
+  };
+
   /** practise: stamp the q_ids of the items mapped to the current segment into
    *  the args (they reach the client and the audit row the recap reads). A
    *  manifest that is not ready stamps nothing — the move still works. */
@@ -364,6 +375,7 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn teach", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    full = unmarked(full, "teach");
     // A teaching call has no tools: any "I've sent / assigned …" is unbacked.
     const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur in the narration (or the question).
@@ -400,6 +412,7 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn board knowledge", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    full = unmarked(full, "board_knowledge");
     const claims = actionClaimGuard(full);
     const verdict = groundingCheck(claims.text, knowledgeSupportTokens(k.passages), body.text);
     const said = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || k.passages[0]!.text;
@@ -423,12 +436,39 @@ export async function POST(request: Request) {
     label: "grounded" | "declined";
     usage?: { inputTokens: number; outputTokens: number };
     trimmed?: boolean;
+    lang?: SkAnswerLang;
   }> => {
     const name = "board.explain_selection";
     const sel = ctx.board?.selection;
     const noSelection = sayFor("no_selection", ctx.user.locale);
     if (!sel) return { text: noSelection, sources: [], label: "declined" };
-    const slide = admin ? await loadSelectionSlide(admin as unknown as SelectionAdmin, sel, ctx.user.id) : null;
+    // 2026-10-31: a page with no words SK can read (her handwriting).
+    if (sel.on === "page") return { text: sayFor("selection_page", ctx.user.locale), sources: [name], label: "declined" };
+    // A video slide's frame: that slide as a whole, from the lesson map's
+    // narration (the board.explain teaching call), said as such.
+    if (sel.on === "video") {
+      const k = sel.n - 1;
+      const lead = sayFor("selection_video", ctx.user.locale, { n: sel.n });
+      const heading = ctx.board?.segments?.find((x) => x.k === k)?.heading || sel.title || "";
+      const taught = await teach("explain", { k, ...(heading ? { concept: heading } : {}) }, sayFor("explain", ctx.user.locale, { heading: heading || `${sel.n}` }));
+      if (!taught) return { text: BOARD_NO_MAP, sources: [name], label: "declined" };
+      const grounded = taught.sources.includes("manifest");
+      return {
+        text: `${lead} ${taught.text}`,
+        sources: grounded ? [name, "manifest"] : [name],
+        label: grounded ? "grounded" : "declined",
+        ...(taught.usage ? { usage: taught.usage } : {}),
+        ...(taught.trimmed ? { trimmed: true } : {}),
+        ...(taught.lang ? { lang: taught.lang } : {}),
+      };
+    }
+    // A deck page: the deck's own text map, else — an adopted kit's deck —
+    // the open unit's sibling deck piece through the kit (#233).
+    let slide = admin ? await loadSelectionSlide(admin as unknown as SelectionAdmin, sel, ctx.user.id) : null;
+    if (!slide) {
+      const s = await openUnitDeckSlide(ctx, sel.generationId, sel.n);
+      if (s) slide = { n: s.n, png: "", w: 0, h: 0, title: s.title, text: s.text, notes: s.notes, words: [], blocks: [] };
+    }
     if (!slide) return { text: BOARD_SELECTION_NO_SLIDE, sources: [name], label: "declined" };
     // Only the words that are on the slide reach the model (selection.ts).
     const selected = selectionOnSlide(sel, slide);
@@ -443,6 +483,7 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn selection", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    full = unmarked(full, "selection");
     const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur on the slide (text or notes) or in the question.
     const verdict = groundingCheck(claims.text, selectionSupportTokens(slide), body.text);
@@ -460,7 +501,11 @@ export async function POST(request: Request) {
       // S6 slice C: the turn's last navigate (a Board deep link names the
       // class and lesson the teacher opened — workflow.ts workflowFromTurn).
       let navigatedTo: string | null = null;
-      const send = (ev: SkTurnEvent) => {
+      /** 2026-10-31: the last line of defence — no tool-call markup is ever
+       *  sent, spoken or stored, whichever path wrote the text (markup.ts). */
+      const shown = (text: string, where: string): string => cleanReply(text, ctx.user.locale, () => console.warn("sk-shell.turn tool markup", JSON.stringify({ turnId: body.turnId, where })));
+      const send = (raw: SkTurnEvent) => {
+        const ev: SkTurnEvent = raw.type === "text" ? { ...raw, text: shown(raw.text, "send") } : raw;
         if (ev.type === "navigate") navigatedTo = ev.path;
         if (ev.type === "text" && timing.firstTextMs === null) timing.firstTextMs = Date.now() - t0;
         if (ev.type === "tool") {
@@ -559,6 +604,7 @@ export async function POST(request: Request) {
         pending?: SkMemory["pending"] | null,
         lang?: { langOverride: SkAnswerLang | null },
       ) => {
+        assistantText = shown(assistantText, "memory");
         // S4 slice D: a book code / order number typed to SK is never remembered
         // (the memory travels to the browser and back into later prompts), and
         // book.activate's pending question lasts exactly one turn.
@@ -796,6 +842,25 @@ export async function POST(request: Request) {
         done({ sources, label: last.label, ...(r.usage ? { usage: r.usage } : {}), ...(r.trimmed ? { trimmed: true } : {}) }, r.text, [], undefined, { langOverride: code });
       };
 
+      /** "Highlight and ask SK" (2026-10-31): board.explain_selection validated
+       *  (audited against the present session), then ONE grounded call
+       *  (explainSelection). The rules' move, model routing's pre-rule and the
+       *  model's hand-off all end here, so each says the same thing. */
+      const runSelection = async () => {
+        const name = "board.explain_selection";
+        const r = await runCapability(ctx, name, {}, boardDeps);
+        send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
+        if (!r.ok) {
+          send({ type: "text", text: r.summary });
+          done({ sources: [], label: "declined" }, r.summary, []);
+          return;
+        }
+        const s = await explainSelection();
+        if (s.lang) sendLang(s.lang);
+        send({ type: "text", text: s.text });
+        done({ sources: s.sources, label: s.label, ...(s.usage ? { usage: s.usage } : {}), ...(s.trimmed ? { trimmed: true } : {}) }, s.text, []);
+      };
+
       /** 2026-10-30: a tour / language control the MODEL chose (shell-controls.ts),
        *  performed as its rule performs it. `used` = the model round's usage. */
       const runControl = async (t: ToolTrace, used?: { inputTokens: number; outputTokens: number }) => {
@@ -961,6 +1026,7 @@ export async function POST(request: Request) {
           if (decision.move === "explain_selection" && r.ok) {
             // Content only: no `board` event, the video and the roll stay put.
             const s = await explainSelection();
+            if (s.lang) sendLang(s.lang);
             send({ type: "text", text: s.text });
             done({ sources: s.sources, label: s.label, ...(s.usage ? { usage: s.usage } : {}), ...(s.trimmed ? { trimmed: true } : {}) }, s.text, []);
             finish();
@@ -1237,6 +1303,11 @@ export async function POST(request: Request) {
               if (ctx.tutor) await runTutor("tutor.explain", { question: body.text });
               else await runTutor("tutor.where", {});
             }
+          } else if (before.kind === "selection") {
+            // 2026-10-31: the highlight, as the rules path explains it — the
+            // slide read here, ONE grounded call; the model wrote nothing.
+            timing.route = "model>selection";
+            await runSelection();
           } else {
             timing.route = "model>lesson_plan";
             await planLesson(before.args);
@@ -1284,7 +1355,11 @@ export async function POST(request: Request) {
         // completed action backs a claim here. The guard ignores the support
         // set, so the question's own words ("delete Amir's record") never
         // make "I have deleted Amir's record." pass.
-        const claims = actionClaimGuard(full, []);
+        // 2026-10-31: a tool call written out as text (`<invoke …>`) is never
+        // an answer: it goes before anything else reads the text (markup.ts).
+        const markup = stripToolMarkup(full);
+        if (markup.stripped) console.warn("sk-shell.turn tool markup", JSON.stringify({ turnId: body.turnId, where: "model", tools: trace.map((t) => t.name), left: markup.text.length }));
+        const claims = actionClaimGuard(markup.text, []);
         const modelText = claims.text;
         // 2026-10-30: a clarifying question that names HER class, book,
         // chapter, child or school ("Do you mean a class like 7B …?") is not
@@ -1331,6 +1406,13 @@ export async function POST(request: Request) {
         } else {
           text = navHit ? `Opening ${navHit.label}.` : SK_NOTHING_ON_THAT;
           label = navHit ? "navigation" : "declined";
+        }
+        // The model wrote ONLY a tool call as text: nothing it said is left,
+        // and "nothing on that" would be untrue — SK's honest line instead.
+        if (markup.stripped && !modelText.trim() && (text === SK_NOTHING_ON_THAT || !text.trim())) {
+          text = lineFor(COULD_NOT_DO, ctx.user.locale);
+          label = "declined";
+          trimmed = false;
         }
         if (act && "declined" in act) {
           // No token secret: the action is unavailable, whatever the model said.

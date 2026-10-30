@@ -202,7 +202,7 @@ describe("createBoardBridge — moves → controller calls", () => {
   it("without a manifest the state still names the session (no k / segments)", () => {
     manifest = null;
     const s = bridge().state();
-    expect(s).toEqual({ sessionId: "sess-1", t: 0, paused: true, rollPage: 0, generationId: "gen-1" });
+    expect(s).toEqual({ sessionId: "sess-1", t: 0, paused: true, rollPage: 0, rollCount: 1, generationId: "gen-1" });
   });
   it("unit(): the controller's getUnit() wins; the host's generationId dep is only a fallback", () => {
     expect(bridge().unit()).toEqual({ generationId: "gen-1", part: 1, title: "Cells" });

@@ -80,6 +80,7 @@ const SHIPPED = [
   "board.load_deck",
   // Founder 2026-10-28: explain the highlighted part of a deck slide.
   "board.explain_selection",
+  "board.page",
   // S1 slice D: the first confirm-tier action (teacher hat only).
   "assign",
   // S2 slice A: diary note + parent reminders (teacher hat, diary flag).
