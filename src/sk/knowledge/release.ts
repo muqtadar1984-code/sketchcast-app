@@ -31,22 +31,38 @@ import { chunkText, flattenSection, normLanguage, plain } from "./text";
 export const BUNDLE_SCHEMA = "sketchcast.book-release/1";
 
 export type ReleaseRow = {
+  // the production columns of pub_releases (book app migration 0172, applied 2026-10-30)
   id: number;
   work_uid: string;
   slug: string;
   release_kind: "final" | "draft";
   edition_key: string;
   language: string;
-  revision_key?: string | null;
+  revision_key: string;
+  gate_e_approval_id?: number | null;
   title: string;
+  subtitle?: string | null;
   subject?: string | null;
-  chapters?: { chapter: number; title?: string; content_sha256: string }[] | null;
+  curriculum_code?: string | null;
+  grade_band?: string | null;
+  age_band?: string | null;
+  chapters: { chapter: number; title?: string; content_sha256: string; gate_d_approval_id?: number | null; pdf_key?: string | null }[];
+  chapter_count?: number;
   bundle_key: string;
   bundle_sha256: string;
-  cover_key?: string | null;
-  released_at?: string | null;
+  digital_pdf_key?: string | null; // null for a draft
+  digital_pdf_sha256?: string | null;
+  print_pdf_key?: string | null;
+  print_pdf_sha256?: string | null;
+  cover_key?: string | null; // null for a draft
+  cover_sha256?: string | null;
+  released_by?: string;
+  released_at?: string;
+  run_id?: number | null;
   superseded_by: number | null;
   withdrawn_at: string | null;
+  withdrawn_reason?: string | null;
+  withdrawn_by?: string | null;
 };
 
 /** Reads one object from the books bucket. */
@@ -297,6 +313,7 @@ export async function importRelease(db: KnowledgeDb, s3: BundleReader, row: Rele
 
 export type PollResult =
   | { status: "waiting_for_book_app" }
+  | { status: "waiting_for_0174"; live: number }
   | { status: "ok"; live: number; imported: number[]; unchanged: number[]; skipped: number[]; unavailable: string[]; errors: { release_id: number; error: string }[] };
 
 /** Import every live release that changed; mark books with no live release unavailable. */
@@ -305,7 +322,11 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } 
   if (missing) return { status: "waiting_for_book_app" };
 
   const { data: prodData, error: prodErr } = await db.from("sk_book_products").select(PRODUCT_COLS).not("work_uid", "is", null);
-  if (prodErr) throw new Error(`sk_book_products read failed: ${prodErr.message}`);
+  if (prodErr) {
+    // 0172 is live but SK's 0174 (the link columns, the blocks) is not applied yet
+    if (prodErr.code === "42703" || isMissingRelation(prodErr)) return { status: "waiting_for_0174", live: rows.length };
+    throw new Error(`sk_book_products read failed: ${prodErr.message}`);
+  }
   const products = (prodData ?? []) as ProductRow[];
   const { data: okData } = await db.from("sk_release_imports").select("release_id").eq("status", "ok");
   const ok = new Set(((okData ?? []) as { release_id: number }[]).map((r) => Number(r.release_id)));
