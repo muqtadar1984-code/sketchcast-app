@@ -9,18 +9,27 @@
 
 import type { ResolvedEntity, SkContext } from "./types";
 import { base64UrlDecode, base64UrlEncode, hmacHex, randomHex, safeEqualHex } from "./hash";
+import { isAnswerLang, type SkAnswerLang } from "./language";
 
 export const SK_MEMORY_VERSION = 1 as const;
 export const SK_MEMORY_MAX_ENTITIES = 10;
 export const SK_MEMORY_MAX_TURNS = 6;
 export const SK_MEMORY_TURN_CHARS = 400;
 export const SK_MEMORY_GAP_MS = 4 * 60 * 60 * 1000;
+/** "Repeat that in X" (2026-10-30): the LAST explanation is kept whole, up to
+ *  this many characters (the turns keep 400 each, which would truncate it).
+ *  ~4 KB of text ≈ 11 KB of the blob's 64 000-character ceiling. */
+export const SK_MEMORY_LAST_ANSWER_CHARS = 4000;
 /** S2 tray: how many announced kit ids the blob keeps (newest first). 20 uuids
  *  ≈ 1 KB of the blob's 64 000-character ceiling. */
 export const SK_MEMORY_MAX_ANNOUNCED = 20;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 export type SkMemoryTurn = { role: "user" | "assistant"; text: string };
+
+/** SK's last explanation, whole, for "say that in Malay": the text, the
+ *  language it was said in, its label and the tools it rested on. */
+export type SkLastAnswer = { text: string; lang: SkAnswerLang; label: "grounded" | "supplementary"; sources: string[] };
 
 /** S2: what a bare "yes" / "open it" on the NEXT turn opens — set by the
  *  greeting's "Your kit for … is ready — want me to open it?" and dropped by
@@ -58,6 +67,14 @@ export type SkMemory = {
    *  (finished or failed), newest first, at most SK_MEMORY_MAX_ANNOUNCED. */
   announced?: string[];
   offer?: SkOffer;
+  /** 2026-10-30: the last explanation ("repeat that in X" re-says it). */
+  lastAnswer?: SkLastAnswer;
+  /** 2026-10-30: the answer language the user chose in this conversation
+   *  (after "say that in Malay"), until "back to …" (language.ts). */
+  langOverride?: SkAnswerLang;
+  /** 2026-10-30: the unsupported source language SK already said it cannot
+   *  answer in — said once per conversation. */
+  langNoted?: string;
 };
 
 let processSecret: string | null = null;
@@ -121,10 +138,27 @@ export function verifyMemory(blob: string | null | undefined): SkMemory | null {
       for (const k of ARG_KEYS) if (typeof raw[k] === "string" && ID_RE.test(raw[k] as string)) args[k] = raw[k] as string;
       out.offer = { target: "read", capability: o.capability as SuggestRead, args, label: o.label.slice(0, 160) };
     } else delete out.offer;
+    const last = cleanLastAnswer(m.lastAnswer);
+    if (last) out.lastAnswer = last;
+    else delete out.lastAnswer;
+    if (!isAnswerLang(m.langOverride)) delete out.langOverride;
+    if (typeof m.langNoted === "string" && m.langNoted.length <= 40) out.langNoted = m.langNoted;
+    else delete out.langNoted;
     return out;
   } catch {
     return null;
   }
+}
+
+/** A well-formed last answer, bounded; anything else is dropped. */
+export function cleanLastAnswer(v: unknown): SkLastAnswer | null {
+  if (!v || typeof v !== "object") return null;
+  const a = v as Record<string, unknown>;
+  if (typeof a.text !== "string" || !a.text.trim() || !isAnswerLang(a.lang)) return null;
+  const label = a.label === "supplementary" ? "supplementary" : a.label === "grounded" ? "grounded" : null;
+  if (!label) return null;
+  const sources = Array.isArray(a.sources) ? a.sources.filter((x): x is string => typeof x === "string" && x.length <= 60).slice(0, 10) : [];
+  return { text: a.text.slice(0, SK_MEMORY_LAST_ANSWER_CHARS), lang: a.lang, label, sources };
 }
 
 export type OpenMemoryResult = { memory: SkMemory; fresh: boolean; reason: "none" | "ok" | "invalid" | "context_changed" | "gap" };
@@ -148,7 +182,16 @@ export function openMemory(blob: string | null | undefined, ctx: SkContext, now:
  *  kind+id, capped). Returns a new memory; never mutates. */
 export function rememberTurn(
   mem: SkMemory,
-  turn: { user: string; assistant: string; entities?: ResolvedEntity[]; pending?: SkMemory["pending"] | null },
+  turn: {
+    user: string;
+    assistant: string;
+    entities?: ResolvedEntity[];
+    pending?: SkMemory["pending"] | null;
+    /** 2026-10-30: undefined keeps; null clears. */
+    lastAnswer?: SkLastAnswer | null;
+    langOverride?: SkAnswerLang | null;
+    langNoted?: string;
+  },
   now: Date,
 ): SkMemory {
   const seen = new Set<string>();
@@ -171,6 +214,14 @@ export function rememberTurn(
   delete next.offer;
   if (turn.pending === null) delete next.pending;
   else if (turn.pending) next.pending = turn.pending;
+  if (turn.lastAnswer === null) delete next.lastAnswer;
+  else if (turn.lastAnswer) {
+    const last = cleanLastAnswer(turn.lastAnswer);
+    if (last) next.lastAnswer = last;
+  }
+  if (turn.langOverride === null) delete next.langOverride;
+  else if (turn.langOverride) next.langOverride = turn.langOverride;
+  if (turn.langNoted) next.langNoted = turn.langNoted.slice(0, 40);
   return next;
 }
 

@@ -14,7 +14,7 @@
 
 import type { SkTurnEvent } from "../types";
 
-const EVENT_TYPES: ReadonlySet<string> = new Set(["meta", "text", "tool", "navigate", "board", "confirm", "done", "error"]);
+const EVENT_TYPES: ReadonlySet<string> = new Set(["meta", "text", "tool", "navigate", "board", "tutor", "confirm", "lang", "done", "error"]);
 
 /** A frame's JSON → a typed event, or null when it is not one of ours.
  * Exported for the panel's own guards; a frame that fails here is dropped,

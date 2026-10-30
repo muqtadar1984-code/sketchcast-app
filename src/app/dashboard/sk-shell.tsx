@@ -72,7 +72,14 @@ type Entry = {
   label?: Label;
   /** Still streaming. */
   pending?: boolean;
+  /** 2026-10-30: the language SK answered in (the `lang` event) — the bubble's
+   *  direction and lang attribute follow it, not the page. */
+  lang?: string;
+  dir?: "ltr" | "rtl";
 };
+
+/** The BCP-47 tag for an answer language code (ms-arab → ms-Arab, zh → zh-CN). */
+const htmlLangOf = (lang: string | undefined) => (lang === "ms-arab" ? "ms-Arab" : lang === "zh" ? "zh-CN" : lang);
 
 /** S1: a confirm-tier card (§2.5, §9.2). `token` is opaque; the server decides. */
 type Card = {
@@ -227,6 +234,9 @@ export default function SkShell({
   const turnRef = useRef<AbortController | null>(null);
   const narrationRef = useRef<AbortController | null>(null);
   const memoryRef = useRef<string | undefined>(undefined);
+  /** 2026-10-30: the dictation language while she has chosen an answer
+   *  language ("say that in Arabic"); null = the page's. */
+  const dictLangRef = useRef<string | null>(null);
   const storeRef = useRef<MemoryStore | null>(null);
   const boardRef = useRef<SkBoardBridge | null | undefined>(board);
   const tutorRef = useRef<SkTutorBridge | null | undefined>(tutor);
@@ -313,7 +323,10 @@ export default function SkShell({
   useEffect(() => {
     const coord = createSpeechCoordinator({
       server: speechMode(process.env.NEXT_PUBLIC_SK_TTS) === "polly",
-      makeProvider: () => new PollyClientSpeechProvider(() => readRigChoice()),
+      // The Polly voices are English (Joanna / Matthew): an answer in another
+      // language (2026-10-30: the answer language can differ from the page)
+      // is read by the browser voice for that language.
+      makeProvider: (lang) => (lang.toLowerCase().startsWith("en") ? new PollyClientSpeechProvider(() => readRigChoice()) : new BrowserSpeechProvider(lang)),
       fallback: (lang) => new BrowserSpeechProvider(lang),
       defaultLang: pageSpeechLang(),
       board: {
@@ -697,7 +710,7 @@ export default function SkShell({
         setListening(false);
         if (mode === "ptt") inputRef.current?.focus();
       },
-      { lang: pageSpeechLang() },
+      { lang: dictLangRef.current ?? pageSpeechLang() },
     );
     if (!stop) {
       gate.stop("manual");
@@ -776,8 +789,11 @@ export default function SkShell({
       coord?.stop();
       const turn = new AbortController();
       turnRef.current = turn;
-      // The answer is spoken a sentence at a time as it streams.
-      const stream = coord?.stream();
+      // The answer is spoken a sentence at a time as it streams — in the
+      // answer's language (the `lang` event arrives before the text).
+      let speechLang: string | null = null;
+      let stream: ReturnType<SpeechCoordinator["stream"]> | undefined;
+      const streamFor = () => (stream ??= coord?.stream(speechLang ? { lang: speechLang } : {}));
 
       const skId = uuid();
       setEntries((m) => [...m, { id: uuid(), who: "user", text: q }, { id: skId, who: "sk", text: "", pending: true }]);
@@ -838,6 +854,8 @@ export default function SkShell({
       function handle(ev: SkTurnEvent) {
         switch (ev.type) {
           case "meta":
+            // A turn with no `lang` event is in the page's language.
+            dictLangRef.current = null;
             if (ev.capabilities) {
               setCapabilities(ev.capabilities);
               warmNavigation(ev.capabilities);
@@ -848,7 +866,7 @@ export default function SkShell({
             full += ev.text;
             patchEntry(skId, (en) => ({ ...en, text: full }));
             setCaption(lastSentence(full));
-            stream?.push(ev.text);
+            streamFor()?.push(ev.text);
             break;
           case "tool":
             patchEntry(skId, (en) => ({ ...en, tools: [...(en.tools ?? []), { name: ev.name, ok: ev.ok, summary: ev.summary }] }));
@@ -935,6 +953,13 @@ export default function SkShell({
             setCaption(ev.title);
             break;
           }
+          case "lang":
+            // 2026-10-30: what the text that follows is in. Dictation follows
+            // only her own choice (an Arabic kit does not make her speak Arabic).
+            speechLang = ev.speech;
+            dictLangRef.current = ev.override ? ev.speech : null;
+            patchEntry(skId, (en) => ({ ...en, lang: ev.lang, dir: ev.dir }));
+            break;
           case "done":
             sawDone = true;
             if (ev.memory) keepMemory(ev.memory);
@@ -1088,6 +1113,8 @@ export default function SkShell({
               {e.who === "user" && <span className="text-[10px] text-slate-500 me-1 mb-0.5">{copy.you}</span>}
               {(e.text || e.pending) && (
                 <div
+                  dir={e.who === "sk" && e.dir ? e.dir : undefined}
+                  lang={e.who === "sk" ? htmlLangOf(e.lang) : undefined}
                   className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
                     e.who === "user" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-slate-900 rounded-es-sm"
                   }`}

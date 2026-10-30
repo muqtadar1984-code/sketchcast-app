@@ -119,6 +119,16 @@ export const RUNNABLE_STAGES: RunnableStage[] = [
     measuredFrom: "free — no model calls",
   },
   {
+    key: "release",
+    title: "Release the book (Library and SK)",
+    summary:
+      "Publishes the book for the Library and SK. Draft (0): the chapters of the current revision that are Gate D approved for their current text — re-run it as more chapters are approved. Final (1): the compiled book approved at Gate E. A newer release replaces the previous one of its kind; an approver can withdraw one. Free.",
+    action: "approve",
+    params: [{ key: "final", label: "Final (1) or draft (0)", min: 0, max: 1, default: 0 }],
+    measuredPerChapterUsd: 0,
+    measuredFrom: "free — no model calls",
+  },
+  {
     key: "render_trial",
     title: "Re-render a trial chapter",
     summary:
@@ -171,7 +181,7 @@ export const PIPELINE: PipelineStage[] = [
   { key: "checks", layer: "produce", title: "Book checks", does: "The source files are whole and every approval still matches its text.", run: ["check_files"], book: [] },
   { key: "compile", layer: "produce", title: "Compile the book", does: "Front matter, chapters, coverage, glossary, index and credits into one book; Gate E approves the compiled PDF.", run: ["compile_book"], book: ["first_draft", "revision_4_1"] },
   { key: "kdp", layer: "produce", title: "KDP paperback", does: "Print interior, cover and the listing sheet.", run: [], comes: "S4", book: ["kdp"] },
-  { key: "sk_export", layer: "produce", title: "SK export", does: "The approved chapters exported for the SK tutor.", run: [], comes: "S4", book: ["sk_export"] },
+  { key: "sk_export", layer: "produce", title: "SK export", does: "A release for the Library and SK: a draft of the Gate D approved chapters, or the final after Gate E.", run: ["release"], book: ["sk_export"] },
   { key: "editor", layer: "polish", title: "Editor", does: "Edit the compiled book by hand, with AI help; re-approval.", run: [], comes: "R3", book: [] },
 ];
 

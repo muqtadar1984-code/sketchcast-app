@@ -109,7 +109,7 @@ export async function runCapability(ctx: SkContext, name: string, args: Record<s
 /** What the model reads back. Tool results are DATA (§8.3): wrapped so the
  *  model treats any instruction inside as content, never as a command. */
 export function toolResultText(r: SkCapabilityResult): string {
-  const body = { ok: r.ok, summary: r.summary, facts: r.facts ?? [], ...(r.navigate ? { navigate: r.navigate } : {}), ...(r.error ? { error: r.error } : {}) };
+  const body = { ok: r.ok, summary: r.summary, facts: r.facts ?? [], ...(r.navigate ? { navigate: r.navigate } : {}), ...(r.error ? { error: r.error } : {}), ...(r.language ? { source_language: r.language } : {}) };
   return `<tool_result data_only="true">${JSON.stringify(body)}</tool_result>`;
 }
 

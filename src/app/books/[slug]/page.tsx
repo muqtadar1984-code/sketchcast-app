@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { listApprovals, listArtifacts, listOpenItems, listRuns, listStages } from "@/utils/books/store";
 import type { Approval } from "@/utils/books/types";
+import { canOn } from "@/utils/books-access";
+import { listReleases, releaseState } from "@/utils/books/releases";
 import { loadBook } from "./load";
 import { Card, Chip, day, usd } from "../ui";
+import WithdrawRelease from "./withdraw-release";
 
 /** "reply hit the output cap (6000)" → "output cap"; the full error is in the tooltip. */
 function shortError(e: string): string {
@@ -16,13 +19,14 @@ function shortError(e: string): string {
 // stage by stage, with the approvals, runs and files each stage left.
 export default async function BookOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { work, revisions } = await loadBook(slug);
-  const [stages, approvals, runs, artifacts, openItems] = await Promise.all([
+  const { work, revisions, member } = await loadBook(slug);
+  const [stages, approvals, runs, artifacts, openItems, releases] = await Promise.all([
     listStages(work.uid),
     listApprovals(work.uid),
     listRuns(work.uid),
     listArtifacts(work.uid),
     listOpenItems(work.uid),
+    listReleases(work.uid),
   ]);
   const revLabel = new Map(revisions.map((r) => [r.key, r.label]));
   const approvalsFor = (stageKey: string, revisionKey: string | null): Approval[] =>
@@ -143,6 +147,35 @@ export default async function BookOverview({ params }: { params: Promise<{ slug:
             <p className="text-sm text-[#7A7363]">
               Not checked from the app yet: Pipeline →{" "}
               <Link href={`/books/${slug}/runs`} className="underline hover:text-[#1F2A24]">Readiness re-check</Link> (free).
+            </p>
+          )}
+        </Card>
+        <Card title="Releases (Library and SK)">
+          {releases.length ? (
+            <ul className="space-y-2 text-sm">
+              {releases.slice(0, 6).map((r) => {
+                const state = releaseState(r);
+                return (
+                  <li key={r.id} className={state === "live" ? "" : "text-[#7A7363]"}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span>
+                        <span className="font-medium">{r.release_kind === "final" ? "Final" : "Draft"}</span> {r.edition_key}
+                      </span>
+                      <Chip label={state} tone={state === "live" ? "done" : state === "withdrawn" ? "rejected" : "parked"} />
+                    </div>
+                    <p className="text-xs text-[#7A7363]">
+                      Chapters {r.chapters.map((c) => c.chapter).join(", ")} · {r.revision_key} · {day(r.released_at)}
+                      {r.withdrawn_reason ? ` · withdrawn: ${r.withdrawn_reason}` : ""}
+                    </p>
+                    {state === "live" && canOn(member, work.uid, "approve") && <WithdrawRelease slug={slug} id={r.id} />}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-[#7A7363]">
+              Not released yet. Pipeline → <Link href={`/books/${slug}/runs`} className="underline hover:text-[#1F2A24]">Release the book</Link>: a draft (the
+              Gate D approved chapters) or the final (after Gate E). SK and the Library read releases.
             </p>
           )}
         </Card>

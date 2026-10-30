@@ -92,6 +92,10 @@ export type SkBoardState = {
    *  Untrusted like everything here: board.explain_selection re-checks the
    *  deck is hers, and the route keeps only the words that are on the slide. */
   selection?: { generationId: string; n: number; text: string; title?: string };
+  /** 2026-10-30 (additive): the open unit's lesson language (the Kit
+   *  Manifest's `language`), so SK answers in the kit's language by default.
+   *  Not permission-bearing; the teaching call re-reads it from the manifest. */
+  language?: string;
 };
 
 /** S3 slice D: the student's kit player as the Shell sees it (published by
@@ -117,6 +121,9 @@ export type SkTutorState = {
   practised?: number[];
   /** The kit's sections, so "go to the red blood cells part" resolves without a read. */
   segments?: Array<{ k: number; key: string; heading: string }>;
+  /** 2026-10-30 (additive): the kit's lesson language (/api/sk/kit
+   *  kit.language). Not permission-bearing; tutor.explain re-reads it. */
+  language?: string;
 };
 
 /** S3 slice D: the moves the Shell drives on the student's kit player. */
@@ -176,6 +183,10 @@ export type SkContext = {
   ttlSeconds: number;
   /** Stable hash of {role, schoolId, hat, plan, coordinator scope (S5)}: tokens are bound to it (§8.2). */
   contextHash: string;
+  /** 2026-10-30: the language SK answers in this turn (shell/language.ts
+   *  answerLanguage) — set by the turn route. `user.locale` then carries the
+   *  locale the fixed lines are looked up in (the same, except zh → en). */
+  answer?: { lang: string; from: "override" | "source" | "ui"; override: string | null; uiLocale: string };
 };
 
 /** What the client's collector posts with each turn (§5.4). Untrusted. */
@@ -251,6 +262,10 @@ export type SkCapabilityResult = {
    *  pending task after this turn (book.activate asking for the order number
    *  or the child keeps the code's HMAC here); null clears it. */
   pending?: { task: string; needs: string[] } | null;
+  /** 2026-10-30: the language of the knowledge this result's content comes
+   *  from (a kit's manifest, an article, a book) — the answer defaults to it
+   *  when every such result agrees (shell/language.ts answerLanguage). */
+  language?: string;
 };
 
 /** What /api/sk/act answers after a token is returned (§9.2). */
@@ -349,6 +364,10 @@ export type SkTurnEvent =
   /** S1: a confirm-tier card (§2.5, §8.2). The client renders it and returns
    *  `token` by click or spoken yes; the server executes only with the token. */
   | { type: "confirm"; token: string; action: string; title: string; params: Record<string, string | number | boolean | null>; expiresAt: string }
+  /** 2026-10-30: the language the text that follows is in — its direction,
+   *  the read-aloud voice (`speech`, BCP-47) and, when `override` (the user
+   *  chose it), the dictation language too. Sent before the text. */
+  | { type: "lang"; lang: string; dir: "ltr" | "rtl"; speech: string; override: boolean }
   | {
       type: "done";
       /** §2.3 / §9.3: which tools the answer rests on, and its label. */
@@ -364,7 +383,7 @@ export type SkTurnEvent =
     }
   | { type: "error"; message: string };
 
-export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat" | "tutor";
+export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat" | "tutor" | "lang";
 
 /** The Board moves of Final Plan §2.4, as the client executes them. */
 export type SkBoardMove =
