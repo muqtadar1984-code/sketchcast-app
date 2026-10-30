@@ -25,7 +25,7 @@ import { isContentQuestion } from "@/sk/knowledge/answer";
 import { findBookCode } from "@/sk/book-activate";
 import { normalizeIntent } from "./intent-normalize";
 import { fromApiToolName } from "./registry";
-import { bookActivateOf, normRuleText, type RulesDecision } from "./rules";
+import { bookActivateOf, normRuleText, selectionAsk, type RulesDecision } from "./rules";
 import { SK_NOTHING_ON_THAT, type SkCapabilityResult, type SkContext } from "./types";
 
 export type SkRouting = "rules" | "model";
@@ -84,6 +84,10 @@ export function modelFirstDecision(text: string, ctx: SkContext): RulesDecision 
     const book = bookActivateOf(raw, normRuleText(raw), ctx);
     if (book) return { intent: "act", action: "book.activate", book };
   }
+  // 2026-10-31: a live highlight + "explain this" → the grounded selection
+  // path (the rules' own explain_selection), no model round to choose it.
+  // Any other wording reaches the model, whose explain_selection is a hand-off.
+  if (selectionAsk(raw, ctx)) return { intent: "teach", move: "explain_selection", args: {} };
   return { intent: "ask" };
 }
 
@@ -149,7 +153,8 @@ export const ESCALATE_TOOLS: readonly string[] = ["knowledge.search", "kit.docum
  *  metered kit turn (handoffBefore / handoffAfter) — escalating first would
  *  only buy a second Shell round that is thrown away. */
 export function escalationTools(ctx: SkContext): ReadonlySet<string> {
-  const handedOff = ctx.user.role === "student" ? new Set(["knowledge.search", "tutor.explain"]) : new Set<string>();
+  // board.explain_selection is a hand-off for everyone (2026-10-31).
+  const handedOff = new Set(ctx.user.role === "student" ? ["knowledge.search", "tutor.explain", "board.explain_selection"] : ["board.explain_selection"]);
   return new Set(ESCALATE_TOOLS.filter((t) => !handedOff.has(t)));
 }
 
@@ -259,7 +264,7 @@ export function addUsage(a: Usage | undefined, b: Usage | undefined): Usage | un
 
 // ── Hand-offs: a tool the model chose that the route performs itself ────────
 
-export type HandoffBefore = "student_knowledge" | "lesson_plan";
+export type HandoffBefore = "student_knowledge" | "lesson_plan" | "selection";
 export type HandoffAfter = "control" | "tutor";
 
 /**
@@ -269,11 +274,18 @@ export type HandoffAfter = "control" | "tutor";
  *     student-ruled kit turn (knowledgeForStudent), never the Shell model
  *     narrating passages;
  *   lesson_plan — start_lesson with nothing named (no book, chapter or kit) by
- *     a teacher: the Board's own pick, then the timetable (start-lesson.ts).
+ *     a teacher: the Board's own pick, then the timetable (start-lesson.ts);
+ *   selection — board.explain_selection (2026-10-31): the route reads the
+ *     highlighted slide and makes ONE grounded call, as the rules path does.
+ *     Run as an ordinary tool it returned only "explaining slide 4" and the
+ *     highlighted words, which the model could not explain from: production
+ *     2026-10-30, it went looking with kit.documents for three rounds, then —
+ *     offered no tools on the last pass — wrote the call out as text.
  */
 export function handoffBefore(name: string, args: Record<string, unknown>, ctx: SkContext): HandoffBefore | null {
   const n = fromApiToolName(name);
   if (ctx.user.role === "student" && n === "knowledge.search") return "student_knowledge";
+  if (n === "board.explain_selection") return "selection";
   if (n === "start_lesson" && ctx.user.role !== "student") {
     const named = ["book", "chapter", "kit"].some((k) => typeof args?.[k] === "string" ? (args[k] as string).trim() !== "" : args?.[k] != null);
     if (!named) return "lesson_plan";

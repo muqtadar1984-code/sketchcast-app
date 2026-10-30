@@ -24,7 +24,7 @@
 
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "@/sk/shell/types";
-import { DOC_NAMES, docsOf, kitOfGeneration, productChapterKits, readDoc, type DocEntry, type DocsAdmin, type KitDocs, type ReadOut } from "@/sk/kit-docs";
+import { DOC_NAMES, deckSlides, docsOf, kitOfGeneration, productChapterKits, readDoc, type DocEntry, type DocsAdmin, type KitDocs, type ReadOut } from "@/sk/kit-docs";
 import { searchForUser } from "./knowledge";
 
 let adminOverride: (() => DocsAdmin | null) | null = null;
@@ -317,6 +317,29 @@ export async function openUnitSlides(ctx: SkContext): Promise<{ title: string; f
     if (r.slides?.length) return { title: r.title ?? kit.title, from: "deck_text_map", slides: r.slides };
     if (r.script?.length) return { title: r.title ?? kit.title, from: "lesson_script", slides: r.script.map((x) => ({ n: x.n, title: x.heading, text: x.points.join(" | "), notes: x.narration })) };
     return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "Highlight and ask SK" on a deck page of an ADOPTED kit (2026-10-31): the
+ * highlighted deck is the open unit's sibling deck piece (#233's kit
+ * resolution — every piece of HER kit, owner-filtered). Its slide `n` from
+ * the deck's own text map, or null when the deck is not a piece of her open
+ * kit or the slide cannot be read.
+ */
+export async function openUnitDeckSlide(ctx: SkContext, deckId: string, n: number): Promise<UnitSlide | null> {
+  const gid = ctx.board?.sessionId ? ctx.board.generationId : undefined;
+  if (!gid || !UUID.test(gid) || !UUID.test(deckId) || !Number.isInteger(n) || n < 1) return null;
+  const admin = docsAdmin();
+  if (!admin) return null;
+  try {
+    const kit = await kitOfGeneration(admin, ctx.user.id, gid);
+    const piece = kit?.pieces.find((p) => p.id === deckId);
+    if (!piece || piece.owner_id !== ctx.user.id) return null;
+    const slides = await deckSlides(admin, piece);
+    return slides?.find((x) => x.n === n) ?? null;
   } catch {
     return null;
   }

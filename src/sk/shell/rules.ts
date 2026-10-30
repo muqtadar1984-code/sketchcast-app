@@ -321,6 +321,15 @@ export function explainSelectionOf(t: string, ctx: SkContext): boolean {
   return !!ctx.board?.selection && ASK_THIS_RE.test(t);
 }
 
+/** Model routing's pre-model rule (2026-10-31): a live highlight on the Board
+ *  and "explain this / what does this mean / tell me more about this" — the
+ *  grounded selection path straight away, with no model round to choose it. */
+export function selectionAsk(raw: string, ctx: SkContext): boolean {
+  if (!ctx.board?.sessionId || !ctx.board.selection || ctx.user.role === "student") return false;
+  const t = norm(raw ?? "").replace(/\s*[,،]\s*/gu, " ").trim().replace(/[?؟]+$/u, "").trim();
+  return explainSelectionOf(t, ctx);
+}
+
 // Arabic's definite article stays: "الانتشار" IS the concept as said.
 const EXPLAIN_LEAD_RE = /^(?:the |about |tentang |mengenai |عن )?/u;
 const EXPLAIN_SLIDE_RE = new RegExp(`\\s+(?:using|with|on|from|guna(?:kan)?|dengan|pada|بـ?|باستخدام|على|في|من) (?:the )?(?:slide|slaid|الشريحة|شريحة) ${NUM}$`, "u");

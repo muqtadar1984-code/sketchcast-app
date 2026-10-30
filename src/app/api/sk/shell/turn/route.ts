@@ -36,6 +36,7 @@ import { maskBookSecrets } from "@/sk/book-activate";
 import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
 import { loadSelectionSlide, selectionBlock, selectionOnSlide, selectionQuestion, selectionSupportTokens, type SelectionAdmin } from "@/sk/shell/selection";
 import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilities/board";
+import { openUnitDeckSlide } from "@/sk/capabilities/documents";
 import { searchLibrary } from "@/sk/capabilities/library";
 import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
@@ -423,12 +424,39 @@ export async function POST(request: Request) {
     label: "grounded" | "declined";
     usage?: { inputTokens: number; outputTokens: number };
     trimmed?: boolean;
+    lang?: SkAnswerLang;
   }> => {
     const name = "board.explain_selection";
     const sel = ctx.board?.selection;
     const noSelection = sayFor("no_selection", ctx.user.locale);
     if (!sel) return { text: noSelection, sources: [], label: "declined" };
-    const slide = admin ? await loadSelectionSlide(admin as unknown as SelectionAdmin, sel, ctx.user.id) : null;
+    // 2026-10-31: a page with no words SK can read (her handwriting).
+    if (sel.on === "page") return { text: sayFor("selection_page", ctx.user.locale), sources: [name], label: "declined" };
+    // A video slide's frame: that slide as a whole, from the lesson map's
+    // narration (the board.explain teaching call), said as such.
+    if (sel.on === "video") {
+      const k = sel.n - 1;
+      const lead = sayFor("selection_video", ctx.user.locale, { n: sel.n });
+      const heading = ctx.board?.segments?.find((x) => x.k === k)?.heading || sel.title || "";
+      const taught = await teach("explain", { k, ...(heading ? { concept: heading } : {}) }, sayFor("explain", ctx.user.locale, { heading: heading || `${sel.n}` }));
+      if (!taught) return { text: BOARD_NO_MAP, sources: [name], label: "declined" };
+      const grounded = taught.sources.includes("manifest");
+      return {
+        text: `${lead} ${taught.text}`,
+        sources: grounded ? [name, "manifest"] : [name],
+        label: grounded ? "grounded" : "declined",
+        ...(taught.usage ? { usage: taught.usage } : {}),
+        ...(taught.trimmed ? { trimmed: true } : {}),
+        ...(taught.lang ? { lang: taught.lang } : {}),
+      };
+    }
+    // A deck page: the deck's own text map, else — an adopted kit's deck —
+    // the open unit's sibling deck piece through the kit (#233).
+    let slide = admin ? await loadSelectionSlide(admin as unknown as SelectionAdmin, sel, ctx.user.id) : null;
+    if (!slide) {
+      const s = await openUnitDeckSlide(ctx, sel.generationId, sel.n);
+      if (s) slide = { n: s.n, png: "", w: 0, h: 0, title: s.title, text: s.text, notes: s.notes, words: [], blocks: [] };
+    }
     if (!slide) return { text: BOARD_SELECTION_NO_SLIDE, sources: [name], label: "declined" };
     // Only the words that are on the slide reach the model (selection.ts).
     const selected = selectionOnSlide(sel, slide);
@@ -796,6 +824,25 @@ export async function POST(request: Request) {
         done({ sources, label: last.label, ...(r.usage ? { usage: r.usage } : {}), ...(r.trimmed ? { trimmed: true } : {}) }, r.text, [], undefined, { langOverride: code });
       };
 
+      /** "Highlight and ask SK" (2026-10-31): board.explain_selection validated
+       *  (audited against the present session), then ONE grounded call
+       *  (explainSelection). The rules' move, model routing's pre-rule and the
+       *  model's hand-off all end here, so each says the same thing. */
+      const runSelection = async () => {
+        const name = "board.explain_selection";
+        const r = await runCapability(ctx, name, {}, boardDeps);
+        send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
+        if (!r.ok) {
+          send({ type: "text", text: r.summary });
+          done({ sources: [], label: "declined" }, r.summary, []);
+          return;
+        }
+        const s = await explainSelection();
+        if (s.lang) sendLang(s.lang);
+        send({ type: "text", text: s.text });
+        done({ sources: s.sources, label: s.label, ...(s.usage ? { usage: s.usage } : {}), ...(s.trimmed ? { trimmed: true } : {}) }, s.text, []);
+      };
+
       /** 2026-10-30: a tour / language control the MODEL chose (shell-controls.ts),
        *  performed as its rule performs it. `used` = the model round's usage. */
       const runControl = async (t: ToolTrace, used?: { inputTokens: number; outputTokens: number }) => {
@@ -961,6 +1008,7 @@ export async function POST(request: Request) {
           if (decision.move === "explain_selection" && r.ok) {
             // Content only: no `board` event, the video and the roll stay put.
             const s = await explainSelection();
+            if (s.lang) sendLang(s.lang);
             send({ type: "text", text: s.text });
             done({ sources: s.sources, label: s.label, ...(s.usage ? { usage: s.usage } : {}), ...(s.trimmed ? { trimmed: true } : {}) }, s.text, []);
             finish();
@@ -1237,6 +1285,11 @@ export async function POST(request: Request) {
               if (ctx.tutor) await runTutor("tutor.explain", { question: body.text });
               else await runTutor("tutor.where", {});
             }
+          } else if (before.kind === "selection") {
+            // 2026-10-31: the highlight, as the rules path explains it — the
+            // slide read here, ONE grounded call; the model wrote nothing.
+            timing.route = "model>selection";
+            await runSelection();
           } else {
             timing.route = "model>lesson_plan";
             await planLesson(before.args);

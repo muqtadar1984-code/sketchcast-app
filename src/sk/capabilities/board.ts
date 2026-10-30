@@ -12,7 +12,7 @@
 
 import type { SkBoardMove, SkBoardState, SkCapability, SkCapabilityMeta, SkCapabilityResult, SkContext, SkJsonSchema } from "@/sk/shell/types";
 import { isDeckSource, type ArtifactRow } from "@/utils/present/deck-pages";
-import { openUnitSlides, type UnitSlide } from "./documents";
+import { openUnitDeckSlide, openUnitSlides, type UnitSlide } from "./documents";
 
 export const BOARD_NOT_OPEN = "Open the Board first.";
 export const BOARD_NO_MAP = "The lesson map isn't ready yet.";
@@ -890,21 +890,43 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * reads it (that route is the only way a deck reaches the roll, so a deck on
  * her roll is always one she owns). No Board move: the route writes the
  * explanation from the slide's text map, and the video and roll stay put.
+ *
+ * 2026-10-31: an ADOPTED kit's deck is also accepted as the open unit's
+ * sibling deck piece (documents.ts openUnitDeckSlide, #233's kit resolution);
+ * a highlight on a video slide's frame (`on: "video"`) is that slide of the
+ * open unit's video; one on any other page (`on: "page"`: her handwriting)
+ * has nothing SK can read, and SK says so. In model routing this tool is a
+ * HAND-OFF (routing.ts handoffBefore): the model stops and the route runs it.
  */
 export const boardExplainSelection: SkCapability = {
   meta: meta(
     "explain_selection",
-    "Board: explain the part of a deck slide the teacher highlighted (the Board state's selection) — 2–4 sentences from that slide's own text and speaker notes. Use for 'explain this / what does this mean / tell me more about this' right after she highlights on a slide. Nothing on the Board moves.",
+    "Board: explain the part of the roll the teacher highlighted (the Board state's highlight) — a deck slide's highlighted words from that slide's own text and speaker notes, or a video slide as a whole. Use for 'explain this / what does this mean / tell me more about this' right after she highlights. SK performs it completely; nothing on the Board moves.",
     NONE,
   ),
   handler: async (ctx, _args, deps) => {
     const b = board(ctx);
     if (!b) return noBoard;
     const sel = b.selection;
+    const loc = ctx.user.locale;
+    if (sel?.on === "page" && Number.isInteger(sel.n) && sel.n >= 1) return { ok: false, summary: sayFor("selection_page", loc), error: "unreadable_page", facts: [] };
+    if (sel?.on === "video" && Number.isInteger(sel.n) && sel.n >= 1) {
+      // Her open unit's video only; the slide must be in the lesson map she holds (when sent).
+      if (!sel.generationId || sel.generationId !== b.generationId || (b.segments?.length && !b.segments.some((s) => s.k === sel.n - 1))) {
+        return { ok: false, summary: sayFor("no_selection", loc), error: "no_selection", facts: [] };
+      }
+      return { ok: true, summary: `Explaining video slide ${sel.n}${sel.title ? ` (${sel.title})` : ""}, which she highlighted.`, facts: [{ video_slide: sel.n, title: sel.title ?? "" }] };
+    }
     if (!sel?.text?.trim() || !sel.generationId || !Number.isInteger(sel.n) || sel.n < 1) {
-      return { ok: false, summary: sayFor("no_selection", ctx.user.locale), error: "no_selection", facts: [] };
+      return { ok: false, summary: sayFor("no_selection", loc), error: "no_selection", facts: [] };
     }
     const refused: SkCapabilityResult = { ok: false, summary: BOARD_SELECTION_REFUSED, error: "not_owner", facts: [] };
+    const sibling = async (): Promise<SkCapabilityResult> => ((await openUnitDeckSlide(ctx, sel.generationId, sel.n)) ? selected : refused);
+    const selected: SkCapabilityResult = {
+      ok: true,
+      summary: `Explaining the highlighted part of slide ${sel.n}${sel.title ? ` (${sel.title})` : ""}.`,
+      facts: [{ slide: sel.n, title: sel.title ?? "", highlighted: sel.text }],
+    };
     if (!UUID_RE.test(sel.generationId)) return refused;
     let row: { id: string; kind: string; owner_id: string; artifacts?: ArtifactRow[] | null } | null = null;
     try {
@@ -916,18 +938,14 @@ export const boardExplainSelection: SkCapability = {
         .eq("status", "done")
         .is("withdrawn_at", null)
         .maybeSingle();
-      if (error) return refused;
+      if (error) return sibling();
       row = data;
     } catch {
-      return refused;
+      return sibling();
     }
     // Belt and braces: the filter above already said so (and a leaked row must not pass).
-    if (!row || row.id !== sel.generationId || row.owner_id !== ctx.user.id || !isDeckSource({ kind: row.kind, artifacts: row.artifacts ?? [] })) return refused;
-    return {
-      ok: true,
-      summary: `Explaining the highlighted part of slide ${sel.n}${sel.title ? ` (${sel.title})` : ""}.`,
-      facts: [{ slide: sel.n, title: sel.title ?? "", highlighted: sel.text }],
-    };
+    if (!row || row.id !== sel.generationId || row.owner_id !== ctx.user.id || !isDeckSource({ kind: row.kind, artifacts: row.artifacts ?? [] })) return sibling();
+    return selected;
   },
 };
 
@@ -949,5 +967,5 @@ export const BOARD_CAPABILITIES: SkCapability[] = [
   boardLoadSlides,
   boardLoadDeck,
   boardExplainSelection,
-];
   boardPage,
+];

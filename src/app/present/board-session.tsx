@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { newRoll, type PageBackground, type Stroke, type Tool } from "@/board/model";
-import { CHIP_MS, chipPosition, createDeckMapCache, payloadOf, selectionFromStroke, strokePointsBox, type DeckMapReply, type SkSelectionPayload } from "./highlight-select";
+import { CHIP_MS, chipPosition, createDeckMapCache, pagePayloadOf, payloadOf, selectionFromStroke, strokePointsBox, type DeckMapReply, type SkSelectionPayload } from "./highlight-select";
 import type { Rect } from "@/board/render";
 import { RollView, type RollHandle } from "@/board/roll";
 import { BoardStore, type LogRecord } from "@/board/store";
@@ -524,7 +524,23 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
       hideChip();
       if (!onAskSelection || s.tool !== "highlighter") return;
       const bg = roll.pages[s.page]?.background;
-      if (bg?.kind !== "deckPage") return;
+      if (bg?.kind !== "deckPage") {
+        // 2026-10-31: a highlight on a video slide's frame or on any other
+        // page (her handwriting on a blank page) rides too, so "explain this"
+        // gets an honest answer. The chip only where SK can explain: a frame.
+        const payload = pagePayloadOf(s.page, bg);
+        if (!payload) return;
+        onHighlight?.(payload);
+        const box = rollBox.current?.getBoundingClientRect();
+        const r = strokePointsBox(s);
+        if (bg?.kind !== "frame" || !box || !r) return;
+        const seq = chipSeq.current;
+        setChip(chipPosition(r, { w: box.width, h: box.height }));
+        chipTimer.current = setTimeout(() => {
+          if (seq === chipSeq.current) setChip(null);
+        }, CHIP_MS);
+        return;
+      }
       const seq = chipSeq.current;
       void deckMaps.get(bg.generationId).then((map) => {
         if (seq !== chipSeq.current) return; // another stroke or a page turn since
@@ -754,6 +770,8 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
             board.current?.push(bg, o.after !== undefined ? { after: o.after } : undefined);
             return at;
           },
+          // 2026-10-31: what the roll holds, for SK's page numbers (roll-map.ts).
+          pages: () => roll.pages.map((p) => p.background),
           findDeckPage: (n, g) => {
             const i = roll.pages.findIndex((p) => p.background.kind === "deckPage" && p.background.n === n && (!g || p.background.generationId === g));
             return i < 0 ? null : i;
@@ -770,8 +788,6 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         },
         sink,
         { onMoving: setMoving },
-          // 2026-10-31: what the roll holds, for SK's page numbers (roll-map.ts).
-          pages: () => roll.pages.map((p) => p.background),
       ),
     [sink, roll, t, cardWords],
   );
