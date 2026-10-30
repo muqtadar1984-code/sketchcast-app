@@ -1,22 +1,27 @@
-// The Board's stage playing a YouTube video (founder 2026-10-30: "the video
-// should be pulled from youtube to avoid egress cost").
+// The Board's stage playing a YouTube video — the FALLBACK, for a lesson with
+// no stored MP4 (founder 2026-10-30: "the quality matters in the app so lets
+// use stored mp4 wherever possible"; stageSource below picks the stored file
+// whenever there is one, and /api/present/kit sends YouTube ids only for a
+// lesson that has none). src/utils/catalogue/kit-youtube.ts finds the id.
 //
-// A catalogue kit's lesson is on YouTube already (the topic catalogue →
-// YouTube pipeline; src/utils/catalogue/kit-youtube.ts finds the id). The
-// stage plays it through the YouTube IFrame Player API instead of signing our
-// storage MP4. The Board drives video by TIME — the controller seeks to a
-// segment's slide, SK reads the position, ink is recorded against it — so the
-// player sits behind the SAME interface the <video> element gives the
-// controller (board-controller.ts VideoLike: currentTime get/set, duration,
-// paused, `seeked`/`error` listeners) plus play/pause. Nothing above the stage
-// can tell which it is driving.
+// The Board drives video by TIME — the controller seeks to a segment's slide,
+// SK reads the position, ink is recorded against it — so the player sits
+// behind the SAME interface the <video> element gives the controller
+// (board-controller.ts VideoLike: currentTime get/set, duration, paused,
+// `seeked`/`error` listeners) plus play/pause. Nothing above the stage can
+// tell which it is driving.
 //
 // WHAT YOUTUBE CANNOT DO: give us its pixels. The player is a cross-origin
 // iframe, so a frame can never be drawn into a canvas — freeze-frame and
 // "Load slides" (both capture video frames) are unavailable on a YouTube
 // lesson; the stage says the frame could not be captured, and the Board hides
-// "Load slides" (the deck still loads as pages). That is the price of not
-// streaming the MP4 from storage.
+// "Load slides" (the deck still loads as pages). The stored MP4 has neither
+// limit, which is one more reason it comes first.
+//
+// CAPTIONS OFF BY DEFAULT: cc_load_policy 0 in the player vars, and on ready
+// captionsOff() unloads the captions module — a viewer's YouTube account can
+// force captions on whatever the vars say, and the Board shows no YouTube
+// controls to turn them off again.
 //
 // THE SEEK. seekTo() has no `seeked` event; the adapter emits one when the
 // player reports a position near the target (or after a short wait, with
@@ -42,6 +47,10 @@ export type YTPlayerLike = {
   getDuration(): number;
   getPlayerState(): number;
   destroy(): void;
+  /** Undocumented but long-standing: the captions module ("captions", or "cc"
+   *  on older players). Optional: a player without them is left alone. */
+  unloadModule?(name: string): void;
+  setOption?(module: string, option: string, value: unknown): void;
 };
 
 export type YTNamespace = {
@@ -52,7 +61,7 @@ export type YTNamespace = {
       width?: string | number;
       height?: string | number;
       playerVars?: Record<string, string | number>;
-      events?: { onReady?: () => void; onStateChange?: (e: { data: number }) => void; onError?: (e: { data: number }) => void };
+      events?: { onReady?: () => void; onStateChange?: (e: { data: number }) => void; onError?: (e: { data: number }) => void; onApiChange?: () => void };
     },
   ) => YTPlayerLike;
 };
@@ -84,9 +93,56 @@ export function loadYouTubeApi(): Promise<YTNamespace> {
   return apiPromise;
 }
 
-/** The player options the stage uses: no YouTube chrome, inline, this origin. */
+/** The player options the stage uses: no YouTube chrome, inline, this
+ *  origin, captions not loaded by default. */
 export function youtubePlayerVars(origin: string): Record<string, string | number> {
-  return { controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, modestbranding: 1, iv_load_policy: 3, origin };
+  return { controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, modestbranding: 1, iv_load_policy: 3, cc_load_policy: 0, origin };
+}
+
+/**
+ * Captions off, on ready. There is no guaranteed parameter — a viewer's
+ * YouTube preference can switch them on regardless of cc_load_policy — so the
+ * captions module is unloaded (both of its names) and its track cleared. Each
+ * call is defensive: the API is undocumented and a failure must never stop
+ * the lesson from playing.
+ */
+export function captionsOff(player: Partial<Pick<YTPlayerLike, "unloadModule" | "setOption">>): void {
+  for (const name of ["captions", "cc"]) {
+    try {
+      player.unloadModule?.(name);
+    } catch {
+      // not loaded, or not this player's name for it
+    }
+  }
+  try {
+    player.setOption?.("captions", "track", {});
+  } catch {
+    // no captions module to talk to
+  }
+}
+
+/**
+ * The IFrame player's events for the stage: on ready, captions off and the
+ * player handed to the adapter; captions off again whenever the player loads
+ * a module (the captions module can arrive after ready, from a viewer's
+ * YouTube preference); state and errors to the adapter. `player` is read
+ * lazily — the events are built before `new YT.Player` returns.
+ */
+export function stagePlayerEvents(video: YouTubeVideo, player: () => YTPlayerLike | null) {
+  return {
+    onReady: () => {
+      const p = player();
+      if (!p) return;
+      captionsOff(p);
+      video.attach(p);
+    },
+    onApiChange: () => {
+      const p = player();
+      if (p) captionsOff(p);
+    },
+    onStateChange: (e: { data: number }) => video.handleState(e.data),
+    onError: () => video.handleError(),
+  };
 }
 
 type Clock = { setTimeout: (fn: () => void, ms: number) => unknown; clearTimeout: (h: unknown) => void };
@@ -216,10 +272,12 @@ export class YouTubeVideo implements VideoLike {
 }
 
 /**
- * Which source the stage plays: a YouTube id wins (a catalogue kit's lesson,
- * resolved server-side), the stored file otherwise, nothing when neither.
+ * Which source the stage plays: the stored file whenever there is one (founder
+ * 2026-10-30: quality first — and its frames can be captured), a YouTube id
+ * only when there is no file, nothing when neither.
  */
 export function stageSource(src: string | null | undefined, youtubeId: string | null | undefined): "youtube" | "file" | "none" {
+  if (src) return "file";
   if (typeof youtubeId === "string" && /^[A-Za-z0-9_-]{11}$/.test(youtubeId)) return "youtube";
-  return src ? "file" : "none";
+  return "none";
 }

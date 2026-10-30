@@ -101,10 +101,11 @@ export type KitUnit = {
   part: number | null;
   total: number;
   /**
-   * `urls`: signed storage MP4s, in part order. `youtube`: the lesson's YouTube
-   * ids, in part order, for a catalogue kit (its copy's params.catalogue_ref /
-   * product_ref) — set INSTEAD of `urls`, so the stage streams from YouTube and
-   * not from our storage (founder 2026-10-30, egress).
+   * `urls`: signed storage MP4s, in part order — what the stage plays whenever
+   * there are any (founder 2026-10-30: "the quality matters in the app so lets
+   * use stored mp4 wherever possible"). `youtube`: the FALLBACK, the lesson's
+   * YouTube ids in part order, sent only for a catalogue kit (its copy's
+   * params.catalogue_ref / product_ref) with no stored MP4.
    */
   video: { id: string; title: string | null; urls: string[]; youtube?: string[] } | null;
   docs: KitDoc[];
@@ -126,6 +127,11 @@ export type SessionKit = {
 
 /** How many videos a unit's lesson runs to, whichever source carries it. */
 export const videoParts = (v: { urls: string[]; youtube?: string[] }): number => Math.max(v.urls.length, v.youtube?.length ?? 0);
+
+/** Whether the stage can capture this lesson's frames (freeze-frame, "Load
+ *  slides"): only from our own stored MP4 — a YouTube fallback's pixels are a
+ *  cross-origin iframe's. The stage plays the file whenever there is one. */
+export const framesCapturable = (v: { urls: string[]; youtube?: string[] } | null | undefined): boolean => !!v?.urls.length;
 
 /** A stable key for a unit. `part` may legitimately be null, so the index is not
  *  usable as identity across a reload and null needs a name of its own. */
@@ -894,8 +900,8 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
       {/* Every slide of the lesson onto the roll, one page each: the video's
           own finished frames (Board UX 2026-10-28). Only when the lesson map
           is ready; the host passes the action then and not before. */}
-      {/* not on a YouTube lesson: its frames are cross-origin and cannot be captured */}
-      {unit?.video && onLoadSlides && !unit.video.youtube?.length && (
+      {/* only from the stored MP4: a YouTube fallback's frames are cross-origin and cannot be captured */}
+      {unit?.video && onLoadSlides && framesCapturable(unit.video) && (
         <button
           type="button"
           disabled={saving}

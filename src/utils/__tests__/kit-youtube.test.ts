@@ -1,8 +1,10 @@
 // Where a catalogue kit's lesson video lives on YouTube (founder 2026-10-30:
-// "the video should be pulled from youtube to avoid egress cost").
+// "the video should be pulled from youtube to avoid egress cost"), since the
+// same day the FALLBACK for a lesson with no stored MP4 ("the quality matters
+// in the app so lets use stored mp4 wherever possible").
 // Run: node node_modules/vitest/vitest.mjs run src/utils/__tests__/kit-youtube.test.ts
 import { describe, expect, it } from "vitest";
-import { bundleVideoId, loadKitYoutubeIds, topicKitIdOf, videoSource, youtubeIdsByKit, youtubeWatchUrl } from "@/utils/catalogue/kit-youtube";
+import { bundleVideoId, loadKitYoutubeIds, topicKitIdOf, videoSource, youtubeEmbedUrl, youtubeIdFromUrl, youtubeIdsByKit, youtubeWatchUrl } from "@/utils/catalogue/kit-youtube";
 
 const KIT = "b0000001-0000-4000-8000-000000000000";
 const OTHER = "b0000002-0000-4000-8000-000000000000";
@@ -44,13 +46,25 @@ describe("topicKitIdOf / bundleVideoId / videoSource", () => {
     expect(bundleVideoId(3)).toBeNull();
   });
 
-  it("YouTube when it covers every stored part; storage otherwise; none when there is nothing", () => {
-    expect(videoSource(["a"], 1)).toBe("youtube");
-    expect(videoSource(["a"], 0)).toBe("youtube");
+  it("storage whenever a part is stored (founder 2026-10-30: quality first); YouTube only with none stored; none when there is nothing", () => {
+    expect(videoSource(["a"], 1)).toBe("storage");
     expect(videoSource(["a"], 2)).toBe("storage");
     expect(videoSource([], 1)).toBe("storage");
+    expect(videoSource(["a"], 0)).toBe("youtube");
     expect(videoSource([], 0)).toBe("none");
     expect(youtubeWatchUrl("AAAAAAAAAA1")).toBe("https://www.youtube.com/watch?v=AAAAAAAAAA1");
+  });
+
+  it("the fallback embed loads no captions by default; a watch link is recognised, a signed URL is not", () => {
+    expect(youtubeEmbedUrl("AAAAAAAAAA1")).toBe("https://www.youtube.com/embed/AAAAAAAAAA1?cc_load_policy=0&rel=0&playsinline=1&modestbranding=1");
+    expect(youtubeEmbedUrl("AAAAAAAAAA1", { autoplay: true })).toMatch(/[?&]cc_load_policy=0&.*&autoplay=1$/);
+    expect(youtubeIdFromUrl(youtubeWatchUrl("AAAAAAAAAA1"))).toBe("AAAAAAAAAA1");
+    expect(youtubeIdFromUrl("https://youtu.be/AAAAAAAAAA1")).toBe("AAAAAAAAAA1");
+    expect(youtubeIdFromUrl("https://www.youtube.com/embed/AAAAAAAAAA1")).toBe("AAAAAAAAAA1");
+    expect(youtubeIdFromUrl("https://x.supabase.co/storage/v1/object/sign/artifacts/u/lesson.mp4?token=t")).toBeNull();
+    expect(youtubeIdFromUrl("https://www.youtube.com/watch?v=short")).toBeNull();
+    expect(youtubeIdFromUrl("not a url")).toBeNull();
+    expect(youtubeIdFromUrl(null)).toBeNull();
   });
 });
 

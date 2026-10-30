@@ -16,10 +16,12 @@
 // the uploaded-book contract of src/app/present/deep-link.ts) for readers the
 // Board admits, and Assign.
 //
-// THE VIDEO PLAYS FROM YOUTUBE, never our storage ("the video should be pulled
-// from youtube to avoid egress cost"): the lesson's Watch chips are the kit's
-// YouTube watch links (kit-youtube.ts). Only a kit with no watchable YouTube
-// video falls back to a signed storage link, and that is logged.
+// THE VIDEO PLAYS FROM OUR STORED MP4 (founder 2026-10-30: "the quality
+// matters in the app so lets use stored mp4 wherever possible"): the lesson's
+// Watch chips are its signed MP4s, in part order. Only a lesson with no stored
+// video falls back to the kit's YouTube watch links (kit-youtube.ts); the card
+// plays either in the in-app player (lesson-player.tsx, captions off on
+// YouTube).
 //
 // The kits belong to the catalogue system account; no session may read or
 // sign them (no generations policy; storage is the owner's prefix). So — the
@@ -112,7 +114,7 @@ const live = (g: PieceRow | undefined): g is PieceRow => !!g && g.status === "do
 /** The Board deep link for a product chapter (0-based num, as deep-link.ts reads it). */
 export const boardHref = (bookId: string, num: number): string => `/present?book=${encodeURIComponent(bookId)}&chapter=${num}`;
 
-async function filesOf(kind: string, g: PieceRow, youtube: string[], topicKitId: string, deps: ChapterDeps): Promise<ChapterFile[]> {
+async function filesOf(kind: string, g: PieceRow, youtube: string[], deps: ChapterDeps): Promise<ChapterFile[]> {
   const arts = g.artifacts ?? [];
   const out: ChapterFile[] = [];
   const many = async (artKind: string, label: ChapterFile["label"]) => {
@@ -129,11 +131,8 @@ async function filesOf(kind: string, g: PieceRow, youtube: string[], topicKitId:
   if (kind === "presentation") {
     const stored = arts.filter((a) => a.kind === "video_mp4").length;
     const source = videoSource(youtube, stored);
-    if (source === "youtube") youtube.forEach((id, i) => out.push({ label: "watch", part: youtube.length > 1 ? i + 1 : null, url: youtubeWatchUrl(id), youtube: true }));
-    else if (source === "storage") {
-      console.warn(`[sk-library] no watchable YouTube video for catalogue kit ${topicKitId} (lesson ${g.id}); linking the stored MP4`);
-      await many("video_mp4", "watch");
-    }
+    if (source === "storage") await many("video_mp4", "watch");
+    else if (source === "youtube") youtube.forEach((id, i) => out.push({ label: "watch", part: youtube.length > 1 ? i + 1 : null, url: youtubeWatchUrl(id), youtube: true }));
   }
   await many("deck_pptx", "deck");
   await one("docx", "download");
@@ -171,7 +170,7 @@ export async function productChapters(data: ProductBookData, deps: ChapterDeps):
         const pieces = await Promise.all(
           piecesOf(kit)
             .filter((p) => live(pieceById.get(p.generationId)))
-            .map(async (p) => ({ generationId: p.generationId, kind: p.kind, files: await filesOf(p.kind, pieceById.get(p.generationId)!, youtube, kit.id, deps) })),
+            .map(async (p) => ({ generationId: p.generationId, kind: p.kind, files: await filesOf(p.kind, pieceById.get(p.generationId)!, youtube, deps) })),
         );
         const first = firstChapter.get(r.generation_id) ?? chapter;
         kits.push({ lessonId: r.generation_id, topicKitId: kit.id, label: r.label, sharedWith: first < chapter ? first : null, pieces });

@@ -74,7 +74,7 @@ function data(over: Partial<ProductBookData> = {}): ProductBookData {
     ],
     youtube: new Map([
       [KIT_CELLS, ["AAAAAAAAAA1"]],
-      // blood has 2 stored parts but only part 1 on YouTube → storage (logged)
+      // blood has 2 stored parts and part 1 on YouTube → storage (stored first)
       [KIT_BLOOD, ["BBBBBBBBBB1"]],
       [KIT_RESP, ["RRRRRRRRRR1"]],
     ]),
@@ -97,16 +97,16 @@ describe("productChapters", () => {
     ]);
   });
 
-  it("the lesson's Watch is the YouTube link — never a signed MP4 — and documents are signed with download names", async () => {
+  it("the lesson's Watch is its stored MP4 even when the kit is on YouTube (quality first), and documents are signed with download names", async () => {
     const out = await productChapters(data(), { sign, boardOn: true });
     const kit = out[0].kits[0];
     expect(kit.pieces.map((p) => p.kind)).toEqual(["presentation", "deck", "lesson_plan", "worksheet"]);
-    expect(kit.pieces[0].files).toEqual([{ label: "watch", part: null, url: "https://www.youtube.com/watch?v=AAAAAAAAAA1", youtube: true }]);
+    expect(kit.pieces[0].files).toEqual([{ label: "watch", part: null, url: "signed:sys/c/lesson.mp4" }]);
     expect(kit.pieces[1].files).toEqual([{ label: "deck", part: null, url: "signed:sys/c/deck.pptx#Deck.pptx" }]);
     expect(kit.pieces[3].files.map((f) => f.label)).toEqual(["download", "answerKey"]); // never the questions json
   });
 
-  it("no watchable YouTube video for every part → the stored MP4s in part order, and it is logged", async () => {
+  it("a multi-part lesson → every stored MP4 in part order, nothing logged (it is the normal path)", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const out = await productChapters(data(), { sign, boardOn: true });
     const blood = out[3].kits[0];
@@ -114,10 +114,17 @@ describe("productChapters", () => {
       { label: "watch", part: 1, url: "signed:sys/b/lesson.mp4" },
       { label: "watch", part: 2, url: "signed:sys/b/lesson_part2.mp4" },
     ]);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining(KIT_BLOOD));
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining(KIT_BLOOD));
     warn.mockRestore();
     // the removed activity is not offered
     expect(blood.pieces.map((p) => p.kind)).toEqual(["presentation"]);
+  });
+
+  it("no stored MP4 → the kit's YouTube watch link, the fallback (played in-app by the card's player)", async () => {
+    const d = data();
+    d.pieces = d.pieces.map((p) => (p.id === "cells-lesson" ? { ...p, artifacts: (p.artifacts ?? []).filter((a) => a.kind !== "video_mp4") } : p));
+    const out = await productChapters(d, { sign, boardOn: true });
+    expect(out[0].kits[0].pieces[0].files).toEqual([{ label: "watch", part: null, url: "https://www.youtube.com/watch?v=AAAAAAAAAA1", youtube: true }]);
   });
 
   it("labels and sharing: the map's label, and a kit an earlier chapter maps says which", async () => {
