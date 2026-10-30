@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { isBookMemberRequest, canOn } from "@/utils/books-access";
 import { getChapter, getWork, fixtureFileFor, fixturePath } from "@/utils/books/store";
 import { libraryPictureLink, s3Link } from "@/utils/books/files";
+import { localEditPicture } from "@/utils/books/edits";
+import { imageSize } from "@/utils/books/edit-apply";
 
 export const runtime = "nodejs";
 
@@ -24,6 +26,8 @@ export async function GET(request: Request) {
   if (!fig?.path) return new NextResponse(null, { status: 404 });
 
   if (fig.store === "s3") {
+    const replaced = localEditPicture(fig.path); // development: a picture replaced in the reader
+    if (replaced) return new NextResponse(replaced as BodyInit, { headers: { "content-type": imageSize(replaced)?.type ?? "image/png", "cache-control": "private, max-age=300" } });
     if (fixturePath()) {
       const local = fixtureFileFor(fig.path);
       if (!local) return new NextResponse(null, { status: 404 });

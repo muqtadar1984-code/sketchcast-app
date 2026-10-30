@@ -1,7 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { claudeClient, claudeModel } from "@/utils/claude-backend";
-import { applyEdits, nextAppRevision, type TextEdit } from "./edit-apply";
+import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { applyEdits, applyImageEdits, imageSize, nextAppRevision, placedRefs, type ImageEdit, type TextEdit } from "./edit-apply";
+import { s3Put } from "./files";
 import { canonicalSha } from "./hash";
 import { createRun, launchRunner, readRunsFile, runsFile, writeRunsFile } from "./runs";
 import { runnableStage } from "./stages";
@@ -27,6 +31,7 @@ export type BookEdit = {
   created_by: string;
   created_at: string;
   applied_revision: string | null;
+  meta?: { key?: string; size?: [number, number] | null; caption?: string | null; content_type?: string } | null;
 };
 type Result<T = object> = ({ ok: true } & T) | { error: string; status: number };
 const TABLE = "pub_book_edits";
@@ -54,6 +59,59 @@ export async function saveEdit(i: { workUid: string; revisionKey: string; chapte
     work_uid: i.workUid, revision_key: i.revisionKey, chapter: i.chapter, kind: i.kind, unit: i.unit, before_text: before,
     after_text: i.kind === "note" ? null : (i.after ?? "").trim(), instruction: i.instruction?.trim() || null,
     status: i.kind === "note" ? "open" : "accepted", created_by: i.by,
+  };
+  const f = runsFile();
+  if (f) {
+    const d = readRunsFile(f);
+    const list = (d[TABLE] ?? []) as unknown as BookEdit[];
+    const e = { ...row, id: list.length + 1, created_at: new Date().toISOString(), applied_revision: null } as BookEdit;
+    (d as unknown as Record<string, BookEdit[]>)[TABLE] = [...list, e];
+    writeRunsFile(f, d);
+    return { ok: true, id: e.id };
+  }
+  const { data, error } = await createAdminClient().from(TABLE).insert(row).select("id").single();
+  if (error && missingTable(error)) return { error: NOT_APPLIED, status: 503 };
+  if (error) throw new Error(`${TABLE}: ${error.message}`);
+  return { ok: true, id: (data as { id: number }).id };
+}
+
+const MAX_PICTURE = 8 * 1024 * 1024;
+
+/** Development: replacement pictures live next to BOOKS_RUNS_FILE instead of the books bucket. */
+function localPicture(key: string): string | null {
+  const f = runsFile();
+  return f ? join(dirname(f), "edit-pictures", key.replace(/[\/]/g, "_")) : null;
+}
+
+/** The bytes of a replacement picture saved in development, or null (production serves them from the bucket). */
+export function localEditPicture(key: string): Uint8Array | null {
+  const p = localPicture(key);
+  return p && existsSync(p) ? new Uint8Array(readFileSync(p)) : null;
+}
+
+/** Replace a picture (phase 3b): the new file is saved to books/<slug>/edits/, and an accepted 'image' edit records
+ * which picture it replaces (unit = the old ref). Apply points every use of the old picture at the new one. */
+export async function saveImageEdit(i: { workUid: string; slug: string; revisionKey: string; chapter: number; ref: string; bytes: Uint8Array; caption: string | null; by: string }): Promise<Result<{ id: number }>> {
+  if (!i.ref) return { error: "Choose the picture to replace.", status: 400 };
+  if (!i.bytes.length) return { error: "Choose a picture file.", status: 400 };
+  if (i.bytes.length > MAX_PICTURE) return { error: "That file is over 8 MB; use a smaller picture.", status: 413 };
+  const info = imageSize(i.bytes);
+  if (!info) return { error: "Use a PNG, JPEG or WebP picture.", status: 415 };
+  const ext = info.type.split("/")[1].replace("jpeg", "jpg");
+  const key = `books/${i.slug}/edits/${randomUUID()}.${ext}`;
+  const local = localPicture(key);
+  if (local) {
+    mkdirSync(dirname(local), { recursive: true });
+    writeFileSync(local, i.bytes);
+  } else {
+    const put = await s3Put(key, i.bytes, info.type);
+    if (put === "unset") return { error: "The books bucket is not configured.", status: 500 };
+    if (put === "denied") return { error: "The app may not save pictures yet: its AWS role needs s3:PutObject on books/*/edits/*.", status: 503 };
+  }
+  const row = {
+    work_uid: i.workUid, revision_key: i.revisionKey, chapter: i.chapter, kind: "image", unit: i.ref, before_text: i.ref,
+    after_text: null, instruction: i.caption?.trim() || null, status: "accepted", created_by: i.by,
+    meta: { key, size: info.size, caption: i.caption?.trim() || null, content_type: info.type },
   };
   const f = runsFile();
   if (f) {
@@ -119,7 +177,10 @@ export async function applyChapterEdits(i: { work: Work; chapter: number; by: st
   if (!row) return { error: "That chapter has no text in the current revision.", status: 404 };
   const pending = (await listEdits(workUid)).filter((e) => e.chapter === i.chapter && e.status === "accepted" && e.revision_key === rev);
   if (!pending.length) return { error: "No accepted changes to apply.", status: 400 };
-  const { body, failed } = applyEdits(row.body, pending as TextEdit[]);
+  const text = applyEdits(row.body, pending.filter((e) => e.kind !== "image") as TextEdit[]);
+  const pics = applyImageEdits(text.body, pending.filter((e) => e.kind === "image") as ImageEdit[]);
+  const body = pics.body;
+  const failed = [...text.failed, ...pics.failed];
   if (failed.length) return { error: `${failed.length} change(s) no longer match the text (it may have changed); reject them and edit again.`, status: 409 };
   const sha = canonicalSha(body);
   const revisions = await listRevisions(workUid);
@@ -138,7 +199,7 @@ export async function applyChapterEdits(i: { work: Work; chapter: number; by: st
   };
   const newRows = [
     ...otherRows.map((r) => ({ ...strip(r), revision_key: key })),
-    { ...strip(row), revision_key: key, body, content_sha256: sha, source_path: `runs/run-${runId}/ch${String(i.chapter).padStart(2, "0")}-draft.json` },
+    { ...strip(row), revision_key: key, body, content_sha256: sha, figure_refs: placedRefs(body), source_path: `runs/run-${runId}/ch${String(i.chapter).padStart(2, "0")}-draft.json` },
   ];
   const revRow = { work_uid: workUid, key, ordinal, label: `Draft ${key.slice(1)} (edited in the app)`, summary: `Chapter ${i.chapter}: ${pending.length} change(s) by ${i.by}` };
   const applied = { status: "applied", applied_revision: key, decided_by: i.by, decided_at: new Date().toISOString() };

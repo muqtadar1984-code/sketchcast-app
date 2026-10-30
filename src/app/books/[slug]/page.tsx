@@ -71,7 +71,16 @@ export default async function Workbench({ params, searchParams }: { params: Prom
   const fileHref = (id: number) => `/api/pub/file?book=${encodeURIComponent(slug)}&id=${id}`;
 
   const chapterEdits = edits.filter((e) => !bookView && e.chapter === active && (e.status === "accepted" || e.status === "open"));
-  const editItems: ChangeItem[] = chapterEdits.map((e) => ({
+  const editItems: ChangeItem[] = chapterEdits.map((e) => e.kind === "image" ? {
+    id: `e${e.id}`,
+    tone: "edit",
+    text: e.meta?.caption ? `New picture: ${e.meta.caption}` : "New picture",
+    before: null,
+    where: bodies[0]?.body.figures?.[e.unit ?? ""]?.caption ?? null,
+    thumb: `/api/pub/edits/image?book=${encodeURIComponent(slug)}&id=${e.id}`,
+    editId: e.id,
+    decide: "rejected",
+  } : {
     id: `e${e.id}`,
     tone: e.kind === "note" ? "note" : "edit",
     text: e.kind === "note" ? (e.instruction ?? "") : (e.after_text ?? ""),
@@ -79,7 +88,7 @@ export default async function Workbench({ params, searchParams }: { params: Prom
     where: e.kind === "note" ? `“${(e.before_text ?? "").slice(0, 60)}”` : e.kind === "reword" && e.instruction ? `AI · ${e.instruction}` : null,
     editId: e.id,
     decide: e.kind === "note" ? "resolved" : "rejected",
-  }));
+  });
   const toApply = chapterEdits.filter((e) => e.status === "accepted" && e.revision_key === rev?.key).length;
   const findingItems: ChangeItem[] = findings
     .filter((f) => f.status === "open" && (bookView || f.chapter === active) && (!rev || f.revision_key === rev.key))
