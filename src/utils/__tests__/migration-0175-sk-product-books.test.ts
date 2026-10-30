@@ -1,6 +1,7 @@
 // 0175 (written 2026-10-30, NOT applied) — SketchCast books as Library books:
 // the product link on books, the index-job guard, the grant rule, the buyers'
-// read policy, adopt_product_kit and the forged product_ref refusals. Same lint
+// read policy, adopt_product_kit (a mapped CATALOGUE kit, the book grant as the
+// entitlement) and the forged product_ref refusals. Same lint
 // pattern as migration-0174: read the SQL, strip comments, assert the DDL the
 // access and safety rules rest on.
 // Run: node node_modules/vitest/vitest.mjs run src/utils/__tests__/migration-0175-sk-product-books.test.ts
@@ -66,14 +67,30 @@ describe("0175_sk_product_books.sql", () => {
     expect(up).not.toMatch(/on public\.chapter_grounding/);
   });
 
-  it("adopt_product_kit: definer, master-only, grant-checked, idempotent, copy flag around the inserts, no job and no credit", () => {
+  it("adopt_product_kit: definer; a piece of an APPROVED catalogue kit mapped in sk_product_kits to a product the caller holds a grant for", () => {
     const f = fn("adopt_product_kit");
     expect(f).toMatch(/returns uuid\s+language plpgsql\s+volatile\s+security definer\s+set search_path = public/);
-    expect(f).toMatch(/b\.sk_product_id is not null and b\.removed_at is null/);
-    expect(f).toMatch(/src\.owner_id is distinct from bk\.owner_id/);
-    expect(f).toMatch(/if not has_book_grant\(bk\.sk_product_id\) then/);
-    expect(f).toMatch(/g\.params -> 'product_ref' ->> 'source' = p_source::text/);
-    expect(f).toMatch(/values \(src\.kind, null, null,/);
+    // 0132's piece rule: the presentation column or a non-blank doc slot of an approved kit
+    expect(f).toMatch(/from topic_kits k\s+join sk_product_kits m on m\.generation_id = k\.presentation_generation_id/);
+    expect(f).toMatch(/k\.status = 'approved'/);
+    expect(f).toMatch(/k\.presentation_generation_id = p_source/);
+    expect(f).toMatch(/jsonb_each_text\(coalesce\(k\.doc_generation_ids, '\{\}'::jsonb\)\) d\s+where nullif\(d\.value, ''\) = p_source::text/);
+    // the BOOK GRANT is the entitlement, inside the same lookup (one answer for "not mapped" and "not yours")
+    expect(f).toMatch(/and has_book_grant\(m\.product_id\)/);
+    // no unlock, no allowance: none of the catalogue's entitlement functions or tables
+    expect(f).not.toMatch(/catalogue_has_access|catalogue_ineligible_reason|unlock_catalogue_kit|catalogue_unlocks|my_catalogue_allowance/);
+    // the source must be done and live
+    expect(f).toMatch(/g\.status = 'done' and g\.removed_at is null and g\.withdrawn_at is null/);
+    expect(f).toMatch(/p\.role = 'student' or p\.suspended_at is not null/);
+  });
+
+  it("adopt_product_kit: idempotent across both adopt functions, 0132's copy (copy flag, no job, no credit) with catalogue_ref AND product_ref", () => {
+    const f = fn("adopt_product_kit");
+    expect(f).toMatch(/g\.params -> 'product_ref' ->> 'source' = p_source::text\s+or g\.params -> 'catalogue_ref' ->> 'source_generation_id' = p_source::text/);
+    expect(f).toMatch(/values \(src\.kind, null, null, src\.title, me, my_school, 'done',/);
+    for (const k of ["topic_id", "topic_kit_id", "source_generation_id", "article_id", "article_version", "language"]) expect(f).toContain(`'${k}',`);
+    expect(f).toMatch(/'catalogue_ref', jsonb_build_object\(/);
+    expect(f).toMatch(/'product_ref', jsonb_build_object\(/);
     for (const k of ["product_id", "release_id", "book_id", "chapter_ref", "source"]) expect(f).toContain(`'${k}',`);
     const on = f.indexOf("set_config('sketchcast.generation_copy', 'on', true)");
     const ins = f.indexOf("insert into generations");
@@ -82,7 +99,6 @@ describe("0175_sk_product_books.sql", () => {
     expect(on).toBeLessThan(ins);
     expect(off).toBeGreaterThan(f.indexOf("insert into artifacts"));
     expect(f).not.toMatch(/insert into jobs|credit_ledger/);
-    expect(f).toMatch(/p\.role = 'student' or p\.suspended_at is not null/);
   });
 
   it("forged params.product_ref is refused by RESTRICTIVE policies (0133's lesson)", () => {

@@ -1,20 +1,27 @@
 -- 0175: SketchCast books as Library books (founder 2026-10-30: "why dont we
 -- list down all the chapters the same way we do for the books uploaded by
--- users? for sketchcast books we wont have parts, we would rather have 1
--- chapter and 1 kit of artifacts per chapter.").
+-- users?"), reworked the same day to the founder's corrections:
+--   "why do we need to generate the 10 chapter kits. we already have those
+--    generated as part of the catalogue. the video should be pulled from
+--    youtube to avoid egress cost."
+--   "the book doesnt go to SK, it goes to the whitebaord just like a users
+--    uploaded text book."
 --
--- A bought SketchCast book becomes ONE system-owned `books` row per product
--- (owned by the catalogue system account, CATALOGUE_OWNER_ID), written by the
--- release importer (src/sk/knowledge/release.ts) from the product's live FINAL
+-- A bought SketchCast book is ONE system-owned `books` row per product (owned
+-- by the catalogue system account, CATALOGUE_OWNER_ID), written by the release
+-- importer (src/sk/knowledge/release.ts) from the product's live FINAL
 -- release: its chapters in the uploaded-book shape ([{num (0-based), title}])
 -- and one chapter_grounding row per chapter (section text + exercise STEMS,
--- never answers). Its master kits are ordinary generations of that book, owned
--- by the same system account, queued by the founder-only
--- scripts/sk-product-kits.ts. A buyer reads the BOOK through RLS; the kits are
--- read and signed by the server after the same grant check (the catalogue's
--- pattern: /api/catalogue/file — no generations policy, see §4); a buyer who
--- wants to ASSIGN or put a chapter on the Board gets their own copy through
--- adopt_product_kit() (the 0132 pattern: no job, no credit, same files).
+-- never answers). NOTHING IS GENERATED for it. Each chapter's kits are the
+-- EXISTING approved catalogue kits of the chapter's topics, mapped in
+-- sk_product_kits (0170: product -> release chapter -> the kit's presentation)
+-- by the founder-only scripts/sk-product-kits.ts. A buyer reads the BOOK
+-- through RLS; the mapped catalogue kits are read and signed by the server
+-- after the same grant check (the catalogue's pattern, /api/catalogue/file);
+-- a buyer who ASSIGNS a chapter or puts it on the Classroom Board gets their
+-- own copy through adopt_product_kit() (adopt_catalogue_piece's copy, 0132:
+-- no job, no credit, same files). The BOOK GRANT is the entitlement: no topic
+-- unlock, no weekly catalogue allowance is spent.
 --
 -- What it adds:
 --   books.sk_product_id / sk_release_id   which product the system book IS, and
@@ -23,9 +30,11 @@
 --                                         index_book job (it has no PDF)
 --   has_book_grant(product)               skAccess's book rule, in SQL
 --   books_sk_product_read                 buyers SELECT their product books
---   adopt_product_kit(source)             the caller's own copy of one master
---                                         piece (book_id/chapter_ref null)
+--   adopt_product_kit(source)             the caller's own copy of one piece of
+--                                         a catalogue kit mapped to a product
+--                                         they hold a grant for
 --   gen_no_product_ref_insert / _update   clients cannot forge params.product_ref
+--                                         (catalogue_ref is already refused, 0133)
 --
 -- ACCESS RULE (src/sk/access.ts skAccess, founder 2026-10-30 "books are
 -- bought"): book access comes ONLY from a live book_access_grants row — not
@@ -35,7 +44,8 @@
 --
 -- NOT CHANGED: books_read (owner / same school), books_write (owner only), the
 -- generations policies, storage policies, chapter_grounding (service role
--- only — nothing client-side reads it), and every uploaded book.
+-- only — nothing client-side reads it), sk_product_kits (service role only),
+-- the catalogue's own unlock rules, and every uploaded book.
 --
 -- Run as ONE execution. Idempotent. Rollback = 0175_sk_product_books_rollback.sql.
 begin;
@@ -114,12 +124,12 @@ comment on function public.has_book_grant(uuid) is
 -- the restrictive books_not_removed (0015) still applies. No write policy is
 -- added — books_write stays owner-only, so a buyer can never edit the book.
 --
--- Master kits are NOT made readable by a generations policy. A permissive
--- policy there would also surface them in every query that relies on RLS
--- alone (the student dashboard lists "whatever generations I can read"), and
--- the master files sit under the system account's storage prefix that no
--- session may sign anyway. The catalogue's answer is the one used here: the
--- server reads and signs master files with the service role AFTER the grant
+-- The mapped catalogue kits are NOT made readable by a generations policy. A
+-- permissive policy there would also surface them in every query that relies
+-- on RLS alone (the student dashboard lists "whatever generations I can
+-- read"), and their files sit under the catalogue account's storage prefix
+-- that no session may sign anyway. The catalogue's answer is the one used
+-- here: the server reads and signs them with the service role AFTER the grant
 -- check (src/utils/my-books/product-book.ts), and a buyer who needs a row of
 -- their own (Assign, the Board) adopts one (§5).
 drop policy if exists books_sk_product_read on public.books;
@@ -127,7 +137,20 @@ create policy books_sk_product_read on public.books
   for select to authenticated
   using (sk_product_id is not null and removed_at is null and public.has_book_grant(sk_product_id));
 
--- ── 5. adopt_product_kit — the caller's own copy of one master piece ───────
+-- ── 5. adopt_product_kit — the caller's own copy of one mapped catalogue piece ─
+-- adopt_catalogue_piece (0132) with ONE difference: the entitlement. 0132 asks
+-- for an unlock of the topic (catalogue_has_access) and so, on a capped tier,
+-- for a piece of the weekly allowance. Here the entitlement is the BOOK GRANT:
+-- the piece's kit must be an approved catalogue kit whose lesson (its
+-- presentation) is mapped in sk_product_kits to a product the caller holds a
+-- live grant for. No unlock is required, none is written, and no allowance is
+-- spent. The copy itself is 0132's exactly — same storage paths, status done,
+-- book_id/chapter_ref null, the 0129 copy flag (no job, no credit), and the
+-- same params.catalogue_ref lineage (so the Library, the Board, kit-cost and
+-- the funnel treat it as the catalogue copy it is) — plus params.product_ref
+-- naming the book it came through. Idempotent per (owner, source), whichever
+-- way the piece was first copied: an earlier catalogue adopt of the same piece
+-- is returned, not duplicated.
 create or replace function public.adopt_product_kit(p_source uuid)
 returns uuid
 language plpgsql
@@ -137,22 +160,43 @@ set search_path = public
 as $$
 declare
   me        uuid := auth.uid();
+  hit       record;
   src       record;
-  bk        record;
   v_release bigint;
+  v_book    uuid;
   my_school uuid;
   existing  uuid;
   new_id    uuid;
-  ch_title  text;
-  ch_label  text;
-  prefix    text;
-  suffix    text;
 begin
   if me is null then
     raise exception 'not signed in' using errcode = 'insufficient_privilege';
   end if;
   if exists (select 1 from profiles p where p.id = me and (p.role = 'student' or p.suspended_at is not null)) then
     raise exception 'this account cannot copy kits' using errcode = 'insufficient_privilege';
+  end if;
+
+  -- The source must be a piece of an APPROVED catalogue kit (0132's rule: the
+  -- presentation column or a doc_generation_ids entry; a blank slot never
+  -- matches) whose lesson is mapped to a product the CALLER holds a live grant
+  -- for. One answer for "not mapped" and "not yours": a forged or guessed id
+  -- learns nothing about which books exist.
+  select k.id as kit_id, k.topic_id, k.article_id, k.language,
+         m.product_id, m.chapter_ref
+    into hit
+  from topic_kits k
+  join sk_product_kits m on m.generation_id = k.presentation_generation_id
+  where k.status = 'approved'
+    and k.presentation_generation_id is not null
+    and (k.presentation_generation_id = p_source
+         or exists (select 1 from jsonb_each_text(coalesce(k.doc_generation_ids, '{}'::jsonb)) d
+                    where nullif(d.value, '') = p_source::text))
+    and has_book_grant(m.product_id)
+  order by coalesce(k.reviewed_at, k.updated_at, k.created_at) desc,
+           m.product_id,
+           case when m.chapter_ref ~ '^[0-9]{1,6}$' then m.chapter_ref::int end nulls last
+  limit 1;
+  if hit.kit_id is null then
+    raise exception 'that kit is not part of a SketchCast book in your library' using errcode = 'insufficient_privilege';
   end if;
 
   select g.* into src
@@ -162,61 +206,44 @@ begin
     raise exception 'that kit is not available' using errcode = 'no_data_found';
   end if;
 
-  -- The source must be a MASTER: a generation of a product book, owned by the
-  -- book's own (system) owner. A buyer's own row pointing at the product book
-  -- is not a master and is refused.
-  select b.id, b.title, b.owner_id, b.sk_product_id, b.chapters into bk
-  from books b
-  where b.id = src.book_id and b.sk_product_id is not null and b.removed_at is null;
-  if bk.id is null or src.owner_id is distinct from bk.owner_id then
-    raise exception 'that kit is not part of a SketchCast book' using errcode = 'no_data_found';
-  end if;
-
-  if not has_book_grant(bk.sk_product_id) then
-    raise exception 'this book is not in your library' using errcode = 'insufficient_privilege';
-  end if;
-
-  -- Idempotent: one copy per (owner, source piece).
+  -- Idempotent: one copy per (owner, source piece), however it was first made.
   select g.id into existing
   from generations g
   where g.owner_id = me
     and g.removed_at is null
-    and g.params -> 'product_ref' ->> 'source' = p_source::text
+    and (g.params -> 'product_ref' ->> 'source' = p_source::text
+         or g.params -> 'catalogue_ref' ->> 'source_generation_id' = p_source::text)
   limit 1;
   if existing is not null then
     return existing;
   end if;
 
-  select p.release_id into v_release from sk_book_products p where p.id = bk.sk_product_id;
+  select p.release_id into v_release from sk_book_products p where p.id = hit.product_id;
+  select b.id into v_book from books b where b.sk_product_id = hit.product_id and b.removed_at is null limit 1;
   select p.school_id into my_school from profiles p where p.id = me;
-
-  -- "<book> — Chapter N: <chapter title> · <piece>". The part before the first
-  -- " · " is the kit's name everywhere ready-made kits are grouped (the
-  -- Board's kitPrefix, the Library's titleStem), so every piece of one
-  -- chapter shares it; " · " is kept out of the prefix itself.
-  select nullif(btrim(c ->> 'title'), '') into ch_title
-  from jsonb_array_elements(case when jsonb_typeof(bk.chapters) = 'array' then bk.chapters else '[]'::jsonb end) c
-  where c ->> 'num' = src.chapter_ref
-  limit 1;
-  ch_label := case when src.chapter_ref ~ '^[0-9]{1,6}$' then (src.chapter_ref::int + 1)::text else coalesce(src.chapter_ref, '?') end;
-  prefix := replace(btrim(bk.title) || ' — Chapter ' || ch_label || coalesce(': ' || ch_title, ''), ' · ', ' - ');
-  suffix := case when strpos(coalesce(src.title, ''), ' · ') > 0
-                 then nullif(btrim(substr(src.title, strpos(src.title, ' · ') + 3)), '') end;
 
   -- 0129: this insert is a COPY — no job, no metering.
   perform set_config('sketchcast.generation_copy', 'on', true);
 
   insert into generations (kind, book_id, chapter_ref, title, owner_id, school_id, status, params)
-  values (src.kind, null, null,
-          prefix || ' · ' || coalesce(suffix, src.kind::text),
-          me, my_school, 'done',
-          jsonb_build_object('product_ref', jsonb_build_object(
-            'product_id', bk.sk_product_id,
-            'release_id', v_release,
-            'book_id', bk.id,
-            'chapter_ref', src.chapter_ref,
-            'source', p_source,
-            'adopted_at', now())))
+  values (src.kind, null, null, src.title, me, my_school, 'done',
+          jsonb_build_object(
+            'catalogue_ref', jsonb_build_object(
+              'topic_id', hit.topic_id,
+              'topic_kit_id', hit.kit_id,
+              'source_generation_id', p_source,
+              'article_id', hit.article_id,
+              'article_version', (select a.version from topic_articles a where a.id = hit.article_id),
+              'language', hit.language,
+              'adopted_at', now()),
+            'product_ref', jsonb_build_object(
+              'product_id', hit.product_id,
+              'release_id', v_release,
+              'book_id', v_book,
+              'chapter_ref', hit.chapter_ref,
+              'topic_kit_id', hit.kit_id,
+              'source', p_source,
+              'adopted_at', now())))
   returning id into new_id;
 
   insert into artifacts (generation_id, kind, storage_path)
@@ -226,12 +253,16 @@ begin
 
   perform set_config('sketchcast.generation_copy', '', true);
 
+  insert into catalogue_events (user_id, topic_id, event, meta)
+  values (me, hit.topic_id, 'adopt',
+          jsonb_build_object('kind', src.kind::text, 'source', p_source, 'copy', new_id, 'via', 'book', 'product', hit.product_id));
+
   return new_id;
 end
 $$;
 
 comment on function public.adopt_product_kit(uuid) is
-  'The caller''s own library copy of one MASTER piece of a SketchCast book (a generation of a books row with sk_product_id, owned by that book''s owner): same storage paths, status done, book_id and chapter_ref null (so Assign and the Board accept it), params.product_ref lineage {product_id, release_id, book_id, chapter_ref, source, adopted_at}. Requires a live book grant (has_book_grant). Idempotent per (owner, source). Never queues a job or spends a credit (0129 copy flag).';
+  'The caller''s own library copy of one piece of an APPROVED catalogue kit whose lesson is mapped in sk_product_kits to a SketchCast book product the caller holds a live grant for (has_book_grant). The grant is the entitlement: no topic unlock, no weekly allowance. The copy is adopt_catalogue_piece''s (0132): same storage paths, status done, book_id/chapter_ref null, params.catalogue_ref lineage, plus params.product_ref {product_id, release_id, book_id, chapter_ref, topic_kit_id, source, adopted_at}. Idempotent per (owner, source) across both adopt functions. Never queues a job or spends a credit (0129 copy flag).';
 
 -- ── 6. only adopt_product_kit may write params.product_ref ─────────────────
 -- RESTRICTIVE, always (0133's lesson: a permissive "refuse" policy refuses

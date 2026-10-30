@@ -5,12 +5,15 @@
 -- clause (the trigger is recreated exactly as 0002 declared it).
 --
 -- NOT removed, on purpose:
---   * the system-owned product books themselves. Their master kits reference
---     them (generations.book_id is ON DELETE SET NULL, so deleting a book would
---     strand every master kit book-less). Without the columns they are
---     ordinary books of the catalogue system account, invisible to buyers.
---   * teachers' adopted copies (params.product_ref). They are the teachers'
---     own rows, may already be assigned, and keep working as book-less kits.
+--   * the system-owned product books themselves (and their chapter_grounding,
+--     SK's knowledge). Without the columns they are ordinary books of the
+--     catalogue system account, invisible to buyers. Delete them by hand if
+--     wanted: nothing generated references them (their kits are catalogue kits).
+--   * teachers' adopted copies (params.product_ref + catalogue_ref). They are
+--     the teachers' own rows, may already be assigned, and keep working as
+--     book-less ready-made kits.
+--   * sk_product_kits rows (0170's table): the founder's map; restore the 0170
+--     seed by hand if wanted.
 -- ⚠️ Run the rollback only when no further product book will be imported: the
 -- importer skips the book (42703) once the columns are gone, but a product
 -- book inserted while the WHEN clause is absent would queue an index_book job.
