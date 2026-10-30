@@ -207,3 +207,108 @@ export function createMicGate(opts: MicGateOptions): MicGate {
     },
   };
 }
+
+// ── 2026-10-30: SK's voice must not cut out (founder: "SK voice is
+// disappearing in the middle of the explanation") ─────────────────────────
+
+/** The quiet tail after SK's WHOLE queue has drained before the hero's mic
+ *  may listen again (the room still carries the last word). */
+export const SPEECH_TAIL_MS = 400;
+
+export type SpeechHold = {
+  /** Feed the coordinator's speaking flag (onSpeaking). */
+  speaking: (on: boolean) => void;
+  /** True while SK speaks or within the tail after: the gate's canResume veto. */
+  readonly holding: boolean;
+  dispose: () => void;
+};
+
+/**
+ * The hero mic's no-echo rule as one piece: the mic stays paused while the
+ * coordinator speaks — read from the COORDINATOR (`isSpeaking`), not from a
+ * React-state mirror that lags a render behind — and for SPEECH_TAIL_MS after
+ * its whole queue has drained; then `onClear` (the gate's resume) runs once.
+ * A new line inside the tail cancels it.
+ */
+export function createSpeechHold(opts: {
+  isSpeaking: () => boolean;
+  onClear: () => void;
+  tailMs?: number;
+  now?: () => number;
+  setTimeout?: (fn: () => void, ms: number) => unknown;
+  clearTimeout?: (handle: unknown) => void;
+}): SpeechHold {
+  const tailMs = opts.tailMs ?? SPEECH_TAIL_MS;
+  const now = opts.now ?? (() => Date.now());
+  const setT = opts.setTimeout ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
+  const clearT = opts.clearTimeout ?? ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  let quietSince = Number.NEGATIVE_INFINITY;
+  let talking = false;
+  let handle: unknown = null;
+  let dead = false;
+  const cancel = () => {
+    if (handle != null) clearT(handle);
+    handle = null;
+  };
+  return {
+    speaking(on) {
+      if (dead) return;
+      cancel();
+      talking = on;
+      if (on) return;
+      quietSince = now();
+      handle = setT(() => {
+        handle = null;
+        if (!dead && !talking && !opts.isSpeaking()) opts.onClear();
+      }, tailMs);
+    },
+    get holding() {
+      return talking || opts.isSpeaking() || now() - quietSince < tailMs;
+    },
+    dispose() {
+      dead = true;
+      cancel();
+    },
+  };
+}
+
+/** One dictation pass's callbacks, guarded (see createDictationPasses). */
+export type DictationPass = { id: number; onText: (t: string) => void; onEnd: () => void };
+
+/**
+ * The hands-free loop's passes. Web Speech calls the end handler twice on an
+ * error (onerror, then onend — voice-client.ts wires both to it), and a
+ * stopped recognizer can still deliver its last words after the mic was
+ * paused. Unguarded, the second end restarted dictation a second time — a
+ * recognizer the gate could no longer stop, listening while SK spoke — and a
+ * stale pass's words landed in the CURRENT pass and were sent as her voice
+ * turn, which stops SK mid-line (barge-in) and pauses the tour as a question.
+ * Here a pass acts only while it is the current one, its end runs once, and
+ * `retire()` (the gate stopped the hands-free mic) silences every pass.
+ */
+export function createDictationPasses() {
+  let current = 0;
+  return {
+    open(h: { onText: (t: string) => void; onEnd: () => void }): DictationPass {
+      const id = ++current;
+      let ended = false;
+      return {
+        id,
+        onText: (t) => {
+          if (id === current && !ended) h.onText(t);
+        },
+        onEnd: () => {
+          if (ended) return;
+          ended = true;
+          if (id === current) h.onEnd();
+        },
+      };
+    },
+    retire(): void {
+      current++;
+    },
+    isCurrent(id: number): boolean {
+      return id === current;
+    },
+  };
+}

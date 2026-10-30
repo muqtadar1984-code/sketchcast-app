@@ -5,7 +5,12 @@
  * Run: node node_modules/vitest/vitest.mjs run src/sk/shell/client/__tests__/mic-gate.test.ts
  */
 import { describe, expect, it, vi } from "vitest";
-import { createMicGate, type GateDocument, type ListenerTarget, type MicStopReason } from "../mic-gate";
+import { SPEECH_TAIL_MS, createDictationPasses, createMicGate, createSpeechHold, type GateDocument, type ListenerTarget, type MicStopReason } from "../mic-gate";
+import { createSpeechCoordinator } from "../speech";
+import { EMPTY_MARKS } from "@/sk/speech/provider";
+import type { SpeechProvider } from "@/sk/speech/provider";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /** A listener target that records (de)registrations and dispatches synchronously, like the DOM. */
 function target() {
@@ -483,5 +488,178 @@ describe("mic gate: the Mic switch resumes (home hero, 2026-10-30)", () => {
     b.gate.dispose();
     expect(b.win.count() + b.doc.count()).toBe(0);
     expect(b.gate.resume()).toBe(false);
+  });
+});
+
+// ── 2026-10-30: SK's voice must not cut out during the walkthrough ─────────
+
+/** A provider whose sentences play until the test ends them. */
+function manualVoice() {
+  const pending: Array<() => void> = [];
+  const played: string[] = [];
+  let cancels = 0;
+  const p: SpeechProvider = {
+    id: "browser",
+    async synthesize(text) {
+      return {
+        audio: null,
+        format: "none",
+        marks: EMPTY_MARKS,
+        play: () =>
+          new Promise<void>((r) =>
+            pending.push(() => {
+              played.push(text);
+              r();
+            }),
+          ),
+      };
+    },
+    cancel() {
+      cancels++;
+    },
+  };
+  return { p, pending, played, cancels: () => cancels };
+}
+const flush = async () => {
+  for (let i = 0; i < 6; i++) await new Promise<void>((r) => setTimeout(r, 0));
+};
+
+describe("the hero mic's no-echo hold (the coordinator's WHOLE queue + a tail)", () => {
+  it("between two sentences of one line the mic stays paused; it listens again SPEECH_TAIL_MS after the queue drains", async () => {
+    const voice = manualVoice();
+    const timers = fakeTimers();
+    let coordSpeaking = () => false;
+    const resumes: string[] = [];
+    const hold = createSpeechHold({ isSpeaking: () => coordSpeaking(), onClear: () => resumes.push("resume"), setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout, now: () => 0 });
+    const c = createSpeechCoordinator({ server: false, makeProvider: () => voice.p, fallback: () => voice.p, onSpeaking: (on) => hold.speaking(on) });
+    coordSpeaking = () => c.speaking;
+    const b = buildHero({ speaking: () => hold.holding });
+    b.gate.setAutoResume(true);
+    b.gate.start({ idle: true });
+    const line = c.sayLine("Here is your library. Every book lives here.");
+    b.gate.stop("speaking");
+    await flush();
+    voice.pending.shift()!(); // sentence 1 ends …
+    await flush();
+    // … the gap before sentence 2: still speaking, so a tap does not bring the mic back.
+    expect(hold.holding).toBe(true);
+    b.doc.dispatch("pointerdown");
+    expect(b.gate.active).toBe(false);
+    voice.pending.shift()!();
+    await expect(line).resolves.toBe("spoken");
+    expect(voice.played).toHaveLength(2);
+    expect(voice.cancels()).toBe(0); // nothing cut the line
+    // The queue drained: the tail holds the mic …
+    expect(resumes).toEqual([]);
+    timers.advance(SPEECH_TAIL_MS - 1);
+    expect(resumes).toEqual([]);
+    // … and then the owed resume is taken.
+    timers.advance(1);
+    expect(resumes).toEqual(["resume"]);
+  });
+
+  it("a new line inside the tail cancels the pending resume", () => {
+    const timers = fakeTimers();
+    let talking = false;
+    const resumes: string[] = [];
+    const hold = createSpeechHold({ isSpeaking: () => talking, onClear: () => resumes.push("r"), setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout });
+    hold.speaking(true);
+    talking = true;
+    hold.speaking(false);
+    talking = false;
+    timers.advance(SPEECH_TAIL_MS / 2);
+    hold.speaking(true);
+    talking = true;
+    timers.advance(SPEECH_TAIL_MS * 2);
+    expect(resumes).toEqual([]);
+    expect(hold.holding).toBe(true);
+    hold.dispose();
+  });
+});
+
+describe("hands-free dictation passes (Web Speech ends twice on an error)", () => {
+  /** The Shell's hands-free loop, reduced: each end with no words restarts dictation. */
+  function loop(guarded: boolean) {
+    const passes = createDictationPasses();
+    const live: Array<{ onText: (t: string) => void; onEnd: () => void; stopped: boolean }> = [];
+    const sent: string[] = [];
+    let dictated = "";
+    const begin = () => {
+      dictated = "";
+      const h = {
+        onText: (t: string) => {
+          dictated = t;
+        },
+        onEnd: () => {
+          const text = dictated.trim();
+          dictated = "";
+          if (text) sent.push(text);
+          begin();
+        },
+      };
+      const cb = guarded ? passes.open(h) : { id: 0, ...h };
+      live.push({ onText: cb.onText, onEnd: cb.onEnd, stopped: false });
+    };
+    begin();
+    return { live, sent, passes };
+  }
+
+  it("UNGUARDED (the old loop): onerror + onend restart twice — two recognizers, one the gate cannot stop — and a stale pass's words are sent", () => {
+    const l = loop(false);
+    const first = l.live[0]!;
+    first.onEnd(); // onerror ("no-speech")
+    first.onEnd(); // onend
+    expect(l.live).toHaveLength(3); // 2 restarts from ONE recognizer's end
+    // The orphan (live[1]) hears SK speaking; the current pass then ends empty.
+    l.live[1]!.onText("Here is your library");
+    l.live[2]!.onEnd();
+    expect(l.sent).toEqual(["Here is your library"]); // SK's own words became her turn → barge-in
+  });
+
+  it("GUARDED: one end per pass, only the current pass acts, and its stale words are never sent", () => {
+    const l = loop(true);
+    const first = l.live[0]!;
+    first.onEnd();
+    first.onEnd();
+    expect(l.live).toHaveLength(2); // exactly one restart
+    first.onText("late words from a stopped recognizer");
+    l.live[1]!.onEnd();
+    expect(l.sent).toEqual([]);
+  });
+
+  it("retire() (the gate stopped the hands-free mic for SK's voice) silences the pass", () => {
+    const passes = createDictationPasses();
+    const got: string[] = [];
+    const pass = passes.open({ onText: (t) => got.push(t), onEnd: () => got.push("end") });
+    passes.retire();
+    pass.onText("SK's own voice");
+    pass.onEnd();
+    expect(got).toEqual([]);
+    expect(passes.isCurrent(pass.id)).toBe(false);
+  });
+});
+
+describe("the Shell's wiring (source pins)", () => {
+  const shell = readFileSync(resolve(__dirname, "..", "..", "..", "..", "app", "dashboard", "sk-shell.tsx"), "utf8").replace(/\r\n/g, "\n");
+  const code = shell.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  it("the hero gate's veto is the hold (coordinator + tail), and the resume comes from the hold, not from the speaking flag", () => {
+    expect(code).toContain("canResume: () => !(holdRef.current?.holding ?? speakingRef.current)");
+    expect(code).toContain("isSpeaking: () => coord.speaking");
+    expect(code).not.toMatch(/if \(speaking\) gate\.stop\("speaking"\);\s*else gate\.resume\(\);/);
+  });
+  it("a hands-free resume never stops SK's voice", () => {
+    const listenNow = code.slice(code.indexOf("function listenNow()"), code.indexOf("useEffect(() => {\n    listenNowRef.current = listenNow;"));
+    expect(listenNow).toContain("beginDictation(\"handsFree\")");
+    expect(listenNow).not.toContain("stop()");
+  });
+  it("dictation runs through guarded passes, retired when the gate stops a hands-free capture", () => {
+    expect(code).toContain("const stop = startDictation(\n      pass.onText,\n      pass.onEnd,");
+    expect(code).toContain('if (micModeRef.current === "handsFree") passesRef.current.retire();');
+  });
+  it("the voice survives page moves and hero ↔ dock: one coordinator per Shell, stopped only by pagehide or unmount", () => {
+    const eff = shell.slice(shell.indexOf("const coord = createSpeechCoordinator("), shell.indexOf("// ── the cross-page memory store"));
+    expect(eff).toMatch(/\}, \[\]\);\s*$/);
+    expect(eff).toContain('window.addEventListener("pagehide", onPageHide);');
+    expect(eff.match(/coord\.stop\(\)/g)?.length).toBe(2); // pagehide + unmount
   });
 });
