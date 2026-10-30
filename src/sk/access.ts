@@ -103,17 +103,22 @@ export function skAccess(input: AccessInput): AccessDecision {
     live_exhausted: false,
     live_used_fraction: null,
   };
-  // Order: school licence → subscription → book grant (plan §11). A licence or
-  // a subscription grants the book AND tutoring.
-  if (input.schoolLicence) return { ...none, book_access: true, tutor_access: true, source: "school" };
-  const sub = input.subscriptions.find((s) => s.active && planGrantsSk(s.plan_key) && (!s.current_period_end || ms(s.current_period_end) > t));
-  if (sub) return { ...none, book_access: true, tutor_access: true, source: "subscription", tutor_expires_at: sub.current_period_end };
-
-  // Book access: any live grant for the product (permanent unless expires_at
-  // is set and past). Tutoring: the grant whose tutor window reaches furthest.
+  // Book access comes ONLY from a live grant for the product (permanent unless
+  // expires_at is set and past): a purchase, a printed or edition code, or a
+  // staff/promo grant. Founder 2026-10-30: "real users are expected to buy a
+  // hard copy or digital copy of the book which grants them access" — so a
+  // school licence or a subscription opens SK TUTORING, never a book.
   const live = input.grants.filter(
     (g) => g.product_id === input.productId && !g.revoked_at && ms(g.activated_at) <= t && (g.expires_at == null || ms(g.expires_at) > t),
   );
+  const book_access = live.length > 0;
+
+  // Tutoring order: school licence → subscription → the grant's tutor window.
+  if (input.schoolLicence) return { ...none, book_access, tutor_access: true, source: "school" };
+  const sub = input.subscriptions.find((s) => s.active && planGrantsSk(s.plan_key) && (!s.current_period_end || ms(s.current_period_end) > t));
+  if (sub) return { ...none, book_access, tutor_access: true, source: "subscription", tutor_expires_at: sub.current_period_end };
+
+  // Tutoring on a grant: the grant whose tutor window reaches furthest.
   if (!live.length) return none;
   const tutorEnd = (g: Grant) => (g.tutor_expires_at ? ms(g.tutor_expires_at) : -Infinity);
   const g = [...live].sort((a, b) => tutorEnd(b) - tutorEnd(a))[0]!;

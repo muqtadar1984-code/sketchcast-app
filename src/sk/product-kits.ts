@@ -6,8 +6,8 @@
 // THE RULE (design decision 2): a user may open a kit in the student tutor
 // when BOTH hold —
 //   1. the existing product entitlement says book_access (entitlement.ts →
-//      access.ts skAccess: school licence, SK subscription, or a live book
-//      grant, staff grants included), and
+//      access.ts skAccess: a live book grant ONLY, staff grants included —
+//      a school licence or SK subscription opens tutoring, never a book), and
 //   2. the generation is mapped to THAT product in sk_product_kits, and is
 //      still a done, non-withdrawn, non-removed presentation.
 // A book grant therefore opens the mapped kits ONLY inside /sk. Nothing here

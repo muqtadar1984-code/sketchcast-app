@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fakeDb } from "@/sk/knowledge/__tests__/fake-db";
 import { loadMyBooks } from "../load";
 import { childLabel, COVER_LINK_SECONDS, myBookTiles } from "../tiles";
-import { grant, KID, ME, NOW, P_ALG, P_BIO, P_OLD, PRODUCTS, RELEASES, STRANGER_KID } from "./fixtures";
+import { grant, KID, ME, NOW, P_ALG, P_BIO, P_DRAFT, P_OLD, PRODUCTS, RELEASES, STRANGER_KID } from "./fixtures";
 
 const SCHOOL = "55555555-5555-5555-5555-555555555555";
 
@@ -39,12 +39,12 @@ describe("loadMyBooks", () => {
     expect(await loadMyBooks(db({ grants: [grant({ user_id: STRANGER_KID, product_id: P_BIO })] }), ME, NOW)).toEqual([]);
   });
 
-  it("a school licence (through profiles.school_id) lists every live final, never a draft", async () => {
-    const d = db({
-      profiles: [{ id: ME, school_id: SCHOOL }],
-      entitlements: [{ school_id: SCHOOL, user_id: null, plan_key: "school_annual", active: true, current_period_end: null }],
-    });
-    const out = await loadMyBooks(d, ME, NOW);
+  it("a school licence (through profiles.school_id) alone lists nothing; with grants it lists the granted live finals, never a draft", async () => {
+    const licensed = { profiles: [{ id: ME, school_id: SCHOOL }], entitlements: [{ school_id: SCHOOL, user_id: null, plan_key: "school_annual", active: true, current_period_end: null }] };
+    // books are bought (founder 2026-10-30): the licence opens tutoring, never a book
+    expect(await loadMyBooks(db(licensed), ME, NOW)).toEqual([]);
+    const grants = [P_BIO, P_ALG, P_DRAFT].map((product_id) => grant({ user_id: ME, product_id, source: "staff" }));
+    const out = await loadMyBooks(db({ ...licensed, grants }), ME, NOW);
     expect(out.map((b) => b.productId).sort()).toEqual([P_ALG, P_BIO].sort());
     expect(out.every((b) => b.releaseId !== 13 && b.releaseId !== 40)).toBe(true);
   });

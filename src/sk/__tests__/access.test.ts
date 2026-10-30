@@ -1,7 +1,8 @@
 // SK book access — codes are well-formed, check-charactered, unreadable from
 // the database; edition codes (SKE) share the check scheme; order numbers are
-// normalised and HMACed under their own domain; the access decision orders
-// school → subscription → grant, keeps BOOK access permanent while TUTORING is
+// normalised and HMACed under their own domain; the access decision opens a
+// book ONLY on a live grant (2026-10-30), orders tutoring school →
+// subscription → grant, keeps BOOK access permanent while TUTORING is
 // a window (0159), respects expiry/revocation, and keeps prepared teaching
 // when the live allowance is spent (R3 refinement 4).
 import { describe, expect, it } from "vitest";
@@ -110,11 +111,20 @@ const grant = (over: Partial<Parameters<typeof skAccess>[0]["grants"][number]> =
 });
 
 describe("skAccess", () => {
-  it("prefers school, then subscription, then a live grant — the first two grant book AND tutoring", () => {
+  it("tutoring prefers school, then subscription, then a live grant — but only a live grant opens the book", () => {
+    // Founder 2026-10-30: books are bought. A licence or an SK plan alone tutors, never opens a book.
     const school = skAccess({ productId: "p1", now: NOW, schoolLicence: true, subscriptions: [], grants: [] });
-    expect(school).toMatchObject({ book_access: true, tutor_access: true, source: "school", grant_source: null });
-    const sub = skAccess({ productId: "p1", now: NOW, subscriptions: [{ plan_key: "homeschool_monthly", active: true, current_period_end: "2026-12-01T00:00:00Z" }], grants: [] });
-    expect(sub).toMatchObject({ book_access: true, tutor_access: true, source: "subscription", tutor_expires_at: "2026-12-01T00:00:00Z" });
+    expect(school).toMatchObject({ book_access: false, tutor_access: true, source: "school", grant_source: null });
+    const sk = [{ plan_key: "homeschool_monthly", active: true, current_period_end: "2026-12-01T00:00:00Z" }];
+    const sub = skAccess({ productId: "p1", now: NOW, subscriptions: sk, grants: [] });
+    expect(sub).toMatchObject({ book_access: false, tutor_access: true, source: "subscription", tutor_expires_at: "2026-12-01T00:00:00Z" });
+    // ...with a live grant for the product too, the book opens; tutoring still comes from the licence / plan
+    const schoolBought = skAccess({ productId: "p1", now: NOW, schoolLicence: true, subscriptions: [], grants: [grant({ source: "purchase" })] });
+    expect(schoolBought).toMatchObject({ book_access: true, tutor_access: true, source: "school", grant_source: null, tutor_expires_at: null });
+    const subBought = skAccess({ productId: "p1", now: NOW, subscriptions: sk, grants: [grant({ source: "purchase" })] });
+    expect(subBought).toMatchObject({ book_access: true, tutor_access: true, source: "subscription", tutor_expires_at: "2026-12-01T00:00:00Z" });
+    // a grant for ANOTHER product does not open this one
+    expect(skAccess({ productId: "p1", now: NOW, schoolLicence: true, subscriptions: [], grants: [grant({ product_id: "p2" })] }).book_access).toBe(false);
     const g = skAccess({ productId: "p1", now: NOW, subscriptions: [{ plan_key: "teacher_pro_monthly", active: true, current_period_end: null }], grants: [grant()] });
     expect(g).toMatchObject({ book_access: true, tutor_access: true, source: "grant", grant_source: "code", tutor_expires_at: "2026-11-19T00:00:00Z" }); // plain Pro does not include SK
     expect(skAccess({ productId: "p1", now: NOW, subscriptions: [], grants: [] })).toMatchObject({ book_access: false, tutor_access: false, source: null });
