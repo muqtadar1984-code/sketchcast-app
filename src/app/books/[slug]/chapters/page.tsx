@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listApprovals, listChapterSummaries } from "@/utils/books/store";
-import { loadBook, pickRevision } from "../load";
+import { loadRecords, pickRevision } from "../load";
 import NotDrafted from "../not-drafted";
 import { approvalFor, latestGateD } from "../approval";
 import RevisionPicker from "../revision-picker";
@@ -12,7 +12,7 @@ import { Card, Chip } from "../../ui";
 export default async function ChaptersPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const { work, revisions } = await loadBook(slug);
+  const { work, revisions } = await loadRecords(slug);
   if (!revisions.length) return <NotDrafted slug={slug} />;
   const board = sp.view === "board";
   const toggle = (

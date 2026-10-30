@@ -4,7 +4,7 @@ import { PIPELINE, runnableStage } from "@/utils/books/stages";
 import { estimateRun, listBookRuns, runnerConfig } from "@/utils/books/runs";
 import { fixturePath, listStages } from "@/utils/books/store";
 import type { Run } from "@/utils/books/types";
-import { loadBook } from "../load";
+import { loadRecords } from "../load";
 import { Card, Chip, Empty, day, usd } from "../../ui";
 import RunForm from "./run-form";
 
@@ -20,7 +20,7 @@ const COMES = { S3: "comes with drafting on the server (S3)", S4: "comes with ap
 // queues, watches and records (R1).
 export default async function RunsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { member, work } = await loadBook(slug);
+  const { member, work } = await loadRecords(slug);
   const [runs, bookStages] = await Promise.all([listBookRuns(work.uid), listStages(work.uid)]);
   const stageOf = new Map(bookStages.map((s) => [s.key, s]));
   const runnable = [...new Set(PIPELINE.flatMap((p) => p.run))].map((k) => runnableStage(k)!).filter(Boolean);

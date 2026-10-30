@@ -1,6 +1,6 @@
 import { listCostLines, listStages } from "@/utils/books/store";
 import { listBookRuns } from "@/utils/books/runs";
-import { loadBook } from "../load";
+import { loadRecords } from "../load";
 import { Card, usd } from "../../ui";
 
 // /books/[slug]/costs — model spend recorded in the book's own ledgers (each
@@ -30,7 +30,7 @@ function Table({ rows, total }: { rows: [string, number, number][]; total: numbe
 
 export default async function CostsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { work } = await loadBook(slug);
+  const { work } = await loadRecords(slug);
   const [lines, stages, runs] = await Promise.all([listCostLines(work.uid), listStages(work.uid), listBookRuns(work.uid, 200)]);
   const runLabel = new Map(runs.map((r) => [r.id, `#${r.id} · ${r.label}`]));
   const runLines = lines.filter((l) => l.run_id);

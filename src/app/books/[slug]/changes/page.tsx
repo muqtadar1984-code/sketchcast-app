@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getChapter, listAnnotations, listChapterSummaries } from "@/utils/books/store";
 import { diffChapter, type BlockChange, type WordOp } from "@/utils/books/diff";
-import { loadBook, pickRevision } from "../load";
+import { loadRecords, pickRevision } from "../load";
 import NotDrafted from "../not-drafted";
 import RevisionPicker from "../revision-picker";
 import { BlockView, type FigureCtx } from "../blocks";
@@ -57,7 +57,7 @@ function ChangeRow({ c, ctx }: { c: BlockChange; ctx: FigureCtx }) {
 export default async function ChangesPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const { work, revisions } = await loadBook(slug);
+  const { work, revisions } = await loadRecords(slug);
   if (!revisions.length) return <NotDrafted slug={slug} />;
   const to = pickRevision(work, revisions, sp.to);
   const toIdx = revisions.findIndex((r) => r.key === to.key);

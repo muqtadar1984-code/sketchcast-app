@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listArtifacts, listStages } from "@/utils/books/store";
 import type { Artifact } from "@/utils/books/types";
-import { loadBook } from "../load";
+import { loadRecords } from "../load";
 import { bytes, Card, Chip, Empty } from "../../ui";
 
 // /books/[slug]/files[?stage=] — every stored file of the book, by the stage
@@ -23,7 +23,7 @@ const KIND_LABEL: Record<string, string> = {
 export default async function FilesPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const { work } = await loadBook(slug);
+  const { work } = await loadRecords(slug);
   const [artifacts, stages] = await Promise.all([listArtifacts(work.uid), listStages(work.uid)]);
   const only = typeof sp.stage === "string" ? sp.stage : null;
   const kind = typeof sp.kind === "string" ? sp.kind : null;
