@@ -130,6 +130,9 @@ async function judgeProvider(): Promise<LLMProvider> {
 }
 
 const itemOf = (id: string): GateItem => GATE_BANK.find((i) => i.id === id)!;
+/** The FULL run's items: the whole bank, or (SK_GATES_SUBSET=ci) the 12-item
+ *  CI subset — the small live comparison (docs/sk-model-first.md). */
+const RUN_BANK: GateItem[] = process.env.SK_GATES_SUBSET === "ci" ? CI_SUBSET : GATE_BANK;
 
 describe.skipIf(FULL)("§8.4 leader gates — CI subset (scripted model, no network)", () => {
   it(`runs ${CI_SUBSET.length} items: grounded, refused and isolated`, async () => {
@@ -155,10 +158,10 @@ describe.skipIf(FULL)("§8.4 leader gates — CI subset under MODEL-FIRST routin
 });
 
 describe.skipIf(!FULL)("§8.4 leader gates — FULL bank", () => {
-  it(`runs all ${GATE_BANK.length} items and writes the report`, async () => {
+  it(`runs all ${RUN_BANK.length} items and writes the report`, async () => {
     const judged = new Map<string, JudgeResult>();
     const judge = JUDGE ? await judgeProvider() : null;
-    const outcomes: GateOutcome[] = await runGates(GATE_BANK, POST, hooks, {
+    const outcomes: GateOutcome[] = await runGates(RUN_BANK, POST, hooks, {
       leaky: true,
       routing: ROUTING,
       onItem: async (o) => {
@@ -171,6 +174,6 @@ describe.skipIf(!FULL)("§8.4 leader gates — FULL bank", () => {
     const paths = writeReport(report, process.env.SK_GATES_REPORT_DIR || "reports/sk-gates");
     console.log(`[sk-gates] ${ROUTING} routing: ${report.summary.pass ? "PASS" : "FAIL"} — report: ${paths.json} , ${paths.md}`);
     // The run itself never fails the process on a gate miss: the report is the verdict.
-    expect(outcomes).toHaveLength(GATE_BANK.length);
+    expect(outcomes).toHaveLength(RUN_BANK.length);
   }, 1_800_000);
 });

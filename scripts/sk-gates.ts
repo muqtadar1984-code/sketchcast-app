@@ -25,6 +25,9 @@
  *   --routing rules|model|both  the Shell routing to measure (SK_ROUTING). Scripted default: both, then the
  *                           rules-vs-model comparison table (grounded, leaks, claims, wrong action, stub rounds).
  *                           Live default: rules (a live model-first run is its own paid run).
+ *   --subset ci             run only the 12-item CI subset (the small live comparison). The live
+ *                           estimate reads the latest scripted RULES volume: the full bank's when a
+ *                           full scripted run exists (an upper bound for the subset).
  *   --report-dir <dir>      default reports/sk-gates.
  *   --yes                   actually spend (live only). Without it a live invocation prints the estimate and stops.
  *
@@ -136,7 +139,8 @@ if (!["rules", "model", "both"].includes(routingArg)) fail(`--routing must be ru
 const routings = routingArg === "both" ? ["rules", "model"] : [routingArg];
 const paid = model === "live" || judge === "live";
 
-const baseEnv: Record<string, string> = { SK_GATES_FULL: "1", SK_GATES_REPORT_DIR: reportDir };
+if (args.subset !== undefined && args.subset !== "ci") fail(`--subset must be ci (got ${String(args.subset)})`);
+const baseEnv: Record<string, string> = { SK_GATES_FULL: "1", SK_GATES_REPORT_DIR: reportDir, ...(args.subset === "ci" ? { SK_GATES_SUBSET: "ci" } : {}) };
 
 if (!paid) {
   console.log(`sk-gates: scripted run (${routings.join(" + ")} routing) — scripted model stub, no network calls.`);
