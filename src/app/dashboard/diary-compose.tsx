@@ -78,7 +78,7 @@ export default function DiaryCompose({
   }
 
   return (
-    <div className="card p-5 mb-6">
+    <div data-tour="diary-compose" className="card p-5 mb-6">
       <h2 className="font-display font-medium mb-3">{t.title}</h2>
 
       <div className="flex flex-wrap gap-1.5 mb-3">

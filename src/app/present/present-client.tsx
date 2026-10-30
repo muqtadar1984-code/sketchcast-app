@@ -635,7 +635,7 @@ export default function PresentClient({
     <main className="min-h-dvh bg-[#0F1417] text-[#E7EDE9]">
       {/* Dark, because it sits above a lit board in a room with the lights down,
           and because it must read from the back of the class. */}
-      <header className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
+      <header data-tour="board-bar" className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
         {/* The Board has no app header (Board UX 2026-10-28, founder): the way
             back to the portal is this menu. Plain links. Above the stage (z 30)
             and the rail overlay, below the SK panel (z 50). */}

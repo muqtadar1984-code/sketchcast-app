@@ -279,11 +279,11 @@ export default async function SchoolAnalyticsPage() {
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">
-          <span className="chip bg-[#E2F4F1] text-[#0C8175] me-2">{scopeLabel}</span>
+          <span data-tour="school-scope" className="chip bg-[#E2F4F1] text-[#0C8175] me-2">{scopeLabel}</span>
           {t.subtitle}
         </p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-10">
+        <div data-tour="school-metrics" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-10">
           {metrics.map((m) => (
             <div key={m.label} className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
               <div className="text-xs text-[#5B6470]">{m.label}</div>
@@ -298,12 +298,12 @@ export default async function SchoolAnalyticsPage() {
         <p className="text-sm text-[#5B6470] mb-3">{t.worklist.hint}</p>
 
         {flagged.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">
+          <div data-tour="school-worklist" className="card px-5 py-6 text-sm text-[#5B6470]">
             {t.worklist.empty} 🎉
           </div>
         ) : isCoordinator ? (
           // Coordinator: the named, actionable worklist within their slice.
-          <div className="card divide-y divide-[#EEF0EC]">
+          <div data-tour="school-worklist" className="card divide-y divide-[#EEF0EC]">
             {flagged.map((f) => (
               <div key={f.studentId} className="px-5 py-3 flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -332,7 +332,7 @@ export default async function SchoolAnalyticsPage() {
         ) : (
           // Principal/Admin: aggregate-first (DPDP) — counts by grade, not open
           // profiling. Coordinators see and act on the named students in-slice.
-          <div className="card divide-y divide-[#EEF0EC]">
+          <div data-tour="school-worklist" className="card divide-y divide-[#EEF0EC]">
             {[...byGrade.entries()]
               .sort((a, b) => b[1] - a[1])
               .map(([grade, n]) => (

@@ -265,7 +265,7 @@ export default async function SchoolDiaryPage({
         </div>
 
         {classes.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.noClassesInScope}</div>
+          <div data-tour="school-diary" className="card px-5 py-6 text-sm text-[#5B6470]">{t.noClassesInScope}</div>
         ) : (
           <>
             <div className="flex flex-wrap gap-1.5 mb-4">
@@ -286,7 +286,7 @@ export default async function SchoolDiaryPage({
 
             <DateNav day={day} href={href} t={td.nav} lang={lang} />
 
-            <div className="card divide-y divide-[#EEF0EC]">
+            <div data-tour="school-diary" className="card divide-y divide-[#EEF0EC]">
               <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                 {fmt(td.fromClassroom, { count: autoEntries.length })}
               </p>

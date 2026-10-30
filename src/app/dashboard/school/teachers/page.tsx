@@ -204,9 +204,9 @@ export default async function SchoolTeachersPage() {
         </p>
 
         {rows.length === 0 ? (
-          <div className="card px-5 py-6 text-sm text-[#5B6470]">{t.empty}</div>
+          <div data-tour="school-teachers" className="card px-5 py-6 text-sm text-[#5B6470]">{t.empty}</div>
         ) : (
-          <div className="card divide-y divide-[#EEF0EC]">
+          <div data-tour="school-teachers" className="card divide-y divide-[#EEF0EC]">
             <div className="hidden sm:grid grid-cols-[2fr_repeat(4,1fr)] gap-3 px-5 py-2 text-xs text-[#5B6470] font-medium">
               <span>{t.col.teacher}</span>
               <span className="text-end">{t.col.lessons}</span>

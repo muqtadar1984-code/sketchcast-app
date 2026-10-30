@@ -241,7 +241,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
         {status}
       </p>
 
-      <div className="card px-4 sm:px-5 py-2 divide-y divide-[#EEF0EC]">
+      <div data-tour="sk-prefs" className="card px-4 sm:px-5 py-2 divide-y divide-[#EEF0EC]">
         <h3 className="text-lg font-display pt-3 pb-1">{t.prefsTitle}</h3>
         <Switch id="pref-read" label={t.readAloud} hint={t.readAloudHint} {...sw(prefs.readAloud)} busy={busy === "pref:readAloud"} onToggle={() => void togglePref("readAloud")} />
         <Switch id="pref-hands" label={t.handsFree} hint={t.handsFreeHint} {...sw(prefs.handsFree)} busy={busy === "pref:handsFree"} onToggle={() => void togglePref("handsFree")} />
@@ -257,7 +257,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
         </div>
       )}
 
-      <div className="card px-4 sm:px-5 py-4">
+      <div data-tour="sk-memory" className="card px-4 sm:px-5 py-4">
         <h3 className="text-lg font-display mb-2">{t.rememberTitle}</h3>
         {!props.memoryReadable ? (
           <p className="text-sm text-[#5B6470]">{t.rememberUnavailable}</p>
@@ -309,7 +309,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
       </div>
 
       {!isStudent && children.length > 0 && (
-        <div className="card px-4 sm:px-5 py-2">
+        <div data-tour="sk-children-consent" className="card px-4 sm:px-5 py-2">
           <h3 className="text-lg font-display pt-3">{t.childrenTitle}</h3>
           <p className="text-sm text-[#5B6470] pb-2">{t.childrenHint}</p>
           {children.map((c) => (
@@ -357,7 +357,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
       )}
 
       {props.school && (
-        <div className="card px-4 sm:px-5 py-2">
+        <div data-tour="sk-school-switch" className="card px-4 sm:px-5 py-2">
           <h3 className="text-lg font-display pt-3">{t.schoolTitle}</h3>
           <Switch
             id="school-memory"

@@ -198,7 +198,7 @@ export default async function MyTimetablePage() {
       <div className="print:hidden">
         <AppHeader />
       </div>
-      <main className="max-w-7xl mx-auto px-6 py-10 print:py-2">
+      <main data-tour="my-timetable" className="max-w-7xl mx-auto px-6 py-10 print:py-2">
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3 print:hidden" />
         <p className="text-[#5B6470] mb-6 print:hidden">{isStudent ? t.studentIntro : t.teacherIntro}</p>

@@ -34,7 +34,7 @@ function Cover({ url, title }: { url: string | null; title: string }) {
 export default function MyBooksStrip({ tiles, t, unavailable }: { tiles: MyBookTile[]; t: MyBooksMessages; unavailable?: boolean }) {
   if (!tiles.length) return null;
   return (
-    <section className="mb-8" aria-labelledby="my-books-title" data-testid="my-books">
+    <section className="mb-8" aria-labelledby="my-books-title" data-testid="my-books" data-tour="my-books">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1">
         <h2 id="my-books-title" className="text-xl font-semibold text-[#14181F]">
           {t.title}

@@ -259,6 +259,7 @@ export default async function ChildrenPage() {
                         scores) — same report a teacher prints per student. */}
                     <Link
                       href={`/dashboard/reports/${l.child_id}`}
+                      data-tour="child-report"
                       className="font-medium text-[#0C8175] hover:underline"
                     >
                       {dict.reports.title}

@@ -74,7 +74,7 @@ export default function ParentCompose({
 
   if (!open)
     return (
-      <div className="px-5 py-3">
+      <div data-tour="diary-parent-compose" className="px-5 py-3">
         <button onClick={() => setOpen(true)} className="btn-ghost h-9 px-3 text-sm">
           + {fmt(t.open, { name: childName })}
         </button>
@@ -82,7 +82,7 @@ export default function ParentCompose({
     );
 
   return (
-    <form onSubmit={submit} className="px-5 py-3">
+    <form data-tour="diary-parent-compose" onSubmit={submit} className="px-5 py-3">
       <div className="flex flex-wrap gap-1.5 mb-2">
         {NOTE_TYPES.map((nt) => (
           <button

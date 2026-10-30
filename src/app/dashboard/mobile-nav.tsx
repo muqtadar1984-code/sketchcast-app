@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { isActive, type NavTab } from "./header-nav";
+import { isActive, TOUR_MARK, type NavTab } from "./header-nav";
 
 // Narrow-width nav: the desktop tabs used to be `hidden sm:flex`, which left
 // phones with NO route to My children / Test Papers / Timetable / School
@@ -74,6 +74,7 @@ export default function MobileNav({
     <div className={`${className} shrink-0`}>
       <button
         onClick={() => setOpen((o) => !o)}
+        data-tour="mobile-nav"
         aria-expanded={open}
         aria-label={open ? closeLabel : openLabel}
         className={`h-9 w-9 inline-flex items-center justify-center rounded-lg border ${c.button}`}
@@ -101,6 +102,7 @@ export default function MobileNav({
                   key={t.href}
                   href={t.href}
                   onClick={() => setOpen(false)}
+                  data-tour={TOUR_MARK[t.href]}
                   aria-current={active ? "page" : undefined}
                   className={`block px-5 py-3 text-sm border-b last:border-b-0 ${c.divider} ${
                     active ? c.active : c.idle

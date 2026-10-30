@@ -67,7 +67,7 @@ export default function CoordinatorAdmin({
   const grantable = members.filter((m) => !coordinatorIds.has(m.id));
 
   return (
-    <div className="card p-5">
+    <div data-tour="school-admin-roles" className="card p-5">
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-display font-medium text-lg">{t.title}</h2>
         <span className="text-xs text-[#5B6470]">

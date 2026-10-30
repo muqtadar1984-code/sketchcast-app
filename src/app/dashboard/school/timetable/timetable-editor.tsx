@@ -512,7 +512,7 @@ export default function TimetableEditor({
       )}
       {error && <p className="text-sm text-red-600 mb-2 print:hidden">{error}</p>}
 
-      <div className="card overflow-x-auto print:overflow-visible print:shadow-none">
+      <div data-tour="timetable-grid" className="card overflow-x-auto print:overflow-visible print:shadow-none">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
