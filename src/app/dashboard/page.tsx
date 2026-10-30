@@ -45,6 +45,8 @@ import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 import { premiumVoicesFor } from "@/utils/narration";
+import MyBooksStrip from "./my-books-strip";
+import { myBooksStrip } from "@/utils/my-books/server";
 
 type Chapter = { num: number; title: string; parts?: { titles?: string[]; words?: number }[] | null };
 
@@ -125,7 +127,7 @@ function examCoverageLabel(
   return bits.join("; ");
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ book_pdf?: string }> } = {}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -258,6 +260,14 @@ export default async function DashboardPage() {
   const locale = await resolveLocale();
   const dict = await getDictionary(locale);
   const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
+
+  // SK S7 K3 — "My books": SketchCast books this reader bought or was given
+  // (and, for a parent, their verified children's). Decided and signed
+  // server-side (src/utils/my-books); empty → the strip is not rendered. Not
+  // gated by SK flags: a bought book shows even while SK is restricted. Read
+  // before the student branch — a student who activated a code sees it too.
+  const myBooks = await myBooksStrip(user, role);
+  const pdfUnavailable = (await searchParams)?.book_pdf === "unavailable";
 
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
@@ -506,6 +516,11 @@ export default async function DashboardPage() {
             <Link href="/dashboard/my-timetable" className="chip bg-[#E2F4F1] text-[#0C8175]">
               📅 My timetable
             </Link>
+          </div>
+        )}
+        {myBooks.length > 0 && (
+          <div className="max-w-7xl mx-auto px-6 pt-6">
+            <MyBooksStrip tiles={myBooks} t={t.myBooks} unavailable={pdfUnavailable} />
           </div>
         )}
         <div data-tour="assignments">
@@ -1238,6 +1253,8 @@ export default async function DashboardPage() {
             />
           </div>
         )}
+
+        <MyBooksStrip tiles={myBooks} t={t.myBooks} unavailable={pdfUnavailable} />
 
         {bookList.length === 0 ? (
           gettingStarted ? (

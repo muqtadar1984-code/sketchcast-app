@@ -1224,6 +1224,18 @@
       "strandedTitle": "Leçons de livres supprimés",
       "strandedHint": "Leur livre a été supprimé, elles sont donc regroupées ici par chapitre. Tout fonctionne encore : lecture, téléchargement et attribution.",
       "answerKey": "Corrigé"
+    },
+    "myBooks": {
+      "title": "Mes livres",
+      "subtitle": "Les livres SketchCast que vous avez achetés ou reçus.",
+      "chapters": "{n} chapitres",
+      "chapterOne": "1 chapitre",
+      "openInSk": "Ouvrir dans SK",
+      "download": "Télécharger le PDF",
+      "forChild": "pour {name}",
+      "forYourChild": "pour votre enfant",
+      "withdrawn": "N'est plus en vente. Votre exemplaire reste le vôtre.",
+      "unavailable": "Le PDF de ce livre n'est pas encore disponible. Veuillez réessayer plus tard."
     }
   },
   "school": {
