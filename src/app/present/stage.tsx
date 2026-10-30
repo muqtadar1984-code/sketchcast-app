@@ -9,7 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import type { VideoLike } from "./board-controller";
-import { loadYouTubeApi, stageSource, youtubePlayerVars, YouTubeVideo } from "./youtube-video";
+import { loadYouTubeApi, stagePlayerEvents, stageSource, youtubePlayerVars, YouTubeVideo, type YTPlayerLike } from "./youtube-video";
 
 // The stage: one video element, for the whole lesson.
 //
@@ -34,15 +34,20 @@ import { loadYouTubeApi, stageSource, youtubePlayerVars, YouTubeVideo } from "./
 // must read as "the frame could not be captured" rather than as a board that
 // silently stopped freezing.
 //
-// A CATALOGUE KIT PLAYS FROM YOUTUBE (founder 2026-10-30: "the video should be
-// pulled from youtube to avoid egress cost"). When the host passes `youtubeId`
-// the stage mounts a YouTube IFrame player in a host <div> that, like the
-// <video>, is rendered unconditionally and only restyled; the player is built
-// once per id and torn down when the id changes. Every handle method drives
-// whichever source is live, and element() hands the controller the YouTube
-// adapter (youtube-video.ts) behind the same VideoLike interface. YouTube's
-// pixels are cross-origin, so freeze() on a YouTube lesson pauses and returns
-// null ("could not capture the frame").
+// THE STORED MP4 FIRST, YOUTUBE ONLY AS THE FALLBACK (founder 2026-10-30:
+// "the quality matters in the app so lets use stored mp4 wherever possible").
+// The host passes `src` whenever the lesson has a stored file, and `youtubeId`
+// only for a lesson that has none; even given both, stageSource plays the
+// file. On the fallback the stage mounts a YouTube IFrame player in a host
+// <div> that, like the <video>, is rendered unconditionally and only
+// restyled; the player is built once per id and torn down when the id
+// changes. Every handle method drives whichever source is live, and element()
+// hands the controller the YouTube adapter (youtube-video.ts) behind the same
+// VideoLike interface. YouTube's pixels are cross-origin, so freeze() on a
+// YouTube lesson pauses and returns null ("could not capture the frame"); on
+// the stored file freeze-frame and the slide stills work. Captions start OFF
+// on the fallback (captionsOff on ready and whenever the player loads a
+// module).
 
 export type StageMode = "full" | "corner" | "away";
 
@@ -70,8 +75,9 @@ export type StageProps = {
    */
   src: string | null;
   /**
-   * A YouTube video id: when set, the stage plays it through the IFrame Player
-   * API and `src` is ignored. Like `src`, CHANGING IT RELOADS the player.
+   * A YouTube video id, the FALLBACK: played through the IFrame Player API only
+   * when `src` is empty (a lesson with no stored MP4). Like `src`, CHANGING IT
+   * RELOADS the player.
    */
   youtubeId?: string | null;
   mode: StageMode;
@@ -168,16 +174,14 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
     loadYouTubeApi()
       .then((YT) => {
         if (cancelled) return;
-        const player = new YT.Player(mount, {
+        const player: YTPlayerLike = new YT.Player(mount, {
           videoId: ytId,
           width: "100%",
           height: "100%",
           playerVars: youtubePlayerVars(window.location.origin),
-          events: {
-            onReady: () => video.attach(player),
-            onStateChange: (e) => video.handleState(e.data),
-            onError: () => video.handleError(),
-          },
+          // captions off on ready (and whenever a module loads), then the
+          // player is handed to the adapter — youtube-video.ts
+          events: stagePlayerEvents(video, () => player),
         });
       })
       .catch(() => {

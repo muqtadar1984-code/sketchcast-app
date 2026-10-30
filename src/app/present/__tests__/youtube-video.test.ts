@@ -1,25 +1,86 @@
-// The Board's stage on a YouTube lesson (founder 2026-10-30: catalogue kit
-// videos stream from YouTube, never our storage): the source the stage picks,
-// the server's per-lesson choice (YouTube ids INSTEAD of signed MP4s for a
-// catalogue copy; an uploaded book's lesson untouched), and the IFrame
-// player adapter behind the controller's VideoLike — seek with an
+// The Board's stage and its YouTube FALLBACK (founder 2026-10-30: "the
+// quality matters in the app so lets use stored mp4 wherever possible"): the
+// source the stage picks (the stored file whenever there is one), the
+// server's per-lesson choice (signed MP4s first; a catalogue copy's YouTube
+// ids only when it has none), captions off on the fallback player, and the
+// IFrame player adapter behind the controller's VideoLike — seek with an
 // asynchronous `seeked`, the time source, play/pause, ended and error.
 // Run: node node_modules/vitest/vitest.mjs run src/app/present/__tests__/youtube-video.test.ts
 import { describe, expect, it } from "vitest";
-import { stageSource, youtubePlayerVars, YouTubeVideo, YT_STATE, type YTPlayerLike } from "../youtube-video";
+import { captionsOff, stagePlayerEvents, stageSource, youtubePlayerVars, YouTubeVideo, YT_STATE, type YTPlayerLike } from "../youtube-video";
+import { framesCapturable } from "../board-session";
 import { lessonVideo } from "@/utils/catalogue/kit-youtube";
 
 describe("stageSource", () => {
-  it("a well-formed YouTube id wins over a stored file; a file alone plays from storage; neither is nothing", () => {
-    expect(stageSource("https://signed/lesson.mp4", "AAAAAAAAAA1")).toBe("youtube");
+  it("the stored file wins over a YouTube id; YouTube only when there is no file; neither is nothing", () => {
+    expect(stageSource("https://signed/lesson.mp4", "AAAAAAAAAA1")).toBe("file");
     expect(stageSource(null, "AAAAAAAAAA1")).toBe("youtube");
+    expect(stageSource("", "AAAAAAAAAA1")).toBe("youtube");
     expect(stageSource("https://signed/lesson.mp4", null)).toBe("file");
-    expect(stageSource("https://signed/lesson.mp4", "bad id")).toBe("file");
+    expect(stageSource(null, "bad id")).toBe("none");
     expect(stageSource(null, null)).toBe("none");
   });
 
-  it("the player shows no YouTube chrome and plays inline", () => {
-    expect(youtubePlayerVars("https://sketchcast.app")).toMatchObject({ controls: 0, rel: 0, playsinline: 1, origin: "https://sketchcast.app" });
+  it("the player shows no YouTube chrome, plays inline, and loads no captions by default", () => {
+    expect(youtubePlayerVars("https://sketchcast.app")).toMatchObject({ controls: 0, rel: 0, playsinline: 1, cc_load_policy: 0, origin: "https://sketchcast.app" });
+  });
+});
+
+describe("freeze-frame and the slide stills (framesCapturable)", () => {
+  it("come back on a lesson with a stored MP4, even when its kit is on YouTube; not on a YouTube-only fallback", () => {
+    expect(framesCapturable({ urls: ["https://signed/lesson.mp4"] })).toBe(true);
+    expect(framesCapturable({ urls: ["https://signed/lesson.mp4"], youtube: ["AAAAAAAAAA1"] })).toBe(true);
+    expect(framesCapturable({ urls: [], youtube: ["AAAAAAAAAA1"] })).toBe(false);
+    expect(framesCapturable(null)).toBe(false);
+  });
+});
+
+describe("captions off on the fallback player", () => {
+  const recorder = (fail = false) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      unloadModule(name: string) {
+        calls.push(`unload:${name}`);
+        if (fail) throw new Error("no such module");
+      },
+      setOption(module: string, option: string, value: unknown) {
+        calls.push(`set:${module}.${option}=${JSON.stringify(value)}`);
+        if (fail) throw new Error("no such module");
+      },
+    };
+  };
+
+  it("unloads the captions module and clears the track", () => {
+    const p = recorder();
+    captionsOff(p);
+    expect(p.calls).toEqual(["unload:captions", "unload:cc", "set:captions.track={}"]);
+  });
+
+  it("never throws: a player without the module, or without the methods, is left alone", () => {
+    const p = recorder(true);
+    expect(() => captionsOff(p)).not.toThrow();
+    expect(p.calls).toHaveLength(3);
+    expect(() => captionsOff({})).not.toThrow();
+  });
+
+  it("the stage's onReady turns captions off and hands the player to the adapter; a module load turns them off again", () => {
+    const v = new YouTubeVideo(manualClock());
+    const p = Object.assign(fakePlayer(7), recorder());
+    const ev = stagePlayerEvents(v, () => p);
+    expect(v.ready).toBe(false);
+    ev.onReady();
+    expect(p.calls).toContain("unload:captions");
+    expect(v.ready).toBe(true);
+    expect(v.currentTime).toBe(7);
+    p.calls.length = 0;
+    ev.onApiChange();
+    expect(p.calls).toContain("unload:captions");
+    // state and errors still reach the adapter
+    let ended = 0;
+    v.addEventListener("ended", () => ended++);
+    ev.onStateChange({ data: YT_STATE.ENDED });
+    expect(ended).toBe(1);
   });
 });
 
@@ -28,16 +89,17 @@ describe("lessonVideo (the kit route's choice)", () => {
     ["k-cells", ["AAAAAAAAAA1"]],
     ["k-two", ["BBBBBBBBBB1"]],
   ]);
-  it("a catalogue copy on YouTube: the ids and NO storage path to sign", () => {
-    expect(lessonVideo({ catalogue_ref: { topic_kit_id: "k-cells" } }, ["sys/lesson.mp4"], byKit)).toEqual({ youtube: ["AAAAAAAAAA1"], paths: [], fellBack: null });
-    expect(lessonVideo({ product_ref: { topic_kit_id: "k-cells" } }, ["sys/lesson.mp4"], byKit).youtube).toEqual(["AAAAAAAAAA1"]);
+  it("a catalogue copy with a stored MP4: the MP4, even though its kit is on YouTube", () => {
+    expect(lessonVideo({ catalogue_ref: { topic_kit_id: "k-cells" } }, ["sys/lesson.mp4"], byKit)).toEqual({ youtube: [], paths: ["sys/lesson.mp4"] });
+    expect(lessonVideo({ product_ref: { topic_kit_id: "k-two" } }, ["a.mp4", "a_part2.mp4"], byKit)).toEqual({ youtube: [], paths: ["a.mp4", "a_part2.mp4"] });
   });
-  it("a catalogue copy without YouTube for every part: storage, and the kit is named for the log", () => {
-    expect(lessonVideo({ catalogue_ref: { topic_kit_id: "k-two" } }, ["a.mp4", "a_part2.mp4"], byKit)).toEqual({ youtube: [], paths: ["a.mp4", "a_part2.mp4"], fellBack: "k-two" });
-    expect(lessonVideo({ catalogue_ref: { topic_kit_id: "k-none" } }, ["a.mp4"], byKit).fellBack).toBe("k-none");
+  it("a catalogue copy with NO stored MP4: its kit's YouTube ids, the fallback", () => {
+    expect(lessonVideo({ catalogue_ref: { topic_kit_id: "k-cells" } }, [], byKit)).toEqual({ youtube: ["AAAAAAAAAA1"], paths: [] });
+    expect(lessonVideo({ catalogue_ref: { topic_kit_id: "k-none" } }, [], byKit)).toEqual({ youtube: [], paths: [] });
   });
-  it("an uploaded book's lesson keeps its own storage video, nothing logged", () => {
-    expect(lessonVideo({ part: 1 }, ["mine/lesson.mp4"], byKit)).toEqual({ youtube: [], paths: ["mine/lesson.mp4"], fellBack: null });
+  it("an uploaded book's lesson keeps its own storage video, and has no fallback", () => {
+    expect(lessonVideo({ part: 1 }, ["mine/lesson.mp4"], byKit)).toEqual({ youtube: [], paths: ["mine/lesson.mp4"] });
+    expect(lessonVideo({ part: 1 }, [], byKit)).toEqual({ youtube: [], paths: [] });
   });
 });
 

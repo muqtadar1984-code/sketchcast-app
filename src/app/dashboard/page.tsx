@@ -1146,13 +1146,14 @@ async function loadLessons(supabase: Db, user: User, t: LibraryMessages, userSig
   }
   const copySign = copySigner ? batchSigner(copySigner, "artifacts", 3600) : null;
 
-  // A catalogue copy's lesson (params.catalogue_ref, or a SketchCast book's
-  // product_ref) WATCHES ON YOUTUBE, not from our storage (founder 2026-10-30:
-  // "the video should be pulled from youtube to avoid egress cost"): one
-  // service-role read of those kits' YouTube ids; a kit with none keeps its
-  // storage link and is logged.
+  // Every lesson WATCHES ITS STORED MP4 (founder 2026-10-30: "the quality
+  // matters in the app so lets use stored mp4 wherever possible"). Only a
+  // catalogue copy (params.catalogue_ref, or a SketchCast book's product_ref)
+  // with NO stored video falls back to its kit's YouTube video, played in the
+  // same in-app player (lesson-player.tsx, captions off): one service-role
+  // read of those kits' YouTube ids, and usually none at all.
   const copyKitIds = ((gensRaw ?? []) as unknown as LessonRow[])
-    .filter((g) => g.kind === "presentation" && isCatalogueCopy({ params: g.params }))
+    .filter((g) => g.kind === "presentation" && isCatalogueCopy({ params: g.params }) && !(g.artifacts ?? []).some((a) => a.kind === "video_mp4"))
     .map((g) => topicKitIdOf(g.params))
     .filter((x): x is string => !!x);
   const youtubeByKit = copySigner && copyKitIds.length ? await loadKitYoutubeIds(copySigner, copyKitIds) : new Map<string, string[]>();
@@ -1176,9 +1177,8 @@ async function loadLessons(supabase: Db, user: User, t: LibraryMessages, userSig
       const videoArts = arts
         .filter((a) => a.kind === "video_mp4" && a.url)
         .sort((a, b) => partNum(a.path) - partNum(b.path));
-      const lv = lessonVideo(isCatalogueCopy({ params: g.params }) ? g.params : null, videoArts.map((a) => a.path), youtubeByKit);
-      if (lv.fellBack) console.warn(`[library] no watchable YouTube video for catalogue kit ${lv.fellBack} (copy ${g.id}); linking the stored MP4`);
-      const videos = lv.youtube.length ? lv.youtube.map(youtubeWatchUrl) : videoArts.map((a) => a.url!);
+      const lv = lessonVideo(isCatalogueCopy({ params: g.params }) ? g.params : null, videoArts.map((a) => a.url!), youtubeByKit);
+      const videos = lv.youtube.length ? lv.youtube.map(youtubeWatchUrl) : lv.paths;
       // TEMPORARY (2026-08-31): a second, download-dispositioned signing of the
       // SAME paths, for the allow-listed accounts only. `videos` above is left
       // disposition-free so in-tab playback still works. Index-aligned with
