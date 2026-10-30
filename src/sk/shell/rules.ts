@@ -878,8 +878,17 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   const f = frameIntent(raw);
   if (!f.framed || !f.text) return first;
   const second = routeOnce(f.question ? `${f.text}?` : f.text, ctx, now, clock);
-  return plainAsk(second) ? first : second;
+  if (plainAsk(second)) return first;
+  // A page move found only after the frame was removed needs an explicit move
+  // verb ("open the board", "take me to the diary"): without one, "I want to
+  // know about the board" stays a question instead of a jump to the Board.
+  if (second.intent === "navigate" && !FRAMED_NAV_VERB_RE.test(norm(f.text))) return first;
+  return second;
 }
+
+/** The move verbs a FRAMED message must keep for the second pass to navigate. */
+const FRAMED_NAV_VERB_RE =
+  /^(?:open|go to|go|goto|take me to|take me|bring me to|bring up|show me|navigate to|switch to|jump to|head to|buka|pergi ke|bawa saya ke|tunjukkan|افتح|اذهب إلى|خذني إلى|ouvre|ouvrir|va à|aller à|abre|abrir|ir a|ir para|vai para|खोलो|खोलें|ले चलो|उघडा|తెరువు)\b/u;
 
 function routeOnce(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
   const raw = (text ?? "").trim();
