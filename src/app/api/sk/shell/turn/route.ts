@@ -18,6 +18,7 @@ import { lineFor } from "@/sk/shell/lines";
 import { KIT_OFFER_DECLINED } from "@/sk/shell/act-lines";
 // S6 slice C: the greeting suggestion's offers, and workflow facts in use.
 import { SUGGEST_DECLINED } from "@/sk/shell/suggest-lines";
+import { WALKTHROUGH_START } from "@/sk/shell/walkthrough-lines";
 import { recordWorkflow, workflowFromTurn } from "@/sk/shell/workflow";
 import type { FactsDb } from "@/sk/facts";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
@@ -678,6 +679,17 @@ export async function POST(request: Request) {
         // ── 2026-10-30: the answer-language commands — no teacher model ──────
         if (decision.intent === "lang") {
           await runLanguage(decision.command);
+          finish();
+          return;
+        }
+
+        // ── 2026-10-30: "Show me around" — the client replays the walkthrough.
+        // No model, no capability, no write: the tour itself is static copy.
+        if (decision.intent === "tour") {
+          const text = lineFor(WALKTHROUGH_START, ctx.user.locale);
+          send({ type: "walkthrough" });
+          send({ type: "text", text });
+          done({ sources: [], label: "navigation" }, text, []);
           finish();
           return;
         }

@@ -46,7 +46,10 @@ export type RulesDecision =
    *  back to one — every role; the route answers without the teacher model
    *  (a repeat makes ONE translation call on the last answer). */
   | { intent: "lang"; command: LangCommand }
-  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor" | "lang"> };
+  /** 2026-10-30: "Show me around" / "give me the tour" / "demo" — replay the
+   *  first-login walkthrough, every role, no model. */
+  | { intent: "tour" }
+  | { intent: Exclude<SkIntent, "navigate" | "chat" | "teach" | "act" | "tutor" | "lang" | "tour"> };
 
 export type SkTutorCapability = "tutor.play" | "tutor.section" | "tutor.slide" | "tutor.practise" | "tutor.where" | "tutor.progress" | "tutor.explain";
 
@@ -784,6 +787,29 @@ export function routeTutor(raw: string, normed: string, ctx: SkContext): RulesDe
   return null;
 }
 
+// "Show me around" in the ten app languages (the phrases the tour itself
+// teaches in each language's last stop) plus the obvious English variants.
+// Anchored like the language commands: "show me around the cell" is a question.
+const WALK_TOUR_RE = polite(
+  [
+    "show me around(?: (?:the app|sketchcast|here))?|give me (?:the|a) (?:tour|demo|quick tour|walkthrough)|(?:take|start|play|replay|run|redo|do) (?:the|a) (?:tour|walkthrough|demo)(?: again)?|(?:the |a )?(?:tour|demo|walkthrough)(?: again)?|show me the (?:tour|demo)|walk me through (?:the app|sketchcast|everything)",
+    "tunjuk(?:kan)? (?:saya )?(?:sekeliling|sekitar)|tunjukkan saya|bawa saya (?:melawat|bersiar)|(?:mula(?:kan)? )?lawatan(?: berpandu)?|tunjuk(?:kan)? demo",
+    "تونجوقکن سکليليڠ|تونجوقکن ساي",
+    "خذني في جولة|عرفني بالمكان|عرّفني بالمكان|أرني المكان|ارني المكان|(?:ابدأ |ابدا )?(?:ال)?جولة(?: تعريفية)?",
+    "fais-moi visiter|faites-moi visiter|(?:une |la )?visite guidée",
+    "enséñame la app|ensename la app|dame un recorrido|muéstrame la app|muestrame la app",
+    "me mostra o app|me mostre o app|faça um tour|faca um tour",
+    "मुझे सब दिखाओ|मुझे सब दिखाइए|टूर दिखाओ",
+    "मला सगळे दाखव|मला सगळं दाखव|टूर दाखवा",
+    "నాకు అన్నీ చూపించు|నాకు అన్నీ చూపించండి",
+  ].join("|"),
+);
+
+/** "Show me around" (any app language): replay the first-login walkthrough. */
+export function isWalkthroughRequest(text: string): boolean {
+  return WALK_TOUR_RE.test(norm(text ?? "").replace(/[«»“”'‘’]/g, "").trim());
+}
+
 export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
   const raw = (text ?? "").trim();
   const t = norm(raw);
@@ -800,6 +826,9 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   // that could read "explain that again in English" as a Board or tutor move.
   const lang = parseLanguageCommand(raw);
   if (lang) return { intent: "lang", command: lang };
+
+  // 2026-10-30: "Show me around" replays the walkthrough (the client runs it).
+  if (isWalkthroughRequest(raw)) return { intent: "tour" };
 
   // S3 slice D: a student's tutor phrasings come first, and a student never
   // reaches the Board, start-a-lesson or teacher-action rules below.

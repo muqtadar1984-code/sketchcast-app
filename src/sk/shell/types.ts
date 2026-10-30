@@ -392,6 +392,10 @@ export type SkTurnEvent =
    *  the read-aloud voice (`speech`, BCP-47) and, when `override` (the user
    *  chose it), the dictation language too. Sent before the text. */
   | { type: "lang"; lang: string; dir: "ltr" | "rtl"; speech: string; override: boolean }
+  /** 2026-10-30: "Show me around" — the client (re)starts the first-login
+   *  walkthrough from stop 1. Decided by rules, no model; a replay never
+   *  writes the seen row. */
+  | { type: "walkthrough" }
   | {
       type: "done";
       /** §2.3 / §9.3: which tools the answer rests on, and its label. */
@@ -411,7 +415,7 @@ export type SkTurnEvent =
     }
   | { type: "error"; message: string };
 
-export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat" | "tutor" | "lang";
+export type SkIntent = "teach" | "ask" | "navigate" | "act" | "job" | "check" | "chat" | "tutor" | "lang" | "tour";
 
 /** The Board moves of Final Plan §2.4, as the client executes them. */
 export type SkBoardMove =
