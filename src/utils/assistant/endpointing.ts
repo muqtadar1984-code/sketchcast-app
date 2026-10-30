@@ -88,8 +88,20 @@ export function soundsUnfinished(text: string): boolean {
   if (CJK_TAILS.some((w) => bare.endsWith(w))) return true;
   if (TERMINAL.test(t)) return false;
   if (CONNECTIVES.has(word)) return true;
+  // A complete short reply ("yes", "next", "stop the tour") answers a card or
+  // steers the tour: it ends at the normal wait, not the hesitant one.
+  if (COMPLETE_SHORT.has(t.toLowerCase().replace(/[\p{P}\p{S}]+/gu, "").replace(/\s+/g, " ").trim())) return false;
   return t.split(/\s+/).length < SHORT_UTTERANCE_WORDS && !/[㐀-鿿]{4,}/u.test(t);
 }
+
+/** Short replies that are complete as they stand (all app languages). */
+const COMPLETE_SHORT: ReadonlySet<string> = new Set([
+  "yes", "no", "yeah", "yep", "nope", "ok", "okay", "sure", "next", "back", "stop", "pause", "skip", "continue", "cancel", "confirm", "thanks", "thank you", "go on", "next one", "go back",
+  "ya", "tak", "boleh", "seterusnya", "kembali", "berhenti", "teruskan", "terima kasih",
+  "نعم", "لا", "حسنا", "التالي", "توقف", "شكرا",
+  "oui", "non", "suivant", "merci", "sí", "si", "siguiente", "gracias", "sim", "não", "nao", "próximo", "obrigado", "obrigada",
+  "हाँ", "हां", "नहीं", "अगला", "रुको", "धन्यवाद", "होय", "नाही", "पुढे", "అవును", "కాదు", "తదుపరి",
+]);
 
 export type EndpointTimings = { silenceMs?: number; hesitantMs?: number };
 

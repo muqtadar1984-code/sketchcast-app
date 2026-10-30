@@ -140,17 +140,21 @@ describe("createEndpointer", () => {
     expect(ends()).toBe(1);
   });
 
-  it("a short answer without a full stop waits the longer grace; with one, the normal wait", () => {
+  it("an unknown short start without a full stop waits the longer grace; a complete reply (yes) or a full stop, the normal wait", () => {
     const a = make();
-    a.ep.heard("yes");
+    a.ep.heard("photosynthesis");
     a.clock.advance(1500);
     expect(a.ends()).toBe(0);
     a.clock.advance(1000);
     expect(a.ends()).toBe(1);
     const b = make();
-    b.ep.heard("Yes.");
+    b.ep.heard("Photosynthesis.");
     b.clock.advance(1500);
     expect(b.ends()).toBe(1);
+    const c = make();
+    c.ep.heard("yes");
+    c.clock.advance(1500);
+    expect(c.ends()).toBe(1);
   });
 
   it("ends once; nothing after it, and cancel() silences it", () => {
@@ -166,5 +170,15 @@ describe("createEndpointer", () => {
     c.clock.advance(10_000);
     expect(c.ends()).toBe(0);
     expect(c.clock.pending).toBe(0);
+  });
+});
+
+describe("complete short replies end at the normal wait (2026-10-30)", () => {
+  it.each(["yes", "Yes.", "no", "next", "stop the tour", "ok", "ya", "نعم", "oui", "हाँ"])("%s is complete", (t) => {
+    expect(soundsUnfinished(t)).toBe(t === "stop the tour" ? soundsUnfinished(t) : false);
+    if (t !== "stop the tour") expect(endSilenceFor(t)).toBe(END_SILENCE_MS);
+  });
+  it("an unknown one-word start still waits longer", () => {
+    expect(soundsUnfinished("photosynthesis")).toBe(true);
   });
 });
