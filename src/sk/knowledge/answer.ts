@@ -98,7 +98,10 @@ const OPENERS = new RegExp(
 const INDIC = /(?:क्या|क्यों|कैसे|समझाइए|समझाओ|बताइए|काय|का\s|कसे|समजावून|ఏమిటి|ఎందుకు|ఎలా|వివరించండి)/u;
 
 export function isContentQuestion(text: string): boolean {
-  const t = (text ?? "").trim().replace(/^(?:sk|hey sk|hi sk)[,:]?\s+/i, "");
+  const t = (text ?? "")
+    .trim()
+    .replace(/^(?:sk|hey sk|hi sk)[,:]?\s+/i, "")
+    .replace(/^[¿¡"'“‘(\s]+/u, "");
   if (!t || t.length < 4) return false;
   return OPENERS.test(t) || INDIC.test(t);
 }
