@@ -1239,8 +1239,16 @@ export async function POST(request: Request) {
         const act = actHit ? await actionEvent(actHit.result) : null;
 
         // ── Grounding (§2.3, §9.3) ───────────────────────────────────────────
+        // Model routing: a tool that answered ok with its own line and no rows
+        // ("No one is at risk", "Grade 6 is outside your scope") answered too —
+        // the rules path said that line; so may the model.
         const productive = trace.filter(
-          (t) => (t.result.facts?.length ?? 0) > 0 || !!t.result.navigate || (t.result.entities?.length ?? 0) > 0 || (t.result.ok && (!!t.result.board || !!t.result.confirm)),
+          (t) =>
+            (t.result.facts?.length ?? 0) > 0 ||
+            !!t.result.navigate ||
+            (t.result.entities?.length ?? 0) > 0 ||
+            (t.result.ok && (!!t.result.board || !!t.result.confirm)) ||
+            (routing === "model" && t.result.ok && !!t.result.summary.trim()),
         );
         const support = trace.flatMap((t) => [t.result.summary, ...(t.result.facts ?? [])]);
         // S5 slice E (§8.4 gates): a sentence claiming SK DID something —
