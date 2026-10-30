@@ -81,10 +81,11 @@ describe('SkShell variant="hero": the card', () => {
     // NOT the floating dialog: one engine, the inline variant.
     expect(html).not.toContain('role="dialog"');
     expect(html).not.toContain('data-sk="shell"');
-    // The still avatar, head-and-shoulders crop of the full figure.
+    // The still avatar: the flattened head-and-shoulders portrait, never the
+    // rig's body layer (it has no head).
     expect(html).toMatch(/data-sk="avatar"[^>]*data-sk-look="B"/);
-    expect(html).toMatch(/sk%2Frig%2Fsk-b%2Fbody\.png|\/sk\/rig\/sk-b\/body\.png/);
-    expect(html).toContain("object-top");
+    expect(html).toContain("/sk/portrait/sk-b.webp");
+    expect(html).not.toContain("body.png");
     // The one-line greeting, then the text box and Send.
     expect(html).toContain(en.sk.shell.hero.greeting);
     expect(html).toContain('data-sk="input"');
