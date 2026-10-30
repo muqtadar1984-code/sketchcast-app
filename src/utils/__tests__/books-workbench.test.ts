@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultChapter, latestPlan, stages, workChapters, type ApprovalLite, type ChapterRow, type RunLite } from "@/utils/books/workbench";
+import { defaultChapter, latestPlan, nextStep, stages, workChapters, type ApprovalLite, type ChapterRow, type RunLite } from "@/utils/books/workbench";
 
 const plan = [1, 2, 3].map((n) => ({ chapter: n, title: `Chapter ${n}` }));
 const row = (n: number, sha = `S${n}`): ChapterRow => ({ chapter: n, title: `Ch ${n}`, content_sha256: sha, revision_key: "d1" });
@@ -66,5 +66,25 @@ describe("approvals follow the text", () => {
     const now = [{ chapter: 1, title: "A", content_sha256: "S1", revision_key: "d1" }, { chapter: 2, title: "B", content_sha256: "S2-edited", revision_key: "d1" }];
     const ch = workChapters([], now, [book], [], [...old, ...now]);
     expect(ch.map((c) => [c.chapter, c.state])).toEqual([[1, "approved"], [2, "ready"]]);
+  });
+});
+
+describe("direction C: one next step", () => {
+  it("without the chapter plan, the next step is the free chapter list, never Final", () => {
+    const one = [{ chapter: 1, title: "A", content_sha256: "S1", revision_key: "d1" }];
+    const aps: ApprovalLite[] = [{ id: 1, kind: "gate_d", chapter: 1, revision_key: "d1", content_sha256: "S1" }];
+    const ch = workChapters([], one, aps, []);
+    const s = stages({ chapters: ch, runs: [], approvals: aps, releases: [], draftUsd: 2.5, auditUsd: 0.58, planKnown: false });
+    expect(s[1]).toMatchObject({ state: "ready", value: "1/?", action: { kind: "run", stage: "readiness", label: "List chapters" } });
+    expect(s[4].action).toBeUndefined();
+    expect(nextStep(s)?.key).toBe("chapters");
+  });
+
+  it("with the plan, the next step is drafting the next chapter in sequence", () => {
+    const one = [{ chapter: 1, title: "A", content_sha256: "S1", revision_key: "d1" }];
+    const aps: ApprovalLite[] = [{ id: 1, kind: "gate_d", chapter: 1, revision_key: "d1", content_sha256: "S1" }];
+    const ch = workChapters([{ chapter: 1, title: "A" }, { chapter: 2, title: "B" }, { chapter: 3, title: "C" }], one, aps, []);
+    const s = stages({ chapters: ch, runs: [], approvals: aps, releases: [], draftUsd: 2.5, auditUsd: 0.58, planKnown: true });
+    expect(nextStep(s)?.action).toMatchObject({ stage: "draft_chapter", params: { chapter: 2 }, label: "Draft 2" });
   });
 });
