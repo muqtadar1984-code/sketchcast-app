@@ -139,7 +139,8 @@ describe("library.find", () => {
     expect(ids).not.toContain("g4"); // t2's kit
     expect(ids).not.toContain("b3"); // t2's book in another school
     const kit = r.facts!.find((f) => f.id === "g1")!;
-    expect(kit).toEqual({ kind: "kit", id: "g1", title: "Quiz: Specialised cells", where: "my_library", status: "done", subject: "Biology", grade: "Form 1" });
+    // 2026-10-30: a book kit names its chapter as the app shows it (chapter_ref "1" → chapter 2).
+    expect(kit).toEqual({ kind: "kit", id: "g1", title: "Quiz: Specialised cells", where: "my_library", status: "done", subject: "Biology", grade: "Form 1", chapter: 2 });
     expect(r.facts!.find((f) => f.id === "g2")!.title).toBe("worksheet: Specialised cells and tissues");
     expect(r.summary).toMatch(/^3 matches for 'specialised cells': 3 in your library \(2 kits, 1 books\), 0 on the school shelf/);
     expect(r.entities!.map((e) => e.kind)).toEqual(expect.arrayContaining(["generation", "book"]));

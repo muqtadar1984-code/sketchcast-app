@@ -23,6 +23,7 @@ import { walkCommand } from "@/sk/shell/client/walkthrough";
 import { recordWorkflow, workflowFromTurn } from "@/sk/shell/workflow";
 import type { FactsDb } from "@/sk/facts";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
+import { contextEntities, groundWithContext } from "@/sk/shell/context-entities";
 // S5 slice E: a claimed action no completed action backs is dropped (§8.4 gates).
 import { actionClaimGuard, claimCorrection } from "@/sk/shell/action-claims";
 import { issueActionToken, publicParams } from "@/sk/shell/tokens";
@@ -1094,11 +1095,15 @@ export async function POST(request: Request) {
         // make "I have deleted Amir's record." pass.
         const claims = actionClaimGuard(full, []);
         const modelText = claims.text;
-        const verdict = groundingCheck(modelText, support, body.text);
-        if (!verdict.ok || claims.dropped.length) {
+        // 2026-10-30: a clarifying question that names HER class, book,
+        // chapter, child or school ("Do you mean a class like 7B …?") is not
+        // invented — when the tools alone do not carry it, the check runs
+        // again with her own context entities (context-entities.ts).
+        const verdict = await groundWithContext(modelText, support, body.text, () => contextEntities(ctx, deps));
+        if (!verdict.ok || claims.dropped.length || verdict.context) {
           // Server-side only: which tokens failed and what was dropped, so a
           // false positive can be diagnosed from the runtime logs (2026-10-28).
-          console.info("sk-shell.turn grounding", JSON.stringify({ turnId: body.turnId, tools: trace.map((t) => t.name), unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped }));
+          console.info("sk-shell.turn grounding", JSON.stringify({ turnId: body.turnId, tools: trace.map((t) => t.name), unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped, context: verdict.context }));
         }
         const navHit = [...trace].reverse().find((t) => t.result.ok && t.result.navigate)?.result.navigate;
         let text: string;

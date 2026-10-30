@@ -134,6 +134,9 @@ export async function searchLibrary(ctx: SkContext, deps: SkCapabilityDeps, quer
   return hits.slice(0, cap);
 }
 
+/** A book kit's chapter, 1-based as the app shows it; null for anything else. */
+const chapterOfHit = (h: LibraryHit): number | null => (h.kind === "kit" && h.bookId && h.chapterRef != null && /^\d{1,3}$/.test(String(h.chapterRef)) ? Number(h.chapterRef) + 1 : null);
+
 const hitEntity = (h: LibraryHit, via: string): ResolvedEntity => ({
   kind: h.kind === "book" ? "book" : "generation",
   id: h.id,
@@ -183,7 +186,9 @@ export const libraryFind: SkCapability = {
       return {
         ok: true,
         summary: summary.slice(0, 400),
-        facts: hits.map((h) => ({ kind: h.kind, id: h.id, title: h.title, where: h.where, status: h.status, subject: h.subject, grade: h.grade })),
+        // A kit of a book chapter carries its chapter as the app shows it
+        // (1-based; chapter_ref is 0-based), so SK may name "chapter 3" from it.
+        facts: hits.map((h) => ({ kind: h.kind, id: h.id, title: h.title, where: h.where, status: h.status, subject: h.subject, grade: h.grade, ...(chapterOfHit(h) !== null ? { chapter: chapterOfHit(h) } : {}) })),
         entities: hits.slice(0, 5).map((h) => hitEntity(h, "library.find")),
       };
     } catch (e) {
