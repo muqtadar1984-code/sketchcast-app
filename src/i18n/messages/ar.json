@@ -2121,7 +2121,8 @@
     "find": "ابحث عن درس",
     "downloads": "الملفات",
     "noMatches": "لا توجد دروس مطابقة.",
-    "allowanceLine": "{used} من {cap} حقائب هذا الأسبوع · يتجدد في {date}"
+    "allowanceLine": "{used} من {cap} حقائب هذا الأسبوع · يتجدد في {date}",
+    "showMore": "عرض {n} أخرى"
   },
   "activate": {
     "title": "فعّل كتابك",

@@ -2121,7 +2121,8 @@
     "find": "पाठ खोजें",
     "downloads": "फ़ाइलें",
     "noMatches": "कोई पाठ मेल नहीं खाता।",
-    "allowanceLine": "इस सप्ताह {cap} में से {used} किट · {date} को रीसेट"
+    "allowanceLine": "इस सप्ताह {cap} में से {used} किट · {date} को रीसेट",
+    "showMore": "{n} और दिखाएँ"
   },
   "activate": {
     "title": "अपनी पुस्तक सक्रिय करें",

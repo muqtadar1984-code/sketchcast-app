@@ -2121,7 +2121,8 @@
     "find": "Cari pelajaran",
     "downloads": "Fail",
     "noMatches": "Tiada pelajaran yang sepadan.",
-    "allowanceLine": "{used} daripada {cap} kit minggu ini · diset semula {date}"
+    "allowanceLine": "{used} daripada {cap} kit minggu ini · diset semula {date}",
+    "showMore": "Tunjukkan {n} lagi"
   },
   "activate": {
     "title": "Aktifkan buku anda",

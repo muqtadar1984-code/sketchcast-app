@@ -2121,7 +2121,8 @@
     "find": "Find a lesson",
     "downloads": "Files",
     "noMatches": "No lessons match.",
-    "allowanceLine": "{used} of {cap} kits this week · resets {date}"
+    "allowanceLine": "{used} of {cap} kits this week · resets {date}",
+    "showMore": "Show {n} more"
   },
   "activate": {
     "title": "Activate your book",

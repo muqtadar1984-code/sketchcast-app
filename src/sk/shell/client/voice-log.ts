@@ -88,3 +88,53 @@ export function beaconVoiceEvents(events: VoiceEvent[]): void {
   }
   void fetch("/api/sk/voice-log", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true }).catch(() => {});
 }
+
+// ── the tour's stops (2026-10-30) ───────────────────────────────────────────
+// "The tour skipped the readymade kits section": WHY a stop was passed over
+// used to reach only the browser console. Each stop now reports one "tour"
+// event to the same log — shown (with how long the page took), or skipped and
+// why — so a slow or broken page shows up in the function logs.
+//
+//   k        "tour"
+//   provider the stop id ("kits")
+//   ok       true when the stop was shown
+//   why      "shown" | "missing" (the page settled without the anchor) |
+//            "cap" (the page never settled in SETTLE_CAP_MS) | "away" (she
+//            left the stop's page herself)
+//   error    "<route> <page>": the route, then what the page looked like —
+//            "settled", "still-loading:<signal>" (which loading UI was still
+//            on screen), "off-route", "not-ready" or "never-quiet"
+//   ms       the wait: from the navigation to the highlight (shown) or to the
+//            skip; for "away", how long the stop had been on screen
+
+export type TourOutcome = "shown" | "missing" | "cap" | "away";
+
+/** A skip's reason: the settled-page wait gives up at its cap, otherwise it
+ *  only ever skips a page that settled without the anchor. */
+export const skipOutcome = (waitedMs: number, capMs: number): "missing" | "cap" => (waitedMs >= capMs ? "cap" : "missing");
+
+/** What the page looked like when the stop was decided (see above). `loading`
+ *  names the loading UI still visible ("aria-busy", "data-loading",
+ *  "data-sk-loading", "animate-pulse"), or null. */
+export function tourPageState(p: { pathOk: boolean; ready: boolean; loading: string | null }, outcome: TourOutcome): string {
+  if (!p.pathOk) return "off-route";
+  if (p.loading) return `still-loading:${p.loading}`;
+  if (!p.ready) return "not-ready";
+  return outcome === "cap" ? "never-quiet" : "settled";
+}
+
+/** One "tour" event. The route is shortened (never the page state) so the
+ *  pair fits the log's 60-character strings. No spoken text, no page content. */
+export function tourEvent(o: { stop: string; route: string; outcome: TourOutcome; ms: number; page: string }): Omit<VoiceEvent, "t"> {
+  const page = o.page.slice(0, 40);
+  const room = STR - page.length - 1;
+  const route = o.route.length > room ? `${o.route.slice(0, Math.max(0, room - 1))}…` : o.route;
+  return {
+    k: "tour",
+    provider: o.stop.slice(0, STR),
+    ok: o.outcome === "shown",
+    why: o.outcome,
+    error: `${route} ${page}`,
+    ms: Math.max(0, Math.round(o.ms)),
+  };
+}

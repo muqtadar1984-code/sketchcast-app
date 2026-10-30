@@ -2121,7 +2121,8 @@
     "find": "Procurar uma aula",
     "downloads": "Ficheiros",
     "noMatches": "Nenhuma aula corresponde.",
-    "allowanceLine": "{used} de {cap} kits esta semana · renova a {date}"
+    "allowanceLine": "{used} de {cap} kits esta semana · renova a {date}",
+    "showMore": "Mostrar mais {n}"
   },
   "activate": {
     "title": "Ative o seu livro",

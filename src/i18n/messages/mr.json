@@ -2121,7 +2121,8 @@
     "find": "पाठ शोधा",
     "downloads": "फाइल्स",
     "noMatches": "कोणताही पाठ जुळत नाही.",
-    "allowanceLine": "या आठवड्यात {cap} पैकी {used} किट · {date} रोजी रीसेट"
+    "allowanceLine": "या आठवड्यात {cap} पैकी {used} किट · {date} रोजी रीसेट",
+    "showMore": "आणखी {n} दाखवा"
   },
   "activate": {
     "title": "तुमचे पुस्तक सक्रिय करा",

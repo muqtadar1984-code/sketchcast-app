@@ -1,19 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 import AssignModal, { type ChildRow, type ClassRow } from "../assign-modal";
-import { type LibraryMessages } from "../labels";
+import { kindLabel, type LibraryMessages } from "../labels";
 import { languageLabel } from "@/utils/narration";
-import { languagesOf, lessonPageUrl, youtubeUrl } from "./logic";
+import { KIT_CHUNK, assignablePieces, downloadsOf, languagesOf, lessonPageUrl, storageVideo, visibleKits, youtubeUrl } from "./logic";
 
 export type KitsMessages = Dictionary["kits"];
 
-export type DownloadLink = { label: string; href: string };
-export type PieceView = { kind: string; generationId: string; label: string; downloads: DownloadLink[] };
+/** A piece as the server sends it. Its label, its download links and whether
+ * it is assignable are derived here (logic.ts) — shipping them resolved for
+ * every card made the page's payload several hundred KB of repeated strings. */
+export type PieceView = { kind: string; generationId: string };
 export type KitView = {
   topicId: string;
   kitId: string;
@@ -22,14 +24,12 @@ export type KitView = {
   subject: string | null;
   language: string;
   youtubeId: string | null;
-  /** the in-app player's source when there is no YouTube video (a translated
-   * kit, D5): /api/catalogue/file?kind=video_mp4, and its frame */
-  videoHref: string | null;
-  posterHref: string | null;
+  /** the presentation's generation, sent only for a kit with no YouTube video
+   * (a translation, D5): it plays in-app from /api/catalogue/file?kind=video_mp4 */
+  videoGenerationId: string | null;
   questionCount: number;
   unlocked: boolean;
   pieces: PieceView[];
-  assignableIds: string[];
 };
 
 const BTN_PRIMARY =
@@ -55,11 +55,17 @@ const CHIP_OFF = `${CHIP} bg-white border-[#CBD3D1] text-[#1F2A37] hover:bg-[#F3
 //                 a link to the Library.
 // Filtering is client-side over the rows the server already resolved: subject
 // chips, an "unlocked" chip, and a find box over the title.
+//
+// 2026-10-30 (the tour skipped this page — "probably because it was taking too
+// long to load"): the allowance line (the tour's anchor) is rendered by the
+// server ABOVE this gallery, and the gallery renders in chunks of KIT_CHUNK —
+// the first chunk at once, the next as the reader nears the end (an
+// IntersectionObserver sentinel, with a "Show more" button as the fallback).
+// The chips and the find box still filter EVERY kit (visibleKits); a `?topic=`
+// highlight is always rendered and scrolled to.
 export default function KitsGallery({
   kits,
   canUnlock,
-  allowanceLine,
-  upgradeHref,
   resetsLabel,
   highlight,
   classes,
@@ -69,12 +75,9 @@ export default function KitsGallery({
 }: {
   kits: KitView[];
   canUnlock: boolean;
-  /** One line: "3 of 5 this week · resets Mon 20 Oct", or the unlimited sentence. */
-  allowanceLine: string;
-  /** Pricing link for personal capped tiers; null hides it. */
-  upgradeHref: string | null;
   resetsLabel: string;
-  /** `?topic=` slug to ring and pre-filter nothing for — it just stands out. */
+  /** `?topic=` slug to ring and scroll to — never cut from the rendered
+   * chunk, never a filter: it just stands out. */
   highlight: string | null;
   classes: ClassRow[];
   childTargets: ChildRow[] | null;
@@ -84,6 +87,8 @@ export default function KitsGallery({
   const [subject, setSubject] = useState<string>("all");
   const [language, setLanguage] = useState<string>("all");
   const [query, setQuery] = useState("");
+  /** How many matching cards to render; back to one chunk on every filter change. */
+  const [count, setCount] = useState(KIT_CHUNK);
   const languages = useMemo(() => languagesOf(kits), [kits]);
 
   const subjects = useMemo(() => {
@@ -91,36 +96,78 @@ export default function KitsGallery({
     for (const k of kits) if (k.subject) seen.set(k.subject, (seen.get(k.subject) ?? 0) + 1);
     return [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s);
   }, [kits]);
-  const unlockedCount = kits.filter((k) => k.unlocked).length;
+  const unlockedCount = useMemo(() => kits.filter((k) => k.unlocked).length, [kits]);
 
-  const q = query.trim().toLowerCase();
-  const shown = kits.filter(
-    (k) =>
-      (subject === "all" || (subject === "unlocked" ? k.unlocked : k.subject === subject)) &&
-      (language === "all" || k.language === language) &&
-      (!q || k.title.toLowerCase().includes(q) || (k.subject ?? "").toLowerCase().includes(q)),
+  const { shown, matched, more } = useMemo(
+    () => visibleKits(kits, { query, subject, language }, highlight, count),
+    [kits, query, subject, language, highlight, count],
   );
+  const pickSubject = (s: string) => {
+    setSubject(s);
+    setCount(KIT_CHUNK);
+  };
+  const pickLanguage = (l: string) => {
+    setLanguage(l);
+    setCount(KIT_CHUNK);
+  };
+
+  // The next chunk counts from what is on screen (the highlight may have
+  // stretched the cut past `count`), so "more" always adds cards.
+  const nextCount = shown.length + KIT_CHUNK;
+  const nextRef = useRef(nextCount);
+  useEffect(() => {
+    nextRef.current = nextCount;
+  }, [nextCount]);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!more || !el || typeof IntersectionObserver === "undefined") return;
+    // A margin below the fold: the next chunk is there before she reaches it.
+    // Re-observed after every chunk, so a sentinel still in range loads again.
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setCount(nextRef.current);
+      },
+      { rootMargin: "0px 0px 600px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [more, shown.length]);
+
+  // The signup carry-through (`?topic=`): bring its card into view, once.
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    if (!highlight || scrolledRef.current) return;
+    const el = document.getElementById(`kit-${highlight}`);
+    if (!el) return;
+    scrolledRef.current = true;
+    try {
+      el.scrollIntoView({ block: "center" });
+    } catch {
+      /* old browsers */
+    }
+  }, [highlight]);
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        <button type="button" onClick={() => setSubject("all")} className={subject === "all" ? CHIP_ON : CHIP_OFF}>
+        <button type="button" onClick={() => pickSubject("all")} className={subject === "all" ? CHIP_ON : CHIP_OFF}>
           {t.filterAll} · {kits.length}
         </button>
         {subjects.map((s) => (
-          <button key={s} type="button" onClick={() => setSubject(s)} className={subject === s ? CHIP_ON : CHIP_OFF}>
+          <button key={s} type="button" onClick={() => pickSubject(s)} className={subject === s ? CHIP_ON : CHIP_OFF}>
             {s}
           </button>
         ))}
         {unlockedCount > 0 && (
-          <button type="button" onClick={() => setSubject("unlocked")} className={subject === "unlocked" ? CHIP_ON : CHIP_OFF}>
+          <button type="button" onClick={() => pickSubject("unlocked")} className={subject === "unlocked" ? CHIP_ON : CHIP_OFF}>
             {t.filterUnlocked} · {unlockedCount}
           </button>
         )}
         {languages.length > 1 && (
           <span className="flex flex-wrap items-center gap-2 sm:ml-2 sm:pl-2 sm:border-l sm:border-[#E6E8E4]" role="group" aria-label={t.filterLanguage}>
             {["all", ...languages].map((l) => (
-              <button key={l} type="button" onClick={() => setLanguage(l)} className={language === l ? CHIP_ON : CHIP_OFF} lang={l === "all" ? undefined : l}>
+              <button key={l} type="button" onClick={() => pickLanguage(l)} className={language === l ? CHIP_ON : CHIP_OFF} lang={l === "all" ? undefined : l}>
                 {l === "all" ? t.filterAll : (languageLabel(l) ?? l.toUpperCase())}
               </button>
             ))}
@@ -129,22 +176,17 @@ export default function KitsGallery({
         <input
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setCount(KIT_CHUNK);
+          }}
           placeholder={t.find}
           aria-label={t.find}
           className="ml-auto w-full sm:w-56 rounded-lg border border-[#CBD3D1] px-3 py-1.5 text-sm"
         />
       </div>
-      <p className="text-xs text-[#5B6470] mb-5 flex flex-wrap items-center gap-x-3" data-tour="kits-allowance">
-        <span className="tabular">{allowanceLine}</span>
-        {upgradeHref && (
-          <a href={upgradeHref} target="_blank" rel="noreferrer" className="font-medium text-[#0C8175] hover:underline">
-            {t.upgradeCta}
-          </a>
-        )}
-      </p>
 
-      {shown.length === 0 && <p className="text-sm text-[#5B6470]">{kits.length === 0 ? t.empty : t.noMatches}</p>}
+      {matched === 0 && <p className="text-sm text-[#5B6470]">{kits.length === 0 ? t.empty : t.noMatches}</p>}
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {shown.map((k) => (
@@ -161,11 +203,24 @@ export default function KitsGallery({
           />
         ))}
       </div>
+      {more && (
+        <div ref={sentinelRef} className="mt-6 flex justify-center" data-kits-more={matched - shown.length}>
+          <button
+            type="button"
+            onClick={() => setCount(nextCount)}
+            className="rounded-lg border border-[#CBD3D1] bg-white px-4 py-2 text-sm font-medium text-[#1F2A37] hover:bg-[#F3F6F5]"
+          >
+            {fmt(t.showMore, { n: Math.min(KIT_CHUNK, matched - shown.length) })}
+          </button>
+        </div>
+      )}
     </>
   );
 }
 
-function KitCard({
+// memo: a new chunk (or a filter) re-renders the gallery, not every card
+// already on screen — their props are the same objects as before.
+const KitCard = memo(function KitCard({
   kit,
   canUnlock,
   resetsLabel,
@@ -229,9 +284,24 @@ function KitCard({
     router.refresh();
   };
 
-  const copyIds = copies ? kit.assignableIds.map((id) => copies[id]).filter((id): id is string => !!id) : [];
-  const adopted = !!copies && copyIds.length === kit.assignableIds.length;
-  const thumb = kit.youtubeId ? `https://i.ytimg.com/vi/${encodeURIComponent(kit.youtubeId)}/mqdefault.jpg` : kit.posterHref;
+  // Derived here, not shipped (logic.ts): the in-app video, the assignable
+  // pieces, and each piece's label and files.
+  const video = storageVideo(kit.youtubeId, kit.videoGenerationId);
+  const videoHref = video?.videoHref ?? null;
+  const posterHref = video?.posterHref ?? null;
+  const pieces = useMemo(
+    () =>
+      kit.pieces.map((p) => ({
+        ...p,
+        label: kindLabel(tLib, p.kind),
+        downloads: downloadsOf(p.kind, p.generationId).map((d) => ({ label: t[d.label], href: d.href })),
+      })),
+    [kit.pieces, t, tLib],
+  );
+  const assignableIds = useMemo(() => assignablePieces(kit.pieces).map((p) => p.generationId), [kit.pieces]);
+  const copyIds = copies ? assignableIds.map((id) => copies[id]).filter((id): id is string => !!id) : [];
+  const adopted = !!copies && copyIds.length === assignableIds.length;
+  const thumb = kit.youtubeId ? `https://i.ytimg.com/vi/${encodeURIComponent(kit.youtubeId)}/mqdefault.jpg` : posterHref;
   const facts = [kit.subject, fmt(t.pieces, { n: kit.pieces.length }), kit.questionCount > 0 ? fmt(t.questions, { n: kit.questionCount }) : null]
     .filter(Boolean)
     .join(" · ");
@@ -243,7 +313,7 @@ function KitCard({
       data-unlocked={kit.unlocked ? "true" : "false"}
       className={`card p-3 flex flex-col ${highlighted ? "ring-2 ring-[#0C8175]" : ""}`}
     >
-      {kit.videoHref ? (
+      {videoHref ? (
         <button
           type="button"
           onClick={() => setPlaying(true)}
@@ -293,7 +363,7 @@ function KitCard({
           )}
         </a>
       )}
-      {playing && kit.videoHref && (
+      {playing && videoHref && (
         // The translated lesson, from storage (Kit Translator §5.7): the <video>
         // follows the route's 302 to a signed URL and seeks against it. Nothing
         // signed is rendered into the page.
@@ -312,8 +382,8 @@ function KitCard({
               autoPlay
               playsInline
               preload="metadata"
-              src={kit.videoHref}
-              poster={kit.posterHref ?? undefined}
+              src={videoHref}
+              poster={posterHref ?? undefined}
               controlsList="nodownload"
               disablePictureInPicture
               className="aspect-video w-full rounded-lg bg-black"
@@ -327,7 +397,7 @@ function KitCard({
       </h2>
       <p className="text-xs text-[#5B6470] mt-1">{facts}</p>
       <ul className="mt-2 flex items-center gap-1.5 text-[#5B6470]" aria-label={fmt(t.pieces, { n: kit.pieces.length })}>
-        {kit.pieces.map((p) => (
+        {pieces.map((p) => (
           <li key={p.generationId} title={p.label} className="rounded-md bg-[#F3F6F5] p-1">
             <PieceIcon kind={p.kind} />
             <span className="sr-only">{p.label}</span>
@@ -372,7 +442,7 @@ function KitCard({
         )}
         {kit.unlocked && filesOpen && (
           <ul className="mt-3 space-y-1.5 text-sm">
-            {kit.pieces
+            {pieces
               .filter((p) => p.downloads.length > 0)
               .map((p) => (
                 <li key={p.generationId} className="flex items-center justify-between gap-2">
@@ -393,7 +463,7 @@ function KitCard({
       </div>
     </article>
   );
-}
+});
 
 function Glyph({ d }: { d: string }) {
   return (
