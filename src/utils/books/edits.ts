@@ -128,6 +128,32 @@ export async function saveImageEdit(i: { workUid: string; slug: string; revision
   return { ok: true, id: (data as { id: number }).id };
 }
 
+/** Change a front-matter piece (phase 3c): accepted at once — the next compile prints it, and rejecting it brings
+ * back the text before it. The book's current revision is recorded for the history. */
+export async function saveFrontMatter(i: { workUid: string; revisionKey: string; unit: string; before: string | null; text: string; by: string }): Promise<Result<{ id: number }>> {
+  const text = i.text.trim();
+  if (!text) return { error: "The text is empty.", status: 400 };
+  if (text.length > 12000) return { error: "That is longer than a front-matter page; shorten it.", status: 400 };
+  if (text === (i.before ?? "").trim()) return { error: "Nothing changed.", status: 400 };
+  const row = {
+    work_uid: i.workUid, revision_key: i.revisionKey, chapter: null, kind: "front_matter", unit: i.unit,
+    before_text: i.before?.trim() || null, after_text: text, instruction: null, status: "accepted", created_by: i.by,
+  };
+  const f = runsFile();
+  if (f) {
+    const d = readRunsFile(f);
+    const list = (d[TABLE] ?? []) as unknown as BookEdit[];
+    const e = { ...row, id: list.length + 1, created_at: new Date().toISOString(), applied_revision: null } as BookEdit;
+    (d as unknown as Record<string, BookEdit[]>)[TABLE] = [...list, e];
+    writeRunsFile(f, d);
+    return { ok: true, id: e.id };
+  }
+  const { data, error } = await createAdminClient().from(TABLE).insert(row).select("id").single();
+  if (error && missingTable(error)) return { error: NOT_APPLIED, status: 503 };
+  if (error) throw new Error(`${TABLE}: ${error.message}`);
+  return { ok: true, id: (data as { id: number }).id };
+}
+
 /** Reject an accepted edit, or resolve a note. */
 export async function decideEdit(i: { workUid: string; id: number; to: "rejected" | "resolved"; by: string }): Promise<Result> {
   const fields = { status: i.to, decided_by: i.by, decided_at: new Date().toISOString() };
