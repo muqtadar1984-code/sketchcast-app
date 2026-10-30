@@ -5,7 +5,8 @@
 // Run: node node_modules/vitest/vitest.mjs run src/app/api/sk/knowledge/__tests__/import-route.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ user: null as null | { id: string; email: string }, poll: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: null as null | { id: string; email: string }, poll: vi.fn(), skAllowed: true }));
+vi.mock("@/utils/flags", () => ({ skAccessAllowed: async () => mocks.skAllowed }));
 vi.mock("@/utils/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: mocks.user } }) } }) }));
 vi.mock("@/utils/supabase/admin", () => ({ createAdminClient: () => ({ admin: true }) }));
 vi.mock("@/sk/knowledge/release", () => ({ pollReleases: mocks.poll }));
@@ -31,6 +32,14 @@ describe("POST /api/sk/knowledge/import", () => {
   it("a signed-in non-founder (even a staff address) → 404, no poll", async () => {
     mocks.user = { id: "u2", email: "teacher@sketchcast.app" };
     const res = await POST();
+    expect(res.status).toBe(404);
+    expect(mocks.poll).not.toHaveBeenCalled();
+  });
+  it("the founder outside the SK allow-list gate → 404, no poll", async () => {
+    mocks.user = { id: "u1", email: "founder@sketchcast.app" };
+    mocks.skAllowed = false;
+    const res = await POST();
+    mocks.skAllowed = true;
     expect(res.status).toBe(404);
     expect(mocks.poll).not.toHaveBeenCalled();
   });
