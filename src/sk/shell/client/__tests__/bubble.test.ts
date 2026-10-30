@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   BUBBLE_INITIAL,
   BUBBLE_READ_MIN_MS,
+  GREETING_MIN_MS,
   SPEECH_LINGER_MS,
   bubbleFadeAt,
   bubbleOpen,
@@ -94,10 +95,11 @@ describe("the greeting: once per session, on a home page, never over something e
     expect(shouldGreet({ home: true, greeted: false, tour: true, text: "Hi" })).toBe(false);
     expect(shouldGreet({ home: true, greeted: false, tour: false, text: "  " })).toBe(false);
   });
-  it("shows and fades like text; it never replaces an open message", () => {
+  it("stays at least GREETING_MIN_MS (how SK starts, founder 2026-10-30), longer if it takes longer to read; it never replaces an open message", () => {
     let s = run([{ type: "greeting", text: "Hi, I'm SK. Ask me anything.", at: 0 }]);
     expect(s.msg).toMatchObject({ kind: "greeting" });
-    expect(bubbleFadeAt(s)).toBe(bubbleReadingMs(s.msg!.text));
+    expect(bubbleFadeAt(s)).toBe(Math.max(GREETING_MIN_MS, bubbleReadingMs(s.msg!.text)));
+    expect(bubbleFadeAt(s)).toBeGreaterThanOrEqual(10000);
     s = run([{ type: "sentence", text: "Speaking now.", at: 0 }, { type: "greeting", text: "Hi.", at: 1 }]);
     expect(s.msg?.kind).toBe("speech");
   });

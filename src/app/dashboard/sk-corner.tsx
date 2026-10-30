@@ -55,27 +55,28 @@ export function SkAvatar({
       data-sk-look={look}
       data-sk-speaking={speaking ? "true" : "false"}
       data-tour="sk-launcher"
-      className="pointer-events-auto relative h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0C8175]/40"
+      className="pointer-events-auto relative h-28 sm:h-36 shrink-0 rounded-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0C8175]/40"
     >
-      {/* Speaking: a soft ring that pulses — an opacity change only, and a
-          still ring when the user asks for reduced motion. */}
+      {/* The FULL figure (founder 2026-10-30: "keep the full size avatar
+          instead of just the head"), standing in the corner — the rig's layers
+          flattened and trimmed by scripts/sk-portraits.mjs. Speaking: a soft
+          teal glow around the figure that pulses (opacity only; still under
+          reduced motion). */}
       <span
         aria-hidden
         data-sk="speaking-ring"
-        className={`pointer-events-none absolute -inset-1 rounded-full ring-4 ring-[#0C8175]/50 transition-opacity duration-300 motion-reduce:transition-none ${speaking ? "opacity-100 motion-safe:animate-pulse" : "opacity-0"}`}
+        className={`pointer-events-none absolute inset-x-1 bottom-0 top-2 rounded-[45%] bg-[#0C8175]/20 blur-xl transition-opacity duration-300 motion-reduce:transition-none ${speaking ? "opacity-100 motion-safe:animate-pulse" : "opacity-0"}`}
       />
-      <span className="block h-full w-full overflow-hidden rounded-full bg-[#E2F4F1] shadow-lg ring-2 ring-white">
-        {/* The flattened head-and-shoulders portrait, cropped to the face. */}
-        <Image
-          src={look === "A" ? "/sk/portrait/sk-a.webp" : "/sk/portrait/sk-b.webp"}
-          alt=""
-          width={128}
-          height={96}
-          unoptimized
-          className="h-full w-full object-cover scale-150 origin-[48%_40%]"
-        />
-      </span>
-      {listening && <span aria-hidden data-sk="listening-dot" className="absolute top-0 end-0 h-3.5 w-3.5 rounded-full bg-[#B42318] ring-2 ring-white" />}
+      <Image
+        src={look === "A" ? "/sk/portrait/sk-a-full.webp" : "/sk/portrait/sk-b-full.webp"}
+        alt=""
+        width={look === "A" ? 333 : 317}
+        height={480}
+        unoptimized
+        priority
+        className="relative h-full w-auto object-contain object-bottom drop-shadow-lg"
+      />
+      {listening && <span aria-hidden data-sk="listening-dot" className="absolute top-1 end-1 h-3.5 w-3.5 rounded-full bg-[#B42318] ring-2 ring-white" />}
     </button>
   );
 }
@@ -102,11 +103,11 @@ export function SkBubble({
   /** The tour's controls need a little more room (still within the phone limit). */
   wide?: boolean;
 }) {
-  // The tail points at the avatar: on the avatar's side, mirrored in RTL.
-  const tail =
-    side === "end"
-      ? "-end-[7px] border-t border-e rotate-45 rtl:-rotate-45"
-      : "-start-[7px] border-b border-s rotate-45 rtl:-rotate-45";
+  // A THOUGHT bubble (founder: "show the thought bubble here on what the
+  // avatar is saying"): two small trailing circles toward the avatar's head,
+  // on the avatar's side (logical start/end, so RTL mirrors it).
+  const near = side === "end" ? "-end-3" : "-start-3";
+  const far = side === "end" ? "-end-[22px]" : "-start-[22px]";
   return (
     <div
       data-sk="bubble"
@@ -125,7 +126,8 @@ export function SkBubble({
         wide ? "w-[min(340px,calc(100vw-88px))]" : "w-max max-w-[min(320px,calc(100vw-88px))]"
       } ${open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
     >
-      <span aria-hidden className={`absolute bottom-4 h-3.5 w-3.5 bg-white border-[#E6E8E4] ${tail}`} />
+      <span aria-hidden data-sk="bubble-tail" className={`absolute top-5 ${near} h-3 w-3 rounded-full border border-[#E6E8E4] bg-white shadow-sm`} />
+      <span aria-hidden className={`absolute top-9 ${far} h-2 w-2 rounded-full border border-[#E6E8E4] bg-white shadow-sm`} />
       {onClose && (
         <button
           type="button"
