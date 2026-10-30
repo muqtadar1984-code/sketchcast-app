@@ -266,6 +266,23 @@ export type SkCapabilityResult = {
    *  from (a kit's manifest, an article, a book) — the answer defaults to it
    *  when every such result agrees (shell/language.ts answerLanguage). */
   language?: string;
+  /** S7 K2 (additive): the passages this result's content came from
+   *  (knowledge.search, library.find's text search, a kit answer that fell
+   *  back to its own book) — the answer's `done` event carries them and the
+   *  panel shows them as chips. */
+  citations?: SkCitation[];
+};
+
+/** S7 K2: one source an answer rests on — a SketchCast book, an article or an
+ *  upload, with its chapter and the block it came from. */
+export type SkCitation = {
+  title: string;
+  chapter: number | null;
+  /** The block's anchor in its source (a section sid, a paragraph p3). */
+  anchor: string;
+  /** The block's own heading, when it has one. */
+  section?: string;
+  kind: "sketchcast_book" | "article" | "user_book";
 };
 
 /** What /api/sk/act answers after a token is returned (§9.2). */
@@ -380,6 +397,10 @@ export type SkTurnEvent =
       /** True when the grounding check dropped one or more sentences the tools
        *  did not support; what remains is fully supported (so still grounded). */
       trimmed?: boolean;
+      /** S7 K2 (additive): the books / articles / uploads the answer came
+       *  from, for the panel's citation chips. `sources` stays the TOOL names
+       *  (§2.3); these are the documents behind them. */
+      citations?: SkCitation[];
     }
   | { type: "error"; message: string };
 

@@ -27,6 +27,8 @@ import { schoolHealth } from "./school";
 import { noticeSchoolAction } from "./notice";
 // S5 slice C: the leader figures (seats, cost, shelf gaps, trend).
 import { SCHOOL_FIGURE_CAPABILITIES } from "./school-figures";
+// S7 K2: knowledge.search (books, articles, uploads the user may read).
+import { knowledgeSearch } from "./knowledge";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -73,6 +75,9 @@ const ENTRIES: SkCapability[] = [
   // S5 slice C: school.seats (principal only), school.cost, school.gaps,
   // school.trend — leader hats only, immediate reads (school-figures.ts).
   ...SCHOOL_FIGURE_CAPABILITIES,
+  // S7 K2: knowledge.search — every role, sk flag, immediate read; the
+  // sources are the user's own (sourcesFor), the search is free.
+  knowledgeSearch,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
@@ -82,3 +87,4 @@ export { PARENT_CAPABILITIES };
 export { schoolHealth };
 export { noticeSchoolAction };
 export { SCHOOL_FIGURE_CAPABILITIES };
+export { knowledgeSearch };

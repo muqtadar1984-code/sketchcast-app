@@ -11,6 +11,7 @@
 // src/utils/availability.ts (pure, tested); this file only gathers rows.
 
 import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "../shell/types";
+import { passagesResult, searchForUser } from "./knowledge";
 import {
   decideAvailability,
   textMatches,
@@ -146,7 +147,7 @@ export const libraryFind: SkCapability = {
   meta: {
     name: "library.find",
     description:
-      "Search the teacher's own books and kits and the school's book shelf by title, subject or chapter. Returns what exists, where it is (my_library | school_shelf) and its status.",
+      "Search the teacher's own books and kits and the school's book shelf by title, subject or chapter. Returns what exists, where it is (my_library | school_shelf) and its status. When no title matches, it searches the text of her books, articles and uploads instead and returns passages with their source.",
     parameters: {
       type: "object",
       properties: { query: { type: "string", description: "Topic, title, subject or chapter words." } },
@@ -162,6 +163,15 @@ export const libraryFind: SkCapability = {
     if (!query) return { ok: false, summary: "I need a word or two to search for.", error: "query required" };
     try {
       const hits = await searchLibrary(ctx, deps, query);
+      // S7 K2: nothing by title, subject or chapter → the TEXT of the books,
+      // articles and uploads she may read (knowledge.search's own path).
+      if (!hits.length) {
+        const k = await searchForUser(ctx, deps, { query }).catch(() => null);
+        if (k?.status === "ok" && k.passages.length) {
+          const r = passagesResult(ctx, query, k.passages);
+          return { ...r, summary: `No title matches '${query}', but the text of your sources does. ${r.summary}`.slice(0, 400) };
+        }
+      }
       const own = hits.filter((h) => h.where === "my_library");
       const shelf = hits.filter((h) => h.where === "school_shelf");
       const summary = hits.length
