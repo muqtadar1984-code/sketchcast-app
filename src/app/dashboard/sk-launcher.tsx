@@ -182,6 +182,8 @@ export default function SkLauncher({
                   act: tour.act,
                   hold: tour.hold,
                   state: tour.state ?? undefined,
+                  narrating: tour.walk?.status === "running",
+                  soundBlocked: tour.soundBlocked,
                 }
               : null
           }

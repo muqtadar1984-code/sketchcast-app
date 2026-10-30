@@ -67,7 +67,10 @@ export class BrowserSpeechProvider implements SpeechProvider {
         watchdog = null;
       };
       u.onend = () => finish();
-      u.onerror = () => finish();
+      // A refused utterance ("not-allowed": no tap on the page yet) is reported
+      // as the same NotAllowedError a refused <audio>.play() raises, so the
+      // tour can show "Tap for sound" again; a cancel or interruption is ours.
+      u.onerror = (e?: { error?: string }) => (e?.error === "not-allowed" ? finish(Object.assign(new Error("speech: not-allowed"), { name: "NotAllowedError" })) : finish());
       watchdog = setTimeout(() => {
         if (this.current === u) window.speechSynthesis.cancel();
         finish(new Error("speech: the browser voice never started"));

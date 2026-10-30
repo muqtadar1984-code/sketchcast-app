@@ -64,6 +64,7 @@ import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector"
 import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultMicOn, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, type SpeechHold } from "@/sk/shell/client/mic-gate";
+import { beaconVoiceEvents, createVoiceLog, type VoiceLog } from "@/sk/shell/client/voice-log";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
@@ -98,6 +99,12 @@ export type SkShellWalk = {
   hold?: () => void;
   /** Where the tour is, sent with every turn so SK never says there is none. */
   state?: SkTurnWalk;
+  /** The tour is narrating (running, not paused): the hero mic stays closed —
+   *  opening it between lines switched Bluetooth headsets into call mode and
+   *  lost SK's voice (founder 2026-10-30). It listens again once paused or ended. */
+  narrating?: boolean;
+  /** The browser refused SK's voice (autoplay): the tour shows "Tap for sound". */
+  soundBlocked?: () => void;
 };
 
 /** The hero keeps the conversation compact: the latest turns, scrollable. */
@@ -322,6 +329,7 @@ export default function SkShell({
   /** The hero gate's onResume, current every render (the gate outlives renders). */
   const listenNowRef = useRef<() => void>(() => {});
   const walkRef = useRef<SkShellWalk | null | undefined>(walk);
+  const voiceLogRef = useRef<VoiceLog | null>(null);
   const onTakeTourRef = useRef(onTakeTour);
   const sendRef = useRef<(text: string, modality: "text" | "voice") => Promise<void>>(async () => {});
   const prefetchedRef = useRef(new Set<string>());
@@ -381,7 +389,7 @@ export default function SkShell({
         stopMicRef.current = null;
         setListening(false);
       },
-      ...(hero ? { onResume: () => listenNowRef.current(), canResume: () => !(holdRef.current?.holding ?? speakingRef.current) } : {}),
+      ...(hero ? { onResume: () => listenNowRef.current(), canResume: () => !walkRef.current?.narrating && !(holdRef.current?.holding ?? speakingRef.current) } : {}),
     });
     gateRef.current = gate;
     return () => {
@@ -410,6 +418,9 @@ export default function SkShell({
   useEffect(() => {
     const tts = speechMode(process.env.NEXT_PUBLIC_SK_TTS);
     const serverMode = tts === "google" ? "google" : "polly";
+    // What SK's voice did, sentence by sentence, to the function log (no text).
+    const voiceLog = createVoiceLog({ send: beaconVoiceEvents });
+    voiceLogRef.current = voiceLog;
     const coord = createSpeechCoordinator({
       server: tts !== "browser",
       serverMode,
@@ -456,7 +467,15 @@ export default function SkShell({
         if (on && heroRef.current) gateRef.current?.stop("speaking");
         setSpeaking(on);
       },
-      onFallback: (why) => console.info(`[sk] server voice ${why}; using the browser voice`),
+      onFallback: (why) => {
+        console.info(`[sk] server voice ${why}; using the browser voice`);
+        voiceLog.push({ k: "fallback", why });
+      },
+      onPlayBlocked: () => {
+        voiceLog.push({ k: "blocked" });
+        walkRef.current?.soundBlocked?.();
+      },
+      onSentence: (e) => voiceLog.push({ k: "sentence", ...e }),
     });
     coord.setEnabled(readAloudRef.current);
     speechRef.current = coord;
@@ -470,10 +489,15 @@ export default function SkShell({
     holdRef.current = hold;
     // Only a real tab unload stops the voice here: an in-app route change or
     // the hero ↔ dock move keeps this Shell (and this coordinator) mounted.
-    const onPageHide = () => coord.stop();
+    const onPageHide = () => {
+      coord.stop();
+      voiceLog.flush();
+    };
     window.addEventListener("pagehide", onPageHide);
     return () => {
       window.removeEventListener("pagehide", onPageHide);
+      voiceLog.dispose();
+      if (voiceLogRef.current === voiceLog) voiceLogRef.current = null;
       hold.dispose();
       if (holdRef.current === hold) holdRef.current = null;
       coord.stop();
@@ -823,6 +847,7 @@ export default function SkShell({
     const gate = gateRef.current;
     if (!gate || !micOnRef.current || micModeRef.current || ready !== true) return;
     if (holdRef.current?.holding) return; // SK is still talking (or just stopped)
+    if (walkRef.current?.narrating) return; // the tour is narrating: the mic waits for a pause
     if (!gate.start({ idle: true })) return;
     micModeRef.current = "handsFree";
     emptyEndsRef.current = 0;
@@ -831,6 +856,21 @@ export default function SkShell({
   useEffect(() => {
     listenNowRef.current = listenNow;
   });
+
+  // The tour starts or resumes narrating: close the hero mic for its whole
+  // run (it is one-way talk). Paused or ended: listen again if the switch is on.
+  const narrating = !!walk?.narrating;
+  useEffect(() => {
+    if (!hero) return;
+    if (narrating) {
+      if (micModeRef.current === "handsFree") {
+        gateRef.current?.stop("speaking");
+        voiceLogRef.current?.push({ k: "mic", why: "closed for the tour" });
+      }
+      return;
+    }
+    listenNowRef.current();
+  }, [narrating, hero]);
 
   // The hero listens while the switch is on, the browser can, the panel is
   // ready and the server's preference is known; off ends the capture now.

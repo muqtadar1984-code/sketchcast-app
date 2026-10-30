@@ -380,6 +380,8 @@ export type SkWalkthrough = {
   hold: () => void;
   /** Where the tour is, for the turn request (null when no run). */
   state: SkTurnWalk | null;
+  /** The browser refused SK's voice (autoplay): show "Tap for sound" again. */
+  soundBlocked: () => void;
 };
 
 /** The stop key: one run, one position, one plan (a missing stop changes it). */
@@ -678,6 +680,19 @@ export function useSkWalkthrough({
     };
   }, [active, soundOn, unlock]);
 
+  /** The browser refused to play (autoplay): back to "Tap for sound", so her
+   *  next tap or key unlocks the voice again instead of the tour going silent. */
+  const soundBlocked = useCallback(() => {
+    if (!soundRef.current) return;
+    soundRef.current = false;
+    setSoundOn(false);
+    try {
+      window.sessionStorage.removeItem(SOUND_KEY);
+    } catch {
+      /* private mode */
+    }
+  }, []);
+
   const move = useCallback(
     (f: (w: WalkState) => WalkState) => {
       quiet();
@@ -786,5 +801,6 @@ export function useSkWalkthrough({
     act,
     hold,
     state,
+    soundBlocked,
   };
 }
