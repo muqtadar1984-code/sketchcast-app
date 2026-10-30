@@ -53,6 +53,16 @@ export const SK_STUDENT_RULES = [
   "S5. Be warm and brief: 2–4 short sentences at the student's level, in the student's language.",
 ].join("\n");
 
+/** S7 K2: the student rules for an answer from her KNOWLEDGE (no lesson
+ *  open): S1 names the passages instead of the kit; S2–S5 are the same. */
+export const SK_STUDENT_KNOWLEDGE_RULES = SK_STUDENT_RULES.split("\n")
+  .map((l) =>
+    l.startsWith("S1.")
+      ? "S1. You are SK, a tutor for ONE student. Teach only from the KNOWLEDGE passages: her SketchCast books, the free articles and her own uploads. You do not use outside sources, and you do not answer as if the passages said something they do not."
+      : l,
+  )
+  .join("\n");
+
 export function shellGreeting(locale: string | null | undefined): string {
   return GREETING[locale ?? "en"] ?? GREETING.en;
 }

@@ -282,3 +282,23 @@ export const knowledgeSearch: SkCapability = {
     }
   },
 };
+
+// ── a kit's OWN sources (tutor.explain / the Board, when the narration falls short) ──
+
+/** The book or article a kit was made from, as sources she may use: the
+ *  product's live final, the upload it came from (only if RLS shows it to
+ *  her), its article (articles are free). Never anything else. */
+export async function kitOwnSources(
+  ctx: SkContext,
+  deps: SkCapabilityDeps,
+  kit: { productSlug?: string | null; bookId?: string | null; articleId?: string | null },
+): Promise<KnowledgeSourceRef[]> {
+  const admin = knowledgeAdmin();
+  if (!admin) return [];
+  const all = await sourcesFor(ctx, admin, deps);
+  const out: KnowledgeSourceRef[] = [];
+  if (kit.productSlug) out.push(...all.filter((s) => s.kind === "sketchcast_book" && s.product?.slug === kit.productSlug));
+  if (kit.bookId) out.push(...all.filter((s) => s.kind === "user_book" && s.id === String(kit.bookId)));
+  if (kit.articleId && all.some((s) => s.kind === "article")) out.push({ kind: "article", id: String(kit.articleId), language: null, title: "" });
+  return out;
+}

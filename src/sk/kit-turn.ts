@@ -24,6 +24,7 @@ import { repeatAnswer } from "./shell/repeat";
 import { supportFrom, TEACH_MAX_TOKENS, teachingBlock, teachingSupportTokens } from "./shell/teach";
 import { NO_TEACHER_TEXT } from "./teacher";
 import type { SseEvent } from "./types";
+import { citationsOf, knowledgeBlock, knowledgeSupportTokens, type Passage } from "./knowledge/answer";
 
 /** `translateProvider`: the re-expression model for "repeat that in X"
  *  (Haiku 5.5, shell/repeat.ts); absent → the teacher provider. */
@@ -45,6 +46,13 @@ export type KitTurnInput = {
    *  Shell passes its student rule block, shell/prompt.ts SK_STUDENT_RULES).
    *  Absent = the player's own explain, unchanged. */
   rules?: string;
+  /** S7 K2: passages from the kit's OWN book or article, found because the
+   *  section's narration does not cover the question (tutor.ts). They join
+   *  TEACHING as KNOWLEDGE data and widen the grounding support; still ONE
+   *  model call, metered once. */
+  knowledge?: Passage[];
+  /** S7 K2: the citation line SK adds under an answer that had knowledge. */
+  cite?: string;
 };
 
 export const KIT_TUTOR_SYSTEM = [
@@ -56,8 +64,11 @@ export const KIT_TUTOR_SYSTEM = [
 export const NO_SECTION_TEXT = "I can't find that section of the lesson. Pick a section from the list and ask me again.";
 
 /** The user turn for the call. The question is quoted as the student's words. */
-export function kitTurnQuestion(heading: string, language: string, question?: string): string {
+export function kitTurnQuestion(heading: string, language: string, question?: string, knowledge = false): string {
   const q = (question ?? "").replace(/\s+/g, " ").trim().slice(0, 600);
+  if (q && knowledge) {
+    return `The student asks about "${heading || "this section"}": "${q}". Answer in ${language}, from the narration in TEACHING; where TEACHING does not cover it, answer from the passages in KNOWLEDGE (this lesson's own book).`;
+  }
   if (q) {
     return `The student asks about "${heading || "this section"}": "${q}". Answer in ${language}, from the narration in TEACHING. If TEACHING does not cover it, say this section does not cover it and say what it does cover.`;
   }
@@ -80,6 +91,7 @@ export async function* runKitExplain(deps: KitTurnDeps, input: KitTurnInput): As
   let cancelled = false;
   let label: "grounded" | "declined" = "grounded";
   let trimmed = false;
+  let citations: ReturnType<typeof citationsOf> | null = null;
 
   const sup = supportFrom(input.manifest, { segmentId: input.segmentKey });
   yield { event: "meta", data: { move: input.question ? "ask" : "explain", segment: input.segmentKey } };
@@ -96,8 +108,9 @@ export async function* runKitExplain(deps: KitTurnDeps, input: KitTurnInput): As
     yield { event: "text", data: NO_TEACHER_TEXT };
   } else {
     const seg = sup.segments[0]!;
-    const system = `${KIT_TUTOR_SYSTEM}${input.rules ? `\n${input.rules}` : ""}\n${teachingBlock(sup)}`;
-    const question = kitTurnQuestion(seg.heading, input.language, input.question);
+    const passages = input.knowledge ?? [];
+    const system = `${KIT_TUTOR_SYSTEM}${input.rules ? `\n${input.rules}` : ""}\n${teachingBlock(sup)}${passages.length ? `\n${knowledgeBlock(passages)}` : ""}`;
+    const question = kitTurnQuestion(seg.heading, input.language, input.question, passages.length > 0);
     let full = "";
     modelReached = true;
     try {
@@ -112,12 +125,14 @@ export async function* runKitExplain(deps: KitTurnDeps, input: KitTurnInput): As
     }
     if (input.signal?.aborted) cancelled = true;
     // §9.3: every name and number must occur in the kit's words (or the student's question).
-    const verdict = groundingCheck(full, teachingSupportTokens(sup), input.question ?? "");
+    const verdict = groundingCheck(full, [...teachingSupportTokens(sup), ...knowledgeSupportTokens(passages)], input.question ?? "");
     if (!verdict.ok) {
       trimmed = true;
       console.info("[sk] kit explain grounding", JSON.stringify({ segment: input.segmentKey, unsupported: verdict.unsupported }));
     }
-    const text = (verdict.ok ? full.trim() : verdict.text.trim()) || captionLine(seg.heading, seg.points);
+    const said = verdict.ok ? full.trim() : verdict.text.trim();
+    const text = said ? (passages.length && input.cite ? `${said}\n${input.cite}` : said) : captionLine(seg.heading, seg.points);
+    if (said && passages.length) citations = citationsOf(passages);
     if (!cancelled) yield { event: "text", data: text };
   }
 
@@ -132,6 +147,113 @@ export async function* runKitExplain(deps: KitTurnDeps, input: KitTurnInput): As
       ...(trimmed ? { trimmed: true } : {}),
       ...(modelReached ? { metered: { live_turns: 1, generated_segments: 0 } } : {}),
       ...(cancelled ? { cancelled: true } : {}),
+      ...(citations?.length ? { citations } : {}),
+      access: accessView(access),
+    },
+  };
+}
+
+// ── S7 K2: a student's content question with no lesson open ─────────────────
+
+export const KNOWLEDGE_TUTOR_SYSTEM = [
+  "You are SK, a friendly tutor answering ONE student's question.",
+  "Speak to the student directly and warmly, at their level. Plain text only: 2–4 short sentences, no headings, no lists, no markdown.",
+  "Answer only from the KNOWLEDGE passages below (the student's own books, the free articles and her uploads). You may rephrase and give a simple everyday comparison, but add no names, numbers, dates, definitions or formulae of your own. If the passages do not answer it, say so in one sentence. Never give the answer to an exercise.",
+].join("\n");
+
+export type KnowledgeTurnInput = {
+  studentId: string;
+  /** The product the live turn is counted against (tutor.ts picks it). */
+  productSlug: string;
+  passages: Passage[];
+  question: string;
+  /** The answer language's name ("English", "Arabic"…). */
+  language: string;
+  /** The citation line SK adds under the answer (knowledge-lines.ts citeLine). */
+  cite?: string;
+  signal?: AbortSignal;
+  rules?: string;
+};
+
+/** What SK says when no model sentence survived: the best passage's own words. */
+export function passageLine(p: Passage | undefined): string {
+  const t = (p?.text ?? "").trim();
+  if (!t) return "";
+  const first = t
+    .split(/(?<=[.!?؟。])\s+/u)
+    .slice(0, 2)
+    .join(" ");
+  return first.length > 320 ? `${first.slice(0, 317).trimEnd()}…` : first;
+}
+
+/**
+ * A student's content question answered from her knowledge passages, under
+ * the SAME rules as runKitExplain: tutor access with allowance left, or SK's
+ * own line and no model; ONE grounded model call (the passages as DATA,
+ * groundingCheck over them); a call that reached the model is ONE live turn
+ * through meterUsage. Same event shape: meta → text → done (+ citations).
+ */
+export async function* runKnowledgeExplain(deps: KitTurnDeps, input: KnowledgeTurnInput): AsyncGenerator<SseEvent, void, void> {
+  const now = deps.now ?? Date.now;
+  const t0 = now();
+  let access = await loadAccessFor(deps, input.studentId, input.productSlug);
+  const usage = { inputTokens: 0, outputTokens: 0 };
+  let modelReached = false;
+  let cancelled = false;
+  let label: "grounded" | "declined" = "grounded";
+  let trimmed = false;
+  let citations: ReturnType<typeof citationsOf> = [];
+  yield { event: "meta", data: { move: "knowledge" } };
+
+  if (!input.passages.length) {
+    label = "declined";
+  } else if (!liveAllowed(access)) {
+    label = "declined";
+    yield { event: "text", data: liveRefusalText(access) };
+  } else if (!deps.teacherProvider) {
+    label = "declined";
+    yield { event: "text", data: NO_TEACHER_TEXT };
+  } else {
+    const system = `${KNOWLEDGE_TUTOR_SYSTEM}${input.rules ? `\n${input.rules}` : ""}\n${knowledgeBlock(input.passages)}`;
+    const q = input.question.replace(/\s+/g, " ").trim().slice(0, 600);
+    const question = `The student asks: "${q}". Answer in ${input.language}, from the passages in KNOWLEDGE.`;
+    let full = "";
+    modelReached = true;
+    try {
+      for await (const ev of deps.teacherProvider.stream({ system, messages: [{ role: "user", text: question }], maxTokens: TEACH_MAX_TOKENS, signal: input.signal })) {
+        if (ev.type === "text") full += ev.text;
+        else if (ev.type === "done") Object.assign(usage, ev.usage);
+        else if (ev.type === "error") console.error("[sk] knowledge explain", ev.retryable ? "retryable" : "fatal", ev.message);
+      }
+    } catch (e) {
+      if (input.signal?.aborted) cancelled = true;
+      else console.error("[sk] knowledge explain failed:", (e as Error).message);
+    }
+    if (input.signal?.aborted) cancelled = true;
+    // §9.3: every name and number must occur in the passages (or her question).
+    const verdict = groundingCheck(full, knowledgeSupportTokens(input.passages), q);
+    if (!verdict.ok) {
+      trimmed = true;
+      console.info("[sk] knowledge explain grounding", JSON.stringify({ unsupported: verdict.unsupported }));
+    }
+    const said = (verdict.ok ? full.trim() : verdict.text.trim()) || passageLine(input.passages[0]);
+    citations = citationsOf(input.passages);
+    const text = input.cite ? `${said}\n${input.cite}` : said;
+    if (!cancelled) yield { event: "text", data: text };
+  }
+
+  // The same write point as an explain turn: a call that reached the model is one live turn.
+  if (modelReached) access = await meterUsage(deps.store, input.studentId, access, { live_turns: 1, generated_segments: 0 }, input.productSlug);
+  yield {
+    event: "done",
+    data: {
+      latency: { totalMs: now() - t0 },
+      usage,
+      label,
+      ...(trimmed ? { trimmed: true } : {}),
+      ...(modelReached ? { metered: { live_turns: 1, generated_segments: 0 } } : {}),
+      ...(cancelled ? { cancelled: true } : {}),
+      ...(citations.length ? { citations } : {}),
       access: accessView(access),
     },
   };
