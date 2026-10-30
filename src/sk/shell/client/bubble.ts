@@ -56,6 +56,8 @@ export const SPEECH_LINGER_MS = 4000;
 /** Text-only messages: reading time per character, with a floor. */
 export const BUBBLE_READ_MS_PER_CHAR = 55;
 export const BUBBLE_READ_MIN_MS = 4000;
+/** The greeting opens SK on a page: at least this long before it fades. */
+export const GREETING_MIN_MS = 10000;
 /** A text-only reply shows its first sentences (and at most this many characters). */
 export const PREVIEW_SENTENCES = 2;
 export const PREVIEW_MAX_CHARS = 240;
@@ -155,7 +157,10 @@ export function bubbleReduce(s: BubbleState, e: BubbleEvent): BubbleState {
 export function bubbleFadeAt(s: BubbleState, opts: { tour?: boolean } = {}): number | null {
   const m = s.msg;
   if (!m || s.closed || s.hold || opts.tour || m.kind === "confirm" || m.speaking) return null;
-  return m.kind === "speech" ? m.since + SPEECH_LINGER_MS : m.since + bubbleReadingMs(m.text);
+  if (m.kind === "speech") return m.since + SPEECH_LINGER_MS;
+  // The greeting is how SK starts (founder 2026-10-30): it stays a while longer.
+  if (m.kind === "greeting") return m.since + Math.max(GREETING_MIN_MS, bubbleReadingMs(m.text));
+  return m.since + bubbleReadingMs(m.text);
 }
 
 /** Whether the bubble is open: always while a tour runs, else an open message. */
@@ -163,7 +168,9 @@ export function bubbleOpen(s: BubbleState, opts: { tour?: boolean } = {}): boole
   return !!opts.tour || (!!s.msg && !s.closed);
 }
 
-/** The greeting shows once per tab session, on a home page, never over a tour. */
+/** The greeting shows once per tab session where SK is allowed to greet
+ *  (any page with the corner avatar, not the Board or the lesson player — the
+ *  launcher decides `home`), never over a tour. */
 export function shouldGreet(input: { home: boolean; greeted: boolean; tour: boolean; text: string | null | undefined }): boolean {
   return input.home && !input.greeted && !input.tour && !!input.text?.trim();
 }

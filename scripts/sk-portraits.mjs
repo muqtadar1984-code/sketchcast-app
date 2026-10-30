@@ -41,4 +41,16 @@ for (const look of ["sk-a", "sk-b"]) {
     .webp({ quality: 86 })
     .toFile(resolve(ROOT, "public/sk/portrait", `${look}.webp`));
   console.log(look, { left, top, width, height });
+
+  // The full figure (founder 2026-10-30: "keep the full size avatar instead of
+  // just the head") for the corner avatar: the same flattened layers, trimmed
+  // to the figure's own outline, FULL_H px tall (about 3× its on-screen size).
+  const FULL_H = 480;
+  const trimmed = await sharp(flat).trim({ threshold: 1 }).png().toBuffer();
+  const meta = await sharp(trimmed).metadata();
+  await sharp(trimmed)
+    .resize({ height: FULL_H })
+    .webp({ quality: 86 })
+    .toFile(resolve(ROOT, "public/sk/portrait", `${look}-full.webp`));
+  console.log(`${look}-full`, { w: meta.width, h: meta.height, out: `${Math.round(((meta.width ?? 0) * FULL_H) / (meta.height ?? 1))}x${FULL_H}` });
 }

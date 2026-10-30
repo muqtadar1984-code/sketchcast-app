@@ -117,7 +117,9 @@ export default function SkLauncher({
         side={board ? "start" : "end"}
         raised={school}
         autoListen={!board}
-        greet={home}
+        // SK starts with a greeting the first time it appears in a tab, on any
+        // page (founder 2026-10-30), never on the Board or in the lesson player.
+        greet={!board && !tutor}
         // A question mid-tour: the tour pauses and SK answers it normally.
         onEngaged={tour.onQuestion}
         walk={

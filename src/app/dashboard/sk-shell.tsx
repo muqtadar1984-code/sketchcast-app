@@ -78,7 +78,8 @@ import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, t
 import { beaconVoiceEvents, createVoiceLog, type VoiceLog } from "@/sk/shell/client/voice-log";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { clearConversation, createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
-import { BUBBLE_INITIAL, GREETED_KEY, bubbleFadeAt, bubbleOpen, bubbleReduce, shouldGreet } from "@/sk/shell/client/bubble";
+import { BUBBLE_INITIAL, GREETED_KEY, GREETING_MIN_MS, bubbleFadeAt, bubbleOpen, bubbleReduce, shouldGreet } from "@/sk/shell/client/bubble";
+
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
 import { citationChips } from "@/sk/shell/client/citations";
@@ -87,6 +88,10 @@ import { TRAY_POLL_MS, parseTray, shouldPollTray, trayStateText, trayVisible, ty
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
 import { SkAvatar, SkBubble, SkCornerMenu, type CornerMenuItem, type CornerSide } from "./sk-corner";
+
+/** An error within this long of the Shell mounting is the warm start's: it
+ *  waits for the greeting (GREETING_MIN_MS) instead of replacing it. */
+const WARM_START_WINDOW_MS = 5000;
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
 
@@ -622,6 +627,8 @@ export default function SkShell({
         if (!res.ok) {
           setReady(false);
           setError(copy.failed);
+          // SK still starts with a greeting (founder 2026-10-30): the standard one.
+          setGreeting((g) => g ?? copy.greetingFallback);
           return;
         }
         setReady(d.ready !== false);
@@ -673,6 +680,8 @@ export default function SkShell({
         if (!cancelled) {
           setReady(false);
           setError(copy.failed);
+          // SK still starts with a greeting (founder 2026-10-30): the standard one.
+          setGreeting((g) => g ?? copy.greetingFallback);
         }
       }
     })();
@@ -1476,9 +1485,16 @@ export default function SkShell({
     if (tourOn) dispatchBubble({ type: "close" });
   }, [tourOn]);
 
-  // Errors show in the bubble, in the Shell's own wording.
+  // Errors show in the bubble, in the Shell's own wording. SK starts with its
+  // greeting (founder 2026-10-30): an error of the warm start itself waits
+  // until the greeting has had its time, instead of replacing it at once.
+  const mountedAtRef = useRef(Date.now());
   useEffect(() => {
-    if (error) dispatchBubble({ type: "error", text: error, at: Date.now() });
+    if (!error) return;
+    const show = () => dispatchBubble({ type: "error", text: error, at: Date.now() });
+    if (Date.now() - mountedAtRef.current > WARM_START_WINDOW_MS) return show();
+    const t = window.setTimeout(show, GREETING_MIN_MS);
+    return () => window.clearTimeout(t);
   }, [error]);
   // Why the mic cannot listen, once, in the bubble.
   useEffect(() => {
@@ -1964,7 +1980,9 @@ export default function SkShell({
     >
       {sheetOpen && sheet}
       {quickOpen && !sheetOpen && quick}
-      <div className={`flex items-end gap-2 ${side === "start" ? "flex-row-reverse" : ""}`}>
+      {/* The thought bubble sits beside the figure's HEAD (items-start), its
+          trailing circles pointing at it. */}
+      <div className={`flex items-start gap-4 ${side === "start" ? "flex-row-reverse" : ""}`}>
         <SkBubble
           open={isBubbleOpen || thinking}
           side={side}

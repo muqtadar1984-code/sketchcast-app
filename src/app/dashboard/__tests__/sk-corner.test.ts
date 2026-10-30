@@ -96,43 +96,44 @@ describe("no card anywhere", () => {
   });
 });
 
-describe("the avatar: round, ~64 px (56 px on a phone), bottom-end, z-40", () => {
-  it("fixed at the bottom-end corner with the portrait cropped to the face", async () => {
+describe("the avatar: the full figure, ~144 px tall (112 px on a phone), bottom-end, z-40 (founder 2026-10-30: \"keep the full size avatar instead of just the head\")", () => {
+  it("fixed at the bottom-end corner, standing: the full flattened figure, never a crop", async () => {
     const html = await shell();
     expect(html).toMatch(/class="pointer-events-none fixed bottom-4 end-4 items-end z-40 [^"]*"[^>]*data-sk="launcher"/);
     expect(html).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*data-sk="avatar"[^>]*data-sk-look="B"[^>]*data-tour="sk-launcher"/);
-    expect(html).toContain("h-14 w-14 sm:h-16 sm:w-16");
-    expect(html).toContain("rounded-full");
-    expect(html).toContain("/sk/portrait/sk-b.webp");
-    expect(html).toContain("object-cover scale-150");
+    expect(html).toContain("h-28 sm:h-36");
+    expect(html).toContain("/sk/portrait/sk-b-full.webp");
+    expect(html).toContain("h-full w-auto object-contain object-bottom");
+    expect(html).not.toContain("scale-150");
     expect(html).not.toContain("body.png");
     expect(html).toContain(`aria-label="${en.sk.shell.corner.avatar}"`);
   });
   it("the Board: bottom-START, and the bubble opens toward the page (end side)", async () => {
     const html = await shell({ side: "start" });
     expect(html).toMatch(/class="pointer-events-none fixed bottom-4 start-4 items-start z-40/);
-    expect(html).toContain("flex items-end gap-2 flex-row-reverse");
-    expect(html).toContain("-start-[7px] border-b border-s rotate-45 rtl:-rotate-45");
+    expect(html).toContain("flex items-start gap-4 flex-row-reverse");
+    expect(html).toMatch(/data-sk="bubble-tail" class="absolute top-5 -start-3 /);
   });
   it("the leaders' School pages: raised above the School-briefing bot's corner", async () => {
     const html = await shell({ raised: true });
     expect(html).toMatch(/fixed bottom-20 end-4 items-end z-40/);
   });
-  it("speaking: a soft ring that pulses by opacity only, still under reduced motion", () => {
+  it("speaking: a soft glow around the figure that pulses by opacity only, still under reduced motion", () => {
     const src = read("sk-corner.tsx");
     expect(src).toContain('${speaking ? "opacity-100 motion-safe:animate-pulse" : "opacity-0"}');
     expect(src).toContain("motion-reduce:transition-none");
     // Listening: a small red dot badge.
-    expect(src).toMatch(/\{listening && <span aria-hidden data-sk="listening-dot" className="absolute top-0 end-0 [^"]*bg-\[#B42318\]/);
+    expect(src).toMatch(/\{listening && <span aria-hidden data-sk="listening-dot" className="absolute top-1 end-1 [^"]*bg-\[#B42318\]/);
   });
 });
 
 describe("the speech bubble: beside the avatar, toward the page", () => {
-  it("max ~320 px (the viewport minus 88 px on a phone), four lines then scrollable, a tail at the avatar", async () => {
+  it("max ~320 px (the viewport minus 88 px on a phone), four lines then scrollable, a THOUGHT bubble: two trailing circles toward the head", async () => {
     const html = await shell();
     expect(html).toContain('data-sk="bubble"');
     expect(html).toContain("max-w-[min(320px,calc(100vw-88px))]");
-    expect(html).toContain("-end-[7px] border-t border-e rotate-45 rtl:-rotate-45");
+    expect(html).toMatch(/data-sk="bubble-tail" class="absolute top-5 -end-3 h-3 w-3 rounded-full/);
+    expect(html).toContain("absolute top-9 -end-[22px] h-2 w-2 rounded-full");
     // Nothing to say yet: present but faded out, inert, out of the a11y tree.
     expect(html).toMatch(/data-sk="bubble"[^>]*data-sk-open="false"[^>]*aria-hidden="true"/);
     expect(read("sk-shell.tsx")).toContain('className="max-h-20 overflow-y-auto whitespace-pre-wrap leading-5"');
@@ -272,9 +273,9 @@ describe("the launcher (source pins)", () => {
     expect(src).toContain('if (pathname?.startsWith("/present") && !board) return null;');
     expect(read("sk-shell.tsx")).toContain("const listen = autoListen ?? !board;");
   });
-  it("the greeting and the first-login tour belong to the home pages", () => {
+  it("SK greets the first time it appears in a tab on any page (not the Board or the lesson player); the first-login tour starts from a home page", () => {
     expect(src).toContain("const home = !board && !tutor && isSkHomePath(pathname);");
-    expect(src).toContain("greet={home}");
+    expect(src).toContain("greet={!board && !tutor}");
   });
   it("the Shell never narrates on its own: the tour is voiced only through `walk.voice`", () => {
     const shell = read("sk-shell.tsx");
