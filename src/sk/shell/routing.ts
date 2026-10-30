@@ -143,7 +143,7 @@ export function chooseModel(text: string, ctx: SkContext): ModelChoice {
 
 /** The tools that mean "this is teaching from content": a fast first round
  *  that wants one of them re-runs on the full model. */
-export const ESCALATE_TOOLS: readonly string[] = ["knowledge.search", "board.explain", "board.compare", "board.explain_selection", "tutor.explain"];
+export const ESCALATE_TOOLS: readonly string[] = ["knowledge.search", "kit.documents", "board.explain", "board.compare", "board.explain_selection", "tutor.explain"];
 
 /** A student's knowledge.search and tutor.explain are handed to their own
  *  metered kit turn (handoffBefore / handoffAfter) — escalating first would

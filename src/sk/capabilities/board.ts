@@ -12,6 +12,7 @@
 
 import type { SkBoardMove, SkBoardState, SkCapability, SkCapabilityMeta, SkCapabilityResult, SkContext, SkJsonSchema } from "@/sk/shell/types";
 import { isDeckSource, type ArtifactRow } from "@/utils/present/deck-pages";
+import { openUnitSlides, type UnitSlide } from "./documents";
 
 export const BOARD_NOT_OPEN = "Open the Board first.";
 export const BOARD_NO_MAP = "The lesson map isn't ready yet.";
@@ -552,15 +553,28 @@ export const boardLoadSlides: SkCapability = {
  *  asks for the render when it is missing (~30 s), and winds to the first
  *  page when the deck is already on the roll. No lesson map needed. The
  *  closing line travels as a template ({a}–{b}) the client fills. */
-export const boardLoadDeck: SkCapability = {
-  meta: meta("load_deck", "Board: load the kit's PowerPoint (.pptx) onto the roll as pages, one rendered slide per page, then land on its first slide. Use for 'load the deck / load the PowerPoint as pages / put the presentation on the board'.", NONE),
-  handler: withBoard(false, (b, ctx) =>
-    ok(
-      b.deck === "loaded" ? "The deck is already on the roll; going to its first page." : "Loading the deck onto the roll as pages.",
-      { move: "load_deck", args: { done: sayFor("deck_loaded", ctx.user.locale) }, say: b.deck === "loaded" ? sayFor("deck_first", ctx.user.locale) : sayFor("load_deck", ctx.user.locale) },
-      b.deck ? [{ deck: b.deck }] : [],
-    ),
+const loadDeckDecider = withBoard(false, (b, ctx) =>
+  ok(
+    b.deck === "loaded" ? "The deck is already on the roll; going to its first page." : "Loading the deck onto the roll as pages.",
+    { move: "load_deck", args: { done: sayFor("deck_loaded", ctx.user.locale) }, say: b.deck === "loaded" ? sayFor("deck_first", ctx.user.locale) : sayFor("load_deck", ctx.user.locale) },
+    b.deck ? [{ deck: b.deck }] : [],
   ),
+);
+
+/** 2026-10-31: the deck's TEXT travels with the move (each slide's title, text
+ *  and speaker notes), so SK can walk through it at once (production
+ *  2026-10-30: the deck loaded and SK said it did not have the slide text). */
+export const boardLoadDeck: SkCapability = {
+  meta: meta("load_deck", "Board: load the kit's PowerPoint (.pptx) onto the roll as pages, one rendered slide per page, then land on its first slide; returns each slide's text and speaker notes. Use for 'load the deck / load the PowerPoint as pages / put the presentation on the board'.", NONE),
+  handler: async (ctx, args, deps) => {
+    const r = await loadDeckDecider(ctx, args, deps);
+    if (!r.ok) return r;
+    const unit = await openUnitSlides(ctx);
+    if (!unit) return r;
+    const rows = unit.slides.slice(0, 30).map((x) => ({ slide: x.n, title: x.title, text: x.text, notes: x.notes }));
+    const what = unit.from === "lesson_script" ? "text (from the lesson script; the deck has one slide per script segment)" : "text and speaker notes";
+    return { ...r, summary: `${r.summary} Its ${unit.slides.length} slides' ${what} are below.`, facts: [...(r.facts ?? []), ...rows] };
+  },
 };
 
 const CONCEPT: SkJsonSchema = {
@@ -570,19 +584,60 @@ const CONCEPT: SkJsonSchema = {
   additionalProperties: false,
 };
 
+/** The deck slide that best matches a concept (its title first, then its
+ *  text); at least half the query's content words. Pure. */
+export function resolveDeckSlide(query: string, slides: UnitSlide[]): UnitSlide | null {
+  const q = conceptTokens(query);
+  if (!q.length) return null;
+  let best: { score: number; slide: UnitSlide } | null = null;
+  for (const sl of slides) {
+    const inTitle = overlap(q, conceptTokens(sl.title));
+    const score = inTitle >= 0.5 ? inTitle + 0.01 : overlap(q, conceptTokens(`${sl.title} ${sl.text}`));
+    if (score >= 0.5 && (!best || score > best.score)) best = { score, slide: sl };
+  }
+  return best ? best.slide : null;
+}
+
+/** board.explain before the lesson map is ready (2026-10-31): the open
+ *  unit's DECK text answers instead: no Board move (the video's frames need
+ *  the map), the slide's own words for SK to explain from. No deck text: the
+ *  map refusal, as before; no match: no_match (the route then tries the kit's
+ *  own book). */
+async function explainFromDeck(ctx: SkContext, args: Record<string, unknown>): Promise<SkCapabilityResult> {
+  const concept = strArg(args.concept);
+  if (!concept) return { ok: false, summary: "Explain what? Name the concept.", error: "bad_concept", facts: [] };
+  const unit = await openUnitSlides(ctx);
+  if (!unit || !unit.slides.length) return noMap;
+  const hit = resolveDeckSlide(concept, unit.slides);
+  if (!hit) return { ok: false, summary: `I couldn't find "${concept}" in this lesson.`, error: "no_match", facts: [] };
+  const body = [hit.text, hit.notes].filter(Boolean).join(" ").slice(0, 600);
+  return {
+    ok: true,
+    summary: `From the deck, slide ${hit.n}${hit.title ? `: ${hit.title}` : ""}. ${body}`.trim(),
+    facts: [{ concept, slide: hit.n, title: hit.title, text: hit.text, notes: hit.notes, source: unit.from === "deck_text_map" ? "deck" : "lesson script" }],
+  };
+}
+
+const explainWithMap = withBoard(true, (b, ctx, args) => {
+  const concept = strArg(args.concept);
+  if (!concept) return { ok: false, summary: "Explain what? Name the concept.", error: "bad_concept", facts: [] };
+  const hit = resolveSegment(concept, b);
+  if (!hit) return { ok: false, summary: `I couldn't find "${concept}" in this lesson.`, error: "no_match", facts: [] };
+  return ok(
+    `Showing slide ${hit.k + 1}: ${hit.heading}.`,
+    { move: "slide", args: { k: hit.k, heading: hit.heading, points: hit.points ?? [], concept, via: hit.via }, say: sayFor("explain", ctx.user.locale, { heading: hit.heading }) },
+    [{ concept, k: hit.k + 1, heading: hit.heading, points: (hit.points ?? []).join(" | ") }],
+  );
+});
+
 export const boardExplain: SkCapability = {
-  meta: meta("explain", "Board: explain a concept — shows the slide that teaches it (resolved from the lesson map) and returns its heading and points for you to narrate from. Use for 'explain X / what is X' while the Board is open.", CONCEPT),
-  handler: withBoard(true, (b, ctx, args) => {
-    const concept = strArg(args.concept);
-    if (!concept) return { ok: false, summary: "Explain what? Name the concept.", error: "bad_concept", facts: [] };
-    const hit = resolveSegment(concept, b);
-    if (!hit) return { ok: false, summary: `I couldn't find "${concept}" in this lesson.`, error: "no_match", facts: [] };
-    return ok(
-      `Showing slide ${hit.k + 1}: ${hit.heading}.`,
-      { move: "slide", args: { k: hit.k, heading: hit.heading, points: hit.points ?? [], concept, via: hit.via }, say: sayFor("explain", ctx.user.locale, { heading: hit.heading }) },
-      [{ concept, k: hit.k + 1, heading: hit.heading, points: (hit.points ?? []).join(" | ") }],
-    );
-  }),
+  meta: meta("explain", "Board: explain a concept — shows the slide that teaches it (resolved from the lesson map) and returns its heading and points for you to narrate from; before the map is ready, returns the matching deck slide's text instead. Use for 'explain X / what is X' while the Board is open.", CONCEPT),
+  handler: async (ctx, args, deps) => {
+    const b = board(ctx);
+    if (!b) return noBoard;
+    if (!b.manifestId) return explainFromDeck(ctx, args ?? {});
+    return explainWithMap(ctx, args, deps);
+  },
 };
 
 const COMPARE: SkJsonSchema = {

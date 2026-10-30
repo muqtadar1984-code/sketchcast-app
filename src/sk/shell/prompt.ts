@@ -191,6 +191,12 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "13. To start, play, teach or open a chapter of a book (or a ready-made kit) call start_lesson with the user's own words (book, chapter, part) — never context.resolve or library.find first, and never ask which book yourself: when it is unclear the tool returns the question; say its line.",
         ]
       : []),
+    // 2026-10-31: any document of a kit, any time — never "I don't have the slide text".
+    ...(capabilities.some((c) => c.name === "kit.documents")
+      ? [
+          "14. To go through a kit's documents — the deck's slides with their speaker notes, the lesson script, the worksheet, the quiz, the answer key, or what a chapter's kit contains — call kit.documents (action=list to see them, action=read with doc to read one; book and chapter for a chapter that is not open). Walk through what it returns in order, in your own words, quoting names and numbers exactly. Never say you do not have a document's text before calling it.",
+        ]
+      : []),
     ...(input.routing === "model" ? ["", ...modelFirstRules(ctx, capabilities)] : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
