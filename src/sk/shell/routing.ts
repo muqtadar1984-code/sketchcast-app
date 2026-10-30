@@ -54,6 +54,14 @@ export function skRouting(email: string | null | undefined): SkRouting {
   return me && emails(process.env.SK_MODEL_FIRST_EMAILS).includes(me) ? "model" : "rules";
 }
 
+/** SK_DEBUG_EMAILS (2026-10-30): testers whose Shell turns get one
+ *  `sk-shell.turn debug` line (what was heard, the route, the tools, the
+ *  reply). Unset = nobody; matching ignores case. Never anyone not listed. */
+export function skDebugFor(email: string | null | undefined): boolean {
+  const me = (email ?? "").trim().toLowerCase();
+  return !!me && emails(process.env.SK_DEBUG_EMAILS).includes(me);
+}
+
 export const skFastModel = (): string => process.env.SK_FAST_MODEL || SK_FAST_DEFAULT_MODEL;
 export const skFullModel = (): string => process.env.SK_SHELL_MODEL || SK_FULL_DEFAULT_MODEL;
 

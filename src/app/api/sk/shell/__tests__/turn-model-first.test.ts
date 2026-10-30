@@ -64,6 +64,7 @@ const ENV = [
   "SK_AUDIT",
   "SK_ROUTING",
   "SK_MODEL_FIRST_EMAILS",
+  "SK_DEBUG_EMAILS",
 ];
 const saved: Record<string, string | undefined> = {};
 const USER = { id: TEACHER_ID, email: "t@school.example", email_confirmed_at: "2026-01-01T00:00:00Z" };
@@ -242,5 +243,56 @@ describe("model routing: the pre-model rules still bypass the model", () => {
     await say("explain how osmosis works");
     expect(mocks.constructed).toEqual([SONNET]);
     expect(timings()[0]).toMatchObject({ model: { tier: "full", models: [SONNET], escalated: null } });
+  });
+});
+
+describe("start_tour covers casual asks (model routing)", () => {
+  it("'can you show me around the app' → the model is offered start_tour with the casual cues, and its call starts the tour", async () => {
+    process.env.SK_ROUTING = "model";
+    mocks.queue.push([{ toolCalls: [{ id: "c1", name: "start_tour", args: {} }] }]);
+    const r = await say("can you show me around the app", { modality: "voice" });
+    const tour = (mocks.opts[0]!.tools ?? []).find((t) => t.name === "start_tour");
+    expect(tour).toBeTruthy();
+    for (const cue of ["show me around", "give me a tour", "what can you do", "what can I do here", "walk me through the app", "how does this work"]) expect(tour!.description, cue).toContain(cue);
+    expect(r.ev.find((e) => e.type === "walkthrough")).toEqual({ type: "walkthrough" });
+    expect(r.text).toBe(WALKTHROUGH_START.en);
+  });
+});
+
+describe("SK_DEBUG_EMAILS: a tester-only debug line per turn", () => {
+  const debugLines = (): Array<Record<string, unknown>> =>
+    info.mock.calls.filter((c: unknown[]) => c[0] === "sk-shell.turn debug").map((c: unknown[]) => JSON.parse(String(c[1])) as Record<string, unknown>);
+  const voiceTurn = async () => {
+    mocks.queue.push([{ text: ["Here is what I can do."] }]);
+    process.env.SK_ROUTING = "model";
+    await say("can you show me around the app", { modality: "voice" });
+  };
+  it("unset → nothing logged", async () => {
+    await voiceTurn();
+    expect(debugLines()).toEqual([]);
+  });
+  it("listed (any case) → one line: modality, what was heard, route, model, tools, reply", async () => {
+    process.env.SK_DEBUG_EMAILS = "other@x.example, T@School.example";
+    await voiceTurn();
+    expect(debugLines()).toEqual([
+      expect.objectContaining({ modality: "voice", text: "can you show me around the app", route: "model", model: "claude-haiku-5-5", tools: [], reply: "Here is what I can do." }),
+    ]);
+  });
+  it("listed, rules routing → the rules intent as the route", async () => {
+    process.env.SK_DEBUG_EMAILS = "t@school.example";
+    await say("Hi SK, show me around?");
+    expect(debugLines()).toEqual([expect.objectContaining({ modality: "text", route: "tour", model: null, tools: [] })]);
+  });
+  it("a book code in the text is masked in the line", async () => {
+    process.env.SK_DEBUG_EMAILS = "t@school.example";
+    await say("my code is SKB-ABCD-EFGH");
+    const line = debugLines()[0]!;
+    expect(String(line.text)).not.toContain("ABCD-EFGH");
+    expect(line).toMatchObject({ route: "book", tools: ["book.activate"] });
+  });
+  it("unlisted → nothing logged", async () => {
+    process.env.SK_DEBUG_EMAILS = "someone@else.example";
+    await voiceTurn();
+    expect(debugLines()).toEqual([]);
   });
 });

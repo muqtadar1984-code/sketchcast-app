@@ -8,7 +8,7 @@ import { AnthropicProvider } from "@/utils/assistant/providers/anthropic";
 // 2026-10-30: SK's own Bedrock region / model overlay (SK_BEDROCK_REGION, SK_BEDROCK_MODEL_MAP).
 import { skProviderTarget, skRegionLabel } from "@/sk/claude-target";
 // 2026-10-30: MODEL-FIRST routing behind SK_ROUTING / SK_MODEL_FIRST_EMAILS.
-import { SkModelProvider, chooseModel, escalationTools, handoffAfter, handoffBefore, modelFirstDecision, skRouting, type HandoffBefore, type ModelStats } from "@/sk/shell/routing";
+import { SkModelProvider, chooseModel, escalationTools, handoffAfter, handoffBefore, modelFirstDecision, skDebugFor, skRouting, type HandoffBefore, type ModelStats } from "@/sk/shell/routing";
 import type { Usage } from "@/utils/assistant/provider";
 import type { Turn } from "@/utils/assistant/provider";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
@@ -258,7 +258,10 @@ export async function POST(request: Request) {
     firstTextMs: number | null;
     toolCalls: number;
     usage?: Usage;
-  } = { route: decision.intent, model: null, firstTextMs: null, toolCalls: 0 };
+    /** SK_DEBUG_EMAILS only: the tools called and the reply, for the debug line. */
+    tools: string[];
+    reply: string;
+  } = { route: decision.intent, model: null, firstTextMs: null, toolCalls: 0, tools: [], reply: "" };
   // S2: the greeting's one-turn offer ("Your kit for … is ready — want me to
   // open it?"). A bare yes / "open it" opens it, a no declines; anything else
   // runs as usual and the offer lapses (rememberTurn drops it).
@@ -460,7 +463,11 @@ export async function POST(request: Request) {
       const send = (ev: SkTurnEvent) => {
         if (ev.type === "navigate") navigatedTo = ev.path;
         if (ev.type === "text" && timing.firstTextMs === null) timing.firstTextMs = Date.now() - t0;
-        if (ev.type === "tool") timing.toolCalls++;
+        if (ev.type === "tool") {
+          timing.toolCalls++;
+          timing.tools.push(ev.name);
+        }
+        if (ev.type === "text" && timing.reply.length < 120) timing.reply += ev.text;
         if (abort.signal.aborted) return;
         try {
           controller.enqueue(frame(ev));
@@ -469,6 +476,7 @@ export async function POST(request: Request) {
         }
       };
       let logged = false;
+      let loggedDebug = false;
       const finish = () => {
         if (!logged) {
           logged = true;
@@ -492,6 +500,24 @@ export async function POST(request: Request) {
               rounds: m?.rounds ?? 0,
               toolCalls: timing.toolCalls,
               tokens: u ? { input: u.inputTokens, output: u.outputTokens, cacheRead: u.cacheReadTokens ?? 0, cacheWrite: u.cacheWriteTokens ?? 0 } : null,
+            }),
+          );
+        }
+        // 2026-10-30: testers only (SK_DEBUG_EMAILS) — what was heard (voice)
+        // or typed, the route, the model and tools, the reply. A book code
+        // in the text is masked, as everywhere it is logged.
+        if (!loggedDebug && skDebugFor(g.user.email)) {
+          loggedDebug = true;
+          console.info(
+            "sk-shell.turn debug",
+            JSON.stringify({
+              turnId: body.turnId,
+              modality: body.modality,
+              text: maskBookSecrets(body.text).slice(0, 200),
+              route: timing.route,
+              model: timing.model ? timing.model.models.join(">") : null,
+              tools: timing.tools,
+              reply: timing.reply.slice(0, 120),
             }),
           );
         }

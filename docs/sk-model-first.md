@@ -15,6 +15,7 @@ This puts the SK Shell (`POST /api/sk/shell/turn`) on **model-first** routing be
 | `SK_FAST_MODEL` | default `claude-haiku-5-5` | The model for short or command-like messages. |
 | `SK_SHELL_MODEL` | default `claude-sonnet-5-5` | The model for teaching, RAG and anything complex. Also the full model in rules routing, as before. |
 | `SK_TRANSLATE_MODEL` | default `claude-haiku-5-5` | "Say that in X" (unchanged). |
+| `SK_DEBUG_EMAILS` | comma-separated emails | Testers only: one `sk-shell.turn debug` line per Shell turn (see Measurement). Unset means nothing is logged. |
 | `SK_BEDROCK_REGION` | e.g. `ap-southeast-2` | **SK only.** The Bedrock region for SK's calls. Unset means today's behaviour (`BEDROCK_REGION`, default `us-east-1`). |
 | `SK_BEDROCK_MODEL_MAP` | JSON object | **SK only.** Model-id overlay, e.g. `{"claude-sonnet-5-5":"au.anthropic.claude-sonnet-5-5","claude-haiku-5-5":"au.anthropic.claude-haiku-5-5"}`. It wins over `BEDROCK_MODEL_MAP` and the built-in table, for SK's calls only. A malformed value is ignored and logged. |
 
@@ -137,6 +138,25 @@ The other fields:
 - `region` is SK's Bedrock region, or `anthropic`.
 
 No env value is ever logged.
+
+### Tester debug line (`SK_DEBUG_EMAILS`)
+
+`SK_DEBUG_EMAILS` is a comma-separated list, compared without case. When it is unset, nothing is logged. For the listed users only, each Shell turn, in either routing, also logs:
+
+```
+sk-shell.turn debug {"turnId":"…","modality":"voice","text":"can you show me around the app","route":"model",
+  "model":"claude-haiku-5-5","tools":[],"reply":"Here is what I can do…"}
+```
+
+The fields:
+
+- `text` is what the recogniser heard or what was typed: the first 200 characters, with any book code masked.
+- `route` is the rules intent, `model`, or a pre-rule name.
+- `model` lists the model(s) the turn used, joined by `>` when Haiku escalated.
+- `tools` are the tools the turn called.
+- `reply` is the first 120 characters of the reply.
+
+The line tells a mishearing apart from the model skipping a tool. Nobody who is not listed is ever logged.
 
 ### Gates (scripted: free, no network)
 
