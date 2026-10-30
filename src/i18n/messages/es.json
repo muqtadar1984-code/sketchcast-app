@@ -2553,7 +2553,6 @@
     },
     "walkthrough": {
       "ui": {
-        "title": "Recorrido",
         "pause": "Pausa",
         "resume": "Reanudar",
         "back": "Atrás",
@@ -2569,8 +2568,6 @@
         "needsClick": "Necesita un clic",
         "tryAsking": "Prueba a preguntar",
         "chipHint": "Toca una para ponerla en el cuadro. Solo se envía cuando pulsas Enviar.",
-        "placeholder": "Pregúntame lo que quieras…",
-        "send": "Enviar",
         "controls": "Controles del recorrido",
         "startLine": "Aquí empieza el recorrido. Te enseño todo."
       },

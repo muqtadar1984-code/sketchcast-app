@@ -2553,7 +2553,6 @@
     },
     "walkthrough": {
       "ui": {
-        "title": "Visite",
         "pause": "Pause",
         "resume": "Reprendre",
         "back": "Retour",
@@ -2569,8 +2568,6 @@
         "needsClick": "Un clic est nécessaire",
         "tryAsking": "Essayez de demander",
         "chipHint": "Touchez-en une pour la mettre dans la zone de saisie. Elle n'est envoyée que lorsque vous appuyez sur Envoyer.",
-        "placeholder": "Demandez-moi ce que vous voulez…",
-        "send": "Envoyer",
         "controls": "Commandes de la visite",
         "startLine": "Voici la visite. Je vous fais faire le tour."
       },

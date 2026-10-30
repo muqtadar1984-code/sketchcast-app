@@ -2553,7 +2553,6 @@
     },
     "walkthrough": {
       "ui": {
-        "title": "Tour",
         "pause": "Pause",
         "resume": "Resume",
         "back": "Back",
@@ -2569,8 +2568,6 @@
         "needsClick": "Needs a click",
         "tryAsking": "Try asking",
         "chipHint": "Tap one to put it in the box. It's only sent when you press Send.",
-        "placeholder": "Ask me anything…",
-        "send": "Send",
         "controls": "Tour controls",
         "startLine": "Here's the tour. I'll show you around."
       },

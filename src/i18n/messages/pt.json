@@ -2553,7 +2553,6 @@
     },
     "walkthrough": {
       "ui": {
-        "title": "Tour",
         "pause": "Pausar",
         "resume": "Retomar",
         "back": "Voltar",
@@ -2569,8 +2568,6 @@
         "needsClick": "Precisa de um clique",
         "tryAsking": "Experimente perguntar",
         "chipHint": "Toque em uma para colocá-la na caixa. Ela só é enviada quando você aperta Enviar.",
-        "placeholder": "Pergunte o que quiser…",
-        "send": "Enviar",
         "controls": "Controles do tour",
         "startLine": "Este é o tour. Vou te mostrar tudo."
       },

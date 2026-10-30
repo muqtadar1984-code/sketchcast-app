@@ -2553,7 +2553,6 @@
     },
     "walkthrough": {
       "ui": {
-        "title": "Panduan",
         "pause": "Jeda",
         "resume": "Sambung",
         "back": "Kembali",
@@ -2569,8 +2568,6 @@
         "needsClick": "Perlu diklik",
         "tryAsking": "Cuba tanya",
         "chipHint": "Ketik satu untuk memasukkannya ke dalam kotak. Ia hanya dihantar apabila anda tekan Hantar.",
-        "placeholder": "Tanya saya apa sahaja…",
-        "send": "Hantar",
         "controls": "Kawalan panduan",
         "startLine": "Ini panduannya. Saya akan tunjukkan sekeliling."
       },

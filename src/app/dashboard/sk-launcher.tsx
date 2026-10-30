@@ -6,6 +6,7 @@ import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
 import { useRigChoice } from "@/sk/board/use-rig-choice";
 import { onSkWalkthroughRequest } from "@/sk/walkthrough/bus";
+import { WALK_STORE_KEY } from "@/sk/shell/client/walkthrough";
 import SkShell, { type SkShellCopy } from "./sk-shell";
 import { useSkHeroSlot } from "./sk-home";
 import { useSkWalkthrough, type WalkCopy } from "./sk-walkthrough";
@@ -110,7 +111,7 @@ export default function SkLauncher({
       setAutoTried(true);
       let carried = false;
       try {
-        carried = !!window.sessionStorage.getItem("sk.walkthrough");
+        carried = !!window.sessionStorage.getItem(WALK_STORE_KEY);
       } catch {
         carried = false;
       }
