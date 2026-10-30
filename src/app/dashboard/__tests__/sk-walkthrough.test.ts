@@ -92,7 +92,8 @@ describe("WalkStrip: the tour inside the speech bubble", () => {
     expect(html).toContain(esc(en.sk.walkthrough.teacher.hello));
     expect(html).toMatch(/class="inline-flex items-center gap-1 rounded-full[^"]*"[^>]*data-sk="walk-sound"/);
     for (const c of ["walk-pause", "walk-back", "walk-next", "walk-skip", "walk-progress"]) expect(html).toContain(`data-sk="${c}"`);
-    expect(html).toContain("1 of 29");
+    expect(html).toContain(`1 of ${teacherWalk().stops.length}`);
+    expect(teacherWalk().stops.length).toBeLessThanOrEqual(22);
     // Back is disabled at the first stop; compact: an arrow with its label for screen readers.
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-sk="walk-back" aria-label="Back"/);
     // Compact: no portrait and no progress dots any more (the avatar is beside the bubble).
@@ -110,7 +111,7 @@ describe("WalkStrip: the tour inside the speech bubble", () => {
   });
   it("the Example card and the sample chips open ABOVE the caption; chips only fill a box", async () => {
     let w = teacherWalk();
-    w = { ...w, index: w.stops.findIndex((s) => s.id === "analytics") };
+    w = { ...w, index: w.stops.findIndex((s) => s.id === "insights") };
     const html = await strip({ walk: w, soundOn: true });
     expect(html).toContain(en.sk.walkthrough.chips.howAreMyClasses);
     expect(html.indexOf('data-sk="walk-chips"')).toBeLessThan(html.indexOf('data-sk="caption"'));

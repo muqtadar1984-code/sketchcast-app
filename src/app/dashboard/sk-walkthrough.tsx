@@ -32,10 +32,15 @@
 //     pointer-events none, so the page stays usable.
 //
 // A combined stop (stops.ts `parts`, founder 2026-10-30: "combine steps 3 to
-// 6 into 1 narration") says its parts' lines as ONE line; the highlight starts
-// on the first part's control and MOVES to each next part's control as the
-// Shell reports SK starting that part's first sentence (`onSentence`), or,
-// without sound, as the reading time reaches it.
+// 6 into 1 narration") says ONE tight line (2026-10-31: 1-3 sentences, fewer
+// than its parts): its precomposed line, or its found parts' clauses composed.
+// The highlight starts on the first part's control and MOVES to each next
+// part's control at that part's `{marker}` inside the line: the Shell reports
+// each sentence's start (`onSentence`) and, once its audio plays, its known
+// length (`onSentencePlay`, from the voice's word marks); the marker's place in
+// the sentence is timed by that length, else by its characters at SK's
+// speaking rate as measured on the tour's earlier sentences. Without sound,
+// each part gets its share of the reading time.
 //
 // Every stop also reports how it went to SK's voice log (POST
 // /api/sk/voice-log → one function-log line per batch; voice-log.ts
@@ -67,9 +72,13 @@ import {
   jumpTo,
   missingStop,
   nextStop,
-  partAtSentence,
-  partReadingStarts,
-  partSentenceStarts,
+  cueDelay,
+  cueReadingTimes,
+  nextSpeakRate,
+  partCues,
+  partDueAt,
+  partsLine,
+  SPEAK_MS_PER_CHAR,
   pauseWalk,
   resumeWalk,
   routePath,
@@ -83,8 +92,9 @@ import {
   waitForSettledPage,
   waitForStableRect,
   walkCommand,
-  joinParts,
+  stripMarks,
   type LineOutcome,
+  type PartCue,
   type PartHit,
   type PlannedStop,
   type SettleProbe,
@@ -410,8 +420,11 @@ export type SkWalkthrough = {
    *  only after it was FULLY spoken. */
   onVoiceDone: (key: string, outcome: LineOutcome) => void;
   /** The Shell starts sentence `index` (0-based) of the `voice` line `key`: a
-   *  combined stop moves its highlight to the part that sentence opens. */
+   *  combined stop times its highlight moves inside that sentence. */
   onSentence: (key: string, index: number) => void;
+  /** Sentence `index` of line `key` starts PLAYING, `ms` long when the voice
+   *  knows (word marks), else null: the in-sentence moves are re-timed. */
+  onSentencePlay: (key: string, index: number, ms: number | null) => void;
   /** A tour action the server decided (natural phrasing it caught). */
   act: (action: SkWalkAction) => void;
   /** She is typing: no auto-advance under her. */
@@ -424,14 +437,16 @@ export type SkWalkthrough = {
 
 /** What the current stop shows: its control (the spotlight's), and for a
  *  combined stop every part's control and line key, the part highlighted now,
- *  the sentence each part starts at and (no sound) the ms each one starts at. */
+ *  its words (markers stripped), where each part starts in them, and (no
+ *  sound) the ms each one starts at. */
 type WalkMatch = {
   el: Element | null;
   line?: string;
   key: string;
-  parts?: Array<{ el: Element; line: string }>;
+  parts?: Array<{ el: Element; id: string; line: string }>;
   part?: number;
-  starts?: number[];
+  text?: string;
+  cues?: PartCue[];
   times?: number[];
 };
 
@@ -507,11 +522,11 @@ export function useSkWalkthrough({
     onIntroDoneRef.current = onIntroDone;
   });
 
-  const lineOf = useCallback((w: WalkState | null, m: { line?: string; parts?: Array<{ line: string }> } | null): string => {
+  const lineOf = useCallback((w: WalkState | null, m: { line?: string; text?: string; parts?: Array<{ id: string; line: string }> } | null): string => {
     const stop = w ? currentStop(w) : null;
     if (!stop || !copy) return "";
-    // A combined stop: its parts' words as ONE line.
-    if (m?.parts?.length) return joinParts(m.parts.map((p) => walkLine(copy, w!.role, p.line)));
+    // A combined stop: its ONE line, markers stripped.
+    if (m?.parts?.length) return m.text ?? stripMarks(partsLine(stop, m.parts, (k) => walkLine(copy, w!.role, k), copy.ui.partJoin));
     return walkLine(copy, w!.role, m?.line ?? stop.line) || walkLine(copy, w!.role, stop.line);
   }, [copy]);
   // The stop effect reads the words through a ref: a new `copy` object (a
@@ -520,6 +535,16 @@ export function useSkWalkthrough({
   useEffect(() => {
     lineOfRef.current = lineOf;
   }, [lineOf]);
+  /** A combined stop's marked line for the parts found (stops.ts `parts`). */
+  const marked = useCallback(
+    (w: WalkState, stop: PlannedStop, parts: Array<{ id: string; line: string }>) =>
+      copy ? partsLine(stop, parts, (k) => walkLine(copy, w.role, k), copy.ui.partJoin) : "",
+    [copy],
+  );
+  const markedRef = useRef(marked);
+  useEffect(() => {
+    markedRef.current = marked;
+  }, [marked]);
 
   // ── a combined stop's highlight, part by part ──
   /** The reading-time clock moving a combined stop's highlight (no sound). */
@@ -753,12 +778,14 @@ export function useSkWalkthrough({
       }
       const m: WalkMatch = { el, line: hit.line, key: goKey };
       if (hit.parts?.length) {
-        // A combined stop: one line, the highlight on its first part for now.
-        m.parts = hit.parts.map((p) => ({ el: p.el, line: p.line }));
+        // A combined stop: one line, the highlight on its first part for now,
+        // moving at each part's marker inside the line.
+        m.parts = hit.parts.map((p) => ({ el: p.el, id: p.id, line: p.line }));
         m.part = 0;
-        const texts = m.parts.map((p) => lineOfRef.current(w, { line: p.line }));
-        m.starts = partSentenceStarts(texts, splitSentences);
-        m.times = partReadingStarts(texts);
+        const { text, cues } = partCues(markedRef.current(w, s, m.parts), m.parts.map((p) => p.id));
+        m.text = text;
+        m.cues = cues;
+        m.times = cueReadingTimes(text, cues);
       }
       matchRef.current = m;
       setMatch(m);
@@ -794,29 +821,81 @@ export function useSkWalkthrough({
     return () => window.clearTimeout(t);
   }, [advance, goKey]);
 
-  const onVoiceDone = useCallback((key: string, outcome: LineOutcome) => {
-    const sp = spokenRef.current;
-    if (!sp || sp.key !== key) return; // an older line
-    const w = walkRef.current;
-    if (!w || goKeyOf(w) !== sp.goKey || sp.entry !== entryRef.current || heldRef.current === sp.entry) return;
-    // Cut off (barge-in, Stop, an error): wait for Next or Resume.
-    const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });
-    if (ms !== null) setAdvance({ goKey: sp.goKey, entry: sp.entry, ms });
-    // Nothing was said (read-aloud off): a combined stop's highlight moves by reading time.
-    if (outcome === "silent") startPartClock(sp.goKey);
-  }, [startPartClock]);
+  // -- SK's speaking rate, measured on the tour's own sentences --
+  /** ms a character, smoothed over the sentences spoken so far. */
+  const rateRef = useRef(SPEAK_MS_PER_CHAR);
+  /** The sentence being spoken: its line, index, start and length. */
+  const sentRef = useRef<{ key: string; index: number; at: number; chars: number } | null>(null);
+  /** The sentence before has ended (the next one starts, or the line ends). */
+  const measure = useCallback((key: string) => {
+    const cur = sentRef.current;
+    if (cur && cur.key === key) rateRef.current = nextSpeakRate(rateRef.current, Date.now() - cur.at, cur.chars);
+    sentRef.current = null;
+  }, []);
 
-  /** SK starts sentence `index` of the line `key`: on a combined stop, the
-   *  highlight moves to the part that sentence belongs to. */
+  /** Move a combined stop's highlight within sentence `index`, timed from now. */
+  const timeParts = useCallback(
+    (goKey: string, index: number, durationMs: number | null) => {
+      const m = matchRef.current;
+      if (!m?.parts || !m.cues || m.key !== goKey) return;
+      clearPartClock();
+      const due = partDueAt(m.cues, index);
+      if (due !== null) showPart(goKey, due);
+      for (const c of m.cues) {
+        if (c.sentence !== index || c.at === 0) continue;
+        partTimersRef.current.push(
+          window.setTimeout(() => {
+            if (goKeyOf(walkRef.current) === goKey) showPart(goKey, c.part);
+          }, cueDelay(c, { durationMs, msPerChar: rateRef.current })),
+        );
+      }
+    },
+    [clearPartClock, showPart],
+  );
+
+  const onVoiceDone = useCallback(
+    (key: string, outcome: LineOutcome) => {
+      if (outcome === "spoken") measure(key);
+      else if (sentRef.current?.key === key) sentRef.current = null;
+      const sp = spokenRef.current;
+      if (!sp || sp.key !== key) return; // an older line
+      const w = walkRef.current;
+      if (!w || goKeyOf(w) !== sp.goKey || sp.entry !== entryRef.current || heldRef.current === sp.entry) return;
+      // Cut off (barge-in, Stop, an error): wait for Next or Resume.
+      const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });
+      if (ms !== null) setAdvance({ goKey: sp.goKey, entry: sp.entry, ms });
+      // Nothing was said (read-aloud off): a combined stop's highlight moves by reading time.
+      if (outcome === "silent") startPartClock(sp.goKey);
+    },
+    [startPartClock, measure],
+  );
+
+  /** SK starts sentence `index` of the line `key`: the rate is measured on the
+   *  sentence before, and a combined stop times its moves inside this one. */
   const onSentence = useCallback(
     (key: string, index: number) => {
       const sp = spokenRef.current;
-      const m = matchRef.current;
-      if (!sp || sp.key !== key || !m?.parts || !m.starts || m.key !== sp.goKey) return;
+      if (!sp || sp.key !== key) return;
+      measure(key);
+      sentRef.current = { key, index, at: Date.now(), chars: [...(splitSentences(sp.text)[index] ?? "")].length };
       if (goKeyOf(walkRef.current) !== sp.goKey || sp.entry !== entryRef.current) return;
-      showPart(sp.goKey, partAtSentence(m.starts, index));
+      timeParts(sp.goKey, index, null);
     },
-    [showPart],
+    [measure, timeParts],
+  );
+
+  /** Sentence `index` starts PLAYING (its audio is ready), `ms` long when the
+   *  voice knows: the start and the in-sentence moves are taken from now. */
+  const onSentencePlay = useCallback(
+    (key: string, index: number, ms: number | null) => {
+      const sp = spokenRef.current;
+      if (!sp || sp.key !== key) return;
+      const cur = sentRef.current;
+      if (cur && cur.key === key && cur.index === index) cur.at = Date.now();
+      if (goKeyOf(walkRef.current) !== sp.goKey || sp.entry !== entryRef.current) return;
+      timeParts(sp.goKey, index, ms);
+    },
+    [timeParts],
   );
 
   // She left the stop's page herself (a link, the back button): hold the tour.
@@ -986,6 +1065,7 @@ export function useSkWalkthrough({
     start,
     onVoiceDone,
     onSentence,
+    onSentencePlay,
     act,
     hold,
     state,

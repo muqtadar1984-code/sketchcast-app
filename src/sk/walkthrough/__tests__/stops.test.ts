@@ -7,9 +7,10 @@
  * Run: node node_modules/vitest/vitest.mjs run src/sk/walkthrough/__tests__/stops.test.ts
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { WALK_ROLES, WALK_STOPS, anchorsOf, lineKeysFor, type WalkAnchor } from "../stops";
+import { WALK_ROLES, WALK_STOPS, anchorsOf, lineKeysFor, type WalkAnchor, type WalkFacts, type WalkRole } from "../stops";
+import { composeParts, planWalk, stripMarks } from "@/sk/shell/client/walkthrough";
 import en from "@/i18n/messages/en.json";
 import ms from "@/i18n/messages/ms.json";
 import msArab from "@/i18n/messages/ms-arab.json";
@@ -100,7 +101,7 @@ describe("every line a stop can say is in all ten message files", () => {
   it("the 'once you generate a kit' and 'More' lines say what the code does: free papers, no credit numbers", () => {
     const t = en.sk.walkthrough.teacher;
     expect(t.assignNone).toMatch(/^Once you generate a kit, you'll be able to assign it to a class/);
-    expect(t.boardBridge).toBe("Generated kits can be used very efficiently on the whiteboard, which we'll cover in a minute.");
+    expect(t.boardBridge).toBe("Generated kits also run on the classroom Board, which we'll see in a minute.");
     // Revision papers and exams are free (0063/0112 enforce_fair_use: no credit, a monthly cap).
     expect(t.more).toMatch(/free/);
     for (const [code, file] of Object.entries(FILES)) {
@@ -222,6 +223,123 @@ describe("Report a problem: the stop follows the widget's flag", () => {
 describe("no tour line claims YouTube playback", () => {
   it("in any of the ten files", () => {
     for (const [code, file] of Object.entries(FILES)) expect(JSON.stringify(file.sk.walkthrough), code).not.toMatch(/youtube|يوتيوب|यूट्यूब|యూట్యూబ్/i);
-    expect(en.sk.walkthrough.teacher.boardSk).toContain("Ready-made kits play right here on the Board");
+    expect(en.sk.walkthrough.teacher.boardSk).toContain("I'm on the Board too");
+  });
+});
+
+// 2026-10-31 (founder: "combine the complete explanation into 1 or no more
+// than 3 sentences and avoid repetitions"): a combined stop's precomposed line
+// carries `{part}` markers where the highlight moves; its parts' lines are
+// short clauses the app composes when a part is missing.
+describe("combined stops: the precomposed line and its part markers, in all ten files", () => {
+  const MARK = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
+  const END = /[.!?؟।]["'”’»)]*$/u;
+  const sentences = (t: string) => t.split(/(?<=[.!?؟।])\s+/).filter(Boolean);
+  const combined = WALK_ROLES.flatMap((role) => WALK_STOPS[role].filter((s) => s.parts?.length).map((s) => ({ role, s })));
+  it("there are combined stops to check", () => {
+    expect(combined.map(({ s }) => s.id)).toEqual(["openBook", "kit", "setup", "classBoard", "readyMade", "insights", "bellLanguage", "skHelp"]);
+  });
+  it("each precomposed line: every later part's marker once, in order, nothing else; 1–2 sentences that end cleanly", () => {
+    for (const { role, s } of combined) {
+      const want = s.parts!.slice(1).map((p) => p.id);
+      for (const [code, file] of Object.entries(FILES)) {
+        const line = (file.sk.walkthrough[role] as Record<string, string>)[s.line ?? s.id]!;
+        const where = `${code} ${role}.${s.line ?? s.id}`;
+        expect([...line.matchAll(MARK)].map((m) => m[1]), where).toEqual(want);
+        const clean = stripMarks(line);
+        expect(clean, where).not.toMatch(/[{}]/);
+        expect(clean, where).toMatch(END);
+        expect(sentences(clean).length, where).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+  it("no other line carries a marker (they would be spoken)", () => {
+    const wholes = new Set(combined.map(({ role, s }) => `${role}.${s.line ?? s.id}`));
+    for (const [code, file] of Object.entries(FILES)) {
+      for (const role of WALK_ROLES) {
+        for (const [k, line] of Object.entries(file.sk.walkthrough[role] as Record<string, string>)) {
+          if (!wholes.has(`${role}.${k}`)) expect(line, `${code} ${role}.${k}`).not.toMatch(/\{[A-Za-z]/);
+        }
+      }
+    }
+  });
+  it("composed from its parts' clauses (a part missing) it stays within 3 sentences, with no lead-in said twice", () => {
+    for (const { role, s } of combined) {
+      // Every clause each part can say: its own line and its fallback lines.
+      const options = s.parts!.map((p) => [p.line ?? p.id, ...(p.fallback ?? []).flatMap((f) => (f.line ? [f.line] : [])), ...anchorsOf(p).flatMap((a) => (typeof a === "string" ? [] : [a.line]))]);
+      for (const [code, file] of Object.entries(FILES)) {
+        const words = (k: string) => (file.sk.walkthrough[role] as Record<string, string>)[k]!;
+        const join = file.sk.walkthrough.ui.partJoin;
+        // Each part's first option, then each part's fallback swapped in, then each part dropped.
+        const firsts = options.map((o) => o[0]!);
+        const variants: string[][] = [firsts, ...options.flatMap((o, i) => o.slice(1).map((alt) => firsts.map((f, j) => (j === i ? alt : f))))];
+        for (let drop = 0; drop < firsts.length; drop++) variants.push(firsts.filter((_, j) => j !== drop));
+        for (const v of variants) {
+          const line = stripMarks(composeParts(v.map(words), v, join));
+          expect(sentences(line).length, `${code} ${role}.${s.id} [${v}]`).toBeLessThanOrEqual(3);
+          if (code === "en") {
+            const leads = v.map((k) => words(k).split(/\s+/).slice(0, 2).join(" ").toLowerCase());
+            expect(new Set(leads).size, `en ${s.id} [${v}] lead-ins ${leads}`).toBe(leads.length);
+          }
+        }
+      }
+    }
+  });
+  it("English: the combined lines repeat no phrase ('you can… you can…', 'here… here…')", () => {
+    for (const { role, s } of combined) {
+      const line = stripMarks((en.sk.walkthrough[role] as Record<string, string>)[s.line ?? s.id]!).toLowerCase();
+      for (const phrase of ["you can", "here", "it uses credits", "in one go"]) expect(line.split(phrase).length - 1, `${s.id}: ${phrase}`).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+// 2026-10-31 (founder: "the tour is approx 6 to 7 minutes right now. need to
+// bring it down to less than 4 minutes"). The spoken length of the whole tour
+// per role, everything on: English words at ~2.6 words a second; the other
+// languages scaled from English by their character count. The teacher's
+// speech must stay under 210 s (≈30 s more for moving between stops).
+describe("the whole tour's spoken length", () => {
+  const WORDS_PER_SEC = 2.6;
+  const ALL: Record<string, WalkFacts> = {
+    teacher: { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true, skTutor: true, reportIssue: true },
+    student: { diary: true, tutorPath: "/sk/bio/1", reportIssue: true },
+    parent: { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true, reportIssue: true },
+    principal: { analytics: true, timetable: true, diary: true, notices: true, roleHats: true, reportIssue: true },
+    coordinator: { timetable: true, diary: true, notices: true, reportIssue: true },
+  };
+  /** What SK says over the whole tour (every part present). */
+  const spoken = (file: (typeof FILES)[keyof typeof FILES], role: WalkRole) => {
+    const t = file.sk.walkthrough[role] as Record<string, string>;
+    return planWalk(role, ALL[role]!)
+      .map((s) => (s.parts?.length ? stripMarks(s.whole ? t[s.whole]! : composeParts(s.parts.map((p) => t[p.line]!), s.parts.map((p) => p.id), file.sk.walkthrough.ui.partJoin)) : t[s.line]!))
+      .join(" ");
+  };
+  const estimate = (role: WalkRole) => {
+    const enText = spoken(en, role);
+    const enSec = enText.split(/\s+/).filter(Boolean).length / WORDS_PER_SEC;
+    const out: Record<string, number> = {};
+    for (const [code, file] of Object.entries(FILES)) out[code] = Math.round((enSec * [...spoken(file, role)].length) / [...enText].length);
+    return { stops: planWalk(role, ALL[role]!).length, sec: out };
+  };
+  it("the teacher's tour is under 210 s of speech in English, and every role and language under 240 s", () => {
+    const report: string[] = [];
+    for (const role of WALK_ROLES) {
+      const e = estimate(role);
+      report.push(`${role} (${e.stops} stops): ${Object.entries(e.sec).map(([c, v]) => `${c} ${v}s`).join(", ")}`);
+      for (const [code, v] of Object.entries(e.sec)) expect(v, `${code} ${role}`).toBeLessThan(240);
+    }
+    // TOUR_LENGTH_REPORT=<file>: write the estimates out (for the script doc).
+    if (process.env.TOUR_LENGTH_REPORT) writeFileSync(process.env.TOUR_LENGTH_REPORT, report.join("\n"));
+    expect(estimate("teacher").sec.en).toBeLessThan(210);
+    expect(estimate("teacher").stops).toBeLessThanOrEqual(22);
+  });
+  it("one short sentence per stop: no single line over ~22 English words (a combined line ~45)", () => {
+    const wholes = new Set(WALK_ROLES.flatMap((r) => WALK_STOPS[r].filter((s) => s.parts?.length).map((s) => `${r}.${s.line ?? s.id}`)));
+    for (const role of WALK_ROLES) {
+      for (const [k, line] of Object.entries(en.sk.walkthrough[role] as Record<string, string>)) {
+        const n = stripMarks(line).split(/\s+/).length;
+        expect(n, `${role}.${k}: ${n} words`).toBeLessThanOrEqual(wholes.has(`${role}.${k}`) ? 45 : 22);
+      }
+    }
   });
 });

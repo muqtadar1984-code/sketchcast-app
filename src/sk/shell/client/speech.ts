@@ -99,6 +99,10 @@ export type SpeechCoordinatorDeps = {
   /** 2026-10-30: the sentence about to be spoken (null when the queue drains or
    *  stops) — the corner avatar's speech bubble shows it as it is said. */
   onCurrent?: (current: SpokenSentence | null) => void;
+  /** 2026-10-31: a sentence's audio starts playing now, `ms` long when the
+   *  voice's word marks give its length (Polly, Google), else null (the
+   *  browser voice). The walkthrough times its in-sentence highlight by it. */
+  onPlay?: (e: { text: string; lang: string; ms: number | null }) => void;
 };
 
 /** The sentence being spoken now, in its language. */
@@ -272,6 +276,8 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
       if (!r || g !== gen) return false;
       // The sentences after this one are fetched while it plays.
       prefetch();
+      const words = r.marks?.words ?? [];
+      deps.onPlay?.({ text, lang, ms: words.length ? Math.max(...words.map((w) => w.t1)) : null });
       const playing = r.play?.({ rate: 1, onWord: (w) => deps.onWord?.({ charIndex: w.charIndex, t: w.t, text }) });
       playing?.catch(() => {});
       await Promise.race([playing, stopped]);

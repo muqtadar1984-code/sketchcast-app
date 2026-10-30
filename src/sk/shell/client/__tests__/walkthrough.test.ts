@@ -31,10 +31,15 @@ import {
   missingStop,
   needHolds,
   nextStop,
-  joinParts,
-  partAtSentence,
-  partReadingStarts,
-  partSentenceStarts,
+  composeParts,
+  cueDelay,
+  cueReadingTimes,
+  nextSpeakRate,
+  partCues,
+  partDueAt,
+  partsLine,
+  stripMarks,
+  SPEAK_MS_PER_CHAR,
   pauseWalk,
   planWalk,
   resolveRoute,
@@ -61,12 +66,18 @@ const TEACHER_ALL: WalkFacts = { books: true, bookId: "b1", classId: "c1", catal
 
 /** The teacher's tour in order (founder feedback 2026-10-30: precise and
  *  complete; then "combine steps 3 to 6" → openBook, "14, 15 and 16" → setup). */
+// 2026-10-31 (founder: "bring it down to less than 4 minutes"): same-page
+// neighbours folded into combined stops (kit, classBoard, readyMade,
+// insights, bellLanguage, skHelp): 29 stops -> 22.
 const TEACHER_ORDER = [
-  "hello", "library", "openBook", "generate", "pieces", "downloads", "rerun", "assign", "boardBridge", "more",
-  "setup", "myBooks", "plan", "board", "boardSk", "kits", "skTutor", "diary", "analytics", "gradeQueue", "timetable", "calendar",
-  "notifications", "language", "settings", "skMenu", "skAsk", "reportProblem", "uploadNow",
+  "hello", "library", "openBook", "generate", "kit", "assign", "boardBridge", "more",
+  "setup", "myBooks", "plan", "classBoard", "readyMade", "diary", "insights", "timetable", "calendar",
+  "bellLanguage", "settings", "skHelp", "reportProblem", "uploadNow",
 ];
 const partIds = (s: PlannedStop | undefined) => (s?.parts ?? []).map((p) => p.id);
+/** A stop, or a part of a combined stop, by id (its anchors and line). */
+const unit = (p: PlannedStop[], id: string): { anchors: PlannedStop["anchors"]; line: string } =>
+  p.find((s) => s.id === id) ?? p.flatMap((s) => s.parts ?? []).find((x) => x.id === id)!;
 
 describe("walkRoleFor: the hat first, then the role", () => {
   it("maps roles and hats to the five tours", () => {
@@ -102,8 +113,8 @@ describe("needHolds / resolveRoute", () => {
 });
 
 describe("planWalk: per-role stops as built", () => {
-  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close, student 11 → 16, parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
-    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(29);
+  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close → 22 folded, student 11 → 16, parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
+    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(22);
     expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(16);
     expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(16);
     // Home educator: Library + kits in, notices + Test Papers out.
@@ -115,15 +126,22 @@ describe("planWalk: per-role stops as built", () => {
     const p = planWalk("teacher", TEACHER_ALL);
     expect(ids(p)).toEqual(TEACHER_ORDER);
     // The Library stops open the tour's book (?book= opens its row); the rest of the page needs no hop.
-    for (const id of TEACHER_ORDER.slice(1, 10)) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard?book=b1");
+    for (const id of TEACHER_ORDER.slice(1, 8)) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard?book=b1");
     for (const id of ["setup", "myBooks", "plan"]) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard");
     // The combined stops' parts, in narration order.
     expect(partIds(p.find((s) => s.id === "openBook"))).toEqual(["bookCard", "generateAll", "chapterKit", "lessonOptions"]);
     expect(partIds(p.find((s) => s.id === "setup"))).toEqual(["upload", "classes", "branding"]);
+    expect(partIds(p.find((s) => s.id === "kit"))).toEqual(["pieces", "downloads", "rerun"]);
+    expect(partIds(p.find((s) => s.id === "classBoard"))).toEqual(["board", "boardSk"]);
+    expect(partIds(p.find((s) => s.id === "readyMade"))).toEqual(["kits", "skTutor"]);
+    expect(partIds(p.find((s) => s.id === "insights"))).toEqual(["analytics", "gradeQueue"]);
+    expect(partIds(p.find((s) => s.id === "bellLanguage"))).toEqual(["notifications", "language"]);
+    expect(partIds(p.find((s) => s.id === "skHelp"))).toEqual(["skMenu", "skAsk"]);
     expect(p.find((s) => s.id === "diary")?.route).toBe("/dashboard/diary?c=c1");
-    expect(p.find((s) => s.id === "board")?.route).toBe("/present?class=c1");
+    expect(p.find((s) => s.id === "classBoard")?.route).toBe("/present?class=c1");
     expect(p.find((s) => s.id === "generate")?.demo).toBe("lessonPrepare");
-    expect(p.find((s) => s.id === "kits")?.chips).toEqual(["lessonOnPhotosynthesis"]);
+    expect(p.find((s) => s.id === "readyMade")?.chips).toEqual(["lessonOnPhotosynthesis"]);
+    expect(p.find((s) => s.id === "insights")?.demo).toBe("markingGrade");
     // The bridge comes right before More (founder 2026-10-30).
     expect(ids(p).indexOf("boardBridge")).toBe(ids(p).indexOf("more") - 1);
     // No book id: the parameter drops and the Library stops stay on /dashboard.
@@ -137,7 +155,7 @@ describe("planWalk: per-role stops as built", () => {
   });
   it("each Library stop points at ONE control in the open book: Generate kit on a part (never Generate all), Assign on a part, a pen on one chip, one download, More", () => {
     const p = planWalk("teacher", TEACHER_ALL);
-    const first = (id: string) => p.find((s) => s.id === id)!.anchors[0]!.sel;
+    const first = (id: string) => unit(p, id).anchors[0]!.sel;
     expect(first("generate")).toBe('[data-tour-book="open"] [data-tour="generate-part"]');
     expect(p.find((s) => s.id === "generate")!.anchors.map((a) => a.sel)).not.toContain('[data-tour="generate-all"]');
     const part = (id: string) => p.find((s) => s.id === "openBook")!.parts!.find((x) => x.id === id)!.anchors[0]!.sel;
@@ -155,7 +173,7 @@ describe("planWalk: per-role stops as built", () => {
     const p = planWalk("teacher", TEACHER_ALL);
     const lines = { assign: "assignNone", rerun: "rerunNone", downloads: "downloadsNone", pieces: "piecesNone" } as const;
     for (const [id, line] of Object.entries(lines)) {
-      const a = p.find((s) => s.id === id)!.anchors;
+      const a = unit(p, id).anchors;
       const fb = a.filter((x) => x.line === line).map((x) => x.sel);
       expect(fb[0], id).toBe('[data-tour-book="open"] [data-tour="generate-part"]');
       expect(fb, id).toContain('[data-tour="upload-book"]');
@@ -190,7 +208,8 @@ describe("planWalk: per-role stops as built", () => {
       { sel: '[data-tour="upload-book"]', line: "libraryEmpty" },
     ]);
     // Assign, re-run, downloads and the pieces still explain themselves (their last fallback is the upload card).
-    for (const id of ["pieces", "downloads", "rerun", "assign", "openBook"]) expect(ids(p)).toContain(id);
+    for (const id of ["kit", "assign", "openBook"]) expect(ids(p)).toContain(id);
+    expect(partIds(p.find((s) => s.id === "kit"))).toEqual(["pieces", "downloads", "rerun"]);
   });
   it("teacher with no class: the diary says what it is for at its tab; no timetable or calendar drops those; More follows FEATURE_EXAM", () => {
     const p = planWalk("teacher", { ...TEACHER_ALL, classId: null, timetable: false, calendar: false, exam: false });
@@ -200,11 +219,11 @@ describe("planWalk: per-role stops as built", () => {
     expect(diary.anchors[0]!.sel).toBe('[data-tour="diary-nav"]');
     expect(ids(p)).not.toContain("timetable");
     expect(ids(p)).not.toContain("calendar");
-    expect(p.find((s) => s.id === "board")?.route).toBe("/present");
+    expect(p.find((s) => s.id === "classBoard")?.route).toBe("/present");
     expect(p.find((s) => s.id === "more")?.line).toBe("moreNoExam");
     // No Board: neither the bridge nor the Board stops.
     const nb = ids(planWalk("teacher", { ...TEACHER_ALL, board: false }));
-    for (const id of ["boardBridge", "board", "boardSk"]) expect(nb).not.toContain(id);
+    for (const id of ["boardBridge", "classBoard"]) expect(nb).not.toContain(id);
   });
   it("student with no SK book: one neutral line instead of stops 6–9", () => {
     const p = planWalk("student", { diary: true });
@@ -298,25 +317,62 @@ describe("combined stops: one narration, the highlight moving part by part", () 
     expect(findParts(openBook().parts!, two)!.parts.map((p) => p.id)).toEqual(["generateAll", "lessonOptions"]);
     expect(findParts(openBook().parts!, { query: () => null, visible: () => true })).toBeNull();
   });
-  it("the highlight sequence: the part whose first sentence SK is starting", () => {
-    const texts = ["One. Two.", "Three", "Four! Five? Six."];
-    // A part that does not end a sentence gets a full stop in the ONE line.
-    expect(joinParts(texts)).toBe("One. Two. Three. Four! Five? Six.");
-    const starts = partSentenceStarts(texts, splitSentences);
-    expect(starts).toEqual([0, 2, 3]);
-    expect([0, 1, 2, 3, 4, 5].map((i) => partAtSentence(starts, i))).toEqual([0, 0, 1, 2, 2, 2]);
-    expect(splitSentences(joinParts(texts))).toHaveLength(6);
-    // The real lines: every sentence of the joined line belongs to one part, in order.
-    const en = ["Each book shows its badges. Tap a book.", "Generate all makes them all.", "Generate full kit makes one.", "Lesson options set the voice."];
-    const st = partSentenceStarts(en, splitSentences);
-    const seq = splitSentences(joinParts(en)).map((_, i) => partAtSentence(st, i));
-    expect(seq).toEqual([0, 0, 1, 2, 3]);
-    // A part with no words shares the next part's start (never highlighted alone).
-    expect(partSentenceStarts(["A.", "", "B."], splitSentences)).toEqual([0, 1, 1]);
-    // Without sound: each part's share of the reading time, starting at 0.
-    const t = partReadingStarts(["x".repeat(100), "y".repeat(100)]);
+  // 2026-10-31: one tight line (fewer sentences than parts): the highlight
+  // moves at markers INSIDE sentences.
+  it("composed from clauses: at most 3 sentences, joined with the locale's separator, a marker at each later part", () => {
+    const four = composeParts(["Badges show progress.", "Generate all builds kits.", "Generate full kit makes one.", "Lesson options set the voice."], ["a", "b", "c", "d"], "; ");
+    expect(four).toBe("Badges show progress; {b}Generate all builds kits. {c}Generate full kit makes one. {d}Lesson options set the voice.");
+    expect(splitSentences(stripMarks(four))).toHaveLength(3);
+    expect(composeParts(["Upload here", "", "Branding adds the logo."], ["u", "c", "b"], "; ")).toBe("Upload here. {b}Branding adds the logo.");
+    expect(composeParts(["One.", "Two."], ["x", "y"], "; ")).toBe("One. {y}Two.");
+    // Markers never reach the caption or the voice.
+    expect(stripMarks("Hi; {b}Generate all. {c}Then.")).toBe("Hi; Generate all. Then.");
+    expect(stripMarks("Hi, {b} Generate all.")).toBe("Hi, Generate all.");
+  });
+  it("the precomposed line only when every planned part is there with its own line; else the clauses", () => {
+    const stop = { parts: [{ id: "a", line: "a", anchors: [] }, { id: "b", line: "b", anchors: [] }], whole: "ab" };
+    const table: Record<string, string> = { ab: "A and {b}B.", a: "A.", b: "B.", bNone: "No B yet." };
+    const words = (k: string) => table[k] ?? "";
+    expect(partsLine(stop, [{ id: "a", line: "a" }, { id: "b", line: "b" }], words, "; ")).toBe("A and {b}B.");
+    expect(partsLine(stop, [{ id: "a", line: "a" }, { id: "b", line: "bNone" }], words, "; ")).toBe("A. {b}No B yet.");
+    expect(partsLine(stop, [{ id: "b", line: "b" }], words, "; ")).toBe("B.");
+    expect(partsLine({ ...stop, whole: undefined }, [{ id: "a", line: "a" }, { id: "b", line: "b" }], words, "; ")).toBe("A. {b}B.");
+    // The plan: `whole` only when every part plays with its own line.
+    const all = planWalk("teacher", TEACHER_ALL);
+    expect(all.find((s) => s.id === "openBook")!.whole).toBe("openBook");
+    expect(all.find((s) => s.id === "setup")!.whole).toBe("setup");
+    const noBook = planWalk("teacher", { ...TEACHER_ALL, books: false, bookId: null });
+    expect(noBook.find((s) => s.id === "openBook")!.whole).toBeUndefined();
+  });
+  it("the cues: each part's sentence and place in it; the delay from the known audio length, else the measured rate", () => {
+    const { text, cues } = partCues("Badges show it. {b}Generate all builds, {c}full kit makes one, {d}and options set it.", ["a", "b", "c", "d"]);
+    expect(text).toBe("Badges show it. Generate all builds, full kit makes one, and options set it.");
+    expect(cues.map((c) => [c.part, c.sentence, c.at])).toEqual([
+      [0, 0, 0],
+      [1, 1, 0],
+      [2, 1, "Generate all builds, ".length],
+      [3, 1, "Generate all builds, full kit makes one, ".length],
+    ]);
+    expect(cues[3]!.len).toBe("Generate all builds, full kit makes one, and options set it.".length);
+    // Sentence 1 starts: part 1 at once (catch-up from earlier sentences too).
+    expect(partDueAt(cues, 0)).toBe(0);
+    expect(partDueAt(cues, 1)).toBe(1);
+    expect(partDueAt(cues, 2)).toBe(3);
+    // Known length (word marks): the share of it; unknown: characters x rate.
+    expect(cueDelay(cues[2]!, { durationMs: 3000, msPerChar: 65 })).toBe(Math.round((cues[2]!.at / cues[2]!.len) * 3000));
+    expect(cueDelay(cues[2]!, { durationMs: null, msPerChar: 70 })).toBe(cues[2]!.at * 70);
+    // The rate follows the sentences actually spoken; odd samples are ignored.
+    expect(nextSpeakRate(SPEAK_MS_PER_CHAR, 6000, 60)).toBe(Math.round((SPEAK_MS_PER_CHAR + 100) / 2));
+    expect(nextSpeakRate(80, 100, 60)).toBe(80);
+    expect(nextSpeakRate(80, 5000, 4)).toBe(80);
+    // A part with no marker starts where the one before it did; part 0 at the start.
+    expect(partCues("A. B.", ["a", "b"]).cues.map((c) => c.offset)).toEqual([0, 0]);
+    // Without sound: each part's share of the reading time.
+    const t = cueReadingTimes(text, cues);
     expect(t[0]).toBe(0);
-    expect(t[1]).toBe(Math.round(readingMs(joinParts(["x".repeat(100), "y".repeat(100)])) / 2));
+    expect(t[1]).toBe(Math.round(("Badges show it. ".length / text.length) * readingMs(text)));
+    // The same sentence split as the voice's.
+    expect(splitSentences(text)).toHaveLength(2);
   });
   it("Step N of M counts a combined stop once; next / back move over it as one stop", () => {
     const p = planWalk("teacher", TEACHER_ALL);
@@ -327,7 +383,7 @@ describe("combined stops: one narration, the highlight moving part by part", () 
     expect(currentStop(s)!.id).toBe("generate");
     s = backStop(backStop(s));
     expect(currentStop(s)!.id).toBe("library");
-    expect(s.stops).toHaveLength(29);
+    expect(s.stops).toHaveLength(22);
   });
   it("a combined stop survives the sessionStorage round trip; a broken parts list reads as none", () => {
     const mem = new Map<string, string>();
