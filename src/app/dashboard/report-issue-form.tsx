@@ -274,6 +274,7 @@ export default function ReportIssueForm({
           content column on anything narrower than ~1560px. The icon keeps it
           discoverable; the label (and tooltip) still name it. */}
       <button
+        data-tour="report-issue"
         onClick={() => setOpen((o) => !o)}
         className="group flex items-center h-10 rounded-full bg-white border border-[#E6E8E4] shadow-sm px-2.5 hover:px-3.5 focus-visible:px-3.5 transition-all"
         title={label}

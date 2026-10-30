@@ -19,11 +19,16 @@ import {
   createWalkStore,
   currentStop,
   findAnchor,
+  findParts,
   isActive,
   jumpTo,
   missingStop,
   needHolds,
   nextStop,
+  joinParts,
+  partAtSentence,
+  partReadingStarts,
+  partSentenceStarts,
   pauseWalk,
   planWalk,
   resolveRoute,
@@ -42,17 +47,20 @@ import {
   type WalkState,
 } from "../walkthrough";
 import { WALK_STOPS, walkRoleFor, type WalkFacts } from "@/sk/walkthrough/stops";
+import { splitSentences } from "../speech";
 
 const ids = (stops: PlannedStop[]) => stops.map((s) => s.id);
 
 const TEACHER_ALL: WalkFacts = { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true, skTutor: true };
 
-/** The teacher's tour in order (founder feedback 2026-10-30: precise and complete). */
+/** The teacher's tour in order (founder feedback 2026-10-30: precise and
+ *  complete; then "combine steps 3 to 6" → openBook, "14, 15 and 16" → setup). */
 const TEACHER_ORDER = [
-  "hello", "library", "bookCard", "generateAll", "chapterKit", "lessonOptions", "generate", "pieces", "downloads", "rerun", "assign", "boardBridge", "more",
-  "upload", "classes", "branding", "myBooks", "plan", "board", "boardSk", "kits", "skTutor", "diary", "analytics", "gradeQueue", "timetable", "calendar",
-  "notifications", "language", "settings", "skMenu", "skAsk",
+  "hello", "library", "openBook", "generate", "pieces", "downloads", "rerun", "assign", "boardBridge", "more",
+  "setup", "myBooks", "plan", "board", "boardSk", "kits", "skTutor", "diary", "analytics", "gradeQueue", "timetable", "calendar",
+  "notifications", "language", "settings", "skMenu", "skAsk", "reportProblem", "uploadNow",
 ];
+const partIds = (s: PlannedStop | undefined) => (s?.parts ?? []).map((p) => p.id);
 
 describe("walkRoleFor: the hat first, then the role", () => {
   it("maps roles and hats to the five tours", () => {
@@ -88,21 +96,24 @@ describe("needHolds / resolveRoute", () => {
 });
 
 describe("planWalk: per-role stops as built", () => {
-  it("every role's stop count with everything on (teacher 14 → 32, student 11 → 15, parent 12 → 15, principal 12 → 15, coordinator 10 → 13)", () => {
-    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(32);
-    expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(15);
-    expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(15);
+  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close, student 11 → 16, parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
+    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(29);
+    expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(16);
+    expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(16);
     // Home educator: Library + kits in, notices + Test Papers out.
-    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(15);
-    expect(planWalk("principal", { analytics: true, timetable: true, diary: true, notices: true, roleHats: true })).toHaveLength(15);
-    expect(planWalk("coordinator", { timetable: true, diary: true, notices: true })).toHaveLength(13);
+    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(17);
+    expect(planWalk("principal", { analytics: true, timetable: true, diary: true, notices: true, roleHats: true })).toHaveLength(16);
+    expect(planWalk("coordinator", { timetable: true, diary: true, notices: true })).toHaveLength(14);
   });
   it("teacher order: the Library and its kits first (the Board bridge, then More), then the page, the Board, the other pages, the header and SK", () => {
     const p = planWalk("teacher", TEACHER_ALL);
     expect(ids(p)).toEqual(TEACHER_ORDER);
     // The Library stops open the tour's book (?book= opens its row); the rest of the page needs no hop.
-    for (const id of TEACHER_ORDER.slice(1, 13)) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard?book=b1");
-    for (const id of ["upload", "classes", "branding", "myBooks", "plan"]) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard");
+    for (const id of TEACHER_ORDER.slice(1, 10)) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard?book=b1");
+    for (const id of ["setup", "myBooks", "plan"]) expect(p.find((s) => s.id === id)?.route, id).toBe("/dashboard");
+    // The combined stops' parts, in narration order.
+    expect(partIds(p.find((s) => s.id === "openBook"))).toEqual(["bookCard", "generateAll", "chapterKit", "lessonOptions"]);
+    expect(partIds(p.find((s) => s.id === "setup"))).toEqual(["upload", "classes", "branding"]);
     expect(p.find((s) => s.id === "diary")?.route).toBe("/dashboard/diary?c=c1");
     expect(p.find((s) => s.id === "board")?.route).toBe("/present?class=c1");
     expect(p.find((s) => s.id === "generate")?.demo).toBe("lessonPrepare");
@@ -123,9 +134,11 @@ describe("planWalk: per-role stops as built", () => {
     const first = (id: string) => p.find((s) => s.id === id)!.anchors[0]!.sel;
     expect(first("generate")).toBe('[data-tour-book="open"] [data-tour="generate-part"]');
     expect(p.find((s) => s.id === "generate")!.anchors.map((a) => a.sel)).not.toContain('[data-tour="generate-all"]');
-    expect(first("generateAll")).toBe('[data-tour-book="open"] [data-tour="generate-all"]');
-    expect(first("chapterKit")).toBe('[data-tour-book="open"] [data-tour="generate-lesson"][data-tour-kit="full"]');
-    expect(first("lessonOptions")).toBe('[data-tour-book="open"] [data-tour="lesson-options"]');
+    const part = (id: string) => p.find((s) => s.id === "openBook")!.parts!.find((x) => x.id === id)!.anchors[0]!.sel;
+    expect(part("bookCard")).toBe('[data-tour-book="open"] [data-tour="book-badges"]');
+    expect(part("generateAll")).toBe('[data-tour-book="open"] [data-tour="generate-all"]');
+    expect(part("chapterKit")).toBe('[data-tour-book="open"] [data-tour="generate-lesson"][data-tour-kit="full"]');
+    expect(part("lessonOptions")).toBe('[data-tour-book="open"] [data-tour="lesson-options"]');
     expect(first("assign")).toBe('[data-tour-book="open"] [data-tour="assign-part"]');
     expect(first("rerun")).toBe('[data-tour-book="open"] [data-tour="rerun"]');
     expect(first("downloads")).toBe('[data-tour-book="open"] [data-tour="download-doc"][data-tour-kind="worksheet"]');
@@ -159,7 +172,9 @@ describe("planWalk: per-role stops as built", () => {
   });
   it("teacher with no book: the Library and the kit stops say what to do first, at the upload card", () => {
     const p = planWalk("teacher", { ...TEACHER_ALL, books: false, bookId: null });
-    for (const id of ["bookCard", "generateAll", "chapterKit", "more"]) expect(ids(p)).not.toContain(id);
+    expect(ids(p)).not.toContain("more");
+    // The open-book narration keeps only the part that needs no book: Lesson options.
+    expect(partIds(p.find((s) => s.id === "openBook"))).toEqual(["lessonOptions"]);
     const gen = p.find((s) => s.id === "generate")!;
     expect(gen.line).toBe("noBooks");
     expect(gen.anchors.map((a) => a.sel)).toEqual(['[data-tour="upload-book"]']);
@@ -169,7 +184,7 @@ describe("planWalk: per-role stops as built", () => {
       { sel: '[data-tour="upload-book"]', line: "libraryEmpty" },
     ]);
     // Assign, re-run, downloads and the pieces still explain themselves (their last fallback is the upload card).
-    for (const id of ["pieces", "downloads", "rerun", "assign", "lessonOptions"]) expect(ids(p)).toContain(id);
+    for (const id of ["pieces", "downloads", "rerun", "assign", "openBook"]) expect(ids(p)).toContain(id);
   });
   it("teacher with no class: the diary says what it is for at its tab; no timetable or calendar drops those; More follows FEATURE_EXAM", () => {
     const p = planWalk("teacher", { ...TEACHER_ALL, classId: null, timetable: false, calendar: false, exam: false });
@@ -198,7 +213,7 @@ describe("planWalk: per-role stops as built", () => {
     expect(s.anchors[1]).toEqual({ sel: '[data-tour="assignments"]', line: "openLessonEmpty" });
   });
   it("parent: no child → straight to Add child; unverified → say why; home educator → Library, no notices or Test Papers", () => {
-    expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "notifications", "language", "skMenu", "addChild"]);
+    expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "reportProblem", "notifications", "language", "skMenu", "addChild", "uploadNow"]);
     expect(planWalk("parent", { children: 0 }).find((s) => s.id === "addChild")?.line).toBe("addChildFirst");
     const un = planWalk("parent", { children: 1, verifiedChildren: 0, schoolParent: true, parentPortal: true });
     expect(un.find((s) => s.id === "childCard")?.line).toBe("childUnverified");
@@ -214,7 +229,7 @@ describe("planWalk: per-role stops as built", () => {
   });
   it("leaders: a school feature that is off drops its stop; the principal's hat stop only points", () => {
     const p = planWalk("principal", { analytics: false, timetable: false, diary: false, notices: false, roleHats: false });
-    expect(ids(p)).toEqual(["hello", "teachers", "access", "admin", "books", "schoolSwitch", "notifications", "language", "skAsk"]);
+    expect(ids(p)).toEqual(["hello", "teachers", "access", "admin", "books", "schoolSwitch", "notifications", "language", "reportProblem", "skAsk"]);
     const hat = planWalk("principal", { roleHats: true }).find((s) => s.id === "hat")!;
     expect(hat.anchors[0].sel).toBe('[data-tour="hat-switcher"]');
     expect(hat.demo).toBeUndefined();
@@ -224,6 +239,184 @@ describe("planWalk: per-role stops as built", () => {
       for (const d of defs) {
         expect(d.route).not.toMatch(/activate|autostart/);
       }
+    }
+  });
+});
+
+// Founder 2026-10-30: "Can we combine steps 3 to 6 into 1 narration as all
+// the features are available in 1 screen?" (and 14–16 likewise).
+describe("combined stops: one narration, the highlight moving part by part", () => {
+  const openBook = () => planWalk("teacher", TEACHER_ALL).find((s) => s.id === "openBook")!;
+  const OPEN = '[data-tour-book="open"] ';
+  it("a part whose fact is missing is left out, not the stop; no part at all = no stop", () => {
+    const defs = [
+      {
+        id: "combo",
+        route: "/dashboard",
+        anchors: [],
+        parts: [
+          { id: "a", anchors: ["#a"], needs: ["books" as const] },
+          { id: "b", anchors: ["#b"], needs: ["exam" as const] },
+          { id: "c", anchors: ["#c"], fallback: [{ unless: "class" as const, line: "cNoClass" }] },
+        ],
+      },
+    ];
+    const all = planWalk("teacher", { books: true, exam: true, classId: "x" }, defs)[0]!;
+    expect(all.parts!.map((p) => p.id)).toEqual(["a", "b", "c"]);
+    expect(all.line).toBe("a");
+    expect(all.anchors.map((a) => a.sel)).toEqual(["#a", "#b", "#c"]);
+    const some = planWalk("teacher", { books: false, exam: true }, defs)[0]!;
+    expect(some.parts!.map((p) => [p.id, p.line])).toEqual([["b", "b"], ["c", "cNoClass"]]);
+    expect(planWalk("teacher", { books: false, exam: false }, [{ ...defs[0]!, parts: defs[0]!.parts.slice(0, 2) }])).toEqual([]);
+  });
+  it("on the page: each part's own control, a fallback with its own line, a missing part dropped", () => {
+    const on = new Set([OPEN + '[data-tour="book-badges"]', OPEN + '[data-tour="lesson-options"]', '[data-tour="book-card"]']);
+    const dom = { query: (sel: string) => (on.has(sel) ? { sel } : null), visible: () => true };
+    const hit = findParts(openBook().parts!, dom)!;
+    // No Generate all: its fallback (the badges, "generateAllNone"); no chapter
+    // kit nor Assign chapter: the book list ("chapterKitClosed").
+    expect(hit.parts.map((p) => [p.id, p.line, (p.el as { sel: string }).sel])).toEqual([
+      ["bookCard", "bookCard", OPEN + '[data-tour="book-badges"]'],
+      ["generateAll", "generateAllNone", OPEN + '[data-tour="book-badges"]'],
+      ["chapterKit", "chapterKitClosed", '[data-tour="book-card"]'],
+      ["lessonOptions", "lessonOptions", OPEN + '[data-tour="lesson-options"]'],
+    ]);
+    // A fallback in play: provisional (taken only once the page has settled).
+    expect(hit.index).toBe(1);
+    expect((hit.el as { sel: string }).sel).toBe(OPEN + '[data-tour="book-badges"]');
+    // Every part's own control: complete, taken as soon as it holds still.
+    const full = { query: (sel: string) => (sel.startsWith(OPEN) ? { sel } : null), visible: () => true };
+    expect(findParts(openBook().parts!, full)!.index).toBe(0);
+    // A part with nothing on the page is left out of the narration.
+    const two = { query: (sel: string) => (sel === OPEN + '[data-tour="lesson-options"]' || sel === OPEN + '[data-tour="generate-all"]' ? { sel } : null), visible: () => true };
+    expect(findParts(openBook().parts!, two)!.parts.map((p) => p.id)).toEqual(["generateAll", "lessonOptions"]);
+    expect(findParts(openBook().parts!, { query: () => null, visible: () => true })).toBeNull();
+  });
+  it("the highlight sequence: the part whose first sentence SK is starting", () => {
+    const texts = ["One. Two.", "Three", "Four! Five? Six."];
+    // A part that does not end a sentence gets a full stop in the ONE line.
+    expect(joinParts(texts)).toBe("One. Two. Three. Four! Five? Six.");
+    const starts = partSentenceStarts(texts, splitSentences);
+    expect(starts).toEqual([0, 2, 3]);
+    expect([0, 1, 2, 3, 4, 5].map((i) => partAtSentence(starts, i))).toEqual([0, 0, 1, 2, 2, 2]);
+    expect(splitSentences(joinParts(texts))).toHaveLength(6);
+    // The real lines: every sentence of the joined line belongs to one part, in order.
+    const en = ["Each book shows its badges. Tap a book.", "Generate all makes them all.", "Generate full kit makes one.", "Lesson options set the voice."];
+    const st = partSentenceStarts(en, splitSentences);
+    const seq = splitSentences(joinParts(en)).map((_, i) => partAtSentence(st, i));
+    expect(seq).toEqual([0, 0, 1, 2, 3]);
+    // A part with no words shares the next part's start (never highlighted alone).
+    expect(partSentenceStarts(["A.", "", "B."], splitSentences)).toEqual([0, 1, 1]);
+    // Without sound: each part's share of the reading time, starting at 0.
+    const t = partReadingStarts(["x".repeat(100), "y".repeat(100)]);
+    expect(t[0]).toBe(0);
+    expect(t[1]).toBe(Math.round(readingMs(joinParts(["x".repeat(100), "y".repeat(100)])) / 2));
+  });
+  it("Step N of M counts a combined stop once; next / back move over it as one stop", () => {
+    const p = planWalk("teacher", TEACHER_ALL);
+    const i = ids(p).indexOf("openBook");
+    let s = jumpTo(startWalk("teacher", p, { record: false, runId: "c" }), i);
+    expect(currentStop(s)!.id).toBe("openBook");
+    s = nextStop(s);
+    expect(currentStop(s)!.id).toBe("generate");
+    s = backStop(backStop(s));
+    expect(currentStop(s)!.id).toBe("library");
+    expect(s.stops).toHaveLength(29);
+  });
+  it("a combined stop survives the sessionStorage round trip; a broken parts list reads as none", () => {
+    const mem = new Map<string, string>();
+    const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    const store = createWalkStore(storage);
+    const w = startWalk("teacher", planWalk("teacher", TEACHER_ALL), { record: false, runId: "p" });
+    store.save(jumpTo(w, 2));
+    expect(currentStop(store.load()!)!.parts!.map((x) => x.id)).toEqual(["bookCard", "generateAll", "chapterKit", "lessonOptions"]);
+    const bad = { ...w, stops: w.stops.map((x) => (x.parts ? { ...x, parts: [{ id: 1 }] } : x)) };
+    mem.set(WALK_STORE_KEY, JSON.stringify(bad));
+    expect(store.load()).toBeNull();
+  });
+});
+
+// Founder 2026-10-30: "SK missed the report issue feature using the bottom
+// left and in line for a failed kit."
+describe("Report a problem: the inline report on a failed kit first, else the bottom-left widget", () => {
+  const OPEN = '[data-tour-book="open"] ';
+  const FAILED = '[data-tour="report-failure"]';
+  const WIDGET = '[data-tour="report-issue"]';
+  const stop = (role: Parameters<typeof planWalk>[0], facts: WalkFacts) => planWalk(role, facts).find((s) => s.id === "reportProblem");
+  it("teacher: on the Library, the open book's failed kit, any failed kit, then the widget with its own line", () => {
+    const s = stop("teacher", TEACHER_ALL)!;
+    expect(s.route).toBe("/dashboard?book=b1");
+    expect(s.anchors).toEqual([{ sel: OPEN + FAILED }, { sel: FAILED }, { sel: WIDGET, line: "reportProblemWidget" }]);
+    expect(s.line).toBe("reportProblem");
+    // A failed kit on screen: its inline report, with the stop's own line.
+    const both = { query: (sel: string) => (sel === FAILED || sel === WIDGET ? { sel } : null), visible: () => true };
+    const hit = findAnchor(s.anchors, both)!;
+    expect(hit.sel).toBe(FAILED);
+    expect(hit.line).toBeUndefined();
+    expect(hit.index).toBe(1);
+    // None: the widget, with the widget line (a fallback: taken once the page has settled).
+    const widget = { query: (sel: string) => (sel === WIDGET ? { sel } : null), visible: () => true };
+    expect(findAnchor(s.anchors, widget)).toMatchObject({ sel: WIDGET, line: "reportProblemWidget", index: 2 });
+    // Neither on the page: nothing (the settled wait then passes the stop over).
+    expect(findAnchor(s.anchors, { query: () => null, visible: () => true })).toBeNull();
+  });
+  it("skipped when the widget is off (platformConsoleEnabled() false); unknown counts as present", () => {
+    for (const role of ["teacher", "student", "parent", "principal", "coordinator"] as const) {
+      expect(stop(role, { reportIssue: false, children: 1, verifiedChildren: 1 }), role).toBeUndefined();
+      expect(stop(role, { children: 1, verifiedChildren: 1 }), role).toBeDefined();
+    }
+  });
+  it("every role gets it near the end, on a page that renders the widget, before the closing stop", () => {
+    const routes = { student: "/dashboard", parent: "/dashboard", principal: "/dashboard/school", coordinator: "/dashboard/school" } as const;
+    for (const [role, route] of Object.entries(routes) as Array<[keyof typeof routes, string]>) {
+      const p = planWalk(role, { children: 1, verifiedChildren: 1, diary: true, tutorPath: "/sk/a/1", roleHats: true });
+      const s = p.find((x) => x.id === "reportProblem")!;
+      expect(s.route, role).toBe(route);
+      expect(ids(p).indexOf("reportProblem"), role).toBeGreaterThan(p.length / 2);
+      expect(ids(p).at(-1), role).not.toBe("reportProblem");
+    }
+    // The School pages have no kits: the widget only.
+    expect(stop("principal", {})!.anchors).toEqual([{ sel: WIDGET }]);
+    expect(stop("coordinator", {})!.anchors).toEqual([{ sel: WIDGET }]);
+    // The student's and the parent's dashboards: any failed kit, then the widget.
+    expect(stop("student", {})!.anchors.map((a) => a.sel)).toEqual([FAILED, WIDGET]);
+    expect(stop("parent", {})!.anchors.map((a) => a.sel)).toEqual([FAILED, WIDGET]);
+  });
+});
+
+// Founder 2026-10-30: "at the end tell SK to get back to library and
+// highlight the upload button and ask the client, click here to upload your
+// textbook if you are ready."
+describe("the close: back on the Library, at Upload", () => {
+  const UPLOAD = '[data-tour="upload-book"]';
+  it("teacher: the LAST stop, on the Library route, pointing at Upload, with or without a book", () => {
+    for (const facts of [TEACHER_ALL, { ...TEACHER_ALL, books: false, bookId: null }, { ...TEACHER_ALL, board: false, diary: false, reportIssue: false }]) {
+      const p = planWalk("teacher", facts);
+      const last = p.at(-1)!;
+      expect(last.id).toBe("uploadNow");
+      expect(last.route).toBe(facts.bookId ? `/dashboard?book=${facts.bookId}` : "/dashboard");
+      expect(last.anchors).toEqual([{ sel: UPLOAD }]);
+      expect(last.line).toBe("uploadNow");
+      // Report a problem comes right before it.
+      if (facts.reportIssue !== false) expect(ids(p).at(-2)).toBe("reportProblem");
+    }
+    // The old /dashboard `upload` stop is gone: Upload is only a part of the setup narration.
+    const p = planWalk("teacher", TEACHER_ALL);
+    expect(ids(p)).not.toContain("upload");
+    expect(p.filter((s) => s.anchors[0]?.sel === UPLOAD).map((s) => s.id)).toEqual(["setup", "uploadNow"]);
+  });
+  it("a home educator parent closes the same way; a school parent, the student and the leaders keep their endings", () => {
+    const home = planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false });
+    expect(ids(home).at(-1)).toBe("uploadNow");
+    expect(home.at(-1)!.route).toBe("/dashboard");
+    expect(ids(home).at(-2)).toBe("addChild");
+    const school = planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: true, parentPortal: true });
+    expect(ids(school).at(-1)).toBe("addChild");
+    expect(ids(school)).not.toContain("uploadNow");
+    for (const role of ["student", "principal", "coordinator"] as const) {
+      const p = planWalk(role, { roleHats: true });
+      expect(ids(p).at(-1), role).toBe("skAsk");
+      expect(ids(p), role).not.toContain("uploadNow");
     }
   });
 });

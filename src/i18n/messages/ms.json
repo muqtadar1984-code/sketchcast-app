@@ -2696,19 +2696,22 @@
         "more": "Di bawah Lagi ada Kertas tambahan: Kertas ulang kaji membuat lembaran kerja atau kertas ujian merentas bab yang telah anda ajar, digabungkan atau satu bagi setiap bab, dan Peperiksaan membina kertas peperiksaan bersama skema jawapannya. Kedua-duanya percuma, daripada pelajaran yang sudah anda jana.",
         "moreNoExam": "Di bawah Lagi ada Kertas tambahan: Kertas ulang kaji membuat lembaran kerja atau kertas ujian merentas bab yang telah anda ajar, digabungkan atau satu bagi setiap bab. Ia percuma, daripada pelajaran yang sudah anda jana.",
         "moreClosed": "Dalam setiap buku, Lagi menyimpan Kertas tambahan: kertas ulang kaji dan peperiksaan yang dibina daripada bab yang telah anda ajar.",
-        "upload": "Untuk menambah buku teks, berikan tajuk dan pengarangnya, kemudian pilih PDF. Tiada PDF? Imbas halaman menukar foto halaman menjadi satu PDF.",
+        "upload": "Di sinilah anda memuat naik buku teks, sebagai PDF atau foto halamannya dengan Imbas halaman.",
         "branding": "Penjenamaan sekolah: muat naik templat Word dan PowerPoint sekolah anda sekali sahaja, dan setiap dokumen dan slaid yang kami buat akan menggunakan kepala surat, warna dan logo anda.",
         "myBooksNone": "Buku SketchCast yang diberikan kepada anda muncul di bawah Buku saya, sedia untuk diajar di Papan, ditugaskan atau dimuat turun.",
         "plan": "Meter ini menunjukkan penjanaan bulan ini: apa yang termasuk dalam pelan anda dan apa yang telah anda gunakan. Peruntukan yang tidak digunakan dibawa ke hadapan, dan Beli kredit menambah pek yang tidak pernah luput.",
         "planUnlimited": "Pelan dengan peruntukan bulanan menunjukkan meter di sini: apa yang termasuk dan apa yang telah anda gunakan. Pelan anda tidak mempunyainya, jadi tiada apa yang perlu dikira.",
-        "boardSk": "Saya ada di Papan juga: sebut 'slaid 4', 'terangkan membran' atau 'beri mereka tiga soalan'. Kit sedia guna dimainkan terus dari YouTube, dan Tamatkan pelajaran menyimpan papan serta merangka nota untuk kelas.",
+        "boardSk": "Saya ada di Papan juga: sebut 'slaid 4', 'terangkan membran' atau 'beri mereka tiga soalan'. Kit sedia guna dimainkan terus di Papan ini, dan Tamatkan pelajaran menyimpan papan serta merangka nota untuk kelas.",
         "skTutor": "Tutor SK ialah tempat saya mengajar buku SketchCast bab demi bab, dengan penerangan dan soalan latihan. Inilah yang digunakan oleh pelajar anda bersama buku mereka.",
         "diaryNoClass": "Diari ialah buku komunikasi anda dengan ibu bapa. Sebaik sahaja anda ada kelas, anda siarkan nota kepadanya di sini, atau beritahu saya dan saya akan tunjukkan teks tepatnya dahulu.",
         "calendar": "Kalendar menyimpan acara dan notis sekolah, dan anda boleh melanggannya daripada kalendar telefon anda.",
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
         "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Apabila saya bertindak bagi pihak anda, saya tunjukkan kad dahulu dan tiada apa-apa berlaku sehingga anda sahkan. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Apabila saya bertindak bagi pihak anda, saya tunjukkan kad dahulu dan tiada apa-apa berlaku sehingga anda sahkan. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Jika kit gagal, laporkan di sini dan kami akan menelitinya. Untuk perkara lain, Laporkan masalah ada di sudut kiri bawah.",
+        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya.",
+        "uploadNow": "Itu sahaja untuk panduan ini. Apabila anda bersedia, klik di sini untuk memuat naik buku teks anda dan saya akan menjadikannya pelajaran."
       },
       "student": {
         "hello": "Hai, saya SK! Saya akan tunjukkan sekeliling dalam dua minit. Ketik untuk mendengar saya, atau baca sahaja.",
@@ -2729,7 +2732,9 @@
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
         "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam bahasa anda sendiri; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam bahasa anda sendiri; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Jika sesuatu gagal, ketik lapor di sini dan kami akan menelitinya.",
+        "reportProblemWidget": "Ada yang tidak berfungsi? Ketik di sini, di sudut kiri bawah, dan beritahu kami dalam beberapa perkataan. Kami akan menelitinya."
       },
       "parent": {
         "hello": "Helo, saya SK. Saya akan tunjukkan cara mengikuti perkembangan anak-anak anda dalam kira-kira tiga minit. Ketik untuk mendengar saya.",
@@ -2750,7 +2755,10 @@
         "homeKits": "Di atas sini ada Kit sedia guna, pelajaran siap yang boleh anda buka setiap minggu dan tambah ke Pustaka anda, dan Tutor SK, tempat saya mengajar daripada buku SketchCast.",
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
-        "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan."
+        "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
+        "reportProblem": "Jika kit gagal, laporkan di sini dan kami akan menelitinya. Untuk perkara lain, Laporkan masalah ada di sudut kiri bawah.",
+        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya.",
+        "uploadNow": "Itu sahaja untuk panduan ini. Apabila anda bersedia, klik di sini untuk memuat naik buku teks dan saya akan menjadikannya pelajaran untuk anak-anak anda."
       },
       "principal": {
         "hello": "Selamat datang. Saya SK, dan saya akan tunjukkan gambaran keseluruhan sekolah dalam kira-kira tiga minit. Ketik untuk mendengar saya.",
@@ -2767,7 +2775,8 @@
         "hat": "Tukar kepada peranan Guru di sini untuk menggunakan Pustaka dan Papan Bilik Darjah.",
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa, dan loceng menunjukkan perkembangannya."
       },
       "coordinator": {
         "hello": "Hai, saya SK. Semua yang anda lihat terhad kepada tahun dan subjek anda; cip ini menunjukkan bahagian anda.",
@@ -2782,7 +2791,8 @@
         "hatSettings": "Peranan Guru anda ada kelas, Pustaka dan Papan anda sendiri, dan Tetapan menyimpan apa yang saya ingat.",
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa, dan loceng menunjukkan perkembangannya."
       }
     }
   },
