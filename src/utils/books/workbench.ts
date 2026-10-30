@@ -63,7 +63,7 @@ function latest(runs: RunLite[], keys: string[], status?: string): RunLite | und
 }
 
 /** The six stages, top to bottom, each with at most one action. */
-export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approvals: ApprovalLite[]; releases: ReleaseLite[]; draftUsd: number; auditUsd: number; frontChangedAt?: string | null }): Stage[] {
+export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approvals: ApprovalLite[]; releases: ReleaseLite[]; draftUsd: number; auditUsd: number; frontChangedAt?: string | null; planKnown?: boolean }): Stage[] {
   const { chapters, runs, approvals, releases } = input;
   const total = chapters.length;
   const approved = chapters.filter((c) => c.state === "approved").length;
@@ -80,12 +80,22 @@ export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approv
     action: passed || drafted > 0 ? undefined : { kind: "run", stage: pct === 100 ? "gate_r" : "readiness", params: {}, label: pct === 100 ? "Pin sources" : "Check" },
   });
 
+  // Without the book's chapter plan (recorded by a readiness check since worker #366) the workbench knows only the
+  // drafted chapters, so the next step is the free check that lists them all.
+  const planKnown = input.planKnown ?? true;
+  const listing = runs.some((r) => r.stage_key === "readiness" && LIVE.has(r.status));
   const nextToDraft = chapters.find((c) => c.state === "not_drafted");
   out.push({
     key: "chapters",
-    state: total > 0 && approved === total ? "done" : chapters.some((c) => c.state === "drafting") ? "running" : passed || drafted > 0 ? "ready" : "waiting",
-    value: total ? `${approved}/${total}` : undefined,
-    action: nextToDraft && (passed || drafted > 0) ? { kind: "run", stage: "draft_chapter", params: { chapter: nextToDraft.chapter }, label: `Draft ${nextToDraft.chapter}`, usd: input.draftUsd } : undefined,
+    state:
+      planKnown && total > 0 && approved === total ? "done"
+      : chapters.some((c) => c.state === "drafting") || listing ? "running"
+      : passed || drafted > 0 ? "ready" : "waiting",
+    value: total ? `${approved}/${planKnown ? total : "?"}` : undefined,
+    action:
+      !planKnown && drafted > 0 && !listing ? { kind: "run", stage: "readiness", params: {}, label: "List chapters" }
+      : nextToDraft && (passed || drafted > 0) ? { kind: "run", stage: "draft_chapter", params: { chapter: nextToDraft.chapter }, label: `Draft ${nextToDraft.chapter}`, usd: input.draftUsd }
+      : undefined,
   });
 
   out.push({ key: "book", state: drafted ? "ready" : "waiting", action: drafted ? { kind: "view", view: "book" } : undefined });
@@ -98,9 +108,10 @@ export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approv
     action: drafted && !(audit && LIVE.has(audit.status)) ? { kind: "run", stage: "academic_audit", params: { first: 1, last }, label: audit?.status === "done" ? "Audit again" : "Run audit", usd: input.auditUsd * last } : undefined,
   });
 
+  const allKnown = planKnown;
   // a final approval counts only while every chapter is approved and the front matter has not changed since the last
   // compile (a newer draft, chapter edit or front-matter edit reopens the book)
-  const allApproved = total > 0 && approved === total;
+  const allApproved = allKnown && total > 0 && approved === total;
   const compile = latest(runs, ["compile_book"]);
   const lastCompiled = latest(runs, ["compile_book"], "done");
   const frontNewer = !!input.frontChangedAt && !!lastCompiled?.created_at && input.frontChangedAt > lastCompiled.created_at;
@@ -111,7 +122,7 @@ export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approv
   if (gateE) final = { key: "final", state: "done", value: gateE.approved_on ?? undefined };
   else if (compile && LIVE.has(compile.status)) final = { key: "final", state: "running" };
   else if (compiledApprovedText && compiledDone) final = { key: "final", state: "ready", action: { kind: "gate_e", run: compiledDone.id } };
-  else if (total > 0 && approved === total) final = { key: "final", state: "ready", action: { kind: "run", stage: "compile_book", params: { first: 1, last: total }, label: "Compile" } };
+  else if (allApproved) final = { key: "final", state: "ready", action: { kind: "run", stage: "compile_book", params: { first: 1, last: total }, label: "Compile" } };
   out.push(final);
 
   const live = releases.find((r) => r.release_kind === "final" && !r.superseded_by && !r.withdrawn_at);
@@ -122,6 +133,12 @@ export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approv
   else if (gateE) publish = { key: "publish", state: "ready", action: { kind: "run", stage: "release", params: { final: 1, reissue: 0 }, label: "Publish" } };
   out.push(publish);
   return out;
+}
+
+/** The one step the spine offers (direction C): the first stage, top to bottom, that is not done and has a step to
+ * take. Reading the book is not a step. */
+export function nextStep(list: Stage[]): Stage | undefined {
+  return list.find((s) => s.state !== "done" && s.state !== "running" && s.action && s.action.kind !== "view");
 }
 
 /** Whether anything is moving, so the workbench refreshes itself while it waits. */
