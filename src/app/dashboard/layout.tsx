@@ -7,6 +7,7 @@ import { assertAdultRole } from "@/utils/stripe/guards";
 import { activeHatCookie } from "@/utils/hats-server";
 import AssistantLauncher from "./assistant-launcher";
 import SkLauncher from "./sk-launcher";
+import { SkHomeProvider } from "./sk-home";
 import TourProvider from "@/tour/TourProvider";
 import { tourForRole } from "@/tour/definitions";
 import { shouldAutoStart } from "@/tour/logic";
@@ -172,17 +173,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <TourProvider role={role} seen={seen} copy={t.app.tour}>
-      {children}
-      {/* A principal (school_admin) doesn't teach from books — no teaching
-          Assistant. Everyone else keeps it; the launcher also hides itself on
-          the leadership School pages, where the School-briefing bot takes over
-          the bottom-right slot. */}
-      {role !== "school_admin" && (
-        <AssistantLauncher t={{ ...t.school.assistant, close: t.common.close }} hidden={skOn} />
-      )}
-      {/* SK Shell (S0): the portal-wide companion, in the same corner — so the
-          Assistant above is handed `hidden` whenever this one renders. */}
-      {skOn && <SkLauncher copy={t.sk.shell} tourCopy={t.app.tour} role={role} hat={hat} introDue={skIntroDue} />}
+      {/* 2026-10-30: the landing pages show SK inline (<SkHomeHero />) — the
+          launcher below portals its one Shell there. This hands them THIS
+          layout's skOn decision; the hero adds no gate of its own. */}
+      <SkHomeProvider on={skOn}>
+        {children}
+        {/* A principal (school_admin) doesn't teach from books — no teaching
+            Assistant. Everyone else keeps it; the launcher also hides itself on
+            the leadership School pages, where the School-briefing bot takes over
+            the bottom-right slot. */}
+        {role !== "school_admin" && (
+          <AssistantLauncher t={{ ...t.school.assistant, close: t.common.close }} hidden={skOn} />
+        )}
+        {/* SK Shell (S0): the portal-wide companion, in the same corner — so the
+            Assistant above is handed `hidden` whenever this one renders. */}
+        {skOn && <SkLauncher copy={t.sk.shell} tourCopy={t.app.tour} role={role} hat={hat} introDue={skIntroDue} />}
+      </SkHomeProvider>
     </TourProvider>
   );
 }

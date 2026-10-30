@@ -4,18 +4,32 @@
 // viseme marks into `onViseme` (the avatar's mouth) off the element's own
 // clock. A 404 from the route means the server flag is off: it throws
 // `SpeakUnavailable` so the page stops asking and stays on the browser voice.
+//
+// 2026-10-30: the same client serves SK_TTS=google. It sends the line's
+// language (`lang`, the BCP-47 tag the coordinator speaks in) so the route
+// can pick the Google voice for it (a Polly server refuses a non-English
+// one with 404). A 429 with reason
+// "tts_cap" (the user's monthly Google characters are spent) is also
+// `SpeakUnavailable`: the browser voice for the rest of the page.
 
 import type { Marks } from "@/sk/board/engine";
 import type { PlayOpts, SpeechProvider, SpeechResult, SynthesizeOpts, VoiceId } from "./provider";
 
 export class SpeakUnavailable extends Error {
-  constructor() {
+  /** "off" = the route answered 404; "tts_cap" = the monthly cap is reached. */
+  constructor(readonly reason: "off" | "tts_cap" = "off") {
     super("server speech is not available");
     this.name = "SpeakUnavailable";
   }
 }
 
-type SpeakReply = { format?: unknown; audio?: unknown; marks?: unknown };
+type SpeakReply = { format?: unknown; audio?: unknown; marks?: unknown; reason?: unknown };
+
+export type ServerSpeechOptions = {
+  endpoint?: string;
+  /** The line's language (BCP-47), sent with every request. */
+  lang?: string;
+};
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -44,28 +58,47 @@ export class PollyClientSpeechProvider implements SpeechProvider {
   readonly id = "polly-client";
   private audio: HTMLAudioElement | null = null;
   private url: string | null = null;
-  private inflight: AbortController | null = null;
+  /** 2026-10-30: requests in flight — several at once: the coordinator
+   *  fetches the next sentence's audio while this one plays (speech.ts). */
+  private inflight = new Set<AbortController>();
   private stopCurrent: (() => void) | null = null;
+
+  private readonly endpoint: string;
+  readonly lang: string | undefined;
 
   constructor(
     private readonly look: () => "A" | "B",
-    private readonly endpoint = "/api/sk/speak",
-  ) {}
+    opts: ServerSpeechOptions = {},
+  ) {
+    this.endpoint = opts.endpoint ?? "/api/sk/speak";
+    this.lang = opts.lang;
+  }
 
   async synthesize(text: string, _voice: VoiceId, opts: SynthesizeOpts): Promise<SpeechResult> {
-    void _voice; // the route maps the look to the voice; the id is for the seam's bookkeeping
-    this.cancel();
+    void _voice; // the route maps the look (and lang) to the voice; the id is for the seam's bookkeeping
+    // 2026-10-30: a request no longer cancels what is playing — the next
+    // sentence is fetched DURING this one (the coordinator orders playback,
+    // and cancels both through cancel() or the signal on barge-in).
     const ac = new AbortController();
-    this.inflight = ac;
-    opts.signal?.addEventListener("abort", () => ac.abort(), { once: true });
-    const res = await fetch(this.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, look: this.look() }),
-      signal: ac.signal,
-    });
-    if (this.inflight === ac) this.inflight = null;
+    this.inflight.add(ac);
+    if (opts.signal?.aborted) ac.abort();
+    else opts.signal?.addEventListener("abort", () => ac.abort(), { once: true });
+    let res: Response;
+    try {
+      res = await fetch(this.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(this.lang ? { text, look: this.look(), lang: this.lang } : { text, look: this.look() }),
+        signal: ac.signal,
+      });
+    } finally {
+      this.inflight.delete(ac);
+    }
     if (res.status === 404) throw new SpeakUnavailable();
+    if (res.status === 429) {
+      const r = (await res.json().catch(() => null)) as SpeakReply | null;
+      if (r?.reason === "tts_cap") throw new SpeakUnavailable("tts_cap");
+    }
     if (!res.ok) throw new Error(`speak: HTTP ${res.status}`);
     const j = (await res.json()) as SpeakReply;
     if (j.format !== "mp3" || typeof j.audio !== "string" || !j.audio) throw new Error("speak: malformed reply");
@@ -74,10 +107,10 @@ export class PollyClientSpeechProvider implements SpeechProvider {
     return { audio: bytes, format: "mp3", marks, play: (o) => this.play(bytes, marks, o ?? {}) };
   }
 
-  /** Barge-in: abort a pending request and stop whatever is playing. */
+  /** Barge-in: abort every pending request and stop whatever is playing. */
   cancel(): void {
-    this.inflight?.abort();
-    this.inflight = null;
+    for (const ac of this.inflight) ac.abort();
+    this.inflight.clear();
     this.stopCurrent?.();
   }
 

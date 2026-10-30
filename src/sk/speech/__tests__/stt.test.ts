@@ -8,7 +8,7 @@
  */
 import { createHash, createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { clientSttMode, skSttMode, STT_URL_EXPIRES_S, transcribeLanguageFor } from "@/sk/speech/stt";
+import { answerLangOfTranscribe, clientSttMode, skSttMode, STT_URL_EXPIRES_S, sttIdentifyEnabled, TRANSCRIBE_ID_OPTIONS, transcribeLanguageFor } from "@/sk/speech/stt";
 import { skSttMode as fromServer } from "@/sk/server";
 import { amzDates, presignQuery, presignTranscribeUrl, sigv4Encode } from "@/sk/speech/transcribe-presign";
 
@@ -127,5 +127,39 @@ describe("the Transcribe streaming URL", () => {
     expect(plain.searchParams.has("X-Amz-Security-Token")).toBe(false);
     expect(plain.host).toBe("transcribestreaming.us-west-2.amazonaws.com:8443");
     expect(() => presignTranscribeUrl({ region: "evil.com/x", languageCode: "en-US", creds, now })).toThrow(/region/);
+  });
+});
+
+describe("2026-10-30: automatic language identification", () => {
+  const creds = { accessKeyId: "ASIAEXAMPLEKEY", secretAccessKey: "secret", sessionToken: "tok" };
+  const now = new Date("2026-10-30T12:34:56Z");
+
+  it("identify-language + language-options + preferred-language, in place of language-code; still signed over the sorted query", () => {
+    const url = presignTranscribeUrl({ region: "us-east-1", languageCode: "ar-SA", creds, now, identify: { options: TRANSCRIBE_ID_OPTIONS, preferred: "ar-SA" } });
+    const p = new URL(url).searchParams;
+    expect(p.get("identify-language")).toBe("true");
+    expect(p.get("language-options")).toBe("en-US,ms-MY,ar-SA,zh-CN");
+    expect(p.get("preferred-language")).toBe("ar-SA");
+    expect(p.has("language-code")).toBe(false);
+    // The comma is encoded in the canonical query (RFC 3986), as SigV4 wants.
+    expect(url).toContain("language-options=en-US%2Cms-MY%2Car-SA%2Czh-CN");
+    const keys = url.split("?")[1]!.replace(/&X-Amz-Signature=[0-9a-f]+$/, "").split("&").map((kv) => kv.split("=")[0]!);
+    expect(keys).toEqual([...keys].sort());
+  });
+  it("refuses options the API refuses: fewer than two, two dialects of one language, a preferred one not offered", () => {
+    expect(() => presignTranscribeUrl({ region: "us-east-1", languageCode: "en-US", creds, now, identify: { options: ["en-US"] } })).toThrow(/options/);
+    expect(() => presignTranscribeUrl({ region: "us-east-1", languageCode: "en-US", creds, now, identify: { options: ["en-US", "en-GB"] } })).toThrow(/options/);
+    expect(() => presignTranscribeUrl({ region: "us-east-1", languageCode: "en-US", creds, now, identify: { options: ["en-US", "ms-MY"], preferred: "zh-CN" } })).toThrow(/preferred/);
+  });
+  it("the options are the four approved streaming languages, each mapped back to an answer language", () => {
+    expect(TRANSCRIBE_ID_OPTIONS.map((c) => transcribeLanguageFor(c))).toEqual(["en-US", "ms-MY", "ar-SA", "zh-CN"]);
+    expect(TRANSCRIBE_ID_OPTIONS.map(answerLangOfTranscribe)).toEqual(["en", "ms", "ar", "zh"]);
+    expect(answerLangOfTranscribe("mr-IN")).toBeNull();
+    expect(answerLangOfTranscribe(undefined)).toBeNull();
+  });
+  it("SK_STT_IDENTIFY: on by default, off by 'off' / '0' / 'false' / 'no'", () => {
+    expect(sttIdentifyEnabled(undefined)).toBe(true);
+    expect(sttIdentifyEnabled("")).toBe(true);
+    for (const v of ["off", "OFF", "0", "false", "no"]) expect(sttIdentifyEnabled(v)).toBe(false);
   });
 });

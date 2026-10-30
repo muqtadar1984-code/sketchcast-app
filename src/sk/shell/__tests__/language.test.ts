@@ -12,10 +12,12 @@ import {
   answerLanguage,
   canSpeakList,
   langMeta,
+  languageChosen,
   linesLocale,
   normalizeLanguage,
   overrideForBack,
   parseLanguageCommand,
+  stickyAfterQuestion,
   targetCode,
 } from "../language";
 import { routeByRules } from "../rules";
@@ -165,8 +167,53 @@ describe("back phrasings", () => {
     ["reviens au français", "fr"],
     ["vuelve al español", "es"],
     ["volta ao português", "pt"],
+    // 2026-10-30: a switch from now on, no repeat.
+    ["speak in Marathi", "mr"],
+    ["talk to me in Malay", "ms"],
+    ["reply in Arabic from now on", "ar"],
+    ["switch to Hindi", "hi"],
+    ["change the language to Chinese", "zh"],
+    ["please speak in Telugu", "te"],
   ])("%s → %s", (text, code) => {
     expect(back(text)).toBe(code);
+  });
+  it("a switch phrasing that names no language is not a command", () => {
+    for (const t of ["switch to the next slide", "change to slide 4", "speak in a simple way", "talk in detail"]) expect(parseLanguageCommand(t), t).toBeNull();
+  });
+});
+
+describe("2026-10-30 precedence: the question's own language > the conversation's > the source's > the UI's", () => {
+  it("a confident question language beats the conversation's language and the source's", () => {
+    expect(answerLanguage({ question: "mr", override: "ms", sourceLanguages: ["ar"], uiLocale: "en" })).toEqual({ lang: "mr", from: "question" });
+    expect(answerLanguage({ question: "en", override: null, sourceLanguages: ["ar"], uiLocale: "ms" })).toEqual({ lang: "en", from: "question" });
+  });
+  it("no confident question language: the conversation's, then the source's (the book/article default), then the UI's", () => {
+    expect(answerLanguage({ question: null, override: "mr", sourceLanguages: ["ar"], uiLocale: "en" })).toEqual({ lang: "mr", from: "override" });
+    expect(answerLanguage({ question: null, override: null, sourceLanguages: ["ar"], uiLocale: "en" })).toEqual({ lang: "ar", from: "source" });
+    expect(answerLanguage({ question: null, override: null, sourceLanguages: [], uiLocale: "hi" })).toEqual({ lang: "hi", from: "ui" });
+  });
+  it("a question language that is not an answer language is ignored", () => {
+    expect(answerLanguage({ question: "ta", sourceLanguages: ["ar"], uiLocale: "en" })).toEqual({ lang: "ar", from: "source" });
+  });
+  it("stickyAfterQuestion: a confident question becomes the conversation's language, cleared when it is the natural one", () => {
+    // Marathi on an English page: kept, so "ok" / "next" stay in Marathi.
+    expect(stickyAfterQuestion("mr", null, { sourceLanguages: [], uiLocale: "en" })).toBe("mr");
+    expect(stickyAfterQuestion("mr", "ms", { sourceLanguages: [], uiLocale: "en" })).toBe("mr");
+    // English on an English page: nothing to keep (the page's own language).
+    expect(stickyAfterQuestion("en", "mr", { sourceLanguages: [], uiLocale: "en" })).toBeNull();
+    // English over an Arabic book: kept (the book would say Arabic).
+    expect(stickyAfterQuestion("en", null, { sourceLanguages: ["ar"], uiLocale: "en" })).toBe("en");
+    // Arabic over an Arabic book: the book's own — nothing to keep.
+    expect(stickyAfterQuestion("ar", "en", { sourceLanguages: ["ar"], uiLocale: "en" })).toBeNull();
+    // No confident question: the conversation's language as it was.
+    expect(stickyAfterQuestion(null, "mr", { sourceLanguages: ["ar"], uiLocale: "en" })).toBe("mr");
+    expect(stickyAfterQuestion(null, undefined, { sourceLanguages: [], uiLocale: "en" })).toBeNull();
+  });
+  it("languageChosen: the user's own language (question or conversation), not the material's or the page's", () => {
+    expect(languageChosen({ from: "question" })).toBe(true);
+    expect(languageChosen({ from: "override" })).toBe(true);
+    expect(languageChosen({ from: "source" })).toBe(false);
+    expect(languageChosen({ from: "ui" })).toBe(false);
   });
 });
 

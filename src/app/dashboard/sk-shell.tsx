@@ -13,6 +13,9 @@
 //   mic-gate.ts      — §2.6: the mic stops on blur/hidden/pagehide/idle, never resumes
 //   narration.ts     — §4.6: the intro script and its abortable runner
 //   memory-store.ts  — S1: the memory blob across pages (sessionStorage)
+//   transcript-store.ts — 2026-10-30: the visible turns across pages and
+//                      Shell instances, so the hero and the panel are ONE
+//                      conversation (same tab, same server session)
 //   confirm.ts       — S1 §9.2: when a bare yes/no answers a confirm card
 //   prefetch.ts      — which pages to warm (router.prefetch) so a navigate
 //                      lands on a render already under way
@@ -28,15 +31,29 @@
 // Voice: SK speaks through the SpeechProvider seam (src/sk/speech) behind the
 // coordinator; dictation stays on the Assistant's browser adapter
 // (startDictation) so a hosted STT swap later is one module, not two panels.
+//
+// 2026-10-30 (founder): `variant="hero"` renders the SAME machinery inline at
+// the top of a role's landing page (sk-home.tsx) instead of the floating
+// panel: a still avatar, a one-line greeting, the conversation, the text box,
+// and a Mic switch (prefs.ts micOn; on by default except for students). With
+// the switch on SK listens hands-free through startDictation (so the
+// Transcribe / browser choice applies unchanged) while the page is visible and
+// focused, pauses while SK speaks (no echo) and comes back after, and resumes
+// after blur / hidden / idle when she returns or interacts (mic-gate.ts
+// autoResume; never on a timer). The panel variant is unchanged: push-to-talk,
+// the hands-free opt-in, and a mic that never resumes by itself.
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { micSupported, pageSpeechLang, startDictation } from "@/utils/assistant/voice-client";
-import { createSpeechCoordinator, speechMode, type SpeechCoordinator } from "@/sk/shell/client/speech";
+import { createSpeechCoordinator, serverProviderFor, speechMode, type SpeechCoordinator } from "@/sk/shell/client/speech";
 import { BrowserSpeechProvider } from "@/sk/speech/browser";
-import { PollyClientSpeechProvider } from "@/sk/speech/polly-client";
+import { googleVoiceFor } from "@/sk/speech/google-voices";
 import { pollyVoiceFor } from "@/sk/speech/polly-marks";
 import { pickBrowserVoice, readRigChoice, voiceGenderForChoice } from "@/sk/board/avatar";
+import { useRigChoice } from "@/sk/board/use-rig-choice";
 import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
@@ -46,11 +63,12 @@ import { SK_INTRO_TOUR } from "@/sk/shell/tour";
 import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector";
 // S6 slice C: the preferences follow the user (workflow facts), with a
 // one-time migration of this browser's localStorage values (prefs.ts).
-import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
+import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultMicOn, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createMicGate, type MicGate } from "@/sk/shell/client/mic-gate";
 import { runNarration, skIntroScript } from "@/sk/shell/client/narration";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
+import { createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
 import { citationChips } from "@/sk/shell/client/citations";
@@ -59,6 +77,10 @@ import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
+export type SkShellVariant = "panel" | "hero";
+
+/** The hero keeps the conversation compact: the latest turns, scrollable. */
+const HERO_ENTRIES = 12;
 
 type Label = "grounded" | "supplementary" | "declined" | "navigation";
 type Entry = {
@@ -192,6 +214,9 @@ export default function SkShell({
   onClose,
   board,
   tutor,
+  variant = "panel",
+  portalTo,
+  onEngaged,
 }: {
   copy: SkShellCopy;
   tourCopy: TourCopy;
@@ -200,16 +225,28 @@ export default function SkShell({
   /** Server-decided: shouldAutoStart(seen row for "sk-intro", SK_INTRO_TOUR.version). */
   introDue: boolean;
   /** The launcher flips its flag so a re-open in this session does not narrate again. */
-  onIntroDone: () => void;
-  onClose: () => void;
+  onIntroDone?: () => void;
+  /** The panel's close; the hero has none. */
+  onClose?: () => void;
   /** S1: on /present, the Board bridge — its state rides with every turn and
    *  it performs the `board` events the server decides. */
   board?: SkBoardBridge | null;
   /** S3 slice D: on /sk, the kit player bridge — its state rides with every
    *  turn and it performs the `tutor` events the server decides. */
   tutor?: SkTutorBridge | null;
+  /** "panel" (default): the floating dialog. "hero": inline on a landing page. */
+  variant?: SkShellVariant;
+  /** The hero's place on the page (sk-home.tsx). The launcher keeps ONE Shell
+   *  across pages and portals it there while a landing page shows a slot, so
+   *  the conversation (and a turn still streaming) survives the move. */
+  portalTo?: HTMLElement | null;
+  /** Called when she sends a turn — the launcher carries an engaged
+   *  conversation on into the panel when she leaves the hero's page. */
+  onEngaged?: () => void;
 }) {
   const router = useRouter();
+  const hero = variant === "hero";
+  const [rig] = useRigChoice();
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
@@ -230,6 +267,12 @@ export default function SkShell({
   // S2: the job tray (SK-started kits) and whether the tab is visible.
   const [tray, setTray] = useState<TrayKit[]>([]);
   const [visible, setVisible] = useState(true);
+  // The hero's Mic switch (prefs.ts micOn; default by role) and why the mic
+  // cannot be used. `prefsSettled` holds the first listen back until the
+  // server's preference is known, so a saved "off" never opens the mic.
+  const [micOn, setMicOn] = useState(false);
+  const [micNote, setMicNote] = useState<"unsupported" | "denied" | null>(null);
+  const [prefsSettled, setPrefsSettled] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -240,7 +283,13 @@ export default function SkShell({
   /** 2026-10-30: the dictation language while she has chosen an answer
    *  language ("say that in Arabic"); null = the page's. */
   const dictLangRef = useRef<string | null>(null);
+  /** The language Transcribe heard the last dictation in (a hint the server weighs). */
+  const spokenLangRef = useRef<string | null>(null);
   const storeRef = useRef<MemoryStore | null>(null);
+  const transcriptRef = useRef<TranscriptStore | null>(null);
+  /** The server session the visible transcript belongs to (transcript-store.ts). */
+  const sessionIdRef = useRef<string | null>(null);
+  const onEngagedRef = useRef(onEngaged);
   const boardRef = useRef<SkBoardBridge | null | undefined>(board);
   const tutorRef = useRef<SkTutorBridge | null | undefined>(tutor);
   const cardsRef = useRef<Card[]>([]);
@@ -251,6 +300,10 @@ export default function SkShell({
   const emptyEndsRef = useRef(0);
   const handsFreeRef = useRef(false);
   const readAloudRef = useRef(true);
+  const micOnRef = useRef(false);
+  const speakingRef = useRef(false);
+  /** The hero gate's onResume, current every render (the gate outlives renders). */
+  const listenNowRef = useRef<() => void>(() => {});
   const introStartedRef = useRef(false);
   const introPostedRef = useRef(false);
   const sendRef = useRef<(text: string, modality: "text" | "voice") => Promise<void>>(async () => {});
@@ -284,11 +337,20 @@ export default function SkShell({
       speechRef.current?.setEnabled(ra);
       setHandsFree(hf);
       handsFreeRef.current = hf;
+      // The hero's switch: this browser's copy for the first paint, else the
+      // role's default; the server's value follows with the warm start.
+      const mo = readFlag(PREF_LOCAL_KEY.micOn, defaultMicOn(role));
+      setMicOn(mo);
+      micOnRef.current = mo;
     }, 0);
     return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── the §2.6 mic gate: one per panel; onStop is the ONLY way dictation ends from outside ──
+  // The hero's gate can also RESUME (founder 2026-10-30): while the Mic switch
+  // is on, it calls listenNow when she is back on the page or interacts with
+  // it, never while SK is speaking. The panel's gate gets no onResume.
   useEffect(() => {
     const gate = createMicGate({
       win: window,
@@ -299,13 +361,14 @@ export default function SkShell({
         stopMicRef.current = null;
         setListening(false);
       },
+      ...(hero ? { onResume: () => listenNowRef.current(), canResume: () => !speakingRef.current } : {}),
     });
     gateRef.current = gate;
     return () => {
       gate.dispose();
       gateRef.current = null;
     };
-  }, []);
+  }, [hero]);
 
   useEffect(() => {
     boardRef.current = board;
@@ -318,18 +381,23 @@ export default function SkShell({
   }, [cards]);
 
   // ── SK's voice (§2.6 lifecycle 2): one coordinator per panel ──
-  // The public flag only makes the client ASK for Polly; the server's SK_TTS
-  // decides (404 → the browser voice, sticky). The Board adapter reads the
-  // bridge through its ref so a bridge that arrives later is seen. Playback
+  // The public flag only makes the client ASK for the server voice (polly or
+  // google); the server's SK_TTS decides (404 → the browser voice, sticky).
+  // The Board adapter reads the bridge through its ref so a bridge that
+  // arrives later is seen. Playback
   // stops on barge-in (push-to-talk, hands-free start, a new question), on
   // Stop, on read-aloud off, on pagehide and when the panel unmounts.
   useEffect(() => {
+    const tts = speechMode(process.env.NEXT_PUBLIC_SK_TTS);
+    const serverMode = tts === "google" ? "google" : "polly";
     const coord = createSpeechCoordinator({
-      server: speechMode(process.env.NEXT_PUBLIC_SK_TTS) === "polly",
+      server: tts !== "browser",
+      serverMode,
       // The Polly voices are English (Joanna / Matthew): an answer in another
       // language (2026-10-30: the answer language can differ from the page)
-      // is read by the browser voice for that language.
-      makeProvider: (lang) => (lang.toLowerCase().startsWith("en") ? new PollyClientSpeechProvider(() => readRigChoice()) : new BrowserSpeechProvider(lang)),
+      // is read by the browser voice for that language. The Google voices
+      // cover every SK language: each line goes to the server with its lang.
+      makeProvider: (lang) => serverProviderFor(serverMode, lang, () => readRigChoice()),
       fallback: (lang) => new BrowserSpeechProvider(lang),
       defaultLang: pageSpeechLang(),
       board: {
@@ -353,7 +421,7 @@ export default function SkShell({
       // otherwise the engine chooses by the utterance's lang.
       voice: (id, lang) => {
         const gender = voiceGenderForChoice(readRigChoice());
-        if (id !== "browser") return pollyVoiceFor(gender);
+        if (id !== "browser") return serverMode === "google" ? googleVoiceFor(lang, gender) : pollyVoiceFor(gender);
         const prefix = (lang.split("-")[0] ?? "en").toLowerCase();
         const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
         const pool = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
@@ -383,6 +451,7 @@ export default function SkShell({
       storage = null;
     }
     storeRef.current = createMemoryStore(storage);
+    transcriptRef.current = createTranscriptStore(storage);
     const id = window.setInterval(() => setTick((n) => n + 1), 1000);
     return () => window.clearInterval(id);
   }, []);
@@ -391,6 +460,7 @@ export default function SkShell({
   const keepMemory = useCallback((memory: string | undefined, sessionId?: string | null) => {
     if (!memory) return;
     memoryRef.current = memory;
+    if (sessionId) sessionIdRef.current = sessionId;
     storeRef.current?.save({ memory, sessionId: sessionId ?? null });
   }, []);
 
@@ -464,12 +534,15 @@ export default function SkShell({
         // or a fresh one; the saved blob is only the fallback.
         if (d.memory) keepMemory(d.memory, d.sessionId ?? null);
         else if (saved) memoryRef.current = saved.memory;
+        sessionIdRef.current = d.sessionId ?? (d.memory ? null : saved?.sessionId ?? null);
         if (d.announced) writeText(LS_ANNOUNCED, d.announced);
         // S6 slice C: the server's preferences win; a value only this browser
         // holds is migrated up once (prefs.ts resolvePrefs). A reply without
         // prefs (unreadable) changes nothing.
         if (d.prefs !== undefined) {
-          const r = resolvePrefs(d.prefs === null ? null : pick(d.prefs), readLocalPrefs(), readText(PREFS_MIGRATED_LOCAL_KEY) === "1");
+          const r = resolvePrefs(d.prefs === null ? null : pick(d.prefs), readLocalPrefs(), readText(PREFS_MIGRATED_LOCAL_KEY) === "1", role);
+          micOnRef.current = r.prefs.micOn;
+          setMicOn(r.prefs.micOn);
           readAloudRef.current = r.prefs.readAloud;
           setReadAloud(r.prefs.readAloud);
           speechRef.current?.setEnabled(r.prefs.readAloud);
@@ -480,6 +553,17 @@ export default function SkShell({
             if (Object.keys(r.migrate).length) void savePref(r.migrate).then((ok) => ok && writeText(PREFS_MIGRATED_LOCAL_KEY, "1"));
             else writeText(PREFS_MIGRATED_LOCAL_KEY, "1");
           }
+        }
+        setPrefsSettled(true);
+        // 2026-10-30: the conversation she was having in this tab (the hero
+        // on the home page, the panel on another) carries on as it was — no
+        // re-greeting — when the server carried THAT session.
+        const carried = transcriptRef.current?.load(sessionIdRef.current) as Entry[] | null | undefined;
+        if (carried?.length) {
+          setEntries(carried);
+          const lastSk = [...carried].reverse().find((e) => e.who === "sk" && e.text);
+          setCaption(lastSk ? lastSentence(lastSk.text) : "");
+          return;
         }
         const greeting = (d.greeting && String(d.greeting).trim()) || copy.greetingFallback;
         setEntries([{ id: uuid(), who: "sk", text: greeting }]);
@@ -499,7 +583,12 @@ export default function SkShell({
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+    // One conversation per tab: every change is what the next Shell restores.
+    if (entries.length) transcriptRef.current?.save(sessionIdRef.current, entries as unknown as TranscriptEntry[]);
   }, [entries]);
+  useEffect(() => {
+    onEngagedRef.current = onEngaged;
+  }, [onEngaged]);
 
   // Unmount: the mic and the in-flight turn stop with the panel (the voice
   // stops in its own effect's cleanup — lifecycle 2, playback stops on
@@ -606,13 +695,20 @@ export default function SkShell({
       postIntroSeen(status);
       setNarrating(false);
       narrationRef.current = null;
-      onIntroDone();
+      onIntroDone?.();
     },
     [onIntroDone],
   );
 
   useEffect(() => {
     if (!introDue || ready === null || introStartedRef.current) return;
+    // The hero greets in text only — the §4.6 intro SPEAKS, and a browser
+    // blocks audio before her first gesture. A Shell that began as the hero
+    // never narrates it (not even after it moves into the panel mid-talk).
+    if (hero) {
+      introStartedRef.current = true;
+      return;
+    }
     // Deferred like TourProvider: Strict Mode's mount/unmount/mount would
     // otherwise abort a narration that had already started and record it as
     // skipped. The flag flips INSIDE the timer so a cleared timer reschedules.
@@ -640,7 +736,7 @@ export default function SkShell({
       });
     }, 500);
     return () => clearTimeout(t);
-  }, [introDue, ready, role, tourCopy, copy, appendSk, finishIntro]);
+  }, [introDue, ready, role, tourCopy, copy, appendSk, finishIntro, hero]);
 
   function skipIntro() {
     narrationRef.current?.abort();
@@ -669,6 +765,105 @@ export default function SkShell({
     if (!nv && micModeRef.current === "handsFree") gateRef.current?.stop("manual");
   }
 
+  // ── the hero's Mic switch (founder 2026-10-30) ──
+  /** The microphone is refused: the switch goes off and STAYS off (saved, so
+   *  the next visit does not ask again), with a short note. */
+  const micRefused = useCallback(() => {
+    micOnRef.current = false;
+    setMicOn(false);
+    writeFlag(PREF_LOCAL_KEY.micOn, false);
+    void savePref({ micOn: false });
+    setMicNote("denied");
+    gateRef.current?.setAutoResume(false);
+    gateRef.current?.stop("manual");
+  }, []);
+
+  /** The browser's word on the microphone, where it can say. */
+  function micPermission(): Promise<PermissionState | null> {
+    const perms = typeof navigator !== "undefined" ? navigator.permissions : undefined;
+    if (!perms) return Promise.resolve(null);
+    return perms
+      .query({ name: "microphone" as PermissionName })
+      .then((st) => st.state)
+      .catch(() => null);
+  }
+
+  function toggleMic() {
+    if (!mic) return;
+    const nv = !micOnRef.current;
+    micOnRef.current = nv;
+    setMicOn(nv);
+    setMicNote(null);
+    writeFlag(PREF_LOCAL_KEY.micOn, nv);
+    void savePref({ micOn: nv });
+    // The effect below starts or ends the capture; this click is the user
+    // gesture a first permission prompt (and SK's voice) needs.
+  }
+
+  /** The hero gate's onResume: the page is visible and focused, SK is quiet.
+   *  No barge-in here — the gate never resumes while SK speaks. */
+  function listenNow() {
+    const gate = gateRef.current;
+    if (!gate || !micOnRef.current || micModeRef.current || ready !== true) return;
+    if (!gate.start({ idle: true })) return;
+    micModeRef.current = "handsFree";
+    emptyEndsRef.current = 0;
+    beginDictation("handsFree");
+  }
+  useEffect(() => {
+    listenNowRef.current = listenNow;
+  });
+
+  // The hero listens while the switch is on, the browser can, the panel is
+  // ready and the server's preference is known; off ends the capture now.
+  useEffect(() => {
+    if (!hero) return;
+    const gate = gateRef.current;
+    if (!gate) return;
+    const want = micOn && mic && ready === true && prefsSettled;
+    gate.setAutoResume(want);
+    if (want) gate.resume();
+    else if (micModeRef.current) gate.stop("manual");
+  }, [hero, micOn, mic, ready, prefsSettled]);
+
+  // Refused in this browser (Permissions API, where it exists) — already, or
+  // in the prompt the first listen raised: the switch goes off and stays off
+  // rather than failing on every visit.
+  useEffect(() => {
+    if (!hero || !micOn || !prefsSettled) return;
+    let live = true;
+    let status: PermissionStatus | null = null;
+    const onChange = () => {
+      if (live && status?.state === "denied" && micOnRef.current) micRefused();
+    };
+    const perms = typeof navigator !== "undefined" ? navigator.permissions : undefined;
+    perms
+      ?.query({ name: "microphone" as PermissionName })
+      .then((st) => {
+        status = st;
+        st.addEventListener("change", onChange);
+        onChange();
+      })
+      .catch(() => {
+        /* not queryable here: three refused listens pause it instead */
+      });
+    return () => {
+      live = false;
+      status?.removeEventListener("change", onChange);
+    };
+  }, [hero, micOn, prefsSettled, micRefused]);
+
+  // No echo: the hero's mic pauses while SK speaks and comes back after (the
+  // gate owes the resume; its canResume veto reads speakingRef).
+  useEffect(() => {
+    speakingRef.current = speaking;
+    if (!hero) return;
+    const gate = gateRef.current;
+    if (!gate) return;
+    if (speaking) gate.stop("speaking");
+    else gate.resume();
+  }, [speaking, hero]);
+
   /** Stop = the voice, the answer being written AND the narration. The video
    *  stays where it is (an explicit stop never resumes it; "continue" does). */
   function stopAll() {
@@ -685,6 +880,7 @@ export default function SkShell({
     if (!gate?.active) return;
     const startedAt = Date.now();
     dictatedRef.current = "";
+    spokenLangRef.current = null;
     const stop = startDictation(
       (t) => {
         dictatedRef.current = t;
@@ -702,8 +898,11 @@ export default function SkShell({
             void sendRef.current(text, "voice");
           } else if (Date.now() - startedAt < 1500 && ++emptyEndsRef.current >= 3) {
             // Three immediate empty ends in a row = the browser is refusing
-            // (permission, no device). Stop rather than spin.
-            gate.stop("manual");
+            // (permission, no device). Stop rather than spin. The hero pauses
+            // as for idle instead (back on her next interaction, never by
+            // itself) and asks the browser whether the mic is refused.
+            gate.stop(hero ? "idle" : "manual");
+            if (hero) void micPermission().then((st) => st === "denied" && micRefused());
             return;
           }
           beginDictation("handsFree");
@@ -713,9 +912,12 @@ export default function SkShell({
         setListening(false);
         if (mode === "ptt") inputRef.current?.focus();
       },
-      { lang: dictLangRef.current ?? pageSpeechLang() },
+      // Transcribe (en/ms/ar/zh) identifies which of those she speaks, so she
+      // can switch by speaking; the browser recognizer listens in `lang`.
+      { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l) },
     );
     if (!stop) {
+      if (hero) setMicNote("unsupported");
       gate.stop("manual");
       return;
     }
@@ -784,6 +986,7 @@ export default function SkShell({
         }
       }
       setBusy(true);
+      onEngagedRef.current?.();
       // A new question interrupts whatever SK was saying (barge-in) and the
       // intro if it is still running.
       turnRef.current?.abort();
@@ -820,6 +1023,7 @@ export default function SkShell({
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
+      if (modality === "voice" && spokenLangRef.current) req.spokenLang = spokenLangRef.current;
 
       let full = "";
       let sawDone = false;
@@ -1031,22 +1235,95 @@ export default function SkShell({
   const shownParams = (params: Card["params"]) => Object.entries(params).filter(([k]) => !/(?:^|_)ids?$/.test(k) && k !== "chapter_ref" && k !== "click_only" && k !== "audience");
   const paramValue = (v: Card["params"][string]) => (v === null || v === undefined ? "—" : typeof v === "boolean" ? (v ? cardLabels?.yes ?? "Yes" : cardLabels?.no ?? "No") : String(v));
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
-      {/* THE PANEL'S COLOURS ARE ITS OWN. It mounts on the Board too, whose page
-          sets light text for a dark room, and an inherited `color` made the
-          title and the typed text near-invisible there (founder, 2026-10-28).
-          Near-black on the root overrides whatever the page set; color-scheme
-          light keeps native controls from flipping dark with the page. */}
-      <div
-        className="card w-full max-w-md flex flex-col max-h-[92dvh] sm:max-h-[86dvh] rounded-b-none sm:rounded-b-2xl text-slate-900 [color-scheme:light]"
-        onClick={(e) => e.stopPropagation()}
-        data-sk="shell"
-        data-sk-role={role ?? ""}
-        data-sk-hat={hat ?? ""}
-        role="dialog"
-        aria-label={copy.title}
-      >
+  // ── the hero (founder 2026-10-30): still avatar, Mic switch, greeting ──
+  const hc = copy.hero;
+  const micLive = micOn && mic;
+  const heroHeader = (
+    <div className="px-4 sm:px-6 pt-3 pb-3 border-b border-[#EEF0EC]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-xs font-medium text-slate-600">{copy.title}</span>
+        <div className="flex items-center gap-3 shrink-0">
+          {showStop ? (
+            <button type="button" onClick={stopAll} className="text-xs font-medium text-[#B42318] hover:underline" title={copy.stop} data-sk="stop">
+              ■ {copy.stop}
+            </button>
+          ) : (
+            <button type="button" onClick={toggleReadAloud} aria-pressed={readAloud} className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-slate-500"} hover:underline`}>
+              {readAloud ? "🔊" : "🔈"} {copy.readAloud}
+            </button>
+          )}
+          {/* The Mic switch, top-end of the card: on by default (by role),
+              one tap to turn off, remembered in her SK preferences. */}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <span className="text-xs font-medium text-slate-700" aria-hidden>
+              {micLive ? hc.micOn : hc.micOff}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={micLive}
+              aria-label={hc.micSwitch}
+              title={micLive ? hc.micOn : hc.micOff}
+              disabled={!mic}
+              onClick={toggleMic}
+              data-sk="mic-switch"
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                micLive ? "bg-[#0C8175] border-[#0C8175]" : "bg-slate-200 border-slate-300"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${micLive ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0.5 rtl:-translate-x-0.5"}`}
+              />
+            </button>
+          </label>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-col items-center text-center">
+        {/* Still: one flattened portrait per look (public/sk/portrait, made by
+            scripts/sk-portraits.mjs from the rig layers — body.png alone has
+            no head). While SK speaks the ring and
+            the label fade in — an opacity change, nothing moves. */}
+        <div className="relative h-32 w-44 sm:h-36 sm:w-48 overflow-hidden rounded-2xl bg-[#E2F4F1]" data-sk="avatar" data-sk-look={rig}>
+          <Image src={rig === "A" ? "/sk/portrait/sk-a.webp" : "/sk/portrait/sk-b.webp"} alt="" width={480} height={360} unoptimized priority className="h-full w-full object-cover" />
+          <span aria-hidden className={`pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-inset ring-[#0C8175] transition-opacity ${speaking ? "opacity-100" : "opacity-0"}`} />
+        </div>
+        <span className={`mt-1 text-[11px] font-medium text-[#0C8175] transition-opacity ${speaking ? "opacity-100" : "opacity-0"}`} aria-hidden={!speaking} data-sk="speaking">
+          {hc.speaking}
+        </span>
+        <p className="mt-0.5 text-sm text-slate-700" data-sk="hero-greeting">
+          {hc.greeting}
+        </p>
+      </div>
+    </div>
+  );
+  // The line under the text box: why the mic cannot listen, the live
+  // indicator (§2.6), or the quiet paused state (idle, or the tab was away).
+  const heroMicLine =
+    prefsSettled && !mic ? (
+      <span className="text-slate-500" data-sk="mic-note" data-sk-why="unsupported">
+        {hc.micUnsupported}
+      </span>
+    ) : micNote ? (
+      <span className="text-slate-500" data-sk="mic-note" data-sk-why={micNote}>
+        {micNote === "denied" ? hc.micDenied : hc.micUnsupported}
+      </span>
+    ) : listening ? (
+      <span className="inline-flex items-center gap-1.5 font-medium text-[#B42318]" data-sk="listening">
+        <span className="inline-block h-2 w-2 rounded-full bg-[#B42318]" aria-hidden />
+        {copy.listening}
+      </span>
+    ) : micLive && prefsSettled && ready === true && !speaking ? (
+      <span className="text-slate-500" data-sk="mic-paused">
+        {hc.paused}
+      </span>
+    ) : null;
+
+  const body = (
+    <>
+      {hero ? (
+        heroHeader
+      ) : (
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
           <div className="min-w-0">
             <div className="font-display font-medium flex items-center gap-1.5 text-slate-900">
@@ -1080,231 +1357,244 @@ export default function SkShell({
             </button>
           </div>
         </div>
+      )}
 
-        {/* S2 job tray: her SK-started kits, newest first, at most 3. Hidden when empty. */}
-        {trayVisible(tray) && (
-          <div className="px-5 py-2 border-b border-[#EEF0EC] bg-[#FAFBF9]" data-sk="kit-tray" data-sk-polling={trayPolling ? "on" : "off"}>
-            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 mb-1">{copy.tray.title}</div>
-            <ul className="space-y-1">
-              {tray.map((k) => (
-                <li key={k.id} className="flex items-center gap-2 text-xs" data-sk="kit-tray-item" data-sk-state={k.state}>
-                  <span className="min-w-0 flex-1 truncate text-slate-900" title={k.title}>
-                    {k.title}
-                  </span>
+      {/* S2 job tray: her SK-started kits, newest first, at most 3. Hidden when empty. */}
+      {trayVisible(tray) && (
+        <div className="px-5 py-2 border-b border-[#EEF0EC] bg-[#FAFBF9]" data-sk="kit-tray" data-sk-polling={trayPolling ? "on" : "off"}>
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 mb-1">{copy.tray.title}</div>
+          <ul className="space-y-1">
+            {tray.map((k) => (
+              <li key={k.id} className="flex items-center gap-2 text-xs" data-sk="kit-tray-item" data-sk-state={k.state}>
+                <span className="min-w-0 flex-1 truncate text-slate-900" title={k.title}>
+                  {k.title}
+                </span>
+                <span
+                  className={`shrink-0 ${k.state === "failed" ? "text-[#B42318]" : k.state === "ready" ? "text-[#0C8175] font-medium" : "text-slate-600"}`}
+                >
+                  {(k.state === "making" || k.state === "partial") && <span className="animate-pulse" aria-hidden>● </span>}
+                  {trayStateText(k, copy.tray)}
+                </span>
+                {k.href && (
+                  <button type="button" onClick={() => router.push(k.href as string)} className="shrink-0 text-[#0C8175] font-medium hover:underline" data-sk="kit-tray-open">
+                    {copy.tray.open}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Transcript */}
+      <div ref={scrollRef} className={hero ? "max-h-72 overflow-y-auto px-4 sm:px-6 py-3 space-y-3" : "flex-1 overflow-y-auto px-5 py-4 space-y-3"} data-sk="transcript">
+        {ready === null && <p className="text-sm text-slate-500">…</p>}
+        {(hero ? entries.slice(-HERO_ENTRIES) : entries).map((e) => (
+          <div key={e.id} className={e.who === "user" ? "flex flex-col items-end" : "flex flex-col items-start"}>
+            {e.who === "user" && <span className="text-[10px] text-slate-500 me-1 mb-0.5">{copy.you}</span>}
+            {(e.text || e.pending) && (
+              <div
+                dir={e.who === "sk" && e.dir ? e.dir : undefined}
+                lang={e.who === "sk" ? htmlLangOf(e.lang) : undefined}
+                className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
+                  e.who === "user" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-slate-900 rounded-es-sm"
+                }`}
+              >
+                {e.text ? <RichText text={e.text} /> : <span className="text-slate-500">…</span>}
+              </div>
+            )}
+            {e.nav?.map((n, i) => (
+              <div key={i} className="text-xs text-[#3730A3] mt-1 ms-1" data-sk="nav-line">
+                → {fmt(copy.opening, { label: n.label })}
+              </div>
+            ))}
+            {e.moves?.map((m, i) => (
+              <div key={i} className={`text-xs mt-1 ms-1 ${m.ok === false ? "text-[#B42318]" : "text-[#0C8175]"}`} data-sk="board-line" data-sk-move={m.move} title={m.summary}>
+                ▶ {m.move}
+                {m.ok === undefined ? " …" : m.ok ? "" : ` — ${m.summary ?? ""}`}
+              </div>
+            ))}
+            {e.who === "sk" && (e.tools?.length || e.sources?.length) ? (
+              <div className="flex flex-wrap gap-1 mt-1 ms-1" data-sk="tool-chips">
+                {(e.sources?.length ? e.sources.map((s) => ({ name: s, ok: true })) : (e.tools ?? [])).map((t, i) => (
                   <span
-                    className={`shrink-0 ${k.state === "failed" ? "text-[#B42318]" : k.state === "ready" ? "text-[#0C8175] font-medium" : "text-slate-600"}`}
+                    key={`${t.name}-${i}`}
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full border ${t.ok ? "border-[#CFE9E4] text-[#0C8175]" : "border-[#F3C9C4] text-[#B42318]"}`}
+                    title={"summary" in t ? (t as { summary?: string }).summary : undefined}
                   >
-                    {(k.state === "making" || k.state === "partial") && <span className="animate-pulse" aria-hidden>● </span>}
-                    {trayStateText(k, copy.tray)}
+                    {t.name}
                   </span>
-                  {k.href && (
-                    <button type="button" onClick={() => router.push(k.href as string)} className="shrink-0 text-[#0C8175] font-medium hover:underline" data-sk="kit-tray-open">
-                      {copy.tray.open}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+                ))}
+              </div>
+            ) : null}
+            {e.who === "sk" && e.citations?.length
+              ? (() => {
+                  const chips = citationChips(e.citations, copy.knowledge.chapter);
+                  return chips.length ? (
+                    <div className="flex flex-wrap items-center gap-1 mt-1 ms-1" data-sk="citations" role="list" aria-label={copy.knowledge.sources}>
+                      <span className="text-[10px] text-slate-500">{copy.knowledge.sources}:</span>
+                      {chips.map((c) => (
+                        <span key={c.key} role="listitem" className="text-[10px] px-1.5 py-0.5 rounded-full border border-[#E3DAF3] bg-[#F8F5FD] text-[#4A3B78]" data-sk="citation" data-sk-kind={c.kind} title={c.text}>
+                          {c.text}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null;
+                })()
+              : null}
+            {e.who === "sk" && e.label && (
+              <span className={`text-[10px] mt-1 ms-1 px-1.5 py-0.5 rounded ${labelTone(e.label)}`} data-sk="label">
+                {labelText(e.label)}
+              </span>
+            )}
+          </div>
+        ))}
+        {narrating && (
+          <div className="flex justify-start">
+            <button onClick={skipIntro} className="text-xs font-medium text-[#5B6470] underline" data-sk="intro-skip" title={copy.introSkip}>
+              {copy.skip}
+            </button>
           </div>
         )}
+        {error && <p className="text-xs text-[#B42318]">{error}</p>}
+      </div>
 
-        {/* Transcript */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3" data-sk="transcript">
-          {ready === null && <p className="text-sm text-slate-500">…</p>}
-          {entries.map((e) => (
-            <div key={e.id} className={e.who === "user" ? "flex flex-col items-end" : "flex flex-col items-start"}>
-              {e.who === "user" && <span className="text-[10px] text-slate-500 me-1 mb-0.5">{copy.you}</span>}
-              {(e.text || e.pending) && (
-                <div
-                  dir={e.who === "sk" && e.dir ? e.dir : undefined}
-                  lang={e.who === "sk" ? htmlLangOf(e.lang) : undefined}
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
-                    e.who === "user" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-slate-900 rounded-es-sm"
-                  }`}
-                >
-                  {e.text ? <RichText text={e.text} /> : <span className="text-slate-500">…</span>}
-                </div>
-              )}
-              {e.nav?.map((n, i) => (
-                <div key={i} className="text-xs text-[#3730A3] mt-1 ms-1" data-sk="nav-line">
-                  → {fmt(copy.opening, { label: n.label })}
-                </div>
-              ))}
-              {e.moves?.map((m, i) => (
-                <div key={i} className={`text-xs mt-1 ms-1 ${m.ok === false ? "text-[#B42318]" : "text-[#0C8175]"}`} data-sk="board-line" data-sk-move={m.move} title={m.summary}>
-                  ▶ {m.move}
-                  {m.ok === undefined ? " …" : m.ok ? "" : ` — ${m.summary ?? ""}`}
-                </div>
-              ))}
-              {e.who === "sk" && (e.tools?.length || e.sources?.length) ? (
-                <div className="flex flex-wrap gap-1 mt-1 ms-1" data-sk="tool-chips">
-                  {(e.sources?.length ? e.sources.map((s) => ({ name: s, ok: true })) : (e.tools ?? [])).map((t, i) => (
-                    <span
-                      key={`${t.name}-${i}`}
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full border ${t.ok ? "border-[#CFE9E4] text-[#0C8175]" : "border-[#F3C9C4] text-[#B42318]"}`}
-                      title={"summary" in t ? (t as { summary?: string }).summary : undefined}
-                    >
-                      {t.name}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {e.who === "sk" && e.citations?.length
-                ? (() => {
-                    const chips = citationChips(e.citations, copy.knowledge.chapter);
-                    return chips.length ? (
-                      <div className="flex flex-wrap items-center gap-1 mt-1 ms-1" data-sk="citations" role="list" aria-label={copy.knowledge.sources}>
-                        <span className="text-[10px] text-slate-500">{copy.knowledge.sources}:</span>
-                        {chips.map((c) => (
-                          <span key={c.key} role="listitem" className="text-[10px] px-1.5 py-0.5 rounded-full border border-[#E3DAF3] bg-[#F8F5FD] text-[#4A3B78]" data-sk="citation" data-sk-kind={c.kind} title={c.text}>
-                            {c.text}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null;
-                  })()
-                : null}
-              {e.who === "sk" && e.label && (
-                <span className={`text-[10px] mt-1 ms-1 px-1.5 py-0.5 rounded ${labelTone(e.label)}`} data-sk="label">
-                  {labelText(e.label)}
-                </span>
-              )}
-            </div>
-          ))}
-          {narrating && (
-            <div className="flex justify-start">
-              <button onClick={skipIntro} className="text-xs font-medium text-[#5B6470] underline" data-sk="intro-skip" title={copy.introSkip}>
-                {copy.skip}
-              </button>
-            </div>
-          )}
-          {error && <p className="text-xs text-[#B42318]">{error}</p>}
-        </div>
-
-        {/* Caption — SK's latest sentence; the Board reads this line later. */}
+      {/* Caption — SK's latest sentence; the Board reads this line later.
+          The hero shows the conversation itself, so it has no caption or
+          job line: avatar, greeting, conversation, text box. */}
+      {!hero && (
         <div className="px-5 py-1.5 border-t border-[#EEF0EC] text-xs text-slate-600 truncate min-h-[1.75rem]" data-sk="caption" aria-live="polite">
           {caption}
         </div>
+      )}
 
-        {/* S0's job-tray line — on the Board it reports the lesson map and the
-            slides load. S2's kits have their own list above the transcript. */}
+      {/* S0's job-tray line — on the Board it reports the lesson map and the
+          slides load. S2's kits have their own list above the transcript. */}
+      {!hero && (
         <div className="px-5 py-1 text-[10px] text-slate-600 border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
           {slideLoad ? fmt(copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n }) : mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
         </div>
+      )}
 
-        {/* S1: confirmation cards (§2.5). One active card at a time. */}
-        <div data-sk="confirm-slot" className={cards.length ? "px-4 py-2 border-t border-[#EEF0EC] space-y-2" : "hidden"}>
-          {cards.map((c) => {
-            const left = secondsLeft(c.expiresAt, nowMs);
-            const settled = c.status !== "active" && c.status !== "sending";
-            return (
-              <div key={c.id} className="rounded-xl border border-[#F3D9A4] bg-[#FFF9EC] px-3.5 py-3 text-sm" data-sk="confirm-card" data-sk-action={c.action} data-sk-status={c.status} role="group" aria-label={copy.confirmTitle}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <div className="font-medium text-[#14181F]">{c.title}</div>
-                  {c.status === "active" && (
-                    <span className="text-[10px] text-[#8A5A00] shrink-0" data-sk="confirm-expiry">
-                      {fmt(copy.expiresIn, { s: left })}
-                    </span>
-                  )}
-                </div>
-                <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-                  {shownParams(c.params).map(([k, v]) => (
-                    <Fragment key={k}>
-                      <dt className="text-[#98A0A9]">{paramLabel(k)}</dt>
-                      <dd className="text-[#14181F] break-words whitespace-pre-wrap">{paramValue(v)}</dd>
-                    </Fragment>
-                  ))}
-                </dl>
-                {settled ? (
-                  <p className={`mt-2 text-xs ${c.status === "done" ? "text-[#0C4E47]" : "text-[#B42318]"}`}>{c.result}</p>
-                ) : (
-                  <div className="mt-2.5 flex items-center gap-2">
-                    <button type="button" onClick={() => void act(c, "click")} disabled={c.status !== "active"} className="btn-primary h-8 px-3 text-xs disabled:opacity-50" data-sk="confirm-yes">
-                      {c.status === "sending" ? copy.cardSent : copy.confirm}
-                    </button>
-                    <button type="button" onClick={() => dismissCard(c)} disabled={c.status !== "active"} className="h-8 px-3 text-xs rounded-lg border border-[#E6E8E4] text-[#5B6470] disabled:opacity-50" data-sk="confirm-no">
-                      {copy.cancel}
-                    </button>
-                    {c.params.click_only === true ? (
-                      <span className="text-[10px] text-[#8A5A00] ms-auto" data-sk="confirm-click-only">
-                        {copy.clickOnlyHint}
-                      </span>
-                    ) : (
-                      mic && <span className="text-[10px] text-[#98A0A9] ms-auto">{copy.voiceYesHint}</span>
-                    )}
-                  </div>
+      {/* S1: confirmation cards (§2.5). One active card at a time. */}
+      <div data-sk="confirm-slot" className={cards.length ? "px-4 py-2 border-t border-[#EEF0EC] space-y-2" : "hidden"}>
+        {cards.map((c) => {
+          const left = secondsLeft(c.expiresAt, nowMs);
+          const settled = c.status !== "active" && c.status !== "sending";
+          return (
+            <div key={c.id} className="rounded-xl border border-[#F3D9A4] bg-[#FFF9EC] px-3.5 py-3 text-sm" data-sk="confirm-card" data-sk-action={c.action} data-sk-status={c.status} role="group" aria-label={copy.confirmTitle}>
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="font-medium text-[#14181F]">{c.title}</div>
+                {c.status === "active" && (
+                  <span className="text-[10px] text-[#8A5A00] shrink-0" data-sk="confirm-expiry">
+                    {fmt(copy.expiresIn, { s: left })}
+                  </span>
                 )}
               </div>
-            );
-          })}
-        </div>
+              <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                {shownParams(c.params).map(([k, v]) => (
+                  <Fragment key={k}>
+                    <dt className="text-[#98A0A9]">{paramLabel(k)}</dt>
+                    <dd className="text-[#14181F] break-words whitespace-pre-wrap">{paramValue(v)}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+              {settled ? (
+                <p className={`mt-2 text-xs ${c.status === "done" ? "text-[#0C4E47]" : "text-[#B42318]"}`}>{c.result}</p>
+              ) : (
+                <div className="mt-2.5 flex items-center gap-2">
+                  <button type="button" onClick={() => void act(c, "click")} disabled={c.status !== "active"} className="btn-primary h-8 px-3 text-xs disabled:opacity-50" data-sk="confirm-yes">
+                    {c.status === "sending" ? copy.cardSent : copy.confirm}
+                  </button>
+                  <button type="button" onClick={() => dismissCard(c)} disabled={c.status !== "active"} className="h-8 px-3 text-xs rounded-lg border border-[#E6E8E4] text-[#5B6470] disabled:opacity-50" data-sk="confirm-no">
+                    {copy.cancel}
+                  </button>
+                  {c.params.click_only === true ? (
+                    <span className="text-[10px] text-[#8A5A00] ms-auto" data-sk="confirm-click-only">
+                      {copy.clickOnlyHint}
+                    </span>
+                  ) : (
+                    mic && <span className="text-[10px] text-[#98A0A9] ms-auto">{copy.voiceYesHint}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
-        <div className="px-4 py-3 border-t border-[#EEF0EC]">
-          <form
-            className="flex items-center gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-          >
-            {mic && (
-              <button
-                type="button"
-                disabled={ready === false}
-                aria-pressed={listening}
-                title={handsFree ? copy.handsFree : copy.holdToTalk}
-                aria-label={handsFree ? copy.handsFree : copy.holdToTalk}
-                data-sk="mic"
-                data-sk-mode={handsFree ? "handsFree" : "ptt"}
-                className={`h-9 w-9 rounded-lg border text-base shrink-0 select-none disabled:opacity-40 ${
-                  listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
-                }`}
-                style={{ touchAction: "none" }}
-                onContextMenu={(e) => e.preventDefault()}
-                // Hands-free: a click toggles. Push-to-talk: hold.
-                onClick={handsFree ? clickMicHandsFree : undefined}
-                onPointerDown={handsFree ? undefined : pressMic}
-                onPointerUp={handsFree ? undefined : releaseMic}
-                onPointerLeave={handsFree ? undefined : releaseMic}
-                onPointerCancel={handsFree ? undefined : releaseMic}
-                onKeyDown={
-                  handsFree
-                    ? undefined
-                    : (e) => {
-                        if ((e.key === " " || e.key === "Enter") && !e.repeat) {
-                          e.preventDefault();
-                          pressMic();
-                        }
-                      }
-                }
-                onKeyUp={
-                  handsFree
-                    ? undefined
-                    : (e) => {
-                        if (e.key === " " || e.key === "Enter") {
-                          e.preventDefault();
-                          releaseMic();
-                        }
-                      }
-                }
-              >
-                🎤
-              </button>
-            )}
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              maxLength={600}
+      <div className={hero ? "px-4 sm:px-6 py-3 border-t border-[#EEF0EC]" : "px-4 py-3 border-t border-[#EEF0EC]"}>
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          {/* The hero has no push-to-talk button: its Mic switch listens. */}
+          {mic && !hero && (
+            <button
+              type="button"
               disabled={ready === false}
-              placeholder={listening ? copy.listening : copy.placeholder}
-              className="field h-9 px-3 text-sm flex-1 bg-white text-slate-900 placeholder:text-slate-400"
-              data-sk="input"
-            />
-            <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm text-white disabled:opacity-50">
-              {busy ? "…" : copy.send}
+              aria-pressed={listening}
+              title={handsFree ? copy.handsFree : copy.holdToTalk}
+              aria-label={handsFree ? copy.handsFree : copy.holdToTalk}
+              data-sk="mic"
+              data-sk-mode={handsFree ? "handsFree" : "ptt"}
+              className={`h-9 w-9 rounded-lg border text-base shrink-0 select-none disabled:opacity-40 ${
+                listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
+              }`}
+              style={{ touchAction: "none" }}
+              onContextMenu={(e) => e.preventDefault()}
+              // Hands-free: a click toggles. Push-to-talk: hold.
+              onClick={handsFree ? clickMicHandsFree : undefined}
+              onPointerDown={handsFree ? undefined : pressMic}
+              onPointerUp={handsFree ? undefined : releaseMic}
+              onPointerLeave={handsFree ? undefined : releaseMic}
+              onPointerCancel={handsFree ? undefined : releaseMic}
+              onKeyDown={
+                handsFree
+                  ? undefined
+                  : (e) => {
+                      if ((e.key === " " || e.key === "Enter") && !e.repeat) {
+                        e.preventDefault();
+                        pressMic();
+                      }
+                    }
+              }
+              onKeyUp={
+                handsFree
+                  ? undefined
+                  : (e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        releaseMic();
+                      }
+                    }
+              }
+            >
+              🎤
             </button>
-          </form>
+          )}
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            maxLength={600}
+            disabled={ready === false}
+            placeholder={listening ? copy.listening : copy.placeholder}
+            className="field h-9 px-3 text-sm flex-1 min-w-0 bg-white text-slate-900 placeholder:text-slate-400"
+            data-sk="input"
+          />
+          <button type="submit" disabled={busy || !input.trim() || ready === false} className="btn-primary h-9 px-4 text-sm text-white disabled:opacity-50">
+            {busy ? "…" : copy.send}
+          </button>
+        </form>
+        {hero ? (
+          <div className="mt-1.5 min-h-[1rem] text-[11px]" data-sk="mic-line" aria-live="polite">
+            {heroMicLine}
+          </div>
+        ) : (
           <div className="flex items-center justify-between mt-1.5 gap-2">
             {mic ? (
               <button
@@ -1327,8 +1617,64 @@ export default function SkShell({
               </span>
             )}
           </div>
-        </div>
+        )}
+      </div>
+    </>
+  );
+
+  if (hero) {
+    const card = (
+      <HeroFrame role={role} hat={hat} title={copy.title}>
+        {body}
+      </HeroFrame>
+    );
+    return portalTo ? createPortal(card, portalTo) : card;
+  }
+  return (
+    <PanelFrame onClose={onClose} role={role} hat={hat} title={copy.title}>
+      {body}
+    </PanelFrame>
+  );
+}
+
+type FrameProps = { role: string | null; hat: string | null; title: string; children: ReactNode };
+
+/** The floating dialog (S0). */
+function PanelFrame({ onClose, role, hat, title, children }: FrameProps & { onClose?: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
+      {/* THE PANEL'S COLOURS ARE ITS OWN. It mounts on the Board too, whose page
+          sets light text for a dark room, and an inherited `color` made the
+          title and the typed text near-invisible there (founder, 2026-10-28).
+          Near-black on the root overrides whatever the page set; color-scheme
+          light keeps native controls from flipping dark with the page. */}
+      <div
+        className="card w-full max-w-md flex flex-col max-h-[92dvh] sm:max-h-[86dvh] rounded-b-none sm:rounded-b-2xl text-slate-900 [color-scheme:light]"
+        onClick={(e) => e.stopPropagation()}
+        data-sk="shell"
+        data-sk-role={role ?? ""}
+        data-sk-hat={hat ?? ""}
+        role="dialog"
+        aria-label={title}
+      >
+        {children}
       </div>
     </div>
+  );
+}
+
+/** The home hero (2026-10-30): inline at the top of a landing page, with the
+ *  same page-independent colours as the panel. */
+function HeroFrame({ role, hat, title, children }: FrameProps) {
+  return (
+    <section
+      className="card w-full max-w-2xl mx-auto mb-8 flex flex-col overflow-hidden text-slate-900 [color-scheme:light]"
+      data-sk="hero"
+      data-sk-role={role ?? ""}
+      data-sk-hat={hat ?? ""}
+      aria-label={title}
+    >
+      {children}
+    </section>
   );
 }

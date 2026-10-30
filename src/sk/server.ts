@@ -26,8 +26,11 @@ import { SupabaseItemBank } from "./items-supabase";
 import type { LoopDeps } from "./loop";
 import { ProductKits } from "./product-kits";
 import { retrievalMode, selectRetrievalProvider, type RetrievalDb, type RetrievalProvider } from "./retrieval";
+import { GoogleSpeechProvider } from "./speech/google";
+import { googleTtsConfigured } from "./speech/google-auth";
 import { PollySpeechProvider } from "./speech/polly";
 import type { SpeechProvider } from "./speech/provider";
+import { reserveSkTts, type ReserveDb, type ReserveOutcome } from "./speech/tts-meter";
 import { InMemorySessionStore, type SessionStore } from "./store";
 import { SupabaseSessionStore, skDbFrom } from "./store-supabase";
 import type { TeachingGraph } from "./types";
@@ -175,9 +178,11 @@ export function loopDepsFor(d: SkDeps, productId: string, chapter: number): Loop
 // ── Gate + auth, shared by every route ──────────────────────────────────────
 /** SK B9: which server-side voice speaks SK's own lines. Unset (the default)
  * = none: POST /api/sk/speak answers 404 and the client stays on the browser
- * voice, so merging the adapter switches nothing chargeable on. */
-export function skTtsMode(): "polly" | "off" {
-  return process.env.SK_TTS === "polly" ? "polly" : "off";
+ * voice, so merging the adapter switches nothing chargeable on. 2026-10-30:
+ * `google` = the lesson videos' Google voices (every SK language, metered). */
+export function skTtsMode(): "polly" | "google" | "off" {
+  const v = process.env.SK_TTS;
+  return v === "polly" ? "polly" : v === "google" ? "google" : "off";
 }
 
 /** SK S6 slice B: which speech-to-text listens (SK_STT, default "browser").
@@ -185,19 +190,35 @@ export function skTtsMode(): "polly" | "off" {
 export { skSttMode } from "./speech/stt";
 
 let speechOverride: SpeechProvider | null | undefined;
-let speechSingleton: PollySpeechProvider | null = null;
+let speechSingleton: { mode: "polly" | "google"; provider: SpeechProvider } | null = null;
 
-/** The provider behind /api/sk/speak, or null when SK_TTS is unset. One
- * Polly client per process (its credential exchange is the shared cache). */
+/** The provider behind /api/sk/speak, or null when SK_TTS is unset (or
+ * google without GOOGLE_APPLICATION_CREDENTIALS_JSON). One per process: the
+ * Polly client's credential exchange and Google's access token are cached. */
 export function skSpeech(): SpeechProvider | null {
   if (speechOverride !== undefined) return speechOverride;
-  if (skTtsMode() !== "polly") return null;
-  if (!speechSingleton) speechSingleton = new PollySpeechProvider();
-  return speechSingleton;
+  const mode = skTtsMode();
+  if (mode === "off") return null;
+  if (mode === "google" && !googleTtsConfigured()) return null;
+  if (speechSingleton?.mode !== mode) speechSingleton = { mode, provider: mode === "google" ? new GoogleSpeechProvider() : new PollySpeechProvider() };
+  return speechSingleton.provider;
 }
 
 export function __setSkSpeechForTests(p: SpeechProvider | null | undefined): void {
   speechOverride = p;
+}
+
+/** SK_TTS=google: reserve this line's characters against the user's monthly
+ * cap (speech/tts-meter.ts) through the service-role client. No admin client
+ * (no service key) is "error" — fail closed. */
+export async function skTtsReserve(userId: string, chars: number): Promise<ReserveOutcome> {
+  let db: ReserveDb;
+  try {
+    db = createAdminClient() as unknown as ReserveDb;
+  } catch {
+    return "error";
+  }
+  return reserveSkTts(db, userId, chars);
 }
 
 export type Gate = { ok: true; userId: string } | { ok: false; response: NextResponse };

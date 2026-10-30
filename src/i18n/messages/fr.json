@@ -2189,6 +2189,16 @@
       "loadingSlides": "Chargement de la diapositive {k} sur {n}…",
       "slidesLoaded": "{n} diapositives sont sur le rouleau, pages {a} à {b}. Page précédente et page suivante passent de l'une à l'autre ; dites « page blanche » pour en insérer une entre deux.",
       "explainSelection": "Explique cette partie",
+      "hero": {
+        "greeting": "Sur quoi travaillons-nous aujourd'hui ? Écris ci-dessous, ou parle-moi simplement.",
+        "micOn": "Micro activé",
+        "micOff": "Micro coupé",
+        "micSwitch": "Microphone",
+        "speaking": "Je parle…",
+        "paused": "En pause — touche l'écran ou commence à écrire pour que j'écoute à nouveau",
+        "micUnsupported": "La saisie vocale n'est pas disponible dans ce navigateur — tu peux toujours écrire.",
+        "micDenied": "Le micro est bloqué. Autorise-le dans ton navigateur, puis active le micro."
+      },
       "act": {
         "diaryCardTitle": "Publier dans le carnet de {target}",
         "diaryPosted": "Publié dans le carnet de {target}.",
@@ -2553,6 +2563,8 @@
     "handsFreeHint": "Touchez le micro une fois et SK écoute jusqu'à ce que vous l'arrêtiez, au lieu de maintenir pour parler.",
     "suggestions": "Suggestions de SK",
     "suggestionsHint": "Au plus une ligne dans l'accueil de SK quand vous l'ouvrez, tirée de votre emploi du temps, de vos corrections ou de votre travail. Jamais envoyée ailleurs.",
+    "micOn": "Micro sur la page d'accueil",
+    "micOnHint": "SK écoute sur ta page d'accueil tant qu'elle est ouverte et au premier plan, et se met en pause quand SK parle. Les élèves commencent micro coupé.",
     "on": "Activé",
     "off": "Désactivé",
     "saving": "Enregistrement…",

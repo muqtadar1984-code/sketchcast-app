@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_PREFS, PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, type SkPrefKey, type SkPrefs } from "@/sk/prefs";
+import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultsFor, type SkPrefKey, type SkPrefs } from "@/sk/prefs";
 
 // The "SK & privacy" controls (SK S6 slice C). Every string arrives as a prop
 // (the page holds the dictionary); every change goes through a route and the
@@ -20,6 +20,8 @@ export type PrivacyStrings = {
   handsFreeHint: string;
   suggestions: string;
   suggestionsHint: string;
+  micOn: string;
+  micOnHint: string;
   on: string;
   off: string;
   saving: string;
@@ -209,7 +211,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
     setLearning((l) => (l ? [] : l));
     // The preferences were workflow facts too: back to the defaults, here and
     // in the panel's local copy.
-    setPrefs(DEFAULT_PREFS);
+    setPrefs(defaultsFor(props.role));
     for (const k of PREF_KEYS) writeLocal(PREF_LOCAL_KEY[k], null);
     writeLocal(PREFS_MIGRATED_LOCAL_KEY, null);
     say(t.deleted);
@@ -244,6 +246,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
         <Switch id="pref-read" label={t.readAloud} hint={t.readAloudHint} {...sw(prefs.readAloud)} busy={busy === "pref:readAloud"} onToggle={() => void togglePref("readAloud")} />
         <Switch id="pref-hands" label={t.handsFree} hint={t.handsFreeHint} {...sw(prefs.handsFree)} busy={busy === "pref:handsFree"} onToggle={() => void togglePref("handsFree")} />
         <Switch id="pref-suggest" label={t.suggestions} hint={t.suggestionsHint} {...sw(prefs.suggestions)} busy={busy === "pref:suggestions"} onToggle={() => void togglePref("suggestions")} />
+        <Switch id="pref-mic" label={t.micOn} hint={t.micOnHint} {...sw(prefs.micOn)} busy={busy === "pref:micOn"} onToggle={() => void togglePref("micOn")} />
       </div>
 
       {isStudent && props.student && (

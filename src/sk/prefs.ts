@@ -1,10 +1,10 @@
-// SK S6 slice C — the three SK preferences as WORKFLOW FACTS (Final Plan §9.5:
+// SK S6 slice C — the SK preferences as WORKFLOW FACTS (Final Plan §9.5:
 // "preferences" are workflow memory, the adult's own, 12 months rolling).
 //
 // Before S6 they were localStorage flags in the panel only (sk-shell.tsx:
 // `sk.readAloud`, `sk.handsFree`), so they never followed a user to another
 // device. Now each is one sk_workflow_facts row — kind "preference", key
-// "read_aloud" | "hands_free" | "suggestions", value { on: boolean } — written
+// "read_aloud" | "hands_free" | "suggestions" | "mic_on", value { on: boolean } — written
 // through the user's own session (RLS owner-only; facts.ts rememberWorkflow).
 //
 // PURE and client-safe: no server imports. The panel (client) and the
@@ -15,19 +15,33 @@
 // and is written up; after that the server is the source of truth and the
 // localStorage copy is only a fast first paint. `resolvePrefs` decides it.
 
-export type SkPrefs = { readAloud: boolean; handsFree: boolean; suggestions: boolean };
+export type SkPrefs = { readAloud: boolean; handsFree: boolean; suggestions: boolean; micOn: boolean };
 export type SkPrefKey = keyof SkPrefs;
 
 /** The defaults the panel had before S6 (read aloud on, hands-free off) plus
- *  the S6 suggestions switch (design decision 5: on by default). */
-export const DEFAULT_PREFS: SkPrefs = { readAloud: true, handsFree: false, suggestions: true };
+ *  the S6 suggestions switch (design decision 5: on by default) and the home
+ *  hero's Mic switch (founder 2026-10-30: on — but see defaultMicOn: the
+ *  default depends on the role, so callers that know it use defaultsFor). */
+export const DEFAULT_PREFS: SkPrefs = { readAloud: true, handsFree: false, suggestions: true, micOn: true };
+
+/** Founder 2026-10-30: the home hero's mic is ON by default for every adult
+ *  role (teacher, parent, principal / coordinator, school admin, the founder)
+ *  and OFF for a student. A saved choice always wins over this, either way. */
+export function defaultMicOn(role: string | null | undefined): boolean {
+  return role !== "student";
+}
+
+/** The defaults for this role (only micOn depends on it). */
+export function defaultsFor(role?: string | null): SkPrefs {
+  return { ...DEFAULT_PREFS, micOn: defaultMicOn(role) };
+}
 
 export const PREF_KIND = "preference";
 /** Preference → its sk_workflow_facts key. */
-export const PREF_FACT_KEY: Record<SkPrefKey, string> = { readAloud: "read_aloud", handsFree: "hands_free", suggestions: "suggestions" };
-export const PREF_KEYS: readonly SkPrefKey[] = ["readAloud", "handsFree", "suggestions"];
-/** The localStorage keys the panel has used since S0 (suggestions is new). */
-export const PREF_LOCAL_KEY: Record<SkPrefKey, string> = { readAloud: "sk.readAloud", handsFree: "sk.handsFree", suggestions: "sk.suggestions" };
+export const PREF_FACT_KEY: Record<SkPrefKey, string> = { readAloud: "read_aloud", handsFree: "hands_free", suggestions: "suggestions", micOn: "mic_on" };
+export const PREF_KEYS: readonly SkPrefKey[] = ["readAloud", "handsFree", "suggestions", "micOn"];
+/** The localStorage keys the panel has used since S0 (suggestions and micOn are new). */
+export const PREF_LOCAL_KEY: Record<SkPrefKey, string> = { readAloud: "sk.readAloud", handsFree: "sk.handsFree", suggestions: "sk.suggestions", micOn: "sk.micOn" };
 /** Set once this browser's local values have been written to the server. */
 export const PREFS_MIGRATED_LOCAL_KEY = "sk.prefsMigrated";
 
@@ -48,9 +62,10 @@ export function prefsFromFacts(facts: ReadonlyArray<{ kind: string; key: string;
   return out;
 }
 
-/** A complete preference set: stored values over the defaults. */
-export function withDefaults(stored: StoredPrefs | null | undefined): SkPrefs {
-  return { ...DEFAULT_PREFS, ...pick(stored ?? {}) };
+/** A complete preference set: stored values over the defaults (the role's,
+ *  when given — see defaultMicOn). */
+export function withDefaults(stored: StoredPrefs | null | undefined, role?: string | null): SkPrefs {
+  return { ...defaultsFor(role), ...pick(stored ?? {}) };
 }
 
 /** Only well-formed boolean values of known keys. */
@@ -83,13 +98,13 @@ export type ResolvedPrefs = {
  * already happened in this browser.
  *   stored value present → it wins;
  *   stored value absent, local present, not yet migrated → local wins AND is migrated;
- *   otherwise → the default.
+ *   otherwise → the default (the role's, when `role` is given).
  * The panel writes the local copy back from `prefs` afterwards, so the next
  * first paint matches.
  */
-export function resolvePrefs(stored: StoredPrefs | null, local: StoredPrefs, migrated: boolean): ResolvedPrefs {
-  if (stored === null) return { prefs: withDefaults(local), migrate: {} };
-  const prefs: SkPrefs = { ...DEFAULT_PREFS };
+export function resolvePrefs(stored: StoredPrefs | null, local: StoredPrefs, migrated: boolean, role?: string | null): ResolvedPrefs {
+  if (stored === null) return { prefs: withDefaults(local, role), migrate: {} };
+  const prefs: SkPrefs = defaultsFor(role);
   const migrate: StoredPrefs = {};
   for (const k of PREF_KEYS) {
     const s = stored[k];

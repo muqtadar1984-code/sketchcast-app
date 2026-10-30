@@ -184,9 +184,11 @@ export type SkContext = {
   /** Stable hash of {role, schoolId, hat, plan, coordinator scope (S5)}: tokens are bound to it (§8.2). */
   contextHash: string;
   /** 2026-10-30: the language SK answers in this turn (shell/language.ts
-   *  answerLanguage) — set by the turn route. `user.locale` then carries the
+   *  answerLanguage) — set by the turn route. `override` is her choice THIS
+   *  turn: the question's own language, else the conversation's (a command
+   *  or an earlier confident question); null = none. `user.locale` then carries the
    *  locale the fixed lines are looked up in (the same, except zh → en). */
-  answer?: { lang: string; from: "override" | "source" | "ui"; override: string | null; uiLocale: string };
+  answer?: { lang: string; from: "question" | "override" | "source" | "ui"; override: string | null; uiLocale: string };
 };
 
 /** What the client's collector posts with each turn (§5.4). Untrusted. */
@@ -361,6 +363,11 @@ export type SkTurnRequest = {
    *  gap; a missing or invalid blob simply starts a new conversation. Needed
    *  because serverless instances share no memory between requests (§5.4). */
   memory?: string;
+  /** 2026-10-30: with modality "voice", the language Amazon Transcribe
+   *  identified the speech as ("ms-MY"; identify-language sessions only).
+   *  A hint: the words themselves decide when they can
+   *  (question-language.ts spokenQuestionLanguage). */
+  spokenLang?: string;
 };
 
 /** SSE events, one JSON object per `data:` line. */

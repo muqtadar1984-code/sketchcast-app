@@ -96,9 +96,27 @@ export function transcribeHost(region: string): string {
   return `transcribestreaming.${region}.amazonaws.com:${TRANSCRIBE_PORT}`;
 }
 
-/** The presigned wss:// URL for one streaming session: 16 kHz PCM, one language. */
-export function presignTranscribeUrl(input: { region: string; languageCode: string; creds: AwsCreds; now: Date; expiresS?: number }): string {
+/** Automatic language identification: the options (two or more, one dialect
+ *  per language) and the preferred one (one of them). */
+export type TranscribeIdentify = { options: readonly string[]; preferred?: string };
+
+const LANG_CODE_RE = /^[a-z]{2,3}-[A-Z]{2}$/;
+
+/** The presigned wss:// URL for one streaming session: 16 kHz PCM, one
+ *  language — or, with `identify`, the language Transcribe identifies among
+ *  the options (`identify-language` + `language-options` [+
+ *  `preferred-language`] in place of `language-code`: the API refuses both). */
+export function presignTranscribeUrl(input: { region: string; languageCode: string; creds: AwsCreds; now: Date; expiresS?: number; identify?: TranscribeIdentify }): string {
   if (!/^[a-z]{2}-[a-z0-9-]+$/.test(input.region)) throw new Error("transcribe: bad region");
+  const id = input.identify;
+  if (id) {
+    const bases = id.options.map((o) => o.split("-")[0]);
+    if (id.options.length < 2 || !id.options.every((o) => LANG_CODE_RE.test(o)) || new Set(bases).size !== bases.length) throw new Error("transcribe: bad language options");
+    if (id.preferred && !id.options.includes(id.preferred)) throw new Error("transcribe: preferred language not among the options");
+  }
+  const language: Record<string, string> = id
+    ? { "identify-language": "true", "language-options": id.options.join(","), ...(id.preferred ? { "preferred-language": id.preferred } : {}) }
+    : { "language-code": input.languageCode };
   const host = transcribeHost(input.region);
   const query = presignQuery({
     host,
@@ -109,7 +127,7 @@ export function presignTranscribeUrl(input: { region: string; languageCode: stri
     now: input.now,
     expiresS: Math.min(input.expiresS ?? STT_URL_EXPIRES_S, STT_URL_EXPIRES_S),
     params: {
-      "language-code": input.languageCode,
+      ...language,
       "media-encoding": "pcm",
       "sample-rate": String(TRANSCRIBE_SAMPLE_RATE),
     },
