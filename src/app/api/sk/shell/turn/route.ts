@@ -6,13 +6,16 @@ import { skEnabled, skShellEnabledFor } from "@/utils/flags";
 import { LOCALE_COOKIE, isLocale } from "@/i18n/locales";
 import { AnthropicProvider } from "@/utils/assistant/providers/anthropic";
 // 2026-10-30: SK's own Bedrock region / model overlay (SK_BEDROCK_REGION, SK_BEDROCK_MODEL_MAP).
-import { skProviderTarget } from "@/sk/claude-target";
+import { skProviderTarget, skRegionLabel } from "@/sk/claude-target";
+// 2026-10-30: MODEL-FIRST routing behind SK_ROUTING / SK_MODEL_FIRST_EMAILS.
+import { SkModelProvider, chooseModel, escalationTools, handoffAfter, handoffBefore, modelFirstDecision, skRouting, type HandoffBefore, type ModelStats } from "@/sk/shell/routing";
+import type { Usage } from "@/utils/assistant/provider";
 import type { Turn } from "@/utils/assistant/provider";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
 import { loadContext } from "@/sk/shell/context";
 import { openMemory, rememberTurn, sealMemory, type SkMemory } from "@/sk/shell/memory";
 import { allowedFor, fromApiToolName, toToolDefs } from "@/sk/shell/registry";
-import { makeRunTool, runCapability, type RunnerDeps, type ToolTrace } from "@/sk/shell/runner";
+import { makeRunTool, runCapability, toolResultText, type RunnerDeps, type ToolTrace } from "@/sk/shell/runner";
 import { auditSinkFor } from "@/sk/shell/audit";
 import { routeByRules } from "@/sk/shell/rules";
 import { offerAnswer } from "@/sk/shell/offer";
@@ -96,6 +99,15 @@ export const runtime = "nodejs";
 // as DATA — grounded against the slide: meta → tool → text →
 // done{grounded, sources: ["board.explain_selection", "deck"]}. Nothing on the
 // Board moves. Nothing highlighted → SK's fixed "highlight it first" line.
+
+// MODEL-FIRST (2026-10-30, docs/sk-model-first.md): with SK_ROUTING=model (or
+// the user in SK_MODEL_FIRST_EMAILS) the rules router is not consulted. Only
+// three things are decided before the model — the greeting offer's yes/no,
+// a running tour's controls (`walk`), and a book code / SK's own book
+// question — and everything else goes to the model (Haiku 5.5 for a short
+// command, Sonnet 5.5 for teaching; routing.ts) with the role's full tool
+// set. The tools' results drive the same events the rules emitted. One
+// `sk-shell.turn timing` log line per turn, either routing.
 
 const SK_SHELL_DEFAULT_MODEL = "claude-sonnet-5-5";
 const MAX_TEXT = 600;
@@ -234,7 +246,19 @@ export async function POST(request: Request) {
   if (memory.pending) ctx.pending = memory.pending;
   const allowed = allowedFor(ctx);
   const sink = auditSinkFor(admin);
-  const decision = routeByRules(body.text, ctx, now, body.collector.clock);
+  // 2026-10-30: the routing for this user (SK_ROUTING / SK_MODEL_FIRST_EMAILS).
+  // Model-first decides only the book code here (routing.ts); the offer's
+  // yes/no and the running tour's controls are checked below, as before.
+  const routing = skRouting(g.user.email);
+  const decision = routing === "model" ? modelFirstDecision(body.text, ctx) : routeByRules(body.text, ctx, now, body.collector.clock);
+  /** One line per turn (finish): the route taken, the model, timings, tokens. */
+  const timing: {
+    route: string;
+    model: ModelStats | null;
+    firstTextMs: number | null;
+    toolCalls: number;
+    usage?: Usage;
+  } = { route: decision.intent, model: null, firstTextMs: null, toolCalls: 0 };
   // S2: the greeting's one-turn offer ("Your kit for … is ready — want me to
   // open it?"). A bare yes / "open it" opens it, a no declines; anything else
   // runs as usual and the offer lapses (rememberTurn drops it).
@@ -435,6 +459,8 @@ export async function POST(request: Request) {
       let navigatedTo: string | null = null;
       const send = (ev: SkTurnEvent) => {
         if (ev.type === "navigate") navigatedTo = ev.path;
+        if (ev.type === "text" && timing.firstTextMs === null) timing.firstTextMs = Date.now() - t0;
+        if (ev.type === "tool") timing.toolCalls++;
         if (abort.signal.aborted) return;
         try {
           controller.enqueue(frame(ev));
@@ -442,7 +468,33 @@ export async function POST(request: Request) {
           /* client gone */
         }
       };
+      let logged = false;
       const finish = () => {
+        if (!logged) {
+          logged = true;
+          // Server-side only, never an env value: the routing, the route the
+          // turn took, the model(s), time to first token / first text, total,
+          // tool rounds and calls, and the tokens (cache included).
+          const m = timing.model;
+          const u = timing.usage;
+          console.info(
+            "sk-shell.turn timing",
+            JSON.stringify({
+              turnId: body.turnId,
+              routing,
+              route: timing.route,
+              role: ctx.user.role,
+              region: skRegionLabel(),
+              model: m ? { tier: m.tier, models: m.models, escalated: m.escalated } : null,
+              ttftMs: m?.firstTokenMs ?? null,
+              firstTextMs: timing.firstTextMs,
+              totalMs: Date.now() - t0,
+              rounds: m?.rounds ?? 0,
+              toolCalls: timing.toolCalls,
+              tokens: u ? { input: u.inputTokens, output: u.outputTokens, cacheRead: u.cacheReadTokens ?? 0, cacheWrite: u.cacheWriteTokens ?? 0 } : null,
+            }),
+          );
+        }
         request.signal?.removeEventListener("abort", onRequestAbort);
         try {
           controller.close();
@@ -472,6 +524,8 @@ export async function POST(request: Request) {
       // round that chose it is counted in that turn's usage.
       let langTurn = decision.intent === "lang";
       let carried: { inputTokens: number; outputTokens: number } | undefined;
+      // The model round's prompt-cache tokens, for the timing line only.
+      let carriedCache: Pick<Usage, "cacheReadTokens" | "cacheWriteTokens"> | undefined;
       const done = (
         ev: Omit<Extract<SkTurnEvent, { type: "done" }>, "type" | "latencyMs" | "memory">,
         assistantText: string,
@@ -509,6 +563,7 @@ export async function POST(request: Request) {
         const notes = workflowFromTurn({ role: ctx.user.role, navigatePath: navigatedTo, entities, known: memory.entities });
         if (notes.length) void recordWorkflow(g.supabase as unknown as FactsDb, ctx.user.id, notes);
         const usage = carried ? { inputTokens: carried.inputTokens + (ev.usage?.inputTokens ?? 0), outputTokens: carried.outputTokens + (ev.usage?.outputTokens ?? 0) } : ev.usage;
+        timing.usage = usage ? { ...(ev.usage as Usage | undefined), ...usage, ...(carriedCache ?? {}) } : undefined;
         send({ type: "done", ...ev, ...(usage ? { usage } : {}), latencyMs: Date.now() - t0, memory: sealMemory(memory) });
       };
 
@@ -587,6 +642,28 @@ export async function POST(request: Request) {
         } else done({ sources: src, label: "declined" }, text, entities);
       };
 
+      /** Model routing: "start the lesson (for 7B)" with nothing else named —
+       *  the model's start_lesson call handed to the rules' planner (the
+       *  Board's pick, then the timetable; start-lesson.ts). */
+      const planLesson = async (args: Record<string, unknown>) => {
+        const cls = typeof args.class === "string" ? args.class.trim().slice(0, 40) : "";
+        const filters: NavFilters = {};
+        const sources: string[] = [];
+        const entities: ResolvedEntity[] = [];
+        let missing: string | null = null;
+        if (cls) {
+          const r = await runCapability(ctx, "context.resolve", { query: cls, kind: "class" }, deps);
+          send({ type: "tool", name: "context.resolve", ok: r.ok, summary: r.summary });
+          const hit = (r.entities ?? []).find((e) => e.kind === "class");
+          if (hit) {
+            filters.classId = hit.id;
+            entities.push(hit);
+            sources.push("context.resolve");
+          } else missing = `class "${cls}"`;
+        }
+        await startLesson(filters, sources, entities, missing);
+      };
+
       /** S3 slice D: one tutor.* capability, start to finish, no model of the
        *  route's own. A move becomes a `tutor` event the panel performs on the
        *  kit player; a read (or tutor.explain's kit turn) carries its own
@@ -594,6 +671,10 @@ export async function POST(request: Request) {
       const runTutor = async (name: string, args: Record<string, unknown>) => {
         const r = await runCapability(ctx, name, args, deps);
         send({ type: "tool", name, ok: r.ok, summary: r.summary.slice(0, 200) });
+        emitTutor(name, r);
+      };
+      /** A tutor.* result → its events (the rules path, or the MODEL's tool call). */
+      const emitTutor = (name: string, r: SkCapabilityResult) => {
         if (r.ok && r.tutor) {
           const say = r.tutor.say ?? r.summary;
           send({ type: "tutor", move: r.tutor.move, args: r.tutor.args ?? {}, say: r.tutor.say });
@@ -728,6 +809,7 @@ export async function POST(request: Request) {
         // phrasing that names the tour.)
         const walkAct = body.walk?.active ? walkCommand(body.text, { loose: true }) : null;
         if (walkAct) {
+          timing.route = "walk";
           send({ type: "walkthrough", action: walkAct });
           done({ sources: [], label: "navigation" }, "", []);
           finish();
@@ -754,6 +836,7 @@ export async function POST(request: Request) {
 
         // ── S2: the answer to the greeting's offer — deterministic, no model ──
         if (offer && offerReply) {
+          timing.route = "offer";
           if (offerReply === "no") {
             // S6 slice C: a suggestion's offer gets a plain "All right." (the
             // kit line names the Library, which is only right for a kit).
@@ -801,6 +884,7 @@ export async function POST(request: Request) {
         // answer to SK's own question runs book.activate directly: the code is
         // never part of a model prompt. A card is CLICK-ONLY (act.ts).
         if (decision.intent === "act" && decision.action === "book.activate") {
+          timing.route = "book";
           const r = await runCapability(ctx, "book.activate", decision.book, deps);
           send({ type: "tool", name: "book.activate", ok: r.ok, summary: maskBookSecrets(r.summary).slice(0, 200) });
           const act = r.confirm ? await actionEvent(r) : null;
@@ -825,7 +909,10 @@ export async function POST(request: Request) {
         // acknowledgement is her question about the open lesson and goes to
         // tutor.explain — the kit turn, ONE grounded model call, metered once
         // — or, with no lesson open, to tutor.where (her chapters, no model).
-        if (ctx.user.role === "student" && decision.intent !== "navigate" && decision.intent !== "chat") {
+        // (Model routing: a student's turn goes to the model with HER tools —
+        // tutor.*, knowledge.search, navigate, start_lesson — and the registry
+        // keeps every teacher action out of reach; see the hand-offs below.)
+        if (routing === "rules" && ctx.user.role === "student" && decision.intent !== "navigate" && decision.intent !== "chat") {
           // S7 K2: "what is osmosis?" / "explain osmosis" with no lesson open →
           // her knowledge first (an explain with no kit has no section to explain).
           const knowledgeFirst = !ctx.tutor && isContentQuestion(body.text) && (decision.intent !== "tutor" || decision.capability === "tutor.explain");
@@ -1030,7 +1117,13 @@ export async function POST(request: Request) {
         }
 
         // ── The model, with the allowed tools ────────────────────────────────
-        const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
+        // Rules routing: the full model, as before. Model routing: Haiku or
+        // Sonnet by the message (chooseModel), Haiku escalating to Sonnet
+        // when its first round wants a teaching tool (SkModelProvider).
+        if (routing === "model") timing.route = "model";
+        const choice = routing === "model" ? chooseModel(body.text, ctx) : { tier: "full" as const, model: process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, reason: "rules" };
+        const provider = new SkModelProvider(choice, (model) => new AnthropicProvider(model, skProviderTarget()), routing === "model" ? escalationTools(ctx) : new Set<string>(), t0);
+        timing.model = provider.stats;
         const trace: ToolTrace[] = [];
         // The chip for a tool goes out the moment THAT tool finishes; the
         // orchestrator runs a round's tools side by side, so "the last trace
@@ -1047,21 +1140,40 @@ export async function POST(request: Request) {
         const control: { hit: ToolTrace | null } = { hit: null };
         const onTrace = (t: ToolTrace) => {
           send({ type: "tool", name: t.name, ok: t.result.ok, summary: t.result.summary.slice(0, 200) });
-          if (!control.hit && t.result.ok && (t.result.walkthrough || t.result.langCommand)) {
+          // A control (tour / language) — and, in model routing, a tutor move
+          // or tutor.*'s own reply — IS the answer: stop the model there.
+          const kind = handoffAfter(t.result);
+          if (!control.hit && kind && (kind === "control" || routing === "model")) {
             control.hit = t;
             stopModel();
           }
         };
         const runShell = makeRunTool(ctx, deps, trace, onTrace);
         const runBoard = makeRunTool(ctx, boardDeps, trace, onTrace);
+        // Model routing: a tool the route performs ITSELF, decided before it
+        // runs (routing.ts handoffBefore) — a student's knowledge question
+        // (her metered kit turn) and a bare "start the lesson" (the Board's
+        // pick / the timetable). The model stops there.
+        const before: { kind: HandoffBefore | null; args: Record<string, unknown> } = { kind: null, args: {} };
         // A board.* tool the model chose is audited against the present session too.
-        const run = (call: Parameters<typeof runShell>[0], signal?: AbortSignal) => (fromApiToolName(call.name).startsWith("board.") ? runBoard(call, signal) : runShell(call, signal));
+        const run = async (call: Parameters<typeof runShell>[0], signal?: AbortSignal): Promise<string> => {
+          const hb = routing === "model" ? handoffBefore(call.name, call.args ?? {}, ctx) : null;
+          if (hb) {
+            if (!before.kind) {
+              before.kind = hb;
+              before.args = call.args ?? {};
+            }
+            stopModel();
+            return toolResultText({ ok: true, summary: "Handled by SK.", facts: [] });
+          }
+          return fromApiToolName(call.name).startsWith("board.") ? runBoard(call, signal) : runShell(call, signal);
+        };
         const history: Turn[] = memory.turns.map((t) => ({ role: t.role, text: t.text }));
         // 2026-10-30: a tour is on in her tab — the model knows, so it never
         // says there is no tour, and points her at "continue the tour".
-        const system = [buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory }), body.walk?.active ? walkPromptLine(body.walk) : ""].filter(Boolean).join("\n\n");
+        const system = [buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory, routing }), body.walk?.active ? walkPromptLine(body.walk) : ""].filter(Boolean).join("\n\n");
         let full = "";
-        let usage: { inputTokens: number; outputTokens: number } | undefined;
+        let usage: Usage | undefined;
         let cancelled = false;
         let failed = false;
 
@@ -1089,8 +1201,29 @@ export async function POST(request: Request) {
             send({ type: "error", message: ev.retryable ? "One moment — try that again in a few seconds." : "I couldn't answer that one. Try asking a different way?" });
           }
         }
+        if (usage && (usage.cacheReadTokens || usage.cacheWriteTokens)) carriedCache = { cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens };
+        if (before.kind && !failed && !abort.signal.aborted) {
+          carried = usage;
+          if (before.kind === "student_knowledge") {
+            // As the rules path: her knowledge, else the open lesson, else her chapters.
+            timing.route = "model>student_knowledge";
+            if (!(await runStudentKnowledge())) {
+              if (ctx.tutor) await runTutor("tutor.explain", { question: body.text });
+              else await runTutor("tutor.where", {});
+            }
+          } else {
+            timing.route = "model>lesson_plan";
+            await planLesson(before.args);
+          }
+          finish();
+          return;
+        }
         if (control.hit && !failed && !abort.signal.aborted) {
-          await runControl(control.hit, usage);
+          if (handoffAfter(control.hit.result) === "tutor") {
+            timing.route = "model>tutor";
+            carried = usage;
+            emitTutor(control.hit.name, control.hit.result);
+          } else await runControl(control.hit, usage);
           finish();
           return;
         }
@@ -1123,7 +1256,9 @@ export async function POST(request: Request) {
         // chapter, child or school ("Do you mean a class like 7B …?") is not
         // invented — when the tools alone do not carry it, the check runs
         // again with her own context entities (context-entities.ts).
-        const verdict = await groundWithContext(modelText, support, body.text, () => contextEntities(ctx, deps));
+        // Model routing: the SOFTER check (prompt.ts soft mode) — contacts and
+        // invented people always; numbers only where a sentence cites tool data.
+        const verdict = await groundWithContext(modelText, support, body.text, () => contextEntities(ctx, deps), routing === "model" ? "soft" : "strict");
         if (!verdict.ok || claims.dropped.length || verdict.context) {
           // Server-side only: which tokens failed and what was dropped, so a
           // false positive can be diagnosed from the runtime logs (2026-10-28).
@@ -1133,9 +1268,19 @@ export async function POST(request: Request) {
         let text: string;
         let label: Extract<SkTurnEvent, { type: "done" }>["label"];
         let trimmed = false;
+        // Model routing: a tool that answered with its own fixed line ("no
+        // lesson is running", "outside your scope") says it; otherwise SK's line.
+        const failedLine =
+          routing === "model" ? [...trace].reverse().find((t) => !t.result.ok && t.result.summary.trim() && !["unknown_capability", "aborted", "not_allowed"].includes(t.result.error ?? ""))?.result.summary : undefined;
         if (trace.length && !productive.length) {
-          text = SK_NOTHING_ON_THAT;
+          text = failedLine ?? SK_NOTHING_ON_THAT;
           label = "declined";
+        } else if (!trace.length && routing === "model" && !verdict.ok && verdict.text.trim()) {
+          // Model routing, no tool: the sentences that passed the softer check
+          // stand (SK's own phrasing); the blocked ones are gone.
+          text = verdict.text.trim();
+          label = "supplementary";
+          trimmed = true;
         } else if (!trace.length) {
           text = verdict.ok && modelText.trim() ? modelText.trim() : SK_NOTHING_ON_THAT;
           label = verdict.ok && modelText.trim() ? "supplementary" : "declined";
