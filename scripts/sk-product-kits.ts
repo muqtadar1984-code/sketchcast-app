@@ -1,32 +1,34 @@
 /**
- * SketchCast books as Library books — FOUNDER ONLY. Two steps, each a DRY RUN
- * unless --apply is given (docs/sk-product-books.md has the run order):
+ * SketchCast books as Library books — FOUNDER ONLY. Writes a product's chapter
+ * → kit MAP (sk_product_kits) from its release bundle's topics and the
+ * catalogue kits that ALREADY EXIST for them. Nothing is generated or queued
+ * (founder 2026-10-30: "we already have those generated as part of the
+ * catalogue"). A DRY RUN unless --apply. docs/sk-product-books.md has the run
+ * order.
  *
- *   node --env-file=.env.local scripts/sk-product-kits.ts <product-slug> [--apply] [--worker-ready] [--any-hour]
- *     KITS: per chapter of the product's system book (0175), what it would
- *     queue — ONE full kit (the Library's "Generate full kit" rows, kitRows),
- *     whole chapter, params.single_part, owned by CATALOGUE_OWNER_ID — and the
- *     estimated cost per kit and in total. With --apply it queues through the
- *     app's own path (a generations insert; the on_generation_created trigger
- *     makes the jobs) ONE KIT AT A TIME, waiting for each to finish before the
- *     next, and stops at the first failed lesson.
- *       Refuses to start (and pauses between kits) while ANY jobs row is queued
- *       or processing — production rule: never starve the worker.
- *       Refuses outside 20:00–05:00 UTC unless --any-hour.
- *       Refuses a PDF-less product book until --worker-ready (the worker change
- *       in the doc is deployed).
+ *   node --env-file=.env.local scripts/sk-product-kits.ts <product-slug> [--map] [--apply] [--allow-missing] [--bundle <local bundle.json>]
  *
- *   node --env-file=.env.local scripts/sk-product-kits.ts <product-slug> --map [--apply]
- *     MAP: once the kits are done, REPLACE the product's sk_product_kits rows
- *     with exactly one row per chapter (its newest done master lesson, label =
- *     the final chapter title). Prints the before and the after. --apply
- *     refuses while any chapter has no done kit. Writes the new rows first,
- *     then deletes the old ones, so /sk never sees an empty map.
+ *   Reads the product's live release (pub_releases row = sk_book_products.release_id),
+ *   its bundle (books bucket, default AWS credential chain — or --bundle),
+ *   and for every chapter's topics: topics by slug → catalogue_current_kits()
+ *   in the release's language → topic_kits → the kit's presentation (done,
+ *   live) → its YouTube ids (topic_publications). The planning is
+ *   src/sk/product-kits-plan.ts (unit-tested).
+ *   Prints the map BEFORE (the product's rows now) and the AFTER it would
+ *   write, every topic that did not resolve (and why), and per chapter the
+ *   bundle's videos beside the resolved kits' YouTube ids.
+ *   --apply writes the AFTER rows first (upsert), then deletes the product's
+ *   other rows, so /sk never sees an empty map; then re-reads and prints the
+ *   live map. Refuses while a topic is unresolved unless --allow-missing.
+ *   `--map` is accepted (the old spelling); the generation path and
+ *   --worker-ready are gone.
  *
- * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CATALOGUE_OWNER_ID.
- * Exit codes: 0 done (or dry run printed); 1 crashed / a kit failed; 2 bad arguments, env or a refusal.
+ * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY; S3: BOOKS_S3_BUCKET
+ * (default sketchcast-books-172042957848), BOOKS_S3_REGION (default us-east-1).
+ * Exit codes: 0 done (or dry run printed); 1 crashed; 2 bad arguments, env or a refusal.
  */
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -45,34 +47,30 @@ export async function resolve(spec, ctx, next) {
   return next(spec, ctx);
 }`;
 
-const POLL_MS = 30_000;
-const KIT_TIMEOUT_MS = 4 * 3600_000;
-const BUSY_WAIT_MAX_MS = 2 * 3600_000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
-  const slug = argv.find((a) => !a.startsWith("--"));
   const has = (f: string) => argv.includes(f);
+  const bundleAt = argv.indexOf("--bundle");
+  const localBundle = bundleAt >= 0 ? argv[bundleAt + 1] : null;
+  const slug = argv.find((a, i) => !a.startsWith("--") && !(bundleAt >= 0 && i === bundleAt + 1));
   const apply = has("--apply");
-  if (!slug) {
-    console.error("usage: node --env-file=.env.local scripts/sk-product-kits.ts <product-slug> [--map] [--apply] [--worker-ready] [--any-hour]");
+  if (has("--worker-ready") || has("--any-hour")) {
+    console.error("--worker-ready / --any-hour are gone: nothing is generated any more, the map points at existing catalogue kits");
+    return 2;
+  }
+  if (!slug || (bundleAt >= 0 && !localBundle)) {
+    console.error("usage: node --env-file=.env.local scripts/sk-product-kits.ts <product-slug> [--map] [--apply] [--allow-missing] [--bundle <file>]");
     return 2;
   }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const owner = (process.env.CATALOGUE_OWNER_ID ?? "").trim().toLowerCase();
   if (!url || !key) {
     console.error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
     return 2;
   }
-  if (!UUID.test(owner)) {
-    console.error("CATALOGUE_OWNER_ID must be set to the catalogue system account's uuid");
-    return 2;
-  }
   register("data:text/javascript," + encodeURIComponent(HOOK), { parentURL: import.meta.url, data: { src: pathToFileURL(resolve(ROOT, "src") + "/").href } });
   const plan = await import(pathToFileURL(resolve(ROOT, "src/sk/product-kits-plan.ts")).href);
+  const rel = await import(pathToFileURL(resolve(ROOT, "src/sk/knowledge/release.ts")).href);
   const { createClient } = await import("@supabase/supabase-js");
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const db: any = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -83,127 +81,115 @@ async function main(): Promise<number> {
     console.error(`no product with slug ${slug}`);
     return 2;
   }
-  const { data: book, error: bErr } = await db.from("books").select("id, title, owner_id, sk_product_id, sk_release_id, storage_path, chapters").eq("sk_product_id", product.id).maybeSingle();
-  if (bErr) {
-    console.error(`books read failed (${bErr.code ?? "?"}): ${bErr.message} — is migration 0175 applied?`);
+  if (!product.release_id) {
+    console.error(`product ${slug} has no live release: import its final first`);
     return 2;
   }
-  if (!book) {
-    console.error(`product ${slug} has no system book yet: apply 0175, then re-import its release (Import now / scripts in the doc)`);
+  const { data: row, error: rErr } = await db.from("pub_releases").select("*").eq("id", product.release_id).maybeSingle();
+  if (rErr) throw new Error(`pub_releases read failed: ${rErr.message}`);
+  if (!row) {
+    console.error(`pub_releases row ${product.release_id} not found`);
     return 2;
   }
-  console.log(`product ${product.slug} (${product.id}) status=${product.status} release=${product.release_id}`);
-  console.log(`book    ${book.id} "${book.title}" release=${book.sk_release_id} owner=${book.owner_id} pdf=${book.storage_path ? "yes" : "none"}`);
+  const language = String(row.language ?? "en").toLowerCase();
+  console.log(`product ${product.slug} (${product.id}) status=${product.status}`);
+  console.log(`release ${row.id} ${row.release_kind} ${row.edition_key} language=${language}`);
 
-  const loadMasters = async () => {
-    const { data, error } = await db
-      .from("generations")
-      .select("id, kind, chapter_ref, status, params, created_at, removed_at, withdrawn_at")
-      .eq("book_id", book.id)
-      .eq("owner_id", book.owner_id);
-    if (error) throw new Error(`generations read failed: ${error.message}`);
+  let bytes: Uint8Array;
+  if (localBundle) bytes = new Uint8Array(readFileSync(localBundle));
+  else {
+    const { S3Client, GetObjectCommand } = await import("@aws-sdk/client-s3");
+    const bucket = process.env.BOOKS_S3_BUCKET || "sketchcast-books-172042957848";
+    try {
+      const out = await new S3Client({ region: process.env.BOOKS_S3_REGION || "us-east-1" }).send(new GetObjectCommand({ Bucket: bucket, Key: row.bundle_key }));
+      bytes = await out.Body!.transformToByteArray();
+    } catch (e: any) {
+      console.error(`S3 GET s3://${bucket}/${row.bundle_key} refused: ${e.name} ${e.message} — pass --bundle <file> instead`);
+      return 2;
+    }
+  }
+  const { bundle, problems } = rel.verifyBundle(row, bytes);
+  if (!bundle) {
+    console.error(`bundle unreadable: ${problems.join("; ")}`);
+    return 2;
+  }
+  if (problems.length) console.log(`  (bundle check: ${problems.join("; ")})`);
+
+  const chapters = plan.bundleChapterTopics(bundle);
+  const slugs = [...new Set(chapters.flatMap((c: any) => c.topics.map((t: any) => t.slug)))];
+  console.log(`bundle: ${chapters.length} chapter(s), ${slugs.length} distinct topic(s)`);
+
+  const { data: topics, error: tErr } = slugs.length ? await db.from("topics").select("id, slug, title").in("slug", slugs) : { data: [], error: null };
+  if (tErr) throw new Error(`topics read failed: ${tErr.message}`);
+  const { data: current, error: cErr } = await db.rpc("catalogue_current_kits");
+  if (cErr) throw new Error(`catalogue_current_kits failed: ${cErr.message}`);
+  const topicIds = new Set((topics ?? []).map((t: any) => t.id));
+  const kitIds = (current ?? []).filter((c: any) => topicIds.has(c.topic_id)).map((c: any) => c.topic_kit_id);
+  const { data: kits, error: kErr } = kitIds.length ? await db.from("topic_kits").select("id, topic_id, presentation_generation_id").in("id", kitIds) : { data: [], error: null };
+  if (kErr) throw new Error(`topic_kits read failed: ${kErr.message}`);
+  const presIds = (kits ?? []).map((k: any) => k.presentation_generation_id).filter(Boolean);
+  const { data: lessons, error: gErr } = presIds.length
+    ? await db.from("generations").select("id, kind, status, removed_at, withdrawn_at").in("id", presIds)
+    : { data: [], error: null };
+  if (gErr) throw new Error(`generations read failed: ${gErr.message}`);
+  const { data: pubs } = kitIds.length ? await db.from("topic_publications").select("*").in("topic_kit_id", kitIds) : { data: [] };
+  const readMap = async () => {
+    const { data, error } = await db.from("sk_product_kits").select("product_id, chapter_ref, sort, generation_id, label").eq("product_id", product.id);
+    if (error) throw new Error(`sk_product_kits read failed: ${error.message}`);
     return data ?? [];
   };
 
-  // ── MAP ──────────────────────────────────────────────────────────────────
-  if (has("--map")) {
-    const { data: current, error: mErr } = await db.from("sk_product_kits").select("product_id, chapter_ref, sort, generation_id, label").eq("product_id", product.id);
-    if (mErr) throw new Error(`sk_product_kits read failed: ${mErr.message}`);
-    const m = plan.planProductKitMap({ book, masters: await loadMasters(), current: current ?? [] });
-    const line = (r: any) => `  ch ${String(r.chapter_ref).padStart(2)} #${r.sort}  ${r.generation_id}  ${r.label ?? ""}`;
-    console.log(`\nBEFORE (${m.before.length} row(s)):`);
-    m.before.forEach((r: any) => console.log(line(r)));
-    console.log(`AFTER (${m.after.length} row(s)):`);
-    m.after.forEach((r: any) => console.log(line(r)));
-    if (m.missing.length) console.log(`MISSING a done kit: ${m.missing.map((x: any) => `ch ${x.chapter} ${x.title}`).join("; ")}`);
-    if (!apply) {
-      console.log("\nDRY RUN — nothing written. Re-run with --apply to replace the map.");
-      return 0;
-    }
-    if (m.missing.length) {
-      console.error("refused: every chapter needs a done kit before the map is replaced");
-      return 2;
-    }
-    const { error: upErr } = await db.from("sk_product_kits").upsert(m.after, { onConflict: "product_id,chapter_ref,generation_id" });
-    if (upErr) throw new Error(`sk_product_kits upsert failed: ${upErr.message}`);
-    for (const r of plan.staleMapRows(m)) {
-      const { error } = await db.from("sk_product_kits").delete().eq("product_id", r.product_id).eq("chapter_ref", r.chapter_ref).eq("generation_id", r.generation_id);
-      if (error) throw new Error(`sk_product_kits delete failed: ${error.message}`);
-    }
-    console.log(`\nmap replaced: ${m.after.length} row(s) written, ${plan.staleMapRows(m).length} old row(s) removed`);
-    return 0;
+  const m = plan.planCatalogueMap({
+    productId: product.id,
+    language,
+    chapters,
+    topics: topics ?? [],
+    current: current ?? [],
+    kits: kits ?? [],
+    lessons: lessons ?? [],
+    publications: pubs ?? [],
+    currentMap: await readMap(),
+  });
+  const line = (r: any) => `  ch ${String(r.chapter_ref).padStart(2)} #${r.sort}  ${r.generation_id}  ${r.label ?? ""}`;
+  console.log(`\nBEFORE (${m.before.length} row(s)):`);
+  m.before.forEach((r: any) => console.log(line(r)));
+  console.log(`AFTER (${m.after.length} row(s)):`);
+  m.after.forEach((r: any) =>
+    console.log(`${line(r)}  [${r.slug}${r.sharedWith ? `, shared with Chapter ${r.sharedWith}` : ""}; YouTube ${r.youtube.length ? r.youtube.join(",") : "NONE — would play from storage"}]`),
+  );
+  if (m.unresolved.length) {
+    console.log("UNRESOLVED (left out of the map):");
+    m.unresolved.forEach((u: any) => console.log(`  ch ${String(u.chapter).padStart(2)}  ${u.slug}: ${u.reason}`));
+  }
+  console.log("VIDEOS (bundle → the resolved kits' YouTube ids):");
+  for (const v of m.videos) {
+    const missing = v.bundle.filter((id: string) => !v.kits.includes(id));
+    console.log(`  ch ${String(v.chapter).padStart(2)}  bundle [${v.bundle.join(", ")}]  kits [${v.kits.join(", ")}]${missing.length ? `  ⚠ not in the kits: ${missing.join(", ")}` : ""}`);
   }
 
-  // ── KITS ─────────────────────────────────────────────────────────────────
-  const p = plan.planProductKits({ book, ownerId: owner, masters: await loadMasters(), workerReady: has("--worker-ready") });
-  console.log("");
-  for (const c of p.chapters) {
-    const what = c.rows.length ? `QUEUE 1 full kit (${c.rows.map((r: any) => r.kind).join(", ")})` : c.state === "done" ? `done (${c.presentationId})` : c.state;
-    console.log(`  ch ${String(c.chapter).padStart(2)}  ${c.title.slice(0, 60).padEnd(60)}  ${what}`);
-  }
-  console.log(`\ncost estimate: $${p.cost.perKit.low}–$${p.cost.perKit.high} per kit (≈$${p.cost.perKit.point}); ${p.cost.kits} kit(s) ≈ $${p.cost.point} (range $${p.cost.low}–$${p.cost.high})`);
-  if (p.blockers.length) console.log(`blockers for --apply:\n  - ${p.blockers.join("\n  - ")}`);
   if (!apply) {
-    console.log("\nDRY RUN — nothing queued. Re-run with --apply (off-peak, empty queue) to queue sequentially.");
+    console.log("\nDRY RUN — nothing written. Re-run with --apply to replace the map.");
     return 0;
   }
-  if (p.blockers.length) {
-    console.error("refused: see blockers above");
+  if (m.unresolved.length && !has("--allow-missing")) {
+    console.error("refused: some topics did not resolve to a current catalogue kit (above); fix them or pass --allow-missing");
     return 2;
   }
-  if (!plan.offPeak(new Date()) && !has("--any-hour")) {
-    console.error("refused: outside the 20:00–05:00 UTC window (users' hours); pass --any-hour to override");
+  if (!m.after.length) {
+    console.error("refused: the AFTER map is empty");
     return 2;
   }
-
-  const busy = async () => {
-    const { data, error } = await db.from("jobs").select("id, status").in("status", ["queued", "processing"]).limit(50);
-    if (error) throw new Error(`jobs read failed: ${error.message}`);
-    return plan.busyJobs(data ?? []);
-  };
-  const first = await busy();
-  if (first > 0) {
-    console.error(`refused: ${first} job(s) queued or processing — never starve production; try again when the queue is empty`);
-    return 2;
+  const rows = plan.mapRows(m);
+  const { error: upErr } = await db.from("sk_product_kits").upsert(rows, { onConflict: "product_id,chapter_ref,generation_id" });
+  if (upErr) throw new Error(`sk_product_kits upsert failed: ${upErr.message}`);
+  const stale = plan.staleMapRows(m);
+  for (const r of stale) {
+    const { error } = await db.from("sk_product_kits").delete().eq("product_id", r.product_id).eq("chapter_ref", r.chapter_ref).eq("generation_id", r.generation_id);
+    if (error) throw new Error(`sk_product_kits delete failed: ${error.message}`);
   }
-
-  for (const [i, c] of p.toQueue.entries()) {
-    // between kits: wait for anyone else's work to clear before queuing ours
-    const waitStart = Date.now();
-    for (let n = await busy(); n > 0; n = await busy()) {
-      if (Date.now() - waitStart > BUSY_WAIT_MAX_MS) {
-        console.error(`stopping: the queue has been busy for 2 h (${n} job(s)); ${p.toQueue.length - i} kit(s) not queued`);
-        return 2;
-      }
-      console.log(`  queue busy (${n} job(s)); waiting…`);
-      await sleep(60_000);
-    }
-    const { data: ins, error } = await db.from("generations").insert(c.rows).select("id, kind");
-    if (error) throw new Error(`ch ${c.chapter}: generations insert failed: ${error.message}`);
-    const ids = (ins ?? []).map((r: any) => r.id);
-    console.log(`[${i + 1}/${p.toQueue.length}] ch ${c.chapter} queued: ${ids.length} row(s) — waiting for the kit…`);
-    const started = Date.now();
-    for (;;) {
-      await sleep(POLL_MS);
-      const { data: rows, error: rErr } = await db.from("generations").select("id, kind, status").in("id", ids);
-      if (rErr) throw new Error(`generations poll failed: ${rErr.message}`);
-      const outcome = plan.kitOutcome(rows ?? []);
-      if (outcome === "done") {
-        const errs = (rows ?? []).filter((r: any) => r.status === "error").map((r: any) => r.kind);
-        console.log(`  ch ${c.chapter} done${errs.length ? ` (failed pieces: ${errs.join(", ")})` : ""} in ${Math.round((Date.now() - started) / 60000)} min`);
-        break;
-      }
-      if (outcome === "failed") {
-        console.error(`  ch ${c.chapter}: the lesson FAILED — stopping the batch (${p.toQueue.length - i - 1} kit(s) not queued)`);
-        return 1;
-      }
-      if (Date.now() - started > KIT_TIMEOUT_MS) {
-        console.error(`  ch ${c.chapter}: still running after 4 h — stopping the batch; check the worker`);
-        return 1;
-      }
-    }
-  }
-  console.log("\nall kits done. Next: --map (dry run), then --map --apply.");
+  const live = (await readMap()).sort((a: any, b: any) => Number(a.chapter_ref) - Number(b.chapter_ref) || a.sort - b.sort);
+  console.log(`\nmap replaced: ${rows.length} row(s) written, ${stale.length} old row(s) removed. NOW (${live.length} row(s)):`);
+  live.forEach((r: any) => console.log(line(r)));
   return 0;
 }
 

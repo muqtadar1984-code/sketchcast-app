@@ -1,175 +1,141 @@
 // SketchCast books as Library books — the pure planning behind the
-// founder-only scripts/sk-product-kits.ts (kits, then the SK map).
+// founder-only scripts/sk-product-kits.ts: the product's chapter → kit MAP.
 //
-// KITS. One FULL kit per chapter of the product's system book (0175): exactly
-// the rows the Library's "Generate full kit" inserts (kitRows — presentation
-// first, then deck, lesson plan, activity, worksheet, test paper, case study),
-// owned by the book's owner (the catalogue system account), for the book's
-// 0-based chapter num, with NO params.part — and params.single_part = true:
-// the request that the chapter (≈3k words) be ONE part, one video, not split
-// at the worker's MAX_PART_WORDS (1,950). ⚠️ The worker must honour it (and
-// must read a PDF-less product book from chapter_grounding.source_text) —
-// see docs/sk-product-books.md "Worker prerequisites"; the script refuses
-// --apply until --worker-ready says so.
+// Founder 2026-10-30: "why do we need to generate the 10 chapter kits. we
+// already have those generated as part of the catalogue." NOTHING IS
+// GENERATED. Each chapter's kits are the EXISTING catalogue kits of the topics
+// the release bundle lists for it (`chapters[].topics = [{slug, title,
+// article}]`), resolved slug → topic → its CURRENT kit in the book's language
+// (catalogue_current_kits(): approved, the topic not retired, the English
+// video public on YouTube) → that kit's presentation, which must be done and
+// live (not removed, not withdrawn).
 //
-// MAP. Once the kits are done, sk_product_kits for the product is REPLACED by
-// exactly one row per chapter: chapter_ref = the RELEASE chapter (num + 1, the
-// key /sk/[product] and the old map use), the chapter's newest done master
-// presentation, label = the final chapter title.
+// sk_product_kits gets one row per (chapter, kit):
+//   chapter_ref = the RELEASE chapter (1-based: /sk/[product]/[chapter], the
+//                 Library's "Chapter N", the Board's num + 1)
+//   sort        = the topic's position in the chapter (the bundle's order)
+//   generation_id = the kit's presentation (what 0170 maps and canOpenKit opens)
+//   label       = the topic's title — EXCEPT a kit an earlier chapter already
+//                 uses (Biology's "cells" in chapters 1, 3 and 7): that row is
+//                 labelled with the chapter's OWN title, and the Library notes
+//                 "shared with Chapter 1".
+// A topic listed twice in one chapter maps once. A topic that does not
+// resolve is reported (with why) and left out; --apply refuses while any is
+// unresolved unless the founder passes --allow-missing.
 //
 // Pure: rows in, decisions out. The script reads and writes; the tests pin this.
 
-import { kitRows, type GenerationRow } from "@/app/dashboard/kit";
+import { bundleVideoId, youtubeIdsByKit, type PublicationRow } from "@/utils/catalogue/kit-youtube";
 
-/**
- * Estimated cost of ONE full kit, USD. Sources: the worker's measured kit
- * (worker/process.py _book_prelude: "the Sonnet analysis DOMINATES a kit's
- * cost — $2.08"), and the 2026-10 unit-cost note (≈$1.5–1.8 on Gemini
- * credits, ≈$2.2–2.5 on Claude cash). The console's live average is
- * src/utils/kit-cost.ts over jobs.usage — check it before a large batch.
- */
-export const KIT_COST_USD = { low: 1.5, point: 2.1, high: 2.5 } as const;
+export type BundleTopic = { slug: string; title: string | null };
+export type BundleChapterTopics = { chapter: number; title: string; topics: BundleTopic[]; videos: string[] };
 
-/** Off-peak window for batches (UTC hours [20, 24) ∪ [0, 5)): never in users' hours. */
-export const OFF_PEAK_UTC = { from: 20, to: 5 } as const;
+const SLUG = /^[a-z0-9][a-z0-9-]{0,199}$/;
+const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-export type ProductBookRow = {
-  id: string;
-  title: string;
-  owner_id: string;
-  sk_product_id: string;
-  storage_path: string | null;
-  chapters: { num: number; title?: string | null }[] | null;
-};
-
-export type MasterGen = {
-  id: string;
-  kind: string;
-  chapter_ref: string | null;
-  status: string;
-  params: Record<string, unknown> | null;
-  created_at: string;
-  removed_at?: string | null;
-  withdrawn_at?: string | null;
-};
-
-export type ChapterState = "done" | "in_progress" | "failed" | "missing";
-
-export type ChapterPlan = {
-  /** books.chapters num (0-based) = generations.chapter_ref */
-  num: number;
-  /** the release chapter (num + 1) = sk_product_kits.chapter_ref */
-  chapter: number;
-  title: string;
-  state: ChapterState;
-  /** the chapter's newest done master presentation, when there is one */
-  presentationId: string | null;
-  /** what --apply would insert for this chapter ([] unless missing/failed) */
-  rows: GenerationRow[];
-};
-
-export type KitPlan = {
-  chapters: ChapterPlan[];
-  toQueue: ChapterPlan[];
-  cost: { perKit: typeof KIT_COST_USD; kits: number; low: number; point: number; high: number };
-  /** reasons --apply must not run (an empty list = it may) */
-  blockers: string[];
-};
-
-const live = (g: MasterGen) => !g.removed_at && !g.withdrawn_at;
-const hasPart = (g: MasterGen) => g.params != null && g.params.part != null && String(g.params.part) !== "";
-const newestFirst = (a: MasterGen, b: MasterGen) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0);
-
-export function chaptersOf(book: Pick<ProductBookRow, "chapters">): { num: number; title: string }[] {
-  return (Array.isArray(book.chapters) ? book.chapters : [])
-    .filter((c) => Number.isInteger(Number(c?.num)))
-    .map((c) => ({ num: Number(c.num), title: (c.title ?? "").trim() || `Chapter ${Number(c.num) + 1}` }))
-    .sort((a, b) => a.num - b.num);
+/** The bundle's chapters with their topics (in order) and video ids. Tolerant of shape: bad entries are dropped. */
+export function bundleChapterTopics(bundle: { chapters?: unknown } | null | undefined): BundleChapterTopics[] {
+  const chapters = Array.isArray(bundle?.chapters) ? (bundle!.chapters as Record<string, unknown>[]) : [];
+  return chapters
+    .filter((c) => c && Number.isInteger(Number(c.chapter)) && Number(c.chapter) >= 1)
+    .map((c) => {
+      const n = Number(c.chapter);
+      const topics = (Array.isArray(c.topics) ? (c.topics as Record<string, unknown>[]) : [])
+        .map((t) => ({ slug: str(t?.slug).toLowerCase(), title: str(t?.title) || null }))
+        .filter((t) => SLUG.test(t.slug));
+      const videos = (Array.isArray(c.videos) ? c.videos : []).map(bundleVideoId).filter((v): v is string => !!v);
+      return { chapter: n, title: str(c.title) || `Chapter ${n}`, topics, videos };
+    })
+    .sort((a, b) => a.chapter - b.chapter);
 }
 
-/** The chapter's master presentations (whole chapter, live), newest first. */
-function presentations(masters: MasterGen[], num: number): MasterGen[] {
-  return masters.filter((g) => g.kind === "presentation" && g.chapter_ref === String(num) && live(g) && !hasPart(g)).sort(newestFirst);
-}
-
-export function chapterState(masters: MasterGen[], num: number): { state: ChapterState; presentationId: string | null } {
-  const mine = masters.filter((g) => g.chapter_ref === String(num) && live(g));
-  const done = presentations(masters, num).find((g) => g.status === "done") ?? null;
-  if (done) return { state: "done", presentationId: done.id };
-  if (mine.some((g) => g.status === "queued" || g.status === "processing")) return { state: "in_progress", presentationId: null };
-  if (presentations(masters, num).some((g) => g.status === "error")) return { state: "failed", presentationId: null };
-  return { state: "missing", presentationId: null };
-}
-
-/** The rows one chapter's kit inserts: the Library's own kit, single-part, owned by the book's owner. */
-export function productKitRows(book: Pick<ProductBookRow, "id" | "owner_id" | "sk_product_id">, num: number): GenerationRow[] {
-  return kitRows({ bookId: book.id, schoolId: null, userId: book.owner_id, chapterNum: num }).map((r) => ({
-    ...r,
-    params: { ...r.params, single_part: true, sk_product: { product_id: book.sk_product_id } },
-  }));
-}
-
-export function planProductKits(input: { book: ProductBookRow; ownerId: string; masters: MasterGen[]; workerReady: boolean }): KitPlan {
-  const { book } = input;
-  const chapters = chaptersOf(book).map<ChapterPlan>((c) => {
-    const s = chapterState(input.masters, c.num);
-    const queue = s.state === "missing" || s.state === "failed";
-    return { num: c.num, chapter: c.num + 1, title: c.title, state: s.state, presentationId: s.presentationId, rows: queue ? productKitRows(book, c.num) : [] };
-  });
-  const toQueue = chapters.filter((c) => c.rows.length > 0);
-  const blockers: string[] = [];
-  if (book.owner_id !== input.ownerId) blockers.push(`the product book is owned by ${book.owner_id}, not CATALOGUE_OWNER_ID`);
-  if (!chapters.length) blockers.push("the product book has no chapters (re-import the release)");
-  if (!book.storage_path && !input.workerReady)
-    blockers.push("the worker cannot build a PDF-less product book yet: deploy the worker change (docs/sk-product-books.md) and pass --worker-ready");
-  if (chapters.some((c) => c.state === "in_progress")) blockers.push("a chapter's kit is still being made; wait for it");
-  const n = toQueue.length;
-  const r2 = (x: number) => Math.round(x * 100) / 100;
-  return {
-    chapters,
-    toQueue,
-    cost: { perKit: KIT_COST_USD, kits: n, low: r2(n * KIT_COST_USD.low), point: r2(n * KIT_COST_USD.point), high: r2(n * KIT_COST_USD.high) },
-    blockers,
-  };
-}
-
-/** Production rule: never start (or continue) while anyone's job is waiting or running. */
-export function busyJobs(jobs: { status: string }[]): number {
-  return jobs.filter((j) => j.status === "queued" || j.status === "processing").length;
-}
-
-export function offPeak(now: Date): boolean {
-  const h = now.getUTCHours();
-  return h >= OFF_PEAK_UTC.from || h < OFF_PEAK_UTC.to;
-}
-
-/** A queued kit is finished when every row is done or error; failed when its lesson errored. */
-export function kitOutcome(rows: { kind: string; status: string }[]): "running" | "done" | "failed" {
-  if (rows.some((r) => r.status !== "done" && r.status !== "error")) return "running";
-  return rows.find((r) => r.kind === "presentation")?.status === "done" ? "done" : "failed";
-}
-
-// ── the SK map ──────────────────────────────────────────────────────────────
+export type TopicRow = { id: string; slug: string | null; title: string | null };
+/** A row of catalogue_current_kits(). */
+export type CurrentKitRow = { topic_id: string; language: string; topic_kit_id: string };
+export type TopicKitRow = { id: string; topic_id: string; presentation_generation_id: string | null };
+export type LessonRow = { id: string; kind: string; status: string; removed_at?: string | null; withdrawn_at?: string | null };
 
 export type MapRow = { product_id: string; chapter_ref: string; sort: number; generation_id: string; label: string | null };
 
-export type MapPlan = { before: MapRow[]; after: MapRow[]; missing: { chapter: number; title: string }[] };
+export type Unresolved = { chapter: number; slug: string; reason: "unknown_topic" | "no_current_kit" | "no_lesson" | "lesson_not_ready" };
+export type PlannedRow = MapRow & { slug: string; topicKitId: string; sharedWith: number | null; youtube: string[] };
 
-export function planProductKitMap(input: { book: ProductBookRow; masters: MasterGen[]; current: MapRow[] }): MapPlan {
-  const after: MapRow[] = [];
-  const missing: MapPlan["missing"] = [];
-  for (const c of chaptersOf(input.book)) {
-    const s = chapterState(input.masters, c.num);
-    if (s.state === "done" && s.presentationId) {
-      after.push({ product_id: input.book.sk_product_id, chapter_ref: String(c.num + 1), sort: 0, generation_id: s.presentationId, label: c.title });
-    } else missing.push({ chapter: c.num + 1, title: c.title });
+export type MapPlan = {
+  before: MapRow[];
+  after: PlannedRow[];
+  unresolved: Unresolved[];
+  /** per chapter: the bundle's video ids beside the YouTube ids of the kits it resolved to */
+  videos: { chapter: number; bundle: string[]; kits: string[] }[];
+};
+
+const byChapterThenSort = (a: MapRow, b: MapRow) => Number(a.chapter_ref) - Number(b.chapter_ref) || a.sort - b.sort;
+
+export function planCatalogueMap(input: {
+  productId: string;
+  language: string;
+  chapters: BundleChapterTopics[];
+  topics: TopicRow[];
+  current: CurrentKitRow[];
+  kits: TopicKitRow[];
+  lessons: LessonRow[];
+  publications?: PublicationRow[];
+  currentMap: MapRow[];
+}): MapPlan {
+  const lang = (input.language || "en").toLowerCase();
+  const topicBySlug = new Map(input.topics.filter((t) => t.slug).map((t) => [String(t.slug).toLowerCase(), t]));
+  const currentByTopic = new Map(input.current.filter((c) => (c.language ?? "").toLowerCase() === lang).map((c) => [c.topic_id, c.topic_kit_id]));
+  const kitById = new Map(input.kits.map((k) => [k.id, k]));
+  const lessonById = new Map(input.lessons.map((g) => [g.id, g]));
+  const youtube = youtubeIdsByKit(input.publications ?? []);
+
+  const after: PlannedRow[] = [];
+  const unresolved: Unresolved[] = [];
+  const videos: MapPlan["videos"] = [];
+  const firstChapterOf = new Map<string, number>();
+
+  for (const c of input.chapters) {
+    const seen = new Set<string>();
+    const kitsHere: string[] = [];
+    c.topics.forEach((t, sort) => {
+      const topic = topicBySlug.get(t.slug);
+      if (!topic) return void unresolved.push({ chapter: c.chapter, slug: t.slug, reason: "unknown_topic" });
+      const kitId = currentByTopic.get(topic.id);
+      const kit = kitId ? kitById.get(kitId) : undefined;
+      if (!kit) return void unresolved.push({ chapter: c.chapter, slug: t.slug, reason: "no_current_kit" });
+      const pres = kit.presentation_generation_id;
+      if (!pres) return void unresolved.push({ chapter: c.chapter, slug: t.slug, reason: "no_lesson" });
+      const lesson = lessonById.get(pres);
+      if (!lesson || lesson.kind !== "presentation" || lesson.status !== "done" || lesson.removed_at || lesson.withdrawn_at)
+        return void unresolved.push({ chapter: c.chapter, slug: t.slug, reason: "lesson_not_ready" });
+      if (seen.has(pres)) return;
+      seen.add(pres);
+      const first = firstChapterOf.get(pres);
+      const sharedWith = first !== undefined && first !== c.chapter ? first : null;
+      if (first === undefined) firstChapterOf.set(pres, c.chapter);
+      const ids = youtube.get(kit.id) ?? [];
+      kitsHere.push(...ids);
+      after.push({
+        product_id: input.productId,
+        chapter_ref: String(c.chapter),
+        sort,
+        generation_id: pres,
+        label: sharedWith !== null ? c.title : t.title || topic.title || t.slug,
+        slug: t.slug,
+        topicKitId: kit.id,
+        sharedWith,
+        youtube: ids,
+      });
+    });
+    videos.push({ chapter: c.chapter, bundle: c.videos, kits: kitsHere });
   }
-  const before = input.current
-    .filter((r) => r.product_id === input.book.sk_product_id)
-    .slice()
-    .sort((a, b) => Number(a.chapter_ref) - Number(b.chapter_ref) || a.sort - b.sort);
-  return { before, after, missing };
+
+  const before = input.currentMap.filter((r) => r.product_id === input.productId).slice().sort(byChapterThenSort);
+  return { before, after: after.sort(byChapterThenSort), unresolved, videos };
 }
+
+/** The bare rows to upsert (sk_product_kits' own columns). */
+export const mapRows = (plan: MapPlan): MapRow[] =>
+  plan.after.map(({ product_id, chapter_ref, sort, generation_id, label }) => ({ product_id, chapter_ref, sort, generation_id, label }));
 
 /** The map rows to delete once `after` is written: everything of the product that is not in `after`. */
 export function staleMapRows(plan: MapPlan): MapRow[] {

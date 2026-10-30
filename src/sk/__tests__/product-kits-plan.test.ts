@@ -1,152 +1,151 @@
 // SketchCast books as Library books — the planning behind
-// scripts/sk-product-kits.ts: one full single-part kit per chapter, owned by
-// the system account, the cost estimate, the production guards, and the SK
-// map replacement (one row per chapter, release chapter numbers, final titles).
+// scripts/sk-product-kits.ts: the chapter → kit MAP built from the release
+// bundle's topics and the catalogue kits that already exist (founder
+// 2026-10-30: nothing is generated). Biology's real topic layout: chapters 3
+// and 7 reuse the "cells" kit, chapters 6, 8 and 10 carry several kits.
 // Run: node node_modules/vitest/vitest.mjs run src/sk/__tests__/product-kits-plan.test.ts
 import { describe, expect, it } from "vitest";
-import { DOC_KINDS } from "@/app/dashboard/kit";
-import {
-  KIT_COST_USD,
-  busyJobs,
-  chapterState,
-  kitOutcome,
-  offPeak,
-  planProductKitMap,
-  planProductKits,
-  staleMapRows,
-  type MasterGen,
-  type ProductBookRow,
-} from "../product-kits-plan";
+import { bundleChapterTopics, mapRows, planCatalogueMap, staleMapRows, type MapRow } from "../product-kits-plan";
 
-const OWNER = "0c0c0c0c-0000-4000-8000-00000000000c";
-const PRODUCT = "161828e0-32aa-40df-bbf3-16eb32c82504";
-const book: ProductBookRow = {
-  id: "b0000000-0000-4000-8000-000000000001",
-  title: "Cells",
-  owner_id: OWNER,
-  sk_product_id: PRODUCT,
-  storage_path: null,
-  chapters: [
-    { num: 2, title: "Cell membranes" },
-    { num: 0, title: "Cells" },
-    { num: 1, title: "Microscopes" },
-  ],
+const PRODUCT = "11111111-1111-4111-8111-111111111111";
+const id = (n: number, p = "a") => `${p}${String(n).padStart(7, "0")}-0000-4000-8000-000000000000`;
+
+// slug → [topic id, kit id, presentation id]
+const SLUGS = [
+  "cells",
+  "using-a-microscope-and-calculating-magnification",
+  "plant-and-animal-cells-compared",
+  "specialised-cells-and-tissues",
+  "states-of-matter-and-particle-model",
+  "diffusion-in-living-cells",
+  "blood-and-its-components",
+  "the-human-respiratory-system",
+  "transport-in-plants",
+  "inheritance-and-variation",
+];
+const ref = (slug: string) => {
+  const i = SLUGS.indexOf(slug);
+  return { topic: id(i, "a"), kit: id(i, "b"), pres: id(i, "c") };
 };
-let seq = 0;
-const gen = (chapter_ref: string, status: string, over: Partial<MasterGen> = {}): MasterGen => ({
-  id: `g-${++seq}`,
-  kind: "presentation",
-  chapter_ref,
-  status,
-  params: {},
-  created_at: `2026-10-30T0${seq % 10}:00:00Z`,
-  ...over,
-});
+const T = (slug: string) => ({ slug, title: slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase()) });
 
-describe("planProductKits", () => {
-  it("one FULL kit per missing chapter: the Library's seven rows, owned by the system account, whole chapter, single part", () => {
-    const plan = planProductKits({ book, ownerId: OWNER, masters: [], workerReady: true });
-    expect(plan.chapters.map((c) => [c.num, c.chapter, c.title, c.state])).toEqual([
-      [0, 1, "Cells", "missing"],
-      [1, 2, "Microscopes", "missing"],
-      [2, 3, "Cell membranes", "missing"],
-    ]);
-    expect(plan.toQueue).toHaveLength(3);
-    const rows = plan.toQueue[0].rows;
-    expect(rows.map((r) => r.kind)).toEqual(["presentation", ...DOC_KINDS]); // lesson FIRST (the docs-ride guard)
-    for (const r of rows) {
-      expect(r).toMatchObject({ book_id: book.id, owner_id: OWNER, school_id: null, chapter_ref: "0", status: "queued" });
-      expect(r.params.part).toBeUndefined();
-      expect(r.params.single_part).toBe(true);
-      expect(r.params.sk_product).toEqual({ product_id: PRODUCT });
-      expect(r.params.catalogue).toBeUndefined(); // never the catalogue path
-    }
-    expect(plan.blockers).toEqual([]);
-  });
+function bundle() {
+  return {
+    chapters: [
+      { chapter: 1, title: "Cells", topics: [T("cells")], videos: ["video:AAAAAAAAAA1"] },
+      { chapter: 2, title: "Using a Microscope", topics: [T("using-a-microscope-and-calculating-magnification")], videos: [] },
+      { chapter: 3, title: "Cell Membranes", topics: [T("cells")], videos: ["video:AAAAAAAAAA1"] },
+      { chapter: 4, title: "Plant and Animal Cells", topics: [T("plant-and-animal-cells-compared")], videos: [] },
+      { chapter: 5, title: "Specialised Cells", topics: [T("specialised-cells-and-tissues")], videos: [] },
+      { chapter: 6, title: "Diffusion", topics: [T("states-of-matter-and-particle-model"), T("diffusion-in-living-cells")], videos: [] },
+      { chapter: 7, title: "Cell Division", topics: [T("cells")], videos: [] },
+      { chapter: 8, title: "Transport", topics: [T("blood-and-its-components"), T("the-human-respiratory-system"), T("transport-in-plants")], videos: [] },
+      { chapter: 9, title: "Inheritance", topics: [T("inheritance-and-variation")], videos: [] },
+      // a review chapter over earlier topics, one of them listed twice and one unknown
+      { chapter: 10, title: "Review", topics: [T("cells"), T("diffusion-in-living-cells"), T("cells"), T("no-such-topic")], videos: [] },
+    ],
+  };
+}
 
-  it("estimates the cost per kit and in total from KIT_COST_USD", () => {
-    const plan = planProductKits({ book, ownerId: OWNER, masters: [gen("0", "done")], workerReady: true });
-    expect(plan.cost).toEqual({ perKit: KIT_COST_USD, kits: 2, low: 2 * KIT_COST_USD.low, point: 2 * KIT_COST_USD.point, high: 2 * KIT_COST_USD.high });
-    expect(KIT_COST_USD.low).toBeGreaterThanOrEqual(1.5);
-    expect(KIT_COST_USD.high).toBeLessThanOrEqual(2.5);
-  });
-
-  it("done chapters are skipped, failed ones re-queued, running ones block --apply", () => {
-    const masters = [gen("0", "done"), gen("1", "error"), gen("2", "processing", { kind: "worksheet" })];
-    const plan = planProductKits({ book, ownerId: OWNER, masters, workerReady: true });
-    expect(plan.chapters.map((c) => c.state)).toEqual(["done", "failed", "in_progress"]);
-    expect(plan.toQueue.map((c) => c.chapter)).toEqual([2]);
-    expect(plan.blockers).toEqual(["a chapter's kit is still being made; wait for it"]);
-  });
-
-  it("refuses --apply for a PDF-less book until the worker is ready, and for a book that is not the system account's", () => {
-    expect(planProductKits({ book, ownerId: OWNER, masters: [], workerReady: false }).blockers[0]).toMatch(/worker cannot build a PDF-less product book/);
-    expect(planProductKits({ book, ownerId: "someone-else", masters: [], workerReady: true }).blockers[0]).toMatch(/not CATALOGUE_OWNER_ID/);
-    expect(planProductKits({ book: { ...book, chapters: [] }, ownerId: OWNER, masters: [], workerReady: true }).blockers).toContain(
-      "the product book has no chapters (re-import the release)",
-    );
-  });
-
-  it("a part kit, a removed or withdrawn row is not the chapter's kit", () => {
-    expect(chapterState([gen("0", "done", { params: { part: 1 } })], 0).state).toBe("missing");
-    expect(chapterState([gen("0", "done", { removed_at: "2026-10-30" })], 0).state).toBe("missing");
-    expect(chapterState([gen("0", "done", { withdrawn_at: "2026-10-30" })], 0).state).toBe("missing");
-  });
-});
-
-describe("production guards", () => {
-  it("busyJobs counts queued and processing jobs only", () => {
-    expect(busyJobs([{ status: "done" }, { status: "error" }])).toBe(0);
-    expect(busyJobs([{ status: "queued" }, { status: "processing" }, { status: "done" }])).toBe(2);
-  });
-
-  it("offPeak is 20:00–05:00 UTC", () => {
-    expect(offPeak(new Date("2026-10-30T20:00:00Z"))).toBe(true);
-    expect(offPeak(new Date("2026-10-30T04:59:00Z"))).toBe(true);
-    expect(offPeak(new Date("2026-10-30T05:00:00Z"))).toBe(false);
-    expect(offPeak(new Date("2026-10-30T12:00:00Z"))).toBe(false);
-  });
-
-  it("kitOutcome waits for every row, and fails on the lesson", () => {
-    expect(kitOutcome([{ kind: "presentation", status: "done" }, { kind: "deck", status: "queued" }])).toBe("running");
-    expect(kitOutcome([{ kind: "presentation", status: "done" }, { kind: "deck", status: "error" }])).toBe("done");
-    expect(kitOutcome([{ kind: "presentation", status: "error" }, { kind: "deck", status: "done" }])).toBe("failed");
-  });
-});
-
-describe("planProductKitMap", () => {
-  const current = [
-    { product_id: PRODUCT, chapter_ref: "8", sort: 1, generation_id: "old-resp", label: "The Human Respiratory System" },
-    { product_id: PRODUCT, chapter_ref: "1", sort: 0, generation_id: "old-cells", label: "Cells" },
-    { product_id: "other", chapter_ref: "1", sort: 0, generation_id: "x", label: null },
+function world(over: { missingKit?: string; lessonNotDone?: string } = {}) {
+  const topics = SLUGS.map((s) => ({ id: ref(s).topic, slug: s, title: `DB ${s}` }));
+  const current = SLUGS.filter((s) => s !== over.missingKit).map((s) => ({ topic_id: ref(s).topic, language: "en", topic_kit_id: ref(s).kit }));
+  // a Malay kit of the same topic must not be picked for an English book
+  current.push({ topic_id: ref("cells").topic, language: "ms", topic_kit_id: id(99, "b") });
+  const kits = SLUGS.map((s) => ({ id: ref(s).kit, topic_id: ref(s).topic, presentation_generation_id: ref(s).pres }));
+  const lessons = SLUGS.map((s) => ({ id: ref(s).pres, kind: "presentation", status: s === over.lessonNotDone ? "processing" : "done", removed_at: null, withdrawn_at: null }));
+  const publications = [
+    { topic_kit_id: ref("cells").kit, part: 1, youtube_video_id: "AAAAAAAAAA1", privacy: "public", superseded_by: null, channel_language: "en" },
+    { topic_kit_id: ref("transport-in-plants").kit, part: 1, youtube_video_id: "BBBBBBBBBB1", privacy: "private", superseded_by: null, channel_language: "en" },
   ];
+  return { topics, current, kits, lessons, publications };
+}
 
-  it("REPLACES the product's map: one row per chapter, release chapter numbers, the newest done kit, the final title", () => {
-    const older = gen("0", "done", { created_at: "2026-10-01T00:00:00Z" });
-    const newer = gen("0", "done", { created_at: "2026-10-30T00:00:00Z" });
-    const plan = planProductKitMap({ book, masters: [older, newer, gen("1", "done"), gen("2", "done")], current });
-    expect(plan.after).toEqual([
-      { product_id: PRODUCT, chapter_ref: "1", sort: 0, generation_id: newer.id, label: "Cells" },
-      { product_id: PRODUCT, chapter_ref: "2", sort: 0, generation_id: expect.any(String), label: "Microscopes" },
-      { product_id: PRODUCT, chapter_ref: "3", sort: 0, generation_id: expect.any(String), label: "Cell membranes" },
+const OLD: MapRow[] = [
+  { product_id: PRODUCT, chapter_ref: "1", sort: 0, generation_id: ref("cells").pres, label: "Cells" },
+  { product_id: PRODUCT, chapter_ref: "3", sort: 0, generation_id: id(50, "d"), label: "an old master" },
+  { product_id: "22222222-2222-4222-8222-222222222222", chapter_ref: "1", sort: 0, generation_id: id(51, "d"), label: "another product" },
+];
+
+describe("bundleChapterTopics", () => {
+  it("reads chapters in order with their topic slugs, titles and video ids; drops malformed entries", () => {
+    const out = bundleChapterTopics({
+      chapters: [
+        { chapter: 2, title: "Two", topics: [{ slug: "Diffusion-In-Living-Cells", title: "Diffusion" }, { slug: "bad slug!" }, null], videos: ["video:AAAAAAAAAA1", "video:short", 7] },
+        { chapter: 1, title: "", topics: "nope" },
+        { chapter: 0, title: "Front matter" },
+      ],
+    });
+    expect(out).toEqual([
+      { chapter: 1, title: "Chapter 1", topics: [], videos: [] },
+      { chapter: 2, title: "Two", topics: [{ slug: "diffusion-in-living-cells", title: "Diffusion" }], videos: ["AAAAAAAAAA1"] },
     ]);
-    expect(plan.missing).toEqual([]);
-    expect(plan.before.map((r) => r.generation_id)).toEqual(["old-cells", "old-resp"]); // only this product, chapter order
-    expect(staleMapRows(plan).map((r) => r.generation_id)).toEqual(["old-cells", "old-resp"]);
+    expect(bundleChapterTopics(null)).toEqual([]);
+  });
+});
+
+describe("planCatalogueMap — Biology", () => {
+  const plan = () => planCatalogueMap({ productId: PRODUCT, language: "en", chapters: bundleChapterTopics(bundle()), ...world(), currentMap: OLD });
+
+  it("maps every chapter to its topics' CURRENT catalogue kits (the presentation), in the chapter's order, 1-based release chapters", () => {
+    const m = plan();
+    const at = (ch: number) => m.after.filter((r) => r.chapter_ref === String(ch)).map((r) => [r.sort, r.generation_id]);
+    expect(at(1)).toEqual([[0, ref("cells").pres]]);
+    expect(at(6)).toEqual([
+      [0, ref("states-of-matter-and-particle-model").pres],
+      [1, ref("diffusion-in-living-cells").pres],
+    ]);
+    expect(at(8).map(([, g]) => g)).toEqual([ref("blood-and-its-components").pres, ref("the-human-respiratory-system").pres, ref("transport-in-plants").pres]);
+    expect(new Set(m.after.map((r) => r.product_id))).toEqual(new Set([PRODUCT]));
+    // never the Malay kit of "cells"
+    expect(m.after.some((r) => r.topicKitId === id(99, "b"))).toBe(false);
   });
 
-  it("lists chapters without a done kit as missing (the script refuses to map until there are none)", () => {
-    const plan = planProductKitMap({ book, masters: [gen("0", "done"), gen("1", "error")], current: [] });
-    expect(plan.after.map((r) => r.chapter_ref)).toEqual(["1"]);
-    expect(plan.missing).toEqual([
-      { chapter: 2, title: "Microscopes" },
-      { chapter: 3, title: "Cell membranes" },
-    ]);
+  it("labels: the topic's title; a kit an earlier chapter already uses gets the chapter's OWN title and sharedWith", () => {
+    const m = plan();
+    const row = (ch: number, slug: string) => m.after.find((r) => r.chapter_ref === String(ch) && r.slug === slug)!;
+    expect(row(1, "cells")).toMatchObject({ label: "Cells", sharedWith: null });
+    expect(row(3, "cells")).toMatchObject({ label: "Cell Membranes", sharedWith: 1, generation_id: ref("cells").pres });
+    expect(row(7, "cells")).toMatchObject({ label: "Cell Division", sharedWith: 1 });
+    expect(row(6, "diffusion-in-living-cells")).toMatchObject({ label: "Diffusion in living cells", sharedWith: null });
+    expect(row(10, "diffusion-in-living-cells")).toMatchObject({ label: "Review", sharedWith: 6 });
   });
 
-  it("a row already in the new map is kept, not deleted and re-made", () => {
-    const k = gen("0", "done");
-    const plan = planProductKitMap({ book, masters: [k], current: [{ product_id: PRODUCT, chapter_ref: "1", sort: 0, generation_id: k.id, label: "old label" }] });
-    expect(staleMapRows(plan)).toEqual([]);
+  it("a topic listed twice in a chapter maps once; an unknown slug is reported, not mapped", () => {
+    const m = plan();
+    expect(m.after.filter((r) => r.chapter_ref === "10").map((r) => r.slug)).toEqual(["cells", "diffusion-in-living-cells"]);
+    expect(m.unresolved).toEqual([{ chapter: 10, slug: "no-such-topic", reason: "unknown_topic" }]);
+  });
+
+  it("carries each kit's WATCHABLE YouTube ids and sets them beside the bundle's videos", () => {
+    const m = plan();
+    expect(m.after.find((r) => r.chapter_ref === "1")!.youtube).toEqual(["AAAAAAAAAA1"]);
+    // a private publication does not embed: no id
+    expect(m.after.find((r) => r.slug === "transport-in-plants")!.youtube).toEqual([]);
+    expect(m.videos.find((v) => v.chapter === 1)).toEqual({ chapter: 1, bundle: ["AAAAAAAAAA1"], kits: ["AAAAAAAAAA1"] });
+  });
+
+  it("a topic with no current kit, or whose lesson is not done, is unresolved with the reason", () => {
+    const m = planCatalogueMap({
+      productId: PRODUCT,
+      language: "en",
+      chapters: bundleChapterTopics(bundle()),
+      ...world({ missingKit: "inheritance-and-variation", lessonNotDone: "specialised-cells-and-tissues" }),
+      currentMap: [],
+    });
+    expect(m.unresolved).toEqual(
+      expect.arrayContaining([
+        { chapter: 9, slug: "inheritance-and-variation", reason: "no_current_kit" },
+        { chapter: 5, slug: "specialised-cells-and-tissues", reason: "lesson_not_ready" },
+      ]),
+    );
+    expect(m.after.some((r) => r.chapter_ref === "9" || r.chapter_ref === "5")).toBe(false);
+  });
+
+  it("before = only this product's rows; stale = before minus after; mapRows = the table's own columns", () => {
+    const m = plan();
+    expect(m.before.map((r) => r.generation_id)).toEqual([ref("cells").pres, id(50, "d")]);
+    expect(staleMapRows(m)).toEqual([OLD[1]]);
+    expect(Object.keys(mapRows(m)[0]).sort()).toEqual(["chapter_ref", "generation_id", "label", "product_id", "sort"]);
   });
 });

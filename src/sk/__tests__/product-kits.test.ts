@@ -128,16 +128,13 @@ describe("canOpenKit — product entitlement AND the kit is mapped to that produ
     expect((await kits.canOpenKit(STUDENT, SLUG, RESP)).ok).toBe(true);
   });
 
-  it("0175 remap: a master kit of the product's SYSTEM BOOK (book_id set, owned by the catalogue account) opens like a catalogue kit", async () => {
+  it("0175 map: ONE catalogue kit shared by chapters 1, 3 and 7 opens from each, its first chapter answering canOpenKit", async () => {
     const { db, kits } = world();
-    const MASTER = "9a9a9a9a-0000-4000-8000-0000000000c3";
-    db.seed("generations", [
-      gen(MASTER, "Cells: Structure — Chapter 3 · Cell Membranes", { book_id: "b0000000-0000-4000-8000-000000000001", owner_id: "0c0c0c0c-0000-4000-8000-00000000000c", chapter_ref: "2" }),
-    ]);
-    db.seed("sk_product_kits", [map(MASTER, "3", 0, PRODUCT, "Cell Membranes")]);
-    const r = await kits.canOpenKit(STUDENT, PRODUCT, MASTER);
-    expect(r.ok && r.kit).toEqual({ chapterRef: "3", sort: 0, generationId: MASTER, label: "Cell Membranes", title: "Cells: Structure — Chapter 3 · Cell Membranes" });
-    expect((await kits.kitForChapter(PRODUCT, "3")).map((k) => k.generationId)).toEqual([MASTER]);
+    db.seed("sk_product_kits", [map(CELLS, "3", 0, PRODUCT, "Cell Membranes"), map(CELLS, "7", 0, PRODUCT, "Cell Division")]);
+    const r = await kits.canOpenKit(STUDENT, PRODUCT, CELLS);
+    expect(r.ok && r.kit.chapterRef).toBe("1");
+    expect((await kits.kitForChapter(PRODUCT, "3")).map((k) => [k.generationId, k.label])).toEqual([[CELLS, "Cell Membranes"]]);
+    expect((await kits.kitForChapter(PRODUCT, "7")).map((k) => [k.generationId, k.label])).toEqual([[CELLS, "Cell Division"]]);
   });
 
   it("a school licence alone does not entitle (books are bought); with a purchase grant it opens, source school", async () => {
