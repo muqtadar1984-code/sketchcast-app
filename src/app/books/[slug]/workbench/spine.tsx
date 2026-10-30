@@ -21,7 +21,7 @@ export default function Spine(props: {
   title: string;
   stages: Stage[];
   chapters: WorkChapter[];
-  active: number | "book" | null;
+  active: number | "book" | "front" | null;
   canRun: boolean;
   canApprove: boolean;
   isOwner: boolean;
@@ -94,6 +94,15 @@ export default function Spine(props: {
                 {s.action.kind === "view" ? "Read" : s.action.kind === "gate_e" ? "Approve book" : s.action.label}
                 {s.action.kind === "run" && s.action.usd ? ` · $${s.action.usd.toFixed(2)}` : ""}
               </button>
+            )}
+            {s.key === "book" && (
+              <Link
+                href={`/books/${props.slug}?view=front`}
+                aria-current={props.active === "front" ? "page" : undefined}
+                className={`ml-1 mt-1.5 inline-block rounded-md border px-2 py-0.5 text-xs ${props.active === "front" ? "border-[#3B6FD8] text-[#3B6FD8]" : "border-[#D8D3C6] text-[#5F5A4E] hover:border-[#B8862F]"}`}
+              >
+                Front matter
+              </Link>
             )}
           </div>
         </div>

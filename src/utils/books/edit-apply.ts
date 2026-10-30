@@ -80,3 +80,113 @@ export function nextAppRevision(keys: string[]): string {
   const n = Math.max(0, ...keys.map((k) => Number(/^d(\d+)$/.exec(k)?.[1] ?? 0)));
   return `d${n + 1}`;
 }
+
+// Replacing a picture (phase 3b): the new picture gets its own ref, and EVERY place the chapter used the old ref
+// (figure blocks, figure groups, exercise figures) points at it instead. The chapter's text therefore changes (so it
+// needs Gate D again, like any edit), and the old picture's label anchors, which were measured on the old picture,
+// no longer apply to it.
+export type ImageEdit = { id: number; unit: string | null; meta: { key?: string; size?: [number, number] | null; caption?: string | null } | null };
+
+export function imageRef(id: number): string {
+  return `edit:img${id}`;
+}
+
+function swapRef(node: unknown, from: string, to: string): [unknown, number] {
+  if (Array.isArray(node)) {
+    let n = 0;
+    const out = node.map((v) => {
+      const [w, k] = swapRef(v, from, to);
+      n += k;
+      return w;
+    });
+    return [out, n];
+  }
+  if (node && typeof node === "object") {
+    let n = 0;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if ((k === "ref" || k === "figure_ref") && v === from) {
+        out[k] = to;
+        n++;
+      } else if (k === "figure_refs" && Array.isArray(v)) {
+        out[k] = v.map((r) => (r === from ? (n++, to) : r));
+      } else {
+        const [w, c] = swapRef(v, from, to);
+        out[k] = w;
+        n += c;
+      }
+    }
+    return [out, n];
+  }
+  return [node, 0];
+}
+
+/** The body with each picture replaced everywhere it is used, and the edits whose picture is no longer in the text. */
+export function applyImageEdits(body: Body, edits: ImageEdit[]): { body: Body; failed: number[] } {
+  let next = body;
+  const failed: number[] = [];
+  for (const e of edits) {
+    const from = e.unit ?? "";
+    const old = next.figures?.[from];
+    if (!from || !e.meta?.key || !old) {
+      failed.push(e.id);
+      continue;
+    }
+    const to = imageRef(e.id);
+    const [sections, a] = swapRef(next.sections, from, to);
+    const [exercises, b] = swapRef(next.exercises ?? [], from, to);
+    if (a + b === 0) {
+      failed.push(e.id);
+      continue;
+    }
+    const caption = e.meta.caption?.trim() || old.caption;
+    next = {
+      ...next,
+      sections: sections as Body["sections"],
+      exercises: exercises as Body["exercises"],
+      figures: {
+        ...next.figures,
+        [to]: { store: "s3", path: e.meta.key, kind: old.kind, caption, labels: [], size: e.meta.size ?? null, credit: { note: "Picture replaced in the book app" } },
+      },
+    };
+  }
+  return { body: next, failed };
+}
+
+/** Every picture ref the chapter's text places (the row's figure_refs column). */
+export function placedRefs(body: Body): string[] {
+  const out = new Set<string>();
+  for (const s of body.sections)
+    for (const b of s.blocks as { type?: string; ref?: string; items?: unknown[] }[]) {
+      if (b.type === "figure" && b.ref) out.add(b.ref);
+      if (b.type === "figure_group") for (const it of b.items ?? []) if (it && typeof it === "object" && (it as { ref?: string }).ref) out.add((it as { ref: string }).ref);
+    }
+  for (const x of body.exercises ?? []) for (const r of [x.figure_ref, ...(x.figure_refs ?? [])]) if (r) out.add(r);
+  return [...out];
+}
+
+/** Width and height of a PNG, JPEG or WebP from its first bytes; null when it is none of those. */
+export function imageSize(b: Uint8Array): { type: "image/png" | "image/jpeg" | "image/webp"; size: [number, number] } | null {
+  const be16 = (i: number) => (b[i] << 8) | b[i + 1];
+  const be32 = (i: number) => ((b[i] << 24) >>> 0) + (b[i + 1] << 16) + (b[i + 2] << 8) + b[i + 3];
+  if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return { type: "image/png", size: [be32(16), be32(20)] };
+  if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
+    for (let i = 2; i + 9 < b.length; ) {
+      if (b[i] !== 0xff) return null;
+      const m = b[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { type: "image/jpeg", size: [be16(i + 7), be16(i + 5)] };
+      i += 2 + be16(i + 2);
+    }
+    return null;
+  }
+  if (b.length > 30 && String.fromCharCode(...b.slice(0, 4)) === "RIFF" && String.fromCharCode(...b.slice(8, 12)) === "WEBP") {
+    const kind = String.fromCharCode(...b.slice(12, 16));
+    if (kind === "VP8X") return { type: "image/webp", size: [1 + (b[24] | (b[25] << 8) | (b[26] << 16)), 1 + (b[27] | (b[28] << 8) | (b[29] << 16))] };
+    if (kind === "VP8 ") return { type: "image/webp", size: [(b[26] | (b[27] << 8)) & 0x3fff, (b[28] | (b[29] << 8)) & 0x3fff] };
+    if (kind === "VP8L") {
+      const v = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
+      return { type: "image/webp", size: [(v & 0x3fff) + 1, ((v >> 14) & 0x3fff) + 1] };
+    }
+  }
+  return null;
+}

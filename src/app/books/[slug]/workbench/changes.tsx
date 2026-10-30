@@ -13,6 +13,7 @@ export type ChangeItem = {
   where?: string | null;
   editId?: number;
   decide?: "rejected" | "resolved";
+  thumb?: string | null;
 };
 const DOT = { edit: "bg-[#3B6FD8]", must: "bg-[#8E2A21]", should: "bg-[#B8862F]", note: "bg-[#A39C8C]" };
 
@@ -56,11 +57,13 @@ export default function Changes(props: {
       </button>
       {open && (
         <ul className="space-y-2.5">
-          {props.items.length === 0 && <li className="text-xs text-[#7A7363]">Select text in the page to change it.</li>}
+          {props.items.length === 0 && <li className="text-xs text-[#7A7363]">{props.bookView ? "No changes waiting." : "Select text in the page to change it."}</li>}
           {props.items.map((i) => (
             <li key={i.id} className="flex gap-2 text-xs leading-snug">
               <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${DOT[i.tone]}`} aria-hidden="true" />
               <span className="min-w-0 flex-1">
+                {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed links */}
+                {i.thumb && <img src={i.thumb} alt="" className="mb-1 max-h-20 rounded border border-[#EFE8D8]" />}
                 {i.before && <span className="block text-[#A39C8C] line-through">{i.before}</span>}
                 <span className="block">{i.text}</span>
                 {i.where && <span className="block text-[#A39C8C]">{i.where}</span>}

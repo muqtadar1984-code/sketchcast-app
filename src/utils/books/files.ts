@@ -1,5 +1,5 @@
 import "server-only";
-import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { bedrockRoleCredentials } from "@/utils/claude-backend";
@@ -28,6 +28,21 @@ function s3Client(): S3Client {
   const roleArn = (process.env.AWS_ROLE_ARN || "").trim();
   s3 = roleArn ? new S3Client({ region, credentials: bedrockRoleCredentials(roleArn, region) }) : new S3Client({ region });
   return s3;
+}
+
+/** Write an object to the books bucket (the reader's replacement pictures, books/<slug>/edits/). Needs
+ *  s3:PutObject on that prefix for the app's role; a refusal comes back as "denied" so the caller can say so. */
+export async function s3Put(key: string, body: Uint8Array, contentType: string): Promise<"ok" | "denied" | "unset"> {
+  const bucket = booksBucket();
+  if (!bucket) return "unset";
+  try {
+    await s3Client().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
+    return "ok";
+  } catch (e) {
+    const name = (e as { name?: string }).name ?? "";
+    if (name === "AccessDenied" || name === "Forbidden" || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 403) return "denied";
+    throw e;
+  }
 }
 
 /** A short-lived link to an object in the books bucket; `download` names the saved file.
