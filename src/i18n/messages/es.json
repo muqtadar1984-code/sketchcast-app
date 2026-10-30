@@ -1235,7 +1235,13 @@
       "forChild": "para {name}",
       "forYourChild": "para tu hijo",
       "withdrawn": "Ya no está a la venta. Tu ejemplar sigue siendo tuyo.",
-      "unavailable": "El PDF de este libro aún no está disponible. Inténtalo de nuevo más tarde."
+      "unavailable": "El PDF de este libro aún no está disponible. Inténtalo de nuevo más tarde.",
+      "chapterN": "Capítulo {n}",
+      "showChapters": "Capítulos ({n})",
+      "kitComingSoon": "Kit de la lección próximamente",
+      "assignChapter": "Asignar capítulo",
+      "assignFailed": "No se pudo preparar este capítulo para asignarlo. Inténtalo de nuevo.",
+      "bySketchCast": "De SketchCast"
     }
   },
   "school": {
@@ -1906,7 +1912,14 @@
       "loadSlides": "Cargar diapositivas como páginas",
       "loadDeck": "Cargar la presentación como páginas",
       "preparingDeck": "Preparando la presentación… (unos 30 s)",
-      "deckFailed": "No se pudo preparar la presentación. Inténtalo de nuevo en un minuto."
+      "deckFailed": "No se pudo preparar la presentación. Inténtalo de nuevo en un minuto.",
+      "productBook": "{title} · SketchCast",
+      "myKits": "En tu biblioteca",
+      "moreKits": "Más kits listos",
+      "preparingKit": "Añadiendo a tu biblioteca…",
+      "adoptFailed": "No se pudo abrir este kit. Inténtalo de nuevo.",
+      "kitComingSoon": "El kit de este capítulo llegará pronto.",
+      "kitLocked": "Desbloquea primero este kit en la página de Kits."
     },
     "start": {
       "heading": "Elige qué vas a enseñar",

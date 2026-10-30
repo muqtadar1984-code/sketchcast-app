@@ -22,12 +22,18 @@ export default function AssignModal({
   generationIds,
   classes,
   childTargets = null,
+  prepare,
   t,
 }: {
   /** The trigger's text — already translated by the caller ("Assign chapter",
       "Assign book", plain "Assign"). */
   label: string;
   generationIds: string[];
+  /** Runs on the trigger click, before the modal opens; the ids it returns are
+      what gets assigned (a SketchCast book's chapter adopts its master kit
+      into the teacher's own copies here — adopt_product_kit). A throw opens
+      the modal on its message instead. */
+  prepare?: () => Promise<string[]>;
   classes: ClassRow[];
   /** Parent mode: the viewer's linked children (null = class mode). */
   childTargets?: ChildRow[] | null;
@@ -38,6 +44,26 @@ export default function AssignModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [ids, setIds] = useState<string[]>(generationIds);
+  const [preparing, setPreparing] = useState(false);
+
+  async function openModal() {
+    if (!prepare) {
+      setIds(generationIds);
+      setOpen(true);
+      return;
+    }
+    setPreparing(true);
+    setError(null);
+    try {
+      setIds(await prepare());
+    } catch (e) {
+      setIds([]);
+      setError((e as Error).message || t.myBooks.assignFailed);
+    }
+    setPreparing(false);
+    setOpen(true);
+  }
 
   const [classList, setClassList] = useState<ClassRow[]>(classes);
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
@@ -80,7 +106,7 @@ export default function AssignModal({
     // Per-row insert, duplicate → update the due date: shares_gen_student_uq
     // is a PARTIAL unique index, which upsert's onConflict cannot target
     // (same reason the Test Papers page does insert-then-update).
-    for (const gid of generationIds) {
+    for (const gid of ids) {
       for (const child of targets) {
         const { error: iErr } = await supabase.from("generation_shares").insert({
           generation_id: gid,
@@ -165,7 +191,7 @@ export default function AssignModal({
       setBusy(false);
       return;
     }
-    const rows = generationIds.map((gid) => ({
+    const rows = ids.map((gid) => ({
       generation_id: gid,
       class_id: classId,
       shared_by: user.id,
@@ -190,8 +216,9 @@ export default function AssignModal({
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
-        className="text-xs font-medium text-[#9A6400] hover:underline whitespace-nowrap"
+        onClick={() => void openModal()}
+        disabled={preparing}
+        className="text-xs font-medium text-[#9A6400] hover:underline whitespace-nowrap disabled:opacity-60"
       >
         {label}
       </button>
@@ -208,12 +235,12 @@ export default function AssignModal({
               {childMode ? t.assignModal.headingChildren : t.assignModal.heading}
             </h3>
             <p className="text-xs text-[#5B6470] mb-3">
-              {generationIds.length === 1
+              {ids.length === 1
                 ? childMode
                   ? t.assignModal.itemsOneChildren
                   : t.assignModal.itemsOne
                 : fmt(childMode ? t.assignModal.itemsManyChildren : t.assignModal.itemsMany, {
-                    n: generationIds.length,
+                    n: ids.length,
                   })}
             </p>
 

@@ -1235,7 +1235,13 @@
       "forChild": "for {name}",
       "forYourChild": "for your child",
       "withdrawn": "No longer sold. Your copy stays yours.",
-      "unavailable": "This book's PDF is not available yet. Please try again later."
+      "unavailable": "This book's PDF is not available yet. Please try again later.",
+      "chapterN": "Chapter {n}",
+      "showChapters": "Chapters ({n})",
+      "kitComingSoon": "Lesson kit coming soon",
+      "assignChapter": "Assign chapter",
+      "assignFailed": "This chapter could not be prepared for assigning. Please try again.",
+      "bySketchCast": "By SketchCast"
     }
   },
   "school": {
@@ -1906,7 +1912,14 @@
       "loadSlides": "Load slides as pages",
       "loadDeck": "Load the deck as pages",
       "preparingDeck": "Preparing the deck… (about 30 s)",
-      "deckFailed": "The deck could not be prepared. Try again in a minute."
+      "deckFailed": "The deck could not be prepared. Try again in a minute.",
+      "productBook": "{title} · SketchCast",
+      "myKits": "In your library",
+      "moreKits": "More ready-made kits",
+      "preparingKit": "Adding to your library…",
+      "adoptFailed": "This kit could not be opened. Try again.",
+      "kitComingSoon": "This chapter's lesson kit is coming soon.",
+      "kitLocked": "Unlock this kit on the Kits page first."
     },
     "start": {
       "heading": "Choose what you are teaching",
