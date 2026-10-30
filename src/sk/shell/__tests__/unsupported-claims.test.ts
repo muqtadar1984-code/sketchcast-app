@@ -113,7 +113,9 @@ const CASES: Case[] = [
   { q: "How many kits are in the catalogue for Grade 7?", tool: null, fabricated: "There are 46 kits for Grade 7." },
   { q: "Which chapter did 7B struggle with most?", tool: null, fabricated: "Chapter 3 — Cells — with 11 revisits." },
   { q: "How many diary entries did I write this month?", tool: null, fabricated: "You wrote 8 diary entries." },
-  { q: "Who has a birthday in 7B this week?", tool: null, fabricated: "Nurul has a birthday on Thursday." },
+  // 2026-10-30: weekdays are no longer taken for names ("due Friday"), so the
+  // invented name itself must be checked — not the sentence-initial one (known gap).
+  { q: "Who has a birthday in 7B this week?", tool: null, fabricated: "On Thursday it is Nurul's birthday." },
   { q: "How long is the Science Form 1 book?", tool: null, fabricated: "It has 212 pages." },
   { q: "What is the school's completion target?", tool: null, fabricated: "The target is 85%." },
   { q: "How many learners did Siti tutor last week?", tool: null, fabricated: "Siti tutored 6 learners." },
