@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { isBookMemberRequest, canOn } from "@/utils/books-access";
 import { getWork } from "@/utils/books/store";
-import { applyChapterEdits, decideEdit, saveEdit, suggestReword } from "@/utils/books/edits";
+import { applyChapterEdits, decideEdit, saveEdit, saveFrontMatter, suggestReword } from "@/utils/books/edits";
+import { isFrontUnit } from "@/utils/books/front-matter";
 import { sameOrigin } from "../runs/same-origin";
 
 export const runtime = "nodejs";
@@ -12,6 +13,7 @@ export const maxDuration = 60;
 //   {book, action: "save", kind: reword|edit|note, chapter, rev, unit, before, after?, instruction?}  → {id}
 //   {book, action: "decide", id, to: rejected|resolved}
 //   {book, action: "apply", chapter}                                         → {revision, run}
+//   {book, action: "front", unit: preface|imprint|about, before, text}      → {id}     (prints from the next compile)
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return new NextResponse(null, { status: 403 });
   const m = await isBookMemberRequest();
@@ -32,6 +34,9 @@ export async function POST(request: Request) {
       const to = b.to === "rejected" || b.to === "resolved" ? b.to : null;
       if (!to) return NextResponse.json({ error: "Unknown decision." }, { status: 400 });
       r = await decideEdit({ workUid: work.uid, id: Number(b.id), to, by: m.email });
+    } else if (b.action === "front") {
+      if (!isFrontUnit(b.unit)) return NextResponse.json({ error: "Unknown front-matter page." }, { status: 400 });
+      r = await saveFrontMatter({ workUid: work.uid, revisionKey: work.current_revision ?? "", unit: b.unit, before: s(b.before) || null, text: s(b.text), by: m.email });
     } else if (b.action === "apply") r = await applyChapterEdits({ work, chapter: Number(b.chapter), by: m.email });
     else return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   } catch (e) {

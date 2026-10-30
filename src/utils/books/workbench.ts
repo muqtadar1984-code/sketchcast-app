@@ -63,7 +63,7 @@ function latest(runs: RunLite[], keys: string[], status?: string): RunLite | und
 }
 
 /** The six stages, top to bottom, each with at most one action. */
-export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approvals: ApprovalLite[]; releases: ReleaseLite[]; draftUsd: number; auditUsd: number }): Stage[] {
+export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approvals: ApprovalLite[]; releases: ReleaseLite[]; draftUsd: number; auditUsd: number; frontChangedAt?: string | null }): Stage[] {
   const { chapters, runs, approvals, releases } = input;
   const total = chapters.length;
   const approved = chapters.filter((c) => c.state === "approved").length;
@@ -98,11 +98,14 @@ export function stages(input: { chapters: WorkChapter[]; runs: RunLite[]; approv
     action: drafted && !(audit && LIVE.has(audit.status)) ? { kind: "run", stage: "academic_audit", params: { first: 1, last }, label: audit?.status === "done" ? "Audit again" : "Run audit", usd: input.auditUsd * last } : undefined,
   });
 
-  // a final approval counts only while every chapter is approved (a newer draft or edit reopens the book)
+  // a final approval counts only while every chapter is approved and the front matter has not changed since the last
+  // compile (a newer draft, chapter edit or front-matter edit reopens the book)
   const allApproved = total > 0 && approved === total;
-  const gateE = allApproved ? approvals.filter((a) => a.kind === "gate_e").sort((a, b) => b.id - a.id)[0] : undefined;
   const compile = latest(runs, ["compile_book"]);
-  const compiledDone = latest(runs, ["compile_book"], "done");
+  const lastCompiled = latest(runs, ["compile_book"], "done");
+  const frontNewer = !!input.frontChangedAt && !!lastCompiled?.created_at && input.frontChangedAt > lastCompiled.created_at;
+  const gateE = allApproved && !frontNewer ? approvals.filter((a) => a.kind === "gate_e").sort((a, b) => b.id - a.id)[0] : undefined;
+  const compiledDone = frontNewer ? undefined : lastCompiled;
   const compiledApprovedText = compiledDone && !gateE ? (compiledDone.detail?.summary?.pdf_sha256 as string | undefined) : undefined;
   let final: Stage = { key: "final", state: "waiting" };
   if (gateE) final = { key: "final", state: "done", value: gateE.approved_on ?? undefined };

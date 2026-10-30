@@ -12,6 +12,8 @@ import Changes, { type ChangeItem } from "./workbench/changes";
 import Live from "./workbench/live";
 import Selection from "./workbench/selection";
 import { listEdits } from "@/utils/books/edits";
+import { frontChangedAt, frontMatter } from "@/utils/books/front-matter";
+import Front from "./workbench/front";
 
 export const dynamic = "force-dynamic";
 
@@ -46,13 +48,15 @@ export default async function Workbench({ params, searchParams }: { params: Prom
     releases,
     draftUsd: runnableStage("draft_chapter")?.measuredPerChapterUsd ?? 2.5,
     auditUsd: runnableStage("academic_audit")?.measuredPerChapterUsd ?? 0.58,
+    frontChangedAt: frontChangedAt(edits),
   });
-  const bookView = sp.view === "book";
+  const frontView = sp.view === "front";
+  const bookView = sp.view === "book" || frontView;
   const wanted = Number(sp.ch);
   const active = bookView ? null : Number.isInteger(wanted) && chapters.some((c) => c.chapter === wanted) ? wanted : defaultChapter(chapters);
   const printed = sp.printed === "1";
 
-  const showRows = rev ? (bookView ? rows : rows.filter((r) => r.chapter === active)) : [];
+  const showRows = rev && !frontView ? (bookView ? rows : rows.filter((r) => r.chapter === active)) : [];
   const bodies = (await Promise.all(showRows.map((r) => getChapter(work.uid, rev!.key, r.chapter)))).filter(Boolean) as ChapterRevision[];
   const figCtx = (n: number, figures: FigureCtx["figures"]): FigureCtx => ({
     src: (ref) => `/api/pub/figure?book=${encodeURIComponent(slug)}&rev=${encodeURIComponent(rev?.key ?? "")}&ch=${n}&ref=${encodeURIComponent(ref)}`,
@@ -98,7 +102,11 @@ export default async function Workbench({ params, searchParams }: { params: Prom
       text: f.problem ?? f.quote ?? "Finding",
       where: bookView ? `Chapter ${f.chapter}` : f.location,
     }));
-  const items = [...editItems, ...findingItems];
+  const pieces = frontView ? await frontMatter(slug, runs, artifacts, edits) : [];
+  const frontItems: ChangeItem[] = pieces
+    .filter((p) => p.edit && p.text !== p.printed)
+    .map((p) => ({ id: `f${p.edit!.id}`, tone: "edit", text: p.label, where: `${p.edit!.by} · prints at the next compile`, editId: p.edit!.id, decide: "rejected" }));
+  const items = frontView ? frontItems : [...editItems, ...findingItems];
   const activeChapter = chapters.find((c) => c.chapter === active);
   const approval = activeRow
     ? aps.filter((a) => (a.kind === "gate_d" && a.chapter === activeRow.chapter && a.content_sha256 === activeRow.content_sha256) || (a.kind === "book" && summaries.some((t) => t.revision_key === a.revision_key && t.chapter === activeRow.chapter && t.content_sha256 === activeRow.content_sha256))).pop()
@@ -113,7 +121,7 @@ export default async function Workbench({ params, searchParams }: { params: Prom
         title={work.title}
         stages={stageList}
         chapters={chapters}
-        active={bookView ? "book" : active}
+        active={frontView ? "front" : bookView ? "book" : active}
         canRun={canOn(member, work.uid, "run")}
         canApprove={canOn(member, work.uid, "approve")}
         isOwner={canOn(member, work.uid, "grant")}
@@ -122,8 +130,8 @@ export default async function Workbench({ params, searchParams }: { params: Prom
       <main className="min-w-0">
         <div className="mx-auto max-w-[44rem]">
           <div className="mb-3 flex items-center justify-between text-xs text-[#7A7363]">
-            <span>{bookView ? "Whole book" : activeChapter ? `Chapter ${activeChapter.chapter}` : ""}</span>
-            {printedArtifact && (
+            <span>{frontView ? "Front matter" : bookView ? "Whole book" : activeChapter ? `Chapter ${activeChapter.chapter}` : ""}</span>
+            {printedArtifact && !frontView && (
               <span className="flex gap-1">
                 <Link href={base} className={`rounded-md px-2 py-0.5 ${printed ? "" : "bg-[#F4EEDF] text-[#1F2A24]"}`}>Reading</Link>
                 <Link href={`${base}&printed=1`} className={`rounded-md px-2 py-0.5 ${printed ? "bg-[#F4EEDF] text-[#1F2A24]" : ""}`}>As printed</Link>
@@ -131,7 +139,9 @@ export default async function Workbench({ params, searchParams }: { params: Prom
             )}
           </div>
 
-          {printed && printedArtifact ? (
+          {frontView ? (
+            <Front slug={slug} pieces={pieces} canEdit={canOn(member, work.uid, "edit")} />
+          ) : printed && printedArtifact ? (
             <iframe src={fileHref(printedArtifact.id)} title="As printed" className="h-[80vh] w-full rounded-lg border border-[#E4DCC8] bg-white" />
           ) : bodies.length === 0 ? (
             <div className="py-24 text-center text-[#7A7363]">

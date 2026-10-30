@@ -41,6 +41,11 @@ describe("book workbench", () => {
     expect(withE[5].action).toMatchObject({ kind: "run", stage: "release", params: { final: 1 } });
     const done = stages({ ...base, approvals: [...aps, ge], runs: [readiness, compiled], releases: [{ id: 3, release_kind: "final", edition_key: "en-1.1", gate_e_approval_id: 11, superseded_by: null, withdrawn_at: null }] });
     expect(done[5]).toMatchObject({ state: "done", value: "en-1.1" });
+    // a front-matter edit after the compile reopens Final: compile again, then Gate E again
+    const at = { ...compiled, created_at: "2026-10-30T08:00:00Z" };
+    const front = stages({ ...base, approvals: [...aps, ge], runs: [readiness, at], frontChangedAt: "2026-10-30T09:00:00Z" });
+    expect(front[4]).toMatchObject({ state: "ready", action: { kind: "run", stage: "compile_book" } });
+    expect(stages({ ...base, approvals: [...aps, ge], runs: [readiness, at], frontChangedAt: "2026-10-30T07:00:00Z" })[4].state).toBe("done");
   });
 });
 
