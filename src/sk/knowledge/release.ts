@@ -5,24 +5,32 @@
 // bundle.json in the books bucket. SK only READS both, with the service role,
 // and never writes pub_* (the contract).
 //
+// FINALS ONLY (founder 2026-10-30: "for books, use only completed books. no
+// drafts."). A draft release is never imported: no product, no blocks; it is
+// logged as skipped. A product only ever points at a final release; if draft
+// blocks were ever imported they are removed. release_kind stays on the
+// product (always 'final' when set).
+//
 // importRelease(admin, s3, row)
-//   1. a superseded or withdrawn row → nothing of it is imported; that book +
-//      language is reconciled instead (its live release, or unavailable);
-//   2. already imported and still the product's release → skipped (idempotent);
-//   3. a draft while the product's FINAL is live → skipped (finals win; SK may
-//      hide drafts once a final exists — the contract);
+//   1. a draft → skipped and logged; any blocks of a draft the product pointed
+//      at are removed (the book falls back to its live final, or unavailable);
+//   2. a superseded or withdrawn final → nothing of it is imported; that book +
+//      language is reconciled instead (its live final, or unavailable);
+//   3. already imported and still the product's release → skipped (idempotent);
 //   4. fetch bundle.json, check the bundle hash against the row, the schema,
 //      and EVERY chapter's content_sha256 by the contract's rule
 //      (canonical-json.ts) — any mismatch refuses the whole release;
 //   5. replace that work + language's blocks with this release's: section
 //      text and exercise STEMS. `answer`, `worked_solution`, `marking_scheme`
 //      and the options never become blocks (they are the answer key);
-//   6. upsert the product (one per work_uid + language) and log the import.
+//   6. upsert the product (one per work_uid + language, status approved) and
+//      log the import.
 // pollReleases(admin)
 //   reads the LIVE rows (superseded_by is null and withdrawn_at is null),
-//   picks one per book + language (the newest final, else the newest draft),
-//   imports what changed and marks products whose releases all went away
-//   unavailable. pub_releases missing (0172 not applied) → waiting_for_book_app.
+//   picks the newest live FINAL per book + language, imports what changed,
+//   logs each live draft once as skipped, and marks products with no live
+//   final unavailable. pub_releases missing → waiting_for_book_app; SK's 0174
+//   not applied → waiting_for_0174.
 
 import { chapterContentSha256, parseRawJson, sha256Hex, type RawJson } from "./canonical-json";
 import { isMissingRelation, replaceBlocks, uniqueAnchors, type KnowledgeBlock, type KnowledgeDb } from "./store";
@@ -192,9 +200,8 @@ async function upsertProduct(db: KnowledgeDb, row: ReleaseRow, bundle: ReleaseBu
     title: row.title,
   };
   if (existing) {
-    // a final makes the product approved; a draft leaves an approved product as it is
-    const status = row.release_kind === "final" ? "approved" : existing.status === "retired" ? "draft" : existing.status;
-    const { error } = await db.from("sk_book_products").update({ ...link, status }).eq("id", existing.id);
+    // only finals reach here: the product is approved
+    const { error } = await db.from("sk_book_products").update({ ...link, status: "approved" }).eq("id", existing.id);
     if (error) throw new Error(`sk_book_products update failed: ${error.message}`);
     return existing.id;
   }
@@ -204,7 +211,7 @@ async function upsertProduct(db: KnowledgeDb, row: ReleaseRow, bundle: ReleaseBu
       ...link,
       slug: await freeSlug(db, row.slug, language, Number(row.id)),
       languages: [language],
-      status: row.release_kind === "final" ? "approved" : "draft",
+      status: "approved",
       manuscript_version: row.revision_key ?? null,
       subject: row.subject ?? null,
     })
@@ -220,6 +227,9 @@ async function logImport(db: KnowledgeDb, row: ReleaseRow, status: "ok" | "error
     .upsert({ release_id: Number(row.id), work_uid: row.work_uid, imported_at: new Date().toISOString(), blocks, status, error: error ? error.slice(0, 2000) : null }, { onConflict: "release_id" });
   if (e) console.error("[sk knowledge] import log failed:", e.message);
 }
+
+/** Why a draft is never imported (logged on its sk_release_imports row). */
+export const DRAFT_SKIP_REASON = "draft releases are not used (founder 2026-10-30)";
 
 async function importedOk(db: KnowledgeDb, releaseId: number): Promise<boolean> {
   const { data } = await db.from("sk_release_imports").select("status").eq("release_id", releaseId).maybeSingle();
@@ -237,11 +247,9 @@ async function liveReleases(db: KnowledgeDb, filter?: { work_uid: string; langua
   return { rows: ((data ?? []) as ReleaseRow[]).filter(live), missing: false };
 }
 
-/** The release a book + language should show: the newest live final, else the newest live draft. */
+/** The release a book + language should show: the newest live FINAL. Drafts never. */
 export function pickRelease(rows: ReleaseRow[]): ReleaseRow | null {
-  const liveRows = rows.filter(live);
-  const newest = (kind: string) => liveRows.filter((r) => r.release_kind === kind).sort((a, b) => Number(b.id) - Number(a.id))[0] ?? null;
-  return newest("final") ?? newest("draft");
+  return rows.filter((r) => live(r) && r.release_kind === "final").sort((a, b) => Number(b.id) - Number(a.id))[0] ?? null;
 }
 
 /** No live release left: the product's blocks go and it is marked unavailable. */
@@ -274,6 +282,17 @@ export async function importRelease(db: KnowledgeDb, s3: BundleReader, row: Rele
     const language = normLanguage(row.language);
     if (!language) throw new Error(`release language ${JSON.stringify(row.language)} is not a language code`);
 
+    if (row.release_kind !== "final") {
+      if (opts.dryRun) return { status: "skipped", release_id: releaseId, reason: DRAFT_SKIP_REASON };
+      await logImport(db, row, "skipped", 0, DRAFT_SKIP_REASON);
+      // a product must never point at a draft: if one ever did, its blocks go
+      const product = await productFor(db, row.work_uid, language);
+      if (product && product.release_kind !== "final" && product.release_id != null) {
+        return { status: "skipped", release_id: releaseId, reason: DRAFT_SKIP_REASON, reconciled: await reconcileWork(db, s3, row.work_uid, language) };
+      }
+      return { status: "skipped", release_id: releaseId, reason: DRAFT_SKIP_REASON };
+    }
+
     if (!live(row)) {
       const reason = row.withdrawn_at != null ? "withdrawn" : `superseded by ${row.superseded_by}`;
       if (opts.dryRun) return { status: "skipped", release_id: releaseId, reason };
@@ -284,14 +303,6 @@ export async function importRelease(db: KnowledgeDb, s3: BundleReader, row: Rele
     const product = await productFor(db, row.work_uid, language);
     if (product?.release_id === releaseId && (await importedOk(db, releaseId))) {
       return { status: "skipped", release_id: releaseId, reason: "already imported" };
-    }
-    if (row.release_kind === "draft" && product?.release_kind === "final" && product.release_id != null) {
-      const { data } = await db.from("pub_releases").select("id, superseded_by, withdrawn_at").eq("id", product.release_id).maybeSingle();
-      if (data && live(data as ReleaseRow)) {
-        const reason = `final release ${product.release_id} is live for this book`;
-        if (!opts.dryRun) await logImport(db, row, "skipped", 0, reason);
-        return { status: "skipped", release_id: releaseId, reason };
-      }
     }
 
     const bytes = await s3.getBytes(row.bundle_key);
@@ -316,7 +327,7 @@ export type PollResult =
   | { status: "waiting_for_0174"; live: number }
   | { status: "ok"; live: number; imported: number[]; unchanged: number[]; skipped: number[]; unavailable: string[]; errors: { release_id: number; error: string }[] };
 
-/** Import every live release that changed; mark books with no live release unavailable. */
+/** Import every live FINAL that changed; skip drafts; mark books with no live final unavailable. */
 export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } = {}): Promise<PollResult> {
   const { rows, missing } = await liveReleases(db);
   if (missing) return { status: "waiting_for_book_app" };
@@ -328,8 +339,9 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } 
     throw new Error(`sk_book_products read failed: ${prodErr.message}`);
   }
   const products = (prodData ?? []) as ProductRow[];
-  const { data: okData } = await db.from("sk_release_imports").select("release_id").eq("status", "ok");
-  const ok = new Set(((okData ?? []) as { release_id: number }[]).map((r) => Number(r.release_id)));
+  const { data: logData } = await db.from("sk_release_imports").select("release_id, status");
+  const logged = new Map(((logData ?? []) as { release_id: number; status: string }[]).map((r) => [Number(r.release_id), r.status]));
+  const ok = new Set([...logged].filter(([, s]) => s === "ok").map(([id]) => id));
 
   const key = (w: string, l: string) => `${w}\u0000${normLanguage(l) ?? l}`;
   const byBook = new Map<string, ReleaseRow[]>();
@@ -338,9 +350,18 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } 
 
   const out: Extract<PollResult, { status: "ok" }> = { status: "ok", live: rows.length, imported: [], unchanged: [], skipped: [], unavailable: [], errors: [] };
   let s3 = deps.s3 ?? null;
+  // drafts are never used (founder 2026-10-30): each live draft is logged once as skipped
+  for (const r of rows) {
+    if (r.release_kind === "final" || logged.has(Number(r.id))) continue;
+    await logImport(db, r, "skipped", 0, DRAFT_SKIP_REASON);
+    out.skipped.push(Number(r.id));
+  }
+  const finals = new Map<string, ReleaseRow>();
   for (const [k, list] of byBook) {
     const pick = pickRelease(list);
-    if (!pick) continue;
+    if (pick) finals.set(k, pick);
+  }
+  for (const [k, pick] of finals) {
     const p = productByBook.get(k);
     if (p && Number(p.release_id) === Number(pick.id) && ok.has(Number(pick.id))) {
       out.unchanged.push(Number(pick.id));
@@ -353,7 +374,8 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader } 
     else out.errors.push({ release_id: r.release_id, error: r.error });
   }
   for (const p of products) {
-    if (!p.work_uid || !p.language || byBook.has(key(p.work_uid, p.language))) continue;
+    // no live FINAL for this book + language (none, withdrawn, or only drafts) → unavailable
+    if (!p.work_uid || !p.language || finals.has(key(p.work_uid, p.language))) continue;
     if (p.status === "retired" && p.release_id == null) continue;
     await markUnavailable(db, p.work_uid, p.language);
     out.unavailable.push(p.id);

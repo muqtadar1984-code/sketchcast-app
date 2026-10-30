@@ -4,9 +4,10 @@
 --
 -- sk_knowledge_blocks   ONE table of passages SK may ground on, from three
 --                       sources:
---                         sketchcast_book  a book-app release (pub_releases,
---                                          the book app's 0172): section text
---                                          and exercise STEMS — answers and
+--                         sketchcast_book  a book-app FINAL release (pub_releases,
+--                                          the book app's 0172; drafts are never
+--                                          used — founder 2026-10-30): section
+--                                          text and exercise STEMS — answers and
 --                                          worked solutions never become blocks;
 --                         article          an approved topic_articles row:
 --                                          sections, glossary, misconceptions,
@@ -20,7 +21,9 @@
 --                       (K2 sourcesFor) — this migration grants no client a row.
 -- sk_book_products      gains the link to a release: work_uid, language,
 --                       release_id, edition_key, release_kind, cover_key. One
---                       product per (work_uid, language). Existing rows are not
+--                       product per (work_uid, language); the importer only ever
+--                       points it at a final (release_kind is kept for the
+--                       contract's vocabulary). Existing rows are not
 --                       changed (Biology keeps its W2 import, work_uid null).
 -- sk_release_imports    the importer's log, one row per pub_releases id.
 -- sk_knowledge_replace  the importers' ONE writer: delete the given scopes and
