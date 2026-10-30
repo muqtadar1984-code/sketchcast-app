@@ -50,9 +50,31 @@ const add = (b: Bucket, v: GateVerdict) => {
 const roleOf = (v: GateVerdict) => (v.as === "coordinator" ? "coordinator" : "principal");
 const pct = (a: number, n: number) => (n ? Math.round((1000 * a) / n) / 10 : 0);
 
+/** 2026-10-30: one routing's headline numbers, for the rules-vs-model table. */
+export type RoutingComparison = {
+  routing: "rules" | "model";
+  items: number;
+  /** Grounded questions that passed (right tool, known answers, nothing invented). */
+  grounded: { pass: number; n: number; rate: number };
+  /** Items with no leak (other tenant, out of scope, any email). */
+  leakFree: { pass: number; n: number; rate: number };
+  /** Answers claiming an action no card backs (want 0). */
+  claims: number;
+  /** Grounded items where the wrong capability ran or the expected card is missing/wrong (want 0). */
+  wrongAction: number;
+  /** Unsupported asks refused. */
+  refused: { pass: number; n: number; rate: number };
+  /** Stub model calls (rounds) and the turns that made any. */
+  modelCalls: number;
+  modelTurns: number;
+  avgRoundsPerModelTurn: number;
+};
+
 export type GateReport = {
   generatedAt: string;
   model: "scripted" | "live";
+  routing: "rules" | "model";
+  comparison: RoutingComparison;
   judge: "none" | "live";
   thresholds: typeof GATE_THRESHOLDS;
   thresholdNotes: string[];
@@ -89,7 +111,41 @@ export type GateReport = {
   items: GateVerdict[];
 };
 
-export function buildReport(outcomes: GateOutcome[], opts: { model: "scripted" | "live"; judge: "none" | "live"; judged?: Map<string, JudgeResult>; judgePromptChars?: number }): GateReport {
+export function routingComparison(items: GateVerdict[], routing: "rules" | "model"): RoutingComparison {
+  const grounded = items.filter((v) => v.suite === "grounded");
+  const unsupported = items.filter((v) => v.suite === "unsupported");
+  const rate = (pass: number, n: number) => ({ pass, n, rate: pct(pass, n) });
+  const modelTurns = items.filter((v) => v.modelCalls > 0).length;
+  const modelCalls = items.reduce((n, v) => n + v.modelCalls, 0);
+  return {
+    routing,
+    items: items.length,
+    grounded: rate(grounded.filter((v) => v.pass).length, grounded.length),
+    leakFree: rate(items.filter((v) => v.isolated).length, items.length),
+    claims: items.filter((v) => v.actionClaim).length,
+    wrongAction: grounded.filter((v) => v.reasons.some((r) => r.startsWith("capability:") || r.startsWith("no ") || r.startsWith("card params"))).length,
+    refused: rate(unsupported.filter((v) => v.pass).length, unsupported.length),
+    modelCalls,
+    modelTurns,
+    avgRoundsPerModelTurn: modelTurns ? Math.round((10 * modelCalls) / modelTurns) / 10 : 0,
+  };
+}
+
+/** The rules-vs-model table (markdown), from each routing's comparison. */
+export function comparisonTable(rows: RoutingComparison[]): string {
+  const f = (r: { pass: number; n: number; rate: number }) => `${r.pass}/${r.n} (${r.rate} %)`;
+  return [
+    row(["Routing", "Grounded pass", "Leak-free", "Action claims", "Wrong action", "Unsupported refused", "Stub model calls", "Model turns", "Avg rounds / model turn"]),
+    row(["---", "---", "---", "---", "---", "---", "---", "---", "---"]),
+    ...rows.map((c) => row([c.routing, f(c.grounded), f(c.leakFree), c.claims, c.wrongAction, f(c.refused), c.modelCalls, `${c.modelTurns}/${c.items}`, c.avgRoundsPerModelTurn])),
+  ].join("\n");
+}
+
+export function buildReport(
+  outcomes: GateOutcome[],
+  opts: { model: "scripted" | "live"; judge: "none" | "live"; routing?: "rules" | "model"; judged?: Map<string, JudgeResult>; judgePromptChars?: number },
+): GateReport {
+  const routing = opts.routing ?? "rules";
   const items = outcomes.map((o) => o.verdict);
   const grounded = items.filter((v) => v.suite === "grounded");
   const unsupported = items.filter((v) => v.suite === "unsupported");
@@ -150,6 +206,8 @@ export function buildReport(outcomes: GateOutcome[], opts: { model: "scripted" |
   return {
     generatedAt: new Date().toISOString(),
     model: opts.model,
+    routing,
+    comparison: routingComparison(items, routing),
     judge: opts.judge,
     thresholds: GATE_THRESHOLDS,
     thresholdNotes: THRESHOLD_NOTES,
@@ -186,7 +244,8 @@ const row = (cells: Array<string | number>) => `| ${cells.join(" | ")} |`;
 export function reportMarkdown(r: GateReport): string {
   const out: string[] = [];
   out.push(`# SK §8.4 leader gates — ${r.summary.pass ? "PASS" : "FAIL"}`, "");
-  out.push(`Generated ${r.generatedAt}. Model: **${r.model}**. Judge: **${r.judge}**.`, "");
+  out.push(`Generated ${r.generatedAt}. Model: **${r.model}**. Routing: **${r.routing}**. Judge: **${r.judge}**.`, "");
+  out.push("## Routing", "", comparisonTable([r.comparison]), "");
   if (r.model === "scripted")
     out.push(
       "> Scripted run: rules-routed questions are answered by the REAL deterministic route; model-routed questions use a scripted stand-in (it calls the tool the bank names and quotes its summary; for unsupported asks it deliberately fabricates). It measures the pipeline's guards, not the model's judgement — `--model live` does that.",
@@ -232,12 +291,15 @@ export function reportMarkdown(r: GateReport): string {
 export function writeReport(r: GateReport, dir: string): { json: string; md: string } {
   mkdirSync(dir, { recursive: true });
   const stamp = r.generatedAt.replace(/[:.]/g, "-");
-  const base = join(dir, `sk-gates-${r.model}-${stamp}`);
+  const base = join(dir, `sk-gates-${r.model}-${r.routing}-${stamp}`);
   const json = `${base}.json`;
   const md = `${base}.md`;
   writeFileSync(json, JSON.stringify(r, null, 2));
   writeFileSync(md, reportMarkdown(r));
-  // The runner reads the latest scripted volume for the live cost estimate.
-  writeFileSync(join(dir, `latest-${r.model}.json`), JSON.stringify({ generatedAt: r.generatedAt, file: json, pass: r.summary.pass, volume: r.volume }, null, 2));
+  const latest = JSON.stringify({ generatedAt: r.generatedAt, file: json, pass: r.summary.pass, routing: r.routing, comparison: r.comparison, volume: r.volume }, null, 2);
+  // The runner reads the latest scripted RULES volume for the live cost
+  // estimate (as before), and each routing's comparison for the table.
+  if (r.routing === "rules") writeFileSync(join(dir, `latest-${r.model}.json`), latest);
+  writeFileSync(join(dir, `latest-${r.model}-${r.routing}.json`), latest);
   return { json, md };
 }
