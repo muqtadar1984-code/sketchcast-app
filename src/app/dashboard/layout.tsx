@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+import { after } from "next/server";
+import { createClient, currentUser } from "@/utils/supabase/server";
 import { onboardingEnabled, skShellEnabledFor } from "@/utils/flags";
 import { claimLsPurchases } from "@/utils/lemonsqueezy/claim";
 import { stampAssumedCountry } from "@/utils/assumed-country";
@@ -21,11 +22,19 @@ import { resolveLocale } from "@/i18n/resolve";
 // floating AI Teaching Assistant launcher. The tour's role + versioned seen-state
 // are resolved here, server-side, and handed to the client provider; both degrade
 // to "nothing" if the user is signed out or the 0037 tables aren't applied yet.
+//
+// SPEED (2026-10-30): this runs on every dashboard page, before anything below
+// it can paint, so its round trips are kept to the ones that decide something:
+// the user (shared with the page via currentUser), the profile (the onboarding
+// gate), then ONE parallel wave for the tour state and the SK gates. The two
+// WRITES (country stamp, Lemon Squeezy claim) start at the same point as before
+// but are no longer waited on — after() keeps the request alive until they
+// settle. The dictionary loads alongside all of it.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The tour's words are needed whatever happens below — fetch them now.
+  const dictP = resolveLocale().then(getDictionary);
+  dictP.catch(() => {}); // awaited below; a redirect() in between must not leave it unhandled
+  const [supabase, user] = await Promise.all([createClient(), currentUser()]);
 
   let role: string | null = null;
   let seen: TourSeen | null = null;
@@ -72,7 +81,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // unchanged on a database behind on 0085. The cost of asking every time is
     // one primary-key UPDATE matching zero rows on a hard load — a shared
     // layout does not re-run on soft navigation (see the note below).
-    if (user) await stampAssumedCountry(supabase, user.id);
+    //
+    // OFF THE CRITICAL PATH (2026-10-30): started here, exactly where it was
+    // awaited before (so it reads this request's headers during the render),
+    // and handed to after() rather than awaited. It never throws.
+    after(stampAssumedCountry(supabase, user.id));
 
     // Bind any Lemon Squeezy purchase parked under this verified email. A
     // public-link checkout carries no custom_data, so the webhook can only park
@@ -105,6 +118,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // binding key is trustworthy only once Supabase has confirmed the account
     // holder controls it. Same precedent as /auth/callback.
     //
+    // OFF THE CRITICAL PATH (2026-10-30): the claim starts here as before but
+    // is handed to after(), which holds the request open until it lands. The
+    // page already rendered CONCURRENTLY with this layout (Next renders a
+    // layout and its page in parallel), so the Library never had a guarantee
+    // of seeing a claim made in the same request; credits still bind on this
+    // load, and buy-credits-return's router.refresh() shows them.
+    //
     // NOTHING HERE CAN THROW. claimLsPurchases is total — it returns 0 rather
     // than raising, including when the service-role client cannot be built
     // (that gap was closed in claim.ts on 2026-08-19, precisely because this
@@ -135,41 +155,45 @@ export default async function DashboardLayout({ children }: { children: React.Re
       adult = false; // student, or no profile role — never claims a purchase
     }
     if (adult && user.email && user.email_confirmed_at) {
-      await claimLsPurchases(user.id, user.email);
+      after(claimLsPurchases(user.id, user.email));
     }
 
+    // Both tours' seen-state — the role tour's and SK's intro — in ONE read of
+    // the caller's own user_tour_progress rows (RLS), started now so it runs
+    // alongside the SK gates instead of after them. Best-effort: a missing 0037
+    // table just returns an error → no rows → seen stays null.
     const def = tourForRole(role);
-    if (def) {
-      // Best-effort: a missing 0037 table just returns an error → seen stays null.
-      const { data: prog } = await supabase
+    const schoolId = (profile?.school_id as string | null | undefined) ?? null;
+    const tourKeys = def ? [def.key, SK_INTRO_TOUR.key] : [SK_INTRO_TOUR.key];
+    const progP = (async () => {
+      const { data } = await supabase
         .from("user_tour_progress")
-        .select("version, status")
-        .eq("tour_key", def.key)
-        .maybeSingle();
-      if (prog) seen = { version: prog.version as number, status: prog.status as "completed" | "skipped" };
-    }
+        .select("tour_key, version, status")
+        .in("tour_key", tourKeys);
+      return (data ?? []) as { tour_key: string; version: number; status: "completed" | "skipped" }[];
+    })();
+    const seenFor = (rows: Awaited<typeof progP>, key: string): TourSeen | null => {
+      const row = rows.find((r) => r.tour_key === key);
+      return row ? { version: row.version as number, status: row.status } : null;
+    };
 
     // SK Shell gates, through the caller's own session (the school-config read
     // inside is RLS-scoped). Nothing here can throw: a missing schools.config
     // or a database behind on 0162 simply reads as "not opted in".
-    const schoolId = (profile?.school_id as string | null | undefined) ?? null;
     skOn = await skShellEnabledFor(supabase, user, role, schoolId);
+    const progRows = await progP;
+    if (def) seen = seenFor(progRows, def.key);
     if (skOn) {
       hat = await activeHatCookie();
-      let skSeen: TourSeen | null = null;
-      const { data: skProg } = await supabase
-        .from("user_tour_progress")
-        .select("version, status")
-        .eq("tour_key", SK_INTRO_TOUR.key)
-        .maybeSingle();
-      if (skProg) skSeen = { version: skProg.version as number, status: skProg.status as "completed" | "skipped" };
+      const skSeen: TourSeen | null = seenFor(progRows, SK_INTRO_TOUR.key);
       skIntroDue = shouldAutoStart(skSeen, SK_INTRO_TOUR.version);
     }
   }
 
   // The tour's WORDS (definitions.ts carries only its targets and order), so a
   // parent taking the tour reads it in the language the rest of the app is in.
-  const t = await getDictionary(await resolveLocale());
+  // (Started at the top; resolveLocale is React-cached per request.)
+  const t = await dictP;
 
   return (
     // 2026-10-30 (founder decision 1): for SK users the SK walkthrough REPLACES
