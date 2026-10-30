@@ -273,9 +273,10 @@ async function KitsSection({
     subject: k.subject,
     language: k.language,
     youtubeId: k.youtubeId,
-    // a kit with no public video (a translation) plays from storage: the
-    // same route as the documents, without the unlock (logic.ts WATCH_KINDS)
-    videoGenerationId: k.youtubeId ? null : k.videoGenerationId,
+    // EVERY kit plays its stored MP4 in-app (founder 2026-10-30: quality
+    // first), through the same route as the documents, without the unlock
+    // (logic.ts WATCH_KINDS); YouTube is the card's fallback only
+    videoGenerationId: k.videoGenerationId,
     questionCount: k.questionCount,
     unlocked: k.unlocked,
     pieces: k.pieces.map((p) => ({ kind: p.kind, generationId: p.generationId })),
