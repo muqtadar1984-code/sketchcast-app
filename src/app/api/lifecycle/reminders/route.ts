@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { runSkMemorySweep } from "@/sk/memory-sweep";
+import { runSkKnowledgePoll } from "@/sk/knowledge/poll";
+import type { KnowledgeDb } from "@/sk/knowledge/store";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { renderEmail } from "@/utils/lifecycle/copy";
 import { selectSegment, type Segment, type UserFacts } from "@/utils/lifecycle/segments";
@@ -60,13 +62,16 @@ async function run(request: Request) {
   // of the emails below — it runs even when they send nothing — skipped on a
   // dry run, and guarded: a failure only logs (src/sk/memory-sweep.ts).
   const skMemory = new URL(request.url).searchParams.get("dry") === "1" ? null : await runSkMemorySweep(createAdminClient);
+  // SK S7 K1: import new book-app releases (0174). Guarded: waits quietly until
+  // pub_releases exists; a failure only logs (src/sk/knowledge/poll.ts).
+  const skKnowledge = new URL(request.url).searchParams.get("dry") === "1" ? null : await runSkKnowledgePoll(() => createAdminClient() as unknown as KnowledgeDb);
 
   const sinceRaw = process.env.LIFECYCLE_EMAILS_SINCE;
   if (!sinceRaw) {
     // Fail closed. Existing users were contacted by hand and must never be
     // swept up by a cron that lost its cutoff.
     return NextResponse.json(
-      { skipped: "LIFECYCLE_EMAILS_SINCE not set — sending nothing", skMemory },
+      { skipped: "LIFECYCLE_EMAILS_SINCE not set — sending nothing", skMemory, skKnowledge },
       { status: 200 },
     );
   }
@@ -163,7 +168,7 @@ async function run(request: Request) {
     sent += 1;
   }
 
-  return NextResponse.json({ since: since.toISOString(), candidates: (data ?? []).length, sent, failed, skMemory });
+  return NextResponse.json({ since: since.toISOString(), candidates: (data ?? []).length, sent, failed, skMemory, skKnowledge });
 }
 
 // Vercel Cron issues a GET; POST is kept for manual/dry runs via curl.
