@@ -20,12 +20,14 @@ export type StageAction =
 
 const LIVE = new Set(["queued", "running"]);
 
-/** A chapter text is approved by a Gate D approval of exactly that text, or by the book approval of its revision. */
-export function isApproved(approvals: ApprovalLite[], row: ChapterRow): boolean {
+/** A chapter text is approved by a Gate D approval of exactly that text, or by the book approval of a revision in which
+ * the chapter had exactly this text (approvals follow the TEXT: a chapter carried unchanged into a newer revision keeps
+ * the approval it had). `texts` is every revision's chapter rows. */
+export function isApproved(approvals: ApprovalLite[], row: ChapterRow, texts: ChapterRow[] = [row]): boolean {
   return approvals.some(
     (a) =>
       (a.kind === "gate_d" && a.chapter === row.chapter && a.content_sha256 === row.content_sha256) ||
-      (a.kind === "book" && a.revision_key === row.revision_key),
+      (a.kind === "book" && texts.some((t) => t.revision_key === a.revision_key && t.chapter === row.chapter && t.content_sha256 === row.content_sha256)),
   );
 }
 
@@ -38,10 +40,10 @@ export function latestPlan(runs: RunLite[]): PlanChapter[] {
 }
 
 /** Every chapter the book plans or has, in order, with its state. */
-export function workChapters(plan: PlanChapter[], rows: ChapterRow[], approvals: ApprovalLite[], runs: RunLite[]): WorkChapter[] {
+export function workChapters(plan: PlanChapter[], rows: ChapterRow[], approvals: ApprovalLite[], runs: RunLite[], texts: ChapterRow[] = rows): WorkChapter[] {
   const byN = new Map<number, WorkChapter>();
   for (const p of plan) byN.set(p.chapter, { chapter: p.chapter, title: p.title, state: "not_drafted", sha: null });
-  for (const r of rows) byN.set(r.chapter, { chapter: r.chapter, title: r.title, state: isApproved(approvals, r) ? "approved" : "ready", sha: r.content_sha256 });
+  for (const r of rows) byN.set(r.chapter, { chapter: r.chapter, title: r.title, state: isApproved(approvals, r, texts) ? "approved" : "ready", sha: r.content_sha256 });
   for (const run of runs) {
     if (!LIVE.has(run.status) || !["draft_chapter", "adopt_trial"].includes(run.stage_key)) continue;
     const n = Number(run.params?.chapter ?? run.chapters?.[0]);
