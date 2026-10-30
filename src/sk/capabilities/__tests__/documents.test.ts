@@ -131,12 +131,12 @@ describe("kit.documents — the open kit's sibling pieces", () => {
     expect(one.facts).toEqual([{ slide: 2, title: "The cell wall", text: "Plant cells have a rigid cellulose wall.", notes: "Point at the wall on the diagram." }]);
   });
 
-  it("a deck not rendered yet reads from the lesson script (one slide per script segment)", async () => {
+  it("a deck not rendered yet reads the lesson video's own slides from its script, labelled as such", async () => {
     db = docsWorld({ pages: false });
     delete db.files[`${CAT}/${SRC_DECK}/deck_pages/pages.json`];
     const r = await run({ doc: "deck" });
     expect(r.ok).toBe(true);
-    expect(r.summary).toMatch(/from the lesson script/);
+    expect(r.summary).toMatch(/slides of the lesson video, from its script/);
     expect(r.facts?.map((f) => f.heading)).toEqual(["Hook", "Cell wall", "Big vacuole"]);
   });
 

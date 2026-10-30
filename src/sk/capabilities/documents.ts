@@ -204,7 +204,7 @@ function readResult(r: Extract<ReadOut, { ok: true }>, where: string, slide: num
     const list = slide ? r.script.filter((x) => x.n === slide) : r.script;
     if (slide && !list.length) return { ok: false, summary: `The lesson has ${r.script.length} slides.`, error: "no_such_slide", facts: [] };
     for (const x of list) facts.push({ slide: x.n, ...(x.part > 1 ? { part: x.part } : {}), heading: x.heading, points: x.points.join(" | "), narration: x.narration });
-    const what = r.doc === "deck" ? "slides (from the lesson script: the deck has one slide per script segment; its rendered text is not ready yet)" : "script segments";
+    const what = r.doc === "deck" ? "slides of the lesson video, from its script (the deck's own page text is not ready yet, and its pages do not match these one for one)" : "script segments";
     return { ok: true, summary: `${slide ? `Slide ${slide}` : `${r.script.length} ${what}`} of ${where}. Go through them in order, from this text only.`, facts: facts.slice(0, MAX_ROWS) };
   }
   const qs = r.questions ?? [];

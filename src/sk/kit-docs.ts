@@ -23,7 +23,10 @@
 // listed as "docx only", and the capability offers the kit's article instead):
 //   deck        the deck's text map (deck_pages_json / pages.json: per slide
 //               title, text and speaker notes); before the deck is rendered,
-//               the lesson script's slides (one slide per script segment)
+//               the LESSON's own slides from its script (the video's slides:
+//               heading and points per script segment). Not the .pptx's pages:
+//               the deck does not have one page per segment (docs/SK-M1-REPORT.md
+//               §6), so they are labelled as the lesson's slides, not the deck's
 //   script      script_json (+ script_partN.json): per segment heading, points, narration
 //   worksheet / quiz / question_bank / exam_paper
 //               questions_json: prompts and options — NEVER the answers
@@ -245,7 +248,8 @@ const pointText = (p: unknown): string => (typeof p === "string" ? p : p && type
 
 const SCRIPT_RE = /\/script(?:_part(\d+))?\.json$/;
 
-/** The lesson script's slides (one per script segment, in part order). */
+/** The lesson's own slides from its script (one per script segment — the
+ *  video's slides, NOT the .pptx's pages), in part order. */
 export async function scriptSlides(admin: DocsAdmin, lesson: Piece): Promise<ScriptSlide[]> {
   const rows = lesson.artifacts
     .filter((a) => a.kind === "script_json" && SCRIPT_RE.test(a.storage_path))
@@ -316,7 +320,7 @@ export async function readDoc(admin: DocsAdmin, kit: KitDocs, doc: string, opts:
     const deck = kit.pieces.find((p) => p.kind === "deck");
     const slides = deck ? await deckSlides(admin, deck) : null;
     if (slides) return { ok: true, doc, title: deck!.title, from: "deck_text_map", slides };
-    // not rendered yet (or no deck piece): the deck has one slide per script segment
+    // not rendered yet (or no deck piece): the lesson's own slides, labelled as such
     if (lesson) {
       const script = await scriptSlides(admin, lesson);
       if (script.length) return { ok: true, doc, title: deck?.title ?? lesson.title, from: "lesson_script", script };

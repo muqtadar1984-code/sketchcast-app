@@ -572,7 +572,7 @@ export const boardLoadDeck: SkCapability = {
     const unit = await openUnitSlides(ctx);
     if (!unit) return r;
     const rows = unit.slides.slice(0, 30).map((x) => ({ slide: x.n, title: x.title, text: x.text, notes: x.notes }));
-    const what = unit.from === "lesson_script" ? "text (from the lesson script; the deck has one slide per script segment)" : "text and speaker notes";
+    const what = unit.from === "lesson_script" ? "text as the lesson video shows them (from its script; the deck's own page text is not ready yet)" : "text and speaker notes";
     return { ...r, summary: `${r.summary} Its ${unit.slides.length} slides' ${what} are below.`, facts: [...(r.facts ?? []), ...rows] };
   },
 };
