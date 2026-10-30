@@ -92,6 +92,16 @@ export type SpeechCoordinatorDeps = {
   onSpeaking?: (speaking: boolean) => void;
   /** The browser voice became sticky: "unavailable" = 404, "failing" = three errors. */
   onFallback?: (why: "unavailable" | "failing") => void;
+  /** The browser refused to play (autoplay: NotAllowedError) — the page needs a tap. */
+  onPlayBlocked?: () => void;
+  /** One sentence's outcome, for the voice log (provider id; error name when it failed). */
+  onSentence?: (e: { provider: string; ok: boolean; error?: string; ms: number }) => void;
+};
+
+/** The DOMException name a refused play() carries (autoplay policy). */
+const errorName = (e: unknown): string => {
+  const n = (e as { name?: unknown } | null)?.name;
+  return typeof n === "string" && n ? n : e instanceof Error ? e.message.slice(0, 60) : "unknown";
 };
 
 export type SayOptions = { lang?: string };
@@ -239,6 +249,7 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
   async function through(p: SpeechProvider, text: string, lang: string, g: number, pending?: Promise<SpeechResult>): Promise<boolean> {
     active = p;
     const stopped = released;
+    const t0 = Date.now();
     try {
       const synth = pending ?? p.synthesize(text, voiceFor(p.id, lang), { marks: ["word", "viseme"] });
       synth.catch(() => {}); // a late rejection after stop() is not an unhandled one
@@ -249,7 +260,16 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
       const playing = r.play?.({ rate: 1, onWord: (w) => deps.onWord?.({ charIndex: w.charIndex, t: w.t, text }) });
       playing?.catch(() => {});
       await Promise.race([playing, stopped]);
+      if (g === gen) deps.onSentence?.({ provider: p.id, ok: true, ms: Date.now() - t0 });
       return g === gen;
+    } catch (e) {
+      if (g === gen) {
+        const error = errorName(e);
+        deps.onSentence?.({ provider: p.id, ok: false, error, ms: Date.now() - t0 });
+        // Autoplay refused: no voice can play until she taps the page again.
+        if (error === "NotAllowedError") deps.onPlayBlocked?.();
+      }
+      throw e;
     } finally {
       if (active === p) active = null;
     }
