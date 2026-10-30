@@ -19,9 +19,14 @@ import { parseLanguageCommand, type LangCommand } from "./language";
 import { walkStartCommand } from "./client/walkthrough";
 // 2026-10-30: the ONE greeting / politeness normaliser every rule reads through.
 import { frameIntent, normalizeIntent } from "./intent-normalize";
+// 2026-10-30: "play chapter 1 from the book" → the start_lesson tool, no model.
+import { playChapterOf, type PlayChapter } from "./lesson-rules";
 
 export type RulesDecision =
-  | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
+  /** `lesson` (2026-10-30): a play-a-chapter command — the route runs the
+   *  start_lesson tool with these words (book, chapter, part, class) and
+   *  emits its navigate; target is "board" (teacher) or "tutor" (student). */
+  | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string; lesson?: PlayChapter }
   | { intent: "chat"; reply: string }
   /** S1: a Board move decided by rules (only while the collector reports an
    *  open Board session). `args` are the capability's arguments; `k` is 0-based. */
@@ -915,9 +920,21 @@ function routeOnce(text: string, ctx: SkContext, now: Date, clock?: SkCollector[
   // S3 slice D: a student's tutor phrasings come first, and a student never
   // reaches the Board, start-a-lesson or teacher-action rules below.
   const student = ctx.user.role === "student";
+
+  // 2026-10-30: "play chapter 1 from the book" / "start chapter one" / "let's
+  // do chapter 2 of biology" — a teacher's Board lesson or a student's Tutor
+  // chapter, through start_lesson (no model). A teacher's comes before the
+  // Board phrasings. A student's kit-player phrasings keep their meaning, and
+  // so does her "open chapter 6" inside a book (the book is the one she is
+  // in); the tool takes a chapter only when they found no book for it.
+  const lesson = student || (ctx.user.role !== "parent" && (ctx.user.hat === "teacher" || ctx.user.hat === null)) ? playChapterOf(raw) : null;
   if (student) {
     const tu = routeTutor(raw, t, ctx);
-    if (tu) return tu;
+    const bookless = !!tu && tu.intent === "navigate" && tu.target === "tutor" && !tu.filters.product;
+    if (tu && !(lesson && bookless)) return tu;
+    if (lesson) return { intent: "navigate", target: "tutor", filters: { autostart: true }, lesson };
+  } else if (lesson) {
+    return { intent: "navigate", target: "board", filters: { autostart: true }, lesson };
   } else if (ctx.board?.sessionId) {
     // S1: with a Board session open, the Board phrasings come first; without
     // one the S0 rules apply unchanged ("open the board" → navigate).

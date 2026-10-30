@@ -901,8 +901,30 @@ export async function POST(request: Request) {
           return;
         }
 
+        // ── 2026-10-30: play a book chapter — start_lesson, no model ─────────
+        // "play chapter 1 from the book": the tool resolves the book and the
+        // chapter and returns the Board deep link (teacher, autostart) or the
+        // Tutor chapter (student); a question ("which book?") or the
+        // not-generated line is its own fixed line. A tool this context may
+        // not use falls through to the model, like the parent block below.
+        if (decision.intent === "navigate" && decision.lesson) {
+          const l = decision.lesson;
+          const args: Record<string, unknown> = { chapter: l.chapter, ...(l.book ? { book: l.book } : {}), ...(l.part ? { part: l.part } : {}), ...(l.class ? { class: l.class } : {}) };
+          const r = await runCapability(ctx, "start_lesson", args, deps);
+          if (r.error !== "not_allowed") {
+            send({ type: "tool", name: "start_lesson", ok: r.ok, summary: r.summary.slice(0, 200) });
+            send({ type: "text", text: r.summary });
+            if (r.ok && r.navigate) {
+              send({ type: "navigate", path: r.navigate.path, label: r.navigate.label });
+              done({ sources: ["start_lesson", "navigate"], label: "navigation" }, r.summary, r.entities ?? []);
+            } else done({ sources: r.ok ? ["start_lesson"] : [], label: r.ok ? "grounded" : "declined" }, r.summary, r.entities ?? []);
+            finish();
+            return;
+          }
+        }
+
         // ── Navigate: deterministic, audited, no model ───────────────────────
-        if (decision.intent === "navigate") {
+        if (decision.intent === "navigate" && !decision.lesson) {
           const sources: string[] = [];
           const entities: ResolvedEntity[] = [];
           const filters: Record<string, unknown> = { ...decision.filters };
