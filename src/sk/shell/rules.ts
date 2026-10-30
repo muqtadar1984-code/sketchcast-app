@@ -17,6 +17,8 @@ import { routeLeader, type LeaderRoute } from "./leader-rules";
 // 2026-10-30: "say that in Malay" / "back to English" — the answer language.
 import { parseLanguageCommand, type LangCommand } from "./language";
 import { walkStartCommand } from "./client/walkthrough";
+// 2026-10-30: the ONE greeting / politeness normaliser every rule reads through.
+import { frameIntent, normalizeIntent } from "./intent-normalize";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -789,20 +791,59 @@ export function routeTutor(raw: string, normed: string, ctx: SkContext): RulesDe
 }
 
 // "Show me around" in the ten app languages (the phrases the tour itself
-// teaches in each language's last stop) plus the obvious English variants.
-// Anchored like the language commands: "show me around the cell" is a question.
+// teaches in each language's last stop) plus the real paraphrases people use
+// (founder 2026-10-30: "Hi SK, show me around?" must start it). The text is
+// the shared normaliser's core (intent-normalize.ts): greetings, "SK",
+// "please", "can you" and the trailing "?" are already off. Anchored like the
+// language commands: "show me around the cell", "give me a demo of
+// photosynthesis" and "what can you do in the diary?" are questions.
+const TOUR_NOUN = "(?:(?:quick|short|full|little|guided|app|product) )?(?:tour|walkthrough|walk-through|demo|onboarding|tutorial)";
+const THE_APP = "(?:the app|this app|the application|sketchcast|the portal|this portal|the website|the site|everything|the place|here)";
 const WALK_TOUR_RE = polite(
   [
-    "show me around(?: (?:the app|sketchcast|here))?|give me (?:the|a) (?:tour|demo|quick tour|walkthrough)|(?:take|start|play|replay|run|redo|do) (?:the|a) (?:tour|walkthrough|demo)(?: again)?|(?:the |a )?(?:tour|demo|walkthrough)(?: again)?|show me the (?:tour|demo)|walk me through (?:the app|sketchcast|everything)",
-    "tunjuk(?:kan)? (?:saya )?(?:sekeliling|sekitar)|tunjukkan saya|bawa saya (?:melawat|bersiar)|(?:mula(?:kan)? )?lawatan(?: berpandu)?|tunjuk(?:kan)? demo",
-    "تونجوقکن سکليليڠ|تونجوقکن ساي",
-    "خذني في جولة|عرفني بالمكان|عرّفني بالمكان|أرني المكان|ارني المكان|(?:ابدأ |ابدا )?(?:ال)?جولة(?: تعريفية)?",
-    "fais-moi visiter|faites-moi visiter|(?:une |la )?visite guidée",
-    "enséñame la app|ensename la app|dame un recorrido|muéstrame la app|muestrame la app",
-    "me mostra o app|me mostre o app|faça um tour|faca um tour",
-    "मुझे सब दिखाओ|मुझे सब दिखाइए|टूर दिखाओ",
-    "मला सगळे दाखव|मला सगळं दाखव|टूर दाखवा",
-    "నాకు అన్నీ చూపించు|నాకు అన్నీ చూపించండి",
+    // English
+    `show me around(?: ${THE_APP})?|show me (?:the|a) ${TOUR_NOUN}|show me the ropes`,
+    `show me how (?:this|it|${THE_APP}) works|show me how to use (?:this|it|${THE_APP})|show me what (?:you|sk|sketchcast|this app|the app) can do`,
+    `give me (?:the|a|an) (?:${TOUR_NOUN}|(?:quick |short |full )?(?:rundown|overview|intro|introduction))(?: (?:of|to|around) (?:${THE_APP}|it|this))?`,
+    `(?:take|start|begin|play|replay|run|redo|do|launch|open|restart) (?:the|a|my|your) ${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?(?: again)?`,
+    `take me (?:on|for) (?:a|the) ${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?|take me (?:around|through ${THE_APP})`,
+    `(?:can|could|may) (?:i|we) (?:get|have|take|see|do) (?:a|the) ${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?`,
+    `(?:the |a |an )?${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?(?: again)?`,
+    `walk me through (?:${THE_APP}|it|this|how (?:this|it|${THE_APP}) works)`,
+    `how (?:does|do) (?:this app|the app|the application|sketchcast|this portal|the portal|this thing|this website) work|how (?:do i|do you|to|should i) use (?:this app|the app|sketchcast|this portal|the portal)`,
+    `guide me(?: (?:around|through (?:${THE_APP}|it|this)))?|(?:start|begin|show me) (?:the |my )?onboarding`,
+    // Malay (Rumi)
+    "tunjuk(?:kan)? (?:saya )?(?:sekeliling|sekitar)(?: (?:aplikasi|app|sketchcast)(?: ini)?)?|tunjukkan saya",
+    "bawa saya (?:melawat|bersiar|berjalan-jalan|meninjau)(?: (?:aplikasi|app|sketchcast)(?: ini)?)?",
+    "(?:mula(?:kan)? |beri(?:kan)? (?:saya )?|buat )?(?:satu )?lawatan(?: berpandu)?(?: (?:aplikasi|app|sketchcast)(?: ini)?)?",
+    "(?:tunjuk(?:kan)? |beri(?:kan)? (?:saya )?)?(?:satu )?demo(?: (?:aplikasi|app|sketchcast)(?: ini)?)?",
+    "tunjuk(?:kan)? (?:saya )?(?:cara|macam mana|bagaimana) (?:nak )?(?:guna|menggunakan|pakai) (?:aplikasi|app|sketchcast)(?: ini)?",
+    "(?:bagaimana|macam mana) (?:aplikasi|app|sketchcast)(?: ini)? (?:berfungsi|bekerja)|bimbing saya|panduan (?:aplikasi|pengenalan)",
+    // Malay (Jawi)
+    "تونجوقکن سکليليڠ|تونجوقکن ساي|(?:مولاکن )?لاوتن(?: برڤندو)?",
+    // Arabic
+    "خذني (?:في |فى )?(?:ب)?جولة(?: (?:تعريفية|سريعة))?(?: في التطبيق)?|عرفني بالمكان|عرّفني بالمكان|(?:عرفني|عرّفني) (?:على |ب)التطبيق",
+    "أرني المكان|ارني المكان|أرني التطبيق|ارني التطبيق|(?:أرني|ارني) كيف يعمل التطبيق",
+    "(?:(?:ابدأ|ابدا|إبدأ|أعطني|اعطني) )?(?:ال)?جولة(?: (?:التعريفية|تعريفية|سريعة|إرشادية))?|كيف يعمل (?:هذا )?التطبيق|(?:(?:أعطني|اعطني) )?(?:ال)?عرض (?:ال)?توضيحي",
+    // French
+    "fais-moi visiter|faites-moi visiter|(?:une |la )?visite guidée|(?:fais|faites)-moi (?:faire )?(?:le|un) tour(?: de l'app(?:lication)?)?",
+    "montre-moi (?:l'app(?:lication)?|comment (?:ça|l'app(?:lication)?) (?:marche|fonctionne))|comment (?:fonctionne|marche) l'app(?:lication)?",
+    "(?:lance|démarre|demarre|commence|lancez|démarrez|commencez) la visite(?: guidée)?|(?:(?:fais|faites|donne|donnez)-moi )?une démo",
+    // Spanish
+    "enséñame la app|ensename la app|muéstrame la app|muestrame la app|(?:dame|hazme|danos) un (?:recorrido|tour)(?: por la app)?",
+    "(?:un )?recorrido(?: guiado)?(?: por la app)?|(?:empieza|comienza|inicia) el (?:recorrido|tour)|(?:dame |hazme )?una demo",
+    "c[óo]mo funciona (?:la app|esta app|la aplicaci[óo]n)|(?:mu[ée]strame|ens[ée]ñame|ensename) c[óo]mo funciona",
+    // Portuguese
+    "me mostra o app|me mostre o app|faça um tour|faca um tour|me (?:dá|da|dê|de) um tour(?: pelo app)?|um tour(?: guiado)?(?: pelo app)?",
+    "(?:comece|começa|comeca|inicia|inicie) o tour|como funciona o app|me (?:mostra|mostre) como funciona",
+    // Hindi
+    "मुझे सब दिखाओ|मुझे सब दिखाइए|टूर दिखाओ|टूर दिखाइए|टूर शुरू (?:करो|करें|कीजिए)|(?:मुझे )?(?:ऐप|एप) (?:दिखाओ|दिखाइए|दिखाएं)",
+    "मुझे घुमाओ|मुझे घुमा दो|(?:यह )?(?:ऐप|एप) कैसे काम करता है|मुझे टूर (?:दो|दीजिए|चाहिए)",
+    // Marathi
+    "मला सगळे दाखव|मला सगळं दाखव|टूर दाखवा|टूर दाखव|टूर सुरू (?:करा|कर)|(?:मला )?(?:ॲप|अॅप|ऍप) दाखवा|(?:हे )?(?:ॲप|अॅप|ऍप) कसे काम करते",
+    // Telugu
+    "నాకు అన్నీ చూపించు|నాకు అన్నీ చూపించండి|టూర్ (?:చూపించు|చూపించండి|ప్రారంభించు|ప్రారంభించండి|మొదలుపెట్టు)",
+    "(?:నాకు )?యాప్ (?:చూపించు|చూపించండి)|(?:ఈ )?యాప్ ఎలా (?:పనిచేస్తుంది|పని చేస్తుంది)",
   ].join("|"),
 );
 
@@ -811,12 +852,47 @@ const WALK_TOUR_RE = polite(
  *  phrasing ("Continue with the tour.") — with no tour running in her tab that
  *  STARTS one (no model). While a tour runs, the turn route hands the same
  *  words to the running tour first (walkCommand → resume), so this never
- *  restarts a tour that is on. */
+ *  restarts a tour that is on. The greeting / politeness frame comes off
+ *  first ("Hi SK, show me around?" → "show me around"). */
 export function isWalkthroughRequest(text: string): boolean {
-  return WALK_TOUR_RE.test(norm(text ?? "").replace(/[«»“”'‘’]/g, "").trim()) || walkStartCommand(text ?? "");
+  return WALK_TOUR_RE.test(normalizeIntent(text ?? "")) || walkStartCommand(text ?? "");
 }
 
+/** A rules decision that is only "hand it to the model" (no parent / leader read). */
+function plainAsk(d: RulesDecision): boolean {
+  return d.intent === "ask" && !("parent" in d) && !("leader" in d);
+}
+
+/**
+ * The rules router. Every rule below is anchored, so a frame around a command
+ * ("Hi SK, …", "can you …", "…, please?") used to send it to the model. Now
+ * the text is routed as said and, when nothing took it, AGAIN with the frame
+ * off (intent-normalize.ts) — the same anchored patterns, the same meanings.
+ * A trailing "?" survives the second pass, so a question stays a question
+ * (actions and book phrasings are never taken from one).
+ */
 export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
+  const raw = (text ?? "").trim();
+  const first = routeOnce(raw, ctx, now, clock);
+  if (!plainAsk(first)) return first;
+  const f = frameIntent(raw);
+  if (!f.framed || !f.text) return first;
+  const second = routeOnce(f.question ? `${f.text}?` : f.text, ctx, now, clock);
+  if (plainAsk(second)) return first;
+  // A page move found only after the frame was removed needs an explicit move
+  // verb ("open the board", "take me to the diary"): without one, "I want to
+  // know about the board" stays a question instead of a jump to the Board.
+  // (A start-a-lesson move is its own explicit rule — "start the lesson on …" —
+  // and keeps its autostart.)
+  if (second.intent === "navigate" && !second.filters.autostart && !FRAMED_NAV_VERB_RE.test(norm(f.text))) return first;
+  return second;
+}
+
+/** The move verbs a FRAMED message must keep for the second pass to navigate. */
+const FRAMED_NAV_VERB_RE =
+  /^(?:open|go to|go|goto|take me to|take me|bring me to|bring up|show me|navigate to|switch to|jump to|head to|buka|pergi ke|bawa saya ke|tunjukkan|افتح|اذهب إلى|خذني إلى|ouvre|ouvrir|va à|aller à|abre|abrir|ir a|ir para|vai para|खोलो|खोलें|ले चलो|उघडा|తెరువు)\b/u;
+
+function routeOnce(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {
   const raw = (text ?? "").trim();
   const t = norm(raw);
   if (!t) return { intent: "chat", reply: SK_CHAT_NOTHING_PENDING };
