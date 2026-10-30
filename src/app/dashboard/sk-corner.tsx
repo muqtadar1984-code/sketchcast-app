@@ -15,7 +15,8 @@
 //                   avatar. It fades out (opacity) rather than jumping away.
 //   SkCornerMenu  — the avatar's compact popover menu: a real ARIA menu
 //                   (arrow keys, Home / End, Escape, Tab closes), with toggles
-//                   as menuitemcheckbox.
+//                   as menuitemcheckbox and a one-of-N choice (SK's
+//                   character) as a group of menuitemradio.
 //
 // No state of their own beyond focus: every decision is the Shell's.
 
@@ -145,9 +146,16 @@ export function SkBubble({
   );
 }
 
+/** One option of a "choice" row: a small round thumbnail and its label. */
+export type CornerMenuOption = { value: string; label: string; image?: string };
+
 export type CornerMenuItem =
   | { kind: "action"; id: string; label: string; onSelect: () => void; disabled?: boolean; icon?: string }
-  | { kind: "toggle"; id: string; label: string; checked: boolean; onSelect: () => void; disabled?: boolean; icon?: string };
+  | { kind: "toggle"; id: string; label: string; checked: boolean; onSelect: () => void; disabled?: boolean; icon?: string }
+  /** A one-of-N choice (SK's character): a labelled group of menuitemradio;
+   *  each option is its own stop for the arrow keys. Picking one keeps the
+   *  menu open, like the toggles. */
+  | { kind: "choice"; id: string; label: string; options: CornerMenuOption[]; value: string; onSelect: (value: string) => void; disabled?: boolean; icon?: string };
 
 /** The avatar's menu. Focus moves into it on open; Escape (or Tab, or a click
  *  outside) closes it and the Shell hands focus back to the avatar. */
@@ -195,10 +203,52 @@ export function SkCornerMenu({ label, items, onClose, side }: { label: string; i
       aria-label={label}
       data-sk="menu"
       onKeyDown={onKey}
-      className={`pointer-events-auto absolute bottom-full mb-2 w-56 rounded-xl border border-[#E6E8E4] bg-white py-1 text-sm text-slate-900 shadow-xl [color-scheme:light] ${side === "end" ? "end-0" : "start-0"}`}
+      className={`pointer-events-auto absolute bottom-full mb-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-[#E6E8E4] bg-white py-1 text-sm text-slate-900 shadow-xl [color-scheme:light] ${side === "end" ? "end-0" : "start-0"}`}
     >
       {items.map((it) =>
-        it.kind === "toggle" ? (
+        it.kind === "choice" ? (
+          <div key={it.id} role="group" aria-labelledby={`sk-menu-${it.id}`} data-sk="menu-choice" data-sk-item={it.id} className="border-y border-[#EEF0EC] py-1 my-1">
+            <div id={`sk-menu-${it.id}`} className="flex items-center gap-2 px-3 pt-1 pb-0.5 text-xs font-medium text-slate-500">
+              {it.icon && (
+                <span aria-hidden className="w-4 shrink-0 text-center">
+                  {it.icon}
+                </span>
+              )}
+              <span className="truncate">{it.label}</span>
+            </div>
+            {it.options.map((o) => {
+              const on = o.value === it.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={on}
+                  disabled={it.disabled}
+                  onClick={() => it.onSelect(o.value)}
+                  data-sk="menu-item"
+                  data-sk-item={`${it.id}-${o.value}`}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-start hover:bg-[#F4F6F3] focus:bg-[#F4F6F3] focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {o.image && (
+                    <Image
+                      src={o.image}
+                      alt=""
+                      width={28}
+                      height={28}
+                      unoptimized
+                      className={`h-7 w-7 shrink-0 rounded-full object-cover ring-2 ${on ? "ring-[#0C8175]" : "ring-transparent"}`}
+                    />
+                  )}
+                  <span className={`min-w-0 flex-1 truncate ${on ? "font-medium" : ""}`}>{o.label}</span>
+                  <span aria-hidden className={`w-4 shrink-0 text-center text-[#0C8175] ${on ? "" : "invisible"}`}>
+                    ✓
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : it.kind === "toggle" ? (
           <button
             key={it.id}
             type="button"
