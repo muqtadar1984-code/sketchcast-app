@@ -105,6 +105,28 @@ export type ManifestReply = { status: "ready"; manifest: KitManifestLike } | { s
 export type ManifestStatus = "none" | "building" | "ready" | "failed";
 export type ManifestFetch = (generationId: string, method: "GET" | "POST") => Promise<ManifestReply>;
 
+/**
+ * GET/POST /api/sk/manifest over HTTP, as loadManifest's fetch. The POST
+ * carries the id in its JSON BODY, which is what the route reads: until
+ * 2026-10-31 the Board sent it only in the query string, the route answered
+ * 400 before its audit row, and no lesson map was ever built from the Board
+ * (production 2026-10-30: no `manifest.build` row for the founder's kit).
+ * A 404 (no Shell, not hers) reads as "missing"; any other non-2xx throws.
+ */
+export function httpManifestFetch(fetchImpl: typeof fetch = (...a) => fetch(...a)): ManifestFetch {
+  return async (generationId, method) => {
+    const url = `/api/sk/manifest?${new URLSearchParams({ generationId }).toString()}`;
+    const r =
+      method === "POST"
+        ? await fetchImpl(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify({ generationId }) })
+        : await fetchImpl(url, { method });
+    if (r.status === 404) return { status: "missing" };
+    if (!r.ok) throw new Error(`manifest ${r.status}`);
+    const j = (await r.json()) as ManifestReply;
+    return j && typeof j.status === "string" ? j : { status: "failed" };
+  };
+}
+
 export const MANIFEST_POLL_MS = 3000;
 export const MANIFEST_MAX_MS = 120_000;
 

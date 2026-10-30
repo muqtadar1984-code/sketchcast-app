@@ -33,6 +33,8 @@ import { knowledgeSearch } from "./knowledge";
 import { SHELL_CONTROL_CAPABILITIES } from "./shell-controls";
 // 2026-10-30: start a book chapter's lesson (teacher → Board, student → Tutor).
 import { startLessonCapability } from "./lesson";
+// 2026-10-31: a kit's documents (deck, script, worksheet, quiz, answer key …) as text.
+import { kitDocuments } from "./documents";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -91,6 +93,11 @@ const ENTRIES: SkCapability[] = [
   // the SK Tutor chapter of a SketchCast book they hold a grant for. The
   // navigate inside refuses a page the role/hat cannot open (navigate.ts).
   startLessonCapability,
+  // 2026-10-31: kit.documents — list / read any document of a kit (the open
+  // one, the bar's, or a book chapter by number; SketchCast chapters from the
+  // catalogue source after her grant). Teaching roles only; the answer key,
+  // lesson plan and question bank never reach a student.
+  kitDocuments,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
@@ -103,3 +110,4 @@ export { SCHOOL_FIGURE_CAPABILITIES };
 export { knowledgeSearch };
 export { SHELL_CONTROL_CAPABILITIES };
 export { startLessonCapability };
+export { kitDocuments };

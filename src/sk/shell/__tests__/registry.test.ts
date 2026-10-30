@@ -127,6 +127,8 @@ const SHIPPED = [
   // 2026-10-30: start a book chapter's lesson (teacher hat → the Board,
   // student → the Tutor); not a parent's, not a leader hat's.
   "start_lesson",
+  // 2026-10-31: a kit's documents as text — teaching roles only (sk flag).
+  "kit.documents",
 ];
 const CONTROLS = ["start_tour", "tour_control", "set_answer_language", "repeat_in_language"];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
