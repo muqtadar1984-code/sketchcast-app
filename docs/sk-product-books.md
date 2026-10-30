@@ -2,100 +2,144 @@
 
 Founder, 2026-10-30: *"why dont we list down all the chapters the same way we do for the books uploaded by users? for sketchcast books we wont have parts, we would rather have 1 chapter and 1 kit of artifacts per chapter."* And, about the Classroom Board: *"my books or readymade kits are not showing up here on the board."*
 
-A bought SketchCast book now appears and works like an uploaded book: every chapter, ONE full kit per chapter (no parts), Assign, Open in SK, Download PDF, and the Classroom Board. The Board also lists every ready-made catalogue kit the teacher can open.
+Corrections the same day:
+1. *"why do we need to generate the 10 chapter kits. we already have those generated as part of the catalogue. the video should be pulled from youtube to avoid egress cost."*
+2. *"the book doesnt go to SK, it goes to the whitebaord just like a users uploaded text book."*
+
+So a bought SketchCast book appears and works like an uploaded book. It lists every chapter, and each chapter's kits are the EXISTING catalogue kits of the chapter's topics. Nothing is generated. The book is taught on the Classroom Board, not in SK. Lesson videos stream from YouTube.
 
 ## The flow
 
 ```
-pub_releases (FINAL)
+pub_releases (FINAL) + bundle.json (chapters[].topics, chapters[].videos)
    │  importer (src/sk/knowledge/release.ts → product-book.ts)
    ▼
 sk_book_products ──1:1── books (system-owned, sk_product_id, sk_release_id)
                            │  chapters [{num 0-based, title}]
-                           │  chapter_grounding: one row per chapter (sections + exercise STEMS)
-                           ▼
-           master kits = generations of that book, owned by CATALOGUE_OWNER_ID
-           (scripts/sk-product-kits.ts: one full single-part kit per chapter)
+                           │  chapter_grounding: one row per chapter (SK's knowledge)
                            │
-     ┌─────────────────────┼──────────────────────────┐
-     ▼                     ▼                          ▼
- Library card         Assign / Board              SK tutor (/sk)
- (server reads +      adopt_product_kit() →       sk_product_kits remapped:
-  signs the masters    teacher-owned copy          one row per chapter
-  after the grant      (book_id null), then the    (release chapter N →
-  decision)            normal Assign / session     the chapter's master lesson)
+   scripts/sk-product-kits.ts --apply (founder)
+   bundle topics → topics.slug → catalogue_current_kits() → topic_kits → presentation
+                           ▼
+              sk_product_kits (0170): product × release chapter → catalogue kit lesson
+                           │
+     ┌─────────────────────┼──────────────────────────────┐
+     ▼                     ▼                              ▼
+ Library card         Classroom Board                 SK tutor (/sk)
+ (server reads the    book picker / ?book=&chapter=   unchanged: kitForChapter /
+  map + kits, signs   → adopt_product_kit() →         canOpenKit read the map,
+  the documents;      her copy of the catalogue kit   now the catalogue kits
+  Watch = YouTube)    → plays it as a ready-made kit  per chapter
+                      (video from YouTube)
 ```
 
-**Chapter numbering.** Uploaded books number chapters from 0 (`books.chapters[].num`, `generations.chapter_ref`, `chapter_grounding.chapter_num`) and render `num + 1`. The product book follows that rule: release chapter N is book chapter `num = N − 1`. `sk_product_kits.chapter_ref` and `/sk/<slug>/<chapter>` keep the RELEASE number N.
+**Chapter numbering.** Uploaded books number chapters from 0 (`books.chapters[].num`, `generations.chapter_ref`, `chapter_grounding.chapter_num`) and render `num + 1`. The product book follows that rule: release chapter N is book chapter `num = N − 1`. `sk_product_kits.chapter_ref`, `/sk/<slug>/<chapter>` and the Library's "Chapter N" use the RELEASE number N. The Board's `?chapter=` is the 0-based `num`, as for uploaded books.
 
-**Access.** Book access is grants-only (`skAccess`: a live `book_access_grants` row — not revoked, `activated_at ≤ now`, `expires_at` null or later). `has_book_grant(product)` is the same rule in SQL. A licence or subscription never opens a book.
+**Access.** Book access is grants-only (`skAccess`: a live `book_access_grants` row — not revoked, `activated_at ≤ now`, `expires_at` null or later). `has_book_grant(product)` is the same rule in SQL. A licence or subscription never opens a book. The book grant IS the entitlement to the mapped catalogue kits: no topic unlock and no weekly catalogue allowance is needed or spent.
 
-**Master files.** No generations RLS policy is added. A permissive one would also surface master kits in every query that relies on RLS alone (the student dashboard lists "whatever generations I can read"), and no session may sign the system account's storage prefix anyway. As for the catalogue (`/api/catalogue/file`), the server reads the masters with the service role and signs them only after the access decision (`src/utils/my-books/server.ts`). A teacher's adopted copies (`params.product_ref`) point at the same paths. The Library signs them with the service role exactly like catalogue copies (`isCatalogueCopy` in `bookless-kits.tsx`). The Board's kit route already signs with the service role.
+**Catalogue files.** No generations RLS policy is added. The server reads the mapped kits with the service role and signs the documents only after the access decision (`src/utils/my-books/server.ts`), as `/api/catalogue/file` does. A teacher's adopted copies point at the same paths, and the Library signs them with the service role like any catalogue copy (`isCatalogueCopy` in `bookless-kits.tsx`).
 
-## Migration 0175 (`supabase/migrations/0175_sk_product_books.sql`)
+## Biology's map
+
+From the release bundle's `chapters[].topics`:
+
+| Ch | Kits (topic order) |
+|---|---|
+| 1 | cells |
+| 2 | using-a-microscope… |
+| 3 | cells (labelled with chapter 3's title, "Shared with Chapter 1") |
+| 4 | plant-and-animal-cells-compared |
+| 5 | specialised-cells |
+| 6 | states-of-matter…, diffusion-in-living-cells |
+| 7 | cells (chapter 7's title, "Shared with Chapter 1") |
+| 8 | blood…, the-human-respiratory-system, transport-in-plants |
+| 9 | inheritance-and-variation |
+| 10 | six review topics |
+
+**Label rule** (`src/sk/product-kits-plan.ts`): a row's label is the topic's title. The exception is a ONE-topic chapter whose kit an earlier chapter already maps (ch 3, 7): that row gets the chapter's own title. In a several-topic chapter (ch 10) a shared kit keeps its topic title, so the kits stay distinguishable. The Library computes "Shared with Chapter N" from the map. A topic listed twice in one chapter maps once.
+
+## Migration 0175 (`supabase/migrations/0175_sk_product_books.sql`, NOT applied)
 
 | Object | What |
 |---|---|
 | `books.sk_product_id uuid → sk_book_products(id)` + unique partial index `books_sk_product_uq` | the system book that IS a product |
 | `books.sk_release_id bigint` | the final whose chapters it carries |
-| trigger `on_book_created` recreated with `WHEN (new.sk_product_id is null)` | a product book never queues `index_book` (it has no PDF). The function body is untouched; the DO block refuses if the live trigger is not the one the repo names |
+| trigger `on_book_created` recreated with `WHEN (new.sk_product_id is null)` | a product book never queues `index_book` (it has no PDF). The function body is untouched. The DO block refuses if the live trigger is not the one the repo names |
 | `has_book_grant(uuid) → boolean` | STABLE, SECURITY DEFINER, `auth.uid()`, skAccess's book rule |
 | policy `books_sk_product_read` (permissive SELECT) | `sk_product_id is not null and removed_at is null and has_book_grant(sk_product_id)` |
-| `adopt_product_kit(uuid) → uuid` | SECURITY DEFINER copy of one master piece: grant required, master-only (the book's own owner), idempotent per (owner, source), `book_id`/`chapter_ref` null, title `"<book> — Chapter N: <title> · <piece>"`, `params.product_ref {product_id, release_id, book_id, chapter_ref, source, adopted_at}`, 0129 copy flag (no job, no credit) |
-| policies `gen_no_product_ref_insert` / `_update` (RESTRICTIVE) | clients cannot forge `params.product_ref` (0133's lesson) |
+| `adopt_product_kit(uuid) → uuid` | SECURITY DEFINER. The source must be a piece (the presentation or a non-blank `doc_generation_ids` slot) of an APPROVED `topic_kits` row whose presentation is mapped in `sk_product_kits` to a product the caller holds a live grant for. That is one lookup with one answer for "not mapped" and "not yours" (42501). The source must be done, not removed, not withdrawn. Students and suspended accounts are refused. It makes `adopt_catalogue_piece`'s copy: same storage paths, status done, `book_id`/`chapter_ref` null, the 0129 copy flag (no job, no credit), title = the source's. It writes `params.catalogue_ref` (0132's shape) AND `params.product_ref {product_id, release_id, book_id, chapter_ref, topic_kit_id, source, adopted_at}`. It is idempotent per (owner, source) across BOTH adopt functions, and logs a `catalogue_events` `adopt` row with `via: book`. It never calls `catalogue_has_access`, `unlock_catalogue_kit` or the allowance |
+| policies `gen_no_product_ref_insert` / `_update` (RESTRICTIVE) | clients cannot forge `params.product_ref` (0133's lesson; `catalogue_ref` is already refused by 0133) |
 
-Not changed: `books_read`, `books_write`, `chapter_grounding` (service role only), storage, every uploaded book.
+Not changed: `books_read`, `books_write`, `chapter_grounding` (service role only), `sk_product_kits` (service role only), storage, the catalogue's unlock rules, every uploaded book.
 
 ## Run order (founder)
 
 1. **Apply 0175** in the SQL editor as one execution. If the DO block raises, stop: the live index trigger differs from the repo.
-2. **Re-import the release.** Use Import now (`POST /api/sk/knowledge/import`) or wait for the daily cron. An already-imported final whose product has no book is no longer "unchanged": the importer fetches the bundle and writes the book and its grounding WITHOUT rewriting the knowledge blocks. `CATALOGUE_OWNER_ID` must be set wherever the importer runs (Vercel has it; add it to `.env.local` for the scripts). Without it the book is skipped with a log line.
-3. **Deploy the worker prerequisites** (below). Until then, `--apply` refuses.
-4. **Dry-run the kits:** `node --env-file=.env.local scripts/sk-product-kits.ts cells-structure-function-organisation`. It prints each chapter (done / queue / running / failed) and the cost.
-5. **Apply the kits**, off-peak (20:00–05:00 UTC) with an empty queue: `… --apply --worker-ready`. One kit at a time. It waits for each kit to finish, pauses while anyone else's job is queued or processing, and stops at the first failed lesson. Re-running it queues only the missing or failed chapters.
-6. **Dry-run the map:** `… --map`. It prints the BEFORE (the 9 old catalogue kits) and the AFTER (one row per chapter, label = the final chapter title).
-7. **Apply the map:** `… --map --apply`. It refuses while any chapter lacks a done kit. It writes the new rows first, then deletes the old ones, so `/sk` never sees an empty map.
+2. **Merge** the PR (deploys the importer, Library, Board and stage).
+3. **Re-import the release.** Use Import now (`POST /api/sk/knowledge/import`) or wait for the daily cron. An already-imported final whose product has no book is no longer "unchanged": the importer fetches the bundle and writes the book and its grounding WITHOUT rewriting the knowledge blocks. `CATALOGUE_OWNER_ID` must be set wherever the importer runs (Vercel has it). Without it the book is skipped with a log line.
+4. **Dry-run the map:** `node --env-file=.env.local scripts/sk-product-kits.ts cells-structure-function-organisation`. It reads the product's live release and its bundle. The bundle comes from S3 with your default AWS credentials, or pass `--bundle <bundle.json>`. It prints:
+   - BEFORE: the product's rows now, which are the nine 0170 seed rows;
+   - AFTER: one row per (chapter, kit), with slug, shared-with and YouTube ids;
+   - UNRESOLVED topics, with the reason (`unknown_topic`, `no_current_kit`, `no_lesson`, `lesson_not_ready`);
+   - per chapter, the bundle's `videos` beside the resolved kits' YouTube ids.
+5. **Apply the map:** `… --apply`. It refuses while a topic is unresolved unless you pass `--allow-missing`. It writes the new rows first, deletes the product's other rows (so `/sk` never sees an empty map), then re-reads and prints the live map. `--map` is still accepted. `--worker-ready` / `--any-hour` are gone.
 
-### Worker prerequisites (not in this repo)
+No generation, no queue, no cost. No worker change is needed.
 
-The script queues exactly the Library's "Generate full kit" rows (`kitRows`), owned by the catalogue account. The worker needs two small changes before those rows can build:
+## Video from YouTube
 
-1. **A PDF-less book.** `_book_prelude` always downloads `books.storage_path`. For a book with `sk_product_id` and no `storage_path`, build the chapter from `chapter_grounding.source_text` (one section, `chapter_num` = `chapter_ref`) instead of the PDF.
-2. **One part.** The rows carry `params.single_part = true` (and `params.sk_product`). The worker should then analyse the whole chapter as ONE chunk (`chunks_override = [whole chapter]`), as the catalogue kit does with its longer budget. Otherwise `build_chapter_parts` splits at `MAX_PART_WORDS` = 1,950 words, and a ~3k-word chapter becomes a 2-part video. Note the 15,000-char analysis bound: a 3k-word chapter is about 18–20k characters, so scale the char budget as `catalogue/kit.py part_chars_budget()` does.
+**Where the id comes from.** `topic_publications` holds one row per `(topic_kit_id, part, channel_language)`, written by the topic catalogue → YouTube pipeline. `src/utils/catalogue/kit-youtube.ts` reads it with the service role. A part is watchable when it meets all of these:
+- `youtube_video_id` is well-formed;
+- `superseded_by` is null;
+- `privacy` is `public` or `unlisted`;
+- `youtube_missing_since` is null.
 
-Other notes:
-- The catalogue account is a platform admin, assumed to be on an uncapped tier for `enforce_fair_use`. This is NOT verified. If it is capped, the first `--apply` insert raises and nothing is queued or spent.
-- `credit_ledger_write` records its usual rows against that account.
-- `params.catalogue` is NOT set, so the job is not routed to the catalogue path.
+The result is one id per part, in part order. A copy finds its kit through `params.catalogue_ref.topic_kit_id` (or `product_ref.topic_kit_id`). A mapped lesson finds its kit through `topic_kits.presentation_generation_id`. The bundle's `chapters[].videos` (`video:<id>`) is only a cross-check, printed by the script.
 
-## Cost
+**Rule** (`videoSource` / `lessonVideo`): use YouTube when it covers EVERY stored part. Otherwise use the stored MP4 and log it (`[present]` / `[library]` / `[sk-library]` "no watchable YouTube video for catalogue kit …"). Uploaded-book kits always use their own storage videos.
 
-About **$1.5–2.5 per kit**, ≈ $2.1 point estimate (`KIT_COST_USD` in `src/sk/product-kits-plan.ts`). Sources:
-- the worker's measured kit (`worker/process.py`: "the Sonnet analysis DOMINATES a kit's cost — $2.08");
-- the 2026-10 unit-cost note (≈ $1.5–1.8 on Gemini credits, ≈ $2.2–2.5 on Claude cash).
+Where it applies:
+- **Library, SketchCast book card:** the lesson's Watch chip opens the YouTube watch page.
+- **Library, ready-made kits (bookless-kits):** every catalogue copy's Watch chip is its YouTube link (`dashboard/page.tsx`).
+- **Classroom Board:** `/api/present/kit` answers a catalogue copy's unit with `video.youtube` (ids) and signs NO MP4. The stage (`stage.tsx`) plays `youtubeId` through the YouTube IFrame Player API (`https://www.youtube.com/iframe_api`, loaded once). `youtube-video.ts` wraps the player in the controller's `VideoLike` interface:
+  - `currentTime` get and set (`seekTo` with an asynchronous `seeked` once the player is near the target, or after 3 s);
+  - `duration`, `paused`, `play`/`pause`;
+  - `ended` and `error` events.
 
-Biology (10 chapters) ≈ **$15–25**, ≈ $21. Check the console's live average (`src/utils/kit-cost.ts` over `jobs.usage`) before a large batch.
+  Segment seeks, SK's position reads and the recorded ink times work unchanged. There is no CSP in this app (`next.config.ts` is empty, `src/proxy.ts` sets no headers, `vercel.json` has only crons), so the iframe and script load.
+- **Not possible on YouTube:** capturing a frame. The iframe is cross-origin. `freeze()` pauses and returns null, and the Board says "Could not capture the frame." "Load slides" (which captures the video's slide frames) is hidden for a YouTube lesson. "Load the deck as pages" still works.
 
 ## UI
 
-- **Library → My books.** `my-books-strip.tsx` (now a server component) renders a tile that has chapters as `product-book-card.tsx`:
-  - the card shows the cover, title, language, "N chapters", Open in SK and Download PDF;
-  - a collapsible list holds every chapter, each with its kit's files or "Lesson kit coming soon";
-  - each chapter has **Assign chapter** (`AssignModal` with `prepare` = `adopt_product_kit` over the student pieces) and **Open in SK**;
-  - buyers get no Generate, regenerate, delete or edit.
-- **Classroom Board.**
-  - **Book picker.** SketchCast books are marked "· SketchCast". Picking a chapter calls `POST /api/present/adopt {bookId, chapterNum}`. That adopts the chapter's whole kit and plays the copy as a ready-made kit.
-  - **Ready-made picker.** It lists her kits first, then every current catalogue kit she can open but has not copied. Picking one calls `POST /api/present/adopt {catalogueKit}`.
-  - **"Can open"** means a topic she unlocked, or any current kit on an unlimited tier (where the unlock is free). A capped tier's locked kit is not offered, and the Board never spends her weekly allowance.
-  - A deep link (`?book=&chapter=`) to a SketchCast chapter is not auto-adopted. Pick it from the bar instead.
-- **SK tutor.** No code change: `canOpenKit` accepts any done, live, mapped presentation (tested with a master of the product book).
+- **Library → My books** (`my-books-strip.tsx`, `product-book-card.tsx`), for a teacher or parent holding the book:
+  - The card shows the cover, title, language, "N chapters", "By SketchCast" and Download PDF.
+  - Every chapter is listed with its kits' files. A chapter with several kits labels each one with its topic. A shared kit says "Shared with Chapter N". A chapter with no kit shows "Lesson kit coming soon".
+  - Per chapter: **Teach on the board** (`/present?book=<id>&chapter=<num>`, shown when the reader passes the Board gate) and **Assign chapter**. Assign uses `AssignModal` with `prepare` = `adopt_product_kit` over the student pieces of every kit of the chapter.
+  - There is no "Open in SK", and no Generate, regenerate, delete or edit.
+  - A **student** keeps the plain tile with its "Open in SK", which is the student tutor.
+  - A parent viewing a child's book also keeps the plain tile.
+- **Library → ready-made kits:** a book's adopted copies group by catalogue topic, so several kits of one chapter stay apart.
+- **Classroom Board:**
+  - **Book picker:** SketchCast books are marked "· SketchCast" and carry each chapter's kits.
+  - **Picking a chapter, or a `?book=&chapter=` deep link:** the chapter is pending. No book rail loads and Start waits.
+    - A chapter with one kit adopts it by itself.
+    - A chapter with several kits shows "Choose the kit".
+    - The adopt is `POST /api/present/adopt {bookId, chapterNum, kit}`. The copy plays as a ready-made kit, and `autostart=1` starts once the copy exists.
+  - **Ready-made picker:** unchanged. It lists her kits first, then every current catalogue kit she can open but has not copied.
+- **SK tutor:** no code change. `canOpenKit` / `kitForChapter` read the map. A kit shared by several chapters answers from its first chapter (tested).
 
 ## Rollback
 
 `supabase/migrations/0175_sk_product_books_rollback.sql` drops the policies, both functions, the columns and the WHEN clause (the trigger returns to 0002's form). It keeps:
-- the system books, because their master kits reference them;
-- teachers' adopted copies, which are their own rows and may already be assigned.
+- the system books and their grounding;
+- teachers' adopted copies, which are their own rows and may already be assigned;
+- the `sk_product_kits` rows.
 
 Restore the old SK map by hand if needed: the 0170 seed inserts the nine catalogue kits with `on conflict do nothing`.
 
 Code rollback is a revert of the branch. The importer, Library and Board all tolerate 0175 being absent (42703 → skip / plain tile / pre-0175 book columns).
+
+## Known limits / follow-ups
+
+- The student `/sk` kit tutor and the student kit player (assigned copies) still sign the stored MP4. They were not in this change's scope.
+- A catalogue topic that is not CURRENT (for example its English video is not public, or its bank is `none`) does not resolve. The script reports it, and `--allow-missing` maps the rest.
