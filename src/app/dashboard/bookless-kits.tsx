@@ -49,8 +49,21 @@ const rank = (kind: string): number => {
   return i === -1 ? PIECE_ORDER.length : i;
 };
 
+/** A LIBRARY COPY of system-owned files: a catalogue piece (params.catalogue_ref,
+ * 0132) or a SketchCast book chapter's piece (params.product_ref, 0175). Both
+ * point at the system account's storage, so the page signs them with the
+ * service role, and both group into one ready-made kit card. */
 export const isCatalogueCopy = (l: { params: Record<string, unknown> | null }): boolean =>
-  !!l.params && typeof l.params === "object" && "catalogue_ref" in l.params;
+  !!l.params && typeof l.params === "object" && ("catalogue_ref" in l.params || "product_ref" in l.params);
+
+/** The kit a copy belongs to: its topic (catalogue) or its book chapter (SketchCast book). */
+function copyKey(l: BooklessLesson): string {
+  const p = l.params as Record<string, unknown>;
+  const product = p.product_ref as { product_id?: unknown; chapter_ref?: unknown } | null | undefined;
+  if (product && typeof product.product_id === "string") return `product:${product.product_id}:${String(product.chapter_ref ?? "")}`;
+  const ref = p.catalogue_ref as { topic_id?: unknown } | null | undefined;
+  return typeof ref?.topic_id === "string" ? ref.topic_id : titleStem(l.title);
+}
 
 /** The worker titles every piece "<topic or chapter> · <kind>" (and the
  * presentation "<topic> · <article title>"); the stem before the first
@@ -67,8 +80,7 @@ export function groupBookless(lessons: readonly BooklessLesson[]): { catalogue: 
   const stranded = new Map<string, KitGroup>();
   for (const l of lessons) {
     if (isCatalogueCopy(l)) {
-      const ref = l.params!.catalogue_ref as { topic_id?: unknown } | null;
-      const key = typeof ref?.topic_id === "string" ? ref.topic_id : titleStem(l.title);
+      const key = copyKey(l);
       const g = catalogue.get(key) ?? { key, title: titleStem(l.title), chapterRef: null, pieces: [] };
       g.pieces.push(l);
       catalogue.set(key, g);

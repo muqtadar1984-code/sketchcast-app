@@ -45,10 +45,14 @@ export type BookOption = {
   grade: string | null;
   subject: string | null;
   chapters: { num: number; title?: string }[];
+  /** A SketchCast book (0175): a chapter is ADOPTED on pick and plays as a ready-made kit. */
+  product?: true;
 };
 
-/** A ready-made kit: one entry per title prefix, keyed by its presentation. */
-export type KitOption = { id: string; title: string };
+/** A ready-made kit: one entry per title prefix, keyed by its presentation.
+ *  `adopt` = a catalogue kit she can open but has not copied yet: adopted on
+ *  pick (/api/present/adopt), then it is hers. */
+export type KitOption = { id: string; title: string; adopt?: { catalogueKit: string } };
 
 /** Exactly what /api/present/kit returns, and exactly what the board consumes. */
 type Kit = SessionKit;
@@ -207,7 +211,17 @@ export default function PresentClient({
   const kitId = pick ? pick.kit : (linkPick?.kit ?? null);
   const bookId = kitId ? null : pick ? pick.book : linkPick ? linkPick.book : (ctx?.suggestion?.bookId ?? null);
   const chapter = kitId ? null : pick ? pick.chapter : linkPick ? linkPick.chapter : (ctx?.suggestion?.chapterNum ?? null);
-  const kitPick = kits.find((k) => k.id === kitId) ?? null;
+  // Kits adopted on THIS visit (a SketchCast chapter or a catalogue kit picked
+  // from the bar): hers now, listed first, and the offers they came from go.
+  const [adopted, setAdopted] = useState<{ kit: KitOption; from: string | null; product: { book: string; chapter: number } | null }[]>([]);
+  const allKits = useMemo(() => {
+    const gone = new Set(adopted.map((a) => a.from).filter((x): x is string => !!x));
+    const mine = adopted.map((a) => a.kit);
+    return [...mine, ...kits.filter((k) => !gone.has(k.id) && !mine.some((m) => m.id === k.id))];
+  }, [adopted, kits]);
+  const kitPick = allKits.find((k) => k.id === kitId && !k.adopt) ?? null;
+  // A SketchCast chapter adopted on pick still SHOWS as its book and chapter.
+  const fromProduct = adopted.find((a) => a.kit.id === kitId)?.product ?? null;
 
   // WHICH CLASS. The timetable names it when there is one; otherwise she picks,
   // and she has to be able to — an independent teacher has classes and no
@@ -225,8 +239,35 @@ export default function PresentClient({
   const setPickedClass = useCallback((id: string | null) => setPickedClassState({ id, search }), [search]);
   const classId = pickedClass ?? link.classId ?? ctx?.classId ?? null;
   const klass = classes.find((c) => c.id === classId) ?? null;
-  const book = books.find((b) => b.id === bookId) ?? null;
-  const chapters = book?.chapters ?? [];
+  const shownBookId = fromProduct ? fromProduct.book : bookId;
+  const shownChapter = fromProduct ? fromProduct.chapter : chapter;
+  const chapters = books.find((b) => b.id === shownBookId)?.chapters ?? [];
+
+  // ADOPT ON PICK: a SketchCast chapter or a catalogue kit she has not copied
+  // becomes her own ready-made kit first (no job, no credit), because the
+  // session and kit routes only play a kit she owns.
+  const [adopting, setAdopting] = useState(false);
+  const [adoptError, setAdoptError] = useState<string | null>(null);
+  const adoptAndPick = useCallback(
+    async (body: { bookId: string; chapterNum: number } | { catalogueKit: string }, from: string | null) => {
+      setAdopting(true);
+      setAdoptError(null);
+      try {
+        const r = await fetch("/api/present/adopt", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        const d = (await r.json().catch(() => ({}))) as { kitId?: string; title?: string; reason?: string };
+        if (!r.ok || !d.kitId) throw new Error(d.reason === "no_kit" ? t.bar.kitComingSoon : d.reason === "locked" ? t.bar.kitLocked : t.bar.adoptFailed);
+        const kit: KitOption = { id: d.kitId, title: d.title || d.kitId };
+        const product = "bookId" in body ? { book: body.bookId, chapter: body.chapterNum } : null;
+        setAdopted((prev) => [{ kit, from, product }, ...prev.filter((a) => a.kit.id !== kit.id)]);
+        setPick({ book: null, chapter: null, kit: kit.id });
+      } catch (e) {
+        setAdoptError(e instanceof Error ? e.message : t.bar.adoptFailed);
+      } finally {
+        setAdopting(false);
+      }
+    },
+    [setPick, t],
+  );
 
   // SHE PICKS A CHAPTER, NOT A PART. A long chapter is split into parts at index
   // time and every kit is generated per part, so a rail that matched only
@@ -688,26 +729,30 @@ export default function PresentClient({
 
         <select
           aria-label={t.bar.book}
-          value={bookId ?? ""}
-          disabled={locked}
+          value={shownBookId ?? ""}
+          disabled={locked || adopting}
           onChange={(e) => setPick({ book: e.target.value || null, chapter: null, kit: null })}
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
         >
           <option value="">{t.bar.chooseBook}</option>
           {books.map((b) => (
             <option key={b.id} value={b.id}>
-              {b.title}
+              {b.product ? fmt(t.bar.productBook, { title: b.title }) : b.title}
             </option>
           ))}
         </select>
 
         <select
           aria-label={t.bar.chapter}
-          value={chapter ?? ""}
-          disabled={locked || !book}
-          onChange={(e) =>
-            setPick({ book: bookId, chapter: e.target.value === "" ? null : Number(e.target.value), kit: null })
-          }
+          value={shownChapter ?? ""}
+          disabled={locked || adopting || !shownBookId}
+          onChange={(e) => {
+            const num = e.target.value === "" ? null : Number(e.target.value);
+            const target = books.find((b) => b.id === shownBookId);
+            // a SketchCast chapter is adopted, then played as a ready-made kit
+            if (target?.product && num !== null) void adoptAndPick({ bookId: target.id, chapterNum: num }, null);
+            else setPick({ book: shownBookId, chapter: num, kit: null });
+          }}
           className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-40"
         >
           <option value="">{t.bar.chooseChapter}</option>
@@ -723,21 +768,48 @@ export default function PresentClient({
             and no chapter, so the two pickers above can never reach them. One
             entry per kit, keyed by its presentation. Only rendered when she has
             any — an independent teacher with no kits sees the bar unchanged. */}
-        {kits.length > 0 && (
+        {allKits.length > 0 && (
           <select
             aria-label={t.bar.kit}
-            value={kitId ?? ""}
-            disabled={locked}
-            onChange={(e) => setPick(e.target.value ? { book: null, chapter: null, kit: e.target.value } : { book: null, chapter: null, kit: null })}
+            value={fromProduct ? "" : (kitId ?? "")}
+            disabled={locked || adopting}
+            onChange={(e) => {
+              const k = allKits.find((x) => x.id === e.target.value);
+              if (k?.adopt) void adoptAndPick({ catalogueKit: k.adopt.catalogueKit }, k.id);
+              else setPick(e.target.value ? { book: null, chapter: null, kit: e.target.value } : { book: null, chapter: null, kit: null });
+            }}
             className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
           >
             <option value="">{t.bar.chooseKit}</option>
-            {kits.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.title}
-              </option>
-            ))}
+            {allKits.some((k) => !k.adopt) && (
+              <optgroup label={t.bar.myKits}>
+                {allKits
+                  .filter((k) => !k.adopt)
+                  .map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.title}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+            {allKits.some((k) => k.adopt) && (
+              <optgroup label={t.bar.moreKits}>
+                {allKits
+                  .filter((k) => k.adopt)
+                  .map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.title}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
           </select>
+        )}
+        {adopting && <span className="text-xs text-[#93A09A]">{t.bar.preparingKit}</span>}
+        {adoptError && !adopting && (
+          <span role="status" className="text-xs text-[#E7B05C]">
+            {adoptError}
+          </span>
         )}
 
         <Confidence t={t} ctx={ctx} />
