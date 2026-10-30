@@ -98,8 +98,9 @@ export function within(restrict: KnowledgeSourceRef[], all: KnowledgeSourceRef[]
       if (anyArticle) out.push(r);
       continue;
     }
-    const hit = all.find((s) => s.kind === r.kind && s.id === r.id);
-    if (hit) out.push(hit);
+    for (const hit of all.filter((s) => s.kind === r.kind && s.id === r.id && (!r.version || s.version === r.version))) {
+      if (!out.includes(hit)) out.push(hit);
+    }
   }
   return out;
 }
@@ -153,7 +154,8 @@ async function toPassages(admin: KnowledgeDb, hits: KnowledgeHit[], allowed: Kno
     .map((h): Passage | null => {
       const text = passageText(h.text);
       if (!text) return null;
-      const ref = allowed.find((s) => s.kind === h.source_kind && s.id === String(h.source_id));
+      // the same work in two languages is two sources (two releases): match the version too
+      const ref = allowed.find((s) => s.kind === h.source_kind && s.id === String(h.source_id) && (!s.version || s.version === String(h.version)));
       const art = h.source_kind === "article" ? arts.get(String(h.source_id)) : undefined;
       const section = passageText(h.title).slice(0, 200);
       const title = (ref?.title || art?.title || section || "").trim().slice(0, 200);
