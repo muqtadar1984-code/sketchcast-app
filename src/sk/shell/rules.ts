@@ -808,7 +808,7 @@ const WALK_TOUR_RE = polite(
     `(?:take|start|begin|play|replay|run|redo|do|launch|open|restart) (?:the|a|my|your) ${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?(?: again)?`,
     `take me (?:on|for) (?:a|the) ${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?|take me (?:around|through ${THE_APP})`,
     `(?:can|could|may) (?:i|we) (?:get|have|take|see|do) (?:a|the) ${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?`,
-    `(?:the |a )?${TOUR_NOUN}(?: again)?|tour (?:of|around) ${THE_APP}`,
+    `(?:the |a |an )?${TOUR_NOUN}(?: (?:of|around) ${THE_APP})?(?: again)?`,
     `walk me through (?:${THE_APP}|it|this|how (?:this|it|${THE_APP}) works)`,
     `how (?:does|do) (?:this app|the app|the application|sketchcast|this portal|the portal|this thing|this website) work|how (?:do i|do you|to|should i) use (?:this app|the app|sketchcast|this portal|the portal)`,
     `guide me(?: (?:around|through (?:${THE_APP}|it|this)))?|(?:start|begin|show me) (?:the |my )?onboarding`,

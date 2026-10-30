@@ -331,7 +331,7 @@ const BACK_RES: RegExp[] = [
   // language word decides — resolveLanguagePhrase — so "talk to me about
   // cells" or "use the diary" name no language and stay questions.
   /^(?:answer|reply|respond|write|speak|talk)(?: (?:to|with) (?:me|us))? (?:in|into) (.+?) (?:from now on|going forward|for the rest of (?:the|this) (?:chat|conversation))$/u,
-  /^from now on(?: (?:speak|talk|answer|reply|respond|use|write))?(?: (?:in|into))? (.+?)$/u,
+  /^from now on,?(?: (?:speak|talk|answer|reply|respond|use|write))?(?: (?:in|into))? (.+?)$/u,
   /^(?:speak|talk|use)(?: (?:to|with) (?:me|us))? (.+?)(?: (?:from now on|instead|only|with me))?$/u,
   /^(?:cakap|bercakap|guna(?:kan)?) (bahasa \S+(?: \S+)?)(?: (?:mulai sekarang|selepas ini|sahaja))?$/u,
   /^(?:tukar|ubah) bahasa (?:ke|kepada) (.+?)$/u,

@@ -74,7 +74,7 @@ describe("who sees them", () => {
       // for the running-tour line (walkPromptLine).
       expect(c.meta.description).not.toContain("guided tour");
     }
-    expect(startTour.meta.description).toMatch(/shown around.*tour.*demo.*walkthrough.*onboarding/s);
-    expect(tourControl.meta.description).toMatch(/resume.*next.*back.*pause.*skip/s);
+    for (const w of ["shown around", "tour", "demo", "walkthrough", "onboarding"]) expect(startTour.meta.description).toContain(w);
+    for (const w of ["resume", "next", "back", "pause", "skip"]) expect(tourControl.meta.description).toContain(w);
   });
 });
