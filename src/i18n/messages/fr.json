@@ -2215,6 +2215,20 @@
         "micUnsupported": "La saisie vocale n'est pas disponible dans ce navigateur — tu peux toujours écrire.",
         "micDenied": "Le micro est bloqué. Autorise-le dans ton navigateur, puis active le micro."
       },
+      "corner": {
+        "avatar": "SK — ouvrir le menu",
+        "menu": "Menu de SK",
+        "typeMessage": "Écrire un message",
+        "showConversation": "Afficher la conversation",
+        "hideConversation": "Masquer la conversation",
+        "clearConversation": "Effacer la conversation",
+        "cleared": "Conversation effacée.",
+        "settings": "Réglages de SK",
+        "more": "Plus",
+        "dismiss": "Fermer",
+        "needConfirm": "J'ai besoin de ta confirmation.",
+        "show": "Afficher"
+      },
       "act": {
         "diaryCardTitle": "Publier dans le carnet de {target}",
         "diaryPosted": "Publié dans le carnet de {target}.",
@@ -2729,8 +2743,10 @@
     "handsFreeHint": "Touchez le micro une fois et SK écoute jusqu'à ce que vous l'arrêtiez, au lieu de maintenir pour parler.",
     "suggestions": "Suggestions de SK",
     "suggestionsHint": "Au plus une ligne dans l'accueil de SK quand vous l'ouvrez, tirée de votre emploi du temps, de vos corrections ou de votre travail. Jamais envoyée ailleurs.",
-    "micOn": "Micro sur la page d'accueil",
-    "micOnHint": "SK écoute sur ta page d'accueil tant qu'elle est ouverte et au premier plan, et se met en pause quand SK parle. Les élèves commencent micro coupé.",
+    "micOn": "Micro de SK",
+    "micOnHint": "SK écoute tant que la page est ouverte et au premier plan, et se met en pause quand SK parle. Les élèves commencent micro coupé.",
+    "showText": "Afficher la conversation de SK",
+    "showTextHint": "Ouvre la conversation au-dessus de l'avatar de SK sur chaque page. Désactivé : seule la bulle s'affiche, et la conversation s'ouvre depuis le menu de SK.",
     "on": "Activé",
     "off": "Désactivé",
     "saving": "Enregistrement…",

@@ -2215,6 +2215,20 @@
         "micUnsupported": "A entrada de voz não está disponível neste navegador — você ainda pode digitar.",
         "micDenied": "O microfone está bloqueado. Permita-o no seu navegador e depois ligue o microfone."
       },
+      "corner": {
+        "avatar": "SK — abrir o menu",
+        "menu": "Menu do SK",
+        "typeMessage": "Escrever uma mensagem",
+        "showConversation": "Mostrar a conversa",
+        "hideConversation": "Ocultar a conversa",
+        "clearConversation": "Limpar a conversa",
+        "cleared": "Conversa limpa.",
+        "settings": "Configurações do SK",
+        "more": "Mais",
+        "dismiss": "Fechar",
+        "needConfirm": "Preciso da sua confirmação.",
+        "show": "Mostrar"
+      },
       "act": {
         "diaryCardTitle": "Publicar na agenda de {target}",
         "diaryPosted": "Publicado na agenda de {target}.",
@@ -2729,8 +2743,10 @@
     "handsFreeHint": "Toque no microfone uma vez e o SK continua a ouvir até o parar, em vez de manter premido para falar.",
     "suggestions": "Sugestões do SK",
     "suggestionsHint": "No máximo uma linha na saudação do SK quando o abre, tirada do seu horário, correções ou trabalho. Nunca é enviada para mais lado nenhum.",
-    "micOn": "Microfone na página inicial",
-    "micOnHint": "O SK ouve na sua página inicial enquanto ela está aberta e em primeiro plano, e pausa enquanto o SK fala. Os alunos começam com ele desligado.",
+    "micOn": "Microfone do SK",
+    "micOnHint": "O SK ouve enquanto a página está aberta e em primeiro plano, e pausa enquanto o SK fala. Os alunos começam com ele desligado.",
+    "showText": "Mostrar a conversa do SK",
+    "showTextHint": "Abre a conversa acima do avatar do SK em cada página. Desligado: só aparece o balão de fala, e a conversa abre pelo menu do SK.",
     "on": "Ligado",
     "off": "Desligado",
     "saving": "A guardar…",

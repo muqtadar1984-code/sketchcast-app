@@ -2215,6 +2215,20 @@
         "micUnsupported": "Input suara tidak tersedia dalam pelayar ini — anda masih boleh menaip.",
         "micDenied": "Mikrofon disekat. Benarkan dalam pelayar anda, kemudian hidupkan mikrofon."
       },
+      "corner": {
+        "avatar": "SK — buka menu",
+        "menu": "Menu SK",
+        "typeMessage": "Taip mesej",
+        "showConversation": "Tunjukkan perbualan",
+        "hideConversation": "Sembunyikan perbualan",
+        "clearConversation": "Kosongkan perbualan",
+        "cleared": "Perbualan dikosongkan.",
+        "settings": "Tetapan SK",
+        "more": "Lagi",
+        "dismiss": "Tutup",
+        "needConfirm": "Saya perlukan pengesahan anda.",
+        "show": "Tunjukkan"
+      },
       "act": {
         "diaryCardTitle": "Hantar ke diari {target}",
         "diaryPosted": "Telah dihantar ke diari {target}.",
@@ -2729,8 +2743,10 @@
     "handsFreeHint": "Ketik mikrofon sekali dan SK terus mendengar sehingga anda menghentikannya, bukan tekan-dan-tahan.",
     "suggestions": "Cadangan SK",
     "suggestionsHint": "Paling banyak satu baris dalam ucapan SK apabila anda membukanya, diambil daripada jadual waktu, penandaan atau kerja anda sendiri. Tidak dihantar ke mana-mana.",
-    "micOn": "Mikrofon di halaman utama",
-    "micOnHint": "SK mendengar di halaman utama anda semasa ia dibuka dan di hadapan, dan berhenti seketika semasa SK bercakap. Murid bermula dengan ia dimatikan.",
+    "micOn": "Mikrofon SK",
+    "micOnHint": "SK mendengar semasa halaman dibuka dan di hadapan, dan berhenti seketika semasa SK bercakap. Murid bermula dengan ia dimatikan.",
+    "showText": "Tunjukkan perbualan SK",
+    "showTextHint": "Membuka perbualan di atas avatar SK pada setiap halaman. Dimatikan: hanya gelembung pertuturan dipaparkan, dan perbualan dibuka dari menu SK.",
     "on": "Hidup",
     "off": "Mati",
     "saving": "Menyimpan…",

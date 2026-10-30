@@ -4,7 +4,7 @@
 // Before S6 they were localStorage flags in the panel only (sk-shell.tsx:
 // `sk.readAloud`, `sk.handsFree`), so they never followed a user to another
 // device. Now each is one sk_workflow_facts row — kind "preference", key
-// "read_aloud" | "hands_free" | "suggestions" | "mic_on", value { on: boolean } — written
+// "read_aloud" | "hands_free" | "suggestions" | "mic_on" | "show_text", value { on: boolean } — written
 // through the user's own session (RLS owner-only; facts.ts rememberWorkflow).
 //
 // PURE and client-safe: no server imports. The panel (client) and the
@@ -15,14 +15,16 @@
 // and is written up; after that the server is the source of truth and the
 // localStorage copy is only a fast first paint. `resolvePrefs` decides it.
 
-export type SkPrefs = { readAloud: boolean; handsFree: boolean; suggestions: boolean; micOn: boolean };
+export type SkPrefs = { readAloud: boolean; handsFree: boolean; suggestions: boolean; micOn: boolean; showText: boolean };
 export type SkPrefKey = keyof SkPrefs;
 
 /** The defaults the panel had before S6 (read aloud on, hands-free off) plus
- *  the S6 suggestions switch (design decision 5: on by default) and the home
- *  hero's Mic switch (founder 2026-10-30: on — but see defaultMicOn: the
- *  default depends on the role, so callers that know it use defaultsFor). */
-export const DEFAULT_PREFS: SkPrefs = { readAloud: true, handsFree: false, suggestions: true, micOn: true };
+ *  the S6 suggestions switch (design decision 5: on by default), the Mic
+ *  switch (founder 2026-10-30: on — but see defaultMicOn: the default depends
+ *  on the role, so callers that know it use defaultsFor) and "show text"
+ *  (founder 2026-10-30: SK is a corner avatar with a speech bubble; the
+ *  conversation's text stays hidden by default — on opens it on each page). */
+export const DEFAULT_PREFS: SkPrefs = { readAloud: true, handsFree: false, suggestions: true, micOn: true, showText: false };
 
 /** Founder 2026-10-30: the home hero's mic is ON by default for every adult
  *  role (teacher, parent, principal / coordinator, school admin, the founder)
@@ -38,10 +40,10 @@ export function defaultsFor(role?: string | null): SkPrefs {
 
 export const PREF_KIND = "preference";
 /** Preference → its sk_workflow_facts key. */
-export const PREF_FACT_KEY: Record<SkPrefKey, string> = { readAloud: "read_aloud", handsFree: "hands_free", suggestions: "suggestions", micOn: "mic_on" };
-export const PREF_KEYS: readonly SkPrefKey[] = ["readAloud", "handsFree", "suggestions", "micOn"];
-/** The localStorage keys the panel has used since S0 (suggestions and micOn are new). */
-export const PREF_LOCAL_KEY: Record<SkPrefKey, string> = { readAloud: "sk.readAloud", handsFree: "sk.handsFree", suggestions: "sk.suggestions", micOn: "sk.micOn" };
+export const PREF_FACT_KEY: Record<SkPrefKey, string> = { readAloud: "read_aloud", handsFree: "hands_free", suggestions: "suggestions", micOn: "mic_on", showText: "show_text" };
+export const PREF_KEYS: readonly SkPrefKey[] = ["readAloud", "handsFree", "suggestions", "micOn", "showText"];
+/** The localStorage keys the panel has used since S0 (suggestions, micOn and showText are new). */
+export const PREF_LOCAL_KEY: Record<SkPrefKey, string> = { readAloud: "sk.readAloud", handsFree: "sk.handsFree", suggestions: "sk.suggestions", micOn: "sk.micOn", showText: "sk.showText" };
 /** Set once this browser's local values have been written to the server. */
 export const PREFS_MIGRATED_LOCAL_KEY = "sk.prefsMigrated";
 

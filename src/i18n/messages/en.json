@@ -2215,6 +2215,20 @@
         "micUnsupported": "Voice input isn't available in this browser — you can still type.",
         "micDenied": "The microphone is blocked. Allow it in your browser, then switch the mic on."
       },
+      "corner": {
+        "avatar": "SK — open the menu",
+        "menu": "SK menu",
+        "typeMessage": "Type a message",
+        "showConversation": "Show conversation",
+        "hideConversation": "Hide conversation",
+        "clearConversation": "Clear conversation",
+        "cleared": "Conversation cleared.",
+        "settings": "SK settings",
+        "more": "More",
+        "dismiss": "Close",
+        "needConfirm": "I need your confirmation.",
+        "show": "Show"
+      },
       "act": {
         "diaryCardTitle": "Post to {target}'s diary",
         "diaryPosted": "Posted to {target}'s diary.",
@@ -2729,8 +2743,10 @@
     "handsFreeHint": "Tap the mic once and SK keeps listening until you stop it, instead of hold-to-talk.",
     "suggestions": "SK suggestions",
     "suggestionsHint": "At most one line in SK's greeting when you open it, taken from your own timetable, marking or work. Never sent anywhere else.",
-    "micOn": "Microphone on the home page",
-    "micOnHint": "SK listens on your home page while it is open and in front, and pauses while SK speaks. Students start with it off.",
+    "micOn": "SK's microphone",
+    "micOnHint": "SK listens while the page is open and in front, and pauses while SK speaks. Students start with it off.",
+    "showText": "Show SK's conversation",
+    "showTextHint": "Opens the conversation above SK's avatar on each page. Off: only the speech bubble shows, and the conversation opens from SK's menu.",
     "on": "On",
     "off": "Off",
     "saving": "Saving…",

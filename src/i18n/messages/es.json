@@ -2215,6 +2215,20 @@
         "micUnsupported": "La entrada de voz no está disponible en este navegador — aún puedes escribir.",
         "micDenied": "El micrófono está bloqueado. Permítelo en tu navegador y luego activa el micrófono."
       },
+      "corner": {
+        "avatar": "SK — abrir el menú",
+        "menu": "Menú de SK",
+        "typeMessage": "Escribir un mensaje",
+        "showConversation": "Mostrar la conversación",
+        "hideConversation": "Ocultar la conversación",
+        "clearConversation": "Borrar la conversación",
+        "cleared": "Conversación borrada.",
+        "settings": "Ajustes de SK",
+        "more": "Más",
+        "dismiss": "Cerrar",
+        "needConfirm": "Necesito tu confirmación.",
+        "show": "Mostrar"
+      },
       "act": {
         "diaryCardTitle": "Publicar en la agenda de {target}",
         "diaryPosted": "Publicado en la agenda de {target}.",
@@ -2729,8 +2743,10 @@
     "handsFreeHint": "Toca el micrófono una vez y SK sigue escuchando hasta que lo detengas, en lugar de mantener pulsado para hablar.",
     "suggestions": "Sugerencias de SK",
     "suggestionsHint": "Como mucho una línea en el saludo de SK al abrirlo, tomada de tu propio horario, correcciones o trabajo. Nunca se envía a ningún otro sitio.",
-    "micOn": "Micrófono en la página de inicio",
-    "micOnHint": "SK escucha en tu página de inicio mientras está abierta y al frente, y hace una pausa mientras SK habla. Los alumnos empiezan con él desactivado.",
+    "micOn": "Micrófono de SK",
+    "micOnHint": "SK escucha mientras la página está abierta y al frente, y hace una pausa mientras SK habla. Los alumnos empiezan con él desactivado.",
+    "showText": "Mostrar la conversación de SK",
+    "showTextHint": "Abre la conversación sobre el avatar de SK en cada página. Desactivado: solo se ve el globo de diálogo, y la conversación se abre desde el menú de SK.",
     "on": "Activado",
     "off": "Desactivado",
     "saving": "Guardando…",
