@@ -52,7 +52,7 @@ import { createSpeechCoordinator, serverProviderFor, speechMode, type SpeechCoor
 import { BrowserSpeechProvider } from "@/sk/speech/browser";
 import { googleVoiceFor } from "@/sk/speech/google-voices";
 import { pollyVoiceFor } from "@/sk/speech/polly-marks";
-import { pickBrowserVoice, readRigChoice, rigBaseForChoice, voiceGenderForChoice } from "@/sk/board/avatar";
+import { pickBrowserVoice, readRigChoice, voiceGenderForChoice } from "@/sk/board/avatar";
 import { useRigChoice } from "@/sk/board/use-rig-choice";
 import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
@@ -1280,10 +1280,12 @@ export default function SkShell({
         </div>
       </div>
       <div className="mt-2 flex flex-col items-center text-center">
-        {/* Still, cropped to head and shoulders. While SK speaks the ring and
+        {/* Still: one flattened portrait per look (public/sk/portrait, made by
+            scripts/sk-portraits.mjs from the rig layers — body.png alone has
+            no head). While SK speaks the ring and
             the label fade in — an opacity change, nothing moves. */}
         <div className="relative h-32 w-44 sm:h-36 sm:w-48 overflow-hidden rounded-2xl bg-[#E2F4F1]" data-sk="avatar" data-sk-look={rig}>
-          <Image src={`${rigBaseForChoice(rig)}body.png`} alt="" width={727} height={1100} sizes="192px" priority className="h-full w-full object-cover object-top" />
+          <Image src={rig === "A" ? "/sk/portrait/sk-a.webp" : "/sk/portrait/sk-b.webp"} alt="" width={480} height={360} unoptimized priority className="h-full w-full object-cover" />
           <span aria-hidden className={`pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-inset ring-[#0C8175] transition-opacity ${speaking ? "opacity-100" : "opacity-0"}`} />
         </div>
         <span className={`mt-1 text-[11px] font-medium text-[#0C8175] transition-opacity ${speaking ? "opacity-100" : "opacity-0"}`} aria-hidden={!speaking} data-sk="speaking">
