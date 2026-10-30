@@ -33,6 +33,8 @@
 //      phrasings are anchored: "explain photosynthesis in Malay" is a new
 //      question, not a repeat.
 
+import { frameIntent } from "./intent-normalize";
+
 /** Every language SK can answer in. The first ten are the app's locales. */
 export const SK_ANSWER_LANGS = ["en", "ms", "ms-arab", "ar", "fr", "es", "pt", "hi", "te", "mr", "zh"] as const;
 export type SkAnswerLang = (typeof SK_ANSWER_LANGS)[number];
@@ -275,8 +277,9 @@ export function uiAnswerLang(uiLocale: string | null | undefined): SkAnswerLang 
 
 export type LangCommand = { kind: "repeat"; target: LangTarget } | { kind: "back"; target: LangTarget };
 
-const LEAD_FILLERS = /^(?:(?:please|pls|can you|could you|would you|will you|hey sk|sk|okay|ok|now|tolong|boleh|cuba|sila|من فضلك|رجاء|رجاءً|ممكن|لو سمحت|s'il te plaît|s'il vous plaît|por favor|कृपया)[ ,،]+|请你|请|麻烦你|麻烦)+/u;
-const TAIL_FILLERS = /(?:[ ,،]+(?:please|pls|thanks|thank you|tolong|ya|من فضلك|رجاء|رجاءً|لو سمحت|s'il te plaît|s'il vous plaît|svp|stp|por favor|कृपया|प्लीज़)|吧|好吗|谢谢)+$/u;
+// The greeting / filler / politeness frame comes off through the ONE shared
+// normaliser (intent-normalize.ts), so "Hi SK, say that in Malay, thanks!"
+// reaches the anchored phrasings below as "say that in malay".
 
 /** Anchored phrasings that REPEAT the last explanation in `lang`. */
 const REPEAT_RES: RegExp[] = [
@@ -324,18 +327,32 @@ const BACK_RES: RegExp[] = [
   /^वापस (\S+?) में(?: बोलो| बोलिए)?$/u,
   /^(मेरी भाषा) में(?: बोलो| बोलिए)?$/u,
   /^(నా భాష)లో(?: మాట్లాడండి)?$/u,
+  // 2026-10-30 (intent-robust): more ways to SWITCH (never a repeat). The
+  // language word decides — resolveLanguagePhrase — so "talk to me about
+  // cells" or "use the diary" name no language and stay questions.
+  /^(?:answer|reply|respond|write|speak|talk)(?: (?:to|with) (?:me|us))? (?:in|into) (.+?) (?:from now on|going forward|for the rest of (?:the|this) (?:chat|conversation))$/u,
+  /^from now on(?: (?:speak|talk|answer|reply|respond|use|write))?(?: (?:in|into))? (.+?)$/u,
+  /^(?:speak|talk|use)(?: (?:to|with) (?:me|us))? (.+?)(?: (?:from now on|instead|only|with me))?$/u,
+  /^(?:cakap|bercakap|guna(?:kan)?) (bahasa \S+(?: \S+)?)(?: (?:mulai sekarang|selepas ini|sahaja))?$/u,
+  /^(?:tukar|ubah) bahasa (?:ke|kepada) (.+?)$/u,
+  /^(?:تحدث|تكلم|تحدّث|تكلّم)(?: معي)? ((?:بال|باللغة )\S+)$/u,
+  /^(?:غيّر|غير|بدّل|بدل) اللغة (?:إلى|الى) (.+?)$/u,
+  /^(?:parle|parlez|réponds|répondez)(?:-moi)?(?: en)? (?:l'|le |la )?(.+?)$/u,
+  /^(?:passe|passez|change|changez)(?: de langue)? (?:en |à l'|au |à )(.+?)$/u,
+  /^(?:habla|háblame|hablame|responde|contesta)(?: en)? (?:el )?(.+?)$/u,
+  /^(?:cambia|cambiemos|pasa|pasemos)(?: el idioma)? (?:a|al) (.+?)$/u,
+  /^(?:fala|fale|responde|responda)(?: em)? (?:o )?(.+?)$/u,
+  /^(?:muda|mude|troca|troque)(?: o idioma)? (?:para|pro) (?:o )?(.+?)$/u,
+  /^(\S+?) में बात (?:करो|करें|कीजिए)$/u,
+  /^(\S+?)‌?లో మాట్లాడు$/u,
 ];
 
-/** Lower-cased, end punctuation off, politeness off; `polite` = a filler was there. */
+/** Lower-cased, the frame off (greetings, "SK", politeness, end punctuation);
+ *  `polite` = a frame word was there ("Malay please" is a command, "Malay?"
+ *  is not). */
 function normCommand(text: string): { s: string; polite: boolean } {
-  const base = (text ?? "")
-    .toLowerCase()
-    .replace(/[“”"«»]/g, "")
-    .replace(/[?!.;:。！？؟]+$/u, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const s = base.replace(LEAD_FILLERS, "").replace(TAIL_FILLERS, "").replace(/[,،]+$/u, "").trim();
-  return { s, polite: s !== base };
+  const f = frameIntent(text);
+  return { s: f.lowered.replace(/[,،]+$/u, "").trim(), polite: f.framed };
 }
 
 /**

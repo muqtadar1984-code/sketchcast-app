@@ -24,6 +24,7 @@
 // The tour writes nothing but the seen row at the end (see sk-launcher.tsx),
 // makes no model call, and never sends a sample question.
 
+import { INTENT_FILLER_WORDS, intentWords } from "@/sk/shell/intent-normalize";
 import { WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkRole, type WalkStopDef } from "@/sk/walkthrough/stops";
 
 export type WalkStatus = "idle" | "running" | "paused" | "done" | "skipped";
@@ -521,23 +522,18 @@ const CMD: Array<[WalkCommand, RegExp]> = [
 // ("go to the next one"). A real question ("how do I continue a lesson?")
 // keeps words that are neither, so it stays a question.
 
-/** Greetings and fillers, any app language (whole words or phrases). */
+/** Greetings and fillers, any app language (whole words or phrases): the ONE
+ *  shared frame list (intent-normalize.ts) plus the yes-words a command may
+ *  carry here ("yes, next"). */
 const FILLERS = [
-  "hi", "hii", "hello", "hey", "hiya", "ok", "okay", "okey", "k", "sk", "please", "pls", "plz", "can you", "could you", "would you", "will you", "can we", "could we",
-  "let's", "lets", "let us", "now", "so", "yes", "yeah", "yep", "sure", "alright", "all right", "right", "thanks", "thank you", "i want to", "i'd like to", "i would like to", "want to", "just",
-  "hai", "helo", "sila", "tolong", "boleh", "jom", "mari", "baik", "terima kasih",
-  "مرحبا", "اهلا", "أهلا", "من فضلك", "لو سمحت", "حسنا", "نعم",
-  "salut", "bonjour", "s'il te plaît", "s'il vous plaît", "d'accord", "oui", "merci",
-  "hola", "por favor", "vale", "sí", "si", "gracias",
-  "olá", "ola", "oi", "obrigado", "obrigada", "sim",
-  "नमस्ते", "नमस्कार", "कृपया", "ठीक है", "हाँ", "धन्यवाद",
-  "दया करून", "हो",
-  "నమస్తే", "దయచేసి", "సరే", "అవును",
+  ...INTENT_FILLER_WORDS,
+  "k", "yes", "yeah", "yep", "sure", "want to", "can we", "could we",
+  "oui", "d'accord", "sí", "si", "sim", "हाँ", "हो", "అవును",
 ];
 
 /** Words that only carry a command along ("go to the next one"). */
 const LIGHT = new Set([
-  "go", "to", "the", "one", "stop", "step", "page", "on", "with", "this", "that", "a", "an", "again", "ahead", "it", "me", "us", "of", "our", "your", "my", "please", "now",
+  "go", "to", "the", "one", "stop", "step", "page", "on", "with", "this", "that", "a", "an", "again", "ahead", "it", "me", "us", "of", "our", "your", "my", "please", "now", "show", "take", "move", "last", "part", "bit", "little", "sec", "second", "moment", "minute", "for", "just",
   "ke", "yang", "ini", "itu", "dengan",
   "إلى", "الى", "مع", "هذه", "هذا",
   "la", "le", "les", "à", "au", "avec", "cette", "ce",
@@ -552,11 +548,11 @@ const TOUR_WORDS = ["tour", "the tour", "walkthrough", "walk through", "guided t
 
 /** Command words found anywhere (phrases first, so "go back" beats "back"). */
 const LOOSE: Array<[WalkCommand, string[]]> = [
-  ["resume", ["continue", "carry on", "resume", "keep going", "go on with", "sambung", "sambungkan", "teruskan", "تابع", "استمر", "واصل", "continuer", "continuez", "continuar", "continua", "जारी", "सुरू ठेवा", "కొనసాగించు"]],
-  ["skip", ["skip", "end", "stop", "finish", "exit", "quit", "close", "langkau", "tamat", "hentikan", "تخط", "تخطى", "إنهاء", "أنهي", "passer", "terminer", "arrêter", "omitir", "saltar", "terminar", "pular", "encerrar", "छोड़ें", "छोड़ो", "बंद", "वगळा", "దాటవేయి"]],
+  ["resume", ["continue", "carry on", "resume", "keep going", "go on with", "pick up", "lanjutkan", "lanjut", "sambung", "sambungkan", "teruskan", "تابع", "استمر", "واصل", "أكمل", "اكمل", "continuer", "continuez", "continuar", "continua", "continúa", "continúe", "continue com", "जारी", "सुरू ठेवा", "కొనసాగించు"]],
+  ["skip", ["skip", "end", "stop", "finish", "exit", "quit", "close", "langkau", "tamat", "tamatkan", "hentikan", "تخط", "تخطى", "إنهاء", "أنهي", "أنهِ", "انهي", "passer", "terminer", "arrêter", "omitir", "saltar", "terminar", "pular", "encerrar", "छोड़ें", "छोड़ो", "बंद", "वगळा", "దాటవేయి"]],
   ["back", ["go back", "back", "previous", "kembali", "sebelumnya", "السابق", "رجوع", "ارجع", "retour", "précédent", "precedent", "atrás", "atras", "anterior", "voltar", "पीछे", "पिछला", "मागे", "వెనుకకు"]],
   ["pause", ["pause", "hold on", "wait", "jeda", "tunggu", "توقف", "انتظر", "attends", "attendez", "espera", "pausa", "pausar", "रुको", "थांबा", "ఆగు"]],
-  ["next", ["next", "go on", "seterusnya", "berikutnya", "التالي", "التالية", "suivant", "suivante", "siguiente", "próximo", "proximo", "seguinte", "अगला", "आगे", "पुढे", "पुढील", "తదుపరి"]],
+  ["next", ["next", "go on", "move on", "go forward", "forward", "seterusnya", "berikutnya", "التالي", "التالية", "suivant", "suivante", "siguiente", "próximo", "proximo", "seguinte", "अगला", "आगे", "पुढे", "पुढील", "తదుపరి"]],
 ];
 
 /** Words that turn a command around ("don't skip the tour"). */
@@ -564,7 +560,7 @@ const NEGATION = /(?:^| )(?:don't|dont|do not|not|no|never|jangan|tidak|لا|ne|
 
 /** "skip" and friends with a meaning outside the tour ("stop", "end"): only
  *  with the tour named. */
-const NEEDS_TOUR = new Set(["end", "stop", "finish", "exit", "quit", "close", "hentikan", "إنهاء", "أنهي", "arrêter", "terminar", "encerrar", "बंद"]);
+const NEEDS_TOUR = new Set(["end", "stop", "finish", "exit", "quit", "close", "hentikan", "إنهاء", "أنهي", "أنهِ", "انهي", "arrêter", "terminar", "encerrar", "बंद"]);
 
 const MAX_LOOSE_WORDS = 8;
 /** Other words a command may carry when the tour is named ("…the tour you were giving me"). */
@@ -574,15 +570,7 @@ const MAX_EXTRA_WORDS = 3;
 const QUESTION_START = /^(?:how|what|what's|whats|why|when|where|who|which|is|are|does|do|can i|should|bagaimana|macam mana|apa|kenapa|mengapa|bila|di mana|كيف|ماذا|ما|لماذا|متى|أين|هل|comment|quoi|pourquoi|quand|où|est-ce|cómo|como|qué|que|por qué|cuándo|dónde|o que|porque|quando|onde|कैसे|क्या|क्यों|कब|कहाँ|कसे|काय|का|कधी|कुठे|ఎలా|ఏమి|ఎందుకు|ఎప్పుడు|ఎక్కడ)(?: |$)/u;
 
 /** Lower-case, quotes and punctuation to spaces, one space between words. */
-function normalise(text: string): string {
-  return String(text ?? "")
-    .toLowerCase()
-    .replace(/[’`]/g, "'")
-    .replace(/[“”"«»]/g, " ")
-    .replace(/[?!.,;:।؟،…()[\]{}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+const normalise = intentWords;
 
 const has = (t: string, phrase: string) => ` ${t} `.includes(` ${phrase} `);
 const cut = (t: string, phrase: string) => ` ${t} `.split(` ${phrase} `).join(" ").replace(/\s+/g, " ").trim();
