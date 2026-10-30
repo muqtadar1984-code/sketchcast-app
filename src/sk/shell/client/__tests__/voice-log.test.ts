@@ -107,11 +107,11 @@ describe("the browser voice reports a refused utterance as NotAllowedError", () 
       this.text = text;
     } as unknown as typeof SpeechSynthesisUtterance);
     const p = new BrowserSpeechProvider("en-US");
-    const r1 = await p.synthesize("Hello.", "browser:default", {});
+    const r1 = await p.synthesize("Hello.", "browser:default", { marks: [] });
     const first = r1.play!({});
     spoken[0]!.onerror!({ error: "not-allowed" });
     await expect(first).rejects.toMatchObject({ name: "NotAllowedError" });
-    const r2 = await p.synthesize("Again.", "browser:default", {});
+    const r2 = await p.synthesize("Again.", "browser:default", { marks: [] });
     const second = r2.play!({});
     spoken[1]!.onerror!({ error: "interrupted" });
     await expect(second).resolves.toBeUndefined();
