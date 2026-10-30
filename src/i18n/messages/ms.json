@@ -2710,7 +2710,8 @@
         "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
         "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Apabila saya bertindak bagi pihak anda, saya tunjukkan kad dahulu dan tiada apa-apa berlaku sehingga anda sahkan. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
         "reportProblem": "Jika kit gagal, laporkan di sini dan kami akan menelitinya. Untuk perkara lain, Laporkan masalah ada di sudut kiri bawah.",
-        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya."
+        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya.",
+        "uploadNow": "Itu sahaja untuk panduan ini. Apabila anda bersedia, klik di sini untuk memuat naik buku teks anda dan saya akan menjadikannya pelajaran."
       },
       "student": {
         "hello": "Hai, saya SK! Saya akan tunjukkan sekeliling dalam dua minit. Ketik untuk mendengar saya, atau baca sahaja.",
@@ -2756,7 +2757,8 @@
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
         "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
         "reportProblem": "Jika kit gagal, laporkan di sini dan kami akan menelitinya. Untuk perkara lain, Laporkan masalah ada di sudut kiri bawah.",
-        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya."
+        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya.",
+        "uploadNow": "Itu sahaja untuk panduan ini. Apabila anda bersedia, klik di sini untuk memuat naik buku teks dan saya akan menjadikannya pelajaran untuk anak-anak anda."
       },
       "principal": {
         "hello": "Selamat datang. Saya SK, dan saya akan tunjukkan gambaran keseluruhan sekolah dalam kira-kira tiga minit. Ketik untuk mendengar saya.",

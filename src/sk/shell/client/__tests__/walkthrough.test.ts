@@ -58,7 +58,7 @@ const TEACHER_ALL: WalkFacts = { books: true, bookId: "b1", classId: "c1", catal
 const TEACHER_ORDER = [
   "hello", "library", "openBook", "generate", "pieces", "downloads", "rerun", "assign", "boardBridge", "more",
   "setup", "myBooks", "plan", "board", "boardSk", "kits", "skTutor", "diary", "analytics", "gradeQueue", "timetable", "calendar",
-  "notifications", "language", "settings", "skMenu", "skAsk", "reportProblem",
+  "notifications", "language", "settings", "skMenu", "skAsk", "reportProblem", "uploadNow",
 ];
 const partIds = (s: PlannedStop | undefined) => (s?.parts ?? []).map((p) => p.id);
 
@@ -96,12 +96,12 @@ describe("needHolds / resolveRoute", () => {
 });
 
 describe("planWalk: per-role stops as built", () => {
-  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 28 with Report a problem, student 11 → 16, parent 12 → 16, principal 12 → 16, coordinator 10 → 14)", () => {
-    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(28);
+  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close, student 11 → 16, parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
+    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(29);
     expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(16);
     expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(16);
     // Home educator: Library + kits in, notices + Test Papers out.
-    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(16);
+    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(17);
     expect(planWalk("principal", { analytics: true, timetable: true, diary: true, notices: true, roleHats: true })).toHaveLength(16);
     expect(planWalk("coordinator", { timetable: true, diary: true, notices: true })).toHaveLength(14);
   });
@@ -213,7 +213,7 @@ describe("planWalk: per-role stops as built", () => {
     expect(s.anchors[1]).toEqual({ sel: '[data-tour="assignments"]', line: "openLessonEmpty" });
   });
   it("parent: no child → straight to Add child; unverified → say why; home educator → Library, no notices or Test Papers", () => {
-    expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "reportProblem", "notifications", "language", "skMenu", "addChild"]);
+    expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "reportProblem", "notifications", "language", "skMenu", "addChild", "uploadNow"]);
     expect(planWalk("parent", { children: 0 }).find((s) => s.id === "addChild")?.line).toBe("addChildFirst");
     const un = planWalk("parent", { children: 1, verifiedChildren: 0, schoolParent: true, parentPortal: true });
     expect(un.find((s) => s.id === "childCard")?.line).toBe("childUnverified");
@@ -321,7 +321,7 @@ describe("combined stops: one narration, the highlight moving part by part", () 
     expect(currentStop(s)!.id).toBe("generate");
     s = backStop(backStop(s));
     expect(currentStop(s)!.id).toBe("library");
-    expect(s.stops).toHaveLength(28);
+    expect(s.stops).toHaveLength(29);
   });
   it("a combined stop survives the sessionStorage round trip; a broken parts list reads as none", () => {
     const mem = new Map<string, string>();
@@ -381,6 +381,43 @@ describe("Report a problem: the inline report on a failed kit first, else the bo
     // The student's and the parent's dashboards: any failed kit, then the widget.
     expect(stop("student", {})!.anchors.map((a) => a.sel)).toEqual([FAILED, WIDGET]);
     expect(stop("parent", {})!.anchors.map((a) => a.sel)).toEqual([FAILED, WIDGET]);
+  });
+});
+
+// Founder 2026-10-30: "at the end tell SK to get back to library and
+// highlight the upload button and ask the client, click here to upload your
+// textbook if you are ready."
+describe("the close: back on the Library, at Upload", () => {
+  const UPLOAD = '[data-tour="upload-book"]';
+  it("teacher: the LAST stop, on the Library route, pointing at Upload, with or without a book", () => {
+    for (const facts of [TEACHER_ALL, { ...TEACHER_ALL, books: false, bookId: null }, { ...TEACHER_ALL, board: false, diary: false, reportIssue: false }]) {
+      const p = planWalk("teacher", facts);
+      const last = p.at(-1)!;
+      expect(last.id).toBe("uploadNow");
+      expect(last.route).toBe(facts.bookId ? `/dashboard?book=${facts.bookId}` : "/dashboard");
+      expect(last.anchors).toEqual([{ sel: UPLOAD }]);
+      expect(last.line).toBe("uploadNow");
+      // Report a problem comes right before it.
+      if (facts.reportIssue !== false) expect(ids(p).at(-2)).toBe("reportProblem");
+    }
+    // The old /dashboard `upload` stop is gone: Upload is only a part of the setup narration.
+    const p = planWalk("teacher", TEACHER_ALL);
+    expect(ids(p)).not.toContain("upload");
+    expect(p.filter((s) => s.anchors[0]?.sel === UPLOAD).map((s) => s.id)).toEqual(["setup", "uploadNow"]);
+  });
+  it("a home educator parent closes the same way; a school parent, the student and the leaders keep their endings", () => {
+    const home = planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false });
+    expect(ids(home).at(-1)).toBe("uploadNow");
+    expect(home.at(-1)!.route).toBe("/dashboard");
+    expect(ids(home).at(-2)).toBe("addChild");
+    const school = planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: true, parentPortal: true });
+    expect(ids(school).at(-1)).toBe("addChild");
+    expect(ids(school)).not.toContain("uploadNow");
+    for (const role of ["student", "principal", "coordinator"] as const) {
+      const p = planWalk(role, { roleHats: true });
+      expect(ids(p).at(-1), role).toBe("skAsk");
+      expect(ids(p), role).not.toContain("uploadNow");
+    }
   });
 });
 

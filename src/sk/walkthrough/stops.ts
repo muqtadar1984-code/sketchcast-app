@@ -366,6 +366,11 @@ const TEACHER: WalkStopDef[] = [
   { id: "skAsk", route: "/dashboard/settings", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
   // Near the end, back on the Library (a failed kit's inline report is there).
   reportProblem(LIB, "open"),
+  // The close (founder 2026-10-30: "at the end tell SK to get back to library
+  // and highlight the upload button and ask the client, click here to upload
+  // your textbook if you are ready"). The invitation lives only here: the
+  // `setup` narration just names Upload, so it is not said twice.
+  { id: "uploadNow", route: LIB, anchors: [UPLOAD] },
 ];
 
 const STUDENT: WalkStopDef[] = [
@@ -420,6 +425,9 @@ const PARENT: WalkStopDef[] = [
   { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
   { id: "skMenu", route: "/dashboard/settings", anchors: [HERO, LAUNCHER] },
   { id: "addChild", route: "/dashboard/children", anchors: ['[data-tour="add-child"]'], fallback: [{ unless: "children", line: "addChildFirst" }] },
+  // A home educator uploads books like a teacher: the same close, at Upload
+  // on their Library. A school parent's tour keeps its Add child ending.
+  { id: "uploadNow", route: "/dashboard", anchors: [UPLOAD], needs: ["!schoolParent"] },
 ];
 
 const PRINCIPAL: WalkStopDef[] = [

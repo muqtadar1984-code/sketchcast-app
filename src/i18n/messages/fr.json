@@ -2710,7 +2710,8 @@
         "skMenu": "Touchez-moi à tout moment pour ouvrir mon menu : écrire un message, afficher notre conversation, activer ou couper le micro ou la lecture à voix haute, ou effacer la conversation.",
         "skAsk": "Demandez-moi ce que vous voulez, à la voix ou par écrit, dans l'une de mes onze langues ; « dis-le en anglais » répète une réponse dans une autre. Quand j'agis pour vous, je vous montre d'abord une carte, et rien ne se passe tant que vous ne confirmez pas. Pour revoir ceci, appuyez sur Visite ou dites « Fais-moi visiter ».",
         "reportProblem": "Si un kit échoue, signalez-le ici même et nous nous en occuperons. Pour tout le reste, Signaler un problème se trouve en bas à gauche.",
-        "reportProblemWidget": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment. Si un kit échoue, un lien pour le signaler apparaît aussi juste à côté."
+        "reportProblemWidget": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment. Si un kit échoue, un lien pour le signaler apparaît aussi juste à côté.",
+        "uploadNow": "Voilà pour la visite. Quand vous serez prêt, cliquez ici pour importer votre manuel et je le transformerai en leçons."
       },
       "student": {
         "hello": "Salut, je suis SK ! Je te fais faire le tour en deux minutes. Touche pour m'entendre, ou lis simplement.",
@@ -2756,7 +2757,8 @@
         "language": "Changez ici la langue de l'application. Je parlerai et répondrai aussi dans cette langue.",
         "skMenu": "Touchez-moi à tout moment pour ouvrir mon menu : écrire un message, afficher notre conversation, activer ou couper le micro ou la lecture à voix haute, ou effacer la conversation.",
         "reportProblem": "Si un kit échoue, signalez-le ici même et nous nous en occuperons. Pour tout le reste, Signaler un problème se trouve en bas à gauche.",
-        "reportProblemWidget": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment. Si un kit échoue, un lien pour le signaler apparaît aussi juste à côté."
+        "reportProblemWidget": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment. Si un kit échoue, un lien pour le signaler apparaît aussi juste à côté.",
+        "uploadNow": "Voilà pour la visite. Quand vous serez prêt, cliquez ici pour importer un manuel et je le transformerai en leçons pour vos enfants."
       },
       "principal": {
         "hello": "Bienvenue. Je suis SK, et je vais vous montrer l'école d'un coup d'œil, en trois minutes environ. Touchez pour m'entendre.",

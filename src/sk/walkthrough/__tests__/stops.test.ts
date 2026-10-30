@@ -89,6 +89,14 @@ describe("every line a stop can say is in all ten message files", () => {
       }
     }
   });
+  it("the invitation to upload is said once: the close asks, the setup narration only names Upload", () => {
+    const t = en.sk.walkthrough.teacher;
+    expect(t.uploadNow).toBe("That's the tour. When you're ready, click here to upload your textbook and I'll turn it into lessons.");
+    expect(t.upload).not.toMatch(/click here|when you're ready/i);
+    expect(en.sk.walkthrough.parent.uploadNow).toMatch(/^That's the tour\. When you're ready, click here to upload a textbook/);
+    // The old long upload explanation (title and author) is gone.
+    expect(t.upload).not.toMatch(/title and author/);
+  });
   it("the 'once you generate a kit' and 'More' lines say what the code does: free papers, no credit numbers", () => {
     const t = en.sk.walkthrough.teacher;
     expect(t.assignNone).toMatch(/^Once you generate a kit, you'll be able to assign it to a class/);

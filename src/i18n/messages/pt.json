@@ -2710,7 +2710,8 @@
         "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
         "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta em outro idioma. Quando eu faço algo por você, mostro um cartão antes, e nada acontece até você confirmar. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”.",
         "reportProblem": "Se um kit falhar, relate aqui mesmo e nós vamos verificar. Para qualquer outra coisa, Relatar um problema fica no canto inferior esquerdo.",
-        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado."
+        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado.",
+        "uploadNow": "Esse foi o guia. Quando estiver pronto, clique aqui para enviar seu livro didático e eu o transformo em aulas."
       },
       "student": {
         "hello": "Oi, eu sou o SK! Vou te mostrar tudo em dois minutos. Toque para me ouvir, ou só acompanhe a leitura.",
@@ -2756,7 +2757,8 @@
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
         "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
         "reportProblem": "Se um kit falhar, relate aqui mesmo e nós vamos verificar. Para qualquer outra coisa, Relatar um problema fica no canto inferior esquerdo.",
-        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado."
+        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado.",
+        "uploadNow": "Esse foi o guia. Quando estiver pronto, clique aqui para enviar um livro didático e eu o transformo em aulas para seus filhos."
       },
       "principal": {
         "hello": "Boas-vindas. Eu sou o SK, e vou te mostrar a escola num relance em uns três minutos. Toque para me ouvir.",

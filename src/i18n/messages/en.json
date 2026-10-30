@@ -2710,7 +2710,8 @@
         "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
         "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer in another. When I act for you, I show a card first and nothing happens until you confirm. To see this again, press Tour or say 'Show me around'.",
         "reportProblem": "If a kit ever fails, report it right here and we'll look into it. For anything else, Report a problem is at the bottom left.",
-        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it."
+        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it.",
+        "uploadNow": "That's the tour. When you're ready, click here to upload your textbook and I'll turn it into lessons."
       },
       "student": {
         "hello": "Hi, I'm SK! I'll show you around in two minutes. Tap to hear me, or read along.",
@@ -2756,7 +2757,8 @@
         "language": "Change the app's language here. I'll speak and answer in it too.",
         "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
         "reportProblem": "If a kit ever fails, report it right here and we'll look into it. For anything else, Report a problem is at the bottom left.",
-        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it."
+        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it.",
+        "uploadNow": "That's the tour. When you're ready, click here to upload a textbook and I'll turn it into lessons for your children."
       },
       "principal": {
         "hello": "Welcome. I'm SK, and I'll show you the school at a glance in about three minutes. Tap to hear me.",
