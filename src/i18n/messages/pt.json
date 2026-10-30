@@ -2550,6 +2550,159 @@
       "rungNoCheck": "Ainda não há outra pergunta sobre esta ideia. Aqui está a explicação.",
       "revealAnswer": "A resposta:",
       "rungHintSection": "Pense no que a seção sobre {heading} diz sobre isso."
+    },
+    "walkthrough": {
+      "ui": {
+        "title": "Tour",
+        "pause": "Pausar",
+        "resume": "Retomar",
+        "back": "Voltar",
+        "next": "Próximo",
+        "skip": "Pular",
+        "finish": "Concluir",
+        "tapForSound": "Toque para ouvir",
+        "continueTour": "Continuar o tour",
+        "progress": "{n} de {total}",
+        "takeTour": "Fazer o tour",
+        "example": "Exemplo",
+        "exampleNote": "É só um exemplo. Nada é enviado.",
+        "needsClick": "Precisa de um clique",
+        "tryAsking": "Experimente perguntar",
+        "chipHint": "Toque em uma para colocá-la na caixa. Ela só é enviada quando você aperta Enviar.",
+        "placeholder": "Pergunte o que quiser…",
+        "send": "Enviar",
+        "controls": "Controles do tour",
+        "startLine": "Este é o tour. Vou te mostrar tudo."
+      },
+      "chips": {
+        "lessonOnPhotosynthesis": "Tem uma aula sobre fotossíntese?",
+        "howAreMyClasses": "Como estão minhas turmas?",
+        "whoIsAtRisk": "Quem está em risco?",
+        "whatsNext": "O que vem agora?",
+        "howAmIDoing": "Como estou indo?",
+        "howAreMyKids": "Como estão meus filhos?",
+        "fallingBehind": "Meu filho está ficando para trás?",
+        "whatsOverdue": "O que está atrasado?",
+        "schoolNotices": "Tem algum aviso da escola?",
+        "howIsTheSchool": "Como está a escola?",
+        "atRiskGrade": "Quem está em risco no 5º ano?",
+        "markingPilingUp": "Quais professores estão com correções acumuladas?",
+        "howManyPeople": "Quantos professores e alunos nós temos?",
+        "shelfGaps": "Onde estão as lacunas na estante?",
+        "whatsOnNow": "Que aulas estão acontecendo agora?",
+        "generationCost": "Qual é o nosso custo de geração?",
+        "schoolTrend": "Mostre a tendência da escola."
+      },
+      "demo": {
+        "lessonPrepare": {
+          "title": "Preparar uma aula",
+          "rows": "Livro: Biologia, 1º ano do ensino médio\nCapítulo: 3, Divisão celular\nPronta até: sexta-feira\nCusto: Usa créditos"
+        },
+        "assign": {
+          "title": "Atribuir a uma turma",
+          "rows": "Turma: 5A\nTrabalho: Exercícios de divisão celular\nPrazo: sexta-feira, 17:00"
+        },
+        "markingGrade": {
+          "title": "Dar uma nota",
+          "rows": "Aluno: Aisha\nTrabalho: Exercícios de divisão celular\nNota: 7 de 10\nComentário: Bom trabalho"
+        },
+        "diaryNote": {
+          "title": "Publicar na agenda da turma",
+          "rows": "Turma: 7B\nRecado: Tragam o jaleco amanhã, por favor."
+        },
+        "diaryParent": {
+          "title": "Recado para o professor",
+          "rows": "Filho: Adam\nRecado: O Adam estava doente ontem."
+        },
+        "bookActivate": {
+          "title": "Ativar um código de livro",
+          "rows": "Código: ••••-••••\nPara: Você"
+        },
+        "bookActivateChild": {
+          "title": "Ativar um código de livro",
+          "rows": "Código: ••••-••••\nPara: Aisyah"
+        },
+        "noticeSchool": {
+          "title": "Publicar um aviso da escola",
+          "rows": "Quem vê: Toda a equipe\nAviso: Reunião da equipe na sexta-feira às 14h."
+        }
+      },
+      "teacher": {
+        "hello": "Oi, eu sou o SK, seu companheiro no SketchCast. Vou te mostrar tudo em uns três minutos. Toque em qualquer lugar para me ouvir, ou só acompanhe a leitura.",
+        "library": "Esta é a sua Biblioteca. Envie um livro didático, ou use um da estante da sua escola, e cada capítulo vira uma aula que você pode dar.",
+        "generate": "Escolha um capítulo e aperte Gerar: você recebe uma videoaula narrada, uma apresentação de slides e cinco documentos. Isso usa créditos. Ou é só me dizer: “prepare o capítulo 3 para sexta”.",
+        "noBooks": "Comece enviando um livro didático aqui. Depois disso, cada capítulo ganha um botão Gerar e, em seguida, uma aula que você pode reproduzir e atribuir.",
+        "output": "As aulas prontas passam bem aqui, e os slides e exercícios são baixados prontos para editar. Nas ferramentas do livro, você também pode montar uma prova com os capítulos que já deu.",
+        "outputNoExam": "As aulas prontas passam bem aqui, e os slides e exercícios são baixados prontos para editar.",
+        "assign": "Atribua a aula, os exercícios e o quiz de um capítulo a uma turma com um clique. Você também pode dizer “atribua os exercícios ao 5A para sexta”: eu mostro um cartão, e nada acontece até você confirmar.",
+        "classes": "Suas turmas ficam aqui: crie uma, adicione alunos, e o progresso deles passa a ser acompanhado sozinho.",
+        "myBooks": "Meus livros guarda os livros SketchCast que você recebeu: abra no SK ou baixe o PDF. O medidor mostra quanto do plano deste mês você já usou.",
+        "kits": "Os kits prontos são aulas finalizadas que você pode desbloquear toda semana e copiar para a sua Biblioteca para atribuir. Me pergunte “tem uma aula sobre fotossíntese?” e eu procuro em todo lugar.",
+        "analytics": "Minhas estatísticas mostra conclusão, notas e os temas que os alunos vivem reabrindo. Me pergunte “como estão minhas turmas?” ou “quem está em risco?” e eu respondo com os seus próprios dados, com os motivos.",
+        "gradeQueue": "Os trabalhos esperando sua nota ficam na fila aqui. Diga “corrigir o próximo”: eu abro a entrega mais antiga, e quando você disser “sete de dez, bom trabalho” eu mostro um cartão para confirmar.",
+        "diary": "A agenda da turma é o seu canal de comunicação com as famílias. Me diga “publique no 7B: tragam o jaleco amanhã” e você vai ver o texto exato antes de qualquer envio.",
+        "timetable": "As aulas da sua semana e as substituições ficam aqui. Me pergunte “o que vem agora?” e eu digo a turma, a sala e onde eles pararam da última vez.",
+        "board": "Esta é a Lousa da sala de aula. Coloque-a na tela da sala, escolha uma turma e um capítulo, e eu conduzo tudo por voz: “slide 4”, “explique a membrana”, “passe três perguntas para eles”.",
+        "settings": "Última parada. Aqui você escolhe se eu leio em voz alta, se escuto no modo mãos livres ou se dou sugestões, e pode ver o que eu lembro e apagar. Fale comigo em qualquer um dos meus onze idiomas e eu respondo nele; “diga isso em inglês” repete uma resposta em outro idioma. Para ver isto de novo, é só dizer “Me mostra o app”."
+      },
+      "student": {
+        "hello": "Oi, eu sou o SK! Vou te mostrar tudo em dois minutos. Toque para me ouvir, ou só acompanhe a leitura.",
+        "assignments": "Tudo o que seu professor passa aparece aqui, organizado por turma e capítulo.",
+        "openLesson": "Toque em uma aula para assistir. Assista até o fim e ela fica marcada como feita.",
+        "openLessonEmpty": "Ainda não tem nada atribuído. Quando seu professor passar uma aula, ela aparece aqui.",
+        "progress": "Aqui você vê o que já terminou e o que ainda falta. Nos exercícios, você envia uma foto ou um arquivo com as respostas, e os quizzes são corrigidos na hora.",
+        "myBooks": "Meus livros guarda os livros SketchCast que você tem. Ganhou um código de um livro? Me diga “ative meu código de livro”, eu preparo tudo, e você aperta Confirmar.",
+        "tutorNone": "Quando você tiver um livro SK, ele aparece no Tutor SK, e eu posso te ensinar a partir dele.",
+        "skBooks": "Este é o Tutor SK: os capítulos dos seus livros que eu posso te ensinar. Escolha um e a gente estuda junto.",
+        "kitPlayer": "A aula passa uma seção por vez e pausa no fim de cada uma. Diga “vá para a parte dos glóbulos vermelhos” ou “mostre o slide” e eu te levo até lá.",
+        "kitHelp": "Travou? Diga “explique isso”. Aperte Praticar para fazer perguntas: se você errar uma, eu ajudo passo a passo antes de mostrar a resposta.",
+        "kitNext": "Me pergunte “o que vem agora?” ou “como estou indo?” e eu digo quais ideias você já domina e quais precisam de mais treino.",
+        "diaryTimetable": "A agenda da sua turma tem recados do seu professor, e o seu horário mostra a semana. Os dois ficam na barra de cima.",
+        "settings": "Aqui você pode ver o que eu lembro sobre o seu aprendizado. Só um responsável ou a sua escola podem ativar isso. Fale comigo no seu idioma e eu respondo nele; “diga isso em inglês” repete uma resposta em outro idioma. Diga “Me mostra o app” para ver isto de novo."
+      },
+      "parent": {
+        "hello": "Olá, eu sou o SK. Vou te mostrar como acompanhar seus filhos em uns três minutos. Toque para me ouvir.",
+        "childCard": "Cada filho tem um cartão: as tarefas da escola, os prazos, as notas e os comentários do professor.",
+        "childUnverified": "Este vínculo ainda está aguardando verificação. Até lá, não posso responder perguntas sobre este filho; quem confirma é a escola.",
+        "week": "Esta semana mostra o que foi feito, o que está atrasado, o que aguarda correção e os recados novos da agenda, tudo dos últimos sete dias.",
+        "weekSteps": "E aqui estão até duas ações concretas para resolver isso. Me pergunte “como estão meus filhos?” e eu leio os mesmos números para você.",
+        "report": "Conclusão e notas num relance, e o registro de progresso completo para imprimir fica a um toque.",
+        "ask": "Você pode me perguntar “meu filho está ficando para trás?” ou “o que está atrasado?”. Eu só respondo sobre os seus próprios filhos, e só depois que o vínculo for verificado.",
+        "diary": "A agenda é o seu canal com o professor. Diga “avise o professor do Adam que ele estava doente ontem” e eu mostro o recado exato antes de enviar.",
+        "calendar": "Os eventos e avisos da escola chegam aqui. Me pergunte “tem algum aviso da escola?” para saber o que vem por aí.",
+        "bookCode": "Tem um código de livro? Me diga “ative este código para a Aisyah” e eu preparo tudo. Você escolhe para qual filho é, e você aperta Confirmar.",
+        "testPapers": "Em Provas você cria exercícios extras a partir de um capítulo do livro e passa para o seu filho.",
+        "homeLibrary": "Como educador domiciliar, você tem a Biblioteca completa: envie um livro, crie aulas e atribua aos seus filhos, igualzinho a um professor.",
+        "consent": "Só você decide se eu guardo o aprendizado do seu filho, por 90 dias, e se ele pode falar comigo por voz. Você pode desligar qualquer um dos dois ou apagar tudo quando quiser.",
+        "addChild": "Para adicionar outro filho, comece aqui. Fale comigo no seu idioma e eu respondo nele; “diga isso em inglês” repete uma resposta em outro idioma. Diga “Me mostra o app” para rever isto.",
+        "addChildFirst": "Comece aqui: adicione seu filho, e as tarefas da escola dele aparecem nesta página. Fale comigo no seu idioma e eu respondo nele. Diga “Me mostra o app” para rever isto."
+      },
+      "principal": {
+        "hello": "Boas-vindas. Eu sou o SK, e vou te mostrar a escola num relance em uns três minutos. Toque para me ouvir.",
+        "metrics": "Estes são os números principais da escola: alunos ativos, trabalhos feitos, atrasados e aguardando correção. Me pergunte “como está a escola?” para ter o mesmo panorama numa frase.",
+        "worklist": "Os alunos que precisam de apoio, contados por ano. Me pergunte “quem está em risco no 5º ano?” e eu digo os nomes, com os motivos.",
+        "teachers": "É assim que cada professor está em relação à referência da própria escola: para apoiar, não para ranquear. Me pergunte “quais professores estão com correções acumuladas?”",
+        "access": "Quem vê o quê, em palavras simples: a parte de cada coordenador e o que fica invisível para ele.",
+        "admin": "Aqui você gerencia os perfis, define os anos e as disciplinas de cada coordenador, revisa os avisos publicados e lê a auditoria de acesso. Me pergunte “quantos professores e alunos nós temos?”",
+        "books": "A estante da escola, com uma nota de saúde para cada livro. Me pergunte “onde estão as lacunas na estante?” e eu listo as disciplinas que vocês ensinam e que ainda não têm livro ou kits.",
+        "timetable": "Monte o horário turma por turma; os conflitos de horário acendem enquanto você digita. Me pergunte “que aulas estão acontecendo agora?” para ver cada turma no horário atual.",
+        "diary": "Uma visão somente leitura da agenda entre professores e famílias de toda a escola, para você ver o que está sendo dito sem interferir.",
+        "notices": "Os eventos e avisos da escola ficam aqui. Diga “publique um aviso para toda a equipe: reunião na sexta às 2” e eu mostro o cartão; ele só é publicado quando você clica em Confirmar.",
+        "schoolSwitch": "Esta chave decide se eu guardo anotações de aprendizado de 90 dias dos seus alunos, de acordo com o seu acordo de dados. Também respondo perguntas sobre custo e tendência: experimente “custo de geração” ou “tendência da escola”.",
+        "hat": "Mude aqui para o seu perfil de Professor para usar a Biblioteca e a Lousa da sala de aula. Fale comigo em qualquer idioma e eu respondo nele, ou diga “Me mostra o app” para rever o tour."
+      },
+      "coordinator": {
+        "hello": "Oi, eu sou o SK. Tudo o que você vai ver se limita aos seus anos e disciplinas; esta etiqueta mostra a sua parte.",
+        "worklist": "Estes são os alunos da sua parte que precisam de apoio, com nome e com os motivos, e um botão para falar com o responsável.",
+        "teachers": "Como estão os professores dos seus anos, incluindo as correções acumuladas.",
+        "access": "Esta página diz exatamente o que você pode ver e o que fica invisível para você.",
+        "books": "A estante dos seus anos. Me pergunte “onde estão as lacunas na estante?” para achar disciplinas sem livro ou sem kits.",
+        "timetable": "Você pode editar o horário dos seus próprios anos. Pergunte “que aulas estão acontecendo agora?” para ver as suas turmas.",
+        "diary": "Uma visão somente leitura da agenda dos seus anos.",
+        "notices": "Você pode publicar avisos para toda a escola ou para toda a equipe. Me diga o texto, e nada é publicado até você clicar em Confirmar.",
+        "costTrend": "Também posso te dar o custo dos kits e a tendência de quatro semanas dos seus anos; os totais da escola inteira ficam com o diretor.",
+        "hatSettings": "Seu perfil de Professor tem suas próprias turmas, Biblioteca e Lousa, e Definições guarda o que eu lembro. Fale comigo em qualquer idioma e diga “Me mostra o app” quando quiser."
+      }
     }
   },
   "settings": {

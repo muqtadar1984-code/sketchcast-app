@@ -2550,6 +2550,159 @@
       "rungNoCheck": "There isn't another question on this idea yet. Here is the explanation.",
       "revealAnswer": "The answer:",
       "rungHintSection": "Think about what the section on {heading} says about this."
+    },
+    "walkthrough": {
+      "ui": {
+        "title": "Tour",
+        "pause": "Pause",
+        "resume": "Resume",
+        "back": "Back",
+        "next": "Next",
+        "skip": "Skip",
+        "finish": "Finish",
+        "tapForSound": "Tap for sound",
+        "continueTour": "Continue the tour",
+        "progress": "{n} of {total}",
+        "takeTour": "Take the tour",
+        "example": "Example",
+        "exampleNote": "Example only. Nothing is sent.",
+        "needsClick": "Needs a click",
+        "tryAsking": "Try asking",
+        "chipHint": "Tap one to put it in the box. It's only sent when you press Send.",
+        "placeholder": "Ask me anything…",
+        "send": "Send",
+        "controls": "Tour controls",
+        "startLine": "Here's the tour. I'll show you around."
+      },
+      "chips": {
+        "lessonOnPhotosynthesis": "Is there a lesson on photosynthesis?",
+        "howAreMyClasses": "How are my classes?",
+        "whoIsAtRisk": "Who's at risk?",
+        "whatsNext": "What's next?",
+        "howAmIDoing": "How am I doing?",
+        "howAreMyKids": "How are my kids doing?",
+        "fallingBehind": "Is my child falling behind?",
+        "whatsOverdue": "What's overdue?",
+        "schoolNotices": "Any notices from school?",
+        "howIsTheSchool": "How is the school doing?",
+        "atRiskGrade": "Who's at risk in grade 5?",
+        "markingPilingUp": "Which teachers have marking piling up?",
+        "howManyPeople": "How many teachers and students do we have?",
+        "shelfGaps": "Where are the shelf gaps?",
+        "whatsOnNow": "What's on now?",
+        "generationCost": "What's our generation cost?",
+        "schoolTrend": "Show me the school trend."
+      },
+      "demo": {
+        "lessonPrepare": {
+          "title": "Prepare a lesson",
+          "rows": "Book: Biology, Form 4\nChapter: 3, Cell division\nReady by: Friday\nCost: Uses credits"
+        },
+        "assign": {
+          "title": "Assign to a class",
+          "rows": "Class: 5A\nWork: Cell division worksheet\nDue: Friday, 17:00"
+        },
+        "markingGrade": {
+          "title": "Give a mark",
+          "rows": "Student: Aisha\nWork: Cell division worksheet\nMark: 7 out of 10\nComment: Good work"
+        },
+        "diaryNote": {
+          "title": "Post to the class diary",
+          "rows": "Class: 7B\nNote: Please bring lab coats tomorrow."
+        },
+        "diaryParent": {
+          "title": "Note to the teacher",
+          "rows": "Child: Adam\nNote: Adam was sick yesterday."
+        },
+        "bookActivate": {
+          "title": "Activate a book code",
+          "rows": "Code: ••••-••••\nFor: You"
+        },
+        "bookActivateChild": {
+          "title": "Activate a book code",
+          "rows": "Code: ••••-••••\nFor: Aisyah"
+        },
+        "noticeSchool": {
+          "title": "Post a school notice",
+          "rows": "Seen by: All staff\nNotice: Staff meeting on Friday at 2 pm."
+        }
+      },
+      "teacher": {
+        "hello": "Hi, I'm SK, your SketchCast companion. I'll walk you round in about three minutes. Tap anywhere to hear me, or just read along.",
+        "library": "This is your Library. Upload a textbook, or use one from your school's shelf, and every chapter becomes a lesson you can teach from.",
+        "generate": "Pick a chapter and press Generate: you get a narrated video lesson, a slide deck and five documents. It uses credits. Or just tell me, 'prepare chapter 3 for Friday'.",
+        "noBooks": "Start by uploading a textbook here. Once it's in, each chapter gets a Generate button, then a lesson you can play and assign.",
+        "output": "Finished lessons play right here, and the deck and worksheets download ready to edit. Under Book tools you can also build a test paper from the chapters you've covered.",
+        "outputNoExam": "Finished lessons play right here, and the deck and worksheets download ready to edit.",
+        "assign": "Assign a chapter's lesson, worksheet and quiz to a class in one click. You can also say 'assign the worksheet to 5A for Friday': I'll show a card, and nothing happens until you confirm.",
+        "classes": "Your classes live here: create one, add students, and their progress starts tracking itself.",
+        "myBooks": "My books holds SketchCast books you were given: open one in SK or download the PDF. The meter shows how much of this month's plan you've used.",
+        "kits": "Ready-made kits are finished lessons you can unlock each week and copy into your Library to assign. Ask me 'is there a lesson on photosynthesis?' and I'll check everywhere.",
+        "analytics": "My Analytics shows completion, scores and the topics students keep re-opening. Ask me 'how are my classes?' or 'who's at risk?' and I'll answer from your own data, with the reasons.",
+        "gradeQueue": "Work waiting for your grade queues here. Say 'mark the next one': I'll bring up the oldest submission, and when you say 'seven out of ten, good work' I'll show a card to confirm.",
+        "diary": "The class diary is your communication book with parents. Tell me 'post to 7B: bring lab coats tomorrow', and you'll see the exact text before anything is sent.",
+        "timetable": "Your week's lessons and any cover duties are here. Ask me 'what's next?' and I'll tell you the class, the room and where they got to last time.",
+        "board": "This is the Classroom Board. Put it on the classroom screen, pick a class and chapter, and I'll drive it by voice: 'slide 4', 'explain the membrane', 'give them three questions'.",
+        "settings": "Last stop. Here you choose whether I read aloud, listen hands-free or make suggestions, and you can see what I remember and delete it. Ask me in any of my eleven languages and I'll answer in that language; 'say that in Malay' repeats an answer in another. To see this again, just say 'Show me around'."
+      },
+      "student": {
+        "hello": "Hi, I'm SK! I'll show you around in two minutes. Tap to hear me, or read along.",
+        "assignments": "Everything your teacher gives you shows up here, grouped by class and chapter.",
+        "openLesson": "Tap a lesson to watch it. Watch it to the end and it's marked done for you.",
+        "openLessonEmpty": "Nothing is assigned yet. When your teacher gives you a lesson, it shows up here.",
+        "progress": "This shows what's finished and what's still to do. Worksheets take a photo or file of your answers, and quizzes are marked straight away.",
+        "myBooks": "My books holds the SketchCast books you have. Got a code from a book? Tell me 'activate my book code', I'll set it up, and you press Confirm.",
+        "tutorNone": "When you have an SK book, it appears in SK Tutor, and I can teach you from it.",
+        "skBooks": "This is SK Tutor: the chapters I can teach you from your books. Pick one and we'll go through it together.",
+        "kitPlayer": "The lesson plays one section at a time and pauses at the end of each. Say 'go to the red blood cells part' or 'show the slide' and I'll take you there.",
+        "kitHelp": "Stuck? Say 'explain this'. Press Practise for questions: if you get one wrong, I'll help step by step before showing the answer.",
+        "kitNext": "Ask me 'what's next?' or 'how am I doing?' and I'll tell you which ideas you've got and which need more work.",
+        "diaryTimetable": "Your class diary has notes from your teacher, and your timetable shows the week. Both are in the top bar.",
+        "settings": "Here you can see what I remember about your learning. Only a parent or your school can turn that on. Ask me in your own language and I'll answer in it; 'say that in Malay' repeats an answer in another. Say 'Show me around' to see this again."
+      },
+      "parent": {
+        "hello": "Hello, I'm SK. I'll show you how to keep up with your children in about three minutes. Tap to hear me.",
+        "childCard": "Each child has a card: their school work, due dates, scores and their teacher's comments.",
+        "childUnverified": "This link is still waiting to be verified. Until it is, I can't answer questions about this child; the school confirms it.",
+        "week": "This week shows what's done, what's overdue, what's waiting for marking and any new diary notes, all for the last seven days.",
+        "weekSteps": "And here are up to two concrete things to do about it. Ask me 'how are my kids doing?' and I'll read you the same numbers.",
+        "report": "Completion and scores at a glance, and the full printable progress record is one tap away.",
+        "ask": "You can ask me 'is my child falling behind?' or 'what's overdue?' I only ever answer about your own children, and only once the link is verified.",
+        "diary": "The diary is your line to the teacher. Say 'tell Adam's teacher he was sick yesterday' and I'll show you the exact note before it goes.",
+        "calendar": "School events and notices land here. Ask me 'any notices from school?' to hear what's coming up.",
+        "bookCode": "Got a book code? Tell me 'activate this code for Aisyah' and I'll prepare it. You choose which child it's for, and you press Confirm.",
+        "testPapers": "Test Papers lets you make extra practice from a book chapter and give it to your child.",
+        "homeLibrary": "As a home educator you have the full Library: upload a book, make lessons and assign them to your children, just like a teacher.",
+        "consent": "Only you decide whether I remember your child's learning, for 90 days, and whether they may talk to me by voice. You can switch either off or delete it any time.",
+        "addChild": "To add another child, start here. Ask me in your own language and I'll answer in it; 'say that in Marathi' repeats an answer in another. Say 'Show me around' to replay this.",
+        "addChildFirst": "Start here: add your child, and their school work appears on this page. Ask me in your own language and I'll answer in it. Say 'Show me around' to replay this."
+      },
+      "principal": {
+        "hello": "Welcome. I'm SK, and I'll show you the school at a glance in about three minutes. Tap to hear me.",
+        "metrics": "These are the school's headline numbers: active learners, work done, overdue and awaiting marking. Ask me 'how is the school doing?' for the same picture in a sentence.",
+        "worklist": "Learners who need support, counted by grade. Ask me 'who's at risk in grade 5?' and I'll name them with the reasons.",
+        "teachers": "This is how each teacher is doing against the school's own baseline: support, not a ranking. Ask me 'which teachers have marking piling up?'",
+        "access": "Who can see what, in plain words: each coordinator's slice and what stays invisible to them.",
+        "admin": "Here you manage roles, set each coordinator's grades and subjects, review published notices and read the access audit. Ask me 'how many teachers and students do we have?'",
+        "books": "The school's shelf, with a health score for each book. Ask me 'where are the shelf gaps?' and I'll list subjects you teach that have no book or no kits yet.",
+        "timetable": "Build the timetable class by class; double-bookings light up as you type. Ask me 'what's on now?' for every class in the current period.",
+        "diary": "A read-only view of the teacher-to-home diary across the school, so you can see what's being said without stepping in.",
+        "notices": "School events and notices live here. Say 'post a notice to all staff: meeting Friday at 2' and I'll show the card; it posts only when you click Confirm.",
+        "schoolSwitch": "This switch decides whether I keep 90-day learning notes for your students, under your data agreement. I also answer cost and trend questions: try 'generation cost' or 'school trend'.",
+        "hat": "Switch to your Teacher hat here to use the Library and the Classroom Board. Ask me in any language and I'll answer in it, or say 'Show me around' to replay."
+      },
+      "coordinator": {
+        "hello": "Hi, I'm SK. Everything you'll see is limited to your grades and subjects; this chip shows your slice.",
+        "worklist": "These are the learners in your slice who need support, by name and with the reasons, plus a button to contact their parent.",
+        "teachers": "How the teachers in your grades are doing, including any marking backlog.",
+        "access": "This page states exactly what you can see and what is invisible to you.",
+        "books": "The shelf for your grades. Ask me 'where are the shelf gaps?' to find subjects with no book or no kits.",
+        "timetable": "You can edit the timetable for your own grades. Ask 'what's on now?' for your classes.",
+        "diary": "A read-only view of the diary for your grades.",
+        "notices": "You can post notices to the whole school or all staff. Tell me the words, and nothing posts until you click Confirm.",
+        "costTrend": "I can also give you the cost of kits and a four-week trend for your grades; school-wide headcounts stay with the principal.",
+        "hatSettings": "Your Teacher hat has your own classes, Library and Board, and Settings holds what I remember. Ask me in any language, and say 'Show me around' any time."
+      }
     }
   },
   "settings": {
