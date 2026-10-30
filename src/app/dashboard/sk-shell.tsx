@@ -78,7 +78,7 @@ import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, t
 import { beaconVoiceEvents, createVoiceLog, type VoiceLog } from "@/sk/shell/client/voice-log";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { clearConversation, createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
-import { BUBBLE_INITIAL, GREETED_KEY, GREETING_MIN_MS, bubbleFadeAt, bubbleOpen, bubbleReduce, shouldGreet } from "@/sk/shell/client/bubble";
+import { BUBBLE_INITIAL, GREETED_KEY, GREETING_MIN_MS, bubbleFadeAt, bubbleOpen, bubbleReduce, hearingPreview, shouldGreet } from "@/sk/shell/client/bubble";
 
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
@@ -301,6 +301,8 @@ export default function SkShell({
   const [readAloud, setReadAloud] = useState(true);
   const [handsFree, setHandsFree] = useState(false);
   const [listening, setListening] = useState(false);
+  /** 2026-10-30: her words so far while the mic listens (the bubble's "you're saying…"). */
+  const [hearing, setHearing] = useState("");
   const [mic, setMic] = useState(false);
   const [caption, setCaption] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -426,6 +428,7 @@ export default function SkShell({
         stopMicRef.current?.();
         stopMicRef.current = null;
         setListening(false);
+        setHearing("");
       },
       ...(listen ? { onResume: () => listenNowRef.current(), canResume: () => !walkRef.current?.narrating && !(holdRef.current?.holding ?? speakingRef.current) } : {}),
     });
@@ -996,7 +999,13 @@ export default function SkShell({
 
   /** One dictation pass. Hands-free restarts it after each utterance for as
    * long as the gate is still active; the gate's onStop is the only thing that
-   * ends the loop, and nothing here ever restarts it after that (§2.6). */
+   * ends the loop, and nothing here ever restarts it after that (§2.6).
+   *
+   * 2026-10-30 (founder: "too sharp or incomplete"): a pass is her whole
+   * TURN, not her first phrase. Hands-free and the tap-to-talk passes end by
+   * the endpointer (voice-client.ts → endpointing.ts: ~1.5 s of silence with
+   * no new words, longer when she trails off on "and…" / "um…"); push-to-talk
+   * ends when the button is released. */
   function beginDictation(mode: "ptt" | "handsFree") {
     const gate = gateRef.current;
     if (!gate?.active) return;
@@ -1009,10 +1018,12 @@ export default function SkShell({
       onText: (t) => {
         dictatedRef.current = t;
         setInput(t);
+        setHearing(t);
         gate.touch();
       },
       onEnd: () => {
         stopMicRef.current = null;
+        setHearing("");
         const text = dictatedRef.current.trim();
         dictatedRef.current = "";
         if (mode === "handsFree" && micModeRef.current === "handsFree" && gate.active) {
@@ -1042,7 +1053,8 @@ export default function SkShell({
       pass.onEnd,
       // Transcribe (en/ms/ar/zh) identifies which of those she speaks, so she
       // can switch by speaking; the browser recognizer listens in `lang`.
-      { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l) },
+      // Push-to-talk: the release ends her turn, not a pause.
+      { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l), endpointing: mode !== "ptt" },
     );
     if (!stop) {
       if (listen) setMicNote("unsupported");
@@ -1062,6 +1074,14 @@ export default function SkShell({
     micModeRef.current = "ptt";
     emptyEndsRef.current = 0;
     beginDictation("ptt");
+  }
+  /** 2026-10-30: a tap on the avatar while she is speaking ends her turn NOW
+   *  and sends it — the dictation's own stop, so the pass ends normally (the
+   *  gate's stop would drop the words). Push-to-talk ends by its release. */
+  function endTurnNow(): boolean {
+    if (!listening || !hearing.trim() || micModeRef.current === "ptt" || !stopMicRef.current) return false;
+    stopMicRef.current();
+    return true;
   }
   function releaseMic() {
     if (micModeRef.current !== "ptt") return;
@@ -1950,9 +1970,16 @@ export default function SkShell({
   );
 
   // ── what the bubble says ──
-  const bubbleKind = tourOn ? "tour" : openMsg ? openMsg.kind : thinking ? "thinking" : msg ? msg.kind : "none";
+  // While she speaks: her words so far, muted and italic ("you're saying…"),
+  // over whatever the bubble held — it comes back when her turn ends.
+  const hearingText = hearingPreview(hearing, { listening, tour: tourOn });
+  const bubbleKind = tourOn ? "tour" : hearingText ? "hearing" : openMsg ? openMsg.kind : thinking ? "thinking" : msg ? msg.kind : "none";
   const bubbleBody = tourOn ? (
     walk?.strip(tourAnswer)
+  ) : hearingText ? (
+    <p className="max-h-20 overflow-y-auto whitespace-pre-wrap leading-5 italic text-slate-500" dir="auto" data-sk="bubble-hearing">
+      {hearingText}…
+    </p>
   ) : thinking ? (
     <p className="text-slate-500" data-sk="bubble-thinking">
       …
@@ -2007,12 +2034,12 @@ export default function SkShell({
           trailing circles pointing at it. */}
       <div className={`flex items-start gap-4 ${side === "start" ? "flex-row-reverse" : ""}`}>
         <SkBubble
-          open={isBubbleOpen || thinking}
+          open={isBubbleOpen || thinking || !!hearingText}
           side={side}
           kind={bubbleKind}
           wide={tourOn}
           onHold={(on) => dispatchBubble({ type: "hold", on, at: Date.now() })}
-          onClose={tourOn ? undefined : () => dispatchBubble({ type: "close" })}
+          onClose={tourOn || hearingText ? undefined : () => dispatchBubble({ type: "close" })}
           closeLabel={cc.dismiss}
         >
           {bubbleBody}
@@ -2025,7 +2052,10 @@ export default function SkShell({
             listening={listening}
             label={cc.avatar}
             expanded={menuOpen}
-            onClick={() => setMenuOpen((o) => !o)}
+            onClick={() => {
+              if (endTurnNow()) return;
+              setMenuOpen((o) => !o);
+            }}
             buttonRef={avatarRef}
           />
         </div>

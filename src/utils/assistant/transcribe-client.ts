@@ -11,8 +11,12 @@
 //      mono PCM16 in ~100 ms chunks;
 //   3. each chunk framed as an event-stream AudioEvent and sent on the socket;
 //      TranscriptEvents come back → partial text, then the final text;
-//   4. like Web Speech with continuous=false, the first FINAL result ends the
-//      dictation: an empty AudioEvent (end of audio), then close.
+//   4. the socket stays open across FINAL results (Transcribe emits one after
+//      any short pause); the finals are joined with spaces, and her turn ends
+//      when the endpointer (endpointing.ts) hears ~1.5 s of silence with no
+//      new words (longer when the words so far sound unfinished): an empty
+//      AudioEvent (end of audio), then close. Until 2026-10-30 the FIRST final
+//      ended the dictation, so a mid-sentence pause sent half a sentence.
 //
 // Any failure BEFORE words arrive — a 404/403/429/400 from the route, no mic,
 // a socket error, a service exception — hands the dictation to browser Web
@@ -27,6 +31,7 @@
 
 import { audioEvent, MessageReader, readServiceEvent } from "./event-stream";
 import { pcm16Bytes, PCM_TARGET_RATE } from "./pcm16";
+import { createEndpointer, type Endpointer } from "./endpointing";
 
 export const WORKLET_URL = "/worklets/pcm16-worklet.js";
 export const WORKLET_NAME = "sk-pcm16-capture";
@@ -168,13 +173,23 @@ export type TranscribeHandlers = {
 };
 
 /** `identify`: ask the route for automatic language identification among
- *  the streaming languages, preferring `lang` (stt.ts TRANSCRIBE_ID_OPTIONS). */
-export type SessionOptions = { untilFinal?: boolean; noSpeechMs?: number; maxMs?: number; identify?: boolean };
+ *  the streaming languages, preferring `lang` (stt.ts TRANSCRIBE_ID_OPTIONS).
+ *  `endpointing` (default on): her turn ends after a stretch of silence with
+ *  no new words (endpointing.ts; `endSilenceMs` / `hesitantMs` tune it). Off
+ *  (push-to-talk): it ends only when stopped, silent for `noSpeechMs`, or
+ *  capped at `maxMs`. */
+export type SessionOptions = {
+  endpointing?: boolean;
+  endSilenceMs?: number;
+  hesitantMs?: number;
+  noSpeechMs?: number;
+  maxMs?: number;
+  identify?: boolean;
+};
 
 export type TranscribeSession = { stop(): void };
 
 export function startTranscribeSession(lang: string, h: TranscribeHandlers, env: TranscribeEnv, o: SessionOptions = {}): TranscribeSession {
-  const untilFinal = o.untilFinal ?? true;
   let done = false;
   let heard = false;
   let committed = "";
@@ -184,6 +199,16 @@ export function startTranscribeSession(lang: string, h: TranscribeHandlers, env:
   const reader = new MessageReader();
   let noSpeech: unknown = null;
   let maxTimer: unknown = null;
+  const endpointer: Endpointer | null =
+    o.endpointing === false
+      ? null
+      : createEndpointer({
+          onEndOfTurn: () => finish(),
+          setTimeout: env.setTimeout,
+          clearTimeout: env.clearTimeout,
+          ...(o.endSilenceMs != null ? { silenceMs: o.endSilenceMs } : {}),
+          ...(o.hesitantMs != null ? { hesitantMs: o.hesitantMs } : {}),
+        });
 
   const join = (a: string, b: string) => (a && b ? `${a} ${b}` : a || b);
 
@@ -192,6 +217,7 @@ export function startTranscribeSession(lang: string, h: TranscribeHandlers, env:
     if (noSpeech != null) env.clearTimeout(noSpeech);
     if (maxTimer != null) env.clearTimeout(maxTimer);
     noSpeech = maxTimer = null;
+    endpointer?.cancel();
     queue.length = 0;
     const s = socket;
     socket = null;
@@ -262,12 +288,17 @@ export function startTranscribeSession(lang: string, h: TranscribeHandlers, env:
         if (!text) continue;
         heard = true;
         if (r.partial) {
-          h.onPartial(join(committed, text));
+          const sofar = join(committed, text);
+          h.onPartial(sofar);
+          endpointer?.heard(sofar);
         } else {
+          // A final is NOT the end of her turn (a pause makes one): keep
+          // listening; the endpointer decides when she has finished. The
+          // last final's language is the one reported last.
           committed = join(committed, text);
           if (r.languageCode) h.onLanguage?.(r.languageCode);
           h.onFinal(committed);
-          if (untilFinal) return finish();
+          endpointer?.heard(committed);
         }
       }
       if (heard) armNoSpeech(); // words are activity

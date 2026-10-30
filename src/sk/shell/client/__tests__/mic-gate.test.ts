@@ -662,6 +662,21 @@ describe("the Shell's wiring (source pins)", () => {
     expect(code).toContain("const stop = startDictation(\n      pass.onText,\n      pass.onEnd,");
     expect(code).toContain('if (micModeRef.current === "handsFree") passesRef.current.retire();');
   });
+  it("2026-10-30 endpointing: a pass is her whole turn — push-to-talk ends on release, every other pass by the endpointer", () => {
+    expect(code).toContain('endpointing: mode !== "ptt" }');
+    expect(code).toContain('gateRef.current?.stop("release");');
+  });
+  it("2026-10-30 the bubble shows her words while she speaks; a tap on the avatar ends her turn through the dictation's own stop (the words are sent)", () => {
+    expect(code).toContain("const hearingText = hearingPreview(hearing, { listening, tour: tourOn });");
+    expect(code).toMatch(/onText: \(t\) => \{\s*dictatedRef\.current = t;\s*setInput\(t\);\s*setHearing\(t\);/);
+    expect(code).toMatch(/onEnd: \(\) => \{\s*stopMicRef\.current = null;\s*setHearing\(""\);/);
+    const endNow = code.slice(code.indexOf("function endTurnNow()"), code.indexOf("function releaseMic()"));
+    expect(endNow).toContain('micModeRef.current === "ptt"');
+    expect(endNow).toContain("stopMicRef.current();");
+    expect(endNow).not.toContain("gate"); // never the gate: its stop drops a hands-free pass's words
+    expect(code).toMatch(/onClick=\{\(\) => \{\s*if \(endTurnNow\(\)\) return;\s*setMenuOpen\(\(o\) => !o\);/);
+    expect(code).toContain('className="max-h-20 overflow-y-auto whitespace-pre-wrap leading-5 italic text-slate-500" dir="auto" data-sk="bubble-hearing"');
+  });
   it("2026-10-30 corner: the auto-resuming gate listens on every page but the Board, which keeps push-to-talk", () => {
     expect(code).toContain("const listen = autoListen ?? !board;");
     expect(code).toContain("...(listen ? { onResume: () => listenNowRef.current(), canResume:");

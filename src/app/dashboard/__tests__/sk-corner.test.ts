@@ -155,7 +155,8 @@ describe("the speech bubble: beside the avatar, toward the page", () => {
     expect(corner).toContain("inert={!open}");
     const src = code(read("sk-shell.tsx"));
     expect(src).toContain('onHold={(on) => dispatchBubble({ type: "hold", on, at: Date.now() })}');
-    expect(src).toContain('onClose={tourOn ? undefined : () => dispatchBubble({ type: "close" })}');
+    // × closes the message (not while a tour pins the bubble, nor over her own words as she speaks — 2026-10-30).
+    expect(src).toContain('onClose={tourOn || hearingText ? undefined : () => dispatchBubble({ type: "close" })}');
     expect(src).toMatch(/onClick=\{openSheet\}[^>]*data-sk="bubble-more"/);
     expect(src).toMatch(/onClick=\{openSheet\}[^>]*data-sk="bubble-show"/);
   });
