@@ -13,6 +13,11 @@
 //   confirm  — a confirmation card arrived while the text is hidden: "I need
 //              your confirmation" + Show. It stays until the card is shown or
 //              settled (the card has its own expiry).
+//   hearing  — (2026-10-30) while the mic listens and she is speaking, the
+//              words so far in a muted "you're saying…" style, so she can see
+//              SK is still listening; a tap on the avatar ends her turn and
+//              sends it. Not a message: it shows over the others and leaves
+//              them as they were (hearingPreview).
 // Hovering or focusing the bubble holds it open (the clock restarts when she
 // leaves); × closes the message. While a tour runs the bubble is pinned open
 // with the tour's caption and controls (the Shell renders those).
@@ -173,4 +178,22 @@ export function bubbleOpen(s: BubbleState, opts: { tour?: boolean } = {}): boole
  *  launcher decides `home`), never over a tour. */
 export function shouldGreet(input: { home: boolean; greeted: boolean; tour: boolean; text: string | null | undefined }): boolean {
   return input.home && !input.greeted && !input.tour && !!input.text?.trim();
+}
+
+// ── 2026-10-30: "you're saying…" — the running transcript while she speaks ──
+
+/** The bubble shows at most this much of what she is saying: the END of it. */
+export const HEARING_MAX_CHARS = 160;
+
+/** What the bubble shows of her words while the mic listens, or null when it
+ *  shows none (not listening, nothing heard yet, or a tour pins the bubble).
+ *  A long utterance shows its tail, cut at a word, after "…". */
+export function hearingPreview(text: string | null | undefined, opts: { listening: boolean; tour?: boolean }, max: number = HEARING_MAX_CHARS): string | null {
+  if (!opts.listening || opts.tour) return null;
+  const t = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  if (t.length <= max) return t;
+  const tail = t.slice(t.length - max);
+  const sp = tail.indexOf(" ");
+  return `…${(sp >= 0 && sp < max * 0.4 ? tail.slice(sp + 1) : tail).trimStart()}`;
 }
