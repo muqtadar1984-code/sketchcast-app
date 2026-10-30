@@ -69,8 +69,11 @@ export type SkMemory = {
   offer?: SkOffer;
   /** 2026-10-30: the last explanation ("repeat that in X" re-says it). */
   lastAnswer?: SkLastAnswer;
-  /** 2026-10-30: the answer language the user chose in this conversation
-   *  (after "say that in Malay"), until "back to …" (language.ts). */
+  /** 2026-10-30: the conversation's language — chosen by a command ("say
+   *  that in Malay", "speak in Marathi") or by a question confidently
+   *  written in it (question-language.ts), until another command or another
+   *  language (language.ts stickyAfterQuestion). Sticky: "ok" / "next" stay
+   *  in it. */
   langOverride?: SkAnswerLang;
   /** 2026-10-30: the unsupported source language SK already said it cannot
    *  answer in — said once per conversation. */

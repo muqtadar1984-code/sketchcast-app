@@ -5,11 +5,12 @@
  * splitting. Everything runs on fakes — no speechSynthesis, no fetch.
  * Run: node node_modules/vitest/vitest.mjs run src/sk/shell/client/__tests__/speech.test.ts
  */
-import { describe, expect, it, vi } from "vitest";
-import { createSpeechCoordinator, SERVER_FAILURES_TO_STICK, speechMode, splitSentences, type SpeechBoard } from "../speech";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createSpeechCoordinator, PREFETCH_AHEAD, SERVER_FAILURES_TO_STICK, serverProviderFor, speechMode, splitSentences, type SpeechBoard } from "../speech";
 import type { PlayOpts, SpeechProvider, SpeechResult } from "@/sk/speech/provider";
 import { EMPTY_MARKS } from "@/sk/speech/provider";
-import { SpeakUnavailable } from "@/sk/speech/polly-client";
+import { BrowserSpeechProvider } from "@/sk/speech/browser";
+import { PollyClientSpeechProvider, SpeakUnavailable } from "@/sk/speech/polly-client";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 /** Let every queued microtask and timer settle. */
@@ -121,6 +122,97 @@ describe("speechMode", () => {
     expect(speechMode("")).toBe("browser");
     expect(speechMode("browser")).toBe("browser");
     expect(speechMode("edge")).toBe("browser");
+  });
+  it("is google for NEXT_PUBLIC_SK_TTS=google (any case)", () => {
+    expect(speechMode("google")).toBe("google");
+    expect(speechMode(" GOOGLE ")).toBe("google");
+  });
+});
+
+describe("server provider per language", () => {
+  it("polly: English through the server client (no lang sent), any other language through the browser", () => {
+    const en = serverProviderFor("polly", "en-US", () => "B");
+    expect(en).toBeInstanceOf(PollyClientSpeechProvider);
+    expect((en as PollyClientSpeechProvider).lang).toBeUndefined();
+    expect(serverProviderFor("polly", "ar-SA", () => "B")).toBeInstanceOf(BrowserSpeechProvider);
+  });
+  it("google: every language through the server client, carrying its lang", () => {
+    for (const lang of ["en-US", "ar-SA", "ms-MY", "zh-CN", "hi-IN"]) {
+      const p = serverProviderFor("google", lang, () => "A");
+      expect(p).toBeInstanceOf(PollyClientSpeechProvider);
+      expect((p as PollyClientSpeechProvider).lang).toBe(lang);
+    }
+  });
+});
+
+describe("server client (POST /api/sk/speak)", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+  function route(status: number, body: unknown) {
+    const bodies: unknown[] = [];
+    globalThis.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify(body), { status });
+    }) as unknown as typeof fetch;
+    return bodies;
+  }
+  const OK = { format: "mp3", audio: Buffer.from([1, 2, 3]).toString("base64"), marks: { words: [{ i: 0, t0: 0, t1: 100, text: "Hi" }], visemes: [] }, voice: "google:ar-XA-Chirp3-HD-Achird" };
+
+  it("sends the line's lang with the look; without a lang the body is unchanged", async () => {
+    const bodies = route(200, OK);
+    const r = await new PollyClientSpeechProvider(() => "A", { lang: "ar-SA" }).synthesize("Hi", "google:ar-XA-Chirp3-HD-Achernar", { marks: ["word"] });
+    await new PollyClientSpeechProvider(() => "B").synthesize("Hi", "polly:Matthew", { marks: ["word"] });
+    expect(bodies).toEqual([
+      { text: "Hi", look: "A", lang: "ar-SA" },
+      { text: "Hi", look: "B" },
+    ]);
+    expect(r.format).toBe("mp3");
+    expect(r.audio).toEqual(new Uint8Array([1, 2, 3]));
+    expect(r.marks).toEqual({ words: [{ i: 0, t0: 0, t1: 100, text: "Hi" }], visemes: [] });
+  });
+  it("2026-10-30: a second request does not cancel the first (the next sentence is fetched while one plays); cancel() aborts both", async () => {
+    const signals: AbortSignal[] = [];
+    const releases: Array<() => void> = [];
+    globalThis.fetch = vi.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          const sig = init!.signal!;
+          signals.push(sig);
+          sig.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
+          releases.push(() => resolve(new Response(JSON.stringify(OK), { status: 200 })));
+        }),
+    ) as unknown as typeof fetch;
+    const p = new PollyClientSpeechProvider(() => "A", { lang: "mr-IN" });
+    const one = p.synthesize("एक.", "x", { marks: [] });
+    const two = p.synthesize("दोन.", "x", { marks: [] });
+    expect(signals.map((x) => x.aborted)).toEqual([false, false]);
+    releases[0]!();
+    releases[1]!();
+    await expect(one).resolves.toMatchObject({ format: "mp3" });
+    await expect(two).resolves.toMatchObject({ format: "mp3" });
+    const three = p.synthesize("तीन.", "x", { marks: [] });
+    const four = p.synthesize("चार.", "x", { marks: [] });
+    p.cancel();
+    await expect(three).rejects.toMatchObject({ name: "AbortError" });
+    await expect(four).rejects.toMatchObject({ name: "AbortError" });
+    // The caller's own signal aborts its request too.
+    const ac = new AbortController();
+    const five = p.synthesize("पाच.", "x", { marks: [], signal: ac.signal });
+    ac.abort();
+    await expect(five).rejects.toMatchObject({ name: "AbortError" });
+  });
+  it("404 and 429 tts_cap are SpeakUnavailable; any other 429 or a 503 is an ordinary failure", async () => {
+    const p = new PollyClientSpeechProvider(() => "B", { lang: "en-US" });
+    route(404, { error: "Not available." });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toMatchObject({ name: "SpeakUnavailable", reason: "off" });
+    route(429, { error: "Monthly voice limit reached.", reason: "tts_cap" });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toMatchObject({ name: "SpeakUnavailable", reason: "tts_cap" });
+    route(429, { error: "slow down" });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toThrow("speak: HTTP 429");
+    route(503, { error: "Speech is unavailable right now.", reason: "tts_meter" });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toThrow("speak: HTTP 503");
   });
 });
 
@@ -452,6 +544,21 @@ describe("provider selection", () => {
     expect(c.mode).toBe("browser");
   });
 
+  it("google mode: reported as google while asked; the monthly cap (tts_cap) makes the browser sticky like a 404", async () => {
+    const why: string[] = [];
+    const browser = fakeProvider("browser");
+    const google = fakeProvider("polly-client", { fail: (_t, n) => (n === 2 ? new SpeakUnavailable("tts_cap") : null) });
+    const c = createSpeechCoordinator({ server: true, serverMode: "google", makeProvider: () => google, fallback: () => browser, onFallback: (w) => why.push(w) });
+    await c.say("One.");
+    expect(c.mode).toBe("google");
+    await c.say("Two.");
+    await c.say("Three.");
+    expect(google.spoken).toEqual(["One.", "Two."]);
+    expect(browser.played).toEqual(["Two.", "Three."]);
+    expect(why).toEqual(["unavailable"]);
+    expect(c.mode).toBe("browser");
+  });
+
   it("builds one provider per language and hands the language to both factories", async () => {
     const langs: string[] = [];
     const c = createSpeechCoordinator({
@@ -512,5 +619,176 @@ describe("read-aloud toggle", () => {
     c.setEnabled(true);
     await c.say("Yes.");
     expect(browser.spoken).toEqual(["Yes."]);
+  });
+});
+
+// ── 2026-10-30: no gap — the next sentences' audio is fetched while one plays ──
+
+/** A server provider whose requests resolve when the test says so, and whose
+ *  lines play until the test finishes them. Records every request's signal. */
+function slowServer(id = "polly-client") {
+  type Req = { text: string; lang: string; signal?: AbortSignal; resolve: () => void; reject: (e: Error) => void };
+  const requests: Req[] = [];
+  const playing: Array<{ text: string; finish: () => void }> = [];
+  const played: string[] = [];
+  const cancels: number[] = [];
+  const make = (lang: string): SpeechProvider => ({
+    id,
+    synthesize(text, _voice, opts) {
+      return new Promise<SpeechResult>((resolve, reject) => {
+        const r: Req = {
+          text,
+          lang,
+          signal: opts.signal,
+          reject,
+          resolve: () =>
+            resolve({
+              audio: new Uint8Array([1]),
+              format: "mp3",
+              marks: EMPTY_MARKS,
+              play: () =>
+                new Promise<void>((done) => {
+                  const me = {
+                    text,
+                    finish: () => {
+                      const i = playing.indexOf(me);
+                      if (i >= 0) playing.splice(i, 1);
+                      played.push(text);
+                      done();
+                    },
+                  };
+                  playing.push(me);
+                }),
+            }),
+        };
+        opts.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
+        requests.push(r);
+      });
+    },
+    cancel() {
+      cancels.push(1);
+      for (const p of [...playing]) p.finish();
+    },
+  });
+  const req = (text: string) => requests.find((r) => r.text === text)!;
+  return { make, requests, playing, played, cancels, req };
+}
+
+describe("prefetch: the next sentence is ready when this one ends", () => {
+  it("asks for the first sentence the moment it is complete in the stream, before the pump runs", () => {
+    const s = slowServer();
+    const c = createSpeechCoordinator({ server: true, makeProvider: s.make, fallback: () => fakeProvider("browser") });
+    const st = c.stream({ lang: "mr-IN" });
+    st.push("प्रकाशसंश्लेषण ही एक प्रक्रिया आहे. ");
+    // Synchronously — no tick has passed.
+    expect(s.requests.map((r) => [r.text, r.lang])).toEqual([["प्रकाशसंश्लेषण ही एक प्रक्रिया आहे.", "mr-IN"]]);
+  });
+
+  it(`while sentence 1 plays, the next ${PREFETCH_AHEAD} are fetched (in order) and no more; each is played in order`, async () => {
+    const s = slowServer();
+    const c = createSpeechCoordinator({ server: true, makeProvider: s.make, fallback: () => fakeProvider("browser") });
+    const done = c.say("One. Two. Three. Four. Five.");
+    // At once: sentence 1 and the PREFETCH_AHEAD after it (1 + 2 = 3 requests).
+    expect(s.requests.map((r) => r.text)).toEqual(["One.", "Two.", "Three."]);
+    s.req("One.").resolve();
+    await settle();
+    expect(s.playing.map((p) => p.text)).toEqual(["One."]);
+    // Sentence 2's audio arrives DURING sentence 1: nothing waits for it later.
+    s.req("Two.").resolve();
+    s.req("Three.").resolve();
+    await settle();
+    expect(s.requests.map((r) => r.text)).toEqual(["One.", "Two.", "Three."]);
+    s.playing[0]!.finish();
+    await settle();
+    // Two plays at once (its audio was already there), and Four is now fetched.
+    expect(s.playing.map((p) => p.text)).toEqual(["Two."]);
+    expect(s.requests.map((r) => r.text)).toEqual(["One.", "Two.", "Three.", "Four."]);
+    s.playing[0]!.finish();
+    await settle();
+    expect(s.requests.map((r) => r.text)).toEqual(["One.", "Two.", "Three.", "Four.", "Five."]);
+    // A later sentence's audio arriving FIRST never plays out of order.
+    s.req("Five.").resolve();
+    await settle();
+    expect(s.playing.map((p) => p.text)).toEqual(["Three."]);
+    s.playing[0]!.finish();
+    await settle();
+    expect(s.playing).toEqual([]); // Four's audio is not here yet: Four waits, Five waits behind it
+    s.req("Four.").resolve();
+    await settle();
+    s.playing[0]!.finish();
+    await settle();
+    s.playing[0]!.finish();
+    await done;
+    expect(s.played).toEqual(["One.", "Two.", "Three.", "Four.", "Five."]);
+  });
+
+  it("a language change costs nothing extra: each line goes to its own language's provider, fetched ahead the same way", async () => {
+    const s = slowServer();
+    const langs: string[] = [];
+    const c = createSpeechCoordinator({
+      server: true,
+      makeProvider: (l) => {
+        langs.push(l);
+        return s.make(l);
+      },
+      fallback: () => fakeProvider("browser"),
+    });
+    void c.say("Hello.", { lang: "en-US" });
+    void c.say("नमस्कार. कसे आहात?", { lang: "mr-IN" });
+    expect(s.requests.map((r) => [r.text, r.lang])).toEqual([
+      ["Hello.", "en-US"],
+      ["नमस्कार.", "mr-IN"],
+      ["कसे आहात?", "mr-IN"],
+    ]);
+    expect(langs).toEqual(["en-US", "mr-IN"]);
+  });
+
+  it("barge-in: stop() aborts every prefetch, plays none of them, and asks for nothing more", async () => {
+    const s = slowServer();
+    const browser = fakeProvider("browser");
+    const c = createSpeechCoordinator({ server: true, makeProvider: s.make, fallback: () => browser });
+    const done = c.say("One. Two. Three. Four.");
+    s.req("One.").resolve();
+    s.req("Two.").resolve(); // already fetched, never played
+    await settle();
+    expect(s.playing.map((p) => p.text)).toEqual(["One."]);
+    c.stop();
+    await done;
+    await settle();
+    expect(s.requests.map((r) => [r.text, !!r.signal?.aborted])).toEqual([
+      ["One.", false], // its audio had arrived; the provider's cancel() stopped it
+      ["Two.", false], // its audio had arrived too: dropped unplayed
+      ["Three.", true], // still in flight: aborted
+    ]);
+    expect(s.cancels.length).toBeGreaterThan(0);
+    expect(s.played).toEqual(["One."]); // cut short by cancel(), not followed by Two
+    expect(browser.spoken).toEqual([]); // an aborted prefetch is not a failure
+    expect(c.mode).toBe("polly");
+    // A fresh line after the stop is asked for anew.
+    void c.say("Again.");
+    expect(s.requests.map((r) => r.text)).toEqual(["One.", "Two.", "Three.", "Again."]);
+  });
+
+  it("the server voice goes sticky (404): the prefetched requests are aborted and the browser speaks the rest", async () => {
+    const s = slowServer();
+    const browser = fakeProvider("browser");
+    const c = createSpeechCoordinator({ server: true, makeProvider: s.make, fallback: () => browser });
+    const done = c.say("One. Two. Three.");
+    s.req("One.").reject(new SpeakUnavailable());
+    await done;
+    expect(s.requests.map((r) => [r.text, !!r.signal?.aborted])).toEqual([
+      ["One.", false],
+      ["Two.", true],
+      ["Three.", true],
+    ]);
+    expect(browser.spoken).toEqual(["One.", "Two.", "Three."]);
+    expect(c.mode).toBe("browser");
+  });
+
+  it("the browser voice is never prefetched (it synthesises as it speaks)", async () => {
+    const { c, browser } = rig({ manual: true });
+    void c.say("One. Two. Three.");
+    await settle();
+    expect(browser.spoken).toEqual(["One."]);
   });
 });

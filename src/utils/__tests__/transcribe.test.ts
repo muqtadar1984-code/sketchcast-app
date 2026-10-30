@@ -215,8 +215,8 @@ class FakeSocket implements SttSocket {
     this.readyState = 1;
     this.onopen?.();
   }
-  serverSays(results: Array<{ text: string; partial: boolean }>) {
-    const body = { Transcript: { Results: results.map((r) => ({ Alternatives: [{ Transcript: r.text }], IsPartial: r.partial })) } };
+  serverSays(results: Array<{ text: string; partial: boolean; lang?: string }>) {
+    const body = { Transcript: { Results: results.map((r) => ({ Alternatives: [{ Transcript: r.text }], IsPartial: r.partial, ...(r.lang ? { LanguageCode: r.lang } : {}) })) } };
     const m = encodeMessage({ ":content-type": "application/json", ":event-type": "TranscriptEvent", ":message-type": "event" }, enc.encode(JSON.stringify(body)));
     this.onmessage?.({ data: m.buffer.slice(m.byteOffset, m.byteOffset + m.byteLength) });
   }
@@ -323,6 +323,39 @@ describe("a Transcribe session", () => {
     expect(log).toEqual(["partial:what is", "final:what is osmosis", "end"]);
     f.pcm(); // late audio after the end goes nowhere
     expect(s.sent.filter((x) => decodeMessage(x).payload.length > 0)).toHaveLength(2);
+  });
+
+  it("2026-10-30 identify: asks the route for identification; the identified language of a FINAL result is reported before its words", async () => {
+    const f = fakeEnv();
+    const log: string[] = [];
+    startTranscribeSession(
+      "en-US",
+      { onPartial: (t) => log.push(`partial:${t}`), onFinal: (t) => log.push(`final:${t}`), onEnd: () => log.push("end"), onFallback: (r) => log.push(`fallback:${r}`), onLanguage: (l) => log.push(`lang:${l}`) },
+      f.env,
+      { identify: true },
+    );
+    await flush();
+    expect(JSON.parse(String(f.fetches[0]!.init.body))).toEqual({ lang: "en-US", identify: true });
+    const s = FakeSocket.all[0]!;
+    f.micOpens();
+    await flush();
+    s.open();
+    s.serverSays([{ text: "apa itu", partial: true, lang: "ms-MY" }]);
+    s.serverSays([{ text: "apa itu osmosis", partial: false, lang: "ms-MY" }]);
+    expect(log).toEqual(["partial:apa itu", "lang:ms-MY", "final:apa itu osmosis"]);
+  });
+
+  it("a malformed LanguageCode is ignored", async () => {
+    const f = fakeEnv();
+    const langs: string[] = [];
+    startTranscribeSession("en-US", { onPartial: () => undefined, onFinal: () => undefined, onEnd: () => undefined, onFallback: () => undefined, onLanguage: (l) => langs.push(l) }, f.env, { identify: true });
+    await flush();
+    const s = FakeSocket.all[0]!;
+    f.micOpens();
+    await flush();
+    s.open();
+    s.serverSays([{ text: "hello there", partial: false, lang: "<script>" }]);
+    expect(langs).toEqual([]);
   });
 
   it.each([403, 404, 429, 400, 503])("route %i → fallback, no socket, no microphone", async (status) => {

@@ -232,8 +232,10 @@ async function explainSection(ctx: SkContext, t: SkTutorState, s: Section, quest
   if (!r.ok) return answer(name, say(ctx, TUTOR_REFUSED), false, r.reason);
   const ready = await readyManifest(kd, r);
   if (!ready) return answer(name, say(ctx, TUTOR_PREPARING), false, "preparing");
-  // 2026-10-30: her override, else the KIT's language (the manifest, read
-  // here — the player's report is only a hint), else her UI locale.
+  // 2026-10-30: her choice this turn (the language her question is written
+  // in, else the conversation's — ctx.answer.override), else the KIT's
+  // language (the manifest, read here — the player's report is only a hint),
+  // else her UI locale.
   const sourceLanguage = ready.manifest.language ?? null;
   const lang = answerLanguage({ override: ctx.answer?.override ?? null, sourceLanguages: [sourceLanguage], uiLocale: ctx.answer?.uiLocale ?? ctx.user.locale });
   const language = languageName(lang.lang);

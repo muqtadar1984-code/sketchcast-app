@@ -32,9 +32,9 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { micSupported, pageSpeechLang, startDictation } from "@/utils/assistant/voice-client";
-import { createSpeechCoordinator, speechMode, type SpeechCoordinator } from "@/sk/shell/client/speech";
+import { createSpeechCoordinator, serverProviderFor, speechMode, type SpeechCoordinator } from "@/sk/shell/client/speech";
 import { BrowserSpeechProvider } from "@/sk/speech/browser";
-import { PollyClientSpeechProvider } from "@/sk/speech/polly-client";
+import { googleVoiceFor } from "@/sk/speech/google-voices";
 import { pollyVoiceFor } from "@/sk/speech/polly-marks";
 import { pickBrowserVoice, readRigChoice, voiceGenderForChoice } from "@/sk/board/avatar";
 import RichText from "@/components/rich-text";
@@ -240,6 +240,8 @@ export default function SkShell({
   /** 2026-10-30: the dictation language while she has chosen an answer
    *  language ("say that in Arabic"); null = the page's. */
   const dictLangRef = useRef<string | null>(null);
+  /** The language Transcribe heard the last dictation in (a hint the server weighs). */
+  const spokenLangRef = useRef<string | null>(null);
   const storeRef = useRef<MemoryStore | null>(null);
   const boardRef = useRef<SkBoardBridge | null | undefined>(board);
   const tutorRef = useRef<SkTutorBridge | null | undefined>(tutor);
@@ -318,18 +320,23 @@ export default function SkShell({
   }, [cards]);
 
   // ── SK's voice (§2.6 lifecycle 2): one coordinator per panel ──
-  // The public flag only makes the client ASK for Polly; the server's SK_TTS
-  // decides (404 → the browser voice, sticky). The Board adapter reads the
-  // bridge through its ref so a bridge that arrives later is seen. Playback
+  // The public flag only makes the client ASK for the server voice (polly or
+  // google); the server's SK_TTS decides (404 → the browser voice, sticky).
+  // The Board adapter reads the bridge through its ref so a bridge that
+  // arrives later is seen. Playback
   // stops on barge-in (push-to-talk, hands-free start, a new question), on
   // Stop, on read-aloud off, on pagehide and when the panel unmounts.
   useEffect(() => {
+    const tts = speechMode(process.env.NEXT_PUBLIC_SK_TTS);
+    const serverMode = tts === "google" ? "google" : "polly";
     const coord = createSpeechCoordinator({
-      server: speechMode(process.env.NEXT_PUBLIC_SK_TTS) === "polly",
+      server: tts !== "browser",
+      serverMode,
       // The Polly voices are English (Joanna / Matthew): an answer in another
       // language (2026-10-30: the answer language can differ from the page)
-      // is read by the browser voice for that language.
-      makeProvider: (lang) => (lang.toLowerCase().startsWith("en") ? new PollyClientSpeechProvider(() => readRigChoice()) : new BrowserSpeechProvider(lang)),
+      // is read by the browser voice for that language. The Google voices
+      // cover every SK language: each line goes to the server with its lang.
+      makeProvider: (lang) => serverProviderFor(serverMode, lang, () => readRigChoice()),
       fallback: (lang) => new BrowserSpeechProvider(lang),
       defaultLang: pageSpeechLang(),
       board: {
@@ -353,7 +360,7 @@ export default function SkShell({
       // otherwise the engine chooses by the utterance's lang.
       voice: (id, lang) => {
         const gender = voiceGenderForChoice(readRigChoice());
-        if (id !== "browser") return pollyVoiceFor(gender);
+        if (id !== "browser") return serverMode === "google" ? googleVoiceFor(lang, gender) : pollyVoiceFor(gender);
         const prefix = (lang.split("-")[0] ?? "en").toLowerCase();
         const voices = typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
         const pool = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
@@ -685,6 +692,7 @@ export default function SkShell({
     if (!gate?.active) return;
     const startedAt = Date.now();
     dictatedRef.current = "";
+    spokenLangRef.current = null;
     const stop = startDictation(
       (t) => {
         dictatedRef.current = t;
@@ -713,7 +721,9 @@ export default function SkShell({
         setListening(false);
         if (mode === "ptt") inputRef.current?.focus();
       },
-      { lang: dictLangRef.current ?? pageSpeechLang() },
+      // Transcribe (en/ms/ar/zh) identifies which of those she speaks, so she
+      // can switch by speaking; the browser recognizer listens in `lang`.
+      { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l) },
     );
     if (!stop) {
       gate.stop("manual");
@@ -820,6 +830,7 @@ export default function SkShell({
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
+      if (modality === "voice" && spokenLangRef.current) req.spokenLang = spokenLangRef.current;
 
       let full = "";
       let sawDone = false;

@@ -162,9 +162,14 @@ export type TranscribeHandlers = {
   /** Transcribe could not serve this dictation and nothing was heard yet: the
    * caller takes over (browser Web Speech). onEnd is NOT called after this. */
   onFallback(reason: FallbackReason): void;
+  /** 2026-10-30: the language Transcribe identified for a FINAL result
+   * ("ms-MY") — identify-language sessions only. Called before onFinal. */
+  onLanguage?(languageCode: string): void;
 };
 
-export type SessionOptions = { untilFinal?: boolean; noSpeechMs?: number; maxMs?: number };
+/** `identify`: ask the route for automatic language identification among
+ *  the streaming languages, preferring `lang` (stt.ts TRANSCRIBE_ID_OPTIONS). */
+export type SessionOptions = { untilFinal?: boolean; noSpeechMs?: number; maxMs?: number; identify?: boolean };
 
 export type TranscribeSession = { stop(): void };
 
@@ -260,6 +265,7 @@ export function startTranscribeSession(lang: string, h: TranscribeHandlers, env:
           h.onPartial(join(committed, text));
         } else {
           committed = join(committed, text);
+          if (r.languageCode) h.onLanguage?.(r.languageCode);
           h.onFinal(committed);
           if (untilFinal) return finish();
         }
@@ -280,7 +286,7 @@ export function startTranscribeSession(lang: string, h: TranscribeHandlers, env:
       const res = await env.fetch(STT_URL_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang }),
+        body: JSON.stringify(o.identify ? { lang, identify: true } : { lang }),
         cache: "no-store",
       });
       if (done) return;
@@ -391,6 +397,8 @@ export type TranscribeDictationOptions = {
   fallback: () => (() => void) | null;
   env?: TranscribeEnv;
   session?: SessionOptions;
+  /** 2026-10-30: the identified language of the words (with session.identify). */
+  onLanguage?: (languageCode: string) => void;
 };
 
 /** startDictation's Transcribe branch: same callbacks, same synchronous stop
@@ -406,6 +414,7 @@ export function startTranscribeDictation(onText: (t: string) => void, onEnd: () 
       onPartial: onText,
       onFinal: onText,
       onEnd,
+      ...(o.onLanguage ? { onLanguage: o.onLanguage } : {}),
       onFallback: () => {
         disabled = true;
         noticeBrowserFallback();

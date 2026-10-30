@@ -12,12 +12,21 @@
 //      zh is an ANSWER language only — there is no zh UI locale; SK's own
 //      language lines carry zh, every other fixed line falls back to English
 //      (linesLocale), and the model answers in Chinese.
-//   2. answerLanguage(): the one precedence rule —
-//        the user's explicit override in this conversation
+//   2. answerLanguage(): the one precedence rule (founder 2026-10-30, second
+//      revision — "a question in Marathi immediately gets a response in
+//      Marathi"):
+//        an explicit command in THIS message ("say that in X", "back to X",
+//          "speak in X" — the turn routes handle it before this is asked)
+//        > the language the question itself is written in, when that is
+//          CONFIDENT (question-language.ts questionLanguage; pure, no model)
+//        > the conversation's current language (`override`: the signed
+//          memory's langOverride — set by a command or by a confident
+//          question, sticky, so "ok" / "next" stay in Marathi)
 //        > the single language of the knowledge source the answer rests on
 //        > the UI locale.
 //      Mixed sources, or a source language SK cannot answer in (Tamil), fall
-//      back to the UI locale.
+//      back to the UI locale. stickyAfterQuestion() is what a confident
+//      question leaves in the memory.
 //   3. parseLanguageCommand(): "say that in Malay" / "ulang dalam bahasa Arab"
 //      / "أعد ذلك بالعربية" / "用中文再说一遍" / "en français" → repeat; "back to
 //      English" / "use my language" / "kembali ke bahasa saya" → back. The
@@ -184,23 +193,34 @@ export function normalizeLanguage(raw: unknown): SkAnswerLang | { unsupported: s
 
 export type AnswerLanguage = {
   lang: SkAnswerLang;
-  from: "override" | "source" | "ui";
+  /** "question" = this message's own language; "override" = the
+   *  conversation's (a command, or an earlier confident question). */
+  from: "question" | "override" | "source" | "ui";
   /** The single source's language when SK cannot answer in it (say so once). */
   unsupportedSource?: string;
 };
 
 /**
- * The language SK answers in:
- *   1. `override` — the user's explicit choice in this conversation;
- *   2. the ONE language of the knowledge the answer rests on (a kit, an
- *      article, a book) — mixed sources skip to 3;
- *   3. the UI locale.
+ * The language SK answers in (an explicit command in this message is the
+ * caller's, and comes before all of these):
+ *   1. `question` — the language this message is written in, when the
+ *      detector is confident (questionLanguage; null = not confident);
+ *   2. `override` — the conversation's current language (signed memory);
+ *   3. the ONE language of the knowledge the answer rests on (a kit, an
+ *      article, a book) — mixed sources skip to 4;
+ *   4. the UI locale.
  * A source language SK cannot answer in falls back to the UI locale and is
  * reported in `unsupportedSource`.
  */
-export function answerLanguage(input: { override?: string | null; sourceLanguages?: ReadonlyArray<string | null | undefined>; uiLocale: string | null | undefined }): AnswerLanguage {
+export function answerLanguage(input: {
+  question?: string | null;
+  override?: string | null;
+  sourceLanguages?: ReadonlyArray<string | null | undefined>;
+  uiLocale: string | null | undefined;
+}): AnswerLanguage {
   const uiNorm = normalizeLanguage(input.uiLocale ?? "en");
   const ui: SkAnswerLang = typeof uiNorm === "string" ? uiNorm : "en";
+  if (isAnswerLang(input.question)) return { lang: input.question, from: "question" };
   if (isAnswerLang(input.override)) return { lang: input.override, from: "override" };
   const seen = new Map<string, SkAnswerLang | { unsupported: string }>();
   for (const raw of input.sourceLanguages ?? []) {
@@ -223,6 +243,26 @@ export function answerLanguage(input: { override?: string | null; sourceLanguage
 export function overrideForBack(target: SkAnswerLang, input: { sourceLanguages?: ReadonlyArray<string | null | undefined>; uiLocale: string | null | undefined }): SkAnswerLang | null {
   const natural = answerLanguage({ override: null, sourceLanguages: input.sourceLanguages, uiLocale: input.uiLocale });
   return natural.lang === target ? null : target;
+}
+
+/** The conversation's language after a CONFIDENT question in `question`:
+ *  like "back to X" — cleared (null) when it is what SK would answer in
+ *  anyway (the source's, else the UI's), else kept as the sticky language.
+ *  A null question leaves the conversation's language as it was. */
+export function stickyAfterQuestion(
+  question: SkAnswerLang | null,
+  current: SkAnswerLang | null | undefined,
+  input: { sourceLanguages?: ReadonlyArray<string | null | undefined>; uiLocale: string | null | undefined },
+): SkAnswerLang | null {
+  if (!question) return current ?? null;
+  return overrideForBack(question, input);
+}
+
+/** True when the user's own language decided the answer (this message's, or
+ *  the conversation's) — a tool result's source language then does NOT
+ *  change it, and dictation follows it. */
+export function languageChosen(a: Pick<AnswerLanguage, "from">): boolean {
+  return a.from === "question" || a.from === "override";
 }
 
 /** The UI locale as an answer language (the "mine" target). */
@@ -265,6 +305,9 @@ const REPEAT_RES: RegExp[] = [
 /** "back to English", "kembali ke bahasa Melayu", "عد إلى العربية", "换回中文". */
 const BACK_RES: RegExp[] = [
   /^(?:(?:go|switch|change|come|move) )?back (?:to|into) (.+?)$/u,
+  // 2026-10-30: "speak in Marathi", "switch to Arabic", "talk to me in Malay"
+  // — a switch from now on (no repeat): the same as "back to X".
+  /^(?:(?:speak|talk|reply|respond|chat)(?: (?:to|with) (?:me|us))?(?: only)? (?:in|into)|(?:switch|change)(?: (?:the )?language)? (?:to|into)) (.+?)(?: (?:from now on|now|instead|only))?$/u,
   /^(?:use|speak|answer in|reply in|talk in|switch to|return to) (my(?: own)? language)$/u,
   /^(?:kembali|balik|tukar balik|tukar semula|tukar) (?:ke|kepada) (.+?)$/u,
   /^(?:guna(?:kan)?|cakap dalam|jawab dalam) (bahasa saya)(?: sendiri)?$/u,

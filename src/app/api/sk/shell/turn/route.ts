@@ -31,9 +31,13 @@ import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilitie
 import { searchLibrary } from "@/sk/capabilities/library";
 import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
-// 2026-10-30: the answer language (override > the source's > the UI's) and
-// "repeat that in X" — one translation call on the last answer.
-import { answerLanguage, canSpeakList, langMeta, languageName, linesLocale, overrideForBack, ownName, targetCode, uiAnswerLang, type AnswerLanguage, type LangCommand, type SkAnswerLang } from "@/sk/shell/language";
+// 2026-10-30: the answer language (a command > the question's own > the
+// conversation's > the source's > the UI's) and "repeat that in X" — one
+// translation call on the last answer.
+import { answerLanguage, canSpeakList, langMeta, languageChosen, languageName, linesLocale, overrideForBack, ownName, parseLanguageCommand, stickyAfterQuestion, targetCode, uiAnswerLang, type AnswerLanguage, type LangCommand, type SkAnswerLang } from "@/sk/shell/language";
+// 2026-10-30 (second revision): the language the QUESTION is written in
+// decides the answer's in the same turn — pure, no model, no round trip.
+import { spokenQuestionLanguage } from "@/sk/shell/question-language";
 import { LANG_CAN_SPEAK, LANG_NOTHING_TO_REPEAT, LANG_SOURCE_UNSUPPORTED, LANG_SWITCHED, langLine } from "@/sk/shell/language-lines";
 import { repeatAnswer, skTranslateModel } from "@/sk/shell/repeat";
 import { knowledgeForStudent, repeatForStudent } from "@/sk/capabilities/tutor";
@@ -137,7 +141,8 @@ function parseBody(raw: unknown): SkTurnRequest | { error: string } {
     locale: typeof c.locale === "string" ? c.locale.slice(0, 10) : undefined,
   };
   const memory = typeof b.memory === "string" && b.memory.length <= 64_000 ? b.memory : undefined;
-  return { turnId, text, modality, collector, memory };
+  const spokenLang = modality === "voice" && typeof b.spokenLang === "string" && b.spokenLang.length <= 12 ? b.spokenLang : undefined;
+  return { turnId, text, modality, collector, memory, ...(spokenLang ? { spokenLang } : {}) };
 }
 
 export async function POST(request: Request) {
@@ -175,20 +180,35 @@ export async function POST(request: Request) {
   });
 
   let memory = openMemory(body.memory, ctx, now).memory;
-  // 2026-10-30: the language SK answers in — her explicit choice in this
-  // conversation, else the ONE language of the kit open on the Board / her
-  // player, else the UI locale (shell/language.ts). The fixed lines follow it
+  // 2026-10-30: the language SK answers in, decided HERE, once, before any
+  // model call (shell/language.ts):
+  //   a command in this message ("say that in X" — runLanguage below)
+  //   > the language this message is written in, when confident
+  //   > the conversation's language (memory.langOverride — sticky)
+  //   > the ONE language of the kit open on the Board / her player
+  //   > the UI locale.
+  // A confident question language becomes the conversation's language
+  // (langOverride, cleared when it is what SK would answer in anyway), so
+  // "ok" / "next" stay in it. The fixed lines follow the answer language
   // too: ctx.user.locale becomes the lines' locale (zh → English lines; the
   // model still answers in Chinese).
   const uiLocale = ctx.user.locale;
   const preSources = [ctx.board?.sessionId ? ctx.board.language : undefined, ctx.user.role === "student" ? ctx.tutor?.language : undefined].filter((x): x is string => !!x);
-  let answer: AnswerLanguage = answerLanguage({ override: memory.langOverride ?? null, sourceLanguages: preSources, uiLocale });
+  // (A dictated question also carries the language Transcribe heard — a hint
+  // the words override.)
+  const question = parseLanguageCommand(body.text) ? null : spokenQuestionLanguage(body.text, body.spokenLang);
+  const sticky = stickyAfterQuestion(question, memory.langOverride, { sourceLanguages: preSources, uiLocale });
+  /** The answer language over a given set of source languages, this turn. */
+  const langOver = (sources: ReadonlyArray<string | null | undefined>) => answerLanguage({ question, override: sticky, sourceLanguages: sources, uiLocale });
+  let answer: AnswerLanguage = langOver(preSources);
   const setAnswer = (a: AnswerLanguage, override: SkAnswerLang | null) => {
     answer = a;
     ctx.answer = { lang: a.lang, from: a.from, override, uiLocale };
     ctx.user.locale = linesLocale(a.lang);
   };
-  setAnswer(answer, memory.langOverride ?? null);
+  // ctx.answer.override is her choice THIS turn (the question's language, or
+  // the conversation's): tutor.ts and the kit turn honour it over a kit's.
+  setAnswer(answer, question ?? sticky);
   // The conversation's resolved entities (signed memory) become ctx.recent, so a
   // capability can resolve "their parents" from the last not-done list (§5.4).
   ctx.recent = { ...ctx.recent, entities: memory.entities };
@@ -290,7 +310,7 @@ export async function POST(request: Request) {
       return { text: `${say} ${BOARD_NO_MAP}`.trim(), sources: [name] };
     }
     // The manifest's own language (server truth) decides, under her override.
-    const tl = answerLanguage({ override: memory.langOverride ?? null, sourceLanguages: sup.language ? [sup.language] : preSources, uiLocale });
+    const tl = langOver(sup.language ? [sup.language] : preSources);
     const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${teachingBlock(sup)}`;
     let full = "";
@@ -325,7 +345,7 @@ export async function POST(request: Request) {
     if (!own.length) return null;
     const k = await searchForUser(ctx, deps, { query: q, restrict: own, limit: 4 });
     if (k.status !== "ok" || !k.passages.length) return null;
-    const tl = answerLanguage({ override: memory.langOverride ?? null, sourceLanguages: k.passages.map((p) => p.language), uiLocale });
+    const tl = langOver(k.passages.map((p) => p.language));
     const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL);
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${knowledgeBlock(k.passages)}`;
     const question = `Explain "${q}" to the class in 2–4 short sentences, in ${languageName(tl.lang)}, using only the passages in KNOWLEDGE (this lesson's own book). No headings, no lists.`;
@@ -418,7 +438,11 @@ export async function POST(request: Request) {
       // The page's own language is the default and needs no event.
       let sentLang: SkAnswerLang = uiAnswerLang(uiLocale);
       let sentOverride = false;
-      const sendLang = (lang: SkAnswerLang, override = answer.from === "override") => {
+      // `override` tells the client the language is HERS (dictation follows
+      // it): the conversation's sticky language, or this message's own when
+      // it differs from the page's.
+      const hers = () => sticky !== null || (answer.from === "question" && answer.lang !== uiAnswerLang(uiLocale));
+      const sendLang = (lang: SkAnswerLang, override = languageChosen(answer) && hers()) => {
         if (sentLang === lang && sentOverride === override) return;
         sentLang = lang;
         sentOverride = override;
@@ -450,7 +474,9 @@ export async function POST(request: Request) {
             entities,
             pending: keep,
             ...(keepLast ? { lastAnswer: { text: assistantText, lang: sentLang, label: ev.label as "grounded" | "supplementary", sources: ev.sources } } : {}),
-            ...(lang ? { langOverride: lang.langOverride } : {}),
+            // A command sets the conversation's language; otherwise a
+            // confident question does (sticky; null clears).
+            ...(lang ? { langOverride: lang.langOverride } : decision.intent !== "lang" && question && sticky !== (memory.langOverride ?? null) ? { langOverride: sticky } : {}),
             ...(noted ? { langNoted: noted } : {}),
           },
           new Date(),
@@ -553,7 +579,7 @@ export async function POST(request: Request) {
         if (r.reply) {
           const text = r.reply.text || r.summary;
           // tutor.explain read the kit's own language: the answer is in it (unless she chose one).
-          if (r.language && answer.from !== "override") sendLang(answerLanguage({ override: null, sourceLanguages: [r.language], uiLocale }).lang);
+          if (r.language && !languageChosen(answer)) sendLang(answerLanguage({ override: null, sourceLanguages: [r.language], uiLocale }).lang);
           send({ type: "text", text });
           done({ sources: r.reply.sources, label: r.reply.label, ...(r.reply.usage ? { usage: r.reply.usage } : {}), ...(r.reply.trimmed ? { trimmed: true } : {}), ...(r.citations?.length ? { citations: r.citations } : {}) }, text, r.entities ?? []);
           return;
@@ -570,7 +596,7 @@ export async function POST(request: Request) {
         if (!r) return false;
         send({ type: "tool", name: "knowledge.search", ok: r.ok, summary: r.summary.slice(0, 200) });
         const text = r.reply?.text || r.summary;
-        if (r.language && answer.from !== "override") sendLang(answerLanguage({ override: null, sourceLanguages: [r.language], uiLocale }).lang);
+        if (r.language && !languageChosen(answer)) sendLang(answerLanguage({ override: null, sourceLanguages: [r.language], uiLocale }).lang);
         send({ type: "text", text });
         const reply = r.reply;
         done(
@@ -1038,7 +1064,7 @@ export async function POST(request: Request) {
         // 2026-10-30: tool results that name their source's language decide
         // the answer's, when they agree (and she chose none).
         const toolLangs = productive.map((t) => t.result.language).filter((x): x is string => !!x);
-        let finalLang: SkAnswerLang | null = toolLangs.length && answer.from !== "override" ? answerLanguage({ override: null, sourceLanguages: [...preSources, ...toolLangs], uiLocale }).lang : null;
+        let finalLang: SkAnswerLang | null = toolLangs.length && !languageChosen(answer) ? answerLanguage({ override: null, sourceLanguages: [...preSources, ...toolLangs], uiLocale }).lang : null;
         // S1 slice C: the model chose explain/compare → the narration-grounded
         // teaching text replaces what the model wrote from headings alone.
         if (actHit && act && "event" in act && (actHit.name === "board.explain" || actHit.name === "board.compare") && actHit.result.board) {

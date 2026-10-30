@@ -1,16 +1,24 @@
 // SK B9 — POST /api/sk/speak: one of SK's own lines → neural mp3 + word and
-// viseme marks (Amazon Polly). { text, look } → { format: "mp3", audio:
-// <base64>, marks, voice }. JSON with base64 audio rather than multipart:
-// the client needs one fetch and one JSON parse, browsers have no multipart
-// response parser, and SK's lines are 10–60 KB of mp3 — a third more on the
-// wire for base64 is nothing against a round trip. Nothing is cached.
+// viseme marks (Amazon Polly, SK_TTS=polly) or the lesson videos' Google
+// voice with spread word marks and no visemes (SK_TTS=google, 2026-10-30).
+// { text, look, lang? } → { format: "mp3", audio: <base64>, marks, voice }.
+// JSON with base64 audio rather than multipart: the client needs one fetch
+// and one JSON parse, browsers have no multipart response parser, and SK's
+// lines are 10–60 KB of mp3 — a third more on the wire for base64 is nothing
+// against a round trip. Nothing is cached.
 //
 // Order of refusals: SK_TTS unset → 404 before anything (the client reads it
 // as "no server voice" and stays on the browser adapter); then the SK gate
-// (feature flag, allow-list, sign-in); then the body.
+// (feature flag, allow-list, sign-in); then the body. Polly with a
+// non-English `lang` (a google client against a polly server) → 404 too:
+// Joanna/Matthew never read another language. Google only: then the
+// user's monthly character cap (tutor_tts_reserve, "sk:google") — over it →
+// 429 { reason: "tts_cap" } (the client stays on the browser voice for the
+// page); a reserve that fails → 503, never unmetered speech.
 
 import { NextResponse } from "next/server";
-import { gate, readBody, skSpeech, skTtsMode } from "@/sk/server";
+import { gate, readBody, skSpeech, skTtsMode, skTtsReserve } from "@/sk/server";
+import { googleVoiceForLook } from "@/sk/speech/google-voices";
 import { MAX_SPEAK_CHARS, voiceForLook } from "@/sk/speech/polly-marks";
 
 export const runtime = "nodejs";
@@ -35,17 +43,25 @@ async function bytesOf(audio: Uint8Array | ReadableStream<Uint8Array> | null): P
 }
 
 export async function POST(request: Request) {
-  if (skTtsMode() !== "polly") return NextResponse.json({ error: "Not available." }, { status: 404 });
+  const mode = skTtsMode();
+  if (mode === "off") return NextResponse.json({ error: "Not available." }, { status: 404 });
   const g = await gate();
   if (!g.ok) return g.response;
-  const body = await readBody<{ text?: unknown; look?: unknown }>(request);
+  const body = await readBody<{ text?: unknown; look?: unknown; lang?: unknown }>(request);
   if (!body || typeof body.text !== "string") return NextResponse.json({ error: "text must be a string." }, { status: 400 });
   const text = body.text.replace(/\s+/g, " ").trim();
   if (!text) return NextResponse.json({ error: "Nothing to say." }, { status: 400 });
   if (text.length > MAX_SPEAK_CHARS) return NextResponse.json({ error: `Lines are capped at ${MAX_SPEAK_CHARS} characters.` }, { status: 413 });
+  if (mode === "polly" && typeof body.lang === "string" && !/^en(?:$|[-_])/i.test(body.lang.trim())) return NextResponse.json({ error: "Not available." }, { status: 404 });
   const provider = skSpeech();
   if (!provider) return NextResponse.json({ error: "Not available." }, { status: 404 });
-  const voice = voiceForLook(body.look);
+  // The language only picks a Google voice from the allow-list (google-voices.ts).
+  const voice = mode === "google" ? googleVoiceForLook(body.look, body.lang) : voiceForLook(body.look);
+  if (mode === "google") {
+    const meter = await skTtsReserve(g.userId, text.length);
+    if (meter === "cap") return NextResponse.json({ error: "Monthly voice limit reached.", reason: "tts_cap" }, { status: 429 });
+    if (meter !== "ok") return NextResponse.json({ error: "Speech is unavailable right now.", reason: "tts_meter" }, { status: 503 });
+  }
   try {
     const r = await provider.synthesize(text, voice, { marks: ["word", "viseme"], signal: request.signal });
     if (r.format !== "mp3") throw new Error(`unexpected audio format ${r.format}`);

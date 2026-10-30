@@ -23,6 +23,7 @@
 | `SK_STT` not `transcribe` | 404 |
 | SK gate (`FEATURE_SK`, `SK_ALLOWED_EMAILS`, sign-in) | 404 / 401 |
 | Language not en / ms / ar / zh | 400 `unsupported_language` |
+| `identify: true` with `SK_STT_IDENTIFY` not `off` | the URL identifies the language among en-US / ms-MY / ar-SA / zh-CN (not a refusal) |
 | A **student** without `voice` consent (a verified guardian's grant, or the school's `sk_learning_memory` switch) | 403 `no_voice_consent` |
 | More than 30 URLs this hour for this user | 429 `rate_limited` |
 | No AWS credentials | 503 `unavailable` |
@@ -70,6 +71,7 @@ The full policy document, if you add it as a separate inline policy:
 | `SK_STT` | `transcribe` | Server. Without it the route answers 404. |
 | `NEXT_PUBLIC_SK_STT` | `transcribe` | Client. It is baked in at build time, so **redeploy** after setting it. |
 | `STT_REGION` | optional, default `us-east-1` | The streaming endpoint region. |
+| `SK_STT_IDENTIFY` | optional, default on | `off` = fixed-language streaming (no automatic language identification). |
 
 The existing `AWS_ROLE_ARN` (Vercel OIDC) is reused unchanged. Without it, the route falls back to `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (+ `AWS_SESSION_TOKEN`).
 
@@ -95,6 +97,35 @@ Removing the IAM statement also stops it: the socket is refused and the client f
 - Every other locale (fr, es, pt, te, mr, hi) stays on the browser recognizer.
 - All four languages are listed as **streaming** on the Transcribe "Supported languages" page (checked 2026-10-30) with no regional asterisk.
 - **Region caveat.** The same page marks some languages (the asterisked ones) as unavailable for streaming in `af-south-1`, `ap-northeast-1`, **`ap-southeast-5` (Malaysia)**, `ap-southeast-7` and `cn-northwest-1`. Keep `STT_REGION=us-east-1` unless you have checked that region on that page. Also check that the region offers Transcribe streaming at all.
+
+## Language follows the conversation; automatic language identification (2026-10-30)
+
+**Dictation listens in the conversation's language.** When SK answers in a language the user chose (a command such as "speak in Marathi", or a question confidently written in it), the turn's `lang` event carries `override: true` and the SK panel's next dictation uses that language's tag. After one Marathi answer, the mic listens in `mr-IN`. Marathi is not one of the four streaming languages, so that dictation uses the browser recognizer (as before, with the one notice).
+
+**Transcribe identifies the spoken language.** This is verified in the AWS docs (read 2026-10-30):
+
+- Language identification works on streaming, over the **WebSocket** API too: <https://docs.aws.amazon.com/transcribe/latest/dg/lang-id-stream.html>.
+- The request carries `identify-language=true`, `language-options` and an optional `preferred-language`, **in place of** `language-code`. The API refuses both together. See the StartStreamTranscription reference: <https://docs.aws.amazon.com/transcribe/latest/APIReference/API_streaming_StartStreamTranscription.html>.
+- `language-options` must have at least two codes and only one dialect per language. More than five "is not recommended".
+- Each result carries `LanguageCode` (`Result.LanguageCode`).
+- Identification needs at least one second of speech. A preferred language speeds it up for short clips.
+- If no option matches the speech, Transcribe picks the **closest** option and transcribes in it. So only SK's streaming languages are offered.
+- PCM is supported (the app streams PCM).
+- It cannot be combined with custom language models or redaction. SK uses neither.
+
+**What SK does with it:**
+
+1. The SK panel asks for identification on every dictation (`identify: true`).
+2. When the dictation language is one of en / ms / ar / zh, the URL route signs `identify-language=true`, `language-options=en-US,ms-MY,ar-SA,zh-CN` and `preferred-language=<the current language>`.
+3. The identified `LanguageCode` of the final result goes back with the turn as `spokenLang`.
+4. On the server, the **words decide first** (`questionLanguage`). The identified language is used only when the words are not conclusive and there are three or more of them (`spokenQuestionLanguage`).
+5. A user can therefore switch between English, Malay, Arabic and Chinese by speaking.
+
+Other languages are not affected. Dictation in fr / es / pt / hi / te / mr stays on the browser recognizer, in the conversation's language. The assistant panel and the school assistant do not ask for identification.
+
+**Turning identification off:** set `SK_STT_IDENTIFY=off` (server). Streaming then uses the fixed `language-code` again; no client deploy is needed.
+
+**Cost:** check the Transcribe pricing page for any charge for streaming language identification before relying on the estimate below. This was not verified on 2026-10-30.
 
 ## Cost (indicative, verify)
 

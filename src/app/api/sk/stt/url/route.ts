@@ -1,6 +1,12 @@
 // SK S6 slice B — POST /api/sk/stt/url: a presigned Amazon Transcribe
-// streaming WebSocket URL for ONE dictation. { lang } → { url, expiresAt,
-// languageCode }. The browser opens the socket itself, straight to AWS.
+// streaming WebSocket URL for ONE dictation. { lang, identify? } → { url,
+// expiresAt, languageCode, identify }. The browser opens the socket itself,
+// straight to AWS.
+//
+// 2026-10-30: `identify: true` asks Transcribe to identify the spoken
+// language among the four streaming languages (stt.ts TRANSCRIBE_ID_OPTIONS),
+// preferring `lang` — so she can switch between English, Malay, Arabic and
+// Chinese by speaking. SK_STT_IDENTIFY=off keeps fixed-language streaming.
 //
 // Order of refusals (every one sends the client back to browser Web Speech):
 //   SK_STT is not "transcribe"         → 404, before anything (nothing chargeable is on)
@@ -16,7 +22,7 @@
 import { NextResponse } from "next/server";
 import { gate, readBody } from "@/sk/server";
 import { memoryAllowed, type ConsentDb } from "@/sk/consent";
-import { skSttMode, STT_URL_EXPIRES_S, transcribeLanguageFor } from "@/sk/speech/stt";
+import { skSttMode, STT_URL_EXPIRES_S, sttIdentifyEnabled, TRANSCRIBE_ID_OPTIONS, transcribeLanguageFor } from "@/sk/speech/stt";
 import { presignTranscribeUrl } from "@/sk/speech/transcribe-presign";
 import { sttCredentials, sttRegion, takeSttUrl } from "@/sk/speech/transcribe-server";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -31,7 +37,7 @@ export async function POST(request: Request) {
   const g = await gate();
   if (!g.ok) return g.response;
 
-  const body = await readBody<{ lang?: unknown }>(request);
+  const body = await readBody<{ lang?: unknown; identify?: unknown }>(request);
   const languageCode = transcribeLanguageFor(body?.lang);
   if (!languageCode) return NextResponse.json({ error: "Language not supported.", reason: "unsupported_language" }, { status: 400 });
 
@@ -51,9 +57,17 @@ export async function POST(request: Request) {
   try {
     const creds = await sttCredentials();
     const now = new Date();
-    const url = presignTranscribeUrl({ region: sttRegion(), languageCode, creds, now, expiresS: STT_URL_EXPIRES_S });
+    const identify = body?.identify === true && sttIdentifyEnabled() && TRANSCRIBE_ID_OPTIONS.includes(languageCode);
+    const url = presignTranscribeUrl({
+      region: sttRegion(),
+      languageCode,
+      creds,
+      now,
+      expiresS: STT_URL_EXPIRES_S,
+      ...(identify ? { identify: { options: TRANSCRIBE_ID_OPTIONS, preferred: languageCode } } : {}),
+    });
     const expiresAt = new Date(now.getTime() + STT_URL_EXPIRES_S * 1000).toISOString();
-    return NextResponse.json({ url, expiresAt, languageCode }, { headers: NO_STORE });
+    return NextResponse.json({ url, expiresAt, languageCode, identify }, { headers: NO_STORE });
   } catch (e) {
     console.error("[sk] stt url failed:", (e as Error).message);
     return NextResponse.json({ error: "Voice is unavailable right now.", reason: "unavailable" }, { status: 503 });

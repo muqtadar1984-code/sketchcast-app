@@ -3,7 +3,8 @@ import { isEventId } from "@/sk/ids";
 import { kitDeps, parseKitQuery, readyManifest, resolveKit } from "@/sk/kit-server";
 import { runKitExplain, runKitRepeat } from "@/sk/kit-turn";
 import { kitLangScope, openKitLang, sealKitLang, type KitLangState } from "@/sk/kit-lang";
-import { answerLanguage, canSpeakList, langMeta, languageName, overrideForBack, ownName, parseLanguageCommand, targetCode, type SkAnswerLang } from "@/sk/shell/language";
+import { answerLanguage, canSpeakList, langMeta, languageChosen, languageName, overrideForBack, ownName, parseLanguageCommand, stickyAfterQuestion, targetCode, uiAnswerLang, type SkAnswerLang } from "@/sk/shell/language";
+import { questionLanguage } from "@/sk/shell/question-language";
 import { LANG_CAN_SPEAK, LANG_NOTHING_TO_REPEAT, LANG_SOURCE_UNSUPPORTED, LANG_SWITCHED, langLine } from "@/sk/shell/language-lines";
 import { supportFrom, teachingSupportTokens } from "@/sk/shell/teach";
 import { gate, readBody } from "@/sk/server";
@@ -14,8 +15,10 @@ export const runtime = "nodejs";
 // POST /api/sk/kit/turn — { eventId, product, chapter, kit, segment, question?, locale?, state? }
 //   → SSE: meta{move, segment} → text → done{usage, label, metered?, access, lang, state}
 //
-// 2026-10-30 — the answer language. SK answers in the student's explicit
-// choice, else the KIT's language (its manifest), else her UI locale
+// 2026-10-30 — the answer language. SK answers in the language her question
+// is written in (when that is clear — question-language.ts, no model call),
+// else her choice in this kit (a command or an earlier question: sticky),
+// else the KIT's language (its manifest), else her UI locale
 // (shell/language.ts answerLanguage). "say that in Malay" typed as the
 // question repeats SK's LAST explanation in Malay with ONE translation call
 // (kit-turn.ts runKitRepeat — tutor access required, metered ONCE like an
@@ -68,6 +71,8 @@ export async function POST(request: Request) {
   const scopeKey = kitLangScope(q.product, q.chapter);
   const st: KitLangState = openKitLang(body.state, g.userId, scopeKey, new Date());
   const command = question ? parseLanguageCommand(question) : null;
+  // The question's own language, decided before the model call (null = not clear).
+  const asked = question && !command ? questionLanguage(question) : null;
 
   const scope = `kit:${g.userId}`;
   const claim = await deps.store.claimEvent<SseEvent[]>(scope, eventId);
@@ -94,10 +99,20 @@ export async function POST(request: Request) {
    *  command. Every `done` carries the language and the next signed note. */
   const languageTurn = async function* (): AsyncGenerator<SseEvent, void, void> {
     const next: KitLangState = { ...st, at: new Date().toISOString() };
-    let lang = answerLanguage({ override: st.override ?? null, sourceLanguages: sources, uiLocale });
+    // A confident question becomes her language in this kit (cleared when it
+    // is what SK would answer in anyway), so "ok" / "next" stay in it.
+    const sticky = stickyAfterQuestion(asked, st.override, { sourceLanguages: sources, uiLocale });
+    if (asked) {
+      if (sticky) next.override = sticky;
+      else delete next.override;
+    }
+    let lang = answerLanguage({ question: asked, override: sticky, sourceLanguages: sources, uiLocale });
+    // `override` = the language is HERS (dictation follows it): the kit's
+    // kept choice, or this question's own when it is kept or not the page's.
+    const hers = () => languageChosen(lang) && (lang.from === "override" || sticky !== null || lang.lang !== uiAnswerLang(uiLocale));
     const finish = (data: Record<string, unknown>): SseEvent => ({
       event: "done",
-      data: { ...data, lang: { ...langMeta(lang.lang), override: lang.from === "override" }, state: sealKitLang(next) },
+      data: { ...data, lang: { ...langMeta(lang.lang), override: hers() }, state: sealKitLang(next) },
     });
     const line = (text: string, label: "grounded" | "declined" | "supplementary"): SseEvent[] => [
       { event: "meta", data: { move: "lang", segment } },
