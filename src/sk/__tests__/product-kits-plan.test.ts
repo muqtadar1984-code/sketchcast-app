@@ -101,14 +101,16 @@ describe("planCatalogueMap — Biology", () => {
     expect(m.after.some((r) => r.topicKitId === id(99, "b"))).toBe(false);
   });
 
-  it("labels: the topic's title; a kit an earlier chapter already uses gets the chapter's OWN title and sharedWith", () => {
+  it("labels: the topic's title; a one-topic chapter whose kit an earlier chapter uses gets the chapter's OWN title and sharedWith", () => {
     const m = plan();
     const row = (ch: number, slug: string) => m.after.find((r) => r.chapter_ref === String(ch) && r.slug === slug)!;
     expect(row(1, "cells")).toMatchObject({ label: "Cells", sharedWith: null });
     expect(row(3, "cells")).toMatchObject({ label: "Cell Membranes", sharedWith: 1, generation_id: ref("cells").pres });
     expect(row(7, "cells")).toMatchObject({ label: "Cell Division", sharedWith: 1 });
     expect(row(6, "diffusion-in-living-cells")).toMatchObject({ label: "Diffusion in living cells", sharedWith: null });
-    expect(row(10, "diffusion-in-living-cells")).toMatchObject({ label: "Review", sharedWith: 6 });
+    // a several-topic (review) chapter keeps the topic titles, so its kits stay distinguishable
+    expect(row(10, "diffusion-in-living-cells")).toMatchObject({ label: "Diffusion in living cells", sharedWith: 6 });
+    expect(row(10, "cells")).toMatchObject({ label: "Cells", sharedWith: 1 });
   });
 
   it("a topic listed twice in a chapter maps once; an unknown slug is reported, not mapped", () => {

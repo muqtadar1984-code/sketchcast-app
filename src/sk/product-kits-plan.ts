@@ -15,10 +15,12 @@
 //                 Library's "Chapter N", the Board's num + 1)
 //   sort        = the topic's position in the chapter (the bundle's order)
 //   generation_id = the kit's presentation (what 0170 maps and canOpenKit opens)
-//   label       = the topic's title — EXCEPT a kit an earlier chapter already
-//                 uses (Biology's "cells" in chapters 1, 3 and 7): that row is
-//                 labelled with the chapter's OWN title, and the Library notes
-//                 "shared with Chapter 1".
+//   label       = the topic's title — EXCEPT a one-topic chapter whose kit an
+//                 earlier chapter already uses (Biology's "cells" in chapters
+//                 1, 3 and 7): that row is labelled with the chapter's OWN
+//                 title, and the Library notes "shared with Chapter 1". In a
+//                 several-topic chapter (a review) a shared kit keeps its
+//                 topic's title, so its kits stay distinguishable.
 // A topic listed twice in one chapter maps once. A topic that does not
 // resolve is reported (with why) and left out; --apply refuses while any is
 // unresolved unless the founder passes --allow-missing.
@@ -95,6 +97,7 @@ export function planCatalogueMap(input: {
 
   for (const c of input.chapters) {
     const seen = new Set<string>();
+    const oneTopic = new Set(c.topics.map((t) => t.slug)).size === 1;
     const kitsHere: string[] = [];
     c.topics.forEach((t, sort) => {
       const topic = topicBySlug.get(t.slug);
@@ -119,7 +122,7 @@ export function planCatalogueMap(input: {
         chapter_ref: String(c.chapter),
         sort,
         generation_id: pres,
-        label: sharedWith !== null ? c.title : t.title || topic.title || t.slug,
+        label: sharedWith !== null && oneTopic ? c.title : t.title || topic.title || t.slug,
         slug: t.slug,
         topicKitId: kit.id,
         sharedWith,
