@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { fmt } from "@/i18n/format";
 import AssignModal from "./assign-modal";
 import MyBookCover from "./my-book-cover";
+import { WatchLink } from "./lesson-player";
 import { kindLabel, type LibraryMessages } from "./labels";
 import { childLabel, type MyBookTile } from "@/utils/my-books/tiles";
 import type { ChapterFile, ChapterKit, ProductChapter } from "@/utils/my-books/product-book";
@@ -23,26 +24,33 @@ import type { ChapterFile, ChapterKit, ProductChapter } from "@/utils/my-books/p
 // chapter's kit on arrival) and Assign chapter (adopt_product_kit copies the
 // student pieces into the teacher's own library, then the Library's own
 // Assign modal runs on those copies). Per book: Download PDF. The lesson's
-// Watch opens YouTube. Everything was decided and signed on the server
-// (src/utils/my-books); this only lays it out.
+// Watch plays its stored MP4 in the in-app player (founder 2026-10-30: "the
+// quality matters in the app so lets use stored mp4 wherever possible"); a
+// lesson with no stored video plays its YouTube fallback there, captions off.
+// Everything was decided and signed on the server (src/utils/my-books); this
+// only lays it out.
 
 function FileLink({ f, t }: { f: ChapterFile; t: LibraryMessages }) {
+  const watchLabel = f.part ? fmt(t.watchPart, { n: f.part }) : t.watch;
   const text =
     f.label === "watch"
-      ? `▶ ${f.part ? fmt(t.watchPart, { n: f.part }) : t.watch}`
+      ? `▶ ${watchLabel}`
       : f.label === "deck"
         ? `⬇ ${f.part ? fmt(t.deckPart, { n: f.part }) : t.deck}`
         : f.label === "answerKey"
           ? `⬇ ${t.bookless.answerKey}`
           : `⬇ ${t.download}`;
+  const cls = "font-medium text-[#0C8175] hover:underline";
+  if (f.label === "watch")
+    return (
+      <span data-youtube={f.youtube ? "true" : undefined} className="contents">
+        <WatchLink src={f.url} title={watchLabel} closeLabel={t.common.close} className={cls}>
+          {text}
+        </WatchLink>
+      </span>
+    );
   return (
-    <a
-      href={f.url}
-      target={f.label === "watch" ? "_blank" : undefined}
-      rel={f.label === "watch" ? "noopener noreferrer" : undefined}
-      data-youtube={f.youtube ? "true" : undefined}
-      className="font-medium text-[#0C8175] hover:underline"
-    >
+    <a href={f.url} className={cls}>
       {text}
     </a>
   );
