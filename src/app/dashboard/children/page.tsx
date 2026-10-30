@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, currentUser } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { parentPortalEnabled, aiTutorEnabled, diaryEnabled } from "@/utils/flags";
@@ -69,13 +69,10 @@ type ChildItem = {
 
 export default async function ChildrenPage() {
   if (!parentPortalEnabled()) redirect("/dashboard");
-  const locale = await resolveLocale();
+  // Locale, session and the (request-shared) verified user in one wave.
+  const [locale, supabase, user] = await Promise.all([resolveLocale(), createClient(), currentUser()]);
   const dict = await getDictionary(locale);
   const t = dict.school.children;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase
@@ -95,34 +92,20 @@ export default async function ChildrenPage() {
   const hatAway = await enforceHat(supabase, role, schoolId, "parent");
   if (hatAway) redirect(hatAway);
 
-  // School notices (0068) — a parent carries no school_id, so noticesFor
-  // resolves the school through their children (the calendar page's fallback).
-  const notices = await noticesFor(supabase, { userId: user.id, role, schoolId });
-  // Can this reader actually GET to the Diary, where the notices list now
-  // lives? Same condition the header uses to decide the tab. FEATURE_DIARY is
-  // independent of FEATURE_NOTICES, so this can genuinely be false while
-  // notices are live — and the list is the only place to sign one.
-  const diaryReachable = diaryEnabled() && !!role;
-
-  // Linked children (RLS: own links only). `source` decides who may delete:
-  // self-created children are the parent's to remove; school-issued links are
-  // school-managed.
-  type LinkRow = {
-    parent_id: string;
-    child_id: string;
-    verified_at: string | null;
-    source: string | null;
-    profiles: { full_name: string | null; username: string | null; school_id: string | null } | null;
-  };
-  const { data: linksRaw } = await supabase
-    .from("parent_links")
-    .select("parent_id, child_id, verified_at, source, profiles:child_id(full_name, username, school_id)");
-  const links = (linksRaw ?? []) as unknown as LinkRow[];
-  if (links.length === 0 && role !== "parent") redirect("/dashboard");
-
-  // The child slice, all RLS-scoped: enrollments → classes, shares (class +
-  // direct), generations, progress, scores.
-  const [enrQ, classesQ, sharesQ, gensQ, progQ, subsQ] = await Promise.all([
+  // Every read this page needs, past its gates, in ONE wave (they used to run
+  // in three steps). All of them are the parent's own RLS-scoped reads.
+  //  • School notices (0068) — a parent carries no school_id, so noticesFor
+  //    resolves the school through their children (the calendar page's fallback).
+  //  • Linked children (RLS: own links only). `source` decides who may delete:
+  //    self-created children are the parent's to remove; school-issued links are
+  //    school-managed.
+  //  • The child slice, all RLS-scoped: enrollments → classes, shares (class +
+  //    direct), generations, progress, scores.
+  const [notices, { data: linksRaw }, enrQ, classesQ, sharesQ, gensQ, progQ, subsQ] = await Promise.all([
+    noticesFor(supabase, { userId: user.id, role, schoolId }),
+    supabase
+      .from("parent_links")
+      .select("parent_id, child_id, verified_at, source, profiles:child_id(full_name, username, school_id)"),
     supabase.from("enrollments").select("class_id, student_id"),
     supabase.from("classes").select("id, name"),
     supabase.from("generation_shares").select("generation_id, class_id, student_id, due_at, shared_by"),
@@ -131,6 +114,21 @@ export default async function ChildrenPage() {
     supabase.from("student_progress").select("generation_id, student_id, status, completed_at, updated_at"),
     supabase.from("submissions").select("generation_id, student_id, auto_score, teacher_score, max_score, grade_status, feedback, submitted_at, graded_at"),
   ]);
+  // Can this reader actually GET to the Diary, where the notices list now
+  // lives? Same condition the header uses to decide the tab. FEATURE_DIARY is
+  // independent of FEATURE_NOTICES, so this can genuinely be false while
+  // notices are live — and the list is the only place to sign one.
+  const diaryReachable = diaryEnabled() && !!role;
+
+  type LinkRow = {
+    parent_id: string;
+    child_id: string;
+    verified_at: string | null;
+    source: string | null;
+    profiles: { full_name: string | null; username: string | null; school_id: string | null } | null;
+  };
+  const links = (linksRaw ?? []) as unknown as LinkRow[];
+  if (links.length === 0 && role !== "parent") redirect("/dashboard");
 
   const className = new Map(((classesQ.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   // The rows, as the shared pure step takes them (src/utils/child-work.ts —

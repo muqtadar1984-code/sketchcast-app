@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, currentUser } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
 import HeaderNav from "./header-nav";
 import MobileNav from "./mobile-nav";
@@ -66,12 +66,15 @@ function labelFor(t: NavMessages["roleLabel"], role: string | null, hasScope: bo
 // dictionary stays on the server: each client control below is handed the
 // handful of strings it renders, never the whole file.
 export default async function AppHeader() {
-  const locale = await resolveLocale();
+  // SPEED (2026-10-30): the header is on every dashboard page and is NOT behind
+  // a Suspense boundary (its links are tour anchors), so it holds the first
+  // paint. Its reads used to run one after another — up to fourteen round
+  // trips. Now: locale + session + user together (the user is shared with the
+  // layout and page via currentUser), the profile, then ONE wave of the
+  // independent reads; the two that truly chain (calendar → notices, issues →
+  // their watermark) chain inside that wave. Same clients, same queries.
+  const [locale, supabase, user] = await Promise.all([resolveLocale(), createClient(), currentUser()]);
   const t = await getDictionary(locale);
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   let role: string | null = null;
   let name = "";
@@ -90,101 +93,12 @@ export default async function AppHeader() {
   // Which school decides the NOTICES gate for this viewer — their own for a
   // member, a child's for a parent (resolved by the calendar walk below).
   let noticeSchoolId: string | null = null;
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, role, school_id")
-      .eq("id", user.id)
-      .maybeSingle();
-    role = (profile?.role as string | null) ?? null;
-    noticeSchoolId = (profile?.school_id as string | null) ?? null;
-    name = profile?.full_name || user.email || "";
-    if (role && role !== "student") {
-      // Global env flag OR this school's config override (the sales-demo tenant).
-      analyticsOn = await schoolAnalyticsEnabledFor(supabase, profile?.school_id as string | null);
-      try {
-        boardOn = (await presentEntitled(createAdminClient(), user.id, user)).ok;
-      } catch {
-        boardOn = false;
-      }
-    }
-    // Timetable reaches every school member — students see their class grid.
-    if (role && profile?.school_id) {
-      timetableOn = await timetableEnabledFor(supabase, profile.school_id as string);
-      // The school's identity badge (far right; logo joins it later).
-      // schools_read (0001): every member reads their own school row.
-      const { data: sch } = await supabase
-        .from("schools")
-        .select("name, display_name")
-        .eq("id", profile.school_id as string)
-        .maybeSingle();
-      schoolName = (sch?.display_name as string | null) || (sch?.name as string | null) || "";
-    }
-    if ((role === "teacher" || role === "coordinator") && profile?.school_id) {
-      // RLS cs_self_read + school filter: only grants in the CURRENT school
-      // count (stale grants from a former school must not surface the tabs).
-      const { data: sc } = await supabase
-        .from("coordinator_scope")
-        .select("id")
-        .eq("school_id", profile.school_id as string)
-        .limit(1);
-      hasScope = (sc?.length ?? 0) > 0;
-    }
-    if (role && role !== "student") {
-      calendarOn = await calendarEnabledFor(supabase, profile?.school_id as string | null);
-      // Parents carry no school_id — check their children's school(s) instead
-      // (readable via schools_parent_read, 0043).
-      if (!calendarOn && !profile?.school_id) {
-        const { data: pl } = await supabase
-          .from("parent_links")
-          .select("profiles:child_id(school_id)")
-          .order("created_at")
-          .limit(10);
-        for (const l of (pl ?? []) as unknown as { profiles: { school_id: string | null } | null }[]) {
-          if (l.profiles?.school_id && (await calendarEnabledFor(supabase, l.profiles.school_id))) {
-            calendarOn = true;
-            // The same child school answers "are notices live for me?".
-            noticeSchoolId = l.profiles.school_id;
-            break;
-          }
-        }
-      }
-    }
-    if (parentPortalEnabled() && role && role !== "student") {
-      // Any adult with links (a parent, or a teacher who is also a parent):
-      // pl_parent_read returns only the viewer's own links. Best-effort — table
-      // missing (0018 not applied) just means no tab. `source` decides the
-      // Test Papers tab: 'school' = the school provisioned this portal.
-      const { data: pl } = await supabase.from("parent_links").select("source").limit(20);
-      hasChildren = (pl?.length ?? 0) > 0;
-      hasSchoolParentLinks = ((pl ?? []) as { source: string | null }[]).some((l) => l.source === "school");
-    }
-  }
 
   // Issue-status notifications: the user's own reports (pi_report_read RLS)
   // and the seen-watermark for the badge. Both best-effort — a pre-0055
   // deploy or a missing console table must never break the header.
   let bellIssues: IssueNotification[] = [];
   let bellUnread = 0;
-  if (user) {
-    const { data: issRaw } = await supabase
-      .from("platform_issues")
-      .select("id, title, category, status, resolution_note, created_at, updated_at")
-      .eq("reporter_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(20);
-    bellIssues = (issRaw ?? []) as IssueNotification[];
-    if (bellIssues.length) {
-      let seen: string | null = null;
-      const { data: seenRow } = await supabase
-        .from("profiles")
-        .select("notifications_seen_at")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (seenRow) seen = (seenRow as { notifications_seen_at?: string | null }).notifications_seen_at ?? null;
-      bellUnread = bellIssues.filter((i) => !seen || i.updated_at > seen).length;
-    }
-  }
 
   // The bell's SECOND feed: the school's live notices (0068 — notices ARE
   // school_events rows, so se_read already delivers exactly the viewer's slice,
@@ -204,31 +118,149 @@ export default async function AppHeader() {
   let bellNotices: NoticeNotification[] = [];
   let bellNoticesUnread = 0;
   let noticesOn = false;
+
+  let hatCookie: Hat | null = null;
+  // SK Tutor (founder, 2026-10-27: live, restricted to the allow-list). The
+  // door shows only when BOTH flags are on (the page needs the public one, the
+  // routes the server one) and this account clears the allow-list
+  // (skAccessAllowed: SK_ALLOWED_EMAILS / SK_ALLOWED_STUDENTS_OF), so an
+  // account it refuses never learns the surface exists. The page re-checks.
+  let skOn = false;
+
   if (user) {
-    noticesOn = await noticesEnabledFor(supabase, noticeSchoolId);
-    if (noticesOn) {
-      const now = new Date();
-      const nowIso = now.toISOString();
-      const freshIso = new Date(now.getTime() - 7 * 86400000).toISOString();
-      const { data: notRaw } = await supabase
-        .from("school_events")
-        .select("id, title, audience, importance, starts_at, action_by, action_label, created_at")
-        .eq("status", "published") // a revoked notice leaves every reader surface
-        .in("audience", ["school", "staff"])
-        .or(`starts_at.gte.${nowIso},action_by.gte.${nowIso},created_at.gte.${freshIso}`)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      bellNotices = (notRaw ?? []) as NoticeNotification[];
-      if (bellNotices.length) {
-        const { data: nSeenRow } = await supabase
-          .from("profiles")
-          .select("notices_seen_at")
-          .eq("id", user.id)
-          .maybeSingle();
-        const nSeen = (nSeenRow as { notices_seen_at?: string | null } | null)?.notices_seen_at ?? null;
-        bellNoticesUnread = bellNotices.filter((n) => !nSeen || n.created_at > nSeen).length;
-      }
-    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name, role, school_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    role = (profile?.role as string | null) ?? null;
+    noticeSchoolId = (profile?.school_id as string | null) ?? null;
+    name = profile?.full_name || user.email || "";
+    const schoolId = (profile?.school_id as string | null) ?? null;
+    const viewerRole = role;
+
+    await Promise.all([
+      (async () => {
+        if (!(viewerRole && viewerRole !== "student")) return;
+        // Global env flag OR this school's config override (the sales-demo tenant).
+        [analyticsOn, boardOn] = await Promise.all([
+          schoolAnalyticsEnabledFor(supabase, schoolId),
+          (async () => {
+            try {
+              return (await presentEntitled(createAdminClient(), user.id, user)).ok;
+            } catch {
+              return false;
+            }
+          })(),
+        ]);
+      })(),
+      (async () => {
+        // Timetable reaches every school member — students see their class grid.
+        if (!(viewerRole && schoolId)) return;
+        const [tt, { data: sch }] = await Promise.all([
+          timetableEnabledFor(supabase, schoolId),
+          // The school's identity badge (far right; logo joins it later).
+          // schools_read (0001): every member reads their own school row.
+          supabase.from("schools").select("name, display_name").eq("id", schoolId).maybeSingle(),
+        ]);
+        timetableOn = tt;
+        schoolName = (sch?.display_name as string | null) || (sch?.name as string | null) || "";
+      })(),
+      (async () => {
+        if (!((viewerRole === "teacher" || viewerRole === "coordinator") && schoolId)) return;
+        // RLS cs_self_read + school filter: only grants in the CURRENT school
+        // count (stale grants from a former school must not surface the tabs).
+        const { data: sc } = await supabase
+          .from("coordinator_scope")
+          .select("id")
+          .eq("school_id", schoolId)
+          .limit(1);
+        hasScope = (sc?.length ?? 0) > 0;
+      })(),
+      (async () => {
+        // Calendar first, THEN notices: the parent walk below can move
+        // noticeSchoolId to a child's school, and the notices gate reads it.
+        if (viewerRole && viewerRole !== "student") {
+          calendarOn = await calendarEnabledFor(supabase, schoolId);
+          // Parents carry no school_id — check their children's school(s) instead
+          // (readable via schools_parent_read, 0043).
+          if (!calendarOn && !schoolId) {
+            const { data: pl } = await supabase
+              .from("parent_links")
+              .select("profiles:child_id(school_id)")
+              .order("created_at")
+              .limit(10);
+            for (const l of (pl ?? []) as unknown as { profiles: { school_id: string | null } | null }[]) {
+              if (l.profiles?.school_id && (await calendarEnabledFor(supabase, l.profiles.school_id))) {
+                calendarOn = true;
+                // The same child school answers "are notices live for me?".
+                noticeSchoolId = l.profiles.school_id;
+                break;
+              }
+            }
+          }
+        }
+        noticesOn = await noticesEnabledFor(supabase, noticeSchoolId);
+        if (noticesOn) {
+          const now = new Date();
+          const nowIso = now.toISOString();
+          const freshIso = new Date(now.getTime() - 7 * 86400000).toISOString();
+          const { data: notRaw } = await supabase
+            .from("school_events")
+            .select("id, title, audience, importance, starts_at, action_by, action_label, created_at")
+            .eq("status", "published") // a revoked notice leaves every reader surface
+            .in("audience", ["school", "staff"])
+            .or(`starts_at.gte.${nowIso},action_by.gte.${nowIso},created_at.gte.${freshIso}`)
+            .order("created_at", { ascending: false })
+            .limit(10);
+          bellNotices = (notRaw ?? []) as NoticeNotification[];
+          if (bellNotices.length) {
+            const { data: nSeenRow } = await supabase
+              .from("profiles")
+              .select("notices_seen_at")
+              .eq("id", user.id)
+              .maybeSingle();
+            const nSeen = (nSeenRow as { notices_seen_at?: string | null } | null)?.notices_seen_at ?? null;
+            bellNoticesUnread = bellNotices.filter((n) => !nSeen || n.created_at > nSeen).length;
+          }
+        }
+      })(),
+      (async () => {
+        if (!(parentPortalEnabled() && viewerRole && viewerRole !== "student")) return;
+        // Any adult with links (a parent, or a teacher who is also a parent):
+        // pl_parent_read returns only the viewer's own links. Best-effort — table
+        // missing (0018 not applied) just means no tab. `source` decides the
+        // Test Papers tab: 'school' = the school provisioned this portal.
+        const { data: pl } = await supabase.from("parent_links").select("source").limit(20);
+        hasChildren = (pl?.length ?? 0) > 0;
+        hasSchoolParentLinks = ((pl ?? []) as { source: string | null }[]).some((l) => l.source === "school");
+      })(),
+      (async () => {
+        const { data: issRaw } = await supabase
+          .from("platform_issues")
+          .select("id, title, category, status, resolution_note, created_at, updated_at")
+          .eq("reporter_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(20);
+        bellIssues = (issRaw ?? []) as IssueNotification[];
+        if (bellIssues.length) {
+          let seen: string | null = null;
+          const { data: seenRow } = await supabase
+            .from("profiles")
+            .select("notifications_seen_at")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (seenRow) seen = (seenRow as { notifications_seen_at?: string | null }).notifications_seen_at ?? null;
+          bellUnread = bellIssues.filter((i) => !seen || i.updated_at > seen).length;
+        }
+      })(),
+      (async () => {
+        if (roleHatsEnabled()) hatCookie = await activeHatCookie();
+      })(),
+      (async () => {
+        skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && (await skAccessAllowed(user, { role: viewerRole }));
+      })(),
+    ]);
   }
 
   // One-hat mode: filter everything to the active hat; legacy union view when off.
@@ -239,18 +271,12 @@ export default async function AppHeader() {
     // The diary counts as a leadership surface: with only FEATURE_DIARY on, a
     // coordinator still holds their hat (the school diary is behind it).
     hats = hatsFor({ role, hasScope, hasChildren, analyticsOn, timetableOn, diaryOn });
-    activeHat = resolveHat(await activeHatCookie(), hats);
+    activeHat = resolveHat(hatCookie, hats);
   }
   // Ready-made kits (catalogue Phase C): flag-gated, adults only. The page
   // decides the rest (release gate, role, allowance) — this is a door, not a
   // guard.
   const kitsOn = catalogueTabEnabled() && !!user && !!role && role !== "student";
-  // SK Tutor (founder, 2026-10-27: live, restricted to the allow-list). The
-  // door shows only when BOTH flags are on (the page needs the public one, the
-  // routes the server one) and this account clears the allow-list
-  // (skAccessAllowed: SK_ALLOWED_EMAILS / SK_ALLOWED_STUDENTS_OF), so an
-  // account it refuses never learns the surface exists. The page re-checks.
-  const skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && !!user && (await skAccessAllowed(user, { role }));
   const tabs = activeHat
     ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn, skOn)
     : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn, kitsOn, skOn);

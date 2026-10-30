@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, currentUser } from "@/utils/supabase/server";
 import { i18nEnabled } from "@/utils/flags";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, type Locale } from "./locales";
 import { localeForCountry } from "./country-locale";
@@ -79,10 +79,9 @@ const NO_PREFS: Prefs = { locale: null, country: null };
  * render. Nulls for anyone we can't ask. */
 async function profilePrefs(): Promise<Prefs> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // The verified user is shared with the rest of this render (currentUser is
+    // React-cached), so the locale costs no Auth round trip of its own.
+    const [supabase, user] = await Promise.all([createClient(), currentUser()]);
     if (!user) return NO_PREFS;
     // Best-effort by design: on a pre-0069 database PostgREST answers 42703
     // ("column does not exist"), which means "nobody has a saved language yet",
