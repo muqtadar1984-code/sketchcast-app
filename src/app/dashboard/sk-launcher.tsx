@@ -122,8 +122,10 @@ export default function SkLauncher({
         greet={!board && !tutor}
         // A question mid-tour: the tour pauses and SK answers it normally.
         onEngaged={tour.onQuestion}
+        // From the moment a start is asked for ("Starting the tour…"), not
+        // only once the run has its plan (2026-10-31).
         walk={
-          tourActive
+          tourActive || tour.starting
             ? {
                 strip: tour.strip,
                 voice: tour.voice,
@@ -132,6 +134,7 @@ export default function SkLauncher({
                 command: tour.command,
                 onVoiceDone: tour.onVoiceDone,
                 onSentence: tour.onSentence,
+                onSentencePlay: tour.onSentencePlay,
                 act: tour.act,
                 hold: tour.hold,
                 state: tour.state ?? undefined,

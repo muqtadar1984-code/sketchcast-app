@@ -5,8 +5,10 @@
 // stops in src/sk/walkthrough/stops.ts; this file is the wiring the SK
 // launcher (sk-launcher.tsx) mounts:
 //
-//   useSkWalkthrough() — starts a run (facts from GET /api/sk/walkthrough →
-//     plan) once the page it starts on has settled, prefetches every page of
+//   useSkWalkthrough() — starts a run at once (2026-10-31: "Starting the
+//     tour…" in the bubble, stop 1's page opened while the facts load from GET
+//     /api/sk/walkthrough; the page she is on is waited for only when stop 1
+//     is on it, ≤ 2 s — walkthrough.ts createWalkStarter), prefetches every page of
 //     the plan, and plays the stops STRICTLY in sequence (2026-10-30 fix):
 //     navigate (router.push, never a full reload) → wait for the page to
 //     SETTLE and the anchor to be visible and still (a stop is skipped, with
@@ -30,10 +32,15 @@
 //     pointer-events none, so the page stays usable.
 //
 // A combined stop (stops.ts `parts`, founder 2026-10-30: "combine steps 3 to
-// 6 into 1 narration") says its parts' lines as ONE line; the highlight starts
-// on the first part's control and MOVES to each next part's control as the
-// Shell reports SK starting that part's first sentence (`onSentence`), or,
-// without sound, as the reading time reaches it.
+// 6 into 1 narration") says ONE tight line (2026-10-31: 1-3 sentences, fewer
+// than its parts): its precomposed line, or its found parts' clauses composed.
+// The highlight starts on the first part's control and MOVES to each next
+// part's control at that part's `{marker}` inside the line: the Shell reports
+// each sentence's start (`onSentence`) and, once its audio plays, its known
+// length (`onSentencePlay`, from the voice's word marks); the marker's place in
+// the sentence is timed by that length, else by its characters at SK's
+// speaking rate as measured on the tour's earlier sentences. Without sound,
+// each part gets its share of the reading time.
 //
 // Every stop also reports how it went to SK's voice log (POST
 // /api/sk/voice-log → one function-log line per batch; voice-log.ts
@@ -56,6 +63,7 @@ import { fmt } from "@/i18n/format";
 import { SK_INTRO_TOUR } from "@/sk/shell/tour";
 import {
   backStop,
+  createWalkStarter,
   createWalkStore,
   currentStop,
   findAnchor,
@@ -64,35 +72,41 @@ import {
   jumpTo,
   missingStop,
   nextStop,
-  partAtSentence,
-  partReadingStarts,
-  partSentenceStarts,
+  cueDelay,
+  cueReadingTimes,
+  nextSpeakRate,
+  partCues,
+  partDueAt,
+  partsLine,
+  SPEAK_MS_PER_CHAR,
   pauseWalk,
-  planWalk,
   resumeWalk,
   routePath,
   skipWalk,
   startWalk,
   advanceDelay,
+  atRoute,
   readingMs,
   SETTLE_CAP_MS,
   waitForSettledAnchor,
   waitForSettledPage,
   waitForStableRect,
   walkCommand,
-  joinParts,
+  stripMarks,
   type LineOutcome,
+  type PartCue,
   type PartHit,
   type PlannedStop,
   type SettleProbe,
   type WalkRect,
   type WalkState,
+  type WalkStarter,
   type WalkStore,
 } from "@/sk/shell/client/walkthrough";
 import { splitSentences } from "@/sk/shell/client/speech";
 import { beaconVoiceEvents, createVoiceLog, skipOutcome, tourEvent, tourPageState, type TourOutcome, type VoiceLog } from "@/sk/shell/client/voice-log";
 import type { SkTurnWalk, SkWalkAction } from "@/sk/shell/types";
-import { CLICK_ONLY_DEMOS, WALK_ROLES, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
+import { CLICK_ONLY_DEMOS, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
 
 export type WalkCopy = Dictionary["sk"]["walkthrough"];
 
@@ -266,6 +280,21 @@ export function WalkStrip(p: WalkStripProps) {
   );
 }
 
+/** The bubble the moment a start is asked for (no run yet): "Starting the
+ *  tour…", and Skip, which gives the start up. */
+export function WalkStarting({ copy, onSkip }: { copy: WalkCopy; onSkip: () => void }) {
+  return (
+    <div className="space-y-2 text-start" data-sk="walk" data-sk-walk-status="starting">
+      <p className="text-sm leading-5 text-slate-800" data-sk="caption" aria-live="polite">
+        {copy.ui.starting}
+      </p>
+      <button type="button" onClick={onSkip} className="h-7 px-1.5 text-[11px] font-medium text-[#5B6470] underline" data-sk="walk-skip">
+        {copy.ui.skip}
+      </button>
+    </div>
+  );
+}
+
 // ── the spotlight ───────────────────────────────────────────────────────────
 
 /** A dim with a cut-out ring round `el`, following it on scroll and resize.
@@ -369,6 +398,8 @@ function settleProbe(path: string | null): SettleProbe {
 export type SkWalkthrough = {
   /** A run is on (running or paused). */
   active: boolean;
+  /** A start is under way (no run yet): the bubble says "Starting the tour…". */
+  starting: boolean;
   walk: WalkState | null;
   /** The tour inside the speech bubble (null when no run); `answer` = SK's
    *  reply to a question asked mid-tour, shown instead of the caption. */
@@ -389,8 +420,11 @@ export type SkWalkthrough = {
    *  only after it was FULLY spoken. */
   onVoiceDone: (key: string, outcome: LineOutcome) => void;
   /** The Shell starts sentence `index` (0-based) of the `voice` line `key`: a
-   *  combined stop moves its highlight to the part that sentence opens. */
+   *  combined stop times its highlight moves inside that sentence. */
   onSentence: (key: string, index: number) => void;
+  /** Sentence `index` of line `key` starts PLAYING, `ms` long when the voice
+   *  knows (word marks), else null: the in-sentence moves are re-timed. */
+  onSentencePlay: (key: string, index: number, ms: number | null) => void;
   /** A tour action the server decided (natural phrasing it caught). */
   act: (action: SkWalkAction) => void;
   /** She is typing: no auto-advance under her. */
@@ -403,14 +437,16 @@ export type SkWalkthrough = {
 
 /** What the current stop shows: its control (the spotlight's), and for a
  *  combined stop every part's control and line key, the part highlighted now,
- *  the sentence each part starts at and (no sound) the ms each one starts at. */
+ *  its words (markers stripped), where each part starts in them, and (no
+ *  sound) the ms each one starts at. */
 type WalkMatch = {
   el: Element | null;
   line?: string;
   key: string;
-  parts?: Array<{ el: Element; line: string }>;
+  parts?: Array<{ el: Element; id: string; line: string }>;
   part?: number;
-  starts?: number[];
+  text?: string;
+  cues?: PartCue[];
   times?: number[];
 };
 
@@ -486,11 +522,11 @@ export function useSkWalkthrough({
     onIntroDoneRef.current = onIntroDone;
   });
 
-  const lineOf = useCallback((w: WalkState | null, m: { line?: string; parts?: Array<{ line: string }> } | null): string => {
+  const lineOf = useCallback((w: WalkState | null, m: { line?: string; text?: string; parts?: Array<{ id: string; line: string }> } | null): string => {
     const stop = w ? currentStop(w) : null;
     if (!stop || !copy) return "";
-    // A combined stop: its parts' words as ONE line.
-    if (m?.parts?.length) return joinParts(m.parts.map((p) => walkLine(copy, w!.role, p.line)));
+    // A combined stop: its ONE line, markers stripped.
+    if (m?.parts?.length) return m.text ?? stripMarks(partsLine(stop, m.parts, (k) => walkLine(copy, w!.role, k), copy.ui.partJoin));
     return walkLine(copy, w!.role, m?.line ?? stop.line) || walkLine(copy, w!.role, stop.line);
   }, [copy]);
   // The stop effect reads the words through a ref: a new `copy` object (a
@@ -499,6 +535,16 @@ export function useSkWalkthrough({
   useEffect(() => {
     lineOfRef.current = lineOf;
   }, [lineOf]);
+  /** A combined stop's marked line for the parts found (stops.ts `parts`). */
+  const marked = useCallback(
+    (w: WalkState, stop: PlannedStop, parts: Array<{ id: string; line: string }>) =>
+      copy ? partsLine(stop, parts, (k) => walkLine(copy, w.role, k), copy.ui.partJoin) : "",
+    [copy],
+  );
+  const markedRef = useRef(marked);
+  useEffect(() => {
+    markedRef.current = marked;
+  }, [marked]);
 
   // ── a combined stop's highlight, part by part ──
   /** The reading-time clock moving a combined stop's highlight (no sound). */
@@ -619,40 +665,48 @@ export function useSkWalkthrough({
     }
   }, [runId, router]);
 
-  const startAbortRef = useRef<AbortController | null>(null);
-  useEffect(() => () => startAbortRef.current?.abort(), []);
-  const start = useCallback(
-    (opts?: { record?: boolean }) => {
-      if (startingRef.current) return;
-      startingRef.current = true;
-      const record = !!opts?.record || introRef.current;
-      const ac = new AbortController();
-      startAbortRef.current = ac;
-      void (async () => {
-        let tour: WalkRole = walkRoleFor(role, hat);
-        let facts: WalkFacts = {};
-        try {
-          const res = await fetch("/api/sk/walkthrough", { cache: "no-store" });
-          if (res.ok) {
-            const j = (await res.json()) as { role?: string; facts?: WalkFacts };
-            if (j.role && (WALK_ROLES as readonly string[]).includes(j.role)) tour = j.role as WalkRole;
-            if (j.facts && typeof j.facts === "object") facts = j.facts;
-          }
-        } catch {
-          /* unknown facts: the settled-page wait still skips what is not there */
-        }
-        // The tour does not START until the page it starts on has settled
-        // (loaded, no loading UI, quiet) — capped, so it always starts.
-        const ok = await waitForSettledPage({ probe: settleProbe(null), observe: observePage, signal: ac.signal });
-        startingRef.current = false;
-        if (!ok || ac.signal.aborted) return;
+  // ── the start (2026-10-31: "SK show me around still didn't start the
+  // tour"): the bubble says "Starting the tour…" at once, stop 1's page opens
+  // at once while the facts load, and the page she is on is waited for only
+  // when stop 1 is on it (≤ 2 s). One start at a time (walkthrough.ts
+  // createWalkStarter): a second "Take the tour" while starting joins it.
+  const [starting, setStarting] = useState(false);
+  const roleRef = useRef({ role, hat });
+  useEffect(() => {
+    roleRef.current = { role, hat };
+  });
+  const starterRef = useRef<WalkStarter<{ record: boolean }> | null>(null);
+  useEffect(() => {
+    const starter = createWalkStarter<{ record: boolean }>({
+      roleGuess: () => walkRoleFor(roleRef.current.role, roleRef.current.hat),
+      here: () => window.location.pathname + window.location.search,
+      navigate: (route) => router.push(route),
+      loadFacts: async (signal) => {
+        const res = await fetch("/api/sk/walkthrough", { cache: "no-store", signal });
+        return res.ok ? ((await res.json()) as { role?: string; facts?: WalkFacts }) : null;
+      },
+      // The page she is on only when stop 1 is on it, capped (≤ 2 s).
+      settle: (capMs, signal) => waitForSettledPage({ probe: settleProbe(null), observe: observePage, signal, capMs }),
+      onStarting: (on) => {
+        startingRef.current = on;
+        setStarting(on);
+      },
+      onReady: (tour, stops, ctx) => {
         setMatch(null);
         setAdvance(null);
-        setWalk(startWalk(tour, planWalk(tour, facts), { record, runId: uid() }));
-      })();
-    },
-    [role, hat],
-  );
+        setWalk(startWalk(tour, stops, { record: ctx.record, runId: uid() }));
+      },
+    });
+    starterRef.current = starter;
+    return () => {
+      starter.cancel();
+      if (starterRef.current === starter) starterRef.current = null;
+    };
+  }, [router]);
+  const start = useCallback((opts?: { record?: boolean }) => {
+    starterRef.current?.start({ record: !!opts?.record || introRef.current });
+  }, []);
+  const cancelStart = useCallback(() => starterRef.current?.cancel(), []);
 
   // ── one stop, strictly in order: navigate → settle → highlight → speak ──
   const goKey = goKeyOf(walk);
@@ -666,7 +720,7 @@ export function useSkWalkthrough({
     const t0 = Date.now();
     const target = routePath(s.route);
     const here = window.location.pathname + window.location.search;
-    const mustMove = s.route.includes("?") ? here !== s.route : window.location.pathname !== target;
+    const mustMove = !atRoute(s.route, here);
     if (mustMove) {
       navigatingRef.current = true;
       router.push(s.route);
@@ -724,12 +778,14 @@ export function useSkWalkthrough({
       }
       const m: WalkMatch = { el, line: hit.line, key: goKey };
       if (hit.parts?.length) {
-        // A combined stop: one line, the highlight on its first part for now.
-        m.parts = hit.parts.map((p) => ({ el: p.el, line: p.line }));
+        // A combined stop: one line, the highlight on its first part for now,
+        // moving at each part's marker inside the line.
+        m.parts = hit.parts.map((p) => ({ el: p.el, id: p.id, line: p.line }));
         m.part = 0;
-        const texts = m.parts.map((p) => lineOfRef.current(w, { line: p.line }));
-        m.starts = partSentenceStarts(texts, splitSentences);
-        m.times = partReadingStarts(texts);
+        const { text, cues } = partCues(markedRef.current(w, s, m.parts), m.parts.map((p) => p.id));
+        m.text = text;
+        m.cues = cues;
+        m.times = cueReadingTimes(text, cues);
       }
       matchRef.current = m;
       setMatch(m);
@@ -765,29 +821,81 @@ export function useSkWalkthrough({
     return () => window.clearTimeout(t);
   }, [advance, goKey]);
 
-  const onVoiceDone = useCallback((key: string, outcome: LineOutcome) => {
-    const sp = spokenRef.current;
-    if (!sp || sp.key !== key) return; // an older line
-    const w = walkRef.current;
-    if (!w || goKeyOf(w) !== sp.goKey || sp.entry !== entryRef.current || heldRef.current === sp.entry) return;
-    // Cut off (barge-in, Stop, an error): wait for Next or Resume.
-    const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });
-    if (ms !== null) setAdvance({ goKey: sp.goKey, entry: sp.entry, ms });
-    // Nothing was said (read-aloud off): a combined stop's highlight moves by reading time.
-    if (outcome === "silent") startPartClock(sp.goKey);
-  }, [startPartClock]);
+  // -- SK's speaking rate, measured on the tour's own sentences --
+  /** ms a character, smoothed over the sentences spoken so far. */
+  const rateRef = useRef(SPEAK_MS_PER_CHAR);
+  /** The sentence being spoken: its line, index, start and length. */
+  const sentRef = useRef<{ key: string; index: number; at: number; chars: number } | null>(null);
+  /** The sentence before has ended (the next one starts, or the line ends). */
+  const measure = useCallback((key: string) => {
+    const cur = sentRef.current;
+    if (cur && cur.key === key) rateRef.current = nextSpeakRate(rateRef.current, Date.now() - cur.at, cur.chars);
+    sentRef.current = null;
+  }, []);
 
-  /** SK starts sentence `index` of the line `key`: on a combined stop, the
-   *  highlight moves to the part that sentence belongs to. */
+  /** Move a combined stop's highlight within sentence `index`, timed from now. */
+  const timeParts = useCallback(
+    (goKey: string, index: number, durationMs: number | null) => {
+      const m = matchRef.current;
+      if (!m?.parts || !m.cues || m.key !== goKey) return;
+      clearPartClock();
+      const due = partDueAt(m.cues, index);
+      if (due !== null) showPart(goKey, due);
+      for (const c of m.cues) {
+        if (c.sentence !== index || c.at === 0) continue;
+        partTimersRef.current.push(
+          window.setTimeout(() => {
+            if (goKeyOf(walkRef.current) === goKey) showPart(goKey, c.part);
+          }, cueDelay(c, { durationMs, msPerChar: rateRef.current })),
+        );
+      }
+    },
+    [clearPartClock, showPart],
+  );
+
+  const onVoiceDone = useCallback(
+    (key: string, outcome: LineOutcome) => {
+      if (outcome === "spoken") measure(key);
+      else if (sentRef.current?.key === key) sentRef.current = null;
+      const sp = spokenRef.current;
+      if (!sp || sp.key !== key) return; // an older line
+      const w = walkRef.current;
+      if (!w || goKeyOf(w) !== sp.goKey || sp.entry !== entryRef.current || heldRef.current === sp.entry) return;
+      // Cut off (barge-in, Stop, an error): wait for Next or Resume.
+      const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });
+      if (ms !== null) setAdvance({ goKey: sp.goKey, entry: sp.entry, ms });
+      // Nothing was said (read-aloud off): a combined stop's highlight moves by reading time.
+      if (outcome === "silent") startPartClock(sp.goKey);
+    },
+    [startPartClock, measure],
+  );
+
+  /** SK starts sentence `index` of the line `key`: the rate is measured on the
+   *  sentence before, and a combined stop times its moves inside this one. */
   const onSentence = useCallback(
     (key: string, index: number) => {
       const sp = spokenRef.current;
-      const m = matchRef.current;
-      if (!sp || sp.key !== key || !m?.parts || !m.starts || m.key !== sp.goKey) return;
+      if (!sp || sp.key !== key) return;
+      measure(key);
+      sentRef.current = { key, index, at: Date.now(), chars: [...(splitSentences(sp.text)[index] ?? "")].length };
       if (goKeyOf(walkRef.current) !== sp.goKey || sp.entry !== entryRef.current) return;
-      showPart(sp.goKey, partAtSentence(m.starts, index));
+      timeParts(sp.goKey, index, null);
     },
-    [showPart],
+    [measure, timeParts],
+  );
+
+  /** Sentence `index` starts PLAYING (its audio is ready), `ms` long when the
+   *  voice knows: the start and the in-sentence moves are taken from now. */
+  const onSentencePlay = useCallback(
+    (key: string, index: number, ms: number | null) => {
+      const sp = spokenRef.current;
+      if (!sp || sp.key !== key) return;
+      const cur = sentRef.current;
+      if (cur && cur.key === key && cur.index === index) cur.at = Date.now();
+      if (goKeyOf(walkRef.current) !== sp.goKey || sp.entry !== entryRef.current) return;
+      timeParts(sp.goKey, index, ms);
+    },
+    [timeParts],
   );
 
   // She left the stop's page herself (a link, the back button): hold the tour.
@@ -873,19 +981,23 @@ export function useSkWalkthrough({
 
   const act = useCallback(
     (a: SkWalkAction) => {
-      if (!isActive(walkRef.current)) return;
+      // Starting (no run yet): only "skip" means something — it gives up the start.
+      if (!isActive(walkRef.current)) {
+        if (a === "skip" && startingRef.current) cancelStart();
+        return;
+      }
       if (a === "next") controls.next();
       else if (a === "back") controls.back();
       else if (a === "skip") controls.skip();
       else if (a === "pause") controls.pause();
       else if (a === "resume") controls.resume();
     },
-    [controls],
+    [controls, cancelStart],
   );
 
   const command = useCallback(
     (text: string) => {
-      if (!isActive(walkRef.current)) return false;
+      if (!isActive(walkRef.current) && !startingRef.current) return false;
       const c = walkCommand(text);
       if (!c) return false;
       act(c);
@@ -911,7 +1023,9 @@ export function useSkWalkthrough({
   const line = shown ? lineOf(walk, match) : "";
   const strip = useCallback(
     (answer?: string | null) =>
-      walk && active && copy ? (
+      !active && starting && copy ? (
+        <WalkStarting copy={copy} onSkip={cancelStart} />
+      ) : walk && active && copy ? (
         <WalkStrip
           copy={copy}
           walk={walk}
@@ -927,7 +1041,7 @@ export function useSkWalkthrough({
           onChip={(text) => setFill({ key: uid(), text })}
         />
       ) : null,
-    [walk, active, copy, line, soundOn, unlock, controls],
+    [walk, active, starting, cancelStart, copy, line, soundOn, unlock, controls],
   );
 
   const cur = walk ? currentStop(walk) : null;
@@ -939,6 +1053,7 @@ export function useSkWalkthrough({
   const showSpot = !!match?.el && active && (walk?.status === "running" || walk?.pausedBy === "user");
   return {
     active,
+    starting,
     walk,
     strip,
     spotlight: showSpot && match?.el ? <WalkSpotlight el={match.el} /> : null,
@@ -950,6 +1065,7 @@ export function useSkWalkthrough({
     start,
     onVoiceDone,
     onSentence,
+    onSentencePlay,
     act,
     hold,
     state,

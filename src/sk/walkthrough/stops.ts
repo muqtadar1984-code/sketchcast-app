@@ -38,10 +38,22 @@
 //              its own needs / fallback, exactly like a stop: a part whose
 //              fact is missing, or whose anchors are all absent, is left out
 //              of the narration; the stop is skipped only when every part is.
-//              The parts' lines are spoken as ONE line and the highlight
-//              moves to each part's control as SK starts its first sentence
-//              (so every part's line ends a sentence). A parts stop's own
-//              `anchors` stay [] and are not used.
+//              2026-10-31 (founder: "1 or no more than 3 sentences and avoid
+//              repetitions"): when every part plays with its own line, the
+//              stop says its PRECOMPOSED line (sk.walkthrough.<role>.<stop
+//              id>), one or two sentences with a `{partId}` marker where each
+//              later part begins; otherwise the found parts' short clauses
+//              (each part's line: one sentence opening with its control's
+//              name) are composed into ≤ 3 sentences. The highlight moves to
+//              a part as SK reaches its marker (walkthrough.ts partCues /
+//              cueDelay); markers are never shown or spoken. A parts stop's
+//              own `anchors` stay [] and are not used.
+//
+// 2026-10-31 (founder: "the tour is approx 6 to 7 minutes … bring it down
+// to less than 4 minutes"): every line is one short sentence (two at most
+// for a combined stop), and the teacher's same-page neighbours are folded
+// into combined stops (kit, classBoard, readyMade, insights, bellLanguage,
+// skHelp): 29 stops → 22.
 
 export type WalkRole = "teacher" | "student" | "parent" | "principal" | "coordinator";
 
@@ -292,9 +304,18 @@ const TEACHER: WalkStopDef[] = [
     demo: "lessonPrepare",
     fallback: [{ unless: "books", line: "noBooks", anchors: [UPLOAD] }],
   },
-  { id: "pieces", route: LIB, anchors: [OPEN + PART_PIECES, PART_PIECES, OPEN + CHAPTER_OUTPUT, CHAPTER_OUTPUT, ...notYet("piecesNone")] },
-  { id: "downloads", route: LIB, anchors: [OPEN + DOWNLOAD_WORKSHEET, OPEN + DOWNLOAD, DOWNLOAD_WORKSHEET, DOWNLOAD, ...notYet("downloadsNone")] },
-  { id: "rerun", route: LIB, anchors: [OPEN + RERUN, RERUN, ...notYet("rerunNone")] },
+  // A finished kit's pieces, its downloads and its pen: one screen, one
+  // narration (2026-10-31, folded from three stops).
+  {
+    id: "kit",
+    route: LIB,
+    anchors: [],
+    parts: [
+      { id: "pieces", anchors: [OPEN + PART_PIECES, PART_PIECES, OPEN + CHAPTER_OUTPUT, CHAPTER_OUTPUT, ...notYet("piecesNone")] },
+      { id: "downloads", anchors: [OPEN + DOWNLOAD_WORKSHEET, OPEN + DOWNLOAD, DOWNLOAD_WORKSHEET, DOWNLOAD, ...notYet("downloadsNone")] },
+      { id: "rerun", anchors: [OPEN + RERUN, RERUN, ...notYet("rerunNone")] },
+    ],
+  },
   {
     id: "assign",
     route: LIB,
@@ -336,11 +357,29 @@ const TEACHER: WalkStopDef[] = [
   // fails, or without lesson tools — production 2026-10-30: {provider:"plan",
   // why:"missing", error:"/dashboard settled"}. Then SK says so at its avatar.
   { id: "plan", route: "/dashboard", anchors: ['[data-tour="fair-use"]', { sel: HERO, line: "planUnlimited" }] },
-  // No autostart: pressing Start opens a Board session, so the tour only describes it.
-  { id: "board", route: "/present?class={classId}", anchors: ['[data-tour="board-bar"]', '[data-sk="launcher"][data-sk-board="true"]'], needs: ["board"] },
-  { id: "boardSk", route: "/present?class={classId}", anchors: ['[data-sk="launcher"][data-sk-board="true"]', HERO, LAUNCHER], needs: ["board"] },
-  { id: "kits", route: "/dashboard/kits", anchors: ['[data-tour="kits-allowance"]'], needs: ["catalogue"], chips: ["lessonOnPhotosynthesis"] },
-  { id: "skTutor", route: "/dashboard/kits", anchors: ['[data-tour="sk-nav"]', MOBILE_NAV], needs: ["skTutor"] },
+  // No autostart: pressing Start opens a Board session, so the tour only
+  // describes it. The Board and SK on it: one narration (2026-10-31).
+  {
+    id: "classBoard",
+    route: "/present?class={classId}",
+    anchors: [],
+    needs: ["board"],
+    parts: [
+      { id: "board", anchors: ['[data-tour="board-bar"]', '[data-sk="launcher"][data-sk-board="true"]'] },
+      { id: "boardSk", anchors: ['[data-sk="launcher"][data-sk-board="true"]', HERO, LAUNCHER] },
+    ],
+  },
+  // Ready-made kits and the SK Tutor tab: one page, one narration (2026-10-31).
+  {
+    id: "readyMade",
+    route: "/dashboard/kits",
+    anchors: [],
+    chips: ["lessonOnPhotosynthesis"],
+    parts: [
+      { id: "kits", anchors: ['[data-tour="kits-allowance"]'], needs: ["catalogue"] },
+      { id: "skTutor", anchors: ['[data-tour="sk-nav"]', MOBILE_NAV], needs: ["skTutor"] },
+    ],
+  },
   // No class yet: the diary still says what it is for, at its tab.
   {
     id: "diary",
@@ -350,20 +389,46 @@ const TEACHER: WalkStopDef[] = [
     demo: "diaryNote",
     fallback: [{ unless: "class", line: "diaryNoClass", anchors: ['[data-tour="diary-nav"]', MOBILE_NAV, HERO] }],
   },
-  { id: "analytics", route: "/dashboard/analytics", anchors: ['[data-tour="analytics-metrics"]'], chips: ["howAreMyClasses", "whoIsAtRisk"] },
-  { id: "gradeQueue", route: "/dashboard/analytics", anchors: ['[data-tour="grade-queue"]'], demo: "markingGrade" },
+  // My Analytics and the grade queue: one page, one narration (2026-10-31).
+  {
+    id: "insights",
+    route: "/dashboard/analytics",
+    anchors: [],
+    chips: ["howAreMyClasses", "whoIsAtRisk"],
+    demo: "markingGrade",
+    parts: [
+      { id: "analytics", anchors: ['[data-tour="analytics-metrics"]'] },
+      { id: "gradeQueue", anchors: ['[data-tour="grade-queue"]'] },
+    ],
+  },
   { id: "timetable", route: "/dashboard/my-timetable", anchors: ['[data-tour="my-timetable"]'], needs: ["timetable"], chips: ["whatsNext"] },
   { id: "calendar", route: "/dashboard/calendar", anchors: ['[data-tour="calendar-grid"]'], needs: ["calendar"] },
-  { id: "notifications", route: "/dashboard/settings", anchors: [BELL] },
-  { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
+  // The bell and the language switch, side by side in the header (2026-10-31).
+  {
+    id: "bellLanguage",
+    route: "/dashboard/settings",
+    anchors: [],
+    parts: [
+      { id: "notifications", anchors: [BELL] },
+      { id: "language", anchors: [LANGUAGE] },
+    ],
+  },
   {
     id: "settings",
     route: "/dashboard/settings",
     anchors: ['[data-tour="sk-prefs"]', '[data-tour="sk-memory"]', '[data-sk="mic"]', '[data-sk="input"]', SETTINGS_LINK],
   },
-  // SK's own menu only exists while it is open: the tour points at the avatar and names what is in it.
-  { id: "skMenu", route: "/dashboard/settings", anchors: [HERO, LAUNCHER] },
-  { id: "skAsk", route: "/dashboard/settings", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
+  // SK's own menu only exists while it is open: the tour points at the
+  // avatar and names what is in it; then how to ask, at the Tour button.
+  {
+    id: "skHelp",
+    route: "/dashboard/settings",
+    anchors: [],
+    parts: [
+      { id: "skMenu", anchors: [HERO, LAUNCHER] },
+      { id: "skAsk", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
+    ],
+  },
   // Near the end, back on the Library (a failed kit's inline report is there).
   reportProblem(LIB, "open"),
   // The close (founder 2026-10-30: "at the end tell SK to get back to library
@@ -507,8 +572,11 @@ export function lineKeysFor(role: WalkRole): string[] {
     for (const a of [...d.anchors, ...(d.fallback ?? []).flatMap((f) => f.anchors ?? [])]) if (typeof a !== "string") keys.add(a.line);
   };
   for (const s of WALK_STOPS[role]) {
-    if (s.parts?.length) s.parts.forEach(add);
-    else add(s);
+    if (s.parts?.length) {
+      // Its precomposed line (all parts there), and each part's clauses.
+      keys.add(s.line ?? s.id);
+      s.parts.forEach(add);
+    } else add(s);
   }
   return [...keys];
 }

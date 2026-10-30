@@ -113,6 +113,9 @@ export type SkShellWalk = {
   /** SK starts sentence `index` (0-based) of the `voice` line `key`: a
    *  combined stop moves its highlight to the part that sentence opens. */
   onSentence?: (key: string, index: number) => void;
+  /** Sentence `index` of the line `key` starts PLAYING, `ms` long when the
+   *  voice knows: the in-sentence highlight moves are re-timed by it. */
+  onSentencePlay?: (key: string, index: number, ms: number | null) => void;
   /** The server answered a turn with a tour action (natural phrasing it caught). */
   act?: (action: SkWalkAction) => void;
   /** She is typing: hold any pending auto-advance. */
@@ -531,6 +534,11 @@ export default function SkShell({
         walkRef.current?.soundBlocked?.();
       },
       onSentence: (e) => voiceLog.push({ k: "sentence", ...e }),
+      // A tour line's sentence starts playing (n was bumped as it started).
+      onPlay: (e) => {
+        const tl = tourLineRef.current;
+        if (tl && tl.n > 0 && walkRef.current?.narrating) walkRef.current.onSentencePlay?.(tl.key, tl.n - 1, e.ms);
+      },
     });
     coord.setEnabled(readAloudRef.current);
     speechRef.current = coord;

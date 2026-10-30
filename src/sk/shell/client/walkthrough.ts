@@ -4,11 +4,12 @@
 //                     the user's facts: which stops play, on which concrete
 //                     route, with which line and anchors (a combined stop:
 //                     which of its parts play).
-//   findParts() / joinParts() / partSentenceStarts() / partAtSentence() /
-//   partReadingStarts() — a combined stop (one narration over several
-//                     controls): its parts on the page, its ONE line, and
-//                     which part the highlight is on as SK speaks (or, without
-//                     sound, as the reading time passes).
+//   findParts() / composeParts() / partCues() / cueDelay() — a combined stop
+//                     (one narration over several controls): its parts on the
+//                     page, its ONE line (the precomposed line, or ≤ 3
+//                     sentences of the parts' clauses), the `{part}` markers
+//                     inside it, and when the highlight moves to each part as
+//                     SK speaks (or, without sound, as the reading time passes).
 //   start/next/back/jump/pause/resume/skip/missing — the state machine:
 //                     idle → running ⇄ paused → done | skipped. Every function
 //                     returns a NEW state and never throws on a bad move (back
@@ -31,7 +32,7 @@
 // makes no model call, and never sends a sample question.
 
 import { INTENT_FILLER_WORDS, intentWords } from "@/sk/shell/intent-normalize";
-import { WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkPartDef, type WalkRole, type WalkScroll, type WalkStopDef } from "@/sk/walkthrough/stops";
+import { WALK_ROLES, WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkPartDef, type WalkRole, type WalkScroll, type WalkStopDef } from "@/sk/walkthrough/stops";
 
 export type WalkStatus = "idle" | "running" | "paused" | "done" | "skipped";
 
@@ -53,6 +54,9 @@ export type PlannedStop = {
    *  `anchors` is then every part's anchors (for the log), and `line` the
    *  first part's. */
   parts?: PlannedPart[];
+  /** A combined stop whose every part plays with its own line: the key of
+   *  its precomposed, part-marked line (sk.walkthrough.<role>.<stop id>). */
+  whole?: string;
 };
 
 /** One part of a combined stop as planned for this user. */
@@ -162,13 +166,17 @@ export function planStop(def: WalkStopDef, f: WalkFacts): PlannedStop | null {
   if (!own) return null;
   let { line, anchors } = own;
   let parts: PlannedPart[] | undefined;
+  let whole: string | undefined;
   if (def.parts) {
     parts = [];
+    let all = true;
     for (const p of def.parts) {
       const pl = planLine(p, f);
       if (pl) parts.push({ id: p.id, line: pl.line, anchors: pl.anchors.map(anchorOf) });
+      if (!pl || pl.line !== (p.line ?? p.id)) all = false;
     }
     if (!parts.length) return null;
+    if (all) whole = def.line ?? def.id;
     line = parts[0]!.line;
     anchors = [];
   }
@@ -183,6 +191,7 @@ export function planStop(def: WalkStopDef, f: WalkFacts): PlannedStop | null {
     ...(def.demo ? { demo: def.demo } : {}),
     ...(def.chips?.length ? { chips: [...def.chips] } : {}),
     ...(parts ? { parts } : {}),
+    ...(whole ? { whole } : {}),
   };
 }
 
@@ -286,6 +295,7 @@ function validStop(x: unknown): x is PlannedStop {
     Array.isArray(s.anchors) &&
     s.anchors.every((a) => a && typeof a.sel === "string") &&
     (s.scroll === undefined || s.scroll === "start" || s.scroll === "center") &&
+    (s.whole === undefined || typeof s.whole === "string") &&
     (s.parts === undefined || (Array.isArray(s.parts) && s.parts.length > 0 && s.parts.every((p) => p && typeof p.id === "string" && typeof p.line === "string" && validAnchors(p.anchors))))
   );
 }
@@ -393,50 +403,155 @@ export function findParts<E>(parts: PlannedPart[], dom: AnchorDom<E>): PartsMatc
   return { el: hits[0]!.el, index: complete ? 0 : 1, parts: hits };
 }
 
-/** The ONE line a combined stop says: its parts' words, in order. A part's
- *  words that do not end a sentence get a full stop, so the next part starts
- *  a sentence of its own (the highlight moves on sentence starts). */
+// 2026-10-31 (founder: "for steps that we combined, … combine the complete
+// explanation into 1 or no more than 3 sentences and avoid repetitions"): a
+// combined stop says ONE tight line — fewer sentences than parts — so the
+// highlight moves on PART MARKERS inside the line ("…badges; {generateAll}
+// Generate all builds…"), not on sentence starts. Markers are stripped before
+// the caption and the voice. When every part is there with its own line, the
+// stop's precomposed line (sk.walkthrough.<role>.<stop id>) is said; when a
+// part is missing or found at a fallback, the line is composed from the
+// parts' short clauses, at most MAX_PART_SENTENCES sentences.
+
+/** A part marker: `{partId}` where the highlight moves to that part. */
+export const PART_MARK = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
+/** A combined stop's line is at most this many sentences. */
+export const MAX_PART_SENTENCES = 3;
+/** The speech coordinator's sentence split (speech.ts SENTENCE_END). */
+const SENTENCE_GAP = /(?<=[.!?؟।])\s+/g;
+const SENTENCE_END_RE = /[.!?؟।]["'”’»)]*$/u;
+
+/** The words without their part markers (what is shown and spoken). */
+export function stripMarks(text: string): string {
+  return partCues(text, []).text;
+}
+
+/** Clauses that do not end a sentence get a full stop. */
 export function joinParts(texts: string[]): string {
   return texts
     .map((t) => String(t ?? "").trim())
     .filter(Boolean)
-    .map((t) => (/[.!?؟।]["'”’»)]*$/u.test(t) ? t : `${t}.`))
+    .map((t) => (SENTENCE_END_RE.test(t) ? t : `${t}.`))
     .join(" ");
 }
 
-/** The sentence each part starts at, when the joined line is spoken sentence
- *  by sentence (`split` = the speech coordinator's splitSentences). */
-export function partSentenceStarts(texts: string[], split: (t: string) => string[]): number[] {
-  const starts: number[] = [];
-  let n = 0;
-  for (const t of texts) {
-    starts.push(n);
-    // A part with no words says nothing: it shares the next part's start.
-    n += split(joinParts([t])).length;
+/**
+ * A combined stop's line from its parts' clauses (each a short sentence), with
+ * a `{id}` marker at each part after the first. More clauses than
+ * MAX_PART_SENTENCES: the first ones are joined with `join` (the locale's
+ * "; ") until the line fits — every clause opens with its control's name, so
+ * the joined clause still reads.
+ */
+export function composeParts(clauses: string[], ids: string[], join: string): string {
+  const items = clauses.map((c, k) => ({ id: ids[k] ?? "", text: String(c ?? "").trim() })).filter((x) => x.text);
+  const sentences: Array<Array<{ id: string; text: string }>> = items.map((x) => [x]);
+  while (sentences.length > MAX_PART_SENTENCES) {
+    const [a, b] = sentences.splice(0, 2) as [Array<{ id: string; text: string }>, Array<{ id: string; text: string }>];
+    sentences.unshift([...a, ...b]);
   }
-  return starts;
+  return sentences
+    .map((group) =>
+      joinParts([
+        group
+          .map((x, k) => {
+            const body = k < group.length - 1 ? x.text.replace(/[.!?؟।]["'”’»)]*$/u, "") : x.text;
+            return (x === items[0] ? "" : `{${x.id}}`) + body;
+          })
+          .join(join),
+      ]),
+    )
+    .join(" ");
 }
 
-/** Which part sentence `i` (0-based, in speaking order) belongs to. */
-export function partAtSentence(starts: number[], i: number): number {
-  let k = 0;
-  for (let j = 0; j < starts.length; j++) if (starts[j]! <= i) k = j;
-  return k;
+/** The (marked) line a combined stop says for the parts found on the page:
+ *  its precomposed line when every planned part is there with its own line,
+ *  else the found parts' clauses composed (composeParts). */
+export function partsLine(stop: Pick<PlannedStop, "parts" | "whole">, found: Array<{ id: string; line: string }>, words: (key: string) => string, join: string): string {
+  const planned = stop.parts ?? [];
+  const all = !!stop.whole && found.length === planned.length && found.every((p, i) => p.id === planned[i]!.id && p.line === planned[i]!.line);
+  const whole = all ? words(stop.whole!).trim() : "";
+  return whole || composeParts(found.map((p) => words(p.line)), found.map((p) => p.id), join);
+}
+
+/** Where a part's highlight starts in a combined stop's (clean) line. */
+export type PartCue = {
+  /** The part (index into the stop's found parts). */
+  part: number;
+  /** The sentence it falls in (as the speech coordinator splits the line). */
+  sentence: number;
+  /** Characters into that sentence, and the sentence's length. */
+  at: number;
+  len: number;
+  /** Characters into the whole line. */
+  offset: number;
+};
+
+/** A marked line against the found parts' ids: the clean words, and one cue
+ *  per part (a part with no marker starts where the one before it did; the
+ *  first part, unmarked, at the start). */
+export function partCues(marked: string, ids: string[]): { text: string; cues: PartCue[] } {
+  const marks = new Map<string, number>();
+  const src = String(marked ?? "").trim();
+  let text = "";
+  let last = 0;
+  for (const m of src.matchAll(PART_MARK)) {
+    text += src.slice(last, m.index);
+    last = m.index! + m[0].length;
+    // "… {id} Word": the marker's own space goes with it.
+    if ((text === "" || text.endsWith(" ")) && src[last] === " ") last++;
+    if (!marks.has(m[1]!)) marks.set(m[1]!, text.length);
+  }
+  text += src.slice(last);
+  const starts = [0];
+  for (const g of text.matchAll(SENTENCE_GAP)) starts.push(g.index! + g[0].length);
+  const cues: PartCue[] = [];
+  let prev = 0;
+  ids.forEach((id, part) => {
+    const raw = marks.get(id);
+    const offset = raw === undefined ? (part === 0 ? 0 : prev) : raw;
+    prev = offset;
+    let sentence = 0;
+    for (let i = 0; i < starts.length; i++) if (starts[i]! <= offset) sentence = i;
+    const begin = starts[sentence]!;
+    const end = sentence + 1 < starts.length ? starts[sentence + 1]! : text.length;
+    cues.push({ part, sentence, at: offset - begin, len: Math.max(1, text.slice(begin, end).trimEnd().length), offset });
+  });
+  return { text, cues };
+}
+
+/** The part whose highlight is due as sentence `i` starts (catch-up for any
+ *  cue in an earlier sentence, or at the very start of this one). */
+export function partDueAt(cues: PartCue[], i: number): number | null {
+  let due: number | null = null;
+  for (const c of cues) if (c.sentence < i || (c.sentence === i && c.at === 0)) due = c.part;
+  return due;
+}
+
+/** With sound: SK's speaking rate before any is measured (ms a character). */
+export const SPEAK_MS_PER_CHAR = 65;
+
+/** A sentence was spoken in `ms` for `chars` characters: the rate, smoothed
+ *  (short or odd samples are ignored, the rate is kept in a sane band). */
+export function nextSpeakRate(prev: number, ms: number, chars: number): number {
+  if (!(chars >= 10) || !(ms >= 300)) return prev;
+  const sample = Math.min(160, Math.max(35, ms / chars));
+  return Math.round((prev + sample) / 2);
+}
+
+/** When (ms after its sentence starts) a cue's highlight moves: its share of
+ *  the sentence's KNOWN audio length when the voice gave one (Polly / Google
+ *  marks), else its characters at the measured speaking rate. */
+export function cueDelay(cue: PartCue, timing: { durationMs?: number | null; msPerChar: number }): number {
+  if (timing.durationMs && timing.durationMs > 0) return Math.round((cue.at / cue.len) * timing.durationMs);
+  return Math.round(cue.at * timing.msPerChar);
 }
 
 /** Without sound: when each part's highlight starts (ms after the stop is
- *  shown), sharing the whole line's reading time by the parts' lengths. */
-export function partReadingStarts(texts: string[]): number[] {
-  const lens = texts.map((t) => [...String(t ?? "")].length);
-  const total = lens.reduce((a, b) => a + b, 0);
-  const ms = readingMs(joinParts(texts));
-  const out: number[] = [];
-  let before = 0;
-  for (const l of lens) {
-    out.push(total ? Math.round((before / total) * ms) : 0);
-    before += l;
-  }
-  return out;
+ *  shown), its share of the line's reading time by where its cue sits. */
+export function cueReadingTimes(text: string, cues: PartCue[]): number[] {
+  const total = [...String(text ?? "")].length;
+  const ms = readingMs(text);
+  return cues.map((c) => (total ? Math.round((c.offset / total) * ms) : 0));
 }
 
 /** A box on screen (getBoundingClientRect's numbers). */
@@ -451,6 +566,18 @@ export const SETTLE_QUIET_MS = 800;
 export const ANCHOR_STABLE_MS = 200;
 /** The longest a stop waits for its page before it is passed over (a hard cap). */
 export const SETTLE_CAP_MS = 20_000;
+/** After this long, a loading UI that is STILL on screen (production
+ *  2026-10-30: the Library keeps aria-busy while it streams kit chunks) no
+ *  longer holds back a stop that has something to show — a fallback anchor, or
+ *  no anchor at all. A stop with nothing found keeps waiting for the loading to
+ *  clear (up to SETTLE_CAP_MS): skipping a stop on a page still streaming was
+ *  the bug the settled wait fixed. */
+export const LOADING_CAP_MS = 3_000;
+/** The tour's start waits at most this long for the page she is on (only when
+ *  stop 1 is on that page; another page is never waited for). */
+export const START_SETTLE_CAP_MS = 2_000;
+/** The facts request may take this long before the tour starts without them. */
+export const FACTS_TIMEOUT_MS = 8_000;
 
 /** What the settled-page wait reads off the page (a browser probe, or a test fake). */
 export type SettleProbe = {
@@ -472,6 +599,8 @@ export type SettleOptions = {
   quietMs?: number;
   stableMs?: number;
   capMs?: number;
+  /** See LOADING_CAP_MS. */
+  loadingCapMs?: number;
   signal?: AbortSignal;
 };
 
@@ -487,7 +616,10 @@ export type SettleOptions = {
  *             point at (`rect` → null) plays once the page has settled.
  *   missing — decided only once the page has SETTLED without one: on the
  *             stop's route, loaded, no loading UI, and no DOM change for
- *             `quietMs`.
+ *             `quietMs`. A stop that HAS something to show (a fallback, or no
+ *             anchor) stops waiting for a long-lived loading UI after
+ *             `loadingCapMs` (≈3 s; a streaming Library keeps aria-busy);
+ *             loaded and quiet are still required.
  *   cap     — after `capMs` (≈20 s): the anchor found by then (even if it is
  *             still moving), else null.
  *   abort   — null at once.
@@ -513,6 +645,7 @@ export function waitForSettledAnchor<T>(
   const quietMs = opts.quietMs ?? SETTLE_QUIET_MS;
   const stableMs = opts.stableMs ?? ANCHOR_STABLE_MS;
   const capMs = opts.capMs ?? SETTLE_CAP_MS;
+  const loadingCapMs = opts.loadingCapMs ?? LOADING_CAP_MS;
   const same = opts.same ?? ((a: T, b: T) => a === b);
   return new Promise<T | null>((resolve) => {
     if (opts.signal?.aborted) return resolve(null);
@@ -539,7 +672,10 @@ export function waitForSettledAnchor<T>(
         return null;
       }
     };
-    const settled = (t: number) => opts.probe.pathOk() && opts.probe.ready() && !opts.probe.loading() && t - lastChange >= quietMs;
+    // `shown`: the stop has something to show (a fallback, or no anchor at
+    // all): a loading UI still on screen after loadingCapMs no longer holds it.
+    const settled = (t: number, shown = false) =>
+      opts.probe.pathOk() && opts.probe.ready() && ((shown && t - started >= loadingCapMs) || !opts.probe.loading()) && t - lastChange >= quietMs;
     const check = () => {
       timer = null;
       if (finished) return;
@@ -555,10 +691,10 @@ export function waitForSettledAnchor<T>(
         const r = opts.rect(hit);
         if (r === null) {
           // Nothing to point at: the stop plays once the page has settled.
-          if (settled(t)) return finish(hit);
+          if (settled(t, true)) return finish(hit);
         } else if (r.width > 0 && r.height > 0) {
           const stable = !!candidate && same(candidate.hit, hit) && sameRect(candidate.rect, r);
-          if (stable && (!opts.provisional?.(hit) || settled(t))) return finish(hit);
+          if (stable && (!opts.provisional?.(hit) || settled(t, true))) return finish(hit);
           candidate = { hit, rect: r };
         } else candidate = null;
       } else {
@@ -580,6 +716,129 @@ export function waitForSettledAnchor<T>(
 export function waitForSettledPage(opts: SettleOptions): Promise<boolean> {
   const hit = { page: true };
   return waitForSettledAnchor({ ...opts, find: () => hit, rect: () => null }).then((v) => v !== null && !opts.signal?.aborted);
+}
+
+// ── the start (2026-10-31, founder: "SK show me around still didn't start
+// the tour") ────────────────────────────────────────────────────────────────
+// Production 2026-10-30: "Show me around" at 18:46:49, stop 1 at 18:47:32.
+// The start fetched the facts and THEN waited for the page she was on (the
+// Library, aria-busy while it streams) to settle — up to 20 s — before stop 1
+// even began its own wait. Now: the bubble says the tour is starting at once,
+// stop 1's page is opened at once (in parallel with the facts), the page she
+// is on is never waited for when stop 1 is elsewhere, and only ≤ 2 s when it
+// is the same page. One start at a time: a second tap while starting joins it.
+
+/** Is the address bar (`href` = path + search) on `route`? A route with a
+ *  query must match exactly; one without only by path. */
+export function atRoute(route: string, href: string): boolean {
+  return route.includes("?") ? href === route : routePath(href) === routePath(route);
+}
+
+/** Stop 1's page for a role, before any fact is known (null when it needs one). */
+export function firstStopRoute(role: WalkRole): string | null {
+  const def = WALK_STOPS[role][0];
+  return def ? resolveRoute(def.route, {}) : null;
+}
+
+export type WalkStarterDeps<C> = {
+  /** The tour this user gets, as the client knows it (the server may correct it). */
+  roleGuess: () => WalkRole;
+  /** Where she is now (pathname + search). */
+  here: () => string;
+  /** The client router (never a full reload). */
+  navigate: (route: string) => void;
+  /** GET /api/sk/walkthrough → role + facts (null / a throw = unknown facts). */
+  loadFacts: (signal: AbortSignal) => Promise<{ role?: string; facts?: WalkFacts } | null>;
+  /** waitForSettledPage on the page she is on, capped at `capMs`. */
+  settle: (capMs: number, signal: AbortSignal) => Promise<boolean>;
+  /** The bubble's "Starting the tour…" on / off. */
+  onStarting: (on: boolean) => void;
+  /** The plan is ready: start the run. */
+  onReady: (role: WalkRole, stops: PlannedStop[], ctx: C) => void;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (h: unknown) => void;
+  factsTimeoutMs?: number;
+  settleCapMs?: number;
+};
+
+export type WalkStarter<C> = {
+  /** Start a run; false when one is already starting (that one goes on). */
+  start: (ctx: C) => boolean;
+  /** Give up the start in progress (Skip while starting, unmount). */
+  cancel: () => void;
+  readonly starting: boolean;
+};
+
+/** The tour's start, single-flight (see above). Every dependency injected, so
+ *  node tests drive it. It never stays "starting": the facts give up after
+ *  `factsTimeoutMs`, the settle after `settleCapMs`, and a cancel ends it. */
+export function createWalkStarter<C>(d: WalkStarterDeps<C>): WalkStarter<C> {
+  const setT = d.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
+  const clearT = d.clearTimer ?? ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  let run: AbortController | null = null;
+  const end = (ac: AbortController) => {
+    if (run !== ac) return;
+    run = null;
+    d.onStarting(false);
+  };
+  const facts = (ac: AbortController): Promise<{ role?: string; facts?: WalkFacts } | null> =>
+    new Promise((resolve) => {
+      const fetchAc = new AbortController();
+      const stop = () => fetchAc.abort();
+      ac.signal.addEventListener("abort", stop);
+      const timer = setT(() => {
+        fetchAc.abort();
+        resolve(null);
+      }, d.factsTimeoutMs ?? FACTS_TIMEOUT_MS);
+      d.loadFacts(fetchAc.signal)
+        .then((v) => resolve(v), () => resolve(null))
+        .finally(() => {
+          clearT(timer);
+          ac.signal.removeEventListener("abort", stop);
+        });
+    });
+  return {
+    get starting() {
+      return run !== null;
+    },
+    start(ctx) {
+      if (run) return false;
+      const ac = new AbortController();
+      run = ac;
+      d.onStarting(true);
+      const from = d.here();
+      // Stop 1's page at once, while the facts load.
+      const guess = d.roleGuess();
+      const first = firstStopRoute(guess);
+      if (first && !atRoute(first, from)) d.navigate(first);
+      void (async () => {
+        try {
+          const j = await facts(ac);
+          if (ac.signal.aborted) return;
+          const role = j?.role && (WALK_ROLES as readonly string[]).includes(j.role) ? (j.role as WalkRole) : guess;
+          const stops = planWalk(role, j?.facts && typeof j.facts === "object" ? j.facts : {});
+          // Stop 1 on the page she started from: a short settle (≤ 2 s).
+          // Another page: no wait here — that stop waits for ITS page.
+          if (stops[0] && atRoute(stops[0].route, from)) {
+            const ok = await d.settle(d.settleCapMs ?? START_SETTLE_CAP_MS, ac.signal);
+            if (!ok || ac.signal.aborted) return;
+          }
+          d.onReady(role, stops, ctx);
+        } catch {
+          /* a failed start leaves nothing behind: she can ask again */
+        } finally {
+          end(ac);
+        }
+      })();
+      return true;
+    },
+    cancel() {
+      const ac = run;
+      if (!ac) return;
+      ac.abort();
+      end(ac);
+    },
+  };
 }
 
 /** Wait for a box to stop moving (a smooth scroll finishing): resolves once two
