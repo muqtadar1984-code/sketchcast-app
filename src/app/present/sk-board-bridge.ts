@@ -37,6 +37,8 @@ import type { AskChannel } from "./highlight-select";
 /** The parts of a KitManifest (src/sk/manifest/derive.ts) the Board needs. */
 export type KitManifestLike = {
   manifest_id: string;
+  /** The kit's lesson language (2026-10-30: SK answers in it by default). */
+  language?: string | null;
   segments: Array<{
     segment_id: string;
     part: number;
@@ -54,6 +56,7 @@ export type KitManifestLike = {
 
 export type BridgeManifest = BoardManifest & {
   manifestId: string;
+  language?: string;
   /** The manifest segment_id of each Board segment, same order as `segments`. */
   ids: string[];
   concepts: Array<{ id: string; name: string; segmentIds: string[] }>;
@@ -88,6 +91,7 @@ export function toBridgeManifest(m: KitManifestLike, part: number | null): Bridg
   });
   return {
     manifestId: m.manifest_id,
+    ...(m.language ? { language: m.language } : {}),
     segments,
     ids: chosen.map((s) => s.segment_id),
     concepts: (m.concepts ?? []).map((c) => ({ id: c.concept_id, name: c.name, segmentIds: [...(c.segment_ids ?? [])] })),
@@ -364,6 +368,7 @@ export function createBoardBridge(deps: BridgeDeps): SkBoardBridge {
       if (sel?.text) out.selection = sel;
       if (m) {
         out.manifestId = m.manifestId;
+        if (m.language) out.language = m.language;
         const k = segmentAt(m, st.t);
         if (k !== undefined) {
           out.k = k;

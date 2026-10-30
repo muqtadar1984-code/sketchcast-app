@@ -31,7 +31,7 @@ import { deriveAndStore } from "./manifest/service";
 import { readManifest, type ReadResult, type StoreAdmin } from "./manifest/store";
 import { ProductKits, type ProductKit, type ProductRef } from "./product-kits";
 import { SupabaseRemediationBank, type RemediationBank } from "./remediation-bank";
-import { persistence, providers } from "./server";
+import { persistence, providers, translateProvider } from "./server";
 import type { SessionStore } from "./store";
 import { skDbFrom } from "./store-supabase";
 
@@ -58,6 +58,8 @@ export type KitDeps = {
   entitlements?: EntitlementSource;
   allowanceEnforced?: boolean;
   teacherProvider?: LLMProvider;
+  /** 2026-10-30: "repeat that in X" — the re-expression model (Haiku 5.5). */
+  translateProvider?: LLMProvider;
   now?: () => number;
   /** S6: remember a learning fact about the student (facts.ts noteLearning:
    *  `transcripts` consent first, a no-op without it). Absent → nothing kept. */
@@ -91,6 +93,7 @@ function realDeps(): KitDeps {
       allowanceEnforced: skAllowanceEnforced(),
       noteLearning: (a, studentId, note) => noteLearning(a as unknown as FactsDb, studentId, note),
       ...providers(),
+      translateProvider: translateProvider(),
     };
   }
   return real;
