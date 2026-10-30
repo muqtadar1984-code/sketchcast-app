@@ -273,7 +273,18 @@ export type SkCapabilityResult = {
    *  back to its own book) — the answer's `done` event carries them and the
    *  panel shows them as chips. */
   citations?: SkCitation[];
+  /** 2026-10-30 (shell-controls.ts): the model asked for the app walkthrough
+   *  — "start" from stop 1, or a move of the running one. The route stops
+   *  the model and emits the same `walkthrough` event the rules do. */
+  walkthrough?: SkWalkAction;
+  /** 2026-10-30 (shell-controls.ts): the model asked to switch the answer
+   *  language ("back") or re-say the last answer in one ("repeat"). The route
+   *  runs it exactly as the language rule would (language.ts LangCommand). */
+  langCommand?: SkLangCommand;
 };
+
+/** language.ts LangCommand, structurally (this file imports no app code). */
+export type SkLangCommand = { kind: "repeat" | "back"; target: { code: string } | { mine: true } | { unsupported: string } };
 
 /** S7 K2: one source an answer rests on — a SketchCast book, an article or an
  *  upload, with its chapter and the block it came from. */

@@ -29,6 +29,8 @@ import { noticeSchoolAction } from "./notice";
 import { SCHOOL_FIGURE_CAPABILITIES } from "./school-figures";
 // S7 K2: knowledge.search (books, articles, uploads the user may read).
 import { knowledgeSearch } from "./knowledge";
+// 2026-10-30: the model's safety net for the tour and the answer language.
+import { SHELL_CONTROL_CAPABILITIES } from "./shell-controls";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -78,6 +80,10 @@ const ENTRIES: SkCapability[] = [
   // S7 K2: knowledge.search — every role, sk flag, immediate read; the
   // sources are the user's own (sourcesFor), the search is free.
   knowledgeSearch,
+  // 2026-10-30: start_tour, tour_control, set_answer_language,
+  // repeat_in_language — every role, no flag; the route performs them as the
+  // rules do (the walkthrough / language events), no second model round.
+  ...SHELL_CONTROL_CAPABILITIES,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
@@ -88,3 +94,4 @@ export { schoolHealth };
 export { noticeSchoolAction };
 export { SCHOOL_FIGURE_CAPABILITIES };
 export { knowledgeSearch };
+export { SHELL_CONTROL_CAPABILITIES };

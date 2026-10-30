@@ -118,7 +118,14 @@ const SHIPPED = [
   "school.trend",
   // S7 K2: knowledge.search — every role, sk flag.
   "knowledge.search",
+  // 2026-10-30: the model's safety net for the tour and the answer language
+  // (shell-controls.ts) — every role, no flag.
+  "start_tour",
+  "tour_control",
+  "set_answer_language",
+  "repeat_in_language",
 ];
+const CONTROLS = ["start_tour", "tour_control", "set_answer_language", "repeat_in_language"];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
 const PARENT_ONLY = SHIPPED.filter((n) => n.startsWith("child."));
 const STUDENT_AND_PARENT = ["book.activate"];
@@ -128,8 +135,8 @@ const STUDENT_AND_PARENT = ["book.activate"];
 const LEADER_ONLY = ["school.health", "notice.school", "school.seats", "school.cost", "school.gaps", "school.trend"];
 const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n) && !LEADER_ONLY.includes(n));
 // S4 slice C: diary.note's parent branch (a note to one of her own children).
-const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search"];
-const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search"];
+const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS];
+const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS];
 
 describe("allowedFor over the shipped registry", () => {
   it("teacher: everything but the tutor, child.* and book.activate; parent: navigate + context.resolve + diary.note + child.* + book.activate; student: navigate + the tutor + book.activate", () => {

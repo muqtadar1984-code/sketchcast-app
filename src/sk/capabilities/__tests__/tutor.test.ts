@@ -80,8 +80,9 @@ describe("registry scopes", () => {
   it("a student sees navigate and the tutor.* entries — nothing else", () => {
     const names = allowedFor(studentCtx()).map((c) => c.meta.name).sort();
     // + S4 slice D's book.activate (student and parent: her own book code),
-    // + S7 K2's knowledge.search (every role: her own sources only).
-    expect(names).toEqual(["book.activate", "knowledge.search", "navigate", ...[...TUTOR].sort()].sort());
+    // + S7 K2's knowledge.search (every role: her own sources only),
+    // + 2026-10-30's tour / language controls (every role, no flag).
+    expect(names).toEqual(["book.activate", "knowledge.search", "navigate", "start_tour", "tour_control", "set_answer_language", "repeat_in_language", ...[...TUTOR].sort()].sort());
     expect(TUTOR).toEqual(new Set(["tutor.where", "tutor.progress", "tutor.play", "tutor.section", "tutor.slide", "tutor.practise", "tutor.explain"]));
   });
   it("every tutor.* entry is student-only, hat-less, immediate, behind the sk flag", () => {
@@ -105,7 +106,7 @@ describe("registry scopes", () => {
   it("with FEATURE_SK's context flag off a student has no tutor entry", () => {
     const ctx = studentCtx();
     ctx.flags = { ...ctx.flags, sk: false };
-    expect(allowedFor(ctx).map((c) => c.meta.name)).toEqual(["navigate"]);
+    expect(allowedFor(ctx).map((c) => c.meta.name)).toEqual(["navigate", "start_tour", "tour_control", "set_answer_language", "repeat_in_language"]);
   });
   it("the runner refuses a tutor.* call from a teacher at execution time", async () => {
     install();

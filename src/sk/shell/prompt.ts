@@ -157,6 +157,14 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           `11. For a content question ("what is…", "explain…", "why…", "how does…") prefer knowledge.search: it searches the books, articles and uploads this user may read. Answer only from its passages, then end with ONE short line naming the source exactly as the result gives it after "end with:" (e.g. "From: Biology · ch 5 · Specialised cells"). Never give the answer to an exercise. If it returns nothing, follow rule 2.`,
         ]
       : []),
+    // 2026-10-30: the tour and the answer language are DONE with their tools
+    // (shell-controls.ts), never narrated — the rules catch most phrasings
+    // before the model; these are for the ones they miss.
+    ...(capabilities.some((c) => c.name === "start_tour" || c.name === "set_answer_language")
+      ? [
+          "12. Do these with their tools, never by describing them: showing the user around the app (a tour, a demo, a walkthrough, onboarding, 'how does this app work') → start_tour; moving a walkthrough that is running (continue, next, back, pause, stop) → tour_control; answering in another language from now on → set_answer_language; saying your last answer again in another language → repeat_in_language. Never say you started, moved, switched or translated anything without calling the tool.",
+        ]
+      : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",
