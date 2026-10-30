@@ -21,7 +21,8 @@ export type FakeDb = KnowledgeDb & {
   calls: { rpc: string; args: any }[];
 };
 
-export function fakeDb(init: Record<string, Row[]> = {}, opts: { missing?: string[]; now?: () => string } = {}): FakeDb {
+/** `missingColumns`: tables whose every query answers 42703 (a column a not-yet-applied migration adds, e.g. 0175's books.sk_product_id). */
+export function fakeDb(init: Record<string, Row[]> = {}, opts: { missing?: string[]; missingColumns?: string[]; now?: () => string } = {}): FakeDb {
   const tables: Record<string, Row[]> = { sk_book_products: [], sk_release_imports: [], ...structuredClone(init) };
   const blocks: FakeDb["blocks"] = [];
   const calls: FakeDb["calls"] = [];
@@ -30,7 +31,7 @@ export function fakeDb(init: Record<string, Row[]> = {}, opts: { missing?: strin
 
   function query(table: string) {
     const filters: Filter[] = [];
-    let op: "select" | "update" | "insert" | "upsert" = "select";
+    let op: "select" | "update" | "insert" | "upsert" | "delete" = "select";
     let payload: any = null;
     let conflict: string | null = null;
     let orders: [string, boolean][] = [];
@@ -38,6 +39,7 @@ export function fakeDb(init: Record<string, Row[]> = {}, opts: { missing?: strin
     let mode: "many" | "maybe" | "single" = "many";
     const run = () => {
       if (opts.missing?.includes(table)) return { data: null, error: { code: "PGRST205", message: `Could not find the table 'public.${table}' in the schema cache` } };
+      if (opts.missingColumns?.includes(table)) return { data: null, error: { code: "42703", message: `column ${table}.sk_product_id does not exist` } };
       const t = (tables[table] ??= []);
       if (op === "insert") {
         const rows = (Array.isArray(payload) ? payload : [payload]).map((r: Row) => ({ id: r.id ?? `${table}-${++seq}`, ...r }));
@@ -46,14 +48,19 @@ export function fakeDb(init: Record<string, Row[]> = {}, opts: { missing?: strin
       }
       if (op === "upsert") {
         const rows = Array.isArray(payload) ? payload : [payload];
+        const keys = conflict!.split(",").map((k) => k.trim());
         for (const r of rows) {
-          const i = t.findIndex((x) => x[conflict!] === r[conflict!]);
+          const i = t.findIndex((x) => keys.every((k) => x[k] === r[k]));
           if (i >= 0) t[i] = { ...t[i], ...r };
           else t.push({ ...r });
         }
         return { data: null, error: null };
       }
       let rows = t.filter((r) => filters.every((f) => f(r)));
+      if (op === "delete") {
+        for (const r of rows) t.splice(t.indexOf(r), 1);
+        return { data: null, error: null };
+      }
       if (op === "update") {
         rows.forEach((r) => Object.assign(r, payload));
         return { data: null, error: null };
@@ -78,6 +85,7 @@ export function fakeDb(init: Record<string, Row[]> = {}, opts: { missing?: strin
       single: () => ((mode = "single"), b),
       update: (p: any) => ((op = "update"), (payload = p), b),
       insert: (p: any) => ((op = "insert"), (payload = p), b),
+      delete: () => ((op = "delete"), b),
       upsert: (p: any, o?: { onConflict?: string }) => ((op = "upsert"), (payload = p), (conflict = o?.onConflict ?? "id"), b),
       then: (res: any, rej: any) => Promise.resolve().then(run).then(res, rej),
     };

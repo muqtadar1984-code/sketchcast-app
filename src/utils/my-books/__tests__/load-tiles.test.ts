@@ -109,7 +109,7 @@ describe("myBookTiles", () => {
       language: "English",
       chapterCount: 10,
       coverUrl: "https://s3.example/books/x/editions/e12/cover.png?X-Amz-Expires=3600",
-      pdfHref: `/api/library/book-pdf?product=${P_BIO}`,
+      pdfHref: `/api/my-books/pdf?product=${P_BIO}`,
       skHref: null,
     });
     // the tile carries no S3 key: the PDF is only ever signed by the route

@@ -3,10 +3,13 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   type CSSProperties,
 } from "react";
+import type { VideoLike } from "./board-controller";
+import { loadYouTubeApi, stageSource, youtubePlayerVars, YouTubeVideo } from "./youtube-video";
 
 // The stage: one video element, for the whole lesson.
 //
@@ -30,6 +33,16 @@ import {
 // The capture is still wrapped: a bucket policy could change, and the failure
 // must read as "the frame could not be captured" rather than as a board that
 // silently stopped freezing.
+//
+// A CATALOGUE KIT PLAYS FROM YOUTUBE (founder 2026-10-30: "the video should be
+// pulled from youtube to avoid egress cost"). When the host passes `youtubeId`
+// the stage mounts a YouTube IFrame player in a host <div> that, like the
+// <video>, is rendered unconditionally and only restyled; the player is built
+// once per id and torn down when the id changes. Every handle method drives
+// whichever source is live, and element() hands the controller the YouTube
+// adapter (youtube-video.ts) behind the same VideoLike interface. YouTube's
+// pixels are cross-origin, so freeze() on a YouTube lesson pauses and returns
+// null ("could not capture the frame").
 
 export type StageMode = "full" | "corner" | "away";
 
@@ -44,8 +57,9 @@ export type StageHandle = {
   currentTime: () => number;
   duration: () => number;
   paused: () => boolean;
-  /** The element itself, so a host can assert it is the same one it had before. */
-  element: () => HTMLVideoElement | null;
+  /** What the controller drives: the <video> element itself (so a host can
+   *  assert it is the same one it had before), or the YouTube adapter. */
+  element: () => VideoLike | null;
 };
 
 export type StageProps = {
@@ -55,6 +69,11 @@ export type StageProps = {
    * from an expired URL — which the eight-hour TTL exists to make rare.
    */
   src: string | null;
+  /**
+   * A YouTube video id: when set, the stage plays it through the IFrame Player
+   * API and `src` is ignored. Like `src`, CHANGING IT RELOADS the player.
+   */
+  youtubeId?: string | null;
   mode: StageMode;
   onEnded?: () => void;
   /** Fired when the media fails — the hook for re-signing an expired URL. */
@@ -115,12 +134,69 @@ function styleFor(mode: StageMode): CSSProperties {
 }
 
 export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
-  { src, mode, onEnded, onError, onTapToFreeze, status },
+  { src, youtubeId = null, mode, onEnded, onError, onTapToFreeze, status },
   ref,
 ) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const source = stageSource(src, youtubeId);
+  const ytHost = useRef<HTMLDivElement | null>(null);
+  const yt = useRef<YouTubeVideo | null>(null);
+  // the latest callbacks, read by the player's events without rebuilding it
+  const onEndedRef = useRef(onEnded);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+    onErrorRef.current = onError;
+  });
+
+  // ONE YouTube player per id. The IFrame API replaces the mount <div> it is
+  // given with its iframe, so the mount is created here, inside the host React
+  // renders (and never reconciles the children of).
+  const ytId = source === "youtube" ? youtubeId : null;
+  useEffect(() => {
+    const host = ytHost.current;
+    if (!ytId || !host) return;
+    const mount = document.createElement("div");
+    mount.style.width = "100%";
+    mount.style.height = "100%";
+    host.appendChild(mount);
+    const video = new YouTubeVideo();
+    video.addEventListener("ended", () => onEndedRef.current?.());
+    video.addEventListener("error", () => onErrorRef.current?.());
+    yt.current = video;
+    let cancelled = false;
+    loadYouTubeApi()
+      .then((YT) => {
+        if (cancelled) return;
+        const player = new YT.Player(mount, {
+          videoId: ytId,
+          width: "100%",
+          height: "100%",
+          playerVars: youtubePlayerVars(window.location.origin),
+          events: {
+            onReady: () => video.attach(player),
+            onStateChange: (e) => video.handleState(e.data),
+            onError: () => video.handleError(),
+          },
+        });
+      })
+      .catch(() => {
+        if (!cancelled) onErrorRef.current?.();
+      });
+    return () => {
+      cancelled = true;
+      video.destroy();
+      if (yt.current === video) yt.current = null;
+      host.replaceChildren();
+    };
+  }, [ytId]);
 
   const freeze = useCallback(async (): Promise<FrozenFrame | null> => {
+    if (yt.current) {
+      // a cross-origin iframe: its frame can never be captured
+      yt.current.pause();
+      return null;
+    }
     const v = videoRef.current;
     if (!v || !v.videoWidth || !v.videoHeight) return null;
     v.pause();
@@ -150,20 +226,21 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
     ref,
     (): StageHandle => ({
       play: async () => {
+        if (yt.current) return yt.current.play();
         // A rejected play() is normal — autoplay policy, or a pause landing in
         // the same tick — and must never surface as an unhandled rejection.
         await videoRef.current?.play().catch(() => {});
       },
-      pause: () => videoRef.current?.pause(),
+      pause: () => (yt.current ? yt.current.pause() : videoRef.current?.pause()),
       freeze,
       seek: (t: number) => {
-        const v = videoRef.current;
+        const v: VideoLike | null = yt.current ?? videoRef.current;
         if (v) v.currentTime = t;
       },
-      currentTime: () => videoRef.current?.currentTime ?? 0,
-      duration: () => videoRef.current?.duration ?? 0,
-      paused: () => videoRef.current?.paused ?? true,
-      element: () => videoRef.current,
+      currentTime: () => (yt.current ? yt.current.currentTime : (videoRef.current?.currentTime ?? 0)),
+      duration: () => (yt.current ? yt.current.duration || 0 : (videoRef.current?.duration ?? 0)),
+      paused: () => (yt.current ? yt.current.paused : (videoRef.current?.paused ?? true)),
+      element: () => yt.current ?? videoRef.current,
     }),
     [freeze],
   );
@@ -182,14 +259,21 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
         // Must be present BEFORE the src loads, or the canvas is tainted and
         // freeze-frame is impossible. See the header.
         crossOrigin="anonymous"
-        src={src ?? undefined}
+        src={source === "file" ? (src ?? undefined) : undefined}
         playsInline
         preload="metadata"
         controls={false}
         onEnded={onEnded}
-        onError={src ? onError : undefined}
+        onError={source === "file" ? onError : undefined}
         onClick={onTapToFreeze}
         style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+      />
+      {/* The YouTube host: rendered unconditionally like the <video>, shown
+          only while a YouTube lesson is the source. Its child is the API's. */}
+      <div
+        ref={ytHost}
+        data-stage-youtube={source === "youtube" ? (youtubeId ?? "") : undefined}
+        style={{ position: "absolute", inset: 0, background: "#000", display: source === "youtube" ? "block" : "none" }}
       />
       {status && (
         <span

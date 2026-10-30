@@ -88,7 +88,8 @@ describe("the founder card", () => {
 });
 
 describe("library.myBooks strings", () => {
-  const KEYS = ["title", "subtitle", "chapters", "chapterOne", "openInSk", "download", "forChild", "forYourChild", "withdrawn", "unavailable"];
+  // 0175 added the book card's chapter words (product-book-card.tsx), incl. the Board link and the shared-kit note
+  const KEYS = ["title", "subtitle", "chapters", "chapterOne", "openInSk", "download", "forChild", "forYourChild", "withdrawn", "unavailable", "chapterN", "showChapters", "kitComingSoon", "assignChapter", "assignFailed", "bySketchCast", "teachOnBoard", "sharedWith"];
   it.each(LOCALES.map((l) => [l.value]))("%s carries every key, translated, with its placeholders", async (locale) => {
     const en = (await import("@/i18n/messages/en.json")).default.library.myBooks as Record<string, string>;
     const m = (await import(`@/i18n/messages/${locale}.json`)).default.library.myBooks as Record<string, string>;

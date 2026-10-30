@@ -8,7 +8,7 @@ import { PDF_LINK_SECONDS } from "@/utils/my-books/tiles";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/library/book-pdf?product=<sk_book_products.id> — "Download PDF" on
+// GET /api/my-books/pdf?product=<sk_book_products.id> — "Download PDF" on
 // the Library's My books strip (SK S7 K3; design decision 6: a short-lived link
 // to the digital PDF, given only after the access check, no watermark yet).
 //

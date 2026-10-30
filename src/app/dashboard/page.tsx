@@ -51,6 +51,7 @@ import { fmt } from "@/i18n/format";
 import { premiumVoicesFor } from "@/utils/narration";
 import MyBooksStrip from "./my-books-strip";
 import { myBooksStrip } from "@/utils/my-books/server";
+import { lessonVideo, loadKitYoutubeIds, topicKitIdOf, youtubeWatchUrl } from "@/utils/catalogue/kit-youtube";
 import type { User } from "@supabase/supabase-js";
 
 type Chapter = { num: number; title: string; parts?: { titles?: string[]; words?: number }[] | null };
@@ -1152,6 +1153,17 @@ async function loadLessons(supabase: Db, user: User, t: LibraryMessages, userSig
   }
   const copySign = copySigner ? batchSigner(copySigner, "artifacts", 3600) : null;
 
+  // A catalogue copy's lesson (params.catalogue_ref, or a SketchCast book's
+  // product_ref) WATCHES ON YOUTUBE, not from our storage (founder 2026-10-30:
+  // "the video should be pulled from youtube to avoid egress cost"): one
+  // service-role read of those kits' YouTube ids; a kit with none keeps its
+  // storage link and is logged.
+  const copyKitIds = ((gensRaw ?? []) as unknown as LessonRow[])
+    .filter((g) => g.kind === "presentation" && isCatalogueCopy({ params: g.params }))
+    .map((g) => topicKitIdOf(g.params))
+    .filter((x): x is string => !!x);
+  const youtubeByKit = copySigner && copyKitIds.length ? await loadKitYoutubeIds(copySigner, copyKitIds) : new Map<string, string[]>();
+
   // Build signed download URLs for finished artifacts.
   return Promise.all(
     ((gensRaw ?? []) as unknown as LessonRow[]).map(async (g) => {
@@ -1171,7 +1183,9 @@ async function loadLessons(supabase: Db, user: User, t: LibraryMessages, userSig
       const videoArts = arts
         .filter((a) => a.kind === "video_mp4" && a.url)
         .sort((a, b) => partNum(a.path) - partNum(b.path));
-      const videos = videoArts.map((a) => a.url!);
+      const lv = lessonVideo(isCatalogueCopy({ params: g.params }) ? g.params : null, videoArts.map((a) => a.path), youtubeByKit);
+      if (lv.fellBack) console.warn(`[library] no watchable YouTube video for catalogue kit ${lv.fellBack} (copy ${g.id}); linking the stored MP4`);
+      const videos = lv.youtube.length ? lv.youtube.map(youtubeWatchUrl) : videoArts.map((a) => a.url!);
       // TEMPORARY (2026-08-31): a second, download-dispositioned signing of the
       // SAME paths, for the allow-listed accounts only. `videos` above is left
       // disposition-free so in-tab playback still works. Index-aligned with

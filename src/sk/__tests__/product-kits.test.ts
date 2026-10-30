@@ -128,6 +128,15 @@ describe("canOpenKit — product entitlement AND the kit is mapped to that produ
     expect((await kits.canOpenKit(STUDENT, SLUG, RESP)).ok).toBe(true);
   });
 
+  it("0175 map: ONE catalogue kit shared by chapters 1, 3 and 7 opens from each, its first chapter answering canOpenKit", async () => {
+    const { db, kits } = world();
+    db.seed("sk_product_kits", [map(CELLS, "3", 0, PRODUCT, "Cell Membranes"), map(CELLS, "7", 0, PRODUCT, "Cell Division")]);
+    const r = await kits.canOpenKit(STUDENT, PRODUCT, CELLS);
+    expect(r.ok && r.kit.chapterRef).toBe("1");
+    expect((await kits.kitForChapter(PRODUCT, "3")).map((k) => [k.generationId, k.label])).toEqual([[CELLS, "Cell Membranes"]]);
+    expect((await kits.kitForChapter(PRODUCT, "7")).map((k) => [k.generationId, k.label])).toEqual([[CELLS, "Cell Division"]]);
+  });
+
   it("a school licence alone does not entitle (books are bought); with a purchase grant it opens, source school", async () => {
     const { db, kits } = world();
     expect(await kits.canOpenKit(SCHOOL_KID, PRODUCT, CELLS)).toEqual({ ok: false, reason: "not_entitled" });

@@ -22,7 +22,7 @@ import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
 import { tabsFor, tabsForHat } from "@/utils/nav-tabs";
 import type { MenuItem } from "./menu-items";
 import { activeHatCookie } from "@/utils/hats-server";
-import { kitGroups, type KitGroupRow } from "@/utils/present/kit";
+import { loadBoardBooks, loadBoardKits } from "@/utils/present/ready-made-server";
 import PresentClient, { type BookOption, type ClassName, type KitOption, type PresentSk } from "./present-client";
 
 export const dynamic = "force-dynamic";
@@ -164,38 +164,20 @@ export default async function PresentPage() {
   }
 
   // The books she can teach from — the manual picker's options, and the only
-  // path available on a first lesson with any class.
-  const { data: bookRows } = await supabase
-    .from("books")
-    .select("id, title, grade, subject, chapters")
-    .is("removed_at", null)
-    .order("title");
-  const books: BookOption[] = ((bookRows ?? []) as BookOption[]).map((b) => ({
-    id: b.id,
-    title: b.title,
-    grade: b.grade ?? null,
-    subject: b.subject ?? null,
-    chapters: Array.isArray(b.chapters) ? b.chapters : [],
-  }));
+  // path available on a first lesson with any class. Since 0175 that includes
+  // every SketchCast book she holds a grant for (RLS), marked `product` with
+  // each chapter's catalogue kits: a chapter of one is adopted on pick or on
+  // a ?book=&chapter= deep link (utils/present/ready-made.ts).
+  const books: BookOption[] = await loadBoardBooks(supabase, admin);
 
-  // Her READY-MADE KITS: catalogue kits copied into the library arrive with no
-  // book and no chapter (book_id and chapter_ref null), so the book picker
-  // cannot reach them. One chooser entry per title prefix, newest first; the
-  // id is the kit's presentation, which is what /api/present/kit?kit= and
+  // READY-MADE KITS: hers (catalogue kits copied into the library arrive with
+  // no book and no chapter, so the book picker cannot reach them), then every
+  // catalogue kit she can open but has not copied — adopted on pick. The id of
+  // one of hers is the kit's presentation, which /api/present/kit?kit= and
   // /api/present/session {kitId} key on. Best-effort like every read here.
   let kits: KitOption[] = [];
   try {
-    const { data } = await supabase
-      .from("generations")
-      .select("id, title, created_at")
-      .eq("owner_id", user.id)
-      .eq("kind", "presentation")
-      .eq("status", "done")
-      .is("book_id", null)
-      .is("withdrawn_at", null)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    kits = kitGroups((data ?? []) as KitGroupRow[]);
+    kits = await loadBoardKits(supabase, admin, user.id, catalogueTabEnabled() && role !== "student");
   } catch {
     kits = [];
   }

@@ -1235,7 +1235,15 @@
       "forChild": "untuk {name}",
       "forYourChild": "untuk anak anda",
       "withdrawn": "Tidak lagi dijual. Salinan anda kekal milik anda.",
-      "unavailable": "PDF buku ini belum tersedia. Sila cuba lagi nanti."
+      "unavailable": "PDF buku ini belum tersedia. Sila cuba lagi nanti.",
+      "chapterN": "Bab {n}",
+      "showChapters": "Bab ({n})",
+      "kitComingSoon": "Kit pelajaran akan datang",
+      "assignChapter": "Tugaskan bab",
+      "assignFailed": "Bab ini tidak dapat disediakan untuk ditugaskan. Sila cuba lagi.",
+      "bySketchCast": "Oleh SketchCast",
+      "teachOnBoard": "Ajar di papan",
+      "sharedWith": "Dikongsi dengan Bab {n}"
     }
   },
   "school": {
@@ -1906,7 +1914,15 @@
       "loadSlides": "Muatkan slaid sebagai halaman",
       "loadDeck": "Muatkan dek sebagai halaman",
       "preparingDeck": "Menyediakan dek… (kira-kira 30 s)",
-      "deckFailed": "Dek tidak dapat disediakan. Cuba lagi sebentar lagi."
+      "deckFailed": "Dek tidak dapat disediakan. Cuba lagi sebentar lagi.",
+      "productBook": "{title} · SketchCast",
+      "myKits": "Dalam pustaka anda",
+      "moreKits": "Lagi kit sedia guna",
+      "preparingKit": "Menambah ke pustaka anda…",
+      "adoptFailed": "Kit ini tidak dapat dibuka. Cuba lagi.",
+      "kitComingSoon": "Kit pelajaran bab ini akan datang.",
+      "kitLocked": "Buka kunci kit ini di halaman Kit dahulu.",
+      "chooseProductKit": "Pilih kit"
     },
     "start": {
       "heading": "Pilih apa yang anda ajar",

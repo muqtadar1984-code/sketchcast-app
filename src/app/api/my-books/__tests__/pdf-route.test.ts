@@ -1,9 +1,9 @@
-// SK S7 K3 — GET /api/library/book-pdf: refuses without access (and mints no
+// SK S7 K3 — GET /api/my-books/pdf: refuses without access (and mints no
 // link), redirects to a 10-minute presigned link with access, logs the
 // download in analytics_access_log (scope book_download), and sends the reader
 // back with "not available yet" when S3 refuses ("[sk-library] s3 denied").
 // The access decision itself is tested in src/utils/my-books/__tests__.
-// Run: node node_modules/vitest/vitest.mjs run src/app/api/library/__tests__/book-pdf-route.test.ts
+// Run: node node_modules/vitest/vitest.mjs run src/app/api/my-books/__tests__/pdf-route.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { fakeDb, type FakeDb } from "@/sk/knowledge/__tests__/fake-db";
@@ -25,9 +25,9 @@ vi.mock("@/utils/supabase/server", () => ({
 vi.mock("@/utils/supabase/admin", () => ({ createAdminClient: () => mocks.admin }));
 vi.mock("@/utils/books/files", () => ({ s3Probe: mocks.probe, s3Link: mocks.link }));
 
-import { GET } from "@/app/api/library/book-pdf/route";
+import { GET } from "@/app/api/my-books/pdf/route";
 
-const req = (product: string) => new NextRequest(`https://app.example/api/library/book-pdf?product=${product}`);
+const req = (product: string) => new NextRequest(`https://app.example/api/my-books/pdf?product=${product}`);
 function setDb(grants: ReturnType<typeof grant>[], links: Record<string, unknown>[] = []): FakeDb {
   const d = fakeDb({
     sk_book_products: PRODUCTS,
@@ -51,7 +51,7 @@ afterEach(() => {
   mocks.probe.mockImplementation(async () => "ok");
 });
 
-describe("GET /api/library/book-pdf", () => {
+describe("GET /api/my-books/pdf", () => {
   it("signed out → 401, nothing signed", async () => {
     mocks.user = null;
     const res = await GET(req(P_BIO));

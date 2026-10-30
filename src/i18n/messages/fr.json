@@ -1235,7 +1235,15 @@
       "forChild": "pour {name}",
       "forYourChild": "pour votre enfant",
       "withdrawn": "N'est plus en vente. Votre exemplaire reste le vôtre.",
-      "unavailable": "Le PDF de ce livre n'est pas encore disponible. Veuillez réessayer plus tard."
+      "unavailable": "Le PDF de ce livre n'est pas encore disponible. Veuillez réessayer plus tard.",
+      "chapterN": "Chapitre {n}",
+      "showChapters": "Chapitres ({n})",
+      "kitComingSoon": "Kit de leçon bientôt disponible",
+      "assignChapter": "Attribuer le chapitre",
+      "assignFailed": "Impossible de préparer ce chapitre pour l’attribuer. Veuillez réessayer.",
+      "bySketchCast": "Par SketchCast",
+      "teachOnBoard": "Enseigner au tableau",
+      "sharedWith": "Partagé avec le chapitre {n}"
     }
   },
   "school": {
@@ -1906,7 +1914,15 @@
       "loadSlides": "Charger les diapositives en pages",
       "loadDeck": "Charger le diaporama en pages",
       "preparingDeck": "Préparation du diaporama… (environ 30 s)",
-      "deckFailed": "Le diaporama n'a pas pu être préparé. Réessayez dans une minute."
+      "deckFailed": "Le diaporama n'a pas pu être préparé. Réessayez dans une minute.",
+      "productBook": "{title} · SketchCast",
+      "myKits": "Dans votre bibliothèque",
+      "moreKits": "Plus de kits prêts à l’emploi",
+      "preparingKit": "Ajout à votre bibliothèque…",
+      "adoptFailed": "Impossible d’ouvrir ce kit. Réessayez.",
+      "kitComingSoon": "Le kit de leçon de ce chapitre arrive bientôt.",
+      "kitLocked": "Débloquez d’abord ce kit sur la page Kits.",
+      "chooseProductKit": "Choisissez le kit"
     },
     "start": {
       "heading": "Choisissez ce que vous allez enseigner",

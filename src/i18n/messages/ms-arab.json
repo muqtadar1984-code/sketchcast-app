@@ -1235,7 +1235,15 @@
       "forChild": "اونتوق {name}",
       "forYourChild": "اونتوق انق اندا",
       "withdrawn": "تيدق لاݢي دجوال. سالينن اندا ککل ميليق اندا.",
-      "unavailable": "PDF بوکو اين بلوم ترسديا. سيلا چوبا لاݢي نانتي."
+      "unavailable": "PDF بوکو اين بلوم ترسديا. سيلا چوبا لاݢي نانتي.",
+      "chapterN": "باب {n}",
+      "showChapters": "باب ({n})",
+      "kitComingSoon": "کيت ڤلاجرن اکن داتڠ",
+      "assignChapter": "توݢسکن باب",
+      "assignFailed": "باب اين تيدق داڤت دسدياکن اونتوق دتوݢسکن. سيلا چوبا لاݢي.",
+      "bySketchCast": "اوليه SketchCast",
+      "teachOnBoard": "اجر دڤن ڤاڤن",
+      "sharedWith": "دکوڠسي دڠن باب {n}"
     }
   },
   "school": {
@@ -1906,7 +1914,15 @@
       "loadSlides": "موتکن سلاءيد سباڬاي هلامن",
       "loadDeck": "موتکن ديق سباڬاي هلامن",
       "preparingDeck": "مڽدياکن ديق… (کيرا-کيرا 30 s)",
-      "deckFailed": "ديق تيدق داڤت دسدياکن. چوبا لاݢي سبنتر لاݢي."
+      "deckFailed": "ديق تيدق داڤت دسدياکن. چوبا لاݢي سبنتر لاݢي.",
+      "productBook": "{title} · SketchCast",
+      "myKits": "دالم ڤوستاک اندا",
+      "moreKits": "لاݢي کيت سدية ݢونا",
+      "preparingKit": "منمبه ک ڤوستاک اندا…",
+      "adoptFailed": "کيت اين تيدق داڤت دبوک. چوبا لاݢي.",
+      "kitComingSoon": "کيت ڤلاجرن باب اين اکن داتڠ.",
+      "kitLocked": "بوک کونچي کيت اين دهالمن کيت دهولو.",
+      "chooseProductKit": "ڤيليه کيت"
     },
     "start": {
       "heading": "ڤيليه اڤ يڠ اندا اجر",

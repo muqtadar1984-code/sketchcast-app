@@ -41,6 +41,34 @@ describe("groupBookless", () => {
     ]);
   });
 
+  it("SketchCast book copies (0175 product_ref) are library copies too: one kit per book chapter", () => {
+    const pref = (chapter: string) => ({ product_ref: { product_id: "p1", chapter_ref: chapter, source: "s" } });
+    const { catalogue, stranded } = groupBookless([
+      L({ id: "w1", kind: "worksheet", title: "Cells — Chapter 1: Cells · Worksheet", params: pref("0") }),
+      L({ id: "p1", kind: "presentation", title: "Cells — Chapter 1: Cells · Cells", params: pref("0") }),
+      L({ id: "p2", kind: "presentation", title: "Cells — Chapter 2: Microscopes · Microscopes", params: pref("1") }),
+    ]);
+    expect(stranded).toEqual([]);
+    expect(catalogue.map((g) => [g.key, g.title, g.pieces.map((p) => p.id)])).toEqual([
+      ["product:p1:0", "Cells — Chapter 1: Cells", ["p1", "w1"]],
+      ["product:p1:1", "Cells — Chapter 2: Microscopes", ["p2"]],
+    ]);
+    expect(isCatalogueCopy({ params: pref("0") })).toBe(true); // signed with the service role, like a catalogue copy
+  });
+
+  it("a SketchCast book copy of a CATALOGUE kit (0175: catalogue_ref + product_ref) groups by its topic: a chapter's several kits stay apart, and one kit is one card", () => {
+    const both = (topic: string, chapter: string) => ({ catalogue_ref: { topic_id: topic, topic_kit_id: `k-${topic}` }, product_ref: { product_id: "p1", chapter_ref: chapter, source: "s" } });
+    const { catalogue } = groupBookless([
+      L({ id: "blood", kind: "presentation", title: "Blood · Blood and Its Components", params: both("t-blood", "8") }),
+      L({ id: "resp", kind: "presentation", title: "Respiration · The Human Respiratory System", params: both("t-resp", "8") }),
+      L({ id: "resp-ws", kind: "worksheet", title: "Respiration · Worksheet", params: { catalogue_ref: { topic_id: "t-resp" } } }),
+    ]);
+    expect(catalogue.map((g) => [g.key, g.pieces.map((p) => p.id)])).toEqual([
+      ["t-blood", ["blood"]],
+      ["t-resp", ["resp", "resp-ws"]],
+    ]);
+  });
+
   it("stranded lessons group by chapter and title stem, never mixed with copies", () => {
     const { catalogue, stranded } = groupBookless([
       L({ id: "a", kind: "worksheet", title: "Photosynthesis · Worksheet", chapterRef: "4" }),

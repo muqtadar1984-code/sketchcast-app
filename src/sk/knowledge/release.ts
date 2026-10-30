@@ -26,7 +26,14 @@
 //      text and exercise STEMS. `answer`, `worked_solution`, `marking_scheme`
 //      and the options never become blocks (they are the answer key);
 //   6. upsert the product (one per work_uid + language, status approved) and
-//      log the import.
+//      log the import;
+//   7. upsert the product's system BOOK (migration 0175, product-book.ts):
+//      one books row owned by the catalogue system account, the final's
+//      chapters in the uploaded-book shape, one chapter_grounding row per
+//      chapter (section text + exercise STEMS). A release already imported
+//      whose book is missing or older (0175 applied after the import) gets
+//      its book on the next run without re-writing its blocks. 0175 not
+//      applied → the book is skipped with a log line.
 // pollReleases(admin)
 //   reads the LIVE rows (superseded_by is null and withdrawn_at is null),
 //   picks the newest live FINAL per book + language, imports what changed,
@@ -37,6 +44,7 @@
 import { chapterContentSha256, parseRawJson, sha256Hex, type RawJson } from "./canonical-json";
 import { isMissingRelation, replaceBlocks, uniqueAnchors, type KnowledgeBlock, type KnowledgeDb } from "./store";
 import { chunkText, flattenSection, normLanguage, plain } from "./text";
+import { bookOwnerFromEnv, productBookReleases, upsertProductBook, type ProductBookResult } from "./product-book";
 
 export const BUNDLE_SCHEMA = "sketchcast.book-release/1";
 
@@ -108,7 +116,7 @@ export type ReleaseBundle = {
 };
 
 export type ImportResult =
-  | { status: "ok"; release_id: number; blocks: number; product_id: string }
+  | { status: "ok"; release_id: number; blocks: number; product_id: string; book?: ProductBookResult; bookOnly?: true }
   | { status: "skipped"; release_id: number; reason: string; reconciled?: ReconcileResult }
   | { status: "error"; release_id: number; error: string };
 
@@ -327,7 +335,21 @@ export async function reconcileWork(db: KnowledgeDb, s3: BundleReader, workUid: 
   return { status: "unavailable", product_id: await markUnavailable(db, workUid, normLanguage(language) ?? language) };
 }
 
-export type ImportOptions = { dryRun?: boolean };
+export type ImportOptions = {
+  dryRun?: boolean;
+  /** Owner of the product's system book; undefined → CATALOGUE_OWNER_ID (bookOwnerFromEnv). */
+  bookOwnerId?: string | null;
+};
+
+const ownerOf = (opts: ImportOptions): string | null => (opts.bookOwnerId === undefined ? bookOwnerFromEnv() : opts.bookOwnerId);
+
+/** Is the product's system book missing or behind this release? False when 0175 is not applied or there is no owner to write it. */
+async function bookBehind(db: KnowledgeDb, productId: string, releaseId: number, owner: string | null): Promise<boolean> {
+  if (!owner) return false;
+  const { missing, releases } = await productBookReleases(db, [productId]);
+  if (missing) return false;
+  return releases.get(productId) !== releaseId;
+}
 
 export async function importRelease(db: KnowledgeDb, s3: BundleReader, row: ReleaseRow, opts: ImportOptions = {}): Promise<ImportResult> {
   const releaseId = Number(row.id);
@@ -354,20 +376,32 @@ export async function importRelease(db: KnowledgeDb, s3: BundleReader, row: Rele
     }
 
     const product = await productFor(db, row.work_uid, language);
-    if (product?.release_id === releaseId && (await importedOk(db, releaseId))) {
+    const alreadyImported = product?.release_id === releaseId && (await importedOk(db, releaseId));
+    // already imported: only the product BOOK may still be owed (0175 applied after the import)
+    if (alreadyImported && !(await bookBehind(db, product!.id, releaseId, ownerOf(opts)))) {
       return { status: "skipped", release_id: releaseId, reason: "already imported" };
     }
 
     const bytes = await s3.getBytes(row.bundle_key);
     const { bundle, problems } = verifyBundle(row, bytes);
     if (!bundle || problems.length) throw new Error(`refused: ${problems.join("; ")}`);
+    const bookInput = (productId: string) => ({ productId, row, chapters: bundle.chapters ?? [], ownerId: ownerOf(opts), dryRun: opts.dryRun });
+
+    if (alreadyImported) {
+      const book = await upsertProductBook(db, bookInput(product!.id));
+      return { status: "ok", release_id: releaseId, blocks: 0, product_id: product!.id, book, bookOnly: true };
+    }
 
     const blocks = releaseBlocks(row, bundle);
-    if (opts.dryRun) return { status: "ok", release_id: releaseId, blocks: blocks.length, product_id: product?.id ?? "(new)" };
+    if (opts.dryRun) {
+      const book = product ? await upsertProductBook(db, bookInput(product.id)) : undefined;
+      return { status: "ok", release_id: releaseId, blocks: blocks.length, product_id: product?.id ?? "(new)", ...(book ? { book } : {}) };
+    }
     await replaceBlocks(db, [{ source_kind: "sketchcast_book", source_id: row.work_uid, language }], blocks);
     const productId = await upsertProduct(db, row, bundle);
     await logImport(db, row, "ok", blocks.length, null);
-    return { status: "ok", release_id: releaseId, blocks: blocks.length, product_id: productId };
+    const book = await upsertProductBook(db, bookInput(productId));
+    return { status: "ok", release_id: releaseId, blocks: blocks.length, product_id: productId, book };
   } catch (e) {
     const message = (e as Error).message ?? String(e);
     if (!opts.dryRun) await logImport(db, row, "error", 0, message);
@@ -381,7 +415,7 @@ export type PollResult =
   | { status: "ok"; live: number; imported: number[]; unchanged: number[]; skipped: number[]; unavailable: string[]; errors: { release_id: number; error: string }[]; dryRun?: true; migration0174?: false };
 
 /** Import every live FINAL that changed; skip drafts; mark books with no live final unavailable. */
-export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader; dryRun?: boolean } = {}): Promise<PollResult> {
+export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader; dryRun?: boolean; bookOwnerId?: string | null } = {}): Promise<PollResult> {
   const { rows, missing } = await liveReleases(db);
   if (missing) return { status: "waiting_for_book_app" };
 
@@ -403,6 +437,10 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader; d
   const byBook = new Map<string, ReleaseRow[]>();
   for (const r of rows) byBook.set(key(r.work_uid, r.language), [...(byBook.get(key(r.work_uid, r.language)) ?? []), r]);
   const productByBook = new Map(products.map((p) => [key(p.work_uid ?? "", p.language ?? ""), p]));
+  // 0175: a product whose system book is missing or behind is not "unchanged"
+  const books = migrationMissing ? { missing: true, releases: new Map<string, number | null>() } : await productBookReleases(db, products.map((p) => p.id));
+  const owner = deps.bookOwnerId === undefined ? bookOwnerFromEnv() : deps.bookOwnerId;
+  const bookCurrent = (p: ProductRow) => books.missing || !owner || books.releases.get(p.id) === Number(p.release_id);
 
   const out: Extract<PollResult, { status: "ok" }> = { status: "ok", live: rows.length, imported: [], unchanged: [], skipped: [], unavailable: [], errors: [] };
   if (dryRun) Object.assign(out, { dryRun: true, ...(migrationMissing ? { migration0174: false } : {}) });
@@ -420,12 +458,12 @@ export async function pollReleases(db: KnowledgeDb, deps: { s3?: BundleReader; d
   }
   for (const [k, pick] of finals) {
     const p = productByBook.get(k);
-    if (p && Number(p.release_id) === Number(pick.id) && ok.has(Number(pick.id))) {
+    if (p && Number(p.release_id) === Number(pick.id) && ok.has(Number(pick.id)) && bookCurrent(p)) {
       out.unchanged.push(Number(pick.id));
       continue;
     }
     s3 ??= (await import("./s3")).booksBundleReader;
-    const r = await importRelease(db, s3, pick, { dryRun });
+    const r = await importRelease(db, s3, pick, { dryRun, ...(deps.bookOwnerId !== undefined ? { bookOwnerId: deps.bookOwnerId } : {}) });
     if (r.status === "ok") out.imported.push(r.release_id);
     else if (r.status === "skipped") out.skipped.push(r.release_id);
     else out.errors.push({ release_id: r.release_id, error: r.error });
