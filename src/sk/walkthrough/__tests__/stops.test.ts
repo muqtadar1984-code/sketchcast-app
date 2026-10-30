@@ -126,3 +126,34 @@ describe("every anchor a stop names exists in a component (source scan)", () => 
     expect(read("book-tools.tsx")).toContain('data-tour="book-tools"');
   });
 });
+
+// Production 2026-10-30: {provider:"plan", why:"missing", error:"/dashboard
+// settled"}. The meter renders nothing for an unlimited plan (and when its
+// read fails, or without lesson tools), so the plan stop needs a fallback.
+describe("the 'plan' stop survives a dashboard with no meter", () => {
+  const METER = readFileSync(join(SRC, "app", "dashboard", "fair-use-meter.tsx"), "utf8");
+  const DASHBOARD = readFileSync(join(SRC, "app", "dashboard", "page.tsx"), "utf8");
+  const plan = WALK_STOPS.teacher.find((s) => s.id === "plan")!;
+  it("the meter still carries data-tour=\"fair-use\" on every card it renders, and renders nothing for an unlimited plan", () => {
+    const cards = METER.match(/<section[^>]*>/g) ?? [];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const c of cards) expect(c).toContain('data-tour="fair-use"');
+    expect(METER).toMatch(/if \(fu\.unlimited\) return null;/);
+    // …and it streams in behind lesson tools on the dashboard (#217).
+    expect(DASHBOARD).toMatch(/\{lessonTools && \(\s*<Suspense fallback=\{[^\n]*\}>\s*<FairUseMeter \/>/);
+  });
+  it("so the stop points at the meter first, then falls back to SK's avatar with its own line", () => {
+    expect(plan.route).toBe("/dashboard");
+    expect(selOf(plan.anchors[0]!)).toBe('[data-tour="fair-use"]');
+    const last = plan.anchors[plan.anchors.length - 1]!;
+    expect(last).toEqual({ sel: '[data-sk="avatar"]', line: "planUnlimited" });
+    expect(rendered("data-sk", "avatar")).toBe(true);
+  });
+  it("the fallback line is in all ten files and promises no number", () => {
+    for (const [code, file] of Object.entries(FILES)) {
+      const line = (file.sk.walkthrough.teacher as Record<string, string>).planUnlimited;
+      expect(line, code).toBeTruthy();
+      expect(line, code).not.toMatch(/[0-9]/);
+    }
+  });
+});

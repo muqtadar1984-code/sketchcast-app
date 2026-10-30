@@ -165,6 +165,13 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "12. Do these with their tools, never by describing them: showing the user around the app (a tour, a demo, a walkthrough, onboarding, 'how does this app work') → start_tour; moving a walkthrough that is running (continue, next, back, pause, stop) → tour_control; answering in another language from now on → set_answer_language; saying your last answer again in another language → repeat_in_language. Never say you started, moved, switched or translated anything without calling the tool.",
         ]
       : []),
+    // 2026-10-30: "play chapter 1 from the book" — start_lesson resolves the
+    // book itself and returns the question when it is ambiguous.
+    ...(capabilities.some((c) => c.name === "start_lesson")
+      ? [
+          "13. To start, play, teach or open a chapter of a book (or a ready-made kit) call start_lesson with the user's own words (book, chapter, part) — never context.resolve or library.find first, and never ask which book yourself: when it is unclear the tool returns the question; say its line.",
+        ]
+      : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",

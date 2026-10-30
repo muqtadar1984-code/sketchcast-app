@@ -31,6 +31,8 @@ import { SCHOOL_FIGURE_CAPABILITIES } from "./school-figures";
 import { knowledgeSearch } from "./knowledge";
 // 2026-10-30: the model's safety net for the tour and the answer language.
 import { SHELL_CONTROL_CAPABILITIES } from "./shell-controls";
+// 2026-10-30: start a book chapter's lesson (teacher → Board, student → Tutor).
+import { startLessonCapability } from "./lesson";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -84,6 +86,11 @@ const ENTRIES: SkCapability[] = [
   // repeat_in_language — every role, no flag; the route performs them as the
   // rules do (the walkthrough / language events), no second model round.
   ...SHELL_CONTROL_CAPABILITIES,
+  // 2026-10-30: start_lesson — "play chapter 1 from the book". Teachers (the
+  // teacher hat, or no hat) get the Board deep link with autostart; students
+  // the SK Tutor chapter of a SketchCast book they hold a grant for. The
+  // navigate inside refuses a page the role/hat cannot open (navigate.ts).
+  startLessonCapability,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;
@@ -95,3 +102,4 @@ export { noticeSchoolAction };
 export { SCHOOL_FIGURE_CAPABILITIES };
 export { knowledgeSearch };
 export { SHELL_CONTROL_CAPABILITIES };
+export { startLessonCapability };
