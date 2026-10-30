@@ -58,7 +58,7 @@ const TEACHER_ALL: WalkFacts = { books: true, bookId: "b1", classId: "c1", catal
 const TEACHER_ORDER = [
   "hello", "library", "openBook", "generate", "pieces", "downloads", "rerun", "assign", "boardBridge", "more",
   "setup", "myBooks", "plan", "board", "boardSk", "kits", "skTutor", "diary", "analytics", "gradeQueue", "timetable", "calendar",
-  "notifications", "language", "settings", "skMenu", "skAsk",
+  "notifications", "language", "settings", "skMenu", "skAsk", "reportProblem",
 ];
 const partIds = (s: PlannedStop | undefined) => (s?.parts ?? []).map((p) => p.id);
 
@@ -96,14 +96,14 @@ describe("needHolds / resolveRoute", () => {
 });
 
 describe("planWalk: per-role stops as built", () => {
-  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined, student 11 → 15, parent 12 → 15, principal 12 → 15, coordinator 10 → 13)", () => {
-    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(27);
-    expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(15);
-    expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(15);
+  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 28 with Report a problem, student 11 → 16, parent 12 → 16, principal 12 → 16, coordinator 10 → 14)", () => {
+    expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(28);
+    expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(16);
+    expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(16);
     // Home educator: Library + kits in, notices + Test Papers out.
-    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(15);
-    expect(planWalk("principal", { analytics: true, timetable: true, diary: true, notices: true, roleHats: true })).toHaveLength(15);
-    expect(planWalk("coordinator", { timetable: true, diary: true, notices: true })).toHaveLength(13);
+    expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(16);
+    expect(planWalk("principal", { analytics: true, timetable: true, diary: true, notices: true, roleHats: true })).toHaveLength(16);
+    expect(planWalk("coordinator", { timetable: true, diary: true, notices: true })).toHaveLength(14);
   });
   it("teacher order: the Library and its kits first (the Board bridge, then More), then the page, the Board, the other pages, the header and SK", () => {
     const p = planWalk("teacher", TEACHER_ALL);
@@ -213,7 +213,7 @@ describe("planWalk: per-role stops as built", () => {
     expect(s.anchors[1]).toEqual({ sel: '[data-tour="assignments"]', line: "openLessonEmpty" });
   });
   it("parent: no child → straight to Add child; unverified → say why; home educator → Library, no notices or Test Papers", () => {
-    expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "notifications", "language", "skMenu", "addChild"]);
+    expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "reportProblem", "notifications", "language", "skMenu", "addChild"]);
     expect(planWalk("parent", { children: 0 }).find((s) => s.id === "addChild")?.line).toBe("addChildFirst");
     const un = planWalk("parent", { children: 1, verifiedChildren: 0, schoolParent: true, parentPortal: true });
     expect(un.find((s) => s.id === "childCard")?.line).toBe("childUnverified");
@@ -229,7 +229,7 @@ describe("planWalk: per-role stops as built", () => {
   });
   it("leaders: a school feature that is off drops its stop; the principal's hat stop only points", () => {
     const p = planWalk("principal", { analytics: false, timetable: false, diary: false, notices: false, roleHats: false });
-    expect(ids(p)).toEqual(["hello", "teachers", "access", "admin", "books", "schoolSwitch", "notifications", "language", "skAsk"]);
+    expect(ids(p)).toEqual(["hello", "teachers", "access", "admin", "books", "schoolSwitch", "notifications", "language", "reportProblem", "skAsk"]);
     const hat = planWalk("principal", { roleHats: true }).find((s) => s.id === "hat")!;
     expect(hat.anchors[0].sel).toBe('[data-tour="hat-switcher"]');
     expect(hat.demo).toBeUndefined();
@@ -321,7 +321,7 @@ describe("combined stops: one narration, the highlight moving part by part", () 
     expect(currentStop(s)!.id).toBe("generate");
     s = backStop(backStop(s));
     expect(currentStop(s)!.id).toBe("library");
-    expect(s.stops).toHaveLength(27);
+    expect(s.stops).toHaveLength(28);
   });
   it("a combined stop survives the sessionStorage round trip; a broken parts list reads as none", () => {
     const mem = new Map<string, string>();
@@ -333,6 +333,54 @@ describe("combined stops: one narration, the highlight moving part by part", () 
     const bad = { ...w, stops: w.stops.map((x) => (x.parts ? { ...x, parts: [{ id: 1 }] } : x)) };
     mem.set(WALK_STORE_KEY, JSON.stringify(bad));
     expect(store.load()).toBeNull();
+  });
+});
+
+// Founder 2026-10-30: "SK missed the report issue feature using the bottom
+// left and in line for a failed kit."
+describe("Report a problem: the inline report on a failed kit first, else the bottom-left widget", () => {
+  const OPEN = '[data-tour-book="open"] ';
+  const FAILED = '[data-tour="report-failure"]';
+  const WIDGET = '[data-tour="report-issue"]';
+  const stop = (role: Parameters<typeof planWalk>[0], facts: WalkFacts) => planWalk(role, facts).find((s) => s.id === "reportProblem");
+  it("teacher: on the Library, the open book's failed kit, any failed kit, then the widget with its own line", () => {
+    const s = stop("teacher", TEACHER_ALL)!;
+    expect(s.route).toBe("/dashboard?book=b1");
+    expect(s.anchors).toEqual([{ sel: OPEN + FAILED }, { sel: FAILED }, { sel: WIDGET, line: "reportProblemWidget" }]);
+    expect(s.line).toBe("reportProblem");
+    // A failed kit on screen: its inline report, with the stop's own line.
+    const both = { query: (sel: string) => (sel === FAILED || sel === WIDGET ? { sel } : null), visible: () => true };
+    const hit = findAnchor(s.anchors, both)!;
+    expect(hit.sel).toBe(FAILED);
+    expect(hit.line).toBeUndefined();
+    expect(hit.index).toBe(1);
+    // None: the widget, with the widget line (a fallback: taken once the page has settled).
+    const widget = { query: (sel: string) => (sel === WIDGET ? { sel } : null), visible: () => true };
+    expect(findAnchor(s.anchors, widget)).toMatchObject({ sel: WIDGET, line: "reportProblemWidget", index: 2 });
+    // Neither on the page: nothing (the settled wait then passes the stop over).
+    expect(findAnchor(s.anchors, { query: () => null, visible: () => true })).toBeNull();
+  });
+  it("skipped when the widget is off (platformConsoleEnabled() false); unknown counts as present", () => {
+    for (const role of ["teacher", "student", "parent", "principal", "coordinator"] as const) {
+      expect(stop(role, { reportIssue: false, children: 1, verifiedChildren: 1 }), role).toBeUndefined();
+      expect(stop(role, { children: 1, verifiedChildren: 1 }), role).toBeDefined();
+    }
+  });
+  it("every role gets it near the end, on a page that renders the widget, before the closing stop", () => {
+    const routes = { student: "/dashboard", parent: "/dashboard", principal: "/dashboard/school", coordinator: "/dashboard/school" } as const;
+    for (const [role, route] of Object.entries(routes) as Array<[keyof typeof routes, string]>) {
+      const p = planWalk(role, { children: 1, verifiedChildren: 1, diary: true, tutorPath: "/sk/a/1", roleHats: true });
+      const s = p.find((x) => x.id === "reportProblem")!;
+      expect(s.route, role).toBe(route);
+      expect(ids(p).indexOf("reportProblem"), role).toBeGreaterThan(p.length / 2);
+      expect(ids(p).at(-1), role).not.toBe("reportProblem");
+    }
+    // The School pages have no kits: the widget only.
+    expect(stop("principal", {})!.anchors).toEqual([{ sel: WIDGET }]);
+    expect(stop("coordinator", {})!.anchors).toEqual([{ sel: WIDGET }]);
+    // The student's and the parent's dashboards: any failed kit, then the widget.
+    expect(stop("student", {})!.anchors.map((a) => a.sel)).toEqual([FAILED, WIDGET]);
+    expect(stop("parent", {})!.anchors.map((a) => a.sel)).toEqual([FAILED, WIDGET]);
   });
 });
 

@@ -77,6 +77,8 @@ export type WalkFacts = {
   /** Parent: at least one link came from a school (parent_links.source). */
   schoolParent?: boolean;
   parentPortal?: boolean;
+  /** The floating "Report a problem" widget renders (platformConsoleEnabled()). */
+  reportIssue?: boolean;
 };
 
 export type WalkNeed =
@@ -96,7 +98,8 @@ export type WalkNeed =
   | "verified"
   | "schoolParent"
   | "parentPortal"
-  | "skTutor";
+  | "skTutor"
+  | "reportIssue";
 
 export type WalkNeedSpec = WalkNeed | `!${WalkNeed}`;
 
@@ -204,6 +207,27 @@ const RERUN = '[data-tour="rerun"]';
 const ASSIGN_PART = '[data-tour="assign-part"]';
 const ASSIGN_CHAPTER = '[data-tour="assign-chapter"]';
 const MORE = '[data-tour="book-tools"]';
+
+// "Report a problem" (founder 2026-10-30: "SK missed the report issue feature
+// using the bottom left and in line for a failed kit"). The inline "report" on
+// a FAILED kit item (report-failure.tsx, content-cell.tsx's error state) when
+// one is on screen, else the floating widget (report-issue-form.tsx, bottom
+// left; bottom right in RTL). The widget renders only with
+// platformConsoleEnabled() (the `reportIssue` fact): without it the stop
+// skips (the inline control posts to the same /api/issues, which is off too).
+const REPORT_FAILED = '[data-tour="report-failure"]';
+const REPORT_WIDGET = '[data-tour="report-issue"]';
+/** `inline`: "open" looks in the tour's open book first (the Library), "any"
+ *  anywhere on the page, "none" only the widget (the School pages have no kits). */
+const reportProblem = (route: string, inline: "open" | "any" | "none"): WalkStopDef => ({
+  id: "reportProblem",
+  route,
+  anchors:
+    inline === "none"
+      ? [REPORT_WIDGET]
+      : [...(inline === "open" ? [OPEN + REPORT_FAILED] : []), REPORT_FAILED, { sel: REPORT_WIDGET, line: "reportProblemWidget" }],
+  needs: ["reportIssue"],
+});
 
 /** The trailing fallbacks of a kit stop with no generated kit to point at: the
  *  ungenerated part, else the chapter's Generate full kit, else the book list,
@@ -340,6 +364,8 @@ const TEACHER: WalkStopDef[] = [
   // SK's own menu only exists while it is open: the tour points at the avatar and names what is in it.
   { id: "skMenu", route: "/dashboard/settings", anchors: [HERO, LAUNCHER] },
   { id: "skAsk", route: "/dashboard/settings", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
+  // Near the end, back on the Library (a failed kit's inline report is there).
+  reportProblem(LIB, "open"),
 ];
 
 const STUDENT: WalkStopDef[] = [
@@ -356,6 +382,8 @@ const STUDENT: WalkStopDef[] = [
   { id: "kitHelp", route: "{tutorPath}", anchors: ['[data-tour="kit-explain"]', '[data-tour="kit-practise"]'], needs: ["tutor"] },
   { id: "kitNext", route: "{tutorPath}", anchors: ['[data-tour="kit-next-move"]'], needs: ["tutor"], chips: ["howAmIDoing"] },
   { id: "diaryTimetable", route: "/dashboard", anchors: ['[data-tour="diary-nav"]', '[data-tour="timetable-nav"]', MOBILE_NAV], needs: ["diary"] },
+  // Near the end, while the tour is still on /dashboard (the widget's page).
+  reportProblem("/dashboard", "any"),
   { id: "notifications", route: "/dashboard/settings", anchors: [BELL] },
   { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
   { id: "settings", route: "/dashboard/settings", anchors: ['[data-tour="sk-memory"]', '[data-tour="sk-prefs"]', '[data-sk="mic"]', '[data-sk="input"]'] },
@@ -385,6 +413,8 @@ const PARENT: WalkStopDef[] = [
   { id: "testPapers", route: "/dashboard/test-papers", anchors: ['[data-tour="test-papers-nav"]', MOBILE_NAV], needs: ["schoolParent", "parentPortal"] },
   { id: "homeLibrary", route: "/dashboard", anchors: [BOOK_LIST, UPLOAD], needs: ["!schoolParent"] },
   { id: "homeKits", route: "/dashboard", anchors: ['[data-tour="kits-nav"]', '[data-tour="sk-nav"]', MOBILE_NAV], needs: ["!schoolParent", "catalogue"] },
+  // Near the end, while the tour is still on /dashboard (the widget's page).
+  reportProblem("/dashboard", "any"),
   { id: "consent", route: "/dashboard/settings", anchors: ['[data-tour="sk-children-consent"]'], needs: ["children"] },
   { id: "notifications", route: "/dashboard/settings", anchors: [BELL] },
   { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
@@ -408,6 +438,8 @@ const PRINCIPAL: WalkStopDef[] = [
   { id: "language", route: "/dashboard/settings", anchors: [LANGUAGE] },
   // Founder decision 6: SK points at the hat switcher and NEVER switches it (that writes the hat cookie).
   { id: "hat", route: "/dashboard/school", anchors: ['[data-tour="hat-switcher"]', HERO], needs: ["roleHats"] },
+  // The School page carries the widget too (raised for the briefing bot).
+  reportProblem("/dashboard/school", "none"),
   { id: "skAsk", route: "/dashboard/school", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
 ];
 
@@ -424,6 +456,7 @@ const COORDINATOR: WalkStopDef[] = [
   { id: "notifications", route: "/dashboard/school", anchors: [BELL] },
   { id: "language", route: "/dashboard/school", anchors: [LANGUAGE] },
   { id: "hatSettings", route: "/dashboard/school", anchors: ['[data-tour="hat-switcher"]', SETTINGS_LINK, HERO] },
+  reportProblem("/dashboard/school", "none"),
   { id: "skAsk", route: "/dashboard/school", anchors: [TOUR_BUTTON, HERO, LAUNCHER] },
 ];
 

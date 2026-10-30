@@ -2708,7 +2708,9 @@
         "notifications": "La cloche affiche les avis de l'école et l'avancement de tout ce que vous nous signalez.",
         "language": "Changez ici la langue de l'application. Je parlerai et répondrai aussi dans cette langue.",
         "skMenu": "Touchez-moi à tout moment pour ouvrir mon menu : écrire un message, afficher notre conversation, activer ou couper le micro ou la lecture à voix haute, ou effacer la conversation.",
-        "skAsk": "Demandez-moi ce que vous voulez, à la voix ou par écrit, dans l'une de mes onze langues ; « dis-le en anglais » répète une réponse dans une autre. Quand j'agis pour vous, je vous montre d'abord une carte, et rien ne se passe tant que vous ne confirmez pas. Pour revoir ceci, appuyez sur Visite ou dites « Fais-moi visiter »."
+        "skAsk": "Demandez-moi ce que vous voulez, à la voix ou par écrit, dans l'une de mes onze langues ; « dis-le en anglais » répète une réponse dans une autre. Quand j'agis pour vous, je vous montre d'abord une carte, et rien ne se passe tant que vous ne confirmez pas. Pour revoir ceci, appuyez sur Visite ou dites « Fais-moi visiter ».",
+        "reportProblem": "Si un kit échoue, signalez-le ici même et nous nous en occuperons. Pour tout le reste, Signaler un problème se trouve en bas à gauche.",
+        "reportProblemWidget": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment. Si un kit échoue, un lien pour le signaler apparaît aussi juste à côté."
       },
       "student": {
         "hello": "Salut, je suis SK ! Je te fais faire le tour en deux minutes. Touche pour m'entendre, ou lis simplement.",
@@ -2729,7 +2731,9 @@
         "notifications": "La cloche affiche les avis de l'école et l'avancement de tout ce que tu nous signales.",
         "language": "Change ici la langue de l'application. Je parlerai et répondrai aussi dans cette langue.",
         "skMenu": "Touche-moi à tout moment pour ouvrir mon menu : écrire un message, afficher notre conversation, activer ou couper le micro ou la lecture à voix haute, ou effacer la conversation.",
-        "skAsk": "Demande-moi ce que tu veux, à la voix ou par écrit, dans ta langue ; « dis-le en anglais » répète une réponse dans une autre. Pour revoir ceci, appuie sur Visite ou dis « Fais-moi visiter »."
+        "skAsk": "Demande-moi ce que tu veux, à la voix ou par écrit, dans ta langue ; « dis-le en anglais » répète une réponse dans une autre. Pour revoir ceci, appuie sur Visite ou dis « Fais-moi visiter ».",
+        "reportProblem": "Si quelque chose échoue, touche le lien pour le signaler ici même et nous nous en occuperons.",
+        "reportProblemWidget": "Quelque chose ne marche pas ? Touche ici, en bas à gauche, et dis-le-nous en quelques mots. Nous nous en occuperons."
       },
       "parent": {
         "hello": "Bonjour, je suis SK. Je vais vous montrer comment suivre vos enfants, en trois minutes environ. Touchez pour m'entendre.",
@@ -2750,7 +2754,9 @@
         "homeKits": "Ici en haut, il y a les Kits prêts à l'emploi, des leçons terminées que vous pouvez débloquer chaque semaine et ajouter à votre Bibliothèque, et Tuteur SK, où j'enseigne à partir des livres SketchCast.",
         "notifications": "La cloche affiche les avis de l'école et l'avancement de tout ce que vous nous signalez.",
         "language": "Changez ici la langue de l'application. Je parlerai et répondrai aussi dans cette langue.",
-        "skMenu": "Touchez-moi à tout moment pour ouvrir mon menu : écrire un message, afficher notre conversation, activer ou couper le micro ou la lecture à voix haute, ou effacer la conversation."
+        "skMenu": "Touchez-moi à tout moment pour ouvrir mon menu : écrire un message, afficher notre conversation, activer ou couper le micro ou la lecture à voix haute, ou effacer la conversation.",
+        "reportProblem": "Si un kit échoue, signalez-le ici même et nous nous en occuperons. Pour tout le reste, Signaler un problème se trouve en bas à gauche.",
+        "reportProblemWidget": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment. Si un kit échoue, un lien pour le signaler apparaît aussi juste à côté."
       },
       "principal": {
         "hello": "Bienvenue. Je suis SK, et je vais vous montrer l'école d'un coup d'œil, en trois minutes environ. Touchez pour m'entendre.",
@@ -2767,7 +2773,8 @@
         "hat": "Passez ici à votre rôle d'Enseignant pour utiliser la Bibliothèque et le Tableau de la classe.",
         "notifications": "La cloche affiche les avis de l'école et l'avancement de tout ce que vous nous signalez.",
         "language": "Changez ici la langue de l'application. Je parlerai et répondrai aussi dans cette langue.",
-        "skAsk": "Demandez-moi ce que vous voulez, à la voix ou par écrit, dans l'une de mes onze langues ; « dis-le en anglais » répète une réponse. Pour revoir ceci, appuyez sur Visite ou dites « Fais-moi visiter »."
+        "skAsk": "Demandez-moi ce que vous voulez, à la voix ou par écrit, dans l'une de mes onze langues ; « dis-le en anglais » répète une réponse. Pour revoir ceci, appuyez sur Visite ou dites « Fais-moi visiter ».",
+        "reportProblem": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment, et la cloche affiche où en est votre signalement."
       },
       "coordinator": {
         "hello": "Bonjour, je suis SK. Tout ce que vous verrez est limité à vos niveaux et matières ; cette étiquette montre votre périmètre.",
@@ -2782,7 +2789,8 @@
         "hatSettings": "Votre rôle d'Enseignant contient vos propres classes, votre Bibliothèque et votre Tableau, et Paramètres garde ce dont je me souviens.",
         "notifications": "La cloche affiche les avis de l'école et l'avancement de tout ce que vous nous signalez.",
         "language": "Changez ici la langue de l'application. Je parlerai et répondrai aussi dans cette langue.",
-        "skAsk": "Demandez-moi ce que vous voulez, à la voix ou par écrit, dans l'une de mes onze langues ; « dis-le en anglais » répète une réponse. Pour revoir ceci, appuyez sur Visite ou dites « Fais-moi visiter »."
+        "skAsk": "Demandez-moi ce que vous voulez, à la voix ou par écrit, dans l'une de mes onze langues ; « dis-le en anglais » répète une réponse. Pour revoir ceci, appuyez sur Visite ou dites « Fais-moi visiter ».",
+        "reportProblem": "Quelque chose ne marche pas ? Signaler un problème, ici en bas à gauche, joint notre équipe à tout moment, et la cloche affiche où en est votre signalement."
       }
     }
   },

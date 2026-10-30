@@ -2708,7 +2708,9 @@
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
         "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
-        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer in another. When I act for you, I show a card first and nothing happens until you confirm. To see this again, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer in another. When I act for you, I show a card first and nothing happens until you confirm. To see this again, press Tour or say 'Show me around'.",
+        "reportProblem": "If a kit ever fails, report it right here and we'll look into it. For anything else, Report a problem is at the bottom left.",
+        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it."
       },
       "student": {
         "hello": "Hi, I'm SK! I'll show you around in two minutes. Tap to hear me, or read along.",
@@ -2729,7 +2731,9 @@
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
         "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
-        "skAsk": "Ask me anything, by voice or typing, in your own language; 'say that in Malay' repeats an answer in another. To see this again, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in your own language; 'say that in Malay' repeats an answer in another. To see this again, press Tour or say 'Show me around'.",
+        "reportProblem": "If something ever fails, tap report right here and we'll look into it.",
+        "reportProblemWidget": "Something not working? Tap here, at the bottom left, and tell us in a few words. We'll look into it."
       },
       "parent": {
         "hello": "Hello, I'm SK. I'll show you how to keep up with your children in about three minutes. Tap to hear me.",
@@ -2750,7 +2754,9 @@
         "homeKits": "Up here are Ready-made kits, finished lessons you can unlock each week and add to your Library, and SK Tutor, where I teach from SketchCast books.",
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
-        "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation."
+        "skMenu": "Tap me any time for my menu: type a message, show our conversation, switch the microphone or reading aloud on or off, or clear the conversation.",
+        "reportProblem": "If a kit ever fails, report it right here and we'll look into it. For anything else, Report a problem is at the bottom left.",
+        "reportProblemWidget": "Something not working? Report a problem, here at the bottom left, reaches our team any time. If a kit ever fails, a report link also appears right beside it."
       },
       "principal": {
         "hello": "Welcome. I'm SK, and I'll show you the school at a glance in about three minutes. Tap to hear me.",
@@ -2767,7 +2773,8 @@
         "hat": "Switch to your Teacher hat here to use the Library and the Classroom Board.",
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
-        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'.",
+        "reportProblem": "Something not working? Report a problem, here at the bottom left, reaches our team any time, and the bell shows how it's going."
       },
       "coordinator": {
         "hello": "Hi, I'm SK. Everything you'll see is limited to your grades and subjects; this chip shows your slice.",
@@ -2782,7 +2789,8 @@
         "hatSettings": "Your Teacher hat has your own classes, Library and Board, and Settings holds what I remember.",
         "notifications": "The bell shows school notices and the progress of anything you report to us.",
         "language": "Change the app's language here. I'll speak and answer in it too.",
-        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'."
+        "skAsk": "Ask me anything, by voice or typing, in any of my eleven languages; 'say that in Malay' repeats an answer. To replay this, press Tour or say 'Show me around'.",
+        "reportProblem": "Something not working? Report a problem, here at the bottom left, reaches our team any time, and the bell shows how it's going."
       }
     }
   },

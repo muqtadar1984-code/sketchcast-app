@@ -124,6 +124,10 @@ describe("every anchor a stop names exists in a component (source scan)", () => 
     expect(read("generate-kit-button.tsx")).toMatch(/<button\s+data-tour=\{tour\}/);
     expect(read("book-table.tsx")).toContain('data-tour-book={isOpen ? "open" : undefined}');
     expect(read("book-tools.tsx")).toContain('data-tour="book-tools"');
+    // Report a problem: the inline "report" on a failed kit, and the widget's button.
+    expect(read("report-failure.tsx")).toMatch(/<button\s+data-tour="report-failure"\s+onClick=\{send\}/);
+    expect(read("content-cell.tsx")).toMatch(/lesson\.status === "error"[\s\S]*<ReportFailure/);
+    expect(read("report-issue-form.tsx")).toMatch(/<button\s+data-tour="report-issue"\s+onClick=\{\(\) => setOpen/);
   });
 });
 
@@ -181,6 +185,26 @@ describe("combined stops: every part's line ends a sentence, in all ten files", 
           }
         }
       }
+    }
+  });
+});
+
+// The report stop's fact is the widget's own flag: where it renders, and the
+// facts route reporting it.
+describe("Report a problem: the stop follows the widget's flag", () => {
+  const DASHBOARD = readFileSync(join(SRC, "app", "dashboard", "page.tsx"), "utf8");
+  const SCHOOL = readFileSync(join(SRC, "app", "dashboard", "school", "page.tsx"), "utf8");
+  const ROUTE = readFileSync(join(SRC, "app", "api", "sk", "walkthrough", "route.ts"), "utf8");
+  it("the widget renders on the student, teacher/parent and School dashboards under platformConsoleEnabled()", () => {
+    expect(DASHBOARD).toContain('{platformConsoleEnabled() && <ReportIssueWidget variant="student" />}');
+    expect(DASHBOARD).toContain("{platformConsoleEnabled() && <ReportIssueWidget />}");
+    expect(SCHOOL).toContain("{platformConsoleEnabled() && <ReportIssueWidget />}");
+  });
+  it("the facts route reports it for every role, and every role's report stop needs it", () => {
+    expect(ROUTE).toContain("reportIssue: platformConsoleEnabled()");
+    for (const role of WALK_ROLES) {
+      const s = WALK_STOPS[role].find((d) => d.id === "reportProblem");
+      expect(s?.needs, role).toEqual(["reportIssue"]);
     }
   });
 });

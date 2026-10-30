@@ -2708,7 +2708,9 @@
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
         "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Apabila saya bertindak bagi pihak anda, saya tunjukkan kad dahulu dan tiada apa-apa berlaku sehingga anda sahkan. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Apabila saya bertindak bagi pihak anda, saya tunjukkan kad dahulu dan tiada apa-apa berlaku sehingga anda sahkan. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Jika kit gagal, laporkan di sini dan kami akan menelitinya. Untuk perkara lain, Laporkan masalah ada di sudut kiri bawah.",
+        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya."
       },
       "student": {
         "hello": "Hai, saya SK! Saya akan tunjukkan sekeliling dalam dua minit. Ketik untuk mendengar saya, atau baca sahaja.",
@@ -2729,7 +2731,9 @@
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
         "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam bahasa anda sendiri; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam bahasa anda sendiri; 'cakap dalam bahasa Inggeris' mengulang jawapan dalam bahasa lain. Untuk melihat ini lagi, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Jika sesuatu gagal, ketik lapor di sini dan kami akan menelitinya.",
+        "reportProblemWidget": "Ada yang tidak berfungsi? Ketik di sini, di sudut kiri bawah, dan beritahu kami dalam beberapa perkataan. Kami akan menelitinya."
       },
       "parent": {
         "hello": "Helo, saya SK. Saya akan tunjukkan cara mengikuti perkembangan anak-anak anda dalam kira-kira tiga minit. Ketik untuk mendengar saya.",
@@ -2750,7 +2754,9 @@
         "homeKits": "Di atas sini ada Kit sedia guna, pelajaran siap yang boleh anda buka setiap minggu dan tambah ke Pustaka anda, dan Tutor SK, tempat saya mengajar daripada buku SketchCast.",
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
-        "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan."
+        "skMenu": "Ketik saya bila-bila masa untuk membuka menu saya: taip mesej, tunjukkan perbualan kita, hidupkan atau matikan mikrofon atau bacaan dengan kuat, atau kosongkan perbualan.",
+        "reportProblem": "Jika kit gagal, laporkan di sini dan kami akan menelitinya. Untuk perkara lain, Laporkan masalah ada di sudut kiri bawah.",
+        "reportProblemWidget": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa. Jika kit gagal, pautan lapor juga muncul tepat di sebelahnya."
       },
       "principal": {
         "hello": "Selamat datang. Saya SK, dan saya akan tunjukkan gambaran keseluruhan sekolah dalam kira-kira tiga minit. Ketik untuk mendengar saya.",
@@ -2767,7 +2773,8 @@
         "hat": "Tukar kepada peranan Guru di sini untuk menggunakan Pustaka dan Papan Bilik Darjah.",
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa, dan loceng menunjukkan perkembangannya."
       },
       "coordinator": {
         "hello": "Hai, saya SK. Semua yang anda lihat terhad kepada tahun dan subjek anda; cip ini menunjukkan bahagian anda.",
@@ -2782,7 +2789,8 @@
         "hatSettings": "Peranan Guru anda ada kelas, Pustaka dan Papan anda sendiri, dan Tetapan menyimpan apa yang saya ingat.",
         "notifications": "Loceng menunjukkan notis sekolah dan perkembangan apa-apa yang anda laporkan kepada kami.",
         "language": "Tukar bahasa aplikasi di sini. Saya akan bercakap dan menjawab dalam bahasa itu juga.",
-        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'."
+        "skAsk": "Tanya saya apa sahaja, dengan suara atau menaip, dalam mana-mana sebelas bahasa saya; 'cakap dalam bahasa Inggeris' mengulang jawapan. Untuk mengulang ini, tekan Panduan atau sebut 'Tunjukkan sekeliling'.",
+        "reportProblem": "Ada yang tidak berfungsi? Laporkan masalah, di sini di sudut kiri bawah, sampai kepada pasukan kami bila-bila masa, dan loceng menunjukkan perkembangannya."
       }
     }
   },

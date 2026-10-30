@@ -2708,7 +2708,9 @@
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
         "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta em outro idioma. Quando eu faço algo por você, mostro um cartão antes, e nada acontece até você confirmar. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta em outro idioma. Quando eu faço algo por você, mostro um cartão antes, e nada acontece até você confirmar. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Se um kit falhar, relate aqui mesmo e nós vamos verificar. Para qualquer outra coisa, Relatar um problema fica no canto inferior esquerdo.",
+        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado."
       },
       "student": {
         "hello": "Oi, eu sou o SK! Vou te mostrar tudo em dois minutos. Toque para me ouvir, ou só acompanhe a leitura.",
@@ -2729,7 +2731,9 @@
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
         "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, no seu idioma; “diga isso em inglês” repete uma resposta em outro idioma. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, no seu idioma; “diga isso em inglês” repete uma resposta em outro idioma. Para ver isto de novo, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Se algo falhar, toque no link para relatar aqui mesmo e nós vamos verificar.",
+        "reportProblemWidget": "Algo não está funcionando? Toque aqui, no canto inferior esquerdo, e conte pra gente em poucas palavras. Nós vamos verificar."
       },
       "parent": {
         "hello": "Olá, eu sou o SK. Vou te mostrar como acompanhar seus filhos em uns três minutos. Toque para me ouvir.",
@@ -2750,7 +2754,9 @@
         "homeKits": "Aqui em cima ficam os Kits prontos a usar, aulas finalizadas que você pode desbloquear toda semana e adicionar à sua Biblioteca, e o Tutor SK, onde eu ensino com os livros SketchCast.",
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
-        "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa."
+        "skMenu": "Toque em mim a qualquer momento para abrir o meu menu: escrever uma mensagem, mostrar a nossa conversa, ligar ou desligar o microfone ou a leitura em voz alta, ou limpar a conversa.",
+        "reportProblem": "Se um kit falhar, relate aqui mesmo e nós vamos verificar. Para qualquer outra coisa, Relatar um problema fica no canto inferior esquerdo.",
+        "reportProblemWidget": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora. Se um kit falhar, um link para relatar também aparece logo ao lado."
       },
       "principal": {
         "hello": "Boas-vindas. Eu sou o SK, e vou te mostrar a escola num relance em uns três minutos. Toque para me ouvir.",
@@ -2767,7 +2773,8 @@
         "hat": "Mude aqui para o seu perfil de Professor para usar a Biblioteca e a Lousa da sala de aula.",
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora, e o sino mostra o andamento."
       },
       "coordinator": {
         "hello": "Oi, eu sou o SK. Tudo o que você vai ver se limita aos seus anos e disciplinas; esta etiqueta mostra a sua parte.",
@@ -2782,7 +2789,8 @@
         "hatSettings": "Seu perfil de Professor tem suas próprias turmas, Biblioteca e Lousa, e Definições guarda o que eu lembro.",
         "notifications": "O sino mostra os avisos da escola e o andamento de tudo o que você nos relatar.",
         "language": "Mude aqui o idioma do app. Eu também falo e respondo nele.",
-        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”."
+        "skAsk": "Me pergunte o que quiser, por voz ou digitando, em qualquer um dos meus onze idiomas; “diga isso em inglês” repete uma resposta. Para rever isto, aperte Guia ou diga “Me mostra o app”.",
+        "reportProblem": "Algo não está funcionando? Relatar um problema, aqui no canto inferior esquerdo, chega à nossa equipe a qualquer hora, e o sino mostra o andamento."
       }
     }
   },

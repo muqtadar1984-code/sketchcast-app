@@ -2708,7 +2708,9 @@
         "notifications": "La campana muestra los avisos de la escuela y en qué punto está todo lo que nos has comunicado.",
         "language": "Cambia aquí el idioma de la app. Yo también hablaré y responderé en él.",
         "skMenu": "Tócame cuando quieras para abrir mi menú: escribir un mensaje, ver nuestra conversación, activar o desactivar el micrófono o la lectura en voz alta, o borrar la conversación.",
-        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en cualquiera de mis once idiomas; «dilo en inglés» repite una respuesta en otro. Cuando actúo por ti, primero te muestro una tarjeta y no pasa nada hasta que confirmes. Para volver a verlo, pulsa Guía o di «Enséñame la app»."
+        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en cualquiera de mis once idiomas; «dilo en inglés» repite una respuesta en otro. Cuando actúo por ti, primero te muestro una tarjeta y no pasa nada hasta que confirmes. Para volver a verlo, pulsa Guía o di «Enséñame la app».",
+        "reportProblem": "Si un kit falla, repórtalo aquí mismo y lo revisaremos. Para cualquier otra cosa, Reportar un problema está abajo a la izquierda.",
+        "reportProblemWidget": "¿Algo no funciona? Reportar un problema, aquí abajo a la izquierda, llega a nuestro equipo en cualquier momento. Si un kit falla, también aparece un enlace para reportarlo justo al lado."
       },
       "student": {
         "hello": "¡Hola, soy SK! Te enseño todo en dos minutos. Toca para oírme, o simplemente lee.",
@@ -2729,7 +2731,9 @@
         "notifications": "La campana muestra los avisos de la escuela y en qué punto está todo lo que nos has comunicado.",
         "language": "Cambia aquí el idioma de la app. Yo también hablaré y responderé en él.",
         "skMenu": "Tócame cuando quieras para abrir mi menú: escribir un mensaje, ver nuestra conversación, activar o desactivar el micrófono o la lectura en voz alta, o borrar la conversación.",
-        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en tu idioma; «dilo en inglés» repite una respuesta en otro. Para volver a verlo, pulsa Guía o di «Enséñame la app»."
+        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en tu idioma; «dilo en inglés» repite una respuesta en otro. Para volver a verlo, pulsa Guía o di «Enséñame la app».",
+        "reportProblem": "Si algo falla, toca el enlace para reportarlo aquí mismo y lo revisaremos.",
+        "reportProblemWidget": "¿Algo no funciona? Toca aquí, abajo a la izquierda, y cuéntanoslo en pocas palabras. Lo revisaremos."
       },
       "parent": {
         "hello": "Hola, soy SK. En unos tres minutos te enseño cómo estar al día con tus hijos. Toca para oírme.",
@@ -2750,7 +2754,9 @@
         "homeKits": "Aquí arriba están los Kits listos para usar, lecciones terminadas que puedes desbloquear cada semana y añadir a tu Biblioteca, y Tutor SK, donde enseño con los libros de SketchCast.",
         "notifications": "La campana muestra los avisos de la escuela y en qué punto está todo lo que nos has comunicado.",
         "language": "Cambia aquí el idioma de la app. Yo también hablaré y responderé en él.",
-        "skMenu": "Tócame cuando quieras para abrir mi menú: escribir un mensaje, ver nuestra conversación, activar o desactivar el micrófono o la lectura en voz alta, o borrar la conversación."
+        "skMenu": "Tócame cuando quieras para abrir mi menú: escribir un mensaje, ver nuestra conversación, activar o desactivar el micrófono o la lectura en voz alta, o borrar la conversación.",
+        "reportProblem": "Si un kit falla, repórtalo aquí mismo y lo revisaremos. Para cualquier otra cosa, Reportar un problema está abajo a la izquierda.",
+        "reportProblemWidget": "¿Algo no funciona? Reportar un problema, aquí abajo a la izquierda, llega a nuestro equipo en cualquier momento. Si un kit falla, también aparece un enlace para reportarlo justo al lado."
       },
       "principal": {
         "hello": "Bienvenido. Soy SK, y en unos tres minutos te muestro la escuela de un vistazo. Toca para oírme.",
@@ -2767,7 +2773,8 @@
         "hat": "Cambia aquí a tu rol de Profesor para usar la Biblioteca y la Pizarra del aula.",
         "notifications": "La campana muestra los avisos de la escuela y en qué punto está todo lo que nos has comunicado.",
         "language": "Cambia aquí el idioma de la app. Yo también hablaré y responderé en él.",
-        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en cualquiera de mis once idiomas; «dilo en inglés» repite una respuesta. Para repetir esto, pulsa Guía o di «Enséñame la app»."
+        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en cualquiera de mis once idiomas; «dilo en inglés» repite una respuesta. Para repetir esto, pulsa Guía o di «Enséñame la app».",
+        "reportProblem": "¿Algo no funciona? Reportar un problema, aquí abajo a la izquierda, llega a nuestro equipo en cualquier momento, y la campana muestra en qué punto está."
       },
       "coordinator": {
         "hello": "Hola, soy SK. Todo lo que verás se limita a tus grados y materias; esta etiqueta muestra tu parte.",
@@ -2782,7 +2789,8 @@
         "hatSettings": "Tu rol de Profesor tiene tus propias clases, tu Biblioteca y tu Pizarra, y Ajustes guarda lo que recuerdo.",
         "notifications": "La campana muestra los avisos de la escuela y en qué punto está todo lo que nos has comunicado.",
         "language": "Cambia aquí el idioma de la app. Yo también hablaré y responderé en él.",
-        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en cualquiera de mis once idiomas; «dilo en inglés» repite una respuesta. Para repetir esto, pulsa Guía o di «Enséñame la app»."
+        "skAsk": "Pregúntame lo que quieras, por voz o escribiendo, en cualquiera de mis once idiomas; «dilo en inglés» repite una respuesta. Para repetir esto, pulsa Guía o di «Enséñame la app».",
+        "reportProblem": "¿Algo no funciona? Reportar un problema, aquí abajo a la izquierda, llega a nuestro equipo en cualquier momento, y la campana muestra en qué punto está."
       }
     }
   },
