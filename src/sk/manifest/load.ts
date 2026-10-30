@@ -133,12 +133,55 @@ async function rowsOf(admin: ManifestAdmin, generationIds: string[]): Promise<Ar
   return ((data ?? []) as ArtifactRow[]).map((r) => ({ id: String(r.id), generation_id: String(r.generation_id), kind: String(r.kind), storage_path: String(r.storage_path), created_at: String(r.created_at) }));
 }
 
+/** An adopted catalogue copy's lineage (params.catalogue_ref, stamped by
+ * adopt_catalogue_piece 0132 / adopt_product_kit 0175 — clients cannot forge
+ * it, 0133). Null for anything that is not a copy. */
+export type CatalogueRef = { topicKitId: string | null; sourceId: string | null; articleId: string | null };
+export function catalogueRefOf(params: Record<string, unknown> | null | undefined): CatalogueRef | null {
+  const r = params?.catalogue_ref as Record<string, unknown> | undefined;
+  if (!r || typeof r !== "object") return null;
+  const id = (v: unknown) => (typeof v === "string" && UUID_RE.test(v) ? v : null);
+  const out = { topicKitId: id(r.topic_kit_id), sourceId: id(r.source_generation_id), articleId: id(r.article_id) };
+  return out.topicKitId || out.sourceId ? out : null;
+}
+
+type WorksheetPick = { id: string; params: Record<string, unknown> };
+const WS_COLS = "id, params";
+
+/** An adopted copy's worksheet: her own copy of the SAME catalogue kit's
+ * worksheet (the sibling piece the adopt made alongside the lesson), else —
+ * not copied (yet) — the kit's own worksheet, the catalogue source
+ * (topic_kits.doc_generation_ids.worksheet). Either way the same files. */
+async function siblingWorksheet(admin: ManifestAdmin, gen: GenerationRow, topicKitId: string): Promise<WorksheetPick | null> {
+  const { data } = await admin
+    .from("generations")
+    .select(WS_COLS)
+    .eq("owner_id", gen.owner_id)
+    .eq("kind", "worksheet")
+    .eq("status", "done")
+    .is("withdrawn_at", null)
+    .eq("params->catalogue_ref->>topic_kit_id", topicKitId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const mine = ((data ?? []) as { id: string; params?: Record<string, unknown> | null }[])[0];
+  if (mine) return { id: String(mine.id), params: (mine.params ?? {}) as Record<string, unknown> };
+  const { data: kit } = await admin.from("topic_kits").select("doc_generation_ids").eq("id", topicKitId).maybeSingle();
+  const wsId = ((kit as { doc_generation_ids?: Record<string, unknown> | null } | null)?.doc_generation_ids ?? {}).worksheet;
+  if (typeof wsId !== "string" || !UUID_RE.test(wsId)) return null;
+  const { data: src } = await admin.from("generations").select(WS_COLS).eq("id", wsId).eq("kind", "worksheet").eq("status", "done").is("withdrawn_at", null).maybeSingle();
+  const row = src as { id: string; params?: Record<string, unknown> | null } | null;
+  return row ? { id: String(row.id), params: (row.params ?? {}) as Record<string, unknown> } : null;
+}
+
 /** The newest DONE worksheet of the same owner on the same chapter (book kit)
- * or article (catalogue kit). One worksheet: a second version of the same
+ * or article (catalogue kit); for an adopted catalogue copy, its sibling
+ * worksheet (siblingWorksheet). One worksheet: a second version of the same
  * questions would only duplicate items (S1 choice, see docs/sk-manifest.md). */
-async function newestWorksheet(admin: ManifestAdmin, gen: GenerationRow, articleId: string | null): Promise<{ id: string; params: Record<string, unknown> } | null> {
-  let q = admin.from("generations").select("id, params").eq("owner_id", gen.owner_id).eq("kind", "worksheet").eq("status", "done").is("withdrawn_at", null);
-  if (gen.book_id && gen.chapter_ref !== null && gen.chapter_ref !== undefined) q = q.eq("book_id", gen.book_id).eq("chapter_ref", String(gen.chapter_ref));
+async function newestWorksheet(admin: ManifestAdmin, gen: GenerationRow, articleId: string | null, ref: CatalogueRef | null = null): Promise<WorksheetPick | null> {
+  const bookKit = !!gen.book_id && gen.chapter_ref !== null && gen.chapter_ref !== undefined;
+  if (!bookKit && ref?.topicKitId) return siblingWorksheet(admin, gen, ref.topicKitId);
+  let q = admin.from("generations").select(WS_COLS).eq("owner_id", gen.owner_id).eq("kind", "worksheet").eq("status", "done").is("withdrawn_at", null);
+  if (bookKit) q = q.eq("book_id", gen.book_id).eq("chapter_ref", String(gen.chapter_ref));
   else if (articleId) q = q.eq("params->>article_id", articleId);
   else return null;
   const { data } = await q.order("created_at", { ascending: false }).limit(1);
@@ -217,10 +260,12 @@ export async function loadKitInput(admin: ManifestAdmin, generationId: string): 
   if (g.withdrawn_at) throw new ManifestLoadError("generation is withdrawn", "withdrawn");
   if (g.status !== "done") throw new ManifestLoadError(`generation status is ${g.status}, not done`, "not_done");
   const params = (g.params ?? {}) as Record<string, unknown>;
-  const articleId = typeof params.article_id === "string" && params.article_id ? params.article_id : null;
+  // An adopted catalogue copy carries its article in catalogue_ref, not params.article_id.
+  const ref = catalogueRefOf(params);
+  const articleId = typeof params.article_id === "string" && params.article_id ? params.article_id : (ref?.articleId ?? null);
 
   // Presentation rows + the worksheet's rows: both are pinned.
-  const worksheet = await newestWorksheet(admin, g, articleId);
+  const worksheet = await newestWorksheet(admin, g, articleId, ref);
   const worksheetId = worksheet ? worksheet.id : null;
   const artifacts = await rowsOf(admin, worksheetId ? [g.id, worksheetId] : [g.id]);
 

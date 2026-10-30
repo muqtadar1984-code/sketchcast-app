@@ -30,9 +30,18 @@
 //
 // deriveAndStore never throws: every failure is written as `failed` and
 // returned as such.
+//
+// ONE MAP PER SET OF FILES (2026-10-31). An adopted catalogue kit is a copy
+// over the source's own files, so before any model call deriveAndStore looks
+// for a DONOR: a `ready` manifest of another generation with the same script
+// (sk_manifests.script_id: the catalogue source's, or another teacher's copy
+// of it) whose pinned files, scripts and items are exactly this kit's
+// (derive.ts rebaseManifest). Found and still fresh: re-pinned to this
+// generation and stored `ready`, no model call. Only the first copy of a
+// source pays for a derivation.
 
 import type { ArtifactRow, KitManifest, ManifestSegment, ModelAssignment, ModelItem, ModelPasses } from "./derive";
-import { assemble, assertNoMisleadingFrame, buildSegments, mechanicalItem, movesOf, parseModelJson, segmentsNeedingModel } from "./derive";
+import { assemble, assertNoMisleadingFrame, buildSegments, mechanicalItem, movesOf, parseModelJson, rebaseManifest, segmentsNeedingModel } from "./derive";
 import { CONCEPT_PROMPT_VERSION, conceptPrompt, itemPrompt } from "./prompts";
 import { loadKitInput, ManifestLoadError, type LoadedKit, type ManifestAdmin } from "./load";
 import { readManifest, readRow, type ManifestRow, type ReadResult } from "./store";
@@ -58,7 +67,47 @@ export type DeriveOptions = {
   call?: ModelCall;
   /** Test seam: replaces loadKitInput. */
   load?: (admin: ManifestAdmin, generationId: string) => Promise<LoadedKit>;
+  /** false: never copy another generation's manifest (always derive). Default true. */
+  donors?: boolean;
 };
+
+export const DONOR_CANDIDATES = 10;
+
+/** A fresh `ready` manifest of another generation over exactly these files,
+ * re-pinned to this one (rebaseManifest), or null. Candidates share the
+ * script (sk_manifests.script_id); each is re-verified through readManifest
+ * (which flips a drifted donor stale) before it is used. Never throws. */
+export async function donorManifest(admin: ManifestAdmin, kit: LoadedKit, now: Date): Promise<KitManifest | null> {
+  try {
+    const ids = kit.input.scripts
+      .slice()
+      .sort((a, b) => (a.part ?? 1) - (b.part ?? 1))
+      .map((x) => x.script.script_id || "");
+    if (!ids.length || ids.some((x) => !x)) return null;
+    const { data, error } = await admin
+      .from("sk_manifests")
+      .select("generation_id, manifest")
+      .eq("script_id", ids.join(","))
+      .eq("status", "ready")
+      .order("built_at", { ascending: false })
+      .limit(DONOR_CANDIDATES);
+    if (error || !Array.isArray(data)) return null;
+    const at = now.toISOString();
+    for (const row of data as { generation_id: string; manifest: KitManifest | null }[]) {
+      const donorId = String(row.generation_id);
+      if (!row.manifest || donorId === kit.input.generation_id) continue;
+      if (!rebaseManifest(row.manifest, donorId, kit.input, at)) continue;
+      const fresh = await readManifest(admin, donorId, now);
+      if (fresh.status !== "ready") continue;
+      const m = rebaseManifest(fresh.manifest, donorId, kit.input, at);
+      if (m) return m;
+    }
+    return null;
+  } catch (e) {
+    console.warn("sk-manifest: donor lookup failed", (e as Error).message);
+    return null;
+  }
+}
 
 export async function defaultModelCall(req: { model: string; system: string; user: string; maxTokens: number }): Promise<{ text: string; usage: ModelUsage }> {
   const client = claudeClient();
@@ -180,7 +229,47 @@ async function writeFailed(admin: ManifestAdmin, generationId: string, reason: s
   }
 }
 
-export type DeriveStats = { segments: number; items: number; conceptsToModel: number; itemsToModel: number; visualCarried: number; usage: { input_tokens: number; output_tokens: number; usd: number } };
+export type DeriveStats = {
+  segments: number;
+  items: number;
+  conceptsToModel: number;
+  itemsToModel: number;
+  visualCarried: number;
+  usage: { input_tokens: number; output_tokens: number; usd: number };
+  /** The donor generation when the manifest was copied, not derived. */
+  copiedFrom?: string;
+};
+
+/** The claimed (`building`) row becomes `ready` with this manifest. */
+async function writeReady(admin: ManifestAdmin, generationId: string, m: KitManifest, usage: DeriveStats["usage"], visual: string, now: Date): Promise<void> {
+  const { error } = await admin
+    .from("sk_manifests")
+    .update({
+      manifest_id: m.manifest_id,
+      script_id: m.pinned.script_ids.filter(Boolean).join(",") || null,
+      video_manifest_id: m.pinned.video_manifest_ids.filter(Boolean).join(",") || null,
+      format_version: m.pinned.format_version === null ? null : String(m.pinned.format_version),
+      artifact_hash: m.pinned.artifacts_hash,
+      artifact_paths: m.pinned.artifact_paths,
+      manifest: m,
+      completeness: m.completeness,
+      derived_by: {
+        model: m.derived_by.model,
+        prompt_versions: m.derived_by.prompt_versions,
+        at: m.derived_by.at,
+        usage,
+        visual,
+        ...(m.derived_by.copied_from ? { copied_from: m.derived_by.copied_from } : {}),
+      },
+      status: "ready",
+      stale_reason: null,
+      built_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    })
+    .eq("generation_id", generationId)
+    .eq("status", "building");
+  if (error) throw new Error(`sk_manifests write failed: ${(error as { message?: string }).message ?? "unknown"}`);
+}
 
 /** Derive the manifest for one presentation and store it. Returns the read
  * result afterwards (ready | building | failed …) and never throws. */
@@ -201,6 +290,13 @@ export async function deriveAndStore(admin: ManifestAdmin, generationId: string,
   try {
     const kit = await load(admin, generationId);
     const input = kit.input;
+    const copied = opts.donors === false ? null : await donorManifest(admin, kit, now);
+    if (copied) {
+      const usage = { input_tokens: 0, output_tokens: 0, usd: 0 };
+      await writeReady(admin, generationId, copied, usage, `copied from ${copied.derived_by.copied_from} (no model call)`, now);
+      const stats: DeriveStats = { segments: copied.segments.length, items: copied.items.length, conceptsToModel: 0, itemsToModel: 0, visualCarried: 0, usage, copiedFrom: copied.derived_by.copied_from };
+      return { ...(await readManifest(admin, generationId, now)), stats };
+    }
     const segs = buildSegments(input.scripts, input.artifacts, input.generation_id);
     if (segs.length > MAX_SEGMENTS) throw new Error(`too large: ${segs.length} segments > ${MAX_SEGMENTS}`);
     if (input.items.length > MAX_ITEMS) throw new Error(`too large: ${input.items.length} items > ${MAX_ITEMS}`);
@@ -264,26 +360,7 @@ export async function deriveAndStore(admin: ManifestAdmin, generationId: string,
       m.derived_by.prompt_versions = Array.from(pv);
     }
 
-    const { error } = await admin
-      .from("sk_manifests")
-      .update({
-        manifest_id: m.manifest_id,
-        script_id: m.pinned.script_ids.filter(Boolean).join(",") || null,
-        video_manifest_id: m.pinned.video_manifest_ids.filter(Boolean).join(",") || null,
-        format_version: m.pinned.format_version === null ? null : String(m.pinned.format_version),
-        artifact_hash: m.pinned.artifacts_hash,
-        artifact_paths: m.pinned.artifact_paths,
-        manifest: m,
-        completeness: m.completeness,
-        derived_by: { model: m.derived_by.model, prompt_versions: m.derived_by.prompt_versions, at: m.derived_by.at, usage, visual: carried ? `carried ${carried} verdict(s) from the previous manifest` : S1_VISUAL_REASON },
-        status: "ready",
-        stale_reason: null,
-        built_at: now.toISOString(),
-        updated_at: now.toISOString(),
-      })
-      .eq("generation_id", generationId)
-      .eq("status", "building");
-    if (error) throw new Error(`sk_manifests write failed: ${(error as { message?: string }).message ?? "unknown"}`);
+    await writeReady(admin, generationId, m, usage, carried ? `carried ${carried} verdict(s) from the previous manifest` : S1_VISUAL_REASON, now);
 
     const stats: DeriveStats = { segments: m.segments.length, items: m.items.length, conceptsToModel, itemsToModel, visualCarried: carried, usage };
     const r = await readManifest(admin, generationId, now);

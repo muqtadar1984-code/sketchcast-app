@@ -353,14 +353,17 @@ describe("deriveAndStore — concurrent model passes (fix/sk-speed)", () => {
     expect(peak).toBe(2);
     // The fixture predates S3 slice A, which added derivation_version (and folds it
     // into manifest_id): those two fields are compared separately below.
+    // pinned.generation_ids (2026-10-31) postdates it too.
     const strip = (m: unknown) => {
-      const c = JSON.parse(JSON.stringify(m)) as { derived_by: Record<string, unknown>; derivation_version?: number; manifest_id?: string };
+      const c = JSON.parse(JSON.stringify(m)) as { derived_by: Record<string, unknown>; derivation_version?: number; manifest_id?: string; pinned: Record<string, unknown> };
       delete c.derived_by.at;
       delete c.derivation_version;
       delete c.manifest_id;
+      delete c.pinned.generation_ids;
       return c;
     };
     expect(strip(r.manifest)).toEqual(strip(sequential));
+    expect(r.manifest.pinned.generation_ids).toEqual([GEN, WS]);
     expect(r.manifest.derivation_version).toBe(MANIFEST_DERIVATION_VERSION);
     expect(r.manifest.manifest_id).toMatch(/^[0-9a-f]{24}$/);
     expect(r.manifest.manifest_id).not.toBe((sequential as { manifest_id: string }).manifest_id);

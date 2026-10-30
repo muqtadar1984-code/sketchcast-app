@@ -263,6 +263,12 @@ export type KitManifest = {
     format_version: number | null;
     artifact_paths: string[];
     artifacts_hash: string;
+    /** The generations whose artifacts rows were pinned (the presentation's,
+     *  the worksheet's). Absent on manifests built before 2026-10-31: the read
+     *  path then takes them from the paths (store.ts pinnedGenerationIds) —
+     *  which is wrong for an adopted catalogue copy, whose rows live under the
+     *  SOURCE generation's folder. */
+    generation_ids?: string[];
   };
   completeness: {
     video: "ok" | "missing" | "partial";
@@ -276,7 +282,15 @@ export type KitManifest = {
   concepts: { concept_id: string; name: string; definition: string; segment_ids: string[] }[];
   items: ManifestItem[];
   retrieval: { fts: "chapter_grounding.script_text" | "topic_articles.sections" | "none" };
-  derived_by: { model: string | null; prompt_versions: string[]; at: string; usage?: { input_tokens: number; output_tokens: number; usd: number } };
+  derived_by: {
+    model: string | null;
+    prompt_versions: string[];
+    at: string;
+    usage?: { input_tokens: number; output_tokens: number; usd: number };
+    /** Set when this manifest is another generation's, re-pinned to this one
+     *  (same files, no model call): that generation's id. */
+    copied_from?: string;
+  };
 };
 
 // ── T1–T3: segments ─────────────────────────────────────────────────────────
@@ -613,6 +627,7 @@ export function assemble(input: KitInput, passes: ModelPasses, at: string): KitM
       format_version: input.format_version,
       artifact_paths: pinnedRows.map((r) => r.storage_path).sort(),
       artifacts_hash,
+      generation_ids: pinnedGenerationIdsOf(input),
     },
     completeness,
     moves: { intro: "unavailable", segment: "unavailable", slide: "unavailable", practise: "unavailable", walkthrough: "unavailable", explain: "available", remediate: "unavailable" },
@@ -623,6 +638,100 @@ export function assemble(input: KitInput, passes: ModelPasses, at: string): KitM
     derived_by: { model: passes.model, prompt_versions, at, usage: passes.usage },
   };
   m.moves = movesOf(completeness, segments, items);
+  return m;
+}
+
+/** The presentation and every generation whose rows the input pins, in that order. */
+export function pinnedGenerationIdsOf(input: Pick<KitInput, "generation_id" | "artifacts">): string[] {
+  return Array.from(new Set([input.generation_id, ...input.artifacts.map((r) => r.generation_id)]));
+}
+
+// ── one lesson map per set of files (2026-10-31) ────────────────────────────
+//
+// An adopted catalogue kit is a COPY: new generation rows over the SAME
+// storage files (adopt_catalogue_piece 0132 / adopt_product_kit 0175). Every
+// copy of one source would derive the same manifest with the same model calls,
+// so a manifest that another generation already holds for exactly these files
+// is RE-PINNED to this one instead: the segments are rebuilt mechanically from
+// this generation's script (they must match the donor's keys one for one), the
+// donor's concept and visual verdicts are carried by key, and its items are
+// carried with this kit's worksheet id in their q_id. Everything that names a
+// generation or a row is this generation's; the hash is over this
+// generation's rows. Null when the files, the scripts or the items differ in
+// any way (then the kit is derived as usual).
+
+const sortedEq = (a: readonly string[], b: readonly string[]): boolean => {
+  if (a.length !== b.length) return false;
+  const x = a.slice().sort();
+  const y = b.slice().sort();
+  return x.every((v, i) => v === y[i]);
+};
+
+/** A worksheet item's q_id without its `ws:<8 of the worksheet id>:` prefix (load.ts). */
+const qTail = (q: string): string => /^ws:[^:]+:(.+)$/.exec(q)?.[1] ?? q;
+
+export function rebaseManifest(donor: KitManifest, donorGenerationId: string, input: KitInput, at: string): KitManifest | null {
+  if (!donor || !donor.pinned || !Array.isArray(donor.segments) || !Array.isArray(donor.items)) return null;
+  if ((donor.derivation_version ?? 1) !== MANIFEST_DERIVATION_VERSION || donor.schema !== MANIFEST_SCHEMA) return null;
+  // format_version is NOT compared: a copy's params carry only its lineage
+  // (adopt 0132/0175), so the catalogue source (3) and its copies (none) differ
+  // over identical files. The re-pinned manifest pins THIS generation's value.
+  if (!sortedEq(donor.pinned.artifact_paths, input.artifacts.map((r) => r.storage_path))) return null;
+  const byPart = input.scripts.slice().sort((a, b) => partOf(a) - partOf(b));
+  if (byPart.map((s) => s.script.script_id || "").join(",") !== donor.pinned.script_ids.join(",")) return null;
+  if (byPart.map((s) => s.video.manifest_id || "").join(",") !== donor.pinned.video_manifest_ids.join(",")) return null;
+
+  // segments: this generation's, mechanically; verdicts carried by key
+  const segments = buildSegments(input.scripts, input.artifacts, input.generation_id);
+  const donorSeg = new Map(donor.segments.map((x) => [x.key, x] as const));
+  if (segments.length !== donor.segments.length) return null;
+  for (const seg of segments) {
+    const d = donorSeg.get(seg.key);
+    if (!d || d.slide_k !== seg.slide_k) return null;
+    seg.concept = { ...d.concept, secondary: [...(d.concept.secondary ?? [])] };
+    seg.visual = { ...d.visual, judged_by: { ...d.visual.judged_by } };
+    if (d.visual_metrics) seg.visual_metrics = { ...d.visual_metrics };
+  }
+
+  // items: the donor's, under this kit's worksheet; the q_ids must be exactly this input's
+  const wanted = new Map(input.items.map((i) => [qTail(i.q_id), i] as const));
+  if (wanted.size !== input.items.length || wanted.size !== donor.items.length) return null;
+  const items: ManifestItem[] = [];
+  for (const d of donor.items) {
+    const src = wanted.get(qTail(d.q_id));
+    if (!src || src.source !== d.source || promptHash(src.prompt) !== d.prompt_hash) return null;
+    wanted.delete(qTail(d.q_id));
+    items.push({ ...d, q_id: src.q_id, generation_id: src.generation_id, concept_ids: [...d.concept_ids], segment_ids: [...d.segment_ids] });
+  }
+  if (wanted.size) return null;
+
+  const artifacts_hash = artifactsHash(input.artifacts);
+  const prompt_versions = [...donor.derived_by.prompt_versions];
+  const m: KitManifest = {
+    ...donor,
+    derivation_version: MANIFEST_DERIVATION_VERSION,
+    manifest_id: createHash("sha256").update(`${input.generation_id}|${artifacts_hash}|${prompt_versions.join(",")}|d${MANIFEST_DERIVATION_VERSION}`).digest("hex").slice(0, 24),
+    generation_id: input.generation_id,
+    book_id: input.book_id,
+    chapter_ref: input.chapter_ref,
+    article_id: input.article_id,
+    language: input.language,
+    format_version: input.format_version,
+    pinned: {
+      script_ids: [...donor.pinned.script_ids],
+      video_manifest_ids: [...donor.pinned.video_manifest_ids],
+      format_version: input.format_version,
+      artifact_paths: input.artifacts.map((r) => r.storage_path).sort(),
+      artifacts_hash,
+      generation_ids: pinnedGenerationIdsOf(input),
+    },
+    segments,
+    concepts: donor.concepts.map((c) => ({ ...c, segment_ids: [...c.segment_ids] })),
+    items,
+    derived_by: { model: donor.derived_by.model, prompt_versions, at, usage: { input_tokens: 0, output_tokens: 0, usd: 0 }, copied_from: donorGenerationId },
+  };
+  m.completeness = completenessOf(input, items);
+  m.moves = movesOf(m.completeness, segments, items);
   return m;
 }
 
