@@ -6,6 +6,8 @@
 import type { SkCapabilityMeta, SkContext } from "./types";
 import { SK_NOTHING_ON_THAT } from "./types";
 import type { SkMemory } from "./memory";
+import { NAV_LABEL } from "@/sk/capabilities/navigate";
+import { LANG_INFO } from "./language";
 
 export const SK_SHELL_PROMPT_VERSION = "sk-shell-1.0";
 export const SK_SUPPLEMENTARY_LEAD = "this is not in your data, but";
@@ -170,8 +172,57 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
 
 const NUMBER_RE = /\d+(?:[.,:/]\d+)*%?/g;
 const WORD_RE = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
-/** Words SK may always capitalise. */
-const ALWAYS_OK: ReadonlySet<string> = new Set(["i", "sk", "sketchcast", "ok", "okay"]);
+/**
+ * SK's own product vocabulary (founder 2026-10-30: "Hi, I'm SK." and "… or
+ * run a lesson on the Board." were dropped as unsupported names, and an
+ * answer with every sentence dropped reads "I have nothing on that"). The
+ * app's page names (navigate.ts NAV_LABEL, the same labels the header shows)
+ * plus the feature words SK uses to describe itself. Split into words: the
+ * check is per word ("Classroom Board" → classroom, board).
+ */
+export const SK_PRODUCT_TERMS: readonly string[] = [
+  ...Object.values(NAV_LABEL),
+  "Board", "Classroom Board", "Library", "Diary", "Kits", "Kit", "Ready-made", "SK Tutor", "Tutor", "Analytics", "My Analytics",
+  "Notices", "Notice", "Notifications", "Classes", "Class", "Students", "Settings", "Tour", "Deck", "Plan", "Activities", "Worksheet",
+  "Test paper", "Case study", "Answer key", "Revision papers", "Exam", "Assign", "Upload", "Scan", "My books", "Health", "Lesson",
+  "Lessons", "Presentation", "Generate", "Present mode", "Catalogue", "Credits", "Home",
+];
+
+/** Weekdays and months (and their short forms) — capitalised in English and
+ *  Malay; the other app languages write them lower-case or in scripts
+ *  without case. "due Friday" is a date, not a name. */
+const CALENDAR_WORDS: readonly string[] = [
+  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  "mon", "tue", "tues", "wed", "thu", "thur", "thurs", "fri", "sat", "sun",
+  "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+  "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+  "isnin", "selasa", "rabu", "khamis", "jumaat", "sabtu", "ahad",
+  "januari", "februari", "mac", "mei", "julai", "ogos", "oktober", "disember",
+];
+
+/** The languages SK answers in, by their English and their own names
+ *  (language.ts LANG_INFO), plus the common short forms. */
+const LANGUAGE_WORDS: readonly string[] = [
+  ...Object.values(LANG_INFO).flatMap((l) => [l.english, l.own]),
+  "English", "Malay", "Arabic", "Hindi", "Marathi", "Telugu", "Chinese", "Mandarin", "French", "Spanish", "Portuguese", "Jawi", "Melayu", "Bahasa",
+];
+
+const termWords = (terms: readonly string[]) => terms.flatMap((t) => t.split(/[\s()]+/u)).map((w) => normToken(w)).filter(Boolean);
+
+/** Words SK may always capitalise: itself, its contractions ("I'm"), its own
+ *  product words, calendar words and the language names. Real names (people,
+ *  schools, places, titles) are still checked against the support. */
+const ALWAYS_OK: ReadonlySet<string> = new Set([
+  "i", "i'm", "i've", "i'll", "i'd", "sk", "sketchcast", "ok", "okay",
+  ...termWords(SK_PRODUCT_TERMS),
+  ...termWords(CALENDAR_WORDS),
+  ...termWords(LANGUAGE_WORDS),
+]);
+
+/** ALWAYS_OK with the apostrophe made plain (I’m = I'm). */
+function alwaysOk(t: string): boolean {
+  return ALWAYS_OK.has(t.replace(/’/g, "'"));
+}
 
 function normToken(t: string): string {
   return t
@@ -324,7 +375,7 @@ export function groundingCheck(text: string, support: unknown[], question: strin
     words.forEach((w, i) => {
       if (i === 0 || !isCapitalised(w)) return;
       const t = normToken(w);
-      if (!t || ALWAYS_OK.has(t) || ok.has(t)) return;
+      if (!t || alwaysOk(t) || ok.has(t)) return;
       bad.push(w);
     });
     if (bad.length) {
