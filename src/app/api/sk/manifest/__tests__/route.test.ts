@@ -199,6 +199,14 @@ describe("POST", () => {
     expect(mocks.audit[0]).toMatchObject({ ok: false, error: "not_done: generation status is processing, not done", result: { status: "failed", reason: "not_done: generation status is processing, not done" } });
   });
 
+  it("the id in the query string (the Board's shape until 2026-10-31) still derives and audits", async () => {
+    const res = await POST(new Request(`http://x/api/sk/manifest?generationId=${GEN}`, { method: "POST" }));
+    expect(res.status).toBe(200);
+    expect(mocks.deriveAndStore).toHaveBeenCalledWith(expect.anything(), GEN);
+    expect(mocks.audit).toHaveLength(1);
+    expect(mocks.audit[0]).toMatchObject({ action: "manifest.build", generation_id: GEN });
+  });
+
   it("building (someone else's claim) is ok=true", async () => {
     mocks.deriveAndStore.mockResolvedValue({ status: "building" });
     expect(await (await post({ generationId: GEN })).json()).toEqual({ status: "building" });
