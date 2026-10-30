@@ -26,7 +26,7 @@ vi.mock("@/utils/assistant/providers/anthropic", async () => {
 });
 
 import { POST as turnPOST } from "@/app/api/sk/shell/turn/route";
-import { fakeSession, readEvents } from "@/sk/shell/__tests__/fixtures";
+import { NOW, fakeSession, readEvents } from "@/sk/shell/__tests__/fixtures";
 import { __setParentMasteryForTests, type ChildMasteryRow } from "@/sk/parent-mastery";
 import { MASTERY, PA, TABLES } from "@/sk/capabilities/__tests__/parent-fixtures";
 
@@ -35,6 +35,10 @@ const saved: Record<string, string | undefined> = {};
 const EMAIL = "parent.a@family.example";
 
 beforeEach(() => {
+  // The fixtures date work around NOW (g2 is due 2026-10-30 10:00Z); the route
+  // reads the real clock, so pin it or "overdue" changes with the calendar.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   for (const k of ENV) {
     saved[k] = process.env[k];
     delete process.env[k];
@@ -54,6 +58,7 @@ beforeEach(() => {
   __setParentMasteryForTests({ admin: () => ({ from: () => ({}) }), reader: async (_a, id): Promise<ChildMasteryRow[]> => MASTERY[id] ?? [] });
 });
 afterEach(() => {
+  vi.useRealTimers();
   for (const k of ENV) {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
