@@ -164,7 +164,12 @@ describe("the speech bubble: beside the avatar, toward the page", () => {
     expect(src).toContain('else if (!walkRef.current?.narrating) dispatchBubble({ type: "sentence", text: c.text, lang: c.lang, at: Date.now() });');
     expect(src).toContain('if (!c) dispatchBubble({ type: "speechEnd", at: Date.now() });');
     expect(src).toContain("if (readAloudRef.current && coord) return;");
-    expect(src).toContain('if (error) dispatchBubble({ type: "error", text: error, at: Date.now() });');
+    expect(src).toContain('const show = () => dispatchBubble({ type: "error", text: error, at: Date.now() });');
+    // The warm start's own error waits for the greeting instead of replacing it.
+    expect(src).toContain("if (Date.now() - mountedAtRef.current > WARM_START_WINDOW_MS) return show();");
+    expect(src).toContain("const t = window.setTimeout(show, GREETING_MIN_MS);");
+    // A failed warm start still greets, with the standard line.
+    expect(src).toContain("setGreeting((g) => g ?? copy.greetingFallback);");
     expect(src).toContain("if (!shouldGreet({ home: greet, greeted, tour: tourOn, text: greeting })) return;");
     expect(src).toContain('if (!sheetOpenRef.current) dispatchBubble({ type: "confirm", text: copy.corner.needConfirm, at: Date.now() });');
     // One fade timer, decided by bubble.ts.
