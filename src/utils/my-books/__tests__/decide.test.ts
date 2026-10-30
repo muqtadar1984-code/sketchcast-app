@@ -1,6 +1,7 @@
 // SK S7 K3 — the My books access decision: finals only, skAccess for the
-// reader, verified children's grants labelled, withdrawn books only for
-// readers who held them before the withdrawal, superseded → the newest final.
+// reader (a live grant ONLY — a licence or plan opens no book, 2026-10-30),
+// verified children's grants labelled, withdrawn books only for readers who
+// held them before the withdrawal, superseded → the newest final.
 // Run: node node_modules/vitest/vitest.mjs run src/utils/my-books/__tests__/decide.test.ts
 import { describe, expect, it } from "vitest";
 import { decideMyBooks, type MyBooksInput } from "../decide";
@@ -18,6 +19,9 @@ const input = (over: Partial<MyBooksInput> = {}): MyBooksInput => ({
   ...over,
 });
 const ids = (i: MyBooksInput) => decideMyBooks(i).map((b) => b.productId);
+/** A grant on EVERY product, made after Old Chemistry's withdrawal (2026-10-15): a new reader of each. */
+const allGrants = (source = "staff") =>
+  [P_BIO, P_ALG, P_OLD, P_DRAFT, P_LEGACY].map((product_id) => grant({ user_id: ME, product_id, source, activated_at: "2026-10-20T00:00:00Z" }));
 
 describe("decideMyBooks — who sees what", () => {
   it("no access → nothing (the strip is hidden)", () => {
@@ -52,16 +56,26 @@ describe("decideMyBooks — who sees what", () => {
     expect(ids(input({ grants: [grant({ user_id: ME, product_id: P_BIO, expires_at: "2026-10-20T00:00:00Z" })] }))).toEqual([]);
   });
 
-  it("a school licence or an SK subscription lists every LIVE final — never the withdrawn, draft or legacy one", () => {
+  it("a school licence or an SK subscription ALONE lists nothing — books are bought (founder 2026-10-30)", () => {
+    const family = [{ plan_key: "family_monthly", active: true, current_period_end: null }];
+    expect(ids(input({ schoolLicence: true }))).toEqual([]);
+    expect(ids(input({ subscriptions: family }))).toEqual([]);
+    // with a grant, the licence / plan reader sees exactly the granted book
+    expect(ids(input({ schoolLicence: true, grants: [grant({ user_id: ME, product_id: P_BIO })] }))).toEqual([P_BIO]);
+    expect(ids(input({ subscriptions: family, grants: [grant({ user_id: ME, product_id: P_ALG })] }))).toEqual([P_ALG]);
+  });
+
+  it("grants on every product list every LIVE final — never the withdrawn, draft or legacy one — whatever the plan", () => {
     const want = [P_BIO, P_ALG].sort();
-    expect(ids(input({ schoolLicence: true })).sort()).toEqual(want);
-    expect(ids(input({ subscriptions: [{ plan_key: "family_monthly", active: true, current_period_end: null }] })).sort()).toEqual(want);
-    // a plan without SK does not
-    expect(ids(input({ subscriptions: [{ plan_key: "teacher_pro_monthly", active: true, current_period_end: null }] }))).toEqual([]);
+    expect(ids(input({ grants: allGrants() })).sort()).toEqual(want);
+    expect(ids(input({ schoolLicence: true, grants: allGrants("purchase") })).sort()).toEqual(want);
+    expect(ids(input({ subscriptions: [{ plan_key: "family_monthly", active: true, current_period_end: null }], grants: allGrants() })).sort()).toEqual(want);
+    // a plan without SK changes nothing either way
+    expect(ids(input({ subscriptions: [{ plan_key: "teacher_pro_monthly", active: true, current_period_end: null }], grants: allGrants() })).sort()).toEqual(want);
   });
 
   it("tiles are sorted by title", () => {
-    expect(decideMyBooks(input({ schoolLicence: true })).map((b) => b.title)).toEqual(["Biology: Cells", "Mastering Linear Equations"]);
+    expect(decideMyBooks(input({ grants: allGrants() })).map((b) => b.title)).toEqual(["Biology: Cells", "Mastering Linear Equations"]);
   });
 });
 
@@ -82,7 +96,7 @@ describe("decideMyBooks — drafts are never listed", () => {
   });
 
   it("a product with no work_uid (the old W2 import) is not a release-backed book", () => {
-    expect(ids(input({ schoolLicence: true }))).not.toContain(P_LEGACY);
+    expect(ids(input({ grants: allGrants() }))).not.toContain(P_LEGACY);
   });
 });
 
@@ -124,8 +138,8 @@ describe("decideMyBooks — withdrawn and superseded releases", () => {
   });
 
   it("a withdrawn book disappears for NEW readers — licence, subscription, or a grant made after the withdrawal", () => {
-    expect(ids(input({ schoolLicence: true }))).not.toContain(P_OLD);
-    expect(ids(input({ subscriptions: [{ plan_key: "homeschool_annual", active: true, current_period_end: null }] }))).not.toContain(P_OLD);
+    expect(ids(input({ schoolLicence: true, grants: allGrants() }))).not.toContain(P_OLD);
+    expect(ids(input({ subscriptions: [{ plan_key: "homeschool_annual", active: true, current_period_end: null }], grants: allGrants() }))).not.toContain(P_OLD);
     expect(ids(input({ grants: [grant({ user_id: ME, product_id: P_OLD, activated_at: "2026-10-20T00:00:00Z" })] }))).toEqual([]);
   });
 
@@ -144,7 +158,7 @@ describe("decideMyBooks — withdrawn and superseded releases", () => {
 
   it("withdrawn before the importer ran (product still approved) behaves the same", () => {
     const products = PRODUCTS.map((p) => (p.id === P_OLD ? { ...p, status: "approved", release_id: 30, release_kind: "final" } : p));
-    expect(ids(input({ products, schoolLicence: true }))).not.toContain(P_OLD);
+    expect(ids(input({ products, grants: allGrants() }))).not.toContain(P_OLD);
     expect(ids(input({ products, grants: [grant({ user_id: ME, product_id: P_OLD })] }))).toEqual([P_OLD]);
   });
 

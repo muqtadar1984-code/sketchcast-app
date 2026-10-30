@@ -12,8 +12,9 @@
 //     decision 5: "replaces the text for existing buyers automatically").
 //     A draft release is never a tile and never a file, whatever the product
 //     row says.
-//   * ACCESS is skAccess(): school licence → subscription → grant (purchase,
-//     code, edition code, staff, promo). Not gated by any SK flag: this is
+//   * ACCESS is skAccess(): a live grant ONLY (purchase, code, edition code,
+//     staff, promo) — a school licence or subscription opens tutoring, never
+//     a book (founder 2026-10-30). Not gated by any SK flag: this is
 //     the Library, and a bought book shows even while SK itself is restricted.
 //   * PARENTS also see books granted to their VERIFIED children (the same
 //     reach the book_access_grants RLS gives them), labelled "for <child>".

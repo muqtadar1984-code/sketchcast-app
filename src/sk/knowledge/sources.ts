@@ -6,8 +6,9 @@
 //   sketchcast_book  products whose LIVE release is a FINAL (release_kind
 //                    'final', a release_id, approved, linked to a work) and
 //                    where skAccess(user, product).book_access is true: a
-//                    purchase, code, edition-code or staff grant, a school
-//                    licence, or a subscription. NEVER a draft (founder
+//                    purchase, code, edition-code or staff grant ONLY — a
+//                    school licence or a subscription opens tutoring, never a
+//                    book (founder 2026-10-30). NEVER a draft (founder
 //                    2026-10-30: "completed books only, no drafts"). A
 //                    parent acting for ONE verified child (S4's verified-link
 //                    rule, child-scope.ts) also gets that child's books.

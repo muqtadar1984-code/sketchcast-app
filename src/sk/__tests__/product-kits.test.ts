@@ -128,10 +128,12 @@ describe("canOpenKit — product entitlement AND the kit is mapped to that produ
     expect((await kits.canOpenKit(STUDENT, SLUG, RESP)).ok).toBe(true);
   });
 
-  it("a school licence entitles too (no grant needed)", async () => {
-    const { kits } = world();
+  it("a school licence alone does not entitle (books are bought); with a purchase grant it opens, source school", async () => {
+    const { db, kits } = world();
+    expect(await kits.canOpenKit(SCHOOL_KID, PRODUCT, CELLS)).toEqual({ ok: false, reason: "not_entitled" });
+    db.seed("book_access_grants", [grant(SCHOOL_KID, { source: "purchase", tutor_expires_at: null })]);
     const r = await kits.canOpenKit(SCHOOL_KID, PRODUCT, CELLS);
-    expect(r.ok && r.source).toBe("school");
+    expect(r.ok && r.source).toBe("school"); // the licence still decides tutoring
   });
 
   it("an unmapped generation is refused even when entitled — as is one mapped to ANOTHER product, a withdrawn one, or a non-uuid", async () => {

@@ -3,10 +3,11 @@
  * (in-memory store + static entitlements; Supabase store + Supabase
  * entitlements over the strict fake of 0022/0156/0157/0158/0159):
  *
- *   who may open      a school licence, an SK plan, or a live grant for the
- *                     product → the session opens; nobody else (403, reason
- *                     "no_book_access"); the founder's staff grant is the
- *                     default seed and must keep working;
+ *   who may open      a live grant for the product → the session opens;
+ *                     nobody else (403, reason "no_book_access") — a school
+ *                     licence or an SK plan ALONE tutors but opens no book
+ *                     (books are bought, 2026-10-30); the founder's staff
+ *                     grant is the default seed and must keep working;
  *   who may ask live  tutoring access with allowance left; with the window
  *                     over or the allowance spent the session still opens
  *                     and commands / checks run, but a free-text question
@@ -51,6 +52,8 @@ const silentRouter = () => new StubProvider([{ text: [] }]);
 
 const expiredTutor = (now: number): AccessSeed => ({ grants: [{ ...staffGrant(now), source: "code", tutor_expires_at: new Date(now - DAY).toISOString() }] });
 const metered = (now: number, live_turns: number): AccessSeed => ({ grants: [{ ...staffGrant(now), source: "edition_code", usage_allowance: { live_turns } }] });
+/** A bought book with no tutor window of its own: tutoring, if any, comes from a licence or a plan. */
+const bought = (now: number) => ({ ...staffGrant(now), source: "purchase", tutor_expires_at: null });
 
 describe.each(LOOP_WIRINGS)("B8 access and metering in the loop — $name", ({ make }) => {
   const withProviders = (opts: HarnessOpts, p: { teacher?: StubProvider; router?: StubProvider } = {}) => {
@@ -79,17 +82,24 @@ describe.each(LOOP_WIRINGS)("B8 access and metering in the loop — $name", ({ m
       const expiredBook = withProviders({ access: { grants: [{ ...staffGrant(T0), expires_at: new Date(T0 - 1000).toISOString() }] } });
       await expect(open(expiredBook)).rejects.toMatchObject({ status: 403 });
     });
-    it("a school licence opens with tutoring (source school); so does an SK plan (source subscription, ends with the period)", async () => {
-      const school = withProviders({ access: { schoolLicence: true } });
-      expect((await sessionView(school.deps, await open(school))).access).toMatchObject({ source: "school", tutor: true, tutorExpiresAt: null });
+    it("a school licence or an SK plan ALONE does not open (403 no_book_access); with a bought copy it opens, tutored by the licence / plan", async () => {
       const end = new Date(T0 + 20 * DAY).toISOString();
-      const plan = withProviders({ access: { subscriptions: [{ plan_key: "homeschool_monthly", active: true, current_period_end: end }] } });
-      expect((await sessionView(plan.deps, await open(plan))).access).toMatchObject({ source: "subscription", tutor: true, tutorExpiresAt: end });
-      // plain Pro is not an SK plan; an inactive or lapsed SK plan does not count
-      const pro = withProviders({ access: { subscriptions: [{ plan_key: "teacher_pro_monthly", active: true, current_period_end: end }] } });
-      await expect(open(pro)).rejects.toMatchObject({ status: 403 });
-      const lapsed = withProviders({ access: { subscriptions: [{ plan_key: "family_monthly", active: true, current_period_end: new Date(T0 - DAY).toISOString() }] } });
-      await expect(open(lapsed)).rejects.toMatchObject({ status: 403 });
+      const skPlan = [{ plan_key: "homeschool_monthly", active: true, current_period_end: end }];
+      const schoolOnly = withProviders({ access: { schoolLicence: true } });
+      await expect(open(schoolOnly)).rejects.toMatchObject({ status: 403, reason: "no_book_access" });
+      expect(await schoolOnly.store.findSession(STUDENT, SLUG, 2)).toBeNull();
+      const planOnly = withProviders({ access: { subscriptions: skPlan } });
+      await expect(open(planOnly)).rejects.toMatchObject({ status: 403, reason: "no_book_access" });
+      // the same licence / plan plus a purchase grant: the book opens, tutoring comes from the licence (open-ended) or the plan (ends with the period)
+      const school = withProviders({ access: { schoolLicence: true, grants: [bought(T0)] } });
+      expect((await sessionView(school.deps, await open(school))).access).toMatchObject({ source: "school", book: true, tutor: true, tutorExpiresAt: null });
+      const plan = withProviders({ access: { subscriptions: skPlan, grants: [bought(T0)] } });
+      expect((await sessionView(plan.deps, await open(plan))).access).toMatchObject({ source: "subscription", book: true, tutor: true, tutorExpiresAt: end });
+      // plain Pro is not an SK plan; an inactive or lapsed SK plan does not count — the bought book opens without tutoring
+      const pro = withProviders({ access: { subscriptions: [{ plan_key: "teacher_pro_monthly", active: true, current_period_end: end }], grants: [bought(T0)] } });
+      expect((await sessionView(pro.deps, await open(pro))).access).toMatchObject({ source: "grant", grantSource: "purchase", book: true, tutor: false });
+      const lapsed = withProviders({ access: { subscriptions: [{ plan_key: "family_monthly", active: true, current_period_end: new Date(T0 - DAY).toISOString() }], grants: [bought(T0)] } });
+      expect((await sessionView(lapsed.deps, await open(lapsed))).access).toMatchObject({ source: "grant", book: true, tutor: false });
     });
   });
 
@@ -188,9 +198,9 @@ describe.each(LOOP_WIRINGS)("B8 access and metering in the loop — $name", ({ m
       expect(done(q).metered).toEqual({ live_turns: 1, generated_segments: 0 });
       expect(await usage(h)).toEqual({ live_turns: 1, generated_segments: 0, interactive_ms: 0 });
     });
-    it("a school-licensed student's questions are counted too (never refused: no allowance on a licence)", async () => {
+    it("a school-licensed student's questions on a bought book are counted too (never refused: no allowance on a licence)", async () => {
       const t = teacher();
-      const h = withProviders({ access: { schoolLicence: true }, allowanceEnforced: true }, { teacher: t });
+      const h = withProviders({ access: { schoolLicence: true, grants: [bought(T0)] }, allowanceEnforced: true }, { teacher: t });
       const s = await open(h);
       await runCommand(h.deps, s, { name: "continue", args: {} }, { unitKey: "s1", assetId: "s1-explain-main", t: 1000 });
       await ask(h, s, "which lens is the eyepiece?");
@@ -242,7 +252,7 @@ describe("what only the Supabase wiring can tell us (B8)", () => {
     expect(rows.productId).toBe(PRODUCT);
     expect(rows.grants).toEqual([{ product_id: PRODUCT, source: "staff", activated_at: staffGrant(T0).activated_at, expires_at: null, tutor_expires_at: staffGrant(T0).tutor_expires_at, revoked_at: null, usage_allowance: null }]);
     await expect(h.db.from("book_access_grants").select("id").eq("product_id", SLUG)).resolves.toMatchObject({ error: { code: "22P02" } });
-    // an unknown slug: no product, no grants, nothing to meter — and no access unless a licence or plan says so
+    // an unknown slug: no product, no grants, nothing to meter — and no book access whatever the licence or plan
     expect(await h.entitlements.load(STUDENT, "no-such-book", new Date(T0))).toEqual({ productId: null, schoolLicence: false, subscriptions: [], grants: [] });
   });
   it("the school licence is the school's school_* entitlement row through profiles.school_id, live only while its period runs", async () => {

@@ -1,7 +1,7 @@
 // SK S7 K2 — sourcesFor: every kind, allowed and refused. Finals only (a draft
 // product is never a source, whatever grant points at it); book access by
-// purchase / code / edition code / staff grant, school licence, subscription;
-// a parent's VERIFIED child's grants when acting for that child; every
+// purchase / code / edition code / staff grant ONLY — a school licence or a
+// subscription opens no book (founder 2026-10-30); a parent's VERIFIED child's grants when acting for that child; every
 // approved article as ONE wildcard; uploads exactly as the SESSION (RLS)
 // returns them, minus removed and unconfirmed junk-gated books.
 // Run: node node_modules/vitest/vitest.mjs run src/sk/knowledge/__tests__/sources.test.ts
@@ -12,6 +12,8 @@ import { CHILD, CHILD_ID, NOW, OWN_BOOKS, SCHOOL_ID, STRANGER_ID, STUDENT_ID, UN
 
 const keys = (list: KnowledgeSourceRef[]) => list.map((s) => `${s.kind}:${s.id}${s.version ? `@${s.version}` : ""}`).sort();
 const books = (list: KnowledgeSourceRef[]) => keys(list.filter((s) => s.kind === "sketchcast_book"));
+/** A grant on EVERY product (finals, the draft, the legacy row): what is listed is then the release rule alone. */
+const allGrants = (userId: string, source = "staff") => ["p-bio", "p-bio-ar", "p-chem", "p-alg", "p-legacy"].map((p) => grant(userId, p, { source }));
 const deps = (session = sessionWith({ books: [] }), cache?: Map<string, Promise<unknown>>) => ({ session, now: NOW, ...(cache ? { cache } : {}) });
 
 describe("sketchcast_book — finals with book access, never a draft", () => {
@@ -21,33 +23,37 @@ describe("sketchcast_book — finals with book access, never a draft", () => {
     expect(list.find((s) => s.kind === "sketchcast_book")).toMatchObject({ title: "Biology", language: "en", product: { id: "p-bio", slug: "biology" }, via: "self" });
   });
 
-  it("a DRAFT product is never a source — not with a code grant, not with a school licence", async () => {
+  it("a DRAFT product is never a source — not with a code grant, not with a school licence plus a grant on every product", async () => {
     expect(books(await sourcesFor(studentCtx(), world(), deps()))).not.toContain("sketchcast_book:mastering-linear-equations@1");
-    const licensed = world({ entitlements: [{ school_id: SCHOOL_ID, plan_key: "school_annual", active: true, current_period_end: null }] });
+    const licensed = world({ grants: allGrants(STRANGER_ID), entitlements: [{ school_id: SCHOOL_ID, plan_key: "school_annual", active: true, current_period_end: null }] });
     const list = await sourcesFor(teacherCtx(), licensed, deps());
     expect(books(list)).toEqual(["sketchcast_book:cells-structure@12", "sketchcast_book:cells-structure@13", "sketchcast_book:chem@20"]);
     expect(list.some((s) => s.id === "mastering-linear-equations")).toBe(false);
   });
 
   it("a product with no live release (legacy, no work) is never a source", async () => {
-    const licensed = world({ entitlements: [{ school_id: SCHOOL_ID, plan_key: "school_annual", active: true, current_period_end: null }] });
-    expect((await sourcesFor(teacherCtx(), licensed, deps())).some((s) => s.product?.slug === "legacy")).toBe(false);
+    expect((await sourcesFor(teacherCtx(), world({ grants: allGrants(STRANGER_ID) }), deps())).some((s) => s.product?.slug === "legacy")).toBe(false);
   });
 
-  it("school licence: every final for a member of that school; a lapsed licence or another school's: none", async () => {
+  it("school licence: opens no book by itself (books are bought) — live, lapsed or another school's", async () => {
+    const live = world({ grants: [], entitlements: [{ school_id: SCHOOL_ID, plan_key: "school_annual", active: true, current_period_end: null }] });
+    expect(books(await sourcesFor(teacherCtx(), live, deps()))).toEqual([]);
     const lapsed = world({ entitlements: [{ school_id: SCHOOL_ID, plan_key: "school_annual", active: true, current_period_end: new Date(NOW.getTime() - 1000).toISOString() }] });
     expect(books(await sourcesFor(teacherCtx(), lapsed, deps()))).toEqual([]);
     const other = world({ entitlements: [{ school_id: "another-school", plan_key: "school_annual", active: true, current_period_end: null }] });
     expect(books(await sourcesFor(teacherCtx(), other, deps()))).toEqual([]);
   });
 
-  it("subscription: an SK plan opens every final; a plan without SK or an inactive one does not", async () => {
+  it("subscription: an SK plan alone opens no book; with a grant it opens exactly the granted final, as does any plan", async () => {
     const ctx = makeCtx({ role: "teacher", userId: STRANGER_ID, schoolId: null });
-    const sk = world({ entitlements: [{ user_id: STRANGER_ID, plan_key: "family_monthly", active: true, current_period_end: null }] });
-    expect(books(await sourcesFor(ctx, sk, deps()))).toHaveLength(3);
-    const basic = world({ entitlements: [{ user_id: STRANGER_ID, plan_key: "teacher_pro", active: true, current_period_end: null }] });
-    expect(books(await sourcesFor(ctx, basic, deps()))).toEqual([]);
-    const off = world({ entitlements: [{ user_id: STRANGER_ID, plan_key: "family_monthly", active: false, current_period_end: null }] });
+    const sk = { user_id: STRANGER_ID, plan_key: "family_monthly", active: true, current_period_end: null };
+    expect(books(await sourcesFor(ctx, world({ entitlements: [sk] }), deps()))).toEqual([]);
+    const bought = [grant(STRANGER_ID, "p-chem")];
+    expect(books(await sourcesFor(ctx, world({ grants: bought, entitlements: [sk] }), deps()))).toEqual(["sketchcast_book:chem@20"]);
+    // the grant decides, not the plan: a plan without SK or an inactive one changes nothing
+    const basic = world({ grants: bought, entitlements: [{ user_id: STRANGER_ID, plan_key: "teacher_pro", active: true, current_period_end: null }] });
+    expect(books(await sourcesFor(ctx, basic, deps()))).toEqual(["sketchcast_book:chem@20"]);
+    const off = world({ entitlements: [{ ...sk, active: false }] });
     expect(books(await sourcesFor(ctx, off, deps()))).toEqual([]);
   });
 

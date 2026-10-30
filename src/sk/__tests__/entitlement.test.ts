@@ -24,8 +24,11 @@ describe("decideAccess: who may open, who may ask live questions", () => {
   // The decision table the B8 PR states. book = may open (prepared teaching); live = may ask a question now.
   const cases: { who: string; rows: AccessRows; usage?: { live_turns: number; generated_segments: number; interactive_ms: number }; enforced?: boolean; book: boolean; live: boolean; source: string | null; warning?: string }[] = [
     { who: "nobody (no licence, plan or grant)", rows: rows(), book: false, live: false, source: null },
-    { who: "a school licence", rows: rows({ schoolLicence: true }), book: true, live: true, source: "school" },
-    { who: "an SK plan (homeschool)", rows: rows({ subscriptions: [{ plan_key: "homeschool_annual", active: true, current_period_end: iso(T0 + DAY) }] }), book: true, live: true, source: "subscription" },
+    // Books are bought (2026-10-30): a licence or SK plan tutors, but only a live grant opens the book.
+    { who: "a school licence alone (tutoring, no book)", rows: rows({ schoolLicence: true }), book: false, live: true, source: "school" },
+    { who: "a school licence + a purchase grant", rows: rows({ schoolLicence: true, grants: [grant({ source: "purchase", tutor_expires_at: null })] }), book: true, live: true, source: "school" },
+    { who: "an SK plan (homeschool) alone (tutoring, no book)", rows: rows({ subscriptions: [{ plan_key: "homeschool_annual", active: true, current_period_end: iso(T0 + DAY) }] }), book: false, live: true, source: "subscription" },
+    { who: "an SK plan (homeschool) + a purchase grant", rows: rows({ subscriptions: [{ plan_key: "homeschool_annual", active: true, current_period_end: iso(T0 + DAY) }], grants: [grant({ source: "purchase", tutor_expires_at: null })] }), book: true, live: true, source: "subscription" },
     { who: "plain Pro (not an SK plan)", rows: rows({ subscriptions: [{ plan_key: "teacher_pro_monthly", active: true, current_period_end: iso(T0 + DAY) }] }), book: false, live: false, source: null },
     { who: "a lapsed SK plan", rows: rows({ subscriptions: [{ plan_key: "family_monthly", active: true, current_period_end: iso(T0 - DAY) }] }), book: false, live: false, source: null },
     { who: "a live grant in its tutor window", rows: rows({ grants: [grant()] }), book: true, live: true, source: "grant" },
@@ -40,7 +43,7 @@ describe("decideAccess: who may open, who may ask live questions", () => {
     { who: "a metered grant spent, enforced (book stays)", rows: rows({ grants: [grant({ usage_allowance: { live_turns: 10 } })] }), usage: { live_turns: 10, generated_segments: 0, interactive_ms: 0 }, enforced: true, book: true, live: false, source: "grant", warning: "exhausted" },
     { who: "a metered grant spent, NOT enforced", rows: rows({ grants: [grant({ usage_allowance: { live_turns: 10 } })] }), usage: { live_turns: 10, generated_segments: 0, interactive_ms: 0 }, enforced: false, book: true, live: true, source: "grant", warning: "none" },
     { who: "a school licence beats a spent grant", rows: rows({ schoolLicence: true, grants: [grant({ usage_allowance: { live_turns: 1 } })] }), usage: { live_turns: 5, generated_segments: 0, interactive_ms: 0 }, enforced: true, book: true, live: true, source: "school" },
-    { who: "an unknown product (no row): only a licence or plan can open", rows: rows({ productId: null, grants: [grant()] }), book: false, live: false, source: null },
+    { who: "an unknown product (no row): no grant can match, so no book", rows: rows({ productId: null, grants: [grant()] }), book: false, live: false, source: null },
   ];
   it.each(cases)("$who → book $book, live $live", (c) => {
     const a = decideAccess(c.rows, c.usage ?? null, { now, allowanceEnforced: !!c.enforced });
