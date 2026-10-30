@@ -23,7 +23,7 @@ const fact = (owner: string, kind: string, key: string, value: unknown, updated 
 
 describe("preferences: stored as workflow facts, migrated once from localStorage (pure)", () => {
   it("defaults: read aloud on, hands-free off, suggestions ON, the hero's mic ON (adults)", () => {
-    expect(DEFAULT_PREFS).toEqual({ readAloud: true, handsFree: false, suggestions: true, micOn: true, showText: false });
+    expect(DEFAULT_PREFS).toEqual({ readAloud: true, handsFree: false, suggestions: true, micOn: true, showText: false, lookA: false });
     expect(withDefaults(null)).toEqual(DEFAULT_PREFS);
   });
 
@@ -45,14 +45,14 @@ describe("preferences: stored as workflow facts, migrated once from localStorage
 
   it("first visit on a new server: the browser's values win and are migrated", () => {
     expect(resolvePrefs({}, { readAloud: false, handsFree: true }, false)).toEqual({
-      prefs: { readAloud: false, handsFree: true, suggestions: true, micOn: true, showText: false },
+      prefs: { readAloud: false, handsFree: true, suggestions: true, micOn: true, showText: false, lookA: false },
       migrate: { readAloud: false, handsFree: true },
     });
   });
 
   it("the server's stored value wins over the browser's; nothing is migrated over it", () => {
     expect(resolvePrefs({ readAloud: true }, { readAloud: false, handsFree: true }, false)).toEqual({
-      prefs: { readAloud: true, handsFree: true, suggestions: true, micOn: true, showText: false },
+      prefs: { readAloud: true, handsFree: true, suggestions: true, micOn: true, showText: false, lookA: false },
       migrate: { handsFree: true },
     });
   });
@@ -98,7 +98,7 @@ describe("loadSkSettings — the page's sections by role", () => {
       fact(PARENT, "recent_class", "c2", { label: "NOT MINE" }),
     );
     const d = await loadSkSettings({ session: db, admin: db, userId: TEACHER, role: "teacher", schoolId: SCHOOL, now: NOW });
-    expect(d.prefs).toEqual({ readAloud: true, handsFree: false, suggestions: false, micOn: true, showText: false });
+    expect(d.prefs).toEqual({ readAloud: true, handsFree: false, suggestions: false, micOn: true, showText: false, lookA: false });
     expect(d.memoryReadable).toBe(true);
     expect(d.workflow.map((r) => ("label" in r ? r.label : `${r.pref}=${r.on}`)).sort()).toEqual(["5B", "5B, Plant and Animal Cells", "suggestions=false"]);
     expect(d.learning).toBeNull();

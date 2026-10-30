@@ -209,10 +209,10 @@ describe("the menu: compact, keyboard accessible", () => {
     expect(src).toContain("onClose(true);");
     expect(read("sk-shell.tsx")).toContain("if (refocus) avatarRef.current?.focus();");
   });
-  it("the Shell's menu: Type, Show conversation, Mic (not on the Board), Read aloud, Take the tour (not mid-tour), Clear, SK settings", () => {
+  it("the Shell's menu: Type, Show conversation, Mic (not on the Board), Read aloud, Character, Take the tour (not mid-tour), Clear, SK settings", () => {
     const src = code(read("sk-shell.tsx"));
     const at = (id: string) => src.indexOf(`id: "${id}"`);
-    const order = ["type", "conversation", "mic", "read-aloud", "tour", "clear", "settings"].map(at);
+    const order = ["type", "conversation", "mic", "read-aloud", "character", "tour", "clear", "settings"].map(at);
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(src).toContain('...(listen ? [{ kind: "toggle" as const, id: "mic"');

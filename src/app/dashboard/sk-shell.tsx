@@ -72,7 +72,7 @@ import type { SkActRequest, SkActResponse, SkBoardMove, SkCitation, SkTurnEvent,
 import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector";
 // S6 slice C: the preferences follow the user (workflow facts), with a
 // one-time migration of this browser's localStorage values (prefs.ts).
-import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultMicOn, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
+import { MIGRATED_LOCAL_KEYS, PREF_KEYS, PREF_LOCAL_KEY, applyLook, defaultMicOn, migratedLocalKey, parseLocalPref, pick, pickLook, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, type SpeechHold } from "@/sk/shell/client/mic-gate";
 import { beaconVoiceEvents, createVoiceLog, type VoiceLog } from "@/sk/shell/client/voice-log";
@@ -167,7 +167,8 @@ type ContextReply = { ready?: boolean; greeting?: string; capabilities?: string[
 function readLocalPrefs(): StoredPrefs {
   const out: StoredPrefs = {};
   for (const k of PREF_KEYS) {
-    const v = parseLocalFlag(readText(PREF_LOCAL_KEY[k]));
+    // lookA lives in the rig's own key ("sk:rig" = "A" / "B").
+    const v = parseLocalPref(k, readText(PREF_LOCAL_KEY[k]));
     if (v !== undefined) out[k] = v;
   }
   return out;
@@ -283,7 +284,10 @@ export default function SkShell({
   const router = useRouter();
   /** This corner listens hands-free while the Mic switch is on (not the Board). */
   const listen = autoListen ?? !board;
-  const [rig] = useRigChoice();
+  // SK's character (the look AND the voice gender): useRigChoice is the one
+  // source every reader follows; the warm start applies the server's lookA
+  // through chooseRig, and the menu's Character choice saves it.
+  const [rig, chooseRig] = useRigChoice();
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
@@ -646,7 +650,7 @@ export default function SkShell({
         // holds is migrated up once (prefs.ts resolvePrefs). A reply without
         // prefs (unreadable) changes nothing.
         if (d.prefs !== undefined) {
-          const r = resolvePrefs(d.prefs === null ? null : pick(d.prefs), readLocalPrefs(), readText(PREFS_MIGRATED_LOCAL_KEY) === "1", role);
+          const r = resolvePrefs(d.prefs === null ? null : pick(d.prefs), readLocalPrefs(), (k) => readText(migratedLocalKey(k)) === "1", role);
           micOnRef.current = r.prefs.micOn;
           setMicOn(r.prefs.micOn);
           readAloudRef.current = r.prefs.readAloud;
@@ -655,10 +659,16 @@ export default function SkShell({
           handsFreeRef.current = r.prefs.handsFree;
           setHandsFree(r.prefs.handsFree);
           if (r.prefs.showText) openTextByPref();
+          // SK's character follows her across devices: the avatar, the voice
+          // gender and every other reader of the rig update at once. Only a
+          // real change is stored (no "B" written for a default nobody chose).
+          applyLook(r.prefs, readRigChoice(), chooseRig);
           if (d.prefs !== null) {
-            for (const k of PREF_KEYS) writeFlag(PREF_LOCAL_KEY[k], r.prefs[k]);
-            if (Object.keys(r.migrate).length) void savePref(r.migrate).then((ok) => ok && writeText(PREFS_MIGRATED_LOCAL_KEY, "1"));
-            else writeText(PREFS_MIGRATED_LOCAL_KEY, "1");
+            // lookA's local copy is the rig's key, kept by chooseRig above.
+            for (const k of PREF_KEYS) if (k !== "lookA") writeFlag(PREF_LOCAL_KEY[k], r.prefs[k]);
+            const markMigrated = () => MIGRATED_LOCAL_KEYS.forEach((m) => writeText(m, "1"));
+            if (Object.keys(r.migrate).length) void savePref(r.migrate).then((ok) => ok && markMigrated());
+            else markMigrated();
           }
         }
         setPrefsSettled(true);
@@ -1552,6 +1562,19 @@ export default function SkShell({
       : { kind: "action", id: "conversation", label: cc.showConversation, icon: "💬", onSelect: openSheet },
     ...(listen ? [{ kind: "toggle" as const, id: "mic", label: hc.micSwitch, icon: "🎤", checked: micLive, disabled: !mic, onSelect: toggleMic }] : []),
     { kind: "toggle", id: "read-aloud", label: copy.readAloud, icon: readAloud ? "🔊" : "🔈", checked: readAloud, onSelect: toggleReadAloud },
+    {
+      kind: "choice",
+      id: "character",
+      label: cc.character,
+      icon: "👤",
+      value: rig,
+      options: [
+        { value: "A", label: cc.lookA, image: "/sk/portrait/sk-a.webp" },
+        { value: "B", label: cc.lookB, image: "/sk/portrait/sk-b.webp" },
+      ],
+      // The look and its voice at once, saved so it follows her (prefs.ts pickLook).
+      onSelect: (v: string) => void pickLook(v, readRigChoice(), chooseRig, savePref),
+    },
     ...(onTakeTour && takeTourLabel && !walk
       ? [
           {

@@ -24,6 +24,8 @@ export function dateFmt(locale: Locale) {
 export function workflowLine(t: SettingsMessages, r: WorkflowRow): string {
   switch (r.kind) {
     case "preference": {
+      // SK's character is a choice, not a switch: "SK's character: Look A · female voice".
+      if (r.pref === "lookA") return fmt(t.factPreference, { label: t.character, value: r.on ? t.lookA : t.lookB });
       const label = r.pref === "readAloud" ? t.readAloud : r.pref === "handsFree" ? t.handsFree : r.pref === "micOn" ? t.micOn : r.pref === "showText" ? t.showText : t.suggestions;
       return fmt(t.factPreference, { label, value: r.on ? t.on : t.off });
     }
