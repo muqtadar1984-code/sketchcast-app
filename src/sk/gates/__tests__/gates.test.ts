@@ -12,6 +12,10 @@
  * grade. Both make PAID calls — scripts/sk-gates.ts refuses them without the
  * founder's SK_GATES_LIVE=1, explicit prices and --yes.
  *
+ * SK_GATES_ROUTING=model (2026-10-30) runs the FULL bank under MODEL-FIRST
+ * routing (every item reaches the model; a rules item's scripted stand-in
+ * calls the capability the rules would have). The CI subset runs both.
+ *
  * Run: node node_modules/vitest/vitest.mjs run src/sk/gates/__tests__/gates.test.ts
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -23,6 +27,8 @@ import type { GateToolResult } from "@/sk/gates/grade";
 const LIVE = process.env.SK_GATES_MODEL === "live";
 const JUDGE = process.env.SK_GATES_JUDGE === "live";
 const FULL = process.env.SK_GATES_FULL === "1";
+/** 2026-10-30: the Shell routing a FULL run measures (scripts/sk-gates.ts --routing). */
+const ROUTING: "rules" | "model" = process.env.SK_GATES_ROUTING === "model" ? "model" : "rules";
 if ((LIVE || JUDGE) && process.env.SK_GATES_LIVE !== "1") throw new Error("SK gates: a live model or judge needs SK_GATES_LIVE=1 (paid calls; the founder approves).");
 
 const mocks = vi.hoisted(() => ({
@@ -124,6 +130,9 @@ async function judgeProvider(): Promise<LLMProvider> {
 }
 
 const itemOf = (id: string): GateItem => GATE_BANK.find((i) => i.id === id)!;
+/** The FULL run's items: the whole bank, or (SK_GATES_SUBSET=ci) the 12-item
+ *  CI subset — the small live comparison (docs/sk-model-first.md). */
+const RUN_BANK: GateItem[] = process.env.SK_GATES_SUBSET === "ci" ? CI_SUBSET : GATE_BANK;
 
 describe.skipIf(FULL)("§8.4 leader gates — CI subset (scripted model, no network)", () => {
   it(`runs ${CI_SUBSET.length} items: grounded, refused and isolated`, async () => {
@@ -136,22 +145,35 @@ describe.skipIf(FULL)("§8.4 leader gates — CI subset (scripted model, no netw
   }, 120_000);
 });
 
+describe.skipIf(FULL)("§8.4 leader gates — CI subset under MODEL-FIRST routing (scripted model, no network)", () => {
+  it(`runs ${CI_SUBSET.length} items with every turn reaching the model: grounded, refused and isolated`, async () => {
+    const outcomes = await runGates(CI_SUBSET, POST, hooks, { leaky: true, routing: "model" });
+    for (const { verdict, leakyLeaks } of outcomes) {
+      expect(verdict.reasons, `${verdict.id}: ${verdict.text}`).toEqual([]);
+      expect(verdict.pass, verdict.id).toBe(true);
+      expect(verdict.modelCalls, `${verdict.id} reached the model`).toBeGreaterThan(0);
+      expect(leakyLeaks, `${verdict.id} (leaky RLS)`).toEqual([]);
+    }
+  }, 120_000);
+});
+
 describe.skipIf(!FULL)("§8.4 leader gates — FULL bank", () => {
-  it(`runs all ${GATE_BANK.length} items and writes the report`, async () => {
+  it(`runs all ${RUN_BANK.length} items and writes the report`, async () => {
     const judged = new Map<string, JudgeResult>();
     const judge = JUDGE ? await judgeProvider() : null;
-    const outcomes: GateOutcome[] = await runGates(GATE_BANK, POST, hooks, {
+    const outcomes: GateOutcome[] = await runGates(RUN_BANK, POST, hooks, {
       leaky: true,
+      routing: ROUTING,
       onItem: async (o) => {
         if (judge) judged.set(o.verdict.id, await judgeVerdict(judge, itemOf(o.verdict.id), o.verdict, o.results));
       },
     });
     // What a --judge live run would send (the estimate prices it).
     const judgePromptChars = outcomes.reduce((n, o) => n + JUDGE_SYSTEM.length + judgePrompt(itemOf(o.verdict.id), o.verdict, o.results).length, 0);
-    const report = buildReport(outcomes, { model: LIVE ? "live" : "scripted", judge: JUDGE ? "live" : "none", judged, judgePromptChars });
+    const report = buildReport(outcomes, { model: LIVE ? "live" : "scripted", judge: JUDGE ? "live" : "none", routing: ROUTING, judged, judgePromptChars });
     const paths = writeReport(report, process.env.SK_GATES_REPORT_DIR || "reports/sk-gates");
-    console.log(`[sk-gates] ${report.summary.pass ? "PASS" : "FAIL"} — report: ${paths.json} , ${paths.md}`);
+    console.log(`[sk-gates] ${ROUTING} routing: ${report.summary.pass ? "PASS" : "FAIL"} — report: ${paths.json} , ${paths.md}`);
     // The run itself never fails the process on a gate miss: the report is the verdict.
-    expect(outcomes).toHaveLength(GATE_BANK.length);
+    expect(outcomes).toHaveLength(RUN_BANK.length);
   }, 1_800_000);
 });

@@ -3,7 +3,8 @@
  * SK S5 design 2026-10-29 decision 7: the School Briefing panel is retired
  * only after these gates pass on the live model).
  *
- *   node scripts/sk-gates.ts                         # scripted model, free, no network
+ *   node scripts/sk-gates.ts                         # scripted model, free, no network — BOTH routings + comparison table
+ *   node scripts/sk-gates.ts --routing model         # scripted, model-first routing only
  *   node scripts/sk-gates.ts --model live --price-in <USD/MTok> --price-out <USD/MTok>
  *                                                    # prints the cost estimate, spends nothing
  *   SK_GATES_LIVE=1 node scripts/sk-gates.ts --model live --price-in … --price-out … [--judge live] --env-file .env.local --yes
@@ -21,6 +22,12 @@
  *   --judge none|live       live: a second-model grade per item (SK_GATES_JUDGE_MODEL), reported next to the deterministic grade.
  *   --price-in / --price-out  USD per million input / output tokens. REQUIRED for any live mode; no default.
  *   --env-file <path>       load provider credentials (e.g. .env.local) for a live run.
+ *   --routing rules|model|both  the Shell routing to measure (SK_ROUTING). Scripted default: both, then the
+ *                           rules-vs-model comparison table (grounded, leaks, claims, wrong action, stub rounds).
+ *                           Live default: rules (a live model-first run is its own paid run).
+ *   --subset ci             run only the 12-item CI subset (the small live comparison). The live
+ *                           estimate reads the latest scripted RULES volume: the full bank's when a
+ *                           full scripted run exists (an upper bound for the subset).
  *   --report-dir <dir>      default reports/sk-gates.
  *   --yes                   actually spend (live only). Without it a live invocation prints the estimate and stops.
  *
@@ -77,6 +84,36 @@ function fail(msg: string): never {
   process.exit(2);
 }
 
+type Comparison = {
+  routing: string;
+  items: number;
+  grounded: { pass: number; n: number; rate: number };
+  leakFree: { pass: number; n: number; rate: number };
+  claims: number;
+  wrongAction: number;
+  refused: { pass: number; n: number; rate: number };
+  modelCalls: number;
+  modelTurns: number;
+  avgRoundsPerModelTurn: number;
+};
+
+function latestComparison(dir: string, routing: string): Comparison | null {
+  const p = join(ROOT, dir, `latest-scripted-${routing}.json`);
+  if (!existsSync(p)) return null;
+  return (JSON.parse(readFileSync(p, "utf8")) as { comparison?: Comparison }).comparison ?? null;
+}
+
+/** The rules-vs-model table, markdown (same columns as report.ts comparisonTable). */
+function comparisonTable(rows: Comparison[]): string {
+  const f = (r: { pass: number; n: number; rate: number }) => `${r.pass}/${r.n} (${r.rate} %)`;
+  const line = (cells: Array<string | number>) => `| ${cells.join(" | ")} |`;
+  return [
+    line(["Routing", "Grounded pass", "Leak-free", "Action claims", "Wrong action", "Unsupported refused", "Stub model calls", "Model turns", "Avg rounds / model turn"]),
+    line(["---", "---", "---", "---", "---", "---", "---", "---", "---"]),
+    ...rows.map((c) => line([c.routing, f(c.grounded), f(c.leakFree), c.claims, c.wrongAction, f(c.refused), c.modelCalls, `${c.modelTurns}/${c.items}`, c.avgRoundsPerModelTurn])),
+  ].join("\n");
+}
+
 function runVitest(env: Record<string, string>): number {
   const r = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", GATE_TEST], { cwd: ROOT, stdio: "inherit", env: { ...process.env, ...env } });
   return r.status ?? 1;
@@ -97,14 +134,25 @@ const judge = (args.judge ?? "none") as string;
 const reportDir = typeof args["report-dir"] === "string" ? (args["report-dir"] as string) : "reports/sk-gates";
 if (!["scripted", "live"].includes(model)) fail(`--model must be scripted or live (got ${model})`);
 if (!["none", "live"].includes(judge)) fail(`--judge must be none or live (got ${judge})`);
+const routingArg = (args.routing ?? (model === "live" ? "rules" : "both")) as string;
+if (!["rules", "model", "both"].includes(routingArg)) fail(`--routing must be rules, model or both (got ${routingArg})`);
+const routings = routingArg === "both" ? ["rules", "model"] : [routingArg];
 const paid = model === "live" || judge === "live";
 
-const baseEnv: Record<string, string> = { SK_GATES_FULL: "1", SK_GATES_REPORT_DIR: reportDir };
+if (args.subset !== undefined && args.subset !== "ci") fail(`--subset must be ci (got ${String(args.subset)})`);
+const baseEnv: Record<string, string> = { SK_GATES_FULL: "1", SK_GATES_REPORT_DIR: reportDir, ...(args.subset === "ci" ? { SK_GATES_SUBSET: "ci" } : {}) };
 
 if (!paid) {
-  console.log("sk-gates: scripted run — deterministic rules path + scripted model stub, no network calls.");
-  process.exit(runVitest({ ...baseEnv, SK_GATES_MODEL: "scripted", SK_GATES_JUDGE: "none" }) === 0 ? 0 : 1);
+  console.log(`sk-gates: scripted run (${routings.join(" + ")} routing) — scripted model stub, no network calls.`);
+  let status = 0;
+  for (const routing of routings) {
+    if (runVitest({ ...baseEnv, SK_GATES_MODEL: "scripted", SK_GATES_JUDGE: "none", SK_GATES_ROUTING: routing }) !== 0) status = 1;
+  }
+  const rows = routings.map((r) => latestComparison(reportDir, r)).filter((c): c is Comparison => !!c);
+  if (rows.length) console.log(`\nsk-gates: routing comparison (scripted)\n${comparisonTable(rows)}\n`);
+  process.exit(status);
 }
+if (routings.length !== 1) fail("a live run measures ONE routing: pass --routing rules or --routing model.");
 
 // ── A paid mode: guard, price, estimate ─────────────────────────────────────
 const priceIn = Number(args["price-in"]);
@@ -165,5 +213,5 @@ if (typeof args["env-file"] === "string") {
   if (!existsSync(p)) fail(`--env-file ${p} not found`);
   process.loadEnvFile(p);
 }
-const status = runVitest({ ...baseEnv, SK_GATES_LIVE: "1", SK_GATES_MODEL: model, SK_GATES_JUDGE: judge });
+const status = runVitest({ ...baseEnv, SK_GATES_LIVE: "1", SK_GATES_MODEL: model, SK_GATES_JUDGE: judge, SK_GATES_ROUTING: routings[0] });
 process.exit(status === 0 ? 0 : 1);

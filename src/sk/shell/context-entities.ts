@@ -17,7 +17,7 @@
 // own context never passes.
 
 import type { SkCapabilityDeps, SkContext } from "./types";
-import { groundingCheck, type GroundingVerdict } from "./prompt";
+import { groundingCheck, type GroundingMode, type GroundingVerdict } from "./prompt";
 import { teacherClasses } from "@/sk/capabilities/shared";
 
 type Row = Record<string, unknown>;
@@ -128,10 +128,14 @@ export async function groundWithContext(
   support: unknown[],
   question: string,
   entities: () => Promise<string[]>,
+  mode: GroundingMode = "strict",
 ): Promise<GroundingVerdict & { context: boolean }> {
-  const first = groundingCheck(answer, support, question);
+  // Soft mode (model routing): "does a sentence cite a tool fact?" reads the
+  // TOOL results only, never her context entities.
+  const opts = { mode, toolSupport: support };
+  const first = groundingCheck(answer, support, question, opts);
   if (first.ok) return { ...first, context: false };
   const extra = await entities().catch(() => [] as string[]);
   if (!extra.length) return { ...first, context: false };
-  return { ...groundingCheck(answer, [...support, ...extra], question), context: true };
+  return { ...groundingCheck(answer, [...support, ...extra], question, opts), context: true };
 }

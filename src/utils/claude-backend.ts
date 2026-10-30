@@ -41,11 +41,10 @@ export const BEDROCK_MODEL_IDS: Readonly<Record<string, string>> = {
   "claude-haiku-5-5": "global.anthropic.claude-haiku-5-5",
 };
 
-/** BEDROCK_MODEL_MAP — a JSON object overlaid on the table above, so a new model
- * or a regional profile is one env change, not a deploy. A malformed value is
- * ignored (logged), never fatal: the built-in table still answers. */
-function envModelMap(): Record<string, string> {
-  const raw = process.env.BEDROCK_MODEL_MAP;
+/** A JSON object of model-id overrides (BEDROCK_MODEL_MAP, SK_BEDROCK_MODEL_MAP).
+ * A malformed value is ignored (logged under `label`), never fatal: the built-in
+ * table still answers. Exported so SK's own overlay parses the same way. */
+export function parseModelMap(raw: string | undefined, label: string): Record<string, string> {
   if (!raw) return {};
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -54,17 +53,30 @@ function envModelMap(): Record<string, string> {
     for (const [k, v] of Object.entries(parsed)) if (typeof v === "string" && v) out[k] = v;
     return out;
   } catch (e) {
-    console.error("[claude] BEDROCK_MODEL_MAP is not a JSON object of strings — ignored:", e);
+    console.error(`[claude] ${label} is not a JSON object of strings — ignored:`, e);
     return {};
   }
 }
 
+/** BEDROCK_MODEL_MAP — a JSON object overlaid on the table above, so a new model
+ * or a regional profile is one env change, not a deploy. */
+function envModelMap(): Record<string, string> {
+  return parseModelMap(process.env.BEDROCK_MODEL_MAP, "BEDROCK_MODEL_MAP");
+}
+
 /** The model id to send. Unchanged on the first-party API. On Bedrock, a known
  * first-party id becomes its inference profile; anything else (already a Bedrock
- * id, or a model nobody mapped) passes through so Bedrock names the problem. */
-export function claudeModel(id: string): string {
+ * id, or a model nobody mapped) passes through so Bedrock names the problem.
+ * `overlay` (2026-10-30, SK only — SK_BEDROCK_MODEL_MAP) wins over both tables
+ * for its caller alone; every other caller passes none and is unchanged. */
+export function claudeModel(id: string, overlay?: Readonly<Record<string, string>>): string {
   if (claudeBackend() !== "bedrock") return id;
-  return envModelMap()[id] ?? BEDROCK_MODEL_IDS[id] ?? id;
+  return overlay?.[id] ?? envModelMap()[id] ?? BEDROCK_MODEL_IDS[id] ?? id;
+}
+
+/** The Bedrock region every Claude call uses unless its caller names one. */
+export function bedrockRegion(): string {
+  return process.env.BEDROCK_REGION || "us-east-1";
 }
 
 /** True when a Claude call can be attempted on the selected backend — the check
@@ -142,10 +154,14 @@ export function bedrockRoleCredentials(roleArn: string, region: string): AwsCred
 
 /** A client for the selected backend. Throws when the first-party key is
  * missing; on Bedrock, credentials resolve (and, if absent, reject) at request
- * time — from AWS_ROLE_ARN via Vercel OIDC when set, else the default chain. */
-export function claudeClient(): ClaudeClient {
+ * time — from AWS_ROLE_ARN via Vercel OIDC when set, else the default chain.
+ * `region` (2026-10-30, SK only — SK_BEDROCK_REGION) picks the Bedrock region
+ * for this one client; unset = BEDROCK_REGION, as before. Ignored on the
+ * first-party API. (Clients are not cached; the role credentials are, per
+ * role, and they are valid in every region.) */
+export function claudeClient(opts: { region?: string } = {}): ClaudeClient {
   if (claudeBackend() === "bedrock") {
-    const awsRegion = process.env.BEDROCK_REGION || "us-east-1";
+    const awsRegion = opts.region?.trim() || bedrockRegion();
     const roleArn = (process.env.AWS_ROLE_ARN || "").trim();
     if (!roleArn) return new AnthropicBedrock({ awsRegion });
     const provider = bedrockRoleCredentials(roleArn, awsRegion);

@@ -99,6 +99,12 @@ const TARGET_WORDS: Array<[NavTarget, string[]]> = [
 const ACK_RE = /^(?:yes|yeah|yep|yup|no|nope|ok|okay|sure|fine|alright|go ahead|cancel|ya|tidak|baik|boleh|نعم|لا|حسنا|حسناً|تمام)(?:[\s,.!]*)$/u;
 const THANKS_RE = /^(?:thanks|thank you|thx|cheers|terima kasih|شكرا|شكراً)(?:[\s,.!]*)$/u;
 
+/** The rules' own normalisation (lower case, no closing punctuation). Exported
+ *  for the model-first pre-rules (routing.ts), which reuse bookActivateOf. */
+export function normRuleText(text: string): string {
+  return norm(text);
+}
+
 function norm(text: string): string {
   return text
     .toLowerCase()

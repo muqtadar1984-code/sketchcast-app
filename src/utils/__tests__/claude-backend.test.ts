@@ -105,6 +105,22 @@ describe("claudeClient (factory selection)", () => {
     claudeClient();
     expect(built.bedrock).toEqual([{ awsRegion: "us-west-2" }]);
   });
+
+  it("a caller's own region wins over BEDROCK_REGION for that client only (SK_BEDROCK_REGION)", () => {
+    vi.stubEnv("CLAUDE_BACKEND", "bedrock");
+    vi.stubEnv("BEDROCK_REGION", "us-west-2");
+    claudeClient({ region: "ap-southeast-2" });
+    claudeClient();
+    claudeClient({ region: "  " }); // blank = unset
+    expect(built.bedrock).toEqual([{ awsRegion: "ap-southeast-2" }, { awsRegion: "us-west-2" }, { awsRegion: "us-west-2" }]);
+  });
+
+  it("ignores a region on the first-party API", () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    claudeClient({ region: "ap-southeast-2" });
+    expect(built.anthropic).toHaveLength(1);
+    expect(built.bedrock).toHaveLength(0);
+  });
 });
 
 describe("claudeModel (id mapping)", () => {
@@ -138,6 +154,20 @@ describe("claudeModel (id mapping)", () => {
     expect(claudeModel("claude-sonnet-5")).toBe("us.anthropic.claude-sonnet-5"); // overridden
     expect(claudeModel("claude-opus-5-5")).toBe("global.anthropic.claude-opus-5-5"); // added
     expect(claudeModel("claude-sonnet-4-6")).toBe("global.anthropic.claude-sonnet-4-6"); // untouched
+  });
+
+  it("a caller's overlay (SK_BEDROCK_MODEL_MAP) wins over both tables for that call only", () => {
+    vi.stubEnv("CLAUDE_BACKEND", "bedrock");
+    vi.stubEnv("BEDROCK_MODEL_MAP", JSON.stringify({ "claude-sonnet-5-5": "us.anthropic.claude-sonnet-5-5" }));
+    const sk = { "claude-sonnet-5-5": "au.anthropic.claude-sonnet-5-5", "claude-haiku-5-5": "au.anthropic.claude-haiku-5-5" };
+    expect(claudeModel("claude-sonnet-5-5", sk)).toBe("au.anthropic.claude-sonnet-5-5");
+    expect(claudeModel("claude-haiku-5-5", sk)).toBe("au.anthropic.claude-haiku-5-5");
+    expect(claudeModel("claude-sonnet-5", sk)).toBe("global.anthropic.claude-sonnet-5"); // not in the overlay
+    expect(claudeModel("claude-sonnet-5-5")).toBe("us.anthropic.claude-sonnet-5-5"); // no overlay: unchanged
+  });
+
+  it("passes ids through on the first-party API whatever the overlay", () => {
+    expect(claudeModel("claude-haiku-5-5", { "claude-haiku-5-5": "au.anthropic.claude-haiku-5-5" })).toBe("claude-haiku-5-5");
   });
 
   it("ignores the overlay off Bedrock", () => {

@@ -13,6 +13,11 @@ export type ToolDef = {
 
 export type ToolCall = { id: string; name: string; args: Record<string, unknown> };
 
+/** Tokens one call (or one turn) used. The cache fields are present only when
+ * the provider reports prompt-cache activity (Anthropic: cache_read_input_tokens
+ * / cache_creation_input_tokens); `inputTokens` is the UNCACHED input. */
+export type Usage = { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
+
 /** Provider-agnostic conversation turn. `tool` carries a tool RESULT back to the
  * model (paired to the assistant turn whose toolCalls requested it). */
 export type Turn =
@@ -23,7 +28,7 @@ export type Turn =
 export type StreamEvent =
   | { type: "text"; text: string }
   | { type: "tool_call"; call: ToolCall }
-  | { type: "done"; usage: { inputTokens: number; outputTokens: number } }
+  | { type: "done"; usage: Usage }
   /** retryable=true → transient (rate limit); the caller shows a friendly
    * "one moment" state, never a raw error to a child. */
   | { type: "error"; message: string; retryable?: boolean };

@@ -149,7 +149,7 @@ function refusalMatches(accept: RefusalAccept, ctx: { text: string; label: strin
 
 // ── The verdict ─────────────────────────────────────────────────────────────
 
-export function gradeItem(item: GateItem, run: GateRun, forbidden: string[]): GateVerdict {
+export function gradeItem(item: GateItem, run: GateRun, forbidden: string[], routing: "rules" | "model" = "rules"): GateVerdict {
   const text = answerText(run.events);
   const done = doneOf(run.events);
   const label = done?.label ?? null;
@@ -165,8 +165,9 @@ export function gradeItem(item: GateItem, run: GateRun, forbidden: string[]): Ga
   if (untraceable.length) reasons.push(`untraceable: ${untraceable.join(", ")}`);
   if (leaks.length) reasons.push(`leak: ${leaks.join(", ")}`);
   if (actionClaim) reasons.push("claims an action no card backs");
-  // A rules-routed question that reached the model changed path (and would be billed live).
-  const pathOk = item.path !== "rules" || run.modelCalls === 0;
+  // A rules-routed question that reached the model changed path (and would be
+  // billed live). Under MODEL routing every question reaches the model by design.
+  const pathOk = routing === "model" || item.path !== "rules" || run.modelCalls === 0;
   if (!pathOk) reasons.push(`expected the rules path, made ${run.modelCalls} model call(s)`);
 
   const base = {

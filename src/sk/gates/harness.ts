@@ -9,8 +9,11 @@
 
 import { fakeAuditLog, withAuditLog } from "@/sk/shell/__tests__/audit-log-fake";
 import { GATE_CLOCK, GATE_USERS, forbiddenFor, gateAdmin, gateSession, gateTables, viewFor, type GateView } from "./tenant";
-import { gradeItem, type GateEvent, type GateRun, type GateToolResult, type GateVerdict } from "./grade";
-import type { GateItem } from "./types";
+import { answerText, gradeItem, type GateEvent, type GateRun, type GateToolResult, type GateVerdict } from "./grade";
+import type { GateItem, GateScript } from "./types";
+
+/** 2026-10-30: the Shell routing a gate run measures (SK_ROUTING). */
+export type GateRouting = "rules" | "model";
 
 export type GateHooks = {
   /** Sign the next request in as this session (createClient). */
@@ -96,17 +99,51 @@ export async function runGateTurn(item: GateItem, post: TurnPost, hooks: GateHoo
 
 export type GateOutcome = { verdict: GateVerdict; leakyLeaks: string[] | null; results: GateToolResult[] };
 
+/** Run `fn` with SK_ROUTING set to `routing`, restoring it after. */
+async function withRouting<T>(routing: GateRouting, fn: () => Promise<T>): Promise<T> {
+  const saved = process.env.SK_ROUTING;
+  process.env.SK_ROUTING = routing;
+  try {
+    return await fn();
+  } finally {
+    if (saved === undefined) delete process.env.SK_ROUTING;
+    else process.env.SK_ROUTING = saved;
+  }
+}
+
+/**
+ * Model routing, an item the bank answers by RULES (no script): the scripted
+ * stand-in must call what an honest model would — the capability (and the
+ * arguments) the rules chose for the same words, then quote its summary.
+ * Found by running the item once under rules routing; a rules answer that
+ * ran no capability (a fixed line) is said as is.
+ */
+export async function scriptFromRules(item: GateItem, post: TurnPost, hooks: GateHooks): Promise<GateScript> {
+  const run = await withRouting("rules", () => runGateTurn({ ...item, scripted: undefined }, post, hooks, "rls"));
+  const first = run.results[0];
+  return first ? { calls: [{ name: first.name, args: first.args }], say: "{summary}" } : { say: answerText(run.events) || "I have nothing on that." };
+}
+
 /** Run and grade every item on the RLS view; optionally re-run each on the
  *  LEAKY view (both schools to everyone) for the isolation-only pass. */
-export async function runGates(items: GateItem[], post: TurnPost, hooks: GateHooks, opts: { leaky?: boolean; onItem?: (o: GateOutcome, i: number) => Promise<void> | void } = {}): Promise<GateOutcome[]> {
+export async function runGates(
+  items: GateItem[],
+  post: TurnPost,
+  hooks: GateHooks,
+  opts: { leaky?: boolean; routing?: GateRouting; onItem?: (o: GateOutcome, i: number) => Promise<void> | void } = {},
+): Promise<GateOutcome[]> {
   const out: GateOutcome[] = [];
-  for (const [i, item] of items.entries()) {
-    const forbidden = forbiddenFor(GATE_USERS[item.as]);
-    const run = await runGateTurn(item, post, hooks, "rls");
-    const verdict = gradeItem(item, run, forbidden);
+  const routing = opts.routing ?? "rules";
+  for (const [i, bankItem] of items.entries()) {
+    const forbidden = forbiddenFor(GATE_USERS[bankItem.as]);
+    // Model routing: every item reaches the model, so a rules item gets the
+    // script an honest model would follow (scriptFromRules).
+    const item = routing === "model" && !bankItem.scripted ? { ...bankItem, scripted: await scriptFromRules(bankItem, post, hooks) } : bankItem;
+    const run = await withRouting(routing, () => runGateTurn(item, post, hooks, "rls"));
+    const verdict = gradeItem(item, run, forbidden, routing);
     let leakyLeaks: string[] | null = null;
     if (opts.leaky) {
-      const leaky = gradeItem(item, await runGateTurn(item, post, hooks, "leaky"), forbidden);
+      const leaky = gradeItem(item, await withRouting(routing, () => runGateTurn(item, post, hooks, "leaky")), forbidden, routing);
       leakyLeaks = leaky.leaks;
     }
     const o = { verdict, leakyLeaks, results: run.results };

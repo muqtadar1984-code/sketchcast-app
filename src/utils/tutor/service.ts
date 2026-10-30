@@ -25,8 +25,8 @@ export { claudeConfigured, claudeModel } from "@/utils/claude-backend";
 
 /** The single Claude client factory every route uses — the first-party API, or
  * Amazon Bedrock when CLAUDE_BACKEND=bedrock (see utils/claude-backend.ts). */
-export function anthropic(): ClaudeClient {
-  return claudeClient();
+export function anthropic(opts?: { region?: string }): ClaudeClient {
+  return claudeClient(opts);
 }
 
 export type TutorContext = { bookId: string; chapterNum: number };

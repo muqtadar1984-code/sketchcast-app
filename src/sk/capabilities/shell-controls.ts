@@ -49,7 +49,7 @@ export const startTour: SkCapability = {
   meta: {
     name: "start_tour",
     description:
-      "Start the step-by-step walkthrough of the SketchCast app from its first stop: SK moves the user around the pages and explains each one. Use whenever the user asks to be shown around, for a tour, a demo, a walkthrough, onboarding, how the app works, or what SK can do — in any wording or language. Do not describe the app instead. Not for a question about one feature.",
+      "Start the step-by-step walkthrough of the SketchCast app from its first stop: SK moves the user around the pages and explains each one. Use whenever the user asks to be shown around, for a tour, a demo, a walkthrough, onboarding, how the app works, or what SK can do — in any wording or language, typed or spoken, e.g. 'show me around', 'can you show me around the app', 'give me a tour', 'what can you do', 'what can I do here', 'walk me through the app', 'how does this work', 'tunjukkan saya sekeliling', 'خذني في جولة'. Do not describe the app or list features instead — call this. Not for a question about one feature.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     tier: "immediate",
     kind: "nav",

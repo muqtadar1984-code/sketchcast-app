@@ -4,17 +4,17 @@
 // tool-agnostic (everything injected) so the whole flow is unit-tested with the
 // StubProvider and a fake tool runner.
 
-import type { GenerateOpts, LLMProvider, ToolCall, ToolDef, Turn } from "./provider";
+import type { GenerateOpts, LLMProvider, ToolCall, ToolDef, Turn, Usage } from "./provider";
 
 export type TurnEvent =
   | { type: "text"; text: string }
   | { type: "tool"; name: string } // surfaced so the UI can show "checking the math…"
-  | { type: "done"; fullText: string; usage: { inputTokens: number; outputTokens: number }; toolCalls: number }
+  | { type: "done"; fullText: string; usage: Usage; toolCalls: number }
   | { type: "error"; message: string; retryable?: boolean }
   /** The caller's signal fired (student pressed Stop, tab closed, SK barge-in).
    * Carries what was streamed so far and the usage billed to that point; the
    * turn is NOT a failure and MUST NOT be banked as a finished answer. */
-  | { type: "cancelled"; fullText: string; usage: { inputTokens: number; outputTokens: number }; toolCalls: number };
+  | { type: "cancelled"; fullText: string; usage: Usage; toolCalls: number };
 
 export type TurnConfig = {
   provider: LLMProvider;
@@ -37,7 +37,7 @@ export async function* runAssistantTurn(cfg: TurnConfig): AsyncGenerator<TurnEve
   const messages: Turn[] = [...cfg.history, { role: "user", text: cfg.question }];
   const maxRounds = cfg.maxToolRounds ?? 3;
   let fullText = "";
-  const usage = { inputTokens: 0, outputTokens: 0 };
+  const usage: Usage = { inputTokens: 0, outputTokens: 0 };
   let toolCallCount = 0;
   const cancelled = (): TurnEvent => ({ type: "cancelled", fullText, usage, toolCalls: toolCallCount });
 
@@ -68,6 +68,10 @@ export async function* runAssistantTurn(cfg: TurnConfig): AsyncGenerator<TurnEve
       } else if (ev.type === "done") {
         usage.inputTokens += ev.usage.inputTokens;
         usage.outputTokens += ev.usage.outputTokens;
+        // Prompt-cache tokens appear only when a provider reports them, so a
+        // turn with no cache activity keeps its two-field usage.
+        if (ev.usage.cacheReadTokens) usage.cacheReadTokens = (usage.cacheReadTokens ?? 0) + ev.usage.cacheReadTokens;
+        if (ev.usage.cacheWriteTokens) usage.cacheWriteTokens = (usage.cacheWriteTokens ?? 0) + ev.usage.cacheWriteTokens;
       } else {
         yield { type: "error", message: ev.message, retryable: ev.retryable };
         errored = true;
