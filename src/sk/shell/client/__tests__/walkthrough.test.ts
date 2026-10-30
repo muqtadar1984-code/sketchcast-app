@@ -2,12 +2,19 @@
  * SK's first-login walkthrough — the pure engine (founder 2026-10-30):
  * the per-role plan against the user's facts (the script's Gaps), the state
  * machine's bounds, the position across remounts (sessionStorage), the anchor
- * search / wait, and the bare tour commands.
+ * search and the settled-page wait (2026-10-30: no fixed clock), the strict
+ * sequence's auto-advance, and the tour commands in natural phrasing.
  * Run: node node_modules/vitest/vitest.mjs run src/sk/shell/client/__tests__/walkthrough.test.ts
  */
 import { describe, expect, it } from "vitest";
 import {
-  ANCHOR_TIMEOUT_MS,
+  ADVANCE_AFTER_SPEECH_MS,
+  ANCHOR_STABLE_MS,
+  READ_MIN_MS,
+  READ_MS_PER_CHAR,
+  SETTLE_CAP_MS,
+  SETTLE_QUIET_MS,
+  advanceDelay,
   backStop,
   createWalkStore,
   currentStop,
@@ -24,7 +31,10 @@ import {
   routePath,
   skipWalk,
   startWalk,
-  waitForAnchor,
+  readingMs,
+  waitForSettledAnchor,
+  waitForSettledPage,
+  waitForStableRect,
   walkCommand,
   WALK_STORE_KEY,
   type PlannedStop,
@@ -266,41 +276,209 @@ describe("anchors", () => {
     expect(findAnchor([{ sel: "[bad" }], { query: () => { throw new Error("bad selector"); }, visible: () => true })).toBeNull();
   });
 
-  function fakeClock() {
-    let fn: (() => void) | null = null;
-    let ms = 0;
-    return { setTimer: (f: () => void, m: number) => ((fn = f), (ms = m), 1), clearTimer: () => void (fn = null), fire: () => fn?.(), ms: () => ms };
-  }
-
-  it("resolves when the anchor appears after a page change", async () => {
-    let present: string | null = null;
-    let notify = () => {};
-    const clock = fakeClock();
-    const p = waitForAnchor({ find: () => present, observe: (cb) => ((notify = cb), () => (notify = () => {})), ...clock });
-    notify(); // a mutation, still nothing
-    present = "here";
-    notify();
-    await expect(p).resolves.toBe("here");
-    expect(clock.ms()).toBe(ANCHOR_TIMEOUT_MS);
-  });
-  it("gives up with null after the timeout (the stop is then skipped)", async () => {
-    const clock = fakeClock();
+  /** A fake page: a clock, one pending timer at a time, a probe and an observer. */
+  function fakePage(init: { pathOk?: boolean; ready?: boolean; loading?: boolean } = {}) {
+    let t = 0;
+    const timers: Array<{ at: number; fn: () => void; id: number }> = [];
+    let nextId = 1;
+    let notify: () => void = () => {};
     let unsubscribed = false;
-    const p = waitForAnchor({ find: () => null, observe: () => () => (unsubscribed = true), ...clock });
-    clock.fire();
-    await expect(p).resolves.toBeNull();
-    expect(unsubscribed).toBe(true);
+    const page = { pathOk: init.pathOk ?? true, ready: init.ready ?? true, loading: init.loading ?? false };
+    return {
+      page,
+      now: () => t,
+      setTimer: (fn: () => void, ms: number) => {
+        const id = nextId++;
+        timers.push({ at: t + ms, fn, id });
+        return id;
+      },
+      clearTimer: (h: unknown) => {
+        const i = timers.findIndex((x) => x.id === h);
+        if (i >= 0) timers.splice(i, 1);
+      },
+      probe: { pathOk: () => page.pathOk, ready: () => page.ready, loading: () => page.loading },
+      observe: (cb: () => void) => {
+        notify = cb;
+        return () => {
+          unsubscribed = true;
+          notify = () => {};
+        };
+      },
+      /** A DOM change now. */
+      mutate: () => notify(),
+      unsubscribed: () => unsubscribed,
+      /** Run the clock forward, firing timers in order. */
+      advance(ms: number) {
+        const end = t + ms;
+        for (;;) {
+          timers.sort((a, b) => a.at - b.at);
+          const next = timers[0];
+          if (!next || next.at > end) break;
+          timers.shift();
+          t = next.at;
+          next.fn();
+        }
+        t = end;
+      },
+    };
+  }
+  const box = (top = 10) => ({ top, left: 0, width: 100, height: 40 });
+
+  it("a slow page: the anchor appears late (after the old 4 s) and is found once it holds still", async () => {
+    const p = fakePage({ loading: true });
+    let el: { id: string } | null = null;
+    let rect = box(10);
+    const wait = waitForSettledAnchor({ find: () => el, rect: () => rect, ...p });
+    // Six seconds of a loading page with no anchor: never "missing" (the old clock gave up at 4 s).
+    for (let i = 0; i < 30; i++) {
+      p.mutate();
+      p.advance(200);
+    }
+    el = { id: "book-card" };
+    p.advance(200); // seen once
+    rect = box(80); // still moving (the page above it streamed in)
+    p.advance(200);
+    p.page.loading = false;
+    p.advance(200); // the same box twice, 200 ms apart
+    await expect(wait).resolves.toEqual({ id: "book-card" });
+    expect(p.unsubscribed()).toBe(true);
   });
-  it("an abort (she pressed Skip, or the page unmounted) ends the wait", async () => {
+  it("an invisible (zero-size) anchor is not found", async () => {
+    const p = fakePage();
+    const el = { id: "hidden" };
+    const wait = waitForSettledAnchor({ find: () => el, rect: () => ({ top: 0, left: 0, width: 0, height: 0 }), ...p });
+    p.advance(SETTLE_CAP_MS + 200);
+    await expect(wait).resolves.toBeNull(); // in the DOM but showing nothing, even at the cap
+    const p2 = fakePage();
+    let gone = false;
+    const wait2 = waitForSettledAnchor({ find: () => (gone ? null : el), rect: () => ({ top: 0, left: 0, width: 0, height: 0 }), ...p2 });
+    p2.advance(400);
+    gone = true;
+    p2.advance(SETTLE_QUIET_MS + 400);
+    await expect(wait2).resolves.toBeNull();
+  });
+  it("settles empty: missing is decided only after the page is loaded, without loading UI, quiet for ~800 ms", async () => {
+    const p = fakePage({ pathOk: false, ready: false, loading: true });
+    let done = false;
+    const wait = waitForSettledAnchor({ find: () => null, rect: () => box(), ...p }).then((v) => ((done = true), v));
+    p.advance(3000);
+    p.page.pathOk = true; // the navigation landed
+    p.advance(3000);
+    p.page.ready = true;
+    p.advance(3000);
+    await Promise.resolve();
+    expect(done).toBe(false); // the loading ring is still up
+    p.page.loading = false;
+    p.mutate(); // the page swapped in
+    p.advance(SETTLE_QUIET_MS - 200);
+    await Promise.resolve();
+    expect(done).toBe(false); // not quiet long enough
+    p.advance(400);
+    await expect(wait).resolves.toBeNull();
+  });
+  it("the cap (~20 s): an anchor that keeps moving is taken as it is", async () => {
+    const p = fakePage({ loading: true });
+    const el = { id: "carousel" };
+    let top = 0;
+    const wait = waitForSettledAnchor({ find: () => el, rect: () => box((top += 7)), ...p });
+    p.advance(SETTLE_CAP_MS + 200);
+    await expect(wait).resolves.toBe(el);
+  });
+  it("the cap (~20 s): a page that never settles gives up with what it has", async () => {
+    const p = fakePage({ loading: true });
+    const wait = waitForSettledAnchor({ find: () => null, rect: () => box(), ...p });
+    p.advance(SETTLE_CAP_MS - 400);
+    let settled = false;
+    void wait.then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    p.advance(600);
+    await expect(wait).resolves.toBeNull();
+  });
+  it("abort ends the wait at once (Skip, a move, the page unmounted)", async () => {
     const ac = new AbortController();
-    const clock = fakeClock();
-    const p = waitForAnchor({ find: () => null, observe: () => () => {}, signal: ac.signal, ...clock });
+    const p = fakePage({ loading: true });
+    const wait = waitForSettledAnchor({ find: () => null, rect: () => box(), ...p, signal: ac.signal });
+    p.advance(1000);
     ac.abort();
-    await expect(p).resolves.toBeNull();
+    await expect(wait).resolves.toBeNull();
+    const pre = new AbortController();
+    pre.abort();
+    await expect(waitForSettledAnchor({ find: () => ({}), rect: () => box(), ...fakePage(), signal: pre.signal })).resolves.toBeNull();
+  });
+  it("a stop with nothing to point at plays once the page has settled", async () => {
+    const p = fakePage({ loading: true });
+    const hit = { el: null };
+    const wait = waitForSettledAnchor({ find: () => hit, rect: () => null, ...p });
+    p.advance(2000);
+    p.page.loading = false;
+    p.advance(SETTLE_QUIET_MS + 200);
+    await expect(wait).resolves.toBe(hit);
+  });
+  it("two finds of the same element are the same anchor (the browser compares elements)", async () => {
+    const p = fakePage();
+    const el = { id: "x" };
+    const wait = waitForSettledAnchor({ find: () => ({ el }), rect: () => box(), same: (a, b) => a.el === b.el, ...p });
+    p.advance(ANCHOR_STABLE_MS);
+    await expect(wait).resolves.toEqual({ el });
+  });
+  it("the tour's start waits for the home page to settle", async () => {
+    const p = fakePage({ loading: true });
+    let started = false;
+    const wait = waitForSettledPage({ ...p }).then((v) => ((started = v), v));
+    p.advance(5000);
+    await Promise.resolve();
+    expect(started).toBe(false);
+    p.page.loading = false;
+    p.advance(SETTLE_QUIET_MS + 200);
+    await expect(wait).resolves.toBe(true);
+    const ac = new AbortController();
+    const p2 = fakePage({ loading: true });
+    const w2 = waitForSettledPage({ ...p2, signal: ac.signal });
+    ac.abort();
+    await expect(w2).resolves.toBe(false);
+  });
+  it("the scroll has finished when the box stops moving", async () => {
+    const p = fakePage();
+    let top = 500;
+    let resolved = false;
+    const w = waitForStableRect({ rect: () => box(top), setTimer: p.setTimer }).then(() => (resolved = true));
+    top = 300; // scrolling
+    p.advance(100);
+    top = 120;
+    p.advance(100);
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    p.advance(100); // 120 twice: the scroll has finished
+    await w;
+    expect(resolved).toBe(true);
   });
 });
 
-describe("walkCommand: a bare tour command, never a question", () => {
+describe("strict sequence: when the tour may move on by itself", () => {
+  it("sound on: ~1 s after the line has FULLY been spoken; never while it is still being spoken", () => {
+    expect(advanceDelay({ status: "running", soundOn: true, outcome: "spoken", text: "Hello." })).toBe(ADVANCE_AFTER_SPEECH_MS);
+    expect(ADVANCE_AFTER_SPEECH_MS).toBe(1000);
+    expect(advanceDelay({ status: "running", soundOn: true, outcome: null, text: "Hello." })).toBeNull();
+  });
+  it("a line cut off (barge-in, Stop, an error) never advances: Next or Resume", () => {
+    expect(advanceDelay({ status: "running", soundOn: true, outcome: "stopped", text: "Hello." })).toBeNull();
+  });
+  it("sound off (or read-aloud off): the reading time, 55 ms a character, at least 5 s", () => {
+    const long = "x".repeat(200);
+    expect(advanceDelay({ status: "running", soundOn: false, text: long })).toBe(200 * READ_MS_PER_CHAR);
+    expect(advanceDelay({ status: "running", soundOn: false, text: "Short." })).toBe(READ_MIN_MS);
+    expect(advanceDelay({ status: "running", soundOn: true, outcome: "silent", text: long })).toBe(11_000);
+    expect(readingMs("")).toBe(5000);
+  });
+  it("a pause or a question holds it", () => {
+    expect(advanceDelay({ status: "paused", soundOn: true, outcome: "spoken", text: "Hi." })).toBeNull();
+    expect(advanceDelay({ status: "paused", soundOn: false, text: "Hi." })).toBeNull();
+    expect(advanceDelay({ status: "done", soundOn: false, text: "Hi." })).toBeNull();
+  });
+});
+
+describe("walkCommand: tour commands, never a question", () => {
   it("knows next / back / pause / continue / skip in several languages", () => {
     expect(walkCommand("Next")).toBe("next");
     expect(walkCommand("next.")).toBe("next");
@@ -312,10 +490,34 @@ describe("walkCommand: a bare tour command, never a question", () => {
     expect(walkCommand("teruskan")).toBe("resume");
     expect(walkCommand("skip")).toBe("skip");
   });
-  it("anything longer is a question for SK", () => {
+  it("natural phrasing: greetings and fillers stripped, the command anywhere in a short message about the tour", () => {
+    expect(walkCommand("Hi, continue with the tour?")).toBe("resume");
+    expect(walkCommand("go to the next one")).toBe("next");
+    expect(walkCommand("skip this tour please")).toBe("skip");
+    expect(walkCommand("ok next")).toBe("next");
+    expect(walkCommand("Okay SK, let's go back")).toBe("back");
+    expect(walkCommand("can you continue the tour")).toBe("resume");
+    expect(walkCommand("Hey, end the tour")).toBe("skip");
+    expect(walkCommand("please pause the tour")).toBe("pause");
+    expect(walkCommand("sila teruskan lawatan")).toBe("resume");
+    expect(walkCommand("مرحبا، تابع الجولة")).toBe("resume");
+    expect(walkCommand("Salut, continuer la visite")).toBe("resume");
+    expect(walkCommand("hola, siguiente por favor")).toBe("next");
+  });
+  it("a real question stays a question", () => {
+    expect(walkCommand("how do I continue a lesson?")).toBeNull();
     expect(walkCommand("what's next?")).toBeNull();
     expect(walkCommand("next slide")).toBeNull();
     expect(walkCommand("how are my classes")).toBeNull();
+    expect(walkCommand("stop")).toBeNull(); // "stop" alone is not "end the tour"
+    expect(walkCommand("don't skip the tour")).toBeNull();
+    expect(walkCommand("continue writing the diary note for 7B please")).toBeNull();
+    expect(walkCommand("Hi, could you please continue with the tour you were giving me just now")).toBeNull(); // > 8 words
     expect(walkCommand("")).toBeNull();
+  });
+  it("loose (the server, while a tour is on): longer, but the tour must be named", () => {
+    expect(walkCommand("Hi SK, could you please continue with the tour you were giving me", { loose: true })).toBe("resume");
+    expect(walkCommand("go to the next one", { loose: true })).toBeNull();
+    expect(walkCommand("how do I end a lesson in the tour", { loose: true })).toBeNull();
   });
 });

@@ -181,11 +181,52 @@ describe("the launcher's wiring (source pins)", () => {
     expect(readSrc("app/present/present-client.tsx")).toContain("walkCopy={sk.walkCopy}");
     expect(readSrc("app/sk/layout.tsx")).toContain("walkCopy={t.sk.walkthrough}");
   });
-  it("navigation is the client router (never a full reload) with a prefetch of the next stop", () => {
+  it("navigation is the client router (never a full reload), with EVERY page of the plan prefetched when the run starts", () => {
     const w = read("sk-walkthrough.tsx");
     expect(w).toContain("router.push(s.route);");
-    expect(w).toContain("router.prefetch(nx.route);");
+    expect(w).toContain("for (const route of new Set(w.stops.map((s) => s.route))) {");
+    expect(w).toContain("router.prefetch(route);");
     expect(w).not.toMatch(/window\.location\.(?:href|assign|replace)\s*[=(]/);
+  });
+});
+
+// 2026-10-30 (founder: "SK is proceeding without waiting for the page to
+// complete loading" — the teacher tour started at "1 of 10" on "output").
+describe("strict sequence: navigate → settle → highlight → the whole line → only then next (source pins)", () => {
+  const w = code(read("sk-walkthrough.tsx")).replace(/\r\n/g, "\n");
+  const stopEffect = w.slice(w.indexOf("const goKey = goKeyOf(walk);"), w.indexOf("const onVoiceDone = useCallback("));
+  it("no fixed clock: the anchor waits for a SETTLED page (route, loaded, no loading UI, quiet), capped", () => {
+    expect(w).not.toContain("waitForAnchor(");
+    expect(stopEffect).toContain("await waitForSettledAnchor<");
+    expect(stopEffect).toContain("probe: settleProbe(target),");
+    expect(w).toContain("ready: () => document.readyState === \"complete\",");
+    expect(w).toMatch(/\[aria-busy="true"\], \[data-loading\]:not\(\[data-loading="false"\]\), \[data-sk-loading\], \.animate-pulse/);
+    // The route loading.tsx fallbacks carry the attribute the probe keys on.
+    expect(readSrc("components/loading/loading-screen.tsx")).toContain("data-sk-loading");
+  });
+  it("in order: settle → scroll into view → the scroll has finished → highlight → only THEN the line", () => {
+    const order = ["await waitForSettledAnchor<", "el.scrollIntoView(", "await waitForStableRect(", "setMatch(m);", "speakStop(goKey, entry, text)"].map((s) => stopEffect.indexOf(s));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+  it("the tour does not START before the home page has settled", () => {
+    const start = w.slice(w.indexOf("const start = useCallback("), w.indexOf("const goKey = goKeyOf(walk);"));
+    expect(start.indexOf("await waitForSettledPage(")).toBeGreaterThan(0);
+    expect(start.indexOf("await waitForSettledPage(")).toBeLessThan(start.indexOf("setWalk(startWalk("));
+  });
+  it("auto-advance only after the line was FULLY spoken (or the reading time without sound), cancelled by a pause, a question or her typing", () => {
+    expect(w).toContain("const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });");
+    expect(w).toMatch(/if \(advance\.entry !== entryRef\.current \|\| heldRef\.current === advance\.entry\) return;/);
+    for (const name of ["const onQuestion = useCallback(", "const hold = useCallback(", "pause: () => {"]) {
+      const body = w.slice(w.indexOf(name), w.indexOf(name) + 260);
+      expect(body).toContain("setAdvance(null);");
+    }
+    const shell = code(read("sk-shell.tsx"));
+    expect(shell).toContain("void coord.sayLine(v.text).then(report);");
+    expect(shell).toContain("walkRef.current?.hold?.();");
+  });
+  it("the caption shows WITH the highlight, not before the page has settled", () => {
+    expect(w).toContain('const shown = walk?.status === "paused" || (!!match && match.key === goKey);');
   });
 });
 

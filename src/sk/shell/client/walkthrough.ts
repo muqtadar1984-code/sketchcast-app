@@ -9,11 +9,17 @@
 //                     at the first stop stays there; next at the last is done).
 //   createWalkStore() — the position in sessionStorage, so it survives page
 //                     moves AND the separate launchers on /present and /sk.
-//   findAnchor() / waitForAnchor() — the first VISIBLE anchor, and the wait for
-//                     it after a navigation (observer + ~4 s timeout), with
-//                     the DOM injected so node tests drive them.
+//   findAnchor() / waitForSettledAnchor() — the first VISIBLE anchor, and the
+//                     wait for it on a SETTLED page (2026-10-30 fix: no fixed
+//                     clock — "missing" is decided only once the page has
+//                     loaded and gone quiet, capped at ~20 s), with the DOM,
+//                     the clock and the page probe injected so node tests
+//                     drive them. waitForSettledPage() holds the tour's start.
+//   advanceDelay()  — strict sequence: navigate → settle → highlight → the
+//                     WHOLE line → only then may the tour move on by itself.
 //   walkCommand()   — "next" / "back" / "pause" / "skip" / "continue" typed or
-//                     said while the tour is on (no turn, no model).
+//                     said while the tour is on, also in natural phrasing
+//                     ("Hi, continue with the tour?") — no turn, no model.
 //
 // The tour writes nothing but the seen row at the end (see sk-launcher.tsx),
 // makes no model call, and never sends a sample question.
@@ -290,44 +296,202 @@ export function findAnchor<E>(anchors: PlannedStop["anchors"], dom: AnchorDom<E>
   return null;
 }
 
-export const ANCHOR_TIMEOUT_MS = 4000;
+/** A box on screen (getBoundingClientRect's numbers). */
+export type WalkRect = { top: number; left: number; width: number; height: number };
 
-/** Wait for `find()` to return something: checked now, again on every change
- *  the observer reports, and given up (null) after `timeoutMs` or on abort. */
-export function waitForAnchor<T>(opts: {
-  find: () => T | null;
-  /** Subscribe to page changes (a MutationObserver in the browser); returns unsubscribe. */
+const sameRect = (a: WalkRect | null, b: WalkRect | null) =>
+  !!a && !!b && Math.round(a.top) === Math.round(b.top) && Math.round(a.left) === Math.round(b.left) && Math.round(a.width) === Math.round(b.width) && Math.round(a.height) === Math.round(b.height);
+
+/** The page is settled when nothing has changed for this long (and it is loaded). */
+export const SETTLE_QUIET_MS = 800;
+/** An anchor counts once its box is the same on two checks this far apart. */
+export const ANCHOR_STABLE_MS = 200;
+/** The longest a stop waits for its page before it is passed over (a hard cap). */
+export const SETTLE_CAP_MS = 20_000;
+
+/** What the settled-page wait reads off the page (a browser probe, or a test fake). */
+export type SettleProbe = {
+  /** The address bar is on the stop's route. */
+  pathOk: () => boolean;
+  /** document.readyState === "complete". */
+  ready: () => boolean;
+  /** A loading UI is visible: aria-busy, [data-loading], a skeleton, loading.tsx. */
+  loading: () => boolean;
+};
+
+export type SettleOptions = {
+  probe: SettleProbe;
+  /** Subscribe to DOM changes (a MutationObserver in the browser); returns unsubscribe. */
   observe: (onChange: () => void) => () => void;
-  timeoutMs?: number;
+  now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (h: unknown) => void;
+  quietMs?: number;
+  stableMs?: number;
+  capMs?: number;
   signal?: AbortSignal;
-}): Promise<T | null> {
+};
+
+/**
+ * Wait for a stop's anchor on a SETTLED page (founder 2026-10-30: "SK waits for
+ * the page to load before continuing"). Replaces the fixed 4 s clock counted
+ * from the navigation, which dropped four of the teacher's fourteen stops on a
+ * slow dashboard ("1 of 10", starting at "output").
+ *
+ *   found   — `find()` returns an anchor whose box (`rect`) is non-zero and the
+ *             same on two checks `stableMs` apart. The page need not be settled
+ *             for that: a stable anchor is good enough. A stop with nothing to
+ *             point at (`rect` → null) plays once the page has settled.
+ *   missing — decided only once the page has SETTLED without one: on the
+ *             stop's route, loaded, no loading UI, and no DOM change for
+ *             `quietMs`.
+ *   cap     — after `capMs` (≈20 s): the anchor found by then (even if it is
+ *             still moving), else null.
+ *   abort   — null at once.
+ *
+ * Everything is injected (clock, timers, page probe, observer), so node tests
+ * drive it. Checks run every `stableMs`; a mutation only moves the quiet clock.
+ */
+export function waitForSettledAnchor<T>(
+  opts: SettleOptions & {
+    find: () => T | null;
+    /** The anchor's box; null when the hit has no element (a stop with no anchor). */
+    rect: (hit: T) => WalkRect | null;
+    /** Two finds are the same anchor (default ===; the browser compares elements). */
+    same?: (a: T, b: T) => boolean;
+  },
+): Promise<T | null> {
+  const now = opts.now ?? (() => Date.now());
   const setT = opts.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
   const clearT = opts.clearTimer ?? ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  const quietMs = opts.quietMs ?? SETTLE_QUIET_MS;
+  const stableMs = opts.stableMs ?? ANCHOR_STABLE_MS;
+  const capMs = opts.capMs ?? SETTLE_CAP_MS;
+  const same = opts.same ?? ((a: T, b: T) => a === b);
   return new Promise<T | null>((resolve) => {
     if (opts.signal?.aborted) return resolve(null);
-    const first = opts.find();
-    if (first) return resolve(first);
-    let settled = false;
-    let unsubscribe: () => void = () => {};
+    const started = now();
+    let lastChange = started;
+    let candidate: { hit: T; rect: WalkRect } | null = null;
     let timer: unknown = null;
-    const settle = (v: T | null) => {
-      if (settled) return;
-      settled = true;
+    let finished = false;
+    let unsubscribe: () => void = () => {};
+    const finish = (v: T | null) => {
+      if (finished) return;
+      finished = true;
       unsubscribe();
       if (timer !== null) clearT(timer);
       opts.signal?.removeEventListener("abort", onAbort);
       resolve(v);
     };
-    const onAbort = () => settle(null);
+    const onAbort = () => finish(null);
     opts.signal?.addEventListener("abort", onAbort);
+    const safeFind = (): T | null => {
+      try {
+        return opts.probe.pathOk() ? opts.find() : null;
+      } catch {
+        return null;
+      }
+    };
+    const settled = (t: number) => opts.probe.pathOk() && opts.probe.ready() && !opts.probe.loading() && t - lastChange >= quietMs;
+    const check = () => {
+      timer = null;
+      if (finished) return;
+      if (opts.signal?.aborted) return finish(null);
+      const t = now();
+      const hit = safeFind();
+      if (t - started >= capMs) {
+        // The cap: whatever visible anchor there is by now (even still moving).
+        const r = hit ? opts.rect(hit) : null;
+        return finish(hit && (r === null || (r.width > 0 && r.height > 0)) ? hit : null);
+      }
+      if (hit) {
+        const r = opts.rect(hit);
+        if (r === null) {
+          // Nothing to point at: the stop plays once the page has settled.
+          if (settled(t)) return finish(hit);
+        } else if (r.width > 0 && r.height > 0) {
+          if (candidate && same(candidate.hit, hit) && sameRect(candidate.rect, r)) return finish(hit);
+          candidate = { hit, rect: r };
+        } else candidate = null;
+      } else {
+        candidate = null;
+        if (settled(t)) return finish(null);
+      }
+      timer = setT(check, stableMs);
+    };
     unsubscribe = opts.observe(() => {
-      const hit = opts.find();
-      if (hit) settle(hit);
+      lastChange = now();
     });
-    timer = setT(() => settle(opts.find()), opts.timeoutMs ?? ANCHOR_TIMEOUT_MS);
+    check();
   });
+}
+
+/** Wait for the page itself to settle — the tour does not START before the
+ *  home page has. Resolves true once settled (or at the cap: the tour then
+ *  starts anyway), false when aborted. */
+export function waitForSettledPage(opts: SettleOptions): Promise<boolean> {
+  const hit = { page: true };
+  return waitForSettledAnchor({ ...opts, find: () => hit, rect: () => null }).then((v) => v !== null && !opts.signal?.aborted);
+}
+
+/** Wait for a box to stop moving (a smooth scroll finishing): resolves once two
+ *  checks `stepMs` apart read the same box, or at `capMs`. */
+export function waitForStableRect(opts: {
+  rect: () => WalkRect | null;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  stepMs?: number;
+  capMs?: number;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const setT = opts.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
+  const stepMs = opts.stepMs ?? 100;
+  const maxSteps = Math.max(1, Math.ceil((opts.capMs ?? 1500) / stepMs));
+  return new Promise<void>((resolve) => {
+    let last = opts.rect();
+    let steps = 0;
+    const tick = () => {
+      if (opts.signal?.aborted) return resolve();
+      const r = opts.rect();
+      if (r === null || sameRect(last, r) || ++steps >= maxSteps) return resolve();
+      last = r;
+      setT(tick, stepMs);
+    };
+    setT(tick, stepMs);
+  });
+}
+
+// ── auto-advance: one thing at a time ───────────────────────────────────────
+
+/** With sound: the pause after a line has FULLY finished, before the next stop. */
+export const ADVANCE_AFTER_SPEECH_MS = 1000;
+/** Without sound: reading time per character, and its floor. */
+export const READ_MS_PER_CHAR = 55;
+export const READ_MIN_MS = 5000;
+
+export function readingMs(text: string): number {
+  return Math.max(READ_MIN_MS, Math.round([...String(text ?? "")].length * READ_MS_PER_CHAR));
+}
+
+/** How a stop's line ended: every sentence spoken, cut off (barge-in, Stop,
+ *  an error), or silent (read-aloud off / nothing to say). */
+export type LineOutcome = "spoken" | "stopped" | "silent";
+
+/**
+ * When the tour may move on by itself — strictly after the stop is shown
+ * (navigated, settled, highlighted) AND its line is over. Null = never by
+ * itself (wait for Next or Resume).
+ *   sound on  — ADVANCE_AFTER_SPEECH_MS after the line FULLY finished (all its
+ *               sentences); a line that was cut off never advances; null
+ *               while it is still being spoken. Read-aloud off reads instead.
+ *   sound off — the line's reading time (55 ms a character, at least 5 s).
+ * Only a running tour advances: a pause or a question holds it.
+ */
+export function advanceDelay(input: { status: WalkStatus; soundOn: boolean; outcome?: LineOutcome | null; text: string }): number | null {
+  if (input.status !== "running") return null;
+  if (!input.soundOn || input.outcome === "silent") return readingMs(input.text);
+  if (input.outcome === "spoken") return ADVANCE_AFTER_SPEECH_MS;
+  return null;
 }
 
 /** The path part of a route ("/dashboard/diary?c=1" → "/dashboard/diary"). */
@@ -350,16 +514,121 @@ const CMD: Array<[WalkCommand, RegExp]> = [
   ["skip", /^(?:skip|skip the tour|end the tour|stop the tour|langkau|tamat|تخط|تخطى|إنهاء الجولة|passer|terminer|omitir|saltar|pular|छोड़ें|वगळा|దాటవేయి)$/u],
 ];
 
-/** A bare tour command, or null for anything else (which is a question). */
-export function walkCommand(text: string): WalkCommand | null {
-  const t = text
+// 2026-10-30 (founder: "Hi, continue with the tour?" went to the model as a
+// question). The loose match: greetings and fillers are stripped, then a
+// command word ANYWHERE in a short message counts when the message also
+// mentions the tour, or is nothing but the command and a few light words
+// ("go to the next one"). A real question ("how do I continue a lesson?")
+// keeps words that are neither, so it stays a question.
+
+/** Greetings and fillers, any app language (whole words or phrases). */
+const FILLERS = [
+  "hi", "hii", "hello", "hey", "hiya", "ok", "okay", "okey", "k", "sk", "please", "pls", "plz", "can you", "could you", "would you", "will you", "can we", "could we",
+  "let's", "lets", "let us", "now", "so", "yes", "yeah", "yep", "sure", "alright", "all right", "right", "thanks", "thank you", "i want to", "i'd like to", "i would like to", "want to", "just",
+  "hai", "helo", "sila", "tolong", "boleh", "jom", "mari", "baik", "terima kasih",
+  "مرحبا", "اهلا", "أهلا", "من فضلك", "لو سمحت", "حسنا", "نعم",
+  "salut", "bonjour", "s'il te plaît", "s'il vous plaît", "d'accord", "oui", "merci",
+  "hola", "por favor", "vale", "sí", "si", "gracias",
+  "olá", "ola", "oi", "obrigado", "obrigada", "sim",
+  "नमस्ते", "नमस्कार", "कृपया", "ठीक है", "हाँ", "धन्यवाद",
+  "दया करून", "हो",
+  "నమస్తే", "దయచేసి", "సరే", "అవును",
+];
+
+/** Words that only carry a command along ("go to the next one"). */
+const LIGHT = new Set([
+  "go", "to", "the", "one", "stop", "step", "page", "on", "with", "this", "that", "a", "an", "again", "ahead", "it", "me", "us", "of", "our", "your", "my", "please", "now",
+  "ke", "yang", "ini", "itu", "dengan",
+  "إلى", "الى", "مع", "هذه", "هذا",
+  "la", "le", "les", "à", "au", "avec", "cette", "ce",
+  "el", "al", "con", "esta", "este", "lo",
+  "o", "a", "ao", "com", "essa", "esse", "isso",
+  "को", "से", "यह", "ये", "ला", "हा", "ही",
+  "ని", "ఈ",
+]);
+
+/** The tour itself, any app language. */
+const TOUR_WORDS = ["tour", "the tour", "walkthrough", "walk through", "guided tour", "lawatan", "panduan", "tur", "الجولة", "جولة", "visite", "la visite", "recorrido", "passeio", "टूर", "టూర్"];
+
+/** Command words found anywhere (phrases first, so "go back" beats "back"). */
+const LOOSE: Array<[WalkCommand, string[]]> = [
+  ["resume", ["continue", "carry on", "resume", "keep going", "go on with", "sambung", "sambungkan", "teruskan", "تابع", "استمر", "واصل", "continuer", "continuez", "continuar", "continua", "जारी", "सुरू ठेवा", "కొనసాగించు"]],
+  ["skip", ["skip", "end", "stop", "finish", "exit", "quit", "close", "langkau", "tamat", "hentikan", "تخط", "تخطى", "إنهاء", "أنهي", "passer", "terminer", "arrêter", "omitir", "saltar", "terminar", "pular", "encerrar", "छोड़ें", "छोड़ो", "बंद", "वगळा", "దాటవేయి"]],
+  ["back", ["go back", "back", "previous", "kembali", "sebelumnya", "السابق", "رجوع", "ارجع", "retour", "précédent", "precedent", "atrás", "atras", "anterior", "voltar", "पीछे", "पिछला", "मागे", "వెనుకకు"]],
+  ["pause", ["pause", "hold on", "wait", "jeda", "tunggu", "توقف", "انتظر", "attends", "attendez", "espera", "pausa", "pausar", "रुको", "थांबा", "ఆగు"]],
+  ["next", ["next", "go on", "seterusnya", "berikutnya", "التالي", "التالية", "suivant", "suivante", "siguiente", "próximo", "proximo", "seguinte", "अगला", "आगे", "पुढे", "पुढील", "తదుపరి"]],
+];
+
+/** Words that turn a command around ("don't skip the tour"). */
+const NEGATION = /(?:^| )(?:don't|dont|do not|not|no|never|jangan|tidak|لا|ne|pas|nunca|não|nao|मत|नहीं|వద్దు)(?= |$)/u;
+
+/** "skip" and friends with a meaning outside the tour ("stop", "end"): only
+ *  with the tour named. */
+const NEEDS_TOUR = new Set(["end", "stop", "finish", "exit", "quit", "close", "hentikan", "إنهاء", "أنهي", "arrêter", "terminar", "encerrar", "बंद"]);
+
+const MAX_LOOSE_WORDS = 8;
+/** Other words a command may carry when the tour is named ("…the tour you were giving me"). */
+const MAX_EXTRA_WORDS = 3;
+
+/** A question about something ("how do I end a lesson in the tour?") is not a command. */
+const QUESTION_START = /^(?:how|what|what's|whats|why|when|where|who|which|is|are|does|do|can i|should|bagaimana|macam mana|apa|kenapa|mengapa|bila|di mana|كيف|ماذا|ما|لماذا|متى|أين|هل|comment|quoi|pourquoi|quand|où|est-ce|cómo|como|qué|que|por qué|cuándo|dónde|o que|porque|quando|onde|कैसे|क्या|क्यों|कब|कहाँ|कसे|काय|का|कधी|कुठे|ఎలా|ఏమి|ఎందుకు|ఎప్పుడు|ఎక్కడ)(?: |$)/u;
+
+/** Lower-case, quotes and punctuation to spaces, one space between words. */
+function normalise(text: string): string {
+  return String(text ?? "")
     .toLowerCase()
-    .replace(/[“”"«»]/g, "")
-    .replace(/^(?:please|sila|tolong|من فضلك)\s+/u, "")
-    .replace(/[\s?!.,;:।؟]+$/u, "")
+    .replace(/[’`]/g, "'")
+    .replace(/[“”"«»]/g, " ")
+    .replace(/[?!.,;:।؟،…()[\]{}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const has = (t: string, phrase: string) => ` ${t} `.includes(` ${phrase} `);
+const cut = (t: string, phrase: string) => ` ${t} `.split(` ${phrase} `).join(" ").replace(/\s+/g, " ").trim();
+
+/** Remove every filler phrase (longest first), wherever it stands. */
+function stripFillers(t: string): string {
+  let out = t;
+  for (const f of [...FILLERS].sort((a, b) => b.length - a.length)) while (has(out, f)) out = cut(out, f);
+  return out;
+}
+
+/**
+ * A tour command, or null for anything else (which is a question for SK).
+ * Strict by default: a bare command, after greetings and fillers ("ok next",
+ * "please continue"), or the command anywhere in a short message (≤ 8 words)
+ * that mentions the tour or carries nothing else but light words ("Hi,
+ * continue with the tour?", "go to the next one", "skip this tour please").
+ * `loose` (the server's check while a tour is on): no word limit, but the
+ * tour must be named.
+ */
+export function walkCommand(text: string, opts: { loose?: boolean } = {}): WalkCommand | null {
+  const t = normalise(text);
   if (!t) return null;
-  for (const [cmd, re] of CMD) if (re.test(t)) return cmd;
-  return null;
+  const bare = stripFillers(t);
+  if (!bare) return null;
+  for (const [cmd, re] of CMD) if (re.test(bare)) return cmd;
+  if (NEGATION.test(bare) || QUESTION_START.test(bare)) return null;
+  const words = t.split(" ").length;
+  const tourNamed = TOUR_WORDS.some((w) => has(bare, w));
+  if (!opts.loose && words > MAX_LOOSE_WORDS) return null;
+  if (opts.loose && !tourNamed) return null;
+  // The earliest command phrase in the message.
+  let best: { cmd: WalkCommand; at: number; phrase: string } | null = null;
+  for (const [cmd, phrases] of LOOSE) {
+    for (const p of phrases) {
+      const at = ` ${bare} `.indexOf(` ${p} `);
+      if (at < 0) continue;
+      if (NEEDS_TOUR.has(p) && !tourNamed) continue;
+      if (!best || at < best.at || (at === best.at && p.length > best.phrase.length)) best = { cmd, at, phrase: p };
+    }
+  }
+  if (!best) return null;
+  // What else the message says: with the tour named, a few other words; with
+  // it unnamed, nothing but the command and light words ("go to the next one").
+  let rest = cut(bare, best.phrase);
+  for (const w of [...TOUR_WORDS].sort((a, b) => b.length - a.length)) while (has(rest, w)) rest = cut(rest, w);
+  const extra = rest.split(" ").filter((w) => w && !LIGHT.has(w)).length;
+  return extra <= (tourNamed ? MAX_EXTRA_WORDS : 0) ? best.cmd : null;
 }

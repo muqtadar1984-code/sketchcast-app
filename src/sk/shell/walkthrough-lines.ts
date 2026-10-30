@@ -15,3 +15,11 @@ export const WALKTHROUGH_START: Record<string, string> = {
   mr: "हा आहे टूर. मी तुम्हाला सगळे फिरून दाखवतो.",
   hi: "यह रहा टूर। मैं आपको सब कुछ दिखाता हूँ।",
 };
+
+/** 2026-10-30: the one line the model gets while a guided tour is on in her
+ *  tab (founder: "Hi, continue with the tour?" got "I don't have a tour to
+ *  continue here"). English, like the rest of the system prompt. */
+export function walkPromptLine(w: { paused: boolean; stop: string; index: number; total: number }): string {
+  const where = w.stop ? `stop "${w.stop}"${w.total ? ` (${w.index + 1} of ${w.total})` : ""}` : "a stop";
+  return `A guided tour of the app is ${w.paused ? "paused" : "running"} at ${where}. The user can say "continue the tour", "next", "back" or "skip the tour" to move it; if they ask about the tour, tell them that — never say there is no tour.`;
+}
