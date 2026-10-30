@@ -125,9 +125,15 @@ export function fakeDb(init: Record<string, Row[]> = {}, opts: { missing?: strin
         if (k.source_kind === "article") {
           const row = arts.find((x) => String(x.id) === k.source_id);
           const ok = row && row.status === "approved" && !arts.some((n) => n.topic_id === row.topic_id && n.language === row.language && n.status === "approved" && n.version > row.version);
-          if (!ok) (blocks.splice(i, 1), a++);
+          if (!ok) {
+            blocks.splice(i, 1);
+            a++;
+          }
         } else if (k.source_kind === "user_book") {
-          if (!books.some((b) => String(b.id) === k.source_id && !b.removed_at)) (blocks.splice(i, 1), u++);
+          if (!books.some((b) => String(b.id) === k.source_id && !b.removed_at)) {
+            blocks.splice(i, 1);
+            u++;
+          }
         }
       }
       return { data: { articles: a, user_books: u }, error: null };
