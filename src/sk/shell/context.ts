@@ -115,13 +115,40 @@ export function sanitizeBoard(board: unknown): SkBoardState | undefined {
   if (language) out.language = language;
   // The highlighted words on a deck page: a deck id, a slide number, at most
   // 600 characters of text. Anything malformed drops the selection whole.
+  // 2026-10-31: a highlight on a video slide (`on: "video"`: the video and its
+  // slide number, no words) or on any other page (`on: "page"`: the roll page
+  // number, nothing to read) rides too, so SK can answer it honestly.
   if (b.selection && typeof b.selection === "object") {
     const s = b.selection as Record<string, unknown>;
-    const generationId = str(s.generationId, 120);
+    const on = s.on === "video" || s.on === "page" ? s.on : "deck";
+    const generationId = str(s.generationId, 120) ?? "";
     const n = typeof s.n === "number" && Number.isInteger(s.n) && s.n >= 1 && s.n <= 1000 ? s.n : undefined;
     const text = typeof s.text === "string" ? s.text.replace(/\s+/g, " ").trim().slice(0, 600).trim() : "";
     const title = typeof s.title === "string" ? s.title.replace(/\s+/g, " ").trim().slice(0, 160) : "";
-    if (generationId && n !== undefined && text) out.selection = { generationId, n, text, ...(title ? { title } : {}) };
+    if (on === "deck" && generationId && n !== undefined && text) out.selection = { generationId, n, text, ...(title ? { title } : {}) };
+    else if (on === "video" && generationId && n !== undefined) out.selection = { on, generationId, n, text: "", ...(title ? { title } : {}) };
+    else if (on === "page" && n !== undefined) out.selection = { on, generationId: "", n, text: "" };
+  }
+  // 2026-10-31: the roll — its page count, what was loaded where, and what is
+  // on screen. Bounded; a malformed range is dropped on its own.
+  const count = int(b.rollCount);
+  if (count !== undefined && count >= 1 && count <= 5000) out.rollCount = count;
+  if (Array.isArray(b.roll)) {
+    const roll: NonNullable<SkBoardState["roll"]> = [];
+    for (const raw of b.roll.slice(0, 20)) {
+      if (!raw || typeof raw !== "object") continue;
+      const r = raw as Record<string, unknown>;
+      const kind = r.kind === "video" || r.kind === "deck" ? r.kind : null;
+      const [from, to, first, last] = [r.from, r.to, r.first, r.last].map((v) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 5000 ? v : undefined));
+      if (!kind || from === undefined || to === undefined || first === undefined || last === undefined || to < from || last - first !== to - from) continue;
+      roll.push({ kind, from, to, first, last });
+    }
+    if (roll.length) out.roll = roll;
+  }
+  if (b.rollAt && typeof b.rollAt === "object") {
+    const a = b.rollAt as Record<string, unknown>;
+    if ((a.kind === "video" || a.kind === "deck") && typeof a.n === "number" && Number.isInteger(a.n) && a.n >= 1 && a.n <= 5000) out.rollAt = { kind: a.kind, n: a.n };
+    else if (a.kind === "blank" || a.kind === "frame" || a.kind === "card" || a.kind === "question" || a.kind === "other") out.rollAt = { kind: a.kind };
   }
   // S1: the lesson map the client holds, bounded — at most 200 segments and 60
   // concepts, short headings, a handful of points each.

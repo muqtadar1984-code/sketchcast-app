@@ -81,7 +81,9 @@ export type SkActionName =
    *  load (params generationId/count/from/to), not one per slide. */
   | "board.load_deck"
   /** Wind to a deck page already on the roll ("skip to the PowerPoint"). */
-  | "board.deck_page";
+  | "board.deck_page"
+  /** 2026-10-31: turn the roll to a page by its own number (SK's board.page). */
+  | "board.go_to_page";
 
 /** One row of the planned `sk_actions` audit table. */
 export type SkActionRecord = {
@@ -166,6 +168,9 @@ export type BoardPorts = {
   /** The roll index of slide n of a deck on the roll (any deck when no
    *  generation is named), or null when there is none. */
   findDeckPage?: (n: number, generationId?: string) => number | null;
+  /** 2026-10-31 (additive): every roll page's background, in roll order — a
+   *  read, so SK knows what the roll holds and where (roll-map.ts). */
+  pages?: () => PageBackground[];
 };
 
 export type BoardState = {
@@ -252,6 +257,13 @@ export type BoardController = {
   goToDeckPage?(n?: number, generationId?: string): number;
   /** Where slide n of a deck sits on the roll, or null. A read: not audited. */
   findDeckPage?(n?: number, generationId?: string): number | null;
+  /** 2026-10-31: turn the roll to page `page` (0-based), the stage away so the
+   *  page is what she sees. Throws on a page the roll does not have. Audited
+   *  `board.go_to_page`. Additive and optional, like loadDeck. */
+  goToPage?(page: number): number;
+  /** 2026-10-31: each roll page's background, or null when the host gives no
+   *  port. A read: not audited. */
+  rollPages?(): PageBackground[] | null;
   pageUp(): void;
   pageDown(): void;
   /** Put the unit's real questions on the board, one page per question.
@@ -723,6 +735,21 @@ export function createBoardController(
       );
     },
     findDeckPage: (n = 1, generationId) => ports.findDeckPage?.(n, generationId) ?? null,
+    rollPages: () => ports.pages?.() ?? null,
+    goToPage: (page) =>
+      runSync(
+        "board.go_to_page",
+        { page },
+        () => {
+          const w = ports.where();
+          if (!Number.isInteger(page) || page < 0 || page >= w.count) throw new RangeError(`no page ${page + 1} (the roll has ${w.count})`);
+          ports.pause();
+          ports.setStage("away");
+          ports.goTo(page);
+          return page;
+        },
+        (p) => ({ page: p, ...pageCount() }),
+      ),
     goToDeckPage: (n = 1, generationId) =>
       runSync(
         "board.deck_page",

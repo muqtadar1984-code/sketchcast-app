@@ -91,12 +91,37 @@ export type SkBoardState = {
    *  live (60 s). `generationId` is the DECK generation, `n` its 1-based slide.
    *  Untrusted like everything here: board.explain_selection re-checks the
    *  deck is hers, and the route keeps only the words that are on the slide. */
-  selection?: { generationId: string; n: number; text: string; title?: string };
+  selection?: SkBoardSelection;
+  /** 2026-10-31 (additive): the roll's page count, as the Board shows it
+   *  ("30 / 54": rollPage is the 0-based 29, rollCount 54). */
+  rollCount?: number;
+  /** 2026-10-31 (additive): what was loaded onto the roll and where — read
+   *  from the roll's own pages (a deck page carries its slide number, a slide
+   *  frame its time in the video), so a page inserted anywhere shifts them. */
+  roll?: SkRollRange[];
+  /** 2026-10-31 (additive): what the page on screen is. */
+  rollAt?: SkRollAt;
   /** 2026-10-30 (additive): the open unit's lesson language (the Kit
    *  Manifest's `language`), so SK answers in the kit's language by default.
    *  Not permission-bearing; the teaching call re-reads it from the manifest. */
   language?: string;
 };
+
+/** One run of loaded items on the roll (2026-10-31). `from`–`to` are the
+ *  roll's OWN page numbers, 1-based, exactly as the Board shows them;
+ *  `first`–`last` the item numbers on those pages: deck pages (the .pptx's
+ *  slide numbers) or the video's slides (segment k + 1). */
+export type SkRollRange = { kind: "video" | "deck"; from: number; to: number; first: number; last: number };
+
+/** The page on screen: a loaded item (deck page n / video slide n), or what else it is. */
+export type SkRollAt = { kind: "video" | "deck"; n: number } | { kind: "blank" | "frame" | "card" | "question" | "other" };
+
+/** "Highlight a portion and ask SK" — what the highlight is on (2026-10-31):
+ *   deck  (default) a deck page: `generationId` the deck, `n` its slide, `text` the words under the ink;
+ *   video a video slide loaded as a page: `generationId` the video, `n` the slide (k + 1), no words
+ *         (a frame is pixels; SK explains that slide from the lesson map);
+ *   page  any other page (a blank page, her handwriting): nothing SK can read. */
+export type SkBoardSelection = { generationId: string; n: number; text: string; title?: string; on?: "deck" | "video" | "page" };
 
 /** S3 slice D: the student's kit player as the Shell sees it (published by
  *  /sk/[product]/[chapter]/kit-player.tsx through the tutor bridge,
@@ -466,7 +491,11 @@ export type SkBoardMove =
   | "load_deck"
   /** Explain the part of a deck slide she highlighted (SkBoardState.selection).
    *  Content only: the route answers with text, nothing moves on the Board. */
-  | "explain_selection";
+  | "explain_selection"
+  /** 2026-10-31: turn the ROLL to a page — its own number ("30 / 54"), the
+   *  next / previous / first / last, or where a deck page or a video slide
+   *  was loaded (args.item, re-found on the live roll by the bridge). */
+  | "page";
 
 /** The client's answer to a `confirm` card: the token, and how it was given
  *  (§9.2: a spoken yes counts only with exactly one active card and an

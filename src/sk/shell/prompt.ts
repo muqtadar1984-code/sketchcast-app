@@ -95,7 +95,26 @@ function boardLine(b: NonNullable<SkContext["board"]>): string {
   if (typeof b.paused === "boolean") bits.push(b.paused ? "paused" : "playing");
   if (b.segments?.length) bits.push(`slides=${b.segments.length}`);
   if (!b.manifestId) bits.push("map=pending");
+  if (b.deck) bits.push(`deck=${b.deck}`);
+  if (typeof b.rollPage === "number" && typeof b.rollCount === "number") bits.push(`roll=${Math.round(b.rollPage) + 1}/${b.rollCount}`);
+  const sel = b.selection;
+  if (sel) bits.push(sel.on === "video" ? `highlight=video slide ${sel.n}` : sel.on === "page" ? `highlight=roll page ${sel.n} (no words)` : `highlight=deck slide ${sel.n}`);
   return bits.join(" ");
+}
+
+/** 2026-10-31: the ROLL as the model reads it — the page on screen, the page
+ *  count, and what each loaded range is, in the Board's own page numbers
+ *  ("30 / 54"). Empty when the client sent no roll. */
+export function rollLines(b: NonNullable<SkContext["board"]> | undefined): string[] {
+  if (!b || typeof b.rollCount !== "number") return [];
+  const cur = typeof b.rollPage === "number" ? Math.round(b.rollPage) + 1 : null;
+  const at = b.rollAt;
+  const what = !at ? "" : at.kind === "deck" ? ` — deck slide ${at.n}` : at.kind === "video" ? ` — video slide ${at.n}` : at.kind === "blank" ? " — a blank page" : at.kind === "frame" ? " — a frozen video frame" : at.kind === "card" ? " — a text card" : at.kind === "question" ? " — a question" : "";
+  const items = (k: "video" | "deck", a: number, z: number) => `${k === "deck" ? "deck slide" : "video slide"}${a === z ? ` ${a}` : `s ${a}–${z}`}`;
+  return [
+    cur !== null ? `- on screen: page ${cur} of ${b.rollCount}${what}` : `- ${b.rollCount} pages`,
+    ...(b.roll ?? []).map((r) => `- ${r.from === r.to ? `page ${r.from}` : `pages ${r.from}–${r.to}`}: ${items(r.kind, r.first, r.last)}`),
+  ];
 }
 
 export const SK_BOARD_MAP_MAX = 40;
@@ -121,7 +140,7 @@ export function modelFirstRules(ctx: SkContext, capabilities: SkCapabilityMeta[]
   ];
   if (has("navigate")) lines.push("M4. 'Open / show / go to / take me to' a page → navigate (resolve a class or learner the user named with context.resolve first; filters as the tool describes).");
   if (has("start_lesson")) lines.push("M5. 'Start / play / teach' a lesson or a chapter → start_lesson with the user's own words; with nothing named ('start the lesson', 'start the lesson for 7B') call start_lesson with only the class, if one was said.");
-  if (capabilities.some((c) => c.name.startsWith("board."))) lines.push("M6. With a lesson on the Board, every Board phrase (pause, continue, next / previous slide, slide N, explain X, compare A and B, practice questions, freeze, blank page, back, the slides, load the deck, the unit rail, walk through the worksheet, recap) is its board.* tool.");
+  if (capabilities.some((c) => c.name.startsWith("board."))) lines.push("M6. With a lesson on the Board, every Board phrase (pause, continue, next / previous slide, slide N, explain X, compare A and B, practice questions, freeze, blank page, back, next / previous page, page N, deck slide N, the slides, load the deck, the unit rail, walk through the worksheet, recap, explain this highlight) is its board.* tool.");
   if (ctx.user.role !== "student" && capabilities.some((c) => c.kind === "act" || c.tier === "confirm")) lines.push("M7. An action (a diary note or class notice, reminding parents, marking, preparing a kit, a school-wide notice, assigning, a book code) → its tool, which returns a card for the user to confirm; say what the card will do.");
   if (ctx.user.role === "student") lines.push("M8. For this student: moves on her lesson (play, pause, restart, a section, the slide, practice, where am I, how am I doing) → tutor.*; a question about the open lesson → tutor.explain; a content question with no lesson open → knowledge.search. Never answer a content question from your own knowledge.");
   return lines;
@@ -197,12 +216,20 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           "14. To go through a kit's documents — the deck's slides with their speaker notes, the lesson script, the worksheet, the quiz, the answer key, or what a chapter's kit contains — call kit.documents (action=list to see them, action=read with doc to read one; book and chapter for a chapter that is not open). Walk through what it returns in order, in your own words, quoting names and numbers exactly. Never say you do not have a document's text before calling it.",
         ]
       : []),
+    // 2026-10-31: the roll by its own numbers, and the highlight.
+    ...(ctx.board?.sessionId && capabilities.some((c) => c.name === "board.page")
+      ? [
+          "15. The Board's ROLL is its pages, numbered as the Board shows them ('30 / 54' is page 30 of 54; see ROLL). 'Next / previous / first / last page' always means the roll → board.page. 'Page N' → board.page to=page with n=N, exactly as shown. 'Slide N in the deck', 'deck slide N', 'deck page N' → board.page to=deck (it loads the deck first when it is not on the roll; 'load the deck and go to slide N' is ONE board.load_deck call with page=N). 'Video slide N', 'slide N in the video' → board.slide (k=N−1); 'video slide N as a page' → board.page to=video. A bare 'slide N' when the deck or the video's slides are on the roll: what is on screen decides — a deck slide on screen means the deck (to=deck), a video slide page means to=video, otherwise board.slide. Never say you cannot move the roll.",
+          "16. A live highlight (highlight= in the Board context) with 'explain this', 'what does this mean', 'tell me more about this' → board.explain_selection, alone: it reads the highlighted slide itself. Do not read the deck with kit.documents for it.",
+        ]
+      : []),
     ...(input.routing === "model" ? ["", ...modelFirstRules(ctx, capabilities)] : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",
     contextLine(ctx, input.memory),
     ...(ctx.board?.sessionId && ctx.board.segments?.length ? ["", "LESSON MAP (this Board's slides)", ...lessonMapLines(ctx.board)] : []),
+    ...(ctx.board?.sessionId && rollLines(ctx.board).length ? ["", "ROLL (the Board's pages, numbered as the Board shows them)", ...rollLines(ctx.board)] : []),
     "",
     "CAPABILITIES AVAILABLE TO THIS USER",
     caps,

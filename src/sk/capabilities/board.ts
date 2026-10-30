@@ -22,7 +22,7 @@ export const BOARD_NO_SELECTION = "Highlight the part on the slide first, then a
 export const BOARD_SELECTION_REFUSED = "I can't open that deck.";
 /** explain_selection when the deck's text map (or that slide in it) can't be read. */
 export const BOARD_SELECTION_NO_SLIDE = "I couldn't read that slide's text.";
-export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap", "rail", "load_slides", "load_deck", "explain_selection"];
+export const BOARD_MOVES: SkBoardMove[] = ["intro", "segment", "slide", "explain", "compare", "practise", "walkthrough", "freeze", "blank", "back", "resume", "pause", "recap", "rail", "load_slides", "load_deck", "explain_selection", "page"];
 export const PRACTISE_MAX = 10;
 
 type Say = Record<string, string>;
@@ -31,7 +31,7 @@ type Say = Record<string, string>;
  *  particular phrasing — `slides` is `slide {k: 0}` asked for as "the
  *  PowerPoint / the slides" (Board UX 2026-10-28), and `load_slides_any` is
  *  the load line when the client sent no segment list to count. */
-export type SayKey = SkBoardMove | "slides" | "load_slides_any" | "deck_loaded" | "deck_first" | "no_selection";
+export type SayKey = SkBoardMove | "slides" | "load_slides_any" | "deck_loaded" | "deck_first" | "no_selection" | "page_deck" | "page_video" | "selection_page" | "selection_video";
 
 /** SK's one line per move, ten locales. `{n}`, `{heading}`, `{a}`, `{b}`,
  *  `{ha}`, `{hb}` are filled by the handler; the client speaks the result. */
@@ -300,6 +300,70 @@ const SAY: Record<SayKey, Say> = {
     mr: "स्लाइड {n} वर: “{text}”.",
     hi: "स्लाइड {n} पर: “{text}”।",
   },
+  // 2026-10-31: the roll by its own page numbers (board.page).
+  page: {
+    en: "Page {n}.",
+    ms: "Halaman {n}.",
+    "ms-arab": "هلامن {n}.",
+    ar: "الصفحة {n}.",
+    fr: "Page {n}.",
+    es: "Página {n}.",
+    pt: "Página {n}.",
+    te: "పేజీ {n}.",
+    mr: "पान {n}.",
+    hi: "पृष्ठ {n}।",
+  },
+  page_deck: {
+    en: "Deck slide {n}.",
+    ms: "Slaid dek {n}.",
+    "ms-arab": "سلاءيد ديق {n}.",
+    ar: "شريحة العرض {n}.",
+    fr: "Diapositive {n} du diaporama.",
+    es: "Diapositiva {n} de la presentación.",
+    pt: "Diapositivo {n} da apresentação.",
+    te: "డెక్ స్లైడ్ {n}.",
+    mr: "डेक स्लाइड {n}.",
+    hi: "डेक स्लाइड {n}।",
+  },
+  page_video: {
+    en: "Video slide {n} on the roll.",
+    ms: "Slaid video {n} di gulungan.",
+    "ms-arab": "سلاءيد ۏيديو {n} د ڬولوڠن.",
+    ar: "شريحة الفيديو {n} على اللفافة.",
+    fr: "Diapositive {n} de la vidéo, sur le rouleau.",
+    es: "Diapositiva {n} del vídeo, en el rollo.",
+    pt: "Diapositivo {n} do vídeo, no rolo.",
+    te: "రోల్‌పై వీడియో స్లైడ్ {n}.",
+    mr: "रोलवरील व्हिडिओ स्लाइड {n}.",
+    hi: "रोल पर वीडियो स्लाइड {n}।",
+  },
+  // 2026-10-31: a highlight with no words under it. On a blank page (her
+  // handwriting, a drawing) SK says what it cannot read…
+  selection_page: {
+    en: "I can't read handwriting or drawings on the roll. Say or type the words you want explained, and I'll explain them.",
+    ms: "Saya tidak dapat membaca tulisan tangan atau lukisan pada gulungan. Sebut atau taip perkataan yang ingin diterangkan, dan saya akan terangkan.",
+    "ms-arab": "ساي تيدق داڤت ممباچ توليسن تاڠن اتاو لوکيسن ڤد ڬولوڠن. سبوت اتاو تايڤ ڤرکاتأن يڠ ايڠين دتراڠکن، دان ساي اکن تراڠکن.",
+    ar: "لا أستطيع قراءة الكتابة اليدوية أو الرسوم على اللفافة. قل أو اكتب الكلمات التي تريد شرحها، وسأشرحها.",
+    fr: "Je ne peux pas lire l'écriture manuscrite ni les dessins sur le rouleau. Dites ou tapez les mots à expliquer, et je les expliquerai.",
+    es: "No puedo leer la letra a mano ni los dibujos del rollo. Di o escribe las palabras que quieres que explique y las explicaré.",
+    pt: "Não consigo ler a escrita à mão nem os desenhos no rolo. Diga ou escreva as palavras que quer que eu explique, e eu explico.",
+    te: "రోల్‌పై చేతిరాత లేదా బొమ్మలను నేను చదవలేను. మీరు వివరించాలనుకునే పదాలను చెప్పండి లేదా టైప్ చేయండి, నేను వివరిస్తాను.",
+    mr: "रोलवरील हस्ताक्षर किंवा चित्रे मला वाचता येत नाहीत. जे शब्द समजावून हवे आहेत ते सांगा किंवा टाइप करा, मी ते समजावून सांगेन.",
+    hi: "मैं रोल पर हाथ की लिखावट या चित्र नहीं पढ़ सकता। जिन शब्दों को समझाना है उन्हें बोलें या टाइप करें, मैं उन्हें समझा दूँगा।",
+  },
+  // …and on a video slide's frame it explains that slide, saying so first.
+  selection_video: {
+    en: "That's on video slide {n}. I can't pick out words on a video frame, so here is that slide:",
+    ms: "Itu pada slaid video {n}. Saya tidak dapat membaca perkataan pada bingkai video, jadi inilah slaid itu:",
+    "ms-arab": "ايت ڤد سلاءيد ۏيديو {n}. ساي تيدق داڤت ممباچ ڤرکاتأن ڤد بيڠکاي ۏيديو، جادي اينيله سلاءيد ايت:",
+    ar: "هذا في شريحة الفيديو {n}. لا أستطيع قراءة الكلمات في إطار الفيديو، فإليك تلك الشريحة:",
+    fr: "C'est sur la diapositive {n} de la vidéo. Je ne peux pas lire les mots d'une image de la vidéo, alors voici cette diapositive :",
+    es: "Eso está en la diapositiva {n} del vídeo. No puedo leer palabras en un fotograma, así que aquí está esa diapositiva:",
+    pt: "Isso está no diapositivo {n} do vídeo. Não consigo ler palavras numa imagem do vídeo, por isso aqui está esse diapositivo:",
+    te: "అది వీడియో స్లైడ్ {n}లో ఉంది. వీడియో ఫ్రేమ్‌లోని పదాలను నేను చదవలేను, కాబట్టి ఆ స్లైడ్ ఇదిగో:",
+    mr: "ते व्हिडिओ स्लाइड {n} वर आहे. व्हिडिओ फ्रेममधील शब्द मला वाचता येत नाहीत, म्हणून ही ती स्लाइड:",
+    hi: "यह वीडियो स्लाइड {n} पर है। मैं वीडियो फ़्रेम के शब्द नहीं पढ़ सकता, इसलिए यह रही वह स्लाइड:",
+  },
   // …and when she asks with nothing highlighted.
   no_selection: {
     en: BOARD_NO_SELECTION,
@@ -457,7 +521,7 @@ const simple = (move: SkBoardMove, description: string, summary: string): SkCapa
 export const boardIntro = simple("intro", "Board: play the lesson video from the start (SK stays silent). Use for 'start / play the video / play the intro'.", "Playing the video from the start.");
 export const boardFreeze = simple("freeze", "Board: freeze the current video frame onto the roll so the teacher can write on it.", "Frozen the frame onto the roll.");
 export const boardBlank = simple("blank", "Board: add a blank page to the roll.", "Added a blank page.");
-export const boardBack = simple("back", "Board: go back one page on the roll.", "Went back a page.");
+export const boardBack = simple("back", "Board: go back one page on the roll (the same as board.page to=previous).", "Went back a page.");
 export const boardResume = simple("resume", "Board: continue the paused video. Use for 'continue / resume / carry on'.", "Resumed the video.");
 export const boardPause = simple("pause", "Board: pause the video. Use for 'pause / stop there / hold on'.", "Paused the video.");
 export const boardRecap = simple("recap", "Board: end the lesson and open the recap draft. Use for 'end the lesson / recap / wrap up'.", "Ending the lesson — the recap draft opens.");
@@ -512,7 +576,7 @@ const slideHandler = withBoard(true, (b, ctx, args) => {
 });
 
 export const boardSlide: SkCapability = {
-  meta: meta("slide", "Board: show the completed slide of segment k (its end frame, paused). k is the 0-based segment index; the user's 'slide 4' is k=3. With deck=true ('skip to the PowerPoint / show the slides') use k=0.", SLIDE),
+  meta: meta("slide", "Board: show the VIDEO's slide k on the video (the completed frame of segment k, paused) — the lesson video's own slides, not a deck page and not a page of the roll. k is the 0-based segment index; the user's 'video slide 4' is k=3. For 'page N', 'next / previous page' or a slide of the deck use board.page. With deck=true ('skip to the PowerPoint / show the slides') use k=0.", SLIDE),
   handler: async (ctx, args, deps) => {
     const b = board(ctx);
     if (b && args?.deck === true && (b.deck === "ready" || b.deck === "loaded")) return deckFirst(b, ctx);
@@ -553,19 +617,37 @@ export const boardLoadSlides: SkCapability = {
  *  asks for the render when it is missing (~30 s), and winds to the first
  *  page when the deck is already on the roll. No lesson map needed. The
  *  closing line travels as a template ({a}–{b}) the client fills. */
-const loadDeckDecider = withBoard(false, (b, ctx) =>
-  ok(
-    b.deck === "loaded" ? "The deck is already on the roll; going to its first page." : "Loading the deck onto the roll as pages.",
-    { move: "load_deck", args: { done: sayFor("deck_loaded", ctx.user.locale) }, say: b.deck === "loaded" ? sayFor("deck_first", ctx.user.locale) : sayFor("load_deck", ctx.user.locale) },
-    b.deck ? [{ deck: b.deck }] : [],
-  ),
-);
+function loadDeckMove(b: SkBoardState, ctx: SkContext, args: Record<string, unknown>): SkCapabilityResult {
+  // 2026-10-31: "load the deck and go to slide 4" is ONE move — two Board
+  // moves in one turn would leave only the last one on the Board.
+  const page = intArg(args.page);
+  const land = page !== null && page > 1 ? page : null;
+  const loaded = b.deck === "loaded";
+  const loc = ctx.user.locale;
+  return ok(
+    loaded
+      ? `The deck is already on the roll; going to its ${land ? `slide ${land}` : "first page"}.`
+      : `Loading the deck onto the roll as pages${land ? `, then going to its slide ${land}` : ""}.`,
+    { move: "load_deck", args: { done: sayFor("deck_loaded", loc), ...(land ? { page: land } : {}) }, say: loaded ? (land ? sayFor("page_deck", loc, { n: land }) : sayFor("deck_first", loc)) : sayFor("load_deck", loc) },
+    [...(b.deck ? [{ deck: b.deck }] : []), ...(land ? [{ deck_slide: land }] : [])],
+  );
+}
+
+const loadDeckDecider = withBoard(false, loadDeckMove);
+
+const LOAD_DECK: SkJsonSchema = {
+  type: "object",
+  properties: {
+    page: { type: "integer", minimum: 1, description: "Land on this deck slide (1-based) instead of the first. 'Load the deck and go to slide 4' is ONE call with page=4 — never load_deck plus another Board move." },
+  },
+  additionalProperties: false,
+};
 
 /** 2026-10-31: the deck's TEXT travels with the move (each slide's title, text
  *  and speaker notes), so SK can walk through it at once (production
  *  2026-10-30: the deck loaded and SK said it did not have the slide text). */
 export const boardLoadDeck: SkCapability = {
-  meta: meta("load_deck", "Board: load the kit's PowerPoint (.pptx) onto the roll as pages, one rendered slide per page, then land on its first slide; returns each slide's text and speaker notes. Use for 'load the deck / load the PowerPoint as pages / put the presentation on the board'.", NONE),
+  meta: meta("load_deck", "Board: load the kit's PowerPoint (.pptx) onto the roll as pages, one rendered slide per page, then land on its first slide (or on `page`); returns each slide's text and speaker notes. Use for 'load the deck / load the PowerPoint as pages / put the presentation on the board', and for 'load the deck and go to slide N' (page=N, one call).", LOAD_DECK),
   handler: async (ctx, args, deps) => {
     const r = await loadDeckDecider(ctx, args, deps);
     if (!r.ok) return r;
@@ -705,6 +787,98 @@ export const boardPractise: SkCapability = {
 
 export const boardWalkthrough = simple("walkthrough", "Board: walk through the worksheet questions in order on the roll.", "Walking through the worksheet.");
 
+// ── the roll by its own page numbers (2026-10-31) ───────────────────────────
+
+const PAGE: SkJsonSchema = {
+  type: "object",
+  properties: {
+    to: {
+      type: "string",
+      enum: ["page", "next", "previous", "first", "last", "deck", "video"],
+      description:
+        "page = roll page n exactly as the Board shows it ('30 / 54' is page 30 of 54); next / previous / first / last = the roll; deck = where deck slide n is on the roll ('slide 4 in the deck', 'deck page 4'); video = where the video's slide n was loaded as a page.",
+    },
+    n: { type: "integer", minimum: 1, description: "The number: the roll page (to=page), the deck slide (to=deck) or the video slide (to=video)." },
+  },
+  required: ["to"],
+  additionalProperties: false,
+};
+
+const PAGE_TO: ReadonlySet<string> = new Set(["page", "next", "previous", "first", "last", "deck", "video"]);
+
+/** The roll page (1-based) holding `kind` item n, from the ranges the client
+ *  sent — the one nearest the page on screen when it is there twice. */
+export function rangePage(b: SkBoardState, kind: "video" | "deck", n: number): number | null {
+  const hits = (b.roll ?? []).filter((r) => r.kind === kind && n >= r.first && n <= r.last).map((r) => r.from + (n - r.first));
+  if (!hits.length) return null;
+  const cur = typeof b.rollPage === "number" ? Math.round(b.rollPage) + 1 : 1;
+  return hits.reduce((best, p) => (Math.abs(p - cur) < Math.abs(best - cur) ? p : best));
+}
+
+function pageMove(b: SkBoardState, ctx: SkContext, args: Record<string, unknown>): SkCapabilityResult {
+  const raw = typeof args.to === "string" ? args.to.trim().toLowerCase() : "";
+  const to = PAGE_TO.has(raw) ? raw : args.n !== undefined ? "page" : "";
+  const n = intArg(args.n);
+  const count = typeof b.rollCount === "number" && b.rollCount >= 1 ? b.rollCount : null;
+  const cur = typeof b.rollPage === "number" ? Math.round(b.rollPage) + 1 : null;
+  const loc = ctx.user.locale;
+  const fail = (summary: string, error: string): SkCapabilityResult => ({ ok: false, summary, error, facts: [] });
+  const of = count ? ` / ${count}` : "";
+  const go = (page: number, say: string, summary: string, extra: Record<string, unknown> = {}) =>
+    ok(summary, { move: "page", args: { page, ...extra }, say }, [{ page, ...(count ? { of: count } : {}) }]);
+
+  if (to === "next" || to === "previous") {
+    // An older Board that sends no page numbers: the bridge counts itself.
+    if (cur === null || count === null) return ok(to === "next" ? "Next page." : "Previous page.", { move: "page", args: { to }, say: "" });
+    const page = cur + (to === "next" ? 1 : -1);
+    if (page > count) return fail(`This is the last page (${count} / ${count}).`, "at_end");
+    if (page < 1) return fail(`This is the first page (1 / ${count}).`, "at_start");
+    return go(page, sayFor("page", loc, { n: page }), `Page ${page}${of}.`);
+  }
+  if (to === "first") return go(1, sayFor("page", loc, { n: 1 }), `Page 1${of}.`);
+  if (to === "last") {
+    if (count === null) return ok("The last page.", { move: "page", args: { to }, say: "" });
+    return go(count, sayFor("page", loc, { n: count }), `Page ${count}${of}.`);
+  }
+  if (!to) return fail("Which page? Say the number, or next / previous.", "bad_to");
+  if (n === null || n < 1) return fail("Which page? Say the number.", "bad_n");
+  if (to === "page") {
+    if (count !== null && n > count) return fail(`The roll has ${count} pages.`, "no_such_page");
+    return go(n, sayFor("page", loc, { n }), `Page ${n}${of}.`);
+  }
+  if (to === "deck") {
+    const page = rangePage(b, "deck", n);
+    if (page !== null) return go(page, sayFor("page_deck", loc, { n }), `Deck slide ${n} is page ${page}${of} on the roll.`, { item: { kind: "deck", n } });
+    const decks = (b.roll ?? []).filter((r) => r.kind === "deck");
+    if (decks.length) return fail(`The deck on the roll has slides ${Math.min(...decks.map((r) => r.first))}–${Math.max(...decks.map((r) => r.last))}.`, "no_such_slide");
+    // An older Board that sends no ranges: the bridge finds the page itself.
+    if (b.deck === "loaded") return ok(`Going to deck slide ${n}.`, { move: "page", args: { item: { kind: "deck", n } }, say: sayFor("page_deck", loc, { n }) }, [{ deck_slide: n }]);
+    // Not on the roll yet: load it, landing on that slide (ONE move).
+    if (b.deck && b.deck !== "failed") return loadDeckMove(b, ctx, { page: n });
+    return fail("This lesson has no slide deck to show as pages.", "no_deck");
+  }
+  // to === "video": where the video's slide n was loaded as a page.
+  const page = rangePage(b, "video", n);
+  if (page !== null) return go(page, sayFor("page_video", loc, { n }), `Video slide ${n} is page ${page}${of} on the roll.`, { item: { kind: "video", n } });
+  return fail(`Video slide ${n} is not on the roll as a page. Show it on the video with board.slide (k=${n - 1}), or load the slides as pages first.`, "not_on_roll");
+}
+
+/**
+ * 2026-10-31 (production 2026-10-30: "move to page 31" on a 54-page roll was
+ * refused, "show next page" had no tool, "slide 4 in the deck" showed the
+ * VIDEO's slide 4). The roll by its own numbers, from the Board state's
+ * rollPage / rollCount / roll ranges. A deck slide or a video slide travels as
+ * `item` too, so the bridge finds it again on the live roll.
+ */
+export const boardPage: SkCapability = {
+  meta: meta(
+    "page",
+    "Board: turn the ROLL — the Board's pages, shown as 'page / pages' (e.g. '30 / 54'). to=page with n = that page number exactly as shown; to=next / previous / first / last; to=deck with n = a deck slide ('slide 4 in the deck', 'deck page 4'); to=video with n = a video slide loaded as a page. A deck slide not on the roll yet is loaded, landing on it. Use for 'page 31', 'next page', 'previous page', 'the last page', 'deck slide 4'.",
+    PAGE,
+  ),
+  handler: withBoard(false, pageMove),
+};
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -776,3 +950,4 @@ export const BOARD_CAPABILITIES: SkCapability[] = [
   boardLoadDeck,
   boardExplainSelection,
 ];
+  boardPage,

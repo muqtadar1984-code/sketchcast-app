@@ -770,6 +770,8 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         },
         sink,
         { onMoving: setMoving },
+          // 2026-10-31: what the roll holds, for SK's page numbers (roll-map.ts).
+          pages: () => roll.pages.map((p) => p.background),
       ),
     [sink, roll, t, cardWords],
   );

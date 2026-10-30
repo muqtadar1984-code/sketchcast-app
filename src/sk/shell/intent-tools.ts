@@ -31,6 +31,7 @@ export const BOARD_MOVE_TOOLS = {
   load_slides: "board.load_slides",
   load_deck: "board.load_deck",
   explain_selection: "board.explain_selection",
+  page: "board.page",
 } as const satisfies Record<SkBoardMove, string>;
 
 /** Teacher / leader action phrasings (rules: actPhraseOf) → the action's capability. */

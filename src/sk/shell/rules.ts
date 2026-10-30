@@ -255,6 +255,11 @@ const RAIL_CLOSE_RE = polite(
   "(?:hide|close|dismiss|tutup|sorok(?:kan)?|أغلق|اغلق|أخفِ|اخف) (?:the )?(?:units?(?: list| rail| panel)?|rail|side ?panel|panel|unit(?:-unit)?|senarai unit|rel|panel unit|الوحدات|اللوحة الجانبية|الشريط الجانبي|قائمة الوحدات)",
 );
 const SLIDE_N_RE = polite(`(?:(?:go to|show(?: me)?|open|jump to|move to|skip to|buka|tunjuk(?:kan)?|papar(?:kan)?|pergi ke|اعرض|اذهب (?:إلى|الى)|انتقل (?:إلى|الى)) )?(?:the )?(?:slide|slaid|الشريحة|شريحة|للشريحة)(?: (?:number|no\\.?|nombor|رقم))? ${NUM}`);
+// 2026-10-31: the ROLL by its own numbers (board.page) — "page 31", "next
+// page", "slide 4 in the deck". The video's own "slide 4" stays board.slide.
+const NEXT_PAGE_RE = polite("(?:go to |show(?: me)? |move to |turn to |flip to )?(?:the )?next page|page (?:down|forward)|(?:halaman|muka surat) (?:seterusnya|berikutnya|sebelah)|الصفحة التالية");
+const PAGE_N_RE = polite(`(?:go to |show(?: me)? |move to |turn to |jump to |skip to |flip to |pergi ke |buka |اذهب (?:إلى|الى) |انتقل (?:إلى|الى) )?(?:the )?(?:page|halaman|muka surat|الصفحة|صفحة)(?: (?:number|no\\.?|nombor|رقم))? ${NUM}`);
+const DECK_SLIDE_N_RE = polite(`(?:go to |show(?: me)? |move to |jump to |skip to |open |turn to )?(?:the )?(?:(?:deck|power ?point|presentation) (?:slide|page) ${NUM}|(?:slide|page) ${NUM} (?:in|of|from|on) the (?:deck|slide deck|power ?point|presentation|pptx?))`);
 const SEGMENT_N_RE = polite(`(?:(?:play|go to|jump to|skip to|show|main(?:kan)?|pergi ke|شغل|شغّل|اذهب (?:إلى|الى)|انتقل (?:إلى|الى)) )?(?:the )?(?:segment|part|section|segmen|bahagian|الجزء|جزء|المقطع|مقطع)(?: (?:number|no\\.?|nombor|رقم))? ${NUM}`);
 const COMPARE_RE = new RegExp(
   "^(?:please |sila |tolong |من فضلك )?(?:(?:compare|contrast|bandingkan|banding|قارن(?: بين)?|قارني(?: بين)?) (?:the |between )?(.+?) (?:and|with|to|vs\\.?|versus|against|dan|dengan|و)\\s?(.+)|(?:(?:what(?:'s| is) )?(?:the )?difference between|(?:apa(?:kah)? )?(?:beza|perbezaan)(?: antara)?|(?:ما |ما هو )?الفرق بين) (.+?) (?:and|dan|dengan|و)\\s?(.+))$",
@@ -345,7 +350,18 @@ export function routeBoard(raw: string, normed: string, ctx: SkContext): RulesDe
   if (SLIDES_RE.test(t)) return teach("slide", { k: 0, deck: true });
   if (RAIL_OPEN_RE.test(t)) return teach("rail", { open: true });
   if (RAIL_CLOSE_RE.test(t)) return teach("rail", { open: false });
-  let m = t.match(SLIDE_N_RE);
+  if (NEXT_PAGE_RE.test(t)) return teach("page", { to: "next" });
+  let m = t.match(DECK_SLIDE_N_RE);
+  if (m) {
+    const n = numberOf(m[1] ?? m[2]);
+    if (n && n >= 1) return teach("page", { to: "deck", n });
+  }
+  m = t.match(PAGE_N_RE);
+  if (m) {
+    const n = numberOf(m[1]);
+    if (n && n >= 1) return teach("page", { to: "page", n });
+  }
+  m = t.match(SLIDE_N_RE);
   if (m) {
     const n = numberOf(m[1]);
     if (n && n >= 1) return teach("slide", { k: n - 1 });
