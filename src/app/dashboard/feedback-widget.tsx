@@ -85,9 +85,9 @@ export default function FeedbackWidget({
   return (
     <>
       {/* Persistent entry point in the bottom trailing corner (right in LTR,
-          left in RTL — bottom-20 end-4) — stacked ABOVE the AI Assistant
-          launcher, which sits at bottom-4 end-4, so the two don't collide. */}
-      <div className="fixed bottom-20 end-4 z-40">
+          left in RTL — bottom-24 end-4) — stacked ABOVE SK's corner avatar (64px at
+          bottom-4 end-4), with a clear gap, so the two never collide. */}
+      <div className="fixed bottom-24 end-4 z-40">
         {submitted ? (
           <span className="inline-flex items-center gap-2 rounded-full bg-white border border-[#E6E8E4] px-4 h-10 text-sm text-[#0C8175] shadow-sm">
             ✓ Feedback received — thank you!

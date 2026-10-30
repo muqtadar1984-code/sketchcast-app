@@ -124,7 +124,9 @@ export type WalkStopDef = {
   chips?: WalkChip[];
 };
 
-const HERO = '[data-sk="hero"]';
+// 2026-10-30: SK is the corner avatar now (no hero card): "SK here" anchors
+// point at the avatar itself.
+const HERO = '[data-sk="avatar"]';
 const LAUNCHER = '[data-tour="sk-launcher"]';
 const UPLOAD = '[data-tour="upload-book"]';
 

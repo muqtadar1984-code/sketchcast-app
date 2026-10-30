@@ -16,6 +16,7 @@ import { routeParent, type ParentRoute } from "./parent-rules";
 import { routeLeader, type LeaderRoute } from "./leader-rules";
 // 2026-10-30: "say that in Malay" / "back to English" — the answer language.
 import { parseLanguageCommand, type LangCommand } from "./language";
+import { walkStartCommand } from "./client/walkthrough";
 
 export type RulesDecision =
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string }
@@ -805,9 +806,14 @@ const WALK_TOUR_RE = polite(
   ].join("|"),
 );
 
-/** "Show me around" (any app language): replay the first-login walkthrough. */
+/** "Show me around" (any app language): replay the first-login walkthrough.
+ *  2026-10-30 (founder): also "continue / resume / start the tour" in natural
+ *  phrasing ("Continue with the tour.") — with no tour running in her tab that
+ *  STARTS one (no model). While a tour runs, the turn route hands the same
+ *  words to the running tour first (walkCommand → resume), so this never
+ *  restarts a tour that is on. */
 export function isWalkthroughRequest(text: string): boolean {
-  return WALK_TOUR_RE.test(norm(text ?? "").replace(/[«»“”'‘’]/g, "").trim());
+  return WALK_TOUR_RE.test(norm(text ?? "").replace(/[«»“”'‘’]/g, "").trim()) || walkStartCommand(text ?? "");
 }
 
 export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: SkCollector["clock"]): RulesDecision {

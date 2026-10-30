@@ -199,9 +199,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // 2026-10-30 (founder decision 1): for SK users the SK walkthrough REPLACES
     // the driver.js role tour — no auto-start, and the header's 🧭 starts SK's.
     <TourProvider role={role} seen={seen} copy={t.app.tour} skWalkthrough={skOn}>
-      {/* 2026-10-30: the landing pages show SK inline (<SkHomeHero />) — the
-          launcher below portals its one Shell there. This hands them THIS
-          layout's skOn decision; the hero adds no gate of its own. */}
+      {/* 2026-10-30: SK is the corner avatar (sk-launcher.tsx) on every page;
+          this hands THIS layout's skOn decision down (sk-home.tsx useSkOn) —
+          nothing below adds a gate of its own. */}
       <SkHomeProvider on={skOn}>
         {children}
         {/* A principal (school_admin) doesn't teach from books — no teaching

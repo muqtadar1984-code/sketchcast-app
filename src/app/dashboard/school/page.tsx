@@ -6,7 +6,6 @@ import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor, platformConsoleEnabled } from "@/utils/flags";
 import { enforceHat } from "@/utils/hats-server";
 import { SchoolAssistantLauncher } from "./school-assistant";
-import { SkHomeHero } from "../sk-home";
 import ReportIssueWidget from "../report-issue-widget";
 import AdminHelpNote from "../admin-help-note";
 import { getDictionary } from "@/i18n/dictionaries";
@@ -279,9 +278,6 @@ export default async function SchoolAnalyticsPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* SK first (founder 2026-10-30): the hero renders only when the
-            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
-        <SkHomeHero />
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">

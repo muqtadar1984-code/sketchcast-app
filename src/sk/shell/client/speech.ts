@@ -96,7 +96,13 @@ export type SpeechCoordinatorDeps = {
   onPlayBlocked?: () => void;
   /** One sentence's outcome, for the voice log (provider id; error name when it failed). */
   onSentence?: (e: { provider: string; ok: boolean; error?: string; ms: number }) => void;
+  /** 2026-10-30: the sentence about to be spoken (null when the queue drains or
+   *  stops) — the corner avatar's speech bubble shows it as it is said. */
+  onCurrent?: (current: SpokenSentence | null) => void;
 };
+
+/** The sentence being spoken now, in its language. */
+export type SpokenSentence = { text: string; lang: string };
 
 /** The DOMException name a refused play() carries (autoplay policy). */
 const errorName = (e: unknown): string => {
@@ -137,6 +143,8 @@ export type SpeechCoordinator = {
   readonly enabled: boolean;
   /** True while the queue is being spoken. */
   readonly speaking: boolean;
+  /** The sentence being spoken now (null between lines and when quiet). */
+  readonly current: SpokenSentence | null;
   /** The server mode ("polly" / "google") while it is still asked for, else "browser". */
   readonly mode: SpeechMode;
 };
@@ -195,6 +203,13 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
   let teacherTookOver = false;
   /** Outstanding announceMove()s: no resume on drain while a move is pending. */
   let holds = 0;
+  /** The sentence being spoken now (onCurrent). */
+  let current: SpokenSentence | null = null;
+  const setCurrent = (c: SpokenSentence | null) => {
+    if (current === c || (!current && !c)) return;
+    current = c;
+    deps.onCurrent?.(c);
+  };
 
   const serverFor = (lang: string) => {
     let p = servers.get(lang);
@@ -343,7 +358,10 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
           let spoken = false;
           try {
             await beforeLine();
-            if (g === gen) spoken = await speakOne(item, g);
+            if (g === gen) {
+              setCurrent({ text: item.text, lang: item.lang });
+              spoken = await speakOne(item, g);
+            }
           } finally {
             item.done(spoken && g === gen);
           }
@@ -355,6 +373,7 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
       }
     } finally {
       pumping = false;
+      setCurrent(null);
       deps.onSpeaking?.(false);
     }
   }
@@ -396,6 +415,7 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
       /* a provider with nothing to cancel */
     }
     // Whatever the provider does with the cancel, the pump moves on now.
+    setCurrent(null);
     release();
     rearm();
     // Barge-in rule: the teacher is about to speak, or asked for quiet. The
@@ -458,6 +478,9 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
     },
     get speaking() {
       return pumping;
+    },
+    get current() {
+      return current;
     },
     get mode() {
       return serverStuck ? "browser" : (deps.serverMode ?? "polly");

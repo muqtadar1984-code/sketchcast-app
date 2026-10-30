@@ -19,7 +19,7 @@
 //   - the latest SK_TRANSCRIPT_MAX entries, and the same 4-hour gap as the blob.
 // PURE: storage and clock are injected; the Shell passes window.sessionStorage.
 
-import { SK_MEMORY_STORE_GAP_MS, type StorageLike } from "./memory-store";
+import { SK_MEMORY_KEY, SK_MEMORY_STORE_GAP_MS, type StorageLike } from "./memory-store";
 
 export const SK_TRANSCRIPT_KEY = "sk.transcript";
 export const SK_TRANSCRIPT_MAX = 40;
@@ -89,4 +89,25 @@ export function createTranscriptStore(storage: StorageLike | null | undefined, n
     },
     clear,
   };
+}
+
+/**
+ * "Clear conversation" in SK's corner menu (founder 2026-10-30): CLIENT-SIDE
+ * only — this tab's visible turns AND the server-signed memory blob go from
+ * sessionStorage, so the next turn starts a fresh server session. Nothing is
+ * deleted on the server (her SK memory has its own controls in Settings).
+ * Returns false when storage refused (private mode); the Shell resets what it
+ * shows either way.
+ */
+export function clearConversation(storage: StorageLike | null | undefined): boolean {
+  if (!storage) return false;
+  let ok = true;
+  for (const key of [SK_TRANSCRIPT_KEY, SK_MEMORY_KEY]) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      ok = false;
+    }
+  }
+  return ok;
 }

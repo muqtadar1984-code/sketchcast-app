@@ -16,7 +16,6 @@ import { type BookHealth } from "./book-health-badge";
 import BrandingCard from "./branding-card";
 import ClassesCard, { type ClassRoster, type RosterStudent } from "./classes-card";
 import AppHeader from "./app-header";
-import { SkHomeHero } from "./sk-home";
 import StudentDashboard, {
   type StudentItemData,
   type StudentClassGroup,
@@ -253,14 +252,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me); the
   // reads and the signing live in <StudentHome> below, which streams in under
-  // the header and the SK hero.
+  // the header.
   if (role === "student") {
     return (
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
-        {/* SK first (founder 2026-10-30): the hero renders only when the
-            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
-        <SkHomeHero className="max-w-7xl mx-auto px-4 sm:px-6 pt-6" />
         <Suspense fallback={<Pending className="max-w-7xl mx-auto px-6 pt-6" blocks={3} />}>
           <StudentHome
             supabase={supabase}
@@ -598,9 +594,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <AppHeader />
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* SK first (founder 2026-10-30): the hero renders only when the
-            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
-        <SkHomeHero />
         <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{t.subtitle}</p>

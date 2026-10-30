@@ -14,8 +14,10 @@
 //   mic-gate.ts      — §2.6: the mic stops on blur/hidden/pagehide/idle, never resumes
 //   memory-store.ts  — S1: the memory blob across pages (sessionStorage)
 //   transcript-store.ts — 2026-10-30: the visible turns across pages and
-//                      Shell instances, so the hero and the panel are ONE
-//                      conversation (same tab, same server session)
+//                      Shell instances: ONE conversation per tab (same
+//                      server session); clearConversation() for the menu
+//   bubble.ts        — 2026-10-30: what the corner's speech bubble shows, and
+//                      when it fades
 //   confirm.ts       — S1 §9.2: when a bare yes/no answers a confirm card
 //   prefetch.ts      — which pages to warm (router.prefetch) so a navigate
 //                      lands on a render already under way
@@ -32,20 +34,29 @@
 // coordinator; dictation stays on the Assistant's browser adapter
 // (startDictation) so a hosted STT swap later is one module, not two panels.
 //
-// 2026-10-30 (founder): `variant="hero"` renders the SAME machinery inline at
-// the top of a role's landing page (sk-home.tsx) instead of the floating
-// panel: a still avatar, a one-line greeting, the conversation, the text box,
-// and a Mic switch (prefs.ts micOn; on by default except for students). With
-// the switch on SK listens hands-free through startDictation (so the
-// Transcribe / browser choice applies unchanged) while the page is visible and
-// focused, pauses while SK speaks (no echo) and comes back after, and resumes
-// after blur / hidden / idle when she returns or interacts (mic-gate.ts
-// autoResume; never on a timer). The panel variant is unchanged: push-to-talk,
-// the hands-free opt-in, and a mic that never resumes by itself.
+// 2026-10-30 (founder: "get rid of this boxed approach for sk … just keep the
+// avatar to the bottom right … keep [the text] hidden by default … show the
+// thought bubble on what the avatar is saying"): SK is a round AVATAR in the
+// bottom-end corner (bottom-START on the Board) with a SPEECH BUBBLE beside it
+// (client/bubble.ts: the sentence being spoken, a text-only reply, the
+// greeting once per session on a home page, errors, a waiting confirmation;
+// it fades by itself). The avatar opens a small menu (sk-corner.tsx): Type a
+// message (a one-line box above the avatar), Show conversation (the old panel
+// body as a compact NON-modal sheet above the avatar), the Mic switch, Read
+// aloud, Take the tour, Clear conversation (client-side only) and SK settings.
+// The conversation's text is hidden by default (prefs.ts showText).
+//
+// Listening (`autoListen`, every page but the Board): with the Mic switch on
+// (prefs.ts micOn; on by default except for students) SK listens hands-free
+// through startDictation (so the Transcribe / browser choice applies
+// unchanged) while the page is visible and focused, pauses while SK speaks
+// (no echo) and comes back after, and resumes after blur / hidden / idle when
+// she returns or interacts (mic-gate.ts autoResume; never on a timer). What
+// she says is still a turn with the text hidden; the answer is in the bubble.
+// The Board keeps push-to-talk and the hands-free opt-in (in the sheet), and a
+// mic that never resumes by itself — a classroom is not a quiet room.
 
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import Image from "next/image";
+import { Fragment, useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { micSupported, pageSpeechLang, startDictation } from "@/utils/assistant/voice-client";
 import { createSpeechCoordinator, serverProviderFor, speechMode, type SayOutcome, type SpeechCoordinator } from "@/sk/shell/client/speech";
@@ -66,28 +77,29 @@ import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, type SpeechHold } from "@/sk/shell/client/mic-gate";
 import { beaconVoiceEvents, createVoiceLog, type VoiceLog } from "@/sk/shell/client/voice-log";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
-import { createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
+import { clearConversation, createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
+import { BUBBLE_INITIAL, GREETED_KEY, bubbleFadeAt, bubbleOpen, bubbleReduce, shouldGreet } from "@/sk/shell/client/bubble";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
 import { citationChips } from "@/sk/shell/client/citations";
+import { walkStartCommand } from "@/sk/shell/client/walkthrough";
 import { TRAY_POLL_MS, parseTray, shouldPollTray, trayStateText, trayVisible, type TrayKit } from "@/sk/shell/client/tray";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
+import { SkAvatar, SkBubble, SkCornerMenu, type CornerMenuItem, type CornerSide } from "./sk-corner";
 
 export type SkShellCopy = Dictionary["sk"]["shell"];
-/** "dock" (2026-10-30): the walkthrough's compact bar, docked at the bottom
- *  of every page that has no hero while a tour runs (the page stays usable). */
-export type SkShellVariant = "panel" | "hero" | "dock";
 
 /** The walkthrough this Shell carries (sk-walkthrough.tsx useSkWalkthrough). */
 export type SkShellWalk = {
-  /** Caption, sound chip, sample chips, Example card, controls. */
-  strip: ReactNode;
+  /** The tour inside the speech bubble: caption (or `answer`, SK's reply to a
+   *  question asked mid-tour), sound chip, sample chips, Example card, controls. */
+  strip: (answer?: string | null) => ReactNode;
   /** A new key speaks the text through THIS Shell's coordinator ("" = quiet). */
   voice: { key: string; text: string } | null;
   /** A sample chip was tapped: put its words in the box. Never sent by itself. */
   fill: { key: string; text: string } | null;
-  /** Paused by her question: the dock shows the conversation. */
+  /** Paused by her question: the bubble shows SK's answer and "Continue the tour". */
   showAnswers: boolean;
   /** A tour command ("next", "Hi, continue with the tour?"): handled, no turn. */
   command: (text: string) => boolean;
@@ -99,7 +111,7 @@ export type SkShellWalk = {
   hold?: () => void;
   /** Where the tour is, sent with every turn so SK never says there is none. */
   state?: SkTurnWalk;
-  /** The tour is narrating (running, not paused): the hero mic stays closed —
+  /** The tour is narrating (running, not paused): the listening mic stays closed —
    *  opening it between lines switched Bluetooth headsets into call mode and
    *  lost SK's voice (founder 2026-10-30). It listens again once paused or ended. */
   narrating?: boolean;
@@ -107,10 +119,6 @@ export type SkShellWalk = {
   soundBlocked?: () => void;
 };
 
-/** The hero keeps the conversation compact: the latest turns, scrollable. */
-const HERO_ENTRIES = 12;
-/** The dock shows only the last few turns (a question asked mid-tour). */
-const DOCK_ENTRIES = 4;
 
 type Label = "grounded" | "supplementary" | "declined" | "navigation";
 type Entry = {
@@ -225,11 +233,13 @@ export default function SkShell({
   copy,
   role,
   hat,
-  onClose,
   board,
   tutor,
-  variant = "panel",
-  portalTo,
+  side = "end",
+  raised = false,
+  autoListen,
+  greet = false,
+  initialText = false,
   onEngaged,
   walk,
   onTakeTour,
@@ -238,32 +248,36 @@ export default function SkShell({
   copy: SkShellCopy;
   role: string | null;
   hat: string | null;
-  /** The panel's close; the hero has none. */
-  onClose?: () => void;
   /** S1: on /present, the Board bridge — its state rides with every turn and
    *  it performs the `board` events the server decides. */
   board?: SkBoardBridge | null;
   /** S3 slice D: on /sk, the kit player bridge — its state rides with every
    *  turn and it performs the `tutor` events the server decides. */
   tutor?: SkTutorBridge | null;
-  /** "panel" (default): the floating dialog. "hero": inline on a landing page. */
-  variant?: SkShellVariant;
-  /** The hero's place on the page (sk-home.tsx). The launcher keeps ONE Shell
-   *  across pages and portals it there while a landing page shows a slot, so
-   *  the conversation (and a turn still streaming) survives the move. */
-  portalTo?: HTMLElement | null;
-  /** Called when she sends a turn — the launcher carries an engaged
-   *  conversation on into the panel when she leaves the hero's page. */
+  /** The avatar's corner: "end" (default, bottom-end) or "start" (the Board,
+   *  whose Stage video owns bottom-end). */
+  side?: CornerSide;
+  /** Lifted above another bottom-end launcher (the leaders' School briefing). */
+  raised?: boolean;
+  /** Hands-free listening follows the Mic switch (default: everywhere but the
+   *  Board, which keeps push-to-talk). */
+  autoListen?: boolean;
+  /** A home page: the greeting shows in the bubble, once per tab session. */
+  greet?: boolean;
+  /** Start with the conversation open (previews and tests; for users the
+   *  showText preference opens it once it is read). */
+  initialText?: boolean;
+  /** Called when she sends a turn (a question mid-tour pauses the tour). */
   onEngaged?: () => void;
-  /** 2026-10-30: the walkthrough while one runs (hero: inside the card; dock: the bar). */
+  /** 2026-10-30: the walkthrough while one runs — inside the speech bubble. */
   walk?: SkShellWalk | null;
-  /** "Take the tour" (hero and panel header), and SK's "Show me around". */
+  /** "Take the tour" (the avatar's menu), and SK's "Show me around". */
   onTakeTour?: () => void;
   takeTourLabel?: string;
 }) {
   const router = useRouter();
-  const hero = variant === "hero";
-  const dock = variant === "dock";
+  /** This corner listens hands-free while the Mic switch is on (not the Board). */
+  const listen = autoListen ?? !board;
   const [rig] = useRigChoice();
 
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -284,15 +298,28 @@ export default function SkShell({
   // S2: the job tray (SK-started kits) and whether the tab is visible.
   const [tray, setTray] = useState<TrayKit[]>([]);
   const [visible, setVisible] = useState(true);
-  // The hero's Mic switch (prefs.ts micOn; default by role) and why the mic
+  // The Mic switch (prefs.ts micOn; default by role) and why the mic
   // cannot be used. `prefsSettled` holds the first listen back until the
   // server's preference is known, so a saved "off" never opens the mic.
   const [micOn, setMicOn] = useState(false);
   const [micNote, setMicNote] = useState<"unsupported" | "denied" | null>(null);
   const [prefsSettled, setPrefsSettled] = useState(false);
+  // ── the corner (2026-10-30) ──
+  /** The conversation sheet (the old panel body), above the avatar. */
+  const [sheetOpen, setSheetOpen] = useState(initialText);
+  /** The one-line "Type a message" box above the avatar. */
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  /** The warm start's greeting, for the bubble (null once a carried conversation was restored). */
+  const [greeting, setGreeting] = useState<string | null>(null);
+  const [bubble, dispatchBubble] = useReducer(bubbleReduce, BUBBLE_INITIAL);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const avatarRef = useRef<HTMLButtonElement>(null);
+  const sheetOpenRef = useRef(false);
+  /** "Show text by default" opened the sheet once on this mount (never again after she closes it). */
+  const textShownRef = useRef(false);
   const speechRef = useRef<SpeechCoordinator | null>(null);
   const turnRef = useRef<AbortController | null>(null);
   const memoryRef = useRef<string | undefined>(undefined);
@@ -318,15 +345,15 @@ export default function SkShell({
   const readAloudRef = useRef(true);
   const micOnRef = useRef(false);
   const speakingRef = useRef(false);
-  /** 2026-10-30: the hero mic's no-echo hold (mic-gate.ts createSpeechHold) —
+  /** 2026-10-30: the listening mic's no-echo hold (mic-gate.ts createSpeechHold) —
    *  paused while the coordinator speaks and for SPEECH_TAIL_MS after its
    *  WHOLE queue has drained, read from the coordinator itself. */
   const holdRef = useRef<SpeechHold | null>(null);
-  const heroRef = useRef(hero);
+  const listenRef = useRef(listen);
   /** 2026-10-30: hands-free dictation passes (a stale or doubled end never
    *  restarts, and a stale pass's words are never sent). */
   const passesRef = useRef(createDictationPasses());
-  /** The hero gate's onResume, current every render (the gate outlives renders). */
+  /** The listening gate's onResume, current every render (the gate outlives renders). */
   const listenNowRef = useRef<() => void>(() => {});
   const walkRef = useRef<SkShellWalk | null | undefined>(walk);
   const voiceLogRef = useRef<VoiceLog | null>(null);
@@ -362,20 +389,22 @@ export default function SkShell({
       speechRef.current?.setEnabled(ra);
       setHandsFree(hf);
       handsFreeRef.current = hf;
-      // The hero's switch: this browser's copy for the first paint, else the
+      // The Mic switch: this browser's copy for the first paint, else the
       // role's default; the server's value follows with the warm start.
       const mo = readFlag(PREF_LOCAL_KEY.micOn, defaultMicOn(role));
       setMicOn(mo);
       micOnRef.current = mo;
+      // "Show text by default": the conversation opens with the page.
+      if (readFlag(PREF_LOCAL_KEY.showText, false)) openTextByPref();
     }, 0);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── the §2.6 mic gate: one per panel; onStop is the ONLY way dictation ends from outside ──
-  // The hero's gate can also RESUME (founder 2026-10-30): while the Mic switch
-  // is on, it calls listenNow when she is back on the page or interacts with
-  // it, never while SK is speaking. The panel's gate gets no onResume.
+  // ── the §2.6 mic gate: one per Shell; onStop is the ONLY way dictation ends from outside ──
+  // The listening corner's gate can also RESUME (founder 2026-10-30): while the
+  // Mic switch is on, it calls listenNow when she is back on the page or
+  // interacts with it, never while SK is speaking. The Board's gate gets no onResume.
   useEffect(() => {
     const gate = createMicGate({
       win: window,
@@ -389,14 +418,14 @@ export default function SkShell({
         stopMicRef.current = null;
         setListening(false);
       },
-      ...(hero ? { onResume: () => listenNowRef.current(), canResume: () => !walkRef.current?.narrating && !(holdRef.current?.holding ?? speakingRef.current) } : {}),
+      ...(listen ? { onResume: () => listenNowRef.current(), canResume: () => !walkRef.current?.narrating && !(holdRef.current?.holding ?? speakingRef.current) } : {}),
     });
     gateRef.current = gate;
     return () => {
       gate.dispose();
       gateRef.current = null;
     };
-  }, [hero]);
+  }, [listen]);
 
   useEffect(() => {
     boardRef.current = board;
@@ -459,13 +488,19 @@ export default function SkShell({
         const name = pool.length ? pickBrowserVoice(pool, gender, prefix) : null;
         return name ? `browser:${name}` : "browser:default";
       },
-      // The hold hears it synchronously (no render in between): the hero's mic
-      // is paused the moment SK starts, and comes back only SPEECH_TAIL_MS
+      // The hold hears it synchronously (no render in between): the listening
+      // mic is paused the moment SK starts, and comes back only SPEECH_TAIL_MS
       // after the whole queue has drained — never between two sentences.
       onSpeaking: (on) => {
         holdRef.current?.speaking(on);
-        if (on && heroRef.current) gateRef.current?.stop("speaking");
+        if (on && listenRef.current) gateRef.current?.stop("speaking");
         setSpeaking(on);
+      },
+      // The speech bubble shows the sentence being said (not the tour's own
+      // narration: the tour's caption is already in the bubble).
+      onCurrent: (c) => {
+        if (!c) dispatchBubble({ type: "speechEnd", at: Date.now() });
+        else if (!walkRef.current?.narrating) dispatchBubble({ type: "sentence", text: c.text, lang: c.lang, at: Date.now() });
       },
       onFallback: (why) => {
         console.info(`[sk] server voice ${why}; using the browser voice`);
@@ -481,14 +516,14 @@ export default function SkShell({
     speechRef.current = coord;
     const hold = createSpeechHold({
       isSpeaking: () => coord.speaking,
-      // The tail is over: the hero's owed resume (vetoed while held) is taken.
+      // The tail is over: the owed resume (vetoed while held) is taken.
       onClear: () => {
-        if (heroRef.current) gateRef.current?.resume();
+        if (listenRef.current) gateRef.current?.resume();
       },
     });
     holdRef.current = hold;
-    // Only a real tab unload stops the voice here: an in-app route change or
-    // the hero ↔ dock move keeps this Shell (and this coordinator) mounted.
+    // Only a real tab unload stops the voice here: an in-app route change
+    // keeps this Shell (and this coordinator) mounted.
     const onPageHide = () => {
       coord.stop();
       voiceLog.flush();
@@ -528,10 +563,10 @@ export default function SkShell({
   }, []);
 
   // ── S2: the job tray — her SK-started kits (/api/sk/shell/tray) ──
-  // Read on open, after a lesson.prepare confirm, and every 15 s while a kit
-  // is still being made AND this tab is visible (client/tray.ts shouldPollTray;
-  // the visibility test is the §2.6 mic gate's). The panel being mounted IS
-  // the panel being open. A failed read keeps what the tray showed.
+  // Read when the conversation sheet opens, after a lesson.prepare confirm,
+  // and every 15 s while a kit is still being made AND the sheet is open AND
+  // this tab is visible (client/tray.ts shouldPollTray; the visibility test is
+  // the §2.6 mic gate's). A failed read keeps what the tray showed.
   const loadTray = useCallback(async () => {
     try {
       const q = new URLSearchParams({ path: window.location.pathname });
@@ -544,6 +579,7 @@ export default function SkShell({
   }, []);
 
   useEffect(() => {
+    if (!sheetOpen) return;
     const onVisibility = () => {
       const v = document.visibilityState === "visible";
       setVisible(v);
@@ -558,9 +594,9 @@ export default function SkShell({
       window.clearTimeout(t);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [loadTray]);
+  }, [loadTray, sheetOpen]);
 
-  const trayPolling = shouldPollTray({ open: true, visibility: visible ? "visible" : "hidden", kits: tray });
+  const trayPolling = shouldPollTray({ open: sheetOpen, visibility: visible ? "visible" : "hidden", kits: tray });
   useEffect(() => {
     if (!trayPolling) return;
     const id = window.setInterval(() => void loadTray(), TRAY_POLL_MS);
@@ -611,6 +647,7 @@ export default function SkShell({
           speechRef.current?.setEnabled(r.prefs.readAloud);
           handsFreeRef.current = r.prefs.handsFree;
           setHandsFree(r.prefs.handsFree);
+          if (r.prefs.showText) openTextByPref();
           if (d.prefs !== null) {
             for (const k of PREF_KEYS) writeFlag(PREF_LOCAL_KEY[k], r.prefs[k]);
             if (Object.keys(r.migrate).length) void savePref(r.migrate).then((ok) => ok && writeText(PREFS_MIGRATED_LOCAL_KEY, "1"));
@@ -618,9 +655,9 @@ export default function SkShell({
           }
         }
         setPrefsSettled(true);
-        // 2026-10-30: the conversation she was having in this tab (the hero
-        // on the home page, the panel on another) carries on as it was — no
-        // re-greeting — when the server carried THAT session.
+        // 2026-10-30: the conversation she was having in this tab (on any
+        // page, before a full reload) carries on as it was — no re-greeting —
+        // when the server carried THAT session.
         const carried = transcriptRef.current?.load(sessionIdRef.current) as Entry[] | null | undefined;
         if (carried?.length) {
           setEntries(carried);
@@ -631,6 +668,7 @@ export default function SkShell({
         const greeting = (d.greeting && String(d.greeting).trim()) || copy.greetingFallback;
         setEntries([{ id: uuid(), who: "sk", text: greeting }]);
         setCaption(lastSentence(greeting));
+        setGreeting(greeting);
       } catch {
         if (!cancelled) {
           setReady(false);
@@ -666,8 +704,11 @@ export default function SkShell({
   );
 
   const appendSk = useCallback((text: string, extra: Partial<Entry> = {}) => {
-    setEntries((m) => [...m, { id: uuid(), who: "sk", text, ...extra }]);
+    const id = uuid();
+    setEntries((m) => [...m, { id, who: "sk", text, ...extra }]);
     setCaption(lastSentence(text));
+    // The bubble shows it (spoken lines replace it sentence by sentence).
+    dispatchBubble({ type: "reply", key: id, text, at: Date.now() });
   }, []);
 
   const patchEntry = useCallback((id: string, patch: (e: Entry) => Entry) => {
@@ -754,7 +795,8 @@ export default function SkShell({
   useEffect(() => {
     walkRef.current = walk;
     onTakeTourRef.current = onTakeTour;
-    heroRef.current = hero;
+    listenRef.current = listen;
+    sheetOpenRef.current = sheetOpen;
   });
   const walkVoiceKey = walk?.voice?.key;
   const tourVoicedRef = useRef(false);
@@ -781,7 +823,9 @@ export default function SkShell({
     const f = walkRef.current?.fill;
     if (!f) return;
     setInput(f.text);
-    inputRef.current?.focus();
+    // The words go in a box she can see: the sheet's, else the one-line box.
+    if (!sheetOpenRef.current) setQuickOpen(true);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [walkFillKey]);
 
   // ── voice controls ──
@@ -806,7 +850,7 @@ export default function SkShell({
     if (!nv && micModeRef.current === "handsFree") gateRef.current?.stop("manual");
   }
 
-  // ── the hero's Mic switch (founder 2026-10-30) ──
+  // ── the Mic switch (founder 2026-10-30; the avatar's menu) ──
   /** The microphone is refused: the switch goes off and STAYS off (saved, so
    *  the next visit does not ask again), with a short note. */
   const micRefused = useCallback(() => {
@@ -841,7 +885,7 @@ export default function SkShell({
     // gesture a first permission prompt (and SK's voice) needs.
   }
 
-  /** The hero gate's onResume: the page is visible and focused, SK is quiet.
+  /** The listening gate's onResume: the page is visible and focused, SK is quiet.
    *  No barge-in here — the gate never resumes while SK speaks. */
   function listenNow() {
     const gate = gateRef.current;
@@ -857,11 +901,11 @@ export default function SkShell({
     listenNowRef.current = listenNow;
   });
 
-  // The tour starts or resumes narrating: close the hero mic for its whole
-  // run (it is one-way talk). Paused or ended: listen again if the switch is on.
+  // The tour starts or resumes narrating: close the listening mic for its
+  // whole run (it is one-way talk). Paused or ended: listen again if the switch is on.
   const narrating = !!walk?.narrating;
   useEffect(() => {
-    if (!hero) return;
+    if (!listen) return;
     if (narrating) {
       if (micModeRef.current === "handsFree") {
         gateRef.current?.stop("speaking");
@@ -870,25 +914,25 @@ export default function SkShell({
       return;
     }
     listenNowRef.current();
-  }, [narrating, hero]);
+  }, [narrating, listen]);
 
-  // The hero listens while the switch is on, the browser can, the panel is
+  // The corner listens while the switch is on, the browser can, the Shell is
   // ready and the server's preference is known; off ends the capture now.
   useEffect(() => {
-    if (!hero) return;
+    if (!listen) return;
     const gate = gateRef.current;
     if (!gate) return;
     const want = micOn && mic && ready === true && prefsSettled;
     gate.setAutoResume(want);
     if (want) gate.resume();
     else if (micModeRef.current) gate.stop("manual");
-  }, [hero, micOn, mic, ready, prefsSettled]);
+  }, [listen, micOn, mic, ready, prefsSettled]);
 
   // Refused in this browser (Permissions API, where it exists) — already, or
   // in the prompt the first listen raised: the switch goes off and stays off
   // rather than failing on every visit.
   useEffect(() => {
-    if (!hero || !micOn || !prefsSettled) return;
+    if (!listen || !micOn || !prefsSettled) return;
     let live = true;
     let status: PermissionStatus | null = null;
     const onChange = () => {
@@ -909,20 +953,20 @@ export default function SkShell({
       live = false;
       status?.removeEventListener("change", onChange);
     };
-  }, [hero, micOn, prefsSettled, micRefused]);
+  }, [listen, micOn, prefsSettled, micRefused]);
 
-  // No echo: the hero's mic pauses while SK speaks (stopped synchronously in
+  // No echo: the listening mic pauses while SK speaks (stopped synchronously in
   // onSpeaking; this is the backstop) and comes back SPEECH_TAIL_MS after the
   // coordinator's WHOLE queue has drained — the hold's onClear takes the
   // resume the gate owes. Never in the gap between two sentences of a line,
   // and a resume never stops SK's voice (only her words, typing or Stop do).
   useEffect(() => {
     speakingRef.current = speaking;
-    if (!hero) return;
+    if (!listen) return;
     const gate = gateRef.current;
     if (!gate) return;
     if (speaking) gate.stop("speaking");
-  }, [speaking, hero]);
+  }, [speaking, listen]);
 
   /** Stop = the voice and the answer being written. The video
    *  stays where it is (an explicit stop never resumes it; "continue" does). */
@@ -959,11 +1003,11 @@ export default function SkShell({
             void sendRef.current(text, "voice");
           } else if (Date.now() - startedAt < 1500 && ++emptyEndsRef.current >= 3) {
             // Three immediate empty ends in a row = the browser is refusing
-            // (permission, no device). Stop rather than spin. The hero pauses
-            // as for idle instead (back on her next interaction, never by
-            // itself) and asks the browser whether the mic is refused.
-            gate.stop(hero ? "idle" : "manual");
-            if (hero) void micPermission().then((st) => st === "denied" && micRefused());
+            // (permission, no device). Stop rather than spin. The listening
+            // corner pauses as for idle instead (back on her next interaction,
+            // never by itself) and asks the browser whether the mic is refused.
+            gate.stop(listen ? "idle" : "manual");
+            if (listen) void micPermission().then((st) => st === "denied" && micRefused());
             return;
           }
           beginDictation("handsFree");
@@ -982,7 +1026,7 @@ export default function SkShell({
       { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l) },
     );
     if (!stop) {
-      if (hero) setMicNote("unsupported");
+      if (listen) setMicNote("unsupported");
       gate.stop("manual");
       return;
     }
@@ -1030,6 +1074,13 @@ export default function SkShell({
         setInput("");
         return;
       }
+      // 2026-10-30 (founder): "Continue with the tour." with NO tour running
+      // starts one — the same start as "Take the tour", no turn, no model.
+      if (!walkRef.current && onTakeTourRef.current && walkStartCommand(q)) {
+        setInput("");
+        onTakeTourRef.current();
+        return;
+      }
       setError(null);
       // §9.2: with exactly one card waiting, a bare yes/no answers the CARD —
       // spoken (push-to-talk or hands-free, the only sources of a "voice"
@@ -1072,6 +1123,15 @@ export default function SkShell({
 
       const skId = uuid();
       setEntries((m) => [...m, { id: uuid(), who: "user", text: q }, { id: skId, who: "sk", text: "", pending: true }]);
+      // The answer's language, for the bubble's direction.
+      let replyLang: string | undefined;
+      let replyDir: "ltr" | "rtl" | undefined;
+      /** Read-aloud off: the bubble shows the answer as text (spoken answers
+       *  show sentence by sentence through the coordinator instead). */
+      const showReply = (text: string) => {
+        if (readAloudRef.current && coord) return;
+        dispatchBubble({ type: "reply", key: skId, text, lang: replyLang, dir: replyDir, at: Date.now() });
+      };
 
       const req: SkTurnRequest = {
         turnId: uuid(),
@@ -1148,6 +1208,7 @@ export default function SkShell({
             full += ev.text;
             patchEntry(skId, (en) => ({ ...en, text: full }));
             setCaption(lastSentence(full));
+            showReply(full);
             streamFor()?.push(ev.text);
             break;
           case "tool":
@@ -1175,6 +1236,7 @@ export default function SkShell({
               moves: [...(en.moves ?? []), { move: ev.move, say }],
             }));
             if (say) setCaption(say);
+            if (say && !full) showReply(say);
             if (!b) {
               patchEntry(skId, (en) => ({ ...en, moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: false, summary: copy.boardNotOpen } : m)) }));
               break;
@@ -1212,6 +1274,7 @@ export default function SkShell({
             const say = ev.say ?? "";
             patchEntry(skId, (en) => ({ ...en, text: en.text || say, moves: [...(en.moves ?? []), { move: ev.move, say }] }));
             if (say) setCaption(say);
+            if (say && !full) showReply(say);
             if (!tb) {
               patchEntry(skId, (en) => ({ ...en, moves: (en.moves ?? []).map((m) => (m.move === ev.move && m.ok === undefined ? { ...m, ok: false, summary: copy.tutorNotOpen } : m)) }));
               break;
@@ -1233,6 +1296,9 @@ export default function SkShell({
             const card: Card = { id: uuid(), token: ev.token, action: ev.action, title: ev.title, params: ev.params ?? {}, expiresAt: ev.expiresAt, status: "active" };
             setCards((cs) => [...cs.filter((c) => c.status !== "active"), card]);
             setCaption(ev.title);
+            // The text is hidden: the bubble asks for her confirmation (Show
+            // opens the conversation, where the card is).
+            if (!sheetOpenRef.current) dispatchBubble({ type: "confirm", text: copy.corner.needConfirm, at: Date.now() });
             break;
           }
           case "walkthrough":
@@ -1248,6 +1314,8 @@ export default function SkShell({
             // 2026-10-30: what the text that follows is in. Dictation follows
             // only her own choice (an Arabic kit does not make her speak Arabic).
             speechLang = ev.speech;
+            replyLang = ev.lang;
+            replyDir = ev.dir;
             dictLangRef.current = ev.override ? ev.speech : null;
             patchEntry(skId, (en) => ({ ...en, lang: ev.lang, dir: ev.dir }));
             break;
@@ -1319,88 +1387,185 @@ export default function SkShell({
   const shownParams = (params: Card["params"]) => Object.entries(params).filter(([k]) => !/(?:^|_)ids?$/.test(k) && k !== "chapter_ref" && k !== "click_only" && k !== "audience");
   const paramValue = (v: Card["params"][string]) => (v === null || v === undefined ? "—" : typeof v === "boolean" ? (v ? cardLabels?.yes ?? "Yes" : cardLabels?.no ?? "No") : String(v));
 
-  // ── the hero (founder 2026-10-30): still avatar, Mic switch, greeting ──
+  // ── the corner (founder 2026-10-30): avatar, speech bubble, menu, sheet ──
   const hc = copy.hero;
+  const cc = copy.corner;
   const micLive = micOn && mic;
-  // "Take the tour" (founder 2026-10-30): a small link in the hero and the
-  // panel; hidden while a tour runs. A replay — it never writes the seen row.
-  const takeTour =
-    onTakeTour && takeTourLabel && !walk ? (
-      <button type="button" onClick={onTakeTour} className="shrink-0 text-[11px] font-medium text-[#0C8175] hover:underline" data-sk="take-tour">
-        <span aria-hidden>🧭</span> {takeTourLabel}
-      </button>
-    ) : null;
-  const heroHeader = (
-    <div className="px-4 sm:px-6 pt-3 pb-3 border-b border-[#EEF0EC]">
-      <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 flex items-center gap-2">
-          <span className="truncate text-xs font-medium text-slate-600">{copy.title}</span>
-          {takeTour}
-        </span>
-        <div className="flex items-center gap-3 shrink-0">
-          {showStop ? (
-            <button type="button" onClick={stopAll} className="text-xs font-medium text-[#B42318] hover:underline" title={copy.stop} data-sk="stop">
-              ■ {copy.stop}
-            </button>
-          ) : (
-            <button type="button" onClick={toggleReadAloud} aria-pressed={readAloud} className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-slate-500"} hover:underline`}>
-              {readAloud ? "🔊" : "🔈"} {copy.readAloud}
-            </button>
-          )}
-          {/* The Mic switch, top-end of the card: on by default (by role),
-              one tap to turn off, remembered in her SK preferences. */}
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <span className="text-xs font-medium text-slate-700" aria-hidden>
-              {micLive ? hc.micOn : hc.micOff}
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={micLive}
-              aria-label={hc.micSwitch}
-              title={micLive ? hc.micOn : hc.micOff}
-              disabled={!mic}
-              onClick={toggleMic}
-              data-sk="mic-switch"
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                micLive ? "bg-[#0C8175] border-[#0C8175]" : "bg-slate-200 border-slate-300"
-              }`}
-            >
-              <span
-                aria-hidden
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${micLive ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0.5 rtl:-translate-x-0.5"}`}
-              />
-            </button>
-          </label>
-        </div>
-      </div>
-      <div className="mt-2 flex flex-col items-center text-center">
-        {/* Still: one flattened portrait per look (public/sk/portrait, made by
-            scripts/sk-portraits.mjs from the rig layers — body.png alone has
-            no head). While SK speaks the ring and
-            the label fade in — an opacity change, nothing moves. */}
-        <div className="relative h-32 w-44 sm:h-36 sm:w-48 overflow-hidden rounded-2xl bg-[#E2F4F1]" data-sk="avatar" data-sk-look={rig}>
-          <Image src={rig === "A" ? "/sk/portrait/sk-a.webp" : "/sk/portrait/sk-b.webp"} alt="" width={480} height={360} unoptimized priority className="h-full w-full object-cover" />
-          <span aria-hidden className={`pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-inset ring-[#0C8175] transition-opacity ${speaking ? "opacity-100" : "opacity-0"}`} />
-        </div>
-        <span className={`mt-1 text-[11px] font-medium text-[#0C8175] transition-opacity ${speaking ? "opacity-100" : "opacity-0"}`} aria-hidden={!speaking} data-sk="speaking">
-          {hc.speaking}
-        </span>
-        {/* During the walkthrough the tour runs inside the card: its caption,
-            controls and progress take the greeting's place. */}
-        {walk ? (
-          <div className="mt-2 w-full">{walk.strip}</div>
-        ) : (
-          <p className="mt-0.5 text-sm text-slate-700" data-sk="hero-greeting">
-            {hc.greeting}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-  // The line under the text box: why the mic cannot listen, the live
+  const tourOn = !!walk;
+  const isBubbleOpen = bubbleOpen(bubble, { tour: tourOn });
+  // While she waits for an answer and nothing else is showing: a quiet "…".
+  const thinking = busy && !isBubbleOpen;
+  /** The open message — or the last one, while it fades out. */
+  const msg = bubble.msg;
+  const openMsg = msg && !bubble.closed ? msg : null;
+  // Mid-tour (paused by her question): SK's answer replaces the stop's caption.
+  const tourAnswer = walk?.showAnswers && openMsg && openMsg.kind !== "greeting" && openMsg.kind !== "confirm" ? openMsg.text : null;
+  const closeMenu = useCallback((refocus: boolean) => {
+    setMenuOpen(false);
+    if (refocus) avatarRef.current?.focus();
+  }, []);
+
+  /** "Show text by default" (prefs.ts showText): the conversation opens with
+   *  the page, once per mount — closing it is her choice for this page. */
+  function openTextByPref() {
+    if (textShownRef.current) return;
+    textShownRef.current = true;
+    setSheetOpen(true);
+  }
+
+  function openSheet() {
+    setMenuOpen(false);
+    setQuickOpen(false);
+    setSheetOpen(true);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
+  function closeSheet() {
+    setSheetOpen(false);
+    avatarRef.current?.focus();
+  }
+  function openQuick() {
+    setMenuOpen(false);
+    if (sheetOpenRef.current) {
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+      return;
+    }
+    setQuickOpen(true);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
+  function closeQuick() {
+    setQuickOpen(false);
+    avatarRef.current?.focus();
+  }
+
+  /** Clear conversation (client-side only): this tab's transcript and the
+   *  signed memory blob go from sessionStorage, the conversation she sees is
+   *  reset, and the next turn starts a fresh server session. */
+  function clearAll() {
+    setMenuOpen(false);
+    turnRef.current?.abort();
+    speechRef.current?.stop();
+    let storage: Storage | null = null;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      storage = null;
+    }
+    clearConversation(storage);
+    memoryRef.current = undefined;
+    sessionIdRef.current = null;
+    setEntries([]);
+    setCards([]);
+    setCaption("");
+    setError(null);
+    setInput("");
+    dispatchBubble({ type: "clear" });
+    dispatchBubble({ type: "reply", key: `cleared-${uuid()}`, text: cc.cleared, at: Date.now() });
+  }
+
+  // The bubble's fade: one timer for the open message (bubble.ts decides when).
+  const fadeAt = bubbleFadeAt(bubble, { tour: tourOn });
+  const msgId = bubble.msg?.id;
+  useEffect(() => {
+    if (fadeAt === null || msgId === undefined) return;
+    const t = window.setTimeout(() => dispatchBubble({ type: "expire", id: msgId }), Math.max(0, fadeAt - Date.now()));
+    return () => window.clearTimeout(t);
+  }, [fadeAt, msgId]);
+
+  // A tour takes the bubble over: whatever it said before is done with.
+  useEffect(() => {
+    if (tourOn) dispatchBubble({ type: "close" });
+  }, [tourOn]);
+
+  // Errors show in the bubble, in the Shell's own wording.
+  useEffect(() => {
+    if (error) dispatchBubble({ type: "error", text: error, at: Date.now() });
+  }, [error]);
+  // Why the mic cannot listen, once, in the bubble.
+  useEffect(() => {
+    if (micNote) dispatchBubble({ type: "error", text: micNote === "denied" ? hc.micDenied : hc.micUnsupported, at: Date.now() });
+  }, [micNote, hc.micDenied, hc.micUnsupported]);
+
+  // A confirmation waiting is shown (the sheet opened) or settled: the bubble lets go.
+  const cardWaiting = cards.some((c) => c.status === "active" || c.status === "sending");
+  useEffect(() => {
+    if (!cardWaiting || sheetOpen) dispatchBubble({ type: "confirmDone" });
+  }, [cardWaiting, sheetOpen]);
+
+  // The greeting: once per tab session, on a home page, never over a tour.
+  useEffect(() => {
+    let greeted = false;
+    try {
+      greeted = window.sessionStorage.getItem(GREETED_KEY) === "1";
+    } catch {
+      greeted = false;
+    }
+    if (!shouldGreet({ home: greet, greeted, tour: tourOn, text: greeting })) return;
+    try {
+      window.sessionStorage.setItem(GREETED_KEY, "1");
+    } catch {
+      /* private mode: it may greet once more */
+    }
+    dispatchBubble({ type: "greeting", text: greeting ?? "", at: Date.now() });
+  }, [greet, greeting, tourOn]);
+
+  // Escape closes the sheet or the one-line box (focus back on the avatar).
+  useEffect(() => {
+    if (!sheetOpen && !quickOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || menuOpen) return;
+      if (quickOpen) closeQuick();
+      else closeSheet();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
+  const menuItems: CornerMenuItem[] = [
+    { kind: "action", id: "type", label: cc.typeMessage, icon: "⌨", onSelect: openQuick, disabled: ready === false },
+    sheetOpen
+      ? {
+          kind: "action",
+          id: "conversation",
+          label: cc.hideConversation,
+          icon: "💬",
+          onSelect: () => {
+            setMenuOpen(false);
+            closeSheet();
+          },
+        }
+      : { kind: "action", id: "conversation", label: cc.showConversation, icon: "💬", onSelect: openSheet },
+    ...(listen ? [{ kind: "toggle" as const, id: "mic", label: hc.micSwitch, icon: "🎤", checked: micLive, disabled: !mic, onSelect: toggleMic }] : []),
+    { kind: "toggle", id: "read-aloud", label: copy.readAloud, icon: readAloud ? "🔊" : "🔈", checked: readAloud, onSelect: toggleReadAloud },
+    ...(onTakeTour && takeTourLabel && !walk
+      ? [
+          {
+            kind: "action" as const,
+            id: "tour",
+            label: takeTourLabel,
+            icon: "🧭",
+            onSelect: () => {
+              setMenuOpen(false);
+              onTakeTour();
+            },
+          },
+        ]
+      : []),
+    { kind: "action", id: "clear", label: cc.clearConversation, icon: "🗑", onSelect: clearAll },
+    {
+      kind: "action",
+      id: "settings",
+      label: cc.settings,
+      icon: "⚙",
+      onSelect: () => {
+        setMenuOpen(false);
+        router.push("/dashboard/settings");
+      },
+    },
+  ];
+
+  // The line under the sheet's text box: why the mic cannot listen, the live
   // indicator (§2.6), or the quiet paused state (idle, or the tab was away).
-  const heroMicLine =
+  const micLine =
     prefsSettled && !mic ? (
       <span className="text-slate-500" data-sk="mic-note" data-sk-why="unsupported">
         {hc.micUnsupported}
@@ -1420,52 +1585,45 @@ export default function SkShell({
       </span>
     ) : null;
 
-  const body = (
-    <>
-      {dock ? (
-        walk?.strip
-      ) : hero ? (
-        heroHeader
-      ) : (
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
-          <div className="min-w-0">
-            <div className="font-display font-medium flex items-center gap-1.5 text-slate-900">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#0C8175] text-white text-[11px] font-semibold" aria-hidden>
-                SK
-              </span>
-              <span className="truncate text-slate-900">{copy.title}</span>
-              {takeTour}
+  // ── the conversation sheet: the old panel body ──
+  const sheet = (
+    <section
+      className="card pointer-events-auto mb-3 flex w-[90vw] sm:w-[24rem] h-[60vh] sm:h-[min(34rem,70vh)] max-h-[calc(100dvh-9rem)] flex-col overflow-hidden text-slate-900 [color-scheme:light] shadow-xl"
+      data-sk="shell"
+      data-sk-role={role ?? ""}
+      data-sk-hat={hat ?? ""}
+      aria-label={copy.title}
+    >
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#EEF0EC]">
+        <div className="min-w-0">
+          <div className="font-display font-medium flex items-center gap-1.5 text-slate-900">
+            <span className="truncate text-slate-900">{copy.title}</span>
+          </div>
+          {capabilities.length > 0 && (
+            <div className="text-[10px] text-slate-500 truncate" data-sk="capabilities">
+              {capabilities.join(" · ")}
             </div>
-            {capabilities.length > 0 && (
-              <div className="text-[10px] text-slate-500 truncate" data-sk="capabilities">
-                {capabilities.join(" · ")}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {showStop ? (
-              <button onClick={stopAll} className="text-xs font-medium text-[#B42318] hover:underline" title={copy.stop}>
-                ■ {copy.stop}
-              </button>
-            ) : (
-              <button
-                onClick={toggleReadAloud}
-                aria-pressed={readAloud}
-                className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-slate-500"} hover:underline`}
-              >
-                {readAloud ? "🔊" : "🔈"} {copy.readAloud}
-              </button>
-            )}
-            <button onClick={onClose} className="text-slate-500 hover:text-slate-700 text-lg leading-none" aria-label={copy.close}>
-              ×
-            </button>
-          </div>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-3 shrink-0">
+          {showStop ? (
+            <button type="button" onClick={stopAll} className="text-xs font-medium text-[#B42318] hover:underline" title={copy.stop} data-sk="stop">
+              ■ {copy.stop}
+            </button>
+          ) : (
+            <button type="button" onClick={toggleReadAloud} aria-pressed={readAloud} className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-slate-500"} hover:underline`}>
+              {readAloud ? "🔊" : "🔈"} {copy.readAloud}
+            </button>
+          )}
+          <button type="button" onClick={closeSheet} className="text-slate-500 hover:text-slate-700 text-lg leading-none" aria-label={cc.hideConversation} title={cc.hideConversation} data-sk="sheet-close">
+            ×
+          </button>
+        </div>
+      </div>
 
       {/* S2 job tray: her SK-started kits, newest first, at most 3. Hidden when empty. */}
-      {!dock && trayVisible(tray) && (
-        <div className="px-5 py-2 border-b border-[#EEF0EC] bg-[#FAFBF9]" data-sk="kit-tray" data-sk-polling={trayPolling ? "on" : "off"}>
+      {trayVisible(tray) && (
+        <div className="px-4 py-2 border-b border-[#EEF0EC] bg-[#FAFBF9]" data-sk="kit-tray" data-sk-polling={trayPolling ? "on" : "off"}>
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 mb-1">{copy.tray.title}</div>
           <ul className="space-y-1">
             {tray.map((k) => (
@@ -1473,10 +1631,8 @@ export default function SkShell({
                 <span className="min-w-0 flex-1 truncate text-slate-900" title={k.title}>
                   {k.title}
                 </span>
-                <span
-                  className={`shrink-0 ${k.state === "failed" ? "text-[#B42318]" : k.state === "ready" ? "text-[#0C8175] font-medium" : "text-slate-600"}`}
-                >
-                  {(k.state === "making" || k.state === "partial") && <span className="animate-pulse" aria-hidden>● </span>}
+                <span className={`shrink-0 ${k.state === "failed" ? "text-[#B42318]" : k.state === "ready" ? "text-[#0C8175] font-medium" : "text-slate-600"}`}>
+                  {(k.state === "making" || k.state === "partial") && <span aria-hidden>● </span>}
                   {trayStateText(k, copy.tray)}
                 </span>
                 {k.href && (
@@ -1491,23 +1647,9 @@ export default function SkShell({
       )}
 
       {/* Transcript */}
-      {/* The dock shows the conversation only while she has asked something
-          mid-tour (the tour is paused; "Continue the tour" brings it back). */}
-      <div
-        ref={scrollRef}
-        className={
-          dock
-            ? walk?.showAnswers
-              ? "max-h-40 overflow-y-auto px-3 py-2 space-y-2 border-t border-[#EEF0EC]"
-              : "hidden"
-            : hero
-              ? "max-h-72 overflow-y-auto px-4 sm:px-6 py-3 space-y-3"
-              : "flex-1 overflow-y-auto px-5 py-4 space-y-3"
-        }
-        data-sk="transcript"
-      >
-        {ready === null && !dock && <p className="text-sm text-slate-500">…</p>}
-        {(hero ? entries.slice(-HERO_ENTRIES) : dock ? entries.slice(-DOCK_ENTRIES) : entries).map((e) => (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" data-sk="transcript">
+        {ready === null && <p className="text-sm text-slate-500">…</p>}
+        {entries.map((e) => (
           <div key={e.id} className={e.who === "user" ? "flex flex-col items-end" : "flex flex-col items-start"}>
             {e.who === "user" && <span className="text-[10px] text-slate-500 me-1 mb-0.5">{copy.you}</span>}
             {(e.text || e.pending) && (
@@ -1570,25 +1712,19 @@ export default function SkShell({
         {error && <p className="text-xs text-[#B42318]">{error}</p>}
       </div>
 
-      {/* Caption — SK's latest sentence; the Board reads this line later.
-          The hero shows the conversation itself, so it has no caption or
-          job line: avatar, greeting, conversation, text box. */}
-      {!hero && !dock && (
-        <div className="px-5 py-1.5 border-t border-[#EEF0EC] text-xs text-slate-600 truncate min-h-[1.75rem]" data-sk="caption" aria-live="polite">
-          {caption}
-        </div>
-      )}
+      {/* Caption — SK's latest sentence (the Board reads this line). */}
+      <div className="px-4 py-1.5 border-t border-[#EEF0EC] text-xs text-slate-600 truncate min-h-[1.75rem]" data-sk="caption">
+        {caption}
+      </div>
 
       {/* S0's job-tray line — on the Board it reports the lesson map and the
           slides load. S2's kits have their own list above the transcript. */}
-      {!hero && !dock && (
-        <div className="px-5 py-1 text-[10px] text-slate-600 border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
-          {slideLoad ? fmt(copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n }) : mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
-        </div>
-      )}
+      <div className="px-4 py-1 text-[10px] text-slate-600 border-t border-[#EEF0EC]" data-sk="job-tray" data-sk-map={mapStatus}>
+        {slideLoad ? fmt(copy.loadingSlides, { k: slideLoad.k, n: slideLoad.n }) : mapStatus === "building" ? copy.preparingMap : copy.jobTrayEmpty}
+      </div>
 
       {/* S1: confirmation cards (§2.5). One active card at a time. */}
-      <div data-sk="confirm-slot" className={cards.length ? "px-4 py-2 border-t border-[#EEF0EC] space-y-2" : "hidden"}>
+      <div data-sk="confirm-slot" className={cards.length ? "px-4 py-2 border-t border-[#EEF0EC] space-y-2 max-h-[45%] overflow-y-auto" : "hidden"}>
         {cards.map((c) => {
           const left = secondsLeft(c.expiresAt, nowMs);
           const settled = c.status !== "active" && c.status !== "sending";
@@ -1634,7 +1770,7 @@ export default function SkShell({
         })}
       </div>
 
-      <div className={hero ? "px-4 sm:px-6 py-3 border-t border-[#EEF0EC]" : dock ? "px-3 py-2 border-t border-[#EEF0EC]" : "px-4 py-3 border-t border-[#EEF0EC]"}>
+      <div className="px-3 py-2.5 border-t border-[#EEF0EC]">
         <form
           className="flex items-center gap-2"
           onSubmit={(e) => {
@@ -1642,8 +1778,9 @@ export default function SkShell({
             submit();
           }}
         >
-          {/* The hero has no push-to-talk button: its Mic switch listens. */}
-          {mic && !hero && (
+          {/* The listening corner has no push-to-talk button: its Mic switch
+              listens. The Board keeps push-to-talk and the hands-free opt-in. */}
+          {mic && !listen && (
             <button
               type="button"
               disabled={ready === false}
@@ -1705,9 +1842,9 @@ export default function SkShell({
             {busy ? "…" : copy.send}
           </button>
         </form>
-        {dock ? null : hero ? (
+        {listen ? (
           <div className="mt-1.5 min-h-[1rem] text-[11px]" data-sk="mic-line" aria-live="polite">
-            {heroMicLine}
+            {micLine}
           </div>
         ) : (
           <div className="flex items-center justify-between mt-1.5 gap-2">
@@ -1734,88 +1871,124 @@ export default function SkShell({
           </div>
         )}
       </div>
-    </>
+    </section>
   );
 
-  if (dock) {
-    return (
-      <DockFrame role={role} hat={hat} title={copy.title}>
-        {body}
-      </DockFrame>
-    );
-  }
-  if (hero) {
-    const card = (
-      <HeroFrame role={role} hat={hat} title={copy.title}>
-        {body}
-      </HeroFrame>
-    );
-    return portalTo ? createPortal(card, portalTo) : card;
-  }
-  return (
-    <PanelFrame onClose={onClose} role={role} hat={hat} title={copy.title}>
-      {body}
-    </PanelFrame>
+  // ── "Type a message": one line above the avatar; Escape, or Send with
+  // nothing in it, closes it ──
+  const quick = (
+    <form
+      className="pointer-events-auto mb-3 flex w-[min(22rem,calc(100vw-2rem))] items-center gap-2 rounded-2xl border border-[#E6E8E4] bg-white p-1.5 shadow-lg [color-scheme:light]"
+      data-sk="quick-input"
+      aria-label={cc.typeMessage}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!input.trim()) {
+          closeQuick();
+          return;
+        }
+        submit();
+      }}
+    >
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={(e) => {
+          setInput(e.target.value);
+          walkRef.current?.hold?.();
+        }}
+        maxLength={600}
+        disabled={ready === false}
+        placeholder={listening ? copy.listening : copy.placeholder}
+        aria-label={cc.typeMessage}
+        className="field h-9 px-3 text-sm flex-1 min-w-0 bg-white text-slate-900 placeholder:text-slate-400"
+        data-sk="input"
+      />
+      <button type="submit" disabled={busy || ready === false} className="btn-primary h-9 px-3 text-sm text-white disabled:opacity-50">
+        {busy ? "…" : copy.send}
+      </button>
+    </form>
   );
-}
 
-type FrameProps = { role: string | null; hat: string | null; title: string; children: ReactNode };
-
-/** The floating dialog (S0). */
-function PanelFrame({ onClose, role, hat, title, children }: FrameProps & { onClose?: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
-      {/* THE PANEL'S COLOURS ARE ITS OWN. It mounts on the Board too, whose page
-          sets light text for a dark room, and an inherited `color` made the
-          title and the typed text near-invisible there (founder, 2026-10-28).
-          Near-black on the root overrides whatever the page set; color-scheme
-          light keeps native controls from flipping dark with the page. */}
-      <div
-        className="card w-full max-w-md flex flex-col max-h-[92dvh] sm:max-h-[86dvh] rounded-b-none sm:rounded-b-2xl text-slate-900 [color-scheme:light]"
-        onClick={(e) => e.stopPropagation()}
-        data-sk="shell"
-        data-sk-role={role ?? ""}
-        data-sk-hat={hat ?? ""}
-        role="dialog"
-        aria-label={title}
+  // ── what the bubble says ──
+  const bubbleKind = tourOn ? "tour" : openMsg ? openMsg.kind : thinking ? "thinking" : msg ? msg.kind : "none";
+  const bubbleBody = tourOn ? (
+    walk?.strip(tourAnswer)
+  ) : thinking ? (
+    <p className="text-slate-500" data-sk="bubble-thinking">
+      …
+    </p>
+  ) : msg ? (
+    <div data-sk="bubble-body">
+      <p
+        className="max-h-20 overflow-y-auto whitespace-pre-wrap leading-5"
+        dir={msg.dir}
+        lang={htmlLangOf(msg.lang)}
+        data-sk="bubble-text"
+        aria-live="polite"
       >
-        {children}
-      </div>
+        {msg.text}
+      </p>
+      {(msg.more || msg.kind === "confirm" || showStop) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          {msg.more && (
+            <button type="button" onClick={openSheet} className="text-xs font-medium text-[#0C8175] hover:underline" data-sk="bubble-more">
+              {cc.more}
+            </button>
+          )}
+          {msg.kind === "confirm" && (
+            <button type="button" onClick={openSheet} className="btn-primary h-7 px-3 text-xs text-white" data-sk="bubble-show">
+              {cc.show}
+            </button>
+          )}
+          {showStop && (
+            <button type="button" onClick={stopAll} className="ms-auto text-xs font-medium text-[#B42318] hover:underline" title={copy.stop} data-sk="stop">
+              ■ {copy.stop}
+            </button>
+          )}
+        </div>
+      )}
     </div>
-  );
-}
+  ) : null;
 
-/** The walkthrough's docked bar (2026-10-30): compact, NON-modal (no
- *  backdrop, no click-outside), at the bottom of the page so the page above
- *  stays visible and usable; full width on a phone, a card on wider screens. */
-function DockFrame({ role, hat, title, children }: FrameProps) {
+  const corner = side === "start" ? "start-4 items-start" : "end-4 items-end";
+  const bottom = raised ? "bottom-20" : "bottom-4";
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[48] flex justify-center sm:px-4 sm:pb-4">
-      <section
-        className="card pointer-events-auto w-full max-w-xl max-h-[65dvh] overflow-y-auto rounded-b-none sm:rounded-b-2xl text-slate-900 [color-scheme:light] shadow-lg"
-        data-sk="dock"
-        data-sk-role={role ?? ""}
-        data-sk-hat={hat ?? ""}
-        aria-label={title}
-      >
-        {children}
-      </section>
-    </div>
-  );
-}
-
-/** The home hero (2026-10-30): inline at the top of a landing page, with the
- *  same page-independent colours as the panel. */
-function HeroFrame({ role, hat, title, children }: FrameProps) {
-  return (
-    <section
-      className="card w-full max-w-2xl mx-auto mb-8 flex flex-col overflow-hidden text-slate-900 [color-scheme:light]"
-      data-sk="hero"
+    <div
+      className={`pointer-events-none fixed ${bottom} ${corner} ${tourOn ? "z-[48]" : "z-40"} flex flex-col text-slate-900`}
+      data-sk="launcher"
+      data-sk-board={board ? "true" : undefined}
+      data-sk-side={side}
       data-sk-role={role ?? ""}
       data-sk-hat={hat ?? ""}
-      aria-label={title}
     >
-      {children}
-    </section>
+      {sheetOpen && sheet}
+      {quickOpen && !sheetOpen && quick}
+      <div className={`flex items-end gap-2 ${side === "start" ? "flex-row-reverse" : ""}`}>
+        <SkBubble
+          open={isBubbleOpen || thinking}
+          side={side}
+          kind={bubbleKind}
+          wide={tourOn}
+          onHold={(on) => dispatchBubble({ type: "hold", on, at: Date.now() })}
+          onClose={tourOn ? undefined : () => dispatchBubble({ type: "close" })}
+          closeLabel={cc.dismiss}
+        >
+          {bubbleBody}
+        </SkBubble>
+        <div className="relative">
+          {menuOpen && <SkCornerMenu label={cc.menu} items={menuItems} onClose={closeMenu} side={side} />}
+          <SkAvatar
+            look={rig}
+            speaking={speaking}
+            listening={listening}
+            label={cc.avatar}
+            expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+            buttonRef={avatarRef}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

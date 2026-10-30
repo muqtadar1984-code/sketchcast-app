@@ -22,6 +22,8 @@ export type PrivacyStrings = {
   suggestionsHint: string;
   micOn: string;
   micOnHint: string;
+  showText: string;
+  showTextHint: string;
   on: string;
   off: string;
   saving: string;
@@ -247,6 +249,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
         <Switch id="pref-hands" label={t.handsFree} hint={t.handsFreeHint} {...sw(prefs.handsFree)} busy={busy === "pref:handsFree"} onToggle={() => void togglePref("handsFree")} />
         <Switch id="pref-suggest" label={t.suggestions} hint={t.suggestionsHint} {...sw(prefs.suggestions)} busy={busy === "pref:suggestions"} onToggle={() => void togglePref("suggestions")} />
         <Switch id="pref-mic" label={t.micOn} hint={t.micOnHint} {...sw(prefs.micOn)} busy={busy === "pref:micOn"} onToggle={() => void togglePref("micOn")} />
+        <Switch id="pref-text" label={t.showText} hint={t.showTextHint} {...sw(prefs.showText)} busy={busy === "pref:showText"} onToggle={() => void togglePref("showText")} />
       </div>
 
       {isStudent && props.student && (

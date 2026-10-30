@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from "vitest";
 import type { StorageLike } from "../memory-store";
-import { SK_MEMORY_STORE_GAP_MS } from "../memory-store";
-import { SK_TRANSCRIPT_KEY, SK_TRANSCRIPT_MAX, createTranscriptStore, hasHerTurn, type TranscriptEntry } from "../transcript-store";
+import { SK_MEMORY_KEY, SK_MEMORY_STORE_GAP_MS, createMemoryStore } from "../memory-store";
+import { SK_TRANSCRIPT_KEY, SK_TRANSCRIPT_MAX, clearConversation, createTranscriptStore, hasHerTurn, type TranscriptEntry } from "../transcript-store";
 
 function fakeStorage(): StorageLike & { map: Map<string, string> } {
   const map = new Map<string, string>();
@@ -85,5 +85,37 @@ describe("the hero and the panel read one conversation", () => {
     const s = fakeStorage();
     createTranscriptStore(s).save(null, [ask]);
     expect(s.map.size).toBe(0);
+  });
+});
+
+// 2026-10-30: "Clear conversation" in SK's corner menu — client-side only.
+describe("clearConversation: this tab's transcript AND the signed memory blob", () => {
+  it("removes both stores; nothing restores afterwards; other keys stay", () => {
+    const s = fakeStorage();
+    createTranscriptStore(s, () => 1).save("sess-1", [greet, ask, answer]);
+    createMemoryStore(s, () => 1).save({ memory: "signed.blob", sessionId: "sess-1" });
+    s.setItem("sk.walkthrough", "{}");
+    s.setItem("sk.greeted", "1");
+    expect(s.map.has(SK_TRANSCRIPT_KEY)).toBe(true);
+    expect(s.map.has(SK_MEMORY_KEY)).toBe(true);
+    expect(clearConversation(s)).toBe(true);
+    expect(s.map.has(SK_TRANSCRIPT_KEY)).toBe(false);
+    expect(s.map.has(SK_MEMORY_KEY)).toBe(false);
+    expect(createTranscriptStore(s, () => 2).load("sess-1")).toBeNull();
+    expect(createMemoryStore(s, () => 2).load()).toBeNull();
+    // Not the tour's position, not the greeting note.
+    expect(s.map.get("sk.walkthrough")).toBe("{}");
+    expect(s.map.get("sk.greeted")).toBe("1");
+  });
+  it("no storage, or storage that throws: false, never a throw", () => {
+    expect(clearConversation(null)).toBe(false);
+    const bad: StorageLike = {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {
+        throw new Error("denied");
+      },
+    };
+    expect(clearConversation(bad)).toBe(false);
   });
 });

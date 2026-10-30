@@ -39,6 +39,16 @@ describe("isWalkthroughRequest: the replay phrase", () => {
       expect(isWalkthroughRequest(t), t).toBe(false);
     }
   });
+  it("2026-10-30: 'continue / resume / start the tour' in natural phrasing is the tour too (no tour running → starts one)", () => {
+    for (const t of ["Continue with the tour.", "Hi, continue with the tour?", "resume the tour please", "carry on with the tour", "teruskan lawatan", "تابع الجولة", "continuer la visite", "Ok, start the tour now"]) {
+      expect(isWalkthroughRequest(t), t).toBe(true);
+    }
+    // Not without the tour named, and never a question about it.
+    for (const t of ["continue", "continue the video", "how do I continue the tour", "skip the tour"]) {
+      expect(isWalkthroughRequest(t), t).toBe(false);
+    }
+    expect(routeByRules("Continue with the tour.", makeCtx({ role: "teacher" }), NOW).intent).toBe("tour");
+  });
   it("routeByRules decides it with no model, for every role", () => {
     for (const role of ["teacher", "student", "parent", "school_admin"]) {
       expect(routeByRules("Show me around", makeCtx({ role }), NOW).intent).toBe("tour");
