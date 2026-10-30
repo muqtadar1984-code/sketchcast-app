@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { canonicalSha } from "./hash";
 import { getBookRun, readRunsFile, runsFile, writeRunsFile } from "./runs";
-import { getChapter, listApprovals, listFindings } from "./store";
+import { getChapter, listApprovals, listChapterSummaries, listFindings } from "./store";
 import type { Approval, Finding } from "./types";
 
 // What a member decides in the book app (R1 S4, migration 0167):
@@ -148,13 +148,26 @@ export type CompiledBook = {
   missing: number[];
 };
 
-/** Why this compiled book may not be approved at Gate E, or null. Pure (tested): every chapter it holds must be Gate D
- * approved for exactly the text it printed, none may be missing, and the same PDF is approved once. */
-export function gateERefusal(book: CompiledBook, approvals: Approval[]): string | null {
+export type ChapterText = { revision_key: string; chapter: number; content_sha256: string };
+
+/** What approves a chapter as PRINTED (its text hash): a Gate D approval of exactly that text, or the book-level
+ * approval of a revision whose stored text it is (Biology's Revision 4.1 was approved as a whole — the same rule as
+ * the chapter page's approvalFor and the engine's sk_bundle). Pure (tested). */
+export function printedApproval(approvals: Approval[], texts: ChapterText[], chapter: number, sha: string): Approval | null {
+  const gd = approvalOfText(approvals, chapter, sha);
+  if (gd) return gd;
+  const revisions = texts.filter((t) => t.chapter === chapter && t.content_sha256 === sha).map((t) => t.revision_key);
+  return approvals.find((a) => a.kind === "book" && a.revision_key != null && revisions.includes(a.revision_key)) ?? null;
+}
+
+/** Why this compiled book may not be approved at Gate E, or null. Pure (tested): every chapter it holds must be
+ * approved for exactly the text it printed (Gate D, or with the book), none may be missing, and the same PDF is
+ * approved once. */
+export function gateERefusal(book: CompiledBook, approvals: Approval[], texts: ChapterText[] = []): string | null {
   if (book.missing.length) return `Chapters ${book.missing.join(", ")} are not drafted yet; compile the whole book first.`;
   if (!book.chapters.length) return "The compile holds no chapters.";
-  const unapproved = book.chapters.filter((c) => !approvalOfText(approvals, c.number, c.content_sha256)).map((c) => c.number);
-  if (unapproved.length) return `Chapters ${unapproved.join(", ")} are not Gate D approved for the text this compile printed.`;
+  const unapproved = book.chapters.filter((c) => !printedApproval(approvals, texts, c.number, c.content_sha256)).map((c) => c.number);
+  if (unapproved.length) return `Chapters ${unapproved.join(", ")} are not approved (at Gate D or with the book) for the text this compile printed.`;
   if (approvals.some((a) => a.kind === "gate_e" && a.content_sha256 === book.pdf_sha256)) return "This compiled book is already approved at Gate E.";
   return null;
 }
@@ -164,7 +177,8 @@ export async function approveGateE(input: { workUid: string; runId: number; revi
   if (!run || run.stage_key !== "compile_book" || run.status !== "done") return { error: "Not a finished compile of this book.", status: 404 };
   const book = run.detail?.summary as CompiledBook | undefined;
   if (!book?.pdf_sha256) return { error: "This compile recorded no book.", status: 409 };
-  const refused = gateERefusal(book, await listApprovals(input.workUid));
+  const [approvals, texts] = await Promise.all([listApprovals(input.workUid), listChapterSummaries(input.workUid)]);
+  const refused = gateERefusal(book, approvals, texts);
   if (refused) return { error: refused, status: 409 };
   const row = {
     work_uid: input.workUid,
@@ -176,7 +190,7 @@ export async function approveGateE(input: { workUid: string; runId: number; revi
     label: `Gate E — compiled book (run #${input.runId}, ${book.pages} pages), approved in the book app`,
     approved_by: input.by,
     approved_on: new Date().toISOString().slice(0, 10),
-    basis: input.note.trim() || `Chapters ${book.chapters.map((c) => c.number).join(", ")}, each at its Gate D approved text.`,
+    basis: input.note.trim() || `Chapters ${book.chapters.map((c) => c.number).join(", ")}, each at its approved text (Gate D or with the book).`,
     content_sha256: book.pdf_sha256,
     hash_of: `compiled book PDF (${book.pdf})`,
     hash_verified: true,

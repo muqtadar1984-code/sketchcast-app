@@ -15,9 +15,18 @@ const gd = (chapter: number, sha: string) => ({ kind: "gate_d", chapter, content
 
 describe("Gate E", () => {
   it("needs every chapter Gate D approved for the printed text", () => {
-    expect(gateERefusal(book, [gd(1, "S1")])).toMatch(/Chapters 2 are not Gate D approved/);
+    expect(gateERefusal(book, [gd(1, "S1")])).toMatch(/Chapters 2 are not approved/);
     expect(gateERefusal(book, [gd(1, "S1"), gd(2, "OLD")])).toMatch(/Chapters 2/);
     expect(gateERefusal(book, [gd(1, "S1"), gd(2, "S2")])).toBeNull();
+  });
+
+  it("accepts a book approval of the revision whose text was printed (Biology r4.1)", () => {
+    const book4 = { kind: "book", revision_key: "r4.1", content_sha256: null } as unknown as Approval;
+    const texts = [{ revision_key: "r4.1", chapter: 2, content_sha256: "S2" }, { revision_key: "r4", chapter: 2, content_sha256: "OLD" }];
+    expect(gateERefusal(book, [gd(1, "S1"), book4], texts)).toBeNull();
+    // a book approval of ANOTHER revision does not cover this text
+    const other = { kind: "book", revision_key: "r4", content_sha256: null } as unknown as Approval;
+    expect(gateERefusal(book, [gd(1, "S1"), other], texts)).toMatch(/Chapters 2/);
   });
 
   it("refuses a partial book and a second approval of the same PDF", () => {

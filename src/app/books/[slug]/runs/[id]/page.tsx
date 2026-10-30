@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { canOn } from "@/utils/books-access";
 import { runnableStage } from "@/utils/books/stages";
 import { getBookRun, listRunArtifacts, listRunEvents } from "@/utils/books/runs";
-import { listApprovals } from "@/utils/books/store";
-import { approvalOfText, gateERefusal, type CompiledBook } from "@/utils/books/decide";
+import { listApprovals, listChapterSummaries } from "@/utils/books/store";
+import { gateERefusal, printedApproval, type CompiledBook } from "@/utils/books/decide";
 import ApproveGateE from "./gate-e";
 import { loadBook } from "../../load";
 import { Card, bytes } from "../../../ui";
@@ -24,9 +24,9 @@ export default async function RunPage({ params }: { params: Promise<{ slug: stri
   const fileHref = (id: number) => `/api/pub/file?book=${encodeURIComponent(slug)}&id=${id}`;
   const pictures = files.filter((a) => /\.png$/i.test(a.rel_path));
   const compiled = run.stage_key === "compile_book" && run.status === "done" ? (run.detail?.summary as CompiledBook | undefined) : undefined;
-  const approvals = compiled ? await listApprovals(work.uid) : [];
+  const [approvals, texts] = compiled ? await Promise.all([listApprovals(work.uid), listChapterSummaries(work.uid)]) : [[], []];
   const gateE = compiled ? approvals.find((a) => a.kind === "gate_e" && a.content_sha256 === compiled.pdf_sha256) : undefined;
-  const refusal = compiled && !gateE ? gateERefusal(compiled, approvals) : null;
+  const refusal = compiled && !gateE ? gateERefusal(compiled, approvals, texts) : null;
 
   return (
     <div className="space-y-4">
@@ -38,13 +38,16 @@ export default async function RunPage({ params }: { params: Promise<{ slug: stri
         <Card title={`Compiled book · ${compiled.pages} pages`}>
           <ul className="text-sm divide-y divide-[#EFE8D8]">
             {compiled.chapters.map((c) => {
-              const ok = !!approvalOfText(approvals, c.number, c.content_sha256);
+              const by = printedApproval(approvals, texts, c.number, c.content_sha256);
+              const ok = !!by;
               return (
                 <li key={c.number} className="flex flex-wrap items-baseline justify-between gap-2 py-1.5">
                   <span>
                     Chapter {c.number} · {c.title} <span className="text-xs text-[#7A7363]">p. {c.start}, {c.pages} pp</span>
                   </span>
-                  <span className={"text-xs " + (ok ? "text-[#24543A]" : "text-[#8A4B10]")}>{ok ? "Gate D approved" : "not Gate D approved"}</span>
+                  <span className={"text-xs " + (ok ? "text-[#24543A]" : "text-[#8A4B10]")}>
+                    {!by ? "not approved for this text" : by.kind === "book" ? `approved with the book (${by.revision_key})` : "Gate D approved"}
+                  </span>
                 </li>
               );
             })}
