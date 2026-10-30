@@ -4,7 +4,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, claudeModel } from "@/utils/tutor/service";
-import { isAbortError, type GenerateOpts, type LLMProvider, type StreamEvent, type Turn } from "../provider";
+import { isAbortError, type GenerateOpts, type LLMProvider, type StreamEvent, type ToolDef, type Turn } from "../provider";
 
 type MsgParam = Anthropic.MessageParam;
 
@@ -24,6 +24,22 @@ export function toAnthropicMessages(messages: Turn[]): MsgParam[] {
     }
   }
   return out;
+}
+
+/** The tool list as the API takes it. The LAST tool carries a cache
+ *  breakpoint (2026-10-30, SK model-first): the render order is tools →
+ *  system → messages, and a caller whose system prompt changes every turn
+ *  (SK's context line) still reuses the cached tool definitions as long as
+ *  it keeps the list stable and in the same order. A prefix under the
+ *  model's minimum cacheable length is simply not cached. Exported for the
+ *  contract test. */
+export function toAnthropicTools(tools: ToolDef[]): Anthropic.Tool[] {
+  return tools.map((t, i) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.parameters as Anthropic.Tool.InputSchema,
+    ...(i === tools.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}),
+  }));
 }
 
 export class AnthropicProvider implements LLMProvider {
@@ -52,7 +68,7 @@ export class AnthropicProvider implements LLMProvider {
         system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
         messages: toAnthropicMessages(opts.messages),
         ...(opts.tools?.length
-          ? { tools: opts.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters as Anthropic.Tool.InputSchema })) }
+          ? { tools: toAnthropicTools(opts.tools) }
           : {}),
         stream: true,
       }, opts.signal ? { signal: opts.signal } : undefined);
@@ -65,11 +81,17 @@ export class AnthropicProvider implements LLMProvider {
 
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheReadTokens = 0;
+    let cacheWriteTokens = 0;
     // Accumulate tool_use blocks (json args arrive as deltas) per block index.
     const pending = new Map<number, { id: string; name: string; json: string }>();
     try {
       for await (const ev of stream) {
-        if (ev.type === "message_start") inputTokens = ev.message.usage.input_tokens;
+        if (ev.type === "message_start") {
+          inputTokens = ev.message.usage.input_tokens;
+          cacheReadTokens = ev.message.usage.cache_read_input_tokens ?? 0;
+          cacheWriteTokens = ev.message.usage.cache_creation_input_tokens ?? 0;
+        }
         else if (ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
           pending.set(ev.index, { id: ev.content_block.id, name: ev.content_block.name, json: "" });
         } else if (ev.type === "content_block_delta") {
@@ -100,6 +122,6 @@ export class AnthropicProvider implements LLMProvider {
       return;
     }
     if (opts.signal?.aborted) return;
-    yield { type: "done", usage: { inputTokens, outputTokens } };
+    yield { type: "done", usage: { inputTokens, outputTokens, ...(cacheReadTokens ? { cacheReadTokens } : {}), ...(cacheWriteTokens ? { cacheWriteTokens } : {}) } };
   }
 }
