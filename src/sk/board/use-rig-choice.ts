@@ -6,7 +6,7 @@
 // hydration — without a setState inside an effect.
 
 import { useCallback, useSyncExternalStore } from "react";
-import { DEFAULT_RIG, readRigChoice, storeRigChoice, type RigChoice } from "./avatar";
+import { DEFAULT_RIG, RIG_CHOICE_KEY, readRigChoice, storeRigChoice, type RigChoice } from "./avatar";
 import { micSupported } from "@/utils/assistant/voice-client";
 
 const listeners = new Set<() => void>();
@@ -24,6 +24,17 @@ export function useRigChoice(): [RigChoice, (c: RigChoice) => void] {
     for (const fn of listeners) fn();
   }, []);
   return [rig, choose];
+}
+
+/** Forget this browser's stored look (the settings page's "delete what SK
+ *  remembers"): every reader falls back to the default at once. */
+export function forgetRigChoice(): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.removeItem(RIG_CHOICE_KEY);
+  } catch {
+    /* storage blocked */
+  }
+  for (const fn of listeners) fn();
 }
 
 const noop = () => () => {};

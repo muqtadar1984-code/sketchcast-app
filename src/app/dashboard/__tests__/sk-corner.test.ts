@@ -200,7 +200,7 @@ describe("the menu: compact, keyboard accessible", () => {
     expect(html).toContain("Type a message");
     expect(html).toContain("Clear conversation");
     // Opens upward from the avatar, on its side.
-    expect(html).toContain("absolute bottom-full mb-2 w-56");
+    expect(html).toContain("absolute bottom-full mb-2 w-64 max-w-[calc(100vw-2rem)]");
     expect(html).toContain("end-0");
   });
   it("arrow keys, Home / End, Escape (focus back to the avatar) and Tab are handled", () => {
@@ -209,10 +209,10 @@ describe("the menu: compact, keyboard accessible", () => {
     expect(src).toContain("onClose(true);");
     expect(read("sk-shell.tsx")).toContain("if (refocus) avatarRef.current?.focus();");
   });
-  it("the Shell's menu: Type, Show conversation, Mic (not on the Board), Read aloud, Take the tour (not mid-tour), Clear, SK settings", () => {
+  it("the Shell's menu: Type, Show conversation, Mic (not on the Board), Read aloud, Character, Take the tour (not mid-tour), Clear, SK settings", () => {
     const src = code(read("sk-shell.tsx"));
     const at = (id: string) => src.indexOf(`id: "${id}"`);
-    const order = ["type", "conversation", "mic", "read-aloud", "tour", "clear", "settings"].map(at);
+    const order = ["type", "conversation", "mic", "read-aloud", "character", "tour", "clear", "settings"].map(at);
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(src).toContain('...(listen ? [{ kind: "toggle" as const, id: "mic"');

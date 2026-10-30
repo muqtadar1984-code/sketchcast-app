@@ -23,7 +23,7 @@ describe("showText: off by default, for every role", () => {
 
 describe("showText persists like the other preferences", () => {
   it("is a known key next to micOn, with its fact key and its localStorage key", () => {
-    expect(PREF_KEYS).toEqual(["readAloud", "handsFree", "suggestions", "micOn", "showText"]);
+    expect(PREF_KEYS).toEqual(["readAloud", "handsFree", "suggestions", "micOn", "showText", "lookA"]);
     expect(PREF_FACT_KEY.showText).toBe("show_text");
     expect(PREF_LOCAL_KEY.showText).toBe("sk.showText");
     expect(pick({ showText: true, junk: 1 })).toEqual({ showText: true });
