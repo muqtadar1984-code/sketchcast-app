@@ -2189,6 +2189,16 @@
       "loadingSlides": "Memuatkan slaid {k} daripada {n}…",
       "slidesLoaded": "{n} slaid kini di gulungan sebagai halaman {a}–{b}. Halaman atas dan halaman bawah bergerak antaranya; sebut 'halaman kosong' untuk menambah satu di antaranya.",
       "explainSelection": "Terangkan bahagian ini",
+      "hero": {
+        "greeting": "Apa yang kita mahu buat hari ini? Taip di bawah, atau bercakap sahaja dengan saya.",
+        "micOn": "Mikrofon hidup",
+        "micOff": "Mikrofon mati",
+        "micSwitch": "Mikrofon",
+        "speaking": "Sedang bercakap…",
+        "paused": "Dijeda — ketik atau mula menaip untuk mendengar semula",
+        "micUnsupported": "Input suara tidak tersedia dalam pelayar ini — anda masih boleh menaip.",
+        "micDenied": "Mikrofon disekat. Benarkan dalam pelayar anda, kemudian hidupkan mikrofon."
+      },
       "act": {
         "diaryCardTitle": "Hantar ke diari {target}",
         "diaryPosted": "Telah dihantar ke diari {target}.",
@@ -2553,6 +2563,8 @@
     "handsFreeHint": "Ketik mikrofon sekali dan SK terus mendengar sehingga anda menghentikannya, bukan tekan-dan-tahan.",
     "suggestions": "Cadangan SK",
     "suggestionsHint": "Paling banyak satu baris dalam ucapan SK apabila anda membukanya, diambil daripada jadual waktu, penandaan atau kerja anda sendiri. Tidak dihantar ke mana-mana.",
+    "micOn": "Mikrofon di halaman utama",
+    "micOnHint": "SK mendengar di halaman utama anda semasa ia dibuka dan di hadapan, dan berhenti seketika semasa SK bercakap. Murid bermula dengan ia dimatikan.",
     "on": "Hidup",
     "off": "Mati",
     "saving": "Menyimpan…",

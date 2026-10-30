@@ -2189,6 +2189,16 @@
       "loadingSlides": "Cargando diapositiva {k} de {n}…",
       "slidesLoaded": "{n} diapositivas están en el rollo como páginas {a}–{b}. Página arriba y página abajo se mueven entre ellas; di 'página en blanco' para añadir una en medio.",
       "explainSelection": "Explica esta parte",
+      "hero": {
+        "greeting": "¿En qué trabajamos hoy? Escribe abajo, o simplemente háblame.",
+        "micOn": "Micrófono activado",
+        "micOff": "Micrófono desactivado",
+        "micSwitch": "Micrófono",
+        "speaking": "Hablando…",
+        "paused": "En pausa — toca o empieza a escribir para volver a escuchar",
+        "micUnsupported": "La entrada de voz no está disponible en este navegador — aún puedes escribir.",
+        "micDenied": "El micrófono está bloqueado. Permítelo en tu navegador y luego activa el micrófono."
+      },
       "act": {
         "diaryCardTitle": "Publicar en la agenda de {target}",
         "diaryPosted": "Publicado en la agenda de {target}.",
@@ -2553,6 +2563,8 @@
     "handsFreeHint": "Toca el micrófono una vez y SK sigue escuchando hasta que lo detengas, en lugar de mantener pulsado para hablar.",
     "suggestions": "Sugerencias de SK",
     "suggestionsHint": "Como mucho una línea en el saludo de SK al abrirlo, tomada de tu propio horario, correcciones o trabajo. Nunca se envía a ningún otro sitio.",
+    "micOn": "Micrófono en la página de inicio",
+    "micOnHint": "SK escucha en tu página de inicio mientras está abierta y al frente, y hace una pausa mientras SK habla. Los alumnos empiezan con él desactivado.",
     "on": "Activado",
     "off": "Desactivado",
     "saving": "Guardando…",

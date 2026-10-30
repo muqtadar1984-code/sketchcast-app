@@ -2189,6 +2189,16 @@
       "loadingSlides": "A carregar o diapositivo {k} de {n}…",
       "slidesLoaded": "{n} diapositivos estão no rolo como páginas {a}–{b}. Página acima e página abaixo movem-se entre eles; diga 'página em branco' para acrescentar uma no meio.",
       "explainSelection": "Explica esta parte",
+      "hero": {
+        "greeting": "Em que vamos trabalhar hoje? Escreva abaixo, ou simplesmente fale comigo.",
+        "micOn": "Microfone ligado",
+        "micOff": "Microfone desligado",
+        "micSwitch": "Microfone",
+        "speaking": "Falando…",
+        "paused": "Em pausa — toque ou comece a digitar para eu voltar a ouvir",
+        "micUnsupported": "A entrada de voz não está disponível neste navegador — você ainda pode digitar.",
+        "micDenied": "O microfone está bloqueado. Permita-o no seu navegador e depois ligue o microfone."
+      },
       "act": {
         "diaryCardTitle": "Publicar na agenda de {target}",
         "diaryPosted": "Publicado na agenda de {target}.",
@@ -2553,6 +2563,8 @@
     "handsFreeHint": "Toque no microfone uma vez e o SK continua a ouvir até o parar, em vez de manter premido para falar.",
     "suggestions": "Sugestões do SK",
     "suggestionsHint": "No máximo uma linha na saudação do SK quando o abre, tirada do seu horário, correções ou trabalho. Nunca é enviada para mais lado nenhum.",
+    "micOn": "Microfone na página inicial",
+    "micOnHint": "O SK ouve na sua página inicial enquanto ela está aberta e em primeiro plano, e pausa enquanto o SK fala. Os alunos começam com ele desligado.",
     "on": "Ligado",
     "off": "Desligado",
     "saving": "A guardar…",
