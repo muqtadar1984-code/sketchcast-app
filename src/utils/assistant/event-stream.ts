@@ -181,7 +181,9 @@ export function audioEvent(pcm: Uint8Array): Uint8Array {
 
 const str = (h: HeaderValue | undefined) => (h && h.type === "string" ? h.value : undefined);
 
-export type TranscriptResult = { text: string; partial: boolean; resultId?: string };
+/** `languageCode`: the language Transcribe identified (identify-language
+ *  sessions only — Result.LanguageCode). */
+export type TranscriptResult = { text: string; partial: boolean; resultId?: string; languageCode?: string };
 
 /** What a service message means to the dictation client. */
 export type ServiceEvent =
@@ -212,10 +214,15 @@ export function readServiceEvent(m: EventMessage): ServiceEvent {
   const raw = (j as { Transcript?: { Results?: unknown } })?.Transcript?.Results;
   const results: TranscriptResult[] = [];
   if (Array.isArray(raw)) {
-    for (const r of raw as Array<{ Alternatives?: Array<{ Transcript?: unknown }>; IsPartial?: unknown; ResultId?: unknown }>) {
+    for (const r of raw as Array<{ Alternatives?: Array<{ Transcript?: unknown }>; IsPartial?: unknown; ResultId?: unknown; LanguageCode?: unknown }>) {
       const text = r?.Alternatives?.[0]?.Transcript;
       if (typeof text !== "string") continue;
-      results.push({ text, partial: r.IsPartial !== false, ...(typeof r.ResultId === "string" ? { resultId: r.ResultId } : {}) });
+      results.push({
+        text,
+        partial: r.IsPartial !== false,
+        ...(typeof r.ResultId === "string" ? { resultId: r.ResultId } : {}),
+        ...(typeof r.LanguageCode === "string" && /^[a-z]{2,3}-[A-Z]{2}$/.test(r.LanguageCode) ? { languageCode: r.LanguageCode } : {}),
+      });
     }
   }
   return { kind: "transcript", results };

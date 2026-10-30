@@ -25,6 +25,13 @@
 //      about to speak (push-to-talk pressed, hands-free started, a new
 //      question sent) or asked for silence (Stop, read-aloud off, pagehide);
 //      "continue" is one word away and never surprises a class.
+//   4. NO GAP (2026-10-30). With the server voice, a sentence's audio is
+//      requested the moment the sentence is complete in the stream, and the
+//      next PREFETCH_AHEAD sentences' audio is fetched while the current one
+//      plays — so sentence 2 is ready when sentence 1 ends. Every line
+//      carries its own language (and so its own provider and voice): a
+//      language change costs nothing extra. Barge-in aborts every prefetch;
+//      the browser voice needs none (it synthesises as it speaks).
 //
 // PURE: providers, the Board and the clock are injected, so the suite runs in
 // node on fakes. Sentence splitting is StreamSpeaker's (src/utils/assistant/
@@ -33,7 +40,7 @@
 
 import { speakableText } from "@/utils/speakable";
 import { BrowserSpeechProvider } from "@/sk/speech/browser";
-import type { SpeechProvider, VoiceId } from "@/sk/speech/provider";
+import type { SpeechProvider, SpeechResult, VoiceId } from "@/sk/speech/provider";
 import { PollyClientSpeechProvider, SpeakUnavailable } from "@/sk/speech/polly-client";
 
 export type ServerSpeechMode = "polly" | "google";
@@ -130,7 +137,13 @@ export function splitSentences(text: string): string[] {
 /** The server voice sticks to the browser after this many non-404 failures in a row. */
 export const SERVER_FAILURES_TO_STICK = 3;
 
-type Item = { text: string; lang: string; done: () => void };
+/** Sentences whose server audio is fetched ahead of the one playing. */
+export const PREFETCH_AHEAD = 2;
+
+/** One sentence's server audio, requested ahead of its turn. */
+type Prefetch = { provider: SpeechProvider; result: Promise<SpeechResult>; abort: AbortController };
+
+type Item = { text: string; lang: string; done: () => void; pre?: Prefetch };
 
 export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoordinator {
   const defaultLang = deps.defaultLang ?? "en-US";
@@ -148,6 +161,8 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
   let gen = 0;
   /** Whatever is speaking right now, for cancel(). */
   let active: SpeechProvider | null = null;
+  /** Server requests in flight ahead of their turn (aborted on barge-in). */
+  const prefetching = new Set<AbortController>();
   /** SK paused the video and owes it a resume when the queue drains. */
   let pausedByUs = false;
   /** The teacher restarted the video while SK talked: hands off until the queue drains. */
@@ -166,19 +181,52 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
     return p;
   };
 
+  /** Ask the server for one sentence's audio now (its turn may be later). */
+  function request(item: Item): Prefetch {
+    const provider = serverFor(item.lang);
+    const abort = new AbortController();
+    prefetching.add(abort);
+    const result = provider.synthesize(item.text, voiceFor(provider.id, item.lang), { marks: ["word", "viseme"], signal: abort.signal });
+    // Settled either way: no longer in flight. (This handler also keeps a
+    // failed prefetch from being an unhandled rejection before its turn.)
+    result.then(
+      () => prefetching.delete(abort),
+      () => prefetching.delete(abort),
+    );
+    return { provider, result, abort };
+  }
+
+  /** Start the server audio of the next PREFETCH_AHEAD queued sentences. */
+  function prefetch(): void {
+    if (serverStuck || !enabled) return;
+    for (const item of queue.slice(0, PREFETCH_AHEAD)) item.pre ??= request(item);
+  }
+
+  /** Abort every request made ahead of its turn. */
+  function dropPrefetches(): void {
+    for (const a of prefetching) a.abort();
+    prefetching.clear();
+    for (const item of queue) delete item.pre;
+  }
+
   const stick = (why: "unavailable" | "failing") => {
     if (serverStuck) return;
     serverStuck = true;
+    // The browser voice speaks from now on: the server audio fetched ahead is not needed.
+    dropPrefetches();
     deps.onFallback?.(why);
   };
 
-  /** Speak one sentence through one provider; true when it played. Throws
-   *  only what the provider threw, and only when this generation still stands. */
-  async function through(p: SpeechProvider, text: string, lang: string, g: number): Promise<boolean> {
+  /** Speak one sentence through one provider (its audio already requested,
+   *  or requested now); true when it played. Throws only what the provider
+   *  threw, and only when this generation still stands. */
+  async function through(p: SpeechProvider, text: string, lang: string, g: number, pending?: Promise<SpeechResult>): Promise<boolean> {
     active = p;
     try {
-      const r = await p.synthesize(text, voiceFor(p.id, lang), { marks: ["word", "viseme"] });
+      const r = await (pending ?? p.synthesize(text, voiceFor(p.id, lang), { marks: ["word", "viseme"] }));
       if (g !== gen) return false;
+      // The sentences after this one are fetched while it plays.
+      prefetch();
       await r.play?.({ rate: 1, onWord: (w) => deps.onWord?.({ charIndex: w.charIndex, t: w.t, text }) });
       return g === gen;
     } finally {
@@ -188,8 +236,10 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
 
   async function speakOne(item: Item, g: number): Promise<void> {
     if (!serverStuck) {
+      const pre = item.pre ?? request(item);
+      delete item.pre;
       try {
-        await through(serverFor(item.lang), item.text, item.lang, g);
+        await through(pre.provider, item.text, item.lang, g, pre.result);
         serverFailures = 0;
         return;
       } catch (e) {
@@ -245,6 +295,8 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
         while (queue.length) {
           const item = queue.shift()!;
           const g = gen;
+          // Keep PREFETCH_AHEAD sentences behind this one on their way.
+          prefetch();
           try {
             await beforeLine();
             if (g === gen) await speakOne(item, g);
@@ -271,6 +323,9 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
         if (--left === 0) resolve();
       };
       for (const s of sentences) queue.push({ text: s, lang, done });
+      // The first sentence's audio is requested NOW, in the same tick it was
+      // complete — before the pump's await on the Board's video.
+      prefetch();
       void pump();
     });
   }
@@ -282,6 +337,7 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
 
   function stop(): void {
     gen++;
+    dropPrefetches();
     const dropped = queue.splice(0, queue.length);
     for (const it of dropped) it.done();
     try {

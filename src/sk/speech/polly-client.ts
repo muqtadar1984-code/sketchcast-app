@@ -58,7 +58,9 @@ export class PollyClientSpeechProvider implements SpeechProvider {
   readonly id = "polly-client";
   private audio: HTMLAudioElement | null = null;
   private url: string | null = null;
-  private inflight: AbortController | null = null;
+  /** 2026-10-30: requests in flight — several at once: the coordinator
+   *  fetches the next sentence's audio while this one plays (speech.ts). */
+  private inflight = new Set<AbortController>();
   private stopCurrent: (() => void) | null = null;
 
   private readonly endpoint: string;
@@ -74,17 +76,24 @@ export class PollyClientSpeechProvider implements SpeechProvider {
 
   async synthesize(text: string, _voice: VoiceId, opts: SynthesizeOpts): Promise<SpeechResult> {
     void _voice; // the route maps the look (and lang) to the voice; the id is for the seam's bookkeeping
-    this.cancel();
+    // 2026-10-30: a request no longer cancels what is playing — the next
+    // sentence is fetched DURING this one (the coordinator orders playback,
+    // and cancels both through cancel() or the signal on barge-in).
     const ac = new AbortController();
-    this.inflight = ac;
-    opts.signal?.addEventListener("abort", () => ac.abort(), { once: true });
-    const res = await fetch(this.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(this.lang ? { text, look: this.look(), lang: this.lang } : { text, look: this.look() }),
-      signal: ac.signal,
-    });
-    if (this.inflight === ac) this.inflight = null;
+    this.inflight.add(ac);
+    if (opts.signal?.aborted) ac.abort();
+    else opts.signal?.addEventListener("abort", () => ac.abort(), { once: true });
+    let res: Response;
+    try {
+      res = await fetch(this.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(this.lang ? { text, look: this.look(), lang: this.lang } : { text, look: this.look() }),
+        signal: ac.signal,
+      });
+    } finally {
+      this.inflight.delete(ac);
+    }
     if (res.status === 404) throw new SpeakUnavailable();
     if (res.status === 429) {
       const r = (await res.json().catch(() => null)) as SpeakReply | null;
@@ -98,10 +107,10 @@ export class PollyClientSpeechProvider implements SpeechProvider {
     return { audio: bytes, format: "mp3", marks, play: (o) => this.play(bytes, marks, o ?? {}) };
   }
 
-  /** Barge-in: abort a pending request and stop whatever is playing. */
+  /** Barge-in: abort every pending request and stop whatever is playing. */
   cancel(): void {
-    this.inflight?.abort();
-    this.inflight = null;
+    for (const ac of this.inflight) ac.abort();
+    this.inflight.clear();
     this.stopCurrent?.();
   }
 

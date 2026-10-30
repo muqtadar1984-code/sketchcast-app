@@ -140,20 +140,33 @@ export function pageSpeechLang(): string {
  * notice. Same signature, same callbacks, same synchronous stop handle, so the
  * SK panel, the Board, the assistant panels and the §2.6 mic gate (whose
  * onStop calls the handle) all inherit it unchanged. */
-export function startDictation(
-  onText: (t: string) => void,
-  onEnd: () => void,
-  opts: { lang?: string } = {},
-): (() => void) | null {
+export type DictationOptions = {
+  /** Recognition language (BCP-47 or a locale); default: the page's. */
+  lang?: string;
+  /** 2026-10-30: with Transcribe, let it identify the spoken language among
+   * the streaming languages (en / ms / ar / zh), preferring `lang`, and report
+   * it through `onLanguage` ("ms-MY") — so she can switch by speaking. The
+   * browser recognizer ignores both (it has no identification). */
+  identify?: boolean;
+  onLanguage?: (languageCode: string) => void;
+};
+
+export function startDictation(onText: (t: string) => void, onEnd: () => void, opts: DictationOptions = {}): (() => void) | null {
+  const browserOpts = { ...(opts.lang ? { lang: opts.lang } : {}) };
   if (clientSttMode() === "transcribe" && micSupported() && transcribeUsable()) {
     const lang = opts.lang ?? (typeof document !== "undefined" ? document.documentElement.lang : "") ?? "";
     if (!transcribeLanguageFor(lang)) {
       noticeBrowserFallback(); // a language Transcribe is not set up for
-      return startBrowserDictation(onText, onEnd, opts);
+      return startBrowserDictation(onText, onEnd, browserOpts);
     }
-    return startTranscribeDictation(onText, onEnd, { lang, fallback: () => startBrowserDictation(onText, onEnd, opts) });
+    return startTranscribeDictation(onText, onEnd, {
+      lang,
+      fallback: () => startBrowserDictation(onText, onEnd, browserOpts),
+      ...(opts.identify ? { session: { identify: true } } : {}),
+      ...(opts.onLanguage ? { onLanguage: opts.onLanguage } : {}),
+    });
   }
-  return startBrowserDictation(onText, onEnd, opts);
+  return startBrowserDictation(onText, onEnd, browserOpts);
 }
 
 /** Browser Web Speech dictation — the default path, and Transcribe's fallback.

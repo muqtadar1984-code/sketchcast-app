@@ -143,9 +143,11 @@ describe("an English explanation, then 'say that in Malay'", () => {
     expect(mem.langOverride).toBe("ms");
     expect(mem.lastAnswer?.text).toBe(EXPLANATION); // the repeat never replaces the original
 
-    // The next turn: still Malay — rule 6 and the lang event.
+    // The next turn: still Malay — rule 6 and the lang event. (A short
+    // follow-up has no language of its own; a confident English question
+    // would switch back to English — 2026-10-30 precedence, tested below.)
     mocks.queue.push([{ text: ["Osmosis ialah resapan air."] }]);
-    const third = await say("what is osmosis", second.memory);
+    const third = await say("and osmosis?", second.memory);
     expect(third.ev.find((e) => e.type === "lang")).toEqual({ type: "lang", lang: "ms", dir: "ltr", speech: "ms-MY", override: true });
     expect(mocks.opts[2]!.system).toContain("6. Answer in Bahasa Melayu — the user asked for Bahasa Melayu");
 
@@ -164,7 +166,9 @@ describe("an English explanation, then 'say that in Malay'", () => {
     mocks.queue.push([{ text: ["Active transport needs energy."] }]);
     const after = await say("what is active transport", back.memory);
     expect(after.ev.some((e) => e.type === "lang")).toBe(false);
-    expect(mocks.opts[mocks.opts.length - 1]!.system).toContain("6. Answer in the user's language (English)");
+    // A confident English question: English because she wrote in English.
+    expect(mocks.opts[mocks.opts.length - 1]!.system).toContain("6. Answer in English — the language the user wrote this message in");
+    expect(verifyMemory(after.memory)!.langOverride).toBeUndefined(); // English is the page's: nothing to keep
   });
 
   it("a translation that changes a number loses that sentence (grounded on the original)", async () => {
@@ -212,7 +216,7 @@ describe("an English explanation, then 'say that in Malay'", () => {
     expect(zh.ev.find((e) => e.type === "lang")).toEqual({ type: "lang", lang: "zh", dir: "ltr", speech: "zh-CN", override: true });
     expect(zh.text).toContain("扩散");
     mocks.queue.push([{ text: ["渗透是水的扩散。"] }]);
-    await say("what is osmosis", zh.memory);
+    await say("osmosis?", zh.memory);
     expect(mocks.opts[mocks.opts.length - 1]!.system).toContain("6. Answer in Simplified Chinese (zh-CN)");
   });
 });
@@ -239,9 +243,9 @@ const BOARD = {
 const onBoard = { path: "/present", locale: "en", board: BOARD };
 
 describe("an Arabic kit on the Board with an English UI", () => {
-  it("the model answers in Arabic by default: rule 6, and an RTL lang event before the text", async () => {
+  it("the model answers in Arabic by default (a question with no clear language of its own): rule 6, and an RTL lang event before the text", async () => {
     mocks.queue.push([{ text: ["هذا الدرس عن خلايا الدم."] }]);
-    const r = await say("what is this lesson about?", undefined, onBoard);
+    const r = await say("this lesson?", undefined, onBoard);
     expect(r.ev.map((e) => e.type).slice(0, 2)).toEqual(["meta", "lang"]);
     expect(r.ev[1]).toEqual({ type: "lang", lang: "ar", dir: "rtl", speech: "ar-SA", override: false });
     expect(mocks.opts[0]!.system).toContain("6. Answer in Arabic, the language of the lesson material");
@@ -281,10 +285,75 @@ describe("an Arabic kit on the Board with an English UI", () => {
   it("a kit in a language SK cannot answer in: the UI locale, said once per conversation", async () => {
     const tamil = { ...onBoard, board: { ...BOARD, language: "ta" } };
     mocks.queue.push([{ text: ["This lesson is about blood cells."] }]);
-    const first = await say("what is this lesson about?", undefined, tamil);
+    const first = await say("this lesson?", undefined, tamil);
     expect(first.text.startsWith("This material is in a language I can't answer in yet (ta), so I'll answer in English. ")).toBe(true);
     mocks.queue.push([{ text: ["They carry oxygen."] }]);
-    const second = await say("what do they do?", first.memory, tamil);
+    const second = await say("and then?", first.memory, tamil);
     expect(second.text).toBe("They carry oxygen.");
+  });
+});
+
+// ── 2026-10-30: the QUESTION's language decides, in the same turn ──────────
+
+describe("a question in Marathi on an English page", () => {
+  const MR = "प्रकाशसंश्लेषण म्हणजे वनस्पती सूर्यप्रकाशापासून अन्न बनवतात.";
+  it("is answered in Marathi in the SAME turn — one model call, rule 6, an mr lang event before the text — and Marathi sticks for 'and then?' until she writes English", async () => {
+    mocks.queue.push([{ text: [MR] }]);
+    const first = await say("प्रकाशसंश्लेषण म्हणजे काय?");
+    expect(mocks.constructed).toHaveLength(1); // no detection call, no extra round trip
+    expect(first.ev.map((e) => e.type).slice(0, 2)).toEqual(["meta", "lang"]);
+    // override: true → the panel's dictation listens in Marathi (mr-IN) next.
+    expect(first.ev[1]).toEqual({ type: "lang", lang: "mr", dir: "ltr", speech: "mr-IN", override: true });
+    expect(mocks.opts[0]!.system).toContain("6. Answer in Marathi — the language the user wrote this message in");
+    expect(first.text).toBe(MR);
+    const mem = verifyMemory(first.memory)!;
+    expect(mem.langOverride).toBe("mr"); // the conversation's language (sticky)
+    expect(mem.lastAnswer).toMatchObject({ text: MR, lang: "mr" });
+
+    // A follow-up with no language of its own stays in Marathi.
+    mocks.queue.push([{ text: ["पुढे, ग्लुकोज तयार होते."] }]);
+    const next = await say("and then?", first.memory);
+    expect(next.ev.find((e) => e.type === "lang")).toEqual({ type: "lang", lang: "mr", dir: "ltr", speech: "mr-IN", override: true });
+    expect(mocks.opts[1]!.system).toContain("6. Answer in Marathi — the user asked for Marathi");
+
+    // She writes English: English at once, and the page's own language needs no event.
+    mocks.queue.push([{ text: ["Chlorophyll absorbs the light."] }]);
+    const en = await say("what does chlorophyll do?", next.memory);
+    expect(en.ev.some((e) => e.type === "lang")).toBe(false);
+    expect(mocks.opts[2]!.system).toContain("6. Answer in English — the language the user wrote this message in");
+    expect(verifyMemory(en.memory)!.langOverride).toBeUndefined();
+  });
+
+  it("Hindi, Arabic and Chinese questions likewise; Hinglish keeps the page's language", async () => {
+    mocks.queue.push([{ text: ["उत्तर"] }], [{ text: ["جواب"] }], [{ text: ["答案"] }], [{ text: ["answer"] }]);
+    const hi = await say("प्रकाश संश्लेषण क्या है?");
+    expect(hi.ev.find((e) => e.type === "lang")).toMatchObject({ lang: "hi", override: true });
+    const ar = await say("ما هو التمثيل الضوئي؟");
+    expect(ar.ev.find((e) => e.type === "lang")).toMatchObject({ lang: "ar", dir: "rtl", override: true });
+    const zh = await say("什么是光合作用？");
+    expect(zh.ev.find((e) => e.type === "lang")).toMatchObject({ lang: "zh", override: true });
+    const hinglish = await say("photosynthesis kya hai bhai");
+    expect(hinglish.ev.some((e) => e.type === "lang")).toBe(false);
+    expect(verifyMemory(hinglish.memory)!.langOverride).toBeUndefined();
+  });
+
+  it("an explicit command still wins over the question's own language", async () => {
+    mocks.queue.push([{ text: [EXPLANATION] }]);
+    const first = await say("what is diffusion across 2 sides");
+    const sw = await say("speak in Marathi", first.memory);
+    expect(sw.ev.find((e) => e.type === "lang")).toEqual({ type: "lang", lang: "mr", dir: "ltr", speech: "mr-IN", override: true });
+    expect(verifyMemory(sw.memory)!.langOverride).toBe("mr");
+    expect(mocks.constructed).toHaveLength(1); // a switch is SK's own line, no model
+  });
+
+  it("dictation: the language Transcribe identified decides when the words cannot (voice only, three words or more)", async () => {
+    const voice = (text: string, spokenLang: string, memory?: string) =>
+      POST(req({ turnId: `t-${Math.random().toString(36).slice(2)}`, text, modality: "voice", collector: { path: "/dashboard", locale: "en" }, spokenLang, ...(memory ? { memory } : {}) }));
+    mocks.queue.push([{ text: ["Osmosis dan resapan."] }], [{ text: ["x"] }]);
+    const ev = (await readEvents(await voice("osmosis dan diffusion", "ms-MY"))) as Ev[];
+    expect(ev.find((e) => e.type === "lang")).toMatchObject({ lang: "ms", override: true });
+    // Typed text ignores a spokenLang it should never carry.
+    const typed = (await readEvents(await POST(req({ ...turn("osmosis dan diffusion"), spokenLang: "ms-MY" })))) as Ev[];
+    expect(typed.some((e) => e.type === "lang")).toBe(false);
   });
 });

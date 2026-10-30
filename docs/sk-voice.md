@@ -82,6 +82,29 @@ Arabic `؟` and the Devanagari `।`. Every sentence passes through
 nothing. `stream().push(chunk)` speaks whole sentences as the answer streams;
 `flush()` speaks the tail when the turn ends.
 
+## No gap between sentences (2026-10-30)
+
+With a server voice (`polly` or `google`):
+
+- A sentence's audio is requested **the moment the sentence is complete** in the
+  stream, in the same tick (before the coordinator's await on the Board video).
+- While one sentence plays, the audio of the next `PREFETCH_AHEAD` (2) queued
+  sentences is already being fetched. Playback order never changes: a later
+  sentence whose audio arrives first waits its turn.
+- Every sentence carries its own `lang`, so its own provider and voice. A
+  language change (a Marathi answer after an English one) costs no extra step.
+- Barge-in (`stop()`) aborts every request still in flight; audio that already
+  arrived is dropped unplayed. An aborted request is not a failure: no fallback.
+- When the server voice goes sticky (404 / `tts_cap` / three failures), the
+  prefetched requests are aborted and the browser voice speaks the rest.
+- The browser voice is never prefetched: it synthesises as it speaks.
+- `PollyClientSpeechProvider.synthesize()` no longer cancels what is playing,
+  so a prefetch cannot cut the current sentence; `cancel()` aborts every request.
+
+Cost: unchanged. Each sentence is requested once, as before. Only sentences a
+barge-in drops after their audio arrived are paid for and not heard (at most
+two per barge-in).
+
 ## Known limits (follow-ups, not in this slice)
 
 - `run("pause")` on the bridge drops the segment-end watcher. When SK speaks

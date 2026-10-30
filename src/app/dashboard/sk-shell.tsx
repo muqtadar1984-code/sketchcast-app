@@ -240,6 +240,8 @@ export default function SkShell({
   /** 2026-10-30: the dictation language while she has chosen an answer
    *  language ("say that in Arabic"); null = the page's. */
   const dictLangRef = useRef<string | null>(null);
+  /** The language Transcribe heard the last dictation in (a hint the server weighs). */
+  const spokenLangRef = useRef<string | null>(null);
   const storeRef = useRef<MemoryStore | null>(null);
   const boardRef = useRef<SkBoardBridge | null | undefined>(board);
   const tutorRef = useRef<SkTutorBridge | null | undefined>(tutor);
@@ -690,6 +692,7 @@ export default function SkShell({
     if (!gate?.active) return;
     const startedAt = Date.now();
     dictatedRef.current = "";
+    spokenLangRef.current = null;
     const stop = startDictation(
       (t) => {
         dictatedRef.current = t;
@@ -718,7 +721,9 @@ export default function SkShell({
         setListening(false);
         if (mode === "ptt") inputRef.current?.focus();
       },
-      { lang: dictLangRef.current ?? pageSpeechLang() },
+      // Transcribe (en/ms/ar/zh) identifies which of those she speaks, so she
+      // can switch by speaking; the browser recognizer listens in `lang`.
+      { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l) },
     );
     if (!stop) {
       gate.stop("manual");
@@ -825,6 +830,7 @@ export default function SkShell({
         }),
       };
       if (memoryRef.current) req.memory = memoryRef.current;
+      if (modality === "voice" && spokenLangRef.current) req.spokenLang = spokenLangRef.current;
 
       let full = "";
       let sawDone = false;

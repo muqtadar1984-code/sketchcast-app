@@ -163,13 +163,16 @@ describe("language", () => {
 });
 
 describe("the reply", () => {
-  it("{ url, expiresAt, languageCode }, no-store; the URL has the host, params and the session token", async () => {
+  it("{ url, expiresAt, languageCode, identify }, no-store; the URL has the host, params and the session token", async () => {
     const before = Date.now();
     const r = await POST(req({ lang: "ar" }));
     expect(r.status).toBe(200);
     expect(r.headers.get("Cache-Control")).toBe("no-store");
     const j = (await r.json()) as { url: string; expiresAt: string; languageCode: string };
-    expect(Object.keys(j).sort()).toEqual(["expiresAt", "languageCode", "url"]);
+    expect(Object.keys(j).sort()).toEqual(["expiresAt", "identify", "languageCode", "url"]);
+    expect((j as unknown as { identify: boolean }).identify).toBe(false);
+    expect(new URL(j.url).searchParams.get("language-code")).toBe("ar-SA");
+    expect(new URL(j.url).searchParams.get("identify-language")).toBeNull();
     const u = new URL(j.url);
     expect(u.protocol).toBe("wss:");
     expect(u.host).toBe("transcribestreaming.us-east-1.amazonaws.com:8443");
@@ -182,6 +185,29 @@ describe("the reply", () => {
     const exp = Date.parse(j.expiresAt);
     expect(exp - before).toBeGreaterThanOrEqual(299_000);
     expect(exp - before).toBeLessThanOrEqual(301_000);
+  });
+  it("2026-10-30: identify → identify-language among en/ms/ar/zh, preferring hers, and NO language-code (the API refuses both)", async () => {
+    const r = await POST(req({ lang: "ms-MY", identify: true }));
+    const j = (await r.json()) as { url: string; identify: boolean; languageCode: string };
+    expect(j.identify).toBe(true);
+    expect(j.languageCode).toBe("ms-MY");
+    const u = new URL(j.url);
+    expect(u.searchParams.get("identify-language")).toBe("true");
+    expect(u.searchParams.get("language-options")).toBe("en-US,ms-MY,ar-SA,zh-CN");
+    expect(u.searchParams.get("preferred-language")).toBe("ms-MY");
+    expect(u.searchParams.get("language-code")).toBeNull();
+  });
+  it("identify is refused quietly (fixed language) with SK_STT_IDENTIFY=off, or when not asked for", async () => {
+    process.env.SK_STT_IDENTIFY = "off";
+    try {
+      const j = (await (await POST(req({ lang: "en", identify: true }))).json()) as { url: string; identify: boolean };
+      expect(j.identify).toBe(false);
+      expect(new URL(j.url).searchParams.get("language-code")).toBe("en-US");
+    } finally {
+      delete process.env.SK_STT_IDENTIFY;
+    }
+    const j2 = (await (await POST(req({ lang: "en", identify: "yes" }))).json()) as { url: string; identify: boolean };
+    expect(j2.identify).toBe(false);
   });
   it("STT_REGION picks the regional host", async () => {
     process.env.STT_REGION = "eu-west-1";

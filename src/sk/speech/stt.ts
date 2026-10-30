@@ -46,6 +46,46 @@ export function transcribeLanguageFor(lang: unknown): string | null {
   return TRANSCRIBE_LANG[key] ?? TRANSCRIBE_LANG[key.split("-")[0]!] ?? null;
 }
 
+// ── automatic language identification (2026-10-30) ─────────────────────────
+//
+// Transcribe streaming identifies the spoken language itself when the
+// request carries `identify-language=true` + `language-options` (two or
+// more codes, one dialect per language, "more than five is not recommended")
+// + an optional `preferred-language` from those options — and it is
+// available on the WebSocket API. Each Result then carries `LanguageCode`.
+// Source (read 2026-10-30): "Language identification with streaming
+// transcriptions", https://docs.aws.amazon.com/transcribe/latest/dg/lang-id-stream.html,
+// and the StartStreamTranscription API reference (IdentifyLanguage,
+// LanguageOptions, PreferredLanguage; Result.LanguageCode). It needs at
+// least one second of speech; when no option matches, Transcribe picks the
+// CLOSEST option (so only languages SK streams are offered).
+//
+// The options are exactly the four approved streaming languages; the
+// preferred one is the language the conversation is in now (which speeds
+// identification of a short utterance). SK_STT_IDENTIFY=off turns it off
+// (fixed-language streaming, as before) without a client deploy.
+
+/** The language options offered to Transcribe's identification, in order. */
+export const TRANSCRIBE_ID_OPTIONS: readonly string[] = ["en-US", "ms-MY", "ar-SA", "zh-CN"];
+
+/** Server: SK_STT_IDENTIFY. On unless it says "off" (or "0" / "false" / "no"). */
+export function sttIdentifyEnabled(env: string | undefined | null = process.env.SK_STT_IDENTIFY): boolean {
+  const v = (env ?? "").trim().toLowerCase();
+  return !(v === "off" || v === "0" || v === "false" || v === "no");
+}
+
+/** A Transcribe language code ("ms-MY") → the SK answer language it means
+ *  ("ms"), for the four streaming languages only; anything else → null. */
+export function answerLangOfTranscribe(code: unknown): "en" | "ms" | "ar" | "zh" | null {
+  if (typeof code !== "string") return null;
+  const k = code.trim().toLowerCase();
+  if (k === "en-us") return "en";
+  if (k === "ms-my") return "ms";
+  if (k === "ar-sa") return "ar";
+  if (k === "zh-cn") return "zh";
+  return null;
+}
+
 /** Presigned URL lifetime. 300 s is the documented MAXIMUM for
  * X-Amz-Expires on the streaming WebSocket ("Setting up a streaming
  * transcription", 2026-10-30). The client opens the socket at once, so the

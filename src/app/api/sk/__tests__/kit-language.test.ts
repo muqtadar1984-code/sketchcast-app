@@ -173,6 +173,21 @@ describe("the kit's own language", () => {
     await ask(undefined, en.state);
     expect(userTurn(teacher.calls[2]!)).toContain("in English");
   });
+  it("2026-10-30: a question written in Marathi is explained in Marathi in the same turn, and Marathi sticks for the next explain", async () => {
+    install([["पेशी हे जीवनाचे सर्वात लहान एकक आहे."], ["प्रत्येक सजीव पेशींनी बनलेला आहे."], ["The nucleus holds the DNA."]], "ar");
+    const mr = await ask("पेशी म्हणजे काय आहे?");
+    expect(teacher.calls).toHaveLength(1);
+    expect(userTurn(teacher.calls[0]!)).toContain("in Marathi");
+    expect(mr.done.lang).toEqual({ lang: "mr", dir: "ltr", speech: "mr-IN", override: true });
+    // "explain this" (no question) keeps her Marathi over the kit's Arabic.
+    const next = await ask(undefined, mr.state);
+    expect(userTurn(teacher.calls[1]!)).toContain("in Marathi");
+    expect(next.done.lang).toMatchObject({ lang: "mr", override: true });
+    // An English question: English (over the Arabic kit), kept for the next turn.
+    const en = await ask("what does the nucleus do?", next.state);
+    expect(userTurn(teacher.calls[2]!)).toContain("in English");
+    expect(en.done.lang).toMatchObject({ lang: "en", override: true });
+  });
   it("the narration widens the repeat's support (its numbers and names stay allowed)", () => {
     expect(NARRATION_0).toContain("bacteria");
   });
