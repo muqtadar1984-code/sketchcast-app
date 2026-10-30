@@ -7,7 +7,7 @@ import type { SkSelection } from "@/sk/shell/types";
 import { deepLinkStartable, parsePresentDeepLink } from "./deep-link";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { fmt } from "@/i18n/format";
-import type { TourCopy } from "@/tour/definitions";
+import type { WalkCopy } from "@/app/dashboard/sk-walkthrough";
 import SkLauncher from "@/app/dashboard/sk-launcher";
 import type { SkShellCopy } from "@/app/dashboard/sk-shell";
 import BoardSession, { type SessionInfo, type SessionKit } from "./board-session";
@@ -58,7 +58,8 @@ export type PresentWords = Dictionary["present"];
 /** S1: what the server hands down when the SK Shell is on for this user. */
 export type PresentSk = {
   copy: SkShellCopy;
-  tourCopy: TourCopy;
+  /** sk.walkthrough: a tour that reaches the Board carries on here. */
+  walkCopy: WalkCopy;
   role: string | null;
   hat: string | null;
 };
@@ -886,7 +887,7 @@ export default function PresentClient({
           bottom-end corner video. Mounted with the bridge whether or not a
           lesson is running — before one, the Shell navigates and answers;
           its Board moves need the session. */}
-      {sk && bridge && <SkLauncher copy={sk.copy} tourCopy={sk.tourCopy} role={sk.role} hat={sk.hat} introDue={false} board={bridge} />}
+      {sk && bridge && <SkLauncher copy={sk.copy} walkCopy={sk.walkCopy} role={sk.role} hat={sk.hat} introDue={false} board={bridge} />}
     </main>
   );
 }

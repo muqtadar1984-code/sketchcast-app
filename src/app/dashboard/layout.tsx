@@ -172,7 +172,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const t = await getDictionary(await resolveLocale());
 
   return (
-    <TourProvider role={role} seen={seen} copy={t.app.tour}>
+    // 2026-10-30 (founder decision 1): for SK users the SK walkthrough REPLACES
+    // the driver.js role tour — no auto-start, and the header's 🧭 starts SK's.
+    <TourProvider role={role} seen={seen} copy={t.app.tour} skWalkthrough={skOn}>
       {/* 2026-10-30: the landing pages show SK inline (<SkHomeHero />) — the
           launcher below portals its one Shell there. This hands them THIS
           layout's skOn decision; the hero adds no gate of its own. */}
@@ -187,7 +189,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         )}
         {/* SK Shell (S0): the portal-wide companion, in the same corner — so the
             Assistant above is handed `hidden` whenever this one renders. */}
-        {skOn && <SkLauncher copy={t.sk.shell} tourCopy={t.app.tour} role={role} hat={hat} introDue={skIntroDue} />}
+        {skOn && <SkLauncher copy={t.sk.shell} walkCopy={t.sk.walkthrough} role={role} hat={hat} introDue={skIntroDue} />}
       </SkHomeProvider>
     </TourProvider>
   );
