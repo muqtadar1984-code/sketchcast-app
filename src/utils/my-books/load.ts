@@ -26,8 +26,18 @@ const GRANT_COLS = "user_id, product_id, source, activated_at, expires_at, tutor
 
 type Res<T> = { data: T | null; error: { message?: string; code?: string } | null };
 
+class NotYet extends Error {}
+
+/** A table or column that is not there yet: 0172 (pub_releases) or 0174 (the product link columns). */
+function notYet(e: { message?: string; code?: string }): boolean {
+  return ["42P01", "42703", "PGRST205", "PGRST204"].includes(e.code ?? "") || /does not exist|schema cache|could not find/i.test(e.message ?? "");
+}
+
 function rows<T>(r: Res<T[]>, what: string): T[] {
-  if (r.error) throw new Error(`${what}: ${r.error.message ?? r.error.code ?? "error"}`);
+  if (r.error) {
+    if (notYet(r.error)) throw new NotYet(what);
+    throw new Error(`${what}: ${r.error.message ?? r.error.code ?? "error"}`);
+  }
   return r.data ?? [];
 }
 
@@ -93,7 +103,8 @@ export async function loadMyBooks(db: MyBooksDb, userId: string, now: Date, opts
 
     return decideMyBooks({ now, userId, products, releases: finals, schoolLicence, subscriptions, grants, children });
   } catch (e) {
-    console.error("[sk-library] my books read failed:", (e as Error).message);
+    // before the migrations land every dashboard load would log this: stay quiet
+    if (!(e instanceof NotYet)) console.error("[sk-library] my books read failed:", (e as Error).message);
     return [];
   }
 }

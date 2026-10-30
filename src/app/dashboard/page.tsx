@@ -127,7 +127,7 @@ function examCoverageLabel(
   return bits.join("; ");
 }
 
-export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ book_pdf?: string }> } = {}) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ book_pdf?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -267,7 +267,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
   // gated by SK flags: a bought book shows even while SK is restricted. Read
   // before the student branch — a student who activated a code sees it too.
   const myBooks = await myBooksStrip(user, role);
-  const pdfUnavailable = (await searchParams)?.book_pdf === "unavailable";
+  const pdfUnavailable = (await searchParams).book_pdf === "unavailable";
 
   // ── Student view ──────────────────────────────────────────────────────────
   // Students see only the content assigned to them (RLS → shared_to_me). We sign
