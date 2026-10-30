@@ -6,6 +6,11 @@
 
 import { EMPTY_MARKS, type PlayOpts, type SpeechProvider, type SpeechResult, type SynthesizeOpts, type VoiceId } from "./provider";
 
+/** 2026-10-30: an utterance that has not STARTED by now never will (Chrome
+ *  drops a speak() that follows a cancel() too closely, with no event at all):
+ *  the line fails instead of holding SK's queue — and the tour — for ever. */
+export const BROWSER_START_TIMEOUT_MS = 4000;
+
 export function browserSpeechAvailable(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
 }
@@ -30,8 +35,11 @@ export class BrowserSpeechProvider implements SpeechProvider {
 
   private play(text: string, voice: VoiceId, opts: PlayOpts): Promise<void> {
     if (!browserSpeechAvailable() || !text.trim()) return Promise.resolve();
-    this.cancel();
-    return new Promise<void>((resolve) => {
+    // Only clear the engine when it has something: a cancel() right before
+    // every speak() is what makes Chrome drop the new utterance silently.
+    const synth = window.speechSynthesis;
+    if (synth.speaking || synth.pending) this.cancel();
+    return new Promise<void>((resolve, reject) => {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = this.lang;
       u.rate = Math.min(2, Math.max(0.5, opts.rate ?? 1));
@@ -44,12 +52,26 @@ export class BrowserSpeechProvider implements SpeechProvider {
       u.onboundary = (e) => {
         if (e.name === "word") opts.onWord?.({ charIndex: e.charIndex, t: performance.now() - t0 });
       };
-      const finish = () => {
+      let settled = false;
+      let watchdog: ReturnType<typeof setTimeout> | null = null;
+      const finish = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        if (watchdog) clearTimeout(watchdog);
         if (this.current === u) this.current = null;
-        resolve();
+        if (err) reject(err);
+        else resolve();
       };
-      u.onend = finish;
-      u.onerror = finish;
+      u.onstart = () => {
+        if (watchdog) clearTimeout(watchdog);
+        watchdog = null;
+      };
+      u.onend = () => finish();
+      u.onerror = () => finish();
+      watchdog = setTimeout(() => {
+        if (this.current === u) window.speechSynthesis.cancel();
+        finish(new Error("speech: the browser voice never started"));
+      }, BROWSER_START_TIMEOUT_MS);
       const onAbort = () => {
         window.speechSynthesis.cancel();
         finish();

@@ -172,7 +172,17 @@ export default function SkLauncher({
           tutor={tutor ?? null}
           walk={
             tourActive
-              ? { strip: tour.strip(heroHere ? "hero" : "dock", rig), voice: tour.voice, fill: tour.fill, showAnswers: tour.showAnswers, command: tour.command }
+              ? {
+                  strip: tour.strip(heroHere ? "hero" : "dock", rig),
+                  voice: tour.voice,
+                  fill: tour.fill,
+                  showAnswers: tour.showAnswers,
+                  command: tour.command,
+                  onVoiceDone: tour.onVoiceDone,
+                  act: tour.act,
+                  hold: tour.hold,
+                  state: tour.state ?? undefined,
+                }
               : null
           }
           onTakeTour={() => {

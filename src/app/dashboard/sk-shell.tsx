@@ -48,7 +48,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { micSupported, pageSpeechLang, startDictation } from "@/utils/assistant/voice-client";
-import { createSpeechCoordinator, serverProviderFor, speechMode, type SpeechCoordinator } from "@/sk/shell/client/speech";
+import { createSpeechCoordinator, serverProviderFor, speechMode, type SayOutcome, type SpeechCoordinator } from "@/sk/shell/client/speech";
 import { BrowserSpeechProvider } from "@/sk/speech/browser";
 import { googleVoiceFor } from "@/sk/speech/google-voices";
 import { pollyVoiceFor } from "@/sk/speech/polly-marks";
@@ -57,13 +57,13 @@ import { useRigChoice } from "@/sk/board/use-rig-choice";
 import RichText from "@/components/rich-text";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
-import type { SkActRequest, SkActResponse, SkBoardMove, SkCitation, SkTurnEvent, SkTurnRequest, SkTutorMove } from "@/sk/shell/types";
+import type { SkActRequest, SkActResponse, SkBoardMove, SkCitation, SkTurnEvent, SkTurnRequest, SkTurnWalk, SkTutorMove, SkWalkAction } from "@/sk/shell/types";
 import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector";
 // S6 slice C: the preferences follow the user (workflow facts), with a
 // one-time migration of this browser's localStorage values (prefs.ts).
 import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultMicOn, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
-import { createMicGate, type MicGate } from "@/sk/shell/client/mic-gate";
+import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, type SpeechHold } from "@/sk/shell/client/mic-gate";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
@@ -88,8 +88,16 @@ export type SkShellWalk = {
   fill: { key: string; text: string } | null;
   /** Paused by her question: the dock shows the conversation. */
   showAnswers: boolean;
-  /** A bare "next" / "back" / "pause" / "skip" / "continue": handled, no turn. */
+  /** A tour command ("next", "Hi, continue with the tour?"): handled, no turn. */
   command: (text: string) => boolean;
+  /** How `voice` ended (key = voice.key): the tour advances only after "spoken". */
+  onVoiceDone?: (key: string, outcome: SayOutcome) => void;
+  /** The server answered a turn with a tour action (natural phrasing it caught). */
+  act?: (action: SkWalkAction) => void;
+  /** She is typing: hold any pending auto-advance. */
+  hold?: () => void;
+  /** Where the tour is, sent with every turn so SK never says there is none. */
+  state?: SkTurnWalk;
 };
 
 /** The hero keeps the conversation compact: the latest turns, scrollable. */
@@ -303,6 +311,14 @@ export default function SkShell({
   const readAloudRef = useRef(true);
   const micOnRef = useRef(false);
   const speakingRef = useRef(false);
+  /** 2026-10-30: the hero mic's no-echo hold (mic-gate.ts createSpeechHold) —
+   *  paused while the coordinator speaks and for SPEECH_TAIL_MS after its
+   *  WHOLE queue has drained, read from the coordinator itself. */
+  const holdRef = useRef<SpeechHold | null>(null);
+  const heroRef = useRef(hero);
+  /** 2026-10-30: hands-free dictation passes (a stale or doubled end never
+   *  restarts, and a stale pass's words are never sent). */
+  const passesRef = useRef(createDictationPasses());
   /** The hero gate's onResume, current every render (the gate outlives renders). */
   const listenNowRef = useRef<() => void>(() => {});
   const walkRef = useRef<SkShellWalk | null | undefined>(walk);
@@ -357,12 +373,15 @@ export default function SkShell({
       win: window,
       doc: document,
       onStop: () => {
+        // A hands-free pass the gate stopped says nothing more: its late
+        // words or end are not her turn. (Push-to-talk keeps its last words.)
+        if (micModeRef.current === "handsFree") passesRef.current.retire();
         micModeRef.current = null;
         stopMicRef.current?.();
         stopMicRef.current = null;
         setListening(false);
       },
-      ...(hero ? { onResume: () => listenNowRef.current(), canResume: () => !speakingRef.current } : {}),
+      ...(hero ? { onResume: () => listenNowRef.current(), canResume: () => !(holdRef.current?.holding ?? speakingRef.current) } : {}),
     });
     gateRef.current = gate;
     return () => {
@@ -429,15 +448,34 @@ export default function SkShell({
         const name = pool.length ? pickBrowserVoice(pool, gender, prefix) : null;
         return name ? `browser:${name}` : "browser:default";
       },
-      onSpeaking: setSpeaking,
+      // The hold hears it synchronously (no render in between): the hero's mic
+      // is paused the moment SK starts, and comes back only SPEECH_TAIL_MS
+      // after the whole queue has drained — never between two sentences.
+      onSpeaking: (on) => {
+        holdRef.current?.speaking(on);
+        if (on && heroRef.current) gateRef.current?.stop("speaking");
+        setSpeaking(on);
+      },
       onFallback: (why) => console.info(`[sk] server voice ${why}; using the browser voice`),
     });
     coord.setEnabled(readAloudRef.current);
     speechRef.current = coord;
+    const hold = createSpeechHold({
+      isSpeaking: () => coord.speaking,
+      // The tail is over: the hero's owed resume (vetoed while held) is taken.
+      onClear: () => {
+        if (heroRef.current) gateRef.current?.resume();
+      },
+    });
+    holdRef.current = hold;
+    // Only a real tab unload stops the voice here: an in-app route change or
+    // the hero ↔ dock move keeps this Shell (and this coordinator) mounted.
     const onPageHide = () => coord.stop();
     window.addEventListener("pagehide", onPageHide);
     return () => {
       window.removeEventListener("pagehide", onPageHide);
+      hold.dispose();
+      if (holdRef.current === hold) holdRef.current = null;
       coord.stop();
       if (speechRef.current === coord) speechRef.current = null;
     };
@@ -692,6 +730,7 @@ export default function SkShell({
   useEffect(() => {
     walkRef.current = walk;
     onTakeTourRef.current = onTakeTour;
+    heroRef.current = hero;
   });
   const walkVoiceKey = walk?.voice?.key;
   const tourVoicedRef = useRef(false);
@@ -706,7 +745,12 @@ export default function SkShell({
     tourVoicedRef.current = !!v.text;
     const coord = speechRef.current;
     coord?.stop();
-    if (v.text) void coord?.say(v.text);
+    if (!v.text) return;
+    // The tour moves on by itself only once this line has FULLY been spoken
+    // (every sentence); a line cut off (barge-in, Stop, an error) holds it.
+    const report = (o: SayOutcome) => walkRef.current?.onVoiceDone?.(v.key, o);
+    if (!coord) report("silent");
+    else void coord.sayLine(v.text).then(report);
   }, [walkVoiceKey]);
   const walkFillKey = walk?.fill?.key;
   useEffect(() => {
@@ -778,6 +822,7 @@ export default function SkShell({
   function listenNow() {
     const gate = gateRef.current;
     if (!gate || !micOnRef.current || micModeRef.current || ready !== true) return;
+    if (holdRef.current?.holding) return; // SK is still talking (or just stopped)
     if (!gate.start({ idle: true })) return;
     micModeRef.current = "handsFree";
     emptyEndsRef.current = 0;
@@ -826,15 +871,17 @@ export default function SkShell({
     };
   }, [hero, micOn, prefsSettled, micRefused]);
 
-  // No echo: the hero's mic pauses while SK speaks and comes back after (the
-  // gate owes the resume; its canResume veto reads speakingRef).
+  // No echo: the hero's mic pauses while SK speaks (stopped synchronously in
+  // onSpeaking; this is the backstop) and comes back SPEECH_TAIL_MS after the
+  // coordinator's WHOLE queue has drained — the hold's onClear takes the
+  // resume the gate owes. Never in the gap between two sentences of a line,
+  // and a resume never stops SK's voice (only her words, typing or Stop do).
   useEffect(() => {
     speakingRef.current = speaking;
     if (!hero) return;
     const gate = gateRef.current;
     if (!gate) return;
     if (speaking) gate.stop("speaking");
-    else gate.resume();
   }, [speaking, hero]);
 
   /** Stop = the voice and the answer being written. The video
@@ -853,13 +900,15 @@ export default function SkShell({
     const startedAt = Date.now();
     dictatedRef.current = "";
     spokenLangRef.current = null;
-    const stop = startDictation(
-      (t) => {
+    // One guarded pass: its end runs once, and only while it is the current
+    // pass (Web Speech ends twice on an error — onerror, then onend).
+    const pass = passesRef.current.open({
+      onText: (t) => {
         dictatedRef.current = t;
         setInput(t);
         gate.touch();
       },
-      () => {
+      onEnd: () => {
         stopMicRef.current = null;
         const text = dictatedRef.current.trim();
         dictatedRef.current = "";
@@ -884,6 +933,10 @@ export default function SkShell({
         setListening(false);
         if (mode === "ptt") inputRef.current?.focus();
       },
+    });
+    const stop = startDictation(
+      pass.onText,
+      pass.onEnd,
       // Transcribe (en/ms/ar/zh) identifies which of those she speaks, so she
       // can switch by speaking; the browser recognizer listens in `lang`.
       { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l) },
@@ -1000,9 +1053,14 @@ export default function SkShell({
       };
       if (memoryRef.current) req.memory = memoryRef.current;
       if (modality === "voice" && spokenLangRef.current) req.spokenLang = spokenLangRef.current;
+      // 2026-10-30: the tour this tab is giving, so SK never says there is none.
+      const walkState = walkRef.current?.state;
+      if (walkState?.active) req.walk = walkState;
 
       let full = "";
       let sawDone = false;
+      /** The server took this turn as a tour command (no answer to show). */
+      let walkActed = false;
       // Board moves run as their events arrive; the turn stays busy until the
       // Board has reported on every one of them.
       const moveRuns: Promise<void>[] = [];
@@ -1026,7 +1084,8 @@ export default function SkShell({
       } finally {
         if (turnRef.current === turn) turnRef.current = null;
         setBusy(false);
-        patchEntry(skId, (en) => {
+        if (walkActed) setEntries((m) => m.filter((e) => e.id !== skId || !!e.text));
+        else patchEntry(skId, (en) => {
           const empty = !en.text && !(en.nav?.length || en.tools?.length || en.moves?.length);
           // An answer that carried nothing at all: SK's fixed line (§2.3).
           return { ...en, pending: false, text: empty && sawDone ? copy.nothingOnThat : en.text };
@@ -1137,8 +1196,13 @@ export default function SkShell({
             break;
           }
           case "walkthrough":
-            // "Show me around" (rules.ts, no model): the launcher restarts the tour.
-            onTakeTourRef.current?.();
+            // A tour command the server caught ("…continue with the tour?"):
+            // the running tour takes it. Otherwise "Show me around" (rules.ts,
+            // no model): the launcher restarts the tour.
+            if (ev.action && ev.action !== "start") {
+              walkActed = true;
+              walkRef.current?.act?.(ev.action);
+            } else onTakeTourRef.current?.();
             break;
           case "lang":
             // 2026-10-30: what the text that follows is in. Dictation follows
@@ -1586,7 +1650,11 @@ export default function SkShell({
           <input
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // She is typing mid-tour: the tour does not move on under her.
+              walkRef.current?.hold?.();
+            }}
             maxLength={600}
             disabled={ready === false}
             placeholder={listening ? copy.listening : copy.placeholder}

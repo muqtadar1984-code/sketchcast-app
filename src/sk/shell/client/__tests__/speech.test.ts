@@ -792,3 +792,84 @@ describe("prefetch: the next sentence is ready when this one ends", () => {
     expect(browser.spoken).toEqual(["One."]);
   });
 });
+
+// 2026-10-30 (founder: "SK voice is disappearing in the middle of the
+// explanation… it does not continue to speak while walkthrough is happening").
+describe("the walkthrough's lines: sayLine outcome, and a stop never strands the queue", () => {
+  it("sayLine: 'spoken' only when EVERY sentence of the line played; 'stopped' when cut off; 'silent' when off or empty", async () => {
+    const { c, browser } = rig({ manual: true });
+    const line = c.sayLine("One. Two.");
+    await settle();
+    browser.pending[0]!.finish();
+    await settle();
+    expect(c.speaking).toBe(true); // between sentence 1 and 2 SK is still speaking
+    browser.pending[0]!.finish();
+    await expect(line).resolves.toBe("spoken");
+
+    const cut = c.sayLine("Three. Four.");
+    await settle();
+    browser.pending[0]!.finish(); // "Three." played …
+    await settle();
+    c.stop(); // … then a barge-in during "Four."
+    await expect(cut).resolves.toBe("stopped");
+
+    await expect(c.sayLine("")).resolves.toBe("silent");
+    c.setEnabled(false);
+    await expect(c.sayLine("Off.")).resolves.toBe("silent");
+  });
+
+  it("a voice with no audio at all (every provider throws) is not 'spoken'", async () => {
+    const broken: SpeechProvider = {
+      id: "browser",
+      async synthesize() {
+        throw new Error("no voice");
+      },
+    };
+    const c = createSpeechCoordinator({ server: false, makeProvider: () => broken, fallback: () => broken });
+    await expect(c.sayLine("Hello.")).resolves.toBe("stopped");
+  });
+
+  it("REGRESSION: a provider whose play() never settles (a browser voice that drops its end event) no longer silences every later line — stop() frees the queue", async () => {
+    let plays = 0;
+    const stuckOnce: SpeechProvider & { spoken: string[] } = {
+      id: "browser",
+      spoken: [],
+      async synthesize(text) {
+        stuckOnce.spoken.push(text);
+        return {
+          audio: null,
+          format: "none",
+          marks: EMPTY_MARKS,
+          // The first sentence hangs for ever (no end, no error); later ones play.
+          play: () => (++plays === 1 ? new Promise<void>(() => {}) : Promise.resolve()),
+        };
+      },
+      cancel() {
+        /* the engine ignores the cancel: no event fires */
+      },
+    };
+    const c = createSpeechCoordinator({ server: false, makeProvider: () => stuckOnce, fallback: () => stuckOnce });
+    const first = c.sayLine("Stop one line.");
+    await settle();
+    expect(c.speaking).toBe(true);
+    // The tour's next stop: the Shell stops the old line and says the new one.
+    c.stop();
+    await expect(first).resolves.toBe("stopped");
+    const next = c.sayLine("Stop two line.");
+    await expect(next).resolves.toBe("spoken");
+    expect(stuckOnce.spoken).toEqual(["Stop one line.", "Stop two line."]);
+    await settle();
+    expect(c.speaking).toBe(false);
+  });
+
+  it("the server voice: a request that never answers is released by stop() too", async () => {
+    const hung: SpeechProvider = { id: "polly-client", synthesize: () => new Promise<SpeechResult>(() => {}) };
+    const browser = fakeProvider("browser");
+    const c = createSpeechCoordinator({ server: true, makeProvider: () => hung, fallback: () => browser });
+    const a = c.sayLine("Never comes.");
+    await settle();
+    c.stop();
+    await expect(a).resolves.toBe("stopped");
+    expect(browser.spoken).toEqual([]); // a stopped request is not a failure: no fallback
+  });
+});

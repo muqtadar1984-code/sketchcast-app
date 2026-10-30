@@ -194,6 +194,36 @@ describe("chat", () => {
   });
 });
 
+// 2026-10-30 (founder: "Hi, continue with the tour?" while the tour was paused
+// went to the model, which said "I don't have a tour to continue here").
+describe("the walkthrough's state rides with the turn", () => {
+  const walk = { active: true, paused: true, role: "teacher", stop: "output", index: 3, total: 14 };
+  it("a tour command about the running tour → the walkthrough action, no model", async () => {
+    const ev = await readEvents(await POST(req(turn("Hi SK, could you please continue with the tour you were giving me", { walk }))));
+    expect(ev.map((e) => e.type)).toEqual(["meta", "walkthrough", "done"]);
+    expect(ev[1]).toEqual({ type: "walkthrough", action: "resume" });
+    expect(mocks.constructed).toEqual([]);
+    const next = await readEvents(await POST(req(turn("Hi, go to the next part of the tour please", { walk }))));
+    expect(next.find((e) => e.type === "walkthrough")).toEqual({ type: "walkthrough", action: "next" });
+    const skip = await readEvents(await POST(req(turn("skip this tour please", { walk }))));
+    expect(skip.find((e) => e.type === "walkthrough")).toEqual({ type: "walkthrough", action: "skip" });
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("any other turn tells the model the tour is there (so it never says there is none)", async () => {
+    mocks.script = [{ text: ["Say \"continue the tour\" and I'll carry on."] }];
+    await readEvents(await POST(req(turn("what were you showing me just now", { walk }))));
+    expect(mocks.constructed).toEqual(["claude-sonnet-5-5"]);
+    expect(mocks.systems[0]).toContain('A guided tour of the app is paused at stop "output" (4 of 14).');
+    expect(mocks.systems[0]).toContain("continue the tour");
+  });
+  it("without a tour (or a malformed one) nothing changes: no action, no tour line", async () => {
+    mocks.script = [{ text: ["Sure."] }];
+    const ev = await readEvents(await POST(req(turn("continue with the tour", { walk: { active: "yes", stop: "<script>" } }))));
+    expect(ev.some((e) => e.type === "walkthrough")).toBe(false);
+    expect(mocks.systems.join(" ")).not.toContain("guided tour");
+  });
+});
+
 describe("model path + grounding", () => {
   it("uses SK_SHELL_MODEL (default claude-sonnet-5-5) and offers the allowed tools", async () => {
     mocks.script = [{ text: ["I can open pages and look up your classes."] }];

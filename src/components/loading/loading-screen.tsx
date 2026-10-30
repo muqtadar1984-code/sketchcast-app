@@ -13,7 +13,7 @@ import { useLoadingLabel } from "./loading-indicator";
 export default function LoadingScreen() {
   const label = useLoadingLabel();
   return (
-    <div className="loading-veil flex min-h-[40vh] flex-1 items-center justify-center py-16" aria-busy="true">
+    <div className="loading-veil flex min-h-[40vh] flex-1 items-center justify-center py-16" aria-busy="true" data-sk-loading="">
       <Spinner size="lg" label={label} />
     </div>
   );

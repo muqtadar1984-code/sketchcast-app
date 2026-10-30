@@ -6,9 +6,15 @@
 // launcher (sk-launcher.tsx) mounts:
 //
 //   useSkWalkthrough() — starts a run (facts from GET /api/sk/walkthrough →
-//     plan), moves between pages with router.push (prefetched, never a full
-//     reload), waits for each stop's anchor (observer + ~4 s, then skips it
-//     silently with a debug line), keeps the position in sessionStorage so the
+//     plan) once the page it starts on has settled, prefetches every page of
+//     the plan, and plays the stops STRICTLY in sequence (2026-10-30 fix):
+//     navigate (router.push, never a full reload) → wait for the page to
+//     SETTLE and the anchor to be visible and still (a stop is skipped, with
+//     a debug line, only once the page settled without it; cap ~20 s) →
+//     scroll it into view → highlight → the caption and the WHOLE line → then
+//     the next stop by itself (1 s after the voice finished; reading time
+//     without sound; never after a line that was cut off, never while paused
+//     or while she types). It keeps the position in sessionStorage so the
 //     separate launchers on /present and /sk carry on, pauses when she asks a
 //     question or leaves the stop's page, and records completed / skipped in
 //     user_tour_progress ONLY for the first-login run.
@@ -21,10 +27,12 @@
 //   WalkSpotlight — a dimmed backdrop with a cut-out ring round the anchor;
 //     pointer-events none, so the page stays usable.
 //
-// Captions, highlights and moves start at once; the voice waits for her first
-// tap or key (the browser's autoplay rule) and then speaks through the
-// Shell's own speech coordinator (sk-shell.tsx, `walk.voice`), so the Google,
-// Polly or browser voice applies unchanged. No model call, no write.
+// A stop's caption shows with its highlight, once its page has settled; the
+// voice waits for her first tap or key (the browser's autoplay rule) and then
+// speaks through the Shell's own speech coordinator (sk-shell.tsx,
+// `walk.voice`), so the Google, Polly or browser voice applies unchanged; the
+// Shell reports back how each line ended (`onVoiceDone`), which is what lets
+// the tour move on. No model call, no write.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -48,12 +56,20 @@ import {
   routePath,
   skipWalk,
   startWalk,
-  waitForAnchor,
+  advanceDelay,
+  readingMs,
+  waitForSettledAnchor,
+  waitForSettledPage,
+  waitForStableRect,
   walkCommand,
+  type LineOutcome,
   type PlannedStop,
+  type SettleProbe,
+  type WalkRect,
   type WalkState,
   type WalkStore,
 } from "@/sk/shell/client/walkthrough";
+import type { SkTurnWalk, SkWalkAction } from "@/sk/shell/types";
 import { CLICK_ONLY_DEMOS, WALK_ROLES, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
 
 export type WalkCopy = Dictionary["sk"]["walkthrough"];
@@ -285,6 +301,56 @@ export function WalkSpotlight({ el }: { el: Element }) {
   );
 }
 
+/// ── the page probe (browser) ────────────────────────────────────────────────
+
+/** SK's own UI: its changes and its listening pulse are not the page loading. */
+const SK_UI = '[data-sk="hero"], [data-sk="dock"], [data-sk="shell"], [data-sk="walk-spotlight"]';
+/** Loading UI: aria-busy (the navigation veil sets it on <body>, loading.tsx's
+ *  ring carries it), [data-loading], [data-sk-loading] (the route loading.tsx
+ *  fallbacks) and skeletons (.animate-pulse — a tiny pulsing dot is not one). */
+const LOADING_SEL = '[aria-busy="true"], [data-loading]:not([data-loading="false"]), [data-sk-loading], .animate-pulse';
+
+function loadingVisible(): boolean {
+  for (const el of Array.from(document.querySelectorAll(LOADING_SEL))) {
+    if (el.closest(SK_UI) || el.getClientRects().length === 0) continue;
+    if (el.classList.contains("animate-pulse")) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 24 || r.height < 8) continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+function rectOf(el: Element): WalkRect | null {
+  if (!el.isConnected) return null;
+  const r = el.getBoundingClientRect();
+  return { top: r.top, left: r.left, width: r.width, height: r.height };
+}
+
+/** DOM changes outside SK's own UI. */
+function observePage(onChange: () => void): () => void {
+  const mo = new MutationObserver((records) => {
+    for (const r of records) {
+      const t = r.target instanceof Element ? r.target : r.target.parentElement;
+      if (t?.closest(SK_UI)) continue;
+      onChange();
+      return;
+    }
+  });
+  mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open", "aria-busy", "data-loading", "data-sk-loading"] });
+  return () => mo.disconnect();
+}
+
+/** On `path` (null = wherever we are), loaded, no loading UI visible. */
+function settleProbe(path: string | null): SettleProbe {
+  return {
+    pathOk: () => path === null || window.location.pathname === path,
+    ready: () => document.readyState === "complete",
+    loading: loadingVisible,
+  };
+}
+
 // ── the hook ────────────────────────────────────────────────────────────────
 
 export type SkWalkthrough = {
@@ -299,12 +365,27 @@ export type SkWalkthrough = {
   fill: WalkVoice;
   /** Paused by her question: the dock shows the conversation. */
   showAnswers: boolean;
-  /** A bare tour command typed or said; true = handled (no turn). */
+  /** A tour command typed or said; true = handled (no turn). */
   command: (text: string) => boolean;
   /** She asked SK something: the tour pauses and SK answers normally. */
   onQuestion: () => void;
   /** Start from stop 1. `record` only for the first-login run. */
   start: (opts?: { record?: boolean }) => void;
+  /** The Shell reports how a `voice` line ended: the tour moves on by itself
+   *  only after it was FULLY spoken. */
+  onVoiceDone: (key: string, outcome: LineOutcome) => void;
+  /** A tour action the server decided (natural phrasing it caught). */
+  act: (action: SkWalkAction) => void;
+  /** She is typing: no auto-advance under her. */
+  hold: () => void;
+  /** Where the tour is, for the turn request (null when no run). */
+  state: SkTurnWalk | null;
+};
+
+/** The stop key: one run, one position, one plan (a missing stop changes it). */
+const goKeyOf = (w: WalkState | null): string | null => {
+  const s = w && w.status === "running" ? currentStop(w) : null;
+  return w && s ? `${w.runId}:${w.index}:${w.stops.length}:${s.id}` : null;
 };
 
 export function useSkWalkthrough({
@@ -328,6 +409,8 @@ export function useSkWalkthrough({
   const [soundOn, setSoundOn] = useState(false);
   const [voice, setVoice] = useState<WalkVoice>(null);
   const [fill, setFill] = useState<WalkVoice>(null);
+  /** The pending auto-advance: after `ms`, if the tour is still on THAT entry of THAT stop. */
+  const [advance, setAdvance] = useState<{ goKey: string; entry: number; ms: number } | null>(null);
   const storeRef = useRef<WalkStore | null>(null);
   const walkRef = useRef<WalkState | null>(null);
   const matchRef = useRef(match);
@@ -337,6 +420,13 @@ export function useSkWalkthrough({
   const endedRef = useRef(new Set<string>());
   const introRef = useRef(introPending);
   const onIntroDoneRef = useRef(onIntroDone);
+  /** Bumped each time a stop is (re)entered: an advance or a voice from an
+   *  earlier visit to the same stop never moves this one. */
+  const entryRef = useRef(0);
+  /** The line being voiced now, and for which stop entry. */
+  const spokenRef = useRef<{ key: string; goKey: string; entry: number; text: string } | null>(null);
+  /** The entry she held (typing): it does not move on by itself. */
+  const heldRef = useRef(-1);
   useEffect(() => {
     walkRef.current = walk;
     matchRef.current = match;
@@ -350,8 +440,25 @@ export function useSkWalkthrough({
     if (!stop || !copy) return "";
     return walkLine(copy, w!.role, m?.line ?? stop.line) || walkLine(copy, w!.role, stop.line);
   }, [copy]);
+  // The stop effect reads the words through a ref: a new `copy` object (a
+  // layout re-render) must not re-run it, which restarted the line mid-word.
+  const lineOfRef = useRef(lineOf);
+  useEffect(() => {
+    lineOfRef.current = lineOf;
+  }, [lineOf]);
 
-  const quiet = useCallback(() => setVoice({ key: uid(), text: "" }), []);
+  const quiet = useCallback(() => {
+    spokenRef.current = null;
+    setVoice({ key: uid(), text: "" });
+  }, []);
+
+  /** Say this stop's line now; the tour moves on once it has been spoken. */
+  const speakStop = useCallback((goKey: string, entry: number, text: string) => {
+    const key = uid();
+    spokenRef.current = { key, goKey, entry, text };
+    setAdvance(null);
+    setVoice({ key, text });
+  }, []);
 
   // Restore a run this tab already has (page move, or another layout's launcher).
   useEffect(() => {
@@ -393,11 +500,32 @@ export function useSkWalkthrough({
     }
   }, [walk]);
 
+  // Warm EVERY page of the planned tour once per run (not just the next
+  // stop's), so each hop lands on a render already under way.
+  const runId = walk?.runId ?? null;
+  useEffect(() => {
+    const w = walkRef.current;
+    if (!runId || !w || !isActive(w)) return;
+    const here = window.location.pathname + window.location.search;
+    for (const route of new Set(w.stops.map((s) => s.route))) {
+      if (route === here) continue;
+      try {
+        router.prefetch(route);
+      } catch {
+        /* a hint only */
+      }
+    }
+  }, [runId, router]);
+
+  const startAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => startAbortRef.current?.abort(), []);
   const start = useCallback(
     (opts?: { record?: boolean }) => {
       if (startingRef.current) return;
       startingRef.current = true;
       const record = !!opts?.record || introRef.current;
+      const ac = new AbortController();
+      startAbortRef.current = ac;
       void (async () => {
         let tour: WalkRole = walkRoleFor(role, hat);
         let facts: WalkFacts = {};
@@ -409,24 +537,29 @@ export function useSkWalkthrough({
             if (j.facts && typeof j.facts === "object") facts = j.facts;
           }
         } catch {
-          /* unknown facts: the anchor wait still skips what is not there */
+          /* unknown facts: the settled-page wait still skips what is not there */
         }
+        // The tour does not START until the page it starts on has settled
+        // (loaded, no loading UI, quiet) — capped, so it always starts.
+        const ok = await waitForSettledPage({ probe: settleProbe(null), observe: observePage, signal: ac.signal });
         startingRef.current = false;
+        if (!ok || ac.signal.aborted) return;
         setMatch(null);
+        setAdvance(null);
         setWalk(startWalk(tour, planWalk(tour, facts), { record, runId: uid() }));
       })();
     },
     [role, hat],
   );
 
-  // ── move to the stop, wait for its anchor, then show and say it ──
-  const stop = walk ? currentStop(walk) : null;
-  const goKey = walk && walk.status === "running" && stop ? `${walk.runId}:${walk.index}:${walk.stops.length}:${stop.id}` : null;
+  // ── one stop, strictly in order: navigate → settle → highlight → speak ──
+  const goKey = goKeyOf(walk);
   useEffect(() => {
     if (!goKey) return;
     const w = walkRef.current;
     const s = w ? currentStop(w) : null;
     if (!w || !s) return;
+    const entry = ++entryRef.current;
     const ac = new AbortController();
     const target = routePath(s.route);
     const here = window.location.pathname + window.location.search;
@@ -439,53 +572,71 @@ export function useSkWalkthrough({
       query: (sel: string) => document.querySelector(sel),
       visible: (el: Element) => el.getClientRects().length > 0,
     };
-    void waitForAnchor<{ el: Element | null; line?: string }>({
-      find: () => {
-        if (window.location.pathname !== target) return null;
-        if (!s.anchors.length) return { el: null };
-        return findAnchor(s.anchors, dom);
-      },
-      observe: (cb) => {
-        const mo = new MutationObserver(cb);
-        mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] });
-        const poll = window.setInterval(cb, 300); // a route change without a mutation
-        return () => {
-          mo.disconnect();
-          window.clearInterval(poll);
-        };
-      },
-      signal: ac.signal,
-    }).then((hit) => {
+    const none = { el: null as Element | null };
+    void (async () => {
+      // Found = visible and holding still; missing = only once the page has
+      // SETTLED without it (never a clock counted from the navigation).
+      const hit = await waitForSettledAnchor<{ el: Element | null; line?: string }>({
+        find: () => (s.anchors.length ? findAnchor(s.anchors, dom) : none),
+        rect: (h) => (h.el ? rectOf(h.el) : null),
+        same: (a, b) => a.el === b.el,
+        probe: settleProbe(target),
+        observe: observePage,
+        signal: ac.signal,
+      });
       if (ac.signal.aborted) return;
       navigatingRef.current = false;
       if (!hit) {
-        debug(`stop "${s.id}" (${s.route}) skipped: no anchor of ${s.anchors.map((a) => a.sel).join(", ")} appeared`);
+        debug(`stop "${s.id}" (${s.route}) skipped: the page settled without ${s.anchors.map((a) => a.sel).join(", ")}`);
         setWalk((cur) => (cur && cur.runId === w.runId && cur.index === w.index ? missingStop(cur) : cur));
         return;
       }
-      if (hit.el) {
+      const el = hit.el;
+      if (el) {
+        // Into view, and only once the scroll has finished is it highlighted.
         const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
         try {
-          hit.el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+          el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
         } catch {
           /* old browsers */
         }
+        await waitForStableRect({ rect: () => rectOf(el), signal: ac.signal });
+        if (ac.signal.aborted) return;
       }
-      const m = { el: hit.el, line: hit.line, key: goKey };
+      const m = { el, line: hit.line, key: goKey };
       setMatch(m);
-      if (soundRef.current) setVoice({ key: uid(), text: lineOf(w, m) });
-      // Warm the next page so the hop lands on a render already under way.
-      const nx = w.stops[w.index + 1];
-      if (nx && routePath(nx.route) !== target) {
-        try {
-          router.prefetch(nx.route);
-        } catch {
-          /* a hint only */
-        }
-      }
-    });
+      // Only now the line: the caption shows with the highlight, and the voice
+      // (or, without sound, the reading time) decides when the tour moves on.
+      const text = lineOfRef.current(w, m);
+      if (soundRef.current) speakStop(goKey, entry, text);
+      else setAdvance({ goKey, entry, ms: advanceDelay({ status: "running", soundOn: false, text }) ?? readingMs(text) });
+    })();
     return () => ac.abort();
-  }, [goKey, router, lineOf]);
+  }, [goKey, router, speakStop]);
+
+  // The auto-advance itself: only for the stop entry it was set for, only
+  // while that stop is still the one running. A pause, a question, her typing
+  // or a move cancels it (goKey changes, or `advance` is cleared).
+  useEffect(() => {
+    if (!advance || !goKey || advance.goKey !== goKey) return;
+    if (advance.entry !== entryRef.current || heldRef.current === advance.entry) return;
+    const t = window.setTimeout(() => {
+      setAdvance(null);
+      setMatch(null);
+      setWalk((cur) => (cur && goKeyOf(cur) === advance.goKey ? nextStop(cur) : cur));
+    }, advance.ms);
+    return () => window.clearTimeout(t);
+  }, [advance, goKey]);
+
+  const onVoiceDone = useCallback((key: string, outcome: LineOutcome) => {
+    const sp = spokenRef.current;
+    if (!sp || sp.key !== key) return; // an older line
+    const w = walkRef.current;
+    if (!w || goKeyOf(w) !== sp.goKey || sp.entry !== entryRef.current || heldRef.current === sp.entry) return;
+    // Cut off (barge-in, Stop, an error): wait for Next or Resume.
+    const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });
+    if (ms !== null) setAdvance({ goKey: sp.goKey, entry: sp.entry, ms });
+  }, []);
 
   // She left the stop's page herself (a link, the back button): hold the tour.
   useEffect(() => {
@@ -509,9 +660,13 @@ export function useSkWalkthrough({
     } catch {
       /* private mode */
     }
+    // A stop already on screen: its line is said now, and the reading timer
+    // gives way to the voice (the tour moves on once the line is spoken).
     const w = walkRef.current;
-    if (w?.status === "running" && matchRef.current) setVoice({ key: uid(), text: lineOf(w, matchRef.current) });
-  }, [lineOf]);
+    const m = matchRef.current;
+    const gk = goKeyOf(w);
+    if (w && gk && m?.key === gk) speakStop(gk, entryRef.current, lineOfRef.current(w, m));
+  }, [speakStop]);
   useEffect(() => {
     if (!active || soundOn) return;
     const onGesture = () => unlock();
@@ -526,6 +681,7 @@ export function useSkWalkthrough({
   const move = useCallback(
     (f: (w: WalkState) => WalkState) => {
       quiet();
+      setAdvance(null);
       setMatch(null);
       setWalk((cur) => (cur ? f(cur) : cur));
     },
@@ -540,10 +696,23 @@ export function useSkWalkthrough({
       resume: () => move(resumeWalk),
       pause: () => {
         quiet();
+        setAdvance(null);
         setWalk((cur) => (cur ? pauseWalk(cur, "user") : cur));
       },
     }),
     [move, quiet],
+  );
+
+  const act = useCallback(
+    (a: SkWalkAction) => {
+      if (!isActive(walkRef.current)) return;
+      if (a === "next") controls.next();
+      else if (a === "back") controls.back();
+      else if (a === "skip") controls.skip();
+      else if (a === "pause") controls.pause();
+      else if (a === "resume") controls.resume();
+    },
+    [controls],
   );
 
   const command = useCallback(
@@ -551,21 +720,27 @@ export function useSkWalkthrough({
       if (!isActive(walkRef.current)) return false;
       const c = walkCommand(text);
       if (!c) return false;
-      if (c === "next") controls.next();
-      else if (c === "back") controls.back();
-      else if (c === "skip") controls.skip();
-      else if (c === "pause") controls.pause();
-      else controls.resume();
+      act(c);
       return true;
     },
-    [controls],
+    [act],
   );
 
   const onQuestion = useCallback(() => {
+    setAdvance(null);
     setWalk((cur) => (cur?.status === "running" ? pauseWalk(cur, "question") : cur));
   }, []);
 
-  const line = lineOf(walk, match?.key === goKey || walk?.status === "paused" ? match : null);
+  const hold = useCallback(() => {
+    if (!isActive(walkRef.current)) return;
+    heldRef.current = entryRef.current;
+    setAdvance(null);
+  }, []);
+
+  // The caption shows WITH the highlight (not before the page has settled);
+  // a paused stop keeps its words.
+  const shown = walk?.status === "paused" || (!!match && match.key === goKey);
+  const line = shown ? lineOf(walk, match) : "";
   const strip = useCallback(
     (mode: "hero" | "dock", look?: "A" | "B") =>
       walk && active && copy ? (
@@ -589,6 +764,12 @@ export function useSkWalkthrough({
     [walk, active, copy, line, soundOn, unlock, controls],
   );
 
+  const cur = walk ? currentStop(walk) : null;
+  const state = useMemo<SkTurnWalk | null>(
+    () => (walk && active && cur ? { active: true, paused: walk.status === "paused", role: walk.role, stop: cur.id, index: walk.index, total: walk.stops.length } : null),
+    [walk, active, cur],
+  );
+
   const showSpot = !!match?.el && active && (walk?.status === "running" || walk?.pausedBy === "user");
   return {
     active,
@@ -601,5 +782,9 @@ export function useSkWalkthrough({
     command,
     onQuestion,
     start,
+    onVoiceDone,
+    act,
+    hold,
+    state,
   };
 }

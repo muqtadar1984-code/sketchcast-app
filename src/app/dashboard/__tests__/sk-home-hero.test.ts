@@ -142,7 +142,8 @@ describe("the wiring (source pins)", () => {
     expect(src).not.toContain("runNarration");
     expect(src).not.toContain("introDue");
     // The tour's lines go through THIS Shell's coordinator (one voice).
-    expect(src).toContain("if (v.text) void coord?.say(v.text);");
+    // (2026-10-30: and the Shell reports how each line ended, for the auto-advance.)
+    expect(src).toContain("else void coord.sayLine(v.text).then(report);");
   });
   it("a fresh Shell restores this tab's conversation instead of re-greeting", () => {
     const src = read("sk-shell.tsx");
