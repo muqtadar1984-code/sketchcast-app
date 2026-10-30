@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, currentUser } from "@/utils/supabase/server";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { fmt } from "@/i18n/format";
@@ -19,10 +19,8 @@ import DismissWithdrawn from "./dismiss-withdrawn";
 // One entry per WITHDRAWAL, not per kit: retiring a book with forty kits is one
 // event a teacher needs to understand, not forty notifications.
 export default async function WithdrawnNotice() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The verified user is shared with the rest of the render (currentUser).
+  const [supabase, user] = await Promise.all([createClient(), currentUser()]);
   if (!user) return null;
 
   // Best-effort throughout: this is an explanation, and failing to render it

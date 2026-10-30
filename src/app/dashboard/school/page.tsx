@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+import { after } from "next/server";
+import { createClient, currentUser } from "@/utils/supabase/server";
 import AppHeader from "../app-header";
 import { InkUnderline } from "@/components/ink-mark";
 import { schoolAnalyticsEnabledFor, schoolAssistantEnabledFor, platformConsoleEnabled } from "@/utils/flags";
@@ -38,13 +39,10 @@ type Flagged = {
 };
 
 export default async function SchoolAnalyticsPage() {
-  const locale = await resolveLocale();
+  // Locale, session and the (request-shared) verified user in one wave.
+  const [locale, supabase, user] = await Promise.all([resolveLocale(), createClient(), currentUser()]);
   const dict = await getDictionary(locale);
   const t = dict.school.analytics;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase
@@ -60,21 +58,27 @@ export default async function SchoolAnalyticsPage() {
   // One-hat mode: the School pages belong to the leadership hats.
   const hatAway = await enforceHat(supabase, role, (profile?.school_id as string | null) ?? null, "leadership");
   if (hatAway) redirect(hatAway);
-  // The briefing assistant rides its own per-tenant gate on top of the suite.
-  const assistantOn = await schoolAssistantEnabledFor(supabase, profile?.school_id as string | null);
   const isAdmin = role === "school_admin";
 
   // Coordinator access is a GRANT (coordinator_scope rows), not an identity —
   // a teacher holding scope rows gets the coordinator view of their slice and
   // keeps their teacher dashboard. No grant and not an admin → no page.
   const schoolId = (profile?.school_id as string | null) ?? null;
+  // The briefing assistant rides its own per-tenant gate on top of the suite —
+  // read alongside the coordinator grant rather than before it.
+  const [assistantOn, scopeRes] = await Promise.all([
+    schoolAssistantEnabledFor(supabase, schoolId),
+    // School-scoped: a stale grant from a school this user has left must not
+    // open THIS school's analytics.
+    !isAdmin && schoolId
+      ? supabase.from("coordinator_scope").select("grade, subject").eq("school_id", schoolId)
+      : null,
+  ]);
   if (!schoolId) redirect("/dashboard");
   let scopeLabel = t.scope.wholeSchool;
   let isCoordinator = false;
   if (!isAdmin) {
-    // School-scoped: a stale grant from a school this user has left must not
-    // open THIS school's analytics.
-    const { data: scopes } = await supabase.from("coordinator_scope").select("grade, subject").eq("school_id", schoolId);
+    const scopes = scopeRes?.data ?? null;
     isCoordinator = (scopes?.length ?? 0) > 0;
     if (!isCoordinator) redirect("/dashboard");
     const grades = [...new Set((scopes ?? []).map((s) => s.grade as string))];
@@ -85,7 +89,15 @@ export default async function SchoolAnalyticsPage() {
   }
 
   // ── RLS-scoped reads (the policies return only in-scope rows per role) ──────
-  const { data: classesRaw } = await supabase.from("classes").select("id, name, grade");
+  // Independent of each other, so ONE wave (they used to run one by one).
+  const [{ data: classesRaw }, { data: enrRaw }, { data: sharesRaw }, { data: progRaw }, { data: subsRaw }] =
+    await Promise.all([
+      supabase.from("classes").select("id, name, grade"),
+      supabase.from("enrollments").select("class_id, student_id, profiles(full_name, username, parent_email)"),
+      supabase.from("generation_shares").select("generation_id, class_id, due_at"),
+      supabase.from("student_progress").select("generation_id, student_id, status, updated_at"),
+      supabase.from("submissions").select("generation_id, student_id, auto_score, max_score, teacher_score, submitted_at"),
+    ]);
   const classes = (classesRaw ?? []) as { id: string; name: string; grade: string | null }[];
 
   type EnrRow = {
@@ -93,21 +105,12 @@ export default async function SchoolAnalyticsPage() {
     student_id: string;
     profiles: { full_name: string | null; username: string | null; parent_email: string | null } | null;
   };
-  const { data: enrRaw } = await supabase
-    .from("enrollments")
-    .select("class_id, student_id, profiles(full_name, username, parent_email)");
   const enr = (enrRaw ?? []) as unknown as EnrRow[];
 
   type ShareRow = { generation_id: string; class_id: string; due_at: string | null };
-  const { data: sharesRaw } = await supabase
-    .from("generation_shares")
-    .select("generation_id, class_id, due_at");
   const shares = (sharesRaw ?? []) as ShareRow[];
 
   type ProgRow = { generation_id: string; student_id: string; status: string; updated_at: string };
-  const { data: progRaw } = await supabase
-    .from("student_progress")
-    .select("generation_id, student_id, status, updated_at");
   const prog = (progRaw ?? []) as ProgRow[];
 
   type SubRow = {
@@ -118,9 +121,6 @@ export default async function SchoolAnalyticsPage() {
     teacher_score: number | null;
     submitted_at: string;
   };
-  const { data: subsRaw } = await supabase
-    .from("submissions")
-    .select("generation_id, student_id, auto_score, max_score, teacher_score, submitted_at");
   const subs = (subsRaw ?? []) as SubRow[];
 
   // ── Index ──────────────────────────────────────────────────────────────────
@@ -247,18 +247,24 @@ export default async function SchoolAnalyticsPage() {
   for (const f of flagged) byGrade.set(f.grade, (byGrade.get(f.grade) ?? 0) + 1);
 
   // ── DPDP audit trail: record this leadership view ───────────────────────────
-  try {
-    await supabase.from("analytics_access_log").insert({
-      actor_id: user.id,
-      actor_role: role,
-      school_id: profile?.school_id ?? null,
-      scope: isCoordinator ? "at_risk" : "school_health",
-      target_kind: isCoordinator ? "student" : "school",
-      detail: { at_risk: flagged.length, students: allStudents.size },
-    });
-  } catch {
-    // Logging must never break the page; a missing audit row is recoverable.
-  }
+  // Written on every view exactly as before, but no longer waited on: the
+  // insert starts here and after() keeps the request alive until it lands.
+  after(
+    (async () => {
+      try {
+        await supabase.from("analytics_access_log").insert({
+          actor_id: user.id,
+          actor_role: role,
+          school_id: profile?.school_id ?? null,
+          scope: isCoordinator ? "at_risk" : "school_health",
+          target_kind: isCoordinator ? "student" : "school",
+          detail: { at_risk: flagged.length, students: allStudents.size },
+        });
+      } catch {
+        // Logging must never break the page; a missing audit row is recoverable.
+      }
+    })(),
+  );
 
   // "—" for rates that have no denominator yet — no-data-yet ≠ measured zero.
   const metrics: { label: string; value: string | number; tone?: "warn" }[] = [

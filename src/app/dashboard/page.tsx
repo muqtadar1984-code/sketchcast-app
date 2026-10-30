@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+import { after } from "next/server";
+import { createClient, currentUser } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { batchSigner, type Signer } from "@/utils/storage/batch-sign";
 import { isPossiblyOfficeMimetype } from "@/utils/office-file";
 import UploadBook from "./upload-book";
 import AutoRefresh from "@/components/auto-refresh";
@@ -28,7 +31,7 @@ import WithdrawnNotice from "./withdrawn-notice";
 import GettingStarted from "./getting-started";
 import NoticeBanner from "./notice-banner";
 import NoticesCard from "./notices-card";
-import { noticesFor } from "@/utils/notices";
+import { noticesFor, type NoticesData } from "@/utils/notices";
 import { catalogueTabEnabled, diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
@@ -41,13 +44,14 @@ import FeedbackQuestionnaire from "./feedback-questionnaire";
 import { tourForRole } from "@/tour/definitions";
 import { shouldAutoStart } from "@/tour/logic";
 import { maybeSendWelcomeEmail } from "@/utils/lifecycle/welcome";
-import { getDictionary } from "@/i18n/dictionaries";
+import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
-import { htmlLang } from "@/i18n/locales";
+import { htmlLang, type Locale } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
 import { premiumVoicesFor } from "@/utils/narration";
 import MyBooksStrip from "./my-books-strip";
 import { myBooksStrip } from "@/utils/my-books/server";
+import type { User } from "@supabase/supabase-js";
 
 type Chapter = { num: number; title: string; parts?: { titles?: string[]; words?: number }[] | null };
 
@@ -128,40 +132,83 @@ function examCoverageLabel(
   return bits.join("; ");
 }
 
+// ── Streaming (2026-10-30) ──────────────────────────────────────────────────
+// The page used to make ~30 sequential round trips — and sign every artifact
+// of every lesson one request at a time — before the first byte of the
+// Library could render. Now the page itself only waits for what DECIDES the
+// page (who you are, the forced-password and hat redirects, the dictionary);
+// every section below starts its reads at once and streams in through its own
+// <Suspense>. Sections that need the same data await the same promise, so
+// nothing is read twice.
+//
+// SK's walkthrough treats aria-busy / [data-loading] / .animate-pulse as "still
+// loading". Every fallback below carries aria-busy="true" + data-sk-loading,
+// and every data-tour anchor lives in the STREAMED content, never in a
+// fallback — so the tour waits for the real element rather than pointing at a
+// skeleton.
+
+type Db = Awaited<ReturnType<typeof createClient>>;
+
+/** A started read that one or more sections await. Marked handled so a branch
+ * that never renders it cannot leave an unhandled rejection behind; every
+ * section that awaits it still sees the real error. */
+function started<T>(p: Promise<T>): Promise<T> {
+  p.catch(() => {});
+  return p;
+}
+
+/** The fallback every streaming section shows. Light on purpose: no data, no
+ * anchors — just "busy" for the walkthrough and, where a section has real
+ * height, a pulse block so the page does not jump when it lands. */
+function Pending({ className = "", blocks = 0, height = "h-16" }: { className?: string; blocks?: number; height?: string }) {
+  return (
+    <div aria-busy="true" data-loading="" data-sk-loading="" className={className}>
+      {Array.from({ length: blocks }, (_, i) => (
+        <div key={i} className={`animate-pulse ${height} rounded-xl bg-[#F0F2EE] mb-4`} />
+      ))}
+    </div>
+  );
+}
+
+type Trial = {
+  isBeta: boolean;
+  trialPin: { bookId: string; chapterRef: string | null; part: number | null } | null;
+  trialBookUsed: number;
+};
+type ClassOption = { id: string; name: string; grade: string | null };
+type ChildTarget = { id: string; name: string };
+type FairUse = { trialTier: boolean; premiumVoices: boolean };
+type GettingStartedSteps = { upload: boolean; generate: boolean; assign: boolean };
+
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ book_pdf?: string }> }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The verified user is shared with the layout and header (currentUser is
+  // React-cached per request) — one Auth round trip for the whole render.
+  const [supabase, user] = await Promise.all([createClient(), currentUser()]);
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role, school_id")
-    .eq("id", user.id)
-    .single();
+  // Everything the gates below need, in ONE wave. They stay separate queries
+  // on purpose:
+  //  • must_reset_password — forced password change (set by /api/reset-password
+  //    hand-outs and on invited-student provisioning): everyone funnels through
+  //    this page after sign-in, so this is the single enforcement point.
+  //    Separate best-effort query so a not-yet-applied 0005 migration can't
+  //    break the dashboard.
+  //  • lesson_tools (0052) — PE/Music/Art-style teachers don't teach from books:
+  //    SketchCast staff flag them and the upload/generation surfaces disappear
+  //    (the DB triggers are the real guard). Best-effort: a not-yet-applied 0052
+  //    must not break the dashboard, so a failed read means tools stay on.
+  const [{ data: profile }, { data: mrp }, { data: lt }, locale, params] = await Promise.all([
+    supabase.from("profiles").select("full_name, role, school_id").eq("id", user.id).single(),
+    supabase.from("profiles").select("must_reset_password").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("lesson_tools").eq("id", user.id).maybeSingle(),
+    resolveLocale(),
+    searchParams,
+  ]);
   const schoolId = (profile?.school_id as string | null) ?? null;
   const role = (profile?.role as string | null) ?? null;
 
-  // Forced password change (set by /api/reset-password hand-outs and on
-  // invited-student provisioning): everyone funnels through this page after
-  // sign-in, so this is the single enforcement point. Separate best-effort
-  // query so a not-yet-applied 0005 migration can't break the dashboard.
-  const { data: mrp } = await supabase
-    .from("profiles")
-    .select("must_reset_password")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  // Lesson tools (0052): PE/Music/Art-style teachers don't teach from books —
-  // SketchCast staff flag them and the upload/generation surfaces disappear
-  // (the DB triggers are the real guard). Best-effort: a not-yet-applied 0052
-  // must not break the dashboard, so a failed read means tools stay on.
   let lessonTools = true;
-  {
-    const { data: lt } = await supabase.from("profiles").select("lesson_tools").eq("id", user.id).maybeSingle();
-    if (lt && (lt as { lesson_tools?: boolean | null }).lesson_tools === false) lessonTools = false;
-  }
+  if (lt && (lt as { lesson_tools?: boolean | null }).lesson_tools === false) lessonTools = false;
   if ((mrp as { must_reset_password?: boolean } | null)?.must_reset_password) {
     redirect("/auth/update-password");
   }
@@ -172,84 +219,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const hatAway = await enforceHat(supabase, role, schoolId, "teacher");
   if (hatAway) redirect(hatAway);
 
-  // Teacher trial locks + signup notification: best-effort queries so a
-  // not-yet-applied migration can never break the dashboard.
-  // The trial state mirrors the DB scope EXACTLY via my_trial_pin (0057):
-  // trial tier, no school, not a parent, no console override. beta_tester
-  // alone no longer decides — the flag is never cleared on upgrade, so a
-  // paying teacher must unlock the moment their entitlement lands (review
-  // finding). Before 0057 runs, the RPC is absent → no locks, matching the
-  // unpinned DB.
-  let isBeta = false;
-  let trialPin: { bookId: string; chapterRef: string | null; part: number | null } | null = null;
-  let trialBookUsed = 0;
-  if (role && role !== "student") {
-    if (teacherBetaEnabled()) {
-      const { data: tp } = await supabase.rpc("my_trial_pin");
-      const pin = (Array.isArray(tp) ? tp[0] : tp) as
-        | {
-            in_scope: boolean;
-            pinned: boolean;
-            book_id: string | null;
-            chapter_ref: string | null;
-            part: number | null;
-            repinnable: boolean;
-          }
-        | null;
-      isBeta = !!pin?.in_scope;
-      // repinnable = the DB's failed-first-attempt escape is open (the pinned
-      // unit never succeeded and every remaining generation errored) — render
-      // as unpinned so the teacher can restart anywhere, exactly as the DB
-      // would accept. The pin moves on their next accepted generation.
-      if (isBeta && pin?.pinned && pin.book_id && !pin.repinnable) {
-        trialPin = {
-          bookId: pin.book_id,
-          chapterRef: pin.chapter_ref,
-          part: pin.part && pin.part >= 1 ? pin.part : null,
-        };
-      }
-      if (isBeta) {
-        const { data: used } = await supabase.rpc("my_trial_book_used");
-        trialBookUsed = typeof used === "number" ? used : 0;
-      }
-    }
-    // Every signup path (email, Google, invite, school setup) funnels through
-    // this page, so the founder's new-registration email fires here, exactly
-    // once per account (signup_notified_at is the dedup marker).
-    const { data: b } = await supabase
-      .from("profiles")
-      .select("signup_notified_at, onboarded_at")
-      .eq("id", user.id)
-      .maybeSingle();
-    const flags = b as { signup_notified_at?: string | null; onboarded_at?: string | null } | null;
-    // Don't notify while the user is still in onboarding limbo. This page renders
-    // CONCURRENTLY with the layout's onboarding redirect, so firing here for a
-    // brand-new adult would capture the pre-onboarding DEFAULT role ('teacher')
-    // for someone who is about to choose Parent. Wait until they're settled —
-    // onboarded, or the onboarding gate is off — so the email reports the real
-    // role. The notification then fires on their first post-onboarding load.
-    const settled = !onboardingEnabled() || !!flags?.onboarded_at;
-    if (flags && !flags.signup_notified_at && settled) {
-      const { notifySignupOnce } = await import("@/utils/notify");
-      await notifySignupOnce(user.id, user.email ?? null, (profile?.full_name as string) ?? null, role);
-    }
-  }
-
-  // Parents are now full authors (migration 0035 dropped the test-papers-only
-  // trigger): they fall through to the Library like any other adult, with
-  // My Children + Test Papers as extra tabs (see app-header tabsFor). No redirect.
-
-  // School notices (0068): the pinned banner + the "Next 10" card, the same
-  // pair on every dashboard. ONE call resolves the flag (parents included, who
-  // belong through their children) and both lists; null = notices are off for
-  // this viewer, so nothing renders. Read before the student branch below —
-  // students get the same board.
-  const notices = await noticesFor(supabase, { userId: user.id, role, schoolId });
-  // Can this reader reach the Diary, where the notices list now lives? Same
-  // condition the header uses for the tab. FEATURE_DIARY is independent of
-  // FEATURE_NOTICES, so this really can be false while notices are live.
-  const diaryReachable = diaryEnabled() && !!role;
-
   // The Library's words, resolved ONCE here and threaded down the whole client
   // tree as one object: every cell, card and modal below is a client component,
   // so they take the strings as a prop rather than importing the (server-only)
@@ -258,191 +227,616 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // a student's row label ("Lesson", "Deck · Part 2") and chapter headings
   // are built from the same `library` words the adult surfaces use, so the
   // dashboard itself reads in the family's language, not just its rows.
-  const locale = await resolveLocale();
   const dict = await getDictionary(locale);
   const t: LibraryMessages = { ...dict.library, common: dict.common, utils: dict.utils };
+  const pdfUnavailable = params.book_pdf === "unavailable";
+
+  // School notices (0068): the pinned banner + the "Next 10" card, the same
+  // pair on every dashboard. ONE call resolves the flag (parents included, who
+  // belong through their children) and both lists; null = notices are off for
+  // this viewer, so nothing renders. Started before the student branch below —
+  // students get the same board.
+  const noticesP = started(noticesFor(supabase, { userId: user.id, role, schoolId }));
+  // Can this reader reach the Diary, where the notices list now lives? Same
+  // condition the header uses for the tab. FEATURE_DIARY is independent of
+  // FEATURE_NOTICES, so this really can be false while notices are live.
+  const diaryReachable = diaryEnabled() && !!role;
 
   // SK S7 K3 — "My books": SketchCast books this reader bought or was given
   // (and, for a parent, their verified children's). Decided and signed
   // server-side (src/utils/my-books); empty → the strip is not rendered. Not
-  // gated by SK flags: a bought book shows even while SK is restricted. Read
+  // gated by SK flags: a bought book shows even while SK is restricted. Started
   // before the student branch — a student who activated a code sees it too.
-  const myBooks = await myBooksStrip(user, role);
-  const pdfUnavailable = (await searchParams).book_pdf === "unavailable";
+  const myBooksP = started(myBooksStrip(user, role));
 
   // ── Student view ──────────────────────────────────────────────────────────
-  // Students see only the content assigned to them (RLS → shared_to_me). We sign
-  // those artifacts with the service role since the storage policy only lets the
-  // owning teacher sign directly.
+  // Students see only the content assigned to them (RLS → shared_to_me); the
+  // reads and the signing live in <StudentHome> below, which streams in under
+  // the header and the SK hero.
   if (role === "student") {
-    const { data: gensRaw } = await supabase
+    return (
+      <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
+        <AppHeader />
+        {/* SK first (founder 2026-10-30): the hero renders only when the
+            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
+        <SkHomeHero className="max-w-7xl mx-auto px-4 sm:px-6 pt-6" />
+        <Suspense fallback={<Pending className="max-w-7xl mx-auto px-6 pt-6" blocks={3} />}>
+          <StudentHome
+            supabase={supabase}
+            userId={user.id}
+            schoolId={schoolId}
+            t={t}
+            dict={dict}
+            noticesP={noticesP}
+            myBooksP={myBooksP}
+            pdfUnavailable={pdfUnavailable}
+          />
+        </Suspense>
+        {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
+      </div>
+    );
+  }
+
+  // ── Teacher / parent library ──────────────────────────────────────────────
+  // (`locale`, `dict` and `t` — the Library's words — were resolved above the
+  // student branch, which shares them.)
+  //
+  // Every read below STARTS here and is awaited by the section that shows it.
+
+  // Teacher trial locks: best-effort queries so a not-yet-applied migration can
+  // never break the dashboard. The trial state mirrors the DB scope EXACTLY via
+  // my_trial_pin (0057): trial tier, no school, not a parent, no console
+  // override. beta_tester alone no longer decides — the flag is never cleared
+  // on upgrade, so a paying teacher must unlock the moment their entitlement
+  // lands (review finding). Before 0057 runs, the RPC is absent → no locks,
+  // matching the unpinned DB.
+  const trialP: Promise<Trial> = started(
+    (async () => {
+      let isBeta = false;
+      let trialPin: Trial["trialPin"] = null;
+      let trialBookUsed = 0;
+      if (role && teacherBetaEnabled()) {
+        const { data: tp } = await supabase.rpc("my_trial_pin");
+        const pin = (Array.isArray(tp) ? tp[0] : tp) as
+          | {
+              in_scope: boolean;
+              pinned: boolean;
+              book_id: string | null;
+              chapter_ref: string | null;
+              part: number | null;
+              repinnable: boolean;
+            }
+          | null;
+        isBeta = !!pin?.in_scope;
+        // repinnable = the DB's failed-first-attempt escape is open (the pinned
+        // unit never succeeded and every remaining generation errored) — render
+        // as unpinned so the teacher can restart anywhere, exactly as the DB
+        // would accept. The pin moves on their next accepted generation.
+        if (isBeta && pin?.pinned && pin.book_id && !pin.repinnable) {
+          trialPin = {
+            bookId: pin.book_id,
+            chapterRef: pin.chapter_ref,
+            part: pin.part && pin.part >= 1 ? pin.part : null,
+          };
+        }
+        if (isBeta) {
+          const { data: used } = await supabase.rpc("my_trial_book_used");
+          trialBookUsed = typeof used === "number" ? used : 0;
+        }
+      }
+      return { isBeta, trialPin, trialBookUsed };
+    })(),
+  );
+
+  if (role) {
+    // Every signup path (email, Google, invite, school setup) funnels through
+    // this page, so the founder's new-registration email fires here, exactly
+    // once per account (signup_notified_at is the dedup marker). Started now,
+    // finished by after() — the email no longer holds the render.
+    after(
+      (async () => {
+        const { data: b } = await supabase
+          .from("profiles")
+          .select("signup_notified_at, onboarded_at")
+          .eq("id", user.id)
+          .maybeSingle();
+        const flags = b as { signup_notified_at?: string | null; onboarded_at?: string | null } | null;
+        // Don't notify while the user is still in onboarding limbo. This page renders
+        // CONCURRENTLY with the layout's onboarding redirect, so firing here for a
+        // brand-new adult would capture the pre-onboarding DEFAULT role ('teacher')
+        // for someone who is about to choose Parent. Wait until they're settled —
+        // onboarded, or the onboarding gate is off — so the email reports the real
+        // role. The notification then fires on their first post-onboarding load.
+        const settled = !onboardingEnabled() || !!flags?.onboarded_at;
+        if (flags && !flags.signup_notified_at && settled) {
+          const { notifySignupOnce } = await import("@/utils/notify");
+          await notifySignupOnce(user.id, user.email ?? null, (profile?.full_name as string) ?? null, role);
+        }
+      })(),
+    );
+  }
+
+  // Parents are now full authors (migration 0035 dropped the test-papers-only
+  // trigger): they fall through to the Library like any other adult, with
+  // My Children + Test Papers as extra tabs (see app-header tabsFor). No redirect.
+
+  // Parent-role accounts (home educators): the Assign modal targets their
+  // LINKED CHILDREN, not classes — a family has named learners, not a class
+  // register (founder, 2026-08-18). RLS scopes parent_links to the viewer's
+  // own rows; null (teachers/admins) keeps the class mode untouched.
+  type ChildLinkJoin = { child_id: string; profiles: { full_name: string | null; username: string | null } | null };
+  const childTargetsP: Promise<ChildTarget[] | null> = started(
+    role === "parent"
+      ? (async () =>
+          (
+            ((await supabase.from("parent_links").select("child_id, profiles:child_id(full_name, username)")).data ??
+              []) as unknown as ChildLinkJoin[]
+          ).map((l) => ({
+            id: l.child_id,
+            name: l.profiles?.full_name || l.profiles?.username || dict.school.fallback.child,
+          })))()
+      : Promise.resolve(null),
+  );
+
+  // Junk-upload gate: trial accounts get the dialog's stronger "your only
+  // trial kit" line. Detected by plan_tier — my_fair_use() reports it (0047,
+  // SECURITY DEFINER, auth.uid()-scoped) — and deliberately NOT by
+  // beta_tester, which is never cleared on upgrade (known trap). Best-effort:
+  // a pre-0047 DB just means no extra line.
+  const fairUseP: Promise<FairUse> = started(
+    (async () => {
+      const { data: fu } = await supabase.rpc("my_fair_use");
+      const f = fu as { tier?: string; unlimited?: boolean; premium_voices?: boolean } | null;
+      // Premium voices in the picker follow the DATABASE's one answer — 0105's
+      // premium_voices_allowed(): a paid tier, or a comp override at or above the
+      // threshold that function carries. my_fair_use() reports it as
+      // `premium_voices`; the worker's gate asks the same function, so the picker
+      // and the render agree. Free and trial accounts see free voices; `auto`
+      // still gives everyone the right language.
+      const premiumVoices = premiumVoicesFor(f);
+      return { trialTier: f?.tier === "trial", premiumVoices };
+    })(),
+  );
+
+  // Teacher surfaces show what the person OWNS. Admins/coordinators can read
+  // school-wide rows under RLS, so filter by ownership explicitly — their
+  // Library is their teacher hat, not the school view (that's /dashboard/school).
+  // Simple list for the assignment dropdown — always works (no 0005 columns).
+  const classesP: Promise<ClassOption[]> = started(
+    (async () => {
+      const { data: classesRaw } = await supabase
+        .from("classes")
+        .select("id, name, grade")
+        .eq("teacher_id", user.id)
+        .order("created_at", { ascending: false });
+      return (classesRaw ?? []) as ClassOption[];
+    })(),
+  );
+
+  // Roster for the Classes card. Reads migration 0005's profile columns + policy;
+  // if that migration isn't applied yet the query errors and we degrade to [] so
+  // the rest of the dashboard keeps working.
+  const rostersP: Promise<ClassRoster[]> = started(
+    (async () => {
+      const { data: rostersRaw } = await supabase
+        .from("classes")
+        .select("id, name, grade, join_code, enrollments(profiles(id, full_name, username, parent_email))")
+        .eq("teacher_id", user.id)
+        .order("created_at", { ascending: false });
+      type RosterRaw = {
+        id: string;
+        name: string;
+        grade: string | null;
+        join_code: string;
+        enrollments: { profiles: RosterStudent | null }[];
+      };
+      return ((rostersRaw ?? []) as unknown as RosterRaw[]).map((c) => ({
+        id: c.id,
+        name: c.name,
+        grade: c.grade,
+        join_code: c.join_code,
+        students: (c.enrollments ?? []).map((e) => e.profiles).filter((p): p is RosterStudent => !!p),
+      }));
+    })(),
+  );
+
+  // Letterhead branding is a teacher/school affordance. Parent accounts (home
+  // educators included) don't get the card (founder, 2026-08-18) — so skip the
+  // reads too. Gated on ROLE, not hat: a teacher-who-is-a-parent keeps theirs.
+  const brandingP = started(
+    (async () => {
+      const { data: brandingRow } =
+        role === "parent"
+          ? { data: null }
+          : await supabase.from("branding").select("docx_path, pptx_path").eq("owner_id", user.id).maybeSingle();
+
+      // A stored path is not proof of a usable template. Before upload-time
+      // validation existed a teacher uploaded JPEGs as their .docx/.pptx letterheads
+      // and the card still read "templates set", so they had no way to tell why
+      // their documents came out unbranded. Check what is actually in storage and
+      // treat an impossible mimetype as "not set".
+      const brandingFiles = brandingRow
+        ? (await supabase.storage.from("uploads").list(`${user.id}/branding`)).data ?? []
+        : [];
+      const brandingUsable = (path: string | null | undefined) => {
+        if (!path) return false;
+        const name = path.split("/").pop();
+        const obj = brandingFiles.find((f) => f.name === name);
+        // Missing metadata is not evidence of a bad file — only a positively
+        // impossible type hides the template.
+        return isPossiblyOfficeMimetype(obj?.metadata?.mimetype as string | undefined);
+      };
+      return {
+        hasDocx: brandingUsable(brandingRow?.docx_path as string | null | undefined),
+        hasPptx: brandingUsable(brandingRow?.pptx_path as string | null | undefined),
+      };
+    })(),
+  );
+
+  // ONE signer for everything this render signs as the USER (covers, and the
+  // artifacts of every generation that is not a catalogue copy): calls made in
+  // the same tick go out as one createSignedUrls request per download name,
+  // under the same session — so storage RLS decides exactly as before.
+  const userSign = batchSigner(supabase, "artifacts", 3600);
+  const booksP = started(loadBooks(supabase, user.id, schoolId, classesP, userSign));
+  const lessonsP = started(loadLessons(supabase, user, t, userSign));
+
+  // Getting-started stepper (inline onboarding, 0064) — new joiners only. Show
+  // ONLY when the flag is on, this account has book tools, and the dismissal
+  // column reads back a genuine NULL (a pre-migration error → column undefined →
+  // hidden, never a broken card; existing users were backfilled as dismissed).
+  const gettingStartedP: Promise<GettingStartedSteps | null> = started(
+    gettingStartedEnabled() && lessonTools && role !== "student"
+      ? (async () => {
+          const { data: gs, error: gsErr } = await supabase
+            .from("profiles")
+            .select("getting_started_dismissed_at")
+            .eq("id", user.id)
+            .maybeSingle();
+          const dismissedAt = (gs as { getting_started_dismissed_at?: string | null } | null)?.getting_started_dismissed_at;
+          if (gsErr || !gs || dismissedAt != null) return null;
+          // Step 3 = "has assigned anything". One cheap head count of the shares the
+          // user can see (RLS scopes to their own); best-effort → not-done on error.
+          const [{ count }, books, lessons] = await Promise.all([
+            supabase.from("generation_shares").select("id", { count: "exact", head: true }),
+            booksP,
+            lessonsP,
+          ]);
+          return {
+            upload: books.bookList.length > 0,
+            generate: lessons.length > 0,
+            assign: (count ?? 0) > 0,
+          };
+        })()
+      : Promise.resolve(null),
+  );
+
+  // Beta feedback: whether feedback was already submitted (the widget is
+  // entirely voluntary — it opens only from its button).
+  const feedbackP: Promise<{ submitted: boolean } | null> = started(
+    trialP.then(async ({ isBeta }) => {
+      if (!isBeta) return null;
+      const { data: fb } = await supabase.from("beta_feedback").select("id").maybeSingle();
+      return { submitted: !!fb };
+    }),
+  );
+
+  // Feedback questionnaire (0083): the founder asks a specific account for
+  // feedback from the console, and the OLDEST still-open request (never
+  // answered, snooze expired or never snoozed) renders the modal over this
+  // page. Adults only — requests target teachers/parents, and students never
+  // reach this branch anyway (they returned above), but the role guard makes
+  // that a rule rather than an accident of control flow.
+  //
+  // The tables are service-role-only (no authenticated RLS policies, by
+  // design — all writes go through /api/feedback), so the read uses the admin
+  // client. Best-effort like every other optional surface on this page: a
+  // missing SUPABASE_SERVICE_ROLE_KEY or a not-yet-applied 0083 means no
+  // modal, never a broken dashboard.
+  //
+  // Coexistence with the other blocking surfaces: onboarding role
+  // confirmation, forced password reset and the hat redirect all `redirect()`
+  // BEFORE this point, so this page render proves none of them fired. The one
+  // overlay that could still fight it is the role tour auto-starting for a
+  // user who has never seen it — same check the client provider makes
+  // (shouldAutoStart), evaluated here server-side; the ask waits for the next
+  // visit rather than stacking on the coach-marks.
+  const feedbackAskP: Promise<{ requestId: string } | null> = started(
+    (async () => {
+      if (!(role && role !== "student")) return null;
+      let tourWillAutoStart = false;
+      if (process.env.NEXT_PUBLIC_FEATURE_TOUR === "true") {
+        const def = tourForRole(role);
+        if (def) {
+          // Best-effort (0037): a missing table errors → prog null → the tour
+          // WOULD auto-start, so the ask correctly stays back.
+          const { data: prog } = await supabase
+            .from("user_tour_progress")
+            .select("version, status")
+            .eq("tour_key", def.key)
+            .maybeSingle();
+          const seen = prog
+            ? { version: prog.version as number, status: prog.status as "completed" | "skipped" }
+            : null;
+          tourWillAutoStart = shouldAutoStart(seen, def.version);
+        }
+      }
+      if (tourWillAutoStart) return null;
+      try {
+        const admin = createAdminClient();
+        const { data: req } = await admin
+          .from("feedback_requests")
+          .select("id")
+          .eq("user_id", user.id)
+          .is("responded_at", null)
+          .or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return req?.id ? { requestId: req.id as string } : null;
+      } catch {
+        // No service key in this environment — the ask simply doesn't render.
+        return null;
+      }
+    })(),
+  );
+
+  if (role) {
+    // One-time welcome email for new accounts (claim-first, never throws,
+    // never blocks the render on failure — see utils/lifecycle/welcome.ts).
+    // Started now and finished by after(): it no longer holds the render.
+    try {
+      after(maybeSendWelcomeEmail(createAdminClient(), user.id, user.email));
+    } catch {
+      // best-effort only
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
+      <AppHeader />
+
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        {/* SK first (founder 2026-10-30): the hero renders only when the
+            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
+        <SkHomeHero />
+        <h1 className="text-4xl mb-2">{t.title}</h1>
+        <InkUnderline className="block h-3 w-28 mb-3" />
+        <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
+
+        <Suspense fallback={<Pending />}>
+          <NoticesSection noticesP={noticesP} diaryReachable={diaryReachable} />
+        </Suspense>
+
+        <Suspense fallback={<Pending />}>
+          <GettingStartedSection
+            gettingStartedP={gettingStartedP}
+            userId={user.id}
+            variant={role === "parent" ? "parent" : "teacher"}
+          />
+        </Suspense>
+
+        <Suspense fallback={<Pending />}>
+          <BetaSection trialP={trialP} />
+        </Suspense>
+
+        {/* Fair-use transparency: what this month's plan includes, what's used,
+            what carried over (0047). The DB triggers are the guard. */}
+        <Suspense fallback={<Pending />}>
+          <WithdrawnNotice />
+        </Suspense>
+
+        {lessonTools && (
+          <Suspense fallback={<Pending blocks={1} height="h-12" />}>
+            <FairUseMeter />
+          </Suspense>
+        )}
+
+        {/* The trial's book slot comes from the 0046 ledger (my_trial_book_used):
+            a deleted generated-from book keeps its slot consumed, so live book
+            rows must not decide whether to offer a doomed multi-minute upload. */}
+        {lessonTools ? (
+          <Suspense fallback={<Pending blocks={1} height="h-24" />}>
+            <UploadSection trialP={trialP} booksP={booksP} schoolId={schoolId} t={t} userId={user.id} />
+          </Suspense>
+        ) : (
+          <p className="text-sm text-[#5B6470] mb-6">{t.noBookTools}</p>
+        )}
+
+        <Suspense fallback={<Pending blocks={1} height="h-28" />}>
+          <ClassesSection rostersP={rostersP} trialP={trialP} brandingP={brandingP} role={role} t={t} />
+        </Suspense>
+
+        <Suspense fallback={<Pending />}>
+          <MyBooksSection myBooksP={myBooksP} t={t} unavailable={pdfUnavailable} />
+        </Suspense>
+
+        <Suspense fallback={<Pending blocks={3} height="h-20" />}>
+          <LibrarySection
+            booksP={booksP}
+            lessonsP={lessonsP}
+            classesP={classesP}
+            childTargetsP={childTargetsP}
+            trialP={trialP}
+            fairUseP={fairUseP}
+            gettingStartedP={gettingStartedP}
+            t={t}
+            locale={locale}
+            schoolId={schoolId}
+            userId={user.id}
+            role={role}
+          />
+        </Suspense>
+        {/* Contact SketchCast staff for admin help beyond self-serve (password
+            resets + adding students). Teachers/coordinators here; parents run
+            their own family world, so it's hidden for them. */}
+        {role !== "parent" && (
+          <div className="mt-10">
+            <AdminHelpNote />
+          </div>
+        )}
+      </main>
+
+      <Suspense fallback={<Pending />}>
+        <FeedbackWidgetSection feedbackP={feedbackP} />
+      </Suspense>
+      {platformConsoleEnabled() && <ReportIssueWidget />}
+      <Suspense fallback={<Pending />}>
+        <FeedbackAskSection feedbackAskP={feedbackAskP} t={dict.feedbackAsk} />
+      </Suspense>
+    </div>
+  );
+}
+
+// ── Student home (streams under the header + hero) ──────────────────────────
+
+async function StudentHome({
+  supabase,
+  userId,
+  schoolId,
+  t,
+  dict,
+  noticesP,
+  myBooksP,
+  pdfUnavailable,
+}: {
+  supabase: Db;
+  userId: string;
+  schoolId: string | null;
+  t: LibraryMessages;
+  dict: Dictionary;
+  noticesP: Promise<NoticesData | null>;
+  myBooksP: ReturnType<typeof myBooksStrip>;
+  pdfUnavailable: boolean;
+}) {
+  // Every read the student view needs, in ONE wave (they used to run one after
+  // another). Current progress + submissions are tables from migration 0006;
+  // if not applied yet these error → empty maps → everything shows "not
+  // started". Real chapter titles for headings ("Unit 1: Be a designer" beats
+  // "Chapter 1") — RLS: students in a school can read its books; failure →
+  // graceful fallback. School-linked students get their class timetable; the
+  // header tab is hidden on phones, so surface an in-page link too.
+  const [
+    { data: gensRaw },
+    { data: sharesRaw },
+    { data: progRaw },
+    { data: subsRaw },
+    { data: sBooks },
+    studentTimetableOn,
+    notices,
+    myBooks,
+  ] = await Promise.all([
+    supabase
       .from("generations")
       .select("id, kind, chapter_ref, book_id, params, artifacts(kind, storage_path)")
-      .order("created_at", { ascending: false });
-    const { data: sharesRaw } = await supabase
-      .from("generation_shares")
-      .select("generation_id, due_at, class_id, classes(name)");
+      .order("created_at", { ascending: false }),
+    supabase.from("generation_shares").select("generation_id, due_at, class_id, classes(name)"),
+    supabase.from("student_progress").select("generation_id, status, revision_count, progress_pct"),
+    supabase.from("submissions").select("generation_id"),
+    supabase.from("books").select("id, chapters"),
+    schoolId ? timetableEnabledFor(supabase, schoolId) : Promise.resolve(false),
+    noticesP,
+    myBooksP,
+  ]);
 
-    type ShareRow = { generation_id: string; due_at: string | null; class_id: string | null; classes: { name: string } | null };
-    type ShareInfo = { due: string | null; className: string; classId: string | null };
-    const shareByGen = new Map<string, ShareInfo>();
-    // (to-one embeds come back as objects at runtime; supabase-js types them as arrays)
-    for (const s of (sharesRaw ?? []) as unknown as ShareRow[]) {
-      const gid = s.generation_id;
-      // class_id null = a direct share (parent portal) — group it under a
-      // family heading instead of a class name.
-      const className = s.classes?.name || (s.class_id ? "My class" : "From your parent");
-      const due = s.due_at ?? null;
-      const prev = shareByGen.get(gid);
-      if (!prev) shareByGen.set(gid, { due, className, classId: s.class_id });
-      else if (due && (!prev.due || new Date(due) < new Date(prev.due)))
-        shareByGen.set(gid, { due, className: prev.className, classId: prev.classId });
+  type ShareRow = { generation_id: string; due_at: string | null; class_id: string | null; classes: { name: string } | null };
+  type ShareInfo = { due: string | null; className: string; classId: string | null };
+  const shareByGen = new Map<string, ShareInfo>();
+  // (to-one embeds come back as objects at runtime; supabase-js types them as arrays)
+  for (const s of (sharesRaw ?? []) as unknown as ShareRow[]) {
+    const gid = s.generation_id;
+    // class_id null = a direct share (parent portal) — group it under a
+    // family heading instead of a class name.
+    const className = s.classes?.name || (s.class_id ? "My class" : "From your parent");
+    const due = s.due_at ?? null;
+    const prev = shareByGen.get(gid);
+    if (!prev) shareByGen.set(gid, { due, className, classId: s.class_id });
+    else if (due && (!prev.due || new Date(due) < new Date(prev.due)))
+      shareByGen.set(gid, { due, className: prev.className, classId: prev.classId });
+  }
+
+  const progByGen = new Map<string, { status: string; revisionCount: number; progressPct: number }>();
+  for (const p of (progRaw ?? []) as { generation_id: string; status: string; revision_count: number; progress_pct: number }[])
+    progByGen.set(p.generation_id, {
+      status: p.status,
+      revisionCount: p.revision_count ?? 0,
+      progressPct: p.progress_pct ?? 0,
+    });
+  const submittedSet = new Set((subsRaw ?? []).map((s: { generation_id: string }) => s.generation_id));
+
+  // We sign the student's artifacts with the service role since the storage
+  // policy only lets the owning teacher sign directly.
+  let downloadsReady = true;
+  let admin: ReturnType<typeof createAdminClient> | null = null;
+  try {
+    admin = createAdminClient();
+  } catch {
+    downloadsReady = false;
+  }
+  // ONE batched signer for the whole view (utils/storage/batch-sign): every
+  // row asks for its URLs before its first await, so the view signs in one
+  // round trip instead of a request per file, row after row. Same client —
+  // the service role, only for the paths these assigned rows carry.
+  const adminSign = admin ? batchSigner(admin, "artifacts", 3600) : null;
+  // `download` bakes a Content-Disposition filename into the signed URL —
+  // documents pass one (docDownloadName decides); video URLs and a lesson's
+  // embedded decks must stay untouched. A deck-kind row's own .pptx is not
+  // signed here at all any more: /api/deck/{id} signs it on the click, and
+  // names it there.
+  const sign = async (path: string | null, download?: string): Promise<string | null> => {
+    if (!path || !adminSign) return null;
+    return adminSign(path, download);
+  };
+
+  type GenRow = {
+    id: string;
+    kind: string;
+    chapter_ref: string | null;
+    book_id: string | null;
+    params: { part?: unknown } | null;
+    artifacts: { kind: string; storage_path: string }[];
+  };
+  type Item = StudentItemData & { className: string; chapterRef: string | null; bookId: string | null };
+  const chapterTitle = new Map<string, string>();
+  for (const b of (sBooks ?? []) as { id: string; chapters: { num: number; title: string }[] | null }[]) {
+    for (const c of b.chapters ?? []) {
+      if (c.title && !/^\d+$/.test(c.title.trim())) chapterTitle.set(`${b.id}|${c.num}`, c.title);
     }
-
-    // Current progress + submissions for this student (tables from migration 0006;
-    // if not applied yet these error → empty maps → everything shows "not started").
-    const { data: progRaw } = await supabase
-      .from("student_progress")
-      .select("generation_id, status, revision_count, progress_pct");
-    const progByGen = new Map<string, { status: string; revisionCount: number; progressPct: number }>();
-    for (const p of (progRaw ?? []) as { generation_id: string; status: string; revision_count: number; progress_pct: number }[])
-      progByGen.set(p.generation_id, {
-        status: p.status,
-        revisionCount: p.revision_count ?? 0,
-        progressPct: p.progress_pct ?? 0,
-      });
-    const { data: subsRaw } = await supabase.from("submissions").select("generation_id");
-    const submittedSet = new Set((subsRaw ?? []).map((s: { generation_id: string }) => s.generation_id));
-
-    let downloadsReady = true;
-    let admin: ReturnType<typeof createAdminClient> | null = null;
-    try {
-      admin = createAdminClient();
-    } catch {
-      downloadsReady = false;
-    }
-    // `download` bakes a Content-Disposition filename into the signed URL —
-    // documents pass one (docDownloadName decides); video URLs and a lesson's
-    // embedded decks must stay untouched. A deck-kind row's own .pptx is not
-    // signed here at all any more: /api/deck/{id} signs it on the click, and
-    // names it there.
-    const sign = async (path: string | null, download?: string): Promise<string | null> => {
-      if (!path || !admin) return null;
-      const { data } = await admin.storage
-        .from("artifacts")
-        .createSignedUrl(path, 3600, download ? { download } : undefined);
-      return data?.signedUrl ?? null;
-    };
-
-    type GenRow = {
-      id: string;
-      kind: string;
-      chapter_ref: string | null;
-      book_id: string | null;
-      params: { part?: unknown } | null;
-      artifacts: { kind: string; storage_path: string }[];
-    };
-    type Item = StudentItemData & { className: string; chapterRef: string | null; bookId: string | null };
-    // Real chapter titles for headings ("Unit 1: Be a designer" beats "Chapter 1").
-    // RLS: students in a school can read its books; failure → graceful fallback.
-    const { data: sBooks } = await supabase.from("books").select("id, chapters");
-    const chapterTitle = new Map<string, string>();
-    for (const b of (sBooks ?? []) as { id: string; chapters: { num: number; title: string }[] | null }[]) {
-      for (const c of b.chapters ?? []) {
-        if (c.title && !/^\d+$/.test(c.title.trim())) chapterTitle.set(`${b.id}|${c.num}`, c.title);
-      }
-    }
-    const items: Item[] = [];
-    // (server component, rendered once per request — Date.now is fine here)
-    // eslint-disable-next-line react-hooks/purity
-    const now = Date.now();
-    const gens = (gensRaw ?? []) as GenRow[];
-    // The units whose deck arrives as its own assigned row (kind 'deck'): a
-    // lesson from before 0103 still carries that unit's deck EMBEDDED, and
-    // offering it twice put the recording link (the deck row's) next to one
-    // that records nothing (the lesson row's). Same rule as the Library's.
-    const deckUnits = assignedDeckUnits(gens, (id) => shareByGen.has(id));
-    for (const g of gens) {
-      const info = shareByGen.get(g.id);
-      if (!info || g.kind === "lesson_plan") continue; // only assigned, never the teacher plan
-      const arts = g.artifacts ?? [];
-      const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
-      const prog = progByGen.get(g.id);
-      // Multi-part lessons: every video/deck part, in PART order (Part 1 first).
-      // A deck-kind generation (0103, assignable since 2026-09-04) comes
-      // through the same lines: its one deck_pptx lands in `deck`/`decks`, it
-      // has no video, no docx and no questions_json, so `doc` and `quiz` stay
-      // null and StudentItem renders it as a download alone.
-      // NULL SLOTS ARE KEPT for videos: parts.length must always equal the true
-      // part count — silently dropping a transiently-unsignable URL would shift
-      // part numbering and corrupt the per-part progress math (a student could
-      // even "complete" a lesson with a middle part missing).
-      const videoPaths = arts
-        .filter((a) => a.kind === "video_mp4")
-        .map((a) => a.storage_path)
-        .sort((a, b) => partNum(a) - partNum(b));
-      const videos = await Promise.all(videoPaths.map((p) => sign(p)));
-      // A presentation whose unit has an assigned deck row keeps NO embedded
-      // deck link (studentDeckLinks) — and nothing is signed for it.
-      const deckPaths = studentDeckLinks(
-        g,
-        deckUnits,
-        arts
-          .filter((a) => a.kind === "deck_pptx")
+  }
+  // (server component, rendered once per request — Date.now is fine here)
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const gens = (gensRaw ?? []) as GenRow[];
+  // The units whose deck arrives as its own assigned row (kind 'deck'): a
+  // lesson from before 0103 still carries that unit's deck EMBEDDED, and
+  // offering it twice put the recording link (the deck row's) next to one
+  // that records nothing (the lesson row's). Same rule as the Library's.
+  const deckUnits = assignedDeckUnits(gens, (id) => shareByGen.has(id));
+  // Rows are built concurrently (in their original order), so their URLs
+  // land in the same signing batch.
+  const pending: Promise<Item>[] = [];
+  for (const g of gens) {
+    const info = shareByGen.get(g.id);
+    if (!info || g.kind === "lesson_plan") continue; // only assigned, never the teacher plan
+    pending.push(
+      (async (): Promise<Item> => {
+        const arts = g.artifacts ?? [];
+        const path = (k: string) => arts.find((a) => a.kind === k)?.storage_path ?? null;
+        const prog = progByGen.get(g.id);
+        // Multi-part lessons: every video/deck part, in PART order (Part 1 first).
+        // A deck-kind generation (0103, assignable since 2026-09-04) comes
+        // through the same lines: its one deck_pptx lands in `deck`/`decks`, it
+        // has no video, no docx and no questions_json, so `doc` and `quiz` stay
+        // null and StudentItem renders it as a download alone.
+        // NULL SLOTS ARE KEPT for videos: parts.length must always equal the true
+        // part count — silently dropping a transiently-unsignable URL would shift
+        // part numbering and corrupt the per-part progress math (a student could
+        // even "complete" a lesson with a middle part missing).
+        const videoPaths = arts
+          .filter((a) => a.kind === "video_mp4")
           .map((a) => a.storage_path)
-          .sort((a, b) => partNum(a) - partNum(b)),
-      );
-      // A deck-kind row's .pptx is NEVER signed for the client. The row gets
-      // the ROUTE /api/deck/{id} instead, which re-checks the share and signs
-      // at CLICK time (with the "Deck.pptx" disposition that keeps the click a
-      // download). A signed URL rendered into the page is an hour-long link
-      // the row then has to reason about, and it cannot: a client-router
-      // restore hands the row that cached URL with a fresh mount clock, so an
-      // hour-old link looked new, recorded the item complete, and failed at
-      // storage. Same move `quiz` below already made.
-      //
-      // `downloadsReady` GATES IT. The route mints its URL with a service-role
-      // client of its own, built from the same env this page just failed to
-      // build one from — so when this page has no service role, that route
-      // answers 500 for every click. Rendering the link anyway offered a
-      // live-looking download that saved a JSON error body while the row
-      // recorded "Completed"; without it the row falls back to the
-      // deckWontLoad span (and the page's own downloadsNotReady banner says
-      // why), and records nothing. Every OTHER download on this page is
-      // already absent in that state, because `sign` returns null.
-      //
-      // A presentation's EMBEDDED decks (pre-0103 kits, and the per-part
-      // decks a lesson still carries) keep the bare signed URL they always
-      // had: they record nothing when clicked, so a stale one costs a
-      // refresh and no false completion.
-      const decks =
-        g.kind === "deck"
-          ? deckPaths.length && downloadsReady
-            ? [`/api/deck/${g.id}`]
-            : []
-          : (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);
-      // Per-part lesson units: label carries the part so three assigned
-      // "Lesson"s of one chapter read as Part 1/2/3, not three clones. Both
-      // halves come from the dictionary (the kind via kindLabel — the message
-      // keys ARE the kind strings, `deck` included), so the row reads in the
-      // student's language on the dashboard itself, not only on the adult
-      // surfaces that report on it.
-      const genPart = g.params?.part;
-      const partLabel = typeof genPart === "number" && genPart >= 1 ? ` · ${fmt(t.part, { n: genPart })}` : "";
-      items.push({
-        genId: g.id,
-        kind: g.kind,
-        label: `${kindLabel(t, g.kind)}${partLabel}`,
-        dueAt: info.due,
-        dueOverdue: !!info.due && new Date(info.due).getTime() < now,
-        classId: info.classId,
-        className: info.className,
-        chapterRef: g.chapter_ref ?? null,
-        bookId: g.book_id ?? null,
-        video: videos[0] ?? null,
-        videos,
-        deck: decks[0] ?? null,
-        decks,
+          .sort((a, b) => partNum(a) - partNum(b));
+        const videosP = Promise.all(videoPaths.map((p) => sign(p)));
         // Answer keys stay with the adult (founder, 2026-08-18). Whether a
         // generation's 'docx' is safe to hand a student is decided by ONE
         // proof: the presence of an 'answer_key_docx' SIBLING artifact. The
@@ -458,199 +852,171 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         // up: artifact files live under the ADULT's folder, so a student
         // session cannot sign these paths itself — this line is the only
         // door.
-        doc:
+        const docP =
           g.kind === "exam" || arts.some((a) => a.kind === "answer_key_docx")
-            ? await sign(path("docx"), docDownloadName(g.kind, "docx"))
-            : null,
-        // NOT a signed URL. questions.json IS the marking scheme — the
-        // fill_blank/true_false answers, the match pairs, the subjective
-        // answer_outline — and this line used to hand the person being tested
-        // a service-role signed link to it. A verifier pulled three of those
-        // links from production with no credentials and read the keys back.
-        // The student now gets a route that serves an answer-STRIPPED paper
-        // (src/app/api/quiz/[generationId]) and nothing else; the raw artifact
-        // stays service-role only, exactly like answer_key_docx above.
-        quiz: path("questions_json") ? `/api/quiz/${g.id}` : null,
-        status: (prog?.status as StudentItemData["status"]) ?? null,
-        revisionCount: prog?.revisionCount ?? 0,
-        progressPct: prog?.progressPct ?? 0,
-        submitted: submittedSet.has(g.id),
-      });
-    }
-
-    // Group by class → chapter.
-    const byClass = new Map<string, Map<string, Item[]>>();
-    for (const it of items) {
-      const chKey = it.chapterRef ?? "—";
-      if (!byClass.has(it.className)) byClass.set(it.className, new Map());
-      const chMap = byClass.get(it.className)!;
-      if (!chMap.has(chKey)) chMap.set(chKey, []);
-      chMap.get(chKey)!.push(it);
-    }
-    const groups: StudentClassGroup[] = [...byClass.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([className, chMap]) => ({
-        className,
-        chapters: [...chMap.entries()]
-          .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0))
-          .map(([chKey, its]) => ({
-            key: chKey,
-            // Prefer the chapter's real title ("Unit 1: Be a designer"); the
-            // fallbacks are dictionary words, like the row labels.
-            heading:
-              chKey === "—"
-                ? dict.student.noChapter
-                : chapterTitle.get(`${its[0]?.bookId}|${Number(chKey)}`) ||
-                  fmt(t.chapter, { n: Number(chKey) + 1 }),
-            items: its,
-          })),
-      }));
-
-    // School-linked students get their class timetable; the header tab is
-    // hidden on phones, so surface an in-page link too.
-    const studentTimetableOn = schoolId ? await timetableEnabledFor(supabase, schoolId) : false;
-    return (
-      <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
-        <AppHeader />
-        {/* SK first (founder 2026-10-30): the hero renders only when the
-            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
-        <SkHomeHero className="max-w-7xl mx-auto px-4 sm:px-6 pt-6" />
-        {studentTimetableOn && (
-          <div className="max-w-7xl mx-auto px-6 pt-4 sm:hidden">
-            <Link href="/dashboard/my-timetable" className="chip bg-[#E2F4F1] text-[#0C8175]">
-              📅 My timetable
-            </Link>
-          </div>
-        )}
-        {myBooks.length > 0 && (
-          <div className="max-w-7xl mx-auto px-6 pt-6">
-            <MyBooksStrip tiles={myBooks} t={t.myBooks} unavailable={pdfUnavailable} />
-          </div>
-        )}
-        <div data-tour="assignments">
-          <StudentDashboard
-            groups={groups}
-            studentId={user.id}
-            downloadsReady={downloadsReady}
-            notices={notices}
-          />
-        </div>
-        {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
-      </div>
+            ? sign(path("docx"), docDownloadName(g.kind, "docx"))
+            : Promise.resolve(null);
+        // A presentation whose unit has an assigned deck row keeps NO embedded
+        // deck link (studentDeckLinks) — and nothing is signed for it.
+        const deckPaths = studentDeckLinks(
+          g,
+          deckUnits,
+          arts
+            .filter((a) => a.kind === "deck_pptx")
+            .map((a) => a.storage_path)
+            .sort((a, b) => partNum(a) - partNum(b)),
+        );
+        // A deck-kind row's .pptx is NEVER signed for the client. The row gets
+        // the ROUTE /api/deck/{id} instead, which re-checks the share and signs
+        // at CLICK time (with the "Deck.pptx" disposition that keeps the click a
+        // download). A signed URL rendered into the page is an hour-long link
+        // the row then has to reason about, and it cannot: a client-router
+        // restore hands the row that cached URL with a fresh mount clock, so an
+        // hour-old link looked new, recorded the item complete, and failed at
+        // storage. Same move `quiz` below already made.
+        //
+        // `downloadsReady` GATES IT. The route mints its URL with a service-role
+        // client of its own, built from the same env this page just failed to
+        // build one from — so when this page has no service role, that route
+        // answers 500 for every click. Rendering the link anyway offered a
+        // live-looking download that saved a JSON error body while the row
+        // recorded "Completed"; without it the row falls back to the
+        // deckWontLoad span (and the page's own downloadsNotReady banner says
+        // why), and records nothing. Every OTHER download on this page is
+        // already absent in that state, because `sign` returns null.
+        //
+        // A presentation's EMBEDDED decks (pre-0103 kits, and the per-part
+        // decks a lesson still carries) keep the bare signed URL they always
+        // had: they record nothing when clicked, so a stale one costs a
+        // refresh and no false completion.
+        const decks =
+          g.kind === "deck"
+            ? deckPaths.length && downloadsReady
+              ? [`/api/deck/${g.id}`]
+              : []
+            : (await Promise.all(deckPaths.map((p) => sign(p)))).filter((u): u is string => !!u);
+        const [videos, doc] = await Promise.all([videosP, docP]);
+        // Per-part lesson units: label carries the part so three assigned
+        // "Lesson"s of one chapter read as Part 1/2/3, not three clones. Both
+        // halves come from the dictionary (the kind via kindLabel — the message
+        // keys ARE the kind strings, `deck` included), so the row reads in the
+        // student's language on the dashboard itself, not only on the adult
+        // surfaces that report on it.
+        const genPart = g.params?.part;
+        const partLabel = typeof genPart === "number" && genPart >= 1 ? ` · ${fmt(t.part, { n: genPart })}` : "";
+        return {
+          genId: g.id,
+          kind: g.kind,
+          label: `${kindLabel(t, g.kind)}${partLabel}`,
+          dueAt: info.due,
+          dueOverdue: !!info.due && new Date(info.due).getTime() < now,
+          classId: info.classId,
+          className: info.className,
+          chapterRef: g.chapter_ref ?? null,
+          bookId: g.book_id ?? null,
+          video: videos[0] ?? null,
+          videos,
+          deck: decks[0] ?? null,
+          decks,
+          doc,
+          // NOT a signed URL. questions.json IS the marking scheme — the
+          // fill_blank/true_false answers, the match pairs, the subjective
+          // answer_outline — and this line used to hand the person being tested
+          // a service-role signed link to it. A verifier pulled three of those
+          // links from production with no credentials and read the keys back.
+          // The student now gets a route that serves an answer-STRIPPED paper
+          // (src/app/api/quiz/[generationId]) and nothing else; the raw artifact
+          // stays service-role only, exactly like answer_key_docx above.
+          quiz: path("questions_json") ? `/api/quiz/${g.id}` : null,
+          status: (prog?.status as StudentItemData["status"]) ?? null,
+          revisionCount: prog?.revisionCount ?? 0,
+          progressPct: prog?.progressPct ?? 0,
+          submitted: submittedSet.has(g.id),
+        };
+      })(),
     );
   }
+  const items: Item[] = await Promise.all(pending);
 
-  // ── Teacher / parent library ──────────────────────────────────────────────
-  // (`locale`, `dict` and `t` — the Library's words — were resolved above the
-  // student branch, which shares them.)
-
-  // Parent-role accounts (home educators): the Assign modal targets their
-  // LINKED CHILDREN, not classes — a family has named learners, not a class
-  // register (founder, 2026-08-18). RLS scopes parent_links to the viewer's
-  // own rows; null (teachers/admins) keeps the class mode untouched.
-  type ChildLinkJoin = { child_id: string; profiles: { full_name: string | null; username: string | null } | null };
-  const childTargets =
-    role === "parent"
-      ? (
-          ((await supabase.from("parent_links").select("child_id, profiles:child_id(full_name, username)"))
-            .data ?? []) as unknown as ChildLinkJoin[]
-        ).map((l) => ({
-          id: l.child_id,
-          name: l.profiles?.full_name || l.profiles?.username || dict.school.fallback.child,
-        }))
-      : null;
-
-  // Junk-upload gate: trial accounts get the dialog's stronger "your only
-  // trial kit" line. Detected by plan_tier — my_fair_use() reports it (0047,
-  // SECURITY DEFINER, auth.uid()-scoped) — and deliberately NOT by
-  // beta_tester, which is never cleared on upgrade (known trap). Best-effort:
-  // a pre-0047 DB just means no extra line.
-  let trialTier = false;
-  let premiumVoices = false;
-  {
-    const { data: fu } = await supabase.rpc("my_fair_use");
-    const f = fu as { tier?: string; unlimited?: boolean; premium_voices?: boolean } | null;
-    trialTier = f?.tier === "trial";
-    // Premium voices in the picker follow the DATABASE's one answer — 0105's
-    // premium_voices_allowed(): a paid tier, or a comp override at or above the
-    // threshold that function carries. my_fair_use() reports it as
-    // `premium_voices`; the worker's gate asks the same function, so the picker
-    // and the render agree. Free and trial accounts see free voices; `auto`
-    // still gives everyone the right language.
-    premiumVoices = premiumVoicesFor(f);
+  // Group by class → chapter.
+  const byClass = new Map<string, Map<string, Item[]>>();
+  for (const it of items) {
+    const chKey = it.chapterRef ?? "—";
+    if (!byClass.has(it.className)) byClass.set(it.className, new Map());
+    const chMap = byClass.get(it.className)!;
+    if (!chMap.has(chKey)) chMap.set(chKey, []);
+    chMap.get(chKey)!.push(it);
   }
+  const groups: StudentClassGroup[] = [...byClass.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([className, chMap]) => ({
+      className,
+      chapters: [...chMap.entries()]
+        .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0))
+        .map(([chKey, its]) => ({
+          key: chKey,
+          // Prefer the chapter's real title ("Unit 1: Be a designer"); the
+          // fallbacks are dictionary words, like the row labels.
+          heading:
+            chKey === "—"
+              ? dict.student.noChapter
+              : chapterTitle.get(`${its[0]?.bookId}|${Number(chKey)}`) ||
+                fmt(t.chapter, { n: Number(chKey) + 1 }),
+          items: its,
+        })),
+    }));
 
-  // Teacher surfaces show what the person OWNS. Admins/coordinators can read
-  // school-wide rows under RLS, so filter by ownership explicitly — their
-  // Library is their teacher hat, not the school view (that's /dashboard/school).
-  // Simple list for the assignment dropdown — always works (no 0005 columns).
-  const { data: classesRaw } = await supabase
-    .from("classes")
-    .select("id, name, grade")
-    .eq("teacher_id", user.id)
-    .order("created_at", { ascending: false });
-  const classes = (classesRaw ?? []) as { id: string; name: string; grade: string | null }[];
+  return (
+    <>
+      {studentTimetableOn && (
+        <div className="max-w-7xl mx-auto px-6 pt-4 sm:hidden">
+          <Link href="/dashboard/my-timetable" className="chip bg-[#E2F4F1] text-[#0C8175]">
+            📅 My timetable
+          </Link>
+        </div>
+      )}
+      {myBooks.length > 0 && (
+        <div className="max-w-7xl mx-auto px-6 pt-6">
+          <MyBooksStrip tiles={myBooks} t={t.myBooks} unavailable={pdfUnavailable} />
+        </div>
+      )}
+      <div data-tour="assignments">
+        <StudentDashboard
+          groups={groups}
+          studentId={userId}
+          downloadsReady={downloadsReady}
+          notices={notices}
+        />
+      </div>
+    </>
+  );
+}
 
-  // Roster for the Classes card. Reads migration 0005's profile columns + policy;
-  // if that migration isn't applied yet the query errors and we degrade to [] so
-  // the rest of the dashboard keeps working.
-  const { data: rostersRaw } = await supabase
-    .from("classes")
-    .select("id, name, grade, join_code, enrollments(profiles(id, full_name, username, parent_email))")
-    .eq("teacher_id", user.id)
-    .order("created_at", { ascending: false });
-  type RosterRaw = {
-    id: string;
-    name: string;
-    grade: string | null;
-    join_code: string;
-    enrollments: { profiles: RosterStudent | null }[];
-  };
-  const classRosters: ClassRoster[] = ((rostersRaw ?? []) as unknown as RosterRaw[]).map((c) => ({
-    id: c.id,
-    name: c.name,
-    grade: c.grade,
-    join_code: c.join_code,
-    students: (c.enrollments ?? []).map((e) => e.profiles).filter((p): p is RosterStudent => !!p),
-  }));
+// ── Library loaders ─────────────────────────────────────────────────────────
 
-  // Letterhead branding is a teacher/school affordance. Parent accounts (home
-  // educators included) don't get the card (founder, 2026-08-18) — so skip the
-  // reads too. Gated on ROLE, not hat: a teacher-who-is-a-parent keeps theirs.
-  const { data: brandingRow } =
-    role === "parent"
-      ? { data: null }
-      : await supabase.from("branding").select("docx_path, pptx_path").eq("owner_id", user.id).maybeSingle();
-
-  // A stored path is not proof of a usable template. Before upload-time
-  // validation existed a teacher uploaded JPEGs as their .docx/.pptx letterheads
-  // and the card still read "templates set", so they had no way to tell why
-  // their documents came out unbranded. Check what is actually in storage and
-  // treat an impossible mimetype as "not set".
-  const brandingFiles = brandingRow
-    ? (await supabase.storage.from("uploads").list(`${user.id}/branding`)).data ?? []
-    : [];
-  const brandingUsable = (path: string | null | undefined) => {
-    if (!path) return false;
-    const name = path.split("/").pop();
-    const obj = brandingFiles.find((f) => f.name === name);
-    // Missing metadata is not evidence of a bad file — only a positively
-    // impossible type hides the template.
-    return isPossiblyOfficeMimetype(obj?.metadata?.mimetype as string | undefined);
-  };
-
+/** The teacher's books, then the school shelf merged in, with languages and
+ * signed cover URLs. Two waves: (own books ‖ shelf ‖ timetable ‖ classes),
+ * then (shelf owners ‖ languages ‖ covers, one signing batch). */
+async function loadBooks(
+  supabase: Db,
+  userId: string,
+  schoolId: string | null,
+  classesP: Promise<ClassOption[]>,
+  userSign: Signer,
+) {
   // `health` (migration 0021) is optional — degrade to the health-less select
   // so the library never breaks on a not-yet-applied migration.
   const bookCols = "id, title, author, owner_id, storage_path, status, chapters, grade, subject, cover_path, created_at";
-  const withHealth = await supabase
-    .from("books")
-    .select(`${bookCols}, health`)
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false });
-  const booksRes = withHealth.error
-    ? await supabase.from("books").select(bookCols).eq("owner_id", user.id).order("created_at", { ascending: false })
-    : withHealth;
-  const bookList = (booksRes.data ?? []) as unknown as Book[];
+  const ownP = (async () => {
+    const withHealth = await supabase
+      .from("books")
+      .select(`${bookCols}, health`)
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: false });
+    return withHealth.error
+      ? await supabase.from("books").select(bookCols).eq("owner_id", userId).order("created_at", { ascending: false })
+      : withHealth;
+  })();
 
   // ── The school shelf (0070) ─────────────────────────────────────────────────
   // A school uploads its textbooks once and everyone works from them. The read
@@ -663,78 +1029,72 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // `shelfRest` and waits behind a disclosure — nothing is hidden, it is only
   // ordered. Best-effort throughout: this is an addition to a working Library
   // and must never be the reason it fails to render.
+  const shelfP = schoolId
+    ? supabase
+        .from("books")
+        .select(`${bookCols}, health`)
+        .eq("school_id", schoolId)
+        .neq("owner_id", userId)
+        .order("created_at", { ascending: false })
+    : null;
+  // What this teacher actually teaches — their own classes' grades and the
+  // subjects they are timetabled for. Nobody maintains this; it is already
+  // true. A teacher with neither is shown the whole shelf (see splitShelf).
+  // Read alongside the shelf rather than after it.
+  const slotsP = schoolId ? supabase.from("timetable_slots").select("subject").eq("teacher_id", userId) : null;
+
+  const [booksRes, shelfRes, slotsRes, classes] = await Promise.all([ownP, shelfP, slotsP, classesP]);
+  const bookList = (booksRes.data ?? []) as unknown as Book[];
+
   const shelfOwners = new Map<string, string>();
   // Ids of school books this teacher does not teach. They ride the SAME
   // pipeline as everything else — covers, languages, rows — and are only
   // separated at the very end, when the groups are laid out.
   const shelfRestIds = new Set<string>();
-  if (schoolId) {
-    const { data: shelfRaw } = await supabase
-      .from("books")
-      .select(`${bookCols}, health`)
-      .eq("school_id", schoolId)
-      .neq("owner_id", user.id)
-      .order("created_at", { ascending: false });
-    const shelf = (shelfRaw ?? []) as unknown as Book[];
-    if (shelf.length) {
-      // What this teacher actually teaches — their own classes' grades and the
-      // subjects they are timetabled for. Nobody maintains this; it is already
-      // true. A teacher with neither is shown the whole shelf (see splitShelf).
-      const { data: slots } = await supabase
-        .from("timetable_slots")
-        .select("subject")
-        .eq("teacher_id", user.id);
-      const { relevant, rest } = splitShelf(shelf, {
-        grades: classes.map((c) => c.grade).filter((g): g is string => !!g),
-        subjects: [
-          ...new Set(
-            ((slots ?? []) as { subject: string | null }[])
-              .map((s) => s.subject)
-              .filter((s): s is string => !!s),
-          ),
-        ],
-      });
-      // Who to ask about a book you did not upload.
-      const ownerIds = [...new Set(shelf.map((b) => b.owner_id))];
-      const { data: owners } = await supabase
-        .from("profiles")
-        .select("id, full_name, username")
-        .in("id", ownerIds);
-      for (const o of (owners ?? []) as { id: string; full_name: string | null; username: string | null }[]) {
-        const name = o.full_name || o.username;
-        if (name) shelfOwners.set(o.id, name);
-      }
-      for (const b of rest) shelfRestIds.add(b.id);
-      bookList.push(...relevant, ...rest);
-    }
+  const shelf = (shelfRes?.data ?? []) as unknown as Book[];
+  let ownerIds: string[] = [];
+  if (shelf.length) {
+    const { relevant, rest } = splitShelf(shelf, {
+      grades: classes.map((c) => c.grade).filter((g): g is string => !!g),
+      subjects: [
+        ...new Set(
+          ((slotsRes?.data ?? []) as { subject: string | null }[])
+            .map((s) => s.subject)
+            .filter((s): s is string => !!s),
+        ),
+      ],
+    });
+    // Who to ask about a book you did not upload.
+    ownerIds = [...new Set(shelf.map((b) => b.owner_id))];
+    for (const b of rest) shelfRestIds.add(b.id);
+    bookList.push(...relevant, ...rest);
   }
 
-  // Detected book languages (0056) — separate best-effort query so a
-  // not-yet-run migration can never break the Library.
+  const [ownersRes, langsRes, covers] = await Promise.all([
+    ownerIds.length ? supabase.from("profiles").select("id, full_name, username").in("id", ownerIds) : null,
+    // Detected book languages (0056) — separate best-effort query so a
+    // not-yet-run migration can never break the Library.
+    bookList.length ? supabase.from("books").select("id, language").in("id", bookList.map((b) => b.id)) : null,
+    // Signed URLs for cover thumbnails — one batch with everything else this
+    // tick signs as the user.
+    Promise.all(bookList.map(async (b) => [b.id, b.cover_path ? await userSign(b.cover_path) : null] as const)),
+  ]);
+  for (const o of (ownersRes?.data ?? []) as { id: string; full_name: string | null; username: string | null }[]) {
+    const name = o.full_name || o.username;
+    if (name) shelfOwners.set(o.id, name);
+  }
   const bookLangs = new Map<string, string>();
-  if (bookList.length) {
-    const { data: bl } = await supabase
-      .from("books")
-      .select("id, language")
-      .in("id", bookList.map((b) => b.id));
-    for (const b of (bl ?? []) as { id: string; language: string | null }[]) {
-      if (b.language) bookLangs.set(b.id, b.language);
-    }
+  for (const b of (langsRes?.data ?? []) as { id: string; language: string | null }[]) {
+    if (b.language) bookLangs.set(b.id, b.language);
   }
+  const coverUrls: Record<string, string | null> = Object.fromEntries(covers);
+  return { bookList, shelfOwners, shelfRestIds, bookLangs, coverUrls };
+}
 
-  // Signed URLs for cover thumbnails.
-  const coverUrls: Record<string, string | null> = {};
-  await Promise.all(
-    bookList.map(async (b) => {
-      if (b.cover_path) {
-        const { data } = await supabase.storage.from("artifacts").createSignedUrl(b.cover_path, 3600);
-        coverUrls[b.id] = data?.signedUrl ?? null;
-      } else {
-        coverUrls[b.id] = null;
-      }
-    }),
-  );
-
+/** Every generation the teacher owns, with signed download URLs — all of them
+ * signed in batches (one request per download name per signer), not one
+ * request per file. */
+async function loadLessons(supabase: Db, user: User, t: LibraryMessages, userSign: Signer) {
   const { data: gensRaw } = await supabase
     .from("generations")
     .select(
@@ -790,21 +1150,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   } catch {
     copySigner = null; // no service role locally: copies simply show no links
   }
+  const copySign = copySigner ? batchSigner(copySigner, "artifacts", 3600) : null;
 
   // Build signed download URLs for finished artifacts.
-  const lessons = await Promise.all(
+  return Promise.all(
     ((gensRaw ?? []) as unknown as LessonRow[]).map(async (g) => {
-      const store = copySigner && isCatalogueCopy({ params: g.params }) ? copySigner : supabase;
+      const sign = copySign && isCatalogueCopy({ params: g.params }) ? copySign : userSign;
       const arts = await Promise.all(
         (g.artifacts ?? []).map(async (a) => {
           // Documents get a human download filename ("Test Paper.docx", not
           // the storage basename); everything else signs untouched — a
           // download disposition on a video URL would break in-tab playback.
           const dl = docDownloadName(g.kind, a.kind);
-          const { data } = await store.storage
-            .from("artifacts")
-            .createSignedUrl(a.storage_path, 3600, dl ? { download: dl } : undefined);
-          return { kind: a.kind as string, path: a.storage_path, url: data?.signedUrl ?? null };
+          return { kind: a.kind as string, path: a.storage_path, url: await sign(a.storage_path, dl) };
         }),
       );
       // Multi-part lessons: a long chapter renders as several ~15-min videos
@@ -820,14 +1178,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       // `videos` — a path that fails to sign keeps its slot as null rather than
       // being dropped, so Save never lands under the wrong part's Watch.
       const videoDownloads: (string | null)[] = mayDownloadVideo
-        ? await Promise.all(
-            videoArts.map(async (a, i) => {
-              const { data } = await store.storage
-                .from("artifacts")
-                .createSignedUrl(a.path, 3600, { download: videoDownloadName(i, videoArts.length) });
-              return data?.signedUrl ?? null;
-            }),
-          )
+        ? await Promise.all(videoArts.map((a, i) => sign(a.path, videoDownloadName(i, videoArts.length))))
         : [];
       const decks = arts
         .filter((a) => a.kind === "deck_pptx" && a.url)
@@ -860,6 +1211,162 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       };
     }),
   );
+}
+
+// ── Library sections ────────────────────────────────────────────────────────
+
+async function NoticesSection({
+  noticesP,
+  diaryReachable,
+}: {
+  noticesP: Promise<NoticesData | null>;
+  diaryReachable: boolean;
+}) {
+  const notices = await noticesP;
+  if (!notices) return null;
+  return (
+    <>
+      <NoticeBanner notices={notices.featured} />
+      {/* The browsable list lives on the Diary now — unless this reader has
+          no Diary to go to. The list is the only place a notice can be
+          SIGNED, and staff are asked to sign every staff notice, so it must
+          not vanish just because FEATURE_DIARY is off. */}
+      {!diaryReachable && <NoticesCard notices={notices.upcoming} />}
+    </>
+  );
+}
+
+async function GettingStartedSection({
+  gettingStartedP,
+  userId,
+  variant,
+}: {
+  gettingStartedP: Promise<GettingStartedSteps | null>;
+  userId: string;
+  variant: "parent" | "teacher";
+}) {
+  const steps = await gettingStartedP;
+  return steps ? <GettingStarted userId={userId} variant={variant} steps={steps} /> : null;
+}
+
+async function BetaSection({ trialP }: { trialP: Promise<Trial> }) {
+  const { isBeta } = await trialP;
+  return isBeta ? <BetaBanner /> : null;
+}
+
+async function UploadSection({
+  trialP,
+  booksP,
+  schoolId,
+  t,
+  userId,
+}: {
+  trialP: Promise<Trial>;
+  booksP: ReturnType<typeof loadBooks>;
+  schoolId: string | null;
+  t: LibraryMessages;
+  userId: string;
+}) {
+  const { isBeta, trialBookUsed } = await trialP;
+  // Only a trial account whose ledger is still clear needs the book list to
+  // decide — everyone else gets the upload card without waiting for it.
+  const betaBlocked =
+    isBeta && (trialBookUsed >= 1 || (await booksP).bookList.some((b) => b.owner_id === userId));
+  return <UploadBook schoolId={schoolId} t={t} betaBlocked={betaBlocked} />;
+}
+
+async function ClassesSection({
+  rostersP,
+  trialP,
+  brandingP,
+  role,
+  t,
+}: {
+  rostersP: Promise<ClassRoster[]>;
+  trialP: Promise<Trial>;
+  brandingP: Promise<{ hasDocx: boolean; hasPptx: boolean }>;
+  role: string | null;
+  t: LibraryMessages;
+}) {
+  const [classRosters, { isBeta }, branding] = await Promise.all([rostersP, trialP, brandingP]);
+  // Beta state: remaining student slots.
+  let trialSlotsLeft: number | null = null;
+  if (isBeta) {
+    const distinctStudents = new Set(
+      classRosters.flatMap((c) => c.students.map((s) => s.username || s.full_name || "")),
+    ).size;
+    trialSlotsLeft = Math.max(0, 2 - distinctStudents);
+  }
+  return (
+    <>
+      <div data-tour="classes">
+        <ClassesCard classes={classRosters} t={t} trialSlotsLeft={trialSlotsLeft} />
+      </div>
+
+      {/* Teachers/schools only — parents never see the letterhead card. The
+          school-admin tour's branding step tolerates the absent marker. */}
+      {role !== "parent" && (
+        <div data-tour="branding">
+          <BrandingCard hasDocx={branding.hasDocx} hasPptx={branding.hasPptx} t={t} />
+        </div>
+      )}
+    </>
+  );
+}
+
+async function MyBooksSection({
+  myBooksP,
+  t,
+  unavailable,
+}: {
+  myBooksP: ReturnType<typeof myBooksStrip>;
+  t: LibraryMessages;
+  unavailable: boolean;
+}) {
+  const myBooks = await myBooksP;
+  return <MyBooksStrip tiles={myBooks} t={t.myBooks} unavailable={unavailable} />;
+}
+
+async function LibrarySection({
+  booksP,
+  lessonsP,
+  classesP,
+  childTargetsP,
+  trialP,
+  fairUseP,
+  gettingStartedP,
+  t,
+  locale,
+  schoolId,
+  userId,
+  role,
+}: {
+  booksP: ReturnType<typeof loadBooks>;
+  lessonsP: ReturnType<typeof loadLessons>;
+  classesP: Promise<ClassOption[]>;
+  childTargetsP: Promise<ChildTarget[] | null>;
+  trialP: Promise<Trial>;
+  fairUseP: Promise<FairUse>;
+  gettingStartedP: Promise<GettingStartedSteps | null>;
+  t: LibraryMessages;
+  locale: Locale;
+  schoolId: string | null;
+  userId: string;
+  role: string | null;
+}) {
+  const [
+    { bookList, shelfOwners, shelfRestIds, bookLangs, coverUrls },
+    lessons,
+    classes,
+    childTargets,
+    { isBeta, trialPin },
+    { trialTier, premiumVoices },
+    gettingStarted,
+  ] = await Promise.all([booksP, lessonsP, classesP, childTargetsP, trialP, fairUseP, gettingStartedP]);
+  // The pinned unit: the DB's own answer via my_trial_pin — display-list
+  // derivation broke on created_at ties and the 1000-row cap.
+  const betaPinned = trialPin;
+
   type Lesson = (typeof lessons)[number];
 
   // Latest generation for a book + chapter + kind (gensRaw is newest-first).
@@ -926,7 +1433,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       subject: b.subject,
       language: bookLangs.get(b.id) ?? null,
       // Non-null only for a school book someone else uploaded.
-      sharedBy: b.owner_id === user.id ? null : shelfOwners.get(b.owner_id) ?? null,
+      sharedBy: b.owner_id === userId ? null : shelfOwners.get(b.owner_id) ?? null,
       coverUrl: coverUrls[b.id] ?? null,
       storagePath: b.storage_path,
       createdAt: b.created_at,
@@ -1070,22 +1577,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     };
   });
 
-  // Beta state: the pinned unit (the DB's own answer via my_trial_pin —
-  // display-list derivation broke on created_at ties and the 1000-row cap),
-  // remaining student slots, and whether feedback was already submitted (the
-  // widget is entirely voluntary — it opens only from its button).
-  const betaPinned = trialPin;
-  let trialSlotsLeft: number | null = null;
-  let feedback: { submitted: boolean } | null = null;
-  if (isBeta) {
-    const distinctStudents = new Set(
-      classRosters.flatMap((c) => c.students.map((s) => s.username || s.full_name || "")),
-    ).size;
-    trialSlotsLeft = Math.max(0, 2 - distinctStudents);
-    const { data: fb } = await supabase.from("beta_feedback").select("id").maybeSingle();
-    feedback = { submitted: !!fb };
-  }
-
   // Group the library Grade → Subject (auto-detected; "Other / General" when unknown).
   // The school books this teacher does not teach are grouped the same way, but
   // into their own list — shown behind a disclosure so the shelf is complete
@@ -1107,206 +1598,86 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const groups = groupBy(bookRows.filter((br) => !shelfRestIds.has(br.id)));
   const shelfGroups = groupBy(bookRows.filter((br) => shelfRestIds.has(br.id)));
 
-  // Getting-started stepper (inline onboarding, 0064) — new joiners only. Show
-  // ONLY when the flag is on, this account has book tools, and the dismissal
-  // column reads back a genuine NULL (a pre-migration error → column undefined →
-  // hidden, never a broken card; existing users were backfilled as dismissed).
-  let gettingStarted: { upload: boolean; generate: boolean; assign: boolean } | null = null;
-  if (gettingStartedEnabled() && lessonTools && role !== "student") {
-    const { data: gs, error: gsErr } = await supabase
-      .from("profiles")
-      .select("getting_started_dismissed_at")
-      .eq("id", user.id)
-      .maybeSingle();
-    const dismissedAt = (gs as { getting_started_dismissed_at?: string | null } | null)?.getting_started_dismissed_at;
-    if (!gsErr && gs && dismissedAt == null) {
-      // Step 3 = "has assigned anything". One cheap head count of the shares the
-      // user can see (RLS scopes to their own); best-effort → not-done on error.
-      const { count } = await supabase.from("generation_shares").select("id", { count: "exact", head: true });
-      gettingStarted = {
-        upload: bookList.length > 0,
-        generate: lessons.length > 0,
-        assign: (count ?? 0) > 0,
-      };
-    }
-  }
-
-  // Feedback questionnaire (0083): the founder asks a specific account for
-  // feedback from the console, and the OLDEST still-open request (never
-  // answered, snooze expired or never snoozed) renders the modal over this
-  // page. Adults only — requests target teachers/parents, and students never
-  // reach this branch anyway (they returned above), but the role guard makes
-  // that a rule rather than an accident of control flow.
-  //
-  // The tables are service-role-only (no authenticated RLS policies, by
-  // design — all writes go through /api/feedback), so the read uses the admin
-  // client. Best-effort like every other optional surface on this page: a
-  // missing SUPABASE_SERVICE_ROLE_KEY or a not-yet-applied 0083 means no
-  // modal, never a broken dashboard.
-  //
-  // Coexistence with the other blocking surfaces: onboarding role
-  // confirmation, forced password reset and the hat redirect all `redirect()`
-  // BEFORE this point, so this page render proves none of them fired. The one
-  // overlay that could still fight it is the role tour auto-starting for a
-  // user who has never seen it — same check the client provider makes
-  // (shouldAutoStart), evaluated here server-side; the ask waits for the next
-  // visit rather than stacking on the coach-marks.
-  let feedbackAsk: { requestId: string } | null = null;
-  if (role && role !== "student") {
-    let tourWillAutoStart = false;
-    if (process.env.NEXT_PUBLIC_FEATURE_TOUR === "true") {
-      const def = tourForRole(role);
-      if (def) {
-        // Best-effort (0037): a missing table errors → prog null → the tour
-        // WOULD auto-start, so the ask correctly stays back.
-        const { data: prog } = await supabase
-          .from("user_tour_progress")
-          .select("version, status")
-          .eq("tour_key", def.key)
-          .maybeSingle();
-        const seen = prog
-          ? { version: prog.version as number, status: prog.status as "completed" | "skipped" }
-          : null;
-        tourWillAutoStart = shouldAutoStart(seen, def.version);
-      }
-    }
-    if (!tourWillAutoStart) {
-      try {
-        const admin = createAdminClient();
-        const { data: req } = await admin
-          .from("feedback_requests")
-          .select("id")
-          .eq("user_id", user.id)
-          .is("responded_at", null)
-          .or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        if (req?.id) feedbackAsk = { requestId: req.id as string };
-      } catch {
-        // No service key in this environment — the ask simply doesn't render.
-      }
-    }
-    // One-time welcome email for new accounts (claim-first, never throws,
-    // never blocks the render on failure — see utils/lifecycle/welcome.ts).
-    try {
-      await maybeSendWelcomeEmail(createAdminClient(), user.id, user.email);
-    } catch {
-      // best-effort only
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
+    <>
       <AutoRefresh active={hasPending} />
-      <AppHeader />
-
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* SK first (founder 2026-10-30): the hero renders only when the
-            dashboard layout's skShellEnabledFor() passed (sk-home.tsx). */}
-        <SkHomeHero />
-        <h1 className="text-4xl mb-2">{t.title}</h1>
-        <InkUnderline className="block h-3 w-28 mb-3" />
-        <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
-
-        {notices && <NoticeBanner notices={notices.featured} />}
-        {/* The browsable list lives on the Diary now — unless this reader has
-            no Diary to go to. The list is the only place a notice can be
-            SIGNED, and staff are asked to sign every staff notice, so it must
-            not vanish just because FEATURE_DIARY is off. */}
-        {notices && !diaryReachable && <NoticesCard notices={notices.upcoming} />}
-
-        {gettingStarted && (
-          <GettingStarted
-            userId={user.id}
-            variant={role === "parent" ? "parent" : "teacher"}
-            steps={gettingStarted}
-          />
-        )}
-
-        {isBeta && <BetaBanner />}
-
-        {/* Fair-use transparency: what this month's plan includes, what's used,
-            what carried over (0047). The DB triggers are the guard. */}
-        <WithdrawnNotice />
-
-        {lessonTools && <FairUseMeter />}
-
-        {/* The trial's book slot comes from the 0046 ledger (my_trial_book_used):
-            a deleted generated-from book keeps its slot consumed, so live book
-            rows must not decide whether to offer a doomed multi-minute upload. */}
-        {lessonTools ? (
-          <UploadBook
-            schoolId={schoolId}
-            t={t}
-            betaBlocked={isBeta && (trialBookUsed >= 1 || bookList.some((b) => b.owner_id === user.id))}
-          />
-        ) : (
-          <p className="text-sm text-[#5B6470] mb-6">{t.noBookTools}</p>
-        )}
-
-        <div data-tour="classes">
-          <ClassesCard classes={classRosters} t={t} trialSlotsLeft={trialSlotsLeft} />
-        </div>
-
-        {/* Teachers/schools only — parents never see the letterhead card. The
-            school-admin tour's branding step tolerates the absent marker. */}
-        {role !== "parent" && (
-          <div data-tour="branding">
-            <BrandingCard
-              hasDocx={brandingUsable(brandingRow?.docx_path)}
-              hasPptx={brandingUsable(brandingRow?.pptx_path)}
-              t={t}
-            />
-          </div>
-        )}
-
-        <MyBooksStrip tiles={myBooks} t={t.myBooks} unavailable={pdfUnavailable} />
-
-        {bookList.length === 0 ? (
-          gettingStarted ? (
-            // The stepper above already walks the journey — keep this slim so the
-            // same three steps don't appear twice on one screen.
-            <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-8 text-center text-[#5B6470]">
-              <EmptyBooks />
-              <p className="font-medium text-[#14181F] mt-2">{t.empty.withStepper}</p>
-            </div>
-          ) : (
-          <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
+      {bookList.length === 0 ? (
+        gettingStarted ? (
+          // The stepper above already walks the journey — keep this slim so the
+          // same three steps don't appear twice on one screen.
+          <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-8 text-center text-[#5B6470]">
             <EmptyBooks />
-            <p className="font-medium text-[#14181F] mb-4">{t.empty.title}</p>
-            <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
-                <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">1</span>
-                {t.empty.step1}
-              </span>
-              <span className="rtl-flip text-[#98A0A9]">→</span>
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
-                <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">2</span>
-                {t.empty.step2}
-              </span>
-              <span className="rtl-flip text-[#98A0A9]">→</span>
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
-                <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">3</span>
-                {t.empty.step3}
-              </span>
-            </div>
-            <p className="text-xs text-[#98A0A9] mt-4">{t.empty.note}</p>
+            <p className="font-medium text-[#14181F] mt-2">{t.empty.withStepper}</p>
           </div>
-          )
         ) : (
-          <div className="space-y-8" data-tour="book-card">
-            {groups.map((g) => (
-              <section key={`${g.grade}-${g.subject}`}>
+        <div className="rounded-xl border border-dashed border-[#D2D6D1] bg-white p-10 text-center text-[#5B6470]">
+          <EmptyBooks />
+          <p className="font-medium text-[#14181F] mb-4">{t.empty.title}</p>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
+              <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">1</span>
+              {t.empty.step1}
+            </span>
+            <span className="rtl-flip text-[#98A0A9]">→</span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
+              <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">2</span>
+              {t.empty.step2}
+            </span>
+            <span className="rtl-flip text-[#98A0A9]">→</span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#F5F6F3] px-3 py-1.5">
+              <span className="h-5 w-5 rounded-full bg-[#1FB8A6] text-white text-xs font-medium inline-flex items-center justify-center">3</span>
+              {t.empty.step3}
+            </span>
+          </div>
+          <p className="text-xs text-[#98A0A9] mt-4">{t.empty.note}</p>
+        </div>
+        )
+      ) : (
+        <div className="space-y-8" data-tour="book-card">
+          {groups.map((g) => (
+            <section key={`${g.grade}-${g.subject}`}>
+              <div className="flex items-center gap-2 mb-2.5 px-1">
+                <h2 className="chip font-sans bg-[#E2F4F1] text-[#0C8175]">{g.grade}</h2>
+                <span className="text-sm font-medium text-[#5B6470]">{g.subject}</span>
+              </div>
+              <BookTable
+                books={g.books}
+                schoolId={schoolId}
+                classes={classes}
+                childTargets={childTargets}
+                t={t}
+                lang={htmlLang(locale)}
+                beta={isBeta ? { pinned: betaPinned } : null}
+                examEnabled={examGenerationEnabled()}
+                trial={trialTier}
+                premiumVoices={premiumVoices}
+              />
+            </section>
+          ))}
+        </div>
+      )}
+
+      {/* The rest of the school's shelf (0070). Closed by default and never
+          filtered away: the relevance rule upstream decides what a teacher
+          sees FIRST, not what they are allowed to use, so being wrong about
+          what someone teaches costs one click and not a missing book. */}
+      {shelfGroups.length > 0 && (
+        <details className="mt-10 group">
+          <summary className="cursor-pointer text-sm text-[#5B6470] hover:text-[#14181F] select-none">
+            <span className="rtl-flip inline-block me-1.5 transition-transform group-open:rotate-90">▶</span>
+            {fmt(t.shelf.alsoInSchool, { n: shelfGroups.reduce((n, g) => n + g.books.length, 0) })}
+          </summary>
+          <div className="space-y-8 mt-5">
+            {shelfGroups.map((g) => (
+              <section key={`shelf-${g.grade}-${g.subject}`}>
                 <div className="flex items-center gap-2 mb-2.5 px-1">
-                  <h2 className="chip font-sans bg-[#E2F4F1] text-[#0C8175]">{g.grade}</h2>
+                  <h2 className="chip font-sans bg-[#F5F6F3] text-[#5B6470]">{g.grade}</h2>
                   <span className="text-sm font-medium text-[#5B6470]">{g.subject}</span>
                 </div>
                 <BookTable
                   books={g.books}
                   schoolId={schoolId}
                   classes={classes}
-                  childTargets={childTargets}
                   t={t}
                   lang={htmlLang(locale)}
                   beta={isBeta ? { pinned: betaPinned } : null}
@@ -1317,62 +1688,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               </section>
             ))}
           </div>
-        )}
+        </details>
+      )}
 
-        {/* The rest of the school's shelf (0070). Closed by default and never
-            filtered away: the relevance rule upstream decides what a teacher
-            sees FIRST, not what they are allowed to use, so being wrong about
-            what someone teaches costs one click and not a missing book. */}
-        {shelfGroups.length > 0 && (
-          <details className="mt-10 group">
-            <summary className="cursor-pointer text-sm text-[#5B6470] hover:text-[#14181F] select-none">
-              <span className="rtl-flip inline-block me-1.5 transition-transform group-open:rotate-90">▶</span>
-              {fmt(t.shelf.alsoInSchool, { n: shelfGroups.reduce((n, g) => n + g.books.length, 0) })}
-            </summary>
-            <div className="space-y-8 mt-5">
-              {shelfGroups.map((g) => (
-                <section key={`shelf-${g.grade}-${g.subject}`}>
-                  <div className="flex items-center gap-2 mb-2.5 px-1">
-                    <h2 className="chip font-sans bg-[#F5F6F3] text-[#5B6470]">{g.grade}</h2>
-                    <span className="text-sm font-medium text-[#5B6470]">{g.subject}</span>
-                  </div>
-                  <BookTable
-                    books={g.books}
-                    schoolId={schoolId}
-                    classes={classes}
-                    t={t}
-                    lang={htmlLang(locale)}
-                    beta={isBeta ? { pinned: betaPinned } : null}
-                    examEnabled={examGenerationEnabled()}
-                    trial={trialTier}
-                    premiumVoices={premiumVoices}
-                  />
-                </section>
-              ))}
-            </div>
-          </details>
-        )}
-
-        <BooklessKits
-          lessons={lessons.filter((l) => l.bookId === null)}
-          classes={classes}
-          childTargets={childTargets}
-          kitsHref={catalogueTabEnabled() && role !== "student" ? "/dashboard/kits" : null}
-          t={t}
-        />
-        {/* Contact SketchCast staff for admin help beyond self-serve (password
-            resets + adding students). Teachers/coordinators here; parents run
-            their own family world, so it's hidden for them. */}
-        {role !== "parent" && (
-          <div className="mt-10">
-            <AdminHelpNote />
-          </div>
-        )}
-      </main>
-
-      {feedback && <FeedbackWidget submitted={feedback.submitted} />}
-      {platformConsoleEnabled() && <ReportIssueWidget />}
-      {feedbackAsk && <FeedbackQuestionnaire requestId={feedbackAsk.requestId} t={dict.feedbackAsk} />}
-    </div>
+      <BooklessKits
+        lessons={lessons.filter((l) => l.bookId === null)}
+        classes={classes}
+        childTargets={childTargets}
+        kitsHref={catalogueTabEnabled() && role !== "student" ? "/dashboard/kits" : null}
+        t={t}
+      />
+    </>
   );
+}
+
+async function FeedbackWidgetSection({ feedbackP }: { feedbackP: Promise<{ submitted: boolean } | null> }) {
+  const feedback = await feedbackP;
+  return feedback ? <FeedbackWidget submitted={feedback.submitted} /> : null;
+}
+
+async function FeedbackAskSection({
+  feedbackAskP,
+  t,
+}: {
+  feedbackAskP: Promise<{ requestId: string } | null>;
+  t: Dictionary["feedbackAsk"];
+}) {
+  const feedbackAsk = await feedbackAskP;
+  return feedbackAsk ? <FeedbackQuestionnaire requestId={feedbackAsk.requestId} t={t} /> : null;
 }
