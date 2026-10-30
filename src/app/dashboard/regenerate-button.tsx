@@ -59,6 +59,7 @@ export default function RegenerateButton({
   params = null,
   icon = false,
   gate = null,
+  tour,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -73,6 +74,8 @@ export default function RegenerateButton({
   /** Junk-upload gate: non-null for a gated book — a new version still spends a
       credit on a weak source, so it confirms too (and stamps the params). */
   gate?: JunkGateInfo | null;
+  /** A data-tour marker for the icon trigger (SK's walkthrough points at one). */
+  tour?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -178,6 +181,7 @@ export default function RegenerateButton({
   const hint = `New version — writes a different ${noun}`;
   const trigger = icon ? (
     <button
+      data-tour={tour}
       onClick={openDialog}
       disabled={busy}
       title={hint}

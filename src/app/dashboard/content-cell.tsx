@@ -317,7 +317,13 @@ export default function ContentCell({
       ) : (
         <>
           {docHref && (
-            <a href={docHref} onClick={() => trackViews && recordArtifactView(lesson.id, docViewKind)} className={linkCls}>
+            <a
+              href={docHref}
+              onClick={() => trackViews && recordArtifactView(lesson.id, docViewKind)}
+              className={linkCls}
+              data-tour="download-doc"
+              data-tour-kind={kind}
+            >
               <span className="text-[#1FB8A6]"><DownloadIcon /></span>{label}
             </a>
           )}
@@ -345,6 +351,7 @@ export default function ContentCell({
           oldGenId={lesson.id}
           oldArtifactPaths={lesson.artifactPaths}
           gate={gate}
+          tour={isPres ? undefined : "rerun"}
         />
       )}
       {/* Only reachable in the done branch — queued/processing return above —

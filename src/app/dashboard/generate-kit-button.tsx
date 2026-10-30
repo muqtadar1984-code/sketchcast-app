@@ -30,6 +30,7 @@ export default function GenerateKitButton({
   children,
   gate = null,
   premiumVoices = false,
+  tour,
 }: {
   bookId: string;
   schoolId: string | null;
@@ -47,6 +48,8 @@ export default function GenerateKitButton({
       Receives `busy` so the caller can show its own "Queuing…" state. */
   className?: string;
   children?: (state: { busy: boolean }) => React.ReactNode;
+  /** A data-tour marker for the card button (SK's walkthrough points at it). */
+  tour?: string;
   /** Junk-upload gate: non-null for a gated book — the INSERT path confirms
       first (and stamps every row); adopting a colleague's finished kit burns
       nothing, so that path is deliberately NOT gated. */
@@ -253,6 +256,7 @@ export default function GenerateKitButton({
     return (
       <>
         <button
+          data-tour={tour}
           onClick={generate}
           disabled={busy}
           className={className}

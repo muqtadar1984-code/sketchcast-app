@@ -139,6 +139,7 @@ export default function GenerateAllButton({
   return (
     <>
       <button
+        data-tour="generate-all"
         onClick={onClick}
         disabled={busy}
         className="h-8 px-3 rounded-lg border border-[#1FB8A6] text-[#0C8175] text-xs font-medium hover:bg-[#E2F4F1] disabled:opacity-50 whitespace-nowrap"
