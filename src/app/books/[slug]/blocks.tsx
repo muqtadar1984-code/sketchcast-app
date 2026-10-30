@@ -31,7 +31,7 @@ export function Picture({ refId, caption, ctx, compact }: { refId: string; capti
   const size = ann?.size ?? (f?.size?.[0] && f?.size?.[1] ? [f.size[0], f.size[1]] : null);
   const anchors = ann?.anchors ? Object.entries(ann.anchors) : [];
   return (
-    <figure className={compact ? "" : "my-4"}>
+    <figure className={compact ? "" : "my-4"} data-figref={f ? refId : undefined}>
       <div className="inline-block max-w-full rounded-lg border border-[#EFE8D8] bg-[#FDFBF5] p-2">
         {f ? (
           // The frame keeps the picture's real proportions, so label points sit right while it loads, and the
