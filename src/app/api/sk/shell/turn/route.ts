@@ -37,6 +37,8 @@ import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingS
 import { loadSelectionSlide, selectionBlock, selectionOnSlide, selectionQuestion, selectionSupportTokens, type SelectionAdmin } from "@/sk/shell/selection";
 import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilities/board";
 import { openUnitDeckSlide } from "@/sk/capabilities/documents";
+// 2026-10-31: tool-call markup never reaches the bubble, the voice or the memory.
+import { COULD_NOT_DO, cleanReply, stripToolMarkup } from "@/sk/shell/markup";
 import { searchLibrary } from "@/sk/capabilities/library";
 import type { NavFilters } from "@/sk/capabilities/navigate";
 import { kitFilters, lessonNotStarted, namesLesson, pickKitHit, planStartLesson } from "@/sk/shell/start-lesson";
@@ -313,6 +315,14 @@ export async function POST(request: Request) {
 
   const support = async (target: TeachTarget): Promise<TeachingSupport | null> => (admin && boardGen ? teachingSupport(admin, boardGen, target) : null);
 
+  /** 2026-10-31: a model's text without tool-call markup (markup.ts) — logged
+   *  with the turn id whenever any had to go. */
+  const unmarked = (text: string, where: string): string => {
+    const r = stripToolMarkup(text);
+    if (r.stripped) console.warn("sk-shell.turn tool markup", JSON.stringify({ turnId: body.turnId, where }));
+    return r.text;
+  };
+
   /** practise: stamp the q_ids of the items mapped to the current segment into
    *  the args (they reach the client and the audit row the recap reads). A
    *  manifest that is not ready stamps nothing — the move still works. */
@@ -365,6 +375,7 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn teach", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    full = unmarked(full, "teach");
     // A teaching call has no tools: any "I've sent / assigned …" is unbacked.
     const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur in the narration (or the question).
@@ -401,6 +412,7 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn board knowledge", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    full = unmarked(full, "board_knowledge");
     const claims = actionClaimGuard(full);
     const verdict = groundingCheck(claims.text, knowledgeSupportTokens(k.passages), body.text);
     const said = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || k.passages[0]!.text;
@@ -471,6 +483,7 @@ export async function POST(request: Request) {
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn selection", ev.retryable ? "retryable" : "fatal", ev.message);
     }
+    full = unmarked(full, "selection");
     const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur on the slide (text or notes) or in the question.
     const verdict = groundingCheck(claims.text, selectionSupportTokens(slide), body.text);
@@ -488,7 +501,11 @@ export async function POST(request: Request) {
       // S6 slice C: the turn's last navigate (a Board deep link names the
       // class and lesson the teacher opened — workflow.ts workflowFromTurn).
       let navigatedTo: string | null = null;
-      const send = (ev: SkTurnEvent) => {
+      /** 2026-10-31: the last line of defence — no tool-call markup is ever
+       *  sent, spoken or stored, whichever path wrote the text (markup.ts). */
+      const shown = (text: string, where: string): string => cleanReply(text, ctx.user.locale, () => console.warn("sk-shell.turn tool markup", JSON.stringify({ turnId: body.turnId, where })));
+      const send = (raw: SkTurnEvent) => {
+        const ev: SkTurnEvent = raw.type === "text" ? { ...raw, text: shown(raw.text, "send") } : raw;
         if (ev.type === "navigate") navigatedTo = ev.path;
         if (ev.type === "text" && timing.firstTextMs === null) timing.firstTextMs = Date.now() - t0;
         if (ev.type === "tool") {
@@ -587,6 +604,7 @@ export async function POST(request: Request) {
         pending?: SkMemory["pending"] | null,
         lang?: { langOverride: SkAnswerLang | null },
       ) => {
+        assistantText = shown(assistantText, "memory");
         // S4 slice D: a book code / order number typed to SK is never remembered
         // (the memory travels to the browser and back into later prompts), and
         // book.activate's pending question lasts exactly one turn.
@@ -1337,7 +1355,11 @@ export async function POST(request: Request) {
         // completed action backs a claim here. The guard ignores the support
         // set, so the question's own words ("delete Amir's record") never
         // make "I have deleted Amir's record." pass.
-        const claims = actionClaimGuard(full, []);
+        // 2026-10-31: a tool call written out as text (`<invoke …>`) is never
+        // an answer: it goes before anything else reads the text (markup.ts).
+        const markup = stripToolMarkup(full);
+        if (markup.stripped) console.warn("sk-shell.turn tool markup", JSON.stringify({ turnId: body.turnId, where: "model", tools: trace.map((t) => t.name), left: markup.text.length }));
+        const claims = actionClaimGuard(markup.text, []);
         const modelText = claims.text;
         // 2026-10-30: a clarifying question that names HER class, book,
         // chapter, child or school ("Do you mean a class like 7B …?") is not
@@ -1384,6 +1406,13 @@ export async function POST(request: Request) {
         } else {
           text = navHit ? `Opening ${navHit.label}.` : SK_NOTHING_ON_THAT;
           label = navHit ? "navigation" : "declined";
+        }
+        // The model wrote ONLY a tool call as text: nothing it said is left,
+        // and "nothing on that" would be untrue — SK's honest line instead.
+        if (markup.stripped && !modelText.trim() && (text === SK_NOTHING_ON_THAT || !text.trim())) {
+          text = lineFor(COULD_NOT_DO, ctx.user.locale);
+          label = "declined";
+          trimmed = false;
         }
         if (act && "declined" in act) {
           // No token secret: the action is unavailable, whatever the model said.
