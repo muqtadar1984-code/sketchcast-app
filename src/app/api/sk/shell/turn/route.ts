@@ -730,10 +730,14 @@ export async function POST(request: Request) {
         // tutor.explain — the kit turn, ONE grounded model call, metered once
         // — or, with no lesson open, to tutor.where (her chapters, no model).
         if (ctx.user.role === "student" && decision.intent !== "navigate" && decision.intent !== "chat") {
-          if (decision.intent === "tutor") await runTutor(decision.capability, decision.args);
+          // S7 K2: "what is osmosis?" / "explain osmosis" with no lesson open →
+          // her knowledge first (an explain with no kit has no section to explain).
+          const knowledgeFirst = !ctx.tutor && isContentQuestion(body.text) && (decision.intent !== "tutor" || decision.capability === "tutor.explain");
+          if (knowledgeFirst && (await runStudentKnowledge())) {
+            // answered from her knowledge
+          } else if (decision.intent === "tutor") await runTutor(decision.capability, decision.args);
           else if (ctx.tutor) await runTutor("tutor.explain", { question: body.text });
-          // S7 K2: "what is osmosis?" with no lesson open → her knowledge.
-          else if (!(isContentQuestion(body.text) && (await runStudentKnowledge()))) await runTutor("tutor.where", {});
+          else await runTutor("tutor.where", {});
           finish();
           return;
         }
