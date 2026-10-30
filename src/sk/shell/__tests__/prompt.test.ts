@@ -88,6 +88,37 @@ describe("groundingCheck", () => {
   });
 });
 
+describe("groundingCheck — SK's own words are not names (production 2026-10-30)", () => {
+  it("keeps 'Hi, I'm SK.' (the contraction), both apostrophes", () => {
+    for (const s of ["Hi, I'm SK.", "Hi, I’m SK.", "Sure, I've opened it.", "Then I'll show you.", "Okay, I'd start there."]) {
+      const v = groundingCheck(s, [], "hi");
+      expect(v.ok, s).toBe(true);
+      expect(v.text, s).toBe(s);
+    }
+  });
+  it("keeps the product words: the Board, the Library, SK Tutor, the Diary …", () => {
+    const s = "I can also check overdue work, open the Diary or the Library, or run a lesson on the Board.";
+    expect(groundingCheck(s, [], "what can you do").text).toBe(s);
+    expect(groundingCheck("Open My Analytics, the Classroom Board or a Ready-made kit; the SK Tutor and the Worksheet, Test paper and Answer key are there too.", [], "help").ok).toBe(true);
+  });
+  it("keeps calendar words ('due Friday', 'in October', 'Jumaat')", () => {
+    expect(groundingCheck("The worksheet is due Friday.", [], "when is it due").ok).toBe(true);
+    expect(groundingCheck("It was set in October, before Mon and Sept.", [], "when").ok).toBe(true);
+    expect(groundingCheck("Kerja ini perlu dihantar pada Jumaat.", [], "bila").ok).toBe(true);
+  });
+  it("keeps the language names ('I can answer in Arabic.', own-script names)", () => {
+    expect(groundingCheck("I can answer in Arabic.", [], "languages").ok).toBe(true);
+    expect(groundingCheck("I can also use Malay, Jawi, Hindi or Français.", [], "languages").ok).toBe(true);
+  });
+  it("still drops a real name the support does not carry", () => {
+    const v = groundingCheck("The Board is ready. Mrs Tan said the class did well.", [], "how was it");
+    expect(v.unsupported).toEqual(["Tan"]);
+    expect(v.text).toBe("The Board is ready.");
+    expect(groundingCheck("Mrs Tan said the class did well.", [{ teacher: "Mrs Tan" }], "how was it").ok).toBe(true);
+    expect(groundingCheck("Ask Encik Rahman at Seri Bestari on Friday.", [], "who").unsupported).toEqual(["Encik", "Rahman", "Seri", "Bestari"]);
+  });
+});
+
 describe("groundingCheck — emails, phone numbers and URLs (S5 gate finding 2026-10-29)", () => {
   const facts = [{ name: "Amir", className: "5 Amanah", reasons: "never started" }, "At risk in the school: 1. Amir (5 Amanah) — never started."];
   it("drops a sentence with an email address no tool carries (u-parent-email)", () => {

@@ -6,6 +6,8 @@
 import type { SkCapabilityMeta, SkContext } from "./types";
 import { SK_NOTHING_ON_THAT } from "./types";
 import type { SkMemory } from "./memory";
+import { NAV_LABEL } from "@/sk/capabilities/navigate";
+import { LANG_INFO } from "./language";
 
 export const SK_SHELL_PROMPT_VERSION = "sk-shell-1.0";
 export const SK_SUPPLEMENTARY_LEAD = "this is not in your data, but";
@@ -155,6 +157,14 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
           `11. For a content question ("what is…", "explain…", "why…", "how does…") prefer knowledge.search: it searches the books, articles and uploads this user may read. Answer only from its passages, then end with ONE short line naming the source exactly as the result gives it after "end with:" (e.g. "From: Biology · ch 5 · Specialised cells"). Never give the answer to an exercise. If it returns nothing, follow rule 2.`,
         ]
       : []),
+    // 2026-10-30: the tour and the answer language are DONE with their tools
+    // (shell-controls.ts), never narrated — the rules catch most phrasings
+    // before the model; these are for the ones they miss.
+    ...(capabilities.some((c) => c.name === "start_tour" || c.name === "set_answer_language")
+      ? [
+          "12. Do these with their tools, never by describing them: showing the user around the app (a tour, a demo, a walkthrough, onboarding, 'how does this app work') → start_tour; moving a walkthrough that is running (continue, next, back, pause, stop) → tour_control; answering in another language from now on → set_answer_language; saying your last answer again in another language → repeat_in_language. Never say you started, moved, switched or translated anything without calling the tool.",
+        ]
+      : []),
     ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",
@@ -170,8 +180,57 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
 
 const NUMBER_RE = /\d+(?:[.,:/]\d+)*%?/g;
 const WORD_RE = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
-/** Words SK may always capitalise. */
-const ALWAYS_OK: ReadonlySet<string> = new Set(["i", "sk", "sketchcast", "ok", "okay"]);
+/**
+ * SK's own product vocabulary (founder 2026-10-30: "Hi, I'm SK." and "… or
+ * run a lesson on the Board." were dropped as unsupported names, and an
+ * answer with every sentence dropped reads "I have nothing on that"). The
+ * app's page names (navigate.ts NAV_LABEL, the same labels the header shows)
+ * plus the feature words SK uses to describe itself. Split into words: the
+ * check is per word ("Classroom Board" → classroom, board).
+ */
+export const SK_PRODUCT_TERMS: readonly string[] = [
+  ...Object.values(NAV_LABEL),
+  "Board", "Classroom Board", "Library", "Diary", "Kits", "Kit", "Ready-made", "SK Tutor", "Tutor", "Analytics", "My Analytics",
+  "Notices", "Notice", "Notifications", "Classes", "Class", "Students", "Settings", "Tour", "Deck", "Plan", "Activities", "Worksheet",
+  "Test paper", "Case study", "Answer key", "Revision papers", "Exam", "Assign", "Upload", "Scan", "My books", "Health", "Lesson",
+  "Lessons", "Presentation", "Generate", "Present mode", "Catalogue", "Credits", "Home",
+];
+
+/** Weekdays and months (and their short forms) — capitalised in English and
+ *  Malay; the other app languages write them lower-case or in scripts
+ *  without case. "due Friday" is a date, not a name. */
+const CALENDAR_WORDS: readonly string[] = [
+  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  "mon", "tue", "tues", "wed", "thu", "thur", "thurs", "fri", "sat", "sun",
+  "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+  "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+  "isnin", "selasa", "rabu", "khamis", "jumaat", "sabtu", "ahad",
+  "januari", "februari", "mac", "mei", "julai", "ogos", "oktober", "disember",
+];
+
+/** The languages SK answers in, by their English and their own names
+ *  (language.ts LANG_INFO), plus the common short forms. */
+const LANGUAGE_WORDS: readonly string[] = [
+  ...Object.values(LANG_INFO).flatMap((l) => [l.english, l.own]),
+  "English", "Malay", "Arabic", "Hindi", "Marathi", "Telugu", "Chinese", "Mandarin", "French", "Spanish", "Portuguese", "Jawi", "Melayu", "Bahasa",
+];
+
+const termWords = (terms: readonly string[]) => terms.flatMap((t) => t.split(/[\s()]+/u)).map((w) => normToken(w)).filter(Boolean);
+
+/** Words SK may always capitalise: itself, its contractions ("I'm"), its own
+ *  product words, calendar words and the language names. Real names (people,
+ *  schools, places, titles) are still checked against the support. */
+const ALWAYS_OK: ReadonlySet<string> = new Set([
+  "i", "i'm", "i've", "i'll", "i'd", "sk", "sketchcast", "ok", "okay",
+  ...termWords(SK_PRODUCT_TERMS),
+  ...termWords(CALENDAR_WORDS),
+  ...termWords(LANGUAGE_WORDS),
+]);
+
+/** ALWAYS_OK with the apostrophe made plain (I’m = I'm). */
+function alwaysOk(t: string): boolean {
+  return ALWAYS_OK.has(t.replace(/’/g, "'"));
+}
 
 function normToken(t: string): string {
   return t
@@ -324,7 +383,7 @@ export function groundingCheck(text: string, support: unknown[], question: strin
     words.forEach((w, i) => {
       if (i === 0 || !isCapitalised(w)) return;
       const t = normToken(w);
-      if (!t || ALWAYS_OK.has(t) || ok.has(t)) return;
+      if (!t || alwaysOk(t) || ok.has(t)) return;
       bad.push(w);
     });
     if (bad.length) {

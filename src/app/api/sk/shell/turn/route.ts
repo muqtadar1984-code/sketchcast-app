@@ -463,6 +463,12 @@ export async function POST(request: Request) {
         send({ type: "lang", ...langMeta(lang), override });
       };
       let noted: string | undefined;
+      // 2026-10-30: a language command reached through the MODEL's tool
+      // (set_answer_language / repeat_in_language) is a language turn too —
+      // its line is never kept as the "last explanation" — and the model
+      // round that chose it is counted in that turn's usage.
+      let langTurn = decision.intent === "lang";
+      let carried: { inputTokens: number; outputTokens: number } | undefined;
       const done = (
         ev: Omit<Extract<SkTurnEvent, { type: "done" }>, "type" | "latencyMs" | "memory">,
         assistantText: string,
@@ -479,7 +485,7 @@ export async function POST(request: Request) {
         // pleasantry or a repeat (a repeat re-says the ORIGINAL, so "now in
         // Arabic" translates from the source, not from the Malay).
         const keepLast =
-          decision.intent !== "lang" && decision.intent !== "chat" && (ev.label === "grounded" || ev.label === "supplementary") && !!assistantText.trim() && assistantText !== SK_NOTHING_ON_THAT;
+          !langTurn && decision.intent !== "chat" && (ev.label === "grounded" || ev.label === "supplementary") && !!assistantText.trim() && assistantText !== SK_NOTHING_ON_THAT;
         memory = rememberTurn(
           memory,
           {
@@ -490,7 +496,7 @@ export async function POST(request: Request) {
             ...(keepLast ? { lastAnswer: { text: assistantText, lang: sentLang, label: ev.label as "grounded" | "supplementary", sources: ev.sources } } : {}),
             // A command sets the conversation's language; otherwise a
             // confident question does (sticky; null clears).
-            ...(lang ? { langOverride: lang.langOverride } : decision.intent !== "lang" && question && sticky !== (memory.langOverride ?? null) ? { langOverride: sticky } : {}),
+            ...(lang ? { langOverride: lang.langOverride } : !langTurn && question && sticky !== (memory.langOverride ?? null) ? { langOverride: sticky } : {}),
             ...(noted ? { langNoted: noted } : {}),
           },
           new Date(),
@@ -499,7 +505,8 @@ export async function POST(request: Request) {
         // the owner's own session, time-boxed, never fails the turn).
         const notes = workflowFromTurn({ role: ctx.user.role, navigatePath: navigatedTo, entities, known: memory.entities });
         if (notes.length) void recordWorkflow(g.supabase as unknown as FactsDb, ctx.user.id, notes);
-        send({ type: "done", ...ev, latencyMs: Date.now() - t0, memory: sealMemory(memory) });
+        const usage = carried ? { inputTokens: carried.inputTokens + (ev.usage?.inputTokens ?? 0), outputTokens: carried.outputTokens + (ev.usage?.outputTokens ?? 0) } : ev.usage;
+        send({ type: "done", ...ev, ...(usage ? { usage } : {}), latencyMs: Date.now() - t0, memory: sealMemory(memory) });
       };
 
       /** S1: turn a capability result's `board` / `confirm` into the event the
@@ -677,6 +684,29 @@ export async function POST(request: Request) {
         if (r.cancelled) return;
         send({ type: "text", text: r.text });
         done({ sources, label: last.label, ...(r.usage ? { usage: r.usage } : {}), ...(r.trimmed ? { trimmed: true } : {}) }, r.text, [], undefined, { langOverride: code });
+      };
+
+      /** 2026-10-30: a tour / language control the MODEL chose (shell-controls.ts),
+       *  performed as its rule performs it. `used` = the model round's usage. */
+      const runControl = async (t: ToolTrace, used?: { inputTokens: number; outputTokens: number }) => {
+        carried = used;
+        const r = t.result;
+        if (r.walkthrough === "start") {
+          const text = lineFor(WALKTHROUGH_START, ctx.user.locale);
+          send({ type: "walkthrough" });
+          send({ type: "text", text });
+          done({ sources: [t.name], label: "navigation" }, text, []);
+          return;
+        }
+        if (r.walkthrough) {
+          send({ type: "walkthrough", action: r.walkthrough });
+          done({ sources: [t.name], label: "navigation" }, "", []);
+          return;
+        }
+        if (r.langCommand) {
+          langTurn = true;
+          await runLanguage(r.langCommand as LangCommand);
+        }
       };
 
       try {
@@ -980,7 +1010,23 @@ export async function POST(request: Request) {
         // The chip for a tool goes out the moment THAT tool finishes; the
         // orchestrator runs a round's tools side by side, so "the last trace
         // entry" would name the wrong one.
-        const onTrace = (t: ToolTrace) => send({ type: "tool", name: t.name, ok: t.result.ok, summary: t.result.summary.slice(0, 200) });
+        // 2026-10-30: the model's safety net (shell-controls.ts). When it picks
+        // start_tour / tour_control / set_answer_language / repeat_in_language
+        // the model stops right there (no second round to narrate) and the
+        // control runs exactly as its rule would: the same events, the same
+        // memory override. Its own signal, so stopping it never cancels the turn.
+        const modelAbort = new AbortController();
+        const stopModel = () => modelAbort.abort();
+        if (abort.signal.aborted) stopModel();
+        else abort.signal.addEventListener("abort", stopModel, { once: true });
+        const control: { hit: ToolTrace | null } = { hit: null };
+        const onTrace = (t: ToolTrace) => {
+          send({ type: "tool", name: t.name, ok: t.result.ok, summary: t.result.summary.slice(0, 200) });
+          if (!control.hit && t.result.ok && (t.result.walkthrough || t.result.langCommand)) {
+            control.hit = t;
+            stopModel();
+          }
+        };
         const runShell = makeRunTool(ctx, deps, trace, onTrace);
         const runBoard = makeRunTool(ctx, boardDeps, trace, onTrace);
         // A board.* tool the model chose is audited against the present session too.
@@ -1003,7 +1049,7 @@ export async function POST(request: Request) {
           runTool: run,
           maxToolRounds: 3,
           maxTokens: 600,
-          signal: abort.signal,
+          signal: modelAbort.signal,
         })) {
           if (ev.type === "text") full += ev.text; // buffered: grounding runs before the client sees a word
           else if (ev.type === "done") usage = ev.usage;
@@ -1017,6 +1063,11 @@ export async function POST(request: Request) {
             console.error("sk-shell.turn provider", ev.retryable ? "retryable" : "fatal", ev.message);
             send({ type: "error", message: ev.retryable ? "One moment — try that again in a few seconds." : "I couldn't answer that one. Try asking a different way?" });
           }
+        }
+        if (control.hit && !failed && !abort.signal.aborted) {
+          await runControl(control.hit, usage);
+          finish();
+          return;
         }
         if (cancelled || failed) {
           finish();
