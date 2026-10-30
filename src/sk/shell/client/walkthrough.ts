@@ -632,3 +632,42 @@ export function walkCommand(text: string, opts: { loose?: boolean } = {}): WalkC
   const extra = rest.split(" ").filter((w) => w && !LIGHT.has(w)).length;
   return extra <= (tourNamed ? MAX_EXTRA_WORDS : 0) ? best.cmd : null;
 }
+
+// 2026-10-30 (founder: "Continue with the tour." with NO tour running went to
+// the model, which said there is no tour). With no run in this tab, "continue
+// / resume / carry on / start … the tour" STARTS one — the existing
+// `walkthrough` start event, no model. The tour must be NAMED: a bare
+// "continue" with no tour is a Board or tutor move ("continue the video").
+
+/**
+ * True when `text` asks to continue, resume or start THE TOUR (any app
+ * language, natural phrasing like "Hi, continue with the tour?"). Callers use
+ * it only when no tour is running: the running tour takes "continue" itself
+ * (walkCommand → "resume").
+ */
+export function walkStartCommand(text: string): boolean {
+  const bare = stripFillers(normalise(text));
+  if (!bare || !TOUR_WORDS.some((w) => has(bare, w))) return false;
+  if (walkCommand(text, { loose: true }) === "resume") return true;
+  // "start / begin / restart the tour" (the server's "Show me around" rule
+  // takes the bare forms; this catches them inside a short sentence).
+  if (NEGATION.test(bare) || QUESTION_START.test(bare)) return false;
+  let rest = bare;
+  for (const w of [...TOUR_WORDS].sort((a, b) => b.length - a.length)) while (has(rest, w)) rest = cut(rest, w);
+  const verb = [...START_WORDS].sort((a, b) => b.length - a.length).find((p) => has(rest, p));
+  if (!verb) return false;
+  return cut(rest, verb).split(" ").filter((w) => w && !LIGHT.has(w)).length <= MAX_EXTRA_WORDS;
+}
+
+/** "Start the tour" verbs, any app language. */
+const START_WORDS = [
+  "start", "begin", "restart", "start again", "begin again",
+  "mula", "mulakan", "mulai",
+  "ابدأ", "ابدا", "إبدأ",
+  "commencer", "commence", "commencez", "démarrer", "demarrer",
+  "empezar", "empieza", "comenzar", "comienza", "iniciar", "inicia",
+  "começar", "comecar", "comece",
+  "शुरू करो", "शुरू करें", "शुरू",
+  "सुरू करा", "सुरू",
+  "ప్రారంభించు", "మొదలుపెట్టు",
+];

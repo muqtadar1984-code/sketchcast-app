@@ -70,6 +70,7 @@ import { createTranscriptStore, type TranscriptEntry, type TranscriptStore } fro
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
 import { citationChips } from "@/sk/shell/client/citations";
+import { walkStartCommand } from "@/sk/shell/client/walkthrough";
 import { TRAY_POLL_MS, parseTray, shouldPollTray, trayStateText, trayVisible, type TrayKit } from "@/sk/shell/client/tray";
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
@@ -1028,6 +1029,13 @@ export default function SkShell({
       // no turn, no model. Anything else is a question (the tour pauses).
       if (walkRef.current?.command(q)) {
         setInput("");
+        return;
+      }
+      // 2026-10-30 (founder): "Continue with the tour." with NO tour running
+      // starts one — the same start as "Take the tour", no turn, no model.
+      if (!walkRef.current && onTakeTourRef.current && walkStartCommand(q)) {
+        setInput("");
+        onTakeTourRef.current();
         return;
       }
       setError(null);

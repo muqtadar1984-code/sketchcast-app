@@ -36,6 +36,7 @@ import {
   waitForSettledPage,
   waitForStableRect,
   walkCommand,
+  walkStartCommand,
   WALK_STORE_KEY,
   type PlannedStop,
   type WalkState,
@@ -519,5 +520,45 @@ describe("walkCommand: tour commands, never a question", () => {
     expect(walkCommand("Hi SK, could you please continue with the tour you were giving me", { loose: true })).toBe("resume");
     expect(walkCommand("go to the next one", { loose: true })).toBeNull();
     expect(walkCommand("how do I end a lesson in the tour", { loose: true })).toBeNull();
+  });
+});
+
+// 2026-10-30 (founder: "Continue with the tour." with NO tour running went to
+// the model, which said there is no tour): with no run, it starts one.
+describe("walkStartCommand: 'continue / start the tour' with no tour running", () => {
+  it("natural phrasing that names the tour, in the app languages", () => {
+    for (const t of [
+      "Continue with the tour.",
+      "continue the tour",
+      "Hi, continue with the tour?",
+      "Hi SK, could you please continue with the tour you were giving me",
+      "resume the tour",
+      "carry on with the tour please",
+      "start the tour",
+      "Ok, start the tour now",
+      "can you begin the tour",
+      "restart the tour",
+      "sila teruskan lawatan",
+      "مرحبا، تابع الجولة",
+      "Salut, continuer la visite",
+    ]) {
+      expect(walkStartCommand(t), t).toBe(true);
+    }
+  });
+  it("the tour must be named; questions and other commands are not a start", () => {
+    for (const t of [
+      "continue",
+      "carry on",
+      "resume the video",
+      "continue writing the diary note for 7B please",
+      "how do I continue the tour?",
+      "what is the tour about",
+      "don't start the tour",
+      "skip the tour",
+      "next",
+      "",
+    ]) {
+      expect(walkStartCommand(t), t).toBe(false);
+    }
   });
 });

@@ -216,11 +216,30 @@ describe("the walkthrough's state rides with the turn", () => {
     expect(mocks.systems[0]).toContain('A guided tour of the app is paused at stop "output" (4 of 14).');
     expect(mocks.systems[0]).toContain("continue the tour");
   });
-  it("without a tour (or a malformed one) nothing changes: no action, no tour line", async () => {
+  it("a malformed tour reads as no tour: no action, no tour line for the model", async () => {
     mocks.script = [{ text: ["Sure."] }];
-    const ev = await readEvents(await POST(req(turn("continue with the tour", { walk: { active: "yes", stop: "<script>" } }))));
+    const ev = await readEvents(await POST(req(turn("what were you showing me just now", { walk: { active: "yes", stop: "<script>" } }))));
     expect(ev.some((e) => e.type === "walkthrough")).toBe(false);
     expect(mocks.systems.join(" ")).not.toContain("guided tour");
+  });
+  // 2026-10-30 (founder: "Continue with the tour." with no tour running went
+  // to the model, which said there is no tour): with no tour, it STARTS one.
+  it("'continue the tour' with NO tour running → the walkthrough START event and its line, no model", async () => {
+    for (const text of ["Continue with the tour.", "Hi, continue with the tour?", "resume the tour please", "carry on with the tour", "teruskan lawatan", "Ok, start the tour now"]) {
+      for (const extra of [{}, { walk: { active: "yes", stop: "<script>" } }]) {
+        const ev = await readEvents(await POST(req(turn(text, extra))));
+        expect(ev.map((e) => e.type), text).toEqual(["meta", "walkthrough", "text", "done"]);
+        // No action = start (the client's onTakeTour), never "resume".
+        expect(ev[1], text).toEqual({ type: "walkthrough" });
+        expect(ev[0], text).toMatchObject({ intent: "tour" });
+      }
+    }
+    expect(mocks.constructed).toEqual([]);
+  });
+  it("a bare 'continue' with no tour named is NOT a tour (a Board or tutor move may want it)", async () => {
+    mocks.script = [{ text: ["Sure."] }];
+    const ev = await readEvents(await POST(req(turn("continue"))));
+    expect(ev.some((e) => e.type === "walkthrough")).toBe(false);
   });
 });
 
