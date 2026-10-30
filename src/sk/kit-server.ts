@@ -2,7 +2,7 @@
 // Never imported by client code.
 //
 // THE ORDER EVERY KIT ROUTE RUNS (design slice B; Final Plan §8.1):
-//   1. gate()                     FEATURE_SK, SK_ALLOWED_EMAILS, signed in (server.ts)
+//   1. gate()                     FEATURE_SK, skAccessAllowed, signed in (server.ts)
 //   2. kits.entitled()            book access to the product — before the map
 //                                 is read, so an unentitled user learns nothing
 //   3. kits.kitForChapter()       the chapter's mapped kits (chapter 8 has three)

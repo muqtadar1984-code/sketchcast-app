@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed, skEnabled } from "@/utils/flags";
 import { createClient } from "@/utils/supabase/server";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -16,8 +16,8 @@ import ChapterLinks from "./chapter-links";
 // Same gates as the student page, in the same order, so the two surfaces are
 // visible to exactly the same people:
 //   NEXT_PUBLIC_FEATURE_SK + FEATURE_SK  — the surface exists at all
-//   SK_ALLOWED_EMAILS                    — restricted live (founder, 2026-10-27):
-//                                           off-list and anonymous ⇒ 404
+//   SK_ALLOWED_EMAILS / _STUDENTS_OF     — restricted live (skAccessAllowed):
+//                                           not allowed and anonymous ⇒ 404
 // Book titles come from sk_book_products through RLS (approved products only).
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function SkIndexPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (process.env.SK_ALLOWED_EMAILS && !skUserAllowed(user)) notFound();
+  if (!(await skAccessAllowed(user))) notFound();
   if (!user) notFound();
   const t = (await getDictionary(await resolveLocale())).sk.player;
 

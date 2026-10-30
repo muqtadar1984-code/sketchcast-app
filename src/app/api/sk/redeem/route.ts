@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed, skEnabled } from "@/utils/flags";
 import { redeemMessage } from "@/sk/access";
 import { bookCodeSecret, bookTitleFor, hashBookCode, redeemHashed, redeemStatus } from "@/sk/book-redeem";
 
@@ -20,15 +20,16 @@ const recent = new Map<string, { status: number; body: unknown; at: number }>();
 
 export async function POST(request: Request) {
   if (!skEnabled()) return NextResponse.json({ error: "Not available." }, { status: 404 });
-  const secret = bookCodeSecret();
-  if (!secret) return NextResponse.json({ error: "Activation is not configured.", reason: "not_configured" }, { status: 503 });
-
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!skUserAllowed(user)) return NextResponse.json({ error: "Not available." }, { status: 404 }); // restricted live: off-list ⇒ as if the flag were off
+  // Restricted live: anyone the allow-list refuses gets the flag-off 404 —
+  // before the 503 below, so a missing secret does not reveal the route.
+  if (!(await skAccessAllowed(user))) return NextResponse.json({ error: "Not available." }, { status: 404 });
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const secret = bookCodeSecret();
+  if (!secret) return NextResponse.json({ error: "Activation is not configured.", reason: "not_configured" }, { status: 503 });
 
   let body: { eventId?: string; code?: string; forChildId?: string };
   try {

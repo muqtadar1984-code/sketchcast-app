@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { skEnabled, skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed, skEnabled } from "@/utils/flags";
 import { createClient } from "@/utils/supabase/server";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -21,7 +21,7 @@ export default async function SkProductPage({ params }: { params: Promise<{ prod
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (process.env.SK_ALLOWED_EMAILS && !skUserAllowed(user)) notFound();
+  if (!(await skAccessAllowed(user))) notFound();
   if (!user) notFound();
   const t = (await getDictionary(await resolveLocale())).sk.player;
 

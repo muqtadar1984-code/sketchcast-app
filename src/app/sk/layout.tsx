@@ -8,8 +8,8 @@ import SkTutorLauncher from "./sk-tutor-launcher";
 // SK S3 slice D — the SK Shell for students on /sk. The pages under /sk keep
 // every gate of their own (each one 404s on its own terms); this layout only
 // adds the Shell's launcher, and only when skTutorShellEnabledFor() passes:
-// the /sk gate (NEXT_PUBLIC_FEATURE_SK + FEATURE_SK, signed in, on
-// SK_ALLOWED_EMAILS while that is set) AND the Shell's own (SK_ROLES must
+// the /sk gate (NEXT_PUBLIC_FEATURE_SK + FEATURE_SK, signed in, allowed by
+// skAccessAllowed while an allow-list is set) AND the Shell's own (SK_ROLES must
 // include the role — "student" is not in the default "teacher" — and the
 // tenant opt-in). So the Shell can never reach anyone the tutor pages would
 // turn away. The /api/sk/shell/* routes re-check on every call.

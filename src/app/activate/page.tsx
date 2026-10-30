@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { skUserAllowed } from "@/utils/flags";
+import { skAccessAllowed } from "@/utils/flags";
 import { createClient } from "@/utils/supabase/server";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
@@ -14,7 +14,7 @@ import ActivateForm from "./activate-form";
 // plus the buyer's Amazon order number). Distribution plan §6. The routes
 // under /api/sk/{redeem,activate} carry the authoritative checks; this page
 // only renders the form. Behind NEXT_PUBLIC_FEATURE_SK like the student page,
-// and 404 to anyone off the SK_ALLOWED_EMAILS list while that is in force.
+// and 404 to anyone skAccessAllowed() refuses while an allow-list is in force.
 //
 // SK S4 slice D (design 2026-10-29, decision 3): a signed-in parent with
 // VERIFIED linked children activates FOR A CHILD — one child is preselected,
@@ -35,7 +35,7 @@ export default async function ActivatePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (process.env.SK_ALLOWED_EMAILS && !skUserAllowed(user)) notFound();
+  if (!(await skAccessAllowed(user))) notFound();
   const locale = await resolveLocale();
   const t = (await getDictionary(locale)).activate;
 
