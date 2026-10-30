@@ -1,8 +1,10 @@
 /**
  * SK's first-login walkthrough — the browser half (founder 2026-10-30):
- * the static Example card (never a request, never a token), the docked bar
- * (non-modal, with Pause / Back / Next / Skip and the text box), the strip in
- * the hero, TourProvider standing down for SK users, and the version bump.
+ * the static Example card (never a request, never a token), the tour INSIDE
+ * SK's speech bubble beside the corner avatar (caption, "Tap for sound",
+ * compact Pause / Back / Next / Skip and "n of N"; the Example card and chips
+ * above; SK's answer to a question mid-tour with "Continue the tour"),
+ * TourProvider standing down for SK users, and the version bump.
  * Server-rendered with react-dom/server (no DOM in this suite) plus source
  * pins for the wiring no render can see.
  * Run: node node_modules/vitest/vitest.mjs run src/app/dashboard/__tests__/sk-walkthrough.test.ts
@@ -76,45 +78,63 @@ describe("WalkExampleCard: a static demo of an action card", () => {
   });
 });
 
-describe("WalkStrip: caption, sound chip, chips, controls", () => {
-  it("shows the stop's caption, 'Tap for sound' until a gesture, and Pause / Back / Next / Skip with the progress", async () => {
+describe("WalkStrip: the tour inside the speech bubble", () => {
+  const strip = async (props: Record<string, unknown>) => {
     const { WalkStrip } = await import("../sk-walkthrough");
-    const walk = teacherWalk();
-    const html = renderToStaticMarkup(
-      createElement(WalkStrip, { mode: "hero", copy: en.sk.walkthrough, walk, line: en.sk.walkthrough.teacher.hello, soundOn: false, onSound: noop, onPause: noop, onResume: noop, onBack: noop, onNext: noop, onSkip: noop, onJump: noop, onChip: noop }),
+    return renderToStaticMarkup(
+      createElement(WalkStrip, { copy: en.sk.walkthrough, walk: teacherWalk(), line: en.sk.walkthrough.teacher.hello, soundOn: false, onSound: noop, onPause: noop, onResume: noop, onBack: noop, onNext: noop, onSkip: noop, onChip: noop, ...props } as Parameters<typeof WalkStrip>[0]),
     );
+  };
+  it("the caption, 'Tap for sound' as a chip until a gesture, and compact Pause / Back / Next / Skip with 'n of N'", async () => {
+    const html = await strip({});
+    expect(html).toContain('data-sk-walk-mode="bubble"');
     expect(html).toContain('data-sk="caption"');
     expect(html).toContain(esc(en.sk.walkthrough.teacher.hello));
-    expect(html).toContain('data-sk="walk-sound"');
-    for (const c of ["walk-pause", "walk-back", "walk-next", "walk-skip", "walk-progress", "walk-dots"]) expect(html).toContain(`data-sk="${c}"`);
+    expect(html).toMatch(/class="inline-flex items-center gap-1 rounded-full[^"]*"[^>]*data-sk="walk-sound"/);
+    for (const c of ["walk-pause", "walk-back", "walk-next", "walk-skip", "walk-progress"]) expect(html).toContain(`data-sk="${c}"`);
     expect(html).toContain("1 of 14");
-    // Back is disabled at the first stop.
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-sk="walk-back"/);
+    // Back is disabled at the first stop; compact: an arrow with its label for screen readers.
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-sk="walk-back" aria-label="Back"/);
+    // Compact: no portrait and no progress dots any more (the avatar is beside the bubble).
+    expect(html).not.toContain('data-sk="walk-portrait"');
+    expect(html).not.toContain('data-sk="walk-dots"');
+    // The caption keeps to four lines, scrolling past them.
+    expect(html).toContain("max-h-20 overflow-y-auto");
   });
-  it("paused by a question: Resume and 'Continue the tour'; sample chips are buttons that only fill the box", async () => {
-    const { WalkStrip } = await import("../sk-walkthrough");
+  it("the Example card and the sample chips open ABOVE the caption; chips only fill a box", async () => {
     let w = teacherWalk();
     w = { ...w, index: w.stops.findIndex((s) => s.id === "analytics") };
+    const html = await strip({ walk: w, soundOn: true });
+    expect(html).toContain(en.sk.walkthrough.chips.howAreMyClasses);
+    expect(html.indexOf('data-sk="walk-chips"')).toBeLessThan(html.indexOf('data-sk="caption"'));
+    const demoStop = teacherWalk().stops.findIndex((s) => !!s.demo);
+    const demo = await strip({ walk: { ...teacherWalk(), index: demoStop }, soundOn: true });
+    expect(demo.indexOf('data-sk="walk-example"')).toBeGreaterThan(-1);
+    expect(demo.indexOf('data-sk="walk-example"')).toBeLessThan(demo.indexOf('data-sk="caption"'));
+    expect(read("sk-walkthrough.tsx")).toContain("onChip={(text) => setFill({ key: uid(), text })}");
+    // A tapped chip lands in a box she can see: the sheet's, else the one-line box.
+    const shell = read("sk-shell.tsx").replace(/\r\n/g, "\n");
+    expect(shell).toMatch(/const f = walkRef\.current\?\.fill;\s*if \(!f\) return;\s*setInput\(f\.text\);/);
+    expect(shell).toContain("if (!sheetOpenRef.current) setQuickOpen(true);");
+  });
+  it("a question mid-tour: SK's answer in the bubble instead of the caption, with 'Continue the tour' and Resume", async () => {
+    let w = teacherWalk();
     w = pauseWalk(w, "question");
-    const html = renderToStaticMarkup(
-      createElement(WalkStrip, { mode: "dock", copy: en.sk.walkthrough, walk: w, line: "x", soundOn: true, look: "A", onSound: noop, onPause: noop, onResume: noop, onBack: noop, onNext: noop, onSkip: noop, onJump: noop, onChip: noop }),
-    );
+    const html = await strip({ walk: w, soundOn: true, answer: "Your classes are 7A and 7B." });
+    expect(html).toContain("Your classes are 7A and 7B.");
+    expect(html).toContain('data-sk-answer="true"');
+    expect(html).not.toContain(esc(en.sk.walkthrough.teacher.hello));
     expect(html).toContain('data-sk="walk-continue"');
     expect(html).toContain(en.sk.walkthrough.ui.continueTour);
     expect(html).toContain('data-sk="walk-resume"');
     expect(html).not.toContain('data-sk="walk-sound"');
-    expect(html).toContain(en.sk.walkthrough.chips.howAreMyClasses);
-    expect(html).toContain('data-sk="walk-portrait"');
-    expect(html).toContain("/sk/portrait/sk-a.webp");
-    // The chips never send: the handler only hands the words to the Shell's box.
-    const src = read("sk-walkthrough.tsx");
-    expect(src).toContain("onChip={(text) => setFill({ key: uid(), text })}");
-    expect(read("sk-shell.tsx")).toMatch(/const f = walkRef\.current\?\.fill;\s*if \(!f\) return;\s*setInput\(f\.text\);/);
+    // The Shell hands the answer over only while the tour is paused by her question.
+    expect(code(read("sk-shell.tsx"))).toContain('const tourAnswer = walk?.showAnswers && openMsg && openMsg.kind !== "greeting" && openMsg.kind !== "confirm" ? openMsg.text : null;');
   });
   it("Arabic: the controls flip their arrows and use logical spacing (RTL)", async () => {
     const { WalkStrip } = await import("../sk-walkthrough");
     const html = renderToStaticMarkup(
-      createElement(WalkStrip, { mode: "dock", copy: ar.sk.walkthrough, walk: teacherWalk(), line: ar.sk.walkthrough.teacher.hello, soundOn: false, onSound: noop, onPause: noop, onResume: noop, onBack: noop, onNext: noop, onSkip: noop, onJump: noop, onChip: noop }),
+      createElement(WalkStrip, { copy: ar.sk.walkthrough, walk: teacherWalk(), line: ar.sk.walkthrough.teacher.hello, soundOn: false, onSound: noop, onPause: noop, onResume: noop, onBack: noop, onNext: noop, onSkip: noop, onChip: noop }),
     );
     expect(html).toContain("rtl:rotate-180");
     expect(html).toContain("ms-auto");
@@ -122,60 +142,68 @@ describe("WalkStrip: caption, sound chip, chips, controls", () => {
   });
 });
 
-describe("the docked bar: the Shell's dock variant", () => {
-  it("is non-modal (no backdrop, no dialog), docked at the bottom, phone-width, with the tour controls and the text box", async () => {
+describe("the tour in the Shell: the bubble, pinned open, non-modal", () => {
+  it("no dock, no dialog, no backdrop: the corner with the tour in its bubble, above the spotlight", async () => {
     vi.resetModules();
     const { default: SkShell } = await import("../sk-shell");
     const { WalkStrip } = await import("../sk-walkthrough");
     const walk = teacherWalk();
-    const strip = createElement(WalkStrip, { mode: "dock", copy: en.sk.walkthrough, walk, line: en.sk.walkthrough.teacher.kits, soundOn: false, look: "B", onSound: noop, onPause: noop, onResume: noop, onBack: noop, onNext: noop, onSkip: noop, onJump: noop, onChip: noop });
-    const html = renderToStaticMarkup(
-      createElement(SkShell, { variant: "dock", copy: en.sk.shell, role: "teacher", hat: null, walk: { strip, voice: null, fill: null, showAnswers: false, command: () => false } }),
-    );
-    expect(html).toContain('data-sk="dock"');
+    const strip = (answer?: string | null) =>
+      createElement(WalkStrip, { copy: en.sk.walkthrough, walk, line: en.sk.walkthrough.teacher.kits, answer, soundOn: false, onSound: noop, onPause: noop, onResume: noop, onBack: noop, onNext: noop, onSkip: noop, onChip: noop });
+    const html = renderToStaticMarkup(createElement(SkShell, { copy: en.sk.shell, role: "teacher", hat: null, walk: { strip, voice: null, fill: null, showAnswers: false, command: () => false } }));
+    expect(html).not.toContain('data-sk="dock"');
     expect(html).not.toContain('role="dialog"');
     expect(html).not.toContain("bg-black/40");
-    expect(html).toContain("fixed inset-x-0 bottom-0");
-    expect(html).toContain("w-full max-w-xl");
-    for (const c of ["walk-pause", "walk-back", "walk-next", "walk-skip", "walk-portrait", "caption", "input"]) expect(html).toContain(`data-sk="${c}"`);
+    expect(html).toMatch(/data-sk="bubble" data-sk-kind="tour" data-sk-open="true"/);
+    for (const c of ["walk-pause", "walk-back", "walk-next", "walk-skip", "caption", "avatar"]) expect(html).toContain(`data-sk="${c}"`);
     expect(html).toContain(esc(en.sk.walkthrough.teacher.kits));
-    // The conversation stays out of the way until she asks something.
-    expect(html).toMatch(/class="hidden" data-sk="transcript"/);
+    // The bubble is wider for the controls, still within the phone limit.
+    expect(html).toContain("w-[min(340px,calc(100vw-88px))]");
+    // z-[48]: above the spotlight's dim (z-[46]).
+    expect(html).toContain("z-[48]");
+    expect(read("sk-walkthrough.tsx")).toContain('className="pointer-events-none fixed inset-0 z-[46]"');
+    // The conversation stays hidden unless she opens it.
+    expect(html).not.toContain('data-sk="transcript"');
   });
-  it("the hero carries the tour inside the card instead of its greeting; the panel and hero offer 'Take the tour'", async () => {
-    vi.resetModules();
-    const { default: SkShell } = await import("../sk-shell");
-    const strip = createElement("div", { "data-sk": "walk" }, "tour strip");
-    const hero = renderToStaticMarkup(createElement(SkShell, { variant: "hero", copy: en.sk.shell, role: "teacher", hat: null, walk: { strip, voice: null, fill: null, showAnswers: false, command: () => false } }));
-    expect(hero).toContain("tour strip");
-    expect(hero).not.toContain('data-sk="hero-greeting"');
-    const idle = renderToStaticMarkup(createElement(SkShell, { variant: "hero", copy: en.sk.shell, role: "teacher", hat: null, onTakeTour: noop, takeTourLabel: "Take the tour" }));
-    expect(idle).toContain('data-sk="take-tour"');
-    const panel = renderToStaticMarkup(createElement(SkShell, { copy: en.sk.shell, role: "teacher", hat: null, onClose: noop, onTakeTour: noop, takeTourLabel: "Take the tour" }));
-    expect(panel).toContain('data-sk="take-tour"');
-    // Not while a tour runs.
-    expect(hero).not.toContain('data-sk="take-tour"');
+  it("the tour never fades: bubble.ts pins it while a tour runs", () => {
+    const shell = code(read("sk-shell.tsx"));
+    expect(shell).toContain("const isBubbleOpen = bubbleOpen(bubble, { tour: tourOn });");
+    expect(shell).toContain("const tourOn = !!walk;");
+  });
+  it("'Take the tour' is in the avatar's menu, never while a tour runs", () => {
+    const shell = code(read("sk-shell.tsx"));
+    expect(shell).toContain("...(onTakeTour && takeTourLabel && !walk");
+    expect(shell).toContain('id: "tour",');
+  });
+  it("the settle probe ignores SK's own corner (its pulse and fades are not the page loading)", () => {
+    expect(read("sk-walkthrough.tsx")).toContain(`const SK_UI = '[data-sk="launcher"], [data-sk="shell"], [data-sk="walk-spotlight"]';`);
   });
 });
 
 describe("the launcher's wiring (source pins)", () => {
-  const src = read("sk-launcher.tsx");
-  it("one Shell: hero on a landing page, the dock elsewhere while a tour runs, else the panel", () => {
-    expect(src).toContain('variant={heroHere ? "hero" : docked ? "dock" : "panel"}');
+  const src = read("sk-launcher.tsx").replace(/\r\n/g, "\n");
+  it("one Shell, the tour handed to it while it runs", () => {
     expect(src.match(/<SkShell\b/g)?.length).toBe(1);
+    expect(src).toContain("strip: tour.strip,");
+    expect(src).toContain('narrating: tour.walk?.status === "running",');
   });
-  it("the dock works on the leaders' School pages (the floating launcher stays hidden there)", () => {
-    expect(src).toContain("if (hiddenHere && !heroHere && !tourActive) return null;");
+  it("SK and its tour work on the leaders' School pages (raised above the briefing bot)", () => {
+    expect(src).toContain("raised={school}");
+    expect(src).not.toContain('pathname?.startsWith("/dashboard/school") || ');
   });
-  it("auto-starts only from the home hero, only while the intro is due, and records only that run", () => {
-    expect(src).toMatch(/if \(!SK_ON \|\| autoTried \|\| !introPending \|\| !heroHere \|\| tourActive\) return;/);
+  it("auto-starts only from a home page, only while the intro is due, and records only that run", () => {
+    expect(src).toMatch(/if \(!SK_ON \|\| autoTried \|\| !introPending \|\| !home \|\| tourActive\) return;/);
     expect(src).toContain("if (!carried) start({ record: true });");
-    // Replays (the 🧭, the links, "Show me around") start without record.
+    // Replays (the 🧭, the menu, "Show me around") start without record.
     expect(src).toContain("useEffect(() => onSkWalkthroughRequest(() => start()), [start]);");
+    expect(src).toContain("onTakeTour={() => start()}");
   });
   it("a question mid-tour pauses it; SK answers through the normal turn", () => {
-    expect(src).toContain("tour.onQuestion();");
+    expect(src).toContain("onEngaged={tour.onQuestion}");
     expect(read("sk-shell.tsx")).toMatch(/if \(walkRef\.current\?\.command\(q\)\) \{/);
+  });
+  it("'continue the tour' with no tour running starts one, with no turn (founder 2026-10-30)", () => {
+    expect(code(read("sk-shell.tsx"))).toMatch(/if \(!walkRef\.current && onTakeTourRef\.current && walkStartCommand\(q\)\) \{\s*setInput\(""\);\s*onTakeTourRef\.current\(\);\s*return;/);
   });
   it("the /present and /sk launchers carry the tour's words (a run resumes there)", () => {
     expect(readSrc("app/present/present-client.tsx")).toContain("walkCopy={sk.walkCopy}");

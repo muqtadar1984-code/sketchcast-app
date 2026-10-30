@@ -367,7 +367,7 @@ describe("mic gate: the Mic switch resumes (home hero, 2026-10-30)", () => {
     b.timers.advance(60_000);
     expect(b.stops).toEqual(["idle"]);
     expect(b.gate.active).toBe(false);
-    expect(b.gate.pending).toBe(true); // "Paused" in the hero
+    expect(b.gate.pending).toBe(true); // "Paused" in the listening corner
     b.timers.advance(24 * 60 * 60_000);
     expect(b.gate.active).toBe(false);
     expect(b.resumes).toBe(0);
@@ -524,7 +524,7 @@ const flush = async () => {
   for (let i = 0; i < 6; i++) await new Promise<void>((r) => setTimeout(r, 0));
 };
 
-describe("the hero mic's no-echo hold (the coordinator's WHOLE queue + a tail)", () => {
+describe("the listening mic's no-echo hold (the coordinator's WHOLE queue + a tail)", () => {
   it("between two sentences of one line the mic stays paused; it listens again SPEECH_TAIL_MS after the queue drains", async () => {
     const voice = manualVoice();
     const timers = fakeTimers();
@@ -642,12 +642,12 @@ describe("hands-free dictation passes (Web Speech ends twice on an error)", () =
 describe("the Shell's wiring (source pins)", () => {
   const shell = readFileSync(resolve(__dirname, "..", "..", "..", "..", "app", "dashboard", "sk-shell.tsx"), "utf8").replace(/\r\n/g, "\n");
   const code = shell.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  it("the hero gate's veto is the hold (coordinator + tail), and the resume comes from the hold, not from the speaking flag", () => {
+  it("the listening corner's gate veto is the hold (coordinator + tail), and the resume comes from the hold, not from the speaking flag", () => {
     expect(code).toContain("canResume: () => !walkRef.current?.narrating && !(holdRef.current?.holding ?? speakingRef.current)");
     expect(code).toContain("isSpeaking: () => coord.speaking");
     expect(code).not.toMatch(/if \(speaking\) gate\.stop\("speaking"\);\s*else gate\.resume\(\);/);
   });
-  it("the hero mic stays closed while the tour narrates, and listens again once it pauses or ends (founder 2026-10-30)", () => {
+  it("the listening mic stays closed while the tour narrates, and listens again once it pauses or ends (founder 2026-10-30)", () => {
     const listenNow = code.slice(code.indexOf("function listenNow()"), code.indexOf("useEffect(() => {\n    listenNowRef.current = listenNow;"));
     expect(listenNow).toContain("if (walkRef.current?.narrating) return;");
     expect(code).toContain('gateRef.current?.stop("speaking");\n        voiceLogRef.current?.push({ k: "mic", why: "closed for the tour" });');
@@ -662,7 +662,14 @@ describe("the Shell's wiring (source pins)", () => {
     expect(code).toContain("const stop = startDictation(\n      pass.onText,\n      pass.onEnd,");
     expect(code).toContain('if (micModeRef.current === "handsFree") passesRef.current.retire();');
   });
-  it("the voice survives page moves and hero ↔ dock: one coordinator per Shell, stopped only by pagehide or unmount", () => {
+  it("2026-10-30 corner: the auto-resuming gate listens on every page but the Board, which keeps push-to-talk", () => {
+    expect(code).toContain("const listen = autoListen ?? !board;");
+    expect(code).toContain("...(listen ? { onResume: () => listenNowRef.current(), canResume:");
+    expect(code).toMatch(/useEffect\(\(\) => \{\s*if \(!listen\) return;\s*if \(narrating\) \{/);
+    expect(code).toContain("if (on && listenRef.current) gateRef.current?.stop(\"speaking\");");
+    expect(code).not.toMatch(/(?<!\.)\bhero\b/);
+  });
+  it("the voice survives page moves: one coordinator per Shell, stopped only by pagehide or unmount", () => {
     const eff = shell.slice(shell.indexOf("const coord = createSpeechCoordinator("), shell.indexOf("// ── the cross-page memory store"));
     expect(eff).toMatch(/\}, \[\]\);\s*$/);
     expect(eff).toContain('window.addEventListener("pagehide", onPageHide);');

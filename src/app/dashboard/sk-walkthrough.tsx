@@ -18,10 +18,12 @@
 //     separate launchers on /present and /sk carry on, pauses when she asks a
 //     question or leaves the stop's page, and records completed / skipped in
 //     user_tour_progress ONLY for the first-login run.
-//   WalkStrip     — caption, "Tap for sound", sample-question chips (never
-//     sent: a tap only fills the text box), the static Example card, and
-//     Pause / Back / Next / Skip with the progress. Inside the home hero, or at
-//     the top of the docked bar on every other page.
+//   WalkStrip     — the tour INSIDE SK's speech bubble (founder 2026-10-30:
+//     the corner avatar replaced the hero card and the docked bar): the
+//     caption (or SK's answer to a question asked mid-tour), "Tap for sound"
+//     as a chip, compact Pause / Back / Next / Skip and "n of N"; above them,
+//     when the stop has them, the sample-question chips (never sent: a tap
+//     only fills a text box) and the static Example card.
 //   WalkExampleCard — the static demo of an action card. Client-only: no
 //     token, no /api/sk/act, Confirm disabled and labelled "Example".
 //   WalkSpotlight — a dimmed backdrop with a cut-out ring round the anchor;
@@ -36,7 +38,6 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { fmt } from "@/i18n/format";
@@ -157,23 +158,21 @@ export function WalkExampleCard({ demo, copy }: { demo: WalkDemo; copy: WalkCopy
   );
 }
 
-// ── the strip (hero and dock) ───────────────────────────────────────────────
+// ── the strip (inside the speech bubble) ───────────────────────────────────
 
 export type WalkStripProps = {
-  mode: "hero" | "dock";
   copy: WalkCopy;
   walk: WalkState;
   line: string;
+  /** SK's reply to a question she asked mid-tour: shown instead of the stop's caption. */
+  answer?: string | null;
   soundOn: boolean;
-  /** The dock's portrait: SK's Look (useRigChoice). */
-  look?: "A" | "B";
   onSound: () => void;
   onPause: () => void;
   onResume: () => void;
   onBack: () => void;
   onNext: () => void;
   onSkip: () => void;
-  onJump: (i: number) => void;
   onChip: (text: string) => void;
 };
 
@@ -186,26 +185,12 @@ export function WalkStrip(p: WalkStripProps) {
   const n = walk.index + 1;
   const last = walk.index >= total - 1;
   const paused = walk.status === "paused";
-  const btn = "h-8 px-2.5 rounded-lg border border-[#E6E8E4] text-xs font-medium text-[#14181F] bg-white hover:bg-[#F4F6F3] disabled:opacity-40 disabled:cursor-not-allowed";
+  const btn = "h-7 px-2 rounded-md border border-[#E6E8E4] text-[11px] font-medium text-[#14181F] bg-white hover:bg-[#F4F6F3] disabled:opacity-40 disabled:cursor-not-allowed";
   return (
-    <div className={p.mode === "dock" ? "px-3 pt-3 pb-2 space-y-2" : "w-full space-y-2 text-start"} data-sk="walk" data-sk-walk-mode={p.mode} data-sk-walk-stop={stop.id} data-sk-walk-status={walk.status}>
-      <div className="flex items-start gap-2.5">
-        {p.mode === "dock" && (
-          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#E2F4F1]" data-sk="walk-portrait" data-sk-look={p.look ?? "B"}>
-            <Image src={p.look === "A" ? "/sk/portrait/sk-a.webp" : "/sk/portrait/sk-b.webp"} alt="" width={80} height={80} unoptimized className="h-full w-full object-cover" />
-          </div>
-        )}
-        <p className="min-w-0 flex-1 text-sm text-slate-800" data-sk="caption" aria-live="polite">
-          {p.line}
-        </p>
-      </div>
-
-      {!p.soundOn && (
-        <button type="button" onClick={p.onSound} className="inline-flex items-center gap-1 rounded-full border border-[#CFE9E4] bg-[#F1FBF9] px-2.5 py-1 text-[11px] font-medium text-[#0C8175]" data-sk="walk-sound">
-          <span aria-hidden>🔊</span> {ui.tapForSound}
-        </button>
-      )}
-
+    <div className="space-y-2 text-start" data-sk="walk" data-sk-walk-mode="bubble" data-sk-walk-stop={stop.id} data-sk-walk-status={walk.status}>
+      {/* Above the caption (the bubble grows upward from the avatar): the
+          stop's Example card and sample chips. */}
+      {stop.demo && <WalkExampleCard demo={stop.demo} copy={copy} />}
       {stop.chips?.length ? (
         <div className="flex flex-wrap items-center gap-1.5" data-sk="walk-chips" title={ui.chipHint}>
           <span className="text-[10px] text-slate-500">{ui.tryAsking}:</span>
@@ -217,45 +202,45 @@ export function WalkStrip(p: WalkStripProps) {
         </div>
       ) : null}
 
-      {stop.demo && <WalkExampleCard demo={stop.demo} copy={copy} />}
+      <p className="max-h-20 overflow-y-auto text-sm leading-5 text-slate-800 whitespace-pre-wrap" data-sk="caption" data-sk-answer={p.answer ? "true" : undefined} aria-live="polite">
+        {p.answer || p.line}
+      </p>
+
+      {!p.soundOn && (
+        <button type="button" onClick={p.onSound} className="inline-flex items-center gap-1 rounded-full border border-[#CFE9E4] bg-[#F1FBF9] px-2.5 py-0.5 text-[11px] font-medium text-[#0C8175]" data-sk="walk-sound">
+          <span aria-hidden>🔊</span> {ui.tapForSound}
+        </button>
+      )}
 
       {paused && walk.pausedBy !== "user" && (
-        <button type="button" onClick={p.onResume} className="btn-primary h-8 px-3 text-xs text-white" data-sk="walk-continue">
+        <button type="button" onClick={p.onResume} className="btn-primary h-7 px-3 text-xs text-white" data-sk="walk-continue">
           {ui.continueTour}
         </button>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={ui.controls} data-sk="walk-controls">
+      <div className="flex flex-wrap items-center gap-1" role="group" aria-label={ui.controls} data-sk="walk-controls">
         {paused ? (
-          <button type="button" onClick={p.onResume} className={btn} data-sk="walk-resume">
+          <button type="button" onClick={p.onResume} className={btn} data-sk="walk-resume" title={ui.resume}>
             ▶ {ui.resume}
           </button>
         ) : (
-          <button type="button" onClick={p.onPause} className={btn} data-sk="walk-pause">
+          <button type="button" onClick={p.onPause} className={btn} data-sk="walk-pause" title={ui.pause}>
             ❚❚ {ui.pause}
           </button>
         )}
-        <button type="button" onClick={p.onBack} disabled={walk.index === 0} className={btn} data-sk="walk-back">
-          <span aria-hidden className="inline-block rtl:rotate-180">‹</span> {ui.back}
+        <button type="button" onClick={p.onBack} disabled={walk.index === 0} className={btn} data-sk="walk-back" aria-label={ui.back} title={ui.back}>
+          <span aria-hidden className="inline-block rtl:rotate-180">‹</span>
         </button>
         <button type="button" onClick={p.onNext} className={`${btn} border-[#0C8175] text-[#0C8175]`} data-sk="walk-next">
           {last ? ui.finish : ui.next} <span aria-hidden className="inline-block rtl:rotate-180">›</span>
         </button>
-        <button type="button" onClick={p.onSkip} className="h-8 px-2 text-xs font-medium text-[#5B6470] underline" data-sk="walk-skip">
+        <button type="button" onClick={p.onSkip} className="h-7 px-1.5 text-[11px] font-medium text-[#5B6470] underline" data-sk="walk-skip">
           {ui.skip}
         </button>
         <span className="ms-auto text-[11px] text-slate-500 tabular-nums" data-sk="walk-progress">
           {fmt(ui.progress, { n, total })}
         </span>
       </div>
-
-      {p.mode === "hero" && (
-        <div className="flex flex-wrap justify-center gap-1" data-sk="walk-dots" aria-hidden>
-          {walk.stops.map((s, i) => (
-            <button key={`${s.id}-${i}`} type="button" tabIndex={-1} onClick={() => p.onJump(i)} className={`h-1.5 w-1.5 rounded-full ${i === walk.index ? "bg-[#0C8175]" : i < walk.index ? "bg-[#9FD8CF]" : "bg-slate-200"}`} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -304,7 +289,7 @@ export function WalkSpotlight({ el }: { el: Element }) {
 /// ── the page probe (browser) ────────────────────────────────────────────────
 
 /** SK's own UI: its changes and its listening pulse are not the page loading. */
-const SK_UI = '[data-sk="hero"], [data-sk="dock"], [data-sk="shell"], [data-sk="walk-spotlight"]';
+const SK_UI = '[data-sk="launcher"], [data-sk="shell"], [data-sk="walk-spotlight"]';
 /** Loading UI: aria-busy (the navigation veil sets it on <body>, loading.tsx's
  *  ring carries it), [data-loading], [data-sk-loading] (the route loading.tsx
  *  fallbacks) and skeletons (.animate-pulse — a tiny pulsing dot is not one). */
@@ -357,13 +342,14 @@ export type SkWalkthrough = {
   /** A run is on (running or paused). */
   active: boolean;
   walk: WalkState | null;
-  /** The strip for the hero or the dock (null when no run). */
-  strip: (mode: "hero" | "dock", look?: "A" | "B") => ReactNode;
+  /** The tour inside the speech bubble (null when no run); `answer` = SK's
+   *  reply to a question asked mid-tour, shown instead of the caption. */
+  strip: (answer?: string | null) => ReactNode;
   spotlight: ReactNode;
   voice: WalkVoice;
   /** A chip was tapped: the Shell puts this in its text box (never sends it). */
   fill: WalkVoice;
-  /** Paused by her question: the dock shows the conversation. */
+  /** Paused by her question: the bubble shows SK's answer and "Continue the tour". */
   showAnswers: boolean;
   /** A tour command typed or said; true = handled (no turn). */
   command: (text: string) => boolean;
@@ -498,7 +484,7 @@ export function useSkWalkthrough({
         onIntroDoneRef.current?.();
       }
       // An ended run renders as nothing (isActive is false): the strip, the
-      // dock and the spotlight go, and the Shell silences the tour's voice.
+      // bubble's tour and the spotlight go, and the Shell silences the tour's voice.
     }
   }, [walk]);
 
@@ -757,22 +743,20 @@ export function useSkWalkthrough({
   const shown = walk?.status === "paused" || (!!match && match.key === goKey);
   const line = shown ? lineOf(walk, match) : "";
   const strip = useCallback(
-    (mode: "hero" | "dock", look?: "A" | "B") =>
+    (answer?: string | null) =>
       walk && active && copy ? (
         <WalkStrip
-          mode={mode}
           copy={copy}
           walk={walk}
           line={line}
+          answer={answer}
           soundOn={soundOn}
-          look={look}
           onSound={unlock}
           onPause={controls.pause}
           onResume={controls.resume}
           onBack={controls.back}
           onNext={controls.next}
           onSkip={controls.skip}
-          onJump={controls.jump}
           onChip={(text) => setFill({ key: uid(), text })}
         />
       ) : null,
