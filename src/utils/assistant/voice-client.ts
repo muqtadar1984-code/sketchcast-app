@@ -5,7 +5,8 @@
 
 import { speakableText } from "@/utils/speakable";
 import { clientSttMode, transcribeLanguageFor } from "@/sk/speech/stt";
-import { noticeBrowserFallback, startTranscribeDictation, transcribeUsable } from "./transcribe-client";
+import { MAX_DICTATION_MS, NO_SPEECH_MS, noticeBrowserFallback, startTranscribeDictation, transcribeUsable } from "./transcribe-client";
+import { createEndpointer } from "./endpointing";
 
 // ── Read-aloud (TTS) — streaming speaker ─────────────────────────────────────
 
@@ -71,13 +72,14 @@ export class StreamSpeaker {
 
 // ── Mic input (STT) ──────────────────────────────────────────────────────────
 
-type SpeechRec = {
+export type SpeechRecResult = ArrayLike<{ transcript: string }> & { isFinal?: boolean };
+export type SpeechRec = {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((e: { results: ArrayLike<SpeechRecResult> }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e?: { error?: string }) => void) | null;
   start: () => void;
   stop: () => void;
 };
@@ -149,10 +151,15 @@ export type DictationOptions = {
    * browser recognizer ignores both (it has no identification). */
   identify?: boolean;
   onLanguage?: (languageCode: string) => void;
+  /** 2026-10-30 (default on): her turn ends after a stretch of silence with no
+   *  new words (endpointing.ts), not at her first pause. Push-to-talk passes
+   *  false: releasing the button ends it. */
+  endpointing?: boolean;
 };
 
 export function startDictation(onText: (t: string) => void, onEnd: () => void, opts: DictationOptions = {}): (() => void) | null {
-  const browserOpts = { ...(opts.lang ? { lang: opts.lang } : {}) };
+  const endpointing = opts.endpointing !== false;
+  const browserOpts = { ...(opts.lang ? { lang: opts.lang } : {}), endpointing };
   if (clientSttMode() === "transcribe" && micSupported() && transcribeUsable()) {
     const lang = opts.lang ?? (typeof document !== "undefined" ? document.documentElement.lang : "") ?? "";
     if (!transcribeLanguageFor(lang)) {
@@ -162,37 +169,136 @@ export function startDictation(onText: (t: string) => void, onEnd: () => void, o
     return startTranscribeDictation(onText, onEnd, {
       lang,
       fallback: () => startBrowserDictation(onText, onEnd, browserOpts),
-      ...(opts.identify ? { session: { identify: true } } : {}),
+      session: { endpointing, ...(opts.identify ? { identify: true } : {}) },
       ...(opts.onLanguage ? { onLanguage: opts.onLanguage } : {}),
     });
   }
   return startBrowserDictation(onText, onEnd, browserOpts);
 }
 
+/** Timers for the browser recogniser (the real ones by default; fakes in tests). */
+export type DictationClock = {
+  setTimeout: (fn: () => void, ms: number) => unknown;
+  clearTimeout: (h: unknown) => void;
+};
+
+export type BrowserDictationOptions = {
+  lang?: string;
+  /** Default on: end her turn by the endpointer, not at the first pause. */
+  endpointing?: boolean;
+  /** Tests: the recogniser constructor and the clock. */
+  Recognition?: new () => SpeechRec;
+  clock?: DictationClock;
+};
+
+/** Chrome ending a continuous session on its own this many times in a row
+ *  with no new words in between = it will not listen; the turn ends. */
+const MAX_IDLE_RESTARTS = 3;
+
 /** Browser Web Speech dictation — the default path, and Transcribe's fallback.
- * (Browser STT is weaker on some accents; Transcribe is the hosted option.) */
-export function startBrowserDictation(
-  onText: (t: string) => void,
-  onEnd: () => void,
-  opts: { lang?: string } = {},
-): (() => void) | null {
-  const Ctor = recognitionCtor();
+ * (Browser STT is weaker on some accents; Transcribe is the hosted option.)
+ *
+ * 2026-10-30: continuous, so a pause is not the end of her turn — the
+ * endpointer (endpointing.ts) ends it after a stretch of silence. Chrome still
+ * ends a continuous session by itself now and then (about a minute in, or
+ * after a quiet spell): while her turn is not over it is restarted
+ * transparently, the earlier words kept. onEnd fires exactly once — an error
+ * (onerror, then onend) no longer ends it twice. */
+export function startBrowserDictation(onText: (t: string) => void, onEnd: () => void, opts: BrowserDictationOptions = {}): (() => void) | null {
+  const Ctor = opts.Recognition ?? recognitionCtor();
   if (!Ctor) return null;
+  const clock: DictationClock = opts.clock ?? {
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+  };
+  let rec: SpeechRec;
   try {
-    const rec = new Ctor();
-    rec.lang = opts.lang ?? pageSpeechLang();
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      let t = "";
-      for (let i = 0; i < e.results.length; i++) t += e.results[i]![0]!.transcript;
-      onText(t);
-    };
-    rec.onerror = onEnd;
-    rec.onend = onEnd;
-    rec.start();
-    return () => rec.stop();
+    rec = new Ctor();
   } catch {
     return null;
   }
+
+  let over = false; // her turn is over: no restart, end at the next onend
+  let ended = false; // onEnd has fired
+  let earlier = ""; // the words of the sessions Chrome already ended
+  let current = ""; // this session's words (finals + the interim)
+  let idleRestarts = 0;
+  let wordsSinceRestart = false;
+  let heardAny = false;
+  const timers: unknown[] = [];
+  const join = (a: string, b: string) => (a && b ? `${a} ${b}` : a || b);
+  const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+  const sofar = () => join(earlier, current);
+
+  function release() {
+    for (const h of timers.splice(0)) clock.clearTimeout(h);
+    endpointer?.cancel();
+  }
+  function finish() {
+    if (ended) return;
+    ended = over = true;
+    release();
+    onEnd();
+  }
+  /** End her turn: stop the recogniser; its onend (after any last words) ends it. */
+  function endTurn() {
+    if (over) return;
+    over = true;
+    try {
+      rec.stop();
+    } catch {
+      finish();
+    }
+  }
+  const endpointer =
+    opts.endpointing === false ? null : createEndpointer({ onEndOfTurn: endTurn, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout });
+
+  try {
+    rec.lang = opts.lang ?? pageSpeechLang();
+    rec.interimResults = true;
+    rec.continuous = true;
+    rec.onresult = (e) => {
+      if (ended) return;
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i]![0]!.transcript;
+      current = norm(t);
+      const words = sofar();
+      if (!words) return;
+      heardAny = wordsSinceRestart = true;
+      onText(words);
+      endpointer?.heard(words);
+    };
+    // Any error ends her turn, words kept: no-speech (nothing heard), no
+    // permission, no device, network, aborted. onend follows and ends it once.
+    rec.onerror = () => {
+      over = true;
+    };
+    rec.onend = () => {
+      if (ended) return;
+      if (over) return finish();
+      // Chrome ended the session by itself: her turn goes on.
+      earlier = sofar();
+      current = "";
+      if (wordsSinceRestart) idleRestarts = 0;
+      else if (++idleRestarts > MAX_IDLE_RESTARTS) return finish();
+      wordsSinceRestart = false;
+      try {
+        rec.start();
+      } catch {
+        finish();
+      }
+    };
+    rec.start();
+  } catch {
+    release();
+    return null;
+  }
+  // The no-speech timeout (nothing at all heard) and the hard cap, as with Transcribe.
+  timers.push(
+    clock.setTimeout(() => {
+      if (!heardAny) endTurn();
+    }, NO_SPEECH_MS),
+    clock.setTimeout(endTurn, MAX_DICTATION_MS),
+  );
+  return () => endTurn();
 }

@@ -9,11 +9,13 @@ import {
   BUBBLE_INITIAL,
   BUBBLE_READ_MIN_MS,
   GREETING_MIN_MS,
+  HEARING_MAX_CHARS,
   SPEECH_LINGER_MS,
   bubbleFadeAt,
   bubbleOpen,
   bubbleReadingMs,
   bubbleReduce,
+  hearingPreview,
   replyPreview,
   shouldGreet,
   type BubbleEvent,
@@ -132,5 +134,29 @@ describe("a tour pins the bubble open", () => {
   });
   it("clear empties it", () => {
     expect(bubbleOpen(run([{ type: "reply", key: "t", text: "x.", at: 0 }, { type: "clear" }]))).toBe(false);
+  });
+});
+
+describe("2026-10-30: \"you're saying…\" — her words while the mic listens", () => {
+  it("shows her words so far only while listening, never over a tour, never empty", () => {
+    expect(hearingPreview("what is osmosis", { listening: true })).toBe("what is osmosis");
+    expect(hearingPreview("  what   is" + String.fromCharCode(10) + "osmosis ", { listening: true })).toBe("what is osmosis");
+    expect(hearingPreview("what is osmosis", { listening: false })).toBeNull();
+    expect(hearingPreview("what is osmosis", { listening: true, tour: true })).toBeNull();
+    expect(hearingPreview("   ", { listening: true })).toBeNull();
+    expect(hearingPreview(null, { listening: true })).toBeNull();
+  });
+  it("a long turn shows its END (what she is saying now), cut at a word", () => {
+    const words = Array.from({ length: 60 }, (_, i) => `word${i}`).join(" ");
+    const p = hearingPreview(words, { listening: true })!;
+    expect(p.startsWith("…")).toBe(true);
+    expect(p.endsWith("word59")).toBe(true);
+    expect(p.length).toBeLessThanOrEqual(HEARING_MAX_CHARS + 1);
+    expect(p.slice(1)).toMatch(/^word\d+ /);
+  });
+  it("leaves the bubble's own message alone (it is a view, not a message)", () => {
+    const s = run([{ type: "reply", key: "t", text: "Osmosis is water moving.", at: 0 }]);
+    hearingPreview("and what about", { listening: true });
+    expect(s.msg?.text).toBe("Osmosis is water moving.");
   });
 });

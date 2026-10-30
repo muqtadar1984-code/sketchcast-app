@@ -4,7 +4,8 @@
  *   - the event-stream codec: CRC-32, round trip, AWS's documented frames;
  *   - 16 kHz PCM16 downsampling as pure math, and the AudioWorklet file run
  *     in a sandbox agreeing with it sample for sample;
- *   - one streaming session: partial → final → end frame → close;
+ *   - one streaming session: partial → final → (her turn ends by the
+ *     endpointer, 2026-10-30, not at the first final) → end frame → close;
  *   - every fallback: route 404/403, a socket error, a service exception →
  *     browser Web Speech, sticky, with ONE notice;
  *   - the §2.6 mic gate closing the socket and the audio graph in the SAME tick;
@@ -292,7 +293,7 @@ beforeEach(() => {
 // ── one session ─────────────────────────────────────────────────────────────
 
 describe("a Transcribe session", () => {
-  it("asks the route for a URL, streams PCM as AudioEvents, partial → final → end frame → close", async () => {
+  it("asks the route for a URL, streams PCM as AudioEvents, partial → final → silence → end frame → close", async () => {
     const f = fakeEnv();
     const { h, log } = handlers();
     startTranscribeSession("en-US", h, f.env);
@@ -316,6 +317,12 @@ describe("a Transcribe session", () => {
     s.serverSays([{ text: "what is", partial: true }]);
     s.serverSays([{ text: "what is osmosis", partial: false }]);
     expect(log).toEqual(["partial:what is", "final:what is osmosis"]);
+    // 2026-10-30: a final is not the end of her turn — the socket stays open…
+    expect(s.endFrames).toBe(0);
+    expect(s.closed).toEqual([]);
+    expect(f.graph.stopped).toBe(0);
+    // …until END_SILENCE_MS with no new words.
+    f.fire(1500);
     expect(s.endFrames).toBe(1);
     expect(s.closed).toEqual([1000]);
     expect(f.graph.stopped).toBe(1);
@@ -343,6 +350,74 @@ describe("a Transcribe session", () => {
     s.serverSays([{ text: "apa itu", partial: true, lang: "ms-MY" }]);
     s.serverSays([{ text: "apa itu osmosis", partial: false, lang: "ms-MY" }]);
     expect(log).toEqual(["partial:apa itu", "lang:ms-MY", "final:apa itu osmosis"]);
+  });
+
+  it("2026-10-30: final, final, then silence → ONE turn, the finals joined with spaces; the last final's language reported last", async () => {
+    const f = fakeEnv();
+    const log: string[] = [];
+    startTranscribeSession(
+      "en-US",
+      { onPartial: (t) => log.push(`partial:${t}`), onFinal: (t) => log.push(`final:${t}`), onEnd: () => log.push("end"), onFallback: (r) => log.push(`fallback:${r}`), onLanguage: (l) => log.push(`lang:${l}`) },
+      f.env,
+      { identify: true },
+    );
+    await flush();
+    const s = FakeSocket.all[0]!;
+    f.micOpens();
+    await flush();
+    s.open();
+    s.serverSays([{ text: "I want to know about photosynthesis and", partial: false, lang: "en-US" }]);
+    f.fire(1500); // the old cut-off point: a pause after "and" is NOT the end (2.5 s grace)
+    f.pcm();
+    expect(s.endFrames).toBe(0);
+    s.serverSays([{ text: "why plants", partial: true, lang: "en-US" }]);
+    s.serverSays([{ text: "why plants need light.", partial: false, lang: "en-US" }]);
+    f.fire(2500); // the stale grace from the first final was cleared
+    expect(s.endFrames).toBe(0);
+    f.fire(1500);
+    expect(s.endFrames).toBe(1);
+    expect(s.closed).toEqual([1000]);
+    expect(f.graph.stopped).toBe(1);
+    await flush();
+    expect(log).toEqual([
+      "lang:en-US",
+      "final:I want to know about photosynthesis and",
+      "partial:I want to know about photosynthesis and why plants",
+      "lang:en-US",
+      "final:I want to know about photosynthesis and why plants need light.",
+      "end",
+    ]);
+  });
+
+  it("2026-10-30: the timings are tunable per session", async () => {
+    const f = fakeEnv();
+    const { h, log } = handlers();
+    startTranscribeSession("en", h, f.env, { endSilenceMs: 900, hesitantMs: 3000 });
+    await flush();
+    const s = FakeSocket.all[0]!;
+    s.open();
+    s.serverSays([{ text: "tell me about the water cycle.", partial: false }]);
+    f.fire(900);
+    await flush();
+    expect(log).toEqual(["final:tell me about the water cycle.", "end"]);
+  });
+
+  it("2026-10-30 push-to-talk (endpointing off): finals and silence never end it; stop() does, words kept", async () => {
+    const f = fakeEnv();
+    const { h, log } = handlers();
+    const sess = startTranscribeSession("en", h, f.env, { endpointing: false });
+    await flush();
+    const s = FakeSocket.all[0]!;
+    s.open();
+    s.serverSays([{ text: "what is osmosis.", partial: false }]);
+    f.fire(1500);
+    f.fire(2500);
+    expect(s.endFrames).toBe(0);
+    s.serverSays([{ text: "in plants", partial: true }]);
+    sess.stop();
+    expect(s.endFrames).toBe(1);
+    await flush();
+    expect(log).toEqual(["final:what is osmosis.", "partial:what is osmosis. in plants", "end"]);
   });
 
   it("a malformed LanguageCode is ignored", async () => {
@@ -556,9 +631,17 @@ describe("startDictation: the one swap point", () => {
     expect(FakeSocket.all).toHaveLength(1);
     expect(b.audio.addModule).toEqual(["/worklets/pcm16-worklet.js"]);
     expect(FakeRecognition.all).toHaveLength(0);
-    FakeSocket.all[0]!.open();
-    FakeSocket.all[0]!.serverSays([{ text: "hello", partial: false }]);
-    await flush();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      FakeSocket.all[0]!.open();
+      FakeSocket.all[0]!.serverSays([{ text: "hello", partial: false }]);
+      await flush();
+      expect(ends).toBe(0); // 2026-10-30: one short word → the longer grace
+      vi.advanceTimersByTime(2500);
+      await flush();
+    } finally {
+      vi.useRealTimers();
+    }
     expect(texts).toEqual(["hello"]);
     expect(ends).toBe(1);
     expect(b.tracks.stopped).toBe(1);

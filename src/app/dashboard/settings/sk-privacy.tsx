@@ -1,8 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultsFor, type SkPrefKey, type SkPrefs } from "@/sk/prefs";
+import { LOOK_MIGRATED_LOCAL_KEY, MIGRATED_LOCAL_KEYS, PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultsFor, localPrefValue, type SkPrefKey, type SkPrefs } from "@/sk/prefs";
+import type { RigChoice } from "@/sk/board/avatar";
+import { forgetRigChoice, useRigChoice } from "@/sk/board/use-rig-choice";
 
 // The "SK & privacy" controls (SK S6 slice C). Every string arrives as a prop
 // (the page holds the dictionary); every change goes through a route and the
@@ -24,6 +27,10 @@ export type PrivacyStrings = {
   micOnHint: string;
   showText: string;
   showTextHint: string;
+  character: string;
+  characterHint: string;
+  lookA: string;
+  lookB: string;
   on: string;
   off: string;
   saving: string;
@@ -116,6 +123,40 @@ function Switch({ id, label, hint, on, busy, onLabel, offLabel, onToggle }: { id
   );
 }
 
+/** SK's character: two thumbnail radio buttons (native radios, so the arrow
+ *  keys move between them), each at least 44 px tall. */
+function LookChoice({ t, value, busy, onPick }: { t: PrivacyStrings; value: RigChoice; busy: boolean; onPick: (c: RigChoice) => void }) {
+  const looks: Array<{ c: RigChoice; label: string; image: string }> = [
+    { c: "A", label: t.lookA, image: "/sk/portrait/sk-a.webp" },
+    { c: "B", label: t.lookB, image: "/sk/portrait/sk-b.webp" },
+  ];
+  return (
+    <fieldset className="py-3" data-sk="look-choice" aria-describedby="pref-look-hint">
+      <legend className="font-medium">{t.character}</legend>
+      <p id="pref-look-hint" className="text-sm text-[#5B6470] mt-0.5">
+        {t.characterHint}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {looks.map(({ c, label, image }) => {
+          const on = value === c;
+          return (
+            <label
+              key={c}
+              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-full border py-1.5 ps-1.5 pe-4 text-sm transition-colors has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-[#0C8175]/40 ${
+                on ? "border-[#0C8175] bg-[#E7F3F1] font-medium" : "border-[#CDD2CC] bg-white"
+              } ${busy ? "opacity-60" : ""}`}
+            >
+              <input type="radio" name="sk-look" value={c} checked={on} disabled={busy} onChange={() => onPick(c)} className="sr-only" data-sk-look={c} />
+              <Image src={image} alt="" width={40} height={40} unoptimized className={`h-10 w-10 rounded-full object-cover ring-2 ${on ? "ring-[#0C8175]" : "ring-transparent"}`} />
+              <span>{label}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 function Confirm({ text, yes, no, onYes, onNo, busy }: { text: string; yes: string; no: string; onYes: () => void; onNo: () => void; busy: boolean }) {
   return (
     <div role="alertdialog" aria-modal="false" aria-label={text} className="mt-3 rounded-lg border border-[#E8C4BE] bg-[#FDF5F3] p-4">
@@ -136,6 +177,9 @@ export default function SkPrivacy(props: SkPrivacyProps) {
   const { t } = props;
   const router = useRouter();
   const [prefs, setPrefs] = useState<SkPrefs>(props.prefs);
+  // SK's character reads the rig (the avatar's own source), not prefs.lookA:
+  // the Shell's warm start applies the server's value to it.
+  const [rig, chooseRig] = useRigChoice();
   const [children, setChildren] = useState(props.children);
   const [schoolOn, setSchoolOn] = useState(props.school?.on ?? false);
   const [workflow, setWorkflow] = useState(props.workflow);
@@ -161,8 +205,27 @@ export default function SkPrivacy(props: SkPrivacyProps) {
     }
     // The panel's fast first paint follows the server's value; the server
     // already holds it, so this browser has nothing left to migrate.
-    writeLocal(PREF_LOCAL_KEY[k], next ? "on" : "off");
+    writeLocal(PREF_LOCAL_KEY[k], localPrefValue(k, next));
     writeLocal(PREFS_MIGRATED_LOCAL_KEY, "1");
+    say(t.saved);
+  }
+
+  async function pickLook(next: RigChoice) {
+    const prev = rig;
+    if (next === prev) return;
+    // The avatar (and the voice) change at once; reverted if the save fails.
+    chooseRig(next);
+    setBusy("pref:lookA");
+    say(t.saving);
+    const ok = await send("/api/sk/prefs", "POST", { lookA: next === "A" });
+    setBusy(null);
+    if (!ok) {
+      chooseRig(prev);
+      say(t.saveFailed);
+      return;
+    }
+    // The server holds her look now: this browser's copy has nothing to migrate.
+    writeLocal(LOOK_MIGRATED_LOCAL_KEY, "1");
     say(t.saved);
   }
 
@@ -215,7 +278,9 @@ export default function SkPrivacy(props: SkPrivacyProps) {
     // in the panel's local copy.
     setPrefs(defaultsFor(props.role));
     for (const k of PREF_KEYS) writeLocal(PREF_LOCAL_KEY[k], null);
-    writeLocal(PREFS_MIGRATED_LOCAL_KEY, null);
+    for (const m of MIGRATED_LOCAL_KEYS) writeLocal(m, null);
+    // lookA's local copy is the rig's key (removed above): the avatar follows.
+    forgetRigChoice();
     say(t.deleted);
   }
 
@@ -250,6 +315,7 @@ export default function SkPrivacy(props: SkPrivacyProps) {
         <Switch id="pref-suggest" label={t.suggestions} hint={t.suggestionsHint} {...sw(prefs.suggestions)} busy={busy === "pref:suggestions"} onToggle={() => void togglePref("suggestions")} />
         <Switch id="pref-mic" label={t.micOn} hint={t.micOnHint} {...sw(prefs.micOn)} busy={busy === "pref:micOn"} onToggle={() => void togglePref("micOn")} />
         <Switch id="pref-text" label={t.showText} hint={t.showTextHint} {...sw(prefs.showText)} busy={busy === "pref:showText"} onToggle={() => void togglePref("showText")} />
+        <LookChoice t={t} value={rig} busy={busy === "pref:lookA"} onPick={(c) => void pickLook(c)} />
       </div>
 
       {isStudent && props.student && (

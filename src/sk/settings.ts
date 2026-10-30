@@ -195,7 +195,7 @@ export async function loadSkSettings(input: LoadSettingsInput): Promise<SkSettin
 export async function savePrefs(session: FactsDb, userId: string, body: unknown, now: Date = new Date()): Promise<Reply> {
   const patch: StoredPrefs = pick(body);
   const keys = Object.keys(patch) as SkPrefKey[];
-  if (!keys.length) return { status: 400, body: { error: "Send readAloud, handsFree, suggestions, micOn or showText as true or false." } };
+  if (!keys.length) return { status: 400, body: { error: "Send readAloud, handsFree, suggestions, micOn, showText or lookA as true or false." } };
   const results = await Promise.all(keys.map((k) => rememberWorkflow(session, userId, PREF_KIND, PREF_FACT_KEY[k], { on: patch[k] }, now)));
   if (results.some((ok) => !ok)) return { status: 500, body: { error: "Your settings could not be saved. Please try again." } };
   return { status: 200, body: { ok: true, saved: patch } };

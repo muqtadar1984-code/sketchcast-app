@@ -72,13 +72,13 @@ import type { SkActRequest, SkActResponse, SkBoardMove, SkCitation, SkTurnEvent,
 import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector";
 // S6 slice C: the preferences follow the user (workflow facts), with a
 // one-time migration of this browser's localStorage values (prefs.ts).
-import { PREF_KEYS, PREF_LOCAL_KEY, PREFS_MIGRATED_LOCAL_KEY, defaultMicOn, parseLocalFlag, pick, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
+import { MIGRATED_LOCAL_KEYS, PREF_KEYS, PREF_LOCAL_KEY, applyLook, defaultMicOn, migratedLocalKey, parseLocalPref, pick, pickLook, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, type SpeechHold } from "@/sk/shell/client/mic-gate";
 import { beaconVoiceEvents, createVoiceLog, type VoiceLog } from "@/sk/shell/client/voice-log";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { clearConversation, createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
-import { BUBBLE_INITIAL, GREETED_KEY, GREETING_MIN_MS, bubbleFadeAt, bubbleOpen, bubbleReduce, shouldGreet } from "@/sk/shell/client/bubble";
+import { BUBBLE_INITIAL, GREETED_KEY, GREETING_MIN_MS, bubbleFadeAt, bubbleOpen, bubbleReduce, hearingPreview, shouldGreet } from "@/sk/shell/client/bubble";
 
 import { decideWithCards, secondsLeft } from "@/sk/shell/client/confirm";
 import { pathsToPrefetch } from "@/sk/shell/client/prefetch";
@@ -167,7 +167,8 @@ type ContextReply = { ready?: boolean; greeting?: string; capabilities?: string[
 function readLocalPrefs(): StoredPrefs {
   const out: StoredPrefs = {};
   for (const k of PREF_KEYS) {
-    const v = parseLocalFlag(readText(PREF_LOCAL_KEY[k]));
+    // lookA lives in the rig's own key ("sk:rig" = "A" / "B").
+    const v = parseLocalPref(k, readText(PREF_LOCAL_KEY[k]));
     if (v !== undefined) out[k] = v;
   }
   return out;
@@ -283,7 +284,10 @@ export default function SkShell({
   const router = useRouter();
   /** This corner listens hands-free while the Mic switch is on (not the Board). */
   const listen = autoListen ?? !board;
-  const [rig] = useRigChoice();
+  // SK's character (the look AND the voice gender): useRigChoice is the one
+  // source every reader follows; the warm start applies the server's lookA
+  // through chooseRig, and the menu's Character choice saves it.
+  const [rig, chooseRig] = useRigChoice();
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
@@ -297,6 +301,8 @@ export default function SkShell({
   const [readAloud, setReadAloud] = useState(true);
   const [handsFree, setHandsFree] = useState(false);
   const [listening, setListening] = useState(false);
+  /** 2026-10-30: her words so far while the mic listens (the bubble's "you're saying…"). */
+  const [hearing, setHearing] = useState("");
   const [mic, setMic] = useState(false);
   const [caption, setCaption] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -422,6 +428,7 @@ export default function SkShell({
         stopMicRef.current?.();
         stopMicRef.current = null;
         setListening(false);
+        setHearing("");
       },
       ...(listen ? { onResume: () => listenNowRef.current(), canResume: () => !walkRef.current?.narrating && !(holdRef.current?.holding ?? speakingRef.current) } : {}),
     });
@@ -646,7 +653,7 @@ export default function SkShell({
         // holds is migrated up once (prefs.ts resolvePrefs). A reply without
         // prefs (unreadable) changes nothing.
         if (d.prefs !== undefined) {
-          const r = resolvePrefs(d.prefs === null ? null : pick(d.prefs), readLocalPrefs(), readText(PREFS_MIGRATED_LOCAL_KEY) === "1", role);
+          const r = resolvePrefs(d.prefs === null ? null : pick(d.prefs), readLocalPrefs(), (k) => readText(migratedLocalKey(k)) === "1", role);
           micOnRef.current = r.prefs.micOn;
           setMicOn(r.prefs.micOn);
           readAloudRef.current = r.prefs.readAloud;
@@ -655,10 +662,16 @@ export default function SkShell({
           handsFreeRef.current = r.prefs.handsFree;
           setHandsFree(r.prefs.handsFree);
           if (r.prefs.showText) openTextByPref();
+          // SK's character follows her across devices: the avatar, the voice
+          // gender and every other reader of the rig update at once. Only a
+          // real change is stored (no "B" written for a default nobody chose).
+          applyLook(r.prefs, readRigChoice(), chooseRig);
           if (d.prefs !== null) {
-            for (const k of PREF_KEYS) writeFlag(PREF_LOCAL_KEY[k], r.prefs[k]);
-            if (Object.keys(r.migrate).length) void savePref(r.migrate).then((ok) => ok && writeText(PREFS_MIGRATED_LOCAL_KEY, "1"));
-            else writeText(PREFS_MIGRATED_LOCAL_KEY, "1");
+            // lookA's local copy is the rig's key, kept by chooseRig above.
+            for (const k of PREF_KEYS) if (k !== "lookA") writeFlag(PREF_LOCAL_KEY[k], r.prefs[k]);
+            const markMigrated = () => MIGRATED_LOCAL_KEYS.forEach((m) => writeText(m, "1"));
+            if (Object.keys(r.migrate).length) void savePref(r.migrate).then((ok) => ok && markMigrated());
+            else markMigrated();
           }
         }
         setPrefsSettled(true);
@@ -986,7 +999,13 @@ export default function SkShell({
 
   /** One dictation pass. Hands-free restarts it after each utterance for as
    * long as the gate is still active; the gate's onStop is the only thing that
-   * ends the loop, and nothing here ever restarts it after that (§2.6). */
+   * ends the loop, and nothing here ever restarts it after that (§2.6).
+   *
+   * 2026-10-30 (founder: "too sharp or incomplete"): a pass is her whole
+   * TURN, not her first phrase. Hands-free and the tap-to-talk passes end by
+   * the endpointer (voice-client.ts → endpointing.ts: ~1.5 s of silence with
+   * no new words, longer when she trails off on "and…" / "um…"); push-to-talk
+   * ends when the button is released. */
   function beginDictation(mode: "ptt" | "handsFree") {
     const gate = gateRef.current;
     if (!gate?.active) return;
@@ -999,10 +1018,12 @@ export default function SkShell({
       onText: (t) => {
         dictatedRef.current = t;
         setInput(t);
+        setHearing(t);
         gate.touch();
       },
       onEnd: () => {
         stopMicRef.current = null;
+        setHearing("");
         const text = dictatedRef.current.trim();
         dictatedRef.current = "";
         if (mode === "handsFree" && micModeRef.current === "handsFree" && gate.active) {
@@ -1032,7 +1053,8 @@ export default function SkShell({
       pass.onEnd,
       // Transcribe (en/ms/ar/zh) identifies which of those she speaks, so she
       // can switch by speaking; the browser recognizer listens in `lang`.
-      { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l) },
+      // Push-to-talk: the release ends her turn, not a pause.
+      { lang: dictLangRef.current ?? pageSpeechLang(), identify: true, onLanguage: (l) => (spokenLangRef.current = l), endpointing: mode !== "ptt" },
     );
     if (!stop) {
       if (listen) setMicNote("unsupported");
@@ -1052,6 +1074,14 @@ export default function SkShell({
     micModeRef.current = "ptt";
     emptyEndsRef.current = 0;
     beginDictation("ptt");
+  }
+  /** 2026-10-30: a tap on the avatar while she is speaking ends her turn NOW
+   *  and sends it — the dictation's own stop, so the pass ends normally (the
+   *  gate's stop would drop the words). Push-to-talk ends by its release. */
+  function endTurnNow(): boolean {
+    if (!listening || !hearing.trim() || micModeRef.current === "ptt" || !stopMicRef.current) return false;
+    stopMicRef.current();
+    return true;
   }
   function releaseMic() {
     if (micModeRef.current !== "ptt") return;
@@ -1552,6 +1582,19 @@ export default function SkShell({
       : { kind: "action", id: "conversation", label: cc.showConversation, icon: "💬", onSelect: openSheet },
     ...(listen ? [{ kind: "toggle" as const, id: "mic", label: hc.micSwitch, icon: "🎤", checked: micLive, disabled: !mic, onSelect: toggleMic }] : []),
     { kind: "toggle", id: "read-aloud", label: copy.readAloud, icon: readAloud ? "🔊" : "🔈", checked: readAloud, onSelect: toggleReadAloud },
+    {
+      kind: "choice",
+      id: "character",
+      label: cc.character,
+      icon: "👤",
+      value: rig,
+      options: [
+        { value: "A", label: cc.lookA, image: "/sk/portrait/sk-a.webp" },
+        { value: "B", label: cc.lookB, image: "/sk/portrait/sk-b.webp" },
+      ],
+      // The look and its voice at once, saved so it follows her (prefs.ts pickLook).
+      onSelect: (v: string) => void pickLook(v, readRigChoice(), chooseRig, savePref),
+    },
     ...(onTakeTour && takeTourLabel && !walk
       ? [
           {
@@ -1927,9 +1970,16 @@ export default function SkShell({
   );
 
   // ── what the bubble says ──
-  const bubbleKind = tourOn ? "tour" : openMsg ? openMsg.kind : thinking ? "thinking" : msg ? msg.kind : "none";
+  // While she speaks: her words so far, muted and italic ("you're saying…"),
+  // over whatever the bubble held — it comes back when her turn ends.
+  const hearingText = hearingPreview(hearing, { listening, tour: tourOn });
+  const bubbleKind = tourOn ? "tour" : hearingText ? "hearing" : openMsg ? openMsg.kind : thinking ? "thinking" : msg ? msg.kind : "none";
   const bubbleBody = tourOn ? (
     walk?.strip(tourAnswer)
+  ) : hearingText ? (
+    <p className="max-h-20 overflow-y-auto whitespace-pre-wrap leading-5 italic text-slate-500" dir="auto" data-sk="bubble-hearing">
+      {hearingText}…
+    </p>
   ) : thinking ? (
     <p className="text-slate-500" data-sk="bubble-thinking">
       …
@@ -1984,12 +2034,12 @@ export default function SkShell({
           trailing circles pointing at it. */}
       <div className={`flex items-start gap-4 ${side === "start" ? "flex-row-reverse" : ""}`}>
         <SkBubble
-          open={isBubbleOpen || thinking}
+          open={isBubbleOpen || thinking || !!hearingText}
           side={side}
           kind={bubbleKind}
           wide={tourOn}
           onHold={(on) => dispatchBubble({ type: "hold", on, at: Date.now() })}
-          onClose={tourOn ? undefined : () => dispatchBubble({ type: "close" })}
+          onClose={tourOn || hearingText ? undefined : () => dispatchBubble({ type: "close" })}
           closeLabel={cc.dismiss}
         >
           {bubbleBody}
@@ -2002,7 +2052,10 @@ export default function SkShell({
             listening={listening}
             label={cc.avatar}
             expanded={menuOpen}
-            onClick={() => setMenuOpen((o) => !o)}
+            onClick={() => {
+              if (endTurnNow()) return;
+              setMenuOpen((o) => !o);
+            }}
             buttonRef={avatarRef}
           />
         </div>
