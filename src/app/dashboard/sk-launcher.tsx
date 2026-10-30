@@ -131,6 +131,7 @@ export default function SkLauncher({
                 showAnswers: tour.showAnswers,
                 command: tour.command,
                 onVoiceDone: tour.onVoiceDone,
+                onSentence: tour.onSentence,
                 act: tour.act,
                 hold: tour.hold,
                 state: tour.state ?? undefined,

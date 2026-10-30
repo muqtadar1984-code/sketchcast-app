@@ -2,7 +2,13 @@
 //
 //   planWalk()      — the role's stops (src/sk/walkthrough/stops.ts) against
 //                     the user's facts: which stops play, on which concrete
-//                     route, with which line and anchors.
+//                     route, with which line and anchors (a combined stop:
+//                     which of its parts play).
+//   findParts() / joinParts() / partSentenceStarts() / partAtSentence() /
+//   partReadingStarts() — a combined stop (one narration over several
+//                     controls): its parts on the page, its ONE line, and
+//                     which part the highlight is on as SK speaks (or, without
+//                     sound, as the reading time passes).
 //   start/next/back/jump/pause/resume/skip/missing — the state machine:
 //                     idle → running ⇄ paused → done | skipped. Every function
 //                     returns a NEW state and never throws on a bad move (back
@@ -25,7 +31,7 @@
 // makes no model call, and never sends a sample question.
 
 import { INTENT_FILLER_WORDS, intentWords } from "@/sk/shell/intent-normalize";
-import { WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkRole, type WalkScroll, type WalkStopDef } from "@/sk/walkthrough/stops";
+import { WALK_STOPS, type WalkAnchor, type WalkChip, type WalkDemo, type WalkFacts, type WalkNeedSpec, type WalkPartDef, type WalkRole, type WalkScroll, type WalkStopDef } from "@/sk/walkthrough/stops";
 
 export type WalkStatus = "idle" | "running" | "paused" | "done" | "skipped";
 
@@ -42,6 +48,19 @@ export type PlannedStop = {
   scroll?: WalkScroll;
   demo?: WalkDemo;
   chips?: WalkChip[];
+  /** A combined stop (founder 2026-10-30: one narration over several
+   *  controls on one screen): the parts that play for this user, in order.
+   *  `anchors` is then every part's anchors (for the log), and `line` the
+   *  first part's. */
+  parts?: PlannedPart[];
+};
+
+/** One part of a combined stop as planned for this user. */
+export type PlannedPart = {
+  id: string;
+  /** sk.walkthrough.<role>.<line>. */
+  line: string;
+  anchors: Array<{ sel: string; line?: string }>;
 };
 
 export type WalkState = {
@@ -121,8 +140,9 @@ export function resolveRoute(route: string, f: WalkFacts): string | null {
 
 const anchorOf = (a: WalkAnchor) => (typeof a === "string" ? { sel: a } : { sel: a.sel, line: a.line });
 
-/** One stop against the facts: null when it does not play for this user. */
-export function planStop(def: WalkStopDef, f: WalkFacts): PlannedStop | null {
+/** A stop's or a part's needs and fallback against the facts: its line and
+ *  anchors, or null when it does not play. */
+function planLine(def: WalkStopDef | WalkPartDef, f: WalkFacts): { line: string; anchors: WalkAnchor[] } | null {
   if (def.needs && !def.needs.every((n) => needHolds(n, f))) return null;
   let line = def.line ?? def.id;
   let anchors = def.anchors;
@@ -132,16 +152,37 @@ export function planStop(def: WalkStopDef, f: WalkFacts): PlannedStop | null {
     if (fb.line) line = fb.line;
     if (fb.anchors) anchors = fb.anchors;
   }
+  return { line, anchors };
+}
+
+/** One stop against the facts: null when it does not play for this user. A
+ *  combined stop plays the parts whose facts hold, and none = no stop. */
+export function planStop(def: WalkStopDef, f: WalkFacts): PlannedStop | null {
+  const own = planLine(def, f);
+  if (!own) return null;
+  let { line, anchors } = own;
+  let parts: PlannedPart[] | undefined;
+  if (def.parts) {
+    parts = [];
+    for (const p of def.parts) {
+      const pl = planLine(p, f);
+      if (pl) parts.push({ id: p.id, line: pl.line, anchors: pl.anchors.map(anchorOf) });
+    }
+    if (!parts.length) return null;
+    line = parts[0]!.line;
+    anchors = [];
+  }
   const route = resolveRoute(def.route, f);
   if (!route) return null;
   return {
     id: def.id,
     route,
     line,
-    anchors: anchors.map(anchorOf),
+    anchors: parts ? parts.flatMap((p) => p.anchors) : anchors.map(anchorOf),
     ...(def.scroll && def.scroll !== "center" ? { scroll: def.scroll } : {}),
     ...(def.demo ? { demo: def.demo } : {}),
     ...(def.chips?.length ? { chips: [...def.chips] } : {}),
+    ...(parts ? { parts } : {}),
   };
 }
 
@@ -232,6 +273,8 @@ export type WalkStore = {
   clear: () => void;
 };
 
+const validAnchors = (a: unknown) => Array.isArray(a) && a.every((x) => x && typeof x.sel === "string");
+
 function validStop(x: unknown): x is PlannedStop {
   const s = x as PlannedStop;
   return (
@@ -242,7 +285,8 @@ function validStop(x: unknown): x is PlannedStop {
     typeof s.line === "string" &&
     Array.isArray(s.anchors) &&
     s.anchors.every((a) => a && typeof a.sel === "string") &&
-    (s.scroll === undefined || s.scroll === "start" || s.scroll === "center")
+    (s.scroll === undefined || s.scroll === "start" || s.scroll === "center") &&
+    (s.parts === undefined || (Array.isArray(s.parts) && s.parts.length > 0 && s.parts.every((p) => p && typeof p.id === "string" && typeof p.line === "string" && validAnchors(p.anchors))))
   );
 }
 
@@ -317,6 +361,82 @@ export function findAnchor<E>(anchors: PlannedStop["anchors"], dom: AnchorDom<E>
     if (el && dom.visible(el)) return { el, sel: a.sel, ...(a.line ? { line: a.line } : {}), index };
   }
   return null;
+}
+
+// ── combined stops: one narration, the highlight moving part by part ───────
+
+/** One part of a combined stop as found on the page: its control (or a
+ *  fallback, with that anchor's line) and the line key to say. */
+export type PartHit<E> = { id: string; el: E; line: string; index: number };
+
+/** A combined stop as found: the first part's control is where the highlight
+ *  starts. `index` is 0 only when EVERY planned part found its own control,
+ *  so the settled wait takes fallbacks (or a part left out) only once the page
+ *  has settled — exactly like a single stop's fallback anchor. */
+export type PartsMatch<E> = { el: E; index: number; parts: Array<PartHit<E>> };
+
+/** Each part's first visible anchor; a part with none is left out. Null when
+ *  no part is on the page. */
+export function findParts<E>(parts: PlannedPart[], dom: AnchorDom<E>): PartsMatch<E> | null {
+  const hits: Array<PartHit<E>> = [];
+  let complete = true;
+  for (const p of parts) {
+    const m = findAnchor(p.anchors, dom);
+    if (!m) {
+      complete = false;
+      continue;
+    }
+    if (m.index > 0) complete = false;
+    hits.push({ id: p.id, el: m.el, line: m.line ?? p.line, index: m.index });
+  }
+  if (!hits.length) return null;
+  return { el: hits[0]!.el, index: complete ? 0 : 1, parts: hits };
+}
+
+/** The ONE line a combined stop says: its parts' words, in order. A part's
+ *  words that do not end a sentence get a full stop, so the next part starts
+ *  a sentence of its own (the highlight moves on sentence starts). */
+export function joinParts(texts: string[]): string {
+  return texts
+    .map((t) => String(t ?? "").trim())
+    .filter(Boolean)
+    .map((t) => (/[.!?؟।]["'”’»)]*$/u.test(t) ? t : `${t}.`))
+    .join(" ");
+}
+
+/** The sentence each part starts at, when the joined line is spoken sentence
+ *  by sentence (`split` = the speech coordinator's splitSentences). */
+export function partSentenceStarts(texts: string[], split: (t: string) => string[]): number[] {
+  const starts: number[] = [];
+  let n = 0;
+  for (const t of texts) {
+    starts.push(n);
+    // A part with no words says nothing: it shares the next part's start.
+    n += split(joinParts([t])).length;
+  }
+  return starts;
+}
+
+/** Which part sentence `i` (0-based, in speaking order) belongs to. */
+export function partAtSentence(starts: number[], i: number): number {
+  let k = 0;
+  for (let j = 0; j < starts.length; j++) if (starts[j]! <= i) k = j;
+  return k;
+}
+
+/** Without sound: when each part's highlight starts (ms after the stop is
+ *  shown), sharing the whole line's reading time by the parts' lengths. */
+export function partReadingStarts(texts: string[]): number[] {
+  const lens = texts.map((t) => [...String(t ?? "")].length);
+  const total = lens.reduce((a, b) => a + b, 0);
+  const ms = readingMs(joinParts(texts));
+  const out: number[] = [];
+  let before = 0;
+  for (const l of lens) {
+    out.push(total ? Math.round((before / total) * ms) : 0);
+    before += l;
+  }
+  return out;
 }
 
 /** A box on screen (getBoundingClientRect's numbers). */

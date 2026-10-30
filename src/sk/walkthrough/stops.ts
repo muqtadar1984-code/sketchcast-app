@@ -31,6 +31,17 @@
 //   demo     — a STATIC "Example" card (never a real confirm card: a real one
 //              writes an sk_action_tokens row).
 //   chips    — sample questions, shown but NEVER sent by the tour.
+//   parts    — (founder 2026-10-30: "combine them into 1 narration as all the
+//              features are available in 1 screen") ONE stop that narrates
+//              several controls on the same page, in order. Each part has its
+//              own anchors (with their own fallback lines), its own line and
+//              its own needs / fallback, exactly like a stop: a part whose
+//              fact is missing, or whose anchors are all absent, is left out
+//              of the narration; the stop is skipped only when every part is.
+//              The parts' lines are spoken as ONE line and the highlight
+//              moves to each part's control as SK starts its first sentence
+//              (so every part's line ends a sentence). A parts stop's own
+//              `anchors` stay [] and are not used.
 
 export type WalkRole = "teacher" | "student" | "parent" | "principal" | "coordinator";
 
@@ -127,6 +138,20 @@ export type WalkChip =
   | "generationCost"
   | "schoolTrend";
 
+/** What to do instead when a fact is missing (a stop's or a part's). */
+export type WalkFallback = { unless: WalkNeedSpec; line?: string; anchors?: WalkAnchor[]; skip?: true };
+
+/** One part of a combined stop: a control, its line, its own needs. */
+export type WalkPartDef = {
+  /** Stable id; also the default line key. */
+  id: string;
+  anchors: WalkAnchor[];
+  /** The line key when it differs from `id`. */
+  line?: string;
+  needs?: WalkNeedSpec[];
+  fallback?: WalkFallback[];
+};
+
 export type WalkStopDef = {
   /** Stable id; also the default line key. */
   id: string;
@@ -138,9 +163,11 @@ export type WalkStopDef = {
   scroll?: WalkScroll;
   needs?: WalkNeedSpec[];
   /** First entry whose `unless` fact is missing applies: another line and/or anchors, or skip. */
-  fallback?: Array<{ unless: WalkNeedSpec; line?: string; anchors?: WalkAnchor[]; skip?: true }>;
+  fallback?: WalkFallback[];
   demo?: WalkDemo;
   chips?: WalkChip[];
+  /** A combined stop: one narration over these controls, in order (see the header). */
+  parts?: WalkPartDef[];
 };
 
 // 2026-10-30: SK is the corner avatar now (no hero card): "SK here" anchors
@@ -194,28 +221,36 @@ const TEACHER: WalkStopDef[] = [
   { id: "hello", route: "/dashboard", anchors: [HERO, LAUNCHER] },
   // The Library at the TOP of the screen, not its middle (founder 2026-10-30).
   { id: "library", route: LIB, scroll: "start", anchors: [BOOK_LIST, { sel: '[data-tour="library-empty"]', line: "libraryEmpty" }, { sel: UPLOAD, line: "libraryEmpty" }] },
-  { id: "bookCard", route: LIB, anchors: [OPEN + BOOK_BADGES, BOOK_BADGES], needs: ["books"] },
+  // Steps 3–6 were four stops on one screen (founder 2026-10-30: "combine
+  // steps 3 to 6 into 1 narration as all the features are available in 1
+  // screen"): the open book's badges, Generate all, Generate full kit and
+  // Lesson options — one narration, the highlight moving part by part.
   {
-    id: "generateAll",
+    id: "openBook",
     route: LIB,
-    anchors: [OPEN + GENERATE_ALL, GENERATE_ALL, { sel: OPEN + BOOK_BADGES, line: "generateAllNone" }, { sel: BOOK_BADGES, line: "generateAllNone" }],
-    needs: ["books"],
-  },
-  {
-    id: "chapterKit",
-    route: LIB,
-    anchors: [OPEN + FULL_KIT, FULL_KIT, { sel: OPEN + ASSIGN_CHAPTER, line: "chapterKitDone" }, { sel: BOOK_LIST, line: "chapterKitClosed" }],
-    needs: ["books"],
-  },
-  {
-    id: "lessonOptions",
-    route: LIB,
-    anchors: [
-      OPEN + LESSON_OPTIONS,
-      LESSON_OPTIONS,
-      { sel: OPEN + BOOK_BADGES, line: "lessonOptionsNone" },
-      { sel: BOOK_LIST, line: "lessonOptionsNone" },
-      { sel: UPLOAD, line: "lessonOptionsNone" },
+    anchors: [],
+    parts: [
+      { id: "bookCard", anchors: [OPEN + BOOK_BADGES, BOOK_BADGES], needs: ["books"] },
+      {
+        id: "generateAll",
+        anchors: [OPEN + GENERATE_ALL, GENERATE_ALL, { sel: OPEN + BOOK_BADGES, line: "generateAllNone" }, { sel: BOOK_BADGES, line: "generateAllNone" }],
+        needs: ["books"],
+      },
+      {
+        id: "chapterKit",
+        anchors: [OPEN + FULL_KIT, FULL_KIT, { sel: OPEN + ASSIGN_CHAPTER, line: "chapterKitDone" }, { sel: BOOK_LIST, line: "chapterKitClosed" }],
+        needs: ["books"],
+      },
+      {
+        id: "lessonOptions",
+        anchors: [
+          OPEN + LESSON_OPTIONS,
+          LESSON_OPTIONS,
+          { sel: OPEN + BOOK_BADGES, line: "lessonOptionsNone" },
+          { sel: BOOK_LIST, line: "lessonOptionsNone" },
+          { sel: UPLOAD, line: "lessonOptionsNone" },
+        ],
+      },
     ],
   },
   // A part that is "Not generated yet": ITS Generate kit, never Generate all.
@@ -258,9 +293,19 @@ const TEACHER: WalkStopDef[] = [
     needs: ["books"],
     fallback: [{ unless: "exam", line: "moreNoExam" }],
   },
-  { id: "upload", route: "/dashboard", anchors: [UPLOAD] },
-  { id: "classes", route: "/dashboard", anchors: ['[data-tour="classes"]'] },
-  { id: "branding", route: "/dashboard", anchors: ['[data-tour="branding"]'] },
+  // Steps 14–16 were three stops on one screen (founder 2026-10-30: "also on
+  // the same screen, combine them all into 1 narration"). Upload is a brief
+  // mention here; the closing stop is the invitation to upload.
+  {
+    id: "setup",
+    route: "/dashboard",
+    anchors: [],
+    parts: [
+      { id: "upload", anchors: [UPLOAD] },
+      { id: "classes", anchors: ['[data-tour="classes"]'] },
+      { id: "branding", anchors: ['[data-tour="branding"]'] },
+    ],
+  },
   { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', { sel: HERO, line: "myBooksNone" }] },
   // The meter (fair-use-meter.tsx) renders NOTHING for an unlimited plan
   // (my_fair_use().unlimited: staff, school plans with no cap), when the read
@@ -402,14 +447,27 @@ export function walkRoleFor(role: string | null | undefined, hat: string | null 
   return "teacher";
 }
 
-/** Every line key a role's stops can say (the stop ids, their fallback lines
- *  and their anchors' own lines) — the i18n test checks each one exists. */
+/** Every anchor a stop names: its own, its fallbacks', and its parts' (theirs
+ *  and their fallbacks'). */
+export function anchorsOf(d: WalkStopDef | WalkPartDef): WalkAnchor[] {
+  const own = [...d.anchors, ...(d.fallback ?? []).flatMap((f) => f.anchors ?? [])];
+  const parts = "parts" in d && d.parts ? d.parts.flatMap(anchorsOf) : [];
+  return [...own, ...parts];
+}
+
+/** Every line key a role's stops can say (the stop ids — for a combined stop,
+ *  its parts' ids instead —, their fallback lines and their anchors' own
+ *  lines) — the i18n test checks each one exists. */
 export function lineKeysFor(role: WalkRole): string[] {
   const keys = new Set<string>();
+  const add = (d: WalkStopDef | WalkPartDef) => {
+    keys.add(d.line ?? d.id);
+    for (const f of d.fallback ?? []) if (f.line) keys.add(f.line);
+    for (const a of [...d.anchors, ...(d.fallback ?? []).flatMap((f) => f.anchors ?? [])]) if (typeof a !== "string") keys.add(a.line);
+  };
   for (const s of WALK_STOPS[role]) {
-    keys.add(s.line ?? s.id);
-    for (const f of s.fallback ?? []) if (f.line) keys.add(f.line);
-    for (const a of [...s.anchors, ...(s.fallback ?? []).flatMap((f) => f.anchors ?? [])]) if (typeof a !== "string") keys.add(a.line);
+    if (s.parts?.length) s.parts.forEach(add);
+    else add(s);
   }
   return [...keys];
 }

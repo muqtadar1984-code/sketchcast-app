@@ -29,6 +29,12 @@
 //   WalkSpotlight — a dimmed backdrop with a cut-out ring round the anchor;
 //     pointer-events none, so the page stays usable.
 //
+// A combined stop (stops.ts `parts`, founder 2026-10-30: "combine steps 3 to
+// 6 into 1 narration") says its parts' lines as ONE line; the highlight starts
+// on the first part's control and MOVES to each next part's control as the
+// Shell reports SK starting that part's first sentence (`onSentence`), or,
+// without sound, as the reading time reaches it.
+//
 // Every stop also reports how it went to SK's voice log (POST
 // /api/sk/voice-log → one function-log line per batch; voice-log.ts
 // tourEvent): shown and how long its page took, or skipped and why — the
@@ -53,10 +59,14 @@ import {
   createWalkStore,
   currentStop,
   findAnchor,
+  findParts,
   isActive,
   jumpTo,
   missingStop,
   nextStop,
+  partAtSentence,
+  partReadingStarts,
+  partSentenceStarts,
   pauseWalk,
   planWalk,
   resumeWalk,
@@ -70,13 +80,16 @@ import {
   waitForSettledPage,
   waitForStableRect,
   walkCommand,
+  joinParts,
   type LineOutcome,
+  type PartHit,
   type PlannedStop,
   type SettleProbe,
   type WalkRect,
   type WalkState,
   type WalkStore,
 } from "@/sk/shell/client/walkthrough";
+import { splitSentences } from "@/sk/shell/client/speech";
 import { beaconVoiceEvents, createVoiceLog, skipOutcome, tourEvent, tourPageState, type TourOutcome, type VoiceLog } from "@/sk/shell/client/voice-log";
 import type { SkTurnWalk, SkWalkAction } from "@/sk/shell/types";
 import { CLICK_ONLY_DEMOS, WALK_ROLES, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
@@ -375,6 +388,9 @@ export type SkWalkthrough = {
   /** The Shell reports how a `voice` line ended: the tour moves on by itself
    *  only after it was FULLY spoken. */
   onVoiceDone: (key: string, outcome: LineOutcome) => void;
+  /** The Shell starts sentence `index` (0-based) of the `voice` line `key`: a
+   *  combined stop moves its highlight to the part that sentence opens. */
+  onSentence: (key: string, index: number) => void;
   /** A tour action the server decided (natural phrasing it caught). */
   act: (action: SkWalkAction) => void;
   /** She is typing: no auto-advance under her. */
@@ -383,6 +399,19 @@ export type SkWalkthrough = {
   state: SkTurnWalk | null;
   /** The browser refused SK's voice (autoplay): show "Tap for sound" again. */
   soundBlocked: () => void;
+};
+
+/** What the current stop shows: its control (the spotlight's), and for a
+ *  combined stop every part's control and line key, the part highlighted now,
+ *  the sentence each part starts at and (no sound) the ms each one starts at. */
+type WalkMatch = {
+  el: Element | null;
+  line?: string;
+  key: string;
+  parts?: Array<{ el: Element; line: string }>;
+  part?: number;
+  starts?: number[];
+  times?: number[];
 };
 
 /** The stop key: one run, one position, one plan (a missing stop changes it). */
@@ -408,7 +437,7 @@ export function useSkWalkthrough({
   const router = useRouter();
   const pathname = usePathname();
   const [walk, setWalk] = useState<WalkState | null>(null);
-  const [match, setMatch] = useState<{ el: Element | null; line?: string; key: string } | null>(null);
+  const [match, setMatch] = useState<WalkMatch | null>(null);
   const [soundOn, setSoundOn] = useState(false);
   const [voice, setVoice] = useState<WalkVoice>(null);
   const [fill, setFill] = useState<WalkVoice>(null);
@@ -457,9 +486,11 @@ export function useSkWalkthrough({
     onIntroDoneRef.current = onIntroDone;
   });
 
-  const lineOf = useCallback((w: WalkState | null, m: { line?: string } | null): string => {
+  const lineOf = useCallback((w: WalkState | null, m: { line?: string; parts?: Array<{ line: string }> } | null): string => {
     const stop = w ? currentStop(w) : null;
     if (!stop || !copy) return "";
+    // A combined stop: its parts' words as ONE line.
+    if (m?.parts?.length) return joinParts(m.parts.map((p) => walkLine(copy, w!.role, p.line)));
     return walkLine(copy, w!.role, m?.line ?? stop.line) || walkLine(copy, w!.role, stop.line);
   }, [copy]);
   // The stop effect reads the words through a ref: a new `copy` object (a
@@ -469,18 +500,67 @@ export function useSkWalkthrough({
     lineOfRef.current = lineOf;
   }, [lineOf]);
 
-  const quiet = useCallback(() => {
-    spokenRef.current = null;
-    setVoice({ key: uid(), text: "" });
+  // ── a combined stop's highlight, part by part ──
+  /** The reading-time clock moving a combined stop's highlight (no sound). */
+  const partTimersRef = useRef<number[]>([]);
+  const clearPartClock = useCallback(() => {
+    for (const t of partTimersRef.current) window.clearTimeout(t);
+    partTimersRef.current = [];
+  }, []);
+  useEffect(() => clearPartClock, [clearPartClock]);
+
+  /** Move the highlight to part `k` of the combined stop `gk` (scrolled into
+   *  view only when it is off screen). */
+  const showPart = useCallback((gk: string, k: number) => {
+    const m = matchRef.current;
+    const p = m?.parts?.[k];
+    if (!m || !p || m.key !== gk || m.part === k) return;
+    matchRef.current = { ...m, el: p.el, part: k };
+    try {
+      const r = p.el.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) {
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        p.el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      }
+    } catch {
+      /* old browsers */
+    }
+    setMatch((cur) => (cur && cur.key === gk && cur.parts ? { ...cur, el: p.el, part: k } : cur));
   }, []);
 
-  /** Say this stop's line now; the tour moves on once it has been spoken. */
+  /** Without sound: each part's highlight at its share of the reading time. */
+  const startPartClock = useCallback(
+    (gk: string) => {
+      clearPartClock();
+      const times = matchRef.current?.key === gk ? matchRef.current.times : undefined;
+      if (!times) return;
+      times.forEach((ms, k) => {
+        if (k === 0) return;
+        partTimersRef.current.push(
+          window.setTimeout(() => {
+            if (goKeyOf(walkRef.current) === gk) showPart(gk, k);
+          }, ms),
+        );
+      });
+    },
+    [clearPartClock, showPart],
+  );
+
+  const quiet = useCallback(() => {
+    spokenRef.current = null;
+    clearPartClock();
+    setVoice({ key: uid(), text: "" });
+  }, [clearPartClock]);
+
+  /** Say this stop's line now; the tour moves on once it has been spoken. A
+   *  combined stop's highlight then follows the voice, sentence by sentence. */
   const speakStop = useCallback((goKey: string, entry: number, text: string) => {
     const key = uid();
     spokenRef.current = { key, goKey, entry, text };
+    clearPartClock();
     setAdvance(null);
     setVoice({ key, text });
-  }, []);
+  }, [clearPartClock]);
 
   // Restore a run this tab already has (page move, or another layout's launcher).
   useEffect(() => {
@@ -599,9 +679,11 @@ export function useSkWalkthrough({
     const none = { el: null as Element | null, index: 0 };
     void (async () => {
       // Found = visible and holding still; missing = only once the page has
-      // SETTLED without it (never a clock counted from the navigation).
-      const hit = await waitForSettledAnchor<{ el: Element | null; line?: string; index: number }>({
-        find: () => (s.anchors.length ? findAnchor(s.anchors, dom) : none),
+      // SETTLED without it (never a clock counted from the navigation). A
+      // combined stop is found with its parts: complete (every part's own
+      // control) at once, else whatever is there once the page has settled.
+      const hit = await waitForSettledAnchor<{ el: Element | null; line?: string; index: number; parts?: Array<PartHit<Element>> }>({
+        find: () => (s.parts?.length ? findParts(s.parts, dom) : s.anchors.length ? findAnchor(s.anchors, dom) : none),
         rect: (h) => (h.el ? rectOf(h.el) : null),
         same: (a, b) => a.el === b.el,
         // A fallback anchor (not the stop's own control) only once the page
@@ -640,7 +722,16 @@ export function useSkWalkthrough({
         await waitForStableRect({ rect: () => rectOf(el), signal: ac.signal });
         if (ac.signal.aborted) return;
       }
-      const m = { el, line: hit.line, key: goKey };
+      const m: WalkMatch = { el, line: hit.line, key: goKey };
+      if (hit.parts?.length) {
+        // A combined stop: one line, the highlight on its first part for now.
+        m.parts = hit.parts.map((p) => ({ el: p.el, line: p.line }));
+        m.part = 0;
+        const texts = m.parts.map((p) => lineOfRef.current(w, { line: p.line }));
+        m.starts = partSentenceStarts(texts, splitSentences);
+        m.times = partReadingStarts(texts);
+      }
+      matchRef.current = m;
       setMatch(m);
       shownAtRef.current = { goKey, at: Date.now() };
       const busy = loadingSignal();
@@ -649,10 +740,16 @@ export function useSkWalkthrough({
       // (or, without sound, the reading time) decides when the tour moves on.
       const text = lineOfRef.current(w, m);
       if (soundRef.current) speakStop(goKey, entry, text);
-      else setAdvance({ goKey, entry, ms: advanceDelay({ status: "running", soundOn: false, text }) ?? readingMs(text) });
+      else {
+        setAdvance({ goKey, entry, ms: advanceDelay({ status: "running", soundOn: false, text }) ?? readingMs(text) });
+        startPartClock(goKey);
+      }
     })();
-    return () => ac.abort();
-  }, [goKey, router, speakStop, logStop]);
+    return () => {
+      ac.abort();
+      clearPartClock();
+    };
+  }, [goKey, router, speakStop, logStop, startPartClock, clearPartClock]);
 
   // The auto-advance itself: only for the stop entry it was set for, only
   // while that stop is still the one running. A pause, a question, her typing
@@ -676,7 +773,22 @@ export function useSkWalkthrough({
     // Cut off (barge-in, Stop, an error): wait for Next or Resume.
     const ms = advanceDelay({ status: w.status, soundOn: true, outcome, text: sp.text });
     if (ms !== null) setAdvance({ goKey: sp.goKey, entry: sp.entry, ms });
-  }, []);
+    // Nothing was said (read-aloud off): a combined stop's highlight moves by reading time.
+    if (outcome === "silent") startPartClock(sp.goKey);
+  }, [startPartClock]);
+
+  /** SK starts sentence `index` of the line `key`: on a combined stop, the
+   *  highlight moves to the part that sentence belongs to. */
+  const onSentence = useCallback(
+    (key: string, index: number) => {
+      const sp = spokenRef.current;
+      const m = matchRef.current;
+      if (!sp || sp.key !== key || !m?.parts || !m.starts || m.key !== sp.goKey) return;
+      if (goKeyOf(walkRef.current) !== sp.goKey || sp.entry !== entryRef.current) return;
+      showPart(sp.goKey, partAtSentence(m.starts, index));
+    },
+    [showPart],
+  );
 
   // She left the stop's page herself (a link, the back button): hold the tour.
   useEffect(() => {
@@ -837,6 +949,7 @@ export function useSkWalkthrough({
     onQuestion,
     start,
     onVoiceDone,
+    onSentence,
     act,
     hold,
     state,

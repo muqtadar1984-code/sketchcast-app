@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { WALK_ROLES, WALK_STOPS, lineKeysFor, type WalkAnchor } from "../stops";
+import { WALK_ROLES, WALK_STOPS, anchorsOf, lineKeysFor, type WalkAnchor } from "../stops";
 import en from "@/i18n/messages/en.json";
 import ms from "@/i18n/messages/ms.json";
 import msArab from "@/i18n/messages/ms-arab.json";
@@ -46,7 +46,7 @@ function attributePairs(): Array<[string, string]> {
   const pairs = new Map<string, [string, string]>();
   for (const defs of Object.values(WALK_STOPS)) {
     for (const d of defs) {
-      for (const a of [...d.anchors, ...(d.fallback ?? []).flatMap((f) => f.anchors ?? [])]) {
+      for (const a of anchorsOf(d)) {
         for (const m of selOf(a).matchAll(/\[([a-z-]+)="([^"]+)"\]/g)) pairs.set(`${m[1]}=${m[2]}`, [m[1]!, m[2]!]);
       }
     }
@@ -154,6 +154,33 @@ describe("the 'plan' stop survives a dashboard with no meter", () => {
       const line = (file.sk.walkthrough.teacher as Record<string, string>).planUnlimited;
       expect(line, code).toBeTruthy();
       expect(line, code).not.toMatch(/[0-9]/);
+    }
+  });
+});
+
+// Founder 2026-10-30: steps 3–6 and 14–16 are one narration each. The parts'
+// lines are spoken as ONE line and the highlight moves on sentence starts, so
+// every part's line must end a sentence, in every language.
+describe("combined stops: every part's line ends a sentence, in all ten files", () => {
+  it("teacher openBook and setup carry their parts", () => {
+    const t = WALK_STOPS.teacher;
+    expect(t.find((s) => s.id === "openBook")?.parts?.map((p) => p.id)).toEqual(["bookCard", "generateAll", "chapterKit", "lessonOptions"]);
+    expect(t.find((s) => s.id === "setup")?.parts?.map((p) => p.id)).toEqual(["upload", "classes", "branding"]);
+    for (const id of ["bookCard", "generateAll", "chapterKit", "lessonOptions", "upload", "classes", "branding"]) expect(t.find((s) => s.id === id), id).toBeUndefined();
+  });
+  it("each part line (own, fallback, per-anchor) ends with sentence punctuation", () => {
+    for (const role of WALK_ROLES) {
+      for (const s of WALK_STOPS[role]) {
+        for (const p of s.parts ?? []) {
+          const keys = new Set<string>([p.line ?? p.id, ...(p.fallback ?? []).flatMap((f) => (f.line ? [f.line] : [])), ...anchorsOf(p).flatMap((a) => (typeof a === "string" ? [] : [a.line]))]);
+          for (const [code, file] of Object.entries(FILES)) {
+            for (const k of keys) {
+              const line = (file.sk.walkthrough[role] as Record<string, string>)[k]!;
+              expect(line, `${code} ${role}.${k}`).toMatch(/[.!?؟।]["'”’»)]*$/u);
+            }
+          }
+        }
+      }
     }
   });
 });
