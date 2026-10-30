@@ -643,9 +643,15 @@ describe("the Shell's wiring (source pins)", () => {
   const shell = readFileSync(resolve(__dirname, "..", "..", "..", "..", "app", "dashboard", "sk-shell.tsx"), "utf8").replace(/\r\n/g, "\n");
   const code = shell.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   it("the hero gate's veto is the hold (coordinator + tail), and the resume comes from the hold, not from the speaking flag", () => {
-    expect(code).toContain("canResume: () => !(holdRef.current?.holding ?? speakingRef.current)");
+    expect(code).toContain("canResume: () => !walkRef.current?.narrating && !(holdRef.current?.holding ?? speakingRef.current)");
     expect(code).toContain("isSpeaking: () => coord.speaking");
     expect(code).not.toMatch(/if \(speaking\) gate\.stop\("speaking"\);\s*else gate\.resume\(\);/);
+  });
+  it("the hero mic stays closed while the tour narrates, and listens again once it pauses or ends (founder 2026-10-30)", () => {
+    const listenNow = code.slice(code.indexOf("function listenNow()"), code.indexOf("useEffect(() => {\n    listenNowRef.current = listenNow;"));
+    expect(listenNow).toContain("if (walkRef.current?.narrating) return;");
+    expect(code).toContain('gateRef.current?.stop("speaking");\n        voiceLogRef.current?.push({ k: "mic", why: "closed for the tour" });');
+    expect(code).toMatch(/if \(narrating\) \{[\s\S]*?return;\s*\}\s*listenNowRef\.current\(\);/);
   });
   it("a hands-free resume never stops SK's voice", () => {
     const listenNow = code.slice(code.indexOf("function listenNow()"), code.indexOf("useEffect(() => {\n    listenNowRef.current = listenNow;"));
