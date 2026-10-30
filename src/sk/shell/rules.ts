@@ -882,7 +882,9 @@ export function routeByRules(text: string, ctx: SkContext, now: Date, clock?: Sk
   // A page move found only after the frame was removed needs an explicit move
   // verb ("open the board", "take me to the diary"): without one, "I want to
   // know about the board" stays a question instead of a jump to the Board.
-  if (second.intent === "navigate" && !FRAMED_NAV_VERB_RE.test(norm(f.text))) return first;
+  // (A start-a-lesson move is its own explicit rule — "start the lesson on …" —
+  // and keeps its autostart.)
+  if (second.intent === "navigate" && !second.filters.autostart && !FRAMED_NAV_VERB_RE.test(norm(f.text))) return first;
   return second;
 }
 
