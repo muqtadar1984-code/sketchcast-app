@@ -5,11 +5,12 @@
  * splitting. Everything runs on fakes — no speechSynthesis, no fetch.
  * Run: node node_modules/vitest/vitest.mjs run src/sk/shell/client/__tests__/speech.test.ts
  */
-import { describe, expect, it, vi } from "vitest";
-import { createSpeechCoordinator, SERVER_FAILURES_TO_STICK, speechMode, splitSentences, type SpeechBoard } from "../speech";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createSpeechCoordinator, SERVER_FAILURES_TO_STICK, serverProviderFor, speechMode, splitSentences, type SpeechBoard } from "../speech";
 import type { PlayOpts, SpeechProvider, SpeechResult } from "@/sk/speech/provider";
 import { EMPTY_MARKS } from "@/sk/speech/provider";
-import { SpeakUnavailable } from "@/sk/speech/polly-client";
+import { BrowserSpeechProvider } from "@/sk/speech/browser";
+import { PollyClientSpeechProvider, SpeakUnavailable } from "@/sk/speech/polly-client";
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 /** Let every queued microtask and timer settle. */
@@ -121,6 +122,66 @@ describe("speechMode", () => {
     expect(speechMode("")).toBe("browser");
     expect(speechMode("browser")).toBe("browser");
     expect(speechMode("edge")).toBe("browser");
+  });
+  it("is google for NEXT_PUBLIC_SK_TTS=google (any case)", () => {
+    expect(speechMode("google")).toBe("google");
+    expect(speechMode(" GOOGLE ")).toBe("google");
+  });
+});
+
+describe("server provider per language", () => {
+  it("polly: English through the server client (no lang sent), any other language through the browser", () => {
+    const en = serverProviderFor("polly", "en-US", () => "B");
+    expect(en).toBeInstanceOf(PollyClientSpeechProvider);
+    expect((en as PollyClientSpeechProvider).lang).toBeUndefined();
+    expect(serverProviderFor("polly", "ar-SA", () => "B")).toBeInstanceOf(BrowserSpeechProvider);
+  });
+  it("google: every language through the server client, carrying its lang", () => {
+    for (const lang of ["en-US", "ar-SA", "ms-MY", "zh-CN", "hi-IN"]) {
+      const p = serverProviderFor("google", lang, () => "A");
+      expect(p).toBeInstanceOf(PollyClientSpeechProvider);
+      expect((p as PollyClientSpeechProvider).lang).toBe(lang);
+    }
+  });
+});
+
+describe("server client (POST /api/sk/speak)", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+  function route(status: number, body: unknown) {
+    const bodies: unknown[] = [];
+    globalThis.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify(body), { status });
+    }) as unknown as typeof fetch;
+    return bodies;
+  }
+  const OK = { format: "mp3", audio: Buffer.from([1, 2, 3]).toString("base64"), marks: { words: [{ i: 0, t0: 0, t1: 100, text: "Hi" }], visemes: [] }, voice: "google:ar-XA-Chirp3-HD-Achird" };
+
+  it("sends the line's lang with the look; without a lang the body is unchanged", async () => {
+    const bodies = route(200, OK);
+    const r = await new PollyClientSpeechProvider(() => "A", { lang: "ar-SA" }).synthesize("Hi", "google:ar-XA-Chirp3-HD-Achernar", { marks: ["word"] });
+    await new PollyClientSpeechProvider(() => "B").synthesize("Hi", "polly:Matthew", { marks: ["word"] });
+    expect(bodies).toEqual([
+      { text: "Hi", look: "A", lang: "ar-SA" },
+      { text: "Hi", look: "B" },
+    ]);
+    expect(r.format).toBe("mp3");
+    expect(r.audio).toEqual(new Uint8Array([1, 2, 3]));
+    expect(r.marks).toEqual({ words: [{ i: 0, t0: 0, t1: 100, text: "Hi" }], visemes: [] });
+  });
+  it("404 and 429 tts_cap are SpeakUnavailable; any other 429 or a 503 is an ordinary failure", async () => {
+    const p = new PollyClientSpeechProvider(() => "B", { lang: "en-US" });
+    route(404, { error: "Not available." });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toMatchObject({ name: "SpeakUnavailable", reason: "off" });
+    route(429, { error: "Monthly voice limit reached.", reason: "tts_cap" });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toMatchObject({ name: "SpeakUnavailable", reason: "tts_cap" });
+    route(429, { error: "slow down" });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toThrow("speak: HTTP 429");
+    route(503, { error: "Speech is unavailable right now.", reason: "tts_meter" });
+    await expect(p.synthesize("Hi", "x", { marks: [] })).rejects.toThrow("speak: HTTP 503");
   });
 });
 
@@ -449,6 +510,21 @@ describe("provider selection", () => {
     expect(polly.spoken).toEqual(["L1.", "L2.", "L3.", "L4.", "L5."]);
     expect(browser.played).toEqual(["L1.", "L3.", "L4.", "L5.", "L6."]);
     expect(why).toEqual(["failing"]);
+    expect(c.mode).toBe("browser");
+  });
+
+  it("google mode: reported as google while asked; the monthly cap (tts_cap) makes the browser sticky like a 404", async () => {
+    const why: string[] = [];
+    const browser = fakeProvider("browser");
+    const google = fakeProvider("polly-client", { fail: (_t, n) => (n === 2 ? new SpeakUnavailable("tts_cap") : null) });
+    const c = createSpeechCoordinator({ server: true, serverMode: "google", makeProvider: () => google, fallback: () => browser, onFallback: (w) => why.push(w) });
+    await c.say("One.");
+    expect(c.mode).toBe("google");
+    await c.say("Two.");
+    await c.say("Three.");
+    expect(google.spoken).toEqual(["One.", "Two."]);
+    expect(browser.played).toEqual(["Two.", "Three."]);
+    expect(why).toEqual(["unavailable"]);
     expect(c.mode).toBe("browser");
   });
 

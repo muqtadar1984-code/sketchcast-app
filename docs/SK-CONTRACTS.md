@@ -163,6 +163,12 @@ reaching Polly, the shape of `AudioStream` in the Node runtime (`transformToByte
 and the actual audio/marks alignment on Joanna/Matthew. Everything else is under test
 (`src/sk/speech/__tests__/polly.test.ts`, `src/app/api/sk/__tests__/speak.test.ts`).
 
+**Google (2026-10-30).** `SK_TTS=google` is a third mode on the same route: the
+lesson videos' Google voices (Chirp 3 HD; WaveNet for Malay) for every SK language,
+`{ text, look, lang }`, approximate word marks and no visemes, metered per user per
+month (over the cap → 429 `tts_cap`). Env, voices, cost and rollback:
+[`docs/sk-voice.md`](sk-voice.md#google-voice-sk_ttsgoogle).
+
 ### 1.4 `AvatarProvider` (client, B6)
 
 ```ts

@@ -4,18 +4,32 @@
 // viseme marks into `onViseme` (the avatar's mouth) off the element's own
 // clock. A 404 from the route means the server flag is off: it throws
 // `SpeakUnavailable` so the page stops asking and stays on the browser voice.
+//
+// 2026-10-30: the same client serves SK_TTS=google. It sends the line's
+// language (`lang`, the BCP-47 tag the coordinator speaks in) so the route
+// can pick the Google voice for it (a Polly server refuses a non-English
+// one with 404). A 429 with reason
+// "tts_cap" (the user's monthly Google characters are spent) is also
+// `SpeakUnavailable`: the browser voice for the rest of the page.
 
 import type { Marks } from "@/sk/board/engine";
 import type { PlayOpts, SpeechProvider, SpeechResult, SynthesizeOpts, VoiceId } from "./provider";
 
 export class SpeakUnavailable extends Error {
-  constructor() {
+  /** "off" = the route answered 404; "tts_cap" = the monthly cap is reached. */
+  constructor(readonly reason: "off" | "tts_cap" = "off") {
     super("server speech is not available");
     this.name = "SpeakUnavailable";
   }
 }
 
-type SpeakReply = { format?: unknown; audio?: unknown; marks?: unknown };
+type SpeakReply = { format?: unknown; audio?: unknown; marks?: unknown; reason?: unknown };
+
+export type ServerSpeechOptions = {
+  endpoint?: string;
+  /** The line's language (BCP-47), sent with every request. */
+  lang?: string;
+};
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -47,13 +61,19 @@ export class PollyClientSpeechProvider implements SpeechProvider {
   private inflight: AbortController | null = null;
   private stopCurrent: (() => void) | null = null;
 
+  private readonly endpoint: string;
+  readonly lang: string | undefined;
+
   constructor(
     private readonly look: () => "A" | "B",
-    private readonly endpoint = "/api/sk/speak",
-  ) {}
+    opts: ServerSpeechOptions = {},
+  ) {
+    this.endpoint = opts.endpoint ?? "/api/sk/speak";
+    this.lang = opts.lang;
+  }
 
   async synthesize(text: string, _voice: VoiceId, opts: SynthesizeOpts): Promise<SpeechResult> {
-    void _voice; // the route maps the look to the voice; the id is for the seam's bookkeeping
+    void _voice; // the route maps the look (and lang) to the voice; the id is for the seam's bookkeeping
     this.cancel();
     const ac = new AbortController();
     this.inflight = ac;
@@ -61,11 +81,15 @@ export class PollyClientSpeechProvider implements SpeechProvider {
     const res = await fetch(this.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, look: this.look() }),
+      body: JSON.stringify(this.lang ? { text, look: this.look(), lang: this.lang } : { text, look: this.look() }),
       signal: ac.signal,
     });
     if (this.inflight === ac) this.inflight = null;
     if (res.status === 404) throw new SpeakUnavailable();
+    if (res.status === 429) {
+      const r = (await res.json().catch(() => null)) as SpeakReply | null;
+      if (r?.reason === "tts_cap") throw new SpeakUnavailable("tts_cap");
+    }
     if (!res.ok) throw new Error(`speak: HTTP ${res.status}`);
     const j = (await res.json()) as SpeakReply;
     if (j.format !== "mp3" || typeof j.audio !== "string" || !j.audio) throw new Error("speak: malformed reply");

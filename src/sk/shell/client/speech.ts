@@ -6,8 +6,9 @@
 // One coordinator owns three decisions the panel used to make ad hoc:
 //
 //   1. WHICH VOICE. `server: true` (the panel reads NEXT_PUBLIC_SK_TTS ===
-//      "polly") asks the server-backed provider first; a `SpeakUnavailable`
-//      from it (the route answered 404 = SK_TTS unset) makes the browser voice
+//      "polly" or "google") asks the server-backed provider first; a
+//      `SpeakUnavailable` from it (the route answered 404 = SK_TTS unset, or
+//      429 tts_cap = the Google voice's monthly cap) makes the browser voice
 //      sticky for the rest of the session; any other failure (network, 502,
 //      autoplay) falls back for THAT line only, and three such failures in a
 //      row also stick. `server: false` never constructs the server provider.
@@ -31,15 +32,27 @@
 // passing through speakableText so the voice never says "asterisk".
 
 import { speakableText } from "@/utils/speakable";
+import { BrowserSpeechProvider } from "@/sk/speech/browser";
 import type { SpeechProvider, VoiceId } from "@/sk/speech/provider";
-import { SpeakUnavailable } from "@/sk/speech/polly-client";
+import { PollyClientSpeechProvider, SpeakUnavailable } from "@/sk/speech/polly-client";
 
-export type SpeechMode = "polly" | "browser";
+export type ServerSpeechMode = "polly" | "google";
+export type SpeechMode = ServerSpeechMode | "browser";
 
 /** The panel's half of provider selection: the PUBLIC flag only makes the
  * client ASK; the server's SK_TTS decides (404 → browser, sticky). */
 export function speechMode(env: string | undefined | null): SpeechMode {
-  return (env ?? "").trim().toLowerCase() === "polly" ? "polly" : "browser";
+  const v = (env ?? "").trim().toLowerCase();
+  return v === "polly" || v === "google" ? v : "browser";
+}
+
+/** The server-backed provider for one language. Polly's voices are English
+ * only: any other language is read by the browser voice for it. Google has a
+ * voice for every SK language, so every line goes to the server with its
+ * `lang` (the route falls back to en-US for a language it has no voice for). */
+export function serverProviderFor(mode: ServerSpeechMode, lang: string, look: () => "A" | "B"): SpeechProvider {
+  if (mode === "google") return new PollyClientSpeechProvider(look, { lang });
+  return lang.toLowerCase().startsWith("en") ? new PollyClientSpeechProvider(look) : new BrowserSpeechProvider(lang);
 }
 
 /** The slice of the Board the coordinator needs (the panel builds it over
@@ -53,8 +66,10 @@ export type SpeechBoard = {
 export type WordMark = { charIndex: number; t: number; /** The sentence being spoken. */ text: string };
 
 export type SpeechCoordinatorDeps = {
-  /** Ask the server-backed provider first (NEXT_PUBLIC_SK_TTS === "polly"). */
+  /** Ask the server-backed provider first (NEXT_PUBLIC_SK_TTS === "polly" | "google"). */
   server: boolean;
+  /** Which server voice `server` asks for — only reported by `mode` (default "polly"). */
+  serverMode?: ServerSpeechMode;
   /** The server-backed provider for a language; built lazily, once per language. */
   makeProvider: (lang: string) => SpeechProvider;
   /** The browser provider for a language; built lazily, once per language. */
@@ -97,7 +112,7 @@ export type SpeechCoordinator = {
   readonly enabled: boolean;
   /** True while the queue is being spoken. */
   readonly speaking: boolean;
-  /** "polly" while the server voice is still asked for, else "browser". */
+  /** The server mode ("polly" / "google") while it is still asked for, else "browser". */
   readonly mode: SpeechMode;
 };
 
@@ -335,7 +350,7 @@ export function createSpeechCoordinator(deps: SpeechCoordinatorDeps): SpeechCoor
       return pumping;
     },
     get mode() {
-      return serverStuck ? "browser" : "polly";
+      return serverStuck ? "browser" : (deps.serverMode ?? "polly");
     },
   };
 }
