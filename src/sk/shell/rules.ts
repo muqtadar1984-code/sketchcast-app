@@ -21,6 +21,7 @@ import { walkStartCommand } from "./client/walkthrough";
 import { frameIntent, normalizeIntent } from "./intent-normalize";
 // 2026-10-30: "play chapter 1 from the book" → the start_lesson tool, no model.
 import { playChapterOf, type PlayChapter } from "./lesson-rules";
+import { studentBoardMove } from "./learner";
 
 export type RulesDecision =
   /** `lesson` (2026-10-30): a play-a-chapter command — the route runs the
@@ -325,7 +326,9 @@ export function explainSelectionOf(t: string, ctx: SkContext): boolean {
  *  and "explain this / what does this mean / tell me more about this" — the
  *  grounded selection path straight away, with no model round to choose it. */
 export function selectionAsk(raw: string, ctx: SkContext): boolean {
-  if (!ctx.board?.sessionId || !ctx.board.selection || ctx.user.role === "student") return false;
+  // A student only on her OWN Board (learner mode, 2026-10-31): there the
+  // highlight is hers and explain_selection is one of her moves.
+  if (!ctx.board?.sessionId || !ctx.board.selection) return false;
   const t = norm(raw ?? "").replace(/\s*[,،]\s*/gu, " ").trim().replace(/[?؟]+$/u, "").trim();
   return explainSelectionOf(t, ctx);
 }
@@ -934,7 +937,14 @@ function routeOnce(text: string, ctx: SkContext, now: Date, clock?: SkCollector[
   // (no model), before the Board phrasings. A student has no chapter surface
   // any more (SK Tutor retired, founder 2026-10-31), so hers is not a lesson.
   const lesson = !student && ctx.user.role !== "parent" && (ctx.user.hat === "teacher" || ctx.user.hat === null) ? playChapterOf(raw) : null;
-  if (student) {
+  if (student && ctx.board?.sessionId) {
+    // The student Board (learner mode, 2026-10-31): her own Board's phrasings,
+    // limited to the moves a student may use (shell/learner.ts); the dormant
+    // tutor player is not on this page. Anything else reaches the model with
+    // her tools.
+    const b = routeBoard(raw, t, ctx);
+    if (b && (b.intent !== "teach" || studentBoardMove(b.move))) return b;
+  } else if (student) {
     const tu = routeTutor(raw, t, ctx);
     if (tu) return tu;
   } else if (lesson) {

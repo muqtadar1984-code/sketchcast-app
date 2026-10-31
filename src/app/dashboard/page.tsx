@@ -31,7 +31,8 @@ import GettingStarted from "./getting-started";
 import NoticeBanner from "./notice-banner";
 import NoticesCard from "./notices-card";
 import { noticesFor, type NoticesData } from "@/utils/notices";
-import { catalogueTabEnabled, diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import { catalogueTabEnabled, diaryEnabled, examGenerationEnabled, gettingStartedEnabled, onboardingEnabled, platformConsoleEnabled, skShellEnabledFor, teacherBetaEnabled, timetableEnabledFor } from "@/utils/flags";
+import { learnLinks } from "@/utils/present/learner-links";
 import AdminHelpNote from "./admin-help-note";
 import { type JobStage } from "@/utils/job-stage";
 import { builderJob } from "@/utils/builder-job";
@@ -254,6 +255,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // reads and the signing live in <StudentHome> below, which streams in under
   // the header.
   if (role === "student") {
+    // The student Board (SK student Board plan 2026-10-31): "Learn with SK" on
+    // each assigned kit, when SK is on for her (the Board's own learner gate).
+    const learnOnP = started(skShellEnabledFor(supabase, user, role, schoolId).catch(() => false));
     return (
       <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
         <AppHeader />
@@ -267,6 +271,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             noticesP={noticesP}
             myBooksP={myBooksP}
             pdfUnavailable={pdfUnavailable}
+            learnOnP={learnOnP}
           />
         </Suspense>
         {platformConsoleEnabled() && <ReportIssueWidget variant="student" />}
@@ -693,6 +698,7 @@ async function StudentHome({
   noticesP,
   myBooksP,
   pdfUnavailable,
+  learnOnP,
 }: {
   supabase: Db;
   userId: string;
@@ -702,6 +708,8 @@ async function StudentHome({
   noticesP: Promise<NoticesData | null>;
   myBooksP: ReturnType<typeof myBooksStrip>;
   pdfUnavailable: boolean;
+  /** SK is on for her: each assigned kit offers "Learn with SK" (the student Board). */
+  learnOnP: Promise<boolean>;
 }) {
   // Every read the student view needs, in ONE wave (they used to run one after
   // another). Current progress + submissions are tables from migration 0006;
@@ -719,10 +727,11 @@ async function StudentHome({
     studentTimetableOn,
     notices,
     myBooks,
+    learnOn,
   ] = await Promise.all([
     supabase
       .from("generations")
-      .select("id, kind, chapter_ref, book_id, params, artifacts(kind, storage_path)")
+      .select("id, kind, title, chapter_ref, book_id, params, artifacts(kind, storage_path)")
       .order("created_at", { ascending: false }),
     supabase.from("generation_shares").select("generation_id, due_at, class_id, classes(name)"),
     supabase.from("student_progress").select("generation_id, status, revision_count, progress_pct"),
@@ -731,6 +740,7 @@ async function StudentHome({
     schoolId ? timetableEnabledFor(supabase, schoolId) : Promise.resolve(false),
     noticesP,
     myBooksP,
+    learnOnP,
   ]);
 
   type ShareRow = { generation_id: string; due_at: string | null; class_id: string | null; classes: { name: string } | null };
@@ -785,6 +795,7 @@ async function StudentHome({
   type GenRow = {
     id: string;
     kind: string;
+    title?: string | null;
     chapter_ref: string | null;
     book_id: string | null;
     params: { part?: unknown } | null;
@@ -957,6 +968,9 @@ async function StudentHome({
               : chapterTitle.get(`${its[0]?.bookId}|${Number(chKey)}`) ||
                 fmt(t.chapter, { n: Number(chKey) + 1 }),
           items: its,
+          // "Learn with SK": one per assigned kit in this chapter (a ready-made
+          // kit has no chapter, so several can share the "—" heading).
+          ...(learnOn ? { learn: learnLinks(its.map((it) => gens.find((g) => g.id === it.genId)).filter((g): g is GenRow => !!g)) } : {}),
         })),
     }));
 

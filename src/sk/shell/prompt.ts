@@ -4,6 +4,7 @@
 // the user, whatever the model wrote.
 
 import type { SkCapabilityMeta, SkContext } from "./types";
+import { SK_STUDENT_BOARD_RULES } from "./learner";
 import { SK_NOTHING_ON_THAT } from "./types";
 import type { SkMemory } from "./memory";
 import { NAV_LABEL } from "@/sk/capabilities/navigate";
@@ -143,7 +144,8 @@ export function modelFirstRules(ctx: SkContext, capabilities: SkCapabilityMeta[]
   if (has("start_lesson")) lines.push("M5. 'Start / play / teach' a lesson or a chapter → start_lesson with the user's own words; with nothing named ('start the lesson', 'start the lesson for 7B') call start_lesson with only the class, if one was said.");
   if (capabilities.some((c) => c.name.startsWith("board."))) lines.push("M6. With a lesson on the Board, every Board phrase (pause, continue, next / previous slide, slide N, explain X, compare A and B, practice questions, freeze, blank page, back, next / previous page, page N, deck slide N, the slides, load the deck, the unit rail, walk through the worksheet, recap, explain this highlight) is its board.* tool.");
   if (ctx.user.role !== "student" && capabilities.some((c) => c.kind === "act" || c.tier === "confirm")) lines.push("M7. An action (a diary note or class notice, reminding parents, marking, preparing a kit, a school-wide notice, assigning, a book code) → its tool, which returns a card for the user to confirm; say what the card will do.");
-  if (ctx.user.role === "student") lines.push("M8. For this student: moves on her lesson (play, pause, restart, a section, the slide, practice, where am I, how am I doing) → tutor.*; a question about the open lesson → tutor.explain; a content question with no lesson open → knowledge.search. Never answer a content question from your own knowledge.");
+  if (ctx.user.role === "student" && ctx.board?.sessionId) lines.push("M8. For this student on her own Board: moves on her lesson (play, pause, a slide, a page, the deck, the worksheet's questions) → board.*; a question about the lesson → board.explain (or board.explain_selection for a highlight); a question the lesson does not cover → knowledge.search over her books. Never answer a content question from your own knowledge.");
+  else if (ctx.user.role === "student") lines.push("M8. For this student: moves on her lesson (play, pause, restart, a section, the slide, practice, where am I, how am I doing) → tutor.*; a question about the open lesson → tutor.explain; a content question with no lesson open → knowledge.search. Never answer a content question from your own knowledge.");
   return lines;
 }
 
@@ -174,7 +176,11 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
         ? `6. Answer in ${lang}, the language of the lesson material, in 1–4 short sentences, plain words, no headings, no markdown lists.`
         : `6. Answer in the user's language (${lang}) in 1–4 short sentences, plain words, no headings, no markdown lists. If tool results carry a source_language and they all name the same one, answer in that language instead.`,
     "7. If a request needs something you cannot do here, say so in one sentence and name what you can do.",
-    ...(ctx.board?.sessionId
+    ...(ctx.board?.sessionId && ctx.user.role === "student"
+      ? [
+          "8. The student's own Board is open with a lesson her teacher assigned. Drive it with the board.* tools, never by describing: board.intro / board.pause / board.resume for the video, board.slide for a slide of the video (k is 0-based — her 'slide 4' is k=3), board.page for the roll's pages and the deck's slides, board.load_deck for the slides as pages, board.walkthrough for the worksheet's questions, board.explain for a concept (it shows the right slide and returns its heading and points: teach from those, simply), board.compare for two concepts.",
+        ]
+      : ctx.board?.sessionId
       ? [
           "8. The Classroom Board is open with a lesson. Drive it with the board.* tools, never by describing: board.slide for a slide (k is 0-based — the teacher's 'slide 4' is k=3), board.explain for a concept (it shows the right slide and returns its heading and points: narrate from those, briefly, as a teacher would), board.compare for two concepts, board.pause / board.resume / board.intro for the video, board.practise for questions, board.recap to end. A confirm-tier action (such as assigning work) returns a card for the teacher to confirm — never say it is done until it is.",
         ]
@@ -232,7 +238,7 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
         ]
       : []),
     ...(input.routing === "model" ? ["", ...modelFirstRules(ctx, capabilities)] : []),
-    ...(ctx.user.role === "student" ? ["", SK_STUDENT_RULES] : []),
+    ...(ctx.user.role === "student" ? ["", ctx.board?.sessionId ? SK_STUDENT_BOARD_RULES : SK_STUDENT_RULES] : []),
     "",
     "CONTEXT",
     contextLine(ctx, input.memory),

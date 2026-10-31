@@ -49,6 +49,7 @@ export default function SkLauncher({
   replay = false,
   board,
   tutor,
+  lead = null,
 }: {
   copy: SkShellCopy;
   /** sk.walkthrough — the tour's words for this request's language. */
@@ -66,6 +67,8 @@ export default function SkLauncher({
   board?: SkBoardBridge | null;
   /** S3 slice D: set by the /sk layout — the kit player bridge the Shell drives. */
   tutor?: SkTutorBridge | null;
+  /** The student Board (learner mode): SK's next line as it leads the lesson. */
+  lead?: { key: string; text: string } | null;
 }) {
   // Flipped the moment the first-login run ends (completed or skipped), so a
   // replay in the same session never writes the seen row again while the
@@ -159,6 +162,7 @@ export default function SkLauncher({
         }
         onTakeTour={() => start()}
         takeTourLabel={walkCopy.ui.takeTour}
+        lead={lead}
       />
       {tour.spotlight}
     </>

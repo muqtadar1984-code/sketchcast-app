@@ -261,6 +261,7 @@ export default function SkShell({
   walk,
   onTakeTour,
   takeTourLabel,
+  lead = null,
 }: {
   copy: SkShellCopy;
   role: string | null;
@@ -291,6 +292,10 @@ export default function SkShell({
   /** "Take the tour" (the avatar's menu), and SK's "Show me around". */
   onTakeTour?: () => void;
   takeTourLabel?: string;
+  /** The student Board (learner mode, 2026-10-31): SK LEADS the lesson. A new
+   *  `key` adds `text` to the conversation as SK's own line, shows it in the
+   *  bubble and says it (read-aloud permitting). No turn, no model call. */
+  lead?: { key: string; text: string } | null;
 }) {
   const router = useRouter();
   /** This corner listens hands-free while the Mic switch is on (not the Board). */
@@ -1606,6 +1611,16 @@ export default function SkShell({
     }
     dispatchBubble({ type: "greeting", text: greeting ?? "", at: Date.now() });
   }, [greet, greeting, tourOn]);
+
+  // SK leads on the student Board: each new line once, after the warm start
+  // (which sets the conversation and would otherwise replace it).
+  const leadKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!lead?.text || ready === null || leadKeyRef.current === lead.key) return;
+    leadKeyRef.current = lead.key;
+    appendSk(lead.text);
+    speakLine(lead.text);
+  }, [lead, ready, appendSk, speakLine]);
 
   // Escape closes the sheet or the one-line box (focus back on the avatar).
   useEffect(() => {

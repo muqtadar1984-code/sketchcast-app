@@ -8,7 +8,12 @@ import { AnthropicProvider } from "@/utils/assistant/providers/anthropic";
 // 2026-10-30: SK's own Bedrock region / model overlay (SK_BEDROCK_REGION, SK_BEDROCK_MODEL_MAP).
 import { skProviderTarget, skRegionLabel } from "@/sk/claude-target";
 // 2026-10-30: MODEL-FIRST routing behind SK_ROUTING / SK_MODEL_FIRST_EMAILS.
-import { SkModelProvider, chooseModel, escalationTools, handoffAfter, handoffBefore, modelFirstDecision, skDebugFor, skRouting, type HandoffBefore, type ModelStats } from "@/sk/shell/routing";
+import { SkModelProvider, chooseModel, escalationTools, handoffAfter, handoffBefore, modelFirstDecision, skDebugFor, skRouting, studentOnBoard, type HandoffBefore, type ModelStats } from "@/sk/shell/routing";
+// 2026-10-31: the student Board (learner mode) — her board is checked against
+// her assignments, and a hidden fair-use cap counts her turns.
+import { sharedToMe } from "@/utils/present/learner-server";
+import { meterStudentTurn, type CapOutcome } from "@/sk/student-cap";
+import { SK_STUDENT_CAP_LINE } from "@/sk/shell/learner";
 import type { Usage } from "@/utils/assistant/provider";
 import type { Turn } from "@/utils/assistant/provider";
 import { runAssistantTurn } from "@/utils/assistant/orchestrator";
@@ -37,7 +42,7 @@ import { TurnGaps } from "@/sk/gaps/turn";
 import { NOTE_GAP_RESULT, NOTE_GAP_TOOL_DEF, isNoteGapCall, parseNoteGap } from "@/sk/gaps/note-gap";
 import { issueActionToken, publicParams } from "@/sk/shell/tokens";
 import { maskBookSecrets } from "@/sk/book-activate";
-import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
+import { TEACH_AUDIENCE_CLASS, TEACH_AUDIENCE_STUDENT, TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
 import { loadSelectionSlide, selectionBlock, selectionOnSlide, selectionQuestion, selectionSupportTokens, type SelectionAdmin } from "@/sk/shell/selection";
 import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilities/board";
 import { openUnitDeckSlide } from "@/sk/capabilities/documents";
@@ -228,6 +233,22 @@ export async function POST(request: Request) {
     now,
   });
 
+  // The student Board (learner mode, 2026-10-31): a student's Board state is
+  // only as good as her assignments. The open unit (the lesson every Board
+  // read keys on — the manifest, the deck text, the kit's book) must be
+  // assigned to her (one of her own generation_shares rows, through her own
+  // session); anything else drops the Board context for this turn.
+  if (ctx.user.role === "student" && ctx.board?.generationId && !(await sharedToMe(g.supabase, ctx.board.generationId))) {
+    console.warn("sk-shell.turn student board not assigned", JSON.stringify({ turnId: body.turnId }));
+    ctx.board = undefined;
+  }
+  // The hidden fair-use cap (SK_STUDENT_DAILY_TURNS, default 300 a UTC day):
+  // counted for every student turn, before anything is spent on it.
+  const studentCap: CapOutcome | null = ctx.user.role === "student" ? await meterStudentTurn(admin, g.user.id, now) : null;
+  if (studentCap && !studentCap.ok) console.info("sk-student.cap", JSON.stringify({ turnId: body.turnId, count: studentCap.count, cap: studentCap.cap }));
+  /** Who a teaching call speaks to: the class, or one student on her own Board. */
+  const audience = ctx.user.role === "student" ? TEACH_AUDIENCE_STUDENT : TEACH_AUDIENCE_CLASS;
+
   let memory = openMemory(body.memory, ctx, now).memory;
   // 2026-10-30: the language SK answers in, decided HERE, once, before any
   // model call (shell/language.ts):
@@ -395,7 +416,7 @@ export async function POST(request: Request) {
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${teachingBlock(sup)}`;
     let full = "";
     let usage: { inputTokens: number; outputTokens: number } | undefined;
-    for await (const ev of runAssistantTurn({ provider, system, history: [], question: teachingQuestion(kind, sup, languageName(tl.lang)), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
+    for await (const ev of runAssistantTurn({ provider, system, history: [], question: teachingQuestion(kind, sup, languageName(tl.lang), audience), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
       if (ev.type === "text") full += ev.text;
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn teach", ev.retryable ? "retryable" : "fatal", ev.message);
@@ -432,7 +453,7 @@ export async function POST(request: Request) {
     const tl = langOver(k.passages.map((p) => p.language));
     const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${knowledgeBlock(k.passages)}`;
-    const question = `Explain "${q}" to the class in 2–4 short sentences, in ${languageName(tl.lang)}, using only the passages in KNOWLEDGE (this lesson's own book). No headings, no lists.`;
+    const question = `Explain "${q}" to ${audience} in 2–4 short sentences, in ${languageName(tl.lang)}, using only the passages in KNOWLEDGE (this lesson's own book). No headings, no lists.`;
     let full = "";
     let usage: { inputTokens: number; outputTokens: number } | undefined;
     for await (const ev of runAssistantTurn({ provider, system, history: [], question, tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
@@ -495,7 +516,7 @@ export async function POST(request: Request) {
     // the open unit's sibling deck piece through the kit (#233).
     let slide = admin ? await loadSelectionSlide(admin as unknown as SelectionAdmin, sel, ctx.user.id) : null;
     if (!slide) {
-      const s = await openUnitDeckSlide(ctx, sel.generationId, sel.n);
+      const s = await openUnitDeckSlide(ctx, sel.generationId, sel.n, g.supabase);
       if (s) slide = { n: s.n, png: "", w: 0, h: 0, title: s.title, text: s.text, notes: s.notes, words: [], blocks: [] };
     }
     if (!slide) return { text: BOARD_SELECTION_NO_SLIDE, sources: [name], label: "declined" };
@@ -507,7 +528,7 @@ export async function POST(request: Request) {
     const system = `${buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory })}\n${selectionBlock(slide, selected)}`;
     let full = "";
     let usage: { inputTokens: number; outputTokens: number } | undefined;
-    for await (const ev of runAssistantTurn({ provider, system, history: [], question: selectionQuestion(languageName(answer.lang)), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
+    for await (const ev of runAssistantTurn({ provider, system, history: [], question: selectionQuestion(languageName(answer.lang), audience), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_MAX_TOKENS, signal: abort.signal })) {
       if (ev.type === "text") full += ev.text;
       else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
       else if (ev.type === "error") console.error("sk-shell.turn selection", ev.retryable ? "retryable" : "fatal", ev.message);
@@ -950,6 +971,16 @@ export async function POST(request: Request) {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
         // (A language command announces its own language.)
         if (decision.intent !== "lang") sendLang(answer.lang);
+
+        // ── 2026-10-31: the student fair-use cap — SK's own line, no model ──
+        if (studentCap && !studentCap.ok) {
+          timing.route = "student_cap";
+          const text = lineFor(SK_STUDENT_CAP_LINE, ctx.user.locale);
+          send({ type: "text", text });
+          done({ sources: [], label: "declined" }, text, []);
+          finish();
+          return;
+        }
         // A source in a language SK cannot answer in (Tamil): said once per conversation.
         if (answer.unsupportedSource && memory.langNoted !== answer.unsupportedSource && decision.intent !== "lang") {
           noted = answer.unsupportedSource;
@@ -1066,7 +1097,11 @@ export async function POST(request: Request) {
         // (Model routing: a student's turn goes to the model with HER tools —
         // tutor.*, knowledge.search, navigate, start_lesson — and the registry
         // keeps every teacher action out of reach; see the hand-offs below.)
-        if (routing === "rules" && ctx.user.role === "student" && decision.intent !== "navigate" && decision.intent !== "chat") {
+        // On her OWN Board (learner mode, 2026-10-31) a student's turn is a
+        // Board turn instead: her Board moves by rules below, her questions to
+        // the model with her tools (board.*, knowledge.search) — the Board's
+        // own explain / knowledge path, never the dormant tutor.
+        if (routing === "rules" && ctx.user.role === "student" && !studentOnBoard(ctx) && decision.intent !== "navigate" && decision.intent !== "chat") {
           // S7 K2: "what is osmosis?" / "explain osmosis" with no lesson open →
           // her knowledge first (an explain with no kit has no section to explain).
           const knowledgeFirst = !ctx.tutor && isContentQuestion(body.text) && (decision.intent !== "tutor" || decision.capability === "tutor.explain");

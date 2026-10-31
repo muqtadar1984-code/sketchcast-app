@@ -26,6 +26,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import type { SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "@/sk/shell/types";
 import { DOC_NAMES, deckSlides, docsOf, kitOfGeneration, productChapterKits, readDoc, type DocEntry, type DocsAdmin, type KitDocs, type ReadOut } from "@/sk/kit-docs";
 import { searchForUser } from "./knowledge";
+import { learnerKitOfGeneration, type LearnerSession } from "@/sk/learner-kit";
 
 let adminOverride: (() => DocsAdmin | null) | null = null;
 /** Tests: the fake service-role client (null = none configured). */
@@ -301,16 +302,25 @@ export const kitDocuments: SkCapability = {
 
 export type UnitSlide = { n: number; title: string; text: string; notes: string };
 
+/** The kit open on the Board: hers (kitOfGeneration's owner filter) — or, on
+ *  a STUDENT's Board (learner mode), her teacher's kit narrowed to the pieces
+ *  assigned to her (learner-kit.ts), read through her own `session`. */
+async function boardKit(admin: DocsAdmin, ctx: SkContext, gid: string, session?: LearnerSession): Promise<KitDocs | null> {
+  if (ctx.user.role === "student") return session ? learnerKitOfGeneration(admin, session, gid) : null;
+  return kitOfGeneration(admin, ctx.user.id, gid);
+}
+
 /** The open unit's deck as text — the deck's own text map, else the lesson
  *  script's slides — for board.explain / board.load_deck when the lesson map
- *  is not ready (2026-10-31). Hers only (kitOfGeneration's owner filter). */
-export async function openUnitSlides(ctx: SkContext): Promise<{ title: string; from: "deck_text_map" | "lesson_script"; slides: UnitSlide[] } | null> {
+ *  is not ready (2026-10-31). Hers only (kitOfGeneration's owner filter), or
+ *  a student's assigned kit (boardKit). */
+export async function openUnitSlides(ctx: SkContext, session?: LearnerSession): Promise<{ title: string; from: "deck_text_map" | "lesson_script"; slides: UnitSlide[] } | null> {
   const gid = ctx.board?.sessionId ? ctx.board.generationId : undefined;
   if (!gid || !UUID.test(gid)) return null;
   const admin = docsAdmin();
   if (!admin) return null;
   try {
-    const kit = await kitOfGeneration(admin, ctx.user.id, gid);
+    const kit = await boardKit(admin, ctx, gid, session);
     if (!kit) return null;
     const r = await readDoc(admin, kit, "deck", { student: ctx.user.role === "student" });
     if (!r.ok) return null;
@@ -329,15 +339,16 @@ export async function openUnitSlides(ctx: SkContext): Promise<{ title: string; f
  * the deck's own text map, or null when the deck is not a piece of her open
  * kit or the slide cannot be read.
  */
-export async function openUnitDeckSlide(ctx: SkContext, deckId: string, n: number): Promise<UnitSlide | null> {
+export async function openUnitDeckSlide(ctx: SkContext, deckId: string, n: number, session?: LearnerSession): Promise<UnitSlide | null> {
   const gid = ctx.board?.sessionId ? ctx.board.generationId : undefined;
   if (!gid || !UUID.test(gid) || !UUID.test(deckId) || !Number.isInteger(n) || n < 1) return null;
   const admin = docsAdmin();
   if (!admin) return null;
   try {
-    const kit = await kitOfGeneration(admin, ctx.user.id, gid);
+    const kit = await boardKit(admin, ctx, gid, session);
     const piece = kit?.pieces.find((p) => p.id === deckId);
-    if (!piece || piece.owner_id !== ctx.user.id) return null;
+    // A teacher's piece is hers; a student's kit holds only pieces assigned to her (boardKit).
+    if (!piece || (ctx.user.role !== "student" && piece.owner_id !== ctx.user.id)) return null;
     const slides = await deckSlides(admin, piece);
     return slides?.find((x) => x.n === n) ?? null;
   } catch {

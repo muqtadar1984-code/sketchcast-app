@@ -156,7 +156,8 @@
       "partLoadFailed": "La partie {n} n'a pas pu se charger — ferme cette fenêtre et actualise la page pour réessayer.",
       "multiPartHint": "Partie {n} sur {total} (~15 min). Termine une partie pour la valider — la dernière termine la leçon.",
       "singlePartHint": "Regarde jusqu'au bout pour valider cette leçon."
-    }
+    },
+    "learnWithSk": "Apprendre avec SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,43 @@
       "notTeaching": "Le tableau de la classe est réservé aux enseignants.",
       "plan": "Le tableau de la classe est inclus avec Pro, Pro+ et toutes les formules établissement.",
       "back": "Retour à votre bibliothèque"
+    },
+    "learn": {
+      "title": "Mes leçons",
+      "pick": "Choisis une leçon pour apprendre avec SK.",
+      "empty": "Pas encore de leçon. Quand ton enseignant t'en donnera une, elle apparaîtra ici.",
+      "due": "À rendre le {date}",
+      "overdue": "Était à rendre le {date}",
+      "back": "Retour à mes leçons",
+      "close": "Fermer",
+      "loading": "Ouverture de ta leçon…",
+      "failed": "Impossible d'ouvrir cette leçon. Réessaie dans un instant.",
+      "prevPage": "Page précédente",
+      "nextPage": "Page suivante",
+      "steps": {
+        "video": "Vidéo",
+        "slides": "Diapositives",
+        "worksheet": "Fiche d'exercices"
+      },
+      "go": {
+        "video": "▶ Lancer la vidéo",
+        "slides": "Ouvrir les diapositives",
+        "worksheet": "Ouvrir la fiche",
+        "next": "Étape suivante"
+      },
+      "sk": {
+        "startVideo": "Salut ! Commençons par la vidéo. Appuie sur lecture quand tu es prêt, et pose-moi tes questions quand tu veux.",
+        "startSlides": "Salut ! Commençons par les diapositives. Pose-moi tes questions quand tu veux.",
+        "startWorksheet": "Salut ! Regardons la fiche d'exercices ensemble. Demande-moi si tu bloques.",
+        "toSlides": "Bravo ! Maintenant, parcourons les diapositives.",
+        "toWorksheet": "Super travail ! Maintenant, essayons la fiche d'exercices.",
+        "slidesOpen": "Voici les diapositives. Surligne la partie que tu veux que je t'explique.",
+        "slidesMissing": "Les diapositives ne sont pas encore prêtes, passons à la fiche d'exercices.",
+        "worksheetOpen": "Voici la fiche d'exercices. Lis chaque question et essaie. Demande-moi si tu bloques.",
+        "worksheetFailed": "Je n'ai pas pu ouvrir la fiche pour l'instant. Tu peux quand même me poser tes questions.",
+        "done": "C'est toute la leçon. Bravo ! Pose-moi une question sur ce qui n'est pas clair.",
+        "empty": "Cette leçon n'a encore rien à montrer. Tu peux quand même me poser une question."
+      }
     }
   },
   "kits": {

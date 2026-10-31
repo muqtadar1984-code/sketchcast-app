@@ -156,7 +156,8 @@
       "partLoadFailed": "Part {n} couldn't load just now — close this and refresh the page to try again.",
       "multiPartHint": "Part {n} of {total} (~15 min). Finish a part to check it off — the last part completes the lesson.",
       "singlePartHint": "Watch to the end to mark this lesson complete."
-    }
+    },
+    "learnWithSk": "Learn with SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,43 @@
       "notTeaching": "The classroom board is for teachers.",
       "plan": "The classroom board comes with Pro, Pro+ and every school plan.",
       "back": "Back to your library"
+    },
+    "learn": {
+      "title": "My lessons",
+      "pick": "Pick a lesson to learn with SK.",
+      "empty": "No lessons yet. When your teacher gives you one, it will appear here.",
+      "due": "Due {date}",
+      "overdue": "Was due {date}",
+      "back": "Back to my lessons",
+      "close": "Close",
+      "loading": "Opening your lesson…",
+      "failed": "This lesson couldn't open. Try again in a moment.",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "steps": {
+        "video": "Video",
+        "slides": "Slides",
+        "worksheet": "Worksheet"
+      },
+      "go": {
+        "video": "▶ Play the video",
+        "slides": "Open the slides",
+        "worksheet": "Open the worksheet",
+        "next": "Next step"
+      },
+      "sk": {
+        "startVideo": "Hi! Let's start with the video. Tap play when you're ready, and ask me anything at any time.",
+        "startSlides": "Hi! Let's start with the slides. Ask me anything at any time.",
+        "startWorksheet": "Hi! Let's look at the worksheet together. Ask me if you get stuck.",
+        "toSlides": "Well done! Now let's go through the slides.",
+        "toWorksheet": "Great work! Now let's try the worksheet.",
+        "slidesOpen": "Here are the slides. Highlight any part you'd like me to explain.",
+        "slidesMissing": "The slides aren't ready yet, so let's go on to the worksheet.",
+        "worksheetOpen": "Here's the worksheet. Read each question and have a go. Ask me if you get stuck.",
+        "worksheetFailed": "I couldn't open the worksheet just now. You can still ask me anything.",
+        "done": "That's the whole lesson. Well done! Ask me about anything you're not sure of.",
+        "empty": "This lesson has nothing to show yet. You can still ask me a question."
+      }
     }
   },
   "kits": {

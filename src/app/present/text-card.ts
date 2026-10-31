@@ -101,6 +101,40 @@ export function questionCards(
   return { cards, answers };
 }
 
+/**
+ * The STUDENT Board's cards (learner mode, 2026-10-31): the same one card per
+ * question, from the answer-STRIPPED paper /api/quiz/{id} serves a student —
+ * never questions.json. That shape has no answers at all (a match question
+ * carries `left` and a shuffled `options` column instead of `pairs`), and
+ * this returns NO answer map, so the Board has nothing to reveal.
+ */
+export function learnerQuestionCards(raw: unknown, generationId: string): { cards: TextCard[]; answers: Map<string, string> } {
+  const qs = raw && typeof raw === "object" && Array.isArray((raw as { questions?: unknown }).questions)
+    ? ((raw as { questions: unknown[] }).questions as (RawQ & { left?: unknown })[])
+    : [];
+  const usable = qs.filter((q) => q && typeof q === "object" && typeof q.prompt === "string" && q.prompt.trim());
+  const cards: TextCard[] = usable.map((q, i) => {
+    const card: TextCard = {
+      source: "question",
+      heading: str(q.prompt),
+      body: [],
+      generationId,
+      questionId: str(q.id) || `q${i + 1}`,
+      index: i,
+      total: usable.length,
+    };
+    if (typeof q.marks === "number" && q.marks > 0) card.marks = q.marks;
+    if (q.type === "mcq" && Array.isArray(q.options)) card.options = q.options.map(str);
+    if (q.type === "match") {
+      const left = Array.isArray(q.left) ? q.left.map(str) : [];
+      card.body = left.map((l, n) => `${n + 1}. ${l}`);
+      card.options = Array.isArray(q.options) ? q.options.map(str) : [];
+    }
+    return card;
+  });
+  return { cards, answers: new Map() };
+}
+
 export const answerKey = (generationId: string | undefined, questionId: string | undefined) =>
   `${generationId ?? ""}:${questionId ?? ""}`;
 

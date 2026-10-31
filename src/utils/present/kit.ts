@@ -166,8 +166,9 @@ export function railFor(gens: KitGeneration[], here: { chapter: number }): RailU
 }
 
 /** The generations of one unit set, grouped by part (null = whole), each with
- *  its video and its documents. Shared by the chapter rail and the kit rail. */
-function unitsOf(mine: KitGeneration[]): RailUnit[] {
+ *  its video and its documents. Shared by the chapter rail, the kit rail and
+ *  the learner's rail (utils/present/learner.ts). */
+export function unitsOf(mine: KitGeneration[]): RailUnit[] {
   const byPart = new Map<number | null, KitGeneration[]>();
   for (const g of mine) {
     const key = partOf(g);

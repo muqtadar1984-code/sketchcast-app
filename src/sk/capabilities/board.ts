@@ -13,6 +13,7 @@
 import type { SkBoardMove, SkBoardState, SkCapability, SkCapabilityMeta, SkCapabilityResult, SkContext, SkJsonSchema } from "@/sk/shell/types";
 import { isDeckSource, type ArtifactRow } from "@/utils/present/deck-pages";
 import { openUnitDeckSlide, openUnitSlides, type UnitSlide } from "./documents";
+import { studentBoardMove } from "@/sk/shell/learner";
 
 export const BOARD_NOT_OPEN = "Open the Board first.";
 export const BOARD_NO_MAP = "The lesson map isn't ready yet.";
@@ -495,7 +496,10 @@ function meta(move: SkBoardMove, description: string, parameters: SkJsonSchema):
     parameters,
     tier: "immediate",
     kind: "board",
-    roles: ["teacher", "school_admin", "coordinator"],
+    // The student Board (learner mode, 2026-10-31): a student drives her own
+    // Board with the moves in STUDENT_BOARD_MOVES (shell/learner.ts); the
+    // `board` flag is on for her only while that Board is open (context.ts).
+    roles: studentBoardMove(move) ? ["teacher", "school_admin", "coordinator", "student"] : ["teacher", "school_admin", "coordinator"],
     hats: ["teacher"],
     flags: ["board"],
   };
@@ -651,7 +655,7 @@ export const boardLoadDeck: SkCapability = {
   handler: async (ctx, args, deps) => {
     const r = await loadDeckDecider(ctx, args, deps);
     if (!r.ok) return r;
-    const unit = await openUnitSlides(ctx);
+    const unit = await openUnitSlides(ctx, deps?.session);
     if (!unit) return r;
     const rows = unit.slides.slice(0, 30).map((x) => ({ slide: x.n, title: x.title, text: x.text, notes: x.notes }));
     const what = unit.from === "lesson_script" ? "text as the lesson video shows them (from its script; the deck's own page text is not ready yet)" : "text and speaker notes";
@@ -685,10 +689,10 @@ export function resolveDeckSlide(query: string, slides: UnitSlide[]): UnitSlide 
  *  the map), the slide's own words for SK to explain from. No deck text: the
  *  map refusal, as before; no match: no_match (the route then tries the kit's
  *  own book). */
-async function explainFromDeck(ctx: SkContext, args: Record<string, unknown>): Promise<SkCapabilityResult> {
+async function explainFromDeck(ctx: SkContext, args: Record<string, unknown>, session?: Parameters<typeof openUnitSlides>[1]): Promise<SkCapabilityResult> {
   const concept = strArg(args.concept);
   if (!concept) return { ok: false, summary: "Explain what? Name the concept.", error: "bad_concept", facts: [] };
-  const unit = await openUnitSlides(ctx);
+  const unit = await openUnitSlides(ctx, session);
   if (!unit || !unit.slides.length) return noMap;
   const hit = resolveDeckSlide(concept, unit.slides);
   if (!hit) return { ok: false, summary: `I couldn't find "${concept}" in this lesson.`, error: "no_match", facts: [] };
@@ -717,7 +721,7 @@ export const boardExplain: SkCapability = {
   handler: async (ctx, args, deps) => {
     const b = board(ctx);
     if (!b) return noBoard;
-    if (!b.manifestId) return explainFromDeck(ctx, args ?? {});
+    if (!b.manifestId) return explainFromDeck(ctx, args ?? {}, deps?.session);
     return explainWithMap(ctx, args, deps);
   },
 };
@@ -921,7 +925,7 @@ export const boardExplainSelection: SkCapability = {
       return { ok: false, summary: sayFor("no_selection", loc), error: "no_selection", facts: [] };
     }
     const refused: SkCapabilityResult = { ok: false, summary: BOARD_SELECTION_REFUSED, error: "not_owner", facts: [] };
-    const sibling = async (): Promise<SkCapabilityResult> => ((await openUnitDeckSlide(ctx, sel.generationId, sel.n)) ? selected : refused);
+    const sibling = async (): Promise<SkCapabilityResult> => ((await openUnitDeckSlide(ctx, sel.generationId, sel.n, deps?.session)) ? selected : refused);
     const selected: SkCapabilityResult = {
       ok: true,
       summary: `Explaining the highlighted part of slide ${sel.n}${sel.title ? ` (${sel.title})` : ""}.`,

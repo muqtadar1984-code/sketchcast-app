@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { presentEntitled } from "@/utils/present/entitlement";
+import { learnerGate, sharedToMe } from "@/utils/present/learner-server";
 import { PAGE_H, PAGE_W } from "@/board/model";
 import { parseDeckMap, type DeckMap } from "@/app/present/deck-text";
 import {
@@ -35,6 +36,13 @@ export const runtime = "nodejs";
 //
 // Same gate and the same 8-hour signatures as /api/present/kit, and 404 on
 // every failure (a 403 would advertise the surface).
+//
+// THE STUDENT BOARD (learner mode, 2026-10-31) READS ONLY. A student for whom
+// SK is on (learnerGate) may read the pages of a deck ASSIGNED to her — one of
+// her generation_shares rows names it (sharedToMe) and her own session can
+// read it — signed exactly as for the teacher. She never queues a render: her
+// POST answers exactly as GET does ("missing" when nothing is rendered), so
+// no worker job is ever started on a student's behalf.
 
 const SIGN_TTL = 8 * 60 * 60;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,7 +51,7 @@ const NOT_FOUND = () => NextResponse.json({ error: "Not found." }, { status: 404
 type Admin = ReturnType<typeof createAdminClient>;
 type Gen = { id: string; kind: string; owner_id: string; artifacts: ArtifactRow[] };
 
-async function gate(): Promise<{ supabase: Awaited<ReturnType<typeof createClient>>; admin: Admin; userId: string } | null> {
+async function gate(): Promise<{ supabase: Awaited<ReturnType<typeof createClient>>; admin: Admin; userId: string; learner: boolean } | null> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -55,9 +63,32 @@ async function gate(): Promise<{ supabase: Awaited<ReturnType<typeof createClien
   } catch {
     return null;
   }
-  if (!(await presentEntitled(admin, user.id, user)).ok) return null;
-  return { supabase, admin, userId: user.id };
+  if ((await presentEntitled(admin, user.id, user)).ok) return { supabase, admin, userId: user.id, learner: false };
+  // Not a teacher: a student on the learner Board reads assigned decks.
+  if ((await learnerGate(supabase, user)).ok) return { supabase, admin, userId: user.id, learner: true };
+  return null;
 }
+
+/** A deck (or deck-carrying presentation) ASSIGNED to her, done, or null. */
+async function assignedDeck(supabase: Awaited<ReturnType<typeof createClient>>, id: string): Promise<Gen | null> {
+  if (!UUID_RE.test(id) || !(await sharedToMe(supabase, id))) return null;
+  const { data, error } = await supabase
+    .from("generations")
+    .select("id, kind, owner_id, artifacts(kind, storage_path)")
+    .eq("id", id)
+    .eq("status", "done")
+    .is("withdrawn_at", null)
+    .maybeSingle();
+  if (error || !data) return null;
+  const g = data as unknown as Gen;
+  const gen = { ...g, artifacts: g.artifacts ?? [] };
+  if (gen.id !== id || !isDeckSource(gen)) return null;
+  return gen;
+}
+
+/** The deck this caller may read: hers (teacher), or one assigned to her (learner). */
+const deckFor = (g: NonNullable<Awaited<ReturnType<typeof gate>>>, id: string): Promise<Gen | null> =>
+  g.learner ? assignedDeck(g.supabase, id) : ownedDeck(g.supabase, g.userId, id);
 
 /** Her own done deck (or deck-carrying presentation), or null. */
 async function ownedDeck(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, id: string): Promise<Gen | null> {
@@ -129,7 +160,7 @@ export async function GET(request: Request) {
   const g = await gate();
   if (!g) return NOT_FOUND();
   const id = new URL(request.url).searchParams.get("generationId") ?? "";
-  const gen = await ownedDeck(g.supabase, g.userId, id);
+  const gen = await deckFor(g, id);
   if (!gen) return NOT_FOUND();
 
   const ready = await readyReply(g.admin, gen);
@@ -151,12 +182,19 @@ export async function POST(request: Request) {
   }
   const id = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>).generationId : null;
   if (typeof id !== "string") return NextResponse.json({ error: "Missing generationId." }, { status: 400 });
-  const gen = await ownedDeck(g.supabase, g.userId, id);
+  const gen = await deckFor(g, id);
   if (!gen) return NOT_FOUND();
 
   // Already rendered: nothing to ask for.
   const ready = await readyReply(g.admin, gen);
   if (ready) return NextResponse.json(ready);
+
+  // A student never starts a render: what is there, or "missing".
+  if (g.learner) {
+    const active = await activeJob(g.admin, gen.id);
+    const reply: DeckPagesReply = { status: active ? "building" : "missing" };
+    return NextResponse.json(reply);
+  }
 
   // IDEMPOTENT: one live render per deck. Two clicks a second apart can both
   // pass this check; the worker's render is a pure function of the deck and

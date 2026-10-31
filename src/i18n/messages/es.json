@@ -156,7 +156,8 @@
       "partLoadFailed": "La parte {n} no se pudo cargar ahora mismo — cierra esto y actualiza la página para volver a intentarlo.",
       "multiPartHint": "Parte {n} de {total} (~15 min). Termina una parte para marcarla — la última completa la lección.",
       "singlePartHint": "Míralo hasta el final para marcar esta lección como completada."
-    }
+    },
+    "learnWithSk": "Aprender con SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,43 @@
       "notTeaching": "La pizarra del aula es para docentes.",
       "plan": "La pizarra del aula viene con Pro, Pro+ y todos los planes escolares.",
       "back": "Volver a tu biblioteca"
+    },
+    "learn": {
+      "title": "Mis lecciones",
+      "pick": "Elige una lección para aprender con SK.",
+      "empty": "Todavía no hay lecciones. Cuando tu profesor te dé una, aparecerá aquí.",
+      "due": "Entrega el {date}",
+      "overdue": "Era para el {date}",
+      "back": "Volver a mis lecciones",
+      "close": "Cerrar",
+      "loading": "Abriendo tu lección…",
+      "failed": "No se pudo abrir esta lección. Inténtalo de nuevo en un momento.",
+      "prevPage": "Página anterior",
+      "nextPage": "Página siguiente",
+      "steps": {
+        "video": "Vídeo",
+        "slides": "Diapositivas",
+        "worksheet": "Hoja de ejercicios"
+      },
+      "go": {
+        "video": "▶ Ver el vídeo",
+        "slides": "Abrir las diapositivas",
+        "worksheet": "Abrir la hoja",
+        "next": "Siguiente paso"
+      },
+      "sk": {
+        "startVideo": "¡Hola! Empecemos con el vídeo. Pulsa reproducir cuando estés listo y pregúntame lo que quieras cuando quieras.",
+        "startSlides": "¡Hola! Empecemos con las diapositivas. Pregúntame lo que quieras cuando quieras.",
+        "startWorksheet": "¡Hola! Veamos juntos la hoja de ejercicios. Pregúntame si te atascas.",
+        "toSlides": "¡Muy bien! Ahora repasemos las diapositivas.",
+        "toWorksheet": "¡Buen trabajo! Ahora probemos la hoja de ejercicios.",
+        "slidesOpen": "Aquí están las diapositivas. Resalta la parte que quieras que te explique.",
+        "slidesMissing": "Las diapositivas aún no están listas, así que pasemos a la hoja de ejercicios.",
+        "worksheetOpen": "Aquí está la hoja de ejercicios. Lee cada pregunta e inténtalo. Pregúntame si te atascas.",
+        "worksheetFailed": "No pude abrir la hoja ahora mismo. Aun así, puedes preguntarme lo que quieras.",
+        "done": "Esa es toda la lección. ¡Muy bien! Pregúntame lo que no tengas claro.",
+        "empty": "Esta lección aún no tiene nada que mostrar. Aun así, puedes hacerme una pregunta."
+      }
     }
   },
   "kits": {

@@ -10,7 +10,8 @@ import { fmt } from "@/i18n/format";
 import type { WalkCopy } from "@/app/dashboard/sk-walkthrough";
 import SkLauncher from "@/app/dashboard/sk-launcher";
 import type { SkShellCopy } from "@/app/dashboard/sk-shell";
-import BoardSession, { videoParts, type SessionInfo, type SessionKit } from "./board-session";
+import BoardSession, { framesCapturable, videoParts, type BoardIO, type SessionInfo, type SessionKit } from "./board-session";
+import { firstStep, nextLine, nextStep, openingLine, type CoachAvail, type CoachLines, type CoachStep } from "./learner-coach";
 import type { BoardController, BoardUnit } from "./board-controller";
 import { createBoardBridge, httpManifestFetch, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestStatus } from "./sk-board-bridge";
 import { prepareDeck, type DeckPagesReply, type DeckStatus } from "./deck-load";
@@ -56,6 +57,11 @@ export type BookOption = {
  *  pick (/api/present/adopt), then it is hers. */
 export type KitOption = { id: string; title: string; adopt?: { catalogueKit: string } };
 
+/** The student Board (learner mode, 2026-10-31): one of HER assigned kits —
+ *  its id on the Board, its name, its earliest due date, and every assigned
+ *  piece (a `?learn=<piece>` deep link opens the kit holding it). */
+export type LearnerKitOption = { id: string; title: string; due: string | null; members: string[]; overdue?: boolean };
+
 /** Exactly what /api/present/kit returns, and exactly what the board consumes. */
 type Kit = SessionKit;
 
@@ -89,7 +95,33 @@ type Props = {
    *  header computes them (page.tsx), for the Board's menu. Labels already
    *  translated; /present itself is dropped by menuItemsFor. */
   tabs?: MenuItem[];
+  /**
+   * THE STUDENT BOARD (SK student Board plan 2026-10-31, phase 1): set only
+   * for a student for whom SK is on (page.tsx). The same Board in learner
+   * mode — her assigned kits only, SK leading (video → slides → worksheet),
+   * nothing saved or published, no teacher bar.
+   */
+  learner?: { kits: LearnerKitOption[] } | null;
 };
+
+/** A learner session's id: local only (nothing is written for it), a uuid so
+ *  the SK turn's audit rows can carry it like a teacher's session id. */
+function localSessionId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  } catch {
+    /* fall through */
+  }
+  const h = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, "0");
+  return `${h()}${h()}-${h()}-4${h().slice(1)}-a${h().slice(1)}-${h()}${h()}${h()}`;
+}
+
+/** A due date for the chooser, in the reader's own calendar (client only). */
+function dueLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
 
 /** GET/POST /api/sk/manifest (slice A's contract) as the bridge's fetch —
  *  the POST with its JSON body (sk-board-bridge.ts httpManifestFetch). */
@@ -168,7 +200,9 @@ export default function PresentClient({
   kits = [],
   sk = null,
   tabs = [],
+  learner = null,
 }: Props) {
+  const learnerMode = !!learner;
   const now = useSyncExternalStore(subscribeClock, clockSnapshot, clockServerSnapshot);
 
   const ctx: PresentContext | null = useMemo(() => {
@@ -193,7 +227,7 @@ export default function PresentClient({
   // a choice made before it, while under one query her choice still wins.
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ?? "";
-  const link = useMemo(() => parsePresentDeepLink(search, { classes, books, kits }), [search, classes, books, kits]);
+  const link = useMemo(() => parsePresentDeepLink(search, { classes, books, kits, learnerKits: learner?.kits }), [search, classes, books, kits, learner]);
   const linkPick = link.kitId
     ? { book: null, chapter: null, kit: link.kitId }
     : link.bookId
@@ -327,7 +361,9 @@ export default function PresentClient({
     if (!key) return;
     let live = true;
     const q = liveKit ? new URLSearchParams({ kit: liveKit }) : new URLSearchParams({ book: liveBook ?? "", chapter: String(liveChapter) });
-    fetch(`/api/present/kit?${q.toString()}`)
+    // The student Board reads her ASSIGNED kit (answer-stripped worksheet, no
+    // downloads) from its own route; the reply has the same shape.
+    fetch(`${learnerMode ? "/api/present/learn/kit" : "/api/present/kit"}?${q.toString()}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 404 ? t.kit.unavailable : `Failed (${r.status})`);
         return (await r.json()) as Kit;
@@ -345,7 +381,7 @@ export default function PresentClient({
     return () => {
       live = false;
     };
-  }, [key, liveKit, liveBook, liveChapter, t]);
+  }, [key, liveKit, liveBook, liveChapter, t, learnerMode]);
 
   const current = loaded && loaded.key === key ? loaded : null;
   const kit = current?.kit ?? null;
@@ -359,6 +395,12 @@ export default function PresentClient({
 
   const start = useCallback(async () => {
     const kit = kitPick?.id ?? null;
+    if (learnerMode) {
+      // The student Board starts locally: no present session is written for
+      // a learner (nothing she does is published or moves a class pointer).
+      if (kit) setSession({ id: localSessionId(), teacherId, bookId: null, chapterNum: null, kitId: kit });
+      return;
+    }
     if (!kit && (!bookId || chapter === null || productPending)) return;
     setStarting(true);
     setStartError(null);
@@ -386,7 +428,7 @@ export default function PresentClient({
     } finally {
       setStarting(false);
     }
-  }, [bookId, chapter, kitPick, productPending, ctx, classId, klass, teacherId, t]);
+  }, [bookId, chapter, kitPick, productPending, ctx, classId, klass, teacherId, t, learnerMode]);
 
   // The unit rail overlay's state (Board UX 2026-10-28; see below). Declared
   // here so ending a lesson can shut it: the next lesson starts with it closed.
@@ -410,11 +452,21 @@ export default function PresentClient({
   }, [start]);
   useEffect(() => {
     // a SketchCast chapter starts once its kit is adopted (below), not before
-    if (!search || !link.autostart || !deepLinkStartable(link) || session || productPending || startedFor.current === search) return;
+    // (the student Board starts every kit she picks — below)
+    if (learnerMode || !search || !link.autostart || !deepLinkStartable(link) || session || productPending || startedFor.current === search) return;
     startedFor.current = search;
     const id = setTimeout(() => void startRef.current(), 0);
     return () => clearTimeout(id);
-  }, [search, link, session, productPending]);
+  }, [search, link, session, productPending, learnerMode]);
+
+  // THE STUDENT BOARD OPENS A KIT AS SOON AS IT IS PICKED (from the chooser,
+  // the header, or My lessons' "Learn with SK" deep link): there is no class,
+  // period or Start to decide first.
+  useEffect(() => {
+    if (!learnerMode || session || !kitPick) return;
+    const id = setTimeout(() => void startRef.current(), 0);
+    return () => clearTimeout(id);
+  }, [learnerMode, session, kitPick]);
 
   // ADOPT ON ARRIVAL: a pending SketchCast chapter with ONE kit adopts it by
   // itself — from the bar's chapter pick or a ?book=&chapter= deep link — once
@@ -561,6 +613,18 @@ export default function PresentClient({
       stop: () => ac?.abort(),
     };
   });
+  // The student Board's network seam: nothing is synced, uploaded or closed
+  // (no present session exists for her). Deck pages re-sign from the URLs the
+  // deck-pages read already gave her; a frozen frame stays in this tab.
+  const [learnerUrls] = useState(() => new Map<string, string>());
+  const [learnerIO] = useState<BoardIO>(() => ({
+    sync: async () => {},
+    items: async () => {},
+    signFrame: async (path: string) => learnerUrls.get(path) ?? null,
+    upload: async () => {},
+    recordRoll: async () => {},
+    close: async () => true,
+  }));
   const runDeck = useCallback(
     async (gen: string): Promise<BridgeRun> => {
       const c = controller;
@@ -584,6 +648,7 @@ export default function PresentClient({
           if (r.reason !== "aborted") setDeckFailed(gen);
           return { ok: false, summary: r.reason === "timeout" ? "The deck is taking too long to prepare." : "The deck could not be prepared." };
         }
+        if (learnerMode) for (const sl of r.slides) if (sl.url) learnerUrls.set(sl.path, sl.url);
         const res = await c.loadDeck({ generationId: gen, slides: r.slides, map: r.map, signal: ac.signal });
         if (!res.pages) return { ok: false, summary: "Stopped before the first slide." };
         setDeck({ gen, status: "loaded" });
@@ -597,7 +662,7 @@ export default function PresentClient({
         setDeckBusy((g) => (g === gen ? null : g));
       }
     },
-    [controller, deckRun],
+    [controller, deckRun, learnerMode, learnerUrls],
   );
   useEffect(() => () => deckRun.stop(), [deckRun]);
   const deckPort = useMemo(
@@ -691,7 +756,7 @@ export default function PresentClient({
           : null;
 
   // The Board's menu: "Back to dashboard", then the portal's tabs.
-  const menu = useMemo(() => menuItemsFor(tabs, { href: "/dashboard", label: t.bar.backToDashboard }), [tabs, t]);
+  const menu = useMemo(() => menuItemsFor(tabs, { href: "/dashboard", label: learnerMode ? t.learn.back : t.bar.backToDashboard }), [tabs, t, learnerMode]);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     if (!menuOpen) return;
@@ -702,8 +767,221 @@ export default function PresentClient({
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
+  // ── SK leads the student (learner mode, 2026-10-31) ─────────────────────
+  //
+  // Video → slides → worksheet (learner-coach.ts), each step performed
+  // through the paths the rail and SK's own moves already use: the controller
+  // plays the video, runDeck loads the deck as pages (the video's own slides
+  // when there is no rendered deck and the lesson map is ready), and the
+  // controller puts the worksheet's (answer-stripped) questions up. What SK
+  // says goes to its bubble and its conversation (`lead`); she can ask SK
+  // anything at any point.
+  const learn = t.learn;
+  const coachLines: CoachLines = learn.sk;
+  const unitNow = useMemo(() => {
+    if (!kit) return null;
+    return (
+      kit.units.find((x) => openUnit && x.part === openUnit.part && (x.video?.id ?? null) === openUnit.generationId) ??
+      kit.units.find((x) => openUnit && x.part === openUnit.part) ??
+      kit.units[0] ??
+      null
+    );
+  }, [kit, openUnit]);
+  const avail: CoachAvail = useMemo(
+    () => ({
+      video: !!unitNow?.video && videoParts(unitNow.video) > 0,
+      slides: !!unitNow?.docs.some((d) => d.note === "deck") || (!!unitNow?.video && framesCapturable(unitNow.video) && !!manifest?.segments.length),
+      worksheet: !!unitNow?.docs.some((d) => d.projects && d.questions),
+    }),
+    [unitNow, manifest],
+  );
+  const [coach, setCoach] = useState<{ session: string; step: CoachStep } | null>(null);
+  const [said, setSaid] = useState<{ session: string; key: string; text: string } | null>(null);
+  const sid = learnerMode && session ? session.id : null;
+  const step: CoachStep | null = sid && kit ? (coach && coach.session === sid ? coach.step : firstStep(avail)) : null;
+  const lead = !sid || !kit ? null : said && said.session === sid ? { key: said.key, text: said.text } : { key: `${sid}:open`, text: openingLine(firstStep(avail), coachLines) };
+  const say = useCallback((text: string) => {
+    if (!sid) return;
+    setSaid({ session: sid, key: `${sid}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`, text });
+  }, [sid]);
+  const goNext = useCallback(() => {
+    if (!sid || !step) return;
+    const next = nextStep(step, avail);
+    setCoach({ session: sid, step: next });
+    say(nextLine(next, coachLines));
+  }, [sid, step, avail, say, coachLines]);
+  const runStep = useCallback(
+    async (s: CoachStep) => {
+      const c = controller;
+      if (!sid || !c) return;
+      if (s === "video") {
+        await c.play().catch(() => {});
+        return;
+      }
+      if (s === "slides") {
+        const deck = unitNow?.docs.find((d) => d.note === "deck")?.id ?? null;
+        const r = deck ? await runDeck(deck) : null;
+        if (r?.ok) {
+          say(coachLines.slidesOpen);
+          return;
+        }
+        if (bridge && manifest?.segments.length && unitNow?.video && framesCapturable(unitNow.video)) {
+          const v = await bridge.run("load_slides", {});
+          if (v.ok) {
+            say(coachLines.slidesOpen);
+            return;
+          }
+        }
+        // No slides to show: say so and move on to the worksheet.
+        const next = nextStep("slides", avail);
+        setCoach({ session: sid, step: next });
+        say(`${coachLines.slidesMissing}`);
+        return;
+      }
+      if (s === "worksheet") {
+        try {
+          const shown = await c.showQuestions(0);
+          say(shown && shown.total > 0 ? coachLines.worksheetOpen : coachLines.worksheetFailed);
+        } catch {
+          say(coachLines.worksheetFailed);
+        }
+      }
+    },
+    [controller, sid, unitNow, runDeck, bridge, manifest, avail, say, coachLines],
+  );
+  // The video played to its end: SK moves her on.
+  const onVideoEnded = useCallback(() => {
+    if (step === "video") goNext();
+  }, [step, goNext]);
+  const closeLearner = useCallback(() => {
+    endSession();
+    setPick({ book: null, chapter: null, kit: null });
+  }, [endSession, setPick]);
+  const coachSteps = (["video", "slides", "worksheet"] as const).filter((x) => avail[x]);
+  const coachBar =
+    learnerMode && step ? (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-2" data-board="coach">
+        <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px]">
+          {coachSteps.map((x, i) => (
+            <li key={x} className={x === step ? "text-[#4FD6C2]" : "text-[#5F6F69]"} aria-current={x === step ? "step" : undefined}>
+              {i + 1}. {learn.steps[x]}
+            </li>
+          ))}
+        </ol>
+        {step !== "done" && (
+          <span className="ms-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void runStep(step)}
+              className="rounded-lg bg-[#0C8175] px-4 py-2 text-sm font-medium text-white max-sm:min-h-11"
+              data-board="coach-go"
+            >
+              {learn.go[step]}
+            </button>
+            <button type="button" onClick={goNext} className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7] max-sm:min-h-11">
+              {learn.go.next}
+            </button>
+          </span>
+        )}
+      </div>
+    ) : learnerMode && session && kitError ? (
+      <p role="status" className="rounded-xl border border-[#4A3A1C] bg-[#2C2318] px-3 py-2 text-sm text-[#E0A664]">
+        {learn.failed}
+      </p>
+    ) : null;
+
+  if (learnerMode) {
+    const lkits = learner?.kits ?? [];
+    return (
+      <main className="min-h-dvh overflow-x-hidden bg-[#0F1417] text-[#E7EDE9]" data-board-mode="learner">
+        <header className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
+          <a href="/dashboard" className="inline-flex min-h-11 items-center rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#4FD6C2]" data-board="learner-back">
+            ← {learn.back}
+          </a>
+          {lkits.length > 0 && (
+            <select
+              aria-label={learn.title}
+              value={kitId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                endSession();
+                setPick({ book: null, chapter: null, kit: id });
+              }}
+              className="min-h-11 min-w-0 max-w-full flex-1 rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm sm:flex-none"
+            >
+              <option value="">{learn.title}</option>
+              {lkits.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.title}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="ms-auto hidden text-end font-mono text-[11px] leading-tight text-[#93A09A] sm:block">{teacherName ?? ""}</div>
+        </header>
+
+        {session ? (
+          <BoardSession
+            session={session}
+            kit={kit}
+            t={t}
+            onEnd={closeLearner}
+            io={learnerIO}
+            controllerRef={controllerRef}
+            onUnit={setOpenUnit}
+            railOpen={rail.open}
+            onRail={railDispatch}
+            onLoadSlides={loadSlides}
+            slideStatus={slideStatus}
+            onLoadDeck={loadDeck}
+            onHighlight={sk ? onHighlight : undefined}
+            onAskSelection={sk ? onAskSelection : undefined}
+            learner
+            banner={coachBar}
+            onVideoEnded={onVideoEnded}
+          />
+        ) : kitPick ? (
+          <section className="grid place-items-center px-4" style={{ minHeight: "60dvh" }}>
+            <p className="text-sm text-[#93A09A]">{learn.loading}</p>
+          </section>
+        ) : (
+          <section className="mx-auto grid w-full max-w-2xl gap-3 px-4 py-6" data-board="learner-chooser">
+            <h1 className="text-2xl font-semibold tracking-tight">{learn.title}</h1>
+            <p className="text-sm text-[#93A09A]">{lkits.length ? learn.pick : learn.empty}</p>
+            <ul className="grid gap-2">
+              {lkits.map((k) => {
+                const overdue = !!k.overdue;
+                return (
+                  <li key={k.id}>
+                    <button
+                      type="button"
+                      onClick={() => setPick({ book: null, chapter: null, kit: k.id })}
+                      className="flex min-h-14 w-full flex-col items-start rounded-xl border border-[#2A363B] bg-[#141B1F] px-4 py-3 text-start"
+                      data-learner-kit={k.id}
+                    >
+                      <span className="text-base text-[#E7EDE9]">{k.title}</span>
+                      {/* Dates in her own calendar: rendered once the page is
+                          on her device (the clock), never in the server's UTC. */}
+                      {k.due && now && (
+                        <span className={`mt-0.5 font-mono text-[11px] ${overdue ? "text-[#E7B05C]" : "text-[#93A09A]"}`}>
+                          {fmt(overdue ? learn.overdue : learn.due, { date: dueLabel(k.due) })}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {sk && bridge && <SkLauncher copy={sk.copy} walkCopy={sk.walkCopy} role={sk.role} hat={sk.hat} introDue={false} board={bridge} lead={lead} />}
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-dvh bg-[#0F1417] text-[#E7EDE9]">
+    <main className="min-h-dvh bg-[#0F1417] text-[#E7EDE9] max-sm:overflow-x-hidden">
       {/* Dark, because it sits above a lit board in a room with the lights down,
           and because it must read from the back of the class. */}
       <header data-tour="board-bar" className="flex flex-wrap items-center gap-2 border-b border-[#222C30] px-3 py-2">
@@ -716,7 +994,7 @@ export default function PresentClient({
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
-            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]"
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7] max-sm:min-h-11"
             data-board="menu"
           >
             ≡ {t.bar.menu}
@@ -730,7 +1008,7 @@ export default function PresentClient({
                     key={m.href}
                     role="menuitem"
                     href={m.href}
-                    className={`rounded-lg px-3 py-2 text-sm hover:bg-[#1C2529] ${i === 0 ? "text-[#4FD6C2]" : "text-[#E7EDE9]"}`}
+                    className={`rounded-lg px-3 py-2 text-sm hover:bg-[#1C2529] max-sm:py-3 ${i === 0 ? "text-[#4FD6C2]" : "text-[#E7EDE9]"}`}
                   >
                     {m.label}
                   </a>
@@ -746,7 +1024,7 @@ export default function PresentClient({
           value={classId ?? ""}
           disabled={locked}
           onChange={(e) => setPickedClass(e.target.value || null)}
-          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60 max-sm:min-h-11"
         >
           <option value="">{t.bar.noClass}</option>
           {classes.map((c) => (
@@ -761,7 +1039,7 @@ export default function PresentClient({
           value={shownBookId ?? ""}
           disabled={locked || adopting}
           onChange={(e) => setPick({ book: e.target.value || null, chapter: null, kit: null })}
-          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60 max-sm:min-h-11"
         >
           <option value="">{t.bar.chooseBook}</option>
           {books.map((b) => (
@@ -781,7 +1059,7 @@ export default function PresentClient({
             // kit) or after the kit chooser below (several)
             setPick({ book: shownBookId, chapter: num, kit: null });
           }}
-          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-40"
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-40 max-sm:min-h-11"
         >
           <option value="">{t.bar.chooseChapter}</option>
           {chapters.map((c) => (
@@ -804,7 +1082,7 @@ export default function PresentClient({
               const id = e.target.value;
               if (id) void adoptAndPick({ bookId: chooserBook.id, chapterNum: chooserChapter, kit: id }, null);
             }}
-            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60 max-sm:min-h-11"
           >
             <option value="">{t.bar.chooseProductKit}</option>
             {chapterKits.map((k, i) => (
@@ -834,7 +1112,7 @@ export default function PresentClient({
               if (k?.adopt) void adoptAndPick({ catalogueKit: k.adopt.catalogueKit }, k.id);
               else setPick(e.target.value ? { book: null, chapter: null, kit: e.target.value } : { book: null, chapter: null, kit: null });
             }}
-            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60 max-sm:min-h-11"
           >
             <option value="">{t.bar.chooseKit}</option>
             {allKits.some((k) => !k.adopt) && (

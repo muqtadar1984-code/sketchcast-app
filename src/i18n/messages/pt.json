@@ -156,7 +156,8 @@
       "partLoadFailed": "A Parte {n} não carregou agora — feche isto e atualize a página para tentar de novo.",
       "multiPartHint": "Parte {n} de {total} (~15 min). Termine uma parte para marcá-la — a última conclui a aula.",
       "singlePartHint": "Assista até o fim para marcar esta aula como concluída."
-    }
+    },
+    "learnWithSk": "Aprender com o SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,43 @@
       "notTeaching": "A lousa da sala de aula é para professores.",
       "plan": "A lousa da sala de aula está inclusa nos planos Pro, Pro+ e em todos os planos escolares.",
       "back": "Voltar para sua biblioteca"
+    },
+    "learn": {
+      "title": "As minhas lições",
+      "pick": "Escolhe uma lição para aprender com o SK.",
+      "empty": "Ainda não há lições. Quando o teu professor te der uma, ela aparece aqui.",
+      "due": "Entrega a {date}",
+      "overdue": "Era para {date}",
+      "back": "Voltar às minhas lições",
+      "close": "Fechar",
+      "loading": "A abrir a tua lição…",
+      "failed": "Não foi possível abrir esta lição. Tenta novamente daqui a pouco.",
+      "prevPage": "Página anterior",
+      "nextPage": "Página seguinte",
+      "steps": {
+        "video": "Vídeo",
+        "slides": "Diapositivos",
+        "worksheet": "Ficha de trabalho"
+      },
+      "go": {
+        "video": "▶ Ver o vídeo",
+        "slides": "Abrir os diapositivos",
+        "worksheet": "Abrir a ficha",
+        "next": "Próximo passo"
+      },
+      "sk": {
+        "startVideo": "Olá! Vamos começar pelo vídeo. Carrega em reproduzir quando estiveres pronto e pergunta-me o que quiseres, quando quiseres.",
+        "startSlides": "Olá! Vamos começar pelos diapositivos. Pergunta-me o que quiseres, quando quiseres.",
+        "startWorksheet": "Olá! Vamos ver a ficha de trabalho juntos. Pergunta-me se ficares com dúvidas.",
+        "toSlides": "Muito bem! Agora vamos ver os diapositivos.",
+        "toWorksheet": "Excelente trabalho! Agora vamos experimentar a ficha de trabalho.",
+        "slidesOpen": "Aqui estão os diapositivos. Destaca a parte que queres que eu explique.",
+        "slidesMissing": "Os diapositivos ainda não estão prontos, por isso vamos passar à ficha de trabalho.",
+        "worksheetOpen": "Aqui está a ficha de trabalho. Lê cada pergunta e tenta responder. Pergunta-me se ficares com dúvidas.",
+        "worksheetFailed": "Não consegui abrir a ficha agora. Mesmo assim, podes perguntar-me o que quiseres.",
+        "done": "É toda a lição. Muito bem! Pergunta-me o que não tiveres a certeza.",
+        "empty": "Esta lição ainda não tem nada para mostrar. Mesmo assim, podes fazer-me uma pergunta."
+      }
     }
   },
   "kits": {

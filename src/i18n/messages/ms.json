@@ -156,7 +156,8 @@
       "partLoadFailed": "Bahagian {n} tidak dapat dimuatkan sekarang — tutup ini dan muat semula halaman untuk cuba lagi.",
       "multiPartHint": "Bahagian {n} daripada {total} (~15 min). Habiskan satu bahagian untuk menandakannya — bahagian terakhir melengkapkan pelajaran.",
       "singlePartHint": "Tonton sehingga habis untuk menandakan pelajaran ini selesai."
-    }
+    },
+    "learnWithSk": "Belajar dengan SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,43 @@
       "notTeaching": "Papan bilik darjah adalah untuk guru.",
       "plan": "Papan bilik darjah disertakan dengan Pro, Pro+ dan setiap pelan sekolah.",
       "back": "Kembali ke perpustakaan anda"
+    },
+    "learn": {
+      "title": "Pelajaran saya",
+      "pick": "Pilih pelajaran untuk belajar bersama SK.",
+      "empty": "Belum ada pelajaran. Apabila guru anda memberikannya, ia akan muncul di sini.",
+      "due": "Tarikh akhir {date}",
+      "overdue": "Tarikh akhir sudah lepas {date}",
+      "back": "Kembali ke pelajaran saya",
+      "close": "Tutup",
+      "loading": "Membuka pelajaran anda…",
+      "failed": "Pelajaran ini tidak dapat dibuka. Cuba lagi sebentar lagi.",
+      "prevPage": "Halaman sebelumnya",
+      "nextPage": "Halaman seterusnya",
+      "steps": {
+        "video": "Video",
+        "slides": "Slaid",
+        "worksheet": "Lembaran kerja"
+      },
+      "go": {
+        "video": "▶ Main video",
+        "slides": "Buka slaid",
+        "worksheet": "Buka lembaran kerja",
+        "next": "Langkah seterusnya"
+      },
+      "sk": {
+        "startVideo": "Hai! Jom mula dengan video. Tekan main apabila anda sedia, dan tanya saya apa sahaja pada bila-bila masa.",
+        "startSlides": "Hai! Jom mula dengan slaid. Tanya saya apa sahaja pada bila-bila masa.",
+        "startWorksheet": "Hai! Jom lihat lembaran kerja bersama-sama. Tanya saya jika anda tersekat.",
+        "toSlides": "Syabas! Sekarang jom lihat slaid.",
+        "toWorksheet": "Bagus sekali! Sekarang jom cuba lembaran kerja.",
+        "slidesOpen": "Ini slaidnya. Serlahkan mana-mana bahagian yang anda mahu saya terangkan.",
+        "slidesMissing": "Slaid belum sedia lagi, jadi jom terus ke lembaran kerja.",
+        "worksheetOpen": "Ini lembaran kerjanya. Baca setiap soalan dan cuba jawab. Tanya saya jika anda tersekat.",
+        "worksheetFailed": "Saya tidak dapat membuka lembaran kerja sekarang. Anda masih boleh tanya saya apa sahaja.",
+        "done": "Itu sahaja pelajaran ini. Syabas! Tanya saya tentang apa-apa yang anda kurang pasti.",
+        "empty": "Pelajaran ini belum ada apa-apa untuk ditunjukkan. Anda masih boleh bertanya kepada saya."
+      }
     }
   },
   "kits": {

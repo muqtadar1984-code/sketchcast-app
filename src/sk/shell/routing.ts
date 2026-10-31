@@ -119,6 +119,11 @@ export function teachingOpen(ctx: SkContext): boolean {
   return !!(ctx.board?.sessionId || ctx.board?.selection || ctx.tutor?.kit);
 }
 
+/** A student on her OWN Board (learner mode): a learner session is open. */
+export function studentOnBoard(ctx: SkContext): boolean {
+  return ctx.user.role === "student" && !!ctx.board?.sessionId;
+}
+
 /** Is this message a teaching / explanation request (a concept, not her data)? */
 export function isTeachingAsk(text: string): boolean {
   const core = normalizeIntent(text ?? "");
@@ -154,8 +159,10 @@ export const ESCALATE_TOOLS: readonly string[] = ["knowledge.search", "kit.docum
  *  metered kit turn (handoffBefore / handoffAfter) — escalating first would
  *  only buy a second Shell round that is thrown away. */
 export function escalationTools(ctx: SkContext): ReadonlySet<string> {
-  // board.explain_selection is a hand-off for everyone (2026-10-31).
-  const handedOff = new Set(ctx.user.role === "student" ? ["knowledge.search", "tutor.explain", "board.explain_selection"] : ["board.explain_selection"]);
+  // board.explain_selection is a hand-off for everyone (2026-10-31). On her
+  // own Board (learner mode) a student's knowledge.search is NOT handed off
+  // (handoffBefore) — it runs like a teacher's, so it escalates like one.
+  const handedOff = new Set(ctx.user.role === "student" && !studentOnBoard(ctx) ? ["knowledge.search", "tutor.explain", "board.explain_selection"] : ["board.explain_selection"]);
   return new Set(ESCALATE_TOOLS.filter((t) => !handedOff.has(t)));
 }
 
@@ -289,7 +296,11 @@ export type HandoffAfter = "control" | "tutor";
  */
 export function handoffBefore(name: string, args: Record<string, unknown>, ctx: SkContext): HandoffBefore | null {
   const n = fromApiToolName(name);
-  if (ctx.user.role === "student" && n === "knowledge.search") return "student_knowledge";
+  // The student Board (learner mode, 2026-10-31): with her own Board open, a
+  // student's question is answered by the Board's own knowledge / explain
+  // path — knowledge.search runs as an ordinary tool, grounded on her books,
+  // exactly as on a teacher's Board — never the dormant tutor's kit turn.
+  if (ctx.user.role === "student" && n === "knowledge.search" && !studentOnBoard(ctx)) return "student_knowledge";
   if (n === "board.explain_selection") return "selection";
   if (n === "start_lesson" && ctx.user.role !== "student") {
     const named = ["book", "chapter", "kit"].some((k) => typeof args?.[k] === "string" ? (args[k] as string).trim() !== "" : args?.[k] != null);

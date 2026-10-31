@@ -10,7 +10,9 @@ import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 
 export type { StudentItemData };
-export type StudentChapter = { key: string; heading: string; items: StudentItemData[] };
+/** `learn`: the chapter's assigned kits on the student Board ("Learn with SK",
+ *  2026-10-31) — a label only when the chapter holds more than one kit. */
+export type StudentChapter = { key: string; heading: string; items: StudentItemData[]; learn?: { href: string; label: string | null }[] };
 export type StudentClassGroup = { className: string; chapters: StudentChapter[] };
 
 // Student view (Phase B): chapters assigned to the student, grouped by class.
@@ -71,7 +73,19 @@ export default async function StudentDashboard({
               <div className="card divide-y divide-[#EEF0EC]">
                 {g.chapters.map((ch) => (
                   <div key={ch.key} className="px-5 py-3">
-                    <div className="font-display font-medium mb-2">{ch.heading}</div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="font-display font-medium">{ch.heading}</div>
+                      {(ch.learn ?? []).map((l) => (
+                        <a
+                          key={l.href}
+                          href={l.href}
+                          className="inline-flex min-h-11 items-center rounded-lg bg-[#0C8175] px-3 py-2 text-sm font-medium text-white sm:min-h-0 sm:py-1.5"
+                          data-learn-with-sk
+                        >
+                          {l.label ? `${t.learnWithSk} · ${l.label}` : t.learnWithSk}
+                        </a>
+                      ))}
+                    </div>
                     <ul className="space-y-1.5">
                       {ch.items.map((it) => (
                         <StudentItem

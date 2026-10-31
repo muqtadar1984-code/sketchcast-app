@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { newRoll, type PageBackground, type Stroke, type Tool } from "@/board/model";
 import { CHIP_MS, chipPosition, createDeckMapCache, pagePayloadOf, payloadOf, selectionFromStroke, strokePointsBox, type DeckMapReply, type SkSelectionPayload } from "./highlight-select";
@@ -26,7 +26,7 @@ import {
   type QuestionSet,
   type SkActionSink,
 } from "./board-controller";
-import { answerKey, cardPng, drawCard, questionCards, type CardWords } from "./text-card";
+import { answerKey, cardPng, drawCard, learnerQuestionCards, questionCards, type CardWords } from "./text-card";
 
 // A lesson in progress: the bar's choice, the kit, the stage and the roll.
 //
@@ -235,6 +235,18 @@ type Props = {
   onHighlight?: (selection: SkSelectionPayload | null) => void;
   /** The chip's click: ask SK to explain the highlighted part. */
   onAskSelection?: () => void;
+  /**
+   * The STUDENT Board (learner mode, SK student Board plan 2026-10-31): the
+   * same Board for one learner and her assigned kit. Nothing is saved or
+   * published (the host passes an in-memory `io`), so there is no "End lesson"
+   * (a Close instead), no PDF export, no answer to reveal (her worksheet
+   * arrives answer-stripped, learnerQuestionCards), no other worksheets.
+   */
+  learner?: boolean;
+  /** A strip above the toolbar (learner mode: SK's next step). */
+  banner?: ReactNode;
+  /** Told when the lesson video plays to its end (learner mode: SK moves on). */
+  onVideoEnded?: () => void;
 };
 
 /** The deck-pages GET, for the text map's signed URL. */
@@ -254,7 +266,7 @@ function boardUnitOf(u: KitUnit | null): BoardUnit | null {
   return u ? { generationId: u.video?.id ?? null, part: u.part, title: u.video?.title ?? null } : null;
 }
 
-export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null, onLoadDeck, onHighlight, onAskSelection }: Props) {
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null, onLoadDeck, onHighlight, onAskSelection, learner = false, banner = null, onVideoEnded }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -744,7 +756,8 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
             if (!u || !d?.questions) return null;
             const r = await fetch(d.questions);
             if (!r.ok) throw new Error(`questions ${r.status}`);
-            const { cards, answers: key } = questionCards(await r.json(), d.id, cardWords);
+            // A student's paper is the answer-stripped one: cards, and no key.
+            const { cards, answers: key } = learner ? learnerQuestionCards(await r.json(), d.id) : questionCards(await r.json(), d.id, cardWords);
             for (const [k, v] of key) answers.current.set(k, v);
             setAnswerKeys(new Set(answers.current.keys()));
             // Logged as what it is in present_items' terms: a worksheet she put up.
@@ -789,7 +802,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         sink,
         { onMoving: setMoving },
       ),
-    [sink, roll, t, cardWords],
+    [sink, roll, t, cardWords, learner],
   );
   // No deps: it follows ctlRef whenever that is rebuilt.
   useImperativeHandle(controllerRef, () => ctlRef.current as BoardController);
@@ -821,7 +834,8 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
     board.current?.repaint();
   }, [currentKey]);
 
-  const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]";
+  // max-sm: (phone, < 640 px) only — tap targets of at least 44 px; desktop unchanged.
+  const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7] max-sm:min-h-11 max-sm:min-w-11";
   // EVERY CONTROL, not just the End button. The export walks the live roll page
   // by page with an await per background, the tombstones have already been
   // reconciled, and `where.count` is captured in the closure — so a stroke, an
@@ -866,7 +880,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
                   openUnit(k);
                   pick();
                 }}
-                className={`rounded-lg border px-2 py-1.5 font-mono text-[11px] ${
+                className={`rounded-lg border px-2 py-1.5 font-mono text-[11px] max-sm:min-h-11 max-sm:min-w-11 ${
                   on
                     ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
                     : "border-[#2A363B] bg-[#141B1F] text-[#93A09A]"
@@ -1045,13 +1059,92 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
     </>
   );
 
+  /** The page arrows and counter, and a question page's own controls: the
+   *  column beside the roll on a wide screen, a row above the roll on a
+   *  phone (2026-10-31) — one list, so the two never offer different things. */
+  const pager = (phone: boolean) => (
+    <>
+      <button
+        type="button"
+        className={btn}
+        disabled={where.page === 0}
+        aria-label={t.learn.prevPage}
+        onClick={() => board.current?.goTo(where.page - 1)}
+      >
+        ↑
+      </button>
+      {phone && (
+        <p className="min-w-16 text-center font-mono text-[12px] text-[#93A09A]" data-board="page-count">
+          {fmt(t.board.pageOf, { n: where.page + 1, total: where.count })}
+        </p>
+      )}
+      <button
+        type="button"
+        className={btn}
+        disabled={where.page >= where.count - 1}
+        aria-label={t.learn.nextPage}
+        onClick={() => board.current?.goTo(where.page + 1)}
+      >
+        ↓
+      </button>
+      {/* On a phone the column with the big blank-page button is hidden: the
+          same push, in the row. */}
+      {phone && (
+        <button type="button" className={btn} disabled={saving} onClick={() => board.current?.push({ kind: "blank" })}>
+          {t.board.push}
+        </button>
+      )}
+      {!phone && (
+        <p className="text-center font-mono text-[11px] text-[#5F6F69]">
+          {fmt(t.board.pageOf, { n: where.page + 1, total: where.count })}
+        </p>
+      )}
+      {/* Only on a question page, which only SK puts up. */}
+      {currentCard && (
+        <>
+          <button
+            type="button"
+            className={btn}
+            disabled={saving || (currentCard.index ?? 0) <= 0}
+            aria-label={t.board.prevQuestion}
+            title={t.board.prevQuestion}
+            onClick={() => void ctlRef.current?.prevQuestion().catch(() => {})}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className={btn}
+            disabled={saving || (currentCard.index ?? 0) >= (currentCard.total ?? 1) - 1}
+            aria-label={t.board.nextQuestion}
+            title={t.board.nextQuestion}
+            onClick={() => void ctlRef.current?.nextQuestion().catch(() => {})}
+          >
+            ›
+          </button>
+          {/* Never on the student Board: her paper carries no answers. */}
+          {!learner && currentKey && answerKeys.has(currentKey) && (
+            <button type="button" className={btn} disabled={saving} onClick={toggleAnswer}>
+              {revealed.has(currentKey) ? t.board.hideAnswer : t.board.showAnswer}
+            </button>
+          )}
+        </>
+      )}
+    </>
+  );
+
   return (
     // ps-10 when there is a rail handle: the handle sits on the left edge in
-    // every mode and must not cover the column's buttons.
-    <div className={`grid gap-3 p-3 lg:grid-cols-[220px_1fr_96px] ${onRail ? "ps-10" : ""}`}>
-      <aside className="grid content-start gap-2">{railBody()}</aside>
+    // every mode and must not cover the column's buttons. max-sm:pb-32: on a
+    // phone SK's avatar is docked at the bottom, so the page can scroll the
+    // last controls clear of it.
+    <div className={`grid gap-3 p-3 lg:grid-cols-[220px_1fr_96px] max-sm:pb-32 ${onRail ? "ps-10 max-sm:ps-14" : ""}`} data-board-learner={learner ? "1" : undefined}>
+      {/* On a phone the column gives way to the rail overlay (the handle on
+          the left edge), so the stage and the roll come first. */}
+      <aside className={`grid content-start gap-2 ${onRail ? "max-sm:hidden" : ""}`}>{railBody()}</aside>
 
       <div className="grid gap-2">
+        {banner}
         <div className="flex flex-wrap gap-2">
           {TOOLS.map((tool2) => (
             <button
@@ -1059,7 +1152,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
               type="button"
               onClick={() => setTool(tool2.key)}
               disabled={saving}
-              className={`rounded-lg border px-3 py-2 text-sm ${
+              className={`rounded-lg border px-3 py-2 text-sm max-sm:min-h-11 ${
                 tool === tool2.key
                   ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
                   : "border-[#2A363B] bg-[#141B1F] text-[#C2CCC7]"
@@ -1081,15 +1174,33 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           >
             {touchMode === "draw" ? t.board.touchDraw : t.board.touchScroll}
           </button>
-          <button type="button" className={`${btn} ms-auto`} disabled={saving} onClick={exportPdf}>
-            {t.board.exportPdf}
-          </button>
-          <button type="button" className={btn} disabled={phase !== "board"} onClick={end}>
-            {phase === "ending" ? t.board.ending : t.board.endLesson}
-          </button>
+          {learner ? (
+            // The student Board saves and publishes nothing: closing it is just
+            // going back to her lessons.
+            <button type="button" className={`${btn} ms-auto`} onClick={onEnd} data-board="learner-close">
+              {t.learn.close}
+            </button>
+          ) : (
+            <>
+              <button type="button" className={`${btn} ms-auto`} disabled={saving} onClick={exportPdf}>
+                {t.board.exportPdf}
+              </button>
+              <button type="button" className={btn} disabled={phase !== "board"} onClick={end}>
+                {phase === "ending" ? t.board.ending : t.board.endLesson}
+              </button>
+            </>
+          )}
         </div>
 
-        <div ref={rollBox} className="relative">
+        {/* Phone (2026-10-31): the page counter and arrows sit right above
+            the roll, so they stay in view under the video. */}
+        <div className="flex flex-wrap items-center gap-2 sm:hidden" data-board="phone-pager">
+          {pager(true)}
+        </div>
+
+        {/* --roll-h: the roll's height; on a phone a little shorter, so the
+            video above it and the controls around it fit the screen. */}
+        <div ref={rollBox} className="relative max-sm:[--roll-h:60dvh]">
         <RollView
           ref={board}
           roll={roll}
@@ -1105,7 +1216,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           onStrokesMoved={onStrokesMoved}
           onPageChange={onPageChange}
           className="rounded-xl border border-[#222C30] overflow-hidden bg-white"
-          style={{ height: "68dvh", minHeight: 320 }}
+          style={{ height: "var(--roll-h, 68dvh)", minHeight: 320 }}
         />
         {chip && onAskSelection && (
           <button
@@ -1135,7 +1246,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         )}
       </div>
 
-      <aside className="grid content-start gap-2">
+      <aside className="grid content-start gap-2 max-sm:hidden">
         {/* The big one, beside the page arrows. It was labelled "PUSH" — the
             roll metaphor, pushing the paper up for fresh space — and eight of
             the nine translators read it as "send" because nothing on the button
@@ -1151,55 +1262,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         >
           {t.board.push}
         </button>
-        <button
-          type="button"
-          className={btn}
-          disabled={where.page === 0}
-          onClick={() => board.current?.goTo(where.page - 1)}
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          className={btn}
-          disabled={where.page >= where.count - 1}
-          onClick={() => board.current?.goTo(where.page + 1)}
-        >
-          ↓
-        </button>
-        <p className="text-center font-mono text-[11px] text-[#5F6F69]">
-          {fmt(t.board.pageOf, { n: where.page + 1, total: where.count })}
-        </p>
-        {/* Only on a question page, which only SK puts up. */}
-        {currentCard && (
-          <>
-            <button
-              type="button"
-              className={btn}
-              disabled={saving || (currentCard.index ?? 0) <= 0}
-              aria-label={t.board.prevQuestion}
-              title={t.board.prevQuestion}
-              onClick={() => void ctlRef.current?.prevQuestion().catch(() => {})}
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              className={btn}
-              disabled={saving || (currentCard.index ?? 0) >= (currentCard.total ?? 1) - 1}
-              aria-label={t.board.nextQuestion}
-              title={t.board.nextQuestion}
-              onClick={() => void ctlRef.current?.nextQuestion().catch(() => {})}
-            >
-              ›
-            </button>
-            {currentKey && answerKeys.has(currentKey) && (
-              <button type="button" className={btn} disabled={saving} onClick={toggleAnswer}>
-                {revealed.has(currentKey) ? t.board.hideAnswer : t.board.showAnswer}
-              </button>
-            )}
-          </>
-        )}
+        {pager(false)}
       </aside>
 
       {/* Mounted for the whole lesson, whatever the mode. See stage.tsx. */}
@@ -1210,7 +1273,10 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
         mode={mode}
         status={moving ? t.board.moving : null}
         onTapToFreeze={freeze}
-        onEnded={() => setMode("corner")}
+        onEnded={() => {
+          setMode("corner");
+          onVideoEnded?.();
+        }}
         onError={() => setNote(t.board.videoExpired)}
       />
 
@@ -1224,7 +1290,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           onClick={() => onRail("toggle")}
           aria-expanded={railOpen}
           data-board="rail-handle"
-          className="fixed start-0 top-1/2 z-[35] -translate-y-1/2 rounded-e-lg border border-s-0 border-[#17544C] bg-[#12302C] px-1.5 py-3 font-mono text-[11px] text-[#4FD6C2] shadow-lg [writing-mode:vertical-rl]"
+          className="fixed start-0 top-1/2 z-[35] -translate-y-1/2 rounded-e-lg border border-s-0 border-[#17544C] bg-[#12302C] px-1.5 py-3 font-mono text-[11px] text-[#4FD6C2] shadow-lg [writing-mode:vertical-rl] max-sm:left-0 max-sm:min-w-9 max-sm:py-4"
         >
           {t.board.railHandle} <span className="rtl-flip inline-block">▸</span>
         </button>
