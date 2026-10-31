@@ -1,14 +1,14 @@
 /**
- * The SK Tutor tab (founder, 2026-10-27: live, restricted to the allow-list).
- * Pinned: where it appears — the teacher hat and the CONSUMER parent hat right
- * after Kits, every role in the union view (students included: it is the
- * learner's surface), and never a leadership hat or a school-provisioned
- * parent — and that the default (no argument) is OFF, so every existing call
- * site and test reads unchanged.
+ * The SK Tutor tab is gone (founder, 2026-10-31: "remove sk tutor, we dont
+ * need a separate tutor. existing books can be taught on the board itself").
+ * Pinned: no hat and no role in the union view carries an /sk tab any more,
+ * and the teacher's authoring row runs Library → My Analytics → Kits → Board.
  *
  * Run: node node_modules/vitest/vitest.mjs run src/utils/__tests__/nav-tabs-sk.test.ts
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { tabsFor, tabsForHat } from "@/utils/nav-tabs";
 
 const T = {
@@ -31,51 +31,31 @@ const T = {
 } as unknown as Parameters<typeof tabsForHat>[0];
 
 const hrefs = (tabs: Array<{ href: string }>) => tabs.map((t) => t.href);
+const noSk = (tabs: Array<{ href: string }>) => expect(hrefs(tabs).filter((h) => h === "/sk" || h.startsWith("/sk/"))).toEqual([]);
 
-describe("SK Tutor tab — hats", () => {
-  it("teacher hat: right after Kits, before the board; label from the dictionary", () => {
-    const tabs = tabsForHat(T, "teacher", true, true, true, true, false, true, true, true);
-    expect(hrefs(tabs).slice(0, 5)).toEqual(["/dashboard", "/dashboard/analytics", "/dashboard/kits", "/sk", "/present"]);
-    expect(tabs.find((t) => t.href === "/sk")?.label).toBe("SK Tutor");
+describe("no SK Tutor tab — hats", () => {
+  it("teacher hat: Kits is followed by the Board", () => {
+    const tabs = tabsForHat(T, "teacher", true, true, true, true, false, true, true);
+    expect(hrefs(tabs).slice(0, 4)).toEqual(["/dashboard", "/dashboard/analytics", "/dashboard/kits", "/present"]);
+    noSk(tabs);
   });
-  it("teacher hat without kits: right after My Analytics", () => {
-    expect(hrefs(tabsForHat(T, "teacher", true, true, true, true, false, true, false, true)).slice(0, 3)).toEqual([
-      "/dashboard",
-      "/dashboard/analytics",
-      "/sk",
-    ]);
-  });
-  it("consumer parent hat: with the authoring surfaces; school parent: not at all", () => {
-    expect(hrefs(tabsForHat(T, "parent", false, false, false, false, false, false, false, true))).toContain("/sk");
-    expect(hrefs(tabsForHat(T, "parent", false, false, false, false, true, false, false, true))).not.toContain("/sk");
-  });
-  it("leadership hats never carry it", () => {
-    for (const hat of ["principal", "coordinator"] as const)
-      expect(hrefs(tabsForHat(T, hat, true, true, true, true, false, false, false, true))).not.toContain("/sk");
-  });
-  it("default is OFF", () => {
-    expect(hrefs(tabsForHat(T, "teacher", true, true, true, true, false, true, true))).not.toContain("/sk");
+  it("every hat, school parent or not", () => {
+    for (const hat of ["teacher", "parent", "principal", "coordinator"] as const)
+      for (const schoolParent of [false, true]) noSk(tabsForHat(T, hat, true, true, true, true, schoolParent, true, true));
   });
 });
 
-describe("SK Tutor tab — union view", () => {
-  it("teacher: right after Kits; off by default", () => {
-    const on = hrefs(tabsFor(T, "teacher", false, false, false, false, false, false, false, "My lessons", true, true, true));
-    expect(on.slice(0, 5)).toEqual(["/dashboard", "/dashboard/analytics", "/dashboard/kits", "/sk", "/present"]);
-    const off = hrefs(tabsFor(T, "teacher", false, false, false, false, false, false, false, "My lessons", true, true));
-    expect(off).not.toContain("/sk");
-    expect(off).toEqual(on.filter((h) => h !== "/sk"));
+describe("no SK Tutor tab — union view", () => {
+  it("students: My lessons, then the diary", () => {
+    const tabs = tabsFor(T, "student", false, false, false, false, false, false, true, "My lessons", false, false);
+    expect(hrefs(tabs)).toEqual(["/dashboard", "/dashboard/diary"]);
   });
-  it("student: right after My lessons", () => {
-    expect(hrefs(tabsFor(T, "student", false, false, false, false, false, false, true, "My lessons", false, false, true))).toEqual([
-      "/dashboard",
-      "/sk",
-      "/dashboard/diary",
-    ]);
-    expect(hrefs(tabsFor(T, "student", false, false, false, false, false, false, true, "My lessons", false, false))).not.toContain("/sk");
+  it("every role", () => {
+    for (const role of ["teacher", "school_admin", "coordinator", "parent", "student", null])
+      noSk(tabsFor(T, role, true, true, true, true, true, true, true, "My lessons", true, true));
   });
-  it("school admin and parent-with-children carry it too", () => {
-    expect(hrefs(tabsFor(T, "school_admin", true, false, false, true, false, false, false, "My lessons", true, false, true))).toContain("/sk");
-    expect(hrefs(tabsFor(T, "parent", false, true, false, false, false, false, false, "My lessons", false, false, true))).toContain("/sk");
+  it("the header has no /sk tour marker left", () => {
+    const src = readFileSync(join(resolve(__dirname, "..", ".."), "app", "dashboard", "header-nav.tsx"), "utf8");
+    expect(src).not.toMatch(/"\/sk"\s*:/);
   });
 });

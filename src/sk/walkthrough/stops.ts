@@ -9,7 +9,7 @@
 // walkthrough.ts) turns it into a plan, and node tests read both.
 //
 // Each stop says:
-//   route    — where it happens. `{classId}` / `{tutorPath}` are filled from
+//   route    — where it happens. `{classId}` / `{bookId}` are filled from
 //              the user's facts; a missing value in a QUERY drops that
 //              parameter, a missing value in the PATH skips the stop.
 //   anchors  — what to highlight, in order: the first one visible on the page
@@ -54,6 +54,13 @@
 // for a combined stop), and the teacher's same-page neighbours are folded
 // into combined stops (kit, classBoard, readyMade, insights, bellLanguage,
 // skHelp): 29 stops → 22.
+//
+// 2026-10-31 (founder: "remove sk tutor, we dont need a separate tutor.
+// existing books can be taught on the board itself. that removes 1 step from
+// sk tour"): no stop visits or names SK Tutor. The teacher's readyMade stop
+// (Ready-made kits + the SK Tutor tab) is the kits stop alone; the student's
+// five tutor stops (tutorNone, skBooks, kitPlayer, kitHelp, kitNext) are gone;
+// the parent's homeKits no longer points at the tab.
 
 export type WalkRole = "teacher" | "student" | "parent" | "principal" | "coordinator";
 
@@ -69,8 +76,6 @@ export type WalkFacts = {
   /** Teacher: the book the Library stops open (`/dashboard?book=<id>`): their
    *  most recent own book with a finished lesson, else their newest own book. */
   bookId?: string | null;
-  /** The SK Tutor tab (/sk) is in this user's header. */
-  skTutor?: boolean;
   catalogue?: boolean;
   exam?: boolean;
   diary?: boolean;
@@ -81,8 +86,6 @@ export type WalkFacts = {
   roleHats?: boolean;
   /** /present is open to this user (presentAllowed). */
   board?: boolean;
-  /** Student: the first SK Tutor chapter, `/sk/<product>/<chapter>`. */
-  tutorPath?: string | null;
   /** Parent: linked children, and how many of those links are verified. */
   children?: number;
   verifiedChildren?: number;
@@ -105,12 +108,10 @@ export type WalkNeed =
   | "analytics"
   | "roleHats"
   | "board"
-  | "tutor"
   | "children"
   | "verified"
   | "schoolParent"
   | "parentPortal"
-  | "skTutor"
   | "reportIssue";
 
 export type WalkNeedSpec = WalkNeed | `!${WalkNeed}`;
@@ -369,17 +370,8 @@ const TEACHER: WalkStopDef[] = [
       { id: "boardSk", anchors: ['[data-sk="launcher"][data-sk-board="true"]', HERO, LAUNCHER] },
     ],
   },
-  // Ready-made kits and the SK Tutor tab: one page, one narration (2026-10-31).
-  {
-    id: "readyMade",
-    route: "/dashboard/kits",
-    anchors: [],
-    chips: ["lessonOnPhotosynthesis"],
-    parts: [
-      { id: "kits", anchors: ['[data-tour="kits-allowance"]'], needs: ["catalogue"] },
-      { id: "skTutor", anchors: ['[data-tour="sk-nav"]', MOBILE_NAV], needs: ["skTutor"] },
-    ],
-  },
+  // Ready-made kits (the SK Tutor tab that shared this page is retired, 2026-10-31).
+  { id: "kits", route: "/dashboard/kits", anchors: ['[data-tour="kits-allowance"]'], needs: ["catalogue"], chips: ["lessonOnPhotosynthesis"] },
   // No class yet: the diary still says what it is for, at its tab.
   {
     id: "diary",
@@ -445,12 +437,6 @@ const STUDENT: WalkStopDef[] = [
   { id: "openLesson", route: "/dashboard", anchors: ['[data-tour="open-lesson"]', { sel: '[data-tour="assignments"]', line: "openLessonEmpty" }] },
   { id: "progress", route: "/dashboard", anchors: ['[data-tour="progress"]', { sel: '[data-tour="assignments"]', line: "progressEmpty" }] },
   { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', { sel: HERO, line: "myBooksNone" }], demo: "bookActivate" },
-  // No SK book (or no mapped kit): ONE neutral line instead of stops 6–9 — no selling (founder decision 8).
-  { id: "tutorNone", route: "/dashboard", anchors: [], needs: ["!tutor"] },
-  { id: "skBooks", route: "/sk", anchors: ['[data-tour="sk-books"]'], needs: ["tutor"] },
-  { id: "kitPlayer", route: "{tutorPath}", anchors: ['[data-tour="kit-player"]', '[data-testid="kit-player"]'], needs: ["tutor"] },
-  { id: "kitHelp", route: "{tutorPath}", anchors: ['[data-tour="kit-explain"]', '[data-tour="kit-practise"]'], needs: ["tutor"] },
-  { id: "kitNext", route: "{tutorPath}", anchors: ['[data-tour="kit-next-move"]'], needs: ["tutor"], chips: ["howAmIDoing"] },
   { id: "diaryTimetable", route: "/dashboard", anchors: ['[data-tour="diary-nav"]', '[data-tour="timetable-nav"]', MOBILE_NAV], needs: ["diary"] },
   // Near the end, while the tour is still on /dashboard (the widget's page).
   reportProblem("/dashboard", "any"),
@@ -482,7 +468,7 @@ const PARENT: WalkStopDef[] = [
   // Stop 10 branches: a school parent gets Test Papers, a home educator the Library.
   { id: "testPapers", route: "/dashboard/test-papers", anchors: ['[data-tour="test-papers-nav"]', MOBILE_NAV], needs: ["schoolParent", "parentPortal"] },
   { id: "homeLibrary", route: "/dashboard", anchors: [BOOK_LIST, UPLOAD], needs: ["!schoolParent"] },
-  { id: "homeKits", route: "/dashboard", anchors: ['[data-tour="kits-nav"]', '[data-tour="sk-nav"]', MOBILE_NAV], needs: ["!schoolParent", "catalogue"] },
+  { id: "homeKits", route: "/dashboard", anchors: ['[data-tour="kits-nav"]', MOBILE_NAV], needs: ["!schoolParent", "catalogue"] },
   // Near the end, while the tour is still on /dashboard (the widget's page).
   reportProblem("/dashboard", "any"),
   { id: "consent", route: "/dashboard/settings", anchors: ['[data-tour="sk-children-consent"]'], needs: ["children"] },

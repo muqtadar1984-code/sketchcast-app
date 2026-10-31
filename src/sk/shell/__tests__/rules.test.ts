@@ -35,7 +35,6 @@ describe("navigate phrasings (deterministic, no model)", () => {
     ["bring up the teachers page", "school_teachers", {}],
     ["open access", "school_access", {}],
     ["show me the school overview", "school", {}],
-    ["open the tutor", "tutor", {}],
     ["open this class's analytics", "analytics", { classId: "sel-class" }],
     ["analytics", "analytics", {}],
     ["papan", "board", {}],

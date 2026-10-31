@@ -11,7 +11,8 @@
  *     → its own line;
  *   - several books and none named → "which book?" with up to three titles;
  *     the one on screen / last taught wins over asking;
- *   - a student → the SK Tutor chapter of her SketchCast book.
+ *   - a student is not in the tool's roles any more (SK Tutor retired
+ *     2026-10-31; the Board is teacher-only).
  * Run: node node_modules/vitest/vitest.mjs run src/sk/capabilities/__tests__/lesson.test.ts
  */
 import { describe, expect, it } from "vitest";
@@ -151,30 +152,18 @@ describe("which chapter", () => {
   });
 });
 
-describe("a student → the SK Tutor chapter", () => {
-  const student = () => makeCtx({ role: "student", hat: null, userId: STUDENT_ID });
-  it("her SketchCast book's chapter, 1-based as /sk lists it", async () => {
-    const r = await startLesson(student(), { chapter: 2 }, deps({ books: [PRODUCT, BIO], book_access_grants: [{ ...GRANT, user_id: STUDENT_ID }], sk_book_products: [{ id: "p1", slug: "sketchcast-biology" }] }));
-    expect(r.navigate).toEqual({ path: "/sk/sketchcast-biology/2", label: "SK Tutor" });
-    expect(r.summary).toBe("Opening chapter 2 of SketchCast Biology.");
-  });
-  it("no SketchCast book → the line, never an uploaded book", async () => {
-    const r = await startLesson(student(), { chapter: 1 }, deps({ books: [BIO], book_access_grants: [] }));
-    expect(r.navigate).toBeUndefined();
-    expect(r.summary).toMatch(/^You don't have a SketchCast book yet/);
-  });
-});
-
 describe("the registry entry", () => {
-  it("is registered, immediate, for teachers (teacher hat or none) and students — not parents or leader hats", () => {
+  it("is registered, immediate, for teachers (teacher hat or none) — not students, parents or leader hats", () => {
     expect(REGISTRY).toContain(startLessonCapability);
     expect(startLessonCapability.meta).toMatchObject({ name: "start_lesson", tier: "immediate", kind: "nav", hats: ["teacher"] });
-    expect(startLessonCapability.meta.roles).toEqual(expect.arrayContaining(["teacher", "student"]));
+    expect(startLessonCapability.meta.roles).toEqual(expect.arrayContaining(["teacher"]));
     expect(startLessonCapability.meta.roles).not.toContain("parent");
+    expect(startLessonCapability.meta.roles).not.toContain("student");
+    expect(startLessonCapability.meta.description).not.toMatch(/SK Tutor/);
   });
-  it("through the runner: a parent and a principal hat are refused before any read", async () => {
+  it("through the runner: a parent, a principal hat and a student are refused before any read", async () => {
     const log: string[] = [];
-    for (const ctx of [makeCtx({ role: "parent", hat: "parent" }), makeCtx({ role: "school_admin", hat: "principal" })]) {
+    for (const ctx of [makeCtx({ role: "parent", hat: "parent" }), makeCtx({ role: "school_admin", hat: "principal" }), makeCtx({ role: "student", hat: null, userId: STUDENT_ID })]) {
       const r = await runCapability(ctx, "start_lesson", { chapter: 1 }, { session: fakeSession({ books: [BIO] }, { log }), now: NOW, sessionId: "s", turnId: "t", sink: { write: async () => {} } } as never);
       expect(r.error).toBe("not_allowed");
     }
@@ -211,19 +200,5 @@ describe("the pure parts", () => {
   });
   it("every line used here has all ten locales", () => {
     for (const t of [LESSON_STARTING, LESSON_NOT_GENERATED, LESSON_WHICH_BOOK]) expect(Object.keys(t).sort()).toEqual(["ar", "en", "es", "fr", "hi", "mr", "ms", "ms-arab", "pt", "te"]);
-  });
-});
-
-describe("a student inside one of her books", () => {
-  it("'play chapter 2' on /sk/<product> → that book's chapter, without asking which", async () => {
-    const OTHER = { ...PRODUCT, id: "b-prod2", title: "SketchCast Chemistry", sk_product_id: "p2" };
-    const ctx = makeCtx({ role: "student", hat: null, userId: STUDENT_ID, path: "/sk/sketchcast-biology" });
-    const tables = {
-      books: [PRODUCT, OTHER],
-      book_access_grants: [{ ...GRANT, user_id: STUDENT_ID }, { ...GRANT, user_id: STUDENT_ID, product_id: "p2" }],
-      sk_book_products: [{ id: "p1", slug: "sketchcast-biology" }],
-    };
-    const r = await startLesson(ctx, { chapter: 2 }, deps(tables));
-    expect(r.navigate?.path).toBe("/sk/sketchcast-biology/2");
   });
 });

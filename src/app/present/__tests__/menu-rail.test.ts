@@ -52,7 +52,7 @@ describe("menuItemsFor — the Board's menu", () => {
   });
 
   it("with the real teacher-hat tabs: home first, no /present, every other tab once", () => {
-    const tabs = tabsForHat(en.nav.tabs, "teacher", true, true, true, true, false, true, true, true);
+    const tabs = tabsForHat(en.nav.tabs, "teacher", true, true, true, true, false, true, true);
     const items = menuItemsFor(tabs, HOME);
     expect(items[0]).toEqual(HOME);
     expect(items.some((i) => i.href.startsWith("/present"))).toBe(false);

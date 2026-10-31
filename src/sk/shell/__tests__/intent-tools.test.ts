@@ -51,7 +51,9 @@ describe("the inventory: every rule intent has a registered tool", () => {
     expect(missing(teacher, ["diary.note", "parents.remind", "marking.next", "marking.grade", "lesson.prepare", "context.resolve", "library.find", "start_lesson", "navigate"])).toEqual([]);
     expect(missing(principal, [ACT_TOOLS["notice.school"], ...Object.values(LEADER_TOOLS)])).toEqual([]);
     expect(missing(coordinator, [ACT_TOOLS["notice.school"], "school.health", "learners.risk", "assignments.status", "timetable.now_next"])).toEqual([]);
-    expect(missing(student, [...Object.values(TUTOR_TOOLS), "book.activate", "start_lesson", "knowledge.search", "navigate"])).toEqual([]);
+    expect(missing(student, [...Object.values(TUTOR_TOOLS), "book.activate", "knowledge.search", "navigate"])).toEqual([]);
+    // SK Tutor retired (2026-10-31): start_lesson is the teacher's Board tool only.
+    expect(names(student).has("start_lesson")).toBe(false);
     expect(missing(parent, [...Object.values(PARENT_TOOLS), "book.activate", "diary.note", "navigate"])).toEqual([]);
     for (const ctx of [teacher, student, parent, principal, coordinator]) {
       expect(missing(ctx, [...new Set([...Object.values(LANG_TOOLS), ...Object.values(TOUR_TOOLS)])]), ctx.user.role).toEqual([]);

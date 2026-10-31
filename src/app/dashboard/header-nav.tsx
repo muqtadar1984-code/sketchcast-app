@@ -14,7 +14,6 @@ export const TOUR_MARK: Record<string, string | undefined> = {
   "/dashboard/diary": "diary-nav",
   "/dashboard/my-timetable": "timetable-nav",
   "/dashboard/kits": "kits-nav",
-  "/sk": "sk-nav",
   "/present": "board-nav",
   "/dashboard/analytics": "analytics-nav",
   "/dashboard/calendar": "calendar-nav",

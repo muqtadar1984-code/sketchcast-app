@@ -89,9 +89,9 @@ const ENTRIES: SkCapability[] = [
   // rules do (the walkthrough / language events), no second model round.
   ...SHELL_CONTROL_CAPABILITIES,
   // 2026-10-30: start_lesson — "play chapter 1 from the book". Teachers (the
-  // teacher hat, or no hat) get the Board deep link with autostart; students
-  // the SK Tutor chapter of a SketchCast book they hold a grant for. The
-  // navigate inside refuses a page the role/hat cannot open (navigate.ts).
+  // teacher hat, or no hat) get the Board deep link with autostart (students
+  // no longer: SK Tutor is retired, 2026-10-31). The navigate inside refuses
+  // a page the role/hat cannot open (navigate.ts).
   startLessonCapability,
   // 2026-10-31: kit.documents — list / read any document of a kit (the open
   // one, the bar's, or a book chapter by number; SketchCast chapters from the

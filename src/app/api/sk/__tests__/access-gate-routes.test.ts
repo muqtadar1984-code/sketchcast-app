@@ -210,14 +210,9 @@ describe("the shared route gate admits Sara's student", () => {
   });
 });
 
+// The /sk pages (SK Tutor) are retired (2026-10-31): they only redirect
+// (src/app/sk/redirect-path.ts, tested there) and render no SK at all.
 const PAGES: Array<{ name: string; load: () => Promise<{ default: (props: never) => Promise<unknown> }>; props: unknown }> = [
-  { name: "/sk", load: () => import("@/app/sk/page"), props: {} },
-  { name: "/sk/[product]", load: () => import("@/app/sk/[product]/page"), props: { params: Promise.resolve({ product: "biology" }) } },
-  {
-    name: "/sk/[product]/[chapter]",
-    load: () => import("@/app/sk/[product]/[chapter]/page"),
-    props: { params: Promise.resolve({ product: "biology", chapter: "1" }), searchParams: Promise.resolve({}) },
-  },
   { name: "/activate", load: () => import("@/app/activate/page"), props: {} },
 ];
 
@@ -235,12 +230,7 @@ describe("the surfaces that mount SK await the async gate (source scan)", () => 
   const SURFACES: Record<string, RegExp> = {
     "src/app/dashboard/layout.tsx": /skShellEnabledFor\(/, // the Shell launcher (teachers, parents, …)
     "src/app/console/layout.tsx": /skShellEnabledFor\(/,
-    "src/app/sk/layout.tsx": /skTutorShellEnabledFor\(/, // the Shell on /sk
     "src/app/present/page.tsx": /skShellEnabledFor\(|skAccessAllowed\(/, // the Board's Shell + its tab row
-    "src/app/dashboard/app-header.tsx": /skAccessAllowed\(/, // the SK Tutor tab
-    "src/app/sk/page.tsx": /skAccessAllowed\(/,
-    "src/app/sk/[product]/page.tsx": /skAccessAllowed\(/,
-    "src/app/sk/[product]/[chapter]/page.tsx": /skAccessAllowed\(/,
     "src/app/activate/page.tsx": /skAccessAllowed\(/,
     "src/sk/server.ts": /skAccessAllowed\(/,
   };

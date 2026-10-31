@@ -15,7 +15,6 @@ import {
   timetableEnabledFor,
 } from "@/utils/flags";
 import { activeHatCookie } from "@/utils/hats-server";
-import { chaptersFor } from "@/sk/kit-server";
 import { walkRoleFor, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
 
 export const runtime = "nodejs";
@@ -23,8 +22,8 @@ export const dynamic = "force-dynamic";
 
 // SK's first-login walkthrough (founder 2026-10-30): what the tour needs to
 // know about the caller to plan its stops — books (and the one the Library
-// stops open), the first class, children, the first SK Tutor chapter, and the
-// per-school switches. Called once when
+// stops open), the first class, children, and the per-school switches. (SK
+// Tutor is retired, 2026-10-31: no tutor chapter or tab fact.) Called once when
 // a tour starts (never on page load).
 //
 // READ-ONLY: every query is a select through the caller's own session (RLS).
@@ -68,11 +67,9 @@ export async function GET() {
         timetable: !!schoolId && (await timetableEnabledFor(supabase, schoolId)),
         calendar: await calendarEnabledFor(supabase, schoolId),
         board: presentAllowed(user),
-        // The Shell gate above already ran skAccessAllowed; the tab adds only this.
-        skTutor: process.env.NEXT_PUBLIC_FEATURE_SK === "true",
       });
     } else if (tour === "student") {
-      facts.tutorPath = await firstTutorChapter(supabase, user.id);
+      // Nothing beyond the shared facts (diary, reportIssue).
     } else if (tour === "parent") {
       const { data: links } = await supabase.from("parent_links").select("verified_at, source").eq("parent_id", user.id);
       const rows = (links ?? []) as Array<{ verified_at: string | null; source: string | null }>;
@@ -82,7 +79,6 @@ export async function GET() {
         schoolParent: rows.some((l) => l.source === "school"),
         parentPortal: parentPortalEnabled(),
         catalogue: catalogueTabEnabled(),
-        skTutor: process.env.NEXT_PUBLIC_FEATURE_SK === "true",
       });
     } else {
       Object.assign(facts, {
@@ -121,17 +117,4 @@ async function tourBook(supabase: Awaited<ReturnType<typeof createClient>>, user
     .order("created_at", { ascending: false })
     .limit(1);
   return ((done?.[0]?.book_id as string | undefined) ?? ids[0]) || null;
-}
-
-/** The first chapter /sk would list (books by title, chapters in order). */
-async function firstTutorChapter(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<string | null> {
-  if (process.env.NEXT_PUBLIC_FEATURE_SK !== "true") return null;
-  const { data: products } = await supabase.from("sk_book_products").select("slug, title");
-  const list = ((products ?? []) as Array<{ slug: string; title: string | null }>).sort((a, b) => (a.title ?? a.slug).localeCompare(b.title ?? b.slug));
-  for (const p of list) {
-    const entries = await chaptersFor(userId, p.slug);
-    const first = entries[0];
-    if (first) return `/sk/${p.slug}/${encodeURIComponent(first.chapterRef)}`;
-  }
-  return null;
 }

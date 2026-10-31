@@ -16,8 +16,6 @@ import {
   parentPortalEnabled,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
-  skEnabled,
-  skAccessAllowed,
   timetableEnabledFor,
 } from "@/utils/flags";
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
@@ -120,12 +118,6 @@ export default async function AppHeader() {
   let noticesOn = false;
 
   let hatCookie: Hat | null = null;
-  // SK Tutor (founder, 2026-10-27: live, restricted to the allow-list). The
-  // door shows only when BOTH flags are on (the page needs the public one, the
-  // routes the server one) and this account clears the allow-list
-  // (skAccessAllowed: SK_ALLOWED_EMAILS / SK_ALLOWED_STUDENTS_OF), so an
-  // account it refuses never learns the surface exists. The page re-checks.
-  let skOn = false;
 
   if (user) {
     const { data: profile } = await supabase
@@ -257,9 +249,6 @@ export default async function AppHeader() {
       (async () => {
         if (roleHatsEnabled()) hatCookie = await activeHatCookie();
       })(),
-      (async () => {
-        skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && (await skAccessAllowed(user, { role: viewerRole }));
-      })(),
     ]);
   }
 
@@ -278,8 +267,8 @@ export default async function AppHeader() {
   // guard.
   const kitsOn = catalogueTabEnabled() && !!user && !!role && role !== "student";
   const tabs = activeHat
-    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn, skOn)
-    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn, kitsOn, skOn);
+    ? tabsForHat(t.nav.tabs, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn)
+    : tabsFor(t.nav.tabs, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, t.student.title, boardOn, kitsOn);
   // The hat name reads as a descriptor here ("Ayu · teacher"), not a title, so
   // it is lower-cased — a no-op in the scripts that have no case at all.
   const label = activeHat ? t.nav.hats[activeHat].toLowerCase() : labelFor(t.nav.roleLabel, role, hasScope, hasChildren);

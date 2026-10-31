@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { s3Link } from "@/utils/books/files";
-import { skAccessAllowed, skEnabled, type SkGateUser } from "@/utils/flags";
+import type { SkGateUser } from "@/utils/flags";
 import { loadMyBooks, type MyBooksDb } from "./load";
 import { myBookTiles, type AssignTargets, type MyBookTile } from "./tiles";
 import { loadProductBooks, productChapters, type ProductBookDb } from "./product-book";
@@ -11,9 +11,10 @@ import { presentEntitled } from "@/utils/present/entitlement";
 // access check), then sign the covers of what was decided. Never throws — the
 // Library must render without the strip rather than fail on its account.
 //
-// "Open in SK" only for readers who pass the SK gate (NEXT_PUBLIC_FEATURE_SK +
-// FEATURE_SK + the allow-list, the same as /sk/[product]); the strip itself
-// and the PDF are not gated by any SK flag.
+// The strip and the PDF are not gated by any SK flag. SK Tutor is retired
+// (founder 2026-10-31: "existing books can be taught on the board itself"):
+// a tile's one link besides the PDF is the book on the Board, for a reader
+// the Board admits.
 //
 // 0175 — SketchCast books as Library books: for a book a TEACHER or PARENT
 // holds themselves, its chapters and each chapter's catalogue kits (documents
@@ -23,7 +24,7 @@ import { presentEntitled } from "@/utils/present/entitlement";
 // Board, and the reader's Assign
 // targets (their classes, or a parent's children). The book goes to the
 // Board, not to SK (founder 2026-10-30), so the card carries no "Open in SK";
-// a STUDENT keeps the plain tile, whose "Open in SK" is the student tutor.
+// a STUDENT keeps the plain tile (cover, chapters, PDF) with no Board link.
 
 /** Same lifetime as every other Library link. */
 const KIT_LINK_SECONDS = 3600;
@@ -33,12 +34,6 @@ export async function myBooksStrip(user: SkGateUser & { id: string }, role: stri
     const admin = createAdminClient();
     const books = await loadMyBooks(admin as unknown as MyBooksDb, user.id, new Date());
     if (!books.length) return [];
-    let skOpen = false;
-    try {
-      skOpen = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && (await skAccessAllowed(user, { role }));
-    } catch {
-      skOpen = false;
-    }
     let systemBooks: Awaited<ReturnType<typeof loadProductBooks>> = new Map();
     let boardOn = false;
     if (role !== "student") {
@@ -61,7 +56,7 @@ export async function myBooksStrip(user: SkGateUser & { id: string }, role: stri
     };
     const tiles = await myBookTiles(books, {
       sign: (key, seconds) => s3Link(key, undefined, seconds),
-      skOpen,
+      boardBook: (b) => (boardOn ? (systemBooks.get(b.productId)?.book.id ?? null) : null),
       chapters: async (b) => {
         const hit = systemBooks.get(b.productId);
         if (!hit) return null;

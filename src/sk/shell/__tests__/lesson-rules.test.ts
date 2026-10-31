@@ -109,9 +109,10 @@ describe("negatives: questions and other commands stay what they were", () => {
 });
 
 describe("who the rule is for", () => {
-  it("a student → the Tutor (before her kit-player phrasings, which would read it as a section)", () => {
-    const d = routeByRules("play chapter 2", student, NOW);
-    expect(d).toMatchObject({ intent: "navigate", target: "tutor", lesson: { chapter: 2 } });
+  it("a student is not taken by the rule (SK Tutor retired 2026-10-31; the Board is teacher-only)", () => {
+    const d = routeByRules("play chapter 2", student, NOW) as { intent: string; target?: string; lesson?: unknown };
+    expect(d.lesson).toBeUndefined();
+    expect(d.target).not.toBe("tutor");
   });
   it("a teacher with a Board session open still gets the chapter (not a Board move)", () => {
     const ctx = makeCtx({ role: "teacher", path: "/present" });

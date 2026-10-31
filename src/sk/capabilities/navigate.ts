@@ -5,6 +5,10 @@
 // tabsFor without) — duplicated on purpose: nav-tabs takes the dictionary's
 // t() labels and the header's NavTab type, which this server module must not
 // drag in. Keep the two in step; the navigate matrix test pins this side.
+//
+// No "tutor" target (founder 2026-10-31: SK Tutor is retired — "existing
+// books can be taught on the board itself"): a SketchCast book's chapter is a
+// `board` target with its bookId + chapterRef, like any uploaded book.
 
 import type { SkCapability, SkCapabilityResult, SkContext } from "@/sk/shell/types";
 
@@ -23,7 +27,6 @@ export const NAV_TARGETS = [
   "school_diary",
   "timetable",
   "calendar",
-  "tutor",
   "reports",
 ] as const;
 export type NavTarget = (typeof NAV_TARGETS)[number];
@@ -41,12 +44,6 @@ export type NavFilters = {
   chapterRef?: string;
   generationId?: string;
   autostart?: boolean;
-  /** S3 slice D, tutor only: a book (sk_book_products slug) → /sk/<product>,
-   *  and one of its chapters (the chapter ref as /sk lists it, "5") →
-   *  /sk/<product>/<chapter>; `generationId` then picks one of the chapter's
-   *  kits (?kit=). The pages make every access decision themselves. */
-  product?: string;
-  chapter?: string;
 };
 
 export const NAV_LABEL: Record<NavTarget, string> = {
@@ -64,7 +61,6 @@ export const NAV_LABEL: Record<NavTarget, string> = {
   school_diary: "School diary",
   timetable: "Timetable",
   calendar: "Calendar",
-  tutor: "SK Tutor",
   reports: "Progress record",
 };
 
@@ -84,7 +80,6 @@ export function navTargetsFor(ctx: SkContext): NavTarget[] {
     out.add("library");
     out.add("analytics");
     if (f.kits) out.add("kits");
-    if (f.sk) out.add("tutor");
   };
   const leadership = (principal: boolean) => {
     if (f.analytics) {
@@ -99,9 +94,8 @@ export function navTargetsFor(ctx: SkContext): NavTarget[] {
   };
 
   if (role === "student") {
-    // tabsFor: My lessons (/dashboard), SK, diary, my timetable.
+    // tabsFor: My lessons (/dashboard), diary, my timetable.
     out.add("library");
-    if (f.sk) out.add("tutor");
     if (f.diary) out.add("diary");
     if (f.timetable) out.add("timetable");
     return [...out];
@@ -148,10 +142,6 @@ const ID_RE = /^[A-Za-z0-9_-]{1,120}$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const CHAPTER_RE = /^\d{1,3}$/;
-/** /sk's own ids (kit-server.ts parseKitQuery): a product slug, a chapter ref. */
-const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,119}$/i;
-const SK_CHAPTER_RE = /^[A-Za-z0-9._-]{1,20}$/;
-const KIT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function cleanFilters(raw: Record<string, unknown> | undefined): NavFilters {
   const f: NavFilters = {};
@@ -167,8 +157,6 @@ export function cleanFilters(raw: Record<string, unknown> | undefined): NavFilte
   if (MONTH_RE.test(s("month"))) f.month = s("month");
   const topic = s("topic").slice(0, 80);
   if (topic) f.topic = topic;
-  if (SLUG_RE.test(s("product"))) f.product = s("product");
-  if (SK_CHAPTER_RE.test(s("chapter"))) f.chapter = s("chapter");
   return f;
 }
 
@@ -227,15 +215,6 @@ export function navPath(target: NavTarget, filters: NavFilters, ctx: SkContext):
       return { path: leaderView ? "/dashboard/school/timetable" : "/dashboard/my-timetable", label };
     case "calendar":
       return { path: `/dashboard/calendar${q([["m", filters.month]])}`, label };
-    case "tutor": {
-      // S3 slice D: the student's book and chapter pages. A chapter needs its
-      // book; a kit id only rides with a chapter (the chapter page's ?kit=).
-      if (!filters.product) return { path: "/sk", label };
-      const book = `/sk/${encodeURIComponent(filters.product)}`;
-      if (!filters.chapter) return { path: book, label };
-      const kit = filters.generationId && KIT_UUID_RE.test(filters.generationId) ? q([["kit", filters.generationId]]) : "";
-      return { path: `${book}/${encodeURIComponent(filters.chapter)}${kit}`, label };
-    }
     case "reports":
       if (!filters.learnerId) return { error: "needs_learner" };
       return { path: `/dashboard/reports/${encodeURIComponent(filters.learnerId)}`, label };
@@ -274,8 +253,6 @@ export const navigateCapability: SkCapability = {
         chapterRef: { type: "string", description: "Board: the chapter_ref of that book's chapter (0-based, as library.find reports it)." },
         generationId: { type: "string", description: "Board: a ready-made kit's presentation id (a library.find kit with no book)." },
         autostart: { type: "boolean", description: "Board: start the lesson on landing (needs bookId+chapterRef or generationId)." },
-        product: { type: "string", description: "SK Tutor (students): a book's slug — opens /sk/<product>." },
-        chapter: { type: "string", description: "SK Tutor (students): a chapter of that book as /sk lists it (e.g. '5') — opens the chapter's lesson; generationId picks one of its kits." },
       },
       required: ["target"],
       additionalProperties: false,

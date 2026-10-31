@@ -22,15 +22,20 @@ export type MyBookTile = {
   chapterCount: number | null;
   coverUrl: string | null;
   pdfHref: string | null;
-  skHref: string | null;
+  /**
+   * The book on the Classroom Board (/present?book=<system book id>) for a
+   * reader the Board admits; null otherwise. SK Tutor is retired (founder
+   * 2026-10-31: books are taught on the Board), so there is no "Open in SK".
+   */
+  boardHref: string | null;
   forChildren: string[];
   withdrawn: boolean;
   /**
    * 0175: the book's chapters, each with its catalogue kits (product-book.ts)
    * — the card lists them like an uploaded book, with the Board and Assign.
    * null = the plain tile: no system book yet (0175 not applied, or the
-   * release not re-imported), a student reader (their book opens in SK), or
-   * a child's book a parent sees.
+   * release not re-imported), a student reader, or a child's book a parent
+   * sees.
    */
   chapters: ProductChapter[] | null;
   /** Who "Assign chapter" can reach (set by server.ts when chapters are listed); null = no Assign. */
@@ -42,8 +47,9 @@ export type AssignTargets = { classes: { id: string; name: string; grade: string
 export type TileDeps = {
   /** Mints a short-lived link to a books-bucket object (src/utils/books/files.ts s3Link). */
   sign: (key: string, seconds: number) => Promise<string | null>;
-  /** The reader passes the SK gate (flags + allow-list): "Open in SK" shows. */
-  skOpen: boolean;
+  /** The book's system book id (books.id) when the reader may open the
+   *  Classroom Board, else null; omitted → no Board link. */
+  boardBook?: (b: MyBook) => string | null;
   /** The book's chapters (signed by the server after the decision); omitted → null. */
   chapters?: (b: MyBook) => Promise<ProductChapter[] | null>;
 };
@@ -60,6 +66,8 @@ export async function myBookTiles(books: MyBook[], deps: TileDeps): Promise<MyBo
         }
       }
       // a child's book is the child's: the parent sees the tile, not the kits
+      // (nor a Board link); a withdrawn book has no kits any more.
+      const boardBook = !b.withdrawn && !b.forChildren.length ? (deps.boardBook?.(b) ?? null) : null;
       let chapters: ProductChapter[] | null = null;
       if (deps.chapters && !b.forChildren.length) {
         try {
@@ -75,9 +83,7 @@ export async function myBookTiles(books: MyBook[], deps: TileDeps): Promise<MyBo
         chapterCount: b.chapterCount,
         coverUrl,
         pdfHref: b.pdfKey ? `/api/my-books/pdf?product=${encodeURIComponent(b.productId)}` : null,
-        // A withdrawn book has no SK content any more (the importer removed
-        // it); a child's book is the child's to open in SK, not the parent's.
-        skHref: deps.skOpen && !b.withdrawn && !b.forChildren.length ? `/sk/${encodeURIComponent(b.slug)}` : null,
+        boardHref: boardBook ? `/present?book=${encodeURIComponent(boardBook)}` : null,
         forChildren: b.forChildren,
         withdrawn: b.withdrawn,
         chapters,

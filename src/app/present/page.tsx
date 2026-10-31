@@ -13,9 +13,7 @@ import {
   parentPortalEnabled,
   roleHatsEnabled,
   schoolAnalyticsEnabledFor,
-  skEnabled,
   skShellEnabledFor,
-  skAccessAllowed,
   timetableEnabledFor,
 } from "@/utils/flags";
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
@@ -188,7 +186,7 @@ export default async function PresentPage() {
   // "Back to dashboard", never a broken Board.
   let tabs: MenuItem[] = [];
   try {
-    tabs = await portalTabs(supabase, user, role, schoolId, dict);
+    tabs = await portalTabs(supabase, role, schoolId, dict);
   } catch {
     tabs = [];
   }
@@ -217,7 +215,6 @@ export default async function PresentPage() {
  */
 async function portalTabs(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  user: Parameters<typeof skAccessAllowed>[0],
   role: string | null,
   schoolId: string | null,
   dict: Dictionary,
@@ -245,12 +242,11 @@ async function portalTabs(
     activeHat = resolveHat(await activeHatCookie(), hats);
   }
   const kitsOn = catalogueTabEnabled() && adult;
-  const skOn = process.env.NEXT_PUBLIC_FEATURE_SK === "true" && skEnabled() && (await skAccessAllowed(user, { role }));
   const boardOn = true;
   const t = dict.nav.tabs;
   return activeHat
-    ? tabsForHat(t, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn, skOn)
-    : tabsFor(t, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, dict.student.title, boardOn, kitsOn, skOn);
+    ? tabsForHat(t, activeHat, analyticsOn, calendarOn, timetableOn, diaryOn, hasSchoolParentLinks, boardOn, kitsOn)
+    : tabsFor(t, role, hasScope, hasChildren, hasSchoolParentLinks, analyticsOn, calendarOn, timetableOn, diaryOn, dict.student.title, boardOn, kitsOn);
 }
 
 /** What a teacher sees when the board is not on their plan. Deliberately not a

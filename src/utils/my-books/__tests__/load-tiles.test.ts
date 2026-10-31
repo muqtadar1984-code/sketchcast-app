@@ -99,7 +99,7 @@ describe("myBookTiles", () => {
   it("signs covers ONLY for decided books, for 1 hour — never a PDF, never a book the reader may not have", async () => {
     const d = db({ grants: [grant({ user_id: ME, product_id: P_BIO })] });
     const sign = vi.fn(async (key: string, s: number) => `https://s3.example/${key}?X-Amz-Expires=${s}`);
-    const tiles = await myBookTiles(await loadMyBooks(d, ME, NOW), { sign, skOpen: false });
+    const tiles = await myBookTiles(await loadMyBooks(d, ME, NOW), { sign });
     expect(sign).toHaveBeenCalledTimes(1);
     expect(sign).toHaveBeenCalledWith("books/x/editions/e12/cover.png", COVER_LINK_SECONDS);
     expect(COVER_LINK_SECONDS).toBe(3600);
@@ -110,7 +110,7 @@ describe("myBookTiles", () => {
       chapterCount: 10,
       coverUrl: "https://s3.example/books/x/editions/e12/cover.png?X-Amz-Expires=3600",
       pdfHref: `/api/my-books/pdf?product=${P_BIO}`,
-      skHref: null,
+      boardHref: null,
     });
     // the tile carries no S3 key: the PDF is only ever signed by the route
     expect(JSON.stringify(tiles)).not.toContain("digital.pdf");
@@ -118,7 +118,7 @@ describe("myBookTiles", () => {
 
   it("with no access, nothing is decided and nothing is signed", async () => {
     const sign = vi.fn(async () => "x");
-    const tiles = await myBookTiles(await loadMyBooks(db(), ME, NOW), { sign, skOpen: true });
+    const tiles = await myBookTiles(await loadMyBooks(db(), ME, NOW), { sign });
     expect(tiles).toEqual([]);
     expect(sign).not.toHaveBeenCalled();
   });
@@ -126,7 +126,7 @@ describe("myBookTiles", () => {
   it("cover missing: no key → no signing and a null cover (the strip draws the fallback)", async () => {
     const books = await loadMyBooks(db({ grants: [grant({ user_id: ME, product_id: P_BIO })] }), ME, NOW);
     const sign = vi.fn(async () => "x");
-    const tiles = await myBookTiles([{ ...books[0], coverKey: null }], { sign, skOpen: false });
+    const tiles = await myBookTiles([{ ...books[0], coverKey: null }], { sign });
     expect(tiles[0].coverUrl).toBeNull();
     expect(sign).not.toHaveBeenCalled();
   });
@@ -134,26 +134,29 @@ describe("myBookTiles", () => {
   it("cover signing failing (bucket unset, S3 error) → a null cover, the tile still shows", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const books = await loadMyBooks(db({ grants: [grant({ user_id: ME, product_id: P_BIO })] }), ME, NOW);
-    const tiles = await myBookTiles(books, { sign: async () => Promise.reject(new Error("AccessDenied")), skOpen: false });
+    const tiles = await myBookTiles(books, { sign: async () => Promise.reject(new Error("AccessDenied")) });
     expect(tiles).toHaveLength(1);
     expect(tiles[0].coverUrl).toBeNull();
     err.mockRestore();
   });
 
-  it("Open in SK only behind the SK gate, never for a withdrawn book or a child's book", async () => {
+  it("the Board link: only with a Board book for the reader, never for a withdrawn book or a child's book (no Open in SK)", async () => {
     const own = await loadMyBooks(db({ grants: [grant({ user_id: ME, product_id: P_BIO }), grant({ user_id: ME, product_id: P_OLD })] }), ME, NOW);
     const sign = async () => null;
-    const closed = await myBookTiles(own, { sign, skOpen: false });
-    expect(closed.map((t) => t.skHref)).toEqual([null, null]);
-    const open = await myBookTiles(own, { sign, skOpen: true });
-    expect(Object.fromEntries(open.map((t) => [t.productId, t.skHref]))).toEqual({ [P_BIO]: "/sk/biology", [P_OLD]: null });
+    const closed = await myBookTiles(own, { sign });
+    expect(closed.map((t) => t.boardHref)).toEqual([null, null]);
+    const noBoard = await myBookTiles(own, { sign, boardBook: () => null });
+    expect(noBoard.map((t) => t.boardHref)).toEqual([null, null]);
+    const open = await myBookTiles(own, { sign, boardBook: (b) => `book-${b.slug}` });
+    expect(Object.fromEntries(open.map((t) => [t.productId, t.boardHref]))).toEqual({ [P_BIO]: "/present?book=book-biology", [P_OLD]: null });
+    expect(JSON.stringify(open)).not.toContain("/sk/");
 
     const kid = await loadMyBooks(
       db({ links: [{ parent_id: ME, child_id: KID, verified_at: "2026-09-01T00:00:00Z" }], grants: [grant({ user_id: KID, product_id: P_ALG })] }),
       ME,
       NOW,
     );
-    expect((await myBookTiles(kid, { sign, skOpen: true }))[0].skHref).toBeNull();
+    expect((await myBookTiles(kid, { sign, boardBook: () => "b1" }))[0].boardHref).toBeNull();
   });
 
   it("the child label", () => {

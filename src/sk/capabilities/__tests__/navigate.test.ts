@@ -12,7 +12,7 @@ const targets = (o: CtxOverrides) => sorted(navTargetsFor(makeCtx(o)));
 
 describe("navTargetsFor — the header's tabs, per hat", () => {
   it("teacher hat: authoring + board + diary + my timetable + calendar + reports", () => {
-    expect(targets({ hat: "teacher" })).toEqual(sorted(["library", "analytics", "kits", "tutor", "board", "diary", "timetable", "calendar", "reports"]));
+    expect(targets({ hat: "teacher" })).toEqual(sorted(["library", "analytics", "kits", "board", "diary", "timetable", "calendar", "reports"]));
   });
   it("teacher hat with surfaces off loses exactly those", () => {
     expect(targets({ hat: "teacher", flags: { kits: false, board: false, diary: false, timetable: false, calendar: false, sk: false } })).toEqual(
@@ -20,7 +20,7 @@ describe("navTargetsFor — the header's tabs, per hat", () => {
     );
   });
   it("consumer parent: authoring + children; school parent: watching only", () => {
-    expect(targets({ role: "parent", hat: "parent" })).toEqual(sorted(["library", "analytics", "kits", "tutor", "children", "diary", "calendar", "reports"]));
+    expect(targets({ role: "parent", hat: "parent" })).toEqual(sorted(["library", "analytics", "kits", "children", "diary", "calendar", "reports"]));
     expect(targets({ role: "parent", hat: "parent", flags: { schoolParent: true } })).toEqual(sorted(["children", "diary", "calendar", "reports"]));
   });
   it("principal: school/* incl. admin, school diary, school timetable, calendar — nothing authoring", () => {
@@ -36,15 +36,15 @@ describe("navTargetsFor — the header's tabs, per hat", () => {
   it("leadership with analytics off keeps only diary/timetable/calendar", () => {
     expect(targets({ role: "school_admin", hat: "principal", flags: { analytics: false } })).toEqual(sorted(["school_diary", "timetable", "calendar"]));
   });
-  it("student: my lessons, tutor, diary, my timetable", () => {
-    expect(targets({ role: "student" })).toEqual(sorted(["library", "tutor", "diary", "timetable"]));
+  it("student: my lessons, diary, my timetable (no SK Tutor any more)", () => {
+    expect(targets({ role: "student" })).toEqual(sorted(["library", "diary", "timetable"]));
   });
   it("hats off (union view): a school_admin sees authoring AND school/*; a teacher with scope sees school/* without admin", () => {
     expect(targets({ role: "school_admin", hat: null })).toEqual(
-      sorted(["library", "analytics", "kits", "tutor", "board", "diary", "calendar", "school", "school_teachers", "school_access", "school_admin", "school_books", "school_diary", "timetable", "children", "reports"]),
+      sorted(["library", "analytics", "kits", "board", "diary", "calendar", "school", "school_teachers", "school_access", "school_admin", "school_books", "school_diary", "timetable", "children", "reports"]),
     );
     expect(targets({ role: "teacher", hat: null, scope: [{ grade: "7", subject: null }], flags: { hasChildren: false } })).toEqual(
-      sorted(["library", "analytics", "kits", "tutor", "board", "diary", "calendar", "school", "school_teachers", "school_access", "school_books", "school_diary", "timetable", "reports"]),
+      sorted(["library", "analytics", "kits", "board", "diary", "calendar", "school", "school_teachers", "school_access", "school_books", "school_diary", "timetable", "reports"]),
     );
   });
 });
@@ -92,7 +92,6 @@ describe("navPath — the exact target table", () => {
     ["diary", "/dashboard/diary"],
     ["timetable", "/dashboard/my-timetable"],
     ["calendar", "/dashboard/calendar"],
-    ["tutor", "/sk"],
   ])("teacher %s → %s", (target, expected) => {
     expect(path(teacher, target)).toBe(expected);
   });
@@ -107,6 +106,10 @@ describe("navPath — the exact target table", () => {
     ["calendar", "/dashboard/calendar"],
   ])("principal %s → %s", (target, expected) => {
     expect(path(principal, target)).toBe(expected);
+  });
+  it("no tutor target any more (SK Tutor retired 2026-10-31): unknown, for every role", () => {
+    expect(NAV_TARGETS as readonly string[]).not.toContain("tutor");
+    for (const ctx of [teacher, parent, student]) expect(resolveNavigate(ctx, { target: "tutor", product: "biology", chapter: "1" })).toMatchObject({ ok: false, error: "unknown_target" });
   });
   it("parent children; student my lessons label", () => {
     expect(path(parent, "children")).toBe("/dashboard/children");
