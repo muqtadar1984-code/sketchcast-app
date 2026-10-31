@@ -333,10 +333,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-4xl mb-2">{t.title}</h1>
+            <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
             <InkUnderline className="block h-3 w-28 mb-3" />
             <p className="text-[#5B6470]">{t.intro}</p>
           </div>
@@ -364,7 +364,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-8 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-8 mb-3">
           <h2 className="text-xl">{monthLabel}</h2>
           <div className="flex items-center gap-2">
             <Link href={`/dashboard/calendar?m=${prev}`} className="btn-ghost h-9 px-3 text-sm">
@@ -386,7 +386,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               step with the ten message files. */}
           <div className="grid grid-cols-7 border-b border-[#EEF0EC] bg-[#F5F6F3] text-xs text-[#5B6470]">
             {Array.from({ length: 7 }, (_, i) => (
-              <div key={i} className="px-2 py-1.5 text-center">
+              <div key={i} className="px-0.5 sm:px-2 py-1.5 text-center truncate">
                 {weekdayFmt.format(new Date(gridStartCivil + i * DAY))}
               </div>
             ))}
@@ -401,7 +401,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               return (
                 <div
                   key={key}
-                  className={`min-h-[92px] border-b border-e border-[#EEF0EC] p-1.5 align-top ${inMonth ? "" : "bg-[#FAFBF9] text-[#98A0A9]"}`}
+                  className={`min-h-[64px] sm:min-h-[92px] border-b border-e border-[#EEF0EC] p-1 sm:p-1.5 align-top ${inMonth ? "" : "bg-[#FAFBF9] text-[#98A0A9]"}`}
                 >
                   <div
                     className={`text-xs mb-1 ${key === todayKey ? "inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#0C8175] text-white" : "text-[#5B6470]"}`}

@@ -178,7 +178,7 @@ export default function ExamGenerate({
               const multi = c.units.length > 1 || (c.units[0] && c.units[0].part > 0);
               return (
                 <div key={c.num} className="py-1.5">
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <label className="flex items-center gap-1.5 pointer-coarse:min-h-11 text-xs cursor-pointer">
                     <input
                       type="checkbox"
                       checked={allOn}
@@ -195,7 +195,7 @@ export default function ExamGenerate({
                   {multi && (
                     <div className="ps-5 mt-0.5 flex flex-wrap gap-x-4 gap-y-1">
                       {c.units.map((u) => (
-                        <label key={u.part} className="flex items-center gap-1.5 text-[11px] cursor-pointer text-[#5B6470]">
+                        <label key={u.part} className="flex items-center gap-1.5 pointer-coarse:min-h-11 text-[11px] cursor-pointer text-[#5B6470]">
                           <input
                             type="checkbox"
                             checked={sel.has(unitKey(c.num, u.part))}
@@ -224,7 +224,7 @@ export default function ExamGenerate({
                   max={20}
                   value={counts[q.key]}
                   onChange={(e) => setCount(q.key, parseInt(e.target.value || "0", 10))}
-                  className="w-14 h-7 px-2 rounded-lg border border-[#E6E8E4] text-xs text-end outline-none focus:border-[#1FB8A6]"
+                  className="w-14 h-7 px-2 rounded-lg border border-[#E6E8E4] text-xs text-end outline-none focus:border-[#1FB8A6] pointer-coarse:min-h-11 pointer-coarse:text-base"
                 />
               </label>
             ))}

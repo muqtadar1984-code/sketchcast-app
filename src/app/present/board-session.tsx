@@ -821,7 +821,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
     board.current?.repaint();
   }, [currentKey]);
 
-  const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]";
+  const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm pointer-coarse:min-h-11 text-[#C2CCC7]";
   // EVERY CONTROL, not just the End button. The export walks the live roll page
   // by page with an await per background, the tombstones have already been
   // reconciled, and `where.count` is captured in the closure — so a stroke, an
@@ -866,7 +866,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
                   openUnit(k);
                   pick();
                 }}
-                className={`rounded-lg border px-2 py-1.5 font-mono text-[11px] ${
+                className={`rounded-lg border px-2 py-1.5 font-mono text-[11px] pointer-coarse:min-h-11 pointer-coarse:min-w-11 ${
                   on
                     ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
                     : "border-[#2A363B] bg-[#141B1F] text-[#93A09A]"
@@ -1059,7 +1059,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
               type="button"
               onClick={() => setTool(tool2.key)}
               disabled={saving}
-              className={`rounded-lg border px-3 py-2 text-sm ${
+              className={`rounded-lg border px-3 py-2 text-sm pointer-coarse:min-h-11 ${
                 tool === tool2.key
                   ? "border-[#17544C] bg-[#12302C] text-[#4FD6C2]"
                   : "border-[#2A363B] bg-[#141B1F] text-[#C2CCC7]"

@@ -33,7 +33,7 @@ export default function BookTools({ children, t }: { children: React.ReactNode; 
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1 text-xs text-[#5B6470] hover:text-[#14181F] h-8 px-2.5 rounded-lg hover:bg-[#EEF0EC]"
+        className="inline-flex items-center gap-1 text-xs text-[#5B6470] hover:text-[#14181F] h-8 px-2.5 rounded-lg hover:bg-[#EEF0EC] pointer-coarse:min-h-11"
         title={t.tools.hint}
       >
         {t.tools.more}

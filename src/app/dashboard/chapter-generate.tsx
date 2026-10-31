@@ -263,7 +263,7 @@ export default function ChapterGenerate({
       return (
         <label
           key={k}
-          className="flex items-center gap-1.5 cursor-pointer select-none hover:opacity-80"
+          className="flex items-center gap-1.5 pointer-coarse:min-h-11 cursor-pointer select-none hover:opacity-80"
         >
           <input
             type="checkbox"

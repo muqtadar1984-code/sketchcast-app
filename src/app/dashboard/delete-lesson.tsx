@@ -113,7 +113,7 @@ export default function DeleteLesson({
           aria-describedby={whyId}
           onClick={() => setShowWhy((v) => !v)}
           title={t.deleteLesson.building}
-          className="w-6 h-6 flex items-center justify-center rounded-md text-[#C6CBC4] cursor-not-allowed"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-[#C6CBC4] cursor-not-allowed pointer-coarse:min-w-11 pointer-coarse:min-h-11"
         >
           <span aria-hidden>✕</span>
           <span className="sr-only">{t.deleteLesson.remove}</span>
@@ -149,7 +149,7 @@ export default function DeleteLesson({
         disabled={busy}
         aria-label={t.deleteLesson.cancel}
         title={t.deleteLesson.cancel}
-        className={`h-6 max-w-[6.5rem] inline-flex items-center overflow-hidden rounded-md px-1.5 text-[12px] font-medium text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 ${className}`}
+        className={`h-6 max-w-[6.5rem] inline-flex items-center overflow-hidden rounded-md px-1.5 text-[12px] font-medium text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 pointer-coarse:min-h-11 ${className}`}
       >
         <span className="truncate">{t.common.cancel}</span>
       </button>
@@ -162,7 +162,7 @@ export default function DeleteLesson({
       disabled={busy}
       aria-label={t.deleteLesson.remove}
       title={t.deleteLesson.remove}
-      className={`w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 ${className}`}
+      className={`w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 pointer-coarse:min-w-11 pointer-coarse:min-h-11 ${className}`}
     >
       ✕
     </button>

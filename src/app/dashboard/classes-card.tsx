@@ -173,9 +173,9 @@ export default function ClassesCard({
                   {c.students.length > 0 && (
                     <ul className="mt-3 mb-4 divide-y divide-[#EEF0EC]">
                       {c.students.map((s) => (
-                        <li key={s.id} className="py-1.5 flex items-center justify-between gap-3 text-sm">
+                        <li key={s.id} className="py-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
                           <span className="truncate">{s.full_name || s.username}</span>
-                          <span className="flex items-center gap-3 text-xs text-[#5B6470] shrink-0">
+                          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5B6470] min-w-0 [overflow-wrap:anywhere] sm:shrink-0">
                             <span>
                               {t.classes.idLabel} <span className="text-[#14181F]">{s.username}</span>
                               {s.parent_email ? ` · ${s.parent_email}` : ""}
@@ -212,7 +212,7 @@ export default function ClassesCard({
                   </p>
                   <div className="space-y-1.5">
                     {rows.map((r, i) => (
-                      <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr] gap-1.5">
+                      <div key={i} className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_1.4fr] gap-1.5">
                         <input value={r.firstName} placeholder={t.classes.firstName}
                           onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, firstName: e.target.value } : x)))}
                           className="field h-9 px-2 text-sm" />
@@ -221,12 +221,12 @@ export default function ClassesCard({
                           className="field h-9 px-2 text-sm" />
                         <input value={r.parentEmail} placeholder={t.classes.parentEmail} type="email"
                           onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, parentEmail: e.target.value } : x)))}
-                          className="field h-9 px-2 text-sm" />
+                          className="field h-9 px-2 text-sm col-span-2 sm:col-span-1" />
                       </div>
                     ))}
                   </div>
                   <div className="flex items-center gap-3 mt-2">
-                    <button onClick={() => setRows((rs) => [...rs, emptyRow()])} className="text-xs font-medium text-[#0C8175] hover:underline">{t.classes.addRow}</button>
+                    <button onClick={() => setRows((rs) => [...rs, emptyRow()])} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">{t.classes.addRow}</button>
                     <button onClick={() => addStudents(c.id)} disabled={busy} className="btn-primary h-8 px-3 text-xs ms-auto">
                       {busy ? t.classes.creatingLogins : t.classes.createLogins}
                     </button>
@@ -240,7 +240,7 @@ export default function ClassesCard({
                     <div className="mt-3 rounded-lg border border-[#E6E8E4] bg-white p-3">
                       <div className="flex items-center justify-between mb-1.5">
                         <p className="text-xs font-medium text-[#0C8175]">✓ {t.classes.credsCreated}</p>
-                        <button onClick={copyCreds} className="text-xs font-medium text-[#0C8175] hover:underline">{t.classes.copyAll}</button>
+                        <button onClick={copyCreds} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">{t.classes.copyAll}</button>
                       </div>
                       <ul className="text-xs space-y-1">
                         {creds.map((cr, i) => (

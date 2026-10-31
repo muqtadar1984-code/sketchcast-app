@@ -113,7 +113,7 @@ export default function OptionsModal({
           onClick={() => !busy && setOpen(false)}
         >
           <div
-            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm"
+            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm max-h-[90dvh] overflow-y-auto max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-medium mb-3" style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}>

@@ -37,10 +37,10 @@ export type KitView = {
 };
 
 const BTN_PRIMARY =
-  "inline-flex w-full items-center justify-center rounded-lg bg-[#0C8175] px-3 py-2 text-sm font-medium text-white hover:bg-[#0A6F65] disabled:opacity-60";
+  "inline-flex w-full items-center justify-center rounded-lg bg-[#0C8175] px-3 py-2 text-sm font-medium text-white hover:bg-[#0A6F65] disabled:opacity-60 pointer-coarse:min-h-11";
 const BTN_ICON =
-  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#CBD3D1] px-2 py-2 text-xs font-medium text-[#1F2A37] hover:bg-[#F3F6F5] disabled:opacity-60";
-const CHIP = "rounded-full px-3 py-1 text-xs font-medium border transition-colors";
+  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#CBD3D1] px-2 py-2 text-xs font-medium text-[#1F2A37] hover:bg-[#F3F6F5] disabled:opacity-60 pointer-coarse:min-h-11";
+const CHIP = "rounded-full px-3 py-1 text-xs font-medium border transition-colors pointer-coarse:min-h-11";
 const CHIP_ON = `${CHIP} bg-[#0C8175] border-[#0C8175] text-white`;
 const CHIP_OFF = `${CHIP} bg-white border-[#CBD3D1] text-[#1F2A37] hover:bg-[#F3F6F5]`;
 
@@ -186,7 +186,7 @@ export default function KitsGallery({
           }}
           placeholder={t.find}
           aria-label={t.find}
-          className="ml-auto w-full sm:w-56 rounded-lg border border-[#CBD3D1] px-3 py-1.5 text-sm"
+          className="ml-auto w-full sm:w-56 rounded-lg border border-[#CBD3D1] px-3 py-1.5 text-sm pointer-coarse:min-h-11 pointer-coarse:text-base"
         />
       </div>
 
@@ -381,7 +381,7 @@ const KitCard = memo(function KitCard({
               <span className="truncate text-sm font-medium" lang={kit.language}>
                 {kit.title}
               </span>
-              <button type="button" onClick={() => setPlaying(false)} className="rounded-md px-2 py-1 text-sm hover:bg-white/10">
+              <button type="button" onClick={() => setPlaying(false)} className="rounded-md px-2 py-1 text-sm hover:bg-white/10 pointer-coarse:min-h-11">
                 {t.close}
               </button>
             </div>

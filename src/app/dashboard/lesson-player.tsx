@@ -82,7 +82,7 @@ export function LessonPlayer({
         )}
         <div className="flex items-center justify-between gap-3 mt-2">
           <p className="text-xs text-white/70 truncate"><bdi>{title}</bdi></p>
-          <button type="button" onClick={onClose} className="shrink-0 text-xs text-white/90 hover:underline">
+          <button type="button" onClick={onClose} className="shrink-0 text-xs text-white/90 hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
             {closeLabel}
           </button>
         </div>

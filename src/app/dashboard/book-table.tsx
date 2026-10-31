@@ -145,25 +145,25 @@ function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }
                 src={videos[i]}
                 title={fmt(t.part, { n: i + 1 })}
                 closeLabel={t.common.close}
-                className="text-xs font-medium text-[#0C8175] hover:underline"
+                className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11"
               >
                 ▶ {t.watch}
               </WatchLink>
             )}
             {decks[i] && (
-              <a href={decks[i]} className="text-xs font-medium text-[#0C8175] hover:underline">
+              <a href={decks[i]} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
                 ⬇ {t.deck}
               </a>
             )}
           </span>
         ))}
         {lesson.doc && (
-          <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+          <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
             ⬇ {t.download}
           </a>
         )}
         {lesson.answerKey && (
-          <a href={lesson.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+          <a href={lesson.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
             ⬇ {t.book.answerKey}
           </a>
         )}
@@ -174,17 +174,17 @@ function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }
   return (
     <>
       {videos[0] && (
-        <WatchLink src={videos[0]} title={t.watch} closeLabel={t.common.close} className="text-xs font-medium text-[#0C8175] hover:underline">
+        <WatchLink src={videos[0]} title={t.watch} closeLabel={t.common.close} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
           ▶ {t.watch}
         </WatchLink>
       )}
       {decks[0] && (
-        <a href={decks[0]} className="text-xs font-medium text-[#0C8175] hover:underline">
+        <a href={decks[0]} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
           ⬇ {t.deck}
         </a>
       )}
       {lesson.doc && (
-        <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+        <a href={lesson.doc} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
           ⬇ {t.download}
         </a>
       )}
@@ -192,7 +192,7 @@ function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }
           component only ever renders on adult surfaces, so it is always
           offered, labeled with the same key as the exams section's. */}
       {lesson.answerKey && (
-        <a href={lesson.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+        <a href={lesson.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
           ⬇ {t.book.answerKey}
         </a>
       )}
@@ -276,7 +276,7 @@ export default function BookTable({
           // OPEN book (the one ?book= opened), so it points at that book's
           // controls rather than the first match on the page.
           <div key={b.id} id={`book-${b.id}`} data-tour-book={isOpen ? "open" : undefined} className="border-b border-[#EEF0EC] last:border-b-0 scroll-mt-24">
-            <div className={`grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#EEF3F1]" : ""}`}>
+            <div className={`grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 sm:gap-4 px-4 sm:px-5 py-3 items-center transition-colors ${ready ? "hover:bg-[#EEF3F1]" : ""}`}>
               <button
                 onClick={() => ready && toggle(b.id)}
                 disabled={!ready}
@@ -300,7 +300,7 @@ export default function BookTable({
                   </span>
                 </span>
               </button>
-              <span className="text-sm text-[#5B6470] text-end whitespace-nowrap self-center">
+              <span className="text-sm text-[#5B6470] text-start sm:text-end whitespace-nowrap sm:self-center">
                 {b.status === "indexing" ? (
                   t.book.findingChapters
                 ) : b.status === "error" ? (
@@ -319,7 +319,7 @@ export default function BookTable({
                   </span>
                 )}
               </span>
-              <div data-tour="book-badges" className="flex items-center gap-2 whitespace-nowrap self-center">
+              <div data-tour="book-badges" className="flex flex-wrap items-center gap-2 sm:whitespace-nowrap sm:self-center">
                 {ready && <BookHealthBadge health={b.health} t={t} />}
                 {b.language && languageLabel(b.language) && (
                   <span className="chip bg-[#E2F4F1] text-[#0C8175]">{languageLabel(b.language)}</span>
@@ -499,18 +499,18 @@ export default function BookTable({
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
                     <p className="text-xs text-[#5B6470] mb-1">{t.book.revisionPapers}</p>
                     {b.revisionPapers.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between gap-4 py-1">
-                        <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">{p.label}</span>
-                        <div className="flex items-center gap-2 shrink-0">
+                      <div key={p.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1">
+                        <span className="text-sm text-[#14181F] flex-1 min-w-[8rem] truncate">{p.label}</span>
+                        <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
                           {p.status === "done" ? (
                             <>
                               {p.doc && (
-                                <a href={p.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                <a href={p.doc} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
                                   ⬇ {t.download}
                                 </a>
                               )}
                               {p.answerKey && (
-                                <a href={p.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                <a href={p.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
                                   ⬇ {t.book.answerKey}
                                 </a>
                               )}
@@ -544,8 +544,8 @@ export default function BookTable({
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
                     <p className="text-xs text-[#5B6470] mb-1">{t.book.exams}</p>
                     {b.exams.map((e) => (
-                      <div key={e.id} className="flex items-start justify-between gap-4 py-1.5">
-                        <span className="min-w-0 flex-1">
+                      <div key={e.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-1.5">
+                        <span className="min-w-[8rem] flex-1">
                           <span className="text-sm text-[#14181F] block truncate">{e.label}</span>
                           {e.coverage && (
                             <span className="block text-[10px] text-[#98A0A9] truncate" title={e.coverage}>
@@ -553,16 +553,16 @@ export default function BookTable({
                             </span>
                           )}
                         </span>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
                           {e.status === "done" ? (
                             <>
                               {e.doc && (
-                                <a href={e.doc} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                <a href={e.doc} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
                                   ⬇ {t.book.examPaper}
                                 </a>
                               )}
                               {e.answerKey && (
-                                <a href={e.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline">
+                                <a href={e.answerKey} className="text-xs font-medium text-[#0C8175] hover:underline pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
                                   ⬇ {t.book.answerKey}
                                 </a>
                               )}
@@ -590,9 +590,9 @@ export default function BookTable({
                   <div className="mt-3 pt-2 border-t border-[#EEF0EC]">
                     <p className="text-xs text-[#5B6470] mb-1">{t.otherLessons}</p>
                     {b.otherLessons.map((l) => (
-                      <div key={l.id} className="flex items-center justify-between gap-4 py-1">
-                        <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">{l.title}</span>
-                        <div className="flex items-center gap-2 shrink-0">
+                      <div key={l.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1">
+                        <span className="text-sm text-[#14181F] flex-1 min-w-[8rem] truncate">{l.title}</span>
+                        <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
                           {l.status === "done" ? <ArtifactLinks lesson={l} t={t} /> : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                               {statusLabel(t, l.status)}
@@ -617,15 +617,15 @@ export default function BookTable({
                     {b.batchLessons.map((l) => {
                       const ch = b.chapters.find((c) => String(c.num) === l.chapterRef);
                       return (
-                        <div key={l.id} className="flex items-center justify-between gap-4 py-1">
-                          <span className="text-sm text-[#14181F] flex-1 min-w-0 truncate">
+                        <div key={l.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1">
+                          <span className="text-sm text-[#14181F] flex-1 min-w-[8rem] truncate">
                             <span className="text-[#98A0A9]">
                               {ch ? `${ch.num + 1}. ` : ""}
                             </span>
                             {ch?.title ?? l.title}
                             <span className="text-xs text-[#98A0A9]"> · {kindLabel(t, l.kind)}</span>
                           </span>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
                             {l.status === "done" ? <ArtifactLinks lesson={l} t={t} /> : (
                               <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_STYLE[l.status] ?? ""}`}>
                                 {statusLabel(t, l.status)}

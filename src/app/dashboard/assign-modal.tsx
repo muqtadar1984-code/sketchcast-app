@@ -218,7 +218,7 @@ export default function AssignModal({
       <button
         onClick={() => void openModal()}
         disabled={preparing}
-        className="text-xs font-medium text-[#9A6400] hover:underline whitespace-nowrap disabled:opacity-60"
+        className="text-xs font-medium text-[#9A6400] hover:underline whitespace-nowrap disabled:opacity-60 pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11"
       >
         {label}
       </button>
@@ -228,7 +228,7 @@ export default function AssignModal({
           onClick={() => !busy && setOpen(false)}
         >
           <div
-            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm"
+            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm max-h-[90dvh] overflow-y-auto max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-medium mb-1" style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}>

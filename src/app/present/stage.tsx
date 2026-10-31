@@ -6,6 +6,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
   type CSSProperties,
 } from "react";
 import type { VideoLike } from "./board-controller";
@@ -99,8 +100,15 @@ export type StageProps = {
  * the wrong one: it drops the element from layout, and browsers are within
  * their rights to deprioritise or unload media that is not being displayed.
  * Nothing here may risk the video's position.
+ *
+ * ON A PHONE (below 640px) a 28vw corner video is a thumbnail — about 109px —
+ * so "corner" becomes a full-width 16:9 strip pinned to the TOP, and the page
+ * below starts under it (globals.css pads the body by the same 56.25vw while a
+ * corner stage is mounted) and scrolls beneath it: video on top, the roll
+ * below. "away" leaves upward from the same place. Only the container's style
+ * changes, exactly as on a desktop; the element never moves.
  */
-function styleFor(mode: StageMode): CSSProperties {
+function styleFor(mode: StageMode, phone: boolean): CSSProperties {
   const base: CSSProperties = {
     position: "fixed",
     zIndex: 30,
@@ -109,6 +117,20 @@ function styleFor(mode: StageMode): CSSProperties {
     background: "#000",
     transition: "inset 260ms cubic-bezier(.22,.7,.3,1), width 260ms cubic-bezier(.22,.7,.3,1), height 260ms cubic-bezier(.22,.7,.3,1), opacity 200ms linear",
   };
+  if (phone && mode !== "full") {
+    const strip: CSSProperties = {
+      ...base,
+      borderRadius: 0,
+      insetInlineStart: 0,
+      insetInlineEnd: 0,
+      insetBlockStart: "env(safe-area-inset-top, 0px)",
+      insetBlockEnd: "auto",
+      width: "100%",
+      height: "56.25vw",
+      boxShadow: "0 10px 24px -14px rgba(0,0,0,.8)",
+    };
+    return mode === "corner" ? strip : { ...strip, opacity: 0, pointerEvents: "none", transform: "translateY(-140%)" };
+  }
   switch (mode) {
     case "full":
       return { ...base, inset: "56px 12px 12px 12px" };
@@ -137,6 +159,22 @@ function styleFor(mode: StageMode): CSSProperties {
         transform: "translateY(140%)",
       };
   }
+}
+
+/** Below Tailwind's `sm` — the same line globals.css draws its phone rules on.
+ *  False on the server and on the first paint, so the desktop corner is what
+ *  hydrates; a phone restyles one frame later (the element stays put). */
+const PHONE_QUERY = "(max-width: 639px)";
+function usePhoneWidth(): boolean {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(PHONE_QUERY);
+    const on = () => setPhone(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return phone;
 }
 
 export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
@@ -249,8 +287,9 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
     [freeze],
   );
 
+  const phone = usePhoneWidth();
   return (
-    <div style={styleFor(mode)} data-stage-mode={mode}>
+    <div style={styleFor(mode, phone)} data-stage-mode={mode}>
       {/*
         RENDERED UNCONDITIONALLY. Not behind `src &&`, not behind a mode check:
         a <video> that disappears from the tree when the src is briefly null, or

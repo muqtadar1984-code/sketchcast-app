@@ -144,7 +144,7 @@ function SlideThumb({ n, title, video, processing, pct, trackId, watchHint, clos
 // add-back, retry, regenerate, delete); the pill is just its frame.
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-[#DCE6E2] bg-white px-2.5 py-1 leading-none">
+    <span className="inline-flex max-w-full items-center rounded-full border border-[#DCE6E2] bg-white px-2.5 py-1 leading-none">
       {children}
     </span>
   );
@@ -223,7 +223,7 @@ export default function LessonCard({
   if (locked) {
     return (
       <div className="flex items-center gap-3.5 rounded-xl border border-dashed border-[#DCE6E2] bg-[#E1E8E5] px-3.5 py-3">
-        <div className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#DCE6E2] bg-[#D8E1DD] flex items-center justify-center text-[#C6CBC4]">
+        <div className="h-[58px] w-[100px] sm:h-[74px] sm:w-[128px] shrink-0 rounded-lg border border-dashed border-[#DCE6E2] bg-[#D8E1DD] flex items-center justify-center text-[#C6CBC4]">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></svg>
         </div>
         <div className="min-w-0">
@@ -266,7 +266,7 @@ export default function LessonCard({
       >
         {({ busy }) => (
           <>
-            <span className="h-[74px] w-[128px] shrink-0 rounded-lg border border-dashed border-[#C3D0CB] bg-[#D8E1DD] flex items-center justify-center text-[#B7C1B9] transition-colors group-hover/new:border-[#1FB8A6] group-hover/new:text-[#0C8175]">
+            <span className="h-[58px] w-[100px] sm:h-[74px] sm:w-[128px] shrink-0 rounded-lg border border-dashed border-[#C3D0CB] bg-[#D8E1DD] flex items-center justify-center text-[#B7C1B9] transition-colors group-hover/new:border-[#1FB8A6] group-hover/new:text-[#0C8175]">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
             </span>
             <span className="min-w-0 flex-1">
@@ -279,7 +279,7 @@ export default function LessonCard({
                 <bdi>{subtitle ? `${subtitle} · ` : ""}{t.card.notGenerated}</bdi>
               </span>
             </span>
-            <span className="shrink-0 text-[13px] font-medium text-[#0C8175]">
+            <span className="shrink-0 max-w-[6rem] sm:max-w-none text-end text-[13px] font-medium text-[#0C8175]">
               {busy ? t.queuing : t.card.generateKit}
             </span>
           </>

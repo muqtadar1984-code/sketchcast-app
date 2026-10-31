@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isActive, TOUR_MARK, type NavTab } from "./header-nav";
@@ -34,6 +34,13 @@ import { isActive, TOUR_MARK, type NavTab } from "./header-nav";
 // its colour: the dashboard bar is h-16 and the console's is h-14. The panel is
 // absolutely positioned, so whichever header mounts this must be `relative` or
 // the menu will anchor to the page instead of the bar.
+//
+// `children` is the ACCOUNT section (phone layout, 2026-10-31): on a phone the
+// bar has room for the menu, the brand and the bell, nothing else — so the
+// header hands its language picker, role switch, Settings, Tour and Sign out
+// in here, and they render under the tabs below `md` (the same width the bar
+// stops showing them). Tapping a link or button in it closes the menu like a
+// tab does; the two pickers are <select>s and leave it open.
 const TONES = {
   light: {
     button: "border-[#E6E8E4] bg-white text-[#14181F]",
@@ -58,6 +65,7 @@ export default function MobileNav({
   className = "sm:hidden",
   tone = "light",
   panelTop = "top-16",
+  children,
 }: {
   tabs: NavTab[];
   openLabel: string;
@@ -65,6 +73,7 @@ export default function MobileNav({
   className?: string;
   tone?: keyof typeof TONES;
   panelTop?: string;
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
@@ -77,7 +86,7 @@ export default function MobileNav({
         data-tour="mobile-nav"
         aria-expanded={open}
         aria-label={open ? closeLabel : openLabel}
-        className={`h-9 w-9 inline-flex items-center justify-center rounded-lg border ${c.button}`}
+        className={`h-11 w-11 sm:h-9 sm:w-9 inline-flex items-center justify-center rounded-lg border ${c.button}`}
       >
         {open ? (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
@@ -94,7 +103,9 @@ export default function MobileNav({
         <>
           {/* Backdrop: tap anywhere else to close. */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <nav className={`absolute start-0 end-0 ${panelTop} z-30 border-b shadow-lg ${c.panel}`}>
+          <nav
+            className={`absolute start-0 end-0 ${panelTop} z-30 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain border-b shadow-lg ${c.panel}`}
+          >
             {tabs.map((t) => {
               const active = isActive(t.href, path, tabs);
               return (
@@ -112,6 +123,20 @@ export default function MobileNav({
                 </Link>
               );
             })}
+            {children && (
+              <div
+                className={`md:hidden flex flex-wrap items-center gap-3 px-5 py-3 ${tabs.length ? `border-t ${c.divider}` : ""}`}
+                onClick={(e) => {
+                  // Not a button inside a <form> (Sign out): closing unmounts
+                  // the form before the browser submits it, which cancels the
+                  // submit. That one navigates away by itself.
+                  const hit = (e.target as Element).closest("a, button");
+                  if (hit && !hit.closest("form")) setOpen(false);
+                }}
+              >
+                {children}
+              </div>
+            )}
           </nav>
         </>
       )}

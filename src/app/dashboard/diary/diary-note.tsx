@@ -298,7 +298,7 @@ export default function DiaryNote({
 
   return (
     <div className="px-5 py-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex flex-wrap items-center gap-1.5 text-xs text-[#5B6470]">
           <span className={`chip font-sans normal-case tracking-normal ${TYPE_STYLE[note.type] ?? TYPE_STYLE.general}`}>
             {TYPE_ICON[note.type] ?? "📝"} {noteTypeLabel(t.noteTypes, note.type)}
@@ -351,7 +351,7 @@ export default function DiaryNote({
               disabled={noteBusy}
               aria-label={t.deleteNote}
               title={t.deleteNote}
-              className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
+              className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 pointer-coarse:min-w-11 pointer-coarse:min-h-11"
             >
               ✕
             </button>

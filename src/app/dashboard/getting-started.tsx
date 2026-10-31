@@ -81,7 +81,7 @@ export default function GettingStarted({
         disabled={busy}
         aria-label="Dismiss getting started"
         title="Dismiss"
-        className="absolute top-3 end-3 w-7 h-7 flex items-center justify-center rounded-md text-[#98A0A9] hover:bg-[#F5F6F3] hover:text-[#5B6470] disabled:opacity-50"
+        className="absolute top-3 end-3 w-7 h-7 flex items-center justify-center rounded-md text-[#98A0A9] hover:bg-[#F5F6F3] hover:text-[#5B6470] disabled:opacity-50 pointer-coarse:min-w-11 pointer-coarse:min-h-11 pointer-coarse:top-1 pointer-coarse:end-1"
       >
         ✕
       </button>
