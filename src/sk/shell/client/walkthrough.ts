@@ -374,15 +374,17 @@ export function findAnchor<E>(anchors: PlannedStop["anchors"], dom: AnchorDom<E>
   return null;
 }
 
-/** The control a stop would show if only it were not hidden (phone layout,
- *  2026-10-31: a control inside a closed sheet). Per anchor list (one per
+/** The controls a stop is about (phone layout, 2026-10-31/11-01), so that
+ *  whatever can open or close around them — a teacher's More sheet, a
+ *  chapter's action sheet — can follow the tour. Per anchor list (one per
  *  part, or the stop's own), the FIRST anchor with any match on the page
- *  decides, exactly as findAnchor ranks them: visible → that list needs
- *  nothing; only hidden → EVERY match of it is returned (a control can have
- *  several hidden copies — the header's, a sheet's — and only the container
- *  holding one of them can open). A later, visible fallback never stands in
- *  for a hidden earlier control. Empty when there is nothing to reveal. */
-export function hiddenAnchor<E>(lists: Array<PlannedStop["anchors"]>, dom: AnchorDom<E>): E[] {
+ *  decides, exactly as findAnchor ranks them: its visible matches when it has
+ *  any (a sheet already open on it stays open), else every hidden match (the
+ *  container holding one of them opens). A later, visible fallback never
+ *  stands in for a hidden earlier control. Visible or not, the result is what
+ *  the containers are asked about: one holding none of it closes, if the tour
+ *  opened it. Empty when no anchor is on the page. */
+export function stopControls<E>(lists: Array<PlannedStop["anchors"]>, dom: AnchorDom<E>): E[] {
   const all = (sel: string): E[] => {
     try {
       if (dom.queryAll) return dom.queryAll(sel);
@@ -392,15 +394,17 @@ export function hiddenAnchor<E>(lists: Array<PlannedStop["anchors"]>, dom: Ancho
       return [];
     }
   };
+  const out: E[] = [];
   for (const anchors of lists) {
     for (const a of anchors) {
       const found = all(a.sel);
       if (!found.length) continue;
-      if (found.some((x) => dom.visible(x))) break;
-      return found;
+      const shown = found.filter((x) => dom.visible(x));
+      out.push(...(shown.length ? shown : found));
+      break;
     }
   }
-  return [];
+  return out;
 }
 
 // ── combined stops: one narration, the highlight moving part by part ───────

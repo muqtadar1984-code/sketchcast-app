@@ -23,20 +23,22 @@ export function onSkWalkthroughRequest(cb: () => void): () => void {
 
 // ── reveal: the tour opens what hides its control (phone layout, 2026-10-31) ──
 // On a teacher's phone some controls live inside things that start closed —
-// the tab bar's More sheet, a chapter's action sheet. When a stop's control is
-// on the page but hidden, the tour asks for it to be revealed: each container
-// that can open listens, and the one that holds the control opens (and says
-// so). `null` asks every container the TOUR opened to close again; one the
-// teacher opened herself stays as she left it. Opening only: nothing is
-// pressed, nothing is written.
+// the tab bar's More sheet, a chapter's action sheet. At every stop the tour
+// names the controls it is about (visible or not); each container that can
+// open listens. The one holding a named control opens (or, already open,
+// stays open) and says so; every other container the TOUR opened closes. So
+// the sheet follows the tour stop by stop, with no close-then-reopen between
+// two stops in the same sheet. `null` (the tour paused, ended or went away)
+// closes everything the tour opened. A container the teacher opened herself
+// is never shut by the tour. Opening only: nothing is pressed or written.
 
 export const SK_REVEAL_EVENT = "sk:walkthrough-reveal";
 
-/** `els`: the hidden copies of one control (null = close what the tour opened). */
+/** `els`: the stop's controls (null = close what the tour opened). */
 export type SkRevealDetail = { els: Element[] | null; claimed: boolean };
 
-/** Ask for the container holding one of `els` to open (or, with null, for the
- *  tour's to close). True when a container took it. */
+/** Name the stop's controls (or, with null, close what the tour opened).
+ *  True when a container holds one of them. */
 export function requestSkReveal(els: Element[] | null): boolean {
   if (typeof window === "undefined") return false;
   const detail: SkRevealDetail = { els, claimed: false };

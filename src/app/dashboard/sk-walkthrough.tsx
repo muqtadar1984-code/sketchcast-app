@@ -68,7 +68,7 @@ import {
   currentStop,
   findAnchor,
   findParts,
-  hiddenAnchor,
+  stopControls,
   isActive,
   jumpTo,
   missingStop,
@@ -302,32 +302,41 @@ export function WalkStarting({ copy, onSkip }: { copy: WalkCopy; onSkip: () => v
 
 // ── the spotlight ───────────────────────────────────────────────────────────
 
-/** A dim with a cut-out ring round `el`, following it on scroll and resize.
- *  pointer-events none: the page under it stays usable. */
+/** A dim with a cut-out ring round `el`, following it wherever it goes.
+ *  pointer-events none: the page under it stays usable.
+ *
+ *  2026-11-01: measured every frame, not on scroll/resize alone. A control
+ *  moves without either — a sheet opening or closing around it, a book
+ *  expanding above it, a list streaming in — and the ring was left behind
+ *  where the control had been ("the highlights are going off"). A hidden
+ *  control (its sheet closed) shows no ring at all rather than one at 0,0.
+ *  The state only changes when the box does, so a still control costs one
+ *  getBoundingClientRect a frame, only while a tour is running. */
 export function WalkSpotlight({ el }: { el: Element }) {
   const [box, setBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   useEffect(() => {
     let raf = 0;
-    const measure = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (!el.isConnected) return setBox(null);
+    let last = "";
+    const tick = () => {
+      if (!el.isConnected || el.getClientRects().length === 0) {
+        if (last !== "none") {
+          last = "none";
+          setBox(null);
+        }
+      } else {
         const r = el.getBoundingClientRect();
         const pad = 6;
-        setBox({ top: r.top - pad, left: r.left - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
-      });
+        const next = { top: r.top - pad, left: r.left - pad, width: r.width + pad * 2, height: r.height + pad * 2 };
+        const key = `${next.top}|${next.left}|${next.width}|${next.height}`;
+        if (key !== last) {
+          last = key;
+          setBox(next);
+        }
+      }
+      raf = requestAnimationFrame(tick);
     };
-    measure();
-    window.addEventListener("scroll", measure, true);
-    window.addEventListener("resize", measure);
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    ro?.observe(el);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", measure, true);
-      window.removeEventListener("resize", measure);
-      ro?.disconnect();
-    };
+    tick();
+    return () => cancelAnimationFrame(raf);
   }, [el]);
   if (!box || typeof document === "undefined") return null;
   return createPortal(
@@ -767,6 +776,14 @@ export function useSkWalkthrough({
 
   // ── one stop, strictly in order: navigate → settle → highlight → speak ──
   const goKey = goKeyOf(walk);
+
+  // Between stops the next stop's first look decides what stays open (above).
+  // When there is no next stop — the tour paused, ended, or the launcher went
+  // away — every sheet the tour opened closes.
+  useEffect(() => {
+    if (!goKey) requestSkReveal(null);
+  }, [goKey]);
+  useEffect(() => () => void requestSkReveal(null), []);
   useEffect(() => {
     if (!goKey) return;
     const w = walkRef.current;
@@ -790,22 +807,24 @@ export function useSkWalkthrough({
       visible: (el: Element) => el.getClientRects().length > 0,
     };
     const none = { el: null as Element | null, index: 0 };
-    // Phone layout (2026-10-31): a control inside a closed sheet (a teacher's
-    // More sheet, a chapter's actions) is on the page but hidden. Asked for
-    // once per stop, as soon as a look finds that control hidden rather than
-    // missing (a page still streaming in has neither yet); the sheet opens and
-    // the next look finds it. Closed again when the stop ends (cleanup below).
-    let revealAsked = false;
+    // Phone layout (2026-10-31; 2026-11-01 fix): a control inside a sheet (a
+    // teacher's More sheet, a chapter's actions). On every look the tour names
+    // the stop's controls BEFORE searching, so the sheets follow it: the one
+    // holding them opens or stays open, any other the tour opened closes. The
+    // look then sees the sheets as they will be, never a sheet from the last
+    // stop that is about to close (which left sheets open and highlights
+    // pointing at controls that then vanished). Re-announced only when the
+    // named controls change (the page streaming in, a sheet opening).
+    const lists = s.parts?.length ? s.parts.map((p) => p.anchors) : [s.anchors];
+    let named: Element[] = [];
     const find = () => {
-      const h = s.parts?.length ? findParts(s.parts, dom) : s.anchors.length ? findAnchor(s.anchors, dom) : none;
-      if (!revealAsked && (!h || h.index > 0)) {
-        const hidden = hiddenAnchor(s.parts?.length ? s.parts.map((p) => p.anchors) : [s.anchors], dom);
-        if (hidden.length) {
-          revealAsked = true;
-          if (requestSkReveal(hidden)) debug(`stop "${s.id}": opened what holds its control`);
-        }
+      if (ac.signal.aborted) return null;
+      const ctl = stopControls(lists, dom);
+      if (ctl.length !== named.length || ctl.some((el, i) => el !== named[i])) {
+        named = ctl;
+        if (requestSkReveal(ctl)) debug(`stop "${s.id}": a sheet holds its control`);
       }
-      return h;
+      return s.parts?.length ? findParts(s.parts, dom) : s.anchors.length ? findAnchor(s.anchors, dom) : none;
     };
     void (async () => {
       // Found = visible and holding still; missing = only once the page has
@@ -846,7 +865,11 @@ export function useSkWalkthrough({
         try {
           // "start" for a big section (the Library list at the TOP of the
           // screen, founder 2026-10-30); "center" for one control.
-          el.scrollIntoView({ block: s.scroll ?? "center", behavior: reduce ? "auto" : "smooth" });
+          // On a teacher's phone SK's bubble sits low, above the tab bar, so a
+          // control goes to the TOP of what she sees (globals.css gives tour
+          // targets a scroll margin there) instead of the middle, under it.
+          const phoneBar = !!document.querySelector("[data-tabbar]") && !!window.matchMedia?.("(max-width: 767px)").matches;
+          el.scrollIntoView({ block: phoneBar ? "start" : (s.scroll ?? "center"), behavior: reduce ? "auto" : "smooth" });
         } catch {
           /* old browsers */
         }
@@ -882,7 +905,6 @@ export function useSkWalkthrough({
     return () => {
       ac.abort();
       clearPartClock();
-      if (revealAsked) requestSkReveal(null);
       // 2026-10-31: cut off while still waiting (a pause, a move, a new run, the
       // launcher going away) — before, such a stop left no trace at all.
       if (!decided) logStop(s.id, s.route, "abandoned", Date.now() - t0, "cut-off");
