@@ -196,8 +196,8 @@ export default async function SchoolTeachersPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">
           {baseTotal > 0 ? fmt(t.introBaseline, { pct: baselinePct }) : t.intro}
@@ -215,9 +215,9 @@ export default async function SchoolTeachersPage() {
               <span className="text-end">{t.col.completion}</span>
             </div>
             {rows.map((r) => (
-              <div key={r.id} className="px-5 py-3">
-                <div className="grid sm:grid-cols-[2fr_repeat(4,1fr)] gap-x-3 gap-y-1 items-center">
-                  <span className="font-medium truncate">{r.name}</span>
+              <div key={r.id} className="px-4 sm:px-5 py-3">
+                <div className="grid grid-cols-2 sm:grid-cols-[2fr_repeat(4,1fr)] gap-x-3 gap-y-1 items-center">
+                  <span className="font-medium truncate col-span-2 sm:col-span-1">{r.name}</span>
                   <span className="tabular sm:text-end text-sm">
                     <span className="sm:hidden text-[#5B6470]">{t.col.lessons} </span>{r.lessons}
                   </span>

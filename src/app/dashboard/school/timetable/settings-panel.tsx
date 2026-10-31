@@ -99,11 +99,11 @@ export default function SettingsPanel({ shape, t }: { shape: TimetableShape; t: 
     setBusy(false);
   }
 
-  const fieldCls = "field h-9 px-2 text-sm";
+  const fieldCls = "field h-11 sm:h-9 px-2 text-base sm:text-sm";
 
   return (
     <div className="card mt-4 p-4 print:hidden">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-start">
+      <button onClick={() => setOpen(!open)} className="w-full min-h-11 sm:min-h-0 flex items-center justify-between gap-3 text-start">
         <span className="font-medium text-sm">⚙ {t.settings.title}</span>
         <span className="text-xs text-[#5B6470]">{open ? t.hide : t.show}</span>
       </button>
@@ -177,7 +177,7 @@ export default function SettingsPanel({ shape, t }: { shape: TimetableShape; t: 
                 <button
                   onClick={() => setPeriods((prev) => prev.filter((_, j) => j !== i))}
                   disabled={periods.length <= 1}
-                  className="text-xs text-[#B42318] hover:underline disabled:opacity-30"
+                  className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-[#B42318] hover:underline disabled:opacity-30"
                 >
                   {t.settings.remove}
                 </button>
@@ -186,7 +186,7 @@ export default function SettingsPanel({ shape, t }: { shape: TimetableShape; t: 
             {periods.length < 12 && (
               <button
                 onClick={() => setPeriods((prev) => [...prev, { label: `P${prev.length + 1}` }])}
-                className="text-xs text-[#0C8175] hover:underline"
+                className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-[#0C8175] hover:underline"
               >
                 {t.settings.addPeriod}
               </button>
@@ -233,7 +233,7 @@ export default function SettingsPanel({ shape, t }: { shape: TimetableShape; t: 
                     ))}
                   </select>
                 </label>
-                <button onClick={() => setBreaks((prev) => prev.filter((_, j) => j !== i))} className="text-xs text-[#B42318] hover:underline">
+                <button onClick={() => setBreaks((prev) => prev.filter((_, j) => j !== i))} className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-[#B42318] hover:underline">
                   {t.settings.remove}
                 </button>
               </div>
@@ -241,7 +241,7 @@ export default function SettingsPanel({ shape, t }: { shape: TimetableShape; t: 
             {breaks.length < 6 && (
               <button
                 onClick={() => setBreaks((prev) => [...prev, { label: "", minutes: 15, afterPeriod: 0 }])}
-                className="text-xs text-[#0C8175] hover:underline"
+                className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-[#0C8175] hover:underline"
               >
                 {t.settings.addBreak}
               </button>
@@ -258,7 +258,7 @@ export default function SettingsPanel({ shape, t }: { shape: TimetableShape; t: 
           {msg && <p className="text-sm text-[#0C8175] mt-2">{msg}</p>}
           {err && <p className="text-sm text-red-600 mt-2">{err}</p>}
           <div className="mt-3 flex items-center gap-3">
-            <button onClick={() => void save()} disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
+            <button onClick={() => void save()} disabled={busy} className="btn-primary h-11 sm:h-10 px-4 text-sm disabled:opacity-50">
               {busy ? t.saving : t.settings.save}
             </button>
             {dirty && !busy && <span className="text-xs text-[#9A6400]">● {t.settings.unsaved}</span>}

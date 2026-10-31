@@ -441,19 +441,19 @@ export default function TimetableEditor({
         <div className="flex rounded-lg border border-[#E6E8E4] overflow-hidden">
           <button
             onClick={() => setView("class")}
-            className={`h-9 px-3 text-sm ${view === "class" ? "bg-[#14181F] text-white" : "bg-white text-[#5B6470]"}`}
+            className={`h-11 sm:h-9 px-3 text-sm ${view === "class" ? "bg-[#14181F] text-white" : "bg-white text-[#5B6470]"}`}
           >
             {t.editor.byClass}
           </button>
           <button
             onClick={() => setView("teacher")}
-            className={`h-9 px-3 text-sm ${view === "teacher" ? "bg-[#14181F] text-white" : "bg-white text-[#5B6470]"}`}
+            className={`h-11 sm:h-9 px-3 text-sm ${view === "teacher" ? "bg-[#14181F] text-white" : "bg-white text-[#5B6470]"}`}
           >
             {t.editor.byTeacher}
           </button>
         </div>
         {view === "class" ? (
-          <select value={classId} onChange={(e) => { setClassId(e.target.value); setEditing(null); }} className="field h-9 px-2 text-sm">
+          <select value={classId} onChange={(e) => { setClassId(e.target.value); setEditing(null); }} className="field h-11 sm:h-9 px-2 text-base sm:text-sm min-w-0 flex-1 sm:flex-none">
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -462,7 +462,7 @@ export default function TimetableEditor({
             ))}
           </select>
         ) : (
-          <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)} className="field h-9 px-2 text-sm">
+          <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)} className="field h-11 sm:h-9 px-2 text-base sm:text-sm min-w-0 flex-1 sm:flex-none">
             {teachers.map((x) => (
               <option key={x.id} value={x.id}>
                 {x.name}
@@ -474,13 +474,13 @@ export default function TimetableEditor({
           <button
             onClick={() => void undo()}
             disabled={busy}
-            className="btn-ghost h-9 px-3 text-sm"
+            className="btn-ghost h-11 sm:h-9 px-3 text-sm max-w-full truncate"
             title={fmt(t.editor.undo, { label: undoStack[undoStack.length - 1].label })}
           >
             ↩ {fmt(t.editor.undo, { label: undoStack[undoStack.length - 1].label })}
           </button>
         )}
-        <button onClick={() => window.print()} className="btn-ghost h-9 px-3 text-sm ms-auto">
+        <button onClick={() => window.print()} className="btn-ghost h-11 sm:h-9 px-3 text-sm ms-auto">
           🖨 {t.editor.print}
         </button>
       </div>
@@ -513,10 +513,10 @@ export default function TimetableEditor({
       {error && <p className="text-sm text-red-600 mb-2 print:hidden">{error}</p>}
 
       <div data-tour="timetable-grid" className="card overflow-x-auto print:overflow-visible print:shadow-none">
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full min-w-[560px] sm:min-w-0 text-sm border-collapse">
           <thead>
             <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
-              <th className="px-2 py-2 text-start font-normal w-20">{t.period}</th>
+              <th className="px-2 py-2 text-start font-normal w-20 max-sm:sticky max-sm:start-0 max-sm:z-[1] bg-[#F5F6F3]">{t.period}</th>
               {days.map((d) => (
                 <th key={d} className="px-2 py-2 text-start font-normal">
                   {d}
@@ -539,7 +539,7 @@ export default function TimetableEditor({
               return (
                 <Fragment key={p.label}>
                   <tr className="border-t border-[#EEF0EC] align-top">
-                    <td className="px-2 py-1.5 text-xs text-[#5B6470] whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-xs text-[#5B6470] whitespace-nowrap max-sm:sticky max-sm:start-0 max-sm:z-[1] max-sm:bg-white">
                       {p.label}
                       {p.time ? <span className="block text-[10px] text-[#98A0A9]">{p.time}</span> : null}
                     </td>
@@ -659,7 +659,7 @@ export default function TimetableEditor({
       {view === "class" && currentClass?.editable && (
         <div className="flex flex-wrap items-center gap-2 mt-3 text-sm print:hidden">
           <span className="text-xs text-[#5B6470]">{t.editor.dayTools}</span>
-          <select value={copySrc} onChange={(e) => setCopySrc(Number(e.target.value))} className="field h-9 px-2 text-sm">
+          <select value={copySrc} onChange={(e) => setCopySrc(Number(e.target.value))} className="field h-11 sm:h-9 px-2 text-base sm:text-sm">
             {days.map((d, i) => (
               <option key={d} value={i + 1}>
                 {fmt(t.editor.copyDay, { day: d })}
@@ -667,7 +667,7 @@ export default function TimetableEditor({
             ))}
           </select>
           <span className="text-xs text-[#5B6470]">{t.editor.to}</span>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {days.map((d, i) => {
               const v = i + 1;
               const on = copyDst.includes(v);
@@ -676,17 +676,17 @@ export default function TimetableEditor({
                   key={d}
                   disabled={v === copySrc}
                   onClick={() => setCopyDst((prev) => (on ? prev.filter((x) => x !== v) : [...prev, v]))}
-                  className={`h-9 px-2 rounded border text-xs ${on ? "bg-[#14181F] text-white border-[#14181F]" : "bg-white text-[#5B6470] border-[#E6E8E4]"} disabled:opacity-30`}
+                  className={`h-11 sm:h-9 min-w-11 sm:min-w-0 px-2 rounded border text-xs ${on ? "bg-[#14181F] text-white border-[#14181F]" : "bg-white text-[#5B6470] border-[#E6E8E4]"} disabled:opacity-30`}
                 >
                   {d}
                 </button>
               );
             })}
           </div>
-          <button onClick={() => void copyDay()} disabled={busy || !copyDst.length} className="btn-ghost h-9 px-3 text-sm disabled:opacity-50">
+          <button onClick={() => void copyDay()} disabled={busy || !copyDst.length} className="btn-ghost h-11 sm:h-9 px-3 text-sm disabled:opacity-50">
             {t.editor.copy}
           </button>
-          <span className="mx-1 text-[#E6E8E4]">|</span>
+          <span className="hidden sm:inline mx-1 text-[#E6E8E4]">|</span>
           <select
             id="tt-clear-day"
             defaultValue=""
@@ -695,7 +695,7 @@ export default function TimetableEditor({
               e.target.value = "";
               if (v) void clearDays([v], fmt(t.editor.clearDay, { day: days[v - 1] ?? "" }));
             }}
-            className="field h-9 px-2 text-sm"
+            className="field h-11 sm:h-9 px-2 text-base sm:text-sm"
           >
             <option value="" disabled>
               {t.editor.clearDayPrompt}
@@ -709,7 +709,7 @@ export default function TimetableEditor({
           <button
             onClick={() => void clearDays(days.map((_, i) => i + 1), t.editor.clearWeekLabel)}
             disabled={busy}
-            className="text-sm text-[#B42318] hover:underline disabled:opacity-50"
+            className="min-h-11 sm:min-h-0 px-1 text-sm text-[#B42318] hover:underline disabled:opacity-50"
           >
             {t.editor.clearWeek}
           </button>
@@ -729,7 +729,7 @@ export default function TimetableEditor({
                 list="tt-subjects"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="field w-full h-10 px-3 text-sm mt-1"
+                className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm mt-1"
                 maxLength={60}
                 autoFocus
               />
@@ -741,7 +741,7 @@ export default function TimetableEditor({
             </label>
             <label className="text-xs text-[#5B6470]">
               {cellNonTeaching ? t.editor.teacherOnDuty : t.editor.teacher}
-              <select value={cellTeacher} onChange={(e) => setCellTeacher(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
+              <select value={cellTeacher} onChange={(e) => setCellTeacher(e.target.value)} className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1">
                 <option value="">{t.editor.unassigned}</option>
                 {teachers.map((x) => (
                   <option key={x.id} value={x.id}>
@@ -752,30 +752,30 @@ export default function TimetableEditor({
             </label>
             <label className="text-xs text-[#5B6470]">
               {t.editor.room}
-              <input value={room} onChange={(e) => setRoom(e.target.value)} className="field w-full h-10 px-3 text-sm mt-1" maxLength={40} />
+              <input value={room} onChange={(e) => setRoom(e.target.value)} className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm mt-1" maxLength={40} />
             </label>
           </div>
           <div className="flex flex-wrap gap-4 mt-3">
-            <label className="flex items-center gap-1.5 text-xs text-[#5B6470]">
+            <label className="flex items-center gap-1.5 min-h-11 sm:min-h-0 text-xs text-[#5B6470]">
               <input type="checkbox" checked={cellLocked} onChange={(e) => setCellLocked(e.target.checked)} />
               🔒 {t.editor.lock}
             </label>
-            <label className="flex items-center gap-1.5 text-xs text-[#5B6470]">
+            <label className="flex items-center gap-1.5 min-h-11 sm:min-h-0 text-xs text-[#5B6470]">
               <input type="checkbox" checked={cellNonTeaching} onChange={(e) => setCellNonTeaching(e.target.checked)} />
               {t.editor.nonTeachingOption}
             </label>
           </div>
           {capWarning && <p className="text-sm text-[#9A6400] mt-2">⚠ {capWarning}</p>}
           {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-          <div className="flex items-center justify-between mt-3">
-            <button onClick={() => void clearCell()} disabled={busy} className="text-sm text-[#B42318] hover:underline">
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+            <button onClick={() => void clearCell()} disabled={busy} className="min-h-11 sm:min-h-0 text-sm text-[#B42318] hover:underline">
               {t.editor.clearCell}
             </button>
             <div className="flex items-center gap-2">
-              <button onClick={() => setEditing(null)} className="btn-ghost h-10 px-4 text-sm">
+              <button onClick={() => setEditing(null)} className="btn-ghost h-11 sm:h-10 px-4 text-sm">
                 {t.cancel}
               </button>
-              <button onClick={() => void saveCell()} disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
+              <button onClick={() => void saveCell()} disabled={busy} className="btn-primary h-11 sm:h-10 px-4 text-sm disabled:opacity-50">
                 {busy ? t.saving : t.save}
               </button>
             </div>

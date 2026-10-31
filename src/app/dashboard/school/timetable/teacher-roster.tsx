@@ -150,13 +150,13 @@ export default function TeacherRoster({
 
   return (
     <div className="card mt-6 p-4 print:hidden">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-start">
+      <button onClick={() => setOpen(!open)} className="w-full min-h-11 sm:min-h-0 flex items-center justify-between gap-3 text-start">
         <span className="font-medium text-sm">{fmt(t.roster.title, { n: rows.length })}</span>
         <span className="text-xs text-[#5B6470]">{open ? t.hide : t.show}</span>
       </button>
       {open && (
         <div className="overflow-x-auto mt-3">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full min-w-[640px] sm:min-w-0 text-sm border-collapse">
             <thead>
               <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
                 <th className="px-2 py-2 text-start font-normal">{t.roster.col.teacher}</th>
@@ -229,7 +229,7 @@ export default function TeacherRoster({
                 .sort((a, b) => (a.grade ?? "").localeCompare(b.grade ?? "") || a.name.localeCompare(b.name))
                 .map((c) => (
                   <label key={c.id} className="flex items-center gap-2 text-sm">
-                    <span className="w-44 truncate text-[#5B6470]" title={c.name}>
+                    <span className="w-28 sm:w-44 shrink-0 truncate text-[#5B6470]" title={c.name}>
                       {c.name}
                     </span>
                     {isAdmin ? (
@@ -237,7 +237,7 @@ export default function TeacherRoster({
                         value={staffIds.has(c.teacher_id) ? c.teacher_id : ""}
                         onChange={(e) => void reassign(c.id, e.target.value)}
                         disabled={ctBusy}
-                        className={`field h-8 px-2 text-sm ${staffIds.has(c.teacher_id) ? "" : "text-[#B42318]"}`}
+                        className={`field h-11 sm:h-8 px-2 text-base sm:text-sm min-w-0 flex-1 sm:flex-none ${staffIds.has(c.teacher_id) ? "" : "text-[#B42318]"}`}
                       >
                         {!staffIds.has(c.teacher_id) && <option value="">{`⚠ ${t.roster.assignPrompt}`}</option>}
                         {staff.map((member) => (

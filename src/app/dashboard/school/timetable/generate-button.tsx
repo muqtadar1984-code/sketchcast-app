@@ -72,13 +72,13 @@ export default function GenerateButton({
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="btn-primary h-9 px-4 text-sm">
+      <button onClick={() => setOpen(true)} className="btn-primary h-11 sm:h-9 px-4 text-sm">
         ✨ {t.button}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
           <div
-            className="card w-full max-w-2xl p-6 max-h-[90dvh] overflow-y-auto"
+            className="card w-full max-w-2xl p-4 sm:p-6 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg">{t.title}</h2>
@@ -87,7 +87,7 @@ export default function GenerateButton({
             <div className="space-y-2 mb-4">
               {subjects.map((s) => (
                 <div key={s} className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm w-36 shrink-0 text-[#14181F]">{s}</span>
+                  <span className="text-sm w-full sm:w-36 shrink-0 text-[#14181F]">{s}</span>
                   {teachers.map((teacher) => {
                     const on = (mapping[s] ?? []).includes(teacher.id);
                     return (
@@ -95,7 +95,7 @@ export default function GenerateButton({
                         key={teacher.id}
                         onClick={() => toggle(s, teacher.id)}
                         aria-pressed={on}
-                        className={`chip font-sans cursor-pointer ${on ? "bg-[#E2F4F1] text-[#0C8175]" : "bg-[#F4F6F3] text-[#98A0A9]"}`}
+                        className={`chip font-sans cursor-pointer max-sm:min-h-9 max-sm:px-3 max-sm:text-sm ${on ? "bg-[#E2F4F1] text-[#0C8175]" : "bg-[#F4F6F3] text-[#98A0A9]"}`}
                       >
                         {teacher.name.split(" ")[0]}
                       </button>
@@ -106,12 +106,12 @@ export default function GenerateButton({
               ))}
             </div>
 
-            <div className="flex items-center gap-4 mb-4 text-sm">
-              <label className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4 text-sm">
+              <label className="flex items-center gap-1.5 min-h-11 sm:min-h-0">
                 <input type="radio" checked={mode === "fill"} onChange={() => setMode("fill")} />
                 {t.modeFill}
               </label>
-              <label className="flex items-center gap-1.5">
+              <label className="flex items-center gap-1.5 min-h-11 sm:min-h-0">
                 <input type="radio" checked={mode === "replace"} onChange={() => setMode("replace")} />
                 {t.modeReplace}
               </label>
@@ -145,15 +145,15 @@ export default function GenerateButton({
               </div>
             )}
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs text-[#98A0A9]">
                 {fmt(t.staffed, { n: assignedCount, total: subjects.length })}
               </span>
               <div className="flex items-center gap-2">
-                <button onClick={() => setOpen(false)} className="btn-ghost h-10 px-4 text-sm">
+                <button onClick={() => setOpen(false)} className="btn-ghost h-11 sm:h-10 px-4 text-sm">
                   {result ? t.done : t.cancel}
                 </button>
-                <button onClick={() => void generate()} disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
+                <button onClick={() => void generate()} disabled={busy} className="btn-primary h-11 sm:h-10 px-4 text-sm disabled:opacity-50">
                   {busy ? t.generating : result ? t.runAgain : t.generate}
                 </button>
               </div>

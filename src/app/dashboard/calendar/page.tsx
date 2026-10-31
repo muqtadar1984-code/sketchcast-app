@@ -333,14 +333,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-4xl mb-2">{t.title}</h1>
+            <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
             <InkUnderline className="block h-3 w-28 mb-3" />
             <p className="text-[#5B6470]">{t.intro}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <SubscribeButton t={t.subscribe} />
             {canCreate && (
               <EventEditor
@@ -364,22 +364,27 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-8 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-8 mb-3">
           <h2 className="text-xl">{monthLabel}</h2>
           <div className="flex items-center gap-2">
-            <Link href={`/dashboard/calendar?m=${prev}`} className="btn-ghost h-9 px-3 text-sm">
+            <Link href={`/dashboard/calendar?m=${prev}`} className="btn-ghost inline-flex items-center h-11 sm:h-9 px-3 text-sm">
               <span className="rtl-flip">←</span> {t.prev}
             </Link>
-            <Link href="/dashboard/calendar" className="btn-ghost h-9 px-3 text-sm">
+            <Link href="/dashboard/calendar" className="btn-ghost inline-flex items-center h-11 sm:h-9 px-3 text-sm">
               {t.today}
             </Link>
-            <Link href={`/dashboard/calendar?m=${next}`} className="btn-ghost h-9 px-3 text-sm">
+            <Link href={`/dashboard/calendar?m=${next}`} className="btn-ghost inline-flex items-center h-11 sm:h-9 px-3 text-sm">
               {t.next} <span className="rtl-flip">→</span>
             </Link>
           </div>
         </div>
 
-        <div data-tour="calendar-grid" className="card overflow-hidden">
+        <div data-tour="calendar-grid" className="card overflow-x-auto">
+          {/* Seven columns of ~50 px cannot carry an event title on a phone, so
+              the month keeps a readable width and scrolls inside its card;
+              the Upcoming list below is the phone-shaped view of the same
+              events. */}
+          <div className="min-w-[560px] sm:min-w-0">
           {/* The column heads are FORMATTED, not listed: the grid always starts
               on a Monday, so the first seven cells name themselves in whatever
               language the page is being read in — no seven more keys to keep in
@@ -441,6 +446,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               );
             })}
           </div>
+          </div>
         </div>
 
         {(() => {
@@ -463,12 +469,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   {manageable.map((e) => {
                     const ed = editable(e);
                     return (
-                      <div key={`m-${e.id}`} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div key={`m-${e.id}`} className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3">
                         <div className="min-w-0">
                           <div className="text-sm text-[#14181F] truncate">{e.title}</div>
                           <div className="text-xs text-[#5B6470]">{subLine(e)}</div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 sm:shrink-0">
                           <span className={`chip font-sans ${KIND_STYLE[e.kind] ?? KIND_STYLE.other}`}>
                             {kindLabel(e.kind)}
                           </span>
@@ -495,7 +501,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   </p>
                   <div className="card divide-y divide-[#EEF0EC] bg-[#FAFBF9]">
                     {pulled.map((e) => (
-                      <div key={`w-${e.id}`} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div key={`w-${e.id}`} className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-sm text-[#98A0A9] line-through truncate">{e.title}</div>
                           <div className="text-xs text-[#98A0A9]">{subLine(e)}</div>
@@ -519,7 +525,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             {upcoming.map((e) => {
               const ed = canManage(e) ? editable(e) : null;
               return (
-                <div key={e.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                <div key={e.id} className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3">
                   <div className="min-w-0">
                     <div className="text-sm text-[#14181F] truncate">{e.title}</div>
                     <div className="text-xs text-[#5B6470]">
@@ -527,7 +533,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                       {e.location ? ` · ${e.location}` : ""}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 sm:shrink-0">
                     <span className={`chip font-sans ${KIND_STYLE[e.kind] ?? KIND_STYLE.other}`}>
                       {kindLabel(e.kind)}
                     </span>
