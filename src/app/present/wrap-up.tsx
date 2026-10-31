@@ -132,7 +132,7 @@ export default function WrapUp({ sessionId, roll, t, onDone }: Props) {
 
   const chars = (body ?? "").trim().length;
   const over = chars > MAX_BODY;
-  const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-4 py-2.5 text-sm pointer-coarse:min-h-11 text-[#C2CCC7]";
+  const btn = "rounded-lg border border-[#2A363B] bg-[#141B1F] px-4 py-2.5 text-sm text-[#C2CCC7]";
 
   return (
     <section className="mx-auto grid w-full max-w-2xl gap-4 p-6">

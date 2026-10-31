@@ -124,8 +124,8 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
   const shell = (body: React.ReactNode) => (
     <>
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-6 py-10">
+        <h1 className="text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7 max-w-3xl">{t.subtitle}</p>
         {body}

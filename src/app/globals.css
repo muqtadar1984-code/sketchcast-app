@@ -434,14 +434,16 @@ html {
   }
 }
 
-/* Inputs go to 16px on touch: anything smaller makes iOS Safari zoom the whole
-   page in on focus and leave it zoomed. Deliberately UNlayered, so it beats the
-   text-sm the fields carry. */
-@media (pointer: coarse) {
-  input.field,
-  select.field,
-  textarea.field {
-    font-size: 16px;
+/* Inputs never drop below 16px on a phone or any touch screen: anything
+   smaller makes iOS Safari zoom the whole page in on focus and leave it
+   zoomed. Every input, not only .field — plenty of fields are hand-styled.
+   Deliberately UNlayered, so it beats the text-sm/text-xs they carry; max()
+   keeps a field that is already bigger at its own size. */
+@media (max-width: 639px), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
   }
 }
 
@@ -449,7 +451,7 @@ html {
    problem", the feedback chip — sit clear of the home indicator and of a
    landscape notch. A margin, not a new bottom/inset, so each widget keeps the
    offset classes it already has (and the tests that pin them). */
-[data-sk="launcher"],
+[data-sk="launcher"]:not([data-sk-board]),
 [data-corner] {
   margin-bottom: env(safe-area-inset-bottom, 0px);
   margin-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
@@ -471,14 +473,8 @@ html {
   body:has([data-corner]) {
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
-  body:has([data-sk="launcher"]) {
+  /* Not on the Board: /present lays itself out (its own phone layout). */
+  body:has([data-sk="launcher"]:not([data-sk-board])) {
     padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
-  }
-
-  /* The Board: on a phone the stage's "corner" video is a full-width strip
-     pinned to the top (stage.tsx), so everything else starts below it and
-     scrolls underneath. 56.25vw is the strip's 16:9 height. */
-  body:has([data-stage-mode="corner"]) {
-    padding-top: calc(56.25vw + env(safe-area-inset-top, 0px));
   }
 }

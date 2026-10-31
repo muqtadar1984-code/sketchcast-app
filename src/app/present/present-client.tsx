@@ -716,7 +716,7 @@ export default function PresentClient({
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
-            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm pointer-coarse:min-h-11 text-[#C2CCC7]"
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm text-[#C2CCC7]"
             data-board="menu"
           >
             ≡ {t.bar.menu}
@@ -746,7 +746,7 @@ export default function PresentClient({
           value={classId ?? ""}
           disabled={locked}
           onChange={(e) => setPickedClass(e.target.value || null)}
-          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm pointer-coarse:min-h-11 disabled:opacity-60"
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
         >
           <option value="">{t.bar.noClass}</option>
           {classes.map((c) => (
@@ -761,7 +761,7 @@ export default function PresentClient({
           value={shownBookId ?? ""}
           disabled={locked || adopting}
           onChange={(e) => setPick({ book: e.target.value || null, chapter: null, kit: null })}
-          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm pointer-coarse:min-h-11 disabled:opacity-60"
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
         >
           <option value="">{t.bar.chooseBook}</option>
           {books.map((b) => (
@@ -781,7 +781,7 @@ export default function PresentClient({
             // kit) or after the kit chooser below (several)
             setPick({ book: shownBookId, chapter: num, kit: null });
           }}
-          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm pointer-coarse:min-h-11 disabled:opacity-40"
+          className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-40"
         >
           <option value="">{t.bar.chooseChapter}</option>
           {chapters.map((c) => (
@@ -804,7 +804,7 @@ export default function PresentClient({
               const id = e.target.value;
               if (id) void adoptAndPick({ bookId: chooserBook.id, chapterNum: chooserChapter, kit: id }, null);
             }}
-            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm pointer-coarse:min-h-11 disabled:opacity-60"
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
           >
             <option value="">{t.bar.chooseProductKit}</option>
             {chapterKits.map((k, i) => (
@@ -834,7 +834,7 @@ export default function PresentClient({
               if (k?.adopt) void adoptAndPick({ catalogueKit: k.adopt.catalogueKit }, k.id);
               else setPick(e.target.value ? { book: null, chapter: null, kit: e.target.value } : { book: null, chapter: null, kit: null });
             }}
-            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm pointer-coarse:min-h-11 disabled:opacity-60"
+            className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-sm disabled:opacity-60"
           >
             <option value="">{t.bar.chooseKit}</option>
             {allKits.some((k) => !k.adopt) && (

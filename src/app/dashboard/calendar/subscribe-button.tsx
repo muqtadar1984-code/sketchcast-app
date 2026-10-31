@@ -67,7 +67,7 @@ export default function SubscribeButton({ t }: { t: Dictionary["comms"]["calenda
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div className="card w-full max-w-md p-6 space-y-3 max-h-[90dvh] overflow-y-auto max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="card w-full max-w-md p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg">{t.title}</h2>
             <p className="text-sm text-[#5B6470]">
               {/* Menu breadcrumbs: the arrows walk you through a menu, so they

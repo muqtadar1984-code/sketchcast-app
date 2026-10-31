@@ -171,7 +171,7 @@ export default async function ProgressReportPage({
           would bleed everywhere. This <style> only exists on THIS page. */}
       <style>{`@media print { header { display: none !important } }`}</style>
       <AppHeader />
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10 print:py-2">
+      <main className="max-w-4xl mx-auto px-6 py-10 print:py-2">
         {/* The dated line that makes the printout stand on its own. */}
         <p className="hidden print:block text-sm text-[#5B6470] mb-4">
           SketchCast — {t.title} — {d(today.toISOString())}
@@ -179,7 +179,7 @@ export default async function ProgressReportPage({
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl sm:text-4xl mb-1">{t.title}</h1>
+            <h1 className="text-4xl mb-1">{t.title}</h1>
             <InkUnderline className="block h-3 w-28 mb-3 print:hidden" />
             <p className="text-2xl font-display mb-2">{learnerName}</p>
             <p className="text-xs text-[#5B6470]">
