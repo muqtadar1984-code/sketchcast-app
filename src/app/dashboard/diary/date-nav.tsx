@@ -54,16 +54,16 @@ export default function DateNav({
     timeZone: "UTC", // the key IS the civil day — don't re-shift it
   });
   return (
-    <div className="flex items-center gap-2 mb-6">
-      <Link href={href(shiftDay(day, -1))} aria-label={t.previousDay} className="btn-ghost h-9 px-3 text-sm">
+    <div className="flex flex-wrap items-center gap-2 mb-6">
+      <Link href={href(shiftDay(day, -1))} aria-label={t.previousDay} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
         <span className="rtl-flip">←</span>
       </Link>
-      <span className="font-display text-lg whitespace-nowrap">{label}</span>
-      <Link href={href(shiftDay(day, 1))} aria-label={t.nextDay} className="btn-ghost h-9 px-3 text-sm">
+      <span className="font-display text-lg sm:whitespace-nowrap">{label}</span>
+      <Link href={href(shiftDay(day, 1))} aria-label={t.nextDay} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
         <span className="rtl-flip">→</span>
       </Link>
       {day !== today && (
-        <Link href={href(today)} className="text-sm font-medium text-[#0C8175] hover:underline ms-1">
+        <Link href={href(today)} className="inline-flex items-center min-h-11 sm:min-h-0 text-sm font-medium text-[#0C8175] hover:underline ms-1">
           {t.today}
         </Link>
       )}

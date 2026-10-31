@@ -74,22 +74,22 @@ export default function ParentCompose({
 
   if (!open)
     return (
-      <div data-tour="diary-parent-compose" className="px-5 py-3">
-        <button onClick={() => setOpen(true)} className="btn-ghost h-9 px-3 text-sm">
+      <div data-tour="diary-parent-compose" className="px-4 sm:px-5 py-3">
+        <button onClick={() => setOpen(true)} className="btn-ghost h-11 sm:h-9 px-3 text-sm text-start">
           + {fmt(t.open, { name: childName })}
         </button>
       </div>
     );
 
   return (
-    <form data-tour="diary-parent-compose" onSubmit={submit} className="px-5 py-3">
+    <form data-tour="diary-parent-compose" onSubmit={submit} className="px-4 sm:px-5 py-3">
       <div className="flex flex-wrap gap-1.5 mb-2">
         {NOTE_TYPES.map((nt) => (
           <button
             key={nt}
             type="button"
             onClick={() => setType(nt)}
-            className={`chip font-sans normal-case tracking-normal ${
+            className={`chip min-h-11 sm:min-h-0 font-sans normal-case tracking-normal ${
               type === nt ? TYPE_STYLE[nt] : "bg-white border border-[#E6E8E4] text-[#5B6470]"
             }`}
           >
@@ -104,14 +104,14 @@ export default function ParentCompose({
         maxLength={4000}
         rows={3}
         placeholder={fmt(t.placeholder, { name: childName })}
-        className="field px-3 py-2 w-full text-sm"
+        className="field px-3 py-2 w-full text-base sm:text-sm"
       />
-      <label className="mt-2 flex items-start gap-1.5 text-sm text-[#5B6470]">
+      <label className="mt-2 flex items-start gap-2 sm:gap-1.5 text-sm text-[#5B6470]">
         <input
           type="checkbox"
           checked={childCanSee}
           onChange={(e) => setChildCanSee(e.target.checked)}
-          className="accent-[#0C8175] mt-1"
+          className="h-5 w-5 sm:h-auto sm:w-auto shrink-0 accent-[#0C8175] mt-0.5 sm:mt-1"
         />
         <span>
           {fmt(t.letChildSee, { name: childName })}
@@ -119,10 +119,10 @@ export default function ParentCompose({
         </span>
       </label>
       <div className="mt-2 flex items-center gap-2">
-        <button type="submit" disabled={busy || !body.trim()} className="btn-primary h-9 px-4 text-sm">
+        <button type="submit" disabled={busy || !body.trim()} className="btn-primary h-11 sm:h-9 px-4 text-sm">
           {busy ? t.saving : t.addToDiary}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-9 px-3 text-sm">
+        <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
           {t.cancel}
         </button>
       </div>

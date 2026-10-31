@@ -184,8 +184,8 @@ export default async function ChildrenPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">{t.subtitle}</p>
 
@@ -213,9 +213,12 @@ export default async function ChildrenPage() {
             const name = l.profiles?.full_name || l.profiles?.username || dict.school.fallback.child;
             const renderRows = (rows: ChildItem[]) =>
               rows.map((it, i) => (
-                <div key={i} className="px-5 py-2.5 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="min-w-0 truncate">
+                <div key={i} className="px-4 sm:px-5 py-2.5 text-sm">
+                  {/* Phone: the title wraps and the score/status drop to their
+                      own line — `truncate` on a 390px row cut the source and
+                      due date off entirely. One line again from sm up. */}
+                  <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                    <span className="min-w-0 break-words sm:truncate">
                       {it.label} <span className="text-xs text-[#5B6470]">· {fmt(t.from, { source: it.from })}</span>
                       {it.due && (
                         <span className={`text-xs ms-2 ${it.overdue ? "text-[#B3401F]" : "text-[#5B6470]"}`}>
@@ -236,25 +239,29 @@ export default async function ChildrenPage() {
                     </p>
                   )}
                   {coachOn && it.kind === "presentation" && (
-                    <div className="mt-1.5 flex items-center gap-3 text-xs">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                       <CoachRecap studentId={l.child_id} generationId={it.genId} />
-                      <AskCoachButton generationId={it.genId} chapterLabel={it.label} className="font-medium text-[#0C8175] hover:underline" />
+                      <AskCoachButton generationId={it.genId} chapterLabel={it.label} className="min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline" />
                     </div>
                   )}
                 </div>
               ));
             return (
               <div key={l.child_id} data-tour="child-assignments" className="card divide-y divide-[#EEF0EC]">
-                <div className="px-5 py-3 flex items-center justify-between gap-3">
-                  <span className="font-medium text-lg font-display truncate">{name}</span>
-                  <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
+                {/* Phone: the name takes its own line and the actions wrap
+                    beneath it. As one shrink-0 row, Report + Reset password +
+                    Delete (and Reset's inline confirm) pushed the page wider
+                    than 390px. */}
+                <div className="px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="min-w-0 font-medium text-lg font-display break-words sm:truncate">{name}</span>
+                  <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#5B6470]">
                     {!l.verified_at && <span>{t.unverified}</span>}
                     {/* The printable per-child record (assignments, completions,
                         scores) — same report a teacher prints per student. */}
                     <Link
                       href={`/dashboard/reports/${l.child_id}`}
                       data-tour="child-report"
-                      className="font-medium text-[#0C8175] hover:underline"
+                      className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline"
                     >
                       {dict.reports.title}
                     </Link>
@@ -263,14 +270,14 @@ export default async function ChildrenPage() {
                   </span>
                 </div>
                 {weekCards[l.child_id] && <WeekCard card={weekCards[l.child_id]} t={t.week} />}
-                <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                <p data-tour="progress-recap" className="px-4 sm:px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                   {fmt(t.schoolWork, { n: school.length })}
                 </p>
-                {school.length ? renderRows(school) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.noSchoolWork}</p>}
-                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                {school.length ? renderRows(school) : <p className="px-4 sm:px-5 py-2.5 text-sm text-[#98A0A9]">{t.noSchoolWork}</p>}
+                <p className="px-4 sm:px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                   {fmt(t.yourWork, { n: mine.length })}
                 </p>
-                {mine.length ? renderRows(mine) : <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.noTestPapers}</p>}
+                {mine.length ? renderRows(mine) : <p className="px-4 sm:px-5 py-2.5 text-sm text-[#98A0A9]">{t.noTestPapers}</p>}
               </div>
             );
           })}

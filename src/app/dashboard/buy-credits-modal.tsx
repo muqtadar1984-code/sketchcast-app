@@ -157,13 +157,13 @@ export default function BuyCreditsModal({
         // background. "Buy credits" is short in English and fits everywhere
         // measured — but the meter's other button proved the failure mode, and
         // a floor costs nothing.
-        className="btn-primary min-h-[2.25rem] px-4 py-1.5 text-sm"
+        className="btn-primary min-h-11 sm:min-h-[2.25rem] px-4 py-1.5 text-sm"
       >
         {t.buyTitle}
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-x-0 top-0 h-[100dvh] z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#14181F]/40" onClick={close} aria-hidden />
           {/* max-h + overflow, copied from feedback-questionnaire.tsx, which is
               this same shell built right. Without the pair the panel is a
@@ -183,7 +183,7 @@ export default function BuyCreditsModal({
             role="dialog"
             aria-modal="true"
             aria-label={t.buyTitle}
-            className="relative card w-full max-w-md p-6 space-y-3 max-h-[90dvh] overflow-y-auto overscroll-contain"
+            className="relative card w-full max-w-md p-5 sm:p-6 space-y-3 max-h-[90dvh] overflow-y-auto overscroll-contain"
           >
             <h2 className="font-display text-base font-medium">{t.buyTitle}</h2>
             <p className="text-sm text-[#5B6470]">{t.buyHint}</p>
@@ -275,7 +275,7 @@ export default function BuyCreditsModal({
             </p>
 
             <div className="flex justify-end pt-1">
-              <button type="button" onClick={close} className="btn-ghost h-9 px-3 text-sm">
+              <button type="button" onClick={close} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
                 <bdi>{t.buyClose}</bdi>
               </button>
             </div>

@@ -261,14 +261,14 @@ export default async function ParentDiary({
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className={`text-[#5B6470] ${teacherHref ? "mb-2" : "mb-6"}`}>{t.parentIntro}</p>
         {teacherHref && (
           <p className="text-sm text-[#5B6470] mb-6">
             {t.viewingAsParent} ·{" "}
-            <Link href={teacherHref} className="font-medium text-[#0C8175] hover:underline">
+            <Link href={teacherHref} className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline">
               {t.backToClassDiary}
             </Link>
           </p>
@@ -301,18 +301,18 @@ export default async function ParentDiary({
               .join(", ");
             return (
               <div key={l.child_id} className="card divide-y divide-[#EEF0EC]">
-                <div className="px-5 py-3 flex items-center justify-between gap-3">
-                  <span className="font-medium text-lg font-display truncate">{childName}</span>
-                  {classLabels && <span className="text-xs text-[#5B6470] shrink-0">{classLabels}</span>}
+                <div className="px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+                  <span className="min-w-0 font-medium text-lg font-display break-words sm:truncate">{childName}</span>
+                  {classLabels && <span className="min-w-0 text-xs text-[#5B6470] break-words">{classLabels}</span>}
                 </div>
 
-                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                <p className="px-4 sm:px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                   {fmt(t.fromClassroom, { count: entries.length })}
                 </p>
                 {entries.length ? (
                   entries.map((e, i) => (
-                    <div key={i} className="px-5 py-2.5 text-sm flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate">
+                    <div key={i} className="px-4 sm:px-5 py-2.5 text-sm flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <span className="min-w-0 break-words sm:truncate">
                         {e.label} <span className="text-xs text-[#5B6470]">· {e.detail}</span>
                       </span>
                       <span className="flex items-center gap-2 shrink-0">
@@ -336,10 +336,10 @@ export default async function ParentDiary({
                     </div>
                   ))
                 ) : (
-                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.nothingRecorded}</p>
+                  <p className="px-4 sm:px-5 py-2.5 text-sm text-[#98A0A9]">{t.nothingRecorded}</p>
                 )}
 
-                <p className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
+                <p className="px-4 sm:px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                   {fmt(t.notesHeading, { count: childNotes.length })}
                 </p>
                 {childNotes.length ? (
@@ -381,7 +381,7 @@ export default async function ParentDiary({
                     );
                   })
                 ) : (
-                  <p className="px-5 py-2.5 text-sm text-[#98A0A9]">{t.noNotes}</p>
+                  <p className="px-4 sm:px-5 py-2.5 text-sm text-[#98A0A9]">{t.noNotes}</p>
                 )}
 
                 <ParentCompose studentId={l.child_id} childName={childName} entryDate={day} t={composeT} />

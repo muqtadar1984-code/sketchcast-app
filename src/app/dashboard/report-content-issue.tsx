@@ -94,15 +94,15 @@ export default function ReportContentIssue({ generationId }: { generationId: str
   return (
     <span className="inline-block">
       {!open && !issueId && (
-        <button onClick={() => setOpen(true)} className="text-xs text-[#98A0A9] hover:text-[#B3401F]">
+        <button onClick={() => setOpen(true)} className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-[#98A0A9] hover:text-[#B3401F]">
           Report an issue
         </button>
       )}
 
       {open && !issueId && (
-        <form onSubmit={submit} className="card p-3 mt-1 w-72 shadow-lg text-start">
+        <form onSubmit={submit} className="card p-3 mt-1 w-72 max-w-full shadow-lg text-start">
           <p className="text-xs font-medium mb-2">What&apos;s wrong with this item?</p>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="field h-8 px-2 text-xs w-full mb-2">
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className="field h-11 sm:h-8 px-2 text-base sm:text-xs w-full mb-2">
             {OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -113,14 +113,14 @@ export default function ReportContentIssue({ generationId }: { generationId: str
             rows={2}
             maxLength={2000}
             placeholder="Anything that helps (optional)"
-            className="field px-2 py-1.5 text-xs w-full mb-2"
+            className="field px-2 py-1.5 text-base sm:text-xs w-full mb-2"
           />
           {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
           <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-8 px-2 text-xs">
+            <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-11 sm:h-8 px-2 text-xs">
               Cancel
             </button>
-            <button type="submit" disabled={busy} className="btn-primary h-8 px-3 text-xs">
+            <button type="submit" disabled={busy} className="btn-primary h-11 sm:h-8 px-3 text-xs">
               {busy ? "Sending…" : "Diagnose it"}
             </button>
           </div>

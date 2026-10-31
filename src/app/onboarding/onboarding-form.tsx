@@ -172,7 +172,7 @@ export default function OnboardingForm({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`rounded-full border px-3 py-1.5 text-sm ${
+      className={`min-h-11 sm:min-h-0 rounded-full border px-3 py-1.5 text-sm ${
         selected
           ? "border-[#1FB8A6] bg-[#E2F4F1] text-[#0C8175]"
           : "border-[#E6E8E4] bg-white text-[#5B6470] hover:border-[#CBD2CC]"
@@ -190,8 +190,8 @@ export default function OnboardingForm({
   );
 
   return (
-    <main className="min-h-screen flex items-start sm:items-center justify-center bg-[#FCFCFA] px-4 py-10">
-      <div className="w-full max-w-lg card rounded-2xl p-8">
+    <main className="min-h-screen flex items-start sm:items-center justify-center bg-[#FCFCFA] px-4 py-6 sm:py-10">
+      <div className="w-full max-w-lg card rounded-2xl p-5 sm:p-8">
         <div className="flex items-center gap-2.5 mb-1">
           <LogoMark size={34} />
           <h1 className="text-2xl">{t.title}</h1>
@@ -410,7 +410,7 @@ export default function OnboardingForm({
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 [overflow-wrap:anywhere]">{error}</p>}
           {attempted && !ready && !error && (
             <p className="text-sm text-[#C0392B]">{t.completeRequired}</p>
           )}

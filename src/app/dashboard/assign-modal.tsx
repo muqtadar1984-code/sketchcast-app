@@ -218,17 +218,23 @@ export default function AssignModal({
       <button
         onClick={() => void openModal()}
         disabled={preparing}
-        className="text-xs font-medium text-[#9A6400] hover:underline whitespace-nowrap disabled:opacity-60"
+        className="inline-flex items-center min-h-11 sm:min-h-0 text-xs font-medium text-[#9A6400] hover:underline whitespace-nowrap disabled:opacity-60"
       >
         {label}
       </button>
       {open && (
+        // inset-x-0 top-0 h-[100dvh], not inset-0: on a phone inset-0's bottom
+        // is the LARGE viewport (browser chrome hidden), so a centred panel sat
+        // low and its Assign button could land under the URL bar. The panel
+        // scrolls inside itself (max-h + overflow) for long child lists and
+        // the on-screen keyboard; inputs are text-base below sm because iOS
+        // zooms the page on focus under 16px.
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-x-0 top-0 h-[100dvh] z-50 flex items-center justify-center bg-black/40 p-4"
           onClick={() => !busy && setOpen(false)}
         >
           <div
-            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm"
+            className="bg-white rounded-xl border border-[#E6E8E4] p-5 w-full max-w-sm max-h-[90dvh] overflow-y-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-medium mb-1" style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}>
@@ -252,7 +258,7 @@ export default function AssignModal({
                   <p className="text-sm text-[#5B6470]">{t.assignModal.noChildren}</p>
                   <a
                     href="/dashboard/children"
-                    className="text-xs font-medium text-[#0C8175] hover:underline"
+                    className="inline-flex items-center min-h-11 sm:min-h-0 text-xs font-medium text-[#0C8175] hover:underline"
                   >
                     {t.assignModal.manageChildren}
                   </a>
@@ -263,12 +269,12 @@ export default function AssignModal({
                     <span className="text-xs text-[#5B6470]">{t.assignModal.childrenLabel}</span>
                     <div className="mt-1 space-y-0.5">
                       {(childTargets ?? []).map((c) => (
-                        <label key={c.id} className="flex items-center gap-2 text-sm py-0.5 cursor-pointer">
+                        <label key={c.id} className="flex items-center gap-2 text-sm min-h-11 sm:min-h-0 py-0.5 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={picked.has(c.id)}
                             onChange={() => toggleChild(c.id)}
-                            className="accent-[#0C8175]"
+                            className="h-5 w-5 sm:h-auto sm:w-auto accent-[#0C8175]"
                           />
                           {c.name}
                         </label>
@@ -281,7 +287,7 @@ export default function AssignModal({
                       type="date"
                       value={due}
                       onChange={(e) => setDue(e.target.value)}
-                      className="w-full h-9 px-3 mt-1 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
+                      className="w-full h-11 sm:h-9 px-3 mt-1 rounded-lg border border-[#E6E8E4] text-base sm:text-sm outline-none focus:border-[#1FB8A6]"
                     />
                   </label>
                   {error && <p className="text-xs text-red-600">{error}</p>}
@@ -289,14 +295,14 @@ export default function AssignModal({
                     <button
                       onClick={() => setOpen(false)}
                       disabled={busy}
-                      className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
+                      className="h-11 sm:h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
                     >
                       {t.common.cancel}
                     </button>
                     <button
                       onClick={assignToChildren}
                       disabled={busy}
-                      className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
+                      className="h-11 sm:h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
                     >
                       {busy ? t.assignModal.assigning : t.assignModal.assign}
                     </button>
@@ -310,20 +316,20 @@ export default function AssignModal({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder={t.assignModal.namePlaceholder}
-                  className="w-full h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
+                  className="w-full h-11 sm:h-9 px-3 rounded-lg border border-[#E6E8E4] text-base sm:text-sm outline-none focus:border-[#1FB8A6]"
                 />
                 <input
                   value={newGrade}
                   onChange={(e) => setNewGrade(e.target.value)}
                   placeholder={t.assignModal.gradePlaceholder}
-                  className="w-full h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
+                  className="w-full h-11 sm:h-9 px-3 rounded-lg border border-[#E6E8E4] text-base sm:text-sm outline-none focus:border-[#1FB8A6]"
                 />
                 {error && <p className="text-xs text-red-600">{error}</p>}
                 <div className="flex justify-end gap-2 pt-1">
                   {classList.length > 0 && (
                     <button
                       onClick={() => setCreating(false)}
-                      className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
+                      className="h-11 sm:h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
                     >
                       {t.assignModal.back}
                     </button>
@@ -331,7 +337,7 @@ export default function AssignModal({
                   <button
                     onClick={createClass}
                     disabled={busy}
-                    className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
+                    className="h-11 sm:h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
                   >
                     {busy ? t.assignModal.creating : t.assignModal.createClass}
                   </button>
@@ -344,7 +350,7 @@ export default function AssignModal({
                   <select
                     value={classId}
                     onChange={(e) => setClassId(e.target.value)}
-                    className="w-full h-9 px-2 mt-1 rounded-lg border border-[#E6E8E4] text-sm bg-white outline-none focus:border-[#1FB8A6]"
+                    className="w-full h-11 sm:h-9 px-2 mt-1 rounded-lg border border-[#E6E8E4] text-base sm:text-sm bg-white outline-none focus:border-[#1FB8A6]"
                   >
                     {classList.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -356,7 +362,7 @@ export default function AssignModal({
                 </label>
                 <button
                   onClick={() => setCreating(true)}
-                  className="text-xs font-medium text-[#0C8175] hover:underline"
+                  className="inline-flex items-center min-h-11 sm:min-h-0 text-xs font-medium text-[#0C8175] hover:underline"
                 >
                   {t.assignModal.addClass}
                 </button>
@@ -366,7 +372,7 @@ export default function AssignModal({
                     type="date"
                     value={due}
                     onChange={(e) => setDue(e.target.value)}
-                    className="w-full h-9 px-3 mt-1 rounded-lg border border-[#E6E8E4] text-sm outline-none focus:border-[#1FB8A6]"
+                    className="w-full h-11 sm:h-9 px-3 mt-1 rounded-lg border border-[#E6E8E4] text-base sm:text-sm outline-none focus:border-[#1FB8A6]"
                   />
                 </label>
                 {error && <p className="text-xs text-red-600">{error}</p>}
@@ -374,14 +380,14 @@ export default function AssignModal({
                   <button
                     onClick={() => setOpen(false)}
                     disabled={busy}
-                    className="h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
+                    className="h-11 sm:h-9 px-3 rounded-lg border border-[#E6E8E4] text-sm hover:bg-[#F5F6F3]"
                   >
                     {t.common.cancel}
                   </button>
                   <button
                     onClick={assign}
                     disabled={busy}
-                    className="h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
+                    className="h-11 sm:h-9 px-4 rounded-lg bg-[#14181F] text-white text-sm font-medium hover:bg-[#20262F] disabled:opacity-50"
                   >
                     {busy ? t.assignModal.assigning : t.assignModal.assign}
                   </button>
