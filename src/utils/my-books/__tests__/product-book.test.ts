@@ -188,7 +188,7 @@ describe("myBookTiles with chapters", () => {
 
   it("a book the reader holds gets its chapters; a child's book (parent view) does not", async () => {
     let asked = 0;
-    const deps = { sign: async () => null, skOpen: true, chapters: async () => (asked++, await productChapters(data({ map: [] }), { sign, boardOn: false })) };
+    const deps = { sign: async () => null, chapters: async () => (asked++, await productChapters(data({ map: [] }), { sign, boardOn: false })) };
     const [own] = await myBookTiles([mine], deps);
     expect(own.chapters).toHaveLength(4);
     const [kid] = await myBookTiles([{ ...mine, forChildren: ["Aisyah"] }], deps);
@@ -197,11 +197,11 @@ describe("myBookTiles with chapters", () => {
   });
 
   it("no chapters loader, or a loader that fails → the plain tile", async () => {
-    const [plain] = await myBookTiles([mine], { sign: async () => null, skOpen: false });
+    const [plain] = await myBookTiles([mine], { sign: async () => null });
     expect(plain.chapters).toBeNull();
     const err = console.error;
     console.error = () => {};
-    const [failed] = await myBookTiles([mine], { sign: async () => null, skOpen: false, chapters: async () => Promise.reject(new Error("boom")) });
+    const [failed] = await myBookTiles([mine], { sign: async () => null, chapters: async () => Promise.reject(new Error("boom")) });
     console.error = err;
     expect(failed.chapters).toBeNull();
   });

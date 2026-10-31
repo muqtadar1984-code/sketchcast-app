@@ -62,16 +62,17 @@ import { splitSentences } from "../speech";
 
 const ids = (stops: PlannedStop[]) => stops.map((s) => s.id);
 
-const TEACHER_ALL: WalkFacts = { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true, skTutor: true };
+const TEACHER_ALL: WalkFacts = { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true };
 
 /** The teacher's tour in order (founder feedback 2026-10-30: precise and
  *  complete; then "combine steps 3 to 6" → openBook, "14, 15 and 16" → setup). */
 // 2026-10-31 (founder: "bring it down to less than 4 minutes"): same-page
 // neighbours folded into combined stops (kit, classBoard, readyMade,
-// insights, bellLanguage, skHelp): 29 stops -> 22.
+// insights, bellLanguage, skHelp): 29 stops -> 22. 2026-10-31 (founder:
+// "remove sk tutor"): readyMade (kits + the SK Tutor tab) is the kits stop alone.
 const TEACHER_ORDER = [
   "hello", "library", "openBook", "generate", "kit", "assign", "boardBridge", "more",
-  "setup", "myBooks", "plan", "classBoard", "readyMade", "diary", "insights", "timetable", "calendar",
+  "setup", "myBooks", "plan", "classBoard", "kits", "diary", "insights", "timetable", "calendar",
   "bellLanguage", "settings", "skHelp", "reportProblem", "uploadNow",
 ];
 const partIds = (s: PlannedStop | undefined) => (s?.parts ?? []).map((p) => p.id);
@@ -98,24 +99,23 @@ describe("needHolds / resolveRoute", () => {
     expect(needHolds("diary", {})).toBe(true);
     expect(needHolds("diary", { diary: false })).toBe(false);
     expect(needHolds("class", {})).toBe(false);
-    expect(needHolds("tutor", {})).toBe(false);
     expect(needHolds("children", {})).toBe(false);
-    expect(needHolds("!tutor", {})).toBe(true);
+    expect(needHolds("!children", {})).toBe(true);
     expect(needHolds("!schoolParent", { schoolParent: true })).toBe(false);
   });
   it("fills the tokens; a missing query value drops the parameter, a missing path value kills the route", () => {
     expect(resolveRoute("/dashboard/diary?c={classId}", { classId: "a b" })).toBe("/dashboard/diary?c=a%20b");
     expect(resolveRoute("/present?class={classId}", {})).toBe("/present");
-    expect(resolveRoute("{tutorPath}", { tutorPath: "/sk/bio/3" })).toBe("/sk/bio/3");
-    expect(resolveRoute("{tutorPath}", {})).toBeNull();
+    expect(resolveRoute("/dashboard?book={bookId}", { bookId: "b3" })).toBe("/dashboard?book=b3");
+    expect(resolveRoute("/x/{bookId}", {})).toBeNull();
     expect(routePath("/dashboard/diary?c=1")).toBe("/dashboard/diary");
   });
 });
 
 describe("planWalk: per-role stops as built", () => {
-  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close → 22 folded, student 11 → 16, parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
+  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close → 22 folded, student 11 → 16 → 12 without SK Tutor, parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
     expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(22);
-    expect(planWalk("student", { diary: true, tutorPath: "/sk/bio/1" })).toHaveLength(16);
+    expect(planWalk("student", { diary: true })).toHaveLength(12);
     expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(16);
     // Home educator: Library + kits in, notices + Test Papers out.
     expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(17);
@@ -133,14 +133,15 @@ describe("planWalk: per-role stops as built", () => {
     expect(partIds(p.find((s) => s.id === "setup"))).toEqual(["upload", "classes", "branding"]);
     expect(partIds(p.find((s) => s.id === "kit"))).toEqual(["pieces", "downloads", "rerun"]);
     expect(partIds(p.find((s) => s.id === "classBoard"))).toEqual(["board", "boardSk"]);
-    expect(partIds(p.find((s) => s.id === "readyMade"))).toEqual(["kits", "skTutor"]);
+    expect(p.find((s) => s.id === "kits")?.parts).toBeUndefined();
+    expect(p.find((s) => s.id === "kits")?.route).toBe("/dashboard/kits");
     expect(partIds(p.find((s) => s.id === "insights"))).toEqual(["analytics", "gradeQueue"]);
     expect(partIds(p.find((s) => s.id === "bellLanguage"))).toEqual(["notifications", "language"]);
     expect(partIds(p.find((s) => s.id === "skHelp"))).toEqual(["skMenu", "skAsk"]);
     expect(p.find((s) => s.id === "diary")?.route).toBe("/dashboard/diary?c=c1");
     expect(p.find((s) => s.id === "classBoard")?.route).toBe("/present?class=c1");
     expect(p.find((s) => s.id === "generate")?.demo).toBe("lessonPrepare");
-    expect(p.find((s) => s.id === "readyMade")?.chips).toEqual(["lessonOnPhotosynthesis"]);
+    expect(p.find((s) => s.id === "kits")?.chips).toEqual(["lessonOnPhotosynthesis"]);
     expect(p.find((s) => s.id === "insights")?.demo).toBe("markingGrade");
     // The bridge comes right before More (founder 2026-10-30).
     expect(ids(p).indexOf("boardBridge")).toBe(ids(p).indexOf("more") - 1);
@@ -225,13 +226,14 @@ describe("planWalk: per-role stops as built", () => {
     const nb = ids(planWalk("teacher", { ...TEACHER_ALL, board: false }));
     for (const id of ["boardBridge", "classBoard"]) expect(nb).not.toContain(id);
   });
-  it("student with no SK book: one neutral line instead of stops 6–9", () => {
-    const p = planWalk("student", { diary: true });
-    expect(ids(p)).toContain("tutorNone");
-    for (const id of ["skBooks", "kitPlayer", "kitHelp", "kitNext"]) expect(ids(p)).not.toContain(id);
-    const q = planWalk("student", { diary: true, tutorPath: "/sk/bio/2" });
-    expect(ids(q)).not.toContain("tutorNone");
-    expect(q.find((s) => s.id === "kitPlayer")?.route).toBe("/sk/bio/2");
+  it("no role's tour visits or names SK Tutor (retired 2026-10-31)", () => {
+    for (const id of ["tutorNone", "skBooks", "kitPlayer", "kitHelp", "kitNext", "readyMade"])
+      for (const role of ["teacher", "student", "parent", "principal", "coordinator"] as const) expect(ids(planWalk(role, { diary: true, children: 1, verifiedChildren: 1 })), `${role} ${id}`).not.toContain(id);
+    for (const role of ["teacher", "student", "parent", "principal", "coordinator"] as const)
+      for (const s of WALK_STOPS[role]) {
+        expect(s.route.startsWith("/sk"), `${role}.${s.id}`).toBe(false);
+        expect(JSON.stringify(s), `${role}.${s.id}`).not.toMatch(/sk-nav|kit-player|sk-books/);
+      }
   });
   it("student with nothing assigned: the empty My lessons, with its own line", () => {
     const s = planWalk("student", {}).find((x) => x.id === "openLesson")!;
@@ -431,10 +433,12 @@ describe("Report a problem: the inline report on a failed kit first, else the bo
   it("every role gets it near the end, on a page that renders the widget, before the closing stop", () => {
     const routes = { student: "/dashboard", parent: "/dashboard", principal: "/dashboard/school", coordinator: "/dashboard/school" } as const;
     for (const [role, route] of Object.entries(routes) as Array<[keyof typeof routes, string]>) {
-      const p = planWalk(role, { children: 1, verifiedChildren: 1, diary: true, tutorPath: "/sk/a/1", roleHats: true });
+      const p = planWalk(role, { children: 1, verifiedChildren: 1, diary: true, roleHats: true });
       const s = p.find((x) => x.id === "reportProblem")!;
       expect(s.route, role).toBe(route);
-      expect(ids(p).indexOf("reportProblem"), role).toBeGreaterThan(p.length / 2);
+      // (≥ half: without SK Tutor's four stops the student's report stop — her
+      // last /dashboard stop — sits exactly halfway, 7th of 12.)
+      expect(ids(p).indexOf("reportProblem"), role).toBeGreaterThanOrEqual(p.length / 2);
       expect(ids(p).at(-1), role).not.toBe("reportProblem");
     }
     // The School pages have no kits: the widget only.

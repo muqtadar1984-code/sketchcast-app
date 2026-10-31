@@ -237,7 +237,7 @@ describe("combined stops: the precomposed line and its part markers, in all ten 
   const sentences = (t: string) => t.split(/(?<=[.!?؟।])\s+/).filter(Boolean);
   const combined = WALK_ROLES.flatMap((role) => WALK_STOPS[role].filter((s) => s.parts?.length).map((s) => ({ role, s })));
   it("there are combined stops to check", () => {
-    expect(combined.map(({ s }) => s.id)).toEqual(["openBook", "kit", "setup", "classBoard", "readyMade", "insights", "bellLanguage", "skHelp"]);
+    expect(combined.map(({ s }) => s.id)).toEqual(["openBook", "kit", "setup", "classBoard", "insights", "bellLanguage", "skHelp"]);
   });
   it("each precomposed line: every later part's marker once, in order, nothing else; 1–2 sentences that end cleanly", () => {
     for (const { role, s } of combined) {
@@ -301,8 +301,8 @@ describe("combined stops: the precomposed line and its part markers, in all ten 
 describe("the whole tour's spoken length", () => {
   const WORDS_PER_SEC = 2.6;
   const ALL: Record<string, WalkFacts> = {
-    teacher: { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true, skTutor: true, reportIssue: true },
-    student: { diary: true, tutorPath: "/sk/bio/1", reportIssue: true },
+    teacher: { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true, reportIssue: true },
+    student: { diary: true, reportIssue: true },
     parent: { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true, reportIssue: true },
     principal: { analytics: true, timetable: true, diary: true, notices: true, roleHats: true, reportIssue: true },
     coordinator: { timetable: true, diary: true, notices: true, reportIssue: true },

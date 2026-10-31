@@ -39,6 +39,11 @@ export const runtime = "nodejs";
 // "Hi Aisha — you were on <section> of <kit>. Carry on?" (the panel sends the
 // kit player's state as `tutor`), else her chapters; the "Carry on?" offer
 // rides in the memory blob like the kit tray's. No kit notices for a student.
+// 2026-10-31 (founder: SK Tutor retired — "existing books can be taught on
+// the board itself"): only while a kit player is OPEN (the panel sends its
+// state). Elsewhere a student gets the plain greeting: the old "here are your
+// chapters" / "Carry on?" pointed at the /sk chapter pages, which now only
+// redirect.
 
 // S6 slice C: after the kit notices and the tutor greeting, at most ONE
 // suggestion line (src/sk/shell/suggest.ts - every rule is there): only with
@@ -118,7 +123,7 @@ async function warmStart(input: ContextInput) {
   const student = ctx.user.role === "student";
   const factsP = warmFacts(supabase as unknown as FactsDb, ctx.user.id, now);
   const notices = student ? { lines: [] as string[], ids: [] as string[], entities: [], offer: null } : await kitNotices(ctx, { session: supabase, now }, prior);
-  const tutor = student ? await tutorGreeting(ctx, supabase) : null;
+  const tutor = student && ctx.tutor?.kit ? await tutorGreeting(ctx, supabase) : null;
   const facts = await factsP;
   const stored: StoredPrefs | null = facts ? prefsFromFacts(facts) : null;
 

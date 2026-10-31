@@ -1,68 +1,10 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { skAccessAllowed, skEnabled } from "@/utils/flags";
-import { createClient } from "@/utils/supabase/server";
-import { getDictionary } from "@/i18n/dictionaries";
-import { resolveLocale } from "@/i18n/resolve";
-import { chaptersFor } from "@/sk/kit-server";
-import type { ChapterEntry } from "@/sk/kit-view";
-import ChapterLinks from "./chapter-links";
+import { skRedirect } from "./redirect";
 
-// SK — the learner's front door (the "SK Tutor" dashboard tab). Lists, per
-// book, the chapters this learner can open:
-//   - S3: the chapters with a MAPPED KIT (sk_product_kits, 0170), when the
-//     learner has book access to the product (an unentitled learner sees none
-//     of the map). A chapter with several kits lists each.
-// Same gates as the student page, in the same order, so the two surfaces are
-// visible to exactly the same people:
-//   NEXT_PUBLIC_FEATURE_SK + FEATURE_SK  — the surface exists at all
-//   SK_ALLOWED_EMAILS / _STUDENTS_OF     — restricted live (skAccessAllowed):
-//                                           not allowed and anonymous ⇒ 404
-// Book titles come from sk_book_products through RLS (approved products only).
+// SK Tutor is retired (founder 2026-10-31): books are taught on the Classroom
+// Board. This address only forwards a bookmark (redirect-path.ts).
 
 export const dynamic = "force-dynamic";
 
-export default async function SkIndexPage() {
-  if (process.env.NEXT_PUBLIC_FEATURE_SK !== "true" || !skEnabled()) notFound();
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!(await skAccessAllowed(user))) notFound();
-  if (!user) notFound();
-  const t = (await getDictionary(await resolveLocale())).sk.player;
-
-  const { data: products } = await supabase.from("sk_book_products").select("slug, title, subject");
-  const rows = new Map<string, { slug: string; title: string | null; subject: string | null }>();
-  for (const p of (products ?? []) as { slug: string; title: string | null; subject: string | null }[]) rows.set(p.slug, p);
-
-  const books: { slug: string; title: string | null; subject: string | null; entries: ChapterEntry[] }[] = [];
-  for (const p of [...rows.values()].sort((a, b) => (a.title ?? a.slug).localeCompare(b.title ?? b.slug))) {
-    const entries = await chaptersFor(user.id, p.slug);
-    if (entries.length) books.push({ ...p, entries });
-  }
-
-  return (
-    <main className="min-h-screen bg-[#F6F7F5] p-4 sm:p-6">
-      <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl font-semibold text-[#14181F]">{t.title}</h1>
-        <p className="mt-1 text-sm text-[#5B6470]">{t.intro}</p>
-        {books.length === 0 ? (
-          <p className="mt-6 text-sm text-[#5B6470]">{t.noChapters}</p>
-        ) : (
-          <ul className="mt-6 space-y-3">
-            {books.map((b) => (
-              <li key={b.slug} className="rounded-xl border border-[#E3E6E2] bg-white p-4">
-                <div className="text-xs uppercase tracking-wide text-[#5B6470]">{b.subject ?? t.bookFallback}</div>
-                <Link href={`/sk/${b.slug}`} className="mt-0.5 block font-medium text-[#14181F] underline-offset-2 hover:underline">
-                  {b.title ?? b.slug}
-                </Link>
-                <ChapterLinks slug={b.slug} entries={b.entries} t={t} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </main>
-  );
+export default async function SkIndexPage(): Promise<never> {
+  return skRedirect();
 }

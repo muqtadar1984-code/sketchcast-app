@@ -87,7 +87,6 @@ export const NAV_TOOLS = {
   calendar: "navigate",
   timetable: "navigate",
   kits: "navigate",
-  tutor: "navigate",
   reports: "navigate",
   school: "navigate",
   school_teachers: "navigate",

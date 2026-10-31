@@ -66,9 +66,9 @@ export default async function MyBooksStrip({ tiles, t, unavailable }: { tiles: M
                 {b.forChildren.length > 0 && <p className="mt-1 text-xs text-[#5B6470]">{childLabel(b.forChildren, t)}</p>}
                 {b.withdrawn && <p className="mt-1 text-xs text-[#9A6400]">{t.withdrawn}</p>}
                 <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                  {b.skHref && (
-                    <Link href={b.skHref} className="inline-flex min-h-10 items-center rounded-lg bg-[#1FB8A6] px-3 text-sm font-medium text-white hover:bg-[#0C8175]">
-                      {t.openInSk}
+                  {b.boardHref && (
+                    <Link href={b.boardHref} className="inline-flex min-h-10 items-center rounded-lg bg-[#1FB8A6] px-3 text-sm font-medium text-white hover:bg-[#0C8175]">
+                      {t.teachOnBoard}
                     </Link>
                   )}
                   {b.pdfHref && (

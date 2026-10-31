@@ -213,9 +213,9 @@ describe("the launcher's wiring (source pins)", () => {
   it("'continue the tour' with no tour running starts one, with no turn (founder 2026-10-30)", () => {
     expect(code(read("sk-shell.tsx"))).toMatch(/if \(!walkRef\.current && onTakeTourRef\.current && walkStartCommand\(q\)\) \{\s*setInput\(""\);\s*onTakeTourRef\.current\(\);\s*return;/);
   });
-  it("the /present and /sk launchers carry the tour's words (a run resumes there)", () => {
+  it("the /present launcher carries the tour's words (a run resumes there); /sk has no launcher any more (SK Tutor retired 2026-10-31)", () => {
     expect(readSrc("app/present/present-client.tsx")).toContain("walkCopy={sk.walkCopy}");
-    expect(readSrc("app/sk/layout.tsx")).toContain("walkCopy={t.sk.walkthrough}");
+    expect(() => readSrc("app/sk/layout.tsx")).toThrow();
   });
   it("navigation is the client router (never a full reload), with EVERY page of the plan prefetched when the run starts", () => {
     const w = read("sk-walkthrough.tsx");

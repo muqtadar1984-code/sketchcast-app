@@ -70,19 +70,13 @@ describe("tutor phrasings — ≥ 6 per move, EN/MS/AR, no model", () => {
 });
 
 describe("navigate for a student: her own pages", () => {
-  it("a chapter of her book, by number (EN/MS/AR)", () => {
-    for (const p of ["open chapter 6", "chapter 6", "buka bab 6", "bab 6", "افتح الفصل 6"]) {
-      expect(route(p), p).toEqual({ intent: "navigate", target: "tutor", filters: { product: "cells-structure-function-organisation", chapter: "6" } });
+  it("SK Tutor is retired (2026-10-31): a chapter or her chapter list is no navigate to /sk any more", () => {
+    const ctx = makeCtx({ role: "student", hat: null, path: "/dashboard" });
+    for (const p of ["open chapter 6", "chapter 6", "buka bab 6", "bab 6", "افتح الفصل 6", "my chapters", "show all chapters", "senarai bab", "قائمة الفصول"]) {
+      const d = route(p, ctx) as { intent: string; target?: string; lesson?: unknown };
+      expect(d.target, p).not.toBe("tutor");
+      expect(d.lesson, p).toBeUndefined();
     }
-  });
-  it("her chapter list", () => {
-    for (const p of ["my chapters", "show all chapters", "senarai bab", "قائمة الفصول"]) {
-      expect(route(p), p).toEqual({ intent: "navigate", target: "tutor", filters: { product: "cells-structure-function-organisation" } });
-    }
-  });
-  it("on /sk/<book> with no kit open the book comes from the path", () => {
-    const ctx = makeCtx({ role: "student", hat: null, path: "/sk/cells-structure-function-organisation" });
-    expect(route("open chapter 2", ctx)).toEqual({ intent: "navigate", target: "tutor", filters: { product: "cells-structure-function-organisation", chapter: "2" } });
   });
   it("a portal page still navigates, with no class or learner lookup", () => {
     expect(route("open my timetable")).toEqual({ intent: "navigate", target: "timetable", filters: {} });

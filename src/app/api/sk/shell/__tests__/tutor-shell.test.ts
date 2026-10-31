@@ -208,9 +208,9 @@ describe("a student turn", () => {
     expect(mocks.constructed).toEqual([]);
   });
 
-  it("a chapter is a navigate to her book's chapter page", async () => {
+  it("SK Tutor is retired (2026-10-31): 'open chapter 1' no longer navigates to a /sk chapter page", async () => {
     const evs = await readEvents(await turnPOST(turn("open chapter 1")));
-    expect(evs.find((e) => e.type === "navigate")).toEqual({ type: "navigate", path: `/sk/${SLUG}/1`, label: "SK Tutor" });
+    expect(evs.filter((e) => e.type === "navigate" && String(e.path).startsWith("/sk"))).toEqual([]);
   });
 });
 
@@ -226,9 +226,11 @@ describe("the greeting", () => {
     expect(evs.find((e) => e.type === "tutor")).toMatchObject({ move: "play" });
     expect(teacher.calls).toHaveLength(0);
   });
-  it("elsewhere on /sk with no kit session: her chapters", async () => {
-    const d = (await (await contextPOST(context({ path: "/sk" }))).json()) as { greeting: string };
-    expect(d.greeting).toMatch(/^Hi Aisha — here are your chapters: Chapter 1: Cells; .*Chapter 5: Specialised Cells and Tissues.*\. Which one shall we open\?$/);
+  it("with no kit player open (SK Tutor retired 2026-10-31): the plain greeting — no chapter list, no 'Carry on?' offer", async () => {
+    for (const path of ["/sk", "/dashboard"]) {
+      const d = (await (await contextPOST(context({ path }))).json()) as { greeting: string };
+      expect(d.greeting, path).not.toMatch(/here are your chapters|Carry on\?|Which one shall we open/);
+    }
   });
 });
 

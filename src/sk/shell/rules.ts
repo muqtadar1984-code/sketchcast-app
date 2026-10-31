@@ -25,7 +25,8 @@ import { playChapterOf, type PlayChapter } from "./lesson-rules";
 export type RulesDecision =
   /** `lesson` (2026-10-30): a play-a-chapter command — the route runs the
    *  start_lesson tool with these words (book, chapter, part, class) and
-   *  emits its navigate; target is "board" (teacher) or "tutor" (student). */
+   *  emits its navigate; target is "board" (teachers only — SK Tutor is
+   *  retired, founder 2026-10-31). */
   | { intent: "navigate"; target: NavTarget; filters: NavFilters; classQuery?: string; learnerQuery?: string; kitQuery?: string; lesson?: PlayChapter }
   | { intent: "chat"; reply: string }
   /** S1: a Board move decided by rules (only while the collector reports an
@@ -91,7 +92,6 @@ const TARGET_WORDS: Array<[NavTarget, string[]]> = [
   ["diary", ["buku komunikasi", "diary", "diari", "اليوميات", "دفتر التواصل"]],
   ["timetable", ["my timetable", "timetable", "schedule", "jadual waktu", "jadual", "الجدول", "جدول"]],
   ["calendar", ["calendar", "kalendar", "التقويم"]],
-  ["tutor", ["sk tutor", "the tutor", "tutor", "tutor sk", "المعلم الخصوصي"]],
   ["school", ["school overview", "school dashboard", "school page", "school health", "leadership", "my school", "the school", "school", "sekolah", "المدرسة"]],
   ["library", ["library", "my books", "books", "home page", "home", "dashboard", "my lessons", "perpustakaan", "halaman utama", "المكتبة"]],
 ];
@@ -748,21 +748,6 @@ const T_EXPLAIN_TOPIC_RE = new RegExp(
 const T_CONFUSED_RE = polite(
   "i (?:don'?t|do not) (?:understand|get it|get this)|i'?m (?:confused|lost)|what does (?:this|that|it) mean|(?:saya )?(?:tak|tidak) (?:faham|paham)|saya keliru|apa maksud(?:nya| ini)?|لم (?:أفهم|افهم)|لا (?:أفهم|افهم)|ما معنى (?:هذا|ذلك)|ماذا يعني (?:هذا|ذلك)",
 );
-const T_CHAPTER_RE = new RegExp(
-  "^(?:please |sila |tolong |من فضلك )?(?:(?:open|go to|show(?: me)?|take me to|start|buka|pergi ke|tunjuk(?:kan)?|mula(?:kan)?|افتح|اذهب (?:إلى|الى)|انتقل (?:إلى|الى)) )?(?:the )?(?:chapter|bab|الفصل|فصل) ([0-9]{1,3})$",
-  "u",
-);
-const T_CHAPTERS_RE = polite(
-  "(?:(?:show|open|go to|back to)(?: me)? )?(?:all |my |the )?chapters|(?:the )?chapter list|(?:tunjuk(?:kan)?|buka|kembali ke) (?:semua )?bab|senarai bab|bab-bab saya|(?:اعرض|افتح|ارجع (?:إلى|الى)) (?:كل )?الفصول|قائمة الفصول|فصولي",
-);
-
-/** The student's book: the open kit's, the selection's, or the /sk/<product> path's. */
-function tutorProduct(ctx: SkContext): string | undefined {
-  if (ctx.tutor?.product) return ctx.tutor.product;
-  if (ctx.selection.productSlug) return ctx.selection.productSlug;
-  const m = /^\/sk\/([^/?#]+)/.exec(ctx.place.path);
-  return m?.[1] && /^[a-z0-9][a-z0-9_-]{0,119}$/i.test(m[1]) ? m[1] : undefined;
-}
 
 /** A section heading the words name, from the kit player's own list. */
 function sectionByWords(words: string, ctx: SkContext): number | null {
@@ -799,16 +784,8 @@ export function routeTutor(raw: string, normed: string, ctx: SkContext): RulesDe
   }
   if (T_NEXT_RE.test(t)) return tu("tutor.section", { step: "next" });
   if (T_PREV_RE.test(t)) return tu("tutor.section", { step: "previous" });
-  // A chapter of her book: a navigate, no model.
-  const ch = t.match(T_CHAPTER_RE);
-  if (ch) {
-    const product = tutorProduct(ctx);
-    return { intent: "navigate", target: "tutor", filters: product ? { product, chapter: ch[1] } : {} };
-  }
-  if (T_CHAPTERS_RE.test(t)) {
-    const product = tutorProduct(ctx);
-    return { intent: "navigate", target: "tutor", filters: product ? { product } : {} };
-  }
+  // (No "open chapter N" / "my chapters" navigate any more: SK Tutor, the
+  // student's chapter pages, is retired — founder 2026-10-31.)
   if (T_EXPLAIN_RE.test(t) || T_CONFUSED_RE.test(t)) return tu("tutor.explain");
   // "go to the red blood cells part": only when the words name one of HER
   // sections (so "go to my timetable" stays a navigate).
@@ -953,17 +930,13 @@ function routeOnce(text: string, ctx: SkContext, now: Date, clock?: SkCollector[
   const student = ctx.user.role === "student";
 
   // 2026-10-30: "play chapter 1 from the book" / "start chapter one" / "let's
-  // do chapter 2 of biology" — a teacher's Board lesson or a student's Tutor
-  // chapter, through start_lesson (no model). A teacher's comes before the
-  // Board phrasings. A student's kit-player phrasings keep their meaning, and
-  // so does her "open chapter 6" inside a book (the book is the one she is
-  // in); the tool takes a chapter only when they found no book for it.
-  const lesson = student || (ctx.user.role !== "parent" && (ctx.user.hat === "teacher" || ctx.user.hat === null)) ? playChapterOf(raw) : null;
+  // do chapter 2 of biology" — a teacher's Board lesson through start_lesson
+  // (no model), before the Board phrasings. A student has no chapter surface
+  // any more (SK Tutor retired, founder 2026-10-31), so hers is not a lesson.
+  const lesson = !student && ctx.user.role !== "parent" && (ctx.user.hat === "teacher" || ctx.user.hat === null) ? playChapterOf(raw) : null;
   if (student) {
     const tu = routeTutor(raw, t, ctx);
-    const bookless = !!tu && tu.intent === "navigate" && tu.target === "tutor" && !tu.filters.product;
-    if (tu && !(lesson && bookless)) return tu;
-    if (lesson) return { intent: "navigate", target: "tutor", filters: { autostart: true }, lesson };
+    if (tu) return tu;
   } else if (lesson) {
     return { intent: "navigate", target: "board", filters: { autostart: true }, lesson };
   } else if (ctx.board?.sessionId) {

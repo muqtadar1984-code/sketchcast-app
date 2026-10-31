@@ -2,7 +2,7 @@
 // "play chapter 1 from the book" called context.resolve + library.find and
 // could only ask a question back; nothing could START a chapter).
 //
-// One immediate-tier tool, two roles:
+// One immediate-tier tool, for the TEACHING roles (teacher hat):
 //   teacher → the Classroom Board deep link with autostart
 //             (/present?book=&chapter=&autostart=1, deep-link.ts). An uploaded
 //             book's chapter needs a finished presentation of HER OWN (the
@@ -10,8 +10,10 @@
 //             Library row instead. A SketchCast product book's chapter goes to
 //             the Board as it is: the Board adopts its catalogue kit on arrival
 //             (present-client.tsx "ADOPT ON ARRIVAL") and then starts it.
-//   student → the SK Tutor chapter (/sk/<product>/<chapter>) of a SketchCast
-//             book she holds a live grant for.
+//   (A student used to get the SK Tutor chapter, /sk/<product>/<chapter>.
+//   SK Tutor is retired — founder 2026-10-31: "existing books can be taught
+//   on the board itself" — and the Board is teacher-only, so students are no
+//   longer in this tool's roles.)
 //
 // Resolution, in order:
 //   book    — the user's books through RLS (own, the school shelf, product
@@ -27,7 +29,7 @@
 //   kit     — a ready-made kit by title (the start-lesson rule's own path).
 //
 // Nothing is started here: the result is a `navigate` the route emits, and
-// the Board / Tutor page makes every access decision again itself.
+// the Board page makes every access decision again itself.
 
 import type { ResolvedEntity, SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "@/sk/shell/types";
 import { resolveNavigate, type NavFilters, type NavTarget } from "./navigate";
@@ -47,7 +49,6 @@ import {
   LESSON_NO_PRODUCT_BOOKS,
   LESSON_PART_ON_RAIL,
   LESSON_STARTING,
-  LESSON_TUTOR_OPENING,
   LESSON_WHICH_BOOK,
   LESSON_WHICH_CHAPTER,
   lineFor,
@@ -210,8 +211,8 @@ export async function lessonBooks(ctx: SkContext, deps: SkCapabilityDeps): Promi
 async function recentBookIds(ctx: SkContext, deps: SkCapabilityDeps, deep: boolean, books: LessonBook[]): Promise<string[]> {
   const ids: string[] = [];
   if (ctx.selection.bookId) ids.push(ctx.selection.bookId);
-  // A student inside a SketchCast book (/sk/<product>, or its open kit): that book.
-  const slug = ctx.tutor?.product ?? ctx.selection.productSlug ?? /^\/sk\/([a-z0-9][a-z0-9_-]{0,119})/i.exec(ctx.place.path)?.[1];
+  // A SketchCast book on screen (its product slug): that book.
+  const slug = ctx.tutor?.product ?? ctx.selection.productSlug;
   if (slug && books.some((b) => b.productId)) {
     try {
       const p = rowsOf(await deps.session.from("sk_book_products").select("id, slug").eq("slug", slug)).find((r) => r.slug === slug);
@@ -356,14 +357,6 @@ export async function startLesson(ctx: SkContext, rawArgs: Record<string, unknow
   const chapterTitle = book.chapters.find((c) => c.num === ch.num)?.title ?? null;
   const facts = [{ book: book.title, chapter: n, chapter_title: chapterTitle, part }];
 
-  // ── student: the SK Tutor chapter ──
-  if (student) {
-    const prod = rowsOf(await deps.session.from("sk_book_products").select("id, slug").eq("id", book.productId));
-    const slug = prod.find((p) => p.id === book.productId && typeof p.slug === "string")?.slug as string | undefined;
-    if (!slug) return { ok: false, summary: lineFor(LESSON_NO_PRODUCT_BOOKS, loc), error: "no_product", facts: [] };
-    return go(ctx, "tutor", { product: slug, chapter: String(n) }, lineFor(LESSON_TUTOR_OPENING, loc, { n, book: book.title }), facts, entities);
-  }
-
   // ── teacher: the Board, or the Library row when there is nothing to play ──
   const say = lineFor(LESSON_STARTING, loc, { n, book: book.title }) + (part ? ` ${lineFor(LESSON_PART_ON_RAIL, loc, { part })}` : "");
   const board: NavFilters = { ...filters, bookId: book.id, chapterRef: String(ch.num), autostart: true };
@@ -380,7 +373,7 @@ export const startLessonCapability: SkCapability = {
   meta: {
     name: START_LESSON,
     description:
-      "Start (play, teach, open) a lesson: a chapter of one of the user's books, or a ready-made kit by title. For a teacher it opens the Classroom Board on that chapter and starts it (a SketchCast book chapter is adopted on the Board); a chapter with no generated kit yet opens its Library row instead. For a student it opens that chapter of her SketchCast book in SK Tutor. Use for 'play chapter 1 from the book', 'start chapter two of Biology', 'teach the first chapter', 'mainkan bab 1', 'شغّل الفصل الأول'. Pass the user's own words: book = a title or title words (leave it out, or pass 'the book', when none was named — the tool picks the only or most recent book and otherwise asks which), chapter = its number (1-based, as said) or title words, part = a part number if said, kit = a ready-made kit's title, class = a class name if said ('7B'). Do NOT call context.resolve or library.find first and do NOT ask which book yourself: this tool resolves the book and returns the question when it is ambiguous — repeat its line.",
+      "Start (play, teach, open) a lesson: a chapter of one of the user's books, or a ready-made kit by title. For a teacher it opens the Classroom Board on that chapter and starts it (a SketchCast book chapter is adopted on the Board); a chapter with no generated kit yet opens its Library row instead. Use for 'play chapter 1 from the book', 'start chapter two of Biology', 'teach the first chapter', 'mainkan bab 1', 'شغّل الفصل الأول'. Pass the user's own words: book = a title or title words (leave it out, or pass 'the book', when none was named — the tool picks the only or most recent book and otherwise asks which), chapter = its number (1-based, as said) or title words, part = a part number if said, kit = a ready-made kit's title, class = a class name if said ('7B'). Do NOT call context.resolve or library.find first and do NOT ask which book yourself: this tool resolves the book and returns the question when it is ambiguous — repeat its line.",
     parameters: {
       type: "object",
       properties: {
@@ -394,7 +387,7 @@ export const startLessonCapability: SkCapability = {
     },
     tier: "immediate",
     kind: "nav",
-    roles: ["teacher", "school_admin", "coordinator", "student"],
+    roles: ["teacher", "school_admin", "coordinator"],
     hats: ["teacher"],
   },
   handler: startLesson,

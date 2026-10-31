@@ -142,7 +142,7 @@ const LEADER_ONLY = ["school.health", "notice.school", "school.seats", "school.c
 const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n) && !LEADER_ONLY.includes(n));
 // S4 slice C: diary.note's parent branch (a note to one of her own children).
 const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS];
-const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS, "start_lesson"];
+const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS]; // no start_lesson: SK Tutor retired 2026-10-31
 
 describe("allowedFor over the shipped registry", () => {
   it("teacher: everything but the tutor, child.* and book.activate; parent: navigate + context.resolve + diary.note + child.* + book.activate; student: navigate + the tutor + book.activate", () => {
