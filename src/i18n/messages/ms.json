@@ -2232,6 +2232,13 @@
         "chapter": "bab {n}",
         "from": "Sumber: {source}"
       },
+      "teach": {
+        "gapNote": "Nampaknya soalan ini agak sukar — biar saya ajar dengan cara lain.",
+        "extraOffer": "Syabas — anda sudah tamatkan pelajaran ini! Mahu satu langkah Tambahan yang pendek untuk pergi lebih jauh?",
+        "extraYes": "Tunjukkan",
+        "extraNo": "Bukan sekarang",
+        "pictureFrom": "Daripada slaid pelajaran anda — slaid {n}"
+      },
       "gap": {
         "thumb": "Ini tidak membantu",
         "ask": "Apa yang anda mahukan?",

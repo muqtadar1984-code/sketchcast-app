@@ -2232,6 +2232,13 @@
         "chapter": "cap. {n}",
         "from": "Fonte: {source}"
       },
+      "teach": {
+        "gapNote": "Parece que esta é difícil — deixa-me ensinar de outra maneira.",
+        "extraOffer": "Muito bem — terminaste esta lição! Queres um passo Extra curto para ir um pouco mais longe?",
+        "extraYes": "Mostra-me",
+        "extraNo": "Agora não",
+        "pictureFrom": "Dos diapositivos da tua lição — diapositivo {n}"
+      },
       "gap": {
         "thumb": "Isto não ajudou",
         "ask": "O que pretendia?",

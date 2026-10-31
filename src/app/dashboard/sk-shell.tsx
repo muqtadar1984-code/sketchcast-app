@@ -65,7 +65,13 @@ import { googleVoiceFor } from "@/sk/speech/google-voices";
 import { pollyVoiceFor } from "@/sk/speech/polly-marks";
 import { pickBrowserVoice, readRigChoice, voiceGenderForChoice } from "@/sk/board/avatar";
 import { useRigChoice } from "@/sk/board/use-rig-choice";
+// 2026-10-31 (student Board phase 3): SK teaches in this chat — headings,
+// lists, maths and the kit's own pictures (sk-rich-text.tsx, rich-blocks.ts).
 import RichText from "@/components/rich-text";
+import SkRichText from "./sk-rich-text";
+import { hasMarkup, plainOf, spokenOf } from "@/sk/shell/client/rich-blocks";
+import { SK_LEARNER_DONE_EVENT, SK_LEARNER_GAP_EVENT, createDoneGate, createGapGate, extraRequest, gapRequest } from "@/sk/shell/client/teach-trigger";
+import type { SkTeachRequest } from "@/sk/shell/types";
 import { fmt } from "@/i18n/format";
 import type { Dictionary } from "@/i18n/dictionaries";
 import type { SkActRequest, SkActResponse, SkBoardMove, SkCitation, SkTurnEvent, SkTurnRequest, SkTurnWalk, SkTutorMove, SkWalkAction } from "@/sk/shell/types";
@@ -155,7 +161,42 @@ type Entry = {
   dir?: "ltr" | "rtl";
   /** 2026-10-31: the turn this reply answered (the 👎 names it). */
   turnId?: string;
+  /** Phase 3: a quiet line of SK's (no bubble shape): "Let me teach this another way". */
+  note?: boolean;
+  /** Phase 3: this reply is one of SK's lessons. */
+  teach?: boolean;
+  /** Phase 3: a slide of the kit's own deck that shows the concept (url once resolved). */
+  picture?: { generationId: string; n: number; title: string; url?: string | null };
+  /** Phase 3: the Extra-step offer after the kit — open, taken or dismissed. */
+  offer?: "open" | "taken" | "dismissed";
 };
+
+/** Phase 3: a turn SK starts by itself — a lesson (a worksheet gap, the Extra
+ *  step) — and the quiet line shown in place of her bubble (she typed nothing). */
+type SendOpts = { teach?: SkTeachRequest; note?: string };
+
+/** Phase 3: the signed page URL of slide `n` of a deck she may read
+ *  (/api/present/deck-pages re-checks it is hers), one read per deck per tab. */
+const deckPageUrls = new Map<string, Promise<Map<number, string>>>();
+function deckPageUrl(generationId: string, n: number): Promise<string | null> {
+  let p = deckPageUrls.get(generationId);
+  if (!p) {
+    p = fetch(`/api/present/deck-pages?${new URLSearchParams({ generationId }).toString()}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { status?: string; slides?: Array<{ n: number; url: string | null }> } | null) => {
+        const m = new Map<number, string>();
+        if (j?.status === "ready") for (const s of j.slides ?? []) if (s.url) m.set(s.n, s.url);
+        return m;
+      })
+      .catch(() => new Map<number, string>());
+    deckPageUrls.set(generationId, p);
+    // A deck still rendering may be ready later: forget an empty answer.
+    void p.then((m) => {
+      if (!m.size) deckPageUrls.delete(generationId);
+    });
+  }
+  return p.then((m) => m.get(n) ?? null);
+}
 
 /** The BCP-47 tag for an answer language code (ms-arab → ms-Arab, zh → zh-CN). */
 const htmlLangOf = (lang: string | undefined) => (lang === "ms-arab" ? "ms-Arab" : lang === "zh" ? "zh-CN" : lang);
@@ -389,7 +430,7 @@ export default function SkShell({
   const tourLineRef = useRef<{ key: string; n: number } | null>(null);
   const voiceLogRef = useRef<VoiceLog | null>(null);
   const onTakeTourRef = useRef(onTakeTour);
-  const sendRef = useRef<(text: string, modality: "text" | "voice") => Promise<void>>(async () => {});
+  const sendRef = useRef<(text: string, modality: "text" | "voice", opts?: SendOpts) => Promise<void>>(async () => {});
   const prefetchedRef = useRef(new Set<string>());
 
   /** Warm the pages `navigate` can send this role to, once each per panel,
@@ -1138,27 +1179,32 @@ export default function SkShell({
 
   // ── the turn ──
   const send = useCallback(
-    async (text: string, modality: "text" | "voice") => {
+    async (text: string, modality: "text" | "voice", opts: SendOpts = {}) => {
       const q = text.trim();
-      if (!q || ready === false) return;
-      // The walkthrough's bare commands ("next", "pause"…) move the tour —
-      // no turn, no model. Anything else is a question (the tour pauses).
-      if (walkRef.current?.command(q)) {
-        setInput("");
-        return;
-      }
-      // 2026-10-30 (founder): "Continue with the tour." with NO tour running
-      // starts one — the same start as "Take the tour", no turn, no model.
-      if (!walkRef.current && onTakeTourRef.current && walkStartCommand(q)) {
-        setInput("");
-        onTakeTourRef.current();
-        return;
+      // Phase 3: a lesson SK starts by itself carries no words of hers.
+      const teach = opts.teach ?? null;
+      if ((!q && !teach) || ready === false) return;
+      // (A lesson SK starts by itself is never a tour command.)
+      if (!teach) {
+        // The walkthrough's bare commands ("next", "pause"…) move the tour —
+        // no turn, no model. Anything else is a question (the tour pauses).
+        if (walkRef.current?.command(q)) {
+          setInput("");
+          return;
+        }
+        // 2026-10-30 (founder): "Continue with the tour." with NO tour running
+        // starts one — the same start as "Take the tour", no turn, no model.
+        if (!walkRef.current && onTakeTourRef.current && walkStartCommand(q)) {
+          setInput("");
+          onTakeTourRef.current();
+          return;
+        }
       }
       setError(null);
       // §9.2: with exactly one card waiting, a bare yes/no answers the CARD —
       // spoken (push-to-talk or hands-free, the only sources of a "voice"
       // turn) or typed (one deliberate act, reported as a click).
-      const active = cardsRef.current.filter((c) => c.status === "active");
+      const active = teach ? [] : cardsRef.current.filter((c) => c.status === "active");
       if (active.length === 1) {
         const d = decideWithCards({ activeCards: 1, modality, text: q, locale: localeFromLang(document.documentElement.lang) });
         if (d.kind === "confirm") {
@@ -1196,7 +1242,9 @@ export default function SkShell({
 
       const skId = uuid();
       const turnId = uuid();
-      setEntries((m) => [...m, { id: uuid(), who: "user", text: q }, { id: skId, who: "sk", text: "", pending: true, turnId }]);
+      // Phase 3: SK's own lesson shows a quiet line of its own, never a bubble of hers.
+      const lead: Entry = teach ? { id: uuid(), who: "sk", text: opts.note ?? "", note: true } : { id: uuid(), who: "user", text: q };
+      setEntries((m) => [...m, ...(teach && !opts.note ? [] : [lead]), { id: skId, who: "sk", text: "", pending: true, turnId }]);
       // The answer's language, for the bubble's direction.
       let replyLang: string | undefined;
       let replyDir: "ltr" | "rtl" | undefined;
@@ -1230,6 +1278,7 @@ export default function SkShell({
       // 2026-10-30: the tour this tab is giving, so SK never says there is none.
       const walkState = walkRef.current?.state;
       if (walkState?.active) req.walk = walkState;
+      if (teach) req.teach = teach;
 
       let full = "";
       let sawDone = false;
@@ -1264,7 +1313,8 @@ export default function SkShell({
           // An answer that carried nothing at all: SK's fixed line (§2.3).
           return { ...en, pending: false, text: empty && sawDone ? copy.nothingOnThat : en.text };
         });
-        if (modality === "text") inputRef.current?.focus();
+        // (A lesson SK started by itself never pops a phone's keyboard.)
+        if (modality === "text" && !teach) inputRef.current?.focus();
       }
 
       function handle(ev: SkTurnEvent) {
@@ -1278,12 +1328,25 @@ export default function SkShell({
             }
             if (ev.memory) keepMemory(ev.memory, ev.sessionId);
             break;
-          case "text":
+          case "text": {
             full += ev.text;
             patchEntry(skId, (en) => ({ ...en, text: full }));
-            setCaption(lastSentence(full));
-            showReply(full);
-            streamFor()?.push(ev.text);
+            // Phase 3: a lesson's marks and maths never reach the bubble, the
+            // caption or the voice as raw markup (rich-blocks.ts).
+            const marked = hasMarkup(full);
+            const flat = marked ? plainOf(full) : full;
+            setCaption(lastSentence(flat));
+            showReply(flat);
+            streamFor()?.push(hasMarkup(ev.text) ? `${spokenOf(ev.text, speechLang)} ` : ev.text);
+            break;
+          }
+          case "picture":
+            // Phase 3: the kit's own slide for the concept — its page, signed
+            // for her by /api/present/deck-pages.
+            patchEntry(skId, (en) => ({ ...en, picture: { generationId: ev.generationId, n: ev.n, title: ev.title } }));
+            void deckPageUrl(ev.generationId, ev.n).then((url) =>
+              patchEntry(skId, (en) => (en.picture && en.picture.generationId === ev.generationId && en.picture.n === ev.n ? { ...en, picture: { ...en.picture, url } } : en)),
+            );
             break;
           case "tool":
             patchEntry(skId, (en) => ({ ...en, tools: [...(en.tools ?? []), { name: ev.name, ok: ev.ok, summary: ev.summary }] }));
@@ -1396,8 +1459,10 @@ export default function SkShell({
           case "done":
             sawDone = true;
             if (ev.memory) keepMemory(ev.memory);
-            patchEntry(skId, (en) => ({ ...en, sources: ev.sources ?? [], label: ev.label, ...(ev.citations?.length ? { citations: ev.citations } : {}) }));
+            patchEntry(skId, (en) => ({ ...en, sources: ev.sources ?? [], label: ev.label, ...(ev.citations?.length ? { citations: ev.citations } : {}), ...(ev.teach ? { teach: true } : {}) }));
             void stream?.flush();
+            // Phase 3: a lesson is read in the chat window — SK opens it.
+            if (ev.teach && ev.teach.trigger !== "check" && !sheetOpenRef.current) setSheetOpen(true);
             break;
           case "error":
             setError(ev.message || copy.failed);
@@ -1622,6 +1687,56 @@ export default function SkShell({
     speakLine(lead.text);
   }, [lead, ready, appendSk, speakLine]);
 
+  // ── Phase 3 (student Board, 2026-10-31): SK teaches by itself ───────────
+  // While HER Board is open (a student with the Board bridge): a worksheet
+  // gap (`sk:learner-gap`, phase 2) starts a short lesson in this chat; the
+  // kit finished (`sk:learner-done`) brings one dismissable Extra offer.
+  // A gap that arrives while SK is answering waits for that answer.
+  const learnerBoard = role === "student" && !!board;
+  const gapGateRef = useRef(createGapGate());
+  const doneGateRef = useRef(createDoneGate());
+  const pendingTeachRef = useRef<SkTeachRequest | null>(null);
+  const busyRef = useRef(false);
+  useEffect(() => {
+    busyRef.current = busy;
+    if (!busy && pendingTeachRef.current && ready === true) {
+      const req = pendingTeachRef.current;
+      pendingTeachRef.current = null;
+      void sendRef.current("", "text", { teach: req, note: copy.teach.gapNote });
+    }
+  }, [busy, ready, copy.teach.gapNote]);
+  useEffect(() => {
+    if (!learnerBoard) return;
+    const onGap = (e: Event) => {
+      const req = gapRequest((e as CustomEvent).detail);
+      if (!req || !gapGateRef.current.take(req, Date.now())) return;
+      if (busyRef.current || ready !== true) {
+        pendingTeachRef.current = req;
+        return;
+      }
+      void sendRef.current("", "text", { teach: req, note: copy.teach.gapNote });
+    };
+    const onDone = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!doneGateRef.current.take(detail)) return;
+      appendSk(copy.teach.extraOffer, { offer: "open" });
+      speakLine(copy.teach.extraOffer);
+      // The offer's two buttons are in the conversation: open it.
+      setSheetOpen(true);
+    };
+    window.addEventListener(SK_LEARNER_GAP_EVENT, onGap);
+    window.addEventListener(SK_LEARNER_DONE_EVENT, onDone);
+    return () => {
+      window.removeEventListener(SK_LEARNER_GAP_EVENT, onGap);
+      window.removeEventListener(SK_LEARNER_DONE_EVENT, onDone);
+    };
+  }, [learnerBoard, ready, copy.teach.gapNote, copy.teach.extraOffer, appendSk, speakLine]);
+  /** The Extra offer's buttons: "Show me" sends the Extra lesson; "Not now" lets it go. */
+  const answerOffer = (id: string, take: boolean) => {
+    patchEntry(id, (en) => ({ ...en, offer: take ? "taken" : "dismissed" }));
+    if (take) void sendRef.current("", "text", { teach: extraRequest(null) });
+  };
+
   // Escape closes the sheet or the one-line box (focus back on the avatar).
   useEffect(() => {
     if (!sheetOpen && !quickOpen) return;
@@ -1776,18 +1891,48 @@ export default function SkShell({
       {/* Transcript */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" data-sk="transcript">
         {ready === null && <p className="text-sm text-slate-500">…</p>}
-        {entries.map((e) => (
+        {entries.map((e) =>
+          e.note ? (
+            // Phase 3: SK's quiet line before a lesson it started by itself.
+            <p key={e.id} className="text-center text-xs italic text-slate-500" data-sk="teach-note">
+              {e.text}
+            </p>
+          ) : (
           <div key={e.id} className={e.who === "user" ? "flex flex-col items-end" : "flex flex-col items-start"}>
             {e.who === "user" && <span className="text-[10px] text-slate-500 me-1 mb-0.5">{copy.you}</span>}
             {(e.text || e.pending) && (
               <div
                 dir={e.who === "sk" && e.dir ? e.dir : undefined}
                 lang={e.who === "sk" ? htmlLangOf(e.lang) : undefined}
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
+                className={`${e.teach ? "max-w-[94%]" : "max-w-[85%]"} min-w-0 break-words rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
                   e.who === "user" ? "bg-[#E2F4F1] text-[#0C4E47] rounded-ee-sm" : "bg-[#F4F6F3] text-slate-900 rounded-es-sm"
                 }`}
+                data-sk-teach={e.teach ? "lesson" : undefined}
               >
-                {e.text ? <RichText text={e.text} /> : <span className="text-slate-500">…</span>}
+                {e.text ? e.who === "sk" ? <SkRichText text={e.text} /> : <RichText text={e.text} /> : <span className="text-slate-500">…</span>}
+              </div>
+            )}
+            {e.who === "sk" && e.picture && e.picture.url !== null && (
+              // Phase 3: the kit's own slide for this concept (never a new image).
+              <figure className="mt-1.5 max-w-[94%] overflow-hidden rounded-xl border border-[#E3E7E2] bg-white" data-sk="teach-picture">
+                {e.picture.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a short-lived signed URL; next/image would proxy it.
+                  <img src={e.picture.url} alt={e.picture.title || fmt(copy.teach.pictureFrom, { n: e.picture.n })} loading="lazy" className="block h-auto w-full" />
+                ) : (
+                  <div className="aspect-video w-56 max-w-full animate-pulse bg-[#F4F6F3]" aria-hidden />
+                )}
+                <figcaption className="px-2 py-1 text-[10px] text-slate-500">{fmt(copy.teach.pictureFrom, { n: e.picture.n })}</figcaption>
+              </figure>
+            )}
+            {e.who === "sk" && e.offer === "open" && (
+              // Phase 3: the Extra step after the kit — hers to take or leave.
+              <div className="mt-1.5 flex flex-wrap gap-2" data-sk="teach-offer">
+                <button type="button" onClick={() => answerOffer(e.id, true)} disabled={busy} className="min-h-11 rounded-lg bg-[#0C8175] px-3 py-2 text-xs font-medium text-white disabled:opacity-50 sm:min-h-0" data-sk="teach-offer-yes">
+                  {copy.teach.extraYes}
+                </button>
+                <button type="button" onClick={() => answerOffer(e.id, false)} className="min-h-11 rounded-lg border border-[#D5DBD6] px-3 py-2 text-xs text-slate-700 sm:min-h-0" data-sk="teach-offer-no">
+                  {copy.teach.extraNo}
+                </button>
               </div>
             )}
             {e.nav?.map((n, i) => (
@@ -1838,7 +1983,8 @@ export default function SkShell({
               <SkGapThumb state={gapUi[e.id] ?? "idle"} copy={copy.gap} onOpen={() => gapOpen(e.id)} onSend={(note) => void sendGap(e.id, note)} />
             )}
           </div>
-        ))}
+          ),
+        )}
         {error && <p className="text-xs text-[#B42318]">{error}</p>}
       </div>
 

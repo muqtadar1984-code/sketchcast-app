@@ -14,6 +14,7 @@ import BoardSession, { framesCapturable, videoParts, type BoardIO, type SessionI
 import { firstStep, nextLine, nextStep, openingLine, type CoachAvail, type CoachLines, type CoachStep } from "./learner-coach";
 import { PracticePanel, usePractice } from "./practice-panel";
 import type { TextCard } from "@/board/model";
+import { SK_LEARNER_DONE_EVENT } from "@/sk/shell/client/teach-trigger";
 import type { BoardController, BoardUnit } from "./board-controller";
 import { createBoardBridge, httpManifestFetch, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestStatus } from "./sk-board-bridge";
 import { prepareDeck, type DeckPagesReply, type DeckStatus } from "./deck-load";
@@ -824,7 +825,11 @@ export default function PresentClient({
     const next = nextStep(step, avail);
     setCoach({ session: sid, step: next });
     say(nextLine(next, coachLines));
-  }, [sid, step, avail, say, coachLines]);
+    // Phase 3 (2026-10-31): the kit is done — SK offers one short Extra step
+    // in its chat (sk-shell listens; phase 2 may dispatch the same event when
+    // every worksheet question is answered).
+    if (next === "done" && step !== "done") window.dispatchEvent(new CustomEvent(SK_LEARNER_DONE_EVENT, { detail: { generationId: openUnit?.generationId ?? null } }));
+  }, [sid, step, avail, say, coachLines, openUnit]);
   const runStep = useCallback(
     async (s: CoachStep) => {
       const c = controller;

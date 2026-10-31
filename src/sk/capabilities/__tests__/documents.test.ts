@@ -292,3 +292,31 @@ describe("the Board before its lesson map is ready", () => {
 
 // keep the imported ids referenced (A_WS documents the sibling worksheet copy)
 void A_WS;
+
+// ── student Board phase 3 (2026-10-31): SK teaching in the chat ─────────────
+
+describe("a lesson's picture and the answer guard's read (phase 3)", () => {
+  it("the picture is the kit's OWN deck slide that best shows the concept", async () => {
+    const { openUnitDeckPicture } = await import("../documents");
+    const { bestSlide } = await import("@/sk/shell/learn-teach");
+    expect(await openUnitDeckPicture(ctx({ board: onBoard() }), "the cell wall", bestSlide)).toEqual({ generationId: A_DECK, n: 2, title: "The cell wall" });
+    expect(await openUnitDeckPicture(ctx({ board: onBoard() }), "photosynthesis", bestSlide)).toBeNull();
+    expect(await openUnitDeckPicture(ctx({}), "the cell wall", bestSlide)).toBeNull();
+  });
+
+  it("no deck text map yet: no picture (never a new image)", async () => {
+    db = docsWorld({ pages: false });
+    delete db.files[`${CAT}/${SRC_DECK}/deck_pages/pages.json`];
+    const { openUnitDeckPicture } = await import("../documents");
+    const { bestSlide } = await import("@/sk/shell/learn-teach");
+    expect(await openUnitDeckPicture(ctx({ board: onBoard() }), "the cell wall", bestSlide)).toBeNull();
+  });
+
+  it("the question's answer, by id or by its words — read only for the guard", async () => {
+    const { openUnitAnswer } = await import("../documents");
+    expect(await openUnitAnswer(ctx({ board: onBoard() }), { generationId: A_QUIZ, questionId: "q1" })).toBe("Wall");
+    expect(await openUnitAnswer(ctx({ board: onBoard() }), { generationId: A_QUIZ, questionText: "which part is RIGID?" })).toBe("Wall");
+    expect(await openUnitAnswer(ctx({ board: onBoard() }), { generationId: A_QUIZ, questionId: "q9" })).toBeNull();
+    expect(await openUnitAnswer(ctx({}), { questionId: "q1" })).toBeNull();
+  });
+});
