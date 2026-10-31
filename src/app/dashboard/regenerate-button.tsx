@@ -186,7 +186,7 @@ export default function RegenerateButton({
       disabled={busy}
       title={hint}
       aria-label={hint}
-      className="text-[#C6CBC4] hover:text-[#0C8175] disabled:opacity-50"
+      className="text-[#C6CBC4] hover:text-[#0C8175] disabled:opacity-50 pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:justify-center pointer-coarse:min-w-11 pointer-coarse:min-h-11 pointer-coarse:-m-2.5"
     >
       <NewVersionIcon />
     </button>
@@ -209,7 +209,7 @@ export default function RegenerateButton({
       {trigger}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14181F]/40 p-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl max-h-[90dvh] overflow-y-auto max-h-[90dvh] overflow-y-auto">
             <h2 className="font-display text-base font-medium">Create a new version?</h2>
 
             <p className="mt-2 text-sm text-[#5B6470]">

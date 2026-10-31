@@ -24,9 +24,11 @@ const LANGUAGE_PICKER = 189;
 const HAT_SWITCHER = 175;
 const PER_TAB = 88;
 
-/** Tailwind's default screens, smallest first. */
+/** Tailwind's default screens, smallest first. There is no `sm` tier: below
+ *  `md` the account controls (language, Settings, Tour, Sign out) leave the
+ *  bar for the hamburger's panel (app-header, phone layout 2026-10-31), so the
+ *  hamburger has to exist at least that far up whatever the tab count. */
 const TIERS = [
-  { px: 640, show: "hidden sm:flex", hide: "sm:hidden" },
   { px: 768, show: "hidden md:flex", hide: "md:hidden" },
   { px: 1024, show: "hidden lg:flex", hide: "lg:hidden" },
   { px: 1280, show: "hidden xl:flex", hide: "xl:hidden" },

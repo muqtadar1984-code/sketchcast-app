@@ -634,7 +634,7 @@ export default function PageScanner({
                   <span className="block text-[#98A0A9]">{t.scan.tips}</span>
                 </p>
               </div>
-              <button onClick={onClose} aria-label={t.common.close} className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
+              <button onClick={onClose} aria-label={t.common.close} className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:justify-center pointer-coarse:min-w-11 pointer-coarse:min-h-11 pointer-coarse:-m-2.5">×</button>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -707,7 +707,7 @@ export default function PageScanner({
                   </p>
                 )}
 
-                <ul className="mt-4 grid grid-cols-3 sm:grid-cols-5 gap-3">
+                <ul className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
                   {pages.map((p, i) => (
                     <li key={p.id} className="group relative rounded-lg border border-[#DCE6E2] overflow-hidden bg-[#F5F6F3]">
                       {/* The copy above says "tap a page to set its edges by hand",
@@ -807,7 +807,7 @@ function CornerEditor({
           <h2 className="font-display text-base font-medium">{t.scan.editTitle}</h2>
           <p className="mt-1 text-xs text-[#5B6470]">{t.scan.editIntro}</p>
         </div>
-        <button onClick={onCancel} aria-label={t.scan.back} className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none">×</button>
+        <button onClick={onCancel} aria-label={t.scan.back} className="text-[#98A0A9] hover:text-[#14181F] text-lg leading-none pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:justify-center pointer-coarse:min-w-11 pointer-coarse:min-h-11 pointer-coarse:-m-2.5">×</button>
       </div>
 
       <div
@@ -864,7 +864,7 @@ function CornerEditor({
 
       {busy && <p className="mt-3 text-xs text-[#9A6400]">{busy}</p>}
 
-      <div className="mt-5 flex items-center justify-between gap-2">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
         <button onClick={() => onApply(null)} disabled={!!busy} className="btn-ghost h-10 px-4 text-sm">
           {t.scan.useFullPhoto}
         </button>

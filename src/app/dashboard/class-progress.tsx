@@ -76,7 +76,7 @@ export default function ClassProgress({ classId, t }: { classId: string; t: Libr
 
   if (!loaded) {
     return (
-      <button onClick={load} disabled={busy} className="mt-3 text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-50">
+      <button onClick={load} disabled={busy} className="mt-3 text-xs font-medium text-[#0C8175] hover:underline disabled:opacity-50 pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
         {busy ? t.progress.loading : t.progress.show}
       </button>
     );

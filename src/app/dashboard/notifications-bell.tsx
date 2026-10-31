@@ -188,7 +188,7 @@ export default function NotificationsBell({
       <button
         data-tour="notifications"
         onClick={() => void toggle()}
-        className="relative h-9 w-9 inline-flex items-center justify-center rounded-lg hover:bg-[#EEF0EC] text-base"
+        className="relative h-11 w-11 sm:h-9 sm:w-9 inline-flex items-center justify-center rounded-lg hover:bg-[#EEF0EC] text-base"
         aria-label={unread ? fmt(t.titleUnread, { count: unread }) : t.title}
         title={noticesOn ? t.tooltipWithNotices : t.tooltipIssuesOnly}
       >
@@ -199,8 +199,12 @@ export default function NotificationsBell({
           </span>
         )}
       </button>
+      {/* On a phone the bell sits near the bar's end and a w-80 panel hung
+          from it ran off the opposite edge, so below sm the panel is pinned to
+          the viewport under the bar instead (the header sets no transform, so
+          `fixed` is the screen). */}
       {open && (
-        <div className="absolute end-0 top-11 z-50 w-80 max-h-96 overflow-y-auto card p-3 shadow-lg">
+        <div className="fixed inset-x-3 top-[calc(4rem+env(safe-area-inset-top))] sm:absolute sm:inset-x-auto sm:end-0 sm:top-11 z-50 sm:w-80 max-h-[min(24rem,calc(100dvh-6rem))] overflow-y-auto card p-3 shadow-lg">
           <p className="text-xs font-medium text-[#5B6470] mb-2">
             {noticesOn ? t.headingWithNotices : t.headingIssuesOnly}
           </p>

@@ -177,7 +177,7 @@ function NoticeLine({
   t: NoticeBannerMessages;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5 mb-1">
           <span className="chip bg-white text-[#9A6400]">{n.countdown.label}</span>
@@ -211,7 +211,7 @@ function NoticeLine({
           onClick={onDismiss}
           aria-label={fmt(t.dismiss, { title: n.title })}
           title={t.dismissTitle}
-          className="text-[#9A6400] hover:text-[#14181F] text-lg leading-none"
+          className="text-[#9A6400] hover:text-[#14181F] text-lg leading-none pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:justify-center pointer-coarse:min-w-11 pointer-coarse:min-h-11 pointer-coarse:-m-2.5"
         >
           ×
         </button>

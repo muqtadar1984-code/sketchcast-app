@@ -253,7 +253,7 @@ export default function UploadBook({
             setScanned(false);
             setDupe(null); // a different file deserves a fresh question
           }}
-          className="text-sm text-[#14181F] file:me-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 file:text-[#0C8175] file:font-medium"
+          className="max-w-full text-sm text-[#14181F] file:me-3 file:rounded-lg file:border-0 file:bg-[#E2F4F1] file:px-3 file:py-2 pointer-coarse:file:py-3 file:text-[#0C8175] file:font-medium"
         />
         {/* No digital copy? Photograph the pages — they become one PDF and take
             exactly this same upload path. */}

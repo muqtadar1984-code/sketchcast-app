@@ -87,9 +87,11 @@ export default function FeedbackWidget({
       {/* Persistent entry point in the bottom trailing corner (right in LTR,
           left in RTL — bottom-44 end-4) — stacked ABOVE SK's corner figure (up to 144px tall at
           bottom-4 end-4), with a clear gap, so the two never collide. */}
-      <div className="fixed bottom-44 end-4 z-40">
+      <div data-corner className="fixed bottom-44 end-4 z-40">
         {submitted ? (
-          <span className="inline-flex items-center gap-2 rounded-full bg-white border border-[#E6E8E4] px-4 h-10 text-sm text-[#0C8175] shadow-sm">
+          /* Purely a thank-you, so on a phone — where a pill this wide would
+             sit over the page for good — it steps aside. */
+          <span className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white border border-[#E6E8E4] px-4 h-10 text-sm text-[#0C8175] shadow-sm">
             ✓ Feedback received — thank you!
           </span>
         ) : (

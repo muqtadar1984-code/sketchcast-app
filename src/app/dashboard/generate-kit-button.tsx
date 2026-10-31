@@ -228,7 +228,7 @@ export default function GenerateKitButton({
   const dialog = offer && (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#14181F]/30" onClick={() => !adopting && setOffer(null)} aria-hidden />
-      <div role="dialog" aria-modal="true" aria-label={t.reuse.title} className="relative card w-full max-w-md p-6 space-y-3">
+      <div role="dialog" aria-modal="true" aria-label={t.reuse.title} className="relative card w-full max-w-md p-6 space-y-3 max-h-[90dvh] overflow-y-auto max-h-[90dvh] overflow-y-auto">
         <h2 className="text-xl">{t.reuse.title}</h2>
         <p className="text-sm text-[#5B6470]">{t.reuse.body}</p>
         <p className="text-xs text-[#98A0A9]">{t.reuse.hint}</p>
