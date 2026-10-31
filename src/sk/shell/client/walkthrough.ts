@@ -96,6 +96,9 @@ export function needHolds(spec: WalkNeedSpec, f: WalkFacts): boolean {
     case "class":
       v = !!f.classId;
       break;
+    case "learn":
+      v = !!f.learnPath;
+      break;
     case "children":
       v = (f.children ?? 0) > 0;
       break;
@@ -111,12 +114,13 @@ export function needHolds(spec: WalkNeedSpec, f: WalkFacts): boolean {
   return neg ? !v : v;
 }
 
-const TOKEN_RE = /\{(classId|bookId)\}/g;
+const TOKEN_RE = /\{(classId|bookId|learnPath)\}/g;
 
-/** Fill `{classId}` / `{bookId}`. A missing value in the query
- *  drops that parameter; in the path it makes the route unusable (null). */
+/** Fill `{classId}` / `{bookId}` / `{learnPath}` (a whole path, query
+ *  included). A missing value in the query drops that parameter; in the path
+ *  it makes the route unusable (null). */
 export function resolveRoute(route: string, f: WalkFacts): string | null {
-  const values: Record<string, string | null | undefined> = { classId: f.classId, bookId: f.bookId };
+  const values: Record<string, string | null | undefined> = { classId: f.classId, bookId: f.bookId, learnPath: f.learnPath };
   const [path, query] = route.split("?", 2) as [string, string | undefined];
   let missing = false;
   const p = path.replace(TOKEN_RE, (_m, k: string) => {

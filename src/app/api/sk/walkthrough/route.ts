@@ -16,13 +16,16 @@ import {
 } from "@/utils/flags";
 import { activeHatCookie } from "@/utils/hats-server";
 import { walkRoleFor, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
+import { loadLearnerKits } from "@/utils/present/learner-server";
+import { learnHref } from "@/utils/present/learner-links";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // SK's first-login walkthrough (founder 2026-10-30): what the tour needs to
 // know about the caller to plan its stops — books (and the one the Library
-// stops open), the first class, children, and the per-school switches. (SK
+// stops open), the first class, children, the student's first assigned kit
+// on her Board (learnPath, 2026-10-31), and the per-school switches. (SK
 // Tutor is retired, 2026-10-31: no tutor chapter or tab fact.) Called once when
 // a tour starts (never on page load).
 //
@@ -69,7 +72,11 @@ export async function GET() {
         board: presentAllowed(user),
       });
     } else if (tour === "student") {
-      // Nothing beyond the shared facts (diary, reportIssue).
+      // Her first assigned kit on the student Board (learner mode: a student
+      // with the Shell on — the gate above), in the Board's own order (overdue,
+      // then soonest due): the link "Learn with SK" opens. None = no Board stop.
+      const kits = await loadLearnerKits(supabase);
+      facts.learnPath = kits[0] ? learnHref(kits[0].id) : null;
     } else if (tour === "parent") {
       const { data: links } = await supabase.from("parent_links").select("verified_at, source").eq("parent_id", user.id);
       const rows = (links ?? []) as Array<{ verified_at: string | null; source: string | null }>;

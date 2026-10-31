@@ -293,10 +293,11 @@ describe("TourProvider stands down for SK users (founder decision 1)", () => {
 });
 
 describe("the version bump (founder decision 9)", () => {
-  it("sk-intro is v2, so everyone who heard v1 gets the walkthrough once — and only once", () => {
-    expect(SK_INTRO_TOUR).toEqual({ key: "sk-intro", version: 2 });
+  it("sk-intro is v3 (2026-10-31: the student Board), so everyone who heard v1 or v2 gets the walkthrough once — and only once", () => {
+    expect(SK_INTRO_TOUR).toEqual({ key: "sk-intro", version: 3 });
     expect(shouldAutoStart({ version: 1, status: "completed" }, SK_INTRO_TOUR.version)).toBe(true);
-    expect(shouldAutoStart({ version: 2, status: "skipped" }, SK_INTRO_TOUR.version)).toBe(false);
+    expect(shouldAutoStart({ version: 2, status: "completed" }, SK_INTRO_TOUR.version)).toBe(true);
+    expect(shouldAutoStart({ version: 3, status: "skipped" }, SK_INTRO_TOUR.version)).toBe(false);
     // The layout decides introDue from the same key and version.
     expect(read("layout.tsx")).toContain("skIntroDue = shouldAutoStart(skSeen, SK_INTRO_TOUR.version);");
     // The run posts that pair.
