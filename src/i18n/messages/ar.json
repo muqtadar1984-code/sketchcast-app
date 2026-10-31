@@ -107,7 +107,8 @@
       "inHours": "خلال {n} س",
       "inDays": "خلال {n} يوم"
     },
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "more": "المزيد"
   },
   "student": {
     "title": "دروسي",

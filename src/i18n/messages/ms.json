@@ -107,7 +107,8 @@
       "inHours": "dalam {n} jam",
       "inDays": "dalam {n} hari"
     },
-    "settings": "Tetapan"
+    "settings": "Tetapan",
+    "more": "Lagi"
   },
   "student": {
     "title": "Pelajaran saya",

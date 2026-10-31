@@ -2279,7 +2279,7 @@ export default function SkShell({
       {quickOpen && !sheetOpen && quick}
       {/* The thought bubble sits beside the figure's HEAD (items-start), its
           trailing circles pointing at it. */}
-      <div className={`flex items-start gap-4 ${side === "start" ? "flex-row-reverse" : ""}`}>
+      <div data-sk="corner-row" className={`flex items-start gap-4 ${side === "start" ? "flex-row-reverse" : ""}`}>
         <SkBubble
           open={isBubbleOpen || thinking || !!hearingText}
           side={side}

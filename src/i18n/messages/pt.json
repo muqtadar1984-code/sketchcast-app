@@ -107,7 +107,8 @@
       "inHours": "em {n} h",
       "inDays": "em {n} dias"
     },
-    "settings": "Definições"
+    "settings": "Definições",
+    "more": "Mais"
   },
   "student": {
     "title": "Minhas aulas",

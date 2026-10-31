@@ -3,6 +3,7 @@ import { createClient, currentUser } from "@/utils/supabase/server";
 import { LogoMark } from "./icons";
 import HeaderNav from "./header-nav";
 import MobileNav from "./mobile-nav";
+import PhoneTabBar from "./phone-tab-bar";
 import TourReplayButton from "./tour-replay-button";
 import HatSwitcher from "./hat-switcher";
 import LanguageSwitcher from "./language-switcher";
@@ -20,7 +21,7 @@ import {
 } from "@/utils/flags";
 import { hatsFor, resolveHat, type Hat } from "@/utils/hats";
 import { headerFit } from "@/utils/header-fit";
-import { tabsFor, tabsForHat } from "@/utils/nav-tabs";
+import { phoneTabBar, tabsFor, tabsForHat } from "@/utils/nav-tabs";
 import { presentEntitled } from "@/utils/present/entitlement";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { activeHatCookie } from "@/utils/hats-server";
@@ -320,95 +321,120 @@ export default async function AppHeader() {
     </form>
   );
 
+  // A plain teacher's phone (founder 2026-10-31, teachers first): the tabs
+  // move to a bar at the bottom (phone-tab-bar.tsx) and the hamburger only
+  // returns from md up. Every other profile — a teacher who also coordinates
+  // or parents, any hat switcher, parents, students, leaders — keeps the
+  // hamburger until it has its own phone pass.
+  const teacherBar = !!user && role === "teacher" && !hasScope && !hasChildren && hats.length <= 1 && tabs.length > 0;
+  const bar = teacherBar ? phoneTabBar(tabs) : null;
+  const menuClass = !teacherBar
+    ? tabs.length > 0
+      ? navHide
+      : "md:hidden"
+    : navHide === "md:hidden"
+      ? "hidden"
+      : `hidden md:block ${navHide}`;
+
   return (
-    <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white pt-[env(safe-area-inset-top)]">
-      {/* Full-width bar: the logo alone anchors the left, the tabs float in
-          the center (no dead gap), controls sit right, and the SCHOOL identity
-          holds the extreme right (its logo joins the name later). On phones
-          the tabs are hidden, so a hamburger (far left) opens them as a
-          dropdown — every role's tabs, same source — with the account
-          controls under them. The side padding never sits inside a landscape
-          notch (physical pl/pr: the safe-area insets are physical too). */}
-      <div className="pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))] h-16 flex items-center gap-2 sm:gap-5">
-        {user && (
-          <MobileNav
-            tabs={tabs}
-            openLabel={t.nav.openMenu}
-            closeLabel={t.nav.closeMenu}
-            className={tabs.length > 0 ? navHide : "md:hidden"}
-            panelTop="top-full"
-          >
-            {hatSwitcher}
-            {languageSwitcher}
-            {settingsLink(false)}
-            <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
-            {signOut}
-          </MobileNav>
-        )}
-        {/* The product name is a name, in every language — never translated. */}
-        <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
-          <LogoMark size={30} />
-          SketchCast <span className="text-[#0C8175]">AI</span>
-        </Link>
-        <div className="flex-1 min-w-0 flex justify-center">
-          {tabs.length > 0 && <HeaderNav tabs={tabs} className={navShow} />}
-        </div>
-        <div className="flex items-center gap-3 text-sm shrink-0">
-          {/* Below md these live in the hamburger's panel (above). A signed-out
-              viewer has no menu, so for them nothing moves. */}
-          <div className={`${user ? "hidden md:flex" : "flex"} items-center gap-3`}>
-            {hatSwitcher}
-            {/* Never hidden outright like the name beside it: a reader who
-                can't read the current language has to be able to reach this
-                from the device they actually use — on a phone, in the menu. */}
-            {languageSwitcher}
-          </div>
-          {/* The two purely INFORMATIONAL items in this cluster — who you are,
-              and which school you're in — are the ones that yield when the bar
-              is tight, because everything else beside them is a control you
-              act on. Their breakpoints are deliberately not the device-ish
-              md/xl they were: what they compete with is the tab row's width,
-              not a phone or a laptop, so each returns only once the viewport
-              has grown enough to pay for it (measured: the name is 171px, the
-              school badge 105px). */}
-          <span
-            className="text-[#5B6470] hidden min-[1800px]:inline max-w-[14rem] truncate whitespace-nowrap"
-            title={`${name}${label ? ` · ${label}` : ""}`}
-          >
-            {name}
-            {label ? ` · ${label}` : ""}
-          </span>
+    <>
+      <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white pt-[env(safe-area-inset-top)]">
+        {/* Full-width bar: the logo alone anchors the left, the tabs float in
+            the center (no dead gap), controls sit right, and the SCHOOL identity
+            holds the extreme right (its logo joins the name later). On phones
+            the tabs are hidden, so a hamburger (far left) opens them as a
+            dropdown — every role's tabs, same source — with the account
+            controls under them. The side padding never sits inside a landscape
+            notch (physical pl/pr: the safe-area insets are physical too). */}
+        <div className="pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))] h-16 flex items-center gap-2 sm:gap-5">
           {user && (
-            <NotificationsBell
-              userId={user.id}
-              issues={bellIssues}
-              initialUnread={bellUnread}
-              notices={bellNotices}
-              noticesUnread={bellNoticesUnread}
-              noticesOn={noticesOn}
-              // Where the board lives for THIS viewer. Taken from the tabs we
-              // just built rather than hard-coded, so it is by construction a
-              // route they actually hold: /dashboard/diary for a teacher,
-              // parent or student, /dashboard/school/diary for leadership, and
-              // the calendar when they have no Diary tab at all.
-              noticesHref={tabs.find((tab) => tab.href.endsWith("/diary"))?.href ?? "/dashboard/calendar"}
-              t={t.nav.bell}
-            />
+            <MobileNav
+              tabs={tabs}
+              openLabel={t.nav.openMenu}
+              closeLabel={t.nav.closeMenu}
+              className={menuClass}
+              panelTop="top-full"
+            >
+              {hatSwitcher}
+              {languageSwitcher}
+              {settingsLink(false)}
+              <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
+              {signOut}
+            </MobileNav>
           )}
-          <div className={`${user ? "hidden md:flex" : "flex"} items-center gap-3`}>
-            {settingsLink(true)}
-            <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
-            {signOut}
+          {/* The product name is a name, in every language — never translated. */}
+          <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
+            <LogoMark size={30} />
+            SketchCast <span className="text-[#0C8175]">AI</span>
+          </Link>
+          <div className="flex-1 min-w-0 flex justify-center">
+            {tabs.length > 0 && <HeaderNav tabs={tabs} className={navShow} />}
           </div>
-          {/* Logical inset/border (ps-/ms-/border-s) so the school's divider sits
-              on the correct side once <html dir="rtl"> mirrors the bar. */}
-          {schoolName && (
-            <span className="hidden min-[1600px]:inline-flex items-center ps-4 ms-1 border-s border-[#E6E8E4] font-display text-[#14181F] whitespace-nowrap max-w-[14rem] truncate">
-              {schoolName}
+          <div className="flex items-center gap-3 text-sm shrink-0">
+            {/* Below md these live in the hamburger's panel (above). A signed-out
+                viewer has no menu, so for them nothing moves. */}
+            <div className={`${user ? "hidden md:flex" : "flex"} items-center gap-3`}>
+              {hatSwitcher}
+              {/* Never hidden outright like the name beside it: a reader who
+                  can't read the current language has to be able to reach this
+                  from the device they actually use — on a phone, in the menu. */}
+              {languageSwitcher}
+            </div>
+            {/* The two purely INFORMATIONAL items in this cluster — who you are,
+                and which school you're in — are the ones that yield when the bar
+                is tight, because everything else beside them is a control you
+                act on. Their breakpoints are deliberately not the device-ish
+                md/xl they were: what they compete with is the tab row's width,
+                not a phone or a laptop, so each returns only once the viewport
+                has grown enough to pay for it (measured: the name is 171px, the
+                school badge 105px). */}
+            <span
+              className="text-[#5B6470] hidden min-[1800px]:inline max-w-[14rem] truncate whitespace-nowrap"
+              title={`${name}${label ? ` · ${label}` : ""}`}
+            >
+              {name}
+              {label ? ` · ${label}` : ""}
             </span>
-          )}
+            {user && (
+              <NotificationsBell
+                userId={user.id}
+                issues={bellIssues}
+                initialUnread={bellUnread}
+                notices={bellNotices}
+                noticesUnread={bellNoticesUnread}
+                noticesOn={noticesOn}
+                // Where the board lives for THIS viewer. Taken from the tabs we
+                // just built rather than hard-coded, so it is by construction a
+                // route they actually hold: /dashboard/diary for a teacher,
+                // parent or student, /dashboard/school/diary for leadership, and
+                // the calendar when they have no Diary tab at all.
+                noticesHref={tabs.find((tab) => tab.href.endsWith("/diary"))?.href ?? "/dashboard/calendar"}
+                t={t.nav.bell}
+              />
+            )}
+            <div className={`${user ? "hidden md:flex" : "flex"} items-center gap-3`}>
+              {settingsLink(true)}
+              <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
+              {signOut}
+            </div>
+            {/* Logical inset/border (ps-/ms-/border-s) so the school's divider sits
+                on the correct side once <html dir="rtl"> mirrors the bar. */}
+            {schoolName && (
+              <span className="hidden min-[1600px]:inline-flex items-center ps-4 ms-1 border-s border-[#E6E8E4] font-display text-[#14181F] whitespace-nowrap max-w-[14rem] truncate">
+                {schoolName}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+      {bar && (
+        <PhoneTabBar tabs={tabs} primary={bar.primary} more={bar.more} moreLabel={t.nav.more} closeLabel={t.nav.closeMenu}>
+          {languageSwitcher}
+          {settingsLink(false)}
+          <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
+          {signOut}
+        </PhoneTabBar>
+      )}
+    </>
   );
 }

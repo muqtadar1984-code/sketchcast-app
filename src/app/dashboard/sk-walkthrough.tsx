@@ -68,6 +68,7 @@ import {
   currentStop,
   findAnchor,
   findParts,
+  hiddenAnchor,
   isActive,
   jumpTo,
   missingStop,
@@ -107,6 +108,7 @@ import { splitSentences } from "@/sk/shell/client/speech";
 import { beaconVoiceEvents, createVoiceLog, skipOutcome, tourEvent, tourPageState, walkEvent, type TourOutcome, type VoiceLog, type WalkVia } from "@/sk/shell/client/voice-log";
 import type { SkTurnWalk, SkWalkAction } from "@/sk/shell/types";
 import { CLICK_ONLY_DEMOS, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
+import { requestSkReveal } from "@/sk/walkthrough/bus";
 
 export type WalkCopy = Dictionary["sk"]["walkthrough"];
 
@@ -788,13 +790,30 @@ export function useSkWalkthrough({
       visible: (el: Element) => el.getClientRects().length > 0,
     };
     const none = { el: null as Element | null, index: 0 };
+    // Phone layout (2026-10-31): a control inside a closed sheet (a teacher's
+    // More sheet, a chapter's actions) is on the page but hidden. Asked for
+    // once per stop, as soon as a look finds that control hidden rather than
+    // missing (a page still streaming in has neither yet); the sheet opens and
+    // the next look finds it. Closed again when the stop ends (cleanup below).
+    let revealAsked = false;
+    const find = () => {
+      const h = s.parts?.length ? findParts(s.parts, dom) : s.anchors.length ? findAnchor(s.anchors, dom) : none;
+      if (!revealAsked && (!h || h.index > 0)) {
+        const hidden = hiddenAnchor(s.parts?.length ? s.parts.map((p) => p.anchors) : [s.anchors], dom);
+        if (hidden.length) {
+          revealAsked = true;
+          if (requestSkReveal(hidden)) debug(`stop "${s.id}": opened what holds its control`);
+        }
+      }
+      return h;
+    };
     void (async () => {
       // Found = visible and holding still; missing = only once the page has
       // SETTLED without it (never a clock counted from the navigation). A
       // combined stop is found with its parts: complete (every part's own
       // control) at once, else whatever is there once the page has settled.
       const hit = await waitForSettledAnchor<{ el: Element | null; line?: string; index: number; parts?: Array<PartHit<Element>> }>({
-        find: () => (s.parts?.length ? findParts(s.parts, dom) : s.anchors.length ? findAnchor(s.anchors, dom) : none),
+        find,
         rect: (h) => (h.el ? rectOf(h.el) : null),
         same: (a, b) => a.el === b.el,
         // A fallback anchor (not the stop's own control) only once the page
@@ -863,6 +882,7 @@ export function useSkWalkthrough({
     return () => {
       ac.abort();
       clearPartClock();
+      if (revealAsked) requestSkReveal(null);
       // 2026-10-31: cut off while still waiting (a pause, a move, a new run, the
       // launcher going away) — before, such a stop left no trace at all.
       if (!decided) logStop(s.id, s.route, "abandoned", Date.now() - t0, "cut-off");

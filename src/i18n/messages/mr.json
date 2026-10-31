@@ -107,7 +107,8 @@
       "inHours": "{n} तासांत",
       "inDays": "{n} दिवसांत"
     },
-    "settings": "सेटिंग्ज"
+    "settings": "सेटिंग्ज",
+    "more": "अधिक"
   },
   "student": {
     "title": "माझे धडे",

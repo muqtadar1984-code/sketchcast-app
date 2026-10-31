@@ -75,7 +75,20 @@ export function SkAvatar({
         height={480}
         unoptimized
         priority
+        data-sk="avatar-full"
         className="relative h-full w-auto object-contain object-bottom drop-shadow-lg"
+      />
+      {/* The face alone, for a teacher's phone (2026-10-31): there SK stands in
+          the tab bar's middle slot as a round 56px portrait, and globals.css
+          swaps this in for the full figure. Hidden everywhere else. */}
+      <Image
+        src={look === "A" ? "/sk/portrait/sk-a.webp" : "/sk/portrait/sk-b.webp"}
+        alt=""
+        width={480}
+        height={360}
+        unoptimized
+        data-sk="avatar-face"
+        className="hidden relative h-full w-full object-cover object-top"
       />
       {listening && <span aria-hidden data-sk="listening-dot" className="absolute top-1 end-1 h-3.5 w-3.5 rounded-full bg-[#B42318] ring-2 ring-white" />}
     </button>
@@ -128,7 +141,7 @@ export function SkBubble({
       } ${open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
     >
       <span aria-hidden data-sk="bubble-tail" className={`absolute top-5 ${near} h-3 w-3 rounded-full border border-[#E6E8E4] bg-white shadow-sm`} />
-      <span aria-hidden className={`absolute top-9 ${far} h-2 w-2 rounded-full border border-[#E6E8E4] bg-white shadow-sm`} />
+      <span aria-hidden data-sk="bubble-tail2" className={`absolute top-9 ${far} h-2 w-2 rounded-full border border-[#E6E8E4] bg-white shadow-sm`} />
       {onClose && (
         <button
           type="button"

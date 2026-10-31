@@ -18,6 +18,7 @@ import {
   SETTLE_QUIET_MS,
   START_SETTLE_CAP_MS,
   advanceDelay,
+  hiddenAnchor,
   atRoute,
   backStop,
   createWalkStarter,
@@ -1178,5 +1179,49 @@ describe("the start reports how it ended", () => {
     await f.flush();
     expect(f.events).toEqual([{ what: "failed", ms: 0, error: "boom" }]);
     expect(f.starter.starting).toBe(false);
+  });
+});
+
+describe("hiddenAnchor (phone layout: the tour opens what hides a control)", () => {
+  type El = { id: string; shown: boolean };
+  const domOf = (map: Record<string, El[]>) => ({
+    query: (sel: string) => map[sel]?.[0] ?? null,
+    queryAll: (sel: string) => map[sel] ?? [],
+    visible: (el: El) => el.shown,
+  });
+  const a = (sel: string) => ({ sel });
+
+  it("returns the stop's own control when it is on the page but hidden", () => {
+    const kit = { id: "kit", shown: false };
+    const list = { id: "list", shown: true };
+    expect(hiddenAnchor([[a("kit"), a("list")]], domOf({ kit: [kit], list: [list] }))).toEqual([kit]);
+  });
+
+  it("reveals nothing when the first control on the page is already visible", () => {
+    const kit = { id: "kit", shown: true };
+    expect(hiddenAnchor([[a("kit")]], domOf({ kit: [kit] }))).toEqual([]);
+  });
+
+  it("skips anchors that are not on the page at all, then decides on the next one", () => {
+    const assign = { id: "assign", shown: false };
+    expect(hiddenAnchor([[a("missing"), a("assign")]], domOf({ assign: [assign] }))).toEqual([assign]);
+  });
+
+  it("walks a combined stop part by part: the first part with only a hidden control decides", () => {
+    const bell = { id: "bell", shown: true };
+    const lang = { id: "lang", shown: false };
+    expect(hiddenAnchor([[a("bell")], [a("lang")]], domOf({ bell: [bell], lang: [lang] }))).toEqual([lang]);
+  });
+
+  it("returns every hidden copy, so the container holding any of them can open", () => {
+    const header = { id: "header", shown: false };
+    const sheet = { id: "sheet", shown: false };
+    expect(hiddenAnchor([[a("lang")]], domOf({ lang: [header, sheet] }))).toEqual([header, sheet]);
+  });
+
+  it("prefers a visible copy of a control over a hidden one (the header's tab vs the tab bar's)", () => {
+    const hiddenCopy = { id: "header", shown: false };
+    const shownCopy = { id: "tabbar", shown: true };
+    expect(hiddenAnchor([[a("diary")]], domOf({ diary: [hiddenCopy, shownCopy] }))).toEqual([]);
   });
 });

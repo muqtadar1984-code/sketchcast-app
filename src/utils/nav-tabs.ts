@@ -181,3 +181,37 @@ export function tabsFor(
   }
   return tabs;
 }
+
+// The order a teacher's tabs claim the phone tab bar (2026-10-31, teachers
+// only): the Library, then what she opens daily, then what she opens weekly.
+// Whatever is left goes under "More" in the order the header lists it.
+const PHONE_PRIORITY = [
+  "/dashboard",
+  "/dashboard/kits",
+  "/dashboard/diary",
+  "/present",
+  "/dashboard/analytics",
+  "/dashboard/calendar",
+  "/dashboard/my-timetable",
+];
+
+/** The phone tab bar holds three tabs (SK takes the middle slot, "More" the
+ *  last); every other tab goes behind "More". Same tabs, same labels — only
+ *  where they sit. Unknown hrefs rank after the known ones, in header order. */
+export function phoneTabBar(tabs: NavTab[], slots = 3): { primary: NavTab[]; more: NavTab[] } {
+  const rank = (href: string) => {
+    const i = PHONE_PRIORITY.indexOf(href);
+    return i === -1 ? PHONE_PRIORITY.length : i;
+  };
+  const picked = new Set(
+    [...tabs]
+      .map((tab, i) => ({ tab, i }))
+      .sort((a, b) => rank(a.tab.href) - rank(b.tab.href) || a.i - b.i)
+      .slice(0, slots)
+      .map((x) => x.tab.href),
+  );
+  return {
+    primary: [...tabs].filter((tab) => picked.has(tab.href)).sort((a, b) => rank(a.href) - rank(b.href)),
+    more: tabs.filter((tab) => !picked.has(tab.href)),
+  };
+}
