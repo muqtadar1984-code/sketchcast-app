@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { loadQuizArtifact, type QuizStore } from "@/app/api/quiz/logic";
+import { loadQuizArtifact, type QuizStore, type RawQuiz } from "@/app/api/quiz/logic";
 import { learnerKitFor, learnerWorksheetIn } from "@/utils/present/learner";
 import { learnerGate, loadLearnerKits } from "@/utils/present/learner-server";
 import { claudeClient, claudeConfigured, claudeModel } from "@/utils/claude-backend";
@@ -9,6 +9,10 @@ import { skBedrockRegion, skModelMap } from "@/sk/claude-target";
 import { meterStudentTurn } from "@/sk/student-cap";
 import { skDbFrom } from "@/sk/store-supabase";
 import { practise, type PracticeDeps } from "@/sk/practice/service";
+import { loadQuizKeyState } from "@/sk/practice/quiz-hold";
+import { afterPracticeAnswer } from "@/sk/practice/after";
+import { kitTitleOf } from "@/sk/practice/mastery-read";
+import { readManifest } from "@/sk/manifest/store";
 import type { HelpModelCall } from "@/sk/practice/help";
 
 export const runtime = "nodejs";
@@ -36,7 +40,9 @@ export const dynamic = "force-dynamic";
 //
 // THE KEY STAYS HERE. questions.json is read with the service role on the
 // server (loadQuizArtifact, the quiz's own loader); the reply carries the key
-// only at the ladder's "answer" rung (src/sk/practice/service.ts).
+// only at the ladder's "answer" rung (src/sk/practice/service.ts) — and NOT
+// even then while the paper is her graded quiz, not handed in and not past due
+// (src/sk/practice/quiz-hold.ts: the worked step + "unlocks after you hand in").
 //
 // COST. Checking is free. Help comes from the paper, else the cache, else ONE
 // Haiku 5.5 call per question × rung — metered against the student's fair-use
@@ -98,15 +104,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Practice is unavailable right now." }, { status: 500 });
   }
 
+  // The paper is read once per request (the answer, then the phase 4 after-work).
+  const papers = new Map<string, Promise<RawQuiz | null>>();
+  const loadPaper = (id: string) => {
+    if (!papers.has(id)) papers.set(id, loadQuizArtifact(admin as unknown as QuizStore, id));
+    return papers.get(id)!;
+  };
   const deps: PracticeDeps = {
     db: skDbFrom(admin),
-    loadPaper: (id) => loadQuizArtifact(admin as unknown as QuizStore, id),
+    loadPaper,
     call: claudeConfigured() ? defaultCall : null,
     meter: async () => (await meterStudentTurn(admin, user.id)).ok,
+    // Phase 4: the key stays held while this paper is her open graded quiz.
+    quizKey: (studentId, generationId) => loadQuizKeyState(skDbFrom(admin), studentId, generationId),
     log: (m) => console.warn(m),
   };
   try {
     const r = await practise(deps, { studentId: user.id, sessionId, kitId: kit.id, generationId, questionId, kind, answer: body.answer, ms: body.ms });
+    // Phase 4, after the reply: tag the worksheet's concepts on her first
+    // answer, and draft the recommended plan when she finishes it.
+    if (r.status === 200) {
+      const db = skDbFrom(admin);
+      const work = async () => {
+        await afterPracticeAnswer({
+          db,
+          studentId: user.id,
+          sessionId,
+          kitId: kit.id,
+          generationId,
+          paper: await loadPaper(generationId).catch(() => null),
+          kitTitle: async () => kitTitleOf((await db.from("generations").select("title").eq("id", kit.id).maybeSingle()).data),
+          loadManifest: async () => {
+            const m = await readManifest(admin, kit.id);
+            return m.status === "ready" ? m.manifest : null;
+          },
+          call: deps.call,
+          log: (m) => console.warn(m),
+        });
+      };
+      try {
+        after(work);
+      } catch {
+        /* outside a request scope (never in production): skip the after-work */
+      }
+    }
     return NextResponse.json(r.body, { status: r.status, headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[sk-practice] answer failed:", (e as Error).message);

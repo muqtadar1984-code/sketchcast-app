@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runSkMemorySweep } from "@/sk/memory-sweep";
 import { runSkKnowledgePoll } from "@/sk/knowledge/poll";
+import { runSkWeeklyPlans } from "@/sk/practice/weekly";
 import type { KnowledgeDb } from "@/sk/knowledge/store";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { renderEmail } from "@/utils/lifecycle/copy";
@@ -65,13 +66,16 @@ async function run(request: Request) {
   // SK S7 K1: import new book-app releases (0174). Guarded: waits quietly until
   // pub_releases exists; a failure only logs (src/sk/knowledge/poll.ts).
   const skKnowledge = new URL(request.url).searchParams.get("dry") === "1" ? null : await runSkKnowledgePoll(() => createAdminClient() as unknown as KnowledgeDb);
+  // SK student Board phase 4: the weekly recommended plans — Sundays (UTC)
+  // only, inside this daily run (no new Vercel cron); guarded, logs only.
+  const skPlans = new URL(request.url).searchParams.get("dry") === "1" ? null : await runSkWeeklyPlans(createAdminClient);
 
   const sinceRaw = process.env.LIFECYCLE_EMAILS_SINCE;
   if (!sinceRaw) {
     // Fail closed. Existing users were contacted by hand and must never be
     // swept up by a cron that lost its cutoff.
     return NextResponse.json(
-      { skipped: "LIFECYCLE_EMAILS_SINCE not set — sending nothing", skMemory, skKnowledge },
+      { skipped: "LIFECYCLE_EMAILS_SINCE not set — sending nothing", skMemory, skKnowledge, skPlans },
       { status: 200 },
     );
   }
@@ -168,7 +172,7 @@ async function run(request: Request) {
     sent += 1;
   }
 
-  return NextResponse.json({ since: since.toISOString(), candidates: (data ?? []).length, sent, failed, skMemory, skKnowledge });
+  return NextResponse.json({ since: since.toISOString(), candidates: (data ?? []).length, sent, failed, skMemory, skKnowledge, skPlans });
 }
 
 // Vercel Cron issues a GET; POST is kept for manual/dry runs via curl.

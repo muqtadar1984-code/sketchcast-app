@@ -39,6 +39,8 @@ import { runBookActivate } from "./act-book";
 import { bookActivateAction } from "@/sk/capabilities/book";
 import { runNoticeSchool } from "./act-notice";
 import { noticeSchoolAction } from "@/sk/capabilities/notice";
+import { runPlanReview } from "./act-plan";
+import { planReviewAction } from "@/sk/capabilities/plan";
 
 export { ACT_CLICK_ONLY_LINE, ACT_LINES, ACT_NOT_ALLOWED_LINE, consumeThenWrite, writeFailure } from "./act-core";
 export type { ActAdmin, ActHandler, ActInput, ActOutcome, Handled, WriteOutcome } from "./act-core";
@@ -127,6 +129,9 @@ export const HANDLERS: Record<string, ActHandler> = {
   // S5 slice D: the school notice — CLICK-ONLY (§9.2, school-wide); the row is
   // POST /api/notices' own (shared builder), inserted AS THE LEADER (act-notice.ts).
   "notice.school": { tier: "confirm", kind: "act", clickOnly: true, meta: noticeSchoolAction.meta, run: runNoticeSchool },
+  // 2026-10-31 (student Board phase 4): approve a recommended plan — consume,
+  // then sk_learn_plan_decide AS THE APPROVER (0179; act-plan.ts).
+  "plan.review": { tier: "confirm", kind: "act", meta: planReviewAction.meta, run: runPlanReview },
 };
 
 // ── The decision ─────────────────────────────────────────────────────────────

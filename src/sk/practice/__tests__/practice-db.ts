@@ -93,3 +93,76 @@ export const PAPER = {
     { id: "q6", type: "subjective", prompt: "Explain why plants need light.", answer_outline: "Light energy drives photosynthesis, making glucose.", marks: 3 },
   ],
 };
+
+// ── phase 4 (0179): concept tags, plans, focus — and the rows they read ─────
+const PLAN_STATUS = ["draft", "pending_approval", "approved", "declined", "superseded"] as const;
+export const PLAN_SPECS: Record<string, TableSpec> = {
+  ...PRACTICE_SPECS,
+  sk_practice_concepts: {
+    strictColumns: true,
+    unique: [{ cols: ["generation_id", "question_id", "question_hash"] }],
+    columns: {
+      generation_id: { type: "uuid", notNull: true, references: { table: "generations" } },
+      question_id: { type: "text", notNull: true, check: (v) => String(v).length >= 1 && String(v).length <= 80 },
+      question_hash: { type: "text", notNull: true, check: (v) => String(v).length === 64 },
+      concept_key: { type: "text", notNull: true, check: (v) => String(v).length >= 1 && String(v).length <= 120 },
+      concept_name: { type: "text", notNull: true, check: (v) => String(v).length >= 1 && String(v).length <= 200 },
+      method: { type: "text", notNull: true, in: ["paper", "manifest", "model"] },
+      model: { type: "text" },
+      cost_usd: { type: "numeric", notNull: true, default: () => 0, check: (v) => Number(v) >= 0 },
+      created_at: { type: "timestamptz", notNull: true, default: now },
+    },
+  },
+  sk_learn_plans: {
+    strictColumns: true,
+    unique: [{ cols: ["student_id", "kit_id"], where: (r: DbRow) => r.status === "draft" || r.status === "pending_approval" }],
+    columns: {
+      id: { type: "uuid", notNull: true, default: () => crypto.randomUUID() },
+      student_id: { type: "uuid", notNull: true, references: { table: "profiles" } },
+      kit_id: { type: "uuid", references: { table: "generations" } },
+      trigger: { type: "text", notNull: true, in: ["kit_done", "weekly"] },
+      approver_role: { type: "text", notNull: true, in: ["teacher", "parent"] },
+      class_id: { type: "uuid" },
+      approver_id: { type: "uuid" },
+      status: { type: "text", notNull: true, default: () => "draft", in: PLAN_STATUS },
+      summary: { type: "text", check: (v) => String(v).length <= 600 },
+      items: { type: "jsonb", notNull: true, default: () => [] },
+      mastery: { type: "jsonb", notNull: true, default: () => [] },
+      model: { type: "text" },
+      cost_usd: { type: "numeric", notNull: true, default: () => 0, check: (v) => Number(v) >= 0 },
+      edited: { type: "bool", notNull: true, default: () => false },
+      decided_by: { type: "uuid" },
+      decided_role: { type: "text", in: ["teacher", "parent"] },
+      decided_at: { type: "timestamptz" },
+      decline_note: { type: "text" },
+      applied: { type: "jsonb" },
+      created_at: { type: "timestamptz", notNull: true, default: now },
+      updated_at: { type: "timestamptz", notNull: true, default: now },
+    },
+    checks: { decided_iff_final: (r: DbRow) => (r.status === "approved" || r.status === "declined") === (r.decided_at != null) },
+  },
+};
+
+export const TEACHER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+export const PARENT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+export const CLASS = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+export const NEXT = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+/** The practice tables plus 0179's, with a school (TEACHER's CLASS holds STU) and a home child (STU2, PARENT). */
+export function planDb(): FakeDb {
+  const db = new FakeDb(PLAN_SPECS);
+  db.seed("profiles", [{ id: STU }, { id: STU2 }, { id: TEACHER }, { id: PARENT }]);
+  db.seed("generations", [
+    { id: KIT, title: "Cells — Lesson", kind: "presentation", status: "done", book_id: "book-1", chapter_ref: "2", owner_id: TEACHER },
+    { id: WS, title: "Cells — Worksheet", kind: "worksheet", status: "done", owner_id: TEACHER },
+    { id: NEXT, title: "Tissues — Lesson", kind: "presentation", status: "done", book_id: "book-1", chapter_ref: "3", owner_id: TEACHER, created_at: "2026-10-01T00:00:00Z" },
+  ]);
+  db.seed("classes", [{ id: CLASS, teacher_id: TEACHER, created_at: "2026-09-01T00:00:00Z" }]);
+  db.seed("enrollments", [{ class_id: CLASS, student_id: STU }]);
+  db.seed("generation_shares", [
+    { generation_id: KIT, class_id: CLASS, student_id: null, due_at: null, shared_by: TEACHER },
+    { generation_id: WS, class_id: CLASS, student_id: null, due_at: null, shared_by: TEACHER },
+  ]);
+  db.seed("parent_links", [{ parent_id: PARENT, child_id: STU2, verified_at: "2026-09-01T00:00:00Z" }]);
+  return db;
+}

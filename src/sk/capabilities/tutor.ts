@@ -65,6 +65,10 @@ import { answerLanguage, languageName, linesLocale, type SkAnswerLang } from "@/
 import type { SseEvent } from "@/sk/types";
 import { loadTutorKit, practisedSections, progressGroups, readKitAttempts, readObjectiveMastery, studentChapters, visibleProducts, whereNext } from "@/sk/tutor";
 import { resolveSegment } from "./board";
+// Phase 4 (student Board): "how am I doing?" from her worksheet practice.
+import { readPracticeMastery } from "@/sk/practice/mastery-read";
+import { progressFromPractice } from "@/sk/practice/focus";
+import type { SkDb } from "@/sk/store-supabase";
 
 // ── shared ──────────────────────────────────────────────────────────────────
 
@@ -509,7 +513,10 @@ export const tutorProgress: SkCapability = {
   async handler(ctx, _args, deps) {
     const name = "tutor.progress";
     const t = tutorOf(ctx);
-    if (!t) return noKit(ctx, name);
+    // Phase 4 (student Board): no kit player open → her WORKSHEET PRACTICE
+    // mastery (sk_practice_attempts through her own session, rule sk-learn.1),
+    // for the kit open on her Board, else across her kits.
+    if (!t) return ctx.user.role === "student" ? practiceProgress(ctx, deps) : noKit(ctx, name);
     const loaded = await loadTutorKit(ctx.user.id, { product: t.product, chapter: t.chapter, kit: t.kit });
     if (!loaded.ok) return answer(name, say(ctx, loaded.reason === "preparing" ? TUTOR_PREPARING : TUTOR_REFUSED), false, loaded.reason);
     const kit = loaded.kit;
@@ -524,6 +531,28 @@ export const tutorProgress: SkCapability = {
     return answer(name, text, true, undefined, facts);
   },
 };
+
+/** "How am I doing?" from her worksheet practice (no kit player open). */
+async function practiceProgress(ctx: SkContext, deps: SkCapabilityDeps): Promise<SkCapabilityResult> {
+  const name = "tutor.progress";
+  const kitId = ctx.board?.generationId ?? null;
+  let read = await readPracticeMastery(deps.session as unknown as SkDb, [ctx.user.id], { kitId, now: deps.now.getTime() });
+  // The open unit's id may not be the kit's (a later part): fall back to all her kits.
+  if (!read.rows.length && kitId) read = await readPracticeMastery(deps.session as unknown as SkDb, [ctx.user.id], { now: deps.now.getTime() });
+  if (!read.rows.length) return answer(name, say(ctx, TUTOR_PROGRESS_NONE), true, undefined, []);
+  const g = progressFromPractice(read.rows);
+  const getting = read.rows.filter((r) => r.band === "new" || (r.band === "learning" && r.score >= 60)).map((r) => r.name);
+  const work = read.rows.filter((r) => r.band === "learning" && r.score < 60).map((r) => r.name);
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  const lines: string[] = [];
+  if (g.secure.length) lines.push(say(ctx, TUTOR_PROGRESS_MASTERED, { list: g.secure.join(", ") }));
+  if (getting.length) lines.push(say(ctx, TUTOR_PROGRESS_PROVISIONAL, { list: uniq(getting).join(", ") }));
+  if (work.length) lines.push(say(ctx, TUTOR_PROGRESS_NEEDS_WORK, { list: uniq(work).join(", ") }));
+  const kits = [...new Set(read.rows.map((r) => read.kits.get(r.kitId) ?? ""))].filter(Boolean).slice(0, 3).join(", ");
+  const text = [say(ctx, TUTOR_PROGRESS_HEAD, { kit: kits }), ...lines].join(" ");
+  const facts = read.rows.map((r) => ({ idea: r.name, status: r.band, score: r.score, questions: r.evidence }));
+  return answer(name, text, true, undefined, facts);
+}
 
 /** Every student entry, in the order the registry lists them. */
 export const TUTOR_CAPABILITIES: SkCapability[] = [tutorWhere, tutorProgress, tutorPlay, tutorSection, tutorSlide, tutorPractise, tutorExplain];

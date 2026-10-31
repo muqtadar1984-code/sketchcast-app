@@ -23,6 +23,8 @@ export type PracticeReply = {
   rung: "none" | Rung;
   help: { rung: Rung; text: string | null; source: HelpSource } | null;
   answer: RevealedKey | null;
+  /** "quiz": the key is held — this paper is her graded quiz, not handed in yet (phase 4). */
+  locked?: "quiz" | null;
   done: boolean;
   gap: "wrong_twice" | null;
   concept: string | null;
@@ -36,6 +38,8 @@ export type QuestionState = {
   /** Help served, in order (one per rung reached). */
   help: { rung: Rung; text: string | null; source: HelpSource }[];
   answer: RevealedKey | null;
+  /** Rung 3 reached while the paper is her open graded quiz: the key unlocks after she hands it in. */
+  locked: boolean;
   correct: boolean;
   /** A written answer sent to her teacher (subjective). */
   review: boolean;
@@ -44,7 +48,7 @@ export type QuestionState = {
   concept: string | null;
 };
 
-export const emptyQuestion = (): QuestionState => ({ attempts: 0, wrong: 0, help: [], answer: null, correct: false, review: false, done: false, lastAnswer: null, concept: null });
+export const emptyQuestion = (): QuestionState => ({ attempts: 0, wrong: 0, help: [], answer: null, locked: false, correct: false, review: false, done: false, lastAnswer: null, concept: null });
 
 export const practiceKey = (generationId: string | undefined, questionId: string | undefined) => `${generationId ?? ""}:${questionId ?? ""}`;
 
@@ -69,6 +73,7 @@ export function applyReply(prev: QuestionState, reply: PracticeReply, given: unk
     lastAnswer: isAnswer ? answerText(given) : prev.lastAnswer,
     concept: reply.concept ?? prev.concept,
     answer: reply.answer ?? prev.answer,
+    locked: reply.answer ? false : prev.locked || reply.locked === "quiz",
     help: reply.help && !prev.help.some((h) => h.rung === reply.help!.rung) ? [...prev.help, reply.help] : prev.help,
   };
   return next;
@@ -76,7 +81,7 @@ export function applyReply(prev: QuestionState, reply: PracticeReply, given: unk
 
 /** The highest rung she has reached on this question, or null. */
 export function rungReached(q: QuestionState): Rung | null {
-  return q.answer ? "answer" : q.help.length ? q.help[q.help.length - 1].rung : null;
+  return q.answer || q.locked ? "answer" : q.help.length ? q.help[q.help.length - 1].rung : null;
 }
 
 /** Is the question finished on the Board (nothing left to submit)? */
@@ -95,7 +100,7 @@ export function practiceSummary(questions: { qtype?: string; key: string }[], st
   for (const q of questions) {
     const s = state.get(q.key);
     if (s) hints += s.help.length;
-    if (!finished(s) && !(s?.answer)) open += 1;
+    if (!finished(s) && !s?.answer && !s?.locked) open += 1;
     if (q.qtype === "subjective") continue;
     total += 1;
     if (s?.correct) correct += 1;

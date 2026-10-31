@@ -35,6 +35,8 @@ import { SHELL_CONTROL_CAPABILITIES } from "./shell-controls";
 import { startLessonCapability } from "./lesson";
 // 2026-10-31: a kit's documents (deck, script, worksheet, quiz, answer key …) as text.
 import { kitDocuments } from "./documents";
+// 2026-10-31 (student Board phase 4): approve a recommended learning plan.
+import { planReviewAction } from "./plan";
 
 const ENTRIES: SkCapability[] = [
   navigateCapability,
@@ -98,6 +100,10 @@ const ENTRIES: SkCapability[] = [
   // catalogue source after her grant). Teaching roles only; the answer key,
   // lesson plan and question bank never reach a student.
   kitDocuments,
+  // 2026-10-31 (student Board phase 4): plan.review — a recommended learning
+  // plan waiting for THIS teacher / parent, as a confirm card; the approval
+  // runs sk_learn_plan_decide as the approver in /api/sk/act (act-plan.ts).
+  planReviewAction,
 ];
 
 export const REGISTRY: SkCapability[] = ENTRIES;

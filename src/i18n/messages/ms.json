@@ -2143,6 +2143,14 @@
           "hint": "Baca soalan sekali lagi perlahan-lahan dan cari kata kunci.",
           "step": "Pecahkannya kepada langkah-langkah kecil. Apa yang anda sudah tahu, dan apa yang ditanya oleh soalan?",
           "answer": "Bandingkan jawapan ini dengan jawapan anda dan lihat di mana bezanya."
+        },
+        "locked": "Jawapan akan dibuka selepas anda menghantar kuiz anda. Gunakan langkah kerja di atas untuk mencuba lagi.",
+        "masteryTitle": "Prestasi anda bagi setiap idea",
+        "masteryNote": "SK akan mencadangkan apa yang perlu dilatih seterusnya — guru atau ibu bapa anda akan menyemak pelan itu.",
+        "band": {
+          "secure": "Kukuh",
+          "learning": "Masih belajar",
+          "new": "Baru bermula"
         }
       }
     }
@@ -2956,5 +2964,54 @@
     "studentOff": "SK tidak menyimpan apa-apa tentang pembelajaran anda selepas setiap perbualan. Hanya ibu bapa atau sekolah anda boleh menghidupkannya.",
     "studentVoiceOn": "Input suara dengan SK dibenarkan.",
     "studentVoiceOff": "Input suara dengan SK memerlukan kebenaran ibu bapa atau sekolah anda."
+  },
+  "learnPlan": {
+    "masteryTitle": "Penguasaan latihan",
+    "masteryHint": "Daripada latihan lembaran kerja di Papan pelajar. Betul pada cubaan pertama paling dikira, petunjuk dan langkah kerja dikira kurang, dan latihan terkini dikira lebih.",
+    "noMastery": "Belum ada latihan lembaran kerja.",
+    "band": {
+      "secure": "Kukuh",
+      "learning": "Sedang belajar",
+      "new": "Baru"
+    },
+    "score": "{score}/100",
+    "questions": "{n} soalan",
+    "classConcepts": "Idea di seluruh kelas (paling lemah dahulu)",
+    "byStudent": "Mengikut murid",
+    "plansTitle": "Pelan yang dicadangkan",
+    "plansHint": "SK merangka pelan apabila murid selesai lembaran kerja, dan sekali seminggu. Tiada apa yang berubah sehingga ia diluluskan.",
+    "noPlans": "Belum ada pelan.",
+    "status": {
+      "draft": "Sedang dirangka",
+      "pending_approval": "Menunggu kelulusan",
+      "approved": "Diluluskan",
+      "declined": "Ditolak",
+      "superseded": "Diganti"
+    },
+    "kind": {
+      "reteach": "Ajar semula",
+      "practice": "Latihan",
+      "next": "Topik seterusnya"
+    },
+    "approve": "Luluskan",
+    "decline": "Tolak",
+    "edit": "Sunting",
+    "save": "Simpan perubahan",
+    "cancel": "Batal",
+    "remove": "Buang",
+    "wholeClass": "Guna untuk seluruh kelas",
+    "declineNote": "Sebab (pilihan)",
+    "readOnlyTeacher": "Guru kelas meluluskan pelan ini. Anda boleh melihatnya di sini.",
+    "readOnlyParent": "Ibu bapa meluluskan pelan ini. Anda boleh melihatnya di sini.",
+    "done": {
+      "approved": "Diluluskan — kini dalam pelajaran mereka.",
+      "declined": "Ditolak.",
+      "saved": "Disimpan."
+    },
+    "failed": "Tidak berjaya. Sila cuba lagi.",
+    "notAllowed": "Hanya orang yang meluluskan pelan ini boleh berbuat demikian.",
+    "forStudent": "Pelan untuk {name}",
+    "weekly": "Pelan mingguan",
+    "afterKit": "Selepas {kit}"
   }
 }

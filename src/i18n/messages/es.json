@@ -2143,6 +2143,14 @@
           "hint": "Vuelve a leer la pregunta despacio y busca las palabras clave.",
           "step": "Divídelo en pasos pequeños. ¿Qué sabes ya y qué te pide la pregunta?",
           "answer": "Compara esta respuesta con la tuya y mira en qué se diferencian."
+        },
+        "locked": "La respuesta se desbloquea cuando entregues tu cuestionario. Usa el paso resuelto de arriba para intentarlo de nuevo.",
+        "masteryTitle": "Cómo vas en cada idea",
+        "masteryNote": "SK te sugerirá qué practicar después — tu profesor o tu familia revisará el plan.",
+        "band": {
+          "secure": "Dominado",
+          "learning": "Aprendiendo",
+          "new": "Recién empezado"
         }
       }
     }
@@ -2956,5 +2964,54 @@
     "studentOff": "SK no guarda nada de tu aprendizaje después de cada conversación. Solo tu familia o tu centro pueden activarlo.",
     "studentVoiceOn": "La entrada de voz con SK está permitida.",
     "studentVoiceOff": "La entrada de voz con SK necesita permiso de tu familia o de tu centro."
+  },
+  "learnPlan": {
+    "masteryTitle": "Dominio en la práctica",
+    "masteryHint": "A partir de la práctica de fichas en la pizarra del estudiante. Acertar a la primera cuenta más, las pistas y los pasos resueltos cuentan menos, y la práctica reciente cuenta más.",
+    "noMastery": "Todavía no hay práctica de fichas.",
+    "band": {
+      "secure": "Dominado",
+      "learning": "Aprendiendo",
+      "new": "Nuevo"
+    },
+    "score": "{score}/100",
+    "questions": "{n} preguntas",
+    "classConcepts": "Ideas de toda la clase (las más débiles primero)",
+    "byStudent": "Por estudiante",
+    "plansTitle": "Planes recomendados",
+    "plansHint": "SK prepara un plan cuando un estudiante termina una ficha, y una vez por semana. Nada cambia hasta que se aprueba.",
+    "noPlans": "Todavía no hay planes.",
+    "status": {
+      "draft": "En preparación",
+      "pending_approval": "Pendiente de aprobación",
+      "approved": "Aprobado",
+      "declined": "Rechazado",
+      "superseded": "Reemplazado"
+    },
+    "kind": {
+      "reteach": "Volver a enseñar",
+      "practice": "Practicar",
+      "next": "Siguiente tema"
+    },
+    "approve": "Aprobar",
+    "decline": "Rechazar",
+    "edit": "Editar",
+    "save": "Guardar cambios",
+    "cancel": "Cancelar",
+    "remove": "Quitar",
+    "wholeClass": "Aplicar a toda la clase",
+    "declineNote": "Motivo (opcional)",
+    "readOnlyTeacher": "El profesor de la clase aprueba este plan. Puedes verlo aquí.",
+    "readOnlyParent": "Un familiar aprueba este plan. Puedes verlo aquí.",
+    "done": {
+      "approved": "Aprobado — ya está en sus lecciones.",
+      "declined": "Rechazado.",
+      "saved": "Guardado."
+    },
+    "failed": "No funcionó. Inténtalo de nuevo.",
+    "notAllowed": "Solo quien aprueba este plan puede hacer eso.",
+    "forStudent": "Plan para {name}",
+    "weekly": "Plan semanal",
+    "afterKit": "Después de {kit}"
   }
 }

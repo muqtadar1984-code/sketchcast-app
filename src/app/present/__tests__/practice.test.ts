@@ -114,3 +114,21 @@ describe("learnerQuestionCards carries the question TYPE (the answer box), never
     expect(answers.size).toBe(0);
   });
 });
+
+describe("phase 4: the held key (her open graded quiz)", () => {
+  it("a locked rung-3 reply marks the question locked, without a key", () => {
+    let q = applyReply(emptyQuestion(), R({ wrong: 1 }), "a");
+    q = applyReply(q, R({ wrong: 2, rung: "step", help: { rung: "step", text: "Step.", source: "model" } }), "b");
+    q = applyReply(q, R({ wrong: 3, rung: "answer", help: { rung: "step", text: "Step.", source: "cache" }, locked: "quiz" }), "c");
+    expect(q).toMatchObject({ locked: true, answer: null, done: false });
+    expect(rungReached(q)).toBe("answer");
+    expect(q.help.map((h) => h.rung)).toEqual(["hint", "step"]);
+  });
+  it("a locked question no longer keeps the worksheet open; a later key clears the lock", () => {
+    const locked = applyReply(emptyQuestion(), R({ rung: "answer", locked: "quiz" }), "c");
+    const s = practiceSummary([{ qtype: "fill_blank", key: "k1" }], new Map([["k1", locked]]));
+    expect(s.finished).toBe(true);
+    const unlocked = applyReply(locked, R({ rung: "answer", answer: { type: "text", value: "Chlorophyll" }, locked: null }), "d");
+    expect(unlocked).toMatchObject({ locked: false, answer: { type: "text", value: "Chlorophyll" } });
+  });
+});
