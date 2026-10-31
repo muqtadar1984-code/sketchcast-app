@@ -38,10 +38,10 @@ export default function DeleteStudentButton({ targetId, name }: { targetId: stri
           <span className="text-[#5B6470]">
             Delete {name}&apos;s account permanently? Their sign-in and all their work are removed.
           </span>
-          <button onClick={doDelete} className="font-medium text-red-600 hover:underline">
+          <button onClick={doDelete} className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-red-600 hover:underline">
             Yes, delete
           </button>
-          <button onClick={() => setStage("idle")} className="font-medium text-[#5B6470] hover:underline">
+          <button onClick={() => setStage("idle")} className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#5B6470] hover:underline">
             Cancel
           </button>
         </>
@@ -52,7 +52,7 @@ export default function DeleteStudentButton({ targetId, name }: { targetId: stri
             setStage("confirm");
           }}
           disabled={stage === "busy"}
-          className="font-medium text-red-600 hover:underline disabled:opacity-60"
+          className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-red-600 hover:underline disabled:opacity-60"
         >
           {stage === "busy" ? "Deleting…" : "Delete"}
         </button>

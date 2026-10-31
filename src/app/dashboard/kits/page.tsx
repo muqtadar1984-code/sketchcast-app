@@ -124,8 +124,8 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
   const shell = (body: React.ReactNode) => (
     <>
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7 max-w-3xl">{t.subtitle}</p>
         {body}
@@ -163,7 +163,7 @@ export default async function KitsPage({ searchParams }: { searchParams: Promise
       <p className="text-xs text-[#5B6470] mb-5 flex flex-wrap items-center gap-x-3" data-tour="kits-allowance">
         <span className="tabular">{allowanceLine}</span>
         {upgradeHref && (
-          <a href={upgradeHref} target="_blank" rel="noreferrer" className="font-medium text-[#0C8175] hover:underline">
+          <a href={upgradeHref} target="_blank" rel="noreferrer" className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline">
             {t.upgradeCta}
           </a>
         )}
@@ -298,11 +298,11 @@ async function KitsSection({
 
 function Notice({ title, body, cta }: { title: string; body: string; cta?: { href: string; label: string } }) {
   return (
-    <section className="card px-6 py-6 max-w-2xl">
+    <section className="card px-4 sm:px-6 py-6 max-w-2xl">
       <h2 className="text-xl mb-2">{title}</h2>
       <p className="text-sm text-[#5B6470]">{body}</p>
       {cta && (
-        <a href={cta.href} target="_blank" rel="noreferrer" className="inline-flex mt-4 rounded-lg bg-[#0C8175] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#0A6F65]">
+        <a href={cta.href} target="_blank" rel="noreferrer" className="inline-flex min-h-11 sm:min-h-0 items-center mt-4 rounded-lg bg-[#0C8175] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#0A6F65]">
           {cta.label}
         </a>
       )}

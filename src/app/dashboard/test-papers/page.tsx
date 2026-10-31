@@ -187,8 +187,8 @@ export default async function TestPapersPage() {
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
       <AutoRefresh active={anyRunning} />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">Test papers</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">Test papers</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-6">
           Upload your child&apos;s textbook, generate a test paper for any chapter, then assign it —
@@ -208,8 +208,8 @@ export default async function TestPapersPage() {
           <div className="space-y-5">
             {rows.map((b) => (
               <div key={b.bookId} className="card divide-y divide-[#EEF0EC]">
-                <div className="px-5 py-3 flex items-center justify-between">
-                  <span className="font-medium font-display text-lg">{b.bookTitle}</span>
+                <div className="px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="min-w-0 font-medium font-display text-lg break-words">{b.bookTitle}</span>
                   <span className="flex items-center gap-2">
                     {b.bookStatus === "ready" && <BookHealthBadge health={b.health} t={tLib} />}
                     {b.bookStatus !== "ready" && (
@@ -218,11 +218,14 @@ export default async function TestPapersPage() {
                   </span>
                 </div>
                 {b.chapters.map((c) => (
-                  <div key={c.num} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate">
+                  // Phone: the title takes its own line and the actions wrap
+                  // beneath it — Download, Answer key, Assign to child and
+                  // Report were one shrink-0 row far wider than 390px.
+                  <div key={c.num} className="px-4 sm:px-5 py-2.5 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 text-sm">
+                    <span className="min-w-0 break-words sm:truncate">
                       {c.num + 1}. {c.title}
                     </span>
-                    <span className="flex items-center gap-2 shrink-0">
+                    <span className="flex flex-wrap items-center gap-2 sm:shrink-0">
                       {!c.gen && (
                         <GeneratePaperButton
                           bookId={b.bookId}
@@ -252,12 +255,12 @@ export default async function TestPapersPage() {
                       {c.gen && c.gen.status === "done" && (
                         <>
                           {c.doc && (
-                            <a href={c.doc} className="btn-ghost h-8 px-3 text-xs">
+                            <a href={c.doc} className="btn-ghost h-11 sm:h-8 px-3 text-xs">
                               Download
                             </a>
                           )}
                           {c.answerKey && (
-                            <a href={c.answerKey} className="btn-ghost h-8 px-3 text-xs">
+                            <a href={c.answerKey} className="btn-ghost h-11 sm:h-8 px-3 text-xs">
                               {tLib.book.answerKey}
                             </a>
                           )}
@@ -269,7 +272,7 @@ export default async function TestPapersPage() {
                   </div>
                 ))}
                 {b.chapters.length === 0 && (
-                  <p className="px-5 py-3 text-sm text-[#98A0A9]">Chapters appear here once indexing finishes.</p>
+                  <p className="px-4 sm:px-5 py-3 text-sm text-[#98A0A9]">Chapters appear here once indexing finishes.</p>
                 )}
               </div>
             ))}

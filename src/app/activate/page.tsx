@@ -50,7 +50,7 @@ export default async function ActivatePage() {
   const [before, after] = t.signIn.split("{link}");
   return (
     <main className="min-h-screen bg-[#F6F7F5] p-4 sm:p-8" dir={dirFor(locale)} lang={locale}>
-      <div className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow-sm">
+      <div className="mx-auto max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-sm">
         <h1 className="text-xl font-semibold text-slate-900">{t.title}</h1>
         <p className="mt-2 text-sm text-slate-600">{t.intro}</p>
         {user ? (

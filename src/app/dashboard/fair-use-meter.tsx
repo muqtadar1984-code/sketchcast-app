@@ -177,10 +177,11 @@ const PRICING_URL = "https://sketchcast.app/pricing";
 // pill is what made the height load-bearing. A floor plus real vertical padding
 // lets the pill grow instead of spilling. whitespace-nowrap would NOT be the
 // fix — it only trades a vertical overflow for a horizontal one.
-const BTN_PRIMARY = "btn-primary min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
+// min-h-11 below sm: 44px is the phone tap-target floor; 2.25rem from sm up.
+const BTN_PRIMARY = "btn-primary min-h-11 sm:min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
 // The school cards' second action (0101): the same address the marketing
 // site's school CTA has always used — a school's next step is a conversation.
-const BTN_GHOST = "btn-ghost min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
+const BTN_GHOST = "btn-ghost min-h-11 sm:min-h-[2.25rem] px-4 py-1.5 text-sm text-center";
 const CONTACT_MAILTO = "mailto:sales@sketchcast.app";
 
 /** The strings the client dialog needs, copied out FIELD BY FIELD rather than

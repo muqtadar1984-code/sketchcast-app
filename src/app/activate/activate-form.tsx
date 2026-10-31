@@ -87,7 +87,7 @@ export default function ActivateForm({ t, picker }: { t: Messages; picker: Child
             onChange={(e) => setChildId(e.target.value)}
             required
             data-activate="child"
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 focus:border-emerald-500 focus:outline-none"
+            className="mt-1 w-full min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 focus:border-emerald-500 focus:outline-none"
           >
             {picker.mode === "pick" && (
               <option value="" disabled>
@@ -119,7 +119,7 @@ export default function ActivateForm({ t, picker }: { t: Messages; picker: Child
           spellCheck={false}
           required
           dir="ltr"
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-base tracking-wide text-slate-900 focus:border-emerald-500 focus:outline-none"
+          className="mt-1 w-full min-h-11 rounded-lg border border-slate-300 px-3 py-2 font-mono text-base tracking-wide text-slate-900 focus:border-emerald-500 focus:outline-none"
         />
       </label>
       {kind === "edition" && (
@@ -134,20 +134,20 @@ export default function ActivateForm({ t, picker }: { t: Messages; picker: Child
             autoComplete="off"
             required
             dir="ltr"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-base text-slate-900 focus:border-emerald-500 focus:outline-none"
+            className="mt-1 w-full min-h-11 rounded-lg border border-slate-300 px-3 py-2 font-mono text-base text-slate-900 focus:border-emerald-500 focus:outline-none"
           />
           <span className="mt-1 block text-xs text-slate-500">{t.orderHint}</span>
         </label>
       )}
       {error && (
-        <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+        <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800 [overflow-wrap:anywhere]" role="alert">
           {error}
         </p>
       )}
       <button
         type="submit"
         disabled={busy || !code || (kind === "edition" && !orderNumber) || forChildId === undefined}
-        className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full min-h-11 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? t.submitting : t.submit}
       </button>

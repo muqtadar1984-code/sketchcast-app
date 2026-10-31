@@ -297,8 +297,10 @@ export default function DiaryNote({
   const time = timeFmt.format(new Date(note.createdAt));
 
   return (
-    <div className="px-5 py-3">
-      <div className="flex items-start justify-between gap-3">
+    <div className="px-4 sm:px-5 py-3">
+      {/* Phone: the translate/delete controls wrap under the author line
+          rather than squeezing it to nothing; they are 44px below sm. */}
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0 flex flex-wrap items-center gap-1.5 text-xs text-[#5B6470]">
           <span className={`chip font-sans normal-case tracking-normal ${TYPE_STYLE[note.type] ?? TYPE_STYLE.general}`}>
             {TYPE_ICON[note.type] ?? "📝"} {noteTypeLabel(t.noteTypes, note.type)}
@@ -308,16 +310,16 @@ export default function DiaryNote({
               {t.parentsOnly}
             </span>
           )}
-          <span className="truncate">
+          <span className="min-w-0 break-words sm:truncate">
             {note.author} <span className="rtl-flip">→</span> {note.audience} · {time}
           </span>
         </div>
-        <span className="flex items-center gap-1.5 shrink-0">
+        <span className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
           {!xlLang && remembered && (
             <button
               onClick={() => translateTo(remembered)}
               disabled={xlBusy}
-              className="btn-ghost h-7 px-2 text-xs"
+              className="btn-ghost h-11 sm:h-7 px-2 text-xs"
               title={t.translateLikeLastTime}
             >
               {LANGUAGES.find((l) => l.value === remembered)?.label ?? remembered}
@@ -331,7 +333,7 @@ export default function DiaryNote({
             value={xlLang}
             onChange={(e) => translateTo(e.target.value)}
             disabled={xlBusy}
-            className="field h-7 px-1.5 text-xs"
+            className="field h-11 sm:h-7 px-1.5 text-base sm:text-xs"
             aria-label={t.translateAria}
             title={t.translateTitle}
           >
@@ -351,7 +353,7 @@ export default function DiaryNote({
               disabled={noteBusy}
               aria-label={t.deleteNote}
               title={t.deleteNote}
-              className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
+              className="w-11 h-11 sm:w-6 sm:h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
             >
               ✕
             </button>
@@ -369,14 +371,14 @@ export default function DiaryNote({
           <button
             onClick={removeNote}
             disabled={noteBusy}
-            className="font-medium text-red-600 hover:underline disabled:opacity-60"
+            className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-red-600 hover:underline disabled:opacity-60"
           >
             {noteBusy ? t.deleting : t.yesDelete}
           </button>
           <button
             onClick={() => setConfirmNote(false)}
             disabled={noteBusy}
-            className="font-medium text-[#5B6470] hover:underline disabled:opacity-60"
+            className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#5B6470] hover:underline disabled:opacity-60"
           >
             {t.cancel}
           </button>
@@ -402,14 +404,14 @@ export default function DiaryNote({
                       <button
                         onClick={() => removeReply(r.id)}
                         disabled={busy}
-                        className="font-medium text-red-600 hover:underline disabled:opacity-60"
+                        className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-red-600 hover:underline disabled:opacity-60"
                       >
                         {busy ? t.deleting : t.yesDelete}
                       </button>
                       <button
                         onClick={() => setConfirmReply(null)}
                         disabled={busy}
-                        className="font-medium text-[#5B6470] hover:underline disabled:opacity-60"
+                        className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#5B6470] hover:underline disabled:opacity-60"
                       >
                         {t.cancel}
                       </button>
@@ -422,7 +424,7 @@ export default function DiaryNote({
                       }}
                       aria-label={t.deleteReply}
                       title={t.deleteReply}
-                      className="ms-1.5 align-middle text-xs text-[#98A0A9] hover:text-[#B42318]"
+                      className="ms-1.5 inline-flex h-11 w-11 sm:h-auto sm:w-auto items-center justify-center align-middle text-xs text-[#98A0A9] hover:text-[#B42318]"
                     >
                       ✕
                     </button>
@@ -438,9 +440,9 @@ export default function DiaryNote({
                 maxLength={2000}
                 rows={1}
                 placeholder={t.replyPlaceholder}
-                className="field px-3 py-1.5 text-sm flex-1 min-h-[34px]"
+                className="field px-3 py-1.5 text-base sm:text-sm flex-1 min-w-0 min-h-11 sm:min-h-[34px]"
               />
-              <button type="submit" disabled={replyBusy || !reply.trim()} className="btn-ghost h-8 px-3 text-sm shrink-0">
+              <button type="submit" disabled={replyBusy || !reply.trim()} className="btn-ghost h-11 sm:h-8 px-3 text-sm shrink-0">
                 {replyBusy ? t.sending : t.reply}
               </button>
             </form>
@@ -461,7 +463,7 @@ export default function DiaryNote({
               {t.signed} ✓ {stampFmt.format(new Date(ackedAt))}
             </span>
           ) : (
-            <button onClick={acknowledge} disabled={ackBusy} className="btn-ghost h-8 px-3 text-sm">
+            <button onClick={acknowledge} disabled={ackBusy} className="btn-ghost h-11 sm:h-8 px-3 text-sm">
               {ackBusy ? t.signing : t.acknowledge}
             </button>
           )}
@@ -476,7 +478,7 @@ export default function DiaryNote({
           <button
             onClick={() => translateTo(xlGap.lang)}
             disabled={xlBusy}
-            className="font-medium underline disabled:no-underline"
+            className="inline-flex items-center min-h-11 sm:min-h-0 font-medium underline disabled:no-underline"
           >
             {xlBusy ? t.translating : t.retry}
           </button>

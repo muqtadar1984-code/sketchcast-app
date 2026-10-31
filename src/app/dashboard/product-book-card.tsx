@@ -40,7 +40,8 @@ function FileLink({ f, t }: { f: ChapterFile; t: LibraryMessages }) {
         : f.label === "answerKey"
           ? `⬇ ${t.bookless.answerKey}`
           : `⬇ ${t.download}`;
-  const cls = "font-medium text-[#0C8175] hover:underline";
+  // 44px tall on a phone (TAP); the bare text link was a ~20px target.
+  const cls = "inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline";
   if (f.label === "watch")
     return (
       <span data-youtube={f.youtube ? "true" : undefined} className="contents">
@@ -60,7 +61,7 @@ function KitPieces({ kit, t }: { kit: ChapterKit; t: LibraryMessages }) {
   return (
     <ul className="mt-1.5 flex flex-wrap gap-2">
       {kit.pieces.map((p) => (
-        <li key={p.generationId} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#E4E7E2] px-2.5 py-1.5 text-sm">
+        <li key={p.generationId} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0 sm:gap-y-1 rounded-lg border border-[#E4E7E2] px-2.5 py-0.5 sm:py-1.5 text-sm">
           <span className="text-[#1F2A37]">{kindLabel(t, p.kind)}</span>
           {p.files.map((f, i) => (
             <FileLink key={`${f.label}${i}`} f={f} t={t} />
@@ -94,9 +95,9 @@ function ChapterRow({ c, tile, t }: { c: ProductChapter; tile: MyBookTile; t: Li
           <p className="text-xs text-[#5B6470]">{fmt(m.chapterN, { n: c.chapter })}</p>
           <p className="font-medium text-[#14181F]">{c.title || fmt(m.chapterN, { n: c.chapter })}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-0 sm:gap-3">
           {c.boardHref && (
-            <Link href={c.boardHref} className="text-xs font-medium text-[#0C8175] hover:underline whitespace-nowrap" data-board-link>
+            <Link href={c.boardHref} className="inline-flex items-center min-h-11 sm:min-h-0 text-xs font-medium text-[#0C8175] hover:underline whitespace-nowrap" data-board-link>
               {m.teachOnBoard}
             </Link>
           )}
@@ -132,13 +133,13 @@ export default function ProductBookCard({ tile, t }: { tile: MyBookTile; t: Libr
   const chapters = tile.chapters ?? [];
   const count = chapters.length || tile.chapterCount || 0;
   return (
-    <li className="rounded-xl border border-[#E4E7E2] bg-white p-4 sm:col-span-2 lg:col-span-3" data-product-book={tile.productId}>
+    <li className="min-w-0 rounded-xl border border-[#E4E7E2] bg-white p-3 sm:p-4 sm:col-span-2 lg:col-span-3" data-product-book={tile.productId}>
       <div className="flex gap-3">
         <div className="h-28 w-20 shrink-0 overflow-hidden rounded-md border border-[#E4E7E2]">
           <MyBookCover url={tile.coverUrl} title={tile.title} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <h3 className="font-display text-lg font-medium leading-snug text-[#14181F]" title={tile.title}>
+          <h3 className="font-display text-lg font-medium leading-snug text-[#14181F] break-words" title={tile.title}>
             {tile.title}
           </h3>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#5B6470]">
@@ -151,7 +152,7 @@ export default function ProductBookCard({ tile, t }: { tile: MyBookTile; t: Libr
           <div className="mt-auto flex flex-wrap gap-2 pt-2">
             {tile.pdfHref && (
               // A plain anchor: the route answers with a redirect to the file (or back here).
-              <a href={tile.pdfHref} className="inline-flex min-h-10 items-center rounded-lg border border-[#D2D6D1] px-3 text-sm font-medium text-[#14181F] hover:bg-[#F5F6F3]">
+              <a href={tile.pdfHref} className="inline-flex min-h-11 sm:min-h-10 items-center rounded-lg border border-[#D2D6D1] px-3 text-sm font-medium text-[#14181F] hover:bg-[#F5F6F3]">
                 {m.download}
               </a>
             )}
@@ -160,7 +161,7 @@ export default function ProductBookCard({ tile, t }: { tile: MyBookTile; t: Libr
       </div>
       {chapters.length > 0 && (
         <details className="group mt-3 border-t border-[#E6E8E4] pt-2">
-          <summary className="cursor-pointer select-none py-1 text-sm font-medium text-[#0C8175]">
+          <summary className="flex min-h-11 sm:block sm:min-h-0 cursor-pointer select-none items-center py-1 text-sm font-medium text-[#0C8175]">
             <span className="rtl-flip me-1.5 inline-block transition-transform group-open:rotate-90">▶</span>
             {fmt(m.showChapters, { n: chapters.length })}
           </summary>

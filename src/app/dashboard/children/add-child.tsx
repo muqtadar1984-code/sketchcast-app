@@ -43,13 +43,13 @@ export default function AddChild({ t }: { t: AddChildMessages }) {
 
   return (
     <div data-tour="add-child" className="card p-5">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <p className="font-medium">{t.title}</p>
           <p className="text-xs text-[#5B6470]">{t.hint}</p>
         </div>
         {!open && (
-          <button onClick={() => setOpen(true)} className="btn-primary h-9 px-4 text-sm">
+          <button onClick={() => setOpen(true)} className="btn-primary h-11 sm:h-9 px-4 text-sm">
             {t.button}
           </button>
         )}
@@ -58,7 +58,7 @@ export default function AddChild({ t }: { t: AddChildMessages }) {
       {creds && (
         <div className="mt-3 rounded-lg bg-[#E2F4F1] text-[#0C8175] px-4 py-3 text-sm">
           <p className="font-medium mb-1">{t.saveThese}</p>
-          <p>
+          <p className="[overflow-wrap:anywhere]">
             {t.childId}: <span className="font-mono">{creds.username}</span> · {t.tempPassword}:{" "}
             <span className="font-mono">{creds.password}</span>
           </p>
@@ -68,18 +68,20 @@ export default function AddChild({ t }: { t: AddChildMessages }) {
 
       {open && (
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-2">
-          <label className="block">
+          {/* Phone: each name takes the full row (w-full) at 44px; side by
+              side at h-9 from sm up. */}
+          <label className="block w-full sm:w-auto">
             <span className="text-xs text-[#5B6470]">{t.firstName}</span>
-            <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="field h-9 px-3 mt-1" />
+            <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="field h-11 sm:h-9 w-full px-3 mt-1" />
           </label>
-          <label className="block">
+          <label className="block w-full sm:w-auto">
             <span className="text-xs text-[#5B6470]">{t.lastName}</span>
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} className="field h-9 px-3 mt-1" />
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} className="field h-11 sm:h-9 w-full px-3 mt-1" />
           </label>
-          <button type="submit" disabled={busy} className="btn-primary h-9 px-4 text-sm">
+          <button type="submit" disabled={busy} className="btn-primary h-11 sm:h-9 px-4 text-sm">
             {busy ? t.creating : t.create}
           </button>
-          <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-9 px-3 text-sm">
+          <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
             {t.close}
           </button>
           {error && <p className="w-full text-sm text-red-600 [overflow-wrap:anywhere]">{error}</p>}
