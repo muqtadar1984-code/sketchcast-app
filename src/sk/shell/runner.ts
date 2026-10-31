@@ -30,6 +30,10 @@ export type RunnerDeps = {
    *  schoolReadGate) — the analytics gate, then the 60/day cap + audit row,
    *  BEFORE the handler runs. A result = the read is refused with it. */
   schoolRead?: (name: string, args: Record<string, unknown>) => Promise<SkCapabilityResult | null>;
+  /** 2026-10-31 (SK gap tracker): told every result of this turn's runs —
+   *  the route notes a failed one (`tool_failed`). Must not throw; it is
+   *  guarded anyway, and never changes the result. */
+  onResult?: (name: string, result: SkCapabilityResult) => void;
 };
 
 /** Cap a handler's result so a wide table can never flood the prompt. */
@@ -103,6 +107,13 @@ export async function runCapability(ctx: SkContext, name: string, args: Record<s
     ms: Date.now() - t0,
   };
   await recordSafely(deps.sink, row);
+  if (deps.onResult) {
+    try {
+      deps.onResult(name, result);
+    } catch {
+      /* a gap note never fails a capability */
+    }
+  }
   return result;
 }
 

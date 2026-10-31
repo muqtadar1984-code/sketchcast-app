@@ -2164,6 +2164,14 @@
         "chapter": "bab {n}",
         "from": "Sumber: {source}"
       },
+      "gap": {
+        "thumb": "Ini tidak membantu",
+        "ask": "Apa yang anda mahukan?",
+        "placeholder": "Pilihan — beberapa patah perkataan",
+        "send": "Hantar",
+        "thanks": "Terima kasih — ini membantu kami menambah baik SK.",
+        "failed": "Tidak dapat menghantarnya. Cuba lagi."
+      },
       "open": "Tanya SK",
       "close": "Tutup SK",
       "title": "SK, teman SketchCast anda",

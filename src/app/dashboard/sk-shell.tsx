@@ -88,6 +88,9 @@ import { TRAY_POLL_MS, parseTray, shouldPollTray, trayStateText, trayVisible, ty
 import type { SkBoardBridge } from "@/app/present/sk-board-bridge";
 import type { SkTutorBridge } from "@/sk/shell/client/tutor-bridge";
 import { SkAvatar, SkBubble, SkCornerMenu, type CornerMenuItem, type CornerSide } from "./sk-corner";
+// 2026-10-31: the SK gap tracker's 👎 under each reply (signal E).
+import { SkGapThumb, SkGapThumbIcon, type GapThumbState } from "./sk-gap-thumb";
+import { feedbackContext } from "@/sk/gaps/feedback";
 
 /** An error within this long of the Shell mounting is the warm start's: it
  *  waits for the greeting (GREETING_MIN_MS) instead of replacing it. */
@@ -150,6 +153,8 @@ type Entry = {
    *  direction and lang attribute follow it, not the page. */
   lang?: string;
   dir?: "ltr" | "rtl";
+  /** 2026-10-31: the turn this reply answered (the 👎 names it). */
+  turnId?: string;
 };
 
 /** The BCP-47 tag for an answer language code (ms-arab → ms-Arab, zh → zh-CN). */
@@ -312,6 +317,8 @@ export default function SkShell({
   const [mic, setMic] = useState(false);
   const [caption, setCaption] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** 2026-10-31: each reply's 👎 (by entry id) — idle until she presses it. */
+  const [gapUi, setGapUi] = useState<Record<string, GapThumbState>>({});
   // S2: the job tray (SK-started kits) and whether the tab is visible.
   const [tray, setTray] = useState<TrayKit[]>([]);
   const [visible, setVisible] = useState(true);
@@ -1183,7 +1190,8 @@ export default function SkShell({
       const streamFor = () => (stream ??= coord?.stream(speechLang ? { lang: speechLang } : {}));
 
       const skId = uuid();
-      setEntries((m) => [...m, { id: uuid(), who: "user", text: q }, { id: skId, who: "sk", text: "", pending: true }]);
+      const turnId = uuid();
+      setEntries((m) => [...m, { id: uuid(), who: "user", text: q }, { id: skId, who: "sk", text: "", pending: true, turnId }]);
       // The answer's language, for the bubble's direction.
       let replyLang: string | undefined;
       let replyDir: "ltr" | "rtl" | undefined;
@@ -1195,7 +1203,7 @@ export default function SkShell({
       };
 
       const req: SkTurnRequest = {
-        turnId: uuid(),
+        turnId,
         text: q,
         modality,
         // The address bar at SEND time (an event handler, so no Suspense
@@ -1459,6 +1467,29 @@ export default function SkShell({
   /** The open message — or the last one, while it fades out. */
   const msg = bubble.msg;
   const openMsg = msg && !bubble.closed ? msg : null;
+
+  /** 2026-10-31 (SK gap tracker, signal E): the 👎 on reply `id` — her
+   *  optional note, the question, the reply and up to two earlier exchanges
+   *  go to /api/sk/gap-feedback. One per reply (the server ignores repeats). */
+  const gapOpen = (id: string) => setGapUi((s) => (s[id] && s[id] !== "idle" ? s : { ...s, [id]: "open" }));
+  const sendGap = async (id: string, note: string) => {
+    const entry = entries.find((x) => x.id === id);
+    const fb = feedbackContext(entries, id);
+    if (!entry?.turnId || !fb) return;
+    setGapUi((s) => ({ ...s, [id]: "sending" }));
+    try {
+      const res = await fetch("/api/sk/gap-feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ turnId: entry.turnId, question: fb.question, reply: fb.reply, previous: fb.previous, page: window.location.pathname, ...(note ? { note } : {}) }),
+      });
+      setGapUi((s) => ({ ...s, [id]: res.ok || res.status === 429 ? "sent" : "failed" }));
+    } catch {
+      setGapUi((s) => ({ ...s, [id]: "failed" }));
+    }
+  };
+  /** The reply in the speech bubble, when it can take a 👎. */
+  const bubbleGapId = msg?.kind === "reply" && msg.key && entries.some((x) => x.id === msg.key && x.turnId && !x.pending) && (gapUi[msg.key] ?? "idle") === "idle" ? msg.key : null;
   // Mid-tour (paused by her question): SK's answer replaces the stop's caption.
   const tourAnswer = walk?.showAnswers && openMsg && openMsg.kind !== "greeting" && openMsg.kind !== "confirm" ? openMsg.text : null;
   const closeMenu = useCallback((refocus: boolean) => {
@@ -1788,6 +1819,9 @@ export default function SkShell({
                 {labelText(e.label)}
               </span>
             )}
+            {e.who === "sk" && e.turnId && !e.pending && e.text && (
+              <SkGapThumb state={gapUi[e.id] ?? "idle"} copy={copy.gap} onOpen={() => gapOpen(e.id)} onSend={(note) => void sendGap(e.id, note)} />
+            )}
           </div>
         ))}
         {error && <p className="text-xs text-[#B42318]">{error}</p>}
@@ -2017,8 +2051,23 @@ export default function SkShell({
       >
         {msg.text}
       </p>
-      {(msg.more || msg.kind === "confirm" || showStop) && (
+      {(msg.more || msg.kind === "confirm" || showStop || bubbleGapId) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          {bubbleGapId && (
+            <button
+              type="button"
+              onClick={() => {
+                gapOpen(bubbleGapId);
+                openSheet();
+              }}
+              aria-label={copy.gap.thumb}
+              title={copy.gap.thumb}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              data-sk="bubble-gap-thumb"
+            >
+              <SkGapThumbIcon />
+            </button>
+          )}
           {msg.more && (
             <button type="button" onClick={openSheet} className="text-xs font-medium text-[#0C8175] hover:underline" data-sk="bubble-more">
               {cc.more}
