@@ -58,7 +58,7 @@ export default function DateNav({
       <Link href={href(shiftDay(day, -1))} aria-label={t.previousDay} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
         <span className="rtl-flip">←</span>
       </Link>
-      <span className="font-display text-lg sm:whitespace-nowrap">{label}</span>
+      <span className="font-display text-base sm:text-lg sm:whitespace-nowrap">{label}</span>
       <Link href={href(shiftDay(day, 1))} aria-label={t.nextDay} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
         <span className="rtl-flip">→</span>
       </Link>
