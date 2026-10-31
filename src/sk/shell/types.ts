@@ -191,6 +191,9 @@ export type SkContext = {
   place: SkPlace;
   selection: SkSelection;
   board?: SkBoardState;
+  /** Student Board phase 4: the approved plan's focus line (practice/focus.ts
+   *  focusLine), set by the turn route for a student on her Board; "" or absent = none. */
+  learnFocus?: string;
   /** S3 slice D: the student's open kit (students on /sk only). */
   tutor?: SkTutorState;
   recent: {

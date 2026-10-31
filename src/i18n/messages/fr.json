@@ -2143,6 +2143,14 @@
           "hint": "Relis lentement la question et cherche les mots importants.",
           "step": "Découpe-la en petites étapes. Que sais-tu déjà, et que demande la question ?",
           "answer": "Compare cette réponse avec la tienne et regarde où elles diffèrent."
+        },
+        "locked": "La réponse se débloque une fois ton quiz rendu. Utilise l'étape résolue ci-dessus pour réessayer.",
+        "masteryTitle": "Où tu en es pour chaque notion",
+        "masteryNote": "SK proposera quoi travailler ensuite — ton enseignant ou tes parents vérifieront le plan.",
+        "band": {
+          "secure": "Acquis",
+          "learning": "En cours",
+          "new": "Tout juste commencé"
         }
       }
     }
@@ -2956,5 +2964,54 @@
     "studentOff": "SK ne garde rien de votre apprentissage après chaque conversation. Seul un parent ou votre école peut l'activer.",
     "studentVoiceOn": "La saisie vocale avec SK est autorisée.",
     "studentVoiceOff": "La saisie vocale avec SK nécessite l'accord d'un parent ou de votre école."
+  },
+  "learnPlan": {
+    "masteryTitle": "Maîtrise en entraînement",
+    "masteryHint": "D'après l'entraînement sur les fiches dans le tableau de l'élève. Une bonne réponse du premier coup compte le plus, les indices et les étapes résolues comptent moins, et l'entraînement récent compte davantage.",
+    "noMastery": "Pas encore d'entraînement sur fiche.",
+    "band": {
+      "secure": "Acquis",
+      "learning": "En cours",
+      "new": "Nouveau"
+    },
+    "score": "{score}/100",
+    "questions": "{n} questions",
+    "classConcepts": "Notions de la classe (les plus fragiles d'abord)",
+    "byStudent": "Par élève",
+    "plansTitle": "Plans recommandés",
+    "plansHint": "SK prépare un plan quand un élève termine une fiche, et une fois par semaine. Rien ne change avant son approbation.",
+    "noPlans": "Aucun plan pour l'instant.",
+    "status": {
+      "draft": "En préparation",
+      "pending_approval": "En attente d'approbation",
+      "approved": "Approuvé",
+      "declined": "Refusé",
+      "superseded": "Remplacé"
+    },
+    "kind": {
+      "reteach": "Réexpliquer",
+      "practice": "S'entraîner",
+      "next": "Notion suivante"
+    },
+    "approve": "Approuver",
+    "decline": "Refuser",
+    "edit": "Modifier",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "remove": "Retirer",
+    "wholeClass": "Appliquer à toute la classe",
+    "declineNote": "Raison (facultatif)",
+    "readOnlyTeacher": "C'est l'enseignant de la classe qui approuve ce plan. Vous pouvez le consulter ici.",
+    "readOnlyParent": "C'est un parent qui approuve ce plan. Vous pouvez le consulter ici.",
+    "done": {
+      "approved": "Approuvé — il fait maintenant partie de ses leçons.",
+      "declined": "Refusé.",
+      "saved": "Enregistré."
+    },
+    "failed": "Cela n'a pas fonctionné. Veuillez réessayer.",
+    "notAllowed": "Seule la personne qui approuve ce plan peut faire cela.",
+    "forStudent": "Plan pour {name}",
+    "weekly": "Plan de la semaine",
+    "afterKit": "Après {kit}"
   }
 }

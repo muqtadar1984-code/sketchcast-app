@@ -42,6 +42,8 @@ export type Practice = {
   submit: (card: TextCard, cards: readonly TextCard[], kind: "answer" | "help", answer?: unknown) => Promise<void>;
   /** Note when a question page comes into view (its time starts then). */
   seen: (card: TextCard) => void;
+  /** The kit being practised (the end-of-worksheet mastery summary reads it). */
+  kitId: string | null;
 };
 
 /**
@@ -141,10 +143,56 @@ export function usePractice(o: { sessionId: string | null; kitId: string | null;
     [sessionId, kitId, words, say],
   );
 
-  return { state, busy, error, submit, seen };
+  return { state, busy, error, submit, seen, kitId };
 }
 
 const BTN = "min-h-11 rounded-lg px-4 py-2 text-base";
+
+type MasteryLine = { key: string; name: string; score: number; band: "new" | "learning" | "secure" };
+const BAND_TONE: Record<MasteryLine["band"], string> = {
+  secure: "border-[#17544C] bg-[#12302C] text-[#C9F2EA]",
+  learning: "border-[#4A3A1C] bg-[#2C2318] text-[#F1D9B0]",
+  new: "border-[#2A363B] bg-[#141B1F] text-[#C2CCC7]",
+};
+
+/**
+ * Phase 4: at the end of a worksheet, HER mastery per idea of this kit
+ * (GET /api/present/learn/mastery — her own rows, rule sk-learn.1), weakest
+ * first, with a note that a plan goes to her teacher or parent.
+ */
+function MasterySummary({ kitId, words }: { kitId: string; words: PracticeWords }) {
+  const [rows, setRows] = useState<MasteryLine[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    // The after-work (concept tags) runs after her last reply: give it a moment.
+    const t = setTimeout(() => {
+      fetch(`/api/present/learn/mastery?kitId=${encodeURIComponent(kitId)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b: { concepts?: MasteryLine[] } | null) => {
+          if (live) setRows(Array.isArray(b?.concepts) ? b!.concepts!.slice(0, 8) : []);
+        })
+        .catch(() => live && setRows([]));
+    }, 1500);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [kitId]);
+  if (!rows || !rows.length) return null;
+  return (
+    <div className="grid gap-2 rounded-lg border border-[#222C30] bg-[#0F1417] px-3 py-2" data-practice="mastery">
+      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[#9FB0AA]">{words.masteryTitle}</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {rows.map((r) => (
+          <li key={r.key} className={`rounded-full border px-3 py-1 text-sm ${BAND_TONE[r.band]}`}>
+            {r.name} · {words.band[r.band]}
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm text-[#C2CCC7]">{words.masteryNote}</p>
+    </div>
+  );
+}
 const RUNG_TONE: Record<Rung, string> = {
   hint: "border-[#17544C] bg-[#12302C] text-[#C9F2EA]",
   step: "border-[#4A3A1C] bg-[#2C2318] text-[#F1D9B0]",
@@ -304,7 +352,7 @@ export function PracticePanel({
                 {busy ? words.checking : words.check}
               </button>
             )}
-            {!q.answer && (
+            {!q.answer && !q.locked && (
               <button
                 type="button"
                 disabled={busy}
@@ -338,7 +386,13 @@ export function PracticePanel({
         </div>
       ))}
 
-      {(closed || q.answer) && !last && (
+      {q.locked && !q.answer && (
+        <p className="rounded-lg border border-[#2A363B] bg-[#141B1F] px-3 py-2 text-base text-[#E7EDE9]" data-practice="locked">
+          {words.locked}
+        </p>
+      )}
+
+      {(closed || q.answer || q.locked) && !last && (
         <button type="button" onClick={onNext} className={`${BTN} justify-self-start bg-[#0C8175] font-medium text-white`} data-practice="next">
           {words.next} ›
         </button>
@@ -349,6 +403,7 @@ export function PracticePanel({
           {fmt(words.score, { correct: sum.correct, total: sum.total })} · {sum.hints === 1 ? words.hintOne : fmt(words.hintMany, { n: sum.hints })}
         </p>
       )}
+      {sum.finished && practice.kitId && <MasterySummary kitId={practice.kitId} words={words} />}
     </section>
   );
 }

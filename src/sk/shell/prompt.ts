@@ -239,6 +239,7 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
       : []),
     ...(input.routing === "model" ? ["", ...modelFirstRules(ctx, capabilities)] : []),
     ...(ctx.user.role === "student" ? ["", ctx.board?.sessionId ? SK_STUDENT_BOARD_RULES : SK_STUDENT_RULES] : []),
+    ...(ctx.user.role === "student" && ctx.board?.sessionId && ctx.learnFocus ? [ctx.learnFocus] : []),
     "",
     "CONTEXT",
     contextLine(ctx, input.memory),

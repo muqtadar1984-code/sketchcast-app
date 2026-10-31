@@ -98,6 +98,8 @@ import { kitSource } from "@/sk/shell/teach";
 import { SCHOOL_READ_REFUSALS, schoolReadGate } from "@/sk/shell/school-meter";
 import { SM_ANALYTICS_OFF } from "@/sk/shell/school-meter-lines";
 import { SK_CANNOT_CONFIRM, SK_NOTHING_ON_THAT, type ResolvedEntity, type SkCapabilityResult, type SkCitation, type SkCollector, type SkTurnEvent, type SkTurnRequest, type SkTurnWalk } from "@/sk/shell/types";
+import { focusLine, readFocus } from "@/sk/practice/focus";
+import type { SkDb } from "@/sk/store-supabase";
 
 export const runtime = "nodejs";
 
@@ -272,6 +274,11 @@ export async function POST(request: Request) {
   if (ctx.user.role === "student" && ctx.board?.generationId && !(await sharedToMe(g.supabase, ctx.board.generationId))) {
     console.warn("sk-shell.turn student board not assigned", JSON.stringify({ turnId: body.turnId }));
     ctx.board = undefined;
+  }
+  // Phase 4: an approved plan's focus concepts, for her own Board's turns
+  // (her rows by RLS; nothing on a failed read).
+  if (ctx.user.role === "student" && ctx.board?.sessionId) {
+    ctx.learnFocus = focusLine(await readFocus(g.supabase as unknown as SkDb, ctx.user.id, { kitId: ctx.board.generationId ?? null }));
   }
   // The hidden fair-use cap (SK_STUDENT_DAILY_TURNS, default 300 a UTC day):
   // counted for every student turn, before anything is spent on it.

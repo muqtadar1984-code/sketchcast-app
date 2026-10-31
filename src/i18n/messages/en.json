@@ -2143,6 +2143,14 @@
           "hint": "Read the question again slowly and look for the key words.",
           "step": "Break it into small steps. What do you know already, and what is the question asking for?",
           "answer": "Compare this answer with yours and see where they differ."
+        },
+        "locked": "The answer unlocks after you hand in your quiz. Use the worked step above to try again.",
+        "masteryTitle": "How you're doing on each idea",
+        "masteryNote": "SK will suggest what to practise next — your teacher or parent will check the plan.",
+        "band": {
+          "secure": "Secure",
+          "learning": "Still learning",
+          "new": "Just started"
         }
       }
     }
@@ -2956,5 +2964,54 @@
     "studentOff": "SK keeps nothing about your learning after each conversation. Only a parent or your school can turn this on.",
     "studentVoiceOn": "Voice input with SK is allowed.",
     "studentVoiceOff": "Voice input with SK needs permission from a parent or your school."
+  },
+  "learnPlan": {
+    "masteryTitle": "Practice mastery",
+    "masteryHint": "From worksheet practice on the student Board. Right first time counts most, hints and worked steps count less, and recent practice counts more.",
+    "noMastery": "No worksheet practice yet.",
+    "band": {
+      "secure": "Secure",
+      "learning": "Learning",
+      "new": "New"
+    },
+    "score": "{score}/100",
+    "questions": "{n} questions",
+    "classConcepts": "Ideas across the class (weakest first)",
+    "byStudent": "By student",
+    "plansTitle": "Recommended plans",
+    "plansHint": "SK drafts a plan when a student finishes a worksheet, and once a week. Nothing changes until it is approved.",
+    "noPlans": "No plans yet.",
+    "status": {
+      "draft": "Being drafted",
+      "pending_approval": "Waiting for approval",
+      "approved": "Approved",
+      "declined": "Declined",
+      "superseded": "Replaced"
+    },
+    "kind": {
+      "reteach": "Re-teach",
+      "practice": "Practise",
+      "next": "Next topic"
+    },
+    "approve": "Approve",
+    "decline": "Decline",
+    "edit": "Edit",
+    "save": "Save changes",
+    "cancel": "Cancel",
+    "remove": "Remove",
+    "wholeClass": "Apply to the whole class",
+    "declineNote": "Reason (optional)",
+    "readOnlyTeacher": "The class teacher approves this plan. You can see it here.",
+    "readOnlyParent": "A parent approves this plan. You can see it here.",
+    "done": {
+      "approved": "Approved — it's now in their lessons.",
+      "declined": "Declined.",
+      "saved": "Saved."
+    },
+    "failed": "That didn't work. Please try again.",
+    "notAllowed": "Only the person who approves this plan can do that.",
+    "forStudent": "Plan for {name}",
+    "weekly": "Weekly plan",
+    "afterKit": "After {kit}"
   }
 }

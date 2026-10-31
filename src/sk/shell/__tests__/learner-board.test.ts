@@ -113,6 +113,15 @@ describe("the student prompt on her Board", () => {
     expect(off).not.toContain(SK_STUDENT_BOARD_RULES);
   });
 
+  it("an approved plan's focus line reaches her Board prompt only (phase 4)", () => {
+    const line = "S6. FOCUS (her teacher or parent approved this plan): when it fits — Osmosis";
+    const caps = allowedFor(onBoard).map((c) => c.meta);
+    expect(buildShellPrompt({ ctx: { ...onBoard, learnFocus: line }, capabilities: caps })).toContain(line);
+    expect(buildShellPrompt({ ctx: onBoard, capabilities: caps })).not.toContain("S6. FOCUS");
+    const off = { ...offBoard, learnFocus: line };
+    expect(buildShellPrompt({ ctx: off, capabilities: allowedFor(off).map((c) => c.meta) })).not.toContain(line);
+  });
+
   it("the teaching call speaks to one student, simply", () => {
     const sup = { status: "ready", language: "en", segments: [{ id: "s1", heading: "Osmosis", narration: "n", points: [] }], items: [] } as never;
     expect(teachingQuestion("explain", sup, "English", TEACH_AUDIENCE_STUDENT)).toContain("to the student");

@@ -10,6 +10,11 @@ import { enforceHat } from "@/utils/hats-server";
 import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { fmt } from "@/i18n/format";
+import { skDbFrom } from "@/sk/store-supabase";
+import { readPracticeMastery, kitTitleOf } from "@/sk/practice/mastery-read";
+import { readPlans } from "@/sk/practice/plan-store";
+import { MasterySection, PlansSection } from "../learn-mastery";
+import { planCards } from "../plan-data";
 
 // The DB's kind codes are snake_case and never translated — this maps them to
 // the dictionary's camelCase keys, so a kind we don't recognise falls through
@@ -240,6 +245,27 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const pending: PendingSub[] = subs.filter((s) => s.grade_status === "pending").map(toPendingSub);
   const autoMarked: PendingSub[] = autoMarkedSubs.map(toPendingSub);
 
+  // SK student Board phase 4: practice mastery + recommended plans for the
+  // learners on this page (her classes' students / his children), read
+  // through THIS session — RLS (teaches_student / is_parent_of) decides.
+  const learnerIds = [...allStudents];
+  const skDb = skDbFrom(supabase as never);
+  const [mastery, planRows] = await Promise.all([readPracticeMastery(skDb, learnerIds, { now }), readPlans(skDb, learnerIds)]);
+  const planKitIds = [...new Set(planRows.map((p) => p.kit_id).filter((k): k is string => typeof k === "string" && !mastery.kits.has(k)))];
+  const planKitNames = new Map(mastery.kits);
+  if (planKitIds.length) {
+    const { data: kg } = await supabase.from("generations").select("id, title").in("id", planKitIds);
+    for (const g of (kg ?? []) as { id: string; title: string | null }[]) planKitNames.set(g.id, kitTitleOf(g));
+  }
+  const cards = planCards(
+    planRows,
+    { id: user.id, role: role ?? "", teachesClasses: myClassIds, children: childIds },
+    { student: (id) => studentName.get(id) || dict.school.fallback.student, kit: (id) => planKitNames.get(id) ?? null },
+  );
+  const masteryGroups = parentMode
+    ? links.map((l) => ({ id: l.child_id, name: studentName.get(l.child_id) || dict.school.fallback.child, students: [{ id: l.child_id, name: studentName.get(l.child_id) || dict.school.fallback.child }] }))
+    : classes.filter((c) => !onlyClass || c.id === onlyClass).map((c) => ({ id: c.id, name: c.name, students: (studentsByClass.get(c.id) ?? []).map((id) => ({ id, name: studentName.get(id) || dict.school.fallback.student })) }));
+
   const completionPct = total ? Math.round((completed / total) * 100) : 0;
   const metrics: { label: string; value: string | number }[] = parentMode
     ? [
@@ -360,6 +386,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             })
           )}
         </div>
+
+        <PlansSection plans={cards} t={dict.learnPlan} />
+        <MasterySection groups={masteryGroups} rows={mastery.rows} t={dict.learnPlan} perClass={!parentMode} />
 
         {hotspots.length > 0 && (
           <>
