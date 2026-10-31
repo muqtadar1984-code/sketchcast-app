@@ -14,7 +14,11 @@
 
 import type { SkTurnEvent } from "../types";
 
-const EVENT_TYPES: ReadonlySet<string> = new Set(["meta", "text", "tool", "navigate", "board", "tutor", "confirm", "lang", "picture", "done", "error"]);
+// 2026-10-31: "walkthrough" was missing since the server began sending it
+// (2026-10-30), so a "show me around" answered by the turn route never
+// started the tour (the founder's voice bug). Every SkTurnEvent type must
+// be listed here — the test pins the list to the union in types.ts.
+const EVENT_TYPES: ReadonlySet<string> = new Set(["meta", "text", "tool", "navigate", "board", "tutor", "confirm", "lang", "picture", "walkthrough", "done", "error"]);
 
 /** A frame's JSON → a typed event, or null when it is not one of ours.
  * Exported for the panel's own guards; a frame that fails here is dropped,

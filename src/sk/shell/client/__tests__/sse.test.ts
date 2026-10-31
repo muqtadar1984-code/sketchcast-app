@@ -168,3 +168,23 @@ describe("skTurnEvents over a stream", () => {
     expect(got[1]).toEqual({ type: "error", message: "model unavailable" });
   });
 });
+
+// 2026-10-31: the founder's voice "show me around" never started the tour —
+// the server's `walkthrough` event was dropped here as an unknown type.
+describe("every server event type is accepted", () => {
+  it("passes a walkthrough event through", () => {
+    expect(parseEventJson(JSON.stringify({ type: "walkthrough" }))).toEqual({ type: "walkthrough" });
+    expect(parseEventJson(JSON.stringify({ type: "walkthrough", action: "next" }))).toEqual({ type: "walkthrough", action: "next" });
+  });
+
+  it("accepts each `type` in the SkTurnEvent union (types.ts)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const src = readFileSync(join(process.cwd(), "src/sk/shell/types.ts"), "utf8");
+    const union = src.slice(src.indexOf("export type SkTurnEvent"));
+    const block = union.slice(0, union.indexOf(";\n") > 0 ? union.indexOf(";\n") : undefined);
+    const types = [...block.matchAll(/\|\s*\{\s*type:\s*"([a-z_]+)"/g)].map((m) => m[1]);
+    expect(types.length).toBeGreaterThan(5);
+    for (const t of types) expect(parseEventJson(JSON.stringify({ type: t })), t).not.toBeNull();
+  });
+});
